@@ -75,7 +75,7 @@ api_routes:
     operation: ListPersonas
     description: 查看自己所有分身列表
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
+    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: GET
     path: /v1/user/personas/summary
@@ -89,25 +89,25 @@ api_routes:
     operation: GetActivePersonaContext
     description: 获取当前激活分身上下文快照（供跨域动作主体透传）
     response_entity: ActivePersonaContextView
-    response_fields: [ownerUserId, profileSubjectId, subAccountId, isolationLevel, profileVisibility, contextVersion, switchedAt]
+    response_fields: [personaId, ownerUserId, profileSubjectId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
 
   - method: POST
     path: /v1/user/personas
     operation: CreatePersona
     description: 创建新分身
     request_entity: Persona
-    request_fields: [displayName, userHandle, avatarUrl, backgroundUrl, bio, isolationLevel, purposeHint]
+    request_fields: [displayName, userHandle, avatarUrl, isolationLevel, purposeHint]
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
+    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: PATCH
     path: /v1/user/personas/{personaId}
     operation: UpdatePersona
     description: 更新分身资料或隔离等级
     request_entity: ProfileSubjectMutation
-    request_fields: [displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, callerRingtoneId, isolationLevel, purposeHint, profileVisibility, applyScope, syncTargetIds, fieldsMask]
+    request_fields: [displayName, userHandle, phone, email, avatarUrl, isolationLevel, purposeHint, applyScope, syncTargetIds, fieldsMask]
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
+    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: POST
     path: /v1/user/personas/{personaId}/profile-sync
@@ -140,24 +140,24 @@ api_routes:
     operation: ActivatePersona
     description: 切换激活分身（强一致，排他写）
     response_entity: ActivePersonaContextView
-    response_fields: [ownerUserId, profileSubjectId, subAccountId, isolationLevel, profileVisibility, contextVersion, switchedAt]
+    response_fields: [personaId, ownerUserId, profileSubjectId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
 
-  # ── 用户主页（SubAccount 公开视图） ──────────────────────────────────────
+  # ── 用户主页（公开身份视图） ─────────────────────────────────────────────
 
   - method: GET
     path: /v1/user/{subAccountId}
     operation: GetSubAccountProfile
-    description: 公开用户主页（按 subAccountId 读取）
+    description: 公开用户主页（按 userHandle 读取，兼容既有分身 ID 引用）
     response_entity: ProfileSubjectView
-    response_fields: [profileSubjectId, ownerUserId, subjectType, subAccountId, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
-    note: 不暴露 ownerId / userId，isolationLevel=strict 时返回 404
+    response_fields: [profileSubjectId, subjectType, subAccountId, userHandle, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
+    note: 不暴露 owner 映射字段；IsolationLevel 是公开访问真相源，strict 时返回 404
 
   - method: GET
     path: /v1/me
     operation: GetMeProfile
     description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
     response_entity: ProfileSubjectView
-    response_fields: [profileSubjectId, ownerUserId, subjectType, subAccountId, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
+    response_fields: [profileSubjectId, ownerUserId, subjectType, subAccountId, userHandle, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
 
   - method: GET
     path: /v1/user/search/social-relations

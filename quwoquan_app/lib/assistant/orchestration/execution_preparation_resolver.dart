@@ -1,10 +1,9 @@
-import 'dart:math' as math;
-
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
@@ -33,7 +32,8 @@ class ExecutionPreparationResolver {
     required String domainId,
     required AssistantExecutionPreparation base,
     required String userQuery,
-    required IntentGraph intentGraph,
+    required UnderstandingResult understandingResult,
+    required TaskGraph taskGraph,
     required AssistantRunRequest request,
     DialogueRoundScript? dialogueRoundScript,
     RunArtifacts? previousRunArtifacts,
@@ -52,10 +52,7 @@ class ExecutionPreparationResolver {
       preferExplicitDomain: preferExplicitDomain,
     );
     final executionShell = resolveExecutionShellForRun(
-      domainId: effectiveDomainId,
       baseShell: skillContext.executionShell,
-      intentGraph: intentGraph,
-      request: request,
     );
     final plannerTemplateVersion = templateCatalogRuntime.latestVersionFor(
       'planner.global_plan',
@@ -92,6 +89,32 @@ class ExecutionPreparationResolver {
       fusionSynthTemplateVersion: synthTemplateVersion,
       previousSlotState: previousSlotState,
       previousDomainPolicyBundle: previousDomainPolicyBundle,
+    );
+  }
+
+  Future<AssistantExecutionPreparation> resolveTyped({
+    required String domainId,
+    required AssistantExecutionPreparation base,
+    required String userQuery,
+    required UnderstandingResult understandingResult,
+    required TaskGraph taskGraph,
+    required AssistantRunRequest request,
+    DialogueRoundScript? dialogueRoundScript,
+    RunArtifacts? previousRunArtifacts,
+    List<String> runtimeToolNames = const <String>[],
+    bool preferExplicitDomain = false,
+  }) async {
+    return resolve(
+      domainId: domainId,
+      base: base,
+      userQuery: userQuery,
+      understandingResult: understandingResult,
+      taskGraph: taskGraph,
+      request: request,
+      dialogueRoundScript: dialogueRoundScript,
+      previousRunArtifacts: previousRunArtifacts,
+      runtimeToolNames: runtimeToolNames,
+      preferExplicitDomain: preferExplicitDomain,
     );
   }
 
@@ -141,89 +164,21 @@ class ExecutionPreparationResolver {
   }
 
   SkillExecutionShell resolveExecutionShellForRun({
-    required String domainId,
     required SkillExecutionShell baseShell,
-    required IntentGraph intentGraph,
-    required AssistantRunRequest request,
   }) {
-    final rawProblemClass =
-        intentGraph.isMultiSkill &&
-            baseShell.problemClass.trim().isNotEmpty &&
-            baseShell.problemClass.trim().toLowerCase() != 'general'
-        ? baseShell.problemClass
-        : intentGraph.problemClassWireName;
-    return resolveExecutionShellForProblemClass(
-      domainId: domainId,
-      baseShell: baseShell,
-      rawProblemClass: rawProblemClass,
-      mode: (intentGraph.globalConstraints['mode'] as String?)?.trim() ?? '',
-      secondarySkills: intentGraph.secondarySkills,
-      queryText: request.messages.isNotEmpty
-          ? request.messages.last.content
-          : '',
-    );
+    return baseShell;
   }
 
   SkillExecutionShell resolveExecutionShellForProblemClass({
     required String domainId,
     required SkillExecutionShell baseShell,
-    required String rawProblemClass,
+    required ProblemClass problemClass,
     required String mode,
     required List<String> secondarySkills,
     required String queryText,
   }) {
-    final adaptiveProblemClass = normalizeProblemClassForQuery(
-      raw: rawProblemClass,
-      primarySkill: domainId,
-      mode: mode,
-      secondarySkills: secondarySkills,
-      queryText: queryText,
-    );
-    final isAdaptiveDomain =
-        domainId.trim() == domainRouter.fallbackDomainId ||
-        baseShell.problemClass.trim().toLowerCase() == 'general';
-    if (!isAdaptiveDomain) {
-      return adaptiveProblemClass == 'general'
-          ? baseShell
-          : baseShell.copyWith(problemClass: adaptiveProblemClass);
-    }
-    switch (adaptiveProblemClass) {
-      case 'realtime_info':
-        return baseShell.copyWith(
-          problemClass: adaptiveProblemClass,
-          maxIterations: math.min(baseShell.maxIterations, 2),
-          toolBudget: math.min(baseShell.toolBudget, 1),
-          variantBudget: 0,
-          reflectionBudget: 0,
-          freshnessHoursMax: math.min(baseShell.freshnessHoursMax, 6),
-        );
-      case 'task_execution':
-        return baseShell.copyWith(
-          problemClass: adaptiveProblemClass,
-          maxIterations: math.min(baseShell.maxIterations, 3),
-          toolBudget: math.min(baseShell.toolBudget, 1),
-          variantBudget: 0,
-          reflectionBudget: 0,
-        );
-      case 'complex_reasoning':
-        return baseShell.copyWith(
-          problemClass: adaptiveProblemClass,
-          maxIterations: math.max(3, baseShell.maxIterations),
-          toolBudget: math.max(2, baseShell.toolBudget),
-          variantBudget: math.max(1, baseShell.variantBudget),
-          reflectionBudget: math.max(1, baseShell.reflectionBudget),
-        );
-      case 'simple_qa':
-        return baseShell.copyWith(
-          problemClass: adaptiveProblemClass,
-          maxIterations: math.min(baseShell.maxIterations, 2),
-          toolBudget: math.min(baseShell.toolBudget, 1),
-          variantBudget: 0,
-          reflectionBudget: 0,
-        );
-      default:
-        return baseShell.copyWith(problemClass: adaptiveProblemClass);
-    }
+    final _ = (domainId, problemClass, mode, secondarySkills, queryText);
+    return baseShell;
   }
 
   String normalizeProblemClassForQuery({

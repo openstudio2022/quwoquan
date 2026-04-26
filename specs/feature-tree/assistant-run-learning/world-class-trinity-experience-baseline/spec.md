@@ -335,7 +335,7 @@
 
 ### 2) 工具观测契约
 
-- 工具返回必须可结构化解析（ok/errorCode/errorClass/retryable/slotDelta/data）。
+- 工具返回必须可结构化解析（ok/errorCode/failureKind/recovery action/slotDelta/data）。
 - 禁止以用户文案字符串作为关键业务判断条件。
 
 ### 3) Skill 契约

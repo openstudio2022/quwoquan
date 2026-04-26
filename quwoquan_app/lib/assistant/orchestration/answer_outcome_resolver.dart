@@ -5,7 +5,10 @@ import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
 
@@ -19,7 +22,7 @@ class AnswerOutcomeSnapshot {
     this.synthesisReadiness = const SynthesisReadinessResult(),
     this.retrievalOutcome = const RetrievalOutcome(),
     this.answerGateDecision = const AnswerGateDecision(),
-    this.conversationStateDecision,
+    this.typedTurnDecision,
     this.domainPolicyBundle,
     this.journey = const AssistantJourney(),
   });
@@ -32,7 +35,7 @@ class AnswerOutcomeSnapshot {
   final SynthesisReadinessResult synthesisReadiness;
   final RetrievalOutcome retrievalOutcome;
   final AnswerGateDecision answerGateDecision;
-  final ConversationStateDecision? conversationStateDecision;
+  final AssistantTypedTurnDecision? typedTurnDecision;
   final DomainPolicyBundle? domainPolicyBundle;
   final AssistantJourney journey;
 
@@ -49,8 +52,6 @@ class AnswerOutcomeSnapshot {
     'synthesisReadiness': synthesisReadiness.toJson(),
     'retrievalOutcome': retrievalOutcome.toJson(),
     'answerGateDecision': answerGateDecision.toJson(),
-    if (conversationStateDecision != null)
-      'conversationStateDecision': conversationStateDecision!.toDecisionMap(),
     if (domainPolicyBundle != null)
       'domainPolicyBundle': domainPolicyBundle!.toJson(),
     'journey': journey.toJson(),
@@ -77,7 +78,7 @@ class AnswerOutcomeResolver {
         const <AnswerEvidenceBinding>[],
     EvidenceEvaluationResult? fallbackEvidenceEvaluation,
     AggregationState? fallbackAggregationState,
-    ConversationStateDecision? fallbackConversationStateDecision,
+    AssistantTypedTurnDecision? fallbackAssistantTypedTurnDecision,
     SynthesisReadinessResult? fallbackSynthesisReadiness,
     SlotStateSnapshot? fallbackSlotState,
     DomainPolicyBundle? fallbackDomainPolicyBundle,
@@ -133,18 +134,12 @@ class AnswerOutcomeResolver {
         _parseAggregationState(structured['aggregationState']) ??
         fallbackAggregationState ??
         const AggregationState();
-    final conversationStateDecision =
-        (_hasOutcomeField(rawOutcome, 'conversationStateDecision')
-            ? _parseConversationStateDecision(
-                rawOutcome!['conversationStateDecision'],
-                groundedSlotState: slotState,
-              )
-            : null) ??
-        _parseConversationStateDecision(
-          structured['conversationStateDecision'],
+    final typedTurnDecision =
+        _parseAssistantTypedTurnDecisionFromTypedState(
+          structured: structured,
           groundedSlotState: slotState,
         ) ??
-        fallbackConversationStateDecision;
+        fallbackAssistantTypedTurnDecision;
     final synthesisReadiness =
         _reconcileSynthesisReadiness(
           parsed:
@@ -154,25 +149,25 @@ class AnswerOutcomeResolver {
               _parseSynthesisReadiness(structured['synthesisReadiness']),
           fallback: fallbackSynthesisReadiness,
           aggregationState: aggregationState,
-          conversationStateDecision: conversationStateDecision,
+          typedTurnDecision: typedTurnDecision,
           runArtifacts: runArtifacts,
         ) ??
         const SynthesisReadinessResult();
-    final effectiveConversationStateDecision =
-        (conversationStateDecision != null &&
+    final effectiveAssistantTypedTurnDecision =
+        (typedTurnDecision != null &&
             !synthesisReadiness.ready &&
             synthesisReadiness.replanTask != null)
-        ? ConversationStateDecision(
+        ? AssistantTypedTurnDecision(
             nextAction: AssistantNextAction.toolCall,
             finalAnswerMode: FinalAnswerMode.replan,
             answerEligibility: AnswerEligibility.blocked,
-            slotState: conversationStateDecision.slotState,
-            missingCriticalSlots: conversationStateDecision.missingCriticalSlots,
-            askUser: conversationStateDecision.askUser,
-            qualityGates: conversationStateDecision.qualityGates,
+            slotState: typedTurnDecision.slotState,
+            missingCriticalSlots: typedTurnDecision.missingCriticalSlots,
+            askUser: typedTurnDecision.askUser,
+            qualityGates: typedTurnDecision.qualityGates,
             finalAnswerReady: false,
           )
-        : conversationStateDecision;
+        : typedTurnDecision;
     final domainPolicyBundle =
         (_hasOutcomeField(rawOutcome, 'domainPolicyBundle')
             ? _parseDomainPolicyBundle(rawOutcome!['domainPolicyBundle'])
@@ -189,7 +184,7 @@ class AnswerOutcomeResolver {
         );
     final answerGateDecision = _answerGateResolver.resolve(
       retrievalOutcome: retrievalOutcome,
-      conversationStateDecision: effectiveConversationStateDecision,
+      typedTurnDecision: effectiveAssistantTypedTurnDecision,
       renderableAnswer: _hasRenderableAnswer(
         structured: structured,
         runArtifacts: runArtifacts,
@@ -213,7 +208,7 @@ class AnswerOutcomeResolver {
       synthesisReadiness: synthesisReadiness,
       retrievalOutcome: retrievalOutcome,
       answerGateDecision: answerGateDecision,
-      conversationStateDecision: effectiveConversationStateDecision,
+      typedTurnDecision: effectiveAssistantTypedTurnDecision,
       domainPolicyBundle: domainPolicyBundle,
       journey: journey,
     );
@@ -289,7 +284,7 @@ class AnswerOutcomeResolver {
         freshnessSatisfied: json['freshnessSatisfied'] == true,
         evidenceRequired: json['evidenceRequired'] == true,
         coveredDimensions: _stringList(json['coveredDimensions']),
-        coveredQueryTaskIds: _stringList(json['coveredQueryTaskIds']),
+        coveredSearchPlanIds: _stringList(json['coveredSearchPlanIds']),
         blockingDimensions: _stringList(json['blockingDimensions']),
         missingDimensions: _stringList(json['missingDimensions']),
         summary: (json['summary'] as String?) ?? '',
@@ -299,24 +294,28 @@ class AnswerOutcomeResolver {
     }
   }
 
-  ConversationStateDecision? _parseConversationStateDecision(
-    Object? raw, {
+  AssistantTypedTurnDecision? _parseAssistantTypedTurnDecisionFromTypedState({
+    required Map<String, dynamic> structured,
     required SlotStateSnapshot groundedSlotState,
   }) {
-    if (raw is! Map) return null;
+    final orchestratorRaw = structured[assistantOrchestratorStateField];
+    final synthesisRaw = structured[assistantTurnSynthesisStateField];
+    if (orchestratorRaw is! Map && synthesisRaw is! Map) {
+      return null;
+    }
     try {
-      final dto = ConversationStateDecisionDto.fromJson(
-        raw.cast<String, dynamic>(),
-      );
-      return ConversationStateDecision(
-        nextAction: dto.nextAction,
-        finalAnswerMode: dto.finalAnswerMode,
-        answerEligibility: dto.answerEligibility,
-        slotState: groundedSlotState,
-        missingCriticalSlots: dto.missingCriticalSlots,
-        askUser: dto.askUser,
-        qualityGates: dto.qualityGates,
-        finalAnswerReady: dto.finalAnswerReady,
+      final orchestratorState = orchestratorRaw is Map
+          ? ConversationOrchestratorState.fromJson(
+              orchestratorRaw.cast<String, dynamic>(),
+            )
+          : const ConversationOrchestratorState();
+      final synthesisState = synthesisRaw is Map
+          ? TurnSynthesisState.fromJson(synthesisRaw.cast<String, dynamic>())
+          : const TurnSynthesisState();
+      return AssistantTypedTurnDecision.fromTypedState(
+        orchestratorState: orchestratorState,
+        turnSynthesisState: synthesisState,
+        groundedSlotState: groundedSlotState,
       );
     } catch (_) {
       return null;
@@ -336,14 +335,14 @@ class AnswerOutcomeResolver {
     SynthesisReadinessResult? parsed,
     SynthesisReadinessResult? fallback,
     AggregationState? aggregationState,
-    ConversationStateDecision? conversationStateDecision,
+    AssistantTypedTurnDecision? typedTurnDecision,
     RunArtifacts? runArtifacts,
   }) {
     final candidate = parsed ?? fallback;
     final journeyFinalAnswerReady =
         runArtifacts?.journey.readiness.finalAnswerReady == true;
     final finalAnswerReady =
-        conversationStateDecision?.finalAnswerReady == true ||
+        typedTurnDecision?.finalAnswerReady == true ||
         aggregationState?.finalAnswerReady == true ||
         journeyFinalAnswerReady ||
         (runArtifacts?.displayMarkdown.trim().isNotEmpty ?? false) ||

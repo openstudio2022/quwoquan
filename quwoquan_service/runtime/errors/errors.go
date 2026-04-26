@@ -6,28 +6,30 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type Module string
 type Kind string
 
 const (
-	ModuleGateway   Module = "GATEWAY"
-	ModuleOrch      Module = "ORCH"
+	ModuleGateway     Module = "GATEWAY"
+	ModuleOrch        Module = "ORCH"
 	ModuleContent     Module = "CONTENT"
 	ModuleCircle      Module = "CIRCLE"
+	ModuleEntity      Module = "ENTITY"
 	ModuleIntegration Module = "INTEGRATION"
 	ModuleUser        Module = "USER"
-	ModuleChat      Module = "CHAT"
-	ModuleRTC       Module = "RTC"
-	ModuleOps       Module = "OPS"
-	ModuleAssistant Module = "ASSISTANT"
-	ModuleDB        Module = "DB"
-	ModuleMQ        Module = "MQ"
-	ModuleCache     Module = "CACHE"
-	ModuleOSS       Module = "OSS"
-	ModuleCDN       Module = "CDN"
-	ModuleUnknown   Module = "UNKNOWN"
+	ModuleChat        Module = "CHAT"
+	ModuleRTC         Module = "RTC"
+	ModuleOps         Module = "OPS"
+	ModuleAssistant   Module = "ASSISTANT"
+	ModuleDB          Module = "DB"
+	ModuleMQ          Module = "MQ"
+	ModuleCache       Module = "CACHE"
+	ModuleOSS         Module = "OSS"
+	ModuleCDN         Module = "CDN"
+	ModuleUnknown     Module = "UNKNOWN"
 )
 
 const (
@@ -55,22 +57,39 @@ type AppError struct {
 	Code         ErrorCode
 	UserMessage  string
 	DebugMessage string
-	Retryable    bool
-	Details      map[string]any
 }
 
 type ErrorResponse struct {
-	Code         string         `json:"code"`
-	UserMessage  string         `json:"userMessage"`
-	DebugMessage string         `json:"debugMessage"`
-	Module       string         `json:"module"`
-	Kind         string         `json:"kind"`
-	Reason       string         `json:"reason"`
-	Message      string         `json:"message,omitempty"`
-	RequestID    string         `json:"requestId,omitempty"`
-	TraceID      string         `json:"traceId,omitempty"`
-	Retryable    bool           `json:"retryable"`
-	Details      map[string]any `json:"details,omitempty"`
+	Code         string               `json:"code"`
+	Origin       string               `json:"origin"`
+	Nature       string               `json:"nature"`
+	UserMessage  string               `json:"userMessage"`
+	DebugMessage string               `json:"debugMessage"`
+	Module       string               `json:"module"`
+	Kind         string               `json:"kind"`
+	Reason       string               `json:"reason"`
+	Message      string               `json:"message,omitempty"`
+	RequestID    string               `json:"requestId,omitempty"`
+	TraceID      string               `json:"traceId,omitempty"`
+	Location     RuntimeErrorLocation `json:"location"`
+	Context      RuntimeErrorContext  `json:"context"`
+}
+
+type RuntimeErrorLocation struct {
+	BusinessObject   string `json:"businessObject"`
+	FunctionModule   string `json:"functionModule"`
+	SourceFilePath   string `json:"sourceFilePath,omitempty"`
+	SourceLineNumber int    `json:"sourceLineNumber,omitempty"`
+	SourceLineText   string `json:"sourceLineText,omitempty"`
+}
+
+type RuntimeErrorContext struct {
+	Attributes []RuntimeErrorContextAttribute `json:"attributes"`
+}
+
+type RuntimeErrorContextAttribute struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 type ResponseOptions struct {
@@ -85,6 +104,21 @@ type HTTPWriteOptions struct {
 	IncludeDebug bool
 }
 
+func HTTPWriteOptionsFromRequest(r *http.Request) HTTPWriteOptions {
+	if r == nil {
+		return HTTPWriteOptions{}
+	}
+	requestID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+	traceID := strings.TrimSpace(r.Header.Get("X-Trace-Id"))
+	if traceID == "" {
+		traceID = requestID
+	}
+	return HTTPWriteOptions{
+		RequestID: requestID,
+		TraceID:   traceID,
+	}
+}
+
 var reasonPattern = regexp.MustCompile(`^[a-z0-9_]+$`)
 
 var allowedModules = map[Module]struct{}{
@@ -92,18 +126,19 @@ var allowedModules = map[Module]struct{}{
 	ModuleOrch:        {},
 	ModuleContent:     {},
 	ModuleCircle:      {},
+	ModuleEntity:      {},
 	ModuleIntegration: {},
 	ModuleUser:        {},
-	ModuleChat:      {},
-	ModuleRTC:       {},
-	ModuleOps:       {},
-	ModuleAssistant: {},
-	ModuleDB:        {},
-	ModuleMQ:        {},
-	ModuleCache:     {},
-	ModuleOSS:       {},
-	ModuleCDN:       {},
-	ModuleUnknown:   {},
+	ModuleChat:        {},
+	ModuleRTC:         {},
+	ModuleOps:         {},
+	ModuleAssistant:   {},
+	ModuleDB:          {},
+	ModuleMQ:          {},
+	ModuleCache:       {},
+	ModuleOSS:         {},
+	ModuleCDN:         {},
+	ModuleUnknown:     {},
 }
 
 var allowedKinds = map[Kind]struct{}{
@@ -150,7 +185,7 @@ func (c ErrorCode) Validate() error {
 	return nil
 }
 
-func NewAppError(code ErrorCode, userMessage string, debugMessage string, retryable bool) *AppError {
+func NewAppError(code ErrorCode, userMessage string, debugMessage string) *AppError {
 	if userMessage == "" {
 		userMessage = DefaultUserMessage
 	}
@@ -158,7 +193,6 @@ func NewAppError(code ErrorCode, userMessage string, debugMessage string, retrya
 		Code:         code,
 		UserMessage:  userMessage,
 		DebugMessage: debugMessage,
-		Retryable:    retryable,
 	}
 }
 
@@ -183,41 +217,107 @@ func ToResponseWithOptions(err *AppError, opts ResponseOptions) ErrorResponse {
 	}
 	return ErrorResponse{
 		Code:         err.Code.String(),
+		Origin:       runtimeOriginFromLegacyKind(err.Code.Kind),
+		Nature:       runtimeNatureFromLegacyKind(err.Code.Kind, err.Code.Reason),
 		UserMessage:  err.UserMessage,
 		DebugMessage: debugMessage,
 		Module:       string(err.Code.Module),
-		Kind:         string(err.Code.Kind),
+		Kind:         runtimeKindFromLegacy(err.Code.Kind, err.Code.Reason),
 		Reason:       err.Code.Reason,
 		Message:      debugMessage,
 		RequestID:    opts.RequestID,
 		TraceID:      opts.TraceID,
-		Retryable:    err.Retryable,
-		Details:      err.Details,
+		Location: RuntimeErrorLocation{
+			BusinessObject: "cloud_request",
+			FunctionModule: "runtime_errors",
+		},
+		Context: RuntimeErrorContext{
+			Attributes: []RuntimeErrorContextAttribute{
+				{Key: "module", Value: string(err.Code.Module)},
+				{Key: "reason", Value: err.Code.Reason},
+			},
+		},
 	}
 }
 
 func NormalizeError(err error) *AppError {
 	if err == nil {
-		return NewAppError(NewCode(ModuleUnknown, KindSystem, DefaultInternalReason), DefaultUserMessage, "nil error", false)
+		return NewAppError(NewCode(ModuleUnknown, KindSystem, DefaultInternalReason), DefaultUserMessage, "nil error")
 	}
 	if appErr, ok := err.(*AppError); ok {
 		if appErr.UserMessage == "" {
 			appErr.UserMessage = DefaultUserMessage
 		}
 		if validateErr := appErr.Code.Validate(); validateErr != nil {
-			return NewAppError(NewCode(ModuleUnknown, KindSystem, DefaultInternalReason), DefaultUserMessage, "invalid app error code: "+validateErr.Error(), false)
+			return NewAppError(NewCode(ModuleUnknown, KindSystem, DefaultInternalReason), DefaultUserMessage, "invalid app error code: "+validateErr.Error())
 		}
 		return appErr
 	}
-	return NewAppError(NewCode(ModuleUnknown, KindSystem, DefaultInternalReason), DefaultUserMessage, err.Error(), false)
+	return NewAppError(NewCode(ModuleUnknown, KindSystem, DefaultInternalReason), DefaultUserMessage, err.Error())
+}
+
+func runtimeOriginFromLegacyKind(kind Kind) string {
+	if kind == KindUser {
+		return "user"
+	}
+	if kind == KindNetwork {
+		return "environment"
+	}
+	if kind == KindMiddleware {
+		return "remoteDependency"
+	}
+	return "system"
+}
+
+func runtimeKindFromLegacy(kind Kind, reason string) string {
+	if kind == KindUser {
+		switch reason {
+		case "unauthorized":
+			return "auth"
+		case "forbidden", "permission_denied", "location_permission_required":
+			return "permission"
+		case "not_found":
+			return "notFound"
+		case "rate_limited":
+			return "rateLimited"
+		default:
+			return "validation"
+		}
+	}
+	if kind == KindNetwork {
+		if reason == "timeout" {
+			return "timeout"
+		}
+		return "network"
+	}
+	if kind == KindMiddleware {
+		if reason == "timeout" || reason == "upstream_timeout" {
+			return "timeout"
+		}
+		return "unavailable"
+	}
+	return "internal"
+}
+
+func runtimeNatureFromLegacyKind(kind Kind, reason string) string {
+	if kind == KindNetwork || kind == KindMiddleware {
+		return "transient"
+	}
+	if reason == "permission_denied" || reason == "location_permission_required" {
+		return "requiresPermission"
+	}
+	if kind == KindSystem {
+		return "bug"
+	}
+	return "permanent"
 }
 
 func NewInvalidArgument(module Module, userMessage string, debugMessage string) *AppError {
-	return NewAppError(NewCode(module, KindUser, DefaultInvalidReason), userMessage, debugMessage, false)
+	return NewAppError(NewCode(module, KindUser, DefaultInvalidReason), userMessage, debugMessage)
 }
 
 func NewUnavailable(module Module, userMessage string, debugMessage string) *AppError {
-	return NewAppError(NewCode(module, KindMiddleware, DefaultUnavailableReason), userMessage, debugMessage, true)
+	return NewAppError(NewCode(module, KindMiddleware, DefaultUnavailableReason), userMessage, debugMessage)
 }
 
 func HTTPStatusFromError(err *AppError) int {
@@ -262,6 +362,12 @@ func HTTPStatusFromError(err *AppError) int {
 
 func WriteHTTPError(w http.ResponseWriter, err error, opts HTTPWriteOptions) {
 	appErr := NormalizeError(err)
+	if opts.RequestID == "" {
+		opts.RequestID = fmt.Sprintf("runtime.err.req.%d", time.Now().UnixNano())
+	}
+	if opts.TraceID == "" {
+		opts.TraceID = opts.RequestID
+	}
 	resp := ToResponseWithOptions(appErr, ResponseOptions{
 		RequestID:    opts.RequestID,
 		TraceID:      opts.TraceID,

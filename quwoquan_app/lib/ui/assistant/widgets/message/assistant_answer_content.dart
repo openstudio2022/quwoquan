@@ -27,10 +27,7 @@ class AssistantAnswerContent extends StatelessWidget {
   final List<AssistantAnswerDisplayBlock> answerBlocks;
   final void Function(AssistantCitation reference)? onReferenceTap;
 
-  static final RegExp _referenceBlockPattern = RegExp(
-    r'\n---\n📚\s*\*{0,2}参考资料\*{0,2}[\s\S]*$',
-  );
-  static final RegExp _citationLabelPattern = RegExp(r'^来源(\d+)$');
+  static final RegExp _citationLabelPattern = RegExp(r'^\[?(\d+)\]?$');
   static final RegExp _gfmTableBlockRe = RegExp(
     r'((?:^|\n)\|[^\n]+\|\s*\n\|[\s:|-]+\|\s*\n(?:\|[^\n]+\|\s*\n?)*)',
     multiLine: true,
@@ -39,9 +36,7 @@ class AssistantAnswerContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final references = _resolveReferenceItemsFromTranscriptRow(transcriptRow);
-    final cleaned = content
-        .replaceFirst(_referenceBlockPattern, '')
-        .trimRight();
+    final cleaned = content.trimRight();
     final visibleBlocks = answerBlocks
         .where(_hasVisibleAnswerBlock)
         .toList(growable: false);
@@ -60,78 +55,82 @@ class AssistantAnswerContent extends StatelessWidget {
     final cupertino = CupertinoTheme.of(context);
     final CupertinoThemeData markdownCupertinoTheme =
         cupertino.textTheme.textStyle.fontSize != null
-            ? cupertino
-            : cupertino.copyWith(
-                textTheme: cupertino.textTheme.copyWith(
-                  textStyle: cupertino.textTheme.textStyle.copyWith(
-                    fontSize: AppTypography.iosBody,
-                  ),
-                ),
-              );
+        ? cupertino
+        : cupertino.copyWith(
+            textTheme: cupertino.textTheme.copyWith(
+              textStyle: cupertino.textTheme.textStyle.copyWith(
+                fontSize: AppTypography.iosBody,
+              ),
+            ),
+          );
     final mdStyle =
         MarkdownStyleSheet.fromCupertinoTheme(markdownCupertinoTheme).copyWith(
-      p: textStyle,
-      pPadding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
-      h1: textStyle.copyWith(
-        fontSize: AppTypography.xl,
-        fontWeight: FontWeight.w700,
-        height: AppTypography.bodyLineHeight,
-      ),
-      h1Padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
-      h2: textStyle.copyWith(
-        fontSize: AppTypography.lg,
-        fontWeight: FontWeight.w700,
-      ),
-      h2Padding: EdgeInsets.only(bottom: AppSpacing.xs),
-      h3: textStyle.copyWith(
-        fontSize: AppTypography.base,
-        fontWeight: FontWeight.w600,
-      ),
-      h3Padding: EdgeInsets.only(bottom: AppSpacing.xs),
-      strong: textStyle.copyWith(fontWeight: FontWeight.w700),
-      em: textStyle.copyWith(fontStyle: FontStyle.italic),
-      a: textStyle.copyWith(
-        color: linkColor,
-        fontWeight: FontWeight.w600,
-        decoration: TextDecoration.underline,
-        decorationColor: linkColor.withValues(alpha: 0.4),
-      ),
-      listBullet: textStyle,
-      listIndent: AppSpacing.lg,
-      listBulletPadding: EdgeInsets.only(
-        right: AppSpacing.xs,
-        top: AppSpacing.xs / 2,
-      ),
-      blockquote: textStyle.copyWith(color: textColor.withValues(alpha: 0.88)),
-      blockquotePadding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.intraGroupSm,
-      ),
-      blockquoteDecoration: BoxDecoration(
-        color: linkColor.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        border: Border.all(color: linkColor.withValues(alpha: 0.12)),
-      ),
-      code: textStyle.copyWith(color: textColor, fontFamily: 'monospace'),
-      codeblockPadding: EdgeInsets.all(AppSpacing.containerSm),
-      codeblockDecoration: BoxDecoration(
-        color: textColor.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-      ),
-      horizontalRuleDecoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: textColor.withValues(alpha: 0.08)),
-        ),
-      ),
-      tableColumnWidth: const IntrinsicColumnWidth(),
-      tableCellsPadding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.xs,
-        vertical: AppSpacing.xs / 2,
-      ),
-      tableBorder: TableBorder.all(color: textColor.withValues(alpha: 0.08)),
-      tableHead: textStyle.copyWith(fontWeight: FontWeight.w600),
-      tableBody: textStyle,
-    );
+          p: textStyle,
+          pPadding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+          h1: textStyle.copyWith(
+            fontSize: AppTypography.xl,
+            fontWeight: FontWeight.w700,
+            height: AppTypography.bodyLineHeight,
+          ),
+          h1Padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+          h2: textStyle.copyWith(
+            fontSize: AppTypography.lg,
+            fontWeight: FontWeight.w700,
+          ),
+          h2Padding: EdgeInsets.only(bottom: AppSpacing.xs),
+          h3: textStyle.copyWith(
+            fontSize: AppTypography.base,
+            fontWeight: FontWeight.w600,
+          ),
+          h3Padding: EdgeInsets.only(bottom: AppSpacing.xs),
+          strong: textStyle.copyWith(fontWeight: FontWeight.w700),
+          em: textStyle.copyWith(fontStyle: FontStyle.italic),
+          a: textStyle.copyWith(
+            color: linkColor,
+            fontWeight: FontWeight.w600,
+            decoration: TextDecoration.underline,
+            decorationColor: linkColor.withValues(alpha: 0.4),
+          ),
+          listBullet: textStyle,
+          listIndent: AppSpacing.lg,
+          listBulletPadding: EdgeInsets.only(
+            right: AppSpacing.xs,
+            top: AppSpacing.xs / 2,
+          ),
+          blockquote: textStyle.copyWith(
+            color: textColor.withValues(alpha: 0.88),
+          ),
+          blockquotePadding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupSm,
+          ),
+          blockquoteDecoration: BoxDecoration(
+            color: linkColor.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+            border: Border.all(color: linkColor.withValues(alpha: 0.12)),
+          ),
+          code: textStyle.copyWith(color: textColor, fontFamily: 'monospace'),
+          codeblockPadding: EdgeInsets.all(AppSpacing.containerSm),
+          codeblockDecoration: BoxDecoration(
+            color: textColor.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+          ),
+          horizontalRuleDecoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: textColor.withValues(alpha: 0.08)),
+            ),
+          ),
+          tableColumnWidth: const IntrinsicColumnWidth(),
+          tableCellsPadding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.xs,
+            vertical: AppSpacing.xs / 2,
+          ),
+          tableBorder: TableBorder.all(
+            color: textColor.withValues(alpha: 0.08),
+          ),
+          tableHead: textStyle.copyWith(fontWeight: FontWeight.w600),
+          tableBody: textStyle,
+        );
     final children = visibleBlocks.isNotEmpty
         ? _buildTypedBlocks(
             context: context,
@@ -151,7 +150,10 @@ class AssistantAnswerContent extends StatelessWidget {
             linkColor: linkColor,
             references: references,
           );
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
   }
 
   List<Widget> _buildTypedBlocks({
@@ -163,36 +165,38 @@ class AssistantAnswerContent extends StatelessWidget {
     required Color linkColor,
     required List<_AssistantReferenceItem> references,
   }) {
-    return blocks.map((block) {
-      switch (block.kind) {
-        case DisplayBlockKind.markdown:
-          return _safeMarkdownBody(
-            markdownText: block.body.trim(),
-            markdownHostTheme: markdownHostTheme,
-            styleSheet: mdStyle,
-            textStyle: textStyle,
-            references: references,
-            linkColor: linkColor,
-          );
-        case DisplayBlockKind.bulletList:
-        case DisplayBlockKind.numberedList:
-        case DisplayBlockKind.referenceList:
-          return _buildListBlock(
-            block: block,
-            textStyle: textStyle,
-            textColor: textColor,
-          );
-        case DisplayBlockKind.callout:
-          return _buildCalloutBlock(
-            block: block,
-            textStyle: textStyle,
-            linkColor: linkColor,
-          );
-        case DisplayBlockKind.paragraph:
-        case DisplayBlockKind.unknown:
-          return _buildParagraphBlock(block: block, textStyle: textStyle);
-      }
-    }).toList(growable: false);
+    return blocks
+        .map((block) {
+          switch (block.kind) {
+            case DisplayBlockKind.markdown:
+              return _safeMarkdownBody(
+                markdownText: block.body.trim(),
+                markdownHostTheme: markdownHostTheme,
+                styleSheet: mdStyle,
+                textStyle: textStyle,
+                references: references,
+                linkColor: linkColor,
+              );
+            case DisplayBlockKind.bulletList:
+            case DisplayBlockKind.numberedList:
+            case DisplayBlockKind.referenceList:
+              return _buildListBlock(
+                block: block,
+                textStyle: textStyle,
+                textColor: textColor,
+              );
+            case DisplayBlockKind.callout:
+              return _buildCalloutBlock(
+                block: block,
+                textStyle: textStyle,
+                linkColor: linkColor,
+              );
+            case DisplayBlockKind.paragraph:
+            case DisplayBlockKind.unknown:
+              return _buildParagraphBlock(block: block, textStyle: textStyle);
+          }
+        })
+        .toList(growable: false);
   }
 
   List<Widget> _buildMarkdownSegments({
@@ -498,9 +502,9 @@ class AssistantAnswerContent extends StatelessWidget {
   ) {
     return switch (row) {
       AssistantAnswerTranscriptRow r => _resolveReferenceItemsFromAnswerParts(
-          runArtifactsMap: r.runArtifacts,
-          uiReferences: r.uiReferences,
-        ),
+        runArtifactsMap: r.runArtifacts,
+        uiReferences: r.uiReferences,
+      ),
       _ => const <_AssistantReferenceItem>[],
     };
   }
@@ -547,16 +551,14 @@ class AssistantAnswerContent extends StatelessWidget {
           url: url,
           source: (reference['source'] as String?)?.trim() ?? '',
           snippet: (reference['snippet'] as String?)?.trim() ?? '',
-          label: '来源${index + 1}',
+          label: '[${index + 1}]',
         ),
       );
     }
     return items;
   }
 
-  static RunArtifacts? _resolveRunArtifactsFromMap(
-    Map<String, dynamic> raw,
-  ) {
+  static RunArtifacts? _resolveRunArtifactsFromMap(Map<String, dynamic> raw) {
     if (raw.isEmpty) return null;
     try {
       return parseRunArtifacts(raw);
@@ -678,9 +680,9 @@ class _AssistantCitationChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textColor = AppColors.iosSecondaryLabel(context).withValues(
-      alpha: 0.56,
-    );
+    final textColor = AppColors.iosSecondaryLabel(
+      context,
+    ).withValues(alpha: 0.56);
     return Transform.translate(
       offset: const Offset(0, -3),
       child: GestureDetector(

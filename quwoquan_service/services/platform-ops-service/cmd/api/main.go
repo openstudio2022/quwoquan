@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/controlplane"
+	rterr "quwoquan_service/runtime/errors"
 
 	"gopkg.in/yaml.v3"
 )
@@ -47,171 +48,171 @@ func newServerMux(service *platformService) *http.ServeMux {
 	})
 	mux.HandleFunc("/v1/control-plane/platform/catalog/services", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListServiceCatalog(w)
+		service.handleListServiceCatalog(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/onboarding/domains", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListOnboardingDomains(w)
+		service.handleListOnboardingDomains(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/topology/planes", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListPlaneBindings(w)
+		service.handleListPlaneBindings(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/topology/planes/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":update") {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleUpdatePlaneBinding(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/topology/environments", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListEnvironmentTopologies(w)
+		service.handleListEnvironmentTopologies(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/topology/dependencies", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "dependency_profiles")
+		service.handleListNamespace(w, r, "dependency_profiles")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/topology/capacity", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "capacity_profiles")
+		service.handleListNamespace(w, r, "capacity_profiles")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/configs", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "service_configs")
+		service.handleListNamespace(w, r, "service_configs")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/configs/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":update") {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleUpdateNamespaceDocument(w, r, "service_configs", "config_updated")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/governance/bindings", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "governance_bindings")
+		service.handleListNamespace(w, r, "governance_bindings")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/governance/templates", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "governance_templates")
+		service.handleListNamespace(w, r, "governance_templates")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/governance/bindings/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":update") {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleUpdateNamespaceDocument(w, r, "governance_bindings", "governance_binding_updated")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/observability/slos", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "slo_policies")
+		service.handleListNamespace(w, r, "slo_policies")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/observability/alerts", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "alert_templates")
+		service.handleListNamespace(w, r, "alert_templates")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/observability/dashboards/cards", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "dashboard_cards")
+		service.handleListNamespace(w, r, "dashboard_cards")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/runbooks", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "runbooks")
+		service.handleListNamespace(w, r, "runbooks")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/runbooks/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":runDrill") {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleRunDrill(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/gates", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, "gate_rules")
+		service.handleListNamespace(w, r, "gate_rules")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/gates/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":override") {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleUpdateNamespaceDocument(w, r, "gate_rules", "gate_rule_overridden")
 	})
 	mux.HandleFunc("/v1/control-plane/platform/audits", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		items, err := service.store.ListAudits()
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 	mux.HandleFunc("/v1/control-plane/platform/approvals", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		items, err := service.store.ListAllApprovals()
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"items": items})
 	})
 	mux.HandleFunc("/v1/control-plane/platform/projections/summary", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleProjectionSummary(w)
+		service.handleProjectionSummary(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/releases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "only GET"})
+			writeRuntimeError(w, r, http.StatusMethodNotAllowed, "请求处理失败", "only GET")
 			return
 		}
 		service.handleListReleases(w, r.URL.Query().Get("service"))
@@ -223,7 +224,7 @@ func newServerMux(service *platformService) *http.ServeMux {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":rollback"):
 			service.handleRollbackRelease(w, r)
 		default:
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 		}
 	})
 	return mux
@@ -296,10 +297,10 @@ func (s *platformService) seed() error {
 	return nil
 }
 
-func (s *platformService) handleListServiceCatalog(w http.ResponseWriter) {
+func (s *platformService) handleListServiceCatalog(w http.ResponseWriter, r *http.Request) {
 	items, err := s.readOnboardingDomains()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	out := make([]map[string]any, 0)
@@ -331,10 +332,10 @@ func (s *platformService) handleListServiceCatalog(w http.ResponseWriter) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
-func (s *platformService) handleListOnboardingDomains(w http.ResponseWriter) {
+func (s *platformService) handleListOnboardingDomains(w http.ResponseWriter, r *http.Request) {
 	items, err := s.readOnboardingDomains()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	sort.Slice(items, func(i, j int) bool {
@@ -343,7 +344,7 @@ func (s *platformService) handleListOnboardingDomains(w http.ResponseWriter) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *platformService) handleListPlaneBindings(w http.ResponseWriter) {
+func (s *platformService) handleListPlaneBindings(w http.ResponseWriter, r *http.Request) {
 	var doc struct {
 		Environments map[string]map[string]struct {
 			Bindings []struct {
@@ -353,7 +354,7 @@ func (s *platformService) handleListPlaneBindings(w http.ResponseWriter) {
 		} `yaml:"environments"`
 	}
 	if err := s.readYAMLInto(filepath.Join(s.repoRoot, "deploy", "shared", "process_domain_plane_mapping.yaml"), &doc); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	items := make([]map[string]any, 0)
@@ -383,7 +384,7 @@ func (s *platformService) handleUpdatePlaneBinding(w http.ResponseWriter, r *htt
 	body["id"] = bindingID
 	body["updatedAt"] = nowRFC3339()
 	if err := s.store.PutDocument("plane_binding_overrides", bindingID, body); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	_ = s.store.AppendApproval(controlplane.ApprovalDecision{
@@ -397,14 +398,14 @@ func (s *platformService) handleUpdatePlaneBinding(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusOK, body)
 }
 
-func (s *platformService) handleListEnvironmentTopologies(w http.ResponseWriter) {
+func (s *platformService) handleListEnvironmentTopologies(w http.ResponseWriter, r *http.Request) {
 	var doc struct {
 		Environments map[string]map[string]struct {
 			Domains []string `yaml:"domains"`
 		} `yaml:"environments"`
 	}
 	if err := s.readYAMLInto(filepath.Join(s.repoRoot, "deploy", "shared", "process_domain_mapping.yaml"), &doc); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	items := make([]map[string]any, 0)
@@ -424,10 +425,10 @@ func (s *platformService) handleListEnvironmentTopologies(w http.ResponseWriter)
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *platformService) handleListNamespace(w http.ResponseWriter, namespace string) {
+func (s *platformService) handleListNamespace(w http.ResponseWriter, r *http.Request, namespace string) {
 	items, err := s.store.ListDocuments(namespace)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -452,7 +453,7 @@ func (s *platformService) handleUpdateNamespaceDocument(w http.ResponseWriter, r
 		}
 	}
 	if err := s.store.PutDocument(namespace, id, body); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	mode := "single"
@@ -474,11 +475,11 @@ func (s *platformService) handleRunDrill(w http.ResponseWriter, r *http.Request)
 	runbookID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/runbooks/", ":runDrill")
 	current, ok, err := s.store.GetDocument("runbooks", runbookID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "runbook not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "runbook not found")
 		return
 	}
 	before := cloneMap(current)
@@ -486,7 +487,7 @@ func (s *platformService) handleRunDrill(w http.ResponseWriter, r *http.Request)
 	current["lastRunAt"] = nowRFC3339()
 	current["lastActor"] = actorFromRequest(r)
 	if err := s.store.PutDocument("runbooks", runbookID, current); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	_ = s.store.AppendApproval(controlplane.ApprovalDecision{
@@ -545,7 +546,7 @@ func (s *platformService) handleApplyRelease(w http.ResponseWriter, r *http.Requ
 		RedisErrorRate float64 `json:"redisErrorRate"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
 		return
 	}
 	output, err := runScript(s.repoRoot, "scripts/config_release_apply_stage.sh",
@@ -586,7 +587,7 @@ func (s *platformService) handleRollbackRelease(w http.ResponseWriter, r *http.R
 		TargetConfigVersion string `json:"targetConfigVersion"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
 		return
 	}
 	output, err := runScript(s.repoRoot, "scripts/config_release_rollback.sh",
@@ -630,26 +631,26 @@ func (s *platformService) appendAudit(objectType, objectID, action string, befor
 	})
 }
 
-func (s *platformService) handleProjectionSummary(w http.ResponseWriter) {
+func (s *platformService) handleProjectionSummary(w http.ResponseWriter, r *http.Request) {
 	approvals, err := s.store.ListAllApprovals()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	audits, err := s.store.ListAudits()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	runbooks, err := s.store.ListDocuments("runbooks")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"approvalCount":  len(approvals),
-		"auditCount":     len(audits),
-		"runbookCount":   len(runbooks),
+		"approvalCount":   len(approvals),
+		"auditCount":      len(audits),
+		"runbookCount":    len(runbooks),
 		"releaseServices": []string{"platform-ops-service", "product-ops-service"},
 	})
 }
@@ -821,4 +822,32 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeRuntimeNotFound(w http.ResponseWriter, r *http.Request) {
+	writeRuntimeError(w, r, http.StatusNotFound, "接口不存在", "route not found")
+}
+
+func writeRuntimeError(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	userMessage string,
+	debugMessage string,
+) {
+	reason := "internal_error"
+	kind := rterr.KindSystem
+	if status == http.StatusBadRequest || status == http.StatusMethodNotAllowed || status == http.StatusNotFound {
+		reason = "invalid_argument"
+		kind = rterr.KindUser
+	}
+	rterr.WriteHTTPError(
+		w,
+		rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleOps, kind, reason),
+			userMessage,
+			debugMessage,
+		),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
 }

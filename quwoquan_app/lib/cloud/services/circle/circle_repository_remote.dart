@@ -39,9 +39,7 @@ class RemoteCircleRepository implements CircleRepository {
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircles),
     );
-    return _decodeList(resp)
-        .map(CircleDto.fromMap)
-        .toList(growable: false);
+    return _decodeList(resp).map(CircleDto.fromMap).toList(growable: false);
   }
 
   @override
@@ -122,21 +120,45 @@ class RemoteCircleRepository implements CircleRepository {
   // -- Membership ------------------------------------------------------------
 
   @override
-  Future<void> joinCircle(String circleId) async {
+  Future<void> joinCircle(
+    String circleId, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  }) async {
     final uri = _uri(CircleApiMetadata.joinCirclePath(circleId: circleId));
     final resp = await _client.post(
       uri,
-      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.joinCircle),
+      headers: CloudRequestHeaders.withPersonaContext(
+        CloudRequestHeaders.forPage(CircleRequestPageIds.joinCircle),
+        ownerUserId: ownerUserId,
+        actorProfileSubjectId: actorProfileSubjectId,
+        personaId: personaId,
+        personaContextVersion: personaContextVersion,
+      ),
     );
     _ensureSuccess(resp);
   }
 
   @override
-  Future<void> leaveCircle(String circleId) async {
+  Future<void> leaveCircle(
+    String circleId, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  }) async {
     final uri = _uri(CircleApiMetadata.leaveCirclePath(circleId: circleId));
     final resp = await _client.post(
       uri,
-      headers: CloudRequestHeaders.forPage(CircleRequestPageIds.leaveCircle),
+      headers: CloudRequestHeaders.withPersonaContext(
+        CloudRequestHeaders.forPage(CircleRequestPageIds.leaveCircle),
+        ownerUserId: ownerUserId,
+        actorProfileSubjectId: actorProfileSubjectId,
+        personaId: personaId,
+        personaContextVersion: personaContextVersion,
+      ),
     );
     _ensureSuccess(resp);
   }
@@ -222,9 +244,9 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.listCircleGroups,
       ),
     );
-    return _decodeList(resp)
-        .map(CircleGroupDto.fromMap)
-        .toList(growable: false);
+    return _decodeList(
+      resp,
+    ).map(CircleGroupDto.fromMap).toList(growable: false);
   }
 
   @override
@@ -251,16 +273,13 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.searchCircleGroups,
       ),
     );
-    return _decodeList(resp)
-        .map(CircleGroupDto.fromMap)
-        .toList(growable: false);
+    return _decodeList(
+      resp,
+    ).map(CircleGroupDto.fromMap).toList(growable: false);
   }
 
   @override
-  Future<CircleGroupDto> getCircleGroup(
-    String circleId,
-    String groupId,
-  ) async {
+  Future<CircleGroupDto> getCircleGroup(String circleId, String groupId) async {
     final uri = _uri(
       CircleApiMetadata.getCircleGroupPath(
         circleId: circleId,
@@ -357,9 +376,9 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.listCircleGroupMembers,
       ),
     );
-    return _decodeList(resp)
-        .map(CircleGroupMemberDto.fromMap)
-        .toList(growable: false);
+    return _decodeList(
+      resp,
+    ).map(CircleGroupMemberDto.fromMap).toList(growable: false);
   }
 
   @override
@@ -517,12 +536,7 @@ class RemoteCircleRepository implements CircleRepository {
       ),
     );
     return _decodeList(resp)
-        .map(
-          (m) => CircleFileDto.fromMap({
-            ...m,
-            'circleId': circleId,
-          }),
-        )
+        .map((m) => CircleFileDto.fromMap({...m, 'circleId': circleId}))
         .toList(growable: false);
   }
 
@@ -659,7 +673,8 @@ class RemoteCircleRepository implements CircleRepository {
   List<CircleDto> publishFlowRecommendedCircles() => const [];
 
   @override
-  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig() async {
+  Future<Map<String, CircleCategoryTabConfigDto>>
+  getCircleCategoryConfig() async {
     return CircleCategoryTabsLoader.loadFromAsset();
   }
 
@@ -684,9 +699,7 @@ class RemoteCircleRepository implements CircleRepository {
         CircleRequestPageIds.listUserCircles,
       ),
     );
-    return _decodeList(resp)
-        .map(CircleDto.fromMap)
-        .toList(growable: false);
+    return _decodeList(resp).map(CircleDto.fromMap).toList(growable: false);
   }
 
   // -- Helpers ---------------------------------------------------------------

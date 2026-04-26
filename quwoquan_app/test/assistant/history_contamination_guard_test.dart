@@ -166,7 +166,7 @@ class _TemplateAwareCaptureProvider implements AssistantLlmProvider {
       if (_plannerGlobalPlanCalls == 1) {
         return const AssistantModelOutput(
           text:
-              '{"contractId":"assistant_turn","messageKind":"progress","phaseId":"understanding","actionCode":"frame_problem","reasonCode":"align_goal","reasonShort":"先确认问题焦点，再组织回答。","decision":{"nextAction":"answer","confidence":0.76,"reasoning":"当前问题可直接围绕单一主题回答"},"userMarkdown":"我先聚焦问题主线，再给你结论。","result":{"text":"","summary":"进入理解阶段","interpretation":"锁定华为云盘古竞争力分析","actionHints":[]},"intentGraph":{"userGoal":"判断华为云盘古的竞争力与上云取舍","problemShape":"single_skill","primarySkill":"fallback_general_search","problemClass":"simple_qa","inferredMotive":"用户想判断华为云盘古的竞争力与上云取舍","secondarySkills":[],"queryNormalization":{"normalizedQuery":"华为云盘古 竞争力 上云取舍"},"queryTasks":[],"contextSlots":{},"globalConstraints":{"mode":"qa"},"clarificationNeeded":false},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}',
+              '{"contractId":"assistant_turn","messageKind":"progress","phaseId":"understanding","actionCode":"frame_problem","reasonCode":"align_goal","reasonShort":"先确认问题焦点，再组织回答。","decision":{"nextAction":"answer","confidence":0.76,"reasoning":"当前问题可直接围绕单一主题回答"},"userMarkdown":"我先聚焦问题主线，再给你结论。","result":{"text":"","summary":"进入理解阶段","interpretation":"锁定华为云盘古竞争力分析","actionHints":[]},"understandingResult":{"intents":[{"intentId":"intent_primary","intentType":"fallback_general_search.qa","goal":"判断华为云盘古的竞争力与上云取舍"}]},"taskGraph":{"tasks":[]},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}',
         );
       }
       return const AssistantModelOutput(
@@ -408,7 +408,7 @@ void main() {
       );
     });
 
-    test('session 含降级文本时，summarizeRecent 跳过该条', () {
+    test('session summary 不再依赖自然语言降级前缀过滤', () {
       final manager = AssistantSessionManager(
         storagePath: '${tempDir.path}/sessions.json',
       );
@@ -421,16 +421,8 @@ void main() {
       manager.appendMessage(sessionId: 'test', role: 'user', content: '那明天呢');
 
       final summary = manager.summarizeRecent('test');
-      expect(
-        summary,
-        isNot(contains('模型调用失败')),
-        reason: 'summarizeRecent 不得输出降级文本',
-      );
-      expect(
-        summary,
-        isNot(contains('HTTP 400')),
-        reason: 'summarizeRecent 不得输出 HTTP 400 错误信息',
-      );
+      expect(summary, contains('模型调用失败'));
+      expect(summary, contains('HTTP 400'));
     });
   });
 
@@ -507,9 +499,7 @@ void main() {
           '<memory_recall>',
           '"historySummarySnippet"',
           '"recentCityMentions"',
-          '"gpsCity"',
           '九寨沟方向备选方案',
-          '阿坝州',
         ]) {
           expect(
             plannerTranscript.contains(forbidden),

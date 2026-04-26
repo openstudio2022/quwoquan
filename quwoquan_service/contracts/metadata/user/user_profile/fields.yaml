@@ -367,6 +367,26 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: status
+        type: enum
+        enum_ref: PersonaStatus
+        constraints: [NOT_NULL]
+        default_value: active
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 分身生命周期状态；retired 后不可再作为新动作主体
+
+      - name: retiredAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 分身退役时间；为空表示仍可作为活跃主体
+
       - name: createdAt
         type: timestamp
         constraints: [NOT_NULL]
@@ -1015,7 +1035,7 @@ entities:
         description: 当前子账号 / 全部账号 / 恢复继承
 
   ProfileInheritanceStateView:
-    description: owner 基线与子账号 override 合成后的继承状态视图
+    description: 用户基线与分身 override 合成后的继承状态视图
     fields:
       - name: inheritsFromOwner
         type: bool
@@ -1053,6 +1073,14 @@ entities:
   ActivePersonaContextView:
     description: 当前激活分身上下文快照；供 content/chat/circle/assistant/notification 统一消费
     fields:
+      - name: personaId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
       - name: ownerUserId
         type: string
         constraints: [NOT_NULL]
@@ -1098,6 +1126,30 @@ entities:
       - name: contextVersion
         type: int
         constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: personaSnapshotVersion
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: sourceSurfaceId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: explicitOverride
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -1206,6 +1258,23 @@ entities:
       - name: isActive
         type: bool
         constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: status
+        type: enum
+        enum_ref: PersonaStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: retiredAt
+        type: timestamp
+        constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -1365,7 +1434,7 @@ entities:
         ops_exposure: read
 
   ProfileSubjectView:
-    description: 统一个人主页主体读模型；owner 与 subAccount 最终都映射到此视图
+    description: 统一个人主页主体读模型；用户与分身最终都映射到此视图
     fields:
       - name: profileSubjectId
         type: string
@@ -1382,6 +1451,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: 仅用于本人管理/上下文透传；公开读取不得返回
 
       - name: subjectType
         type: enum
@@ -1399,6 +1469,16 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: 分身内部 canonical key；不承担公开句柄语义
+
+      - name: userHandle
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 公开句柄真相源；用于公开路由与展示
 
       - name: username
         type: string
@@ -1407,6 +1487,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: 兼容别名；值与 userHandle 保持一致，不再承担内部主键语义
 
       - name: displayName
         type: string
@@ -1488,6 +1569,17 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: 兼容展示枚举；由 isolationLevel 派生（open->public, semi->friends, strict->private）
+
+      - name: isolationLevel
+        type: enum
+        enum_ref: IsolationLevel
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 公开访问边界真相源；strict 时公开读取返回不可见语义
 
       - name: inheritsFromOwner
         type: bool
@@ -1821,6 +1913,15 @@ entities:
         ops_exposure: read
 
       - name: username
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 兼容别名；与 userHandle 保持一致
+
+      - name: userHandle
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC

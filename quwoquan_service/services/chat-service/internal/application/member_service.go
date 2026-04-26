@@ -117,7 +117,6 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
 			"当前群聊不可操作",
 			"conversation is not active",
-			false,
 		)
 	}
 	userIDs := dedupeUserIDs(req.UserIds)
@@ -214,7 +213,6 @@ func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwner
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
 			"仅群主可转让群主",
 			"only owner can transfer ownership",
-			false,
 		)
 	}
 	if strings.TrimSpace(req.NewOwnerId) == "" {
@@ -226,7 +224,6 @@ func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwner
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "not_found"),
 			"目标成员不存在",
 			"new owner is not a member",
-			false,
 		)
 	}
 	if nextOwner.Role == "owner" {
@@ -259,7 +256,6 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
 			"仅群主可设置管理员",
 			"only owner can update group admins",
-			false,
 		)
 	}
 	adminIDs := dedupeUserIDs(req.AdminIds, req.OperatorId)

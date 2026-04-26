@@ -59,7 +59,7 @@ flowchart TB
     end
 
     subgraph tools [工具层 9个]
-        SearchTools["web_search / web_fetch\nmemory_search / local_context\nmedia_gallery"]
+        SearchTools["web_search / web_fetch\nmemory_search / media_gallery"]
         ActionTools["scheduler / deep_link\napp_action / intent_bridge"]
     end
 
@@ -136,7 +136,7 @@ LLM 从以下 15 个技能中自主选择，每个技能一行 `description` 是
 | `web_search` | 网络检索，支持 `queryVariants` 多路并发 | 否 | 所有信息查询域 |
 | `web_fetch` | 抓取指定 URL 正文 | 否 | knowledge / finance |
 | `memory_search` | 向量语义搜索用户长期记忆 | 否 | 所有域（个性化） |
-| `local_context` | 获取 GPS 位置、设备信息、权限状态 | 否 | weather / local_life |
+| `SystemContextEnvelope` | 系统默认注入时间、位置摘要、设备与权限信息 | 否 | weather / local_life / calendar_task |
 | `media_gallery` | 访问设备相册媒体 | 否 | 媒体处理 |
 | `intent_bridge` | iOS AppIntent / Android Intent 跳转 | 是 | 系统操作 |
 | `scheduler` | 日历事件 CRUD（native EventKit/AlarmManager） | 是 | calendar_task |

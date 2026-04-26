@@ -7,8 +7,8 @@ errors:
     kind: CONTACT
     reason: rate_limited
     http_status: 429
-    retryable: true
-    retry_after_seconds: 86400
+    recovery_action: retry
+    recovery_after_seconds: 86400
     dart_const: contactDiscoveryRateLimited
     go_const: ErrContactDiscoveryRateLimited
     user_message:
@@ -19,7 +19,7 @@ errors:
     kind: CONTACT
     reason: payload_too_large
     http_status: 400
-    retryable: true
+    recovery_action: retry
     dart_const: tooManyContacts
     go_const: ErrTooManyContacts
     user_message:
@@ -30,7 +30,7 @@ errors:
     kind: CONTACT
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: contactDiscoveryNotFound
     go_const: ErrContactDiscoveryNotFound
     user_message:

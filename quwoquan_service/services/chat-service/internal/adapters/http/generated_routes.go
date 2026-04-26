@@ -4,6 +4,8 @@ package http
 import (
 	"net/http"
 	"strings"
+
+	rterr "quwoquan_service/runtime/errors"
 )
 
 type routeEntry struct {
@@ -37,7 +39,7 @@ func RegisterGeneratedRoutes(mux *http.ServeMux, h *ChatHandler) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		op, ok := resolveGeneratedOperation(r.Method, r.URL.Path)
 		if !ok {
-			http.NotFound(w, r)
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "接口不存在", "route not found"))
 			return
 		}
 		dispatchGeneratedOperation(h, op, w, r)
@@ -83,7 +85,7 @@ func dispatchGeneratedOperation(h *ChatHandler, operation string, w http.Respons
 	case "SearchContacts":
 		h.handleSearchContacts(w, r)
 	default:
-		http.NotFound(w, r)
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "接口不存在", "operation not found"))
 	}
 }
 

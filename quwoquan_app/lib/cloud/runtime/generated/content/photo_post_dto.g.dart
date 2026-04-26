@@ -9,6 +9,7 @@ class PhotoPostDto extends PostBaseDto {
   @override final String identity;
   @override final String assistantUsePolicy;
   @override final String authorId;
+  final String authorProfileSubjectId;
   @override final String displayName;
   @override final String avatarUrl;
   @override final String? authorBackgroundUrl;
@@ -29,6 +30,7 @@ class PhotoPostDto extends PostBaseDto {
     required this.identity,
     required this.assistantUsePolicy,
     required this.authorId,
+    required this.authorProfileSubjectId,
     required this.displayName,
     required this.avatarUrl,
     this.authorBackgroundUrl,
@@ -51,6 +53,7 @@ class PhotoPostDto extends PostBaseDto {
       identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? 'work',
       assistantUsePolicy: m['assistantUsePolicy']?.toString() ?? 'inherit',
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
+      authorProfileSubjectId: m['profileSubjectId']?.toString() ?? m['authorProfileSubjectId']?.toString() ?? m['personaId']?.toString() ?? '',
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
       authorBackgroundUrl: m['authorBackgroundUrl']?.toString() ?? null,
@@ -75,6 +78,7 @@ class PhotoPostDto extends PostBaseDto {
       'identity': identity,
       'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
+      'authorProfileSubjectId': authorProfileSubjectId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'authorBackgroundUrl': authorBackgroundUrl,
@@ -97,6 +101,7 @@ class PhotoPostDto extends PostBaseDto {
     String? identity,
     String? assistantUsePolicy,
     String? authorId,
+    String? authorProfileSubjectId,
     String? displayName,
     String? avatarUrl,
     String? authorBackgroundUrl,
@@ -117,6 +122,7 @@ class PhotoPostDto extends PostBaseDto {
       identity: identity ?? this.identity,
       assistantUsePolicy: assistantUsePolicy ?? this.assistantUsePolicy,
       authorId: authorId ?? this.authorId,
+      authorProfileSubjectId: authorProfileSubjectId ?? this.authorProfileSubjectId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       authorBackgroundUrl: authorBackgroundUrl ?? this.authorBackgroundUrl,

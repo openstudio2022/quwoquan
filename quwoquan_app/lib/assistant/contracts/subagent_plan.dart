@@ -132,7 +132,7 @@ class SubagentPlan {
     );
   }
 
-  bool get hasMilestone3Inputs =>
+  bool get hasTypedExecutionInputs =>
       domainId.trim().isNotEmpty &&
       problemClass.trim().isNotEmpty &&
       goal.trim().isNotEmpty &&

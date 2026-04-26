@@ -16,9 +16,11 @@ import 'package:quwoquan_app/assistant/infrastructure/llm/stream_json_field_extr
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_run_interaction_collector.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_runtime_failure_mapper.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class AssistantModelOutput {
   const AssistantModelOutput({
@@ -30,6 +32,7 @@ class AssistantModelOutput {
     this.rawAssistantToolCallsMessage,
     this.reasoningText = '',
     this.usageEntries = const <LlmUsageLedgerEntry>[],
+    this.runtimeFailure,
   });
 
   final String text;
@@ -37,6 +40,7 @@ class AssistantModelOutput {
   final bool degraded;
   final String modelPath;
   final String failureCode;
+  final RuntimeFailureBase? runtimeFailure;
 
   /// 当模型走 native function calling 时，保存 assistant message 原文（含 tool_calls 字段），
   /// 用于下一轮 LLM 请求时正确构建 OpenAI 协议的消息历史。
@@ -50,6 +54,16 @@ class AssistantModelOutput {
   final List<LlmUsageLedgerEntry> usageEntries;
 
   bool get hasToolCalls => toolCalls.isNotEmpty;
+
+  RuntimeFailureBase? get effectiveRuntimeFailure =>
+      runtimeFailure ??
+      (degraded || failureCode.trim().isNotEmpty
+          ? _runtimeFailureForModelFailureCode(
+              failureCode,
+              message: text,
+              modelPath: modelPath,
+            )
+          : null);
 
   /// 将 [text] 解析为助手 JSON 契约（与 [LlmResponseParser.parse] 一致）。
   ///
@@ -72,6 +86,7 @@ class AssistantModelOutput {
     bool? degraded,
     String? modelPath,
     String? failureCode,
+    RuntimeFailureBase? runtimeFailure,
     Map<String, dynamic>? rawAssistantToolCallsMessage,
     String? reasoningText,
     List<LlmUsageLedgerEntry>? usageEntries,
@@ -82,6 +97,7 @@ class AssistantModelOutput {
       degraded: degraded ?? this.degraded,
       modelPath: modelPath ?? this.modelPath,
       failureCode: failureCode ?? this.failureCode,
+      runtimeFailure: runtimeFailure ?? this.runtimeFailure,
       rawAssistantToolCallsMessage:
           rawAssistantToolCallsMessage ?? this.rawAssistantToolCallsMessage,
       reasoningText: reasoningText ?? this.reasoningText,
@@ -103,6 +119,67 @@ class AssistantFailureCode {
   static const String answerStreamNotStarted = 'answer_stream_not_started';
   static const String answerStreamFailed = 'answer_stream_failed';
   static const String processTimelineMissing = 'process_timeline_missing';
+}
+
+RuntimeFailure _runtimeFailureForModelFailureCode(
+  String failureCode, {
+  required String message,
+  required String modelPath,
+}) {
+  final code = switch (failureCode.trim()) {
+    AssistantFailureCode.templateMissing =>
+      'ASSISTANT.CONTRACT.template_missing',
+    AssistantFailureCode.modelHttp => 'ASSISTANT.MODEL.http_error',
+    AssistantFailureCode.modelException => 'ASSISTANT.MODEL.exception',
+    AssistantFailureCode.modelResponseInvalid =>
+      'ASSISTANT.MODEL.response_invalid',
+    AssistantFailureCode.modelUnavailable => 'ASSISTANT.MODEL.unavailable',
+    AssistantFailureCode.heuristicFallback => 'ASSISTANT.MODEL.fallback_local',
+    AssistantFailureCode.answerStreamNotStarted =>
+      'ASSISTANT.MODEL.answer_stream_not_started',
+    AssistantFailureCode.answerStreamFailed =>
+      'ASSISTANT.MODEL.answer_stream_failed',
+    AssistantFailureCode.processTimelineMissing =>
+      'ASSISTANT.CONTRACT.process_timeline_missing',
+    _ => 'ASSISTANT.MODEL.failure',
+  };
+  return const AssistantRuntimeFailureMapper().fromRuntimeCode(
+    code,
+    boundary: 'assistant_model',
+    stage: 'llm_provider',
+    functionModule: 'llm_provider',
+    attributes: <RuntimeContextAttribute>[
+      RuntimeContextAttribute(key: 'failureCode', value: failureCode),
+      if (modelPath != '')
+        RuntimeContextAttribute(key: 'modelPath', value: modelPath),
+      if (message != '')
+        RuntimeContextAttribute(key: 'message', value: message),
+    ],
+  );
+}
+
+bool _shouldRetryModelFailure(
+  AssistantModelOutput result, {
+  required int remainingBudget,
+}) {
+  final failure = result.effectiveRuntimeFailure;
+  if (failure == null) return false;
+  final decision = const DefaultRuntimeRecoveryPolicy().decide(
+    failure,
+    const EntryContext(
+      kind: 'assistant_model',
+      entryId: '',
+      actorType: 'assistant',
+      actorId: '',
+      surfaceId: 'assistant',
+    ),
+    BoundaryContext(
+      boundary: 'assistant_model',
+      stage: 'llm_provider',
+      remainingBudget: remainingBudget,
+    ),
+  );
+  return decision.action == RuntimeRecoveryAction.retry;
 }
 
 abstract class AssistantLlmProvider {
@@ -1485,11 +1562,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
           const <String, dynamic>{};
       final latencyMs = (entry['latencyMs'] as num?)?.toInt() ?? 0;
       final error = (entry['error'] as String?)?.trim() ?? '';
-      final stage = _consoleStageLabel(
-        templateId: templateId,
-        request: request,
-        kind: kind,
-      );
+      final stage = _consoleStageLabel(templateId: templateId, kind: kind);
       final header = StringBuffer('[AssistantModel][$kind] ');
       header.write(hasError ? 'ERROR' : 'OK');
       if (stage.isNotEmpty) {
@@ -1505,20 +1578,25 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
       if (latencyMs > 0) {
         header.write(' latencyMs=$latencyMs');
       }
-      print(header.toString());
+      _writeConsoleLogLine(header.toString());
       for (final line in _consoleSectionLines('request', request)) {
-        print(line);
+        _writeConsoleLogLine(line);
       }
       for (final line in _consoleSectionLines('response', response)) {
-        print(line);
+        _writeConsoleLogLine(line);
       }
       if (error.isNotEmpty) {
         for (final line in _consoleSectionLines('error', error)) {
-          print(line);
+          _writeConsoleLogLine(line);
         }
       }
       return true;
     }());
+  }
+
+  void _writeConsoleLogLine(String line) {
+    // ignore: avoid_print
+    print(line);
   }
 
   List<String> _consoleSectionLines(String title, Object? value) {
@@ -1531,22 +1609,12 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
 
   String _consoleStageLabel({
     required String templateId,
-    required Map<String, dynamic> request,
     required String kind,
   }) {
     if (templateId == 'synthesizer.final_answer') {
       return 'answering';
     }
     if (templateId == 'planner.global_plan') {
-      final messages =
-          (request['body'] as Map?)?['messages'] as List? ?? const <Object?>[];
-      for (final item in messages) {
-        if (item is! Map) continue;
-        final content = (item['content'] as String?)?.trim() ?? '';
-        if (content.contains('[阶段提示：理解问题]')) {
-          return 'understanding';
-        }
-      }
       return kind.contains('stream') ? 'planning_stream' : 'planning';
     }
     if (templateId == 'phase.output_contract.plan') {
@@ -2224,31 +2292,27 @@ class SwitchableAssistantLlmProvider implements AssistantLlmProvider {
             : remoteResult.modelPath,
       );
 
-      final retryableRemoteFailure =
-          remoteResult.failureCode == AssistantFailureCode.modelHttp ||
-          remoteResult.failureCode == AssistantFailureCode.modelException ||
-          remoteResult.failureCode ==
-              AssistantFailureCode.modelResponseInvalid ||
-          remoteResult.failureCode == AssistantFailureCode.modelUnavailable;
-
       // 网络/DNS/HTTP/响应格式这类模型侧故障不应直接透传给 UI，
       // 先尝试剩余远端模型，再回退到本地安全降级。
-      if (retryableRemoteFailure) {
-        final candidates = _selectedModelOrder.isEmpty
-            ? _registrationOrder
-            : _selectedModelOrder;
-        final currentIndex = candidates.indexOf(ref);
-        final retryRefs = <String>[];
-        for (var i = 1; i < candidates.length; i++) {
-          final idx = currentIndex >= 0
-              ? (currentIndex + i) % candidates.length
-              : i - 1;
-          final candidateRef = candidates[idx];
-          if (candidateRef != ref && !retryRefs.contains(candidateRef)) {
-            retryRefs.add(candidateRef);
-          }
+      final candidates = _selectedModelOrder.isEmpty
+          ? _registrationOrder
+          : _selectedModelOrder;
+      final currentIndex = candidates.indexOf(ref);
+      final retryRefs = <String>[];
+      for (var i = 1; i < candidates.length; i++) {
+        final idx = currentIndex >= 0
+            ? (currentIndex + i) % candidates.length
+            : i - 1;
+        final candidateRef = candidates[idx];
+        if (candidateRef != ref && !retryRefs.contains(candidateRef)) {
+          retryRefs.add(candidateRef);
         }
+      }
 
+      if (_shouldRetryModelFailure(
+        remoteResult,
+        remainingBudget: retryRefs.length,
+      )) {
         for (final nextRef in retryRefs) {
           _activeModelRef = nextRef;
           final nextProvider = _providers[nextRef];

@@ -52,7 +52,7 @@ func (h *CircleHandler) handleCircles(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.handleCreateCircle(w, r)
 	default:
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
 	}
 }
 
@@ -92,14 +92,14 @@ func (h *CircleHandler) handleSearchCircles(w http.ResponseWriter, r *http.Reque
 func (h *CircleHandler) handleCreateCircle(w http.ResponseWriter, r *http.Request) {
 	var req application.CreateCircleRequest
 	if err := readJSON(r, &req); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
 	req.OwnerID = resolveUserID(r)
 
 	circle, err := h.circleService.CreateCircle(r.Context(), req)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"data": circle})
@@ -111,7 +111,7 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 	path := strings.TrimPrefix(r.URL.Path, "/v1/circles/")
 	parts := strings.Split(path, "/")
 	if len(parts) == 0 {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "missing circleId"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "missing circleId"))
 		return
 	}
 	circleID := parts[0]
@@ -125,7 +125,7 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 		case http.MethodDelete:
 			h.handleArchiveCircle(w, r, circleID)
 		default:
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
 		}
 		return
 	}
@@ -147,7 +147,7 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 	case "files":
 		h.handleFiles(w, r, circleID, parts[2:])
 	default:
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "unknown sub-resource: "+subResource))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "unknown sub-resource: "+subResource))
 	}
 }
 
@@ -156,7 +156,7 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 func (h *CircleHandler) handleGetCircle(w http.ResponseWriter, r *http.Request, circleID string) {
 	circle, err := h.circleService.GetCircle(r.Context(), circleID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": circle})
@@ -165,12 +165,12 @@ func (h *CircleHandler) handleGetCircle(w http.ResponseWriter, r *http.Request, 
 func (h *CircleHandler) handleUpdateCircle(w http.ResponseWriter, r *http.Request, circleID string) {
 	var data map[string]any
 	if err := readJSON(r, &data); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
 	circle, err := h.circleService.UpdateCircle(r.Context(), circleID, data)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": circle})
@@ -178,7 +178,7 @@ func (h *CircleHandler) handleUpdateCircle(w http.ResponseWriter, r *http.Reques
 
 func (h *CircleHandler) handleArchiveCircle(w http.ResponseWriter, r *http.Request, circleID string) {
 	if err := h.circleService.ArchiveCircle(r.Context(), circleID); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -188,11 +188,11 @@ func (h *CircleHandler) handleArchiveCircle(w http.ResponseWriter, r *http.Reque
 
 func (h *CircleHandler) handleJoinCircle(w http.ResponseWriter, r *http.Request, circleID string) {
 	if r.Method != http.MethodPost {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
 		return
 	}
-	if err := h.circleService.JoinCircle(r.Context(), circleID, resolveUserID(r)); err != nil {
-		writeHTTPError(w, err)
+	if err := h.circleService.JoinCircle(r.Context(), circleID, resolveActorProfileSubjectID(r)); err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -200,11 +200,11 @@ func (h *CircleHandler) handleJoinCircle(w http.ResponseWriter, r *http.Request,
 
 func (h *CircleHandler) handleLeaveCircle(w http.ResponseWriter, r *http.Request, circleID string) {
 	if r.Method != http.MethodPost {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
 		return
 	}
-	if err := h.circleService.LeaveCircle(r.Context(), circleID, resolveUserID(r)); err != nil {
-		writeHTTPError(w, err)
+	if err := h.circleService.LeaveCircle(r.Context(), circleID, resolveActorProfileSubjectID(r)); err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -213,7 +213,7 @@ func (h *CircleHandler) handleLeaveCircle(w http.ResponseWriter, r *http.Request
 func (h *CircleHandler) handleMembers(w http.ResponseWriter, r *http.Request, circleID string, rest []string) {
 	if len(rest) == 0 {
 		if r.Method != http.MethodGet {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
 			return
 		}
 		q := r.URL.Query()
@@ -232,25 +232,25 @@ func (h *CircleHandler) handleMembers(w http.ResponseWriter, r *http.Request, ci
 	// /v1/circles/{circleId}/members/{userId}/role
 	if len(rest) >= 2 && rest[1] == "role" {
 		if r.Method != http.MethodPatch {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only PATCH"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only PATCH"))
 			return
 		}
 		var body struct {
 			Role string `json:"role"`
 		}
 		if err := readJSON(r, &body); err != nil {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 			return
 		}
 		if err := h.circleService.UpdateMemberRole(r.Context(), circleID, rest[0], body.Role); err != nil {
-			writeHTTPError(w, err)
+			writeHTTPError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "unknown member sub-resource"))
+	writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "unknown member sub-resource"))
 }
 
 // --- Feed ---
@@ -258,7 +258,7 @@ func (h *CircleHandler) handleMembers(w http.ResponseWriter, r *http.Request, ci
 func (h *CircleHandler) handleFeed(w http.ResponseWriter, r *http.Request, circleID string, rest []string) {
 	if len(rest) == 0 {
 		if r.Method != http.MethodGet {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
 			return
 		}
 		q := r.URL.Query()
@@ -276,7 +276,7 @@ func (h *CircleHandler) handleFeed(w http.ResponseWriter, r *http.Request, circl
 		postID := rest[0]
 		action := rest[1]
 		if r.Method != http.MethodPatch {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only PATCH"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only PATCH"))
 			return
 		}
 		var body struct {
@@ -284,7 +284,7 @@ func (h *CircleHandler) handleFeed(w http.ResponseWriter, r *http.Request, circl
 			Featured *bool `json:"featured"`
 		}
 		if err := readJSON(r, &body); err != nil {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 			return
 		}
 		var err error
@@ -296,11 +296,11 @@ func (h *CircleHandler) handleFeed(w http.ResponseWriter, r *http.Request, circl
 			featured := body.Featured != nil && *body.Featured
 			err = h.circleService.FeaturePost(r.Context(), circleID, postID, featured)
 		default:
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效操作", "unknown feed action"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效操作", "unknown feed action"))
 			return
 		}
 		if err != nil {
-			writeHTTPError(w, err)
+			writeHTTPError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -311,12 +311,12 @@ func (h *CircleHandler) handleFeed(w http.ResponseWriter, r *http.Request, circl
 
 func (h *CircleHandler) handleGetStats(w http.ResponseWriter, r *http.Request, circleID string) {
 	if r.Method != http.MethodGet {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
 		return
 	}
 	stats, err := h.circleService.GetCircleStats(r.Context(), circleID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": stats})
@@ -326,18 +326,18 @@ func (h *CircleHandler) handleGetStats(w http.ResponseWriter, r *http.Request, c
 
 func (h *CircleHandler) handleUpdateSections(w http.ResponseWriter, r *http.Request, circleID string) {
 	if r.Method != http.MethodPatch {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only PATCH"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only PATCH"))
 		return
 	}
 	var body struct {
 		Sections []model.CircleSectionConfig `json:"sections"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
 	if err := h.circleService.UpdateSections(r.Context(), circleID, body.Sections); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -367,19 +367,19 @@ func (h *CircleHandler) handleFiles(w http.ResponseWriter, r *http.Request, circ
 		case http.MethodPost:
 			var req application.CreateFileRequest
 			if err := readJSON(r, &req); err != nil {
-				writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+				writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 				return
 			}
 			req.CircleID = circleID
 			req.UploaderID = resolveUserID(r)
 			file, err := h.fileService.CreateFile(r.Context(), req)
 			if err != nil {
-				writeHTTPError(w, err)
+				writeHTTPError(w, r, err)
 				return
 			}
 			writeJSON(w, http.StatusCreated, map[string]any{"data": file})
 		default:
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
 		}
 		return
 	}
@@ -389,30 +389,30 @@ func (h *CircleHandler) handleFiles(w http.ResponseWriter, r *http.Request, circ
 	case http.MethodGet:
 		file, err := h.fileService.GetFile(r.Context(), circleID, fileID)
 		if err != nil {
-			writeHTTPError(w, err)
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"data": file})
 	case http.MethodPatch:
 		var req application.UpdateFileRequest
 		if err := readJSON(r, &req); err != nil {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 			return
 		}
 		file, err := h.fileService.UpdateFile(r.Context(), circleID, fileID, req)
 		if err != nil {
-			writeHTTPError(w, err)
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"data": file})
 	case http.MethodDelete:
 		if err := h.fileService.DeleteFile(r.Context(), circleID, fileID); err != nil {
-			writeHTTPError(w, err)
+			writeHTTPError(w, r, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	default:
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "method not allowed"))
 	}
 }
 
@@ -420,16 +420,16 @@ func (h *CircleHandler) handleFiles(w http.ResponseWriter, r *http.Request, circ
 
 func (h *CircleHandler) handleBehaviors(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
 		return
 	}
 	var report map[string]any
 	if err := readJSON(r, &report); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "请求体无效", err.Error()))
 		return
 	}
 	if err := h.circleService.ReportBehavior(r.Context(), report); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -439,14 +439,14 @@ func (h *CircleHandler) handleBehaviors(w http.ResponseWriter, r *http.Request) 
 
 func (h *CircleHandler) handleUserCircles(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
 		return
 	}
 	// /v1/users/{userId}/circles
 	path := strings.TrimPrefix(r.URL.Path, "/v1/users/")
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 || parts[1] != "circles" {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "expected /v1/users/{userId}/circles"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "无效路径", "expected /v1/users/{userId}/circles"))
 		return
 	}
 	userID := parts[0]
@@ -465,10 +465,23 @@ func (h *CircleHandler) handleUserCircles(w http.ResponseWriter, r *http.Request
 // --- Helpers ---
 
 func resolveUserID(r *http.Request) string {
+	if uid := r.Header.Get("X-Client-User-Id"); uid != "" {
+		return uid
+	}
 	if uid := r.Header.Get("X-User-Id"); uid != "" {
 		return uid
 	}
 	return "anonymous"
+}
+
+func resolveActorProfileSubjectID(r *http.Request) string {
+	if actorID := r.Header.Get("X-Profile-Subject-Id"); actorID != "" {
+		return actorID
+	}
+	if personaID := r.Header.Get("X-Persona-Id"); personaID != "" {
+		return personaID
+	}
+	return resolveUserID(r)
 }
 
 func readJSON(r *http.Request, v any) error {
@@ -485,6 +498,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func writeHTTPError(w http.ResponseWriter, err error) {
-	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptions{})
+func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
+	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }

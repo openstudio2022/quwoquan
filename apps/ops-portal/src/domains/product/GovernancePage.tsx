@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { productWorkflow } from '../../generated/control-plane/productWorkflow.generated';
+import { productWorkflow } from '../../generated/control-plane/productWorkflow.generated.js';
 import {
   fetchAppealCases,
   fetchModerationCases,
@@ -7,9 +7,10 @@ import {
   type AppealCaseItem,
   type ModerationCaseItem,
   type RecoveryCaseItem,
-} from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+} from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function GovernancePage() {
   const workflow = productWorkflow.workflows.filter((item) =>
@@ -19,6 +20,7 @@ export function GovernancePage() {
   const [recoveryCases, setRecoveryCases] = useState<RecoveryCaseItem[]>([]);
   const [appealCases, setAppealCases] = useState<AppealCaseItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     Promise.all([fetchModerationCases(), fetchRecoveryCases(), fetchAppealCases()])
@@ -27,9 +29,11 @@ export function GovernancePage() {
         setRecoveryCases(recoveryItems);
         setAppealCases(appealItems);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -43,6 +47,7 @@ export function GovernancePage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? `已接入 ${moderationCases.length + recoveryCases.length + appealCases.length} 个真实治理对象` : '等待产品控制面连接'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">新建人工复核任务</button>}

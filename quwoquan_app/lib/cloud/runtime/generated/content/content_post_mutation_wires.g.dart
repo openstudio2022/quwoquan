@@ -54,6 +54,8 @@ class CreatePostRequestWire {
     this.publishLocation,
     this.personaId,
     this.profileSubjectId,
+    this.authorDisplayNameSnapshot,
+    this.authorAvatarUrlSnapshot,
     this.personaContextVersion,
   });
 
@@ -85,6 +87,8 @@ class CreatePostRequestWire {
   final CloudJsonMap? publishLocation;
   final String? personaId;
   final String? profileSubjectId;
+  final String? authorDisplayNameSnapshot;
+  final String? authorAvatarUrlSnapshot;
   final String? personaContextVersion;
 
   CloudJsonMap toWire() {
@@ -117,6 +121,8 @@ class CreatePostRequestWire {
     if (publishLocation != null) m['publishLocation'] = publishLocation!;
     _mutationPutOpt(m, 'personaId', personaId);
     _mutationPutOpt(m, 'profileSubjectId', profileSubjectId);
+    _mutationPutOpt(m, 'authorDisplayNameSnapshot', authorDisplayNameSnapshot);
+    _mutationPutOpt(m, 'authorAvatarUrlSnapshot', authorAvatarUrlSnapshot);
     _mutationPutOpt(m, 'personaContextVersion', personaContextVersion);
     return m;
   }
@@ -151,6 +157,8 @@ class CreatePostRequestWire {
       publishLocation: _mutationStringKeyedMap(m['publishLocation']),
       personaId: m['personaId']?.toString(),
       profileSubjectId: m['profileSubjectId']?.toString(),
+      authorDisplayNameSnapshot: m['authorDisplayNameSnapshot']?.toString(),
+      authorAvatarUrlSnapshot: m['authorAvatarUrlSnapshot']?.toString(),
       personaContextVersion: m['personaContextVersion']?.toString(),
     );
   }

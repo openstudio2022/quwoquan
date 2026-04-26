@@ -6,7 +6,7 @@
 - `L2_journey`: `persona-follow-graph`
 - `L3_scenario`: `persona-profile-subject-and-visibility`
 
-本场景冻结“作者分身如何被看见”的领域基线：`Persona/SubAccount` 如何映射成公开可读的 `ProfileSubject`，如何继承 owner 资料基线，如何覆写作者形象，以及停用后的历史归因如何保持稳定。
+本场景冻结“作者分身如何被看见”的领域基线：`Persona` 如何映射成公开可读的 `ProfileSubject`，如何继承用户资料基线，如何覆写作者形象，以及停用后的历史归因如何保持稳定。
 
 本场景只负责 user 域身份读写契约与可见性，不负责主页壳层 UI。`profile-homepage-redesign/owner-subaccount-homepage-unification` 必须消费本场景冻结的契约，而不是再次定义一套 persona 读模型。
 
@@ -14,7 +14,7 @@
 
 当前“作者分身”在公开表面的语义仍不稳定：
 
-1. **公开主体混用**：`userId`、`subAccountId`、`username`、`PersonaDto`、`ProfileSubjectView` 在不同页面和 Repository 中并行存在。
+1. **公开主体混用**：`profileSubjectId`、`subAccountId`、`userHandle`、`username`、`PersonaDto`、`ProfileSubjectView` 在不同页面和 Repository 中并行存在。
 2. **资料继承未形成统一合同**：owner 基线、分身覆写、同步范围、公开可见性已有零散字段，但缺少对“作者分身如何编辑和展示”的统一规格。
 3. **停用后的历史归因缺失基线**：如果分身退出使用，历史内容、评论、聊天消息、通知如何保留作者快照，目前没有冻结的产品合同。
 
@@ -35,17 +35,19 @@
 - `profileSubjectId`
 - `subjectType`
 - `subAccountId`
+- `userHandle`
 - `username`
 - `displayName`
 - `avatarUrl`
 - `backgroundUrl`
 - `bio`
-- 统计字段与可见性字段
+- 统计字段、`isolationLevel` 与 `profileVisibility`
 
 约束：
 
-- 外部展示必须使用 `ProfileSubject`，不能直接暴露 owner 管理字段。
+- 外部展示必须使用 `ProfileSubject`，不能直接暴露可反推出同一用户多分身关系的内部字段。
 - `PersonaDto` 可以继续作为 user 域内部管理对象，但不得直接作为公开主页首屏真相源。
+- `userHandle` 是公开句柄真相源；`username` 仅保留为兼容展示/路由别名，不再承担内部主键语义。
 
 ### F2. owner 基线与分身覆写
 
@@ -59,10 +61,13 @@
 支持覆写的首批字段：
 
 - `displayName`
+- `userHandle`
+- `phone`
+- `email`
 - `avatarUrl`
-- `backgroundUrl`
-- `bio`
-- `profileVisibility`
+
+本阶段不把 `backgroundUrl / bio` 做成 persona 级覆写字段；两者继续作为 owner 基线的公开读字段返回。
+`profileVisibility` 也不再单独写入，而是继续由 `isolationLevel` 派生。
 
 ### F3. 写入与同步范围
 
@@ -79,6 +84,7 @@
 
 - 用户在编辑 owner 或分身资料后，系统应能提示“是否同步到其它分身 / owner”。
 - 同步范围是 user 域写入契约的一部分，不是 UI 私有逻辑。
+- 首批可同步字段冻结为 `displayName / userHandle / phone / email / avatarUrl`；`isolationLevel / purposeHint` 仅对当前分身生效。
 
 ### F4. 可见性与公开读取
 
@@ -90,7 +96,9 @@
 
 约束：
 
-- `strict` 只影响公开读取，不影响 owner 管理视角和审计视角。
+- `IsolationLevel` 是公开访问边界真相源。
+- `ProfileVisibility` 仅作为公开展示层兼容枚举：`open -> public`、`semi -> friends`、`strict -> private`。
+- `strict` 只影响公开读取，不影响用户私有管理视角和审计视角。
 - 公开读取不允许返回 owner 映射信息。
 
 ### F5. 停用后的历史归因
@@ -103,9 +111,9 @@
 
 ### F6. 路由与引用合同
 
-- 对外分享路由继续使用公开路径，如 `/user/{username}`。
+- 对外分享路由继续使用公开路径，如 `/user/{userHandle}`。
 - 内部身份引用统一使用 `profileSubjectId` 或 `subAccountId`。
-- `username` 只承担路由与展示语义，不再承担跨域内部主键语义。
+- `userHandle` 承担公开路由与展示主语义；`username` 仅作为兼容别名。
 
 ## 领域边界
 

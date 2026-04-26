@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 enum CloudErrorType {
   timeout,
@@ -18,6 +19,7 @@ class CloudException implements Exception {
     this.statusCode,
     this.code,
     this.errorCode,
+    this.runtimeFailure,
     this.cause,
   });
 
@@ -30,6 +32,8 @@ class CloudException implements Exception {
 
   /// Typed [ContentErrorCode] parsed from [code]. Null when not a content-domain error.
   final ContentErrorCode? errorCode;
+
+  final RuntimeFailureBase? runtimeFailure;
 
   final Object? cause;
 

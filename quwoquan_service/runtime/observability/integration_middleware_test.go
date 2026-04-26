@@ -101,6 +101,62 @@ func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
 	}
 }
 
+func TestHTTPServerMiddleware_PanicWritesRuntimeErrorResponse(t *testing.T) {
+	var standard bytes.Buffer
+	var errorBuf bytes.Buffer
+
+	ioLogger := NewIOAccessLogger(&standard)
+	filter := NewKVMetadataFilter(nil)
+	processLogger, err := NewProcessTraceLogger(&standard, &errorBuf, TraceLogLevelInfo, filter)
+	if err != nil {
+		t.Fatalf("new process logger failed: %v", err)
+	}
+	exceptionLogger, err := NewExceptionLogger(&standard, &errorBuf, filter)
+	if err != nil {
+		t.Fatalf("new exception logger failed: %v", err)
+	}
+
+	mw := HTTPServerMiddleware(HTTPMiddlewareConfig{
+		Service:           "gateway-service",
+		Origin:            "service.http",
+		Direction:         DirectionInbound,
+		SourceID:          "gateway-service",
+		Src:               "service",
+		ServiceName:       "gateway-service",
+		ServiceInstanceID: "gw-pod-01",
+	}, ioLogger, processLogger, exceptionLogger)
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("boom")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	req.Header.Set("X-Trace-Id", "trace-panic")
+	req.Header.Set("X-Request-Id", "req-panic")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status: %d", rec.Code)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("panic response should be runtime error json: %v body=%q", err, rec.Body.String())
+	}
+	if body["code"] != "UNKNOWN.SYSTEM.internal_error" {
+		t.Fatalf("unexpected code: %+v", body)
+	}
+	if body["requestId"] != "req-panic" || body["traceId"] != "trace-panic" {
+		t.Fatalf("missing request/trace ids: %+v", body)
+	}
+	if _, ok := body["location"].(map[string]any); !ok {
+		t.Fatalf("missing runtime location: %+v", body)
+	}
+	if _, ok := body["context"].(map[string]any); !ok {
+		t.Fatalf("missing runtime context: %+v", body)
+	}
+}
+
 func TestMQMiddleware_EmitIntegratedLogs(t *testing.T) {
 	var standard bytes.Buffer
 	var errorBuf bytes.Buffer
@@ -219,4 +275,3 @@ func TestUAT_CorrelationAcrossThreeLogs(t *testing.T) {
 		}
 	}
 }
-

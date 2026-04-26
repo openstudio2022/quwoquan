@@ -79,7 +79,6 @@ func (s *SearchService) SearchSocialRelations(
 
 		results = append(results, map[string]any{
 			"profileSubjectId": profileSubjectID,
-			"ownerUserId":      strings.TrimSpace(profile.UserID),
 			"subAccountId":     strings.TrimSpace(asString(view["subAccountId"])),
 			"username":         firstNonEmpty(strings.TrimSpace(asString(view["username"])), strings.TrimSpace(profile.Nickname), profileSubjectID),
 			"displayName":      displayName,

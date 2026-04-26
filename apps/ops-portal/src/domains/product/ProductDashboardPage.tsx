@@ -14,9 +14,10 @@ import {
   type RecoveryCaseItem,
   type RecommendationPolicyItem,
   type WorkflowItem,
-} from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+} from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function ProductDashboardPage() {
   const [workflows, setWorkflows] = useState<WorkflowItem[]>([]);
@@ -26,6 +27,7 @@ export function ProductDashboardPage() {
   const [appealCases, setAppealCases] = useState<AppealCaseItem[]>([]);
   const [summary, setSummary] = useState<ProductProjectionSummary | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -44,9 +46,11 @@ export function ProductDashboardPage() {
         setAppealCases(appealItems);
         setSummary(summaryItem);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -73,6 +77,7 @@ export function ProductDashboardPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实产品控制面已接入' : '等待产品控制面连接'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">创建策略变更</button>}

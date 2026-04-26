@@ -1243,6 +1243,13 @@ packages:
       relative: true
     source: path
     version: "0.1.0"
+  quwoquan_runtime_errors:
+    dependency: "direct main"
+    description:
+      path: "../packages/quwoquan_runtime_errors"
+      relative: true
+    source: path
+    version: "0.1.0"
   record:
     dependency: "direct main"
     description:

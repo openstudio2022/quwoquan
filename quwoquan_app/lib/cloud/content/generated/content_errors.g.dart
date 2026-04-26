@@ -26,19 +26,6 @@ enum ContentErrorCode {
   upstreamTimeout,
   unknown;
 
-  bool get isRetryable {
-    switch (this) {
-      case ContentErrorCode.rateLimited:
-      case ContentErrorCode.commentRateLimited:
-      case ContentErrorCode.mediaNotReady:
-      case ContentErrorCode.storageWriteFailed:
-      case ContentErrorCode.upstreamTimeout:
-        return true;
-      default:
-        return false;
-    }
-  }
-
   static ContentErrorCode fromCode(String code) {
     switch (code) {
       case 'CONTENT.USER.post_not_found':

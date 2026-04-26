@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/application/assistant_request_policy.dart';
 import 'package:quwoquan_app/assistant/application/assistant_run_stream.dart';
@@ -31,6 +32,8 @@ import 'package:quwoquan_app/assistant/sync/assistant_sync.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_context_scope_read_view.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_conversation_controller.dart';
 
@@ -38,6 +41,17 @@ List<Map<String, dynamic>> _messageMaps(AssistantConversationController c) {
   return c.transcriptRows
       .map((r) => PersistedTimelineTurnCodec.encode(r))
       .toList(growable: false);
+}
+
+class _FakeAnalyticsService extends AnalyticsService {
+  _FakeAnalyticsService() : super.forTesting();
+
+  final List<AnalyticsEvent> events = <AnalyticsEvent>[];
+
+  @override
+  Future<void> trackEvent(AnalyticsEvent event) async {
+    events.add(event);
+  }
 }
 
 void main() {
@@ -266,6 +280,66 @@ void main() {
         );
       },
     );
+
+    testWidgets('notification replay 命中错误分身提示时会上报 replay/mismatch 指标', (
+      tester,
+    ) async {
+      final analytics = _FakeAnalyticsService();
+      final controller = await _mountController(
+        tester,
+        overrides: [
+          analyticsProvider.overrideWithValue(analytics),
+          assistantRemoteConfiguredProvider.overrideWith((ref) => false),
+          assistantGatewayProvider.overrideWithValue(_FastAssistantGateway()),
+          localAssistantEntryProvider.overrideWithValue(
+            _FakeStreamingLocalAssistantEntry(),
+          ),
+          activePersonaContextProvider.overrideWith((ref) async {
+            return const ActivePersonaContextViewData(
+              profileSubjectId: 'persona_live',
+              ownerUserId: 'user_test',
+              subAccountId: 'persona_live',
+              subjectType: 'persona',
+              displayName: '当前分身',
+              avatarUrl: '',
+              personaContextVersion: 'ctx_live_v2',
+            );
+          }),
+        ],
+        openContext: const AssistantOpenContext(
+          source: AssistantSource.chat,
+          visitTarget: VisitTarget.page('notification_entry'),
+          experienceLevel: ExperienceLevel.returning,
+          hints: <String, dynamic>{
+            'sourceSurfaceId': 'notification.assistant.replay',
+            'personaId': 'persona_hint',
+            'profileSubjectId': 'persona_hint',
+            'contextVersion': 'ctx_live_v1',
+          },
+        ),
+      );
+
+      unawaited(controller.sendMessage(text: '打开这条通知', viewportWidth: 390));
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (DateTime.now().isBefore(deadline)) {
+        await tester.pump(const Duration(milliseconds: 50));
+        if (!controller.assistantResponding &&
+            controller.transcriptRows.isNotEmpty &&
+            _messageMaps(controller).last['senderId'] ==
+                AppConceptConstants.assistantSenderId) {
+          break;
+        }
+      }
+
+      final eventNames = analytics.events
+          .where((event) => event.eventType == 'persona_context')
+          .map((event) => event.eventName)
+          .toList(growable: false);
+      expect(eventNames, contains('persona_context_mismatch_count'));
+      expect(eventNames, contains('assistant_persona_drift_count'));
+      expect(eventNames, contains('notification_wrong_persona_open_count'));
+      expect(eventNames, contains('persona_context_stale_count'));
+    });
 
     testWidgets(
       'completed 未回传 processTimeline 时，仍会把流式阶段累积出的 canonical timeline 落到最终 assistant 消息',
@@ -571,9 +645,7 @@ void main() {
       expect(_messageMaps(controller).last['content'], isNotEmpty);
     });
 
-    testWidgets('sendMessage 在学习记录失败时不会追加错误消息或覆盖最终答案', (
-      tester,
-    ) async {
+    testWidgets('sendMessage 在学习记录失败时不会追加错误消息或覆盖最终答案', (tester) async {
       final gateway = _FastAssistantGateway();
       final entry = _FakeStreamingLocalAssistantEntry();
       final controller = await _mountController(
@@ -1108,9 +1180,7 @@ void main() {
       );
     });
 
-    testWidgets('sendRewrite 在 failed 事件下仍会收口为可展示 assistant 消息', (
-      tester,
-    ) async {
+    testWidgets('sendRewrite 在 failed 事件下不会生成代码兜底文案', (tester) async {
       final gateway = _FastAssistantGateway();
       final entry = _FakeStreamingLocalAssistantEntry(
         streamedChunks: const <String>[],
@@ -1162,17 +1232,19 @@ void main() {
       final displayState = resolvePersistedAssistantDisplayState(
         finalAssistantMessage,
       );
-      expect(finalAssistantMessage['senderId'], AppConceptConstants.assistantSenderId);
-      expect(finalAssistantMessage['content'], isNotEmpty);
       expect(
-        renderAnswerBlocksToMarkdown(displayState.answer.blocks),
-        isNotEmpty,
+        finalAssistantMessage['senderId'],
+        AppConceptConstants.assistantSenderId,
       );
+      expect(finalAssistantMessage['content'], isEmpty);
+      expect(
+        (finalAssistantMessage['assistantBoundaryOutcome'] as Map?)?['status'],
+        'blocked',
+      );
+      expect(renderAnswerBlocksToMarkdown(displayState.answer.blocks), isEmpty);
     });
 
-    testWidgets('sendRewrite 在无 completed 返回时仍保留已流式展示的答案正文', (
-      tester,
-    ) async {
+    testWidgets('sendRewrite 在无 completed 返回时仍保留已流式展示的答案正文', (tester) async {
       final gateway = _FastAssistantGateway();
       final entry = _FakeStreamingLocalAssistantEntry(
         completedFinalAnswerReady: false,
@@ -1230,9 +1302,7 @@ void main() {
       );
     });
 
-    testWidgets('sendRewrite 在流式抛错时仍保留已流式展示的答案正文', (
-      tester,
-    ) async {
+    testWidgets('sendRewrite 在流式抛错时仍保留已流式展示的答案正文', (tester) async {
       final gateway = _FastAssistantGateway();
       final entry = _FakeStreamingLocalAssistantEntry(
         completedFinalAnswerReady: false,
@@ -1353,6 +1423,52 @@ void main() {
       expect(view.pageType, 'discovery');
       expect(view.normalizedUserTags, ['t1', 't2']);
     });
+
+    testWidgets(
+      'native location context does not forward precise coordinates',
+      (tester) async {
+        final gateway = _FastAssistantGateway();
+        final entry = _FakeStreamingLocalAssistantEntry();
+        final controller = await _mountController(
+          tester,
+          overrides: [
+            assistantGatewayProvider.overrideWithValue(gateway),
+            localAssistantEntryProvider.overrideWithValue(entry),
+            activePersonaContextProvider.overrideWith((ref) async {
+              return const ActivePersonaContextViewData(
+                profileSubjectId: 'user_test',
+                ownerUserId: 'owner_test',
+                subAccountId: 'persona_test',
+                subjectType: 'user',
+                displayName: '测试用户',
+                avatarUrl: '',
+                personaContextVersion: 'v_test',
+              );
+            }),
+          ],
+        );
+
+        unawaited(controller.sendMessage(text: '深圳天气怎么样', viewportWidth: 390));
+        final deadline = DateTime.now().add(const Duration(seconds: 5));
+        while (DateTime.now().isBefore(deadline) && entry.lastRequest == null) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+
+        final request = entry.lastRequest;
+        expect(request, isNotNull);
+        expect(request!.deviceProfile, 'mobile');
+        expect(request.gpsLocation, containsPair('city', '深圳'));
+        expect(request.gpsLocation.containsKey('lat'), isFalse);
+        expect(request.gpsLocation.containsKey('lng'), isFalse);
+        expect(request.gpsLocation.containsKey('latitude'), isFalse);
+        expect(request.gpsLocation.containsKey('longitude'), isFalse);
+        expect(
+          request.contextScopeHint.containsKey('availableGeoContext'),
+          isFalse,
+        );
+        expect(request.contextScopeHint.containsKey('city'), isFalse);
+      },
+    );
   });
 }
 
@@ -1360,6 +1476,7 @@ Future<AssistantConversationController> _mountController(
   WidgetTester tester, {
   required dynamic overrides,
   AssistantLearningService? learningService,
+  AssistantOpenContext? openContext,
 }) async {
   final completer = Completer<AssistantConversationController>();
 
@@ -1373,6 +1490,7 @@ Future<AssistantConversationController> _mountController(
       ],
       child: MaterialApp(
         home: _ControllerHarness(
+          openContext: openContext,
           onReady: (controller) {
             if (!completer.isCompleted) {
               completer.complete(controller);
@@ -1412,9 +1530,10 @@ Map<String, dynamic> _canonicalHistoryAssistantMessage(String content) {
 }
 
 class _ControllerHarness extends ConsumerStatefulWidget {
-  const _ControllerHarness({required this.onReady});
+  const _ControllerHarness({required this.onReady, this.openContext});
 
   final ValueChanged<AssistantConversationController> onReady;
+  final AssistantOpenContext? openContext;
 
   @override
   ConsumerState<_ControllerHarness> createState() => _ControllerHarnessState();
@@ -1426,7 +1545,10 @@ class _ControllerHarnessState extends ConsumerState<_ControllerHarness> {
   @override
   void initState() {
     super.initState();
-    controller = AssistantConversationController(ref: ref);
+    controller = AssistantConversationController(
+      ref: ref,
+      openContext: widget.openContext,
+    );
     widget.onReady(controller);
   }
 
@@ -1649,11 +1771,13 @@ class _FakeStreamingLocalAssistantEntry extends LocalAssistantEntry {
   final bool emitCompleted;
   final String? failedMessage;
   final bool throwBeforeCompleted;
+  AssistantRunRequest? lastRequest;
 
   @override
   Stream<AssistantRunStreamEvent> runStream({
     required AssistantRunRequest request,
   }) async* {
+    lastRequest = request;
     final canonicalTimelines = streamedTimelines ?? _fourStageTimelines();
     final visibleTimelines = canonicalTimelines
         .map(buildVisibleProcessTimeline)
@@ -1697,82 +1821,30 @@ class _FakeStreamingLocalAssistantEntry extends LocalAssistantEntry {
 }
 
 class _FakeStreamingRemoteAssistantEntry extends RemoteAssistantEntry {
-  _FakeStreamingRemoteAssistantEntry({
-    this.includeCompletedTimeline = true,
-    this.streamedTimelines,
-    this.completedTimeline,
-    this.completedAnswer = '深圳今天晴，轻装出门更合适。',
-    this.streamedChunks = const <String>['深圳今天晴，', '轻装出门更合适。'],
-    this.completedFinalText,
-    this.completedDisplayMarkdown,
-    this.completedDisplayPlainText,
-    this.completedFinalAnswerReady = true,
-    this.answerChunkDelay = Duration.zero,
-    this.completedEventDelay = Duration.zero,
-    this.emitCompleted = true,
-    this.failedMessage,
-    this.throwBeforeCompleted = false,
-  }) : super(
-         openClawBridge: OpenClawBridge(baseUrl: ''),
-         requestPolicy: const AssistantRequestPolicy(),
-       );
-
-  final bool includeCompletedTimeline;
-  final List<List<ProcessTimelineFrame>>? streamedTimelines;
-  final List<ProcessTimelineFrame>? completedTimeline;
-  final String completedAnswer;
-  final List<String> streamedChunks;
-  final String? completedFinalText;
-  final String? completedDisplayMarkdown;
-  final String? completedDisplayPlainText;
-  final bool completedFinalAnswerReady;
-  final Duration answerChunkDelay;
-  final Duration completedEventDelay;
-  final bool emitCompleted;
-  final String? failedMessage;
-  final bool throwBeforeCompleted;
+  _FakeStreamingRemoteAssistantEntry()
+    : super(
+        openClawBridge: OpenClawBridge(baseUrl: ''),
+        requestPolicy: const AssistantRequestPolicy(),
+      );
 
   @override
   Stream<AssistantRunStreamEvent> runStream({
     required AssistantRunRequest request,
   }) async* {
-    final canonicalTimelines = streamedTimelines ?? _fourStageTimelines();
+    final canonicalTimelines = _fourStageTimelines();
     final visibleTimelines = canonicalTimelines
         .map(buildVisibleProcessTimeline)
         .toList(growable: false);
     for (final timeline in visibleTimelines) {
       yield AssistantRunStreamEvent.processTimeline(timeline);
     }
-    for (final chunk in streamedChunks) {
+    for (final chunk in const <String>['深圳今天晴，', '轻装出门更合适。']) {
       yield AssistantRunStreamEvent.answerDelta(chunk);
-      if (answerChunkDelay > Duration.zero) {
-        await Future<void>.delayed(answerChunkDelay);
-      }
-    }
-    if (completedEventDelay > Duration.zero) {
-      await Future<void>.delayed(completedEventDelay);
-    }
-    if (throwBeforeCompleted) {
-      throw StateError('fake_stream_before_completed');
-    }
-    if ((failedMessage ?? '').isNotEmpty) {
-      yield AssistantRunStreamEvent.failed(failedMessage!);
-      if (!emitCompleted) {
-        return;
-      }
-    }
-    if (!emitCompleted) {
-      return;
     }
     yield AssistantRunStreamEvent.completed(
       _completedAssistantRunResponse(
-        completedTimeline ?? canonicalTimelines.last,
-        includeTimeline: includeCompletedTimeline,
-        answer: completedAnswer,
-        finalText: completedFinalText,
-        displayMarkdown: completedDisplayMarkdown,
-        displayPlainText: completedDisplayPlainText,
-        finalAnswerReady: completedFinalAnswerReady,
+        canonicalTimelines.last,
+        answer: '深圳今天晴，轻装出门更合适。',
       ),
     );
   }

@@ -16,20 +16,30 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeHTTPError(w http.ResponseWriter, err error) {
-	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptions{IncludeDebug: true})
+func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
+	opts := rterr.HTTPWriteOptionsFromRequest(r)
+	opts.IncludeDebug = true
+	rterr.WriteHTTPError(w, err, opts)
 }
 
-func writeNotFound(w http.ResponseWriter, msg string) {
-	writeHTTPError(w, generated.AppErrorFromUserNotFound(msg))
+func writeNotFound(w http.ResponseWriter, r *http.Request, msg string) {
+	writeHTTPError(w, r, generated.AppErrorFromUserNotFound(msg))
 }
 
-func writeInvalidArg(w http.ResponseWriter, msg string) {
-	writeHTTPError(w, generated.AppErrorFromInvalidArgument(msg))
+func writeInvalidArg(w http.ResponseWriter, r *http.Request, msg string) {
+	writeHTTPError(w, r, generated.AppErrorFromInvalidArgument(msg))
 }
 
-func writeForbidden(w http.ResponseWriter, msg string) {
-	writeHTTPError(w, generated.AppErrorFromForbidden(msg))
+func writeForbidden(w http.ResponseWriter, r *http.Request, msg string) {
+	writeHTTPError(w, r, generated.AppErrorFromForbidden(msg))
+}
+
+func writeConflict(w http.ResponseWriter, r *http.Request, userMessage string, debugMessage string) {
+	writeHTTPError(w, r, rterr.NewAppError(
+		rterr.NewCode(rterr.ModuleUser, rterr.KindUser, "conflict"),
+		userMessage,
+		debugMessage,
+	))
 }
 
 func parseLimit(r *http.Request, defaultVal int) int {
@@ -60,6 +70,18 @@ func isParamSlot(_ []string, _ int, _ string) bool { return false }
 
 func userIDFromHeader(r *http.Request) string {
 	return r.Header.Get("X-Client-User-Id")
+}
+
+func profileSubjectIDFromHeader(r *http.Request) string {
+	return strings.TrimSpace(r.Header.Get("X-Profile-Subject-Id"))
+}
+
+func personaIDFromHeader(r *http.Request) string {
+	return strings.TrimSpace(r.Header.Get("X-Persona-Id"))
+}
+
+func personaContextVersionFromHeader(r *http.Request) string {
+	return strings.TrimSpace(r.Header.Get("X-Persona-Context-Version"))
 }
 
 func readBody(r *http.Request) (map[string]any, error) {

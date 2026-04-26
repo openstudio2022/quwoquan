@@ -9,7 +9,7 @@ acceptance_criteria:
   description: errors.yaml 结构完整
   assertions:
   - 含 CONTENT.USER.* 和 CONTENT.SYSTEM.* 两类
-  - 每个 code 含 dart_const / go_const / http_status / retryable / user_message.zh
+  - 每个 code 含 dart_const / go_const / http_status / recovery action / user_message.zh
   - make verify-metadata PASS
 - id: A2
   description: 端侧错误码 codegen 正确

@@ -23,7 +23,7 @@ void main() {
       );
     });
 
-    test('多方案问题可产出多 queryTasks 检索计划', () {
+    test('多方案问题可产出多 searchPlans 检索计划', () {
       final plan = kernel.buildRetrievalPlan(
         '深圳住宿怎么选',
         const <String>['web_search'],
@@ -36,14 +36,14 @@ void main() {
 
       expect(plan, isNotNull);
       expect(plan!.calls.single.name, equals('web_search'));
-      final queryTasks =
-          (plan.calls.single.arguments['queryTasks'] as List?)
+      final searchPlans =
+          (plan.calls.single.arguments['searchPlans'] as List?)
               ?.whereType<Map>()
               .toList(growable: false) ??
           const <Map>[];
-      expect(queryTasks.length, equals(3));
+      expect(searchPlans.length, equals(3));
       expect(
-        queryTasks.map((task) => task['id']).toList(),
+        searchPlans.map((task) => task['id']).toList(),
         containsAll(<String>['candidate_space', 'fit_scenarios', 'risks']),
       );
     });

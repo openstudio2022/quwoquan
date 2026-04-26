@@ -38,6 +38,8 @@ class AssistantAnswerPayloadReadView {
 
   String get nextActionWireName => asTypedOutput.decision.nextAction.wireName;
 
+  AssistantNextAction get nextActionType => asTypedOutput.decision.nextAction;
+
   String get slotStateFailureReason =>
       (_raw['slotState'] as Map?)?['failureReason']?.toString().trim() ?? '';
 
@@ -126,12 +128,18 @@ class AssistantAnswerPayloadReadView {
 
   String get messageKindTrimmed => asTypedOutput.messageKind.wireName.trim();
 
+  AssistantMessageKind get messageKindType => asTypedOutput.messageKind;
+
   String get userMarkdownTrimmed => asTypedOutput.userMarkdown.trim();
 
   String get resultInterpretationTrimmed =>
       asTypedOutput.result.interpretation.trim();
 
   String get resultTextTrimmed => asTypedOutput.result.text.trim();
+
+  String get resultSummaryTrimmed => asTypedOutput.result.summary.trim();
+
+  String get reasonShortTrimmed => asTypedOutput.reasonShort.trim();
 
   bool get hasTopLevelResultMap => _raw['result'] is Map;
 

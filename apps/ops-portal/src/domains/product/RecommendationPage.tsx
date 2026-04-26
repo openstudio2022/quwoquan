@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Line, LineChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-import { productConfigSchema } from '../../generated/control-plane/productConfig.generated';
-import { productControlPlane } from '../../generated/control-plane/productControlPlane.generated';
+import { productConfigSchema } from '../../generated/control-plane/productConfig.generated.js';
+import { productControlPlane } from '../../generated/control-plane/productControlPlane.generated.js';
 import {
   fetchRecommendationPolicies,
   type RecommendationPolicyItem,
-} from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+} from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function RecommendationPage() {
   const recommendationObject = productControlPlane.object_types.find(
@@ -17,15 +18,18 @@ export function RecommendationPage() {
   const recommendationConfigs = productConfigSchema.configs.filter((item) => item.key.includes('ops.reco.'));
   const [policies, setPolicies] = useState<RecommendationPolicyItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     fetchRecommendationPolicies()
       .then((items) => {
         setPolicies(items);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -49,6 +53,7 @@ export function RecommendationPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实推荐策略已接入' : '当前展示回退到门户样例'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">发起策略模拟</button>}

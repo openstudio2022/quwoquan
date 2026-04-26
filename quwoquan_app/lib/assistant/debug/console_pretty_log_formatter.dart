@@ -3,6 +3,21 @@ import 'dart:convert';
 class ConsolePrettyLogFormatter {
   const ConsolePrettyLogFormatter._();
 
+  static String prettyJsonLikeString(Object? value, {String indent = '  '}) {
+    final normalized = normalizeJsonLikeValue(value);
+    if (normalized is Map || normalized is List) {
+      try {
+        return JsonEncoder.withIndent(indent).convert(normalized);
+      } catch (_) {
+        // Fall through to string fallback.
+      }
+    }
+    if (value is String) {
+      return value;
+    }
+    return value?.toString() ?? '';
+  }
+
   static List<String> renderSection({
     required String prefix,
     required String title,
@@ -85,7 +100,7 @@ class ConsolePrettyLogFormatter {
           ),
         );
       }
-      lines.add('${leading}}');
+      lines.add('$leading}');
       return lines;
     }
     if (value is List) {
@@ -106,11 +121,9 @@ class ConsolePrettyLogFormatter {
           }
           continue;
         }
-        lines.add(
-          "${'  ' * (indent + 1)}- ${_renderScalar(normalizedItem)}",
-        );
+        lines.add("${'  ' * (indent + 1)}- ${_renderScalar(normalizedItem)}");
       }
-      lines.add('${leading}]');
+      lines.add('$leading]');
       return lines;
     }
     if (_shouldUseBlockString(value)) {
@@ -137,7 +150,7 @@ class ConsolePrettyLogFormatter {
           ),
         );
       }
-      lines.add('${leading}}');
+      lines.add('$leading}');
       return lines;
     }
     if (value is List) {
@@ -152,7 +165,7 @@ class ConsolePrettyLogFormatter {
           );
         }
       }
-      lines.add('${leading}]');
+      lines.add('$leading]');
       return lines;
     }
     return <String>['$leading- ${_renderScalar(_normalizeValue(value))}'];

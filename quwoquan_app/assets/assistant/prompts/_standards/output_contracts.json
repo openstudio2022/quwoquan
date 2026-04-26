@@ -3,7 +3,9 @@
     "assistant_turn": {
       "required": [
         "contractId",
-        "decision"
+        "decision",
+        "understandingResult",
+        "taskGraph"
       ],
       "decisionNextActionEnum": [
         "tool_call",
@@ -26,12 +28,28 @@
         "prompt",
         "required",
         "suggestions"
+      ],
+      "understandingResultFields": [
+        "contractId",
+        "intents",
+        "dialogueTransitionDecision"
+      ],
+      "taskGraphFields": [
+        "contractId",
+        "tasks"
+      ],
+      "taskNodeFields": [
+        "taskId",
+        "intentId",
+        "toolName",
+        "toolArgs",
+        "status"
       ]
     },
-    "web_query_plan_v2026_02_18": {
+    "web_task_plan_v2026_02_18": {
       "required": [
         "domainId",
-        "queryTasks"
+        "taskGraph"
       ]
     },
     "web_result_judge_v2026_02_18": {

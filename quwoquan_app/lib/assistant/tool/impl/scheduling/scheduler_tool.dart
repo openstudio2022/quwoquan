@@ -19,29 +19,33 @@ class SchedulerTool implements AssistantTool {
   Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final action = (arguments['action'] as String?)?.trim() ?? '';
     if (action.isEmpty) {
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: false,
         message: '缺少 action 参数（create / query / update / delete）',
         errorCode: AssistantErrorCode.invalidArguments,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.invalidArguments,
+          message: '缺少 action 参数（create / query / update / delete）',
+          functionModule: name,
+          stage: 'argument_validation',
+        ),
       );
     }
 
     try {
-      final result = await _channelAdapter.invoke(
-        'scheduler_$action',
-        <String, dynamic>{
-          'title': (arguments['title'] as String?)?.trim() ?? '',
-          'startTime': arguments['startTime'] ?? '',
-          'endTime': arguments['endTime'] ?? '',
-          'allDay': arguments['allDay'] == true,
-          'reminder': arguments['reminder'] ?? '',
-          'notes': (arguments['notes'] as String?)?.trim() ?? '',
-          'eventId': arguments['eventId'] ?? '',
-          'query': (arguments['query'] as String?)?.trim() ?? '',
-          'rangeStart': arguments['rangeStart'] ?? '',
-          'rangeEnd': arguments['rangeEnd'] ?? '',
-        },
-      );
+      final result = await _channelAdapter
+          .invoke('scheduler_$action', <String, dynamic>{
+            'title': (arguments['title'] as String?)?.trim() ?? '',
+            'startTime': arguments['startTime'] ?? '',
+            'endTime': arguments['endTime'] ?? '',
+            'allDay': arguments['allDay'] == true,
+            'reminder': arguments['reminder'] ?? '',
+            'notes': (arguments['notes'] as String?)?.trim() ?? '',
+            'eventId': arguments['eventId'] ?? '',
+            'query': (arguments['query'] as String?)?.trim() ?? '',
+            'rangeStart': arguments['rangeStart'] ?? '',
+            'rangeEnd': arguments['rangeEnd'] ?? '',
+          });
 
       if (result.containsKey('error')) {
         return AssistantToolResult(
@@ -49,6 +53,12 @@ class SchedulerTool implements AssistantTool {
           message: '日程操作失败: ${result['error']}',
           errorCode: AssistantErrorCode.executionFailed,
           degraded: true,
+          runtimeFailure: assistantToolRuntimeFailure(
+            errorCode: AssistantErrorCode.executionFailed,
+            message: '日程操作失败: ${result['error']}',
+            functionModule: name,
+            stage: 'native_scheduler',
+          ),
         );
       }
 
@@ -63,6 +73,12 @@ class SchedulerTool implements AssistantTool {
         message: '日程操作异常: $error',
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.executionFailed,
+          message: '日程操作异常: $error',
+          functionModule: name,
+          stage: 'unexpected_exception',
+        ),
       );
     }
   }

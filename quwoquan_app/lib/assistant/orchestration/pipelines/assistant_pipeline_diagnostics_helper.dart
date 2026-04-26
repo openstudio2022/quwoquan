@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/assistant/contracts/assistant_structured_response_wire.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_subagent_run_record.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_diagnostics_models.dart';
@@ -28,7 +27,7 @@ class AssistantPipelineDiagnosticsHelper {
     required int phaseOneExplicitSkillRunPlanCount,
     required int phaseOneDerivedSkillRunPlanCount,
     required int phaseOneSkillRunPlanCount,
-    required bool milestone3Ready,
+    required bool typedExecutionReady,
     required String phaseOneSkillRunPlanSource,
     required bool phaseOneExecutionSignalsPresent,
     required bool phaseOneContinuationCarryover,
@@ -58,7 +57,7 @@ class AssistantPipelineDiagnosticsHelper {
       'phaseOneExplicitSkillRunPlanCount': phaseOneExplicitSkillRunPlanCount,
       'phaseOneDerivedSkillRunPlanCount': phaseOneDerivedSkillRunPlanCount,
       'phaseOneSkillRunPlanCount': phaseOneSkillRunPlanCount,
-      'milestone3Ready': milestone3Ready,
+      'typedExecutionReady': typedExecutionReady,
       'phaseOneSkillRunPlanSource': phaseOneSkillRunPlanSource,
       'phaseOneExecutionSignalsPresent': phaseOneExecutionSignalsPresent,
       'phaseOneContinuationCarryover': phaseOneContinuationCarryover,
@@ -85,7 +84,8 @@ class AssistantPipelineDiagnosticsHelper {
         (item) => AssistantToolObservation(
           ok: false,
           message: item['message'] ?? '',
-          data: (item['data'] as Map?)?.cast<String, dynamic>() ??
+          data:
+              (item['data'] as Map?)?.cast<String, dynamic>() ??
               const <String, dynamic>{},
           toolCallId: item['toolCallId'] ?? '',
         ),

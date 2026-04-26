@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -55,8 +56,12 @@ func createTestProfile(t *testing.T, userID, nickname string) {
 	}
 }
 
-func createTestPersona(t *testing.T, id, userID, displayName string, isPrimary, isActive bool) {
+func createTestPersona(t *testing.T, id, userID, displayName string, isPrimary bool, isActiveOverride ...bool) {
 	t.Helper()
+	isActive := true
+	if len(isActiveOverride) > 0 {
+		isActive = isActiveOverride[0]
+	}
 	subAccountID := id + "_sa"
 	_, err := pgPool.Exec(context.Background(), `
 		INSERT INTO personas (id, user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
@@ -74,16 +79,22 @@ func cleanAll(t *testing.T) {
 		user_works, user_life_items, credential_bindings,
 		contact_discovery_records, invite_records CASCADE`)
 	if mongoDB != nil {
-		_ = mongoDB.Collection("follow_edges").Drop(ctx)
-		_, _ = mongoDB.Collection("follow_edges").InsertOne(ctx, bson.M{"_cleanup": true})
-		_, _ = mongoDB.Collection("follow_edges").DeleteMany(ctx, bson.M{})
+		for _, name := range []string{"follow_edges", "posts", "comments", "messages", "notifications"} {
+			_ = mongoDB.Collection(name).Drop(ctx)
+			_, _ = mongoDB.Collection(name).InsertOne(ctx, bson.M{"_cleanup": true})
+			_, _ = mongoDB.Collection(name).DeleteMany(ctx, bson.M{})
+		}
 	}
 	mr.FlushAll()
 }
 
 // createTestPersonaFull creates a persona with sub_account_id and isolation_level.
-func createTestPersonaFull(t *testing.T, id, userID, subAccountID, displayName, isolationLevel string, isPrimary, isActive bool) {
+func createTestPersonaFull(t *testing.T, id, userID, subAccountID, displayName, isolationLevel string, isPrimary bool, isActiveOverride ...bool) {
 	t.Helper()
+	isActive := true
+	if len(isActiveOverride) > 0 {
+		isActive = isActiveOverride[0]
+	}
 	_, err := pgPool.Exec(context.Background(), `
 		INSERT INTO personas (id, user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, isolation_level, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, '', '', '', '', '', $5, true, '{}', $6, false, $7, 0, NOW(), NOW())`,
@@ -107,4 +118,94 @@ func createTestCredential(t *testing.T, id, ownerID, credType, credKey string) {
 
 func authHeaders(userID string) map[string]string {
 	return map[string]string{"X-Client-User-Id": userID}
+}
+
+func authHeadersForPersona(userID, profileSubjectID string) map[string]string {
+	headers := authHeaders(userID)
+	if profileSubjectID != "" {
+		headers["X-Profile-Subject-Id"] = profileSubjectID
+		headers["X-Persona-Id"] = profileSubjectID
+	}
+	return headers
+}
+
+func seedPersonaPostHistory(t *testing.T, profileSubjectID string) {
+	t.Helper()
+	if mongoDB == nil {
+		t.Skip("mongo unavailable")
+	}
+	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), bson.M{
+		"_id":                       "post_" + profileSubjectID,
+		"authorId":                  "legacy_" + profileSubjectID,
+		"profileSubjectId":          profileSubjectID,
+		"authorDisplayNameSnapshot": "Post Persona",
+		"authorAvatarUrlSnapshot":   "https://example.com/post.jpg",
+		"status":                    "published",
+		"createdAt":                 time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("seed persona post history: %v", err)
+	}
+}
+
+func seedPersonaCommentHistory(t *testing.T, profileSubjectID string) {
+	t.Helper()
+	if mongoDB == nil {
+		t.Skip("mongo unavailable")
+	}
+	_, err := mongoDB.Collection("comments").InsertOne(context.Background(), bson.M{
+		"_id":                       "comment_" + profileSubjectID,
+		"postId":                    "post_for_" + profileSubjectID,
+		"authorId":                  "legacy_" + profileSubjectID,
+		"profileSubjectId":          profileSubjectID,
+		"authorDisplayNameSnapshot": "Comment Persona",
+		"authorAvatarUrlSnapshot":   "https://example.com/comment.jpg",
+		"content":                   "历史评论",
+		"createdAt":                 time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("seed persona comment history: %v", err)
+	}
+}
+
+func seedPersonaChatHistory(t *testing.T, profileSubjectID string) {
+	t.Helper()
+	if mongoDB == nil {
+		t.Skip("mongo unavailable")
+	}
+	_, err := mongoDB.Collection("messages").InsertOne(context.Background(), bson.M{
+		"_id":                       "message_" + profileSubjectID,
+		"conversationId":            "conv_" + profileSubjectID,
+		"seq":                       1,
+		"senderId":                  "legacy_" + profileSubjectID,
+		"senderProfileSubjectId":    profileSubjectID,
+		"senderDisplayNameSnapshot": "Chat Persona",
+		"senderAvatarUrlSnapshot":   "https://example.com/chat.jpg",
+		"content":                   "历史聊天",
+		"timestamp":                 time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("seed persona chat history: %v", err)
+	}
+}
+
+func seedPersonaNotificationHistory(t *testing.T, profileSubjectID string) {
+	t.Helper()
+	if mongoDB == nil {
+		t.Skip("mongo unavailable")
+	}
+	_, err := mongoDB.Collection("notifications").InsertOne(context.Background(), bson.M{
+		"_id":          "notification_" + profileSubjectID,
+		"userId":       "viewer_" + profileSubjectID,
+		"type":         "social",
+		"title":        "历史通知",
+		"body":         "由分身触发的通知",
+		"senderUserId": profileSubjectID,
+		"targetType":   "post",
+		"targetId":     "post_" + profileSubjectID,
+		"createdAt":    time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("seed persona notification history: %v", err)
+	}
 }

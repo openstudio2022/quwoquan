@@ -553,7 +553,10 @@ func resolveReportDSN(cfg config) string {
 func resolveStoryRuntimeConfig() application.StoryRuntimeConfig {
 	return application.StoryRuntimeConfig{
 		FeatureFlags: map[string]bool{
-			"enable_create_action_entry": parseBoolEnv("CONTENT_FLAG_ENABLE_CREATE_ACTION_ENTRY", true),
+			"enable_create_action_entry": parseBoolEnv(
+				"CONTENT_FLAG_ENABLE_CREATE_ACTION_ENTRY",
+				false,
+			),
 			"enable_unified_create_editor": parseBoolEnv(
 				"CONTENT_FLAG_ENABLE_UNIFIED_CREATE_EDITOR",
 				true,

@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
 
@@ -21,7 +20,7 @@ class ProblemFrame {
     this.freshnessNeed = '',
     this.answerShape = '',
     this.requiresExternalEvidence = false,
-    this.entityAnchors = const <String>[],
+    this.entityRefs = const <String>[],
     this.negativeKeywords = const <String>[],
     this.referenceNowIso = '',
     this.timezone = '',
@@ -50,7 +49,7 @@ class ProblemFrame {
   final String freshnessNeed;
   final String answerShape;
   final bool requiresExternalEvidence;
-  final List<String> entityAnchors;
+  final List<String> entityRefs;
   final List<String> negativeKeywords;
   final String referenceNowIso;
   final String timezone;
@@ -82,12 +81,12 @@ class ProblemFrame {
     'freshnessNeed': freshnessNeed,
     'answerShape': answerShape,
     'requiresExternalEvidence': requiresExternalEvidence,
-    'entityAnchors': entityAnchors,
+    'entityRefs': entityRefs,
     'negativeKeywords': negativeKeywords,
     'queryNormalization': <String, dynamic>{
       'normalizedQuery': normalizedQuery,
       'query': normalizedQuery,
-      'entityAnchors': entityAnchors,
+      'entityRefs': entityRefs,
       'negativeKeywords': negativeKeywords,
       'answerShape': answerShape,
       'freshnessNeed': freshnessNeed,
@@ -123,16 +122,14 @@ class DefaultProblemFramer {
         ? _stringValue(queryNormalization['normalizedQuery'])
         : query;
     final normalized = _normalizeQuery(normalizedSeed);
-    final rawNormalization = QueryNormalization.fromJson(queryNormalization);
-    final resolvedGeoScope =
-        intentPayload['resolvedGeoScope'] is Map
+    final resolvedGeoScope = intentPayload['resolvedGeoScope'] is Map
         ? ResolvedGeoScope.fromJson(
             (intentPayload['resolvedGeoScope'] as Map).cast<String, dynamic>(),
           )
         : const ResolvedGeoScope();
     final effectiveNormalizedQuery =
-        rawNormalization.normalizedQuery.trim().isNotEmpty
-        ? rawNormalization.normalizedQuery.trim()
+        _stringValue(queryNormalization['normalizedQuery']).isNotEmpty
+        ? _stringValue(queryNormalization['normalizedQuery'])
         : normalized;
     final queryIntent = _stringValue(intentPayload['queryIntent']);
     final problemClass = _stringValue(intentPayload['problemClass']).isNotEmpty
@@ -155,7 +152,7 @@ class DefaultProblemFramer {
     final location = resolvedGeoScope.cityLabel.trim().isNotEmpty
         ? resolvedGeoScope.cityLabel.trim()
         : extractCity(effectiveNormalizedQuery);
-    final entityAnchors = _extractEntityAnchors(
+    final entityRefs = _extractEntityRefs(
       effectiveNormalizedQuery,
       targetObject: targetObject,
       location: location,
@@ -189,26 +186,35 @@ class DefaultProblemFramer {
       freshnessNeed: freshnessNeed,
       answerShape: answerShape,
       requiresExternalEvidence: requiresExternalEvidence,
-      entityAnchors: _stringList(intentPayload['entityAnchors']).isNotEmpty
+      entityRefs: _stringList(intentPayload['entityRefs']).isNotEmpty
           ? mergeGeoAnchors(
-              _stringList(intentPayload['entityAnchors']),
+              _stringList(intentPayload['entityRefs']),
               resolvedGeoScope,
             )
-          : mergeGeoAnchors(entityAnchors, resolvedGeoScope),
+          : mergeGeoAnchors(entityRefs, resolvedGeoScope),
       negativeKeywords: negativeKeywords,
-      referenceNowIso: rawNormalization.referenceNowIso,
-      timezone: rawNormalization.timezone,
-      timeScope: rawNormalization.timeScope,
-      timeRangeStart: rawNormalization.timeRangeStart,
-      timeRangeEnd: rawNormalization.timeRangeEnd,
-      timePoint: rawNormalization.timePoint,
-      resolvedTemporalHints: rawNormalization.resolvedTemporalHints,
+      referenceNowIso: _stringValue(queryNormalization['referenceNowIso']),
+      timezone: _stringValue(queryNormalization['timezone']),
+      timeScope: _stringValue(queryNormalization['timeScope']),
+      timeRangeStart: _stringValue(queryNormalization['timeRangeStart']),
+      timeRangeEnd: _stringValue(queryNormalization['timeRangeEnd']),
+      timePoint: _stringValue(queryNormalization['timePoint']),
+      resolvedTemporalHints: _stringList(
+        queryNormalization['resolvedTemporalHints'],
+      ),
       resolvedGeoScope: resolvedGeoScope,
     );
   }
 
   String extractCity(String text) {
     if (text.isEmpty) return '';
+    final inlineGeoMatch = RegExp(
+      r'^([\u4e00-\u9fff]{2,8}?)(?=(?:今天|明天|后天|周末|本周|下周|实时|当前|天气|气温|温度|降水|降雨|风力|体感|空气质量|AQI|穿衣|紫外线|出行|路况|附近|周边))',
+    ).firstMatch(text);
+    if (inlineGeoMatch != null) {
+      final normalized = _normalizeLocationCandidate(inlineGeoMatch.group(1));
+      if (normalized.isNotEmpty) return normalized;
+    }
     final placeLikeMatches = RegExp(
       r'([\u4e00-\u9fffA-Za-z]{2,20}(?:市|区|县|镇|乡|村|街道|公园|景区|机场|车站|大厦|广场|口岸|山|湖|河|沟|湾|岛|草原))',
     ).allMatches(text);
@@ -281,7 +287,7 @@ class DefaultProblemFramer {
     return stripped.isNotEmpty ? stripped : normalized;
   }
 
-  List<String> _extractEntityAnchors(
+  List<String> _extractEntityRefs(
     String normalized, {
     required String targetObject,
     required String location,

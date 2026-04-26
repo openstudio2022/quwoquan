@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/assistant/api/assistant_api_gateway.dart';
 import 'package:quwoquan_app/assistant/config/assistant_configuration_center.dart';
 import 'package:quwoquan_app/assistant/infrastructure/openclaw_bridge.dart';

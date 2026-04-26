@@ -27,11 +27,38 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   }
 }
 
+class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
+  @override
+  bool get reconcilesCapabilityWithSharedRelationshipState => true;
+
+  @override
+  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+    return RelationshipCapabilityDto(
+      viewerSubAccountId: 'viewer-profile',
+      targetSubAccountId: targetUserId,
+      relationState: 'not_following',
+      canFollow: true,
+      canUnfollow: false,
+      canMessage: true,
+      canFollowBack: false,
+      canGreet: false,
+      canOpenConversation: true,
+      canAddSameInterest: false,
+      canSetCloseFriend: false,
+      canStartVoiceCall: false,
+      canStartVideoCall: false,
+      isBlocked: false,
+      isBlockedBy: false,
+    );
+  }
+}
+
 Widget _scopedApp({
   required ProfileMode mode,
   String userId = 'nature_photographer',
   ThemeMode themeMode = ThemeMode.light,
   double textScaleFactor = 1.0,
+  RelationshipCapabilityRepository? capabilityRepository,
   List overrides = const [],
 }) {
   return ProviderScope(
@@ -40,7 +67,7 @@ Widget _scopedApp({
         const MockUserProfileRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
-        _ThrowingCapabilityRepository(),
+        capabilityRepository ?? _ThrowingCapabilityRepository(),
       ),
       ...overrides,
     ],
@@ -116,7 +143,12 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          capabilityRepository: _StaticCapabilityRepository(),
+        ),
+      );
       await _pumpFrames(tester);
       expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
@@ -206,18 +238,16 @@ void main() {
       expect(summaryShare, closeTo(1 - backgroundShare, 0.08));
     });
 
-    testWidgets('other 模式渲染等宽「关注」+主消息入口按钮', (tester) async {
+    testWidgets('other 模式在 capability 延迟时仍保持基础壳层渲染', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
-      expect(find.text('关注'), findsAtLeastNWidgets(1));
-      expect(
-        find.text(UITextConstants.profileDirectMessage),
-        findsAtLeastNWidgets(1),
-      );
+      expect(find.byType(ProfileShell), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
     });
 
     testWidgets('下拉时背景顶边固定，资料区与一级 tab 整体下移', (tester) async {
@@ -442,20 +472,21 @@ void main() {
       expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
     });
 
-    testWidgets('暗色模式下 other 模式渲染不崩溃', (tester) async {
+    testWidgets('暗色模式下 other 模式基础壳层渲染不崩溃', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(
-        _scopedApp(mode: ProfileMode.other, themeMode: ThemeMode.dark),
+        _scopedApp(
+          mode: ProfileMode.other,
+          themeMode: ThemeMode.dark,
+          capabilityRepository: _StaticCapabilityRepository(),
+        ),
       );
       await _pumpFrames(tester);
-      expect(find.text('关注'), findsAtLeastNWidgets(1));
-      expect(
-        find.text(UITextConstants.profileDirectMessage),
-        findsAtLeastNWidgets(1),
-      );
+      expect(find.byType(ProfileShell), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
     });
 
     testWidgets('AnnotatedRegion 存在于渲染树', (tester) async {

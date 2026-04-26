@@ -31,6 +31,9 @@ run_service() {
   bash scripts/verify_config_release_version_mapping.sh
   bash scripts/verify_config_image_compat.sh
   bash scripts/verify_config_pr_policy.sh
+  command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
+  dart tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
+  dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
   (cd quwoquan_service && make gate)
   (cd quwoquan_service/services/product-ops-service && go test ./cmd/api ./tests -count=1)
 }
@@ -38,6 +41,9 @@ run_service() {
 run_app() {
   echo "[gate] quwoquan_app"
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
+  command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
+  dart tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
+  dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
   (cd quwoquan_app && flutter pub get)
   (cd quwoquan_app && flutter analyze --no-fatal-warnings --no-fatal-infos)
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）

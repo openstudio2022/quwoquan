@@ -1,8 +1,12 @@
 // ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 会话持久化消息 Map；子树用 codegen/Codec/assistantJsonAsStringKeyedMap 收窄。
 
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
@@ -24,6 +28,12 @@ const String assistantHistoricalThinkingSnapshotField =
 const String assistantRetrievalProcessingField = 'retrievalProcessing';
 const String assistantProviderReasoningContinuationField =
     'providerReasoningContinuation';
+const String assistantSystemContextEnvelopeField = 'systemContextEnvelope';
+const String assistantUnderstandingResultField = 'understandingResult';
+const String assistantTaskGraphField = 'taskGraph';
+const String assistantOrchestratorStateField = 'orchestratorState';
+const String assistantTurnSynthesisStateField = 'turnSynthesisState';
+const String assistantBoundaryOutcomeField = 'assistantBoundaryOutcome';
 const String assistantHistoryStorageVersion = 'assistant_history_v1';
 
 /// `jsonDecode` 根或嵌套 JSON 对象 → `Map<String, dynamic>`（会话持久化加载等）。
@@ -91,7 +101,9 @@ AssistantJourney resolvePersistedAssistantTimeline(
 List<ProcessTimelineFrame> resolvePersistedAssistantProcessTimeline(
   Map<String, dynamic> message,
 ) {
-  final direct = _parseProcessTimelineList(message[assistantProcessTimelineField]);
+  final direct = _parseProcessTimelineList(
+    message[assistantProcessTimelineField],
+  );
   final runArtifacts = (message['runArtifacts'] as Map?)
       ?.cast<String, dynamic>();
   final nested = _parseProcessTimelineList(
@@ -104,7 +116,9 @@ List<ProcessTimelineFrame> resolvePersistedAssistantProcessTimeline(
             : const <ProcessTimelineFrame>[]);
   final supplemented = buildProcessTimelineFromSnapshots(
     processTimeline: baseTimeline,
-    understandingSnapshot: resolvePersistedAssistantUnderstandingSnapshot(message),
+    understandingSnapshot: resolvePersistedAssistantUnderstandingSnapshot(
+      message,
+    ),
     retrievalProcessing: resolvePersistedAssistantRetrievalProcessing(message),
     answerProcessing: resolvePersistedAssistantAnswerProcessing(message),
   );
@@ -145,9 +159,8 @@ AssistantDisplayState resolvePersistedAssistantDisplayState(
   }
 }
 
-RunArtifactsUnderstandingSnapshot resolvePersistedAssistantUnderstandingSnapshot(
-  Map<String, dynamic> message,
-) {
+RunArtifactsUnderstandingSnapshot
+resolvePersistedAssistantUnderstandingSnapshot(Map<String, dynamic> message) {
   final raw = _resolvePersistedStructuredMap(
     message,
     assistantUnderstandingSnapshotField,
@@ -198,21 +211,64 @@ RetrievalProcessingSnapshot resolvePersistedAssistantRetrievalProcessing(
   return RetrievalProcessingSnapshot.fromJson(raw);
 }
 
-IntentGraph? resolvePersistedAssistantIntentGraph(Map<String, dynamic> message) {
-  final direct = (message['intentGraph'] as Map?)?.cast<String, dynamic>();
-  if (direct != null && direct.isNotEmpty) {
-    try {
-      return IntentGraph.fromJson(direct);
-    } catch (_) {}
+SystemContextEnvelope resolvePersistedAssistantSystemContextEnvelope(
+  Map<String, dynamic> message,
+) {
+  final raw = _resolvePersistedStructuredMap(
+    message,
+    assistantSystemContextEnvelopeField,
+  );
+  if (raw.isEmpty) {
+    return const SystemContextEnvelope();
   }
-  final runArtifacts = (message['runArtifacts'] as Map?)?.cast<String, dynamic>();
-  final nested = (runArtifacts?['intentGraph'] as Map?)?.cast<String, dynamic>();
-  if (nested != null && nested.isNotEmpty) {
-    try {
-      return IntentGraph.fromJson(nested);
-    } catch (_) {}
+  return SystemContextEnvelope.fromJson(raw);
+}
+
+UnderstandingResult resolvePersistedAssistantUnderstandingResult(
+  Map<String, dynamic> message,
+) {
+  final raw = _resolvePersistedStructuredMap(
+    message,
+    assistantUnderstandingResultField,
+  );
+  if (raw.isEmpty) {
+    return const UnderstandingResult();
   }
-  return null;
+  return UnderstandingResult.fromJson(raw);
+}
+
+TaskGraph resolvePersistedAssistantTaskGraph(Map<String, dynamic> message) {
+  final raw = _resolvePersistedStructuredMap(message, assistantTaskGraphField);
+  if (raw.isEmpty) {
+    return const TaskGraph();
+  }
+  return TaskGraph.fromJson(raw);
+}
+
+ConversationOrchestratorState resolvePersistedAssistantOrchestratorState(
+  Map<String, dynamic> message,
+) {
+  final raw = _resolvePersistedStructuredMap(
+    message,
+    assistantOrchestratorStateField,
+  );
+  if (raw.isEmpty) {
+    return const ConversationOrchestratorState();
+  }
+  return ConversationOrchestratorState.fromJson(raw);
+}
+
+TurnSynthesisState resolvePersistedAssistantTurnSynthesisState(
+  Map<String, dynamic> message,
+) {
+  final raw = _resolvePersistedStructuredMap(
+    message,
+    assistantTurnSynthesisStateField,
+  );
+  if (raw.isEmpty) {
+    return const TurnSynthesisState();
+  }
+  return TurnSynthesisState.fromJson(raw);
 }
 
 AssistantJourney resolveAssistantJourneyFromRunResponse(
@@ -525,6 +581,12 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
   Map<String, dynamic> answerProcessing = const <String, dynamic>{},
   Map<String, dynamic> historicalThinkingSnapshot = const <String, dynamic>{},
   Map<String, dynamic> retrievalProcessing = const <String, dynamic>{},
+  Map<String, dynamic> systemContextEnvelope = const <String, dynamic>{},
+  Map<String, dynamic> understandingResult = const <String, dynamic>{},
+  Map<String, dynamic> taskGraph = const <String, dynamic>{},
+  Map<String, dynamic> orchestratorState = const <String, dynamic>{},
+  Map<String, dynamic> turnSynthesisState = const <String, dynamic>{},
+  Map<String, dynamic> assistantBoundaryOutcome = const <String, dynamic>{},
   String providerReasoningContinuation = '',
 }) {
   final persistedProcessTimeline = hasStructuredProcessTimeline(processTimeline)
@@ -577,6 +639,24 @@ Map<String, dynamic> buildPersistedAssistantTurnFields({
       assistantRetrievalProcessingField: _copyStructuredMap(
         retrievalProcessing,
       ),
+    if (_hasStructuredContent(systemContextEnvelope))
+      assistantSystemContextEnvelopeField: _copyStructuredMap(
+        systemContextEnvelope,
+      ),
+    if (_hasStructuredContent(understandingResult))
+      assistantUnderstandingResultField: _copyStructuredMap(
+        understandingResult,
+      ),
+    if (_hasStructuredContent(taskGraph))
+      assistantTaskGraphField: _copyStructuredMap(taskGraph),
+    if (_hasStructuredContent(orchestratorState))
+      assistantOrchestratorStateField: _copyStructuredMap(orchestratorState),
+    if (_hasStructuredContent(turnSynthesisState))
+      assistantTurnSynthesisStateField: _copyStructuredMap(turnSynthesisState),
+    if (_hasStructuredContent(assistantBoundaryOutcome))
+      assistantBoundaryOutcomeField: _copyStructuredMap(
+        assistantBoundaryOutcome,
+      ),
     if (providerReasoningContinuation.trim().isNotEmpty)
       assistantProviderReasoningContinuationField: providerReasoningContinuation
           .trim(),
@@ -605,7 +685,12 @@ bool isCanonicalPersistedAssistantTurnMessage(Map<String, dynamic> message) {
       message.containsKey(assistantDisplayPlainTextField) ||
       message.containsKey(assistantUnderstandingSnapshotField) ||
       message.containsKey(assistantAnswerProcessingField) ||
-      message.containsKey(assistantRetrievalProcessingField);
+      message.containsKey(assistantRetrievalProcessingField) ||
+      message.containsKey(assistantUnderstandingResultField) ||
+      message.containsKey(assistantTaskGraphField) ||
+      message.containsKey(assistantOrchestratorStateField) ||
+      message.containsKey(assistantTurnSynthesisStateField) ||
+      message.containsKey(assistantBoundaryOutcomeField);
   if (!hasCanonicalEnvelope) {
     return false;
   }
@@ -646,6 +731,30 @@ Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
     message,
     assistantRetrievalProcessingField,
   );
+  final systemContextEnvelope = _resolvePersistedStructuredMap(
+    message,
+    assistantSystemContextEnvelopeField,
+  );
+  final understandingResult = _resolvePersistedStructuredMap(
+    message,
+    assistantUnderstandingResultField,
+  );
+  final taskGraph = _resolvePersistedStructuredMap(
+    message,
+    assistantTaskGraphField,
+  );
+  final orchestratorState = _resolvePersistedStructuredMap(
+    message,
+    assistantOrchestratorStateField,
+  );
+  final turnSynthesisState = _resolvePersistedStructuredMap(
+    message,
+    assistantTurnSynthesisStateField,
+  );
+  final assistantBoundaryOutcome = _resolvePersistedStructuredMap(
+    message,
+    assistantBoundaryOutcomeField,
+  );
   final displayMarkdown = resolvePersistedAssistantDisplayMarkdown(message);
   final displayPlainText = resolvePersistedAssistantDisplayPlainText(message);
   final providerReasoningContinuation =
@@ -670,6 +779,17 @@ Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
       assistantHistoricalThinkingSnapshotField: historicalThinkingSnapshot,
     if (_hasStructuredContent(retrievalProcessing))
       assistantRetrievalProcessingField: retrievalProcessing,
+    if (_hasStructuredContent(systemContextEnvelope))
+      assistantSystemContextEnvelopeField: systemContextEnvelope,
+    if (_hasStructuredContent(understandingResult))
+      assistantUnderstandingResultField: understandingResult,
+    if (_hasStructuredContent(taskGraph)) assistantTaskGraphField: taskGraph,
+    if (_hasStructuredContent(orchestratorState))
+      assistantOrchestratorStateField: orchestratorState,
+    if (_hasStructuredContent(turnSynthesisState))
+      assistantTurnSynthesisStateField: turnSynthesisState,
+    if (_hasStructuredContent(assistantBoundaryOutcome))
+      assistantBoundaryOutcomeField: assistantBoundaryOutcome,
     if (providerReasoningContinuation.isNotEmpty)
       assistantProviderReasoningContinuationField:
           providerReasoningContinuation,
@@ -730,6 +850,30 @@ bool _hasReplayableAssistantTurnState(Map<String, dynamic> message) {
           message,
           assistantRetrievalProcessingField,
         ),
+      ) ||
+      _hasStructuredContent(
+        _resolvePersistedStructuredMap(
+          message,
+          assistantUnderstandingResultField,
+        ),
+      ) ||
+      _hasStructuredContent(
+        _resolvePersistedStructuredMap(message, assistantTaskGraphField),
+      ) ||
+      _hasStructuredContent(
+        _resolvePersistedStructuredMap(
+          message,
+          assistantOrchestratorStateField,
+        ),
+      ) ||
+      _hasStructuredContent(
+        _resolvePersistedStructuredMap(
+          message,
+          assistantTurnSynthesisStateField,
+        ),
+      ) ||
+      _hasStructuredContent(
+        _resolvePersistedStructuredMap(message, assistantBoundaryOutcomeField),
       );
 }
 

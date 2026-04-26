@@ -118,6 +118,9 @@ class ArticlePageBackwardLeafFrame {
     required this.versoRevealWidthNormalized,
     required this.edgeBandWidthNormalized,
     required this.coveredWidthNormalized,
+    required this.rectoCoverageNormalized,
+    required this.versoOverlayStartNormalized,
+    required this.versoOverlayEndNormalized,
     required this.laidDownWidthNormalized,
     required this.curlWidthNormalized,
     required this.rectoRevealWidthNormalized,
@@ -134,6 +137,9 @@ class ArticlePageBackwardLeafFrame {
   final double versoRevealWidthNormalized;
   final double edgeBandWidthNormalized;
   final double coveredWidthNormalized;
+  final double rectoCoverageNormalized;
+  final double versoOverlayStartNormalized;
+  final double versoOverlayEndNormalized;
   final double laidDownWidthNormalized;
   final double curlWidthNormalized;
   final double rectoRevealWidthNormalized;
@@ -142,7 +148,7 @@ class ArticlePageBackwardLeafFrame {
   final double edgeLift;
 
   double get totalRectoVisibleWidthNormalized =>
-      (laidDownWidthNormalized + rectoRevealWidthNormalized)
+      (coveredWidthNormalized * rectoCoverageNormalized)
           .clamp(0.0, 1.0)
           .toDouble();
 
@@ -210,11 +216,29 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
     curlWidth * (0.08 + rectoRevealProgress * 0.42),
     curlWidth * 0.58,
   );
-  final versoRevealWidth = math.max(
-    0.0,
-    curlWidth - rectoRevealWidth - edgeBandWidth,
-  );
   final coveredWidth = math.min(1.0, laidDownWidth + curlWidth);
+  // Paper-fold geometry: when the leaf is folded along F (= coveredWidth in
+  // normalized units), the lifted segment occupies screen [2F - W, F]. The
+  // recto only becomes visible on the spine side once 2F > W, i.e. once the
+  // fold has crossed the page midpoint. The boundary E satisfies E = 2F - W,
+  // which translates to rectoCoverage = E / F = (2F - W) / F = 2 - 1/covered.
+  // For covered <= 0.5 the entire leaf is still folded over, so the recto is
+  // not yet exposed. Same formula react-pageflip uses for back replay.
+  final rectoCoverageByFold = coveredWidth > 0.5
+      ? (2.0 - 1.0 / coveredWidth).clamp(0.0, 1.0).toDouble()
+      : 0.0;
+  final rectoCoverage = math
+      .max(rectoCoverageByFold, settleProgress)
+      .clamp(0.0, 1.0)
+      .toDouble();
+  final versoOverlayStart = (coveredWidth * rectoCoverage)
+      .clamp(0.0, coveredWidth)
+      .toDouble();
+  final versoOverlayEnd = coveredWidth;
+  final versoRevealWidth = math
+      .max(0.0, versoOverlayEnd - versoOverlayStart)
+      .clamp(0.0, 1.0)
+      .toDouble();
   final curlPivotNormalized = (laidDownWidth + curlWidth * 0.5)
       .clamp(0.0, 1.0)
       .toDouble();
@@ -237,6 +261,9 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
     versoRevealWidthNormalized: versoRevealWidth,
     edgeBandWidthNormalized: edgeBandWidth,
     coveredWidthNormalized: coveredWidth,
+    rectoCoverageNormalized: rectoCoverage,
+    versoOverlayStartNormalized: versoOverlayStart,
+    versoOverlayEndNormalized: versoOverlayEnd,
     laidDownWidthNormalized: laidDownWidth,
     curlWidthNormalized: curlWidth,
     rectoRevealWidthNormalized: rectoRevealWidth,
@@ -307,10 +334,7 @@ ui.Offset resolveArticlePageBackwardFlippingAnchor({
   required ui.Size pageSize,
   required StPageFlipCorner corner,
 }) {
-  return ui.Offset(
-    0,
-    corner == StPageFlipCorner.top ? 0 : pageSize.height,
-  );
+  return ui.Offset(0, corner == StPageFlipCorner.top ? 0 : pageSize.height);
 }
 
 ui.Offset resolveArticlePageBackwardBottomAnchor({
@@ -341,12 +365,11 @@ StPageFlipShadowData resolveArticlePageBackwardShadowData({
   final width = math.max(
     pageSize.width * 0.08,
     pageSize.width *
-        (frame.versoRevealWidthNormalized + frame.edgeBandWidthNormalized * 2.4),
+        (frame.versoRevealWidthNormalized +
+            frame.edgeBandWidthNormalized * 2.4),
   );
   final opacity =
-      ((0.12 +
-                  frame.emergenceProgress * 0.08 +
-                  frame.unrollProgress * 0.1) *
+      ((0.12 + frame.emergenceProgress * 0.08 + frame.unrollProgress * 0.1) *
               (1 - frame.settleProgress * 0.45) *
               maxShadowOpacity)
           .clamp(0.0, 1.0)
@@ -430,10 +453,9 @@ StPageFlipTimeline _resolveBackwardReplayTimeline({
     pageSize: pageSize,
     angleBand: angleBand,
   );
-  final replayDiagonalExtent =
-      (replayTimeline.diagonalExtent * 0.28)
-          .clamp(pageSize.width * 0.004, pageSize.width * 0.032)
-          .toDouble();
+  final replayDiagonalExtent = (replayTimeline.diagonalExtent * 0.28)
+      .clamp(pageSize.width * 0.004, pageSize.width * 0.032)
+      .toDouble();
   return StPageFlipTimeline(
     mirrored: false,
     curlAngleBand: replayTimeline.curlAngleBand,
@@ -461,7 +483,8 @@ StPageFlipTimeline _resolveForwardTimeline({
 }) {
   final localDragX = localPagePoint.dx.clamp(0.0, pageSize.width).toDouble();
   final curlWidth = math.max(1.0, pageSize.width - localDragX);
-  final diagonalExtent = ui.lerpDouble(
+  final diagonalExtent =
+      ui.lerpDouble(
         switch (angleBand) {
           StPageFlipCurlAngleBand.shallow => pageSize.width * 0.015,
           StPageFlipCurlAngleBand.mid => pageSize.width * 0.018,
@@ -479,15 +502,13 @@ StPageFlipTimeline _resolveForwardTimeline({
         StPageFlipCurlAngleBand.mid => pageSize.width * 0.078,
         StPageFlipCurlAngleBand.steep => pageSize.width * 0.082,
       };
-  final radiusBase = ui.lerpDouble(
-        math.max(
-          curlWidth / math.pi,
-          switch (angleBand) {
-            StPageFlipCurlAngleBand.shallow => pageSize.width * 0.078,
-            StPageFlipCurlAngleBand.mid => pageSize.width * 0.075,
-            StPageFlipCurlAngleBand.steep => pageSize.width * 0.072,
-          },
-        ),
+  final radiusBase =
+      ui.lerpDouble(
+        math.max(curlWidth / math.pi, switch (angleBand) {
+          StPageFlipCurlAngleBand.shallow => pageSize.width * 0.078,
+          StPageFlipCurlAngleBand.mid => pageSize.width * 0.075,
+          StPageFlipCurlAngleBand.steep => pageSize.width * 0.072,
+        }),
         switch (angleBand) {
           StPageFlipCurlAngleBand.shallow => pageSize.width * 0.064,
           StPageFlipCurlAngleBand.mid => pageSize.width * 0.062,
@@ -512,13 +533,15 @@ StPageFlipTimeline _resolveForwardTimeline({
     curlAngleBand: angleBand,
     basePivot: localDragX,
     diagonalExtent: diagonalExtent,
-    leadingRadius: radiusBase *
+    leadingRadius:
+        radiusBase *
         switch (angleBand) {
           StPageFlipCurlAngleBand.shallow => 1.08,
           StPageFlipCurlAngleBand.mid => 1.07,
           StPageFlipCurlAngleBand.steep => 1.06,
         },
-    trailingRadius: radiusBase *
+    trailingRadius:
+        radiusBase *
         switch (angleBand) {
           StPageFlipCurlAngleBand.shallow => 0.86,
           StPageFlipCurlAngleBand.mid => 0.88,
@@ -543,4 +566,3 @@ StPageFlipTimeline _resolveForwardTimeline({
         .toDouble(),
   );
 }
-

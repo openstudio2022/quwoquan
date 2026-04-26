@@ -6,8 +6,6 @@ version: v1
 kind: runtime_policy_contract
 fields:
   - { name: status, type: string, default: '' }
-  - { name: retryable, type: bool, default: false }
-  - { name: errorClass, type: string, default: '' }
   - { name: coverage, type: double, default: 0.0 }
   - { name: confidence, type: double, default: 0.0 }
   - { name: freshnessHours, type: double, default: 0.0 }

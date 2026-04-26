@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated';
+import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated.js';
 import {
   fetchPlaneBindings,
   fetchServiceCatalog,
   type PlaneBindingItem,
   type ServiceCatalogItem,
-} from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+} from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function PlatformServiceCatalogPage() {
   const catalogObjects = platformControlPlane.object_types.filter((item) =>
@@ -16,6 +17,7 @@ export function PlatformServiceCatalogPage() {
   const [services, setServices] = useState<ServiceCatalogItem[]>([]);
   const [bindings, setBindings] = useState<PlaneBindingItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     Promise.all([fetchServiceCatalog(), fetchPlaneBindings()])
@@ -23,9 +25,11 @@ export function PlatformServiceCatalogPage() {
         setServices(items);
         setBindings(bindingItems);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -40,6 +44,7 @@ export function PlatformServiceCatalogPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实目录服务已接入' : '当前展示回退到门户样例'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">新增领域接入评审</button>}

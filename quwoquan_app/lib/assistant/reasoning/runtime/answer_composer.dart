@@ -1,7 +1,6 @@
 // 用户文案应迁至 prompt asset / metadata 模板层，见 canonical_truth_sources.md。禁止新增。
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
-import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/narrative_engine.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/problem_framer.dart';
 
@@ -33,8 +32,7 @@ class AnswerComposer {
     return BaselineComposedAnswer(
       markdown: '',
       plainText: '',
-      interpretation:
-          DefaultProcessingCopyBank.runtimeFallbackDisabledInterpretation,
+      interpretation: '',
       reasoning: narrativeEngine.heuristicReasoning(
         frame: frame,
         hasReferences: observations.isNotEmpty,
@@ -54,8 +52,7 @@ class AnswerComposer {
     return BaselineComposedAnswer(
       markdown: '',
       plainText: '',
-      interpretation:
-          DefaultProcessingCopyBank.runtimeFallbackDisabledInterpretation,
+      interpretation: '',
       reasoning: narrativeEngine.fallbackReason(
         frame: frame,
         missingCriticalSlots: missingCriticalSlots,

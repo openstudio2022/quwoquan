@@ -15,16 +15,16 @@ func (s *productService) handleReportEventBatch(w http.ResponseWriter, r *http.R
 		Events []application.EventRecordInput `json:"events"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid json body"})
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求体无效", err.Error())
 		return
 	}
 	if len(body.Events) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "events are required"})
+		writeRuntimeError(w, r, http.StatusBadRequest, "事件不能为空", "events are required")
 		return
 	}
 	ack, err := s.telemetry.ReportEventBatch(r.Context(), body.Events)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "事件上报暂时不可用", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, ack)
@@ -48,7 +48,7 @@ func (s *productService) handleGetEventSummary(w http.ResponseWriter, r *http.Re
 	}
 	out, err := s.telemetry.GetEventSummary(r.Context(), query)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "事件汇总暂时不可用", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -79,7 +79,7 @@ func (s *productService) handleGetEventDrilldown(w http.ResponseWriter, r *http.
 	}
 	out, err := s.telemetry.GetEventDrilldown(r.Context(), query)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "事件明细暂时不可用", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, out)

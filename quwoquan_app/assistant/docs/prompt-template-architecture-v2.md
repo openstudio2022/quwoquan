@@ -161,7 +161,7 @@ L4 动态层（每轮变化）      → state + context              ~200 token 
 token 0-80:    "我是沃助理，底线是诚实/安全/尊重"                    ← 角色锚定
 token 80-200:  "禁止编造实时数据，危机时提供热线"                    ← 红线约束
 token 200-500: "你是总控规划器，拆解任务、补齐槽位、生成检索计划"     ← 任务定义！核心指令！
-token 500-700: "输出 JSON，必须含 slotFillPlan/queryTasks..."        ← 知道输出什么格式
+token 500-700: "输出 JSON，必须含 slotFillPlan/searchPlans..."        ← 知道输出什么格式
 token 700-850: "你当前扮演天气助理，专业清晰..."                      ← 知道用什么风格
 token 850-1100:"城市已就绪→执行检索；禁止编造天气数据..."             ← 具体技能指令
 token 1100-1300:"当前状态 S1_城市补全，city=深圳，GPS=22.5,114.0..."  ← 数据（紧贴 user 消息）
@@ -283,7 +283,7 @@ task 区块直接由 stagePrompt 模板文件（如 `planner.global_plan.md`、`
 
 ## 执行要求
 - 输出 JSON，禁止自然语言包裹
-- 必须输出 slotFillPlan / queryTasks / contextSlots
+- 必须输出 slotFillPlan / searchPlans / contextSlots
 - 先补关键槽位，再执行联网查询
 
 ## 反思与自检
@@ -342,7 +342,7 @@ v2 方案：**预检（pre-check）嵌入 §3 task + 自检证据链嵌入 §4 o
 - `decision`：{nextAction, confidence, reasoning}
 - `userMarkdown`：一行进度说明
 - `slotFillPlan`：{slot: {from, value, confidence}}
-- `queryTasks`：[{tool, query, depends}]
+- `searchPlans`：[{tool, query, depends}]
 - `queryNormalization`（有 web_search 时）：{normalized, variants, inputIssues}
 - `askUser` / `missingContextSlots`：追问目标槽位与缺失上下文（有缺失时）
 - `selfCheck`：{passed, checks[{rule, ok, evidence}]}
@@ -657,7 +657,7 @@ JSON 结构中的字段必须分清两类：
   "slotFillPlan": {
     "city": { "from": "user_query", "value": "深圳", "confidence": 0.9 }
   },
-  "queryTasks": [
+  "searchPlans": [
     { "tool": "web_search", "query": "深圳 实时天气 2026年3月5日", "depends": [] }
   ],
   "queryNormalization": {
@@ -688,7 +688,7 @@ JSON 结构中的字段必须分清两类：
 | `decision` | 必须 | 必须 | 必须 | 必须 | `{nextAction, confidence, reasoning}` |
 | `userMarkdown` | 一行进度 | 完整 Markdown | 追问文案 | 降级说明 | string |
 | `slotFillPlan` | 必须 | — | — | — | `{slot: {from, value, confidence}}` |
-| `queryTasks` | 必须 | — | — | — | `[{tool, query, depends}]` |
+| `searchPlans` | 必须 | — | — | — | `[{tool, query, depends}]` |
 | `queryNormalization` | 有 web_search 时 | — | — | — | `{normalized, variants, inputIssues}` |
 | `askUser` / `missingContextSlots` | — | — | 必须 | — | `{slotId, prompt}` + `string[]` |
 | `result` | — | 必须 | — | — | string（综合结论） |
@@ -958,7 +958,7 @@ String _smartStringify(dynamic value, {String indent = ''}) {
 
 ## 执行要求
 - 输出 JSON，禁止自然语言包裹
-- 必须输出 slotFillPlan / queryTasks / contextSlots
+- 必须输出 slotFillPlan / searchPlans / contextSlots
 - 先补关键槽位，再执行联网查询
 
 ## 槽位自动补全（Layer 0）
@@ -977,7 +977,7 @@ String _smartStringify(dynamic value, {String indent = ''}) {
 输出纯 JSON，结构必须包含：
 - decision（含 nextAction: tool_call / answer / ask_user）
 - slotFillPlan（每个槽位的来源/值/策略）
-- queryTasks（查询任务列表，含依赖关系和停止条件）
+- searchPlans（查询任务列表，含依赖关系和停止条件）
 - queryNormalization（有 web_search 时必须：normalizedQuery + queryVariants + inputIssues）
 - subagentPlan（跨域时：副技能子任务声明，含 domainId）
 
@@ -1088,7 +1088,7 @@ web_search
 token    0-80:   "我是沃助理，信念=诚实/精准/安全/尊重"    ← 身份锚定
 token   80-200:  "禁止编造实时数据，危机提供热线"           ← 底线加载
 token  200-600:  ★ "你是总控规划器，拆解任务、补齐槽位"     ← 核心！知道干什么了
-token  600-800:  "输出 JSON，含 slotFillPlan/queryTasks"   ← 知道输出什么格式
+token  600-800:  "输出 JSON，含 slotFillPlan/searchPlans"   ← 知道输出什么格式
 token  800-900:  "你是天气助理，专业清晰"                   ← 知道用什么风格
 token  900-1100: "天气技能指令 + 工具调用指引"               ← 具体怎么做
 token 1100-1300: "状态=S1，city=深圳，GPS=22.5..."          ← 数据（紧贴 user）

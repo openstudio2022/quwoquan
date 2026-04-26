@@ -1,0 +1,5 @@
+[project]
+name = "quwoquan-runtime-errors"
+version = "0.1.0"
+description = "Shared runtime failure models for quwoquan Python jobs."
+requires-python = ">=3.11"

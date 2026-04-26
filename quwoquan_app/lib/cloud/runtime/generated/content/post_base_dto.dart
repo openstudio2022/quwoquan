@@ -24,8 +24,9 @@ abstract class PostBaseDto {
   String get displayFormat;
   String get authorId;
   /// Canonical author profile subject key.
-  /// During migration, fall back to the existing `authorId` field.
-  String get authorProfileSubjectId => authorId;
+  /// Must be sourced from `authorProfileSubjectId` / `profileSubjectId`,
+  /// and must not silently fall back to legacy `authorId`.
+  String get authorProfileSubjectId;
   String get displayName;
   String get avatarUrl;
   /// 作者主页背景图 URL；null 表示未配置，UI 显示默认渐变背景。

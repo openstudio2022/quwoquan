@@ -7,6 +7,53 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 
+enum ToolKind {
+  retrieval('retrieval'),
+  context('context'),
+  media('media'),
+  action('action'),
+  unknown('');
+
+  const ToolKind(this.wireName);
+
+  final String wireName;
+}
+
+ToolKind parseToolKind(String raw) {
+  switch (raw.trim()) {
+    case 'retrieval':
+      return ToolKind.retrieval;
+    case 'context':
+      return ToolKind.context;
+    case 'media':
+      return ToolKind.media;
+    case 'action':
+      return ToolKind.action;
+    default:
+      return ToolKind.unknown;
+  }
+}
+
+abstract final class AssistantToolNames {
+  static const String search = 'search';
+  static const String webSearch = 'web_search';
+  static const String webFetch = 'web_fetch';
+  static const String appSearch = 'app_search';
+  static const String context = 'context';
+  static const String retrieval = 'retrieval';
+
+  static bool isRetrievalName(String toolName) {
+    switch (toolName.trim()) {
+      case search:
+      case webSearch:
+      case appSearch:
+        return true;
+      default:
+        return false;
+    }
+  }
+}
+
 /// Permission config for a tool, sourced from [tool_permissions.json].
 class ToolPermissionConfig {
   const ToolPermissionConfig({
@@ -142,22 +189,25 @@ class _ToolOpenAiFunction {
 
 class _ToolRouting {
   const _ToolRouting({
-    this.toolKind = '',
-    this.supportsQueryTasks = false,
+    this.toolKind = ToolKind.unknown,
+    this.supportsSearchPlans = false,
     this.internalOnlyParameters = const <String>[],
   });
 
   factory _ToolRouting.fromJson(Object? raw) {
     final payload = AssistantToolPayload.fromJson(raw);
     return _ToolRouting(
-      toolKind: payload.stringField('toolKind') ?? '',
-      supportsQueryTasks: payload.boolField('supportsQueryTasks') ?? false,
+      toolKind: parseToolKind(payload.stringField('toolKind') ?? ''),
+      supportsSearchPlans:
+          payload.boolField('supportsSearchPlans') ??
+          payload.boolField('supportsTaskGraphArgs') ??
+          false,
       internalOnlyParameters: payload.stringListField('internalOnlyParameters'),
     );
   }
 
-  final String toolKind;
-  final bool supportsQueryTasks;
+  final ToolKind toolKind;
+  final bool supportsSearchPlans;
   final List<String> internalOnlyParameters;
 }
 
@@ -375,11 +425,15 @@ class ToolMetadataRegistry {
   }
 
   String toolKindByName(String toolName) {
-    return _catalog.toolByName(toolName)?.routing.toolKind ?? '';
+    return toolKindTypeByName(toolName).wireName;
   }
 
-  bool supportsQueryTasks(String toolName) {
-    return _catalog.toolByName(toolName)?.routing.supportsQueryTasks ?? false;
+  ToolKind toolKindTypeByName(String toolName) {
+    return _catalog.toolByName(toolName)?.routing.toolKind ?? ToolKind.unknown;
+  }
+
+  bool supportsSearchPlans(String toolName) {
+    return _catalog.toolByName(toolName)?.routing.supportsSearchPlans ?? false;
   }
 
   List<String> internalOnlyParameters(String toolName) {
@@ -388,7 +442,8 @@ class ToolMetadataRegistry {
   }
 
   bool isRetrievalLikeTool(String toolName) {
-    return toolKindByName(toolName) == 'retrieval';
+    return toolKindTypeByName(toolName) == ToolKind.retrieval ||
+        AssistantToolNames.isRetrievalName(toolName);
   }
 
   bool contributesUiReferences(

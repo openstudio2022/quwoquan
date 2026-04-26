@@ -1,9 +1,9 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_subagent_run_record.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_synthesis_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
@@ -22,7 +22,7 @@ class SynthesisDraft {
     required this.contextAssembly,
     required this.synthesisReadiness,
     required this.finalResult,
-    required this.intentGraph,
+    required this.planView,
     required this.skillRuns,
     required this.aggregationState,
     required this.subagentPlan,
@@ -56,7 +56,7 @@ class SynthesisDraft {
   final ContextAssemblyResult contextAssembly;
   final SynthesisReadinessResult synthesisReadiness;
   final ReactRuntimeResult finalResult;
-  final IntentGraph intentGraph;
+  final AssistantPlanView planView;
   final List<SkillRun> skillRuns;
   final AggregationState aggregationState;
   final List<SubagentPlan> subagentPlan;

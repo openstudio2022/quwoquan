@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 圈子互动板块：点赞/评论流（含独立 loading/error 状态）
 class SectionInteraction extends ConsumerStatefulWidget {
@@ -39,7 +40,7 @@ class _InteractionRow {
   factory _InteractionRow.fromPost(PostBaseDto p) {
     return _InteractionRow(
       userName: p.displayName,
-      avatar: p.avatarUrl ?? '',
+      avatar: p.avatarUrl,
       time: '',
       action: '发布了',
       target: p.normalizedTitle.isNotEmpty ? p.normalizedTitle : p.type,
@@ -69,8 +70,9 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
       final feed = await repo.getCircleFeed(widget.circleId);
       if (mounted) {
         setState(() {
-          _interactions =
-              feed.map(_InteractionRow.fromPost).toList(growable: false);
+          _interactions = feed
+              .map(_InteractionRow.fromPost)
+              .toList(growable: false);
           _isLoading = false;
         });
       }
@@ -78,7 +80,7 @@ class _SectionInteractionState extends ConsumerState<SectionInteraction> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = e.toString();
+          _error = runtimeErrorDisplayMessage(e);
         });
       }
     }

@@ -5,14 +5,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_engine.dart'
     as phase_owner;
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_session_history_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
+import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
@@ -35,7 +43,6 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
@@ -48,6 +55,159 @@ bool _isFinalAnswerTemplate(String templateId) =>
 
 bool _hasSubagentRuns(Map<String, dynamic> templateVariables) =>
     templateVariables['subagentRuns'] != null;
+
+AssistantPlanView? _planViewFromState(AgentExecutionState state) {
+  return assistantPlanViewFromTypedMainline(
+    understandingResult: state.understandingResult,
+    taskGraph: state.taskGraph,
+  );
+}
+
+UnderstandingResult _understandingFromPlanView(AssistantPlanView planView) {
+  return UnderstandingResult(
+    intents: <IntentNode>[
+      IntentNode(
+        intentId: 'intent_primary',
+        intentType: '${planView.primarySkill}.primary',
+        goal: planView.userGoal,
+        entityRefs: planView.entityRefs
+            .map(
+              (item) => IntentEntityRef(
+                entityType: 'entity',
+                canonicalKey: item,
+                displayText: item,
+              ),
+            )
+            .toList(growable: false),
+        constraints: planView.constraints
+            .map((item) => IntentConstraint(key: 'constraint', value: item))
+            .toList(growable: false),
+        requiresEvidence: planView.requiresExternalEvidence,
+      ),
+    ],
+    dialogueTransitionDecision: DialogueTransitionDecision(
+      nextTurnMode: planView.requiresExternalEvidence
+          ? NextTurnMode.continueExecution
+          : NextTurnMode.answer,
+      needsClarification: planView.clarificationNeeded,
+    ),
+  );
+}
+
+TaskGraph _taskGraphFromPlanView(AssistantPlanView planView) {
+  final plans = planView.searchPlans
+      .map(
+        (plan) => plan.copyWith(
+          authorityDomains: plan.authorityDomains.isNotEmpty
+              ? plan.authorityDomains
+              : planView.authorityDomains,
+        ),
+      )
+      .toList(growable: false);
+  return TaskGraph(
+    tasks: plans
+        .map(
+          (plan) => TaskNode(
+            taskId: plan.id,
+            intentId: 'intent_primary',
+            toolName: 'web_search',
+            toolArgs: TaskToolArgs(<String, Object?>{
+              'query': plan.query,
+              'searchPlans': <Map<String, dynamic>>[plan.toJson()],
+            }),
+          ),
+        )
+        .toList(growable: false),
+  );
+}
+
+AgentExecutionState _stateWithExecutionSnapshot(
+  ExecutionPhaseSnapshot snapshot,
+) {
+  return AgentExecutionState(executionPhaseSnapshot: snapshot);
+}
+
+ExecutionPhaseSuccess _executionSuccessSnapshot({
+  required String runId,
+  required String traceId,
+  required String latestUserQuery,
+  String domainId = 'weather',
+  SynthesisReadinessResult synthesisReadiness = const SynthesisReadinessResult(
+    ready: true,
+  ),
+  List<AssistantToolResultRow> toolResults = const <AssistantToolResultRow>[],
+  AnswerBoundaryPolicy answerBoundaryPolicy = const AnswerBoundaryPolicy(),
+  EvidenceEvaluationResult evidenceEvaluation =
+      const EvidenceEvaluationResult(),
+  ReactRuntimeResult phaseOneResult = const ReactRuntimeResult(
+    finalText: '',
+    traces: [],
+  ),
+}) {
+  return ExecutionPhaseSuccess(
+    runId: runId,
+    traceId: traceId,
+    runStartAt: DateTime(2026, 4, 26),
+    sessionId: runId,
+    latestUserQuery: latestUserQuery,
+    domainId: domainId,
+    contextAssembly: const ContextAssemblyResult(),
+    understandingResult: const UnderstandingResult(),
+    taskGraph: const TaskGraph(),
+    orchestratorState: const ConversationOrchestratorState(),
+    turnSynthesisState: const TurnSynthesisState(),
+    dialogueRoundScript: const DialogueRoundScript(),
+    domainCatalog: const <String>[],
+    domainCatalogVersion: '',
+    allowedToolNames: const <String>['web_search'],
+    executionShell: const SkillExecutionShell(),
+    previousSlotState: const SlotStateSnapshot(),
+    retrievalPolicy: const <String, dynamic>{},
+    answerBoundaryPolicy: answerBoundaryPolicy,
+    understandingSnapshot: const <String, dynamic>{},
+    templateVariables: const <String, dynamic>{},
+    messages: const <Map<String, dynamic>>[],
+    synthTemplateVersion: '',
+    fusionSynthTemplateVersion: '',
+    phaseOneResult: phaseOneResult,
+    synthesisReadiness: synthesisReadiness,
+    evidenceLedger: const <EvidenceLedgerEntry>[],
+    evidenceEvaluation: evidenceEvaluation,
+    toolResults: toolResults,
+    supplementalTraces: const <AssistantTraceEvent>[],
+  );
+}
+
+AgentExecutionState _stateWithPlanView(
+  AssistantPlanView planView, {
+  AssistantBootstrapContext? bootstrapContext,
+  RunArtifacts? previousRunArtifacts,
+}) {
+  return AgentExecutionState(
+    bootstrapContext: bootstrapContext,
+    previousRunArtifacts: previousRunArtifacts,
+    understandingResult: _understandingFromPlanView(planView),
+    taskGraph: _taskGraphFromPlanView(planView),
+  );
+}
+
+Map<String, dynamic> _typedPlanFields(AssistantPlanView planView) {
+  return <String, dynamic>{
+    assistantUnderstandingResultField: _understandingFromPlanView(
+      planView,
+    ).toJson(),
+    assistantTaskGraphField: _taskGraphFromPlanView(planView).toJson(),
+  };
+}
+
+Map<String, dynamic> _precomputedPlanFields(AssistantPlanView planView) {
+  return <String, dynamic>{
+    'precomputedUnderstandingResult': _understandingFromPlanView(
+      planView,
+    ).toJson(),
+    'precomputedTaskGraph': _taskGraphFromPlanView(planView).toJson(),
+  };
+}
 
 void main() {
   group('orchestration phase owner', () {
@@ -78,10 +238,21 @@ void main() {
       );
       final request = AssistantRunRequest(
         sessionId: 'bootstrap_owner',
+        deviceModel: 'iPhone 17',
+        deviceOs: 'ios',
+        gpsLocation: const <String, dynamic>{
+          'city': '深圳市',
+          'countryCode': 'CN',
+          'countryLabel': '中国',
+          'timezone': 'Asia/Shanghai',
+          'locale': 'zh_CN',
+        },
         messages: const <AssistantRunMessage>[
           AssistantRunMessage(role: 'user', content: '请帮我看看深圳天气'),
         ],
         contextScopeHint: const <String, dynamic>{
+          'referenceNowIso': '2026-04-26T10:00:00+08:00',
+          'timezone': 'Asia/Shanghai',
           'runArtifacts': <String, dynamic>{
             'machineEnvelope': '',
             'displayMarkdown': '',
@@ -123,6 +294,19 @@ void main() {
         contains('- fallback_general_search:'),
       );
       expect(result.state!.contextAssembly, isNotNull);
+      expect(
+        result.state!.systemContextEnvelope.time.timezone,
+        'Asia/Shanghai',
+      );
+      expect(
+        result
+            .state!
+            .bootstrapContext!
+            .systemContextEnvelope
+            .location
+            .adminAreaLevel2,
+        '深圳市',
+      );
     });
 
     test('bootstrap phase 应保留上一轮意图与回答摘要', () async {
@@ -138,14 +322,13 @@ void main() {
         storagePath: '${tempDir.path}/sessions.json',
       );
       await sessionManager.load();
-      final previousIntentGraph = IntentGraph(
+      final previousPlanView = AssistantPlanView(
         userGoal: '给九寨沟行程做备选路线',
         problemShape: ProblemShape.singleSkill,
         primarySkill: 'travel',
         problemClass: ProblemClass.complexReasoning,
         answerShape: AnswerShape.options,
-        entityAnchors: const <String>['九寨沟'],
-        contextSlots: const <String, dynamic>{'destination': '九寨沟'},
+        entityRefs: const <String>['九寨沟'],
       );
       const previousJourney = AssistantJourney(
         stages: <AssistantJourneyStage>[
@@ -172,7 +355,7 @@ void main() {
             actionHints: const <String>[],
             elapsedMs: 4000,
           ),
-          'intentGraph': previousIntentGraph.toJson(),
+          ..._typedPlanFields(previousPlanView),
         },
       );
       sessionManager.updateSessionHistoryState(
@@ -221,11 +404,6 @@ void main() {
         ),
       );
 
-      expect(result.state!.bootstrapContext?.previousIntentGraph, isNotNull);
-      expect(
-        result.state!.bootstrapContext?.previousIntentGraph?.primarySkill,
-        'travel',
-      );
       expect(
         result.state!.bootstrapContext?.previousAnswerSummary,
         contains('九寨沟'),
@@ -235,12 +413,24 @@ void main() {
         contains('九寨沟'),
       );
       expect(
-        result.state!.bootstrapContext?.sessionHistoryState.completedSkillSummaries,
+        result.state!.bootstrapContext?.previousUnderstandingResult.intents,
+        isNotEmpty,
+      );
+      expect(
+        result.state!.bootstrapContext?.previousTaskGraph.tasks,
+        isNotNull,
+      );
+      expect(
+        result
+            .state!
+            .bootstrapContext
+            ?.sessionHistoryState
+            .completedSkillSummaries,
         hasLength(1),
       );
     });
 
-    test('understand phase 应产出 intent graph 并写入 state', () async {
+    test('understand phase 应产出 typed plan 并写入 state', () async {
       final phase = UnderstandPhase();
       final request = AssistantRunRequest(
         messages: const <AssistantRunMessage>[
@@ -264,20 +454,15 @@ void main() {
       );
 
       expect(result.state, isNotNull);
-      expect(result.state!.intentGraph, isNotNull);
-      expect(
-        result.state!.intentGraph!.problemClass,
-        ProblemClass.realtimeInfo,
-      );
-      expect(result.state!.intentGraph!.authorityDomains, <String>[
-        'weather.com.cn',
-        'cma.cn',
-      ]);
-      expect(result.state!.intentGraph!.freshnessHoursMax, 1);
+      final planView = _planViewFromState(result.state!);
+      final searchPlans = searchPlansFromTaskGraph(result.state!.taskGraph);
+      expect(planView, isNotNull);
+      expect(planView!.problemClass, ProblemClass.realtimeInfo);
+      expect(searchPlans, isNotEmpty);
       expect(result.state!.dialogueRoundScript, isNotNull);
       expect(
         result.state!.executionPreparation?.domainId,
-        result.state!.intentGraph!.primarySkill,
+        planView.primarySkill,
       );
     });
 
@@ -311,15 +496,15 @@ void main() {
       );
 
       expect(result.state, isNotNull);
-      expect(result.state!.intentGraph, isNotNull);
+      expect(_planViewFromState(result.state!), isNotNull);
       expect(result.state!.dialogueRoundScript, isNotNull);
       expect(result.state!.executionPreparation, isNotNull);
     });
 
-    test('understand phase 应优先恢复 root-level typed intent graph', () async {
+    test('understand phase 应优先恢复 root-level typed plan', () async {
       final phase = UnderstandPhase(
         runtime: ReactRuntime(
-          llmProvider: const _RootLevelIntentGraphUnderstandLlm(),
+          llmProvider: const _RootLevelTypedPlanUnderstandLlm(),
           toolRegistry: AssistantToolRegistry(),
         ),
       );
@@ -339,19 +524,47 @@ void main() {
         ),
       );
 
-      expect(result.state!.intentGraph, isNotNull);
-      expect(result.state!.intentGraph!.primarySkill, 'weather');
+      final planView = _planViewFromState(result.state!);
+      expect(planView, isNotNull);
+      expect(planView!.primarySkill, 'weather');
+      expect(planView.problemClass, ProblemClass.realtimeInfo);
+      expect(planView.entityRefs, contains('深圳'));
+      expect(planView.searchPlans, hasLength(1));
       expect(
-        result.state!.intentGraph!.problemClass,
-        ProblemClass.realtimeInfo,
-      );
-      expect(result.state!.intentGraph!.entityAnchors, contains('深圳'));
-      expect(result.state!.intentGraph!.queryTasks, hasLength(1));
-      expect(
-        result.state!.intentGraph!.queryTasks.first.authorityDomains,
+        planView.searchPlans.first.authorityDomains,
         contains('weather.cma.cn'),
       );
-      expect(result.state!.queryTasks, hasLength(1));
+      expect(searchPlansFromTaskGraph(result.state!.taskGraph), hasLength(1));
+    });
+
+    test('understand phase 会从归一化查询补回缺失的城市 entityRefs', () async {
+      final phase = UnderstandPhase(
+        runtime: ReactRuntime(
+          llmProvider: const _NormalizedWeatherIntentWithoutAnchorsLlm(),
+          toolRegistry: AssistantToolRegistry(),
+        ),
+      );
+      const request = AssistantRunRequest(
+        sessionId: 'understand_weather_anchor_backfill',
+        messages: <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: 'shen Zheng tian qi'),
+        ],
+      );
+
+      final result = await phase.run(
+        PhaseInput(
+          request: request,
+          state: const AgentExecutionState(),
+          runId: 'run_understand_weather_anchor_backfill',
+          traceId: 'trace_understand_weather_anchor_backfill',
+        ),
+      );
+
+      final planView = _planViewFromState(result.state!);
+      final searchPlans = searchPlansFromTaskGraph(result.state!.taskGraph);
+      expect(planView, isNotNull);
+      expect(planView!.entityRefs, contains('深圳'));
+      expect(searchPlans.first.query, equals('深圳今天天气'));
     });
 
     test('understand phase 应合并 continuity 输入并继承上一轮意图骨架', () async {
@@ -361,23 +574,10 @@ void main() {
           toolRegistry: AssistantToolRegistry(),
         ),
       );
-      const previousIntentGraph = IntentGraph(
-        userGoal: '给九寨沟行程做备选路线',
-        problemShape: ProblemShape.singleSkill,
-        primarySkill: 'travel',
-        problemClass: ProblemClass.complexReasoning,
-        answerShape: AnswerShape.options,
-        freshnessNeed: FreshnessNeed.recent,
-        requiresExternalEvidence: true,
-        entityAnchors: <String>['九寨沟'],
-        contextSlots: <String, dynamic>{'destination': '九寨沟'},
-        globalConstraints: <String, dynamic>{'mode': 'qa'},
-      );
       final bootstrapContext = AssistantBootstrapContext(
         sessionId: 'understand_continuity_owner',
         latestUserQuery: '如果我只有4天，优先哪条路线？',
         historySummary: '上一轮刚讨论过九寨沟多条备选路线。',
-        previousIntentGraph: previousIntentGraph,
         previousAnswerSummary: '上轮推荐了九寨沟方向三条路线。',
         contextContinuityPolicy: const ContextContinuityPolicy(
           continuityMode: ContextContinuityMode.explicitFollowUp,
@@ -427,33 +627,28 @@ void main() {
         ),
       );
 
-      expect(result.state!.intentGraph, isNotNull);
-      expect(result.state!.intentGraph!.primarySkill, 'travel');
-      expect(result.state!.intentGraph!.contextSlots['destination'], '九寨沟');
+      final planView = _planViewFromState(result.state!);
+      expect(planView, isNotNull);
+      expect(planView!.primarySkill, 'travel');
+      expect(planView.entityRefs, contains('九寨沟'));
       expect(
-        (result.state!.intentGraph!.contextSlots['overrideSlots']
-            as Map?)?['durationDays'],
+        result.state!.bootstrapContext?.continuityOverrideSlots['durationDays'],
         4,
       );
       expect(
-        (result.state!.intentGraph!.contextSlots['continuity']
-            as Map?)?['mode'],
-        'explicit_follow_up',
-      );
-      expect(
-        result.state!.intentGraph!.globalConstraints['previousAnswerSummary'],
+        result.state!.bootstrapContext?.previousAnswerSummary,
         contains('九寨沟'),
       );
     });
 
-    test('retrieval design phase 应产出 queryTasks 并回写 intent graph', () async {
+    test('retrieval design phase 应产出 searchPlans 并回写 typed plan', () async {
       final phase = RetrievalDesignPhase(
         runtime: ReactRuntime(
           llmProvider: const _RetrievalDesignPlanLlm(),
           toolRegistry: AssistantToolRegistry(),
         ),
       );
-      final intentGraph = IntentGraph(
+      final planView = AssistantPlanView(
         userGoal: '深圳住宿怎么选',
         problemShape: ProblemShape.singleSkill,
         primarySkill: 'fallback_general_search',
@@ -461,23 +656,22 @@ void main() {
         answerShape: AnswerShape.options,
         requiresExternalEvidence: true,
         authorityDomains: const <String>['gov.cn'],
-        freshnessHoursMax: 24,
-        queryTasks: const <QueryTask>[
-          QueryTask(
+        searchPlans: const <SearchPlanItem>[
+          SearchPlanItem(
             id: 'candidate_space',
-            dimension: QueryTaskDimension.candidateSpace,
+            dimension: SearchPlanDimension.candidateSpace,
             label: '候选范围',
             query: '深圳住宿 候选片区 酒店 民宿 公寓',
           ),
-          QueryTask(
+          SearchPlanItem(
             id: 'fit_scenarios',
-            dimension: QueryTaskDimension.fitScenarios,
+            dimension: SearchPlanDimension.fitScenarios,
             label: '适用场景',
             query: '深圳住宿 通勤 景点 夜生活 亲子 商务 适合',
           ),
-          QueryTask(
+          SearchPlanItem(
             id: 'risks',
-            dimension: QueryTaskDimension.riskBoundaries,
+            dimension: SearchPlanDimension.riskBoundaries,
             label: '风险边界',
             query: '深圳住宿 避坑 噪音 交通 拥堵 安全 风险',
           ),
@@ -492,28 +686,27 @@ void main() {
       final result = await phase.run(
         PhaseInput(
           request: request,
-          state: AgentExecutionState(intentGraph: intentGraph),
+          state: _stateWithPlanView(planView),
           runId: 'run_2',
           traceId: 'trace_2',
         ),
       );
 
-      final queryTasks = result.state!.queryTasks;
-      expect(queryTasks, hasLength(3));
+      final searchPlans = searchPlansFromTaskGraph(result.state!.taskGraph);
+      expect(searchPlans, hasLength(3));
       expect(
-        queryTasks.map((item) => item.id),
+        searchPlans.map((item) => item.id),
         containsAll(<String>['candidate_space', 'fit_scenarios', 'risks']),
       );
       expect(
-        queryTasks.every((item) => item.authorityDomains.contains('gov.cn')),
+        searchPlans.every((item) => item.authorityDomains.contains('gov.cn')),
         isTrue,
       );
-      expect(queryTasks.every((item) => item.freshnessHoursMax == 24), isTrue);
-      expect(result.state!.intentGraph!.queryTasks, hasLength(3));
+      expect(_planViewFromState(result.state!)!.searchPlans, hasLength(3));
       expect(result.state!.executionPreparation, isNotNull);
       expect(
         result.state!.executionPreparation!.domainId,
-        result.state!.intentGraph!.primarySkill,
+        _planViewFromState(result.state!)!.primarySkill,
       );
       expect(
         result.state!.executionPreparation!.executionShell.problemClass,
@@ -521,34 +714,32 @@ void main() {
       );
     });
 
-    test('retrieval design phase 应产出启发式 typed queryTasks', () async {
+    test('retrieval design phase 应产出启发式 typed searchPlans', () async {
       final phase = RetrievalDesignPhase(
         runtime: ReactRuntime(
-          llmProvider: const _ToolCallQueryTasksRetrievalDesignLlm(),
+          llmProvider: const _ToolCallSearchPlansRetrievalDesignLlm(),
           toolRegistry: AssistantToolRegistry(),
         ),
       );
-      const intentGraph = IntentGraph(
+      const planView = AssistantPlanView(
         userGoal: '深圳周末天气适合出门吗',
         problemShape: ProblemShape.singleSkill,
         primarySkill: 'weather',
         problemClass: ProblemClass.realtimeInfo,
         answerShape: AnswerShape.decisionReady,
-        freshnessNeed: FreshnessNeed.recent,
         requiresExternalEvidence: true,
-        entityAnchors: <String>['深圳'],
+        entityRefs: <String>['深圳'],
         authorityDomains: <String>['weather.cma.cn'],
-        freshnessHoursMax: 6,
-        queryTasks: <QueryTask>[
-          QueryTask(
+        searchPlans: <SearchPlanItem>[
+          SearchPlanItem(
             id: 'key_facts',
-            dimension: QueryTaskDimension.keyFacts,
+            dimension: SearchPlanDimension.keyFacts,
             label: '关键事实',
             query: '深圳 周末 天气 实况',
           ),
-          QueryTask(
+          SearchPlanItem(
             id: 'decision_threshold',
-            dimension: QueryTaskDimension.decisionThreshold,
+            dimension: SearchPlanDimension.decisionThreshold,
             label: '出门阈值',
             query: '深圳 周末 天气 出门 适合 条件',
           ),
@@ -563,19 +754,20 @@ void main() {
       final result = await phase.run(
         PhaseInput(
           request: request,
-          state: const AgentExecutionState(intentGraph: intentGraph),
-          runId: 'run_retrieval_tool_call_query_tasks',
-          traceId: 'trace_retrieval_tool_call_query_tasks',
+          state: _stateWithPlanView(planView),
+          runId: 'run_retrieval_tool_call_search_plans',
+          traceId: 'trace_retrieval_tool_call_search_plans',
         ),
       );
 
-      expect(result.state!.queryTasks, hasLength(2));
+      final searchPlans = searchPlansFromTaskGraph(result.state!.taskGraph);
+      expect(searchPlans, hasLength(2));
       expect(
-        result.state!.queryTasks.map((item) => item.id),
+        searchPlans.map((item) => item.id),
         containsAll(<String>['key_facts', 'decision_threshold']),
       );
       expect(
-        result.state!.queryTasks.map((item) => item.id),
+        searchPlans.map((item) => item.id),
         isNot(
           containsAll(<String>[
             'weather_current_state',
@@ -586,43 +778,24 @@ void main() {
         reason: 'weather 场景不应再被 phase 层硬编码扩写为固定天气检索模板',
       );
       expect(
-        result.state!.queryTasks.every(
+        searchPlans.every(
           (item) => item.authorityDomains.contains('weather.cma.cn'),
         ),
         isTrue,
       );
-      expect(
-        result.state!.queryTasks.every((item) => item.freshnessHoursMax == 6),
-        isTrue,
-      );
-      expect(result.state!.intentGraph!.queryTasks, hasLength(2));
+      expect(_planViewFromState(result.state!)!.searchPlans, hasLength(2));
     });
 
-    test('retrieval design phase 应消费 continuity 输入补全 query task 语义', () async {
+    test('retrieval design phase 应消费 continuity 输入补全 search plan 语义', () async {
       final phase = RetrievalDesignPhase(
         runtime: ReactRuntime(
-          llmProvider: const _ToolCallQueryTasksRetrievalDesignLlm(),
+          llmProvider: const _ToolCallSearchPlansRetrievalDesignLlm(),
           toolRegistry: AssistantToolRegistry(),
         ),
-      );
-      const previousIntentGraph = IntentGraph(
-        userGoal: '给九寨沟行程做备选路线',
-        problemShape: ProblemShape.singleSkill,
-        primarySkill: 'travel',
-        problemClass: ProblemClass.complexReasoning,
-        answerShape: AnswerShape.options,
-        freshnessNeed: FreshnessNeed.recent,
-        requiresExternalEvidence: true,
-        entityAnchors: <String>['九寨沟'],
-        negativeKeywords: <String>['购物团'],
-        contextSlots: <String, dynamic>{'destination': '九寨沟'},
-        authorityDomains: <String>['gov.cn'],
-        freshnessHoursMax: 24,
       );
       final bootstrapContext = AssistantBootstrapContext(
         sessionId: 'retrieval_continuity_owner',
         latestUserQuery: '如果我只有4天，优先哪条路线？',
-        previousIntentGraph: previousIntentGraph,
         previousAnswerSummary: '上轮推荐了九寨沟方向三条路线。',
         contextContinuityPolicy: const ContextContinuityPolicy(
           continuityMode: ContextContinuityMode.explicitFollowUp,
@@ -631,28 +804,27 @@ void main() {
         ),
         continuityOverrideSlots: const <String, dynamic>{'durationDays': 4},
       );
-      const intentGraph = IntentGraph(
+      const planView = AssistantPlanView(
         userGoal: '4天优先哪条路线',
         problemShape: ProblemShape.singleSkill,
         primarySkill: 'travel',
         problemClass: ProblemClass.complexReasoning,
         answerShape: AnswerShape.options,
-        freshnessNeed: FreshnessNeed.recent,
         requiresExternalEvidence: true,
-        entityAnchors: <String>['九寨沟'],
-        negativeKeywords: <String>['购物团'],
-        contextSlots: <String, dynamic>{
-          'destination': '九寨沟',
-          'overrideSlots': <String, dynamic>{'durationDays': 4},
-        },
+        entityRefs: <String>['九寨沟'],
         authorityDomains: <String>['gov.cn'],
-        freshnessHoursMax: 24,
-        queryTasks: <QueryTask>[
-          QueryTask(
+        searchPlans: <SearchPlanItem>[
+          SearchPlanItem(
             id: 'route_priority',
-            dimension: QueryTaskDimension.tradeoffs,
+            dimension: SearchPlanDimension.tradeoffs,
             label: '路线取舍',
             query: '九寨沟 4天 路线 优先级 对比',
+            entityRefs: <String>['九寨沟'],
+            negativeKeywords: <String>['购物团'],
+            authorityDomains: <String>['gov.cn'],
+            freshnessHoursMax: 24,
+            answerShape: AnswerShape.options,
+            freshnessNeed: FreshnessNeed.recent,
           ),
         ],
       );
@@ -690,7 +862,8 @@ void main() {
           request: request,
           state: AgentExecutionState(
             bootstrapContext: bootstrapContext,
-            intentGraph: intentGraph,
+            understandingResult: _understandingFromPlanView(planView),
+            taskGraph: _taskGraphFromPlanView(planView),
             previousRunArtifacts: previousRunArtifacts,
           ),
           runId: 'run_retrieval_continuity',
@@ -698,23 +871,18 @@ void main() {
         ),
       );
 
-      expect(result.state!.queryTasks, isNotEmpty);
+      final searchPlans = searchPlansFromTaskGraph(result.state!.taskGraph);
+      expect(searchPlans, isNotEmpty);
       expect(
-        result.state!.queryTasks.every(
-          (item) => item.entityAnchors.contains('九寨沟'),
-        ),
+        searchPlans.every((item) => item.entityRefs.contains('九寨沟')),
         isTrue,
       );
       expect(
-        result.state!.queryTasks.every(
-          (item) => item.answerShape == AnswerShape.options,
-        ),
+        searchPlans.every((item) => item.answerShape == AnswerShape.options),
         isTrue,
       );
       expect(
-        result.state!.queryTasks.every(
-          (item) => item.freshnessNeed == FreshnessNeed.recent,
-        ),
+        searchPlans.every((item) => item.freshnessNeed == FreshnessNeed.recent),
         isTrue,
       );
     });
@@ -758,28 +926,44 @@ void main() {
             state: AgentExecutionState(
               understandingSnapshot: const RunArtifactsUnderstandingSnapshot(
                 intentSummary: '用户想确认深圳今天是否下雨以及要不要带伞。',
-                userFacingSummary:
-                    '先核对天气实况，再筛出真正影响出门建议的依据。',
+                userFacingSummary: '先核对天气实况，再筛出真正影响出门建议的依据。',
               ),
-              executionBridgeSnapshot: <String, dynamic>{
-                'phaseOneResult': phaseOneResult,
-                'synthesisReadiness': const SynthesisReadinessResult(
+              executionPhaseSnapshot: _executionSuccessSnapshot(
+                runId: 'run_evidence_digest_phase',
+                traceId: 'trace_evidence_digest_phase',
+                latestUserQuery: '深圳今天会下雨吗？',
+                synthesisReadiness: const SynthesisReadinessResult(
                   ready: true,
                   reason: 'evidence_ready',
                 ),
-              },
+                toolResults: const <AssistantToolResultRow>[
+                  AssistantToolResultRow(
+                    toolName: 'web_search',
+                    toolCallId: 'call_weather',
+                    message: 'ok',
+                    data: <String, dynamic>{
+                      'summary': '深圳今天白天有分散阵雨。',
+                      'totalReferences': 1,
+                      'references': <Map<String, dynamic>>[
+                        <String, dynamic>{
+                          'title': '深圳天气',
+                          'url': 'https://example.com/weather',
+                          'source': 'example.com',
+                          'snippet': '深圳今天白天有分散阵雨，出门建议带伞。',
+                        },
+                      ],
+                    },
+                  ),
+                ],
+              ).copyWith(phaseOneResult: phaseOneResult),
             ),
             runId: 'run_evidence_digest_phase',
             traceId: 'trace_evidence_digest_phase',
-            onTraceEvent: (event) {
-              if (event is AssistantTraceEvent) {
-                traces.add(event);
-              }
-            },
+            onTraceEvent: traces.add,
           ),
         );
 
-        expect(result.state!.retrievalProcessing.processingSummary, isNotEmpty);
+        expect(result.state!.retrievalProcessing.processingSummary, isEmpty);
         expect(result.state!.retrievalProcessing.acceptedDocumentCount, 1);
         expect(result.state!.retrievalProcessing.selectedKeyPoints, isNotEmpty);
         expect(
@@ -815,36 +999,31 @@ void main() {
               intentSummary: '用户想确认深圳今晚能不能顺利出门。',
               userFacingSummary: '我先确认你最在意的是今晚还能不能顺利出门。',
             ),
-            executionBridgeSnapshot: <String, dynamic>{
-              'phaseOneResult': const ReactRuntimeResult(
-                finalText: 'ok',
-                traces: <AssistantTraceEvent>[],
-              ),
-              'synthesisReadiness': const SynthesisReadinessResult(
+            executionPhaseSnapshot: _executionSuccessSnapshot(
+              runId: 'run_evidence_digest_blocked',
+              traceId: 'trace_evidence_digest_blocked',
+              latestUserQuery: '深圳今晚能不能出门？',
+              synthesisReadiness: const SynthesisReadinessResult(
                 ready: false,
                 reason: '关键来源还不够稳定，暂时不适合继续整理答案。',
               ),
-            },
+              phaseOneResult: const ReactRuntimeResult(
+                finalText: 'ok',
+                traces: <AssistantTraceEvent>[],
+              ),
+            ),
           ),
           runId: 'run_evidence_digest_blocked',
           traceId: 'trace_evidence_digest_blocked',
-          onTraceEvent: (event) {
-            if (event is AssistantTraceEvent) {
-              traces.add(event);
-            }
-          },
+          onTraceEvent: traces.add,
         ),
       );
 
       expect(
-        result.state!.executionBridgeSnapshot['blockedProcessStepId'],
-        ProcessStepId.retrievalProcessing.wireName,
+        result.state!.executionPhaseSnapshot,
+        isA<ExecutionPhaseSuccess>(),
       );
-      expect(result.state!.executionBridgeSnapshot['skipAnswerStage'], isTrue);
-      expect(
-        result.state!.retrievalProcessing.processingSummary,
-        contains('还不够稳定'),
-      );
+      expect(result.state!.retrievalProcessing.processingSummary, isEmpty);
       final commitTrace = traces.singleWhere(
         (trace) =>
             trace.data?['syntheticUserEvent'] == true &&
@@ -856,7 +1035,7 @@ void main() {
                     as Map?)?['processingSummary']
                 as String?) ??
             '',
-        contains('还不够稳定'),
+        isEmpty,
       );
     });
 
@@ -908,36 +1087,21 @@ void main() {
             'freshnessSatisfied': true,
             'evidenceRequired': true,
             'coveredDimensions': <String>['realtime_fact'],
-            'coveredQueryTaskIds': <String>['weather_now'],
+            'coveredSearchPlanItemIds': <String>['weather_now'],
             'blockingDimensions': <String>[],
             'missingDimensions': <String>[],
             'summary': '证据账完整。',
           },
-          'conversationStateDecision': <String, dynamic>{
-            'nextAction': 'answer',
-            'finalAnswerMode': 'full',
-            'answerEligibility': 'ready',
-            'slotState': <String, dynamic>{
-              'domainId': 'chat',
-              'slotValues': <String, dynamic>{
-                'city': <String, dynamic>{
-                  'slotId': 'city',
-                  'status': 'filled',
-                  'value': '深圳',
-                  'source': 'tool_result',
-                },
-              },
-              'missingSlots': <String>[],
+          assistantTurnSynthesisStateField: <String, dynamic>{
+            'contractId': 'turn_synthesis_state',
+            'interactionDirective': <String, dynamic>{
+              'kind': 'final_answer',
+              'intentId': '',
+              'message': '',
             },
-            'missingCriticalSlots': <String>[],
-            'askUser': <String, dynamic>{},
-            'qualityGates': <String, dynamic>{
-              'structureSafe': true,
-              'taskSafe': true,
-              'evidenceSafe': true,
-              'renderSafe': true,
-            },
-            'finalAnswerReady': true,
+            'completedIntentIds': <String>['weather.answer'],
+            'remainingIntentIds': <String>[],
+            'blockedIntentIds': <String>[],
           },
           'runArtifacts': <String, dynamic>{
             'machineEnvelope': '',
@@ -950,7 +1114,7 @@ void main() {
                 'domainId': 'chat',
                 'dimension': 'realtime_fact',
                 'dimensionLabel': '实时事实',
-                'queryTaskId': 'weather_now',
+                'searchPlanId': 'weather_now',
                 'title': '深圳天气预报 - 中国气象局',
                 'url': 'https://weather.cma.cn/shenzhen',
                 'sourceHost': 'weather.cma.cn',
@@ -1024,8 +1188,8 @@ void main() {
         <String>['ev_weather_1'],
       );
       expect(
-        result.state!.conversationStateDecision?.nextActionType,
-        AssistantNextAction.answer,
+        result.state!.pendingResponse?.answerGateDecision.nextAction,
+        AssistantNextAction.answer.wireName,
       );
       expect(result.state!.domainPolicyBundle?.domainId, 'chat');
     });
@@ -1069,12 +1233,12 @@ void main() {
         traceId: 'trace_synthesis_draft_owner',
       );
 
-      expect(snapshot.toLegacyMap()['shortCircuitResponse'], isNull);
+      expect(snapshot, isA<ExecutionPhaseSuccess>());
 
       final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
-          state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+          state: _stateWithExecutionSnapshot(snapshot),
           runId: 'run_synthesis_draft_owner',
           traceId: 'trace_synthesis_draft_owner',
         ),
@@ -1086,7 +1250,15 @@ void main() {
       expect(result.state!.pendingResponse!.displayMarkdown.trim(), isNotEmpty);
       expect(result.state!.previousRunArtifacts, isNotNull);
       expect(result.state!.evidenceLedger, isNotEmpty);
-      expect(result.state!.conversationStateDecision?.finalAnswerReady, isTrue);
+      expect(
+        result
+            .state!
+            .previousRunArtifacts
+            ?.answerDecision
+            .core
+            .finalAnswerReady,
+        isTrue,
+      );
     });
 
     test('synthesis phase 在 phase-one 已成答时应跳过 synthesis', () async {
@@ -1136,14 +1308,16 @@ void main() {
           AssistantRunMessage(role: 'user', content: '请用一句话解释牛顿第一定律'),
         ],
         contextScopeHint: <String, dynamic>{
-          'precomputedIntentGraph': const IntentGraph(
-            userGoal: '一句话解释牛顿第一定律',
-            problemShape: ProblemShape.singleSkill,
-            primarySkill: '',
-            problemClass: ProblemClass.simpleQa,
-            answerShape: AnswerShape.directAnswer,
-            requiresExternalEvidence: false,
-          ).toJson(),
+          ..._precomputedPlanFields(
+            const AssistantPlanView(
+              userGoal: '一句话解释牛顿第一定律',
+              problemShape: ProblemShape.singleSkill,
+              primarySkill: '',
+              problemClass: ProblemClass.simpleQa,
+              answerShape: AnswerShape.directAnswer,
+              requiresExternalEvidence: false,
+            ),
+          ),
           'precomputedExecutionPreparation': prepared.toJson(),
         },
       );
@@ -1157,7 +1331,7 @@ void main() {
       final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
-          state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+          state: _stateWithExecutionSnapshot(snapshot),
           runId: 'run_phase_one_direct_answer_owner',
           traceId: 'trace_phase_one_direct_answer_owner',
         ),
@@ -1173,8 +1347,8 @@ void main() {
         contains('牛顿第一定律'),
       );
       expect(
-        result.state!.conversationStateDecision?.nextActionType,
-        AssistantNextAction.answer,
+        result.state!.previousRunArtifacts?.answerDecision.core.nextAction,
+        AssistantNextAction.answer.wireName,
       );
       final uiUsageStats =
           result.state!.pendingResponse!.structuredResponse['uiUsageStats']
@@ -1233,19 +1407,19 @@ void main() {
             AssistantRunMessage(role: 'user', content: '深圳今天适合出门吗？'),
           ],
           contextScopeHint: <String, dynamic>{
-            'precomputedIntentGraph': const IntentGraph(
-              userGoal: '判断深圳今天是否适合出门',
-              problemShape: ProblemShape.singleSkill,
-              primarySkill: 'weather',
-              problemClass: ProblemClass.realtimeInfo,
-              answerShape: AnswerShape.directAnswer,
-              freshnessNeed: FreshnessNeed.realtime,
-              mustVerifyClaims: true,
-              requiresExternalEvidence: true,
-              entityAnchors: <String>['深圳'],
-              authorityDomains: <String>['weather.cma.cn', 'cma.cn'],
-              freshnessHoursMax: 1,
-            ).toJson(),
+            ..._precomputedPlanFields(
+              const AssistantPlanView(
+                userGoal: '判断深圳今天是否适合出门',
+                problemShape: ProblemShape.singleSkill,
+                primarySkill: 'weather',
+                problemClass: ProblemClass.realtimeInfo,
+                answerShape: AnswerShape.directAnswer,
+                mustVerifyClaims: true,
+                requiresExternalEvidence: true,
+                entityRefs: <String>['深圳'],
+                authorityDomains: <String>['weather.cma.cn', 'cma.cn'],
+              ),
+            ),
             'precomputedExecutionPreparation': prepared.toJson(),
           },
         );
@@ -1256,17 +1430,21 @@ void main() {
           traceId: 'trace_phase_one_gap_fill_direct_answer_owner',
         );
 
-        final readiness =
-            snapshot.toLegacyMap()['synthesisReadiness'] as SynthesisReadinessResult;
-        final boundary = snapshot.toLegacyMap()['answerBoundaryPolicy'];
-        expect((boundary as dynamic).requireToolResultBeforeSynthesis, isTrue);
+        final executionSnapshot = snapshot as ExecutionPhaseSuccess;
+        final readiness = executionSnapshot.synthesisReadiness;
+        expect(
+          executionSnapshot
+              .answerBoundaryPolicy
+              .requireToolResultBeforeSynthesis,
+          isTrue,
+        );
         expect(readiness.ready, isFalse);
         expect(llm.initialPlannerCallCount, 1);
 
         final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
-            state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+            state: _stateWithExecutionSnapshot(snapshot),
             runId: 'run_phase_one_gap_fill_direct_answer_owner',
             traceId: 'trace_phase_one_gap_fill_direct_answer_owner',
           ),
@@ -1275,6 +1453,19 @@ void main() {
         expect(llm.synthesisCallCount, 1);
         expect(result.state!.synthesisReadiness?.ready, isTrue);
         expect(result.state!.pendingResponse!.displayMarkdown, contains('深圳'));
+        final understandingSnapshot =
+            (result
+                        .state!
+                        .pendingResponse!
+                        .structuredResponse['understandingSnapshot']
+                    as Map?)
+                ?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+        expect(
+          (understandingSnapshot['userFacingSummary'] as String?) ?? '',
+          contains('深圳'),
+          reason: 'final answer 未重写 understandingSnapshot 时应继承/派生理解摘要。',
+        );
         final uiUsageStats =
             result.state!.pendingResponse!.structuredResponse['uiUsageStats']
                 as Map<String, dynamic>;
@@ -1329,15 +1520,17 @@ void main() {
           AssistantRunMessage(role: 'user', content: '一句话说明什么是惯性'),
         ],
         contextScopeHint: <String, dynamic>{
-          'precomputedIntentGraph': const IntentGraph(
-            userGoal: '一句话说明什么是惯性',
-            problemShape: ProblemShape.singleSkill,
-            primarySkill: '',
-            problemClass: ProblemClass.simpleQa,
-            answerShape: AnswerShape.directAnswer,
-            requiresExternalEvidence: false,
-            entityAnchors: <String>['惯性'],
-          ).toJson(),
+          ..._precomputedPlanFields(
+            const AssistantPlanView(
+              userGoal: '一句话说明什么是惯性',
+              problemShape: ProblemShape.singleSkill,
+              primarySkill: '',
+              problemClass: ProblemClass.simpleQa,
+              answerShape: AnswerShape.directAnswer,
+              requiresExternalEvidence: false,
+              entityRefs: <String>['惯性'],
+            ),
+          ),
           'precomputedExecutionPreparation': prepared.toJson(),
         },
       );
@@ -1351,7 +1544,7 @@ void main() {
       final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
-          state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+          state: _stateWithExecutionSnapshot(snapshot),
           runId: 'run_phase_one_plain_markdown_owner',
           traceId: 'trace_phase_one_plain_markdown_owner',
         ),
@@ -1418,15 +1611,17 @@ void main() {
           AssistantRunMessage(role: 'user', content: '一句话解释光合作用'),
         ],
         contextScopeHint: <String, dynamic>{
-          'precomputedIntentGraph': const IntentGraph(
-            userGoal: '一句话解释光合作用',
-            problemShape: ProblemShape.singleSkill,
-            primarySkill: '',
-            problemClass: ProblemClass.simpleQa,
-            answerShape: AnswerShape.directAnswer,
-            requiresExternalEvidence: false,
-            entityAnchors: <String>['光合作用'],
-          ).toJson(),
+          ..._precomputedPlanFields(
+            const AssistantPlanView(
+              userGoal: '一句话解释光合作用',
+              problemShape: ProblemShape.singleSkill,
+              primarySkill: '',
+              problemClass: ProblemClass.simpleQa,
+              answerShape: AnswerShape.directAnswer,
+              requiresExternalEvidence: false,
+              entityRefs: <String>['光合作用'],
+            ),
+          ),
           'precomputedExecutionPreparation': prepared.toJson(),
         },
       );
@@ -1440,7 +1635,7 @@ void main() {
       final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
-          state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+          state: _stateWithExecutionSnapshot(snapshot),
           runId: 'run_phase_one_non_contract_json_owner',
           traceId: 'trace_phase_one_non_contract_json_owner',
         ),
@@ -1506,14 +1701,14 @@ void main() {
           synthTemplateVersion: 'followup_repair_synth_v1',
           fusionSynthTemplateVersion: 'followup_repair_fusion_v1',
         );
-        const previousIntentGraph = IntentGraph(
+        const previousPlanView = AssistantPlanView(
           userGoal: '给九寨沟行程做备选路线',
           problemShape: ProblemShape.singleSkill,
           primarySkill: 'travel',
           problemClass: ProblemClass.complexReasoning,
           answerShape: AnswerShape.options,
           requiresExternalEvidence: false,
-          entityAnchors: <String>['九寨沟'],
+          entityRefs: <String>['九寨沟'],
         );
         final request = AssistantRunRequest(
           sessionId: 'phase_one_followup_answer_repair_owner',
@@ -1525,7 +1720,7 @@ void main() {
               'sessionId': 'phase_one_followup_answer_repair_owner',
               'latestUserQuery': '如果我只有4天，优先哪条路线？',
               'historySummary': '上一轮刚讨论过九寨沟多条备选路线。',
-              'previousIntentGraph': previousIntentGraph.toJson(),
+              'previousPlanView': previousPlanView.toJson(),
               'previousAnswerSummary': '上轮推荐了九寨沟方向三条路线。',
               'contextContinuityPolicy': const ContextContinuityPolicy(
                 continuityMode: ContextContinuityMode.explicitFollowUp,
@@ -1536,20 +1731,17 @@ void main() {
                 'durationDays': 4,
               },
             },
-            'precomputedIntentGraph': const IntentGraph(
-              userGoal: '4天优先哪条路线',
-              problemShape: ProblemShape.singleSkill,
-              primarySkill: '',
-              problemClass: ProblemClass.simpleQa,
-              answerShape: AnswerShape.directAnswer,
-              requiresExternalEvidence: false,
-              entityAnchors: <String>['九寨沟'],
-              contextSlots: <String, dynamic>{
-                'destination': '九寨沟',
-                'continuity': <String, dynamic>{'mode': 'explicit_follow_up'},
-                'overrideSlots': <String, dynamic>{'durationDays': 4},
-              },
-            ).toJson(),
+            ..._precomputedPlanFields(
+              const AssistantPlanView(
+                userGoal: '4天优先哪条路线',
+                problemShape: ProblemShape.singleSkill,
+                primarySkill: '',
+                problemClass: ProblemClass.simpleQa,
+                answerShape: AnswerShape.directAnswer,
+                requiresExternalEvidence: false,
+                entityRefs: <String>['九寨沟'],
+              ),
+            ),
             'precomputedExecutionPreparation': prepared.toJson(),
           },
         );
@@ -1563,7 +1755,7 @@ void main() {
         final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
-            state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+            state: _stateWithExecutionSnapshot(snapshot),
             runId: 'run_phase_one_followup_answer_repair_owner',
             traceId: 'trace_phase_one_followup_answer_repair_owner',
           ),
@@ -1592,7 +1784,10 @@ void main() {
           'phase_one_not_structured',
         );
         expect(diagnostics['phaseOneRecoveryApplied'], isFalse);
-        expect(diagnostics['phaseOneModelRepairApplied'], anyOf(isTrue, isFalse));
+        expect(
+          diagnostics['phaseOneModelRepairApplied'],
+          anyOf(isTrue, isFalse),
+        );
       },
     );
 
@@ -1637,14 +1832,14 @@ void main() {
         synthTemplateVersion: 'followup_repair_synth_v1',
         fusionSynthTemplateVersion: 'followup_repair_fusion_v1',
       );
-      const previousIntentGraph = IntentGraph(
+      const previousPlanView = AssistantPlanView(
         userGoal: '给九寨沟行程做备选路线',
         problemShape: ProblemShape.singleSkill,
         primarySkill: 'travel',
         problemClass: ProblemClass.complexReasoning,
         answerShape: AnswerShape.options,
         requiresExternalEvidence: false,
-        entityAnchors: <String>['九寨沟'],
+        entityRefs: <String>['九寨沟'],
       );
       final request = AssistantRunRequest(
         sessionId: 'phase_one_followup_answer_repair_with_execution_owner',
@@ -1657,7 +1852,7 @@ void main() {
                 'phase_one_followup_answer_repair_with_execution_owner',
             'latestUserQuery': '如果我只有4天，优先哪条路线？',
             'historySummary': '上一轮刚讨论过九寨沟多条备选路线。',
-            'previousIntentGraph': previousIntentGraph.toJson(),
+            'previousPlanView': previousPlanView.toJson(),
             'previousAnswerSummary': '上轮推荐了九寨沟方向三条路线。',
             'contextContinuityPolicy': const ContextContinuityPolicy(
               continuityMode: ContextContinuityMode.explicitFollowUp,
@@ -1668,20 +1863,17 @@ void main() {
               'durationDays': 4,
             },
           },
-          'precomputedIntentGraph': const IntentGraph(
-            userGoal: '4天优先哪条路线',
-            problemShape: ProblemShape.singleSkill,
-            primarySkill: '',
-            problemClass: ProblemClass.simpleQa,
-            answerShape: AnswerShape.directAnswer,
-            requiresExternalEvidence: false,
-            entityAnchors: <String>['九寨沟'],
-            contextSlots: <String, dynamic>{
-              'destination': '九寨沟',
-              'continuity': <String, dynamic>{'mode': 'explicit_follow_up'},
-              'overrideSlots': <String, dynamic>{'durationDays': 4},
-            },
-          ).toJson(),
+          ..._precomputedPlanFields(
+            const AssistantPlanView(
+              userGoal: '4天优先哪条路线',
+              problemShape: ProblemShape.singleSkill,
+              primarySkill: '',
+              problemClass: ProblemClass.simpleQa,
+              answerShape: AnswerShape.directAnswer,
+              requiresExternalEvidence: false,
+              entityRefs: <String>['九寨沟'],
+            ),
+          ),
           'precomputedExecutionPreparation': prepared.toJson(),
         },
       );
@@ -1691,8 +1883,9 @@ void main() {
         runId: 'run_phase_one_followup_answer_repair_with_execution_owner',
         traceId: 'trace_phase_one_followup_answer_repair_with_execution_owner',
       );
-      final phaseOneResult = (snapshot as ExecutionPhaseSuccess).phaseOneResult;
-      final mutatedSnapshot = (snapshot as ExecutionPhaseSuccess).copyWith(
+      final executionSnapshot = snapshot as ExecutionPhaseSuccess;
+      final phaseOneResult = executionSnapshot.phaseOneResult;
+      final mutatedSnapshot = executionSnapshot.copyWith(
         phaseOneResult: ReactRuntimeResult(
           finalText: phaseOneResult.finalText,
           traces: <AssistantTraceEvent>[
@@ -1720,10 +1913,7 @@ void main() {
       final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
-          state: AgentExecutionState(
-            executionBridgeSnapshot: mutatedSnapshot.toLegacyMap(),
-            executionPhaseSnapshot: mutatedSnapshot,
-          ),
+          state: _stateWithExecutionSnapshot(mutatedSnapshot),
           runId: 'run_phase_one_followup_answer_repair_with_execution_owner',
           traceId:
               'trace_phase_one_followup_answer_repair_with_execution_owner',
@@ -1820,16 +2010,16 @@ void main() {
               'referenceQueries': <String>['第三问', '第二问'],
             },
           },
-          'precomputedIntentGraph': <String, dynamic>{
-            ...const IntentGraph(
+          ..._precomputedPlanFields(
+            const AssistantPlanView(
               userGoal: '沿着最近两轮继续回答',
               problemShape: ProblemShape.singleSkill,
               primarySkill: '',
               problemClass: ProblemClass.simpleQa,
               answerShape: AnswerShape.directAnswer,
               requiresExternalEvidence: false,
-            ).toJson(),
-          },
+            ),
+          ),
           'precomputedExecutionPreparation': prepared.toJson(),
         },
       );
@@ -1842,7 +2032,7 @@ void main() {
       final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
-          state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+          state: _stateWithExecutionSnapshot(snapshot),
           runId: 'run_synthesis_recent_rounds_owner',
           traceId: 'trace_synthesis_recent_rounds_owner',
         ),
@@ -1853,8 +2043,7 @@ void main() {
       expect(
         llm.capturedSynthesisMessages
             .where(
-              (item) =>
-                  item['role'] == 'user' || item['role'] == 'assistant',
+              (item) => item['role'] == 'user' || item['role'] == 'assistant',
             )
             .map((item) => '${item['role']}:${item['content']}')
             .toList(growable: false),
@@ -1865,124 +2054,120 @@ void main() {
           'user:第四问',
         ]),
       );
-      final recentRounds = (jsonDecode(
-            llm.capturedSynthesisTemplateVariables['recentDialogueRounds']
-                    as String? ??
-                '[]',
-          ) as List)
-          .cast<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .toList(growable: false);
+      final recentRounds =
+          (jsonDecode(
+                    llm.capturedSynthesisTemplateVariables['recentDialogueRounds']
+                            as String? ??
+                        '[]',
+                  )
+                  as List)
+              .cast<Map>()
+              .map((item) => item.cast<String, dynamic>())
+              .toList(growable: false);
       expect(recentRounds, hasLength(2));
       expect(recentRounds.first['turnId'], 'turn_3');
       expect(recentRounds.last['turnId'], 'turn_2');
     });
 
-    test(
-      'synthesis phase 应允许 direct-answer shortcut 覆盖 derived secondary-skill subagent fallback',
-      () async {
-        final tempDir = await Directory.systemTemp.createTemp(
-          'assistant_phase_one_secondary_skill_repair_',
-        );
-        addTearDown(() async {
-          if (await tempDir.exists()) {
-            await tempDir.delete(recursive: true);
-          }
-        });
-        final llm = _PhaseOneDerivedSecondarySkillRepairLlm();
-        final loop = phase_owner.LocalPhaseExecutionOwner(
-          ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
-          sessionManager: AssistantSessionManager(
-            storagePath: '${tempDir.path}/sessions.json',
-          ),
-          memoryRepository: AssistantMemoryRepository(
-            ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
-          ),
-        );
-        final fallbackDomainId = AssistantDomainRouter().fallbackDomainId;
-        final prepared = AssistantExecutionPreparation(
-          domainId: fallbackDomainId,
-          modeDecision: const ModeDecision(
-            mode: AgentMode.singleAgent,
-            reason: 'phase_one_secondary_skill_repair_test',
-          ),
-          skillName: 'Travel Follow-up Answer',
-          skillInstructionMarkdown: '如果本轮信息已经够答，就直接给最终答复。',
-          executionShell: const SkillExecutionShell(
-            problemClass: 'simple_qa',
-            maxIterations: 1,
-            toolBudget: 0,
-            variantBudget: 0,
-            reflectionBudget: 0,
-            freshnessHoursMax: 72,
-          ),
-          plannerTemplateVersion: 'secondary_skill_repair_planner_v1',
-          postcheckTemplateVersion: 'secondary_skill_repair_postcheck_v1',
-          synthTemplateVersion: 'secondary_skill_repair_synth_v1',
-          fusionSynthTemplateVersion: 'secondary_skill_repair_fusion_v1',
-        );
-        final request = AssistantRunRequest(
-          sessionId: 'phase_one_secondary_skill_repair_owner',
-          messages: const <AssistantRunMessage>[
-            AssistantRunMessage(role: 'user', content: '如果我只有4天，优先哪条路线？'),
-          ],
-          contextScopeHint: <String, dynamic>{
-            'precomputedIntentGraph': const IntentGraph(
+    test('synthesis phase 不再派生 secondary-skill subagent fallback', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'assistant_phase_one_secondary_skill_repair_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final llm = _PhaseOneDerivedSecondarySkillRepairLlm();
+      final loop = phase_owner.LocalPhaseExecutionOwner(
+        ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
+        ),
+      );
+      final fallbackDomainId = AssistantDomainRouter().fallbackDomainId;
+      final prepared = AssistantExecutionPreparation(
+        domainId: fallbackDomainId,
+        modeDecision: const ModeDecision(
+          mode: AgentMode.singleAgent,
+          reason: 'phase_one_secondary_skill_repair_test',
+        ),
+        skillName: 'Travel Follow-up Answer',
+        skillInstructionMarkdown: '如果本轮信息已经够答，就直接给最终答复。',
+        executionShell: const SkillExecutionShell(
+          problemClass: 'simple_qa',
+          maxIterations: 1,
+          toolBudget: 0,
+          variantBudget: 0,
+          reflectionBudget: 0,
+          freshnessHoursMax: 72,
+        ),
+        plannerTemplateVersion: 'secondary_skill_repair_planner_v1',
+        postcheckTemplateVersion: 'secondary_skill_repair_postcheck_v1',
+        synthTemplateVersion: 'secondary_skill_repair_synth_v1',
+        fusionSynthTemplateVersion: 'secondary_skill_repair_fusion_v1',
+      );
+      final request = AssistantRunRequest(
+        sessionId: 'phase_one_secondary_skill_repair_owner',
+        messages: const <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '如果我只有4天，优先哪条路线？'),
+        ],
+        contextScopeHint: <String, dynamic>{
+          ..._precomputedPlanFields(
+            const AssistantPlanView(
               userGoal: '4天优先哪条路线',
               problemShape: ProblemShape.singleSkill,
               primarySkill: 'travel',
               problemClass: ProblemClass.simpleQa,
               answerShape: AnswerShape.directAnswer,
               requiresExternalEvidence: false,
-              secondarySkills: <String>['travel_transport'],
-              entityAnchors: <String>['九寨沟'],
-              contextSlots: <String, dynamic>{
-                'destination': '九寨沟',
-                'durationDays': 4,
-              },
-            ).toJson(),
-            'precomputedExecutionPreparation': prepared.toJson(),
-          },
-        );
+              entityRefs: <String>['九寨沟'],
+            ),
+          ),
+          'precomputedExecutionPreparation': prepared.toJson(),
+        },
+      );
 
-        final snapshot = await loop.executeBridge(
-          request,
+      final snapshot = await loop.executeBridge(
+        request,
+        runId: 'run_phase_one_secondary_skill_repair_owner',
+        traceId: 'trace_phase_one_secondary_skill_repair_owner',
+      );
+
+      final result = await SynthesisPhase.fromOwner(loop).run(
+        PhaseInput(
+          request: request,
+          state: _stateWithExecutionSnapshot(snapshot),
           runId: 'run_phase_one_secondary_skill_repair_owner',
           traceId: 'trace_phase_one_secondary_skill_repair_owner',
-        );
+        ),
+      );
 
-        final result = await SynthesisPhase.fromOwner(loop).run(
-          PhaseInput(
-            request: request,
-            state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
-            runId: 'run_phase_one_secondary_skill_repair_owner',
-            traceId: 'trace_phase_one_secondary_skill_repair_owner',
-          ),
-        );
-
-        final diagnostics =
-            result
-                    .state!
-                    .pendingResponse!
-                    .structuredResponse['phaseOneRoutingDiagnostics']
-                as Map<String, dynamic>;
-        expect(result.state!.synthesisDraft!.templateVersionUsed, isNotEmpty);
-        expect(llm.phaseOneCallCount, 1);
-        expect(llm.repairCallCount, 0);
-        expect(llm.subagentCallCount, 0);
-        expect(llm.synthesisCallCount, 1);
-        expect(result.state!.pendingResponse!.displayPlainText, contains('4天'));
-        expect(
-          diagnostics['route'],
-          anyOf(equals('phase_one_direct_answer'), equals('formal_synthesis')),
-        );
-        expect(diagnostics['phaseOneDerivedSkillRunPlanCount'], 1);
-        expect(diagnostics['phaseOneSkillRunPlanCount'], 0);
-        expect(diagnostics['phaseOneSkillRunPlanSource'], 'none');
-        expect(diagnostics['phaseOneRecoveryApplied'], isTrue);
-        expect(diagnostics['phaseOneModelRepairApplied'], isFalse);
-      },
-    );
+      final diagnostics =
+          result
+                  .state!
+                  .pendingResponse!
+                  .structuredResponse['phaseOneRoutingDiagnostics']
+              as Map<String, dynamic>;
+      expect(result.state!.synthesisDraft!.templateVersionUsed, isNotEmpty);
+      expect(llm.phaseOneCallCount, 1);
+      expect(llm.repairCallCount, 0);
+      expect(llm.subagentCallCount, 0);
+      expect(llm.synthesisCallCount, 1);
+      expect(result.state!.pendingResponse!.displayPlainText, contains('4天'));
+      expect(
+        diagnostics['route'],
+        anyOf(equals('phase_one_direct_answer'), equals('formal_synthesis')),
+      );
+      expect(diagnostics['phaseOneDerivedSkillRunPlanCount'], 0);
+      expect(diagnostics['phaseOneSkillRunPlanCount'], 0);
+      expect(diagnostics['phaseOneSkillRunPlanSource'], 'none');
+      expect(diagnostics['phaseOneRecoveryApplied'], isTrue);
+      expect(diagnostics['phaseOneModelRepairApplied'], isFalse);
+    });
 
     test('synthesis phase 应兼容无待执行动作的 progress/tool_call 成答', () async {
       final tempDir = await Directory.systemTemp.createTemp(
@@ -2031,15 +2216,17 @@ void main() {
           AssistantRunMessage(role: 'user', content: '一句话说明惯性'),
         ],
         contextScopeHint: <String, dynamic>{
-          'precomputedIntentGraph': const IntentGraph(
-            userGoal: '一句话说明惯性',
-            problemShape: ProblemShape.singleSkill,
-            primarySkill: '',
-            problemClass: ProblemClass.simpleQa,
-            answerShape: AnswerShape.directAnswer,
-            requiresExternalEvidence: false,
-            entityAnchors: <String>['惯性'],
-          ).toJson(),
+          ..._precomputedPlanFields(
+            const AssistantPlanView(
+              userGoal: '一句话说明惯性',
+              problemShape: ProblemShape.singleSkill,
+              primarySkill: '',
+              problemClass: ProblemClass.simpleQa,
+              answerShape: AnswerShape.directAnswer,
+              requiresExternalEvidence: false,
+              entityRefs: <String>['惯性'],
+            ),
+          ),
           'precomputedExecutionPreparation': prepared.toJson(),
         },
       );
@@ -2053,7 +2240,7 @@ void main() {
       final result = await SynthesisPhase.fromOwner(loop).run(
         PhaseInput(
           request: request,
-          state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+          state: _stateWithExecutionSnapshot(snapshot),
           runId: 'run_phase_one_progress_answer_owner',
           traceId: 'trace_phase_one_progress_answer_owner',
         ),
@@ -2077,6 +2264,106 @@ void main() {
         'phase_one_compat_direct_answer',
       );
       expect(result.state!.pendingResponse!.displayPlainText, contains('惯性'));
+    });
+
+    test('synthesis phase 会修复 tool_call 形态的最终输出并继续成答', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'assistant_synthesis_tool_call_repair_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+      final llm = _SynthesisToolCallRepairLlm();
+      final loop = phase_owner.LocalPhaseExecutionOwner(
+        ReactRuntime(llmProvider: llm, toolRegistry: AssistantToolRegistry()),
+        sessionManager: AssistantSessionManager(
+          storagePath: '${tempDir.path}/sessions.json',
+        ),
+        memoryRepository: AssistantMemoryRepository(
+          ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
+        ),
+      );
+      final fallbackDomainId = AssistantDomainRouter().fallbackDomainId;
+      final prepared = AssistantExecutionPreparation(
+        domainId: fallbackDomainId,
+        modeDecision: const ModeDecision(
+          mode: AgentMode.singleAgent,
+          reason: 'synthesis_tool_call_should_repair_to_answer',
+        ),
+        skillName: 'General Direct Answer',
+        skillInstructionMarkdown: '若本轮已能直接回答，就直接给出最终答复。',
+        executionShell: const SkillExecutionShell(
+          problemClass: 'simple_qa',
+          maxIterations: 1,
+          toolBudget: 0,
+          variantBudget: 0,
+          reflectionBudget: 0,
+          freshnessHoursMax: 720,
+        ),
+        plannerTemplateVersion: 'synthesis_tool_call_planner_v1',
+        postcheckTemplateVersion: 'synthesis_tool_call_postcheck_v1',
+        synthTemplateVersion: 'synthesis_tool_call_synth_v1',
+        fusionSynthTemplateVersion: 'synthesis_tool_call_fusion_v1',
+      );
+      final request = AssistantRunRequest(
+        sessionId: 'synthesis_tool_call_repair_owner',
+        messages: const <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '一句话说明惯性'),
+        ],
+        contextScopeHint: <String, dynamic>{
+          ..._precomputedPlanFields(
+            const AssistantPlanView(
+              userGoal: '一句话说明惯性',
+              problemShape: ProblemShape.singleSkill,
+              primarySkill: '',
+              problemClass: ProblemClass.simpleQa,
+              answerShape: AnswerShape.directAnswer,
+              requiresExternalEvidence: false,
+              entityRefs: <String>['惯性'],
+            ),
+          ),
+          'precomputedExecutionPreparation': prepared.toJson(),
+        },
+      );
+
+      final snapshot = await loop.executeBridge(
+        request,
+        runId: 'run_synthesis_tool_call_repair_owner',
+        traceId: 'trace_synthesis_tool_call_repair_owner',
+      );
+
+      final result = await SynthesisPhase.fromOwner(loop).run(
+        PhaseInput(
+          request: request,
+          state: _stateWithExecutionSnapshot(snapshot),
+          runId: 'run_synthesis_tool_call_repair_owner',
+          traceId: 'trace_synthesis_tool_call_repair_owner',
+        ),
+      );
+
+      final diagnostics =
+          result
+                  .state!
+                  .pendingResponse!
+                  .structuredResponse['phaseOneRoutingDiagnostics']
+              as Map<String, dynamic>;
+      expect(result.state!.synthesisDraft!.templateVersionUsed, isNotEmpty);
+      expect(llm.phaseOneCallCount, 1);
+      expect(llm.synthesisCallCount, 2);
+      expect(llm.repairCallCount, 1);
+      expect(diagnostics['rawDirectAnswerReason'], 'phase_one_not_structured');
+      expect(result.state!.pendingResponse!.displayPlainText, contains('惯性'));
+      expect(
+        result.state!.pendingResponse!.structuredResponse['decision'],
+        isA<Map<String, dynamic>>(),
+      );
+      expect(
+        ((result.state!.pendingResponse!.structuredResponse['decision'] as Map)
+            .cast<String, dynamic>())['nextAction'],
+        'answer',
+      );
     });
 
     test(
@@ -2128,14 +2415,16 @@ void main() {
             AssistantRunMessage(role: 'user', content: '一句话说明惯性'),
           ],
           contextScopeHint: <String, dynamic>{
-            'precomputedIntentGraph': const IntentGraph(
-              userGoal: '一句话说明惯性',
-              problemShape: ProblemShape.singleSkill,
-              primarySkill: '',
-              problemClass: ProblemClass.simpleQa,
-              answerShape: AnswerShape.directAnswer,
-              requiresExternalEvidence: false,
-            ).toJson(),
+            ..._precomputedPlanFields(
+              const AssistantPlanView(
+                userGoal: '一句话说明惯性',
+                problemShape: ProblemShape.singleSkill,
+                primarySkill: '',
+                problemClass: ProblemClass.simpleQa,
+                answerShape: AnswerShape.directAnswer,
+                requiresExternalEvidence: false,
+              ),
+            ),
             'precomputedExecutionPreparation': prepared.toJson(),
           },
         );
@@ -2149,7 +2438,7 @@ void main() {
         final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
-            state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+            state: _stateWithExecutionSnapshot(snapshot),
             runId: 'run_phase_one_tentative_subagent_owner',
             traceId: 'trace_phase_one_tentative_subagent_owner',
           ),
@@ -2188,20 +2477,22 @@ void main() {
             ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
           ),
         );
-        const request = AssistantRunRequest(
+        final request = AssistantRunRequest(
           sessionId: 'phase_one_subagent_owner',
           messages: <AssistantRunMessage>[
             AssistantRunMessage(role: 'user', content: '帮我同时比较路线和住宿取舍'),
           ],
           contextScopeHint: <String, dynamic>{
-            'precomputedIntentGraph': <String, dynamic>{
-              'userGoal': '比较路线和住宿取舍',
-              'problemShape': 'single_skill',
-              'primarySkill': 'travel',
-              'problemClass': 'complex_reasoning',
-              'answerShape': 'options',
-              'requiresExternalEvidence': false,
-            },
+            ..._precomputedPlanFields(
+              const AssistantPlanView(
+                userGoal: '比较路线和住宿取舍',
+                problemShape: ProblemShape.singleSkill,
+                primarySkill: 'travel',
+                problemClass: ProblemClass.complexReasoning,
+                answerShape: AnswerShape.options,
+                requiresExternalEvidence: false,
+              ),
+            ),
             'precomputedExecutionPreparation': <String, dynamic>{
               'domainId': 'travel',
               'modeDecision': <String, dynamic>{
@@ -2240,7 +2531,7 @@ void main() {
         final result = await SynthesisPhase.fromOwner(loop).run(
           PhaseInput(
             request: request,
-            state: AgentExecutionState(executionBridgeSnapshot: snapshot.toLegacyMap(), executionPhaseSnapshot: snapshot),
+            state: _stateWithExecutionSnapshot(snapshot),
             runId: 'run_phase_one_subagent_owner',
             traceId: 'trace_phase_one_subagent_owner',
           ),
@@ -2306,7 +2597,7 @@ void main() {
         domainId: 'travel',
         dimension: 'candidate_options',
         dimensionLabel: '备选方案',
-        queryTaskId: 'route_candidates',
+        searchPlanId: 'route_candidates',
         title: '九寨沟经典路线建议',
         url: 'https://example.com/jzg',
         source: '示例旅行站',
@@ -2345,7 +2636,7 @@ void main() {
           freshnessSatisfied: true,
           evidenceRequired: true,
           coveredDimensions: <String>['candidate_options'],
-          coveredQueryTaskIds: <String>['route_candidates'],
+          coveredSearchPlanIds: <String>['route_candidates'],
           summary: '证据已经足够支持最终答复。',
         ),
         aggregationState: const AggregationState(
@@ -2358,21 +2649,6 @@ void main() {
         synthesisReadiness: const SynthesisReadinessResult(
           ready: true,
           reason: 'typed_answer_outcome_ready',
-        ),
-        conversationStateDecision: const ConversationStateDecision(
-          nextAction: AssistantNextAction.answer,
-          finalAnswerMode: FinalAnswerMode.full,
-          answerEligibility: AnswerEligibility.eligible,
-          slotState: slotState,
-          missingCriticalSlots: <String>[],
-          askUser: AssistantTurnAskUser(),
-          qualityGates: QualityGatesDto(
-            structureSafe: true,
-            taskSafe: true,
-            evidenceSafe: true,
-            renderSafe: true,
-          ),
-          finalAnswerReady: true,
         ),
         domainPolicyBundle: const DomainPolicyBundle(
           domainId: 'travel',
@@ -2415,13 +2691,6 @@ void main() {
             'ready': false,
             'reason': 'legacy_fallback_should_not_win',
           },
-          'conversationStateDecision': const <String, dynamic>{
-            'nextAction': 'retry',
-            'finalAnswerMode': 'retry',
-            'answerEligibility': 'blocked',
-            'missingCriticalSlots': <String>['date'],
-            'finalAnswerReady': false,
-          },
         },
       );
 
@@ -2453,10 +2722,6 @@ void main() {
       expect(result.state!.answerEvidenceBindings, hasLength(1));
       expect(result.state!.evidenceEvaluation?.passed, isTrue);
       expect(result.state!.aggregationState?.finalAnswerReady, isTrue);
-      expect(
-        result.state!.conversationStateDecision?.nextActionType,
-        AssistantNextAction.answer,
-      );
       expect(result.state!.synthesisReadiness?.ready, isTrue);
       expect(
         result.state!.synthesisReadiness?.reason,
@@ -2490,16 +2755,14 @@ void main() {
           ObjectBoxVectorStore(storagePath: '${tempDir.path}/memory.json'),
         ),
       );
-      const intentGraph = IntentGraph(
+      const planView = AssistantPlanView(
         userGoal: '查询深圳天气',
         problemShape: ProblemShape.singleSkill,
         primarySkill: 'weather',
         problemClass: ProblemClass.realtimeInfo,
         answerShape: AnswerShape.directAnswer,
-        freshnessNeed: FreshnessNeed.recent,
         requiresExternalEvidence: true,
         authorityDomains: <String>['cma.cn'],
-        freshnessHoursMax: 6,
       );
       final prepared = AssistantExecutionPreparation(
         domainId: 'weather',
@@ -2542,7 +2805,7 @@ void main() {
           AssistantRunMessage(role: 'user', content: '深圳天气怎么样'),
         ],
         contextScopeHint: <String, dynamic>{
-          'precomputedIntentGraph': intentGraph.toJson(),
+          ..._precomputedPlanFields(planView),
           'precomputedExecutionPreparation': prepared.toJson(),
         },
       );
@@ -2553,34 +2816,25 @@ void main() {
         traceId: 'trace_typed_execution_preparation_owner',
       );
 
-      expect(snapshot.toLegacyMap()['shortCircuitResponse'], isNull);
-      expect(snapshot.toLegacyMap()['domainId'], 'weather');
-      expect(snapshot.toLegacyMap()['synthTemplateVersion'], 'typed_synth_v1');
+      final executionSnapshot = snapshot as ExecutionPhaseSuccess;
+      expect(executionSnapshot.domainId, 'weather');
+      expect(executionSnapshot.synthTemplateVersion, 'typed_synth_v1');
+      expect(executionSnapshot.executionShell.problemClass, 'realtime_info');
       expect(
-        (snapshot.toLegacyMap()['executionShell'] as SkillExecutionShell).problemClass,
-        'realtime_info',
-      );
-      expect(
-        (snapshot.toLegacyMap()['previousSlotState'] as SlotStateSnapshot)
-            .slotValueOf('city')
-            ?.value,
+        executionSnapshot.previousSlotState.slotValueOf('city')?.value,
         '深圳',
       );
       expect(
-        (snapshot.toLegacyMap()['templateVariables']
-            as Map<String, dynamic>)['domainSkillName'],
+        executionSnapshot.templateVariables['domainSkillName'],
         'Typed Owner Skill',
       );
       expect(
-        (snapshot.toLegacyMap()['templateVariables']
-            as Map<String, dynamic>)['domainSkillInstruction'],
+        executionSnapshot.templateVariables['domainSkillInstruction'],
         contains('typed owner instruction'),
       );
-      expect(
-        (snapshot.toLegacyMap()['templateVariables']
-            as Map<String, dynamic>)['availableTools'],
-        <String>['web_search'],
-      );
+      expect(executionSnapshot.templateVariables['availableTools'], <String>[
+        'web_search',
+      ]);
     });
 
     test('finalize phase 应返回 pendingResponse', () async {
@@ -2687,7 +2941,7 @@ class _RetrievalDesignPlanLlm implements AssistantLlmProvider {
   }) async {
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'queryTasks': <Map<String, dynamic>>[
+        'searchPlans': <Map<String, dynamic>>[
           <String, dynamic>{
             'id': 'candidate_space',
             'dimension': 'candidate_space',
@@ -2731,24 +2985,24 @@ class _ContinuityAwareUnderstandLlm implements AssistantLlmProvider {
   }) async {
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'intentGraph': <String, dynamic>{
-          'userGoal': '4天优先哪条路线',
-          'problemShape': 'single_skill',
-          'primarySkill': '',
-          'problemClass': 'complex_reasoning',
-          'inferredMotive': '比较4天路线优先级',
-          'answerShape': 'options',
-          'requiresExternalEvidence': true,
-          'contextSlots': <String, dynamic>{'durationDays': 4},
-          'globalConstraints': <String, dynamic>{'mode': 'qa'},
-        },
+        ..._typedPlanFields(
+          const AssistantPlanView(
+            userGoal: '4天优先哪条路线',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: 'travel',
+            problemClass: ProblemClass.complexReasoning,
+            answerShape: AnswerShape.options,
+            requiresExternalEvidence: true,
+            entityRefs: <String>['九寨沟'],
+          ),
+        ),
       }),
     );
   }
 }
 
-class _RootLevelIntentGraphUnderstandLlm implements AssistantLlmProvider {
-  const _RootLevelIntentGraphUnderstandLlm();
+class _RootLevelTypedPlanUnderstandLlm implements AssistantLlmProvider {
+  const _RootLevelTypedPlanUnderstandLlm();
 
   @override
   Future<AssistantModelOutput> reason({
@@ -2766,37 +3020,34 @@ class _RootLevelIntentGraphUnderstandLlm implements AssistantLlmProvider {
   }) async {
     return AssistantModelOutput(
       text: jsonEncode(<String, dynamic>{
-        'userGoal': '判断深圳周末天气是否适合出门',
-        'problemShape': 'single_skill',
-        'primarySkill': 'weather',
-        'problemClass': 'realtime_info',
-        'inferredMotive': '判断深圳周末是否适合安排外出',
-        'answerShape': 'decision_ready',
-        'freshnessNeed': 'recent',
-        'requiresExternalEvidence': true,
-        'entityAnchors': <String>['深圳'],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': '深圳周末天气适合出门吗',
-        },
-        'queryTasks': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'id': 'current_state',
-            'dimension': 'current_state',
-            'label': '当前天气',
-            'query': '深圳 周末 天气 实况',
-            'authorityDomains': <String>['weather.cma.cn'],
-            'freshnessHoursMax': 1,
-          },
-        ],
-        'contextSlots': <String, dynamic>{'city': '深圳'},
-        'globalConstraints': <String, dynamic>{'mode': 'qa'},
+        ..._typedPlanFields(
+          const AssistantPlanView(
+            userGoal: '判断深圳周末天气是否适合出门',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: 'weather',
+            problemClass: ProblemClass.realtimeInfo,
+            answerShape: AnswerShape.decisionReady,
+            requiresExternalEvidence: true,
+            entityRefs: <String>['深圳'],
+            searchPlans: <SearchPlanItem>[
+              SearchPlanItem(
+                id: 'current_state',
+                dimension: SearchPlanDimension.currentState,
+                label: '当前天气',
+                query: '深圳 周末 天气 实况',
+                authorityDomains: <String>['weather.cma.cn'],
+                freshnessHoursMax: 1,
+              ),
+            ],
+          ),
+        ),
       }),
     );
   }
 }
 
-class _ToolCallQueryTasksRetrievalDesignLlm implements AssistantLlmProvider {
-  const _ToolCallQueryTasksRetrievalDesignLlm();
+class _ToolCallSearchPlansRetrievalDesignLlm implements AssistantLlmProvider {
+  const _ToolCallSearchPlansRetrievalDesignLlm();
 
   @override
   Future<AssistantModelOutput> reason({
@@ -2818,7 +3069,7 @@ class _ToolCallQueryTasksRetrievalDesignLlm implements AssistantLlmProvider {
           <String, dynamic>{
             'toolName': 'web_search',
             'arguments': <String, dynamic>{
-              'queryTasks': <Map<String, dynamic>>[
+              'searchPlans': <Map<String, dynamic>>[
                 <String, dynamic>{
                   'id': 'current_state',
                   'dimension': 'current_state',
@@ -2859,17 +3110,15 @@ Map<String, dynamic> _synthesisDraftIntentEnvelope() {
       'summary': '进入理解阶段',
       'interpretation': '查询深圳实时天气',
     },
-    'intentGraph': const <String, dynamic>{
-      'userGoal': '查询深圳实时天气',
-      'problemShape': 'single_skill',
-      'primarySkill': 'weather',
-      'problemClass': 'realtime_info',
-      'inferredMotive': '查询深圳实时天气',
-      'secondarySkills': <String>[],
-      'contextSlots': <String, dynamic>{},
-      'globalConstraints': <String, dynamic>{'mode': 'qa'},
-      'clarificationNeeded': false,
-    },
+    ..._typedPlanFields(
+      const AssistantPlanView(
+        userGoal: '查询深圳实时天气',
+        problemShape: ProblemShape.singleSkill,
+        primarySkill: 'weather',
+        problemClass: ProblemClass.realtimeInfo,
+        requiresExternalEvidence: true,
+      ),
+    ),
     'selfCheck': const <String, dynamic>{
       'goalSatisfied': true,
       'constraintSatisfied': true,
@@ -3014,10 +3263,7 @@ AssistantModelOutput _streamedSynthesisAnswerOutput({
         'retrieveMoreReason': '',
       },
       'userMarkdown': markdown,
-      'result': <String, dynamic>{
-        'text': text,
-        'summary': summary,
-      },
+      'result': <String, dynamic>{'text': text, 'summary': summary},
       'selfCheck': const <String, dynamic>{
         'goalSatisfied': true,
         'constraintSatisfied': true,
@@ -3096,6 +3342,49 @@ class _PhaseOneDirectAnswerLlm implements AssistantLlmProvider {
           'score': 96,
           'reason': 'simple_qa_direct_answer',
         },
+      }),
+    );
+  }
+}
+
+class _NormalizedWeatherIntentWithoutAnchorsLlm
+    implements AssistantLlmProvider {
+  const _NormalizedWeatherIntentWithoutAnchorsLlm();
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = '',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    return AssistantModelOutput(
+      text: jsonEncode(<String, dynamic>{
+        ..._typedPlanFields(
+          const AssistantPlanView(
+            userGoal: '核对深圳今天天气',
+            problemShape: ProblemShape.singleSkill,
+            primarySkill: 'weather',
+            problemClass: ProblemClass.realtimeInfo,
+            requiresExternalEvidence: true,
+            entityRefs: <String>['深圳'],
+            searchPlans: <SearchPlanItem>[
+              SearchPlanItem(
+                id: 'weather_now',
+                dimension: SearchPlanDimension.latestSignal,
+                query: '深圳今天天气',
+                authorityDomains: <String>['weather.cma.cn'],
+              ),
+            ],
+          ),
+        ),
       }),
     );
   }
@@ -3375,6 +3664,84 @@ class _PhaseOneProgressAnswerLlm implements AssistantLlmProvider {
   }
 }
 
+class _SynthesisToolCallRepairLlm implements AssistantLlmProvider {
+  int phaseOneCallCount = 0;
+  int synthesisCallCount = 0;
+  int repairCallCount = 0;
+
+  @override
+  Future<AssistantModelOutput> reason({
+    required List<Map<String, dynamic>> messages,
+    required List<String> availableTools,
+    Map<String, dynamic> templateContext = const <String, dynamic>{},
+    Map<String, dynamic> templateVariables = const <String, dynamic>{},
+    String templateId = 'planner.global_plan',
+    String templateVersion = '',
+    String sessionId = '',
+    String runId = '',
+    String traceId = '',
+    LlmCallOptions? callOptions,
+    void Function(String delta)? onDelta,
+  }) async {
+    final isSynthesisCall = _isFinalAnswerTemplate(templateId);
+    if (isSynthesisCall) {
+      synthesisCallCount += 1;
+      final repairInstruction = messages.isNotEmpty
+          ? (messages.last['content'] as String?)?.trim() ?? ''
+          : '';
+      final isRepairCall = repairInstruction.contains(
+        'assistant_turn_repair|phase=synthesis',
+      );
+      if (isRepairCall) {
+        repairCallCount += 1;
+        onDelta?.call('惯性是物体保持原来静止或匀速直线运动状态的性质。');
+        return _streamedSynthesisAnswerOutput(
+          markdown: '惯性是物体保持原来静止或匀速直线运动状态的性质。',
+          text: '惯性说明物体会保持原有运动状态。',
+          summary: '惯性是保持原有运动状态的性质',
+          note: 'synthesis_tool_call_repaired',
+        );
+      }
+      onDelta?.call('我再调用一个工具确认一下。');
+      return AssistantModelOutput(
+        text: jsonEncode(<String, dynamic>{
+          'contractId': 'assistant_turn',
+          'messageKind': 'progress',
+          'phaseId': 'answering',
+          'actionCode': 'compose_answer',
+          'reasonCode': 'prepare_delivery',
+          'reasonShort': '我还想再核对一下。',
+          'decision': const <String, dynamic>{'nextAction': 'tool_call'},
+          'userMarkdown': '我再调用一个工具确认一下。',
+          'result': const <String, dynamic>{
+            'text': '我再调用一个工具确认一下。',
+            'summary': '准备继续补查',
+          },
+          'selfCheck': const <String, dynamic>{
+            'goalSatisfied': true,
+            'constraintSatisfied': true,
+            'safetyBoundarySatisfied': true,
+            'failedItems': <String>[],
+          },
+          'diagnostics': const <String, dynamic>{
+            'emergedTags': <Map<String, dynamic>>[],
+            'failedChecks': <String>[],
+            'parseStatus': '',
+            'notes': <String>['synthesis_returned_tool_call'],
+          },
+          'modelSelfScore': const <String, dynamic>{
+            'score': 40,
+            'reason': 'still_wants_tool_call',
+          },
+        }),
+      );
+    }
+    phaseOneCallCount += 1;
+    onDelta?.call('这一问我可以直接解释。');
+    return const AssistantModelOutput(text: '惯性是物体保持原来静止或匀速直线运动状态的性质。');
+  }
+}
+
 class _PhaseOneNonContractJsonAnswerLlm implements AssistantLlmProvider {
   int phaseOneCallCount = 0;
   int synthesisCallCount = 0;
@@ -3398,8 +3765,7 @@ class _PhaseOneNonContractJsonAnswerLlm implements AssistantLlmProvider {
       synthesisCallCount += 1;
       onDelta?.call('光合作用是绿色植物利用阳光把二氧化碳和水转成有机物并释放氧气的过程。');
       return _streamedSynthesisAnswerOutput(
-        markdown:
-            '光合作用是绿色植物利用阳光把二氧化碳和水转成有机物并释放氧气的过程。',
+        markdown: '光合作用是绿色植物利用阳光把二氧化碳和水转成有机物并释放氧气的过程。',
         text: '光合作用是植物把光能转为化学能并释放氧气的过程。',
         summary: '植物利用阳光制造有机物',
       );
@@ -3528,8 +3894,7 @@ class _PhaseOneDerivedSecondarySkillRepairLlm implements AssistantLlmProvider {
       synthesisCallCount += 1;
       onDelta?.call('如果只有4天，九寨沟更推荐经典高效路线，核心景点覆盖完整且时间利用率最高。');
       return _streamedSynthesisAnswerOutput(
-        markdown:
-            '如果只有4天，九寨沟更推荐经典高效路线，核心景点覆盖完整且时间利用率最高。',
+        markdown: '如果只有4天，九寨沟更推荐经典高效路线，核心景点覆盖完整且时间利用率最高。',
         text: '4天优先走九寨沟经典高效路线，兼顾时间效率和景点覆盖。',
         summary: '4天优先九寨沟经典高效路线',
         note: 'secondary_skill_fallback_streamed',

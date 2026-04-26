@@ -260,10 +260,10 @@ class AssistantLearningService {
   ) {
     final now = DateTime.now();
     final values = <String, double>{
-      'answer_relevance': _scoreRelevance(event.answerText),
+      'answer_relevance': _scoreRelevance(event),
       'answer_correctness': _scoreCorrectness(event),
-      'answer_completeness': _scoreCompleteness(event.answerText),
-      'evidence_grounding': _scoreEvidenceGrounding(event.answerText),
+      'answer_completeness': _scoreCompleteness(event),
+      'evidence_grounding': _scoreEvidenceGrounding(event),
       'domain_fitness': _scoreDomainFitness(event),
       'response_speed_satisfaction': _scoreResponseSpeed(event.durationMs),
       'interaction_friction': _scoreInteractionFriction(event),
@@ -342,12 +342,19 @@ class AssistantLearningService {
     return '${time.year}-$m-$d';
   }
 
-  double _scoreRelevance(String answerText) {
-    if (answerText.contains('我已理解你的需求。你可以让我执行') ||
-        answerText.contains('我已理解你的问题。为保护隐私')) {
+  double _scoreRelevance(AssistantInteractionEvent event) {
+    if (event.explicitReasonCodes.contains('off_topic')) {
       return 2.0;
     }
-    if (answerText.trim().isEmpty) return 1.0;
+    if (event.interrupted) {
+      return 2.5;
+    }
+    if (event.explicitThumb == 'up') {
+      return 5.0;
+    }
+    if (event.explicitThumb == 'down') {
+      return 2.0;
+    }
     return 4.0;
   }
 
@@ -358,18 +365,25 @@ class AssistantLearningService {
     return 3.5;
   }
 
-  double _scoreCompleteness(String answerText) {
-    final len = answerText.trim().length;
-    if (len < 16) return 2.0;
-    if (len < 60) return 3.5;
+  double _scoreCompleteness(AssistantInteractionEvent event) {
+    if (event.explicitReasonCodes.contains('incomplete') ||
+        event.explicitReasonCodes.contains('followup_needed')) {
+      return 2.0;
+    }
+    if (event.regeneratedAnswer) return 3.0;
+    if (event.favoritedAnswer || event.sharedAnswer || event.copiedAnswer) {
+      return 4.5;
+    }
     return 4.2;
   }
 
-  double _scoreEvidenceGrounding(String answerText) {
-    if (answerText.contains('[web]') ||
-        answerText.contains('[memory]') ||
-        answerText.contains('[page.')) {
+  double _scoreEvidenceGrounding(AssistantInteractionEvent event) {
+    if (event.referenceOpened) {
       return 4.2;
+    }
+    if (event.explicitReasonCodes.contains('unsupported') ||
+        event.explicitReasonCodes.contains('missing_evidence')) {
+      return 2.0;
     }
     return 3.0;
   }

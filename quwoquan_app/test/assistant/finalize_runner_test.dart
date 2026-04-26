@@ -5,12 +5,16 @@ import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/finalize_runner.dart';
@@ -43,6 +47,19 @@ class _InMemoryVectorStore implements AssistantVectorStore {
   }
 }
 
+const UnderstandingResult _aShareUnderstandingResult = UnderstandingResult(
+  intents: <IntentNode>[
+    IntentNode(
+      intentId: 'intent_a_share_jump',
+      intentType: 'assistant.market_explain',
+      goal: '查昨天A股为什么大涨',
+      requiresEvidence: true,
+    ),
+  ],
+);
+
+const TaskGraph _aShareTaskGraph = TaskGraph();
+
 ExecutionPhaseSnapshot _buildExecutionSnapshot({
   required String sessionId,
   required String latestUserQuery,
@@ -57,11 +74,10 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot({
     latestUserQuery: latestUserQuery,
     domainId: 'assistant',
     contextAssembly: const ContextAssemblyResult(),
-    intentGraph: const IntentGraph(
-      userGoal: '查昨天A股为什么大涨',
-      problemShape: ProblemShape.singleSkill,
-      primarySkill: 'assistant',
-    ),
+    understandingResult: _aShareUnderstandingResult,
+    taskGraph: _aShareTaskGraph,
+    orchestratorState: const ConversationOrchestratorState(),
+    turnSynthesisState: const TurnSynthesisState(),
     dialogueRoundScript: const DialogueRoundScript(),
     domainCatalog: const <String>[],
     domainCatalogVersion: '',
@@ -456,8 +472,8 @@ void main() {
       expect(message[assistantDisplayMarkdownField], equals('这是一版受限答案。'));
       expect(message[assistantDisplayStateField], isA<Map<String, dynamic>>());
       expect(message[assistantProcessTimelineField], isA<List<dynamic>>());
-      expect(message['subagentRuns'], isA<List<dynamic>>());
-      expect(message['uiTimeline'], isA<List<dynamic>>());
+      expect(message.containsKey('subagentRuns'), isFalse);
+      expect(message.containsKey('uiTimeline'), isFalse);
       expect(
         ((message['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{})[assistantDisplayStateField],
@@ -509,8 +525,8 @@ void main() {
     expect(message[assistantDisplayMarkdownField], equals('这是一版受限答案。'));
     expect(message[assistantDisplayStateField], isA<Map<String, dynamic>>());
     expect(message[assistantProcessTimelineField], isA<List<dynamic>>());
-    expect(message['subagentRuns'], isA<List<dynamic>>());
-    expect(message['uiTimeline'], isA<List<dynamic>>());
+    expect(message.containsKey('subagentRuns'), isFalse);
+    expect(message.containsKey('uiTimeline'), isFalse);
     expect(
       ((message['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{})[assistantDisplayStateField],
@@ -533,6 +549,165 @@ void main() {
     expect(
       resolvePersistedAssistantProcessTimeline(reloadedMessage),
       isNotEmpty,
+    );
+  });
+
+  test('finalize 会持久化 typed mainline contracts 供后续 UI 与回放读取', () async {
+    final storagePath = '${tempDir.path}/sessions_typed.json';
+    final sessionManager = AssistantSessionManager(storagePath: storagePath);
+    await sessionManager.load();
+    final runner = FinalizeRunner(
+      sessionManager: sessionManager,
+      memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
+      buildObservabilityPayload: ({required response, required request}) =>
+          <String, dynamic>{},
+    );
+    const request = AssistantRunRequest(
+      sessionId: 'typed_mainline_turn',
+      messages: <AssistantRunMessage>[
+        AssistantRunMessage(role: 'user', content: '深圳明天天气怎么样'),
+      ],
+    );
+    const typedSystemContext = SystemContextEnvelope(
+      time: SystemTimeContext(
+        referenceNowIso: '2026-04-21T08:00:00Z',
+        timezone: 'Asia/Shanghai',
+        locale: 'zh-CN',
+      ),
+      location: SystemLocationContext(
+        countryCode: 'CN',
+        adminAreaLevel1: 'Guangdong',
+        adminAreaLevel2: 'Shenzhen',
+        formattedAddress: 'Guangdong Shenzhen',
+      ),
+    );
+    const typedUnderstandingResult = UnderstandingResult(
+      intents: <IntentNode>[
+        IntentNode(
+          intentId: 'intent_weather',
+          intentType: 'weather.retrieve',
+          goal: '查询深圳明天天气',
+          requiresEvidence: true,
+        ),
+      ],
+      dialogueTransitionDecision: DialogueTransitionDecision(
+        nextTurnMode: NextTurnMode.continueExecution,
+      ),
+    );
+    const typedTaskGraph = TaskGraph(
+      tasks: <TaskNode>[
+        TaskNode(
+          taskId: 'task_weather_search',
+          intentId: 'intent_weather',
+          toolName: 'web_search',
+          toolArgs: TaskToolArgs(<String, Object?>{'query': '深圳 明天天气'}),
+          status: TaskStatus.completed,
+          output: TaskOutput(<String, Object?>{'provider': 'serpapi'}),
+        ),
+      ],
+    );
+    const typedOrchestratorState = ConversationOrchestratorState(
+      completedTaskIds: <String>['task_weather_search'],
+      interactionDirective: InteractionDirective(
+        kind: InteractionDirectiveKind.finalAnswer,
+        intentId: 'intent_weather',
+        message: '可以输出最终答案',
+      ),
+    );
+    const typedSynthesisState = TurnSynthesisState(
+      interactionDirective: InteractionDirective(
+        kind: InteractionDirectiveKind.finalAnswer,
+        intentId: 'intent_weather',
+        message: '整理最终回答',
+      ),
+      completedIntentIds: <String>['intent_weather'],
+    );
+
+    final response = AssistantRunResponse(
+      finalText: '深圳明天多云，气温 24 到 29 度。',
+      traces: const [],
+      structuredResponse: <String, dynamic>{
+        'contractId': 'assistant_turn',
+        'messageKind': 'answer',
+        'decision': const <String, dynamic>{'nextAction': 'answer'},
+        'userMarkdown': '深圳明天多云，气温 24 到 29 度。',
+        assistantDisplayStateField: const <String, dynamic>{
+          'answer': <String, dynamic>{
+            'summary': '深圳明天多云，气温 24 到 29 度。',
+            'blocks': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'blockId': 'answer_markdown',
+                'kind': 'markdown',
+                'body': '深圳明天多云，气温 24 到 29 度。',
+              },
+            ],
+          },
+        },
+        assistantSystemContextEnvelopeField: typedSystemContext.toJson(),
+        assistantUnderstandingResultField: typedUnderstandingResult.toJson(),
+        assistantTaskGraphField: typedTaskGraph.toJson(),
+        assistantOrchestratorStateField: typedOrchestratorState.toJson(),
+        assistantTurnSynthesisStateField: typedSynthesisState.toJson(),
+      },
+    );
+
+    await runner.finalize(
+      request,
+      executionSnapshot: _buildExecutionSnapshot(
+        sessionId: 'typed_mainline_turn',
+        latestUserQuery: '深圳明天天气怎么样',
+        runId: 'typed_mainline_turn_run',
+        traceId: 'typed_mainline_turn_trace',
+      ),
+      response: response,
+    );
+
+    final message = sessionManager
+        .getOrCreateSession('typed_mainline_turn')
+        .single;
+    expect(
+      message[assistantSystemContextEnvelopeField],
+      isA<Map<String, dynamic>>(),
+    );
+    expect(
+      message[assistantUnderstandingResultField],
+      isA<Map<String, dynamic>>(),
+    );
+    expect(message[assistantTaskGraphField], isA<Map<String, dynamic>>());
+    expect(
+      message[assistantOrchestratorStateField],
+      isA<Map<String, dynamic>>(),
+    );
+    expect(
+      message[assistantTurnSynthesisStateField],
+      isA<Map<String, dynamic>>(),
+    );
+
+    expect(
+      resolvePersistedAssistantSystemContextEnvelope(
+        message,
+      ).location.adminAreaLevel2,
+      'Shenzhen',
+    );
+    expect(
+      resolvePersistedAssistantUnderstandingResult(
+        message,
+      ).intents.single.intentType,
+      'weather.retrieve',
+    );
+    expect(
+      resolvePersistedAssistantTaskGraph(message).tasks.single.toolName,
+      'web_search',
+    );
+    expect(
+      resolvePersistedAssistantOrchestratorState(
+        message,
+      ).interactionDirective.kind,
+      InteractionDirectiveKind.finalAnswer,
+    );
+    expect(
+      resolvePersistedAssistantTurnSynthesisState(message).completedIntentIds,
+      <String>['intent_weather'],
     );
   });
 
@@ -574,7 +749,9 @@ void main() {
 
     final reloadedManager = AssistantSessionManager(storagePath: storagePath);
     await reloadedManager.load();
-    final reloadedHistoryState = reloadedManager.historyStateOf('history_session');
+    final reloadedHistoryState = reloadedManager.historyStateOf(
+      'history_session',
+    );
     expect(reloadedHistoryState.sessionSummary, contains('天气与出行结论'));
     expect(reloadedHistoryState.completedSkillSummaries, hasLength(1));
     expect(reloadedHistoryState.pendingSkillStates, hasLength(1));

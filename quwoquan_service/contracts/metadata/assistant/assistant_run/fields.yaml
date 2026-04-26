@@ -550,14 +550,41 @@ entities:
         ops_exposure: read
         description: 首轮导引识别出的次级 skill 列表
 
-      - name: intentGraph
+      - name: understandingResult
         type: object
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 首轮导引产出的结构化意图图
+        description: 模型理解阶段产出的结构化意图与对话转换决策
+
+      - name: taskGraph
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 从 intents 编译出的可执行任务图
+
+      - name: orchestratorState
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 会话编排状态，包含阶段、交互指令和运行决策
+
+      - name: turnSynthesisState
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 当前轮回答综合状态与证据/输出约束
 
       - name: skillRuns
         type: "[]object"

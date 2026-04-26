@@ -1,37 +1,46 @@
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
+import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
+import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/evidence_digest_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
+import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('EvidenceDigestPhase 优先投影 canonical retrieval outcome', () async {
-    const canonicalOutcome = RetrievalOutcome(
-      status: 'need_more_evidence',
-      summary: '资料时效不足，需要补更新来源。',
-      evidenceRequired: true,
-      freshnessRequired: true,
-      retrievalProcessing: RetrievalProcessingSnapshot(
-        processedDocumentCount: 4,
-        acceptedDocumentCount: 1,
-        processingSummary: 'canonical summary should win',
-        acceptedReferences: <RetrievalProcessingReference>[
-          RetrievalProcessingReference(
-            title: '最新快讯',
-            url: 'https://example.com/latest',
-            source: 'example.com',
-            snippet: '最新资料',
-          ),
-        ],
-      ),
-    );
-
+  test('EvidenceDigestPhase consumes typed execution snapshot', () async {
     final phase = const EvidenceDigestPhase();
+    const toolResults = <AssistantToolResultRow>[
+      AssistantToolResultRow(
+        toolName: 'web_search',
+        toolCallId: 'call_search',
+        message: 'ok',
+        data: <String, dynamic>{
+          'summary': 'stale trace-derived summary',
+          'totalReferences': 4,
+          'references': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'title': '最新快讯',
+              'url': 'https://example.com/latest',
+              'source': 'example.com',
+              'snippet': '最新资料显示天气变化。',
+            },
+          ],
+        },
+      ),
+    ];
     final output = await phase.run(
       PhaseInput(
         request: const AssistantRunRequest(
@@ -39,27 +48,45 @@ void main() {
             AssistantRunMessage(role: 'user', content: '最新天气怎么样'),
           ],
         ),
-        state: const AgentExecutionState(
-          executionBridgeSnapshot: <String, dynamic>{
-            'phaseOneResult': ReactRuntimeResult(finalText: '', traces: []),
-            'synthesisReadiness': SynthesisReadinessResult(
-              ready: false,
-              reason: 'fallback reason',
-            ),
-            'answerBoundaryPolicy': AnswerBoundaryPolicy(
+        state: AgentExecutionState(
+          executionPhaseSnapshot: ExecutionPhaseSuccess(
+            runId: 'run_digest_projection',
+            traceId: 'trace_digest_projection',
+            runStartAt: DateTime(2026, 4, 26),
+            sessionId: 'digest_projection',
+            latestUserQuery: '最新天气怎么样',
+            domainId: 'weather',
+            contextAssembly: ContextAssemblyResult(),
+            understandingResult: UnderstandingResult(),
+            taskGraph: TaskGraph(),
+            orchestratorState: ConversationOrchestratorState(),
+            turnSynthesisState: TurnSynthesisState(),
+            dialogueRoundScript: DialogueRoundScript(),
+            domainCatalog: <String>[],
+            domainCatalogVersion: '',
+            allowedToolNames: <String>['web_search'],
+            executionShell: SkillExecutionShell(),
+            previousSlotState: SlotStateSnapshot(),
+            retrievalPolicy: <String, dynamic>{},
+            answerBoundaryPolicy: AnswerBoundaryPolicy(
               evidenceRequired: true,
               freshnessHoursMax: 6,
             ),
-            assistantRetrievalOutcomeField: canonicalOutcome,
-            'toolResults': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'data': <String, dynamic>{
-                  'summary': 'stale trace-derived summary',
-                  'totalReferences': 99,
-                },
-              },
-            ],
-          },
+            understandingSnapshot: <String, dynamic>{},
+            templateVariables: <String, dynamic>{},
+            messages: <Map<String, dynamic>>[],
+            synthTemplateVersion: '',
+            fusionSynthTemplateVersion: '',
+            phaseOneResult: ReactRuntimeResult(finalText: '', traces: []),
+            synthesisReadiness: SynthesisReadinessResult(
+              ready: false,
+              reason: 'fallback reason',
+            ),
+            evidenceLedger: <EvidenceLedgerEntry>[],
+            evidenceEvaluation: EvidenceEvaluationResult(),
+            toolResults: toolResults,
+            supplementalTraces: <AssistantTraceEvent>[],
+          ),
         ),
         runId: 'run_digest_projection',
         traceId: 'trace_digest_projection',
@@ -68,15 +95,12 @@ void main() {
 
     final nextState = output.state;
     expect(nextState, isNotNull);
+    expect(nextState!.executionPhaseSnapshot, isA<ExecutionPhaseSuccess>());
+    expect(nextState.retrievalProcessing.processedDocumentCount, 4);
+    expect(nextState.retrievalProcessing.acceptedDocumentCount, 1);
     expect(
-      nextState!.retrievalProcessing.processingSummary,
-      contains('资料时效不足，需要补更新来源。'),
+      nextState.retrievalProcessing.acceptedReferences.single.url,
+      'https://example.com/latest',
     );
-    final updatedSnapshot = nextState.executionBridgeSnapshot;
-    final canonicalJson =
-        (updatedSnapshot[assistantRetrievalOutcomeField] as Map?)?.cast<String, dynamic>();
-    expect(canonicalJson, isNotNull);
-    expect(canonicalJson!['status'], 'need_more_evidence');
-    expect(canonicalJson['summary'], '资料时效不足，需要补更新来源。');
   });
 }

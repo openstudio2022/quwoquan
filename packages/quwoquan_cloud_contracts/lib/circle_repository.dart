@@ -33,16 +33,25 @@ abstract class CircleRepository {
 
   Future<CircleDto> createCircle(CircleCreateWireDto data);
 
-  Future<CircleDto> updateCircle(
-    String circleId,
-    CircleUpdateWireDto data,
-  );
+  Future<CircleDto> updateCircle(String circleId, CircleUpdateWireDto data);
 
   Future<void> archiveCircle(String circleId);
 
-  Future<void> joinCircle(String circleId);
+  Future<void> joinCircle(
+    String circleId, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  });
 
-  Future<void> leaveCircle(String circleId);
+  Future<void> leaveCircle(
+    String circleId, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  });
 
   Future<List<CircleMemberRosterItemDto>> listMembers(
     String circleId, {

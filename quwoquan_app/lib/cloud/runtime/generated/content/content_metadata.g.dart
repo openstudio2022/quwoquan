@@ -98,6 +98,8 @@ class GeneratedPostRuntimeMetadata {
     'publishLocation',
     'personaId',
     'profileSubjectId',
+    'authorDisplayNameSnapshot',
+    'authorAvatarUrlSnapshot',
     'personaContextVersion',
   ];
 

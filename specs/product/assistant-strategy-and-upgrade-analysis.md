@@ -176,8 +176,8 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
   "tool_name": "unified_retrieval",
   "ok": false,
   "error_code": "ASSISTANT.MIDDLEWARE.upstream_timeout",
-  "error_class": "timeout",
-  "retryable": true,
+  "failure_kind": "timeout",
+  "recovery policy": true,
   "slot_delta": { "location": null, "weather_summary": null },
   "i18n_key": "assistant.error.upstream_timeout"
 }

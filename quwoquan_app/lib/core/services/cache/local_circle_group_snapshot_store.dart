@@ -312,16 +312,6 @@ class LocalCircleGroupSnapshotStore {
         .join(' ');
   }
 
-  String _firstNonEmpty(List<Object?> values) {
-    for (final value in values) {
-      final text = _string(value);
-      if (text.isNotEmpty) {
-        return text;
-      }
-    }
-    return '';
-  }
-
   String _string(Object? value) {
     return value?.toString().trim() ?? '';
   }

@@ -564,14 +564,14 @@ class UITextConstants {
   static const String assistantProcessReferenceDigestTemplate =
       '处理了 %s 篇，接纳了 %s 篇';
   static const String assistantProcessStepProgressTemplate = '已完成 %s/%s 步';
-  static const String assistantProcessRunningSummary = '深度思考';
-  static const String assistantProcessCompletedSummary = '已完成深度思考';
+  static const String assistantProcessRunningSummary = '处理过程';
+  static const String assistantProcessCompletedSummary = '已完成处理';
   static const String assistantProcessCompletedSummaryReferencesTemplate =
-      '已完成深度思考，处理 %s 篇文档';
+      '已完成处理，处理 %s 篇文档';
   static const String assistantProcessCompletedSummaryElapsedTemplate =
-      '已完成深度思考，耗时 %s 秒';
+      '已完成处理，耗时 %s 秒';
   static const String assistantProcessCompletedSummaryFullTemplate =
-      '已完成深度思考，处理 %s 篇文档，耗时 %s 秒';
+      '已完成处理，处理 %s 篇文档，耗时 %s 秒';
   static const String assistantProcessStageUnderstand = '理解问题';
   static const String assistantProcessStageSearch = '检索设计';
   static const String assistantProcessStageRetrievalDesign = '检索设计';
@@ -626,6 +626,7 @@ class UITextConstants {
   static const String personaInactive = '未激活';
   static const String personaDelete = '删除';
   static const String personaRetire = '退役';
+  static const String personaRetired = '已退役';
   static const String personaSyncApply = '同步资料';
   static const String personaSyncIgnore = '暂不处理';
   static const String personaSyncApplyAll = '同步到全部分身';
@@ -640,8 +641,7 @@ class UITextConstants {
   static const String personaSyncStatusMissing = '待补充';
   static const String personaSettingsEntry = '用户与分身';
   static const String personaSyncSuggestionTitle = '同步资料建议';
-  static const String personaSyncSuggestionBody =
-      '你刚刚更新了分身资料，可同步到其它分身以保持资料一致。';
+  static const String personaSyncSuggestionBody = '你刚刚更新了分身资料，可同步到其它分身以保持资料一致。';
   static const String personaDeleteBlocked = '当前分身暂不可删除';
   static const String personaRetireBlocked = '当前分身暂不可退役';
 

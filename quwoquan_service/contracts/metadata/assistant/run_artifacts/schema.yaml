@@ -119,7 +119,7 @@ subcontracts:
       - { name: domainId, type: string, default: '' }
       - { name: dimension, type: string, default: '' }
       - { name: dimensionLabel, type: string, default: '' }
-      - { name: queryTaskId, type: string, default: '' }
+      - { name: searchPlanId, type: string, default: '' }
       - { name: title, type: string, default: '' }
       - { name: url, type: string, default: '' }
       - { name: source, type: string, default: '' }

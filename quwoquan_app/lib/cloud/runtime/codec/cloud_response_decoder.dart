@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 
 class CloudResponseDecoder {
@@ -10,9 +10,9 @@ class CloudResponseDecoder {
     if (decoded is Map) {
       return Map<String, dynamic>.from(decoded);
     }
-    throw CloudException(
-      type: CloudErrorType.invalidResponse,
+    throw CloudErrorMapper.invalidResponse(
       message: 'Invalid object response${context == null ? '' : ': $context'}',
+      requestPath: context,
     );
   }
 
@@ -23,9 +23,9 @@ class CloudResponseDecoder {
     final obj = asObject(decoded, context: context);
     final rawItems = obj['items'];
     if (rawItems is! List) {
-      throw CloudException(
-        type: CloudErrorType.invalidResponse,
+      throw CloudErrorMapper.invalidResponse(
         message: 'Missing items${context == null ? '' : ': $context'}',
+        requestPath: context,
       );
     }
     final items = <CloudJsonMap>[];
@@ -40,10 +40,7 @@ class CloudResponseDecoder {
   }
 
   /// 从已解码对象中读取 `key` 对应的 `List<Map>`（忽略非 Map 元素），避免 `List<dynamic>.cast` 主路径。
-  static List<CloudJsonMap> mapList(
-    CloudJsonMap obj,
-    String key,
-  ) {
+  static List<CloudJsonMap> mapList(CloudJsonMap obj, String key) {
     final raw = obj[key];
     if (raw is! List) {
       return const <Map<String, dynamic>>[];

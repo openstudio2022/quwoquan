@@ -4,6 +4,58 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('runtime string governance', () {
+    test('typed assistant mainline 不再出现旧规划契约名', () {
+      final forbidden = <String>[
+        'Intent'
+            'Graph',
+        'Query'
+            'Task',
+        'intent'
+            'Graph',
+        'query'
+            'Tasks',
+        'intent_'
+            'graph',
+        'query_'
+            'task',
+      ];
+      final scannedPaths = <String>[
+        'lib/assistant',
+        'test/assistant',
+        'integration_test',
+        'tool/assistant',
+        '../quwoquan_service/contracts/metadata/assistant',
+        '../quwoquan_service/contracts/metadata/_shared',
+        '../quwoquan_service/tools/codegen_app_metadata',
+        '../quwoquan_service/generated/assistant',
+      ];
+      final offenders = <String>[];
+      for (final file in _scanTextFiles(scannedPaths)) {
+        final content = file.readAsStringSync();
+        for (final term in forbidden) {
+          if (content.contains(term)) {
+            offenders.add('${file.path}: $term');
+          }
+        }
+      }
+
+      expect(offenders, isEmpty);
+    });
+
+    test('assistant learning/runtime 不以用户可见回答文本做行为评分', () {
+      final offenders = <String>[];
+      final pattern = RegExp(
+        r'(answerText|displayPlainText|userMarkdown)\.contains\(',
+      );
+      for (final file in _scanTextFiles(<String>['lib/assistant'])) {
+        if (pattern.hasMatch(file.readAsStringSync())) {
+          offenders.add(file.path);
+        }
+      }
+
+      expect(offenders, isEmpty);
+    });
+
     test('治理文档冻结 metadata 根路径与 generated-only 规则', () {
       final designDoc = _read(
         'assistant/docs/PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md',
@@ -19,10 +71,10 @@ void main() {
       );
       expect(designDoc, contains('quwoquan_app/lib/assistant/generated/'));
       expect(designDoc, contains('assistant_turn'));
-      expect(designDoc, contains('禁止继续保留读取兼容'));
+      expect(designDoc, contains('历史不兼容仅允许在启动加载阶段完成一次转换'));
 
       expect(ssotDoc, contains('lib/assistant/generated/'));
-      expect(ssotDoc, contains('当前运行时不再读取兼容'));
+      expect(ssotDoc, contains('仅允许在启动加载阶段做一次历史转换'));
 
       expect(
         governance,
@@ -38,7 +90,7 @@ void main() {
         'lib/assistant/reasoning/runtime/narrative_engine.dart',
       );
 
-      expect(content, contains('DefaultProcessingCopyBank'));
+      expect(content, isNot(contains('DefaultProcessingCopyBank')));
       final chineseLiteral = RegExp(
         r'''['"][^'"\n]*[\u4e00-\u9fff][^'"\n]*['"]''',
       );
@@ -50,21 +102,24 @@ void main() {
         'lib/assistant/reasoning/runtime/tool_result_assessor.dart',
       );
 
-      expect(content, contains('DefaultProcessingCopyBank'));
+      expect(content, isNot(contains('DefaultProcessingCopyBank')));
       final chineseLiteral = RegExp(
         r'''['"][^'"\n]*[\u4e00-\u9fff][^'"\n]*['"]''',
       );
       expect(chineseLiteral.hasMatch(content), isFalse);
     });
 
-    test('tool_result_assessor 使用 enum 而不是字符串 message key', () {
-      final content = _read(
-        'lib/assistant/reasoning/runtime/tool_result_assessor.dart',
-      );
+    test(
+      'tool_result_assessor 使用 typed assessment enum 而不是字符串 message key',
+      () {
+        final content = _read(
+          'lib/assistant/reasoning/runtime/tool_result_assessor.dart',
+        );
 
-      expect(content, contains('ToolAssessMessageKey.'));
-      expect(content, isNot(contains("toolAssessMessage('")));
-    });
+        expect(content, contains('AssessmentType.'));
+        expect(content, isNot(contains("toolAssessMessage('")));
+      },
+    );
 
     test('phase owner 不再使用 realtimeTokens 关键词数组做实时判断', () {
       final content = _read(
@@ -72,34 +127,29 @@ void main() {
       );
 
       expect(content, isNot(contains('const realtimeTokens')));
-      expect(content, contains('freshnessHours'));
-      expect(content, contains('authorityScore'));
-      expect(content, contains('EvidenceSourceTier.authority'));
+      expect(content, contains('freshnessHoursMax'));
+      expect(content, contains('answerBoundaryPolicy.authorityRequired'));
+      expect(content, contains('ExecutionPreparationResolver'));
     });
 
-    test('answer_composer 的兜底文案由 copy bank 提供', () {
+    test('answer_composer 不再依赖 copy bank 拼接兜底文案', () {
       final content = _read(
         'lib/assistant/reasoning/runtime/answer_composer.dart',
       );
 
-      expect(content, contains('DefaultProcessingCopyBank'));
+      expect(content, isNot(contains('DefaultProcessingCopyBank')));
       expect(content, isNot(contains('## 当前信息还不够稳')));
       expect(content, isNot(contains('## 先给你一个稳妥版本')));
       expect(content, isNot(contains('### 参考来源')));
       expect(content, isNot(contains('需要补齐关键信息后再继续')));
     });
 
-    test('conversation_state_kernel 默认追问文案由 copy bank 提供', () {
+    test('conversation_state_kernel 不再依赖 copy bank 生成默认追问文案', () {
       final content = _read(
         'lib/assistant/context/assembly/conversation_state_kernel.dart',
       );
 
-      expect(
-        content,
-        contains(
-          'DefaultProcessingCopyBank.conversationKernelAskPrompt(slotId)',
-        ),
-      );
+      expect(content, isNot(contains('DefaultProcessingCopyBank')));
       expect(content, isNot(contains('告诉我更具体的地点')));
       expect(content, isNot(contains('再告诉我预算范围')));
     });
@@ -133,8 +183,8 @@ void main() {
     });
 
     test('assistant generated contracts 提供字段常量与 typed assistant_turn 子合同', () {
-      final decisionContract = _read(
-        'lib/assistant/generated/contracts/conversation_state_decision.g.dart',
+      final typedTurnDecisionContract = _read(
+        'lib/assistant/contracts/assistant_typed_turn_decision_contract.dart',
       );
       final slotSchemaContract = _read(
         'lib/assistant/generated/contracts/slot_schema.g.dart',
@@ -150,8 +200,8 @@ void main() {
       );
 
       expect(
-        decisionContract,
-        contains('class ConversationStateDecisionDtoFields'),
+        typedTurnDecisionContract,
+        contains('class AssistantTypedTurnDecision'),
       );
       expect(slotSchemaContract, contains('class SlotSchemaDtoFields'));
       expect(
@@ -208,8 +258,8 @@ void main() {
       expect(content, isNot(contains('fallbackFrame.userJobToBeDone')));
       expect(content, isNot(contains('fallbackFrame.hardConstraints')));
       expect(content, isNot(contains('fallbackFrame.softConstraints')));
-      expect(content, isNot(contains('fallbackFrame.entityAnchors')));
-      expect(content, isNot(contains('_fallbackIntentQueryTasks(')));
+      expect(content, isNot(contains('fallbackFrame.entityRefs')));
+      expect(content, isNot(contains('_fallbackIntentSearchPlans(')));
     });
 
     test('skill executors 不再通过 skill.id 内建特判知识技能', () {
@@ -324,20 +374,23 @@ void main() {
       );
     });
 
-    test('assistant_journey_projector 使用 typed journey stage/kind 而非旧 explainable 流', () {
-      final content = _read(
-        'lib/assistant/application/assistant_journey_projector.dart',
-      );
+    test(
+      'assistant_journey_projector 使用 typed journey stage/kind 而非旧 explainable 流',
+      () {
+        final content = _read(
+          'lib/assistant/application/assistant_journey_projector.dart',
+        );
 
-      expect(content, contains('JourneyStageId.analyze'));
-      expect(content, contains('JourneyStageId.search'));
-      expect(content, contains('JourneyStageId.verify'));
-      expect(content, contains('JourneyStageId.answer'));
-      expect(content, contains('JourneyEntryKind.referenceBundle'));
-      expect(content, contains('JourneyEntryKind.narrative'));
-      expect(content, isNot(contains('ExplainableFlowEvent')));
-      expect(content, isNot(contains('processJournal')));
-    });
+        expect(content, contains('JourneyStageId.analyze'));
+        expect(content, contains('JourneyStageId.search'));
+        expect(content, contains('JourneyStageId.verify'));
+        expect(content, contains('JourneyStageId.answer'));
+        expect(content, contains('JourneyEntryKind.referenceBundle'));
+        expect(content, contains('JourneyEntryKind.narrative'));
+        expect(content, isNot(contains('ExplainableFlowEvent')));
+        expect(content, isNot(contains('processJournal')));
+      },
+    );
 
     test('assistant_stream_projector 只消费 canonical journey 流', () {
       final content = _read(
@@ -356,7 +409,9 @@ void main() {
       final classifier = _read(
         'lib/assistant/protocol/display_text_classifier.dart',
       );
-      final catalog = _read('assets/assistant/tools/catalog/tool_catalog.meta.json');
+      final catalog = _read(
+        'assets/assistant/tools/catalog/tool_catalog.meta.json',
+      );
 
       expect(
         classifier,
@@ -420,4 +475,34 @@ String _read(String relativePath) {
   final file = File(relativePath);
   expect(file.existsSync(), isTrue, reason: '文件不存在: $relativePath');
   return file.readAsStringSync();
+}
+
+Iterable<File> _scanTextFiles(List<String> roots) sync* {
+  const includedExtensions = <String>{
+    '.dart',
+    '.go',
+    '.json',
+    '.md',
+    '.sh',
+    '.yaml',
+    '.yml',
+  };
+  for (final root in roots) {
+    final directory = Directory(root);
+    if (!directory.existsSync()) {
+      continue;
+    }
+    for (final entity in directory.listSync(recursive: true)) {
+      if (entity is! File) {
+        continue;
+      }
+      final path = entity.path;
+      if (path.contains('/.dart_tool/') || path.contains('/build/')) {
+        continue;
+      }
+      if (includedExtensions.any(path.endsWith)) {
+        yield entity;
+      }
+    }
+  }
 }

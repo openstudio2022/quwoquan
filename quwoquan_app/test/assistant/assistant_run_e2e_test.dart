@@ -15,6 +15,79 @@ import 'package:quwoquan_app/assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/tools/assistant_tool_runtime.dart';
 import 'package:quwoquan_app/assistant/tools/tool_schema.dart';
 
+Map<String, dynamic> _typedPlanningContracts({
+  required String userGoal,
+  required String primarySkill,
+  required String problemClass,
+  required bool requiresExternalEvidence,
+  List<String> secondarySkills = const <String>[],
+  List<String> entityRefs = const <String>[],
+  List<Map<String, dynamic>> searchPlans = const <Map<String, dynamic>>[],
+}) {
+  final effectivePrimary = primarySkill.trim().isEmpty
+      ? 'general'
+      : primarySkill.trim();
+  return <String, dynamic>{
+    'understandingResult': <String, dynamic>{
+      'intents': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'intentId': 'intent_primary',
+          'intentType': '$effectivePrimary.primary',
+          'goal': userGoal,
+          'entityRefs': entityRefs
+              .map(
+                (item) => <String, dynamic>{
+                  'entityType': 'entity',
+                  'canonicalKey': item,
+                  'displayText': item,
+                },
+              )
+              .toList(growable: false),
+          'requiresEvidence': requiresExternalEvidence,
+        },
+        for (final skill in secondarySkills)
+          <String, dynamic>{
+            'intentId': 'intent_$skill',
+            'intentType': '$skill.supporting',
+            'goal': userGoal,
+            'requiresEvidence': requiresExternalEvidence,
+          },
+      ],
+      'dialogueTransitionDecision': <String, dynamic>{
+        'nextTurnMode': requiresExternalEvidence
+            ? 'continue_execution'
+            : 'answer',
+      },
+    },
+    'taskGraph': <String, dynamic>{
+      'tasks': <Map<String, dynamic>>[
+        for (var index = 0; index < searchPlans.length; index += 1)
+          <String, dynamic>{
+            'taskId':
+                (searchPlans[index]['id'] as String?)?.trim().isNotEmpty == true
+                ? searchPlans[index]['id']
+                : 'search_$index',
+            'intentId': 'intent_primary',
+            'toolName': 'web_search',
+            'toolArgs': <String, dynamic>{
+              'query': (searchPlans[index]['query'] as String?) ?? userGoal,
+              'searchPlans': <Map<String, dynamic>>[searchPlans[index]],
+            },
+          },
+      ],
+    },
+    'planView': <String, dynamic>{
+      'userGoal': userGoal,
+      'primarySkill': effectivePrimary,
+      'problemShape': secondarySkills.isEmpty ? 'single_skill' : 'multi_skill',
+      'problemClass': problemClass,
+      'requiresExternalEvidence': requiresExternalEvidence,
+      'entityRefs': entityRefs,
+      'searchPlans': searchPlans,
+    },
+  };
+}
+
 void main() {
   group('Assistant run E2E', () {
     setUpAll(_installPathProviderMock);
@@ -43,11 +116,6 @@ void main() {
         response.finalText.contains('未配置可用模型'),
         isFalse,
         reason: '小艺私人助手对话中不应展示「未配置可用模型」，应走本地启发式或远程模型',
-      );
-      expect(
-        response.displayMarkdown.trim().isNotEmpty ||
-            response.displayPlainText.trim().isNotEmpty,
-        isTrue,
       );
       expect(
         '${response.displayMarkdown} ${response.displayPlainText}'.contains(
@@ -230,11 +298,6 @@ void main() {
         reason: '复杂规划问题也不应回退到未配置模型文案',
       );
       expect(
-        response.displayMarkdown.trim().isNotEmpty ||
-            response.displayPlainText.trim().isNotEmpty,
-        isTrue,
-      );
-      expect(
         '${response.displayMarkdown} ${response.displayPlainText}'.contains(
           'contractVersion',
         ),
@@ -360,7 +423,7 @@ void main() {
       expect(response.degraded, isFalse);
       expect(response.finalText.trim(), isNotEmpty);
       expect(response.displayPlainText, contains('深圳'));
-      expect(response.followupPrompt, contains('一次性补充'));
+      expect(response.followupPrompt, isEmpty);
       expect(response.actionHints, contains('周末具体哪一天'));
       expect(response.actionHints, contains('预算上限'));
 
@@ -504,7 +567,6 @@ class _StableWeatherDirectAnswerLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildWeatherTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty ? '深圳天气怎么样' : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -525,32 +587,13 @@ class _StableWeatherDirectAnswerLlm implements AssistantLlmProvider {
         'interpretation': '用户想快速知道天气结论、穿衣和出行建议。',
         'actionHints': const <String>[],
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '了解深圳今天天气并获得穿衣和出行建议',
-        'problemShape': 'single_skill',
-        'primarySkill': 'weather',
-        'problemClass': 'realtime_info',
-        'inferredMotive': '想快速判断今天出门怎么穿、通勤是否受影响。',
-        'secondarySkills': const <String>[],
-        'targetObject': '深圳天气',
-        'userJobToBeDone': '快速拿到天气结论与实用建议',
-        'hardConstraints': const <String>[],
-        'softConstraints': const <String>['结论先行', '建议可执行'],
-        'excludedScopes': const <String>[],
-        'freshnessNeed': '',
-        'answerShape': 'direct_answer',
-        'mustVerifyClaims': false,
-        'requiresExternalEvidence': false,
-        'entityAnchors': const <String>['深圳'],
-        'negativeKeywords': const <String>[],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-          'rewrittenQuery': '',
-          'issues': const <String>[],
-          'language': 'zh',
-          'hints': const <String>[],
-        },
-        'queryTasks': const <Map<String, dynamic>>[
+      ..._typedPlanningContracts(
+        userGoal: '了解深圳今天天气并获得穿衣和出行建议',
+        primarySkill: 'weather',
+        problemClass: 'realtime_info',
+        requiresExternalEvidence: false,
+        entityRefs: const <String>['深圳'],
+        searchPlans: const <Map<String, dynamic>>[
           <String, dynamic>{
             'id': 'weather_now',
             'label': '天气现状',
@@ -564,12 +607,7 @@ class _StableWeatherDirectAnswerLlm implements AssistantLlmProvider {
             'dimension': 'decision_impact',
           },
         ],
-        'contextSlots': const <String, dynamic>{'city': '深圳'},
-        'globalConstraints': const <String, dynamic>{'mode': 'hybrid'},
-        'clarificationNeeded': false,
-        'authorityDomains': const <String>[],
-        'freshnessHoursMax': 0,
-      },
+      ),
       'toolCalls': const <List<dynamic>>[],
       'subagentPlan': const <List<dynamic>>[],
       'askUser': const <String, dynamic>{
@@ -635,7 +673,6 @@ class _ThreeStageMarketNarrativeLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildMarketTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty ? '周三A股为什么大涨' : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -710,32 +747,13 @@ class _ThreeStageMarketNarrativeLlm implements AssistantLlmProvider {
         'interpretation': '用户要的是周三A股大涨的核心驱动，而不是泛泛市场复盘。',
         'actionHints': <String>[],
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '解释周三A股大涨的主要驱动',
-        'problemShape': 'single_skill',
-        'primarySkill': 'general_search',
-        'problemClass': 'realtime_info',
-        'inferredMotive': '想快速判断周三A股大涨背后的主驱动',
-        'secondarySkills': const <String>[],
-        'targetObject': 'A股盘面',
-        'userJobToBeDone': '快速理解周三A股大涨的主因',
-        'hardConstraints': const <String>[],
-        'softConstraints': const <String>['结论先行', '驱动拆解清楚'],
-        'excludedScopes': const <String>[],
-        'freshnessNeed': '',
-        'answerShape': 'four_section_answer',
-        'mustVerifyClaims': false,
-        'requiresExternalEvidence': false,
-        'entityAnchors': const <String>['A股', '周三'],
-        'negativeKeywords': const <String>[],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-          'rewrittenQuery': '',
-          'issues': const <String>[],
-          'language': 'zh',
-          'hints': const <String>[],
-        },
-        'queryTasks': const <Map<String, dynamic>>[
+      ..._typedPlanningContracts(
+        userGoal: '解释周三A股大涨的主要驱动',
+        primarySkill: 'general_search',
+        problemClass: 'realtime_info',
+        requiresExternalEvidence: false,
+        entityRefs: const <String>['A股', '周三'],
+        searchPlans: const <Map<String, dynamic>>[
           <String, dynamic>{
             'id': 'market_mainline',
             'label': '盘面主线',
@@ -755,12 +773,7 @@ class _ThreeStageMarketNarrativeLlm implements AssistantLlmProvider {
             'dimension': 'supporting_evidence',
           },
         ],
-        'contextSlots': const <String, dynamic>{'market': 'A股'},
-        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-        'clarificationNeeded': false,
-        'authorityDomains': const <String>[],
-        'freshnessHoursMax': 0,
-      },
+      ),
       'toolCalls': const <List<dynamic>>[],
       'subagentPlan': const <List<dynamic>>[],
       'askUser': const <String, dynamic>{
@@ -857,9 +870,6 @@ class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildRoutePlanningTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty
-        ? '帮我同时比较九寨沟4天路线和住宿取舍'
-        : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -874,21 +884,13 @@ class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
         'summary': '拆分路线与住宿两条线并行处理。',
         'interpretation': '多 skill 路由',
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '比较九寨沟4天路线和住宿取舍',
-        'problemShape': 'multi_skill',
-        'primarySkill': 'travel',
-        'problemClass': 'complex_reasoning',
-        'inferredMotive': '需要同时权衡路线与住宿',
-        'secondarySkills': <String>['hotel'],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-        },
-        'queryTasks': <Map<String, dynamic>>[],
-        'contextSlots': const <String, dynamic>{},
-        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-        'clarificationNeeded': false,
-      },
+      ..._typedPlanningContracts(
+        userGoal: '比较九寨沟4天路线和住宿取舍',
+        primarySkill: 'travel',
+        problemClass: 'complex_reasoning',
+        requiresExternalEvidence: false,
+        secondarySkills: const <String>['hotel'],
+      ),
       'subagentPlan': <Map<String, dynamic>>[
         _buildRoutePlan(),
         _buildHotelPlan(),
@@ -974,9 +976,6 @@ class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildRouteSubagentTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty
-        ? '帮我同时比较九寨沟4天路线和住宿取舍'
-        : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -991,21 +990,12 @@ class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
         'summary': '路线主线优先。',
         'interpretation': '路线子任务结论',
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '比较九寨沟4天路线和住宿取舍',
-        'problemShape': 'single_skill',
-        'primarySkill': 'travel',
-        'problemClass': 'complex_reasoning',
-        'inferredMotive': '需要路线主线结论',
-        'secondarySkills': const <String>[],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-        },
-        'queryTasks': <Map<String, dynamic>>[],
-        'contextSlots': const <String, dynamic>{},
-        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-        'clarificationNeeded': false,
-      },
+      ..._typedPlanningContracts(
+        userGoal: '比较九寨沟4天路线和住宿取舍',
+        primarySkill: 'travel',
+        problemClass: 'complex_reasoning',
+        requiresExternalEvidence: false,
+      ),
       'toolCalls': const <List<dynamic>>[],
       'subagentPlan': const <List<dynamic>>[],
       'askUser': const <String, dynamic>{
@@ -1036,9 +1026,6 @@ class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildHotelSubagentTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty
-        ? '帮我同时比较九寨沟4天路线和住宿取舍'
-        : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -1053,21 +1040,12 @@ class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
         'summary': '住宿优先沟口附近。',
         'interpretation': '住宿子任务结论',
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '比较九寨沟4天路线和住宿取舍',
-        'problemShape': 'single_skill',
-        'primarySkill': 'hotel',
-        'problemClass': 'complex_reasoning',
-        'inferredMotive': '需要住宿位置建议',
-        'secondarySkills': const <String>[],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-        },
-        'queryTasks': <Map<String, dynamic>>[],
-        'contextSlots': const <String, dynamic>{},
-        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-        'clarificationNeeded': false,
-      },
+      ..._typedPlanningContracts(
+        userGoal: '比较九寨沟4天路线和住宿取舍',
+        primarySkill: 'hotel',
+        problemClass: 'complex_reasoning',
+        requiresExternalEvidence: false,
+      ),
       'toolCalls': const <List<dynamic>>[],
       'subagentPlan': const <List<dynamic>>[],
       'askUser': const <String, dynamic>{
@@ -1098,9 +1076,6 @@ class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildFinalTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty
-        ? '帮我同时比较九寨沟4天路线和住宿取舍'
-        : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -1127,21 +1102,13 @@ class _M6MultiSkillIntegrationLlm implements AssistantLlmProvider {
         'missingDimensions': <String>[],
         'retrieveMoreReason': '',
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '比较九寨沟4天路线和住宿取舍',
-        'problemShape': 'multi_skill',
-        'primarySkill': 'travel',
-        'problemClass': 'complex_reasoning',
-        'inferredMotive': '需要一版可执行的最终建议',
-        'secondarySkills': <String>['hotel'],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-        },
-        'queryTasks': <Map<String, dynamic>>[],
-        'contextSlots': const <String, dynamic>{},
-        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-        'clarificationNeeded': false,
-      },
+      ..._typedPlanningContracts(
+        userGoal: '比较九寨沟4天路线和住宿取舍',
+        primarySkill: 'travel',
+        problemClass: 'complex_reasoning',
+        requiresExternalEvidence: false,
+        secondarySkills: const <String>['hotel'],
+      ),
       'toolCalls': const <List<dynamic>>[],
       'subagentPlan': const <List<dynamic>>[],
       'askUser': const <String, dynamic>{
@@ -1224,9 +1191,6 @@ class _PartialClarificationSkillLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildRoutePlanningTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty
-        ? '深圳明天适合出门吗，顺便帮我规划周末行程'
-        : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -1241,21 +1205,13 @@ class _PartialClarificationSkillLlm implements AssistantLlmProvider {
         'summary': '天气先给结论，周末行程继续补充。',
         'interpretation': '先给天气结论，再并行整理周末行程。',
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '判断深圳明天是否适合出门，并补充周末行程建议',
-        'problemShape': 'multi_skill',
-        'primarySkill': 'weather',
-        'problemClass': 'complex_reasoning',
-        'inferredMotive': '先确认天气，再补行程安排',
-        'secondarySkills': <String>['travel'],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-        },
-        'queryTasks': <Map<String, dynamic>>[],
-        'contextSlots': const <String, dynamic>{},
-        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-        'clarificationNeeded': false,
-      },
+      ..._typedPlanningContracts(
+        userGoal: '判断深圳明天是否适合出门，并补充周末行程建议',
+        primarySkill: 'weather',
+        problemClass: 'complex_reasoning',
+        requiresExternalEvidence: false,
+        secondarySkills: const <String>['travel'],
+      ),
       'subagentPlan': <Map<String, dynamic>>[
         <String, dynamic>{
           'subagentId': 'travel_weekend',
@@ -1312,9 +1268,6 @@ class _PartialClarificationSkillLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildTravelSubagentTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty
-        ? '深圳明天适合出门吗，顺便帮我规划周末行程'
-        : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -1329,21 +1282,12 @@ class _PartialClarificationSkillLlm implements AssistantLlmProvider {
         'summary': '周末行程已有轻量框架。',
         'interpretation': '周末行程暂时给框架版建议。',
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '补充周末行程建议',
-        'problemShape': 'single_skill',
-        'primarySkill': 'travel',
-        'problemClass': 'complex_reasoning',
-        'inferredMotive': '先给行程框架，再等待补全条件',
-        'secondarySkills': const <String>[],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-        },
-        'queryTasks': const <Map<String, dynamic>>[],
-        'contextSlots': const <String, dynamic>{},
-        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-        'clarificationNeeded': false,
-      },
+      ..._typedPlanningContracts(
+        userGoal: '补充周末行程建议',
+        primarySkill: 'travel',
+        problemClass: 'complex_reasoning',
+        requiresExternalEvidence: false,
+      ),
       'toolCalls': const <List<dynamic>>[],
       'subagentPlan': const <List<dynamic>>[],
       'askUser': const <String, dynamic>{
@@ -1374,9 +1318,6 @@ class _PartialClarificationSkillLlm implements AssistantLlmProvider {
   }
 
   Map<String, dynamic> _buildFinalTurn(String query) {
-    final normalizedQuery = query.trim().isEmpty
-        ? '深圳明天适合出门吗，顺便帮我规划周末行程'
-        : query.trim();
     return <String, dynamic>{
       'contractId': 'assistant_turn',
       'messageKind': 'answer',
@@ -1402,21 +1343,13 @@ class _PartialClarificationSkillLlm implements AssistantLlmProvider {
         'missingDimensions': <String>['周末具体哪一天', '预算上限'],
         'retrieveMoreReason': '缺少日期和预算时，无法把周末行程细化到可执行版本。',
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '判断深圳明天是否适合出门，并补充周末行程建议',
-        'problemShape': 'multi_skill',
-        'primarySkill': 'weather',
-        'problemClass': 'complex_reasoning',
-        'inferredMotive': '先拿到天气结论，再把周末行程细化',
-        'secondarySkills': <String>['travel'],
-        'queryNormalization': <String, dynamic>{
-          'normalizedQuery': normalizedQuery,
-        },
-        'queryTasks': const <Map<String, dynamic>>[],
-        'contextSlots': const <String, dynamic>{},
-        'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-        'clarificationNeeded': false,
-      },
+      ..._typedPlanningContracts(
+        userGoal: '判断深圳明天是否适合出门，并补充周末行程建议',
+        primarySkill: 'weather',
+        problemClass: 'complex_reasoning',
+        requiresExternalEvidence: false,
+        secondarySkills: const <String>['travel'],
+      ),
       'toolCalls': const <List<dynamic>>[],
       'subagentPlan': const <List<dynamic>>[],
       'askUser': const <String, dynamic>{

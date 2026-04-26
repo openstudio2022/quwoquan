@@ -7,6 +7,7 @@ import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_structured_run_response_read_view.dart';
 
 /// 将时间轴行编码为与 [resolvePersistedAssistantDisplayState] 等协议解析器兼容的扁平 Map。
 ///
@@ -179,10 +180,10 @@ RunArtifactsAnswerProcessing resolveAssistantAnswerProcessingFromMessage(
 RetrievalProcessingSnapshot resolveAssistantRetrievalProcessingFromResponse(
   AssistantRunResponse response,
 ) {
-  final direct =
-      (response.structuredResponse[assistantRetrievalProcessingField] as Map?)
-          ?.cast<String, dynamic>();
-  if (direct != null && direct.isNotEmpty) {
+  final direct = AssistantStructuredRunResponseReadView(
+    response.structuredResponse,
+  ).retrievalProcessingMap;
+  if (direct.isNotEmpty) {
     return RetrievalProcessingSnapshot.fromJson(direct);
   }
   return response.runArtifacts?.retrievalProcessing ??

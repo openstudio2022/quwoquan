@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, BellRing, ShieldCheck, Siren } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated';
+import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated.js';
 import {
   fetchAlertTemplates,
   fetchPlatformAudits,
@@ -14,10 +14,11 @@ import {
   type PlatformProjectionSummary,
   type ReleaseItem,
   type SLOPolicyItem,
-} from '../../shared/api/controlPlane';
-import { KpiCard } from '../../shared/components/KpiCard';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+} from '../../shared/api/controlPlane.js';
+import { KpiCard } from '../../shared/components/KpiCard.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function PlatformObservabilityPage() {
   const observabilityObjects = platformControlPlane.object_types.filter((item) =>
@@ -30,6 +31,7 @@ export function PlatformObservabilityPage() {
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [summary, setSummary] = useState<PlatformProjectionSummary | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -46,9 +48,11 @@ export function PlatformObservabilityPage() {
         setReleases(releaseItems);
         setSummary(summaryItem);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -75,6 +79,7 @@ export function PlatformObservabilityPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实可观测数据已接入' : '等待平台控制面连接'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">创建观察视图</button>}

@@ -1,10 +1,30 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_surface_id.g.dart';
 import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 
 void main() {
   group('PostReadProjectionFacade', () {
+    test('authorProfileSubjectId 优先使用 canonical 字段', () {
+      final dto = MomentPostDto.fromMap(<String, dynamic>{
+        '_id': 'p_canonical',
+        'postId': 'p_canonical',
+        'type': 'moment',
+        'contentType': 'micro',
+        'authorId': 'legacy_author',
+        'profileSubjectId': 'persona_author',
+        'displayName': 'User',
+        'authorAvatarUrl': '',
+        'body': 'hello',
+        'likeCount': 1,
+        'commentCount': 2,
+        'shareCount': 3,
+        'favoriteCount': 0,
+        'createdAt': '2026-01-01T00:00:00.000Z',
+      });
+      expect(dto.authorId, 'legacy_author');
+      expect(dto.authorProfileSubjectId, 'persona_author');
+    });
+
     test('presentationFor matches fromPostBase for feedCard', () {
       final dto = MomentPostDto.fromMap(<String, dynamic>{
         '_id': 'p1',

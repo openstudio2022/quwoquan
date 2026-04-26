@@ -5,11 +5,21 @@ void main() {
   group('UserErrorCode — 常规契约', () {
     test('所有错误码存在且 code 非空', () {
       for (final e in UserErrorCode.values) {
-        expect(e.code, isNotEmpty, reason: '${e.name} code should not be empty');
-        expect(e.defaultMessage, isNotEmpty,
-            reason: '${e.name} defaultMessage should not be empty');
-        expect(e.httpStatus, greaterThan(0),
-            reason: '${e.name} httpStatus should be > 0');
+        expect(
+          e.code,
+          isNotEmpty,
+          reason: '${e.name} code should not be empty',
+        );
+        expect(
+          e.defaultMessage,
+          isNotEmpty,
+          reason: '${e.name} defaultMessage should not be empty',
+        );
+        expect(
+          e.httpStatus,
+          greaterThan(0),
+          reason: '${e.name} httpStatus should be > 0',
+        );
       }
     });
 
@@ -25,13 +35,18 @@ void main() {
     });
 
     test('fromCode 反向查找正确', () {
-      expect(UserErrorCode.fromCode('USER.USER.not_found'),
-          UserErrorCode.userNotFound);
-      expect(UserErrorCode.fromCode('USER.USER.nickname_taken'),
-          UserErrorCode.nicknameTaken);
       expect(
-          UserErrorCode.fromCode('USER.SYSTEM.internal_error'),
-          UserErrorCode.internalError);
+        UserErrorCode.fromCode('USER.USER.not_found'),
+        UserErrorCode.userNotFound,
+      );
+      expect(
+        UserErrorCode.fromCode('USER.USER.nickname_taken'),
+        UserErrorCode.nicknameTaken,
+      );
+      expect(
+        UserErrorCode.fromCode('USER.SYSTEM.internal_error'),
+        UserErrorCode.internalError,
+      );
     });
 
     test('HTTP 状态码与 errors.yaml 一致', () {
@@ -50,25 +65,13 @@ void main() {
       expect(UserErrorCode.fromCode('NONEXISTENT.CODE'), isNull);
       expect(UserErrorCode.fromCode(''), isNull);
     });
-
-    test('isRetryable 只有 rateLimited 为 true', () {
-      for (final e in UserErrorCode.values) {
-        if (e == UserErrorCode.rateLimited) {
-          expect(e.isRetryable, true, reason: '${e.name} should be retryable');
-        } else {
-          expect(e.isRetryable, false,
-              reason: '${e.name} should not be retryable');
-        }
-      }
-    });
   });
 
   group('UserErrorCode — 异常/边界契约', () {
     test('defaultMessage 中文非空', () {
       expect(UserErrorCode.userNotFound.defaultMessage, '用户不存在');
       expect(UserErrorCode.unauthorized.defaultMessage, '请先登录');
-      expect(
-          UserErrorCode.nicknameTaken.defaultMessage, contains('昵称'));
+      expect(UserErrorCode.nicknameTaken.defaultMessage, contains('昵称'));
       expect(UserErrorCode.rateLimited.defaultMessage, contains('频繁'));
     });
   });

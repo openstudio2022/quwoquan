@@ -51,6 +51,7 @@ class _StubUserRepository implements UserRepository {
       'profileVisibility': 'public',
       'isPrimary': false,
       'isActive': false,
+      'status': 'active',
       'inheritsProfileFromOwner': true,
       'overriddenProfileFields': const <String>[],
     };
@@ -124,7 +125,18 @@ class _StubUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> retirePersona(String personaId) async {}
+  Future<void> retirePersona(String personaId) async {
+    final index = _items.indexWhere(
+      (item) => item['subAccountId'] == personaId,
+    );
+    if (index == -1) return;
+    _items[index] = <String, dynamic>{
+      ..._items[index],
+      'status': 'retired',
+      'retiredAt': DateTime(2026, 4, 23).toIso8601String(),
+      'isActive': false,
+    };
+  }
 
   @override
   Future<PersonaManagementItemViewData> updatePersona(
@@ -133,11 +145,9 @@ class _StubUserRepository implements UserRepository {
     String? userHandle,
     String? phone,
     String? email,
-    String? bio,
     String? avatarUrl,
     String? isolationLevel,
     String? purposeHint,
-    String? profileVisibility,
     String? applyScope,
     List<String>? syncTargetIds,
     List<String>? fieldsMask,
@@ -185,6 +195,7 @@ List<Map<String, dynamic>> _seed() {
       'isolationLevel': 'open',
       'profileVisibility': 'public',
       'inheritsProfileFromOwner': true,
+      'status': 'active',
       'overriddenProfileFields': const <String>[],
     },
     <String, dynamic>{
@@ -199,6 +210,7 @@ List<Map<String, dynamic>> _seed() {
       'isolationLevel': 'semi',
       'profileVisibility': 'public',
       'inheritsProfileFromOwner': false,
+      'status': 'active',
       'overriddenProfileFields': const <String>['email'],
     },
   ];
@@ -254,6 +266,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repo.syncAppliedCount, 1);
+    });
+
+    testWidgets('已退役分身展示退役态并隐藏删除按钮', (tester) async {
+      final items = _seed();
+      items[1] = <String, dynamic>{
+        ...items[1],
+        'status': 'retired',
+        'retiredAt': DateTime(2026, 4, 23).toIso8601String(),
+      };
+      final repo = _StubUserRepository(items);
+      await tester.pumpWidget(_wrap(repo));
+      await tester.pumpAndSettle();
+
+      expect(find.text(UITextConstants.personaRetired), findsWidgets);
+      expect(find.text(UITextConstants.personaDelete), findsNothing);
     });
   });
 }

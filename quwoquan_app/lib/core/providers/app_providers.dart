@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
@@ -387,7 +388,7 @@ class PersonalContentAccessNotifier
     } catch (error) {
       state = state.copyWith(
         isHydrating: false,
-        errorMessage: error.toString(),
+        errorMessage: runtimeErrorDisplayMessage(error),
       );
     }
   }
@@ -426,7 +427,10 @@ class PersonalContentAccessNotifier
         clearError: true,
       );
     } catch (error) {
-      state = state.copyWith(isSyncing: false, errorMessage: error.toString());
+      state = state.copyWith(
+        isSyncing: false,
+        errorMessage: runtimeErrorDisplayMessage(error),
+      );
     }
   }
 }
@@ -813,10 +817,25 @@ class ClientStateSyncOutboxNotifier
     switch ('${entry.objectType}:${entry.intentType}') {
       case 'profile:follow':
         final repo = ref.read(userProfileRepositoryProvider);
+        final activeContext = await ref.read(
+          activePersonaContextProvider.future,
+        );
         if (entry.desiredBoolValue) {
-          await repo.followUser(entry.objectId);
+          await repo.followUser(
+            entry.objectId,
+            ownerUserId: activeContext.ownerUserId,
+            actorProfileSubjectId: activeContext.profileSubjectId,
+            personaId: activeContext.personaId,
+            personaContextVersion: activeContext.contextVersion,
+          );
         } else {
-          await repo.unfollowUser(entry.objectId);
+          await repo.unfollowUser(
+            entry.objectId,
+            ownerUserId: activeContext.ownerUserId,
+            actorProfileSubjectId: activeContext.profileSubjectId,
+            personaId: activeContext.personaId,
+            personaContextVersion: activeContext.contextVersion,
+          );
         }
         return;
       case 'post:like':
@@ -1006,12 +1025,16 @@ final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
   );
 });
 
-/// 当前活动分身上下文。mock 模式下允许回退；remote 模式由调用方自行决定是否 fail-closed。
+/// 当前活动分身上下文。只有 mock 模式允许本地回退；remote 模式必须显式失败，避免关键写路径静默降级到 user。
 final activePersonaContextProvider =
     FutureProvider<ActivePersonaContextViewData>((ref) async {
+      final mode = ref.read(appDataSourceModeProvider);
       try {
         return await ref.read(userRepositoryProvider).getActivePersonaContext();
       } catch (_) {
+        if (mode == AppDataSourceMode.remote) {
+          rethrow;
+        }
         final currentUser = ref.read(userDataProvider);
         final fallbackId = currentUser?.id.isNotEmpty == true
             ? currentUser!.id

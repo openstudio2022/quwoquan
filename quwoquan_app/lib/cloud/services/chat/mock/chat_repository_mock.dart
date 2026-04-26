@@ -246,9 +246,9 @@ class MockChatRepository implements ChatRepository {
     String? before,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return ChatMockData.messagesFor(conversationId)
-        .map(ChatMessageDto.fromMap)
-        .toList(growable: false);
+    return ChatMockData.messagesFor(
+      conversationId,
+    ).map(ChatMessageDto.fromMap).toList(growable: false);
   }
 
   @override
@@ -316,6 +316,8 @@ class MockChatRepository implements ChatRepository {
     String? senderPersonaId,
     String? senderProfileSubjectId,
     String? personaContextVersion,
+    String? senderDisplayNameSnapshot,
+    String? senderAvatarUrlSnapshot,
     required String clientMsgId,
   }) async {
     _seqCounter++;
@@ -367,9 +369,9 @@ class MockChatRepository implements ChatRepository {
     String? role,
     String? sort,
   }) async {
-    var rows = _ensureMembersCache(conversationId)
-        .map((m) => ChatConversationMemberDto.fromMap(m))
-        .toList();
+    var rows = _ensureMembersCache(
+      conversationId,
+    ).map((m) => ChatConversationMemberDto.fromMap(m)).toList();
     rows = sortChatMemberDtos(rows, sort);
     if (role != null && role.isNotEmpty) {
       rows = rows.where((m) => m.role == role).toList();
@@ -491,9 +493,7 @@ class MockChatRepository implements ChatRepository {
   }) async {
     final normalizedQuery = query.trim().toLowerCase();
     return AppContentPrototypeBundle.instance.chatMockContacts
-        .where(
-          (c) => c.displayName.toLowerCase().contains(normalizedQuery),
-        )
+        .where((c) => c.displayName.toLowerCase().contains(normalizedQuery))
         .take(limit)
         .map((contact) {
           final displayName = contact.displayName;
@@ -533,9 +533,7 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<List<ConversationDto>> batchGetConversations(
-    List<String> ids,
-  ) async {
+  Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
     return _conversationCache
         .where((c) => ids.contains(c['_id'] ?? c['id']))
         .map((c) => ConversationDto.fromMap(Map<String, dynamic>.from(c)))

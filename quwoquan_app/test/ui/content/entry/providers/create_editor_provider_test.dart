@@ -946,7 +946,7 @@ void main() {
     notifier.redoArticle();
     expect(
       container.read(createEditorProvider).articleDocument.nodes.any(
-        (n) => n.isFigure && n.imageUrl == '/img.jpg',
+        (n) => n.isFigure && n.id == figId && n.imageUrl == '/img.jpg',
       ),
       isTrue,
     );

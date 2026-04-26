@@ -187,6 +187,52 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 	}
 }
 
+func TestHomepageInvalidJSONUsesRuntimeErrorResponse(t *testing.T) {
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	req, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/v1/homepages/candidates",
+		bytes.NewReader([]byte("{")),
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-Id", "entity-req-1")
+	req.Header.Set("X-Trace-Id", "entity-trace-1")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", resp.StatusCode)
+	}
+	var out map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if out["code"] != "ENTITY.USER.invalid_argument" {
+		t.Fatalf("expected runtime code ENTITY.USER.invalid_argument, got %v", out["code"])
+	}
+	if out["requestId"] != "entity-req-1" || out["traceId"] != "entity-trace-1" {
+		t.Fatalf("expected request/trace propagation, got request=%v trace=%v", out["requestId"], out["traceId"])
+	}
+	if _, ok := out["origin"].(string); !ok {
+		t.Fatalf("expected runtime origin in error response: %#v", out)
+	}
+	if _, ok := out["location"].(map[string]any); !ok {
+		t.Fatalf("expected runtime location in error response: %#v", out)
+	}
+	if _, ok := out["context"].(map[string]any); !ok {
+		t.Fatalf("expected runtime context in error response: %#v", out)
+	}
+}
+
 func requestJSON(
 	t *testing.T,
 	client *http.Client,

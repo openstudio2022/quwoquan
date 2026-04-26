@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
@@ -47,7 +46,23 @@ void main() {
       expect(frame.city, isEmpty, reason: '不应再用危险兜底把前 2~4 个汉字误判成城市');
     });
 
-    test('检索规划使用通用 queryTask id，而不是垂类专属维度名', () {
+    test('归一化后的天气查询会回填裸城市锚点', () {
+      final frame = framer.frame(
+        'shen Zheng tian qi',
+        intentPayload: const <String, dynamic>{
+          'primaryDomainId': 'weather',
+          'problemClass': 'realtime_info',
+          'requiresExternalEvidence': true,
+          'queryNormalization': <String, dynamic>{'normalizedQuery': '深圳今天天气'},
+        },
+      );
+
+      expect(frame.city, equals('深圳'));
+      expect(frame.entityRefs, contains('深圳'));
+      expect(frame.normalizedQuery, equals('深圳今天天气'));
+    });
+
+    test('检索规划使用通用 searchPlan id，而不是垂类专属维度名', () {
       final travelPlan = planner.plan(
         frame: framer.frame(
           '如果把九寨沟方向考虑进去，多给我几个备选方案',
@@ -73,14 +88,14 @@ void main() {
 
       expect(travelPlan, isNotNull);
       expect(
-        travelPlan!.queryTasks.map((item) => item.id).toList(),
+        travelPlan!.searchPlans.map((item) => item.id).toList(),
         containsAll(<String>['candidate_space', 'fit_scenarios', 'risks']),
       );
       expect(travelPlan.blockingDimensions, contains('候选范围'));
 
       expect(wildlifePlan, isNotNull);
       expect(
-        wildlifePlan!.queryTasks.map((item) => item.id).toList(),
+        wildlifePlan!.searchPlans.map((item) => item.id).toList(),
         containsAll(<String>['key_facts', 'decision_threshold']),
       );
       expect(wildlifePlan.blockingDimensions, isNotEmpty);
@@ -111,7 +126,7 @@ void main() {
           EvidenceLedgerEntry(
             evidenceId: 'a',
             dimension: '关键事实',
-            queryTaskId: 'key_facts',
+            searchPlanId: 'key_facts',
             title: '季节资料',
             url: 'https://example.com/season',
             sourceTier: 'authority',
@@ -122,7 +137,7 @@ void main() {
           EvidenceLedgerEntry(
             evidenceId: 'b',
             dimension: '判断条件',
-            queryTaskId: 'decision_threshold',
+            searchPlanId: 'decision_threshold',
             title: '时段资料',
             url: 'https://example.com/daytime',
             sourceTier: 'authority',
@@ -141,7 +156,7 @@ void main() {
       expect(result.passed, isFalse);
       expect(
         result.missingDimensions,
-        contains(QueryTaskDimension.latestSignal.wireName),
+        contains(SearchPlanDimension.latestSignal.wireName),
       );
     });
 
@@ -155,14 +170,14 @@ void main() {
       final decision = kernel.evaluate(
         domainId: 'fallback_general_search',
         problemClass: 'evidence_lookup',
-        intentGraph: const IntentGraph(
+        planView: const AssistantPlanView(
           userGoal: '土拨鼠观赏最佳时间',
           problemShape: ProblemShape.singleSkill,
           primarySkill: 'fallback_general_search',
           problemClass: ProblemClass.evidenceLookup,
           requiresExternalEvidence: true,
         ),
-        queryTasks: const <QueryTask>[],
+        searchPlans: const <SearchPlanItem>[],
         dialogueRoundScript: _dialogueScript(),
         aggregationState: const AggregationState(
           canGivePartialAnswer: true,
@@ -202,7 +217,7 @@ void main() {
       final decision = kernel.evaluate(
         domainId: 'finance_consumer',
         problemClass: 'evidence_lookup',
-        intentGraph: const IntentGraph(
+        planView: const AssistantPlanView(
           userGoal: 'A股大涨原因',
           problemShape: ProblemShape.singleSkill,
           primarySkill: 'finance_consumer',
@@ -210,11 +225,11 @@ void main() {
           requiresExternalEvidence: true,
           mustVerifyClaims: true,
         ),
-        queryTasks: const <QueryTask>[
-          QueryTask(
+        searchPlans: const <SearchPlanItem>[
+          SearchPlanItem(
             id: 'stock_reason',
             query: 'A股大涨原因',
-            dimension: QueryTaskDimension.latestSignal,
+            dimension: SearchPlanDimension.latestSignal,
           ),
         ],
         dialogueRoundScript: _dialogueScript(),
@@ -256,7 +271,7 @@ void main() {
           freshnessSatisfied: false,
           terminalPayloadComplete: true,
         ),
-        conversationStateDecision: const ConversationStateDecision(
+        typedTurnDecision: const AssistantTypedTurnDecision(
           nextAction: AssistantNextAction.answer,
           finalAnswerMode: FinalAnswerMode.boundedAnswer,
           answerEligibility: AnswerEligibility.blocked,
@@ -266,7 +281,7 @@ void main() {
       );
 
       expect(decision.reasonCode, equals('freshness_unsatisfied'));
-      expect(decision.reason, equals('已基于当前可确认信息整理答案，如需补齐最新变化可继续补查。'));
+      expect(decision.reason, isEmpty);
     });
   });
 }

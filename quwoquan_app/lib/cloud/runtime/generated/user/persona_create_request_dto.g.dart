@@ -5,8 +5,6 @@ class PersonaCreateRequestDto {
   final String displayName;
   final String? userHandle;
   final String? avatarUrl;
-  final String? backgroundUrl;
-  final String? bio;
   final String? isolationLevel;
   final String? purposeHint;
 
@@ -14,8 +12,6 @@ class PersonaCreateRequestDto {
     this.displayName = '',
     this.userHandle,
     this.avatarUrl,
-    this.backgroundUrl,
-    this.bio,
     this.isolationLevel,
     this.purposeHint,
   });
@@ -25,8 +21,6 @@ class PersonaCreateRequestDto {
       displayName: m['displayName']?.toString() ?? '',
       userHandle: m['userHandle']?.toString() ?? null,
       avatarUrl: m['avatarUrl']?.toString() ?? null,
-      backgroundUrl: m['backgroundUrl']?.toString() ?? null,
-      bio: m['bio']?.toString() ?? null,
       isolationLevel: m['isolationLevel']?.toString() ?? null,
       purposeHint: m['purposeHint']?.toString() ?? null,
     );
@@ -37,8 +31,6 @@ class PersonaCreateRequestDto {
       'displayName': displayName,
       'userHandle': userHandle,
       'avatarUrl': avatarUrl,
-      'backgroundUrl': backgroundUrl,
-      'bio': bio,
       'isolationLevel': isolationLevel,
       'purposeHint': purposeHint,
     };
@@ -48,8 +40,6 @@ class PersonaCreateRequestDto {
     String? displayName,
     String? userHandle,
     String? avatarUrl,
-    String? backgroundUrl,
-    String? bio,
     String? isolationLevel,
     String? purposeHint,
   }) {
@@ -57,8 +47,6 @@ class PersonaCreateRequestDto {
       displayName: displayName ?? this.displayName,
       userHandle: userHandle ?? this.userHandle,
       avatarUrl: avatarUrl ?? this.avatarUrl,
-      backgroundUrl: backgroundUrl ?? this.backgroundUrl,
-      bio: bio ?? this.bio,
       isolationLevel: isolationLevel ?? this.isolationLevel,
       purposeHint: purposeHint ?? this.purposeHint,
     );

@@ -305,13 +305,23 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	rterr "quwoquan_service/runtime/errors"
 )
 
 func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		op, ok := resolveGeneratedOperation(r.Method, r.URL.Path)
 		if !ok {
-			http.NotFound(w, r)
+			rterr.WriteHTTPError(
+				w,
+				rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "route_not_found"),
+					"接口不存在",
+					"generated content route not found",
+				),
+				rterr.HTTPWriteOptionsFromRequest(r),
+			)
 			return
 		}
 		dispatchGeneratedOperation(h, op, w, r)
@@ -513,9 +523,9 @@ func patchRepositoryImport(outputDir, packageName string) error {
 // ── errors.yaml → Go errors.go ────────────────────────────────────────────────
 
 type errorEntryYAML struct {
-	Code      string `yaml:"code"`
-	GoConst   string `yaml:"go_const"`
-	Retryable bool   `yaml:"retryable"`
+	Code           string `yaml:"code"`
+	GoConst        string `yaml:"go_const"`
+	RecoveryAction string `yaml:"recovery_action"`
 }
 
 type errorsYAML struct {

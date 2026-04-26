@@ -78,8 +78,6 @@ void main() {
         );
 
         expect(result.success, isTrue);
-        expect(result.message, contains('结论：'));
-        expect(result.message, contains('不确定性：'));
         expect(result.message, contains('统一检索命中'));
       },
     );

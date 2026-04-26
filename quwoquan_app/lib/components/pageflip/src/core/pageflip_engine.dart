@@ -10,8 +10,8 @@ import 'package:quwoquan_app/components/pageflip/src/geometry/pageflip_reverse_c
 import 'package:quwoquan_app/components/pageflip/src/layout/pageflip_layout_resolver.dart';
 import 'package:quwoquan_app/components/pageflip/src/render/pageflip_render_frame.dart';
 import 'package:quwoquan_app/components/pageflip/src/scene/pageflip_scene.dart';
-import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart'
-    as canonical;
+import 'package:quwoquan_app/ui/content/pageflip/backward_render_frame_builder.dart';
+import 'package:quwoquan_app/ui/content/pageflip/forward_render_frame_builder.dart';
 import 'package:quwoquan_app/ui/content/pageflip/release_policy.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
@@ -260,13 +260,6 @@ class PageflipEngine {
   }) {
     final pageSize = _pageSize ?? const Size(1, 1);
     if (direction == PageflipDirection.forward) {
-      final angleBand = canonical.resolveForwardCurlAngleBand(
-        localPagePoint: localPagePoint,
-        pageSize: pageSize,
-        corner: corner == PageflipCorner.top
-            ? StPageFlipCorner.top
-            : StPageFlipCorner.bottom,
-      );
       final calc = PageflipForwardCalculation(
         corner: corner == PageflipCorner.top
             ? StPageFlipCorner.top
@@ -275,30 +268,20 @@ class PageflipEngine {
         pageHeight: pageSize.height,
       );
       calc.calc(localPagePoint);
-      final canonicalFrame = canonical.StPageFlipRenderFrame(
-        localPagePoint: localPagePoint,
-        progress: calc.getProgress(),
-        direction: StPageFlipDirection.forward,
-        renderDirection: StPageFlipDirection.forward,
-        corner: corner == PageflipCorner.top
-            ? StPageFlipCorner.top
-            : StPageFlipCorner.bottom,
-        flippingClipArea: List<Offset>.unmodifiable(calc.getFlippingClipArea()),
-        bottomClipArea: List<Offset>.unmodifiable(calc.getBottomClipArea()),
-        flippingAnchor: calc.getActiveCorner(),
-        bottomAnchor: calc.getBottomPagePosition(),
-        angle: calc.getAngle(),
-        shadow: null,
-        timeline: canonical.resolvePageCurlTimeline(
-          direction: StPageFlipDirection.forward,
-          renderDirection: StPageFlipDirection.forward,
-          progress: calc.getProgress(),
+      final canonicalFrame = buildForwardRenderFrame(
+        ForwardRenderFrameData(
           localPagePoint: localPagePoint,
-          pageSize: pageSize,
+          progress: calc.getProgress(),
           corner: corner == PageflipCorner.top
               ? StPageFlipCorner.top
               : StPageFlipCorner.bottom,
-          angleBand: angleBand,
+          pageSize: pageSize,
+          flippingClipArea: calc.getFlippingClipArea(),
+          bottomClipArea: calc.getBottomClipArea(),
+          flippingAnchor: calc.getActiveCorner(),
+          bottomAnchor: calc.getBottomPagePosition(),
+          angle: calc.getAngle(),
+          shadow: null,
         ),
       );
       return PageflipRenderFrame(
@@ -317,94 +300,23 @@ class PageflipEngine {
       pageHeight: pageSize.height,
     );
     calc.calc(localPagePoint);
-    final replayLocalPoint = canonical.resolveBackwardReplayLocalPagePoint(
-      localPagePoint: localPagePoint,
-      pageSize: pageSize,
-    );
-    final angleBand = canonical.resolveForwardCurlAngleBand(
-      localPagePoint: replayLocalPoint,
-      pageSize: pageSize,
-      corner: corner == PageflipCorner.top
-          ? StPageFlipCorner.top
-          : StPageFlipCorner.bottom,
-    );
-    final canonicalCorner = corner == PageflipCorner.top
-        ? StPageFlipCorner.top
-        : StPageFlipCorner.bottom;
-    final backwardLeafFrame = canonical.resolveArticlePageBackwardLeafFrame(
-      direction: StPageFlipDirection.back,
-      progress: calc.getProgress(),
-      reversePose: null,
-    );
-    final canonicalFrame = canonical.StPageFlipRenderFrame(
-      localPagePoint: localPagePoint,
-      progress: calc.getProgress(),
-      direction: StPageFlipDirection.back,
-      renderDirection: canonical.resolvePageFlipRenderDirection(
-        direction: StPageFlipDirection.back,
-        orientation: layout.orientation,
-        reversePose: null,
-      ),
-      corner: canonicalCorner,
-      flippingClipArea: List<Offset>.unmodifiable(
-        backwardLeafFrame == null
-            ? calc.getFlippingClipArea()
-            : canonical.resolveArticlePageBackwardFlippingClipArea(
-                frame: backwardLeafFrame,
-                pageSize: pageSize,
-              ),
-      ),
-      bottomClipArea: List<Offset>.unmodifiable(
-        backwardLeafFrame == null
-            ? calc.getBottomClipArea()
-            : canonical.resolveArticlePageBackwardBottomClipArea(
-                frame: backwardLeafFrame,
-                pageSize: pageSize,
-              ),
-      ),
-      flippingAnchor: backwardLeafFrame == null
-          ? calc.getActiveCorner()
-          : canonical.resolveArticlePageBackwardFlippingAnchor(
-              frame: backwardLeafFrame,
-              pageSize: pageSize,
-              corner: canonicalCorner,
-            ),
-      bottomAnchor: backwardLeafFrame == null
-          ? calc.getBottomPagePosition()
-          : canonical.resolveArticlePageBackwardBottomAnchor(
-              frame: backwardLeafFrame,
-              pageSize: pageSize,
-              corner: canonicalCorner,
-            ),
-      angle: backwardLeafFrame == null
-          ? calc.getAngle()
-          : canonical.resolveArticlePageBackwardAngle(
-              frame: backwardLeafFrame,
-              corner: canonicalCorner,
-            ),
-      shadow: backwardLeafFrame == null
-          ? null
-          : canonical.resolveArticlePageBackwardShadowData(
-              frame: backwardLeafFrame,
-              pageSize: pageSize,
-              corner: canonicalCorner,
-            ),
-      timeline: canonical.resolvePageCurlTimeline(
-        direction: StPageFlipDirection.back,
-        renderDirection: canonical.resolvePageFlipRenderDirection(
-          direction: StPageFlipDirection.back,
-          orientation: layout.orientation,
-          reversePose: null,
-        ),
-        progress: calc.getProgress(),
+    final canonicalFrame = buildBackwardRenderFrame(
+      BackwardRenderFrameData(
         localPagePoint: localPagePoint,
+        progress: calc.getProgress(),
+        orientation: layout.orientation,
+        corner: corner == PageflipCorner.top
+            ? StPageFlipCorner.top
+            : StPageFlipCorner.bottom,
         pageSize: pageSize,
-        corner: canonicalCorner,
-        angleBand: angleBand,
-        reversePose: null,
+        flippingClipArea: calc.getFlippingClipArea(),
+        bottomClipArea: calc.getBottomClipArea(),
+        flippingAnchor: calc.getActiveCorner(),
+        bottomAnchor: calc.getBottomPagePosition(),
+        angle: calc.getAngle(),
+        shadow: null,
+        maxShadowOpacity: 1.0,
       ),
-      reversePose: null,
-      backwardLeafFrame: backwardLeafFrame,
     );
     return PageflipRenderFrame(
       mode: mode,

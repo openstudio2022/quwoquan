@@ -52,7 +52,11 @@ func (h *Handler) Routes() http.Handler {
 
 func (h *Handler) handleNearby(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		rerrors.WriteHTTPError(
+			w,
+			rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "方法不支持", "only GET"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
 		return
 	}
 
@@ -74,7 +78,7 @@ func (h *Handler) handleNearby(w http.ResponseWriter, r *http.Request) {
 		Limit:        limit,
 	})
 	if serviceErr != nil {
-		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptions{})
+		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptionsFromRequest(r))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{generated.ResponseListKey: poiToClientItems(items)})
@@ -82,7 +86,11 @@ func (h *Handler) handleNearby(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		rerrors.WriteHTTPError(
+			w,
+			rerrors.NewInvalidArgument(rerrors.ModuleIntegration, "方法不支持", "only GET"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
+		)
 		return
 	}
 
@@ -90,8 +98,8 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if query == "" {
 		rerrors.WriteHTTPError(
 			w,
-			generated.AppErrorFromInvalidArgument("query parameter " + generated.QueryParamQ + " is empty"),
-			rerrors.HTTPWriteOptions{},
+			generated.AppErrorFromInvalidArgument("query parameter "+generated.QueryParamQ+" is empty"),
+			rerrors.HTTPWriteOptionsFromRequest(r),
 		)
 		return
 	}
@@ -107,7 +115,7 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		Limit:    limit,
 	})
 	if serviceErr != nil {
-		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptions{})
+		rerrors.WriteHTTPError(w, serviceErr, rerrors.HTTPWriteOptionsFromRequest(r))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{generated.ResponseListKey: poiToClientItems(items)})
@@ -119,9 +127,9 @@ func poiToClientItems(items []model.POI) []map[string]any {
 	out := make([]map[string]any, len(items))
 	for i, p := range items {
 		m := map[string]any{
-			generated.FieldKeyId:       p.ID,
-			generated.FieldKeyName:     p.Name,
-			generated.FieldKeyLatitude: p.Latitude,
+			generated.FieldKeyId:        p.ID,
+			generated.FieldKeyName:      p.Name,
+			generated.FieldKeyLatitude:  p.Latitude,
 			generated.FieldKeyLongitude: p.Longitude,
 		}
 		if p.Address != "" {

@@ -12,14 +12,20 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
-/// 在 UI 测试中使 capability 保持 null（legacy 关注/私信 布局）
-class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
+/// 他人主页用「未关注」能力位，使 [ProfileActionBar] 在 capability 已就绪时渲染（非 null）。
+class _NotFollowingRelationshipCapability
+    extends RelationshipCapabilityRepository {
   @override
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
 
   @override
-  Future<RelationshipCapabilityDto> getCapability(String targetUserId) {
-    return Future.error(StateError('capability unavailable in test'));
+  Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
+    return RelationshipCapabilityDto.fromFollowFlags(
+      viewerId: 'test_viewer',
+      targetId: targetUserId,
+      isFollowing: false,
+      isFollowedBy: false,
+    );
   }
 }
 
@@ -30,7 +36,7 @@ Widget _scopedApp({ProfileMode mode = ProfileMode.mine}) {
         const MockUserProfileRepository(),
       ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
-        _ThrowingCapabilityRepository(),
+        _NotFollowingRelationshipCapability(),
       ),
     ],
     child: MaterialApp(

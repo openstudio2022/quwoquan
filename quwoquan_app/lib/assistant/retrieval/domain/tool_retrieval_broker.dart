@@ -32,7 +32,10 @@ class ToolRetrievalBroker implements RetrievalBroker {
         ...?result.data,
         'broker': 'tool_runtime',
         'query': request.query,
-        'queryTasks': request.queryTasks,
+        if (request.queryPlans.isNotEmpty)
+          'taskGraphSearchPlan': request.queryPlans
+              .map((item) => item.toJson())
+              .toList(growable: false),
       }),
     );
   }
@@ -54,9 +57,9 @@ class ToolRetrievalBroker implements RetrievalBroker {
       degraded: brokerResult.degraded,
       payload: payload.copyWith(
         url: payload.url.trim().isNotEmpty ? payload.url : request.url,
-        queryTaskId: payload.queryTaskId.trim().isNotEmpty
-            ? payload.queryTaskId
-            : request.queryTaskId,
+        searchPlanId: payload.searchPlanId.trim().isNotEmpty
+            ? payload.searchPlanId
+            : request.searchPlanId,
         dimension: payload.dimension.trim().isNotEmpty
             ? payload.dimension
             : request.dimension,

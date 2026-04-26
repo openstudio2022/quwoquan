@@ -7,7 +7,7 @@ errors:
     kind: INVITE
     reason: expired
     http_status: 410
-    retryable: false
+    recovery_action: surface
     dart_const: inviteExpired
     go_const: ErrInviteExpired
     user_message:
@@ -18,7 +18,7 @@ errors:
     kind: INVITE
     reason: conflict
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: inviteAlreadyAccepted
     go_const: ErrInviteAlreadyAccepted
     user_message:
@@ -29,7 +29,7 @@ errors:
     kind: INVITE
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: inviteNotFound
     go_const: ErrInviteNotFound
     user_message:
@@ -40,8 +40,8 @@ errors:
     kind: INVITE
     reason: rate_limited
     http_status: 429
-    retryable: true
-    retry_after_seconds: 86400
+    recovery_action: retry
+    recovery_after_seconds: 86400
     dart_const: inviteDailyLimitExceeded
     go_const: ErrInviteDailyLimitExceeded
     user_message:
@@ -52,7 +52,7 @@ errors:
     kind: INVITE
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: inviteInvalidCode
     go_const: ErrInviteInvalidCode
     user_message:

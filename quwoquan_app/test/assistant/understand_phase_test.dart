@@ -1,6 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/understand_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
@@ -131,6 +137,100 @@ void main() {
       );
     });
 
+    test('planner continuity 注入上一轮 typed understanding 与 system context', () async {
+      final provider = _PlannerRecentRoundsCaptureProvider();
+      final runtime = ReactRuntime(
+        llmProvider: provider,
+        toolRegistry: AssistantToolRegistry(),
+      );
+      final bootstrapContext = AssistantBootstrapContext(
+        systemContextEnvelope: const SystemContextEnvelope(
+          time: SystemTimeContext(
+            referenceNowIso: '2026-04-24T10:00:00+08:00',
+            timezone: 'Asia/Shanghai',
+            locale: 'zh_CN',
+          ),
+          device: DeviceSummary(os: 'ios', model: 'iPhone 17'),
+          location: SystemLocationContext(
+            countryCode: 'CN',
+            countryName: '中国',
+            adminAreaLevel1: '广东省',
+            adminAreaLevel2: '深圳市',
+            timezone: 'Asia/Shanghai',
+            granularity: LocationGranularity.city,
+          ),
+        ),
+        contextContinuityPolicy: const ContextContinuityPolicy(
+          continuityMode: ContextContinuityMode.explicitFollowUp,
+          explicitContinuation: true,
+          allowHistorySummary: true,
+        ),
+        previousUnderstandingResult: const UnderstandingResult(
+          intents: <IntentNode>[
+            IntentNode(
+              intentId: 'intent_prev',
+              intentType: 'travel.compare',
+              goal: '比较九寨沟路线',
+            ),
+          ],
+          dialogueTransitionDecision: DialogueTransitionDecision(
+            nextTurnMode: NextTurnMode.continueExecution,
+          ),
+        ),
+        previousTaskGraph: const TaskGraph(
+          tasks: <TaskNode>[
+            TaskNode(
+              taskId: 'task_prev',
+              intentId: 'intent_prev',
+              toolName: 'app_search',
+            ),
+          ],
+        ),
+      );
+      final output = await UnderstandPhase(runtime: runtime).run(
+        PhaseInput(
+          request: const AssistantRunRequest(
+            messages: <AssistantRunMessage>[
+              AssistantRunMessage(role: 'user', content: '那如果我只有4天呢？'),
+            ],
+          ),
+          state: AgentExecutionState(bootstrapContext: bootstrapContext),
+          runId: 'run_typed_continuity',
+          traceId: 'trace_typed_continuity',
+        ),
+      );
+
+      final dialogueContinuity = (jsonDecode(
+            provider.capturedTemplateVariables['dialogueContinuity']
+                    as String? ??
+                '{}',
+          ) as Map)
+          .cast<String, dynamic>();
+      final sharedContext = (jsonDecode(
+            provider.capturedTemplateVariables['sharedContext'] as String? ??
+                '{}',
+          ) as Map)
+          .cast<String, dynamic>();
+
+      expect(
+        (dialogueContinuity['previousUnderstandingResult'] as Map)['intents'],
+        isNotEmpty,
+      );
+      expect(
+        ((dialogueContinuity['previousTaskGraph'] as Map)['tasks'] as List),
+        isNotEmpty,
+      );
+      expect(
+        (sharedContext['systemContextEnvelope'] as Map)['time'],
+        isA<Map<String, dynamic>>(),
+      );
+      expect(output.state!.systemContextEnvelope.time.timezone, 'Asia/Shanghai');
+      expect(
+        output.state!.systemContextEnvelope.location.adminAreaLevel2,
+        '深圳市',
+      );
+    });
+
     test('天气问题不会把设备地点直接写回业务 geo 语义', () async {
       final runtime = ReactRuntime(
         llmProvider: _WeatherPlannerProvider(expectedQuery: '2026-04-09 天气 预报'),
@@ -162,18 +262,21 @@ void main() {
       );
 
       final state = output.state!;
-      expect(state.intentGraph?.resolvedGeoScope.cityLabel, isEmpty);
-      expect(state.intentGraph?.resolvedGeoScope.defaultApplied, isFalse);
+      expect(state.understandingResult.intents, hasLength(1));
+      expect(state.understandingResult.intents.single.goal, '获取天气预报');
       expect(
-        state.intentGraph?.queryTasks.first.query,
-        '2026-04-09 天气 预报',
+        state.understandingResult.dialogueTransitionDecision.nextTurnMode,
+        NextTurnMode.askUser,
       );
-      expect(state.intentGraph?.clarificationNeeded, isTrue);
+      expect(state.taskGraph.tasks, isNotEmpty);
+      expect(state.taskGraph.tasks.first.toolName, isNotEmpty);
       expect(
-        ((state.intentGraph?.contextSlots['availableGeoContext'] as Map?)?['cityLabel']
-                as String?) ??
-            '',
-        '深圳',
+        state.orchestratorState.interactionDirective.kind,
+        InteractionDirectiveKind.clarify,
+      );
+      expect(
+        state.taskGraph.tasks.first.toolArgs.toJson()['query'],
+        '2026-04-09 天气 预报',
       );
       expect(
         state.understandingSnapshot.resolutionItems,
@@ -207,11 +310,14 @@ void main() {
       );
 
       final state = output.state!;
-      expect(state.intentGraph?.resolvedGeoScope.resolvedText, isEmpty);
-      expect(state.intentGraph?.clarificationNeeded, isTrue);
+      expect(state.understandingResult.intents, hasLength(1));
       expect(
-        state.intentGraph?.contextSlots['geoClarificationReason'],
-        'missing_model_resolved_geo_for_city',
+        state.understandingResult.dialogueTransitionDecision.needsClarification,
+        isTrue,
+      );
+      expect(
+        state.orchestratorState.interactionDirective.kind,
+        InteractionDirectiveKind.clarify,
       );
       expect(
         state.understandingSnapshot.resolutionItems,
@@ -252,30 +358,38 @@ class _WeatherPlannerProvider implements AssistantLlmProvider {
           'userFacingSummary': '我先把天气问题落到具体日期再检索。',
           'retrievalDesignNarrative': '我会先围绕具体日期对应的天气结论继续检索。',
         },
-        'intentGraph': <String, dynamic>{
-          'userGoal': '获取天气预报',
-          'problemShape': 'single_skill',
-          'primarySkill': 'weather',
-          'problemClass': 'realtime_info',
-          'secondarySkills': <String>[],
-          'queryNormalization': <String, dynamic>{
-            'normalizedQuery': expectedQuery,
-          },
-          'queryTasks': <Map<String, dynamic>>[
+        'understandingResult': <String, dynamic>{
+          'contractId': 'understanding_result',
+          'intents': <Map<String, dynamic>>[
             <String, dynamic>{
-              'id': 'weather_forecast',
-              'query': expectedQuery,
-              'dimension': 'forecast',
-              'why': '先锁定日期，再检索天气结论。',
+              'intentId': 'intent_weather',
+              'intentType': 'weather.retrieve',
+              'goal': '获取天气预报',
+              'entityRefs': const <Map<String, dynamic>>[],
+              'constraints': <Map<String, dynamic>>[
+                <String, dynamic>{'key': 'date', 'value': '2026-04-09'},
+              ],
+              'requiresEvidence': true,
             },
           ],
-          'contextSlots': <String, dynamic>{},
-          'globalConstraints': <String, dynamic>{'mode': 'qa'},
-          'clarificationNeeded': false,
-          'requiresExternalEvidence': true,
-          'answerShape': 'decision_ready',
-          'freshnessNeed': 'latest',
-          'freshnessHoursMax': 6,
+          'dialogueTransitionDecision': const <String, dynamic>{
+            'nextTurnMode': 'ask_user',
+            'needsClarification': true,
+            'clarificationTargetIntentId': 'intent_weather',
+            'canAnswerPartially': false,
+          },
+        },
+        'taskGraph': <String, dynamic>{
+          'contractId': 'task_graph',
+          'tasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'taskId': 'task_weather_forecast',
+              'intentId': 'intent_weather',
+              'toolName': 'web_search',
+              'toolArgs': <String, dynamic>{'query': expectedQuery},
+              'status': 'pending',
+            },
+          ],
         },
         'selfCheck': const <String, dynamic>{
           'goalSatisfied': true,
@@ -322,19 +436,31 @@ class _PlannerRecentRoundsCaptureProvider implements AssistantLlmProvider {
           'userFacingSummary': '我先沿用最近一轮上下文继续理解。',
           'retrievalDesignNarrative': '我会沿着最近一轮已确认的上下文继续补查。',
         },
-        'intentGraph': const <String, dynamic>{
-          'userGoal': '沿着上一轮上下文继续追问',
-          'problemShape': 'single_skill',
-          'primarySkill': 'general_search',
-          'problemClass': 'realtime_info',
-          'secondarySkills': <String>[],
-          'contextSlots': <String, dynamic>{},
-          'globalConstraints': <String, dynamic>{'mode': 'qa'},
-          'clarificationNeeded': false,
-          'requiresExternalEvidence': true,
-          'answerShape': 'decision_ready',
-          'freshnessNeed': 'latest',
-          'freshnessHoursMax': 6,
+        'understandingResult': const <String, dynamic>{
+          'contractId': 'understanding_result',
+          'intents': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'intentId': 'intent_followup',
+              'intentType': 'general.retrieve',
+              'goal': '沿着上一轮上下文继续追问',
+              'requiresEvidence': true,
+            },
+          ],
+          'dialogueTransitionDecision': <String, dynamic>{
+            'nextTurnMode': 'continue_execution',
+          },
+        },
+        'taskGraph': const <String, dynamic>{
+          'contractId': 'task_graph',
+          'tasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'taskId': 'task_followup',
+              'intentId': 'intent_followup',
+              'toolName': 'web_search',
+              'toolArgs': <String, dynamic>{'query': '沿着上一轮上下文继续追问'},
+              'status': 'pending',
+            },
+          ],
         },
         'selfCheck': const <String, dynamic>{
           'goalSatisfied': true,

@@ -65,7 +65,7 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 	if existingCallID != "" {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "conflict"),
-			"您正在通话中", "user already in active call", false,
+			"您正在通话中", "user already in active call",
 		)
 	}
 
@@ -84,7 +84,7 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 	if err := o.repo.CreateCall(ctx, session); err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindSystem, "internal_error"),
-			rterr.DefaultUserMessage, "persist call: "+err.Error(), true,
+			rterr.DefaultUserMessage, "persist call: "+err.Error(),
 		)
 	}
 
@@ -121,7 +121,7 @@ func (o *CallOrchestrator) AnswerCall(ctx context.Context, callID, userID string
 	if err := o.domainService.AnswerCall(session, userID); err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法接听", err.Error(), false,
+			"无法接听", err.Error(),
 		)
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
@@ -148,7 +148,7 @@ func (o *CallOrchestrator) RejectCall(ctx context.Context, callID, userID string
 	if err := o.domainService.RejectCall(session, userID); err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法拒绝", err.Error(), false,
+			"无法拒绝", err.Error(),
 		)
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
@@ -168,7 +168,7 @@ func (o *CallOrchestrator) CancelCall(ctx context.Context, callID, userID string
 	if err := o.domainService.CancelCall(session, userID); err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法取消", err.Error(), false,
+			"无法取消", err.Error(),
 		)
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
@@ -188,7 +188,7 @@ func (o *CallOrchestrator) HangupCall(ctx context.Context, callID, userID string
 	if err := o.domainService.HangupCall(session, userID); err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法挂断", err.Error(), false,
+			"无法挂断", err.Error(),
 		)
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
@@ -214,7 +214,7 @@ func (o *CallOrchestrator) JoinCall(ctx context.Context, callID, userID string) 
 	if err := o.domainService.JoinCall(session, userID); err != nil {
 		return nil, "", rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法加入通话", err.Error(), false,
+			"无法加入通话", err.Error(),
 		)
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
@@ -240,7 +240,7 @@ func (o *CallOrchestrator) LeaveCall(ctx context.Context, callID, userID string)
 	if err := o.domainService.LeaveCall(session, userID); err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法离开通话", err.Error(), false,
+			"无法离开通话", err.Error(),
 		)
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
@@ -270,7 +270,7 @@ func (o *CallOrchestrator) InviteToCall(ctx context.Context, callID, userID stri
 	if err := o.domainService.InviteToCall(session, inviteeIDs); err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "invalid_argument"),
-			"无法邀请", err.Error(), false,
+			"无法邀请", err.Error(),
 		)
 	}
 	if err := o.repo.UpdateCall(ctx, session); err != nil {
@@ -401,7 +401,7 @@ func (o *CallOrchestrator) loadSession(ctx context.Context, callID string) (*mod
 	if err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleRTC, rterr.KindUser, "not_found"),
-			"通话不存在", "call not found: "+callID, false,
+			"通话不存在", "call not found: "+callID,
 		)
 	}
 	_ = o.cache.SetCallState(ctx, session)
@@ -464,6 +464,6 @@ func (o *CallOrchestrator) publishEvent(ctx context.Context, eventType string, s
 func wrapSystemError(err error) *rterr.AppError {
 	return rterr.NewAppError(
 		rterr.NewCode(rterr.ModuleRTC, rterr.KindSystem, "internal_error"),
-		rterr.DefaultUserMessage, err.Error(), true,
+		rterr.DefaultUserMessage, err.Error(),
 	)
 }

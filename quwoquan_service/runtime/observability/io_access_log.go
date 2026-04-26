@@ -54,6 +54,8 @@ type IOAccessLog struct {
 	Status            string `json:"status"`
 	DurationMs        int64  `json:"durationMs"`
 	ErrorCode         string `json:"errorCode,omitempty"`
+	ErrorLocation     string `json:"errorLocation,omitempty"`
+	ErrorContext      string `json:"errorContext,omitempty"`
 	MessageSize       int64  `json:"messageSize"`
 }
 
@@ -88,4 +90,3 @@ func (l IOAccessLog) Validate() error {
 	}
 	return nil
 }
-

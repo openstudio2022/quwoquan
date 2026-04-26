@@ -32,8 +32,8 @@ scenario_acceptance:
     journey_step: resolve public persona identity
     done_when:
       - "公开读取统一返回 `ProfileSubject`"
-      - "`username` 不再承担跨域内部主键语义"
-      - 公开接口不暴露 owner 管理字段与映射关系
+      - "`userHandle` 成为公开句柄真相源，`username` 不再承担跨域内部主键语义"
+      - 公开接口不暴露可反推同一用户多分身关系的内部字段与映射关系
     edge_cases:
       - 同一个 owner 拥有多个分身
       - username 变更后内部引用仍稳定
@@ -50,8 +50,14 @@ scenario_acceptance:
       planned:
         - profile subject contract test
         - public read model regression test
-      recorded: []
-    status: pending
+      recorded:
+        - "T1: `make -C quwoquan_service verify-metadata && make codegen && make codegen-app`"
+        - "T3: `go test ./services/user-service/...`"
+        - "T2: `flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart test/ui/user/providers/profile_state_provider_test.dart`"
+    notes:
+      - "公开 `ProfileSubject` 已收口到 `userHandle + profileSubjectId` 双轨语义：公开句柄走 `userHandle`，内部稳定主键走 `profileSubjectId`。"
+      - "公开读不再返回 `ownerUserId`，strict/retired persona 均返回 404。"
+    status: implemented
   A2:
     title: owner 基线、分身覆写与同步范围显式可控
     scenario: owner 编辑 owner 或分身资料，并选择同步目标
@@ -78,8 +84,15 @@ scenario_acceptance:
         - profile subject mutation schema test
         - sync prompt widget test
         - owner to persona sync contract test
-      recorded: []
-    status: pending
+      recorded:
+        - "T1/T3: `go test ./services/user-service/...`"
+        - "T2: `flutter test test/cloud/user/contract/user_repository_contract_test.dart test/ui/user/journeys/edit_profile_journey_test.dart`"
+        - "T2: `flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart`"
+    notes:
+      - "`ProfileSubjectMutation` 已显式承载 `applyScope / syncTargetIds / fieldsMask`，资料同步不再依赖 UI 私有状态。"
+      - "A2 首批真实支持字段已收口为 `displayName / userHandle / phone / email / avatarUrl`；`isolationLevel / purposeHint` 为当前分身局部管理字段。"
+      - "`backgroundUrl / bio` 继续作为 owner 基线公开读字段返回，`profileVisibility` 继续由 `isolationLevel` 派生，不再伪装成 persona 可写字段。"
+    status: implemented
   A3:
     title: 可见性与停用后的历史归因稳定
     scenario: 分身进入 strict isolation 或停用后，公开读取与历史对象作者渲染仍符合预期
@@ -105,8 +118,13 @@ scenario_acceptance:
       planned:
         - strict isolation not found contract test
         - retired persona attribution regression test
-      recorded: []
-    status: pending
+      recorded:
+        - "T3: `go test ./services/user-service/...`"
+        - "T2: `flutter test test/ui/content/post_read_projection_facade_test.dart test/cloud/chat/chat_message_snapshot_contract_test.dart`"
+    notes:
+      - "`HasAttributedHistory` 已扩展为 `invite/greeting + posts/comments/messages/notifications` 四类历史来源联合判断。"
+      - "retired persona 公开页关闭，但内容/评论/聊天的历史快照读取已被契约测试覆盖。"
+    status: implemented
 
 story_readiness:
   S1:
@@ -125,5 +143,15 @@ story_readiness:
       planned:
         - profile consumer contract verification
         - visibility telemetry verification
-      recorded: []
-    status: pending
+      recorded:
+        - "T1: `make -C quwoquan_service verify-metadata && make codegen && make codegen-app`"
+        - "T2: `flutter test test/cloud/integration/remote_api_path_contract_test.dart test/ui/content/post_read_projection_facade_test.dart test/ui/user/providers/profile_state_provider_test.dart`"
+        - "T2: `flutter test test/cloud/user/contract/user_repository_contract_test.dart test/cloud/chat/chat_message_snapshot_contract_test.dart test/cloud/content/post/contract/post_feed_dto_contract_test.dart`"
+        - "T3: `go test ./services/user-service/tests -run 'Test(ProfileSubjectView_|UpdatePersona_|ApplyPersonaProfileSync_|GetPersonaLifecycleGuard_)'`"
+        - "T3: `go test ./services/content-service/tests -run 'TestDiscoveryProjectionPersistsProfileSubjectID'`"
+    notes:
+      - "主页、内容、聊天消费入口已统一切到 `ProfileSubject` / snapshot contract，旧 `authorId` fallback 已退出主链路。"
+      - "`ops.user.profile_subject_v1` 已在 user-service 落地；flag-off 时公开读取退回 `personaId` 兼容路径，但不回退 `profileSubjectId / userHandle / 历史快照` 真相源。"
+      - "`profile_subject_public_read_latency_ms / profile_subject_visibility_not_found_count / retired_subject_attribution_fallback_count / profile_subject_sync_scope_submit_count` 已有运行时埋点与 T3 断言。"
+      - "discovery read model 已显式投影 `profileSubjectId`，`FeedItemDto` 不再假设 `authorId == authorProfileSubjectId`。"
+    status: implemented

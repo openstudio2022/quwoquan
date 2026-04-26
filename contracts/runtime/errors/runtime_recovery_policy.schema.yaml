@@ -1,0 +1,27 @@
+schemaVersion: 1
+types:
+  RuntimeRecoveryDecision:
+    fields:
+      action:
+        type: RuntimeRecoveryAction
+        required: true
+      disruptionLevel:
+        type: UserDisruptionLevel
+        required: true
+      policyId:
+        type: string
+        required: true
+enums:
+  RuntimeRecoveryAction:
+    - absorb
+    - retry
+    - fallback
+    - surface
+    - escalate
+    - compensate
+  UserDisruptionLevel:
+    - silent
+    - passiveIndicator
+    - snackbar
+    - inlineCard
+    - permissionCard

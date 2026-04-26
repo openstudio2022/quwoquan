@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
@@ -457,27 +457,24 @@ class AssistantJourneyProjector {
 
   AssistantJourney applyReadiness({
     AggregationState? aggregationState,
-    ConversationStateDecision? conversationStateDecision,
+    AssistantTypedTurnDecision? typedTurnDecision,
   }) {
     _readiness = AssistantJourneyReadiness(
       nextAction:
-          conversationStateDecision?.nextActionType ??
-          AssistantNextAction.unknown,
+          typedTurnDecision?.nextActionType ?? AssistantNextAction.unknown,
       finalAnswerMode:
-          conversationStateDecision?.finalAnswerModeType ??
+          typedTurnDecision?.finalAnswerModeType ??
           aggregationState?.finalAnswerMode ??
           FinalAnswerMode.blocked,
       answerEligibility:
-          conversationStateDecision?.answerEligibilityType ??
-          AnswerEligibility.unknown,
+          typedTurnDecision?.answerEligibilityType ?? AnswerEligibility.unknown,
       finalAnswerReady:
-          conversationStateDecision?.finalAnswerReady ??
+          typedTurnDecision?.finalAnswerReady ??
           aggregationState?.finalAnswerReady ??
           false,
       clarificationNeeded:
           aggregationState?.clarificationNeeded == true ||
-          conversationStateDecision?.nextActionType ==
-              AssistantNextAction.askUser,
+          typedTurnDecision?.nextActionType == AssistantNextAction.askUser,
       needExpansion: aggregationState?.needExpansion == true,
     );
     if (_readiness.finalAnswerReady) {
@@ -521,7 +518,7 @@ class AssistantJourneyProjector {
     required List<AssistantTraceEvent> traces,
     required ToolMetadataRegistry toolMetadataRegistry,
     AggregationState? aggregationState,
-    ConversationStateDecision? conversationStateDecision,
+    AssistantTypedTurnDecision? typedTurnDecision,
     AssistantJourney seed = const AssistantJourney(),
   }) {
     final projector = AssistantJourneyProjector(
@@ -535,7 +532,7 @@ class AssistantJourneyProjector {
     }
     projector.applyReadiness(
       aggregationState: aggregationState,
-      conversationStateDecision: conversationStateDecision,
+      typedTurnDecision: typedTurnDecision,
     );
     return projector.snapshot;
   }
@@ -910,12 +907,12 @@ class AssistantJourneyProjector {
     if (explicit != JourneyStageId.unknown) {
       return explicit;
     }
-    return switch (_toolMetadataRegistry.toolKindByName(toolName)) {
-      'retrieval' => JourneyStageId.search,
-      'context' => JourneyStageId.analyze,
-      'media' => JourneyStageId.search,
-      'action' => JourneyStageId.answer,
-      _ => JourneyStageId.unknown,
+    return switch (_toolMetadataRegistry.toolKindTypeByName(toolName)) {
+      ToolKind.retrieval => JourneyStageId.search,
+      ToolKind.context => JourneyStageId.analyze,
+      ToolKind.media => JourneyStageId.search,
+      ToolKind.action => JourneyStageId.answer,
+      ToolKind.unknown => JourneyStageId.unknown,
     };
   }
 
@@ -937,9 +934,9 @@ class AssistantJourneyProjector {
   }
 
   String _searchQueryGeneratedDetail({required Map<String, dynamic> data}) {
-    final queryTasks = _queryTasksFromData(data);
-    if (queryTasks.isNotEmpty) {
-      return _formattedQueryTaskLines(queryTasks).join('\n').trim();
+    final searchPlans = _searchPlansFromData(data);
+    if (searchPlans.isNotEmpty) {
+      return _formattedSearchPlanLines(searchPlans).join('\n').trim();
     }
     final query = (data['query'] as String?)?.trim() ?? '';
     if (query.isEmpty) {
@@ -948,8 +945,8 @@ class AssistantJourneyProjector {
     return '- $query';
   }
 
-  List<Map<String, dynamic>> _queryTasksFromData(Map<String, dynamic> data) {
-    final raw = data['queryTasks'];
+  List<Map<String, dynamic>> _searchPlansFromData(Map<String, dynamic> data) {
+    final raw = data['searchPlans'];
     if (raw is! List) {
       return const <Map<String, dynamic>>[];
     }
@@ -959,11 +956,13 @@ class AssistantJourneyProjector {
         .toList(growable: false);
   }
 
-  List<String> _formattedQueryTaskLines(List<Map<String, dynamic>> queryTasks) {
+  List<String> _formattedSearchPlanLines(
+    List<Map<String, dynamic>> searchPlans,
+  ) {
     final lines = <String>[];
     final seen = <String>{};
-    for (final task in queryTasks) {
-      final line = _queryTaskDisplayLine(task);
+    for (final plan in searchPlans) {
+      final line = _searchPlanDisplayLine(plan);
       if (line.isEmpty || !seen.add(line)) {
         continue;
       }
@@ -972,13 +971,13 @@ class AssistantJourneyProjector {
     return lines;
   }
 
-  String _queryTaskDisplayLine(Map<String, dynamic> task) {
-    final query = (task['query'] as String?)?.trim() ?? '';
+  String _searchPlanDisplayLine(Map<String, dynamic> plan) {
+    final query = (plan['query'] as String?)?.trim() ?? '';
     if (query.isEmpty) {
       return '';
     }
-    final objectLabel = _queryTaskObjectLabel(task, query: query);
-    final displayLabel = _queryTaskDisplayLabel(task, query: query);
+    final objectLabel = _searchPlanObjectLabel(plan, query: query);
+    final displayLabel = _searchPlanDisplayLabel(plan, query: query);
     final prefixParts = <String>[
       if (objectLabel.isNotEmpty) objectLabel,
       if (displayLabel.isNotEmpty) displayLabel,
@@ -991,16 +990,16 @@ class AssistantJourneyProjector {
     return '- $prefix';
   }
 
-  String _queryTaskDisplayLabel(
-    Map<String, dynamic> task, {
+  String _searchPlanDisplayLabel(
+    Map<String, dynamic> plan, {
     required String query,
   }) {
-    final label = (task['label'] as String?)?.trim() ?? '';
+    final label = (plan['label'] as String?)?.trim() ?? '';
     if (label.isNotEmpty &&
         _normalizedCompact(label) != _normalizedCompact(query)) {
       return label;
     }
-    final dimension = (task['dimensionLabel'] as String?)?.trim() ?? '';
+    final dimension = (plan['dimensionLabel'] as String?)?.trim() ?? '';
     if (dimension.isNotEmpty &&
         _normalizedCompact(dimension) != _normalizedCompact(query)) {
       return dimension;
@@ -1008,12 +1007,12 @@ class AssistantJourneyProjector {
     return '';
   }
 
-  String _queryTaskObjectLabel(
-    Map<String, dynamic> task, {
+  String _searchPlanObjectLabel(
+    Map<String, dynamic> plan, {
     required String query,
   }) {
     final anchors =
-        (task['entityAnchors'] as List?)
+        (plan['entityRefs'] as List?)
             ?.whereType<String>()
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty)
@@ -1041,11 +1040,11 @@ class AssistantJourneyProjector {
     if (query.isNotEmpty) {
       return query;
     }
-    final queryTasks = _queryTasksFromData(data);
-    if (queryTasks.isEmpty) {
+    final searchPlans = _searchPlansFromData(data);
+    if (searchPlans.isEmpty) {
       return _toolNameFromData(data);
     }
-    return _formattedQueryTaskLines(queryTasks).join('|');
+    return _formattedSearchPlanLines(searchPlans).join('|');
   }
 
   String _toolStartHeadline({
@@ -1160,8 +1159,7 @@ class AssistantJourneyProjector {
           text,
         ) ||
         AssistantDisplayTextResolver.containsTechnicalFailureFragment(text) ||
-        AssistantContentFilters.isJsonEnvelope(text) ||
-        AssistantContentFilters.isDegradedText(text)) {
+        AssistantContentFilters.isJsonEnvelope(text)) {
       return '';
     }
     return text;
@@ -1177,8 +1175,6 @@ class AssistantJourneyProjector {
         AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
           text,
         ) ||
-        AssistantDisplayTextResolver.containsTechnicalFailureFragment(text) ||
-        AssistantContentFilters.isDegradedText(text) ||
         AssistantContentFilters.isJsonEnvelope(text)) {
       return '';
     }

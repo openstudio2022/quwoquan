@@ -1,7 +1,5 @@
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
-import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/tool_assessment.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
@@ -64,17 +62,15 @@ class ToolResultAssessor {
     final missingDimensions = _normalizedDimensions(
       retrievalOutcome.missingDimensions,
     );
-    final canAnswerWithCurrentEvidence =
-        _answerGateResolver.canAnswerWithCurrentEvidence(
+    final canAnswerWithCurrentEvidence = _answerGateResolver
+        .canAnswerWithCurrentEvidence(
           retrievalOutcome: retrievalOutcome,
           policy: boundaryPolicy,
         );
     if (state.shouldStopByBudget || state.shouldStopByIteration) {
       return ToolAssessment(
         assessmentType: AssessmentType.budgetExhausted,
-        userMessage: DefaultProcessingCopyBank.toolAssessMessage(
-          ToolAssessMessageKey.budgetExhausted,
-        ),
+        userMessage: '',
         shouldContinueLoop: false,
         allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
         reasonCode: PlannerReasonCode.budgetBoundary,
@@ -93,9 +89,7 @@ class ToolResultAssessor {
         final pattern = (lastObservation['loopPattern'] as String?) ?? '';
         return ToolAssessment(
           assessmentType: AssessmentType.toolFailed,
-          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
-            ToolAssessMessageKey.loopDetected,
-          ),
+          userMessage: '',
           shouldContinueLoop:
               pattern != 'global_circuit_breaker' &&
               _consecutiveFailures < _maxConsecutiveFailures,
@@ -111,9 +105,7 @@ class ToolResultAssessor {
       if (canAnswerWithCurrentEvidence) {
         return ToolAssessment(
           assessmentType: AssessmentType.sufficient,
-          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
-            ToolAssessMessageKey.fastConverged,
-          ),
+          userMessage: '',
           shouldContinueLoop: false,
           allowAnswerWithCurrentEvidence: true,
           reasonCode: PlannerReasonCode.deliverIncrement,
@@ -127,9 +119,7 @@ class ToolResultAssessor {
       if (_consecutiveFailures >= _maxConsecutiveFailures) {
         return ToolAssessment(
           assessmentType: AssessmentType.toolFailed,
-          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
-            ToolAssessMessageKey.toolFailedStop,
-          ),
+          userMessage: '',
           shouldContinueLoop: false,
           reasonCode: PlannerReasonCode.sourceUnstable,
           referenceCount: referenceCount,
@@ -141,9 +131,7 @@ class ToolResultAssessor {
 
       return ToolAssessment(
         assessmentType: AssessmentType.toolFailed,
-        userMessage: DefaultProcessingCopyBank.toolAssessMessage(
-          ToolAssessMessageKey.toolFailedRetry,
-        ),
+        userMessage: '',
         shouldContinueLoop: true,
         reasonCode: PlannerReasonCode.sourceUnstable,
         referenceCount: referenceCount,
@@ -163,9 +151,7 @@ class ToolResultAssessor {
       if (batchCoverageLooksUsable || canAnswerWithCurrentEvidence) {
         return ToolAssessment(
           assessmentType: AssessmentType.sufficient,
-          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
-            ToolAssessMessageKey.batchUsable,
-          ),
+          userMessage: '',
           shouldContinueLoop: false,
           allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
           reasonCode: PlannerReasonCode.deliverIncrement,
@@ -181,13 +167,7 @@ class ToolResultAssessor {
           _consecutiveLowQuality >= _maxConsecutiveLowQuality) {
         return ToolAssessment(
           assessmentType: AssessmentType.sufficient,
-          userMessage: _isFastConvergence
-              ? DefaultProcessingCopyBank.toolAssessMessage(
-                  ToolAssessMessageKey.fastConverged,
-                )
-              : DefaultProcessingCopyBank.toolAssessMessage(
-                  ToolAssessMessageKey.slowConverged,
-                ),
+          userMessage: '',
           shouldContinueLoop: false,
           allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
           reasonCode: _isFastConvergence
@@ -201,13 +181,7 @@ class ToolResultAssessor {
       }
       return ToolAssessment(
         assessmentType: AssessmentType.needMoreSearch,
-        userMessage: queryCount >= 2
-            ? DefaultProcessingCopyBank.toolAssessMessage(
-                ToolAssessMessageKey.needMoreSearchMulti,
-              )
-            : DefaultProcessingCopyBank.toolAssessMessage(
-                ToolAssessMessageKey.needMoreSearchSingle,
-              ),
+        userMessage: '',
         shouldContinueLoop: true,
         rewriteQuery: true,
         reasonCode: PlannerReasonCode.needMoreEvidence,
@@ -223,9 +197,7 @@ class ToolResultAssessor {
       if (_isFastConvergence || canAnswerWithCurrentEvidence) {
         return ToolAssessment(
           assessmentType: AssessmentType.sufficient,
-          userMessage: DefaultProcessingCopyBank.toolAssessMessage(
-            ToolAssessMessageKey.replanFast,
-          ),
+          userMessage: '',
           shouldContinueLoop: false,
           allowAnswerWithCurrentEvidence: canAnswerWithCurrentEvidence,
           reasonCode: PlannerReasonCode.deliverIncrement,
@@ -237,13 +209,7 @@ class ToolResultAssessor {
       }
       return ToolAssessment(
         assessmentType: AssessmentType.needMoreSearch,
-        userMessage: queryCount >= 2
-            ? DefaultProcessingCopyBank.toolAssessMessage(
-                ToolAssessMessageKey.replanMulti,
-              )
-            : DefaultProcessingCopyBank.toolAssessMessage(
-                ToolAssessMessageKey.replanSingle,
-              ),
+        userMessage: '',
         shouldContinueLoop: true,
         reasonCode: PlannerReasonCode.needMoreSearch,
         referenceCount: referenceCount,
@@ -255,18 +221,7 @@ class ToolResultAssessor {
 
     return ToolAssessment(
       assessmentType: AssessmentType.sufficient,
-      userMessage: referenceCount > 0 && queryCount >= 2
-          ? DefaultProcessingCopyBank.toolAssessMessage(
-              ToolAssessMessageKey.finalMulti,
-              queryCount: queryCount,
-            )
-          : referenceCount > 0
-          ? DefaultProcessingCopyBank.toolAssessMessage(
-              ToolAssessMessageKey.finalRefs,
-            )
-          : DefaultProcessingCopyBank.toolAssessMessage(
-              ToolAssessMessageKey.finalDefault,
-            ),
+      userMessage: '',
       shouldContinueLoop: false,
       allowAnswerWithCurrentEvidence:
           canAnswerWithCurrentEvidence || !boundaryPolicy.evidenceRequired,
@@ -299,8 +254,8 @@ class ToolResultAssessor {
       if (raw.isEmpty) {
         continue;
       }
-      final dimension = parseQueryTaskDimension(raw);
-      final code = dimension != QueryTaskDimension.unknown
+      final dimension = parseSearchPlanDimension(raw);
+      final code = dimension != SearchPlanDimension.unknown
           ? dimension.wireName
           : raw;
       if (seen.add(code)) {

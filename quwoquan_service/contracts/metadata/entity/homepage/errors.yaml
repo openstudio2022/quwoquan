@@ -10,7 +10,7 @@ errors:
     kind: USER
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: homepageNotFound
     go_const: ErrHomepageNotFound
     user_message:
@@ -21,7 +21,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: homepageAttachRequired
     go_const: ErrHomepageAttachRequired
     user_message:
@@ -32,7 +32,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: claimMaterialMissing
     go_const: ErrClaimMaterialMissing
     user_message:
@@ -43,7 +43,7 @@ errors:
     kind: USER
     reason: conflict
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: alreadyClaimed
     go_const: ErrAlreadyClaimed
     user_message:
@@ -54,7 +54,7 @@ errors:
     kind: USER
     reason: gone
     http_status: 410
-    retryable: false
+    recovery_action: surface
     dart_const: homepageOffline
     go_const: ErrHomepageOffline
     user_message:
@@ -65,7 +65,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidHomepageType
     go_const: ErrInvalidHomepageType
     user_message:
@@ -76,7 +76,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: permissionDenied
     go_const: ErrPermissionDenied
     user_message:
@@ -87,7 +87,7 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: false
+    recovery_action: surface
     dart_const: internalError
     go_const: ErrInternalError
     user_message:

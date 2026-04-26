@@ -2,11 +2,15 @@ import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_variables_view.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
@@ -18,8 +22,6 @@ import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 /// short-circuit (domain-gate blocked) path.
 sealed class ExecutionPhaseSnapshot {
   const ExecutionPhaseSnapshot();
-
-  Map<String, dynamic> toLegacyMap();
 }
 
 /// Short-circuit: the execution phase produced a response without entering
@@ -27,11 +29,6 @@ sealed class ExecutionPhaseSnapshot {
 class ExecutionPhaseShortCircuit extends ExecutionPhaseSnapshot {
   const ExecutionPhaseShortCircuit({required this.response});
   final AssistantRunResponse response;
-
-  @override
-  Map<String, dynamic> toLegacyMap() => <String, dynamic>{
-    'shortCircuitResponse': response,
-  };
 }
 
 /// Normal execution result containing all state needed by downstream phases
@@ -45,7 +42,10 @@ class ExecutionPhaseSuccess extends ExecutionPhaseSnapshot {
     required this.latestUserQuery,
     required this.domainId,
     required this.contextAssembly,
-    required this.intentGraph,
+    required this.understandingResult,
+    required this.taskGraph,
+    required this.orchestratorState,
+    required this.turnSynthesisState,
     required this.dialogueRoundScript,
     required this.domainCatalog,
     required this.domainCatalogVersion,
@@ -75,7 +75,10 @@ class ExecutionPhaseSuccess extends ExecutionPhaseSnapshot {
   final String latestUserQuery;
   final String domainId;
   final ContextAssemblyResult contextAssembly;
-  final IntentGraph intentGraph;
+  final UnderstandingResult understandingResult;
+  final TaskGraph taskGraph;
+  final ConversationOrchestratorState orchestratorState;
+  final TurnSynthesisState turnSynthesisState;
   final DialogueRoundScript dialogueRoundScript;
   final List<String> domainCatalog;
   final String domainCatalogVersion;
@@ -94,6 +97,9 @@ class ExecutionPhaseSuccess extends ExecutionPhaseSnapshot {
 
   /// LLM serde boundary: template variable bag consumed by prompt templates.
   final Map<String, dynamic> templateVariables;
+
+  AssistantPipelineTemplateVariablesView get templateVariablesReadView =>
+      AssistantPipelineTemplateVariablesView.fromMap(templateVariables);
 
   /// LLM serde boundary: chat messages for synthesis context.
   final List<Map<String, dynamic>> messages;
@@ -118,7 +124,10 @@ class ExecutionPhaseSuccess extends ExecutionPhaseSnapshot {
     String? latestUserQuery,
     String? domainId,
     ContextAssemblyResult? contextAssembly,
-    IntentGraph? intentGraph,
+    UnderstandingResult? understandingResult,
+    TaskGraph? taskGraph,
+    ConversationOrchestratorState? orchestratorState,
+    TurnSynthesisState? turnSynthesisState,
     DialogueRoundScript? dialogueRoundScript,
     List<String>? domainCatalog,
     String? domainCatalogVersion,
@@ -148,7 +157,10 @@ class ExecutionPhaseSuccess extends ExecutionPhaseSnapshot {
       latestUserQuery: latestUserQuery ?? this.latestUserQuery,
       domainId: domainId ?? this.domainId,
       contextAssembly: contextAssembly ?? this.contextAssembly,
-      intentGraph: intentGraph ?? this.intentGraph,
+      understandingResult: understandingResult ?? this.understandingResult,
+      taskGraph: taskGraph ?? this.taskGraph,
+      orchestratorState: orchestratorState ?? this.orchestratorState,
+      turnSynthesisState: turnSynthesisState ?? this.turnSynthesisState,
       dialogueRoundScript: dialogueRoundScript ?? this.dialogueRoundScript,
       domainCatalog: domainCatalog ?? this.domainCatalog,
       domainCatalogVersion: domainCatalogVersion ?? this.domainCatalogVersion,
@@ -174,40 +186,4 @@ class ExecutionPhaseSuccess extends ExecutionPhaseSnapshot {
       supplementalTraces: supplementalTraces ?? this.supplementalTraces,
     );
   }
-
-  /// Backward-compatible map representation consumed by legacy synthesis and
-  /// finalize paths during the migration. Will be removed once all consumers
-  /// switch to strongly-typed fields.
-  @override
-  @Deprecated('Transitional: will be removed after full pipeline migration')
-  Map<String, dynamic> toLegacyMap() => <String, dynamic>{
-    'runId': runId,
-    'traceId': traceId,
-    'runStartAt': runStartAt,
-    'sessionId': sessionId,
-    'latestUserQuery': latestUserQuery,
-    'domainId': domainId,
-    'contextAssembly': contextAssembly,
-    'intentGraph': intentGraph,
-    'dialogueRoundScript': dialogueRoundScript,
-    'domainCatalog': domainCatalog,
-    'domainCatalogVersion': domainCatalogVersion,
-    'allowedToolNames': allowedToolNames,
-    'executionShell': executionShell,
-    'previousSlotState': previousSlotState,
-    'previousDomainPolicyBundle': previousDomainPolicyBundle,
-    'retrievalPolicy': retrievalPolicy,
-    'answerBoundaryPolicy': answerBoundaryPolicy,
-    'understandingSnapshot': understandingSnapshot,
-    'templateVariables': templateVariables,
-    'messages': messages,
-    'synthTemplateVersion': synthTemplateVersion,
-    'fusionSynthTemplateVersion': fusionSynthTemplateVersion,
-    'phaseOneResult': phaseOneResult,
-    'synthesisReadiness': synthesisReadiness,
-    'evidenceLedger': evidenceLedger,
-    'evidenceEvaluation': evidenceEvaluation,
-    'toolResults': toolResults.map((item) => item.toJson()).toList(growable: false),
-    'supplementalTraces': supplementalTraces,
-  };
 }

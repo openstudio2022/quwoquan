@@ -1,15 +1,14 @@
 # 工具调用指引
 
 ## 调用顺序
-1. `local_context`（仅在缺少城市时调用）
+1. 系统默认注入上下文（仅在缺少城市时读取位置摘要）
 2. `search`（统一检索天气摘要，必要时回退 `web_search`）
 
-## 重试策略
-- 对 `timeout` / `retryable=true` 的错误最多重试 1 次。
-- 仍失败则进入降级回答，并给出明确下一步。
+## 恢复策略
+- 对 RuntimeRecoveryPolicy 判定为 `retry` 的 `timeout` / `network` / `rateLimited` 失败最多重试 1 次。
+- 仍失败则按 recovery action 进入降级回答，并给出明确下一步。
 
 ## 参数规范
-- `local_context.requestedFields`: `["location", "permissions", "device"]`
 - `search.query`: `{{city}}天气`
 - `search.mode`: `result`
 - 参数保持最小、确定、可复现，避免宽泛查询。

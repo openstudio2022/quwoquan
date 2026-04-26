@@ -20,7 +20,7 @@ const (
 
 	groupAvatarTaskStatusQueued          = "queued"
 	groupAvatarTaskStatusProcessing      = "processing"
-	groupAvatarTaskStatusRetryableFailed = "retryable_failed"
+	groupAvatarTaskStatusTransientFailed = "transient_failed"
 	groupAvatarTaskStatusTerminalFailed  = "terminal_failed"
 )
 
@@ -146,7 +146,7 @@ func (s *RedisGroupAvatarTaskScheduler) EnqueueConversationAvatarPatch(ctx conte
 		Payload:          cloneMap(task.Payload),
 		RecipientUserIDs: dedupeSortedUserIDs(task.RecipientUserIDs),
 	}
-	return s.enqueue(ctx, record, true)
+	return s.enqueue(ctx, record, false)
 }
 
 func (s *RedisGroupAvatarTaskScheduler) enqueue(
@@ -288,9 +288,9 @@ func (s *RedisGroupAvatarTaskScheduler) handleTask(ctx context.Context, task gro
 		latest.NextAttemptAt = latest.UpdatedAt
 		s.metrics.recordTerminalFailure()
 	} else {
-		latest.Status = groupAvatarTaskStatusRetryableFailed
+		latest.Status = groupAvatarTaskStatusTransientFailed
 		latest.NextAttemptAt = latest.UpdatedAt.Add(retryBackoff(latest.Attempts))
-		s.metrics.recordRetryableFailure()
+		s.metrics.recordTransientFailure()
 	}
 	if err := s.saveTask(ctx, latest); err != nil {
 		s.logger.Error("persist failed group avatar task failed", "err", err, "taskId", current.ID)

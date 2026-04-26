@@ -5,6 +5,7 @@
   "domainId": "global",
   "requiredVariables": [
     "userQuery",
+    "continuityMode",
     "skillCatalog",
     "sharedContext",
     "currentRuntimeState",

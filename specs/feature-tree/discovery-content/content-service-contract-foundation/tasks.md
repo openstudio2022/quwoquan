@@ -38,7 +38,7 @@
 - [ ] 声明 content 域全量错误码（参见 design.md §三 errors.yaml 示例）
   - CONTENT.USER.post_not_found
   - CONTENT.USER.forbidden_edit / forbidden_create
-  - CONTENT.USER.rate_limited（含 retry_after_seconds）
+  - CONTENT.USER.rate_limited（含 recovery_after_seconds）
   - CONTENT.USER.invalid_argument（参数校验失败）
   - CONTENT.USER.unauthorized
   - CONTENT.SYSTEM.storage_write_failed
@@ -52,7 +52,7 @@
   - `enum ContentErrorCode { postNotFound, rateLimited, ... }`
   - `class ContentErrorMessages { static const Map<ContentErrorCode,String> zh = {...}; }`
   - `static ContentErrorCode fromCode(String code)`
-  - `static bool isRetryable(ContentErrorCode code)`
+  - `static bool recoveryAction(ContentErrorCode code)`
 - [ ] 运行 `make codegen-app`，确认文件生成
 
 ### T2.3 errors.yaml → Go codegen

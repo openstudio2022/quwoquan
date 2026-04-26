@@ -22,7 +22,7 @@ slices:
       - active persona、content/comment、chat、assistant 的 persona envelope 冻结
       - `profileSubjectId`、`contextVersion`、snapshot version 可由 metadata 表达
       - 缺失 context 的错误码与 fail closed 语义有正式 contract
-    status: planned
+    status: implemented
 
   - id: P2
     title: establish codegen, cloud client, and provider baseline
@@ -39,7 +39,7 @@ slices:
       - "`verify-metadata / codegen / codegen-app` 通过"
       - `activePersonaContextProvider`、cloud client 与 assistant session adapter 对齐同一 contract
       - legacy persona adapter 只保留为兼容层
-    status: planned
+    status: implemented
 
   - id: P3
     title: implement persona-aware persistence and recovery
@@ -56,7 +56,7 @@ slices:
       - 关键写操作统一落库 persona key 与最小快照
       - notification 与 assistant 能按 `contextVersion` 恢复正确上下文
       - stale / missing persona context 触发阻断或恢复，而不是 owner fallback
-    status: planned
+    status: implemented
 
   - id: P4
     title: validate fail-closed guardrails and rollout
@@ -74,4 +74,4 @@ slices:
       - mismatch、stale context、assistant drift、notification replay 错误都有观测
       - persona context 开关关闭后可退回单 active persona 安全基线
       - 切换分身后首个关键动作和通知/助手回放旅程回归通过
-    status: planned
+    status: implemented

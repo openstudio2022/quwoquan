@@ -19,7 +19,10 @@ void main() {
       );
 
       expect(decision.shouldSkipSynthesis, isFalse);
-      expect(decision.reason, 'execution_signals_require_synthesis');
+      expect(
+        decision.reason,
+        PhaseOneDirectAnswerReason.executionSignalsRequireSynthesis,
+      );
     });
 
     test('契约字段不完整时不允许 direct answer', () {
@@ -33,7 +36,7 @@ void main() {
       );
 
       expect(decision.shouldSkipSynthesis, isFalse);
-      expect(decision.reason, 'phase_one_contract_incomplete');
+      expect(decision.reason, PhaseOneDirectAnswerReason.contractIncomplete);
     });
 
     test('完整 answer contract 且无执行信号时允许 direct answer', () {
@@ -47,7 +50,7 @@ void main() {
       );
 
       expect(decision.shouldSkipSynthesis, isTrue);
-      expect(decision.reason, 'phase_one_direct_answer');
+      expect(decision.reason, PhaseOneDirectAnswerReason.directAnswer);
       expect(decision.normalizedEnvelopeText, isNotEmpty);
     });
   });

@@ -32,7 +32,6 @@ class AssistantSubagentRunRecord {
     this.inputTokens = 0,
     this.outputTokens = 0,
     this.usageLedger = const <Map<String, dynamic>>[],
-    this.errorClass = '',
     this.errorMessage = '',
   });
 
@@ -148,7 +147,6 @@ class AssistantSubagentRunRecord {
       maxTokensPerCall: 0,
       tokenSource: '',
       tokenSampleCount: 0,
-      errorClass: 'timeout',
       errorMessage: '',
     );
   }
@@ -199,7 +197,6 @@ class AssistantSubagentRunRecord {
       maxTokensPerCall: 0,
       tokenSource: '',
       tokenSampleCount: 0,
-      errorClass: 'execution_failed',
       errorMessage: errorMessage,
     );
   }
@@ -236,7 +233,6 @@ class AssistantSubagentRunRecord {
   final int inputTokens;
   final int outputTokens;
   final List<Map<String, dynamic>> usageLedger;
-  final String errorClass;
   final String errorMessage;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -272,7 +268,6 @@ class AssistantSubagentRunRecord {
     'inputTokens': inputTokens,
     'outputTokens': outputTokens,
     'usageLedger': usageLedger,
-    'errorClass': errorClass,
     'errorMessage': errorMessage,
   };
 
@@ -302,7 +297,8 @@ class AssistantSubagentRunRecord {
       goal: (json['goal'] as String?)?.trim() ?? '',
       mode: (json['mode'] as String?)?.trim() ?? '',
       problemClass: (json['problemClass'] as String?)?.trim() ?? '',
-      shell: (json['shell'] as Map?)?.cast<String, dynamic>() ??
+      shell:
+          (json['shell'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       stopPolicy: (json['stopPolicy'] as String?)?.trim() ?? '',
       searchIntensity: (json['searchIntensity'] as String?)?.trim() ?? '',
@@ -311,7 +307,8 @@ class AssistantSubagentRunRecord {
       answerThreshold: (json['answerThreshold'] as num?)?.toDouble() ?? 0.0,
       summary: (json['summary'] as String?)?.trim() ?? '',
       userMarkdown: (json['userMarkdown'] as String?)?.trim() ?? '',
-      result: (json['result'] as Map?)?.cast<String, dynamic>() ??
+      result:
+          (json['result'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       answerReady: json['answerReady'] == true,
       references:
@@ -354,12 +351,11 @@ class AssistantSubagentRunRecord {
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[],
-      errorClass: (json['errorClass'] as String?)?.trim() ?? '',
       errorMessage: (json['errorMessage'] as String?)?.trim() ?? '',
     );
   }
 
   String get localSummary => summary;
-  bool get hasFailure => failureReason.trim().isNotEmpty || errorClass.trim().isNotEmpty;
-
+  bool get hasFailure =>
+      failureReason.trim().isNotEmpty || errorMessage.trim().isNotEmpty;
 }

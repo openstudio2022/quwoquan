@@ -1,8 +1,12 @@
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_boundary_outcome.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
 
 class AnswerGateResolver {
@@ -30,7 +34,7 @@ class AnswerGateResolver {
 
   AnswerGateDecision resolve({
     required RetrievalOutcome retrievalOutcome,
-    ConversationStateDecision? conversationStateDecision,
+    AssistantTypedTurnDecision? typedTurnDecision,
     bool renderableAnswer = false,
     bool degraded = false,
     bool terminalPayloadComplete = true,
@@ -39,12 +43,12 @@ class AnswerGateResolver {
         terminalPayloadComplete && retrievalOutcome.terminalPayloadComplete;
     final effectiveDegraded = degraded || retrievalOutcome.degraded;
     final nextAction =
-        conversationStateDecision?.nextActionWireName ??
+        typedTurnDecision?.nextActionWireName ??
         (retrievalOutcome.retrievalReady
             ? AssistantNextAction.answer.wireName
             : AssistantNextAction.abort.wireName);
     final answerEligibility =
-        conversationStateDecision?.answerEligibilityWireName ??
+        typedTurnDecision?.answerEligibilityWireName ??
         (retrievalOutcome.retrievalReady &&
                 nextAction == AssistantNextAction.answer.wireName
             ? AnswerEligibility.eligible.wireName
@@ -63,8 +67,7 @@ class AnswerGateResolver {
         nextAction == AssistantNextAction.answer.wireName &&
         answerEligibility == AnswerEligibility.eligible.wireName &&
         (!retrievalOutcome.evidenceRequired || hasRequiredEvidencePayload) &&
-        conversationStateDecision?.finalAnswerModeType ==
-            FinalAnswerMode.boundedAnswer;
+        typedTurnDecision?.finalAnswerModeType == FinalAnswerMode.boundedAnswer;
     final eligible =
         boundedDeliveryAllowedByState ||
         (renderableAnswer &&
@@ -112,23 +115,27 @@ class AnswerGateResolver {
     RunArtifacts? runArtifacts,
     bool degraded = false,
   }) {
+    final boundaryOutcome = _parseAssistantBoundaryOutcome(structured);
+    final blockedByBoundary =
+        boundaryOutcome?.status == AssistantBoundaryStatus.failed ||
+        boundaryOutcome?.status == AssistantBoundaryStatus.blocked;
+    final effectiveDegraded = degraded || blockedByBoundary;
     final retrievalOutcome = _retrievalOutcomeResolver.resolveFromStructured(
       structured: structured,
       runArtifacts: runArtifacts,
-      degraded: degraded,
+      degraded: effectiveDegraded,
     );
-    final conversationStateDecision = _parseConversationStateDecision(
-      structured['conversationStateDecision'] ??
-          runArtifacts?.answerDecision.toWireMap() ??
-          structured['decision'],
+    final typedTurnDecision = _parseAssistantTypedTurnDecisionFromTypedState(
+      structured,
     );
     final renderableAnswer = _hasRenderableAnswer(structured, runArtifacts);
     final derived = resolve(
       retrievalOutcome: retrievalOutcome,
-      conversationStateDecision: conversationStateDecision,
+      typedTurnDecision: typedTurnDecision,
       renderableAnswer: renderableAnswer,
-      degraded: degraded,
-      terminalPayloadComplete: retrievalOutcome.terminalPayloadComplete,
+      degraded: effectiveDegraded,
+      terminalPayloadComplete:
+          retrievalOutcome.terminalPayloadComplete && !blockedByBoundary,
     );
     final raw = (structured[assistantAnswerGateDecisionField] as Map?)
         ?.cast<String, dynamic>();
@@ -143,6 +150,19 @@ class AnswerGateResolver {
       }
     }
     return derived;
+  }
+
+  AssistantBoundaryOutcome? _parseAssistantBoundaryOutcome(
+    Map<String, dynamic> structured,
+  ) {
+    final raw = (structured['assistantBoundaryOutcome'] as Map?)
+        ?.cast<String, dynamic>();
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return AssistantBoundaryOutcome.fromJson(raw);
+    } catch (_) {
+      return null;
+    }
   }
 
   String _reasonCode({
@@ -236,86 +256,29 @@ class AnswerGateResolver {
     required bool renderableAnswer,
     required String nextAction,
   }) {
-    final deliveringBoundedAnswer =
-        nextAction == AssistantNextAction.answer.wireName && renderableAnswer;
-    switch (reasonCode) {
-      case 'evidence_ready':
-        return retrievalOutcome.summary.trim().isNotEmpty
-            ? retrievalOutcome.summary.trim()
-            : '当前证据已满足成答条件。';
-      case 'bounded_delivery':
-        return retrievalOutcome.summary.trim().isNotEmpty
-            ? retrievalOutcome.summary.trim()
-            : '已基于当前可确认信息整理答案；如果还要继续补齐更多依据，可以再补查。';
-      case 'missing_terminal_payload':
-        return '远端流式结果缺少终态 payload，当前只保留可见增量，不按成功完成处理。';
-      case 'incomplete_response':
-        return '当前响应未形成完整终态，先保留可见内容，不直接开闸成答。';
-      case 'degraded_response':
-        return retrievalOutcome.summary.trim().isNotEmpty
-            ? retrievalOutcome.summary.trim()
-            : '当前响应处于降级态，不直接开闸成答。';
-      case 'authority_unsatisfied':
-        if (deliveringBoundedAnswer) {
-          return '已基于当前可确认信息整理答案，如需补齐更稳的权威依据可以继续补查。';
-        }
-        return '当前权威依据还不够稳，先不直接开闸成答。';
-      case 'historical_window_unknown':
-        if (deliveringBoundedAnswer) {
-          return '已基于当前可确认信息整理答案，但资料缺少足够时间锚点；如果要继续核对目标时间窗，可以再补查。';
-        }
-        return '当前资料缺少足够时间锚点，还不能确认是否命中目标时间窗。';
-      case 'historical_window_mismatch':
-        if (deliveringBoundedAnswer) {
-          return '已基于当前可确认信息整理答案，但现有资料还没充分落到目标时间窗；如果要继续补齐该时段依据，可以再补查。';
-        }
-        return '当前资料还没充分命中目标时间窗，先不直接开闸成答。';
-      case 'freshness_unknown':
-        if (deliveringBoundedAnswer) {
-          return '已基于当前可确认信息整理答案，但资料缺少明确时间信号；如需补齐最新变化可继续补查。';
-        }
-        return '当前资料缺少明确时间信号，还不能按最新结论直接成答。';
-      case 'freshness_unsatisfied':
-        if (deliveringBoundedAnswer) {
-          return '已基于当前可确认信息整理答案，如需补齐最新变化可继续补查。';
-        }
-        return '当前资料时效不足，还不能按最新结论直接成答。';
-      case 'missing_dimensions':
-        if (deliveringBoundedAnswer) {
-          return '已基于当前可确认信息整理答案，但还有关键维度未补齐；如果你要，我可以继续补查。';
-        }
-        return '当前还缺关键维度，先不直接开闸成答。';
-      case 'missing_required_evidence':
-        if (deliveringBoundedAnswer) {
-          return '已基于当前可确认信息整理答案；如果还要继续补齐更多依据，可以再补查。';
-        }
-        return '当前还缺继续成答所需的外部依据。';
-      case 'ask_user':
-        return '当前需要先补齐关键信息，再进入最终成答。';
-      case 'no_renderable_answer':
-        return '虽然证据已收敛，但还没有形成可展示的最终答案。';
-      default:
-        return retrievalOutcome.summary.trim().isNotEmpty
-            ? retrievalOutcome.summary.trim()
-            : '当前证据还不足以直接成答。';
-    }
+    return retrievalOutcome.summary.trim();
   }
 
-  ConversationStateDecision? _parseConversationStateDecision(Object? raw) {
-    if (raw is! Map) return null;
+  AssistantTypedTurnDecision? _parseAssistantTypedTurnDecisionFromTypedState(
+    Map<String, dynamic> structured,
+  ) {
+    final orchestratorRaw = structured[assistantOrchestratorStateField];
+    final synthesisRaw = structured[assistantTurnSynthesisStateField];
+    if (orchestratorRaw is! Map && synthesisRaw is! Map) {
+      return null;
+    }
     try {
-      final json = raw.cast<String, dynamic>();
-      return ConversationStateDecision(
-        nextAction: parseAssistantNextAction(
-          (json['nextAction'] as String?)?.trim() ?? '',
-        ),
-        finalAnswerMode: parseFinalAnswerMode(
-          (json['finalAnswerMode'] as String?)?.trim() ?? '',
-        ),
-        answerEligibility: parseAnswerEligibility(
-          (json['answerEligibility'] as String?)?.trim() ?? '',
-        ),
-        finalAnswerReady: json['finalAnswerReady'] == true,
+      final orchestratorState = orchestratorRaw is Map
+          ? ConversationOrchestratorState.fromJson(
+              orchestratorRaw.cast<String, dynamic>(),
+            )
+          : const ConversationOrchestratorState();
+      final synthesisState = synthesisRaw is Map
+          ? TurnSynthesisState.fromJson(synthesisRaw.cast<String, dynamic>())
+          : const TurnSynthesisState();
+      return AssistantTypedTurnDecision.fromTypedState(
+        orchestratorState: orchestratorState,
+        turnSynthesisState: synthesisState,
       );
     } catch (_) {
       return null;

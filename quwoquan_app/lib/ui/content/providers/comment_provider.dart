@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 enum CommentSortMode { latest, hot }
 
@@ -62,7 +63,9 @@ class CommentNotifier extends Notifier<CommentState> {
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final activeContext = await ref.read(activePersonaContextProvider.future);
-    if (ref.read(contentRepositoryProvider).requiresResolvedPersonaForMutations &&
+    if (ref
+            .read(contentRepositoryProvider)
+            .requiresResolvedPersonaForMutations &&
         activeContext.isFallback) {
       throw StateError('active persona context unavailable');
     }
@@ -88,7 +91,7 @@ class CommentNotifier extends Notifier<CommentState> {
     } catch (e) {
       state = state.copyWith(
         status: CommentListStatus.error,
-        errorMessage: () => e.toString(),
+        errorMessage: () => runtimeErrorDisplayMessage(e),
       );
     }
   }
@@ -133,10 +136,8 @@ class CommentNotifier extends Notifier<CommentState> {
     String? personaId,
   }) async {
     final activeContext = await _resolveActivePersonaContext();
-    final resolvedProfileSubjectId = activeContext.profileSubjectId.isNotEmpty
-        ? activeContext.profileSubjectId
-        : ref.read(currentUserIdProvider);
-    final resolvedPersonaId = personaId ?? activeContext.subAccountId;
+    final resolvedProfileSubjectId = activeContext.profileSubjectId;
+    final resolvedPersonaId = personaId ?? activeContext.personaId;
     final optimistic = CommentDto(
       id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
       postId: postId,
@@ -159,7 +160,7 @@ class CommentNotifier extends Notifier<CommentState> {
         replyToCommentId: replyToCommentId,
         personaId: resolvedPersonaId.isEmpty ? null : resolvedPersonaId,
         profileSubjectId: resolvedProfileSubjectId,
-        personaContextVersion: activeContext.personaContextVersion,
+        personaContextVersion: activeContext.contextVersion,
       );
       state = state.copyWith(
         comments: state.comments
@@ -237,7 +238,5 @@ class CommentNotifier extends Notifier<CommentState> {
   }
 }
 
-final commentProviderFamily =
-    NotifierProvider.autoDispose.family<CommentNotifier, CommentState, String>(
-  CommentNotifier.new,
-);
+final commentProviderFamily = NotifierProvider.autoDispose
+    .family<CommentNotifier, CommentState, String>(CommentNotifier.new);

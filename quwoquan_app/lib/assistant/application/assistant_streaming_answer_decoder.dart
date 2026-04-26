@@ -111,7 +111,6 @@ class AssistantStreamingAnswerDecoder {
     }
     if (AssistantContentFilters.isJsonEnvelope(visibleMarkdown) ||
         AssistantContentFilters.isProgressPlaceholder(visibleMarkdown) ||
-        AssistantContentFilters.isDegradedText(visibleMarkdown) ||
         AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
           visibleMarkdown,
         )) {
@@ -503,8 +502,8 @@ class AssistantStreamingAnswerDecoder {
     'diagnostics',
     '"reasoningBasis"',
     'reasoningBasis',
-    '"queryTasks"',
-    'queryTasks',
+    '"searchPlans"',
+    'searchPlans',
     '"contextSlots"',
     'contextSlots',
     '"subagentPlan"',

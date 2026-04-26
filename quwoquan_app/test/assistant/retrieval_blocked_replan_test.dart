@@ -5,15 +5,18 @@ import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
@@ -77,8 +80,7 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
       ? DialogueRoundScript(
           domainId:
               (raw['dialogueRoundScript'] as Map)['domainId']?.toString() ?? '',
-          enabled:
-              (raw['dialogueRoundScript'] as Map)['enabled'] == true,
+          enabled: (raw['dialogueRoundScript'] as Map)['enabled'] == true,
           currentStateId:
               (raw['dialogueRoundScript'] as Map)['currentStateId']
                   ?.toString() ??
@@ -120,8 +122,8 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
               const <String>[],
           passCriteriaRound:
               ((raw['dialogueRoundScript'] as Map)['passCriteriaRound'] as Map?)
-                      ?.cast<String, dynamic>() ??
-                  const <String, dynamic>{},
+                  ?.cast<String, dynamic>() ??
+              const <String, dynamic>{},
           statePromptExcerpt:
               (raw['dialogueRoundScript'] as Map)['statePromptExcerpt']
                   ?.toString() ??
@@ -141,6 +143,45 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
         )
       : const DialogueRoundScript();
 
+  final planView = raw['planView'] is AssistantPlanView
+      ? raw['planView'] as AssistantPlanView
+      : const AssistantPlanView(
+          userGoal: '',
+          primarySkill: '',
+          problemShape: ProblemShape.singleSkill,
+          problemClass: ProblemClass.general,
+        );
+  final searchPlans = planView.searchPlans;
+  final understandingResult = raw['understandingResult'] is UnderstandingResult
+      ? raw['understandingResult'] as UnderstandingResult
+      : UnderstandingResult(
+          intents: <IntentNode>[
+            IntentNode(
+              intentId: 'intent_primary',
+              intentType: planView.primarySkill.trim().isNotEmpty
+                  ? '${planView.primarySkill}.lookup'
+                  : 'fallback_general_search.lookup',
+              goal: planView.userGoal,
+              requiresEvidence: planView.requiresExternalEvidence,
+            ),
+          ],
+        );
+  final taskGraph = raw['taskGraph'] is TaskGraph
+      ? raw['taskGraph'] as TaskGraph
+      : TaskGraph(
+          tasks: <TaskNode>[
+            for (final plan in searchPlans)
+              TaskNode(
+                taskId: plan.id,
+                intentId: 'intent_primary',
+                toolName: 'web_search',
+                toolArgs: TaskToolArgs(<String, Object?>{
+                  'query': plan.query,
+                  'searchPlans': <Map<String, dynamic>>[plan.toJson()],
+                }),
+              ),
+          ],
+        );
   return ExecutionPhaseSuccess(
     runId: (raw['runId'] as String?)?.trim() ?? '',
     traceId: (raw['traceId'] as String?)?.trim() ?? '',
@@ -155,24 +196,22 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
             (raw['contextAssembly'] as Map).cast<String, dynamic>(),
           )
         : const ContextAssemblyResult(),
-    intentGraph: raw['intentGraph'] is IntentGraph
-        ? raw['intentGraph'] as IntentGraph
-        : raw['intentGraph'] is Map
-        ? IntentGraph.fromJson((raw['intentGraph'] as Map).cast<String, dynamic>())
-        : const IntentGraph(
-            userGoal: '',
-            problemShape: ProblemShape.singleSkill,
-            primarySkill: '',
-          ),
+    understandingResult: understandingResult,
+    taskGraph: taskGraph,
+    orchestratorState: const ConversationOrchestratorState(),
+    turnSynthesisState: const TurnSynthesisState(),
     dialogueRoundScript: raw['dialogueRoundScript'] is DialogueRoundScript
         ? raw['dialogueRoundScript'] as DialogueRoundScript
         : dialogueRoundScript,
-    domainCatalog: (raw['domainCatalog'] as List?)
+    domainCatalog:
+        (raw['domainCatalog'] as List?)
             ?.map((item) => item.toString())
             .toList(growable: false) ??
         const <String>[],
-    domainCatalogVersion: (raw['domainCatalogVersion'] as String?)?.trim() ?? '',
-    allowedToolNames: (raw['allowedToolNames'] as List?)
+    domainCatalogVersion:
+        (raw['domainCatalogVersion'] as String?)?.trim() ?? '',
+    allowedToolNames:
+        (raw['allowedToolNames'] as List?)
             ?.map((item) => item.toString())
             .toList(growable: false) ??
         const <String>[],
@@ -190,8 +229,8 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
             (raw['previousSlotState'] as Map).cast<String, dynamic>(),
           )
         : const SlotStateSnapshot(),
-    retrievalPolicy: (raw['retrievalPolicy'] as Map?)
-            ?.cast<String, dynamic>() ??
+    retrievalPolicy:
+        (raw['retrievalPolicy'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{},
     answerBoundaryPolicy: raw['answerBoundaryPolicy'] is AnswerBoundaryPolicy
         ? raw['answerBoundaryPolicy'] as AnswerBoundaryPolicy
@@ -200,13 +239,14 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
             (raw['answerBoundaryPolicy'] as Map).cast<String, dynamic>(),
           )
         : const AnswerBoundaryPolicy(),
-    understandingSnapshot: (raw['understandingSnapshot'] as Map?)
-            ?.cast<String, dynamic>() ??
+    understandingSnapshot:
+        (raw['understandingSnapshot'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{},
-    templateVariables: (raw['templateVariables'] as Map?)
-            ?.cast<String, dynamic>() ??
+    templateVariables:
+        (raw['templateVariables'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{},
-    messages: (raw['messages'] as List?)
+    messages:
+        (raw['messages'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
@@ -226,7 +266,8 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
         ? raw['evidenceEvaluation'] as EvidenceEvaluationResult
         : const EvidenceEvaluationResult(),
     toolResults: const <AssistantToolResultRow>[],
-    supplementalTraces: (raw['supplementalTraces'] as List?)
+    supplementalTraces:
+        (raw['supplementalTraces'] as List?)
             ?.whereType<AssistantTraceEvent>()
             .toList(growable: false) ??
         const <AssistantTraceEvent>[],
@@ -246,18 +287,18 @@ void main() {
       final decision = kernel.evaluate(
         domainId: 'weather',
         problemClass: ProblemClass.realtimeInfo.wireName,
-        intentGraph: const IntentGraph(
+        planView: const AssistantPlanView(
           userGoal: '判断是否需要继续补查天气证据',
           problemShape: ProblemShape.singleSkill,
           primarySkill: 'weather',
           problemClass: ProblemClass.realtimeInfo,
           requiresExternalEvidence: true,
         ),
-        queryTasks: const <QueryTask>[
-          QueryTask(
+        searchPlans: const <SearchPlanItem>[
+          SearchPlanItem(
             id: 'weather_today',
             query: '深圳 天气 实时',
-            dimension: QueryTaskDimension.currentState,
+            dimension: SearchPlanDimension.currentState,
           ),
         ],
         dialogueRoundScript: const DialogueRoundScript(domainId: 'weather'),
@@ -299,113 +340,129 @@ void main() {
       expect(decision.finalAnswerReady, isFalse);
     });
 
-    test('renderable blocked + replanTask 会继续 formal synthesis 而不是 shortcut', () async {
-      final tempDir = await Directory.systemTemp.createTemp(
-        'assistant_retrieval_replan_guard_',
-      );
-      final provider = _StaticEnvelopeProvider(_synthesisRenderableReplanEnvelope);
-      final owner = LocalPhaseExecutionOwner(
-        ReactRuntime(
-          llmProvider: provider,
-          toolRegistry: AssistantToolRegistry(),
-        ),
-        sessionManager: AssistantSessionManager(
-          storagePath: '${tempDir.path}/sessions.json',
-        ),
-        memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
-      );
-
-      try {
-        final response = await owner.synthesizeBridge(
-          const AssistantRunRequest(
-            sessionId: 'renderable_blocked_with_replan',
-            messages: <AssistantRunMessage>[
-              AssistantRunMessage(role: 'user', content: '明天深圳会下雨吗？'),
-            ],
+    test(
+      'renderable blocked + replanTask 会继续 formal synthesis 而不是 shortcut',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'assistant_retrieval_replan_guard_',
+        );
+        final provider = _StaticEnvelopeProvider(
+          _synthesisRenderableReplanEnvelope,
+        );
+        final owner = LocalPhaseExecutionOwner(
+          ReactRuntime(
+            llmProvider: provider,
+            toolRegistry: AssistantToolRegistry(),
           ),
-          executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
-            'runId': 'run_renderable_blocked_with_replan',
-            'traceId': 'trace_renderable_blocked_with_replan',
-            'sessionId': 'renderable_blocked_with_replan',
-            'latestUserQuery': '明天深圳会下雨吗？',
-            'domainId': 'weather',
-            'contextAssembly': const ContextAssemblyResult(),
-            'intentGraph': const IntentGraph(
-              userGoal: '判断明天深圳是否会下雨',
-              problemShape: ProblemShape.singleSkill,
-              primarySkill: 'weather',
-              problemClass: ProblemClass.realtimeInfo,
-              freshnessNeed: FreshnessNeed.recent,
-              requiresExternalEvidence: true,
-              queryTasks: <QueryTask>[
-                QueryTask(
-                  id: 'weather_tomorrow',
-                  query: '深圳 2026-04-10 天气预报',
-                  dimension: QueryTaskDimension.currentState,
-                  timeScope: 'year_month_day',
-                  timePoint: '2026-04-10',
-                  timezone: 'Asia/Shanghai',
-                ),
-              ],
-            ),
-            'dialogueRoundScript': const DialogueRoundScript(domainId: 'weather'),
-            'domainCatalog': const <String>['weather'],
-            'domainCatalogVersion': 'test',
-            'executionShell': const SkillExecutionShell(),
-            'previousSlotState': const SlotStateSnapshot(domainId: 'weather'),
-            'retrievalPolicy': const <String, dynamic>{},
-            'answerBoundaryPolicy': const <String, dynamic>{},
-            'templateVariables': const <String, dynamic>{},
-            'messages': const <Map<String, dynamic>>[
-              <String, dynamic>{'role': 'user', 'content': '明天深圳会下雨吗？'},
-            ],
-            'synthTemplateVersion': 'test',
-            'phaseOneResult': const ReactRuntimeResult(
-              finalText: _phaseOneRenderableBlockedEnvelope,
-              traces: <AssistantTraceEvent>[],
-            ),
-            'synthesisReadiness': const SynthesisReadinessResult(
-              ready: false,
-              reason: 'freshness_pending',
-              replanTask: ContextFillTask(
-                fillType: ContextFillType.replan,
-                targetSlot: ContextTargetSlot.realtimeEvidence,
-                reason: '当前还要继续补齐更稳的天气来源。',
-                generatedQueryConditions: <String>['深圳 2026-04-10 天气预报'],
-                scopeExpansionPolicy:
-                    ContextScopeExpansionPolicy.expandTimeWindow,
-              ),
-            ),
-            'supplementalTraces': const <AssistantTraceEvent>[],
-            'understandingSnapshot': const <String, dynamic>{
-              'userFacingSummary': '我先确认明天深圳的降雨概率。',
-            },
-            'retrievalProcessing': const <String, dynamic>{
-              'processingSummary': '当前证据还不够稳，需要继续补查。',
-            },
-            'blockedProcessStepId': ProcessStepId.retrievalProcessing.wireName,
-            'blockedProcessMessage': '当前证据仍需补齐。',
-          }),
+          sessionManager: AssistantSessionManager(
+            storagePath: '${tempDir.path}/sessions.json',
+          ),
+          memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
         );
 
-        final routing =
-            (response.structuredResponse['phaseOneRoutingDiagnostics'] as Map?)
-                ?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-        final decision =
-            (response.structuredResponse['conversationStateDecision'] as Map?)
-                ?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        try {
+          final response = await owner.synthesizeBridge(
+            const AssistantRunRequest(
+              sessionId: 'renderable_blocked_with_replan',
+              messages: <AssistantRunMessage>[
+                AssistantRunMessage(role: 'user', content: '明天深圳会下雨吗？'),
+              ],
+            ),
+            executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
+              'runId': 'run_renderable_blocked_with_replan',
+              'traceId': 'trace_renderable_blocked_with_replan',
+              'sessionId': 'renderable_blocked_with_replan',
+              'latestUserQuery': '明天深圳会下雨吗？',
+              'domainId': 'weather',
+              'contextAssembly': const ContextAssemblyResult(),
+              'planView': const AssistantPlanView(
+                userGoal: '判断明天深圳是否会下雨',
+                problemShape: ProblemShape.singleSkill,
+                primarySkill: 'weather',
+                problemClass: ProblemClass.realtimeInfo,
+                requiresExternalEvidence: true,
+                searchPlans: <SearchPlanItem>[
+                  SearchPlanItem(
+                    id: 'weather_tomorrow',
+                    query: '深圳 2026-04-10 天气预报',
+                    dimension: SearchPlanDimension.currentState,
+                    timeScope: 'year_month_day',
+                    timePoint: '2026-04-10',
+                    timezone: 'Asia/Shanghai',
+                  ),
+                ],
+              ),
+              'dialogueRoundScript': const DialogueRoundScript(
+                domainId: 'weather',
+              ),
+              'domainCatalog': const <String>['weather'],
+              'domainCatalogVersion': 'test',
+              'executionShell': const SkillExecutionShell(),
+              'previousSlotState': const SlotStateSnapshot(domainId: 'weather'),
+              'retrievalPolicy': const <String, dynamic>{},
+              'answerBoundaryPolicy': const <String, dynamic>{},
+              'templateVariables': const <String, dynamic>{},
+              'messages': const <Map<String, dynamic>>[
+                <String, dynamic>{'role': 'user', 'content': '明天深圳会下雨吗？'},
+              ],
+              'synthTemplateVersion': 'test',
+              'phaseOneResult': const ReactRuntimeResult(
+                finalText: _phaseOneRenderableBlockedEnvelope,
+                traces: <AssistantTraceEvent>[],
+              ),
+              'synthesisReadiness': const SynthesisReadinessResult(
+                ready: false,
+                reason: 'freshness_pending',
+                replanTask: ContextFillTask(
+                  fillType: ContextFillType.replan,
+                  targetSlot: ContextTargetSlot.realtimeEvidence,
+                  reason: '当前还要继续补齐更稳的天气来源。',
+                  generatedQueryConditions: <String>['深圳 2026-04-10 天气预报'],
+                  scopeExpansionPolicy:
+                      ContextScopeExpansionPolicy.expandTimeWindow,
+                ),
+              ),
+              'supplementalTraces': const <AssistantTraceEvent>[],
+              'understandingSnapshot': const <String, dynamic>{
+                'userFacingSummary': '我先确认明天深圳的降雨概率。',
+              },
+              'retrievalProcessing': const <String, dynamic>{
+                'processingSummary': '当前证据还不够稳，需要继续补查。',
+              },
+              'blockedProcessStepId':
+                  ProcessStepId.retrievalProcessing.wireName,
+              'blockedProcessMessage': '当前证据仍需补齐。',
+            }),
+          );
 
-        expect(provider.callCount, greaterThan(0));
-        expect(routing['route'], equals('formal_synthesis'));
-        expect(decision['nextAction'], equals('tool_call'));
-        expect(decision['finalAnswerMode'], equals('replan'));
-      } finally {
-        if (await tempDir.exists()) {
-          await tempDir.delete(recursive: true);
+          final routing =
+              (response.structuredResponse['phaseOneRoutingDiagnostics']
+                      as Map?)
+                  ?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+          final runArtifacts =
+              (response.structuredResponse['runArtifacts'] as Map?)
+                  ?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+          final decision =
+              (response.structuredResponse['decision'] as Map?)
+                  ?.cast<String, dynamic>() ??
+              (response.structuredResponse['answerDecision'] as Map?)
+                  ?.cast<String, dynamic>() ??
+              (runArtifacts['answerDecision'] as Map?)
+                  ?.cast<String, dynamic>() ??
+              const <String, dynamic>{};
+
+          expect(provider.callCount, greaterThan(0));
+          expect(routing['route'], equals('formal_synthesis'));
+          expect(decision['nextAction'], equals('tool_call'));
+          expect(decision['finalAnswerMode'], equals('replan'));
+        } finally {
+          if (await tempDir.exists()) {
+            await tempDir.delete(recursive: true);
+          }
         }
-      }
-    });
+      },
+    );
   });
 }

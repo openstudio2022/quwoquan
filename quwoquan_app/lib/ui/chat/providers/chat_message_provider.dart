@@ -4,7 +4,7 @@ import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 const _uuid = Uuid();
 
@@ -49,7 +49,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
     final activeContext = await ref.read(activePersonaContextProvider.future);
-    if (ref.read(contentRepositoryProvider).requiresResolvedPersonaForMutations &&
+    if (ref
+            .read(contentRepositoryProvider)
+            .requiresResolvedPersonaForMutations &&
         activeContext.isFallback) {
       throw StateError('active persona context unavailable');
     }
@@ -67,7 +69,10 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         await _detectAndFillGap(maxSeq);
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -95,7 +100,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
       return false;
     }
   }
@@ -111,11 +116,8 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   }) async {
     final activeContext = await _resolveActivePersonaContext();
     final clientMsgId = _uuid.v4();
-    final resolvedSenderId =
-        activeContext.profileSubjectId.isNotEmpty
-        ? activeContext.profileSubjectId
-        : ref.read(currentUserIdProvider);
-    final resolvedSenderPersonaId = activeContext.subAccountId;
+    final resolvedSenderId = activeContext.profileSubjectId;
+    final resolvedSenderPersonaId = activeContext.personaId;
     final optimistic = MessageDto(
       id: clientMsgId,
       conversationId: conversationId,
@@ -145,7 +147,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
             ? null
             : resolvedSenderPersonaId,
         senderProfileSubjectId: resolvedSenderId,
-        personaContextVersion: activeContext.personaContextVersion,
+        personaContextVersion: activeContext.contextVersion,
+        senderDisplayNameSnapshot: senderName ?? activeContext.displayName,
+        senderAvatarUrlSnapshot: senderAvatar ?? activeContext.avatarUrl,
         clientMsgId: clientMsgId,
       );
       final confirmed = optimistic.copyWith(
@@ -186,11 +190,11 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         media: msg.media,
         senderPersonaId:
             msg.senderPersonaId ??
-            (activeContext.subAccountId.isEmpty
-                ? null
-                : activeContext.subAccountId),
+            (activeContext.personaId.isEmpty ? null : activeContext.personaId),
         senderProfileSubjectId: msg.senderId,
-        personaContextVersion: activeContext.personaContextVersion,
+        personaContextVersion: activeContext.contextVersion,
+        senderDisplayNameSnapshot: msg.senderName ?? activeContext.displayName,
+        senderAvatarUrlSnapshot: msg.senderAvatar ?? activeContext.avatarUrl,
         clientMsgId: clientMsgId,
       );
       final confirmed = msg.copyWith(
@@ -225,7 +229,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       }).toList();
       state = state.copyWith(messages: _sorted(updated));
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
     }
   }
 
@@ -241,7 +245,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         state = state.copyWith(messages: _sorted(merged));
       }
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
     }
   }
 

@@ -63,6 +63,13 @@ void main() {
         AssistantToolArguments.fromJson(<String, dynamic>{
           'query': '深圳天气',
           'count': 3,
+          'taskGraphSearchPlan': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'weather_now',
+              'dimension': 'latest_signal',
+              'query': '深圳天气 中国气象局',
+            },
+          ],
         }),
       );
 
@@ -70,6 +77,8 @@ void main() {
       expect(result.message, equals('search ok'));
       expect(broker.lastSearchRequest?.query, equals('深圳天气'));
       expect(broker.lastSearchRequest?.count, equals(3));
+      expect(broker.lastSearchRequest?.queryPlans, hasLength(1));
+      expect(broker.lastSearchRequest?.queryPlans.single.id, equals('weather_now'));
       final references =
           (result.data?['references'] as List?)
               ?.whereType<Map>()

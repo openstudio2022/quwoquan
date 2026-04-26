@@ -211,7 +211,10 @@ void main() {
         contains('reasonShort'),
         reason: '规划阶段 contract 仍需兼容当前 reasonShort 流式读取',
       );
-      expect(phasePlan, contains('`queryTasks.query` 必须是最终可执行检索词'));
+      expect(
+        phasePlan,
+        contains('`toolArgs.query` 或 `toolArgs.queries[]` 必须是最终可执行检索词'),
+      );
       expect(phasePlan, contains('`understandingSnapshot.userFacingSummary`'));
       expect(phasePlan, isNot(contains('  - `answer`')));
       expect(
@@ -294,18 +297,11 @@ void main() {
       expect(planner, contains('search_iteration_state'));
       expect(
         planner,
-        contains('不要再额外输出一段与主叙事重复的“检索设计说明”'),
-      );
-      expect(
-        planner,
         contains(
-          '`intentGraph.queryTasks[*].query` 必须是可直接发送给搜索 provider 的最终自然语言检索词',
+          '`taskGraph.tasks[*].toolArgs.query` 或 `taskGraph.tasks[*].toolArgs.queries[]` 必须是可直接发送给搜索 provider 的最终自然语言检索词',
         ),
       );
-      expect(
-        planner,
-        contains('“无需检索即可直接回答”属于 runtime-owned shortcut'),
-      );
+      expect(planner, contains('“无需检索即可直接回答”属于 runtime-owned shortcut'));
       expect(planner, contains('最近 / 最新 / 近期'));
       expect(synth, isNot(contains('## 问题理解')));
       expect(synth, isNot(contains('## 关键观点')));

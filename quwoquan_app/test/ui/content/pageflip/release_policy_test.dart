@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/ui/content/pageflip/release_policy.dart';
-import 'package:flutter/widgets.dart';
 
 void main() {
   test('release policy makes fast forward flings settle sooner', () {

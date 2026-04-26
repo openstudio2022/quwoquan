@@ -64,7 +64,10 @@ void main() {
       final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
       expect(feed, isNotNull);
       expect(feed!.error, isNotNull);
-      expect(feed.error, contains('network_error'));
+      expect(
+        feed.error,
+        '操作失败，请稍后重试',
+      );
     });
 
     test('appendNextPage does nothing when nextCursor is null', () async {

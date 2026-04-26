@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react';
-import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated';
-import { fetchReleases, type ReleaseItem } from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated.js';
+import { fetchReleases, type ReleaseItem } from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function PlatformRolloutPage() {
   const releaseObject = platformControlPlane.object_types.find((item) => item.object_type === 'config_release');
   const [releases, setReleases] = useState<ReleaseItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     fetchReleases()
       .then((items) => {
         setReleases(items);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -30,6 +34,7 @@ export function PlatformRolloutPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实发布脚本 API 已接入' : '当前展示回退到门户样例'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">发起回滚演练</button>}

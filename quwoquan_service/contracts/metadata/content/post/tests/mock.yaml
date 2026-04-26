@@ -76,14 +76,14 @@ error_scenarios:
     input_status: 404
     expected_dart_const: postNotFound
     expected_zh_message: "内容不存在或已删除"
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: parse_rate_limited
     input_code: "CONTENT.USER.rate_limited"
     input_status: 429
     expected_dart_const: rateLimited
-    expected_retryable: true
-    expected_retry_after: 60
+    expected_recovery_action: retry
+    expected_recovery_after: 60
 
   - name: parse_forbidden_edit
     input_code: "CONTENT.USER.forbidden_edit"
@@ -104,74 +104,74 @@ error_scenarios:
     input_code: "CONTENT.SYSTEM.storage_write_failed"
     input_status: 500
     expected_dart_const: storageWriteFailed
-    expected_retryable: true
+    expected_recovery_action: retry
 
   - name: parse_upstream_timeout
     input_code: "CONTENT.MIDDLEWARE.upstream_timeout"
     input_status: 504
     expected_dart_const: upstreamTimeout
-    expected_retryable: true
+    expected_recovery_action: retry
 
   - name: parse_comment_not_found
     input_code: "CONTENT.USER.comment_not_found"
     input_status: 404
     expected_dart_const: commentNotFound
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: parse_comment_too_long
     input_code: "CONTENT.USER.comment_too_long"
     input_status: 400
     expected_dart_const: commentTooLong
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: parse_comment_rate_limited
     input_code: "CONTENT.USER.comment_rate_limited"
     input_status: 429
     expected_dart_const: commentRateLimited
-    expected_retryable: true
-    expected_retry_after: 60
+    expected_recovery_action: retry
+    expected_recovery_after: 60
 
   - name: parse_comment_like_duplicate
     input_code: "CONTENT.USER.comment_like_duplicate"
     input_status: 409
     expected_dart_const: commentLikeDuplicate
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: parse_comment_forbidden_delete
     input_code: "CONTENT.USER.comment_forbidden_delete"
     input_status: 403
     expected_dart_const: commentForbiddenDelete
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: parse_forbidden_delete
     input_code: "CONTENT.USER.forbidden_delete"
     input_status: 403
     expected_dart_const: forbiddenDelete
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: parse_invalid_content_type
     input_code: "CONTENT.USER.invalid_content_type"
     input_status: 400
     expected_dart_const: invalidContentType
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: parse_content_too_long
     input_code: "CONTENT.USER.content_too_long"
     input_status: 422
     expected_dart_const: contentTooLong
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: parse_media_not_ready
     input_code: "CONTENT.USER.media_not_ready"
     input_status: 202
     expected_dart_const: mediaNotReady
-    expected_retryable: true
+    expected_recovery_action: retry
 
   - name: parse_internal_error
     input_code: "CONTENT.SYSTEM.internal_error"
     input_status: 500
     expected_dart_const: internalError
-    expected_retryable: false
+    expected_recovery_action: surface
 
   - name: fallback_unknown_code
     description: 未知错误码 → 返回 internalError 而非崩溃

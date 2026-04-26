@@ -45,7 +45,7 @@ level_acceptance:
     - file: test/cloud/rtc/call_session_dto_test.dart
       layer: T1
   A4:
-    criteria: ≥5 个 RtcErrorCode round-trip + fromCode + httpStatus + isRetryable 全覆盖
+    criteria: ≥5 个 RtcErrorCode round-trip + fromCode + httpStatus + recoveryAction 全覆盖
     status: implemented
     linked_tasks:
     - M2

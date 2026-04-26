@@ -3,7 +3,7 @@ name: travel_planning
 description: 旅行攻略、景点推荐、酒店机票、行程规划。
 domain: travel_planning
 mode: hybrid
-allowed_tools: web_search local_context
+allowed_tools: web_search
 trigger_keywords: []
 searchPolicy:
   maxReflection: 2
@@ -42,8 +42,8 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 禁用信号：明显属于其他垂类时不应强行触发。
 - 竞争冲突：不确定时先 ask_user 澄清（天数/偏好亲子还是轻奢等）。
 
-## local_context 输出约束
-当调用 local_context 时，必须按 `local_context_v1` 解析，并明确 `media.included=false`。
+## 系统上下文约束
+位置、时间、设备与权限信息统一来自系统默认注入上下文，不再通过额外工具读取。
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：

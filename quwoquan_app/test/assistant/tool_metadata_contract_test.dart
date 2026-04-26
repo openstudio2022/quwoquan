@@ -6,7 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 
 void main() {
-  test('tool catalog should define divination domain mapping', () {
+  test('tool catalog should define every skill domain mapping', () {
     final manifestFile = File('assets/assistant/tools/manifest.json');
     expect(manifestFile.existsSync(), isTrue);
 
@@ -31,6 +31,30 @@ void main() {
 
     final domainMatrix =
         (catalog['domainToolMatrix'] as List?) ?? const <dynamic>[];
+    final matrixByDomain = <String, Set<String>>{
+      for (final item in domainMatrix.whereType<Map>())
+        if ((item['domainId']?.toString().trim() ?? '').isNotEmpty)
+          item['domainId'].toString().trim():
+              ((item['allowedTools'] as List?) ?? const <dynamic>[])
+                  .whereType<String>()
+                  .map((tool) => tool.trim())
+                  .where((tool) => tool.isNotEmpty)
+                  .toSet(),
+    };
+    final skillAllowedToolsByDomain = _skillAllowedToolsByDomain();
+    expect(
+      matrixByDomain.keys.toSet(),
+      equals(skillAllowedToolsByDomain.keys.toSet()),
+      reason: 'domainToolMatrix must stay aligned with bundled SKILL.md domains',
+    );
+    for (final entry in skillAllowedToolsByDomain.entries) {
+      expect(
+        matrixByDomain[entry.key],
+        equals(entry.value),
+        reason: '${entry.key} allowed tools must come from SKILL.md',
+      );
+    }
+
     final divination = domainMatrix.whereType<Map>().firstWhere(
       (item) => item['domainId']?.toString() == 'divination_fortune',
       orElse: () => <String, dynamic>{},
@@ -50,9 +74,9 @@ void main() {
     final weatherAllowed =
         (weather['allowedTools'] as List?)?.whereType<String>().toList() ??
         const <String>[];
-    expect(weatherAllowed.contains('local_context'), isTrue);
     expect(weatherAllowed.contains('search'), isTrue);
     expect(weatherAllowed.contains('web_search'), isTrue);
+    expect(weatherAllowed.contains('memory_search'), isTrue);
 
     final fallback = domainMatrix.whereType<Map>().firstWhere(
       (item) => item['domainId']?.toString() == 'fallback_general_search',
@@ -107,7 +131,7 @@ void main() {
       }),
     );
     expect(
-      parameterSummaryNames.contains(SearchToolFieldNames.queryTasks),
+      parameterSummaryNames.contains(SearchToolFieldNames.searchPlans),
       isFalse,
     );
     expect(
@@ -135,7 +159,7 @@ void main() {
         ...SearchToolContract.optionalFields,
       }),
     );
-    expect(properties.containsKey(SearchToolFieldNames.queryTasks), isFalse);
+    expect(properties.containsKey(SearchToolFieldNames.searchPlans), isFalse);
     expect(properties.containsKey(SearchToolFieldNames.queryVariants), isFalse);
 
     final modeSchema =
@@ -185,4 +209,30 @@ void main() {
       equals(SearchToolContract.contentTypes),
     );
   });
+}
+
+Map<String, Set<String>> _skillAllowedToolsByDomain() {
+  final result = <String, Set<String>>{};
+  final skillsDir = Directory('assets/assistant/skills');
+  for (final dir in skillsDir.listSync().whereType<Directory>()) {
+    final skillFile = File('${dir.path}/SKILL.md');
+    if (!skillFile.existsSync()) continue;
+    final raw = skillFile.readAsStringSync();
+    final domain = _frontmatterValue(raw, 'domain');
+    final allowedTools = _frontmatterValue(raw, 'allowed_tools')
+        .split(RegExp(r'[\s,]+'))
+        .map((tool) => tool.trim())
+        .where((tool) => tool.isNotEmpty)
+        .toSet();
+    if (domain.isNotEmpty) {
+      result[domain] = allowedTools;
+    }
+  }
+  return result;
+}
+
+String _frontmatterValue(String raw, String key) {
+  final pattern = RegExp('^$key:\\s*(.+)\$', multiLine: true);
+  final match = pattern.firstMatch(raw);
+  return match?.group(1)?.trim() ?? '';
 }

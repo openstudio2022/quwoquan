@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 
 import 'assistant_test_fixture_paths.dart';

@@ -469,6 +469,58 @@
       ]
     },
     {
+      "domainId": "fortune_astrology",
+      "cases": [
+        {
+          "id": "fortune_astrology-1",
+          "multiTurn": true,
+          "conversation": [
+            "我今天工作运怎么样？",
+            "如果我下午要谈合作，有什么提醒？"
+          ],
+          "mustContain": ["运势", "建议", "不确定"]
+        },
+        {
+          "id": "fortune_astrology-2",
+          "multiTurn": false,
+          "conversation": ["帮我看看双子座本周整体状态。"],
+          "mustContain": ["星座", "行动建议"]
+        },
+        {
+          "id": "fortune_astrology-3",
+          "multiTurn": false,
+          "conversation": ["塔罗占卜结果能不能帮我做决定？"],
+          "mustContain": ["边界", "主观能动性"]
+        }
+      ]
+    },
+    {
+      "domainId": "huawei_cloud_qa",
+      "cases": [
+        {
+          "id": "huawei_cloud_qa-1",
+          "multiTurn": true,
+          "conversation": [
+            "华为云上对象存储和云硬盘怎么选？",
+            "如果我要做图片归档，方案要怎么调整？"
+          ],
+          "mustContain": ["售前咨询", "方案", "检索策略"]
+        },
+        {
+          "id": "huawei_cloud_qa-2",
+          "multiTurn": false,
+          "conversation": ["盘古大模型和 ModelArts 是什么关系？"],
+          "mustContain": ["产品", "流程", "依据"]
+        },
+        {
+          "id": "huawei_cloud_qa-3",
+          "multiTurn": false,
+          "conversation": ["华为云工单提交失败应该怎么排查？"],
+          "mustContain": ["故障诊断", "步骤", "售后服务"]
+        }
+      ]
+    },
+    {
       "domainId": "fallback_general_search",
       "cases": [
         {

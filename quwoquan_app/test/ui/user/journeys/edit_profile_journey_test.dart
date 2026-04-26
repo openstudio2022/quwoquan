@@ -35,6 +35,7 @@ class _EditProfileMockRepository extends MockUserProfileRepository {
       ownerUserId: base.ownerUserId,
       subjectType: base.subjectType,
       subAccountId: base.subAccountId,
+      userHandle: (_updatedProfile['userHandle'] as String?) ?? base.userHandle,
       username: (_updatedProfile['username'] as String?) ?? base.username,
       displayName:
           (nick != null && nick.isNotEmpty) ? nick : base.displayName,
@@ -46,6 +47,7 @@ class _EditProfileMockRepository extends MockUserProfileRepository {
       postCount: base.postCount,
       circleCount: base.circleCount,
       likeCount: base.likeCount,
+      isolationLevel: base.isolationLevel,
       profileVisibility: base.profileVisibility,
       inheritsFromOwner: base.inheritsFromOwner,
       overriddenFields: base.overriddenFields,

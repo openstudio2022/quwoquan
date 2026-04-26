@@ -10,7 +10,7 @@ errors:
     kind: USER
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: circleNotFound
     go_const: ErrCircleNotFound
     user_message:
@@ -21,7 +21,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: joinApprovalRequired
     go_const: ErrJoinApprovalRequired
     user_message:
@@ -32,7 +32,7 @@ errors:
     kind: USER
     reason: conflict
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: alreadyMember
     go_const: ErrAlreadyMember
     user_message:
@@ -43,8 +43,8 @@ errors:
     kind: USER
     reason: rate_limited
     http_status: 429
-    retryable: true
-    retry_after_seconds: 60
+    recovery_action: retry
+    recovery_after_seconds: 60
     dart_const: rateLimited
     go_const: ErrRateLimited
     user_message:
@@ -55,7 +55,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: notMember
     go_const: ErrNotMember
     user_message:
@@ -66,7 +66,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: permissionDenied
     go_const: ErrPermissionDenied
     user_message:
@@ -77,7 +77,7 @@ errors:
     kind: USER
     reason: quota_exceeded
     http_status: 413
-    retryable: false
+    recovery_action: surface
     dart_const: storageQuotaExceeded
     go_const: ErrStorageQuotaExceeded
     user_message:
@@ -88,7 +88,7 @@ errors:
     kind: USER
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: fileNotFound
     go_const: ErrFileNotFound
     user_message:
@@ -99,7 +99,7 @@ errors:
     kind: USER
     reason: upload_failed
     http_status: 422
-    retryable: true
+    recovery_action: retry
     dart_const: fileUploadFailed
     go_const: ErrFileUploadFailed
     user_message:
@@ -110,7 +110,7 @@ errors:
     kind: USER
     reason: validation_failed
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: fileTypeNotAllowed
     go_const: ErrFileTypeNotAllowed
     user_message:
@@ -121,7 +121,7 @@ errors:
     kind: USER
     reason: validation_failed
     http_status: 413
-    retryable: false
+    recovery_action: surface
     dart_const: fileTooLarge
     go_const: ErrFileTooLarge
     user_message:
@@ -132,7 +132,7 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: false
+    recovery_action: surface
     dart_const: internalError
     go_const: ErrInternalError
     user_message:

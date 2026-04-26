@@ -24,7 +24,10 @@ slices:
       - "`PersonaProfileView`、`ActivePersonaContextView`、`RelationshipCapabilityView` 与 graph list item 可由 metadata 表达"
       - 历史 `OwnerAccount / SubAccount / ProfileSubject / username` 主链路命名退出 metadata
       - feature flag 与 telemetry schema 有正式落点
-    status: planned
+    status: partial
+    notes:
+      - "M1/M2 已冻结 `userId / personaId / userHandle`、`ProfileSubjectView`、`ActivePersonaContextView` 与 content canonical `profileSubjectId` 主链路。"
+      - "`follow_edge / social graph / assistant` 的 Journey 级 metadata 与 request context 收口仍待后续 scenario 完成。"
 
   - id: P2
     title: establish non-compatible codegen baseline
@@ -43,7 +46,10 @@ slices:
       - "`make codegen` 与 `make codegen-app` 产出可被 App 与 service 消费的生成物"
       - App / cloud / assistant 不再维护第二套 path、operation 或 request context override
       - 旧 `sub-account / personas / profile-subject` 生成物退出主链路
-    status: planned
+    status: partial
+    notes:
+      - "user-service、content-service 与 App 对 `ProfileSubject` / canonical subject 的 codegen 消费已经转绿。"
+      - "assistant/session 及剩余社交图消费者尚未全部完成统一生成物切换，因此本切片维持 partial。"
 
   - id: P3
     title: land persona management and profile contracts
@@ -61,7 +67,10 @@ slices:
       - "`PersonaProfileView / Mutation / InheritanceState` 成为公开分身资料唯一真相源"
       - `displayName / userHandle / phone / email` 统一下沉为分身字段
       - strict isolation 与 retired attribution 规则可被主页和内容域稳定消费
-    status: planned
+    status: partial
+    notes:
+      - "`persona-management` 与 `persona-profile-subject-and-visibility` 已落地，J1 已 implemented，J3 的公开身份子链路已完成。"
+      - "Journey 级跨关注图/共同联系人/审计映射的泄漏验证尚未闭环，因此本切片仍为 partial。"
 
   - id: P4
     title: propagate active persona across domains
@@ -79,7 +88,10 @@ slices:
       - 发帖、评论、聊天、圈子、通知和助手会话默认都基于 active persona
       - persona context 缺失时系统阻断、恢复或要求确认，不静默回退到 userId
       - assistant 与 notification 的 drift / mismatch 有明确 telemetry
-    status: planned
+    status: partial
+    notes:
+      - "M3 已完成 content/chat/assistant 主链路，M4 补齐了 circle join/leave 的显式 persona request headers 与 notification replay mismatch 回归。"
+      - "J2 仍缺少跨更多业务面的完整 T4 用户旅程，因此本切片维持 partial。"
 
   - id: P5
     title: separate persona graph command and read paths
@@ -96,7 +108,10 @@ slices:
       - follow / unfollow 命令改为 persona-aware `FollowEdge` 写入
       - follower / following 与 `RelationshipCapabilityView` 以 `personaId` 为内部主键稳定读取
       - block gate、计数修正与列表过滤在弱网和重试下不串号
-    status: planned
+    status: partial
+    notes:
+      - "M4 补全后，user-service follow/block/list/capability/search 已切到 `profile-subjects` 单轨，App follow outbox 与主页 capability 也统一围绕 graph projection 工作。"
+      - "列表 overfetch+fill、owner 映射隐藏、计数自动修正与 flag-off edge 可读性回归已补齐，但共同粉丝 / 审计映射等更强隔离验证仍未全部完成。"
 
   - id: P6
     title: validate migration, rollout, and journey evidence
@@ -117,4 +132,9 @@ slices:
       - 历史 `user / persona / relation / content / message` 数据到新 `personaId / userHandle` 的重整路径明确并完成演练
       - 三类开关、关键指标和回滚动作可执行
       - Journey 级主路径回归清单、灰度门槛与失败处置手册明确
-    status: planned
+    status: partial
+    notes:
+      - "M1/M2 已有分身管理与公开身份场景的 verify/codegen/T2/T3 证据，并补齐 profile-subject rollout flag 与 telemetry。"
+      - "M4 补全后已补齐 `ops.user.persona_context_v1 / ops.user.persona_graph_v1`、graph/follow 指标最小触发断言与 follow/graph rollback rehearsal。"
+      - "M5 已补齐 `runtime/persona` dry-run/validate 工具、`scripts/persona_migration_dry_run.sh` / `scripts/persona_migration_validate.sh`、`ops.user.persona_model_v2 / persona_sync_v2 / persona_graph_v2` 开关映射，以及 persona sync patch type。"
+      - "但完整 Journey 级迁移演练、上下文透传与关注图跨域灰度回滚尚未完成，因此不能宣告 P6 implemented。"

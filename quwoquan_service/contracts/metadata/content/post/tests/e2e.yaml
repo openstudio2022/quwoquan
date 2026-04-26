@@ -137,7 +137,7 @@ scenarios:
       - service returns { code: "CONTENT.USER.media_not_ready" }
     assertions:
       - UI shows ContentErrorMessages.zh[mediaNotReady] == "媒体文件正在处理中，请稍后发布"
-      - isRetryable: true → UI shows retry option
+      - recovery_action: retry → UI shows retry option
 
   - name: comment_on_post_journey
     description: 评论内容旅程：发表评论 → 评论数更新 → 行为信号到达推荐服务

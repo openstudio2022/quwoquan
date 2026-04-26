@@ -257,10 +257,7 @@ class _AssistantTestPageState extends State<_AssistantTestPage> {
         children: [
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.smart_toy),
-                onPressed: _invite,
-              ),
+              IconButton(icon: const Icon(Icons.smart_toy), onPressed: _invite),
               IconButton(
                 icon: const Icon(Icons.remove_circle_outline),
                 onPressed: _remove,
@@ -327,6 +324,8 @@ class _TrackingAssistantRepo extends MockChatRepository {
     List<String>? mentions,
     String? senderPersonaId,
     String? senderProfileSubjectId,
+    String? senderAvatarUrlSnapshot,
+    String? senderDisplayNameSnapshot,
     String? personaContextVersion,
     required String clientMsgId,
   }) async {
@@ -341,6 +340,8 @@ class _TrackingAssistantRepo extends MockChatRepository {
       mentions: mentions,
       senderPersonaId: senderPersonaId,
       senderProfileSubjectId: senderProfileSubjectId,
+      senderAvatarUrlSnapshot: senderAvatarUrlSnapshot,
+      senderDisplayNameSnapshot: senderDisplayNameSnapshot,
       personaContextVersion: personaContextVersion,
       clientMsgId: clientMsgId,
     );

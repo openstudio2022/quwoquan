@@ -9,16 +9,6 @@ enum ChatErrorCode {
   internalError,
   unknown;
 
-  bool get isRetryable {
-    switch (this) {
-      case ChatErrorCode.rateLimited:
-      case ChatErrorCode.internalError:
-        return true;
-      default:
-        return false;
-    }
-  }
-
   static ChatErrorCode fromCode(String code) {
     switch (code) {
       case 'CHAT.USER.conversation_not_found':

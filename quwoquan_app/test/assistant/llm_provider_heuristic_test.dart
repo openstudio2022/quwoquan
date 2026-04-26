@@ -14,7 +14,6 @@ void main() {
           ],
           availableTools: const <String>[
             'web_search',
-            'local_context',
             'media_gallery',
             'intent_bridge',
           ],

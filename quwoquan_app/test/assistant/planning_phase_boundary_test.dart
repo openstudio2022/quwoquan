@@ -6,6 +6,7 @@ import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/retrieval_design_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/understand_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
@@ -15,7 +16,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'UnderstandPhase 负责生成 queryTasks，RetrievalDesignPhase 只做归一化不再二次规划',
+    'UnderstandPhase 负责生成 searchPlans，RetrievalDesignPhase 只做归一化不再二次规划',
     () async {
       final provider = _CapturePlannerProvider();
       final toolRegistry = AssistantToolRegistry()
@@ -71,29 +72,20 @@ void main() {
       expect(searchIterationState['currentIteration'], 1);
       final understandState = understandOutput.state;
       expect(understandState, isNotNull);
-      expect(understandState!.queryTasks, isNotEmpty);
-      expect(
-        understandState.intentGraph?.queryNormalization.referenceNowIso,
-        '2026-04-08T10:30:00.000',
+      final understandSearchPlans = searchPlansFromTaskGraph(
+        understandState!.taskGraph,
       );
+      expect(understandSearchPlans, isNotEmpty);
       expect(
-        understandState.intentGraph?.queryNormalization.timezone,
+        understandSearchPlans.first.timezone,
         'Asia/Shanghai',
       );
-      expect(
-        understandState.intentGraph?.queryNormalization.timeScope,
-        isEmpty,
-      );
-      expect(
-        understandState.intentGraph?.queryNormalization.timePoint,
-        isEmpty,
-      );
-      for (final task in understandState.queryTasks) {
+      for (final task in understandSearchPlans) {
         expect(task.timeScope, isEmpty);
         expect(task.timePoint, isEmpty);
         expect(task.query, equals('深圳 2026-04-08 实时天气'));
       }
-      final plannedTaskIds = understandState.queryTasks
+      final plannedTaskIds = understandSearchPlans
           .map((task) => task.id)
           .toList(growable: false);
 
@@ -109,14 +101,17 @@ void main() {
       expect(provider.plannerCalls, 1);
       final retrievalState = retrievalOutput.state;
       expect(retrievalState, isNotNull);
+      final retrievalSearchPlans = searchPlansFromTaskGraph(
+        retrievalState!.taskGraph,
+      );
       expect(
-        retrievalState!.queryTasks
+        retrievalSearchPlans
             .map((task) => task.id)
             .toList(growable: false),
         orderedEquals(plannedTaskIds),
       );
       expect(
-        retrievalState.queryTasks.every(
+        retrievalSearchPlans.every(
           (task) =>
               task.query == '深圳 2026-04-08 实时天气' &&
               task.timePoint.isEmpty &&
@@ -256,31 +251,35 @@ class _CapturePlannerProvider implements AssistantLlmProvider {
           'intentSummary': '用户需要实时天气结论。',
           'concernPoints': <String>['天气现状', '体感'],
         },
-        'intentGraph': const <String, dynamic>{
-          'userGoal': '获取深圳今天实时天气',
-          'problemShape': 'single_skill',
-          'primarySkill': 'weather',
-          'problemClass': 'realtime_info',
-          'inferredMotive': '想知道深圳今天天气',
-          'secondarySkills': <String>[],
-          'queryNormalization': <String, dynamic>{
-            'normalizedQuery': '深圳 今日 天气 实时',
-          },
-          'queryTasks': <Map<String, dynamic>>[
+        'understandingResult': const <String, dynamic>{
+          'intents': <Map<String, dynamic>>[
             <String, dynamic>{
-              'id': 'weather_today',
-              'query': '深圳 2026-04-08 实时天气',
-              'dimension': 'current_state',
-              'why': '直接把今天落成具体日期，避免运行时再猜时间。',
+              'intentId': 'intent_weather_today',
+              'intentType': 'weather.lookup',
+              'goal': '获取深圳今天实时天气',
+              'requiresEvidence': true,
             },
           ],
-          'contextSlots': <String, dynamic>{},
-          'globalConstraints': <String, dynamic>{'mode': 'qa'},
-          'clarificationNeeded': false,
-          'requiresExternalEvidence': true,
-          'answerShape': 'decision_ready',
-          'freshnessNeed': 'latest',
-          'freshnessHoursMax': 6,
+        },
+        'taskGraph': const <String, dynamic>{
+          'tasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'taskId': 'weather_today',
+              'intentId': 'intent_weather_today',
+              'toolName': 'web_search',
+              'toolArgs': <String, dynamic>{
+                'query': '深圳 2026-04-08 实时天气',
+                'searchPlans': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'id': 'weather_today',
+                    'query': '深圳 2026-04-08 实时天气',
+                    'dimension': 'current_state',
+                    'timezone': 'Asia/Shanghai',
+                  },
+                ],
+              },
+            },
+          ],
         },
         'selfCheck': const <String, dynamic>{
           'goalSatisfied': true,

@@ -60,6 +60,33 @@ class CloudRequestHeaders {
     };
   }
 
+  static Map<String, String> withPersonaContext(
+    Map<String, String> headers, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  }) {
+    final next = Map<String, String>.from(headers);
+    final resolvedOwnerUserId = (ownerUserId ?? '').trim();
+    final resolvedActorProfileSubjectId = (actorProfileSubjectId ?? '').trim();
+    final resolvedPersonaId = (personaId ?? '').trim();
+    final resolvedContextVersion = (personaContextVersion ?? '').trim();
+    if (resolvedOwnerUserId.isNotEmpty) {
+      next['X-Client-User-Id'] = resolvedOwnerUserId;
+    }
+    if (resolvedActorProfileSubjectId.isNotEmpty) {
+      next['X-Profile-Subject-Id'] = resolvedActorProfileSubjectId;
+    }
+    if (resolvedPersonaId.isNotEmpty) {
+      next['X-Persona-Id'] = resolvedPersonaId;
+    }
+    if (resolvedContextVersion.isNotEmpty) {
+      next['X-Persona-Context-Version'] = resolvedContextVersion;
+    }
+    return next;
+  }
+
   static Map<String, String> forSurfaceOperation({
     required String surfaceId,
     required String operationId,
@@ -94,4 +121,3 @@ class CloudRequestHeaders {
 
   static String _toBase36(int value) => value.toRadixString(36);
 }
-

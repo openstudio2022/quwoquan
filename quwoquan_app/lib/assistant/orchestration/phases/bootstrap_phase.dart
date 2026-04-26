@@ -1,9 +1,14 @@
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
+import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
@@ -19,6 +24,8 @@ import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart'
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_context_scope_hint_view.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_state_keys.dart';
 
 /// Bootstrap: session resolution, context assembly, catalog loading.
 class BootstrapPhase implements Phase {
@@ -51,8 +58,10 @@ class BootstrapPhase implements Phase {
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content
         : '';
-    final forceRefreshCatalog =
-        request.contextScopeHint['forceRefreshCatalog'] == true;
+    final contextScopeHintView = AssistantPipelineContextScopeHintView(
+      request.contextScopeHint,
+    );
+    final forceRefreshCatalog = contextScopeHintView.forceRefreshCatalog;
     await sessionManager.load();
     final requestedSessionId = request.sessionId ?? 'default';
     final sessionId = requestedSessionId == 'assistant'
@@ -66,10 +75,29 @@ class BootstrapPhase implements Phase {
       forceRefresh: forceRefreshCatalog,
     );
     final previousRunArtifacts = _recoverPreviousRunArtifacts(
-      request.contextScopeHint,
+      contextScopeHintView,
     );
     final latestAssistant = _latestAssistantMessage(priorSessionHistory);
-    final previousIntentGraph = _parsePreviousIntentGraph(latestAssistant);
+    final previousSystemContextEnvelope = latestAssistant == null
+        ? const SystemContextEnvelope()
+        : resolvePersistedAssistantSystemContextEnvelope(latestAssistant);
+    final previousUnderstandingResult = latestAssistant == null
+        ? const UnderstandingResult()
+        : resolvePersistedAssistantUnderstandingResult(latestAssistant);
+    final previousTaskGraph = latestAssistant == null
+        ? const TaskGraph()
+        : resolvePersistedAssistantTaskGraph(latestAssistant);
+    final previousPlanView = _parsePreviousPlanView(latestAssistant);
+    final effectivePreviousUnderstandingResult =
+        previousUnderstandingResult.intents.isNotEmpty
+        ? previousUnderstandingResult
+        : _typedUnderstandingFromPlanView(previousPlanView);
+    final effectivePreviousTaskGraph = previousTaskGraph.tasks.isNotEmpty
+        ? previousTaskGraph
+        : _taskGraphFromPlanView(
+            previousPlanView,
+            effectivePreviousUnderstandingResult,
+          );
     final previousAnswerSummary = _resolvePreviousAnswerSummary(
       latestAssistant,
     );
@@ -102,21 +130,17 @@ class BootstrapPhase implements Phase {
     final continuityPolicy = _fallbackContinuityPolicy(
       query: latestUserQuery,
       sessionHistory: priorSessionHistory,
-      previousIntentGraph: previousIntentGraph,
+      previousPlanView: previousPlanView,
       previousAnswerSummary: previousAnswerSummary,
       recentRoundsLimit: recentRoundsLimit,
       olderRecentRoundsLimit: olderRecentRoundsLimit,
     );
-    final continuityOverrideSlots =
-        (request.contextScopeHint['continuityOverrideSlots'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final continuityOverrideSlots = contextScopeHintView.mapValue(
+      AssistantPipelineStateKeys.continuityOverrideSlots,
+    );
     final carryPreviousTurn = _shouldCarryPreviousTurn(continuityPolicy);
     final carriedPreviousRunArtifacts = carryPreviousTurn
         ? previousRunArtifacts
-        : null;
-    final carriedPreviousIntentGraph = carryPreviousTurn
-        ? previousIntentGraph
         : null;
     final carriedPreviousAnswerSummary = carryPreviousTurn
         ? previousAnswerSummary
@@ -203,6 +227,12 @@ class BootstrapPhase implements Phase {
       contextScopeHint: contextScopeHint,
       continuityPolicy: continuityPolicy,
     );
+    final systemContextEnvelope = _resolveSystemContextEnvelope(
+      request: request,
+      contextScopeHintView: contextScopeHintView,
+      contextAssembly: contextAssembly,
+      fallback: previousSystemContextEnvelope,
+    );
     await toolMetadataRegistry?.ensureLoaded();
     await AssistantContentFilters.ensureLoaded();
     final domainCatalog = await domainRouter.availableDomains(
@@ -234,11 +264,17 @@ class BootstrapPhase implements Phase {
           sessionId: sessionId,
           latestUserQuery: latestUserQuery,
           historySummary: historySummary,
+          systemContextEnvelope: systemContextEnvelope,
           recentDialogueRounds: recentDialogueRounds,
           recentDialogueRoundsLimit: recentRoundsLimit,
           recalledTexts: recalledTexts,
-          previousIntentGraph: carriedPreviousIntentGraph,
           previousAnswerSummary: carriedPreviousAnswerSummary,
+          previousUnderstandingResult: carryPreviousTurn
+              ? effectivePreviousUnderstandingResult
+              : const UnderstandingResult(),
+          previousTaskGraph: carryPreviousTurn
+              ? effectivePreviousTaskGraph
+              : const TaskGraph(),
           previousUnderstandingSnapshot: carriedPreviousUnderstandingSnapshot,
           previousAnswerProcessing: carriedPreviousAnswerProcessing,
           historicalThinkingSnapshot: carriedHistoricalThinkingSnapshot,
@@ -255,6 +291,7 @@ class BootstrapPhase implements Phase {
         ),
         contextAssembly: contextAssembly,
         previousRunArtifacts: carriedPreviousRunArtifacts,
+        systemContextEnvelope: systemContextEnvelope,
       ),
     );
   }
@@ -264,11 +301,12 @@ class BootstrapPhase implements Phase {
   }
 
   RunArtifacts? _recoverPreviousRunArtifacts(
-    Map<String, dynamic> contextScopeHint,
+    AssistantPipelineContextScopeHintView contextScopeHint,
   ) {
-    final raw = (contextScopeHint['runArtifacts'] as Map?)
-        ?.cast<String, dynamic>();
-    if (raw == null || raw.isEmpty) return null;
+    final raw = contextScopeHint.mapValue(
+      AssistantPipelineStateKeys.runArtifacts,
+    );
+    if (raw.isEmpty) return null;
     try {
       return parseRunArtifacts(raw);
     } catch (_) {
@@ -344,17 +382,20 @@ class BootstrapPhase implements Phase {
     return result.finalText.trim();
   }
 
-  IntentGraph? _parsePreviousIntentGraph(
+  AssistantPlanView? _parsePreviousPlanView(
     Map<String, dynamic>? latestAssistant,
   ) {
-    final raw = (latestAssistant?['intentGraph'] as Map?)
-        ?.cast<String, dynamic>();
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      return IntentGraph.fromJson(raw);
-    } catch (_) {
+    if (latestAssistant == null || latestAssistant.isEmpty) {
       return null;
     }
+    final understandingResult = resolvePersistedAssistantUnderstandingResult(
+      latestAssistant,
+    );
+    final taskGraph = resolvePersistedAssistantTaskGraph(latestAssistant);
+    return assistantPlanViewFromTypedMainline(
+      understandingResult: understandingResult,
+      taskGraph: taskGraph,
+    );
   }
 
   RunArtifactsUnderstandingSnapshot _parsePreviousUnderstandingSnapshot(
@@ -424,6 +465,121 @@ class BootstrapPhase implements Phase {
     return const <String, dynamic>{};
   }
 
+  SystemContextEnvelope _resolveSystemContextEnvelope({
+    required AssistantRunRequest request,
+    required AssistantPipelineContextScopeHintView contextScopeHintView,
+    required ContextAssemblyResult? contextAssembly,
+    required SystemContextEnvelope fallback,
+  }) {
+    final geo = contextAssembly?.availableGeoContext;
+    final gps = request.gpsLocation;
+    final fallbackTime = fallback.time;
+    final fallbackLocation = fallback.location;
+    final timezone = _firstNonEmptyString(<Object?>[
+      contextScopeHintView.stringValue('timezone'),
+      gps['timezone'],
+      geo?.timezone,
+      fallbackTime.timezone,
+      fallbackLocation.timezone,
+    ]);
+    final locale = _firstNonEmptyString(<Object?>[
+      contextScopeHintView.stringValue('locale'),
+      gps['locale'],
+      fallbackTime.locale,
+    ]);
+    final referenceNowIso = _firstNonEmptyString(<Object?>[
+      contextScopeHintView.stringValue('referenceNowIso'),
+      fallbackTime.referenceNowIso,
+    ]);
+    final countryCode = _firstNonEmptyString(<Object?>[
+      geo?.countryCode,
+      gps['countryCode'],
+      fallbackLocation.countryCode,
+    ]);
+    final countryName = _firstNonEmptyString(<Object?>[
+      geo?.countryLabel,
+      gps['countryLabel'],
+      fallbackLocation.countryName,
+    ]);
+    final adminAreaLevel1 = _firstNonEmptyString(<Object?>[
+      geo?.regionLabel,
+      gps['region'],
+      gps['regionLabel'],
+      fallbackLocation.adminAreaLevel1,
+    ]);
+    final adminAreaLevel2 = _firstNonEmptyString(<Object?>[
+      geo?.cityLabel,
+      gps['city'],
+      gps['cityLabel'],
+      fallbackLocation.adminAreaLevel2,
+    ]);
+    final adminAreaLevel3 = _firstNonEmptyString(<Object?>[
+      geo?.districtLabel,
+      gps['district'],
+      gps['districtLabel'],
+      fallbackLocation.adminAreaLevel3,
+    ]);
+    final formattedAddress = <String>[
+      countryName,
+      adminAreaLevel1,
+      adminAreaLevel2,
+      adminAreaLevel3,
+    ].where((item) => item.trim().isNotEmpty).join(' ').trim();
+    final locationGranularity = adminAreaLevel2.isNotEmpty
+        ? LocationGranularity.city
+        : adminAreaLevel1.isNotEmpty
+        ? LocationGranularity.region
+        : countryCode.isNotEmpty || countryName.isNotEmpty
+        ? LocationGranularity.region
+        : LocationGranularity.none;
+    return SystemContextEnvelope(
+      time: SystemTimeContext(
+        referenceNowIso: referenceNowIso,
+        timezone: timezone,
+        locale: locale,
+        granularity:
+            referenceNowIso.isNotEmpty || timezone.isNotEmpty || locale.isNotEmpty
+            ? ContextGranularity.coarse
+            : fallbackTime.granularity,
+      ),
+      device: DeviceSummary(
+        os: request.deviceOs.trim().isNotEmpty
+            ? request.deviceOs.trim()
+            : fallback.device.os,
+        model: request.deviceModel.trim().isNotEmpty
+            ? request.deviceModel.trim()
+            : fallback.device.model,
+        appVersion: fallback.device.appVersion,
+        granularity:
+            request.deviceOs.trim().isNotEmpty || request.deviceModel.trim().isNotEmpty
+            ? ContextGranularity.coarse
+            : fallback.device.granularity,
+      ),
+      permissions: fallback.permissions,
+      location: SystemLocationContext(
+        countryCode: countryCode,
+        countryName: countryName,
+        adminAreaLevel1: adminAreaLevel1,
+        adminAreaLevel2: adminAreaLevel2,
+        adminAreaLevel3: adminAreaLevel3,
+        adminAreaLevel4: fallbackLocation.adminAreaLevel4,
+        formattedAddress: formattedAddress,
+        timezone: timezone,
+        granularity: locationGranularity,
+      ),
+    );
+  }
+
+  String _firstNonEmptyString(Iterable<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
+  }
+
   bool _hasStructuredContent(Map<String, dynamic> value) {
     for (final item in value.values) {
       if (item is String && item.trim().isNotEmpty) return true;
@@ -454,6 +610,96 @@ class BootstrapPhase implements Phase {
         '';
   }
 
+  UnderstandingResult _typedUnderstandingFromPlanView(
+    AssistantPlanView? previousPlanView,
+  ) {
+    if (previousPlanView == null || previousPlanView.userGoal.trim().isEmpty) {
+      return const UnderstandingResult();
+    }
+    final intentType = previousPlanView.primarySkill.trim().isNotEmpty
+        ? '${previousPlanView.primarySkill.trim()}.retrieve'
+        : 'general.retrieve';
+    return UnderstandingResult(
+      intents: <IntentNode>[
+        IntentNode(
+          intentId: 'intent_previous',
+          intentType: intentType,
+          goal: previousPlanView.userGoal.trim(),
+          entityRefs: previousPlanView.entityRefs
+              .map(
+                (item) => IntentEntityRef(
+                  entityType: 'entity',
+                  canonicalKey: item.trim(),
+                  displayText: item.trim(),
+                ),
+              )
+              .where((item) => item.canonicalKey.isNotEmpty)
+              .toList(growable: false),
+          constraints: previousPlanView.constraints
+              .map((item) => IntentConstraint(key: 'constraint', value: item))
+              .toList(growable: false),
+          requiresEvidence:
+              previousPlanView.requiresExternalEvidence ||
+              previousPlanView.mustVerifyClaims ||
+              previousPlanView.searchPlans.isNotEmpty,
+        ),
+      ],
+      dialogueTransitionDecision: DialogueTransitionDecision(
+        nextTurnMode:
+            previousPlanView.requiresExternalEvidence ||
+                previousPlanView.searchPlans.isNotEmpty
+            ? NextTurnMode.continueExecution
+            : NextTurnMode.answer,
+        needsClarification: previousPlanView.clarificationNeeded,
+      ),
+    );
+  }
+
+  TaskGraph _taskGraphFromPlanView(
+    AssistantPlanView? previousPlanView,
+    UnderstandingResult understandingResult,
+  ) {
+    if (understandingResult.intents.isEmpty) {
+      return const TaskGraph();
+    }
+    final primaryIntentId = understandingResult.intents.first.intentId;
+    final plans = previousPlanView?.searchPlans ?? const <SearchPlanItem>[];
+    if (plans.isEmpty) {
+      if (!understandingResult.intents.first.requiresEvidence) {
+        return const TaskGraph();
+      }
+      return TaskGraph(
+        tasks: <TaskNode>[
+          TaskNode(
+            taskId: 'task_previous',
+            intentId: primaryIntentId,
+            toolName: 'web_search',
+            toolArgs: TaskToolArgs(<String, Object?>{
+              'query': understandingResult.intents.first.goal,
+            }),
+          ),
+        ],
+      );
+    }
+    return TaskGraph(
+      tasks: plans
+          .map(
+            (plan) => TaskNode(
+              taskId: plan.id.trim().isNotEmpty ? plan.id.trim() : 'task_previous',
+              intentId: primaryIntentId,
+              toolName: 'web_search',
+              toolArgs: TaskToolArgs(<String, Object?>{
+                'query': plan.query.trim().isNotEmpty
+                    ? plan.query.trim()
+                    : understandingResult.intents.first.goal,
+                'searchPlans': <Map<String, dynamic>>[plan.toJson()],
+              }),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
   List<String> _recentUserQueries(List<Map<String, dynamic>> sessionHistory) {
     final result = <String>[];
     for (final item in sessionHistory.reversed) {
@@ -480,7 +726,7 @@ class BootstrapPhase implements Phase {
   ContextContinuityPolicy _fallbackContinuityPolicy({
     required String query,
     required List<Map<String, dynamic>> sessionHistory,
-    required IntentGraph? previousIntentGraph,
+    required AssistantPlanView? previousPlanView,
     required String previousAnswerSummary,
     required int recentRoundsLimit,
     required int olderRecentRoundsLimit,
@@ -493,7 +739,7 @@ class BootstrapPhase implements Phase {
     );
     if (_shouldCarryPreviousTurn(seeded)) return seeded;
     final hasPriorTurn =
-        previousIntentGraph != null ||
+        previousPlanView != null ||
         previousAnswerSummary.trim().isNotEmpty ||
         _latestAssistantMessage(sessionHistory) != null;
     final referenceQueries = _recentUserQueries(sessionHistory);
@@ -501,7 +747,7 @@ class BootstrapPhase implements Phase {
         _looksLikeFollowUpQuery(query) ||
         _looksLikeImplicitSameTopicFollowUp(
           query,
-          previousIntentGraph: previousIntentGraph,
+          previousPlanView: previousPlanView,
           referenceQueries: referenceQueries,
         );
     if (!hasPriorTurn || !implicitFollowUp) {
@@ -510,20 +756,17 @@ class BootstrapPhase implements Phase {
     return ContextContinuityPolicy(
       queryIntent: seeded.queryIntent,
       problemClass:
-          previousIntentGraph?.problemClass.wireName ?? seeded.problemClass,
+          previousPlanView?.problemClass.wireName ?? seeded.problemClass,
       continuityMode: ContextContinuityMode.explicitFollowUp,
       explicitContinuation: true,
       topicOverlap: seeded.topicOverlap > 0 ? seeded.topicOverlap : 0.6,
       allowHistorySummary: true,
       allowLongtermMemory: seeded.allowLongtermMemory,
-      allowLocationHints: _shouldCarryLocationHints(
-        previousIntentGraph,
-        previousAnswerSummary,
-      ),
+      allowLocationHints: _shouldCarryLocationHints(previousPlanView),
       referenceQueries: referenceQueries,
       carryForwardFacts: <String>[
-        if ((previousIntentGraph?.userGoal.trim() ?? '').isNotEmpty)
-          previousIntentGraph!.userGoal.trim(),
+        if ((previousPlanView?.userGoal.trim() ?? '').isNotEmpty)
+          previousPlanView!.userGoal.trim(),
       ],
       needsRecheckFacts: const <String>[],
       discardedAssumptions: const <String>[],
@@ -545,22 +788,22 @@ class BootstrapPhase implements Phase {
 
   bool _looksLikeImplicitSameTopicFollowUp(
     String query, {
-    required IntentGraph? previousIntentGraph,
+    required AssistantPlanView? previousPlanView,
     required List<String> referenceQueries,
   }) {
     final normalizedQuery = _normalizeImplicitFollowUpTopic(query);
     if (normalizedQuery.isEmpty || normalizedQuery.length > 12) {
       return false;
     }
-    final candidates = <String>[
-      previousIntentGraph?.userGoal ?? '',
-      previousIntentGraph?.targetObject ?? '',
-      ...?previousIntentGraph?.entityAnchors,
-      ...referenceQueries,
-    ]
-        .map(_normalizeImplicitFollowUpTopic)
-        .where((item) => item.isNotEmpty)
-        .toSet();
+    final candidates =
+        <String>[
+              previousPlanView?.userGoal ?? '',
+              ...?previousPlanView?.entityRefs,
+              ...referenceQueries,
+            ]
+            .map(_normalizeImplicitFollowUpTopic)
+            .where((item) => item.isNotEmpty)
+            .toSet();
     for (final candidate in candidates) {
       if (candidate.contains(normalizedQuery) ||
           normalizedQuery.contains(candidate)) {
@@ -585,21 +828,16 @@ class BootstrapPhase implements Phase {
     return normalized;
   }
 
-  bool _shouldCarryLocationHints(
-    IntentGraph? previousIntentGraph,
-    String previousAnswerSummary,
-  ) {
-    final contextSlots =
-        previousIntentGraph?.contextSlots ?? const <String, dynamic>{};
-    for (final key in const <String>[
-      'city',
-      'destination',
-      'location',
-      'place',
-    ]) {
-      if (contextSlots[key] != null) return true;
+  bool _shouldCarryLocationHints(AssistantPlanView? previousPlanView) {
+    if (previousPlanView == null) {
+      return false;
     }
-    return false;
+    return previousPlanView.searchPlans.any(
+      (plan) =>
+          plan.entityRefs.isNotEmpty ||
+          plan.timezone.trim().isNotEmpty ||
+          plan.timeScope.trim().isNotEmpty,
+    );
   }
 
   bool _shouldCarryPreviousTurn(ContextContinuityPolicy policy) {

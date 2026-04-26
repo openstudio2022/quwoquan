@@ -6,9 +6,9 @@ class AssistantPipelinePromptKeys {
   static const String dialogueContinuity = 'dialogueContinuity';
   static const String searchIterationState = 'searchIterationState';
   static const String evidenceContext = 'evidenceContext';
-  static const String intentGraphJson = 'intentGraphJson';
-  static const String queryTasksJson = 'queryTasksJson';
-  static const String entityAnchors = 'entityAnchors';
+  static const String planViewJson = 'planViewJson';
+  static const String searchPlansJson = 'searchPlansJson';
+  static const String entityRefs = 'entityRefs';
   static const String recentDialogueRounds = 'recentDialogueRounds';
   static const String skillRuns = 'skillRuns';
   static const String aggregationState = 'aggregationState';
@@ -23,5 +23,5 @@ class AssistantPipelinePromptKeys {
   static const String contextSlots = 'contextSlots';
   static const String referenceNowIso = 'referenceNowIso';
   static const String timezone = 'timezone';
-  static const String queryTasks = 'queryTasks';
+  static const String searchPlans = 'searchPlans';
 }

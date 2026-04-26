@@ -1,0 +1,93 @@
+schemaVersion: 1
+codes:
+  - code: ASSISTANT.MIDDLEWARE.llm_timeout
+    origin: remoteDependency
+    kind: timeout
+    nature: transient
+    defaultLocation:
+      businessObject: assistant_turn
+      functionModule: llm_client
+  - code: ASSISTANT.SYSTEM.contract_parse_failed
+    origin: remoteDependency
+    kind: parsing
+    nature: transient
+    defaultLocation:
+      businessObject: assistant_turn
+      functionModule: structured_response_parser
+  - code: ASSISTANT.SYSTEM.internal_error
+    origin: system
+    kind: internal
+    nature: bug
+    defaultLocation:
+      businessObject: assistant_turn
+      functionModule: pipeline_engine
+  - code: APP.NETWORK.offline
+    origin: environment
+    kind: network
+    nature: transient
+    defaultLocation:
+      businessObject: app_request
+      functionModule: network_client
+  - code: APP.USER.permission_required
+    origin: user
+    kind: permission
+    nature: requiresPermission
+    defaultLocation:
+      businessObject: app_permission
+      functionModule: permission_gate
+  - code: CLOUD.SYSTEM.unknown_error
+    origin: system
+    kind: internal
+    nature: bug
+    defaultLocation:
+      businessObject: cloud_request
+      functionModule: error_mapper
+  - code: OPS.CONFIG.base_url_missing
+    origin: developer
+    kind: validation
+    nature: bug
+    defaultLocation:
+      businessObject: ops_control_plane
+      functionModule: fetchJSON
+  - code: OPS.NETWORK.fetch_failed
+    origin: environment
+    kind: network
+    nature: transient
+    defaultLocation:
+      businessObject: ops_control_plane
+      functionModule: fetchJSON
+  - code: OPS.NETWORK.request_failed
+    origin: remoteDependency
+    kind: network
+    nature: transient
+    defaultLocation:
+      businessObject: ops_control_plane
+      functionModule: fetchJSON
+  - code: OPS.UNAVAILABLE.control_plane_unavailable
+    origin: remoteDependency
+    kind: unavailable
+    nature: transient
+    defaultLocation:
+      businessObject: ops_control_plane
+      functionModule: fetchJSON
+  - code: OPS.CONTRACT.invalid_json_response
+    origin: remoteDependency
+    kind: parsing
+    nature: transient
+    defaultLocation:
+      businessObject: ops_control_plane
+      functionModule: fetchJSON
+  - code: OPS.CONTRACT.invalid_response
+    origin: remoteDependency
+    kind: contract
+    nature: permanent
+    defaultLocation:
+      businessObject: ops_control_plane
+      functionModule: fetchJSON
+  - code: OPS.SYSTEM.unknown_error
+    origin: system
+    kind: internal
+    nature: bug
+    defaultLocation:
+      businessObject: ops_control_plane
+      functionModule: fetchJSON

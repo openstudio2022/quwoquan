@@ -5,6 +5,36 @@ import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 const String assistantRetrievalOutcomeField = 'retrievalOutcome';
 const String assistantAnswerGateDecisionField = 'answerGateDecision';
 
+enum RetrievalStatus {
+  unknown('unknown'),
+  degraded('degraded'),
+  incomplete('incomplete'),
+  needMoreEvidence('need_more_evidence'),
+  ready('ready'),
+  empty('empty');
+
+  const RetrievalStatus(this.wireName);
+
+  final String wireName;
+}
+
+RetrievalStatus parseRetrievalStatus(String raw) {
+  switch (raw.trim()) {
+    case 'degraded':
+      return RetrievalStatus.degraded;
+    case 'incomplete':
+      return RetrievalStatus.incomplete;
+    case 'need_more_evidence':
+      return RetrievalStatus.needMoreEvidence;
+    case 'ready':
+      return RetrievalStatus.ready;
+    case 'empty':
+      return RetrievalStatus.empty;
+    default:
+      return RetrievalStatus.unknown;
+  }
+}
+
 class RetrievalOutcome {
   const RetrievalOutcome({
     this.status = 'unknown',
@@ -19,7 +49,7 @@ class RetrievalOutcome {
     this.acceptedDocumentCount = 0,
     this.coveredDimensions = const <String>[],
     this.missingDimensions = const <String>[],
-    this.coveredQueryTaskIds = const <String>[],
+    this.coveredSearchPlanIds = const <String>[],
     this.authorityDomains = const <String>[],
     this.authoritySatisfied = false,
     this.freshnessHoursMax = 72,
@@ -48,7 +78,7 @@ class RetrievalOutcome {
   final int acceptedDocumentCount;
   final List<String> coveredDimensions;
   final List<String> missingDimensions;
-  final List<String> coveredQueryTaskIds;
+  final List<String> coveredSearchPlanIds;
   final List<String> authorityDomains;
   final bool authoritySatisfied;
   final int freshnessHoursMax;
@@ -64,6 +94,8 @@ class RetrievalOutcome {
   final bool degraded;
   final RetrievalProcessingSnapshot retrievalProcessing;
 
+  RetrievalStatus get statusType => parseRetrievalStatus(status);
+
   bool get temporalRequirementSatisfied => timeWindowRequired
       ? (timeWindowKnown && timeWindowSatisfied)
       : (!freshnessRequired || freshnessSatisfied);
@@ -71,7 +103,7 @@ class RetrievalOutcome {
   bool get retrievalReady =>
       !degraded &&
       terminalPayloadComplete &&
-      status == 'ready' &&
+      statusType == RetrievalStatus.ready &&
       (!evidenceRequired || evidencePassed) &&
       (!authorityRequired || authoritySatisfied) &&
       temporalRequirementSatisfied &&
@@ -90,7 +122,7 @@ class RetrievalOutcome {
     'acceptedDocumentCount': acceptedDocumentCount,
     'coveredDimensions': coveredDimensions,
     'missingDimensions': missingDimensions,
-    'coveredQueryTaskIds': coveredQueryTaskIds,
+    'coveredSearchPlanIds': coveredSearchPlanIds,
     'authorityDomains': authorityDomains,
     'authoritySatisfied': authoritySatisfied,
     'freshnessHoursMax': freshnessHoursMax,
@@ -123,7 +155,7 @@ class RetrievalOutcome {
           (json['acceptedDocumentCount'] as num?)?.toInt() ?? 0,
       coveredDimensions: _stringList(json['coveredDimensions']),
       missingDimensions: _stringList(json['missingDimensions']),
-      coveredQueryTaskIds: _stringList(json['coveredQueryTaskIds']),
+      coveredSearchPlanIds: _stringList(json['coveredSearchPlanIds']),
       authorityDomains: _stringList(json['authorityDomains']),
       authoritySatisfied: json['authoritySatisfied'] == true,
       freshnessHoursMax: (json['freshnessHoursMax'] as num?)?.toInt() ?? 72,

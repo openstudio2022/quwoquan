@@ -127,6 +127,7 @@ components:
             - ORCH
             - CONTENT
             - CIRCLE
+            - ENTITY
             - INTEGRATION
             - USER
             - CHAT
@@ -158,12 +159,6 @@ components:
           type: string
         traceId:
           type: string
-        retryable:
-          type: boolean
-          description: 客户端是否可安全重试（提示/策略）
-        details:
-          type: object
-          additionalProperties: true
     CursorPage:
       type: object
       required: [items]

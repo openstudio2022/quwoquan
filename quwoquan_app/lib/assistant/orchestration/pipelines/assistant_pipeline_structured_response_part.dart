@@ -33,8 +33,9 @@ String _mergeStableNarrativeFinalText({
   if (streamedText.isEmpty) return finalizedText;
   if (finalizedText.isEmpty ||
       streamedText == finalizedText ||
-      streamedText.startsWith(finalizedText))
+      streamedText.startsWith(finalizedText)) {
     return streamedText;
+  }
   final overlap = _suffixPrefixOverlap(streamedText, finalizedText);
   return overlap > 0 && overlap < finalizedText.length
       ? '$streamedText${finalizedText.substring(overlap)}'.trim()
@@ -44,8 +45,9 @@ String _mergeStableNarrativeFinalText({
 int _suffixPrefixOverlap(String left, String right) {
   final maxOverlap = left.length < right.length ? left.length : right.length;
   for (var overlap = maxOverlap; overlap > 0; overlap--) {
-    if (left.substring(left.length - overlap) == right.substring(0, overlap))
+    if (left.substring(left.length - overlap) == right.substring(0, overlap)) {
       return overlap;
+    }
   }
   return 0;
 }
@@ -103,7 +105,7 @@ JourneyStageStatus _journeyStageStatusForPipelineStep({
 /// 摘要只来自模型快照，不遍历 [projectedProcessTimelineWithBlock]（避免把末尾注入的阻塞帧当成独立阶段）。
 List<Map<String, dynamic>> _buildPipelineJourneyStages({
   required RunArtifactsUnderstandingSnapshot understanding,
-  required IntentGraph intentGraph,
+  required AssistantPlanView planView,
   required RetrievalProcessingSnapshot retrieval,
   required String retrievalSummary,
   required bool finalAnswerReady,
@@ -113,7 +115,7 @@ List<Map<String, dynamic>> _buildPipelineJourneyStages({
 }) {
   final understandingSummary = _firstNonEmptyText(<String?>[
     understanding.userFacingSummary.trim(),
-    intentGraph.userGoal.trim(),
+    planView.userGoal.trim(),
   ]);
   final designSummary = understanding.intentSummary.trim();
   final processingSummary = _firstNonEmptyText(<String?>[
@@ -178,47 +180,41 @@ String _buildEvidenceBindingLabel({
   return url.isNotEmpty ? url : 'evidence';
 }
 
-String _trimTrailingSlashes(String input) {
-  var output = input.trim();
-  while (output.endsWith('/')) {
-    output = output.substring(0, output.length - 1).trimRight();
-  }
-  return output;
-}
-
-String _inferPrimaryCity(IntentGraph intentGraph) {
-  final contextCity =
-      (intentGraph.contextSlots['city'] as String?)?.trim() ?? '';
-  if (contextCity.isNotEmpty) return contextCity;
-  for (final task in intentGraph.queryTasks) {
-    for (final anchor in task.entityAnchors) {
+String _inferPrimaryCity(AssistantPlanView planView) {
+  for (final plan in planView.searchPlans) {
+    for (final anchor in plan.entityRefs) {
       final trimmed = anchor.trim();
       if (trimmed.isNotEmpty) return trimmed;
     }
   }
-  for (final anchor in intentGraph.entityAnchors) {
+  for (final anchor in planView.entityRefs) {
     final trimmed = anchor.trim();
     if (trimmed.isNotEmpty) return trimmed;
   }
-  final target = intentGraph.targetObject.trim();
-  if (target.isNotEmpty) return target;
-  return intentGraph.userGoal.trim();
+  return '';
 }
 
 String _buildRetrievalDesignDetail({
-  required IntentGraph intentGraph,
+  required AssistantPlanView planView,
+  required List<SearchPlanItem> searchPlans,
   required Map<String, dynamic> answerPayload,
 }) {
-  final payloadIntentGraph = AssistantAnswerPayloadReadView(
+  final typedOutput = AssistantAnswerPayloadReadView(
     answerPayload,
-  ).asTypedOutput.intentGraph;
-  final queryTasks = payloadIntentGraph?.queryTasks.isNotEmpty == true
-      ? payloadIntentGraph!.queryTasks
-      : intentGraph.queryTasks;
+  ).asTypedOutput;
+  final payloadPlanView = assistantPlanViewFromTypedMainline(
+    understandingResult: typedOutput.understandingResult,
+    taskGraph: typedOutput.taskGraph,
+  );
+  final payloadSearchPlans =
+      payloadPlanView?.searchPlans ?? const <SearchPlanItem>[];
+  final effectiveSearchPlans = payloadSearchPlans.isNotEmpty
+      ? payloadSearchPlans
+      : (searchPlans.isNotEmpty ? searchPlans : planView.searchPlans);
   final lines = <String>[];
   final seen = <String>{};
-  for (final task in queryTasks) {
-    final line = _queryTaskDesignLine(task);
+  for (final plan in effectiveSearchPlans) {
+    final line = _searchPlanDesignLine(plan);
     if (line.isEmpty || !seen.add(line)) {
       continue;
     }
@@ -230,45 +226,10 @@ String _buildRetrievalDesignDetail({
   return lines.join('\n');
 }
 
-String _buildRetrievalDesignNarrativeFallback(Iterable<QueryTask> queryTasks) {
-  final tokens = <String>[];
-  final seen = <String>{};
-  for (final task in queryTasks) {
-    final token = _queryTaskNarrativeToken(task);
-    final normalized = _normalizedCompactText(token);
-    if (normalized.isEmpty || !seen.add(normalized)) {
-      continue;
-    }
-    tokens.add(token);
-    if (tokens.length >= 2) {
-      break;
-    }
-  }
-  if (tokens.isEmpty) {
-    return '';
-  }
-  if (tokens.length == 1) {
-    return '接下来先沿着${tokens.first}这条线继续核对。';
-  }
-  return '接下来先沿着${tokens.first}和${tokens[1]}两条线继续核对。';
-}
-
-String _queryTaskNarrativeToken(QueryTask task) {
-  final dimension = task.dimensionLabel.trim();
-  if (dimension.isNotEmpty) {
-    return dimension;
-  }
-  final label = task.effectiveLabel.trim();
-  if (label.isNotEmpty) {
-    return label;
-  }
-  return task.query.trim();
-}
-
-String _queryTaskDesignLine(QueryTask task) {
-  final query = task.query.trim();
-  final label = task.effectiveLabel.trim();
-  final anchors = task.entityAnchors
+String _searchPlanDesignLine(SearchPlanItem plan) {
+  final query = plan.query.trim();
+  final label = plan.effectiveLabel.trim();
+  final anchors = plan.entityRefs
       .map((item) => item.trim())
       .where((item) => item.isNotEmpty)
       .toSet()
@@ -346,52 +307,24 @@ String _sanitizeRetrievalJourneyDetail(String raw) {
 
 Map<String, dynamic> _normalizedUnderstandingSnapshotMap({
   required Map<String, dynamic> raw,
-  required IntentGraph intentGraph,
+  required AssistantPlanView planView,
+  required List<SearchPlanItem> searchPlans,
   required String latestUserQuery,
 }) {
   if (!_hasStructuredContent(raw)) {
     return const <String, dynamic>{};
   }
   final parsed = RunArtifactsUnderstandingSnapshot.fromJson(raw);
-  final concernPoints = parsed.concernPoints.isNotEmpty
-      ? parsed.concernPoints
-      : <String>[...intentGraph.hardConstraints, ...intentGraph.softConstraints]
-            .where((item) => item.trim().isNotEmpty)
-            .take(4)
-            .toList(growable: false);
-  final canonicalQuery = _firstNonEmptyText(<String?>[
-    intentGraph.queryNormalization.rewrittenQuery,
-    intentGraph.queryNormalization.normalizedQuery,
-    intentGraph.queryTasks.isNotEmpty ? intentGraph.queryTasks.first.query : '',
-  ]);
   final parsedIntentSummary = parsed.intentSummary.trim();
-  final intentSummary = parsedIntentSummary.isNotEmpty
-      ? parsedIntentSummary
-      : _firstNonEmptyText(<String?>[
-          intentGraph.userGoal,
-          intentGraph.userJobToBeDone,
-          intentGraph.targetObject,
-          latestUserQuery,
-          canonicalQuery,
-        ]);
+  final intentSummary = parsedIntentSummary;
   final parsedUserFacingSummary = parsed.userFacingSummary.trim();
-  final userFacingSummary = parsedUserFacingSummary.isNotEmpty
-      ? parsedUserFacingSummary
-      : _firstNonEmptyText(<String?>[
-          parsedIntentSummary,
-          intentSummary,
-          intentGraph.userGoal,
-          intentGraph.userJobToBeDone,
-          intentGraph.targetObject,
-          latestUserQuery,
-          canonicalQuery,
-        ]);
+  final userFacingSummary = parsedUserFacingSummary;
   return RunArtifactsUnderstandingSnapshot(
     intentSummary: _canonicalizeUnderstandingSnapshotDateAnchors(intentSummary),
     userFacingSummary: _canonicalizeUnderstandingSnapshotDateAnchors(
       userFacingSummary,
     ),
-    concernPoints: concernPoints,
+    concernPoints: parsed.concernPoints,
     emotionSignal: parsed.emotionSignal,
     resolutionItems: parsed.resolutionItems,
     assumptions: parsed.assumptions,
@@ -404,13 +337,10 @@ Map<String, dynamic> _normalizedUnderstandingSnapshotMap({
 SlotStateSnapshot _buildSlotStateSnapshot({
   required String domainId,
   required SlotStateSnapshot previousSlotState,
-  required IntentGraph intentGraph,
+  required AssistantPlanView planView,
   required List<AnswerEvidenceBinding> groundingBindings,
 }) {
-  final mergedSlots = <String, dynamic>{
-    ...previousSlotState.slots,
-    ...intentGraph.contextSlots,
-  };
+  final mergedSlots = <String, dynamic>{...previousSlotState.slots};
   final mergedValues = <String, SlotValueSnapshot>{
     ...previousSlotState.slotValues,
   };
@@ -418,28 +348,16 @@ SlotStateSnapshot _buildSlotStateSnapshot({
       .map((item) => item.evidenceId.isNotEmpty ? item.evidenceId : item.url)
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
-  final inferredCity = _inferPrimaryCity(intentGraph);
+  final inferredCity = _inferPrimaryCity(planView);
   if (inferredCity.isNotEmpty) {
     mergedSlots['city'] = inferredCity;
     mergedValues['city'] = SlotValueSnapshot(
       slotId: 'city',
       value: inferredCity,
-      source: 'intent_graph',
+      source: 'plan_view',
       confidence: 1.0,
       updatedAt: DateTime.now().toIso8601String(),
       evidenceIds: groundingEvidenceIds,
-    );
-  }
-  for (final entry in intentGraph.contextSlots.entries) {
-    final key = entry.key.toString().trim();
-    if (key.isEmpty) continue;
-    final value = entry.value;
-    mergedValues[key] = SlotValueSnapshot(
-      slotId: key,
-      value: value,
-      source: 'intent_graph',
-      confidence: 1.0,
-      updatedAt: DateTime.now().toIso8601String(),
     );
   }
   return SlotStateSnapshot(
@@ -449,24 +367,6 @@ SlotStateSnapshot _buildSlotStateSnapshot({
     missingSlots: previousSlotState.missingSlots,
     updatedAt: DateTime.now().toIso8601String(),
   );
-}
-
-List<RunArtifactsUnderstandingResolutionItem>
-_deriveResolutionItemsFromIntentGraph(IntentGraph intentGraph) {
-  final items = <RunArtifactsUnderstandingResolutionItem>[];
-  final explicitDate = _firstUnderstandingSnapshotExplicitDate(intentGraph);
-  if (explicitDate.isNotEmpty) {
-    items.add(
-      RunArtifactsUnderstandingResolutionItem(
-        kind: 'temporal_anchor',
-        title: explicitDate,
-        detail: explicitDate,
-        resolvedValue: explicitDate,
-        visibleInUnderstanding: true,
-      ),
-    );
-  }
-  return items;
 }
 
 List<String> _buildAnswerKeyFacts({
@@ -491,34 +391,14 @@ List<String> _buildAnswerKeyFacts({
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
   if (fromLedger.isNotEmpty) return fromLedger;
+  final answerPayloadView = AssistantAnswerPayloadReadView(answerPayload);
   final fallbackText = _sanitizeAnswerKeyFact(
-    ((answerPayload['userMarkdown'] as String?)?.trim().isNotEmpty == true
-            ? (answerPayload['userMarkdown'] as String).trim()
-            : ((answerPayload['result'] as Map?)?['text'] as String?)
-                  ?.trim()) ??
-        '',
+    _firstNonEmptyText(<String?>[
+      answerPayloadView.userMarkdownTrimmed,
+      answerPayloadView.resultTextTrimmed,
+    ]),
   );
   return fallbackText.isNotEmpty ? <String>[fallbackText] : const <String>[];
-}
-
-String _firstUnderstandingSnapshotExplicitDate(IntentGraph intentGraph) {
-  final qn = intentGraph.queryNormalization;
-  for (final candidate in <String>[
-    qn.timePoint,
-    qn.timeRangeStart,
-    qn.timeRangeEnd,
-  ]) {
-    if (candidate.trim().isNotEmpty) {
-      return _canonicalizeUnderstandingSnapshotDateAnchors(candidate.trim());
-    }
-  }
-  for (final task in intentGraph.queryTasks) {
-    if (task.timePoint.trim().isNotEmpty)
-      return _canonicalizeUnderstandingSnapshotDateAnchors(
-        task.timePoint.trim(),
-      );
-  }
-  return '';
 }
 
 extension AssistantPipelineStructuredResponseAssemblyCore
@@ -528,7 +408,8 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     required ContextAssemblyResult contextAssembly,
     required SynthesisReadinessResult synthesisReadiness,
     required dynamic result,
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
+    required List<SearchPlanItem> searchPlans,
     required List<SkillRun> skillRuns,
     required AggregationState aggregationState,
     required SkillRouteOutput skillRoute,
@@ -584,7 +465,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     final uiReferences = _buildUiReferences(
       toolResults,
       isRealtimeLike: isRealtimeLikeRequest(
-        fallbackProblemClass: intentGraph.problemClassWireName,
+        fallbackProblemClass: planView.problemClassWireName,
         answerPayload: answerPayload,
       ),
     );
@@ -596,7 +477,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
                 .map((item) => item.toJson())
                 .toList(growable: false),
             isRealtimeLike: isRealtimeLikeRequest(
-              fallbackProblemClass: intentGraph.problemClassWireName,
+              fallbackProblemClass: planView.problemClassWireName,
               answerPayload: answerPayload,
             ),
           );
@@ -604,25 +485,18 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         ? fallbackUiReferences
         : uiReferences;
     final answerText = _firstNonEmptyText(<String?>[
-      (answerPayload['userMarkdown'] as String?)?.trim(),
+      answerPayloadView.userMarkdownTrimmed,
       skillSynthesisOutput.answerMarkdown.trim(),
-      ((answerPayload['result'] as Map?)?['text'] as String?)?.trim(),
-      ((answerPayload['result'] as Map?)?['summary'] as String?)?.trim(),
+      answerPayloadView.resultTextTrimmed,
+      answerPayloadView.resultSummaryTrimmed,
       (result.finalText as String?)?.trim(),
     ]);
-    final renderedText = answerText.isNotEmpty
-        ? answerText
-        : assistantPipelineDefaultFailureMessageForStep(
-            blockedProcessStepId == ProcessStepId.answerOrganization
-                ? ProcessStepId.answerOrganization
-                : ProcessStepId.unknown,
-          );
+    final renderedText = answerText;
     final messageKind = _resolveMessageKind(
       answerPayload: answerPayload,
       resultText: renderedText,
     );
     final isFallbackOutput = messageKind == AssistantMessageKind.fallback;
-    final inferredCity = _inferPrimaryCity(intentGraph);
     final reasonShort = (answerPayload['reasonShort'] as String?)?.trim() ?? '';
     final pendingClarifications = skillSynthesisInput.pendingClarifications
         .map((item) => item.trim())
@@ -641,13 +515,15 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         ...?((answerPayload['understandingSnapshot'] as Map?)
             ?.cast<String, dynamic>()),
       },
-      intentGraph: intentGraph,
+      planView: planView,
+      searchPlans: searchPlans,
       latestUserQuery: request.messages.isNotEmpty
           ? request.messages.last.content
           : '',
     );
     final retrievalDesignDetail = _buildRetrievalDesignDetail(
-      intentGraph: intentGraph,
+      planView: planView,
+      searchPlans: searchPlans,
       answerPayload: answerPayload,
     );
     final mergedRetrievalProcessing = <String, dynamic>{
@@ -679,17 +555,18 @@ extension AssistantPipelineStructuredResponseAssemblyCore
               evidenceLedger: evidenceLedger,
               toolResults: toolResults,
             ));
-    final structuredFinalAnswerModeCandidate = _resolveStructuredFinalAnswerMode(
-      turn: structuredTurn,
-      answerPayloadView: answerPayloadView,
-      answerBoundaryPolicy: answerBoundaryPolicy,
-      structuredAnswerMaterializedCandidate:
-          structuredAnswerMaterializedCandidate,
-    );
+    final structuredFinalAnswerModeCandidate =
+        _resolveStructuredFinalAnswerMode(
+          turn: structuredTurn,
+          answerPayloadView: answerPayloadView,
+          answerBoundaryPolicy: answerBoundaryPolicy,
+          structuredAnswerMaterializedCandidate:
+              structuredAnswerMaterializedCandidate,
+        );
     final structuredAskUserCandidate =
         structuredTurn.decision.nextAction == AssistantNextAction.askUser ||
         structuredTurn.hasAskUser;
-    final projectedStateCandidate = _buildProjectedConversationStateDecision(
+    final projectedStateCandidate = _buildProjectedAssistantTypedTurnDecision(
       aggregationState: aggregationState,
       answerBoundaryPolicy: answerBoundaryPolicy,
       synthesisReadiness: synthesisReadiness,
@@ -707,38 +584,40 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       requiredDimensions: answerBoundaryPolicy.requiredDimensions,
       blockingDimensions: answerBoundaryPolicy.blockingDimensions,
     );
-    final resultDegraded = result is ReactRuntimeResult ? result.degraded : false;
+    final resultDegraded = result is ReactRuntimeResult
+        ? result.degraded
+        : false;
     final retrievalOutcome = _retrievalOutcomeResolver.resolve(
       policy: answerBoundaryPolicy,
       retrievalProcessing: projectedRetrievalProcessing,
       evidenceEvaluation: evidenceEvaluation,
       synthesisReadiness: synthesisReadiness,
-      queryTasks: intentGraph.queryTasks,
+      searchPlans: searchPlans.isNotEmpty ? searchPlans : planView.searchPlans,
       toolResults: toolResults,
       terminalPayloadComplete: true,
       degraded: resultDegraded,
     );
     final projectedAnswerGateDecision = _answerGateResolver.resolve(
       retrievalOutcome: retrievalOutcome,
-      conversationStateDecision: projectedStateCandidate,
+      typedTurnDecision: projectedStateCandidate,
       renderableAnswer: renderedText.trim().isNotEmpty,
       degraded: resultDegraded,
       terminalPayloadComplete: retrievalOutcome.terminalPayloadComplete,
     );
-    final projectedConversationStateDecision =
-        _reconcileConversationStateDecisionWithGate(
+    final projectedAssistantTypedTurnDecision =
+        _reconcileAssistantTypedTurnDecisionWithGate(
           base: projectedStateCandidate,
           gate: projectedAnswerGateDecision,
         );
     final journeyReadiness = AssistantJourneyReadiness(
-      nextAction: projectedConversationStateDecision.nextActionType,
-      finalAnswerMode: projectedConversationStateDecision.finalAnswerModeType,
+      nextAction: projectedAssistantTypedTurnDecision.nextActionType,
+      finalAnswerMode: projectedAssistantTypedTurnDecision.finalAnswerModeType,
       answerEligibility:
-          projectedConversationStateDecision.answerEligibilityType,
-      finalAnswerReady: projectedConversationStateDecision.finalAnswerReady,
+          projectedAssistantTypedTurnDecision.answerEligibilityType,
+      finalAnswerReady: projectedAssistantTypedTurnDecision.finalAnswerReady,
       clarificationNeeded:
           aggregationState.clarificationNeeded ||
-          projectedConversationStateDecision.nextActionType ==
+          projectedAssistantTypedTurnDecision.nextActionType ==
               AssistantNextAction.askUser,
       needExpansion: aggregationState.needExpansion,
     );
@@ -752,12 +631,11 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         pendingClarifications.isNotEmpty &&
         (skillSynthesisOutput.partialCompletionState.trim() ==
                 'needs_clarification' ||
-            projectedConversationStateDecision.nextActionWireName ==
+            projectedAssistantTypedTurnDecision.nextActionWireName ==
                 AssistantNextAction.askUser.wireName ||
             aggregationState.clarificationNeeded);
     final resolvedFollowupPrompt = _firstNonEmptyText(<String?>[
       (answerPayload['followupPrompt'] as String?)?.trim(),
-      if (shouldPromptForClarification) '还需要你一次性补充这些信息：',
       skillSynthesisOutput.followUpSuggestions.join('\n').trim(),
     ]);
     final resolvedActionHints =
@@ -770,19 +648,21 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       raw: mergedAnswerProcessing,
       streamedReadinessSummary: streamedAnswerReadinessSummary,
       synthesisReadiness: synthesisReadiness,
-      stateDecision: projectedConversationStateDecision,
+      stateDecision: projectedAssistantTypedTurnDecision,
       evidenceEvaluation: evidenceEvaluation,
       evidenceLedger: evidenceLedger,
       answerPayload: answerPayload,
     );
     final projectedProcessTimeline = buildProcessTimelineFromSnapshots(
       processTimeline: <ProcessTimelineFrame>[
-        if (projectedUnderstandingSnapshot.retrievalDesignNarrative.trim().isNotEmpty ||
+        if (projectedUnderstandingSnapshot.retrievalDesignNarrative
+                .trim()
+                .isNotEmpty ||
             retrievalDesignDetail.isNotEmpty)
           buildProcessTimelineFrame(
             stepId: ProcessStepId.retrievalDesign,
-            headline:
-                projectedUnderstandingSnapshot.retrievalDesignNarrative.trim(),
+            headline: projectedUnderstandingSnapshot.retrievalDesignNarrative
+                .trim(),
             detail: retrievalDesignDetail,
             understandingSnapshot: projectedUnderstandingSnapshot,
           ),
@@ -826,11 +706,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
             buildProcessTimelineFrame(
               stepId: blockedProcessStepId,
               status: JourneyStageStatus.blocked,
-              headline: blockedProcessMessage.isNotEmpty
-                  ? blockedProcessMessage
-                  : assistantPipelineDefaultFailureMessageForStep(
-                      blockedProcessStepId,
-                    ),
+              headline: blockedProcessMessage,
               detail: answerBoundaryPolicy.allowBoundedAnswer
                   ? 'blocked_but_renderable'
                   : 'blocked_closed',
@@ -842,7 +718,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
                 raw: mergedAnswerProcessing,
                 streamedReadinessSummary: streamedAnswerReadinessSummary,
                 synthesisReadiness: synthesisReadiness,
-                stateDecision: projectedConversationStateDecision,
+                stateDecision: projectedAssistantTypedTurnDecision,
                 evidenceEvaluation: evidenceEvaluation,
                 evidenceLedger: evidenceLedger,
                 answerPayload: answerPayload,
@@ -865,7 +741,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     final retrievalJourneyDetail = projectedRetrievalNarrative.detail.trim();
     final journeyStages = _buildPipelineJourneyStages(
       understanding: projectedUnderstandingSnapshot,
-      intentGraph: intentGraph,
+      planView: planView,
       retrieval: projectedRetrievalProcessing,
       retrievalSummary: projectedRetrievalNarrative.headline,
       finalAnswerReady: journeyReadiness.finalAnswerReady,
@@ -879,27 +755,26 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       'displayPlainText': renderedText,
       'displayMarkdown': displayMarkdown,
       'messageKind': messageKind.wireName,
-      'intentGraph': intentGraph.toJson(),
-      'primarySkill': intentGraph.primarySkill,
+      'planView': planView.toJson(),
+      'primarySkill': planView.primarySkill,
       'skillRoute': skillRoute.toJson(),
       'pendingClarifications': pendingClarifications,
       'understandingSnapshot': projectedUnderstandingSnapshot.toJson(),
       'finalAnswerMode':
-          projectedConversationStateDecision.finalAnswerModeWireName,
+          projectedAssistantTypedTurnDecision.finalAnswerModeWireName,
       assistantRetrievalOutcomeField: retrievalOutcome.toJson(),
       assistantAnswerGateDecisionField: projectedAnswerGateDecision.toJson(),
       'displayState': projectedDisplayState.toJson(),
       'followupPrompt': resolvedFollowupPrompt,
       'actionHints': resolvedActionHints,
       'decision': <String, dynamic>{
-        'nextAction': projectedConversationStateDecision.nextActionWireName,
+        'nextAction': projectedAssistantTypedTurnDecision.nextActionWireName,
         'messageKind': messageKind.wireName,
         'finalAnswerMode':
-            projectedConversationStateDecision.finalAnswerModeWireName,
+            projectedAssistantTypedTurnDecision.finalAnswerModeWireName,
       },
-      'conversationStateDecision': projectedConversationStateDecision.toJson(),
       'answerEligibility':
-          projectedConversationStateDecision.answerEligibilityWireName,
+          projectedAssistantTypedTurnDecision.answerEligibilityWireName,
       'journey': <String, dynamic>{
         'stages': journeyStages,
         'entries': <Map<String, dynamic>>[
@@ -937,8 +812,8 @@ extension AssistantPipelineStructuredResponseAssemblyCore
               finalAnswerReady: journeyReadiness.finalAnswerReady,
             ).wireName,
             'order': 1,
-            'headline':
-                projectedUnderstandingSnapshot.retrievalDesignNarrative.trim(),
+            'headline': projectedUnderstandingSnapshot.retrievalDesignNarrative
+                .trim(),
             'detail': retrievalDesignDetail,
             'references': <Map<String, dynamic>>[],
             'provenance': <String, dynamic>{
@@ -1070,7 +945,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     final currentSlotState = _buildSlotStateSnapshot(
       domainId: dialogueRoundScript.domainId,
       previousSlotState: previousSlotState,
-      intentGraph: intentGraph,
+      planView: planView,
       groundingBindings: answerEvidenceBindings,
     );
     final runArtifacts = RunArtifacts(
@@ -1131,8 +1006,8 @@ extension AssistantPipelineStructuredResponseAssemblyCore
               finalAnswerReady: journeyReadiness.finalAnswerReady,
             ),
             order: 1,
-            headline:
-                projectedUnderstandingSnapshot.retrievalDesignNarrative.trim(),
+            headline: projectedUnderstandingSnapshot.retrievalDesignNarrative
+                .trim(),
             detail: retrievalDesignDetail,
             provenance: AssistantJourneyProvenance(
               phaseId: parsePlannerPhaseId('understanding'),
@@ -1217,7 +1092,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         raw: mergedAnswerProcessing,
         streamedReadinessSummary: streamedAnswerReadinessSummary,
         synthesisReadiness: synthesisReadiness,
-        stateDecision: projectedConversationStateDecision,
+        stateDecision: projectedAssistantTypedTurnDecision,
         evidenceEvaluation: evidenceEvaluation,
         evidenceLedger: evidenceLedger,
         answerPayload: answerPayload,
@@ -1226,7 +1101,8 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         raw: carriedHistoricalThinkingSnapshot,
         understandingSnapshot: _buildUnderstandingSnapshot(
           raw: carriedUnderstandingSnapshot,
-          intentGraph: intentGraph,
+          planView: planView,
+          searchPlans: searchPlans,
           latestUserQuery: request.messages.isNotEmpty
               ? request.messages.last.content
               : '',
@@ -1238,10 +1114,11 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       slotState: currentSlotState,
       answerDecision: RunArtifactsAnswerDecisionPartitioned(
         core: RunArtifactsAnswerDecisionCore(
-          nextAction: projectedConversationStateDecision.nextActionWireName,
+          nextAction: projectedAssistantTypedTurnDecision.nextActionWireName,
           answerEligibility:
-              projectedConversationStateDecision.answerEligibilityWireName,
-          finalAnswerReady: projectedConversationStateDecision.finalAnswerReady,
+              projectedAssistantTypedTurnDecision.answerEligibilityWireName,
+          finalAnswerReady:
+              projectedAssistantTypedTurnDecision.finalAnswerReady,
           evidenceSummary: evidenceSummary,
           confidence: structuredTurn.confidence,
           reasoning: structuredTurn.decision.reasoning.trim(),
@@ -1250,7 +1127,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         ),
         extensions: <String, dynamic>{
           'finalAnswerMode':
-              projectedConversationStateDecision.finalAnswerModeWireName,
+              projectedAssistantTypedTurnDecision.finalAnswerModeWireName,
           'reasonCode': projectedAnswerGateDecision.reasonCode,
           'reason': projectedAnswerGateDecision.reason,
           'eligible': projectedAnswerGateDecision.eligible,
@@ -1267,14 +1144,14 @@ extension AssistantPipelineStructuredResponseAssemblyCore
           renderMode: messageKind.wireName,
           renderFallback: isFallbackOutput ? messageKind.wireName : '',
           answerEligibility:
-              projectedConversationStateDecision.answerEligibilityWireName,
-          qualityGates: projectedConversationStateDecision.qualityGatesData,
+              projectedAssistantTypedTurnDecision.answerEligibilityWireName,
+          qualityGates: projectedAssistantTypedTurnDecision.qualityGatesData,
           evidenceEvaluation: evidenceEvaluation.toJson(),
           answerBoundaryPolicy: answerBoundaryPolicy.toJson(),
           evidenceSummary: evidenceSummary,
           evidencePassed: retrievalOutcome.evidencePassed,
           finalAnswerMode:
-              projectedConversationStateDecision.finalAnswerModeWireName,
+              projectedAssistantTypedTurnDecision.finalAnswerModeWireName,
           synthesisReady: synthesisReadiness.ready,
           synthesisReason: synthesisReadiness.reason.trim(),
           heuristicFallbackUsed: false,
@@ -1335,13 +1212,6 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     return const <String, dynamic>{};
   }
 
-  Map<String, dynamic> _preferStructuredMap(
-    Map<String, dynamic> primary,
-    Map<String, dynamic> fallback,
-  ) {
-    return primary.isNotEmpty ? primary : fallback;
-  }
-
   List<AssistantToolResultRow> _toolResultsForEvidenceLedger(
     List<AssistantToolResultRow> toolResults,
   ) {
@@ -1349,7 +1219,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
   }
 
   List<String> _blockingEvidenceDimensions({
-    required List<QueryTask> queryTasks,
+    required List<SearchPlanItem> searchPlans,
     required List<AssistantToolResultRow> toolResults,
   }) {
     final dimensions = <String>{};
@@ -1466,7 +1336,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     return refs;
   }
 
-  ConversationStateDecision _buildProjectedConversationStateDecision({
+  AssistantTypedTurnDecision _buildProjectedAssistantTypedTurnDecision({
     required AggregationState aggregationState,
     required AnswerBoundaryPolicy answerBoundaryPolicy,
     required SynthesisReadinessResult synthesisReadiness,
@@ -1480,14 +1350,14 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         !synthesisReadiness.ready &&
         synthesisReadiness.replanTask != null;
     if (shouldReplanForRetrievalBlock) {
-      return ConversationStateDecision(
+      return AssistantTypedTurnDecision(
         nextAction: AssistantNextAction.toolCall,
         finalAnswerMode: FinalAnswerMode.replan,
         answerEligibility: AnswerEligibility.blocked,
         slotState: const SlotStateSnapshot(),
         missingCriticalSlots: const <String>[],
         askUser: const AssistantTurnAskUser(),
-        qualityGates: const QualityGatesDto(),
+        qualityGates: const AssistantTurnQualityGates(),
         finalAnswerReady: false,
       );
     }
@@ -1497,18 +1367,18 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     final shouldClarify =
         !shouldDeliverAnswer &&
         (structuredAskUserCandidate || aggregationState.clarificationNeeded);
-    return ConversationStateDecision(
+    return AssistantTypedTurnDecision(
       nextAction: shouldDeliverAnswer
           ? AssistantNextAction.answer
           : AssistantNextAction.askUser,
       finalAnswerMode: shouldDeliverAnswer
           ? (structuredFinalAnswerModeCandidate ??
                 (aggregationState.finalAnswerReady
-                ? FinalAnswerMode.full
-                : structuredAnswerMaterializedCandidate ||
-                      answerBoundaryPolicy.allowBoundedAnswer
-                ? FinalAnswerMode.boundedAnswer
-                : FinalAnswerMode.full))
+                    ? FinalAnswerMode.full
+                    : structuredAnswerMaterializedCandidate ||
+                          answerBoundaryPolicy.allowBoundedAnswer
+                    ? FinalAnswerMode.boundedAnswer
+                    : FinalAnswerMode.full))
           : shouldClarify
           ? FinalAnswerMode.clarify
           : FinalAnswerMode.blocked,
@@ -1520,13 +1390,13 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       slotState: const SlotStateSnapshot(),
       missingCriticalSlots: const <String>[],
       askUser: const AssistantTurnAskUser(),
-      qualityGates: const QualityGatesDto(),
+      qualityGates: const AssistantTurnQualityGates(),
       finalAnswerReady: shouldDeliverAnswer,
     );
   }
 
-  ConversationStateDecision _reconcileConversationStateDecisionWithGate({
-    required ConversationStateDecision base,
+  AssistantTypedTurnDecision _reconcileAssistantTypedTurnDecisionWithGate({
+    required AssistantTypedTurnDecision base,
     required AnswerGateDecision gate,
   }) {
     final resolvedNextAction = gate.nextAction.trim().isNotEmpty
@@ -1537,7 +1407,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         : base.answerEligibilityType;
     final shouldPreserveAnswerMode =
         resolvedNextAction == AssistantNextAction.answer;
-    return ConversationStateDecision(
+    return AssistantTypedTurnDecision(
       nextAction: resolvedNextAction,
       finalAnswerMode: gate.finalAnswerReady || shouldPreserveAnswerMode
           ? base.finalAnswerModeType
@@ -1593,7 +1463,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
   }
 
   SkillRun _buildPrimarySkillRun({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required String domainId,
     required Map<String, dynamic> answerPayload,
     required dynamic result,
@@ -1603,11 +1473,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     return SkillRun(
       runId: '${domainId}_${DateTime.now().microsecondsSinceEpoch}',
       domainId: domainId,
-      goal: _firstNonEmptyText(<String?>[
-        intentGraph.userGoal,
-        intentGraph.userJobToBeDone,
-        intentGraph.targetObject,
-      ]),
+      goal: planView.userGoal,
       problemClass: executionShell.problemClass,
       shell: <String, dynamic>{
         'problemClass': executionShell.problemClass,
@@ -1630,7 +1496,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
 
   SkillRouteOutput _buildSkillRouteOutput({
     required String userQuery,
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required String primaryDomainId,
     required SkillExecutionShell executionShell,
     required List<SubagentPlan> subagentPlans,
@@ -1647,29 +1513,19 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       userQuery: userQuery,
       primaryTarget: SkillRouteTarget.primary(
         skillId: primaryDomainId,
-        goal: _firstNonEmptyText(<String?>[
-          intentGraph.userGoal,
-          intentGraph.userJobToBeDone,
-          intentGraph.targetObject,
-          userQuery,
-        ]),
+        goal: _firstNonEmptyText(<String?>[planView.userGoal, userQuery]),
         problemClass: _firstNonEmptyText(<String?>[
           executionShell.problemClass,
-          intentGraph.problemClassWireName,
+          planView.problemClassWireName,
         ]),
-        taskBrief: _firstNonEmptyText(<String?>[
-          intentGraph.userJobToBeDone,
-          intentGraph.targetObject,
-          intentGraph.userGoal,
-          userQuery,
-        ]),
+        taskBrief: _firstNonEmptyText(<String?>[planView.userGoal, userQuery]),
         routeNarrative: primaryRouteNarrative,
         localContextSeed: _buildPrimarySkillLocalContextSeed(
-          intentGraph: intentGraph,
+          planView: planView,
           userQuery: userQuery,
           primaryDomainId: primaryDomainId,
         ),
-        needClarify: intentGraph.clarificationNeeded,
+        needClarify: planView.clarificationNeeded,
       ),
       supportingPlans: subagentPlans,
       routeNarrative: <String>[
@@ -1678,7 +1534,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
             .map((item) => item.routeNarrative.trim())
             .where((item) => item.isNotEmpty),
       ].join(' | '),
-      needClarify: intentGraph.clarificationNeeded,
+      needClarify: planView.clarificationNeeded,
       pendingClarifications: subagentPlans
           .expand((item) => item.pendingClarifications)
           .map((item) => item.trim())
@@ -1688,11 +1544,11 @@ extension AssistantPipelineStructuredResponseAssemblyCore
   }
 
   String _buildPrimarySkillLocalContextSeed({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required String userQuery,
     required String primaryDomainId,
   }) {
-    final anchors = intentGraph.entityAnchors
+    final anchors = planView.entityRefs
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
@@ -1702,12 +1558,12 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       ..write('; primary=')
       ..write(primaryDomainId.trim())
       ..write('; class=')
-      ..write(intentGraph.problemClassWireName);
-    final job = intentGraph.userJobToBeDone.trim();
-    if (job.isNotEmpty) {
+      ..write(planView.problemClassWireName);
+    final goal = planView.userGoal.trim();
+    if (goal.isNotEmpty) {
       buffer
-        ..write('; job=')
-        ..write(job);
+        ..write('; goal=')
+        ..write(goal);
     }
     if (anchors.isNotEmpty) {
       buffer
@@ -1724,18 +1580,15 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     required List<Map<String, dynamic>> acceptedEvidence,
     required bool answerReady,
   }) {
+    final answerPayloadView = AssistantAnswerPayloadReadView(answerPayload);
     return SkillSynthesisSkillResult(
       skillId: primaryDomainId,
       role: 'primary',
       status: answerReady ? 'success' : 'pending',
       summary: _firstNonEmptyText(<String?>[
-        answerPayload['result'] is Map
-            ? ((answerPayload['result'] as Map)['summary'] as String?)?.trim()
-            : null,
-        answerPayload['result'] is Map
-            ? ((answerPayload['result'] as Map)['text'] as String?)?.trim()
-            : null,
-        (answerPayload['reasonShort'] as String?)?.trim(),
+        answerPayloadView.resultSummaryTrimmed,
+        answerPayloadView.resultTextTrimmed,
+        answerPayloadView.reasonShortTrimmed,
         fallbackSummary,
       ]),
       acceptedEvidence: acceptedEvidence,
@@ -1765,15 +1618,13 @@ extension AssistantPipelineStructuredResponseAssemblyCore
   }
 
   AggregationState _buildAggregationState({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required List<SkillRun> skillRuns,
     required Map<String, dynamic> answerPayload,
   }) {
-    final answerReady =
-        ((answerPayload['result'] as Map?)?['text'] as String?)
-            ?.trim()
-            .isNotEmpty ==
-        true;
+    final answerReady = AssistantAnswerPayloadReadView(
+      answerPayload,
+    ).resultTextTrimmed.isNotEmpty;
     return AggregationState(
       allSkillsReady: skillRuns.isNotEmpty,
       blockingSkills: const <String>[],
@@ -1782,7 +1633,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       needExpansion: false,
       expansionPlan: const AggregationExpansionPlanDto(),
       finalAnswerReady: answerReady,
-      answerOwner: intentGraph.primarySkill,
+      answerOwner: planView.primarySkill,
       clarificationSource: '',
       dependencies: const <String, AggregationDependencyChainDto>{},
     );
@@ -1800,9 +1651,9 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     required Map<String, dynamic> answerPayload,
     required String resultText,
   }) {
-    final parsed = parseMessageKind(
-      (answerPayload['messageKind'] as String?)?.trim() ?? '',
-    );
+    final parsed = AssistantAnswerPayloadReadView(
+      answerPayload,
+    ).messageKindType;
     if (parsed != AssistantMessageKind.unknown) return parsed;
     return resultText.trim().isNotEmpty
         ? AssistantMessageKind.answer
@@ -1811,78 +1662,58 @@ extension AssistantPipelineStructuredResponseAssemblyCore
 
   RunArtifactsUnderstandingSnapshot _buildUnderstandingSnapshot({
     required Map<String, dynamic> raw,
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
+    required List<SearchPlanItem> searchPlans,
     required String latestUserQuery,
   }) {
+    final effectiveSearchPlans = searchPlans.isNotEmpty
+        ? searchPlans
+        : planView.searchPlans;
     final parsed = _hasStructuredContent(raw)
         ? RunArtifactsUnderstandingSnapshot.fromJson(raw)
         : const RunArtifactsUnderstandingSnapshot();
-    final concernPoints = parsed.concernPoints.isNotEmpty
-        ? parsed.concernPoints
-        : <String>[
-                ...intentGraph.hardConstraints,
-                ...intentGraph.softConstraints,
-              ]
-              .where((item) => item.trim().isNotEmpty)
-              .take(4)
-              .toList(growable: false);
-    final canonicalQuery = _firstNonEmptyText(<String?>[
-      intentGraph.queryNormalization.rewrittenQuery,
-      intentGraph.queryNormalization.normalizedQuery,
-      intentGraph.queryTasks.isNotEmpty
-          ? intentGraph.queryTasks.first.query
-          : '',
-    ]);
     final parsedIntentSummary = parsed.intentSummary.trim();
-    final intentSummary = parsedIntentSummary.isNotEmpty
-        ? parsedIntentSummary
-        : _firstNonEmptyText(<String?>[
-            intentGraph.userGoal,
-            intentGraph.userJobToBeDone,
-            intentGraph.targetObject,
-            latestUserQuery,
-            canonicalQuery,
-          ]);
+    final intentSummary = _firstNonEmptyText(<String?>[
+      parsedIntentSummary,
+      planView.userGoal.trim(),
+      latestUserQuery,
+    ]);
     final parsedUserFacingSummary = parsed.userFacingSummary.trim();
-    final userFacingSummary = parsedUserFacingSummary.isNotEmpty
-        ? parsedUserFacingSummary
-        : _firstNonEmptyText(<String?>[
-            parsedIntentSummary,
-            intentSummary,
-            intentGraph.userGoal,
-            intentGraph.userJobToBeDone,
-            intentGraph.targetObject,
-            latestUserQuery,
-            canonicalQuery,
-          ]);
-    final parsedRetrievalDesignNarrative =
-        parsed.retrievalDesignNarrative.trim();
-    final retrievalDesignNarrative = parsedRetrievalDesignNarrative.isNotEmpty
-        ? parsedRetrievalDesignNarrative
-        : _firstNonEmptyText(<String?>[
-            if (parsedIntentSummary.isNotEmpty &&
-                parsedIntentSummary != parsedUserFacingSummary)
-              parsedIntentSummary,
-            _buildRetrievalDesignNarrativeFallback(intentGraph.queryTasks),
-          ]);
+    final userFacingSummary = _firstNonEmptyText(<String?>[
+      parsedUserFacingSummary,
+      _fallbackUnderstandingUserFacingSummary(
+        planView: planView,
+        searchPlans: effectiveSearchPlans,
+        latestUserQuery: latestUserQuery,
+      ),
+      intentSummary,
+    ]);
+    final parsedRetrievalDesignNarrative = parsed.retrievalDesignNarrative
+        .trim();
+    final retrievalDesignNarrative = _firstNonEmptyText(<String?>[
+      parsedRetrievalDesignNarrative,
+      _fallbackRetrievalDesignNarrative(
+        planView: planView,
+        searchPlans: effectiveSearchPlans,
+        latestUserQuery: latestUserQuery,
+      ),
+    ]);
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: _normalizeFinalAnswerTemporalAnchors(
         intentSummary,
-        intentGraph,
+        effectiveSearchPlans,
       ),
       userFacingSummary: _normalizeFinalAnswerTemporalAnchors(
         userFacingSummary,
-        intentGraph,
+        effectiveSearchPlans,
       ),
       retrievalDesignNarrative: _normalizeFinalAnswerTemporalAnchors(
         retrievalDesignNarrative,
-        intentGraph,
+        effectiveSearchPlans,
       ),
-      concernPoints: concernPoints,
+      concernPoints: parsed.concernPoints,
       emotionSignal: parsed.emotionSignal,
-      resolutionItems: parsed.resolutionItems.isNotEmpty
-          ? parsed.resolutionItems
-          : _deriveResolutionItemsFromIntentGraph(intentGraph),
+      resolutionItems: parsed.resolutionItems,
       assumptions: parsed.assumptions,
       mismatchSignal: parsed.mismatchSignal,
       carryForwardFacts: parsed.carryForwardFacts,
@@ -1890,11 +1721,58 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     );
   }
 
+  String _fallbackUnderstandingUserFacingSummary({
+    required AssistantPlanView planView,
+    required List<SearchPlanItem> searchPlans,
+    required String latestUserQuery,
+  }) {
+    final goal = _firstNonEmptyText(<String?>[
+      planView.userGoal.trim(),
+      latestUserQuery,
+    ]);
+    final anchors = <String>{
+      ...planView.entityRefs
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty),
+      ...searchPlans
+          .expand((plan) => plan.entityRefs)
+          .map((item) => item.trim())
+          .where((item) => item.isNotEmpty),
+    }.take(2).toList(growable: false);
+    if (goal.isEmpty) {
+      return anchors.isNotEmpty ? '我先围绕${anchors.join('、')}梳理当前问题。' : '';
+    }
+    if (anchors.isEmpty) {
+      return '我先确认你的核心问题：$goal。';
+    }
+    return '我先围绕${anchors.join('、')}确认你的核心问题：$goal。';
+  }
+
+  String _fallbackRetrievalDesignNarrative({
+    required AssistantPlanView planView,
+    required List<SearchPlanItem> searchPlans,
+    required String latestUserQuery,
+  }) {
+    for (final plan in searchPlans) {
+      final line = _searchPlanDesignLine(
+        plan,
+      ).replaceFirst(RegExp(r'^-\s*'), '');
+      if (line.isNotEmpty) {
+        return '我会先按这条线索继续核对：$line。';
+      }
+    }
+    final goal = _firstNonEmptyText(<String?>[
+      planView.userGoal.trim(),
+      latestUserQuery,
+    ]);
+    return goal.isNotEmpty ? '我会先围绕这个目标补齐检索线索：$goal。' : '';
+  }
+
   RunArtifactsAnswerProcessing _buildAnswerProcessingSnapshot({
     required Map<String, dynamic> raw,
     required String streamedReadinessSummary,
     required SynthesisReadinessResult synthesisReadiness,
-    required ConversationStateDecision stateDecision,
+    required AssistantTypedTurnDecision stateDecision,
     required EvidenceEvaluationResult evidenceEvaluation,
     required List<EvidenceLedgerEntry> evidenceLedger,
     required Map<String, dynamic> answerPayload,
@@ -1919,18 +1797,11 @@ extension AssistantPipelineStructuredResponseAssemblyCore
               .where((item) => item.trim().isNotEmpty)
               .take(4)
               .toList(growable: false);
-    final retrieveMoreReason = parsed.retrieveMoreReason.isNotEmpty
-        ? parsed.retrieveMoreReason
-        : (stateDecision.finalAnswerReady
-              ? ''
-              : _firstNonEmptyText(<String?>[
-                  synthesisReadiness.reason,
-                  evidenceEvaluation.summary,
-                ]));
+    final retrieveMoreReason = parsed.retrieveMoreReason;
     final fallbackFact = _sanitizeAnswerKeyFact(
       _firstNonEmptyText(<String?>[
-        (answerPayload['userMarkdown'] as String?)?.trim(),
-        ((answerPayload['result'] as Map?)?['text'] as String?)?.trim(),
+        AssistantAnswerPayloadReadView(answerPayload).userMarkdownTrimmed,
+        AssistantAnswerPayloadReadView(answerPayload).resultTextTrimmed,
         streamedReadinessSummary,
       ]),
     );
@@ -1971,17 +1842,23 @@ extension AssistantPipelineStructuredResponseAssemblyCore
 
   String _normalizeFinalAnswerTemporalAnchors(
     String text,
-    IntentGraph intentGraph,
+    List<SearchPlanItem> searchPlans,
   ) {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return '';
     final normalized = _canonicalizeUnderstandingSnapshotDateAnchors(trimmed);
-    final qn = intentGraph.queryNormalization;
-    final modelAnchors =
-        <String>[qn.timePoint, qn.timeRangeStart, qn.timeRangeEnd, qn.timeScope]
-            .map((item) => item.trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false);
+    final modelAnchors = searchPlans
+        .expand(
+          (plan) => <String>[
+            plan.timePoint,
+            plan.timeRangeStart,
+            plan.timeRangeEnd,
+            plan.timeScope,
+          ],
+        )
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
     for (final anchor in modelAnchors) {
       if (normalized == anchor) return anchor;
     }
@@ -2286,16 +2163,6 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     return points;
   }
 
-  AssistantJourney _enrichJourneyWithStructuredSnapshots(
-    AssistantJourney journey, {
-    required RunArtifactsUnderstandingSnapshot understandingSnapshot,
-    required RetrievalProcessingSnapshot retrievalProcessing,
-    required RunArtifactsAnswerProcessing answerProcessing,
-    required bool finalAnswerReady,
-  }) {
-    return journey;
-  }
-
   List<Map<String, dynamic>> _buildInlineEvidenceLinks({
     required Map<String, dynamic> answerPayload,
     required List<AssistantUiReferenceWireDto> uiReferences,
@@ -2513,11 +2380,13 @@ extension AssistantPipelineStructuredResponseAssemblyCore
     required List<EvidenceLedgerEntry> evidenceLedger,
   }) {
     for (final entry in evidenceLedger) {
-      if (directEvidenceId.isNotEmpty && entry.evidenceId == directEvidenceId)
+      if (directEvidenceId.isNotEmpty && entry.evidenceId == directEvidenceId) {
         return entry;
+      }
       if (directUrl.isNotEmpty &&
-          SafeReferenceNormalizer.canonicalizeUrl(entry.url) == directUrl)
+          SafeReferenceNormalizer.canonicalizeUrl(entry.url) == directUrl) {
         return entry;
+      }
       final haystack = <String>[
         entry.evidenceId,
         entry.title,
@@ -2527,14 +2396,17 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         entry.url,
       ].join(' ').toLowerCase();
       if (claim.trim().isNotEmpty &&
-          haystack.contains(claim.trim().toLowerCase()))
+          haystack.contains(claim.trim().toLowerCase())) {
         return entry;
+      }
       if (title.trim().isNotEmpty &&
-          haystack.contains(title.trim().toLowerCase()))
+          haystack.contains(title.trim().toLowerCase())) {
         return entry;
+      }
       if (snippet.trim().isNotEmpty &&
-          haystack.contains(snippet.trim().toLowerCase()))
+          haystack.contains(snippet.trim().toLowerCase())) {
         return entry;
+      }
     }
     return null;
   }
@@ -2554,14 +2426,17 @@ extension AssistantPipelineStructuredResponseAssemblyCore
         (map['url'] as String?)?.trim() ?? '',
       ].join(' ').toLowerCase();
       if (claim.trim().isNotEmpty &&
-          haystack.contains(claim.trim().toLowerCase()))
+          haystack.contains(claim.trim().toLowerCase())) {
         return map;
+      }
       if (title.trim().isNotEmpty &&
-          haystack.contains(title.trim().toLowerCase()))
+          haystack.contains(title.trim().toLowerCase())) {
         return map;
+      }
       if (snippet.trim().isNotEmpty &&
-          haystack.contains(snippet.trim().toLowerCase()))
+          haystack.contains(snippet.trim().toLowerCase())) {
         return map;
+      }
     }
     return const <String, dynamic>{};
   }

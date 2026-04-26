@@ -15,13 +15,12 @@ SSOT：`contracts/metadata/assistant/**/schema.yaml`（及 `assistant_run/fields
 | `context_fill_task/` | （见 schema） | `context_fill_task.g.dart` |
 | `conversation_state_decision/` | （见 schema） | `conversation_state_decision.g.dart` |
 | `dialogue_round_script/` | （见 schema） | `dialogue_round_script.g.dart` |
-| `intent_graph/` | （见 schema） | `intent_graph.g.dart` |
 | `planner_contracts/` | （见 schema） | `planner_contracts.g.dart` |
 | `preference_fact/` | （见 schema） | `preference_fact.g.dart` |
-| `query_task/` | （见 schema，专用模板） | `query_task.g.dart` |
 | `react_observation/` | （见 schema） | `react_observation.g.dart` |
 | `recall_result/` | （见 schema，专用模板） | `recall_result.g.dart` |
 | `run_artifacts/` | `RunArtifacts` | `run_artifacts.g.dart` |
+| `task_graph/` | （见 schema） | `task_graph.g.dart` |
 
 端上补充（非生成）：`answerDecision` / `diagnostics` 已为 **`type: partitioned_map`**（路径 B）：生成类型为 `*Partitioned`（`core` + `extensions`），wire 仍为单一 JSON object；只读投影与 `??` 合并辅助见 `quwoquan_app/lib/assistant/contracts/run_artifacts_map_read_views.dart`。
 
@@ -30,6 +29,8 @@ SSOT：`contracts/metadata/assistant/**/schema.yaml`（及 `assistant_run/fields
 | `subagent_plan/` | （见 schema，专用模板） | `subagent_plan.g.dart` |
 | `synthesis_readiness_result/` | （见 schema） | `synthesis_readiness_result.g.dart` |
 | `tool_assessment/` | （见 schema） | `tool_assessment.g.dart` |
+| `turn_synthesis_state/` | （见 schema） | `turn_synthesis_state.g.dart` |
+| `understanding_result/` | （见 schema） | `understanding_result.g.dart` |
 
 **枚举**：`assistant/_shared/enums.yaml` → `lib/assistant/generated/enums/assistant_runtime_enums.g.dart`。
 

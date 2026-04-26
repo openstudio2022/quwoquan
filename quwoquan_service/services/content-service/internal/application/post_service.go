@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -298,7 +299,6 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_content_type"),
 			"contentType 不支持",
 			"unsupported contentType",
-			false,
 		)
 	}
 	now := time.Now().UTC()
@@ -310,9 +310,19 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		strings.TrimSpace(asString(payload["assistantUsePolicy"])),
 	)
 	post := &postmodel.Post{
-		ID:                  fmt.Sprintf("post_%d", now.UnixNano()),
-		AuthorId:            strings.TrimSpace(asString(payload["authorId"])),
-		PersonaId:           strings.TrimSpace(asString(payload["personaId"])),
+		ID:               fmt.Sprintf("post_%d", now.UnixNano()),
+		AuthorId:         strings.TrimSpace(asString(payload["authorId"])),
+		PersonaId:        strings.TrimSpace(asString(payload["personaId"])),
+		ProfileSubjectId: strings.TrimSpace(asString(payload["profileSubjectId"])),
+		PersonaContextVersion: asInt64Flexible(
+			payload["personaContextVersion"],
+		),
+		AuthorDisplayNameSnapshot: strings.TrimSpace(
+			asString(payload["authorDisplayNameSnapshot"]),
+		),
+		AuthorAvatarUrlSnapshot: strings.TrimSpace(
+			asString(payload["authorAvatarUrlSnapshot"]),
+		),
 		ContentType:         contentType,
 		ContentIdentity:     contentIdentity,
 		Title:               strings.TrimSpace(asString(payload["title"])),
@@ -341,8 +351,11 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		CreatedAt:           now,
 		UpdatedAt:           now,
 	}
+	if post.ProfileSubjectId == "" {
+		post.ProfileSubjectId = defaultString(post.PersonaId, post.AuthorId)
+	}
 	if post.AuthorId == "" {
-		post.AuthorId = "user_guest"
+		post.AuthorId = defaultString(post.ProfileSubjectId, "user_guest")
 	}
 	if post.SourceType == "" {
 		post.SourceType = "original"
@@ -356,7 +369,6 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "create_failed"),
 			"创建内容失败",
 			err.Error(),
-			true,
 		)
 	}
 	s.mu.Lock()
@@ -427,7 +439,6 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	if strings.EqualFold(strings.TrimSpace(post.Status), "published") {
@@ -435,7 +446,6 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict"),
 			"内容发布后不可修改",
 			"post immutable after publish",
-			false,
 		)
 	}
 	if title, exists := payload["title"]; exists {
@@ -501,7 +511,6 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
 			"更新内容失败",
 			"post disappeared while updating",
-			true,
 		)
 	}
 	return post, nil
@@ -514,7 +523,6 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	if strings.EqualFold(post.Status, "deleted") {
@@ -522,7 +530,6 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict"),
 			"内容已删除",
 			"post deleted",
-			false,
 		)
 	}
 	if err := applyPostSettingsPayload(post, payload); err != nil {
@@ -540,7 +547,6 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "internal_error"),
 			"发布失败",
 			"update failed",
-			true,
 		)
 	}
 	s.syncDistributionsFromPost(post)
@@ -602,7 +608,6 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	if post.AuthorId != "" && userID != "" && post.AuthorId != userID {
@@ -610,7 +615,6 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
 			"无权更新内容设置",
 			"author mismatch",
-			false,
 		)
 	}
 	if err := applyPostSettingsPayload(post, payload); err != nil {
@@ -623,7 +627,6 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
 			"更新内容设置失败",
 			"post disappeared while updating settings",
-			true,
 		)
 	}
 	s.syncDistributionsFromPost(post)
@@ -665,7 +668,6 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	if post.AuthorId != "" && userID != "" && post.AuthorId != userID {
@@ -673,7 +675,6 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
 			"无权升级该内容",
 			"author mismatch",
-			false,
 		)
 	}
 	post.ContentIdentity = "work"
@@ -708,7 +709,6 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_failed"),
 			"升级作品失败",
 			"post disappeared while promoting",
-			true,
 		)
 	}
 	s.syncDistributionsFromPost(post)
@@ -752,7 +752,6 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	if userID != "" && post.AuthorId != "" && post.AuthorId != userID {
@@ -760,7 +759,6 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
 			"无权删除此内容",
 			"author mismatch",
-			false,
 		)
 	}
 	now := time.Now().UTC()
@@ -772,7 +770,6 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) err
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "delete_failed"),
 			"删除内容失败",
 			"post disappeared while deleting",
-			true,
 		)
 	}
 	s.mu.Lock()
@@ -803,7 +800,6 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	if post.AuthorId != "" && userID != "" && post.AuthorId != userID {
@@ -811,7 +807,6 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
 			"无权修改圈子分发关系",
 			"author mismatch",
-			false,
 		)
 	}
 	if !supportsCircleDistribution(post.Visibility) {
@@ -888,7 +883,6 @@ func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circle
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	if strings.EqualFold(post.Status, "deleted") {
@@ -896,7 +890,6 @@ func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circle
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict"),
 			"内容已删除",
 			"post deleted",
-			false,
 		)
 	}
 	if !supportsCircleDistribution(post.Visibility) {
@@ -967,7 +960,6 @@ func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"上传会话不存在",
 			"upload session not found",
-			false,
 		)
 	}
 	asset, ok := s.mediaAssets[mediaID]
@@ -976,7 +968,6 @@ func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"媒体不存在",
 			"media not found",
-			false,
 		)
 	}
 	asset.Status = "ready"
@@ -1024,7 +1015,6 @@ func (s *PostService) SelectAutoVideoCover(_ context.Context, mediaID string) (*
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"媒体不存在",
 			"media not found",
-			false,
 		)
 	}
 	asset.CoverStrategy = "first_frame"
@@ -1044,7 +1034,6 @@ func (s *PostService) SelectManualVideoCover(_ context.Context, mediaID, coverAs
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"媒体不存在",
 			"media not found",
-			false,
 		)
 	}
 	asset.CoverStrategy = "manual"
@@ -1107,7 +1096,6 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int6
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	userID = strings.TrimSpace(userID)
@@ -1141,7 +1129,6 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (in
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	userID = strings.TrimSpace(userID)
@@ -1177,7 +1164,6 @@ func (s *PostService) FavoritePost(ctx context.Context, postID, userID string) (
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	userID = strings.TrimSpace(userID)
@@ -1211,7 +1197,6 @@ func (s *PostService) UnfavoritePost(ctx context.Context, postID, userID string)
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	userID = strings.TrimSpace(userID)
@@ -1564,19 +1549,31 @@ func stringValue(raw any) string {
 	return ""
 }
 
-func (s *PostService) AddComment(ctx context.Context, postID, userID, content, replyToCommentID, personaId string) (map[string]any, int64, error) {
+func (s *PostService) AddComment(
+	ctx context.Context,
+	postID string,
+	userID string,
+	content string,
+	replyToCommentID string,
+	personaId string,
+	profileSubjectID string,
+	personaContextVersion string,
+) (map[string]any, int64, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
 		return nil, 0, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
 		userID = "guest"
+	}
+	profileSubjectID = strings.TrimSpace(profileSubjectID)
+	if profileSubjectID == "" {
+		profileSubjectID = defaultString(strings.TrimSpace(personaId), userID)
 	}
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -1588,7 +1585,6 @@ func (s *PostService) AddComment(ctx context.Context, postID, userID, content, r
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_too_long"),
 			fmt.Sprintf("评论超出字数限制（最多 %d 字）", s.commentMaxLen),
 			fmt.Sprintf("comment length %d exceeds max %d", len(contentRunes), s.commentMaxLen),
-			false,
 		)
 	}
 
@@ -1614,8 +1610,12 @@ func (s *PostService) AddComment(ctx context.Context, postID, userID, content, r
 	comment := map[string]any{
 		"_id":              fmt.Sprintf("comment_%d", now.UnixNano()),
 		"postId":           post.ID,
-		"authorId":         userID,
+		"authorId":         profileSubjectID,
+		"profileSubjectId": profileSubjectID,
 		"personaId":        strings.TrimSpace(personaId),
+		"personaContextVersion": asInt64Flexible(
+			personaContextVersion,
+		),
 		"content":          content,
 		"replyToCommentId": replyToCommentID,
 		"replyToUserId":    replyToUserId,
@@ -1634,11 +1634,13 @@ func (s *PostService) AddComment(ctx context.Context, postID, userID, content, r
 			AggregateType: "Post",
 			AggregateID:   post.ID,
 			Payload: map[string]any{
-				"commentId":     comment["_id"],
-				"postId":        post.ID,
-				"authorId":      userID,
-				"content":       content,
-				"replyToUserId": replyToUserId,
+				"commentId":        comment["_id"],
+				"postId":           post.ID,
+				"authorId":         profileSubjectID,
+				"profileSubjectId": profileSubjectID,
+				"personaId":        strings.TrimSpace(personaId),
+				"content":          content,
+				"replyToUserId":    replyToUserId,
 			},
 			OccurredAt: now.Format(time.RFC3339),
 		})
@@ -1731,7 +1733,6 @@ func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, user
 				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "comment_forbidden_delete"),
 				"无权删除此评论",
 				"comment author mismatch",
-				false,
 			)
 		}
 		comments[i]["deletedAt"] = time.Now().UTC().Format(time.RFC3339)
@@ -1756,7 +1757,6 @@ func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, user
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"评论不存在",
 			"comment not found",
-			false,
 		)
 	}
 
@@ -2016,7 +2016,6 @@ func (s *PostService) GetCounters(ctx context.Context, postID string) (map[strin
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	return map[string]any{
@@ -2177,7 +2176,6 @@ func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[str
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		)
 	}
 	if strings.TrimSpace(post.ContentType) != "article" {
@@ -2185,7 +2183,6 @@ func (s *PostService) GetHelperRead(ctx context.Context, postID string) (map[str
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"仅支持文章类型的辅助阅读",
 			"helper-read only for articles",
-			false,
 		)
 	}
 	summary := post.Summary
@@ -2263,6 +2260,23 @@ func asString(v any) string {
 		return s
 	}
 	return ""
+}
+
+func asInt64Flexible(v any) int64 {
+	switch vv := v.(type) {
+	case int64:
+		return vv
+	case int:
+		return int64(vv)
+	case float64:
+		return int64(vv)
+	case string:
+		n, err := strconv.ParseInt(strings.TrimSpace(vv), 10, 64)
+		if err == nil {
+			return n
+		}
+	}
+	return 0
 }
 
 func asStringSlice(v any) []string {

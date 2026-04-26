@@ -5,17 +5,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:quwoquan_app/assistant/application/assistant_journey_projector.dart';
-import 'package:quwoquan_app/assistant/application/assistant_process_timeline_projector.dart';
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_answer_payload_read_view.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_structured_response_wire.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/observability_payload_builder.dart';
-import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_round_trace_codec.dart';
+import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_context_scope_hint_view.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_response_codec.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_subagent_plan_codec.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_precomputed_contracts.dart';
-import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_domain_policy_helper.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_diagnostics.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_diagnostics_helper.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_failure_messages.dart';
@@ -32,35 +29,34 @@ import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipelin
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_template_builder.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_subagent_run_record.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_route_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_synthesis_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
-import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
-import 'package:quwoquan_app/assistant/reasoning/planner/aggregation_gate.dart';
 import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
-import 'package:quwoquan_app/assistant/context/assembly/conversation_state_kernel.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/baseline_kernel.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/conversation/explainability/dialogue_state_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/conversation_spine.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_boundary_error_mapper.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
@@ -70,9 +66,9 @@ import 'package:quwoquan_app/assistant/reasoning/temporal/relative_time_resolver
 import 'package:quwoquan_app/assistant/context/assembly/recall_coordinator.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_usage_ledger_entry.dart';
-import 'package:quwoquan_app/assistant/memory/preference/preference_fact_service.dart';
 import 'package:quwoquan_app/assistant/prompt_template/runtime/prompt_snippet_renderer.dart';
 import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
+import 'package:quwoquan_app/assistant/debug/console_pretty_log_formatter.dart';
 import 'package:quwoquan_app/assistant/debug/agent_loop_dev_logger.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
@@ -87,9 +83,7 @@ import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/retrieval/contracts/capability_catalog.dart';
-import 'package:quwoquan_app/assistant/orchestration/answer_outcome_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/phase_one_direct_answer_gate.dart';
 import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.dart';
@@ -109,6 +103,7 @@ import 'package:quwoquan_app/assistant/skill/loading/skill_loader.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 part 'assistant_pipeline_structured_response_part.dart';
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -133,9 +128,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     PersonalAssistantSkillRouter? skillRouter,
     RecallCoordinator? recallCoordinator,
     ModeDecider? modeDecider,
-    AggregationGate? aggregationGate,
     BaselineKernel? baselineKernel,
-    ConversationStateKernel? conversationStateKernel,
     AnswerBoundaryResolver? answerBoundaryResolver,
   }) : _sessionManager = sessionManager,
        _memoryRepository = memoryRepository,
@@ -150,12 +143,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
        _skillRouter = skillRouter ?? const PersonalAssistantSkillRouter(),
        _recallCoordinator = recallCoordinator ?? RecallCoordinator(),
        _modeDecider = modeDecider ?? const ModeDecider(),
-       _aggregationGate = aggregationGate ?? const AggregationGate(),
        _baselineKernel = baselineKernel ?? const BaselineKernel(),
        _answerBoundaryResolver =
-           answerBoundaryResolver ?? const AnswerBoundaryResolver(),
-       _conversationStateKernel =
-           conversationStateKernel ?? const ConversationStateKernel();
+           answerBoundaryResolver ?? const AnswerBoundaryResolver();
 
   final ReactRuntime _runtime;
   final AssistantSessionManager _sessionManager;
@@ -173,17 +163,13 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
   final PersonalAssistantSkillRouter _skillRouter;
   final RecallCoordinator _recallCoordinator;
   final ModeDecider _modeDecider;
-  final AggregationGate _aggregationGate;
   final BaselineKernel _baselineKernel;
   final AnswerBoundaryResolver _answerBoundaryResolver;
-  final ConversationStateKernel _conversationStateKernel;
   final AssistantPipelineSubagentPlanCodec _subagentPlanCodec =
       const AssistantPipelineSubagentPlanCodec();
   final RetrievalOutcomeResolver _retrievalOutcomeResolver =
       const RetrievalOutcomeResolver();
   final AnswerGateResolver _answerGateResolver = const AnswerGateResolver();
-  final PreferenceFactService _preferenceFactService =
-      const PreferenceFactService();
   final PromptSnippetRenderer _promptSnippetRenderer = PromptSnippetRenderer();
 
   static void Function(String delta)? _buildThinkingDeltaForwarder(
@@ -295,6 +281,18 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         debugPrint('[AgentLoop] uncaught: $error');
         debugPrint('$stackTrace');
       }
+      final boundaryOutcome = const AssistantBoundaryErrorMapper().failed(
+        boundary: 'assistant_turn',
+        stage: 'pipeline',
+        code: 'ASSISTANT.SYSTEM.internal_error',
+        kind: RuntimeFailureKind.internal,
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'errorType',
+            value: error.runtimeType.toString(),
+          ),
+        ],
+      );
       return AssistantRunResponse(
         finalText: assistantPipelineInternalErrorMessage(),
         degraded: true,
@@ -313,6 +311,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             },
           ),
         ],
+        structuredResponse: <String, dynamic>{
+          'assistantBoundaryOutcome': boundaryOutcome.toJson(),
+        },
       );
     }
   }
@@ -385,19 +386,22 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content
         : '';
-    final precomputedBootstrap = recoverPrecomputedBootstrap(
+    final contextScopeHintView = AssistantPipelineContextScopeHintView(
       request.contextScopeHint,
+    );
+    final precomputedBootstrap = recoverPrecomputedBootstrap(
+      contextScopeHintView.raw,
       defaultRecentDialogueRoundsLimit: defaultRecentDialogueRoundsLimit,
     );
     final precomputedUnderstand = recoverPrecomputedUnderstand(
-      request.contextScopeHint,
+      contextScopeHintView.raw,
     );
     final precomputedRetrieval = recoverPrecomputedRetrieval(
-      request.contextScopeHint,
+      contextScopeHintView.raw,
     );
     final precomputedExecutionPreparation =
         recoverPrecomputedExecutionPreparation(
-          request.contextScopeHint,
+          contextScopeHintView.raw,
           precomputedUnderstand: precomputedUnderstand,
           precomputedRetrieval: precomputedRetrieval,
         );
@@ -431,7 +435,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         contextContinuityPolicy.continuityMode ==
             ContextContinuityMode.explicitFollowUp;
     final templateContext = sanitizeModelTemplateContext(
-      request.contextScopeHint,
+      contextScopeHintView.raw,
       continuationActive: continuationActive,
       previousRunArtifacts: ownerState.previousRunArtifacts,
     );
@@ -441,9 +445,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         ownerState.contextAssembly ?? const ContextAssemblyResult();
     final forceRefreshDynamicCatalog =
         bootstrapContext.forceRefreshCatalog ||
-        request.contextScopeHint[AssistantPipelineStateKeys
-                .forceRefreshCatalog] ==
-            true;
+        contextScopeHintView.forceRefreshCatalog;
     await _templateCatalogRuntime.ensureLoaded(
       forceRefresh: forceRefreshDynamicCatalog,
     );
@@ -452,10 +454,13 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final domainCatalog = bootstrapContext.domainCatalog;
     final domainCatalogVersion = bootstrapContext.domainCatalogVersion;
     final skillCatalog = bootstrapContext.skillCatalog;
-    final intentGraph = ownerState.intentGraph;
-    if (intentGraph == null) {
+    final planView = assistantPlanViewFromTypedMainline(
+      understandingResult: ownerState.understandingResult,
+      taskGraph: ownerState.taskGraph,
+    );
+    if (planView == null) {
       throw StateError(
-        'executeBridge missing intentGraph after owner resolution',
+        'executeBridge missing typed understanding after owner resolution',
       );
     }
     final resolvedExecutionPreparation = ownerState.executionPreparation;
@@ -466,24 +471,20 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     }
     final domainId = resolvedExecutionPreparation.domainId.trim().isNotEmpty
         ? resolvedExecutionPreparation.domainId.trim()
-        : (intentGraph.primarySkill.trim().isNotEmpty
-              ? intentGraph.primarySkill.trim()
+        : (planView.primarySkill.trim().isNotEmpty
+              ? planView.primarySkill.trim()
               : _domainRouter.fallbackDomainId);
-    final problemShape = intentGraph.problemShape.wireName.isNotEmpty
-        ? intentGraph.problemShape.wireName
-        : (intentGraph.secondarySkills.isNotEmpty
-              ? 'multi_skill'
-              : 'single_skill');
+    final problemShape = planView.problemShape.wireName;
     final modeDecision = resolvedExecutionPreparation.modeDecision;
     final intentTraceEvent = AssistantTraceEvent(
       type: AssistantTraceEventType.lifecycleStart,
-      message: 'intent_graph_resolved',
+      message: 'understanding_result_resolved',
       timestamp: DateTime.now(),
       runId: effectiveRunId,
       traceId: effectiveTraceId,
       visibility: TraceVisibility.internal,
       data: <String, dynamic>{
-        ...intentGraph.toJson(),
+        ...planView.toJson(),
         'agentMode': modeDecision.mode.name,
         'agentModeReason': modeDecision.reason,
       },
@@ -517,19 +518,20 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final effectiveToolNames = resolvedExecutionPreparation.allowedToolNames;
     final skillPersona = resolvedExecutionPreparation.skillPersona;
     final retrievalPolicy = await _loadRetrievalPolicy(domainId);
+    final effectiveSearchPlans = searchPlansFromTaskGraph(ownerState.taskGraph);
     final answerBoundaryPolicy = _answerBoundaryResolver.resolve(
-      intentGraph: intentGraph,
+      planView: planView,
       contextAssembly: contextAssembly,
       retrievalPolicy: retrievalPolicy,
-      queryTasks: intentGraph.queryTasks,
+      searchPlans: effectiveSearchPlans,
     );
     final conversationSpine = buildConversationSpine(
       stageId: 'understanding',
       userQuery: request.messages.isEmpty ? '' : request.messages.last.content,
-      userGoal: intentGraph.userGoal,
-      primarySkill: intentGraph.primarySkill,
-      problemClass: intentGraph.problemClass.wireName,
-      answerShape: intentGraph.answerShape.wireName,
+      userGoal: planView.userGoal,
+      primarySkill: planView.primarySkill,
+      problemClass: planView.problemClass.wireName,
+      answerShape: planView.answerShape.wireName,
       historyAssessment: buildHistoryAssessmentFromPolicy(
         policy: contextContinuityPolicy,
         overrideSlots:
@@ -551,34 +553,26 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     );
     final searchIterationState = _seedSearchIterationState(
       request: request,
-      intentGraph: intentGraph,
+      searchPlans: effectiveSearchPlans,
     );
     final recentDialogueRounds =
         precomputedBootstrap?.recentDialogueRounds ??
         coerceRecentDialogueRounds(
-          request.contextScopeHint[AssistantPipelinePromptKeys
-              .recentDialogueRounds],
+          contextScopeHintView.value(
+            AssistantPipelinePromptKeys.recentDialogueRounds,
+          ),
         );
     final temporalReference = _templateRelativeTimeResolver
         .resolveReferenceContext(
           referenceNowIso: _firstNonEmptyText(<String?>[
-            request.contextScopeHint[AssistantPipelinePromptKeys
-                    .referenceNowIso]
-                as String?,
-            intentGraph.queryNormalization.referenceNowIso,
-            precomputedBootstrap
-                ?.previousIntentGraph
-                ?.queryNormalization
-                .referenceNowIso,
+            contextScopeHintView.stringValue(
+              AssistantPipelinePromptKeys.referenceNowIso,
+            ),
           ]),
           timezone: _firstNonEmptyText(<String?>[
-            request.contextScopeHint[AssistantPipelinePromptKeys.timezone]
-                as String?,
-            intentGraph.queryNormalization.timezone,
-            precomputedBootstrap
-                ?.previousIntentGraph
-                ?.queryNormalization
-                .timezone,
+            contextScopeHintView.stringValue(
+              AssistantPipelinePromptKeys.timezone,
+            ),
           ]),
         );
     final calendarContext = _templateRelativeTimeResolver.buildCalendarContext(
@@ -607,9 +601,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         skillCatalog: skillCatalog,
         previousSlotState: previousSlotState,
         previousDomainPolicyBundle: previousDomainPolicyBundle,
-        intentGraph: intentGraph,
+        planView: planView,
+        searchPlans: effectiveSearchPlans,
         answerBoundaryPolicy: answerBoundaryPolicy,
-        previousIntentGraph: precomputedBootstrap?.previousIntentGraph,
         previousAnswerSummary:
             precomputedBootstrap?.previousAnswerSummary ?? '',
         continuityPolicy: contextContinuityPolicy,
@@ -640,7 +634,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       request.messages,
       limit:
           precomputedBootstrap?.recentDialogueRoundsLimit ??
-          resolveRecentDialogueRoundsLimit(request.contextScopeHint),
+          resolveRecentDialogueRoundsLimit(contextScopeHintView.raw),
     );
     final messages = modelMessages
         .map((m) => <String, dynamic>{'role': m.role, 'content': m.content})
@@ -648,24 +642,38 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final dataLayerBuffer = StringBuffer();
     dataLayerBuffer.writeln('<dialogue_state>');
     dataLayerBuffer.writeln(
-      jsonEncode(dialogueScriptForModel(dialogueRoundScript)),
+      ConsolePrettyLogFormatter.prettyJsonLikeString(
+        dialogueScriptForModel(dialogueRoundScript),
+      ),
     );
     dataLayerBuffer.writeln('</dialogue_state>');
     dataLayerBuffer.writeln();
     dataLayerBuffer.writeln('<context_slots>');
-    dataLayerBuffer.writeln(jsonEncode(contextAssembly.contextEnvelope));
+    dataLayerBuffer.writeln(
+      ConsolePrettyLogFormatter.prettyJsonLikeString(
+        contextAssembly.contextEnvelope,
+      ),
+    );
     dataLayerBuffer.writeln('</context_slots>');
     if (previousSlotState.slotValues.isNotEmpty ||
         previousSlotState.missingSlots.isNotEmpty) {
       dataLayerBuffer.writeln();
       dataLayerBuffer.writeln('<slot_state_snapshot>');
-      dataLayerBuffer.writeln(jsonEncode(previousSlotState.toJson()));
+      dataLayerBuffer.writeln(
+        ConsolePrettyLogFormatter.prettyJsonLikeString(
+          previousSlotState.toJson(),
+        ),
+      );
       dataLayerBuffer.writeln('</slot_state_snapshot>');
     }
     if (previousDomainPolicyBundle != null) {
       dataLayerBuffer.writeln();
       dataLayerBuffer.writeln('<domain_policy_bundle>');
-      dataLayerBuffer.writeln(jsonEncode(previousDomainPolicyBundle.toJson()));
+      dataLayerBuffer.writeln(
+        ConsolePrettyLogFormatter.prettyJsonLikeString(
+          previousDomainPolicyBundle.toJson(),
+        ),
+      );
       dataLayerBuffer.writeln('</domain_policy_bundle>');
     }
     if (historySummary.isNotEmpty) {
@@ -811,12 +819,12 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     ) {
       final carriedEvidenceLedger =
           continuationActive &&
-              intentGraph.problemClass != ProblemClass.realtimeInfo
+              planView.problemClass != ProblemClass.realtimeInfo
           ? (ownerState.previousRunArtifacts?.evidenceLedger ??
                 const <EvidenceLedgerEntry>[])
           : const <EvidenceLedgerEntry>[];
       final blockingDimensions = _blockingEvidenceDimensions(
-        queryTasks: intentGraph.queryTasks,
+        searchPlans: effectiveSearchPlans,
         toolResults: toolResults,
       );
       final currentEvidenceLedger = _baselineKernel.buildEvidenceLedger(
@@ -842,10 +850,10 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         query: request.messages.isNotEmpty ? request.messages.last.content : '',
         finalText: runtimeResult.finalText,
         hasToolResult: hasToolResult,
-        problemClass: intentGraph.problemClassWireName,
+        problemClass: planView.problemClassWireName,
         contextAssembly: contextAssembly,
-        intentGraph: intentGraph,
-        queryTasks: intentGraph.queryTasks,
+        planView: planView,
+        searchPlans: effectiveSearchPlans,
         boundaryPolicy: answerBoundaryPolicy,
         evidenceEvaluation: evidenceEvaluation,
       );
@@ -874,7 +882,10 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       latestUserQuery: latestUserQuery,
       domainId: domainId,
       contextAssembly: contextAssembly,
-      intentGraph: intentGraph,
+      understandingResult: ownerState.understandingResult,
+      taskGraph: ownerState.taskGraph,
+      orchestratorState: ownerState.orchestratorState,
+      turnSynthesisState: ownerState.turnSynthesisState,
       dialogueRoundScript: dialogueRoundScript,
       domainCatalog: domainCatalog,
       domainCatalogVersion: domainCatalogVersion,
@@ -914,7 +925,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       precomputedExecutionPreparation: precomputedExecutionPreparation,
     );
     final hasExplicitOwnerInputs =
-        state.intentGraph != null || precomputedExecutionPreparation != null;
+        state.understandingResult.intents.isNotEmpty ||
+        precomputedExecutionPreparation != null;
     if ((state.bootstrapContext == null || state.contextAssembly == null) &&
         hasExplicitOwnerInputs) {
       final compatBootstrap = await _buildCompatibilityBootstrapState(request);
@@ -937,10 +949,10 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       );
       state = bootstrapOutput.state ?? state;
     }
-    final hasIntentGraph = state.intentGraph != null;
+    final hasUnderstanding = state.understandingResult.intents.isNotEmpty;
     final hasExecutionDomainId =
         state.executionPreparation?.domainId.trim().isNotEmpty == true;
-    if (!hasIntentGraph || !hasExecutionDomainId) {
+    if (!hasUnderstanding || !hasExecutionDomainId) {
       final understandOutput = await _understandPhase.run(
         PhaseInput(
           request: request,
@@ -952,15 +964,15 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       );
       state = understandOutput.state ?? state;
     }
-    final hasQueryTasks =
-        state.queryTasks.isNotEmpty ||
-        (state.intentGraph?.queryTasks.isNotEmpty ?? false);
+    final hasSearchPlans = state.taskGraph.tasks.isNotEmpty;
     final hasExecutionDetails =
         state.executionPreparation?.hasExecutionDetails ?? false;
     final hasExplicitPreparedExecution =
         precomputedExecutionPreparation?.hasExecutionDetails ?? false;
-    if (!hasExplicitPreparedExecution &&
-        (!hasExecutionDetails || !hasQueryTasks)) {
+    final shouldRunRetrievalDesign =
+        !hasExplicitPreparedExecution &&
+        (!hasExecutionDetails || !hasSearchPlans);
+    if (shouldRunRetrievalDesign) {
       final retrievalOutput = await _retrievalDesignPhase.run(
         PhaseInput(
           request: request,
@@ -972,10 +984,6 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       );
       state = retrievalOutput.state ?? state;
     }
-    if (state.queryTasks.isEmpty &&
-        state.intentGraph?.queryTasks.isNotEmpty == true) {
-      state = state.copyWith(queryTasks: state.intentGraph!.queryTasks);
-    }
     return state;
   }
 
@@ -985,22 +993,13 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     required PrecomputedUnderstand? precomputedUnderstand,
     required AssistantExecutionPreparation? precomputedExecutionPreparation,
   }) {
-    final precomputedIntentGraph = recoverPrecomputedIntentGraph(
+    final contextScopeHintView = AssistantPipelineContextScopeHintView(
       request.contextScopeHint,
     );
-    final precomputedQueryTasks = _recoverPrecomputedQueryTasks(
-      request.contextScopeHint,
-      fallbackIntentGraph: precomputedIntentGraph,
+    final typedUnderstanding = _recoverTypedUnderstandingResult(
+      contextScopeHintView,
     );
-    final effectiveIntentGraph =
-        precomputedIntentGraph != null &&
-            precomputedIntentGraph.queryTasks.isEmpty &&
-            precomputedQueryTasks.isNotEmpty
-        ? IntentGraph.fromJson(<String, dynamic>{
-            ...precomputedIntentGraph.toJson(),
-            'queryTasks': QueryTask.toJsonList(precomputedQueryTasks),
-          })
-        : precomputedIntentGraph;
+    final typedTaskGraph = _recoverTypedTaskGraph(contextScopeHintView);
     return AgentExecutionState(
       bootstrapContext: precomputedBootstrap == null
           ? null
@@ -1008,12 +1007,15 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
               sessionId: precomputedBootstrap.sessionId,
               latestUserQuery: precomputedBootstrap.latestUserQuery,
               historySummary: precomputedBootstrap.historySummary,
+              systemContextEnvelope: precomputedBootstrap.systemContextEnvelope,
               recentDialogueRounds: precomputedBootstrap.recentDialogueRounds,
               recentDialogueRoundsLimit:
                   precomputedBootstrap.recentDialogueRoundsLimit,
               recalledTexts: precomputedBootstrap.recalledTexts,
-              previousIntentGraph: precomputedBootstrap.previousIntentGraph,
               previousAnswerSummary: precomputedBootstrap.previousAnswerSummary,
+              previousUnderstandingResult:
+                  precomputedBootstrap.previousUnderstandingResult,
+              previousTaskGraph: precomputedBootstrap.previousTaskGraph,
               previousUnderstandingSnapshot:
                   precomputedBootstrap.previousUnderstandingSnapshot,
               previousAnswerProcessing:
@@ -1036,28 +1038,57 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       contextAssembly: precomputedBootstrap?.contextAssembly,
       previousRunArtifacts:
           precomputedBootstrap?.previousRunArtifacts ??
-          recoverPreviousRunArtifacts(request.contextScopeHint),
-      intentGraph: effectiveIntentGraph,
-      queryTasks: precomputedQueryTasks,
+          recoverPreviousRunArtifacts(contextScopeHintView.raw),
+      systemContextEnvelope:
+          precomputedBootstrap?.systemContextEnvelope ??
+          const SystemContextEnvelope(),
       dialogueRoundScript: precomputedUnderstand?.dialogueRoundScript,
+      understandingResult: typedUnderstanding ?? const UnderstandingResult(),
+      taskGraph: typedTaskGraph ?? const TaskGraph(),
       executionPreparation: precomputedExecutionPreparation,
     );
   }
 
-  List<QueryTask> _recoverPrecomputedQueryTasks(
-    Map<String, dynamic> contextScopeHint, {
-    IntentGraph? fallbackIntentGraph,
-  }) {
-    final recovered = QueryTask.normalizeList(
-      contextScopeHint[AssistantPipelineStateKeys.precomputedQueryTasks],
-    );
-    if (recovered.isNotEmpty) return recovered;
-    return fallbackIntentGraph?.queryTasks ?? const <QueryTask>[];
+  UnderstandingResult? _recoverTypedUnderstandingResult(
+    AssistantPipelineContextScopeHintView contextScopeHint,
+  ) {
+    final raw = contextScopeHint.precomputedUnderstandingResult.isNotEmpty
+        ? contextScopeHint.precomputedUnderstandingResult
+        : contextScopeHint.understandingResult;
+    if (raw.isEmpty) {
+      return null;
+    }
+    try {
+      final result = UnderstandingResult.fromJson(raw);
+      return result.intents.isEmpty ? null : result;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  TaskGraph? _recoverTypedTaskGraph(
+    AssistantPipelineContextScopeHintView contextScopeHint,
+  ) {
+    final raw = contextScopeHint.precomputedTaskGraph.isNotEmpty
+        ? contextScopeHint.precomputedTaskGraph
+        : contextScopeHint.taskGraph;
+    if (raw.isEmpty) {
+      return null;
+    }
+    try {
+      final result = TaskGraph.fromJson(raw);
+      return result.tasks.isEmpty ? null : result;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<_CompatibilityBootstrapState> _buildCompatibilityBootstrapState(
     AssistantRunRequest request,
   ) async {
+    final contextScopeHintView = AssistantPipelineContextScopeHintView(
+      request.contextScopeHint,
+    );
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content
         : '';
@@ -1070,11 +1101,10 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
     final recentDialogueRoundsLimit = resolveRecentDialogueRoundsLimit(
-      request.contextScopeHint,
+      contextScopeHintView.raw,
     );
-    final olderRecentDialogueRoundsLimit = resolveOlderRecentDialogueRoundsLimit(
-      request.contextScopeHint,
-    );
+    final olderRecentDialogueRoundsLimit =
+        resolveOlderRecentDialogueRoundsLimit(contextScopeHintView.raw);
     final continuityPolicy = _contextOrchestrator.buildContinuityPolicy(
       query: latestUserQuery,
       sessionHistory: priorSessionHistory,
@@ -1124,13 +1154,10 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       deviceModel: request.deviceModel,
       deviceOs: request.deviceOs,
       gpsLocation: request.gpsLocation,
-      contextScopeHint: request.contextScopeHint,
+      contextScopeHint: contextScopeHintView.raw,
       continuityPolicy: continuityPolicy,
     );
-    final forceRefreshCatalog =
-        request.contextScopeHint[AssistantPipelineStateKeys
-            .forceRefreshCatalog] ==
-        true;
+    final forceRefreshCatalog = contextScopeHintView.forceRefreshCatalog;
     await _templateCatalogRuntime.ensureLoaded(
       forceRefresh: forceRefreshCatalog,
     );
@@ -1138,17 +1165,17 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     await AssistantContentFilters.ensureLoaded();
     final domainCatalog = await _domainRouter.availableDomains(
       forceRefresh: forceRefreshCatalog,
-      contextScopeHint: request.contextScopeHint,
+      contextScopeHint: contextScopeHintView.raw,
     );
     final domainCatalogVersion = await _domainRouter.catalogVersion(
       forceRefresh: false,
-      contextScopeHint: request.contextScopeHint,
+      contextScopeHint: contextScopeHintView.raw,
     );
     final fullSkillCatalog = await _domainRouter.buildSkillCatalogPrompt(
-      contextScopeHint: request.contextScopeHint,
+      contextScopeHint: contextScopeHintView.raw,
     );
     final allManifests = await _domainRouter.availableSkillManifests(
-      contextScopeHint: request.contextScopeHint,
+      contextScopeHint: contextScopeHintView.raw,
     );
     final recallResult = _recallCoordinator.recall(
       latestUserQuery,
@@ -1208,9 +1235,18 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final traceId = executionSnapshot.traceId;
     final sessionId = executionSnapshot.sessionId;
     final latestUserQuery = executionSnapshot.latestUserQuery.trim();
+    final contextScopeHintView = AssistantPipelineContextScopeHintView(
+      request.contextScopeHint,
+    );
     final domainId = executionSnapshot.domainId.trim();
     final contextAssembly = executionSnapshot.contextAssembly;
-    final intentGraph = executionSnapshot.intentGraph;
+    final planView = assistantPlanViewFromTypedMainline(
+      understandingResult: executionSnapshot.understandingResult,
+      taskGraph: executionSnapshot.taskGraph,
+    );
+    if (planView == null) {
+      throw StateError('synthesis missing typed understanding');
+    }
     final dialogueRoundScript = executionSnapshot.dialogueRoundScript;
     final domainCatalog = executionSnapshot.domainCatalog;
     final domainCatalogVersion = executionSnapshot.domainCatalogVersion;
@@ -1222,15 +1258,14 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final retrievalPolicy = executionSnapshot.retrievalPolicy;
     final answerBoundaryPolicy = executionSnapshot.answerBoundaryPolicy;
     final templateVariables = executionSnapshot.templateVariables;
-    final templateVariablesView =
-        AssistantPipelineTemplateVariablesView.fromMap(templateVariables);
+    final templateVariablesView = executionSnapshot.templateVariablesReadView;
     final templateContext = sanitizeModelTemplateContext(
-      request.contextScopeHint,
+      contextScopeHintView.raw,
       continuationActive: _hasContinuationCarryoverContext(
         templateVariablesView,
       ),
       previousRunArtifacts: recoverPreviousRunArtifacts(
-        request.contextScopeHint,
+        contextScopeHintView.raw,
       ),
     );
     final messages = executionSnapshot.messages;
@@ -1242,13 +1277,13 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final domainResultsForSynthesis = buildDomainResultsForSynthesis(
       phaseOneResult.traces,
     );
-    final synthesisQueryTasks = QueryTask.toJsonList(intentGraph.queryTasks);
-    final bootstrapPayload =
-        (request.contextScopeHint[AssistantPipelineStateKeys
-                    .precomputedBootstrap]
-                as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final executionSearchPlans = searchPlansFromTaskGraph(
+      executionSnapshot.taskGraph,
+    );
+    final synthesisSearchPlans = SearchPlanItem.toJsonList(
+      executionSearchPlans,
+    );
+    final bootstrapPayload = contextScopeHintView.precomputedBootstrap;
     final continuityPolicyForSynthesis =
         bootstrapPayload[AssistantPipelineStateKeys.contextContinuityPolicy]
             is Map
@@ -1265,18 +1300,14 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       traces: phaseOneResult.traces,
     );
     final previousRunArtifactsForSynthesis = recoverPreviousRunArtifacts(
-      request.contextScopeHint,
+      contextScopeHintView.raw,
     );
     final previousUnderstandingSnapshotForSynthesis =
         (bootstrapPayload[AssistantPipelineStateKeys
                     .previousUnderstandingSnapshot]
                 as Map?)
             ?.cast<String, dynamic>() ??
-        (request.contextScopeHint[AssistantPipelineStateKeys
-                    .previousUnderstandingSnapshot]
-                as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        contextScopeHintView.previousUnderstandingSnapshot;
     Map<String, dynamic> stagePayloadMap(
       Map<String, dynamic> payload,
       String key,
@@ -1297,7 +1328,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
               const <String, dynamic>{},
         ),
       ),
-      intentGraph: intentGraph,
+      planView: planView,
+      searchPlans: executionSearchPlans,
       latestUserQuery: latestUserQuery,
     );
     var carriedRetrievalProcessing = preferStructuredMap(
@@ -1310,11 +1342,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         (bootstrapPayload[AssistantPipelineStateKeys.historicalThinkingSnapshot]
                 as Map?)
             ?.cast<String, dynamic>() ??
-        (request.contextScopeHint[AssistantPipelineStateKeys
-                    .historicalThinkingSnapshot]
-                as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+        contextScopeHintView.historicalThinkingSnapshot;
     var carriedHistoricalThinkingSnapshot = preferStructuredMap(
       historicalThinkingSnapshotForSynthesis,
       previousRunArtifactsForSynthesis?.historicalThinkingSnapshot.toJson() ??
@@ -1327,7 +1355,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             payload,
             AssistantPipelineStateKeys.understandingSnapshot,
           ),
-          intentGraph: intentGraph,
+          planView: planView,
+          searchPlans: executionSearchPlans,
           latestUserQuery: latestUserQuery,
         ),
         carriedUnderstandingSnapshot,
@@ -1351,22 +1380,19 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final evidenceEvaluationForSynthesis =
         executionSnapshot.evidenceEvaluation as EvidenceEvaluationResult? ??
         const EvidenceEvaluationResult();
-    final templateCurrentRuntimeState =
-        templateVariablesView.currentRuntimeStateMap;
     final templateDialogueState = templateVariablesView.dialogueStateMap;
     final synthesisTemporalReference = _templateRelativeTimeResolver
         .resolveReferenceContext(
           referenceNowIso: _firstNonEmptyText(<String?>[
-            request.contextScopeHint[AssistantPipelinePromptKeys
-                    .referenceNowIso]
-                as String?,
-            intentGraph.queryNormalization.referenceNowIso,
+            contextScopeHintView.stringValue(
+              AssistantPipelinePromptKeys.referenceNowIso,
+            ),
             templateDialogueState['referenceNowIso'] as String?,
           ]),
           timezone: _firstNonEmptyText(<String?>[
-            request.contextScopeHint[AssistantPipelinePromptKeys.timezone]
-                as String?,
-            intentGraph.queryNormalization.timezone,
+            contextScopeHintView.stringValue(
+              AssistantPipelinePromptKeys.timezone,
+            ),
             templateDialogueState['timezone'] as String?,
           ]),
         );
@@ -1403,7 +1429,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final synthesisSearchIterationState = _buildSynthesisSearchIterationState(
       templateVariables: templateVariablesView,
       phaseOneTraces: phaseOneResult.traces,
-      fallbackQueryTasks: intentGraph.queryTasks,
+      fallbackSearchPlans: executionSearchPlans,
       maxIterations: request.totalModelStageBudget,
       acceptedEvidenceCount:
           licensedRetrievalProcessingForSynthesis.acceptedReferences.length,
@@ -1423,8 +1449,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         licensedRetrievalProcessingForSynthesis.selectedKeyPoints.isNotEmpty ||
         licensedRetrievalProcessingForSynthesis.acceptedReferences.isNotEmpty;
     final evidenceContextForSynthesis = <String, dynamic>{
-      'intentGraph': intentGraph.toJson(),
-      'queryTasks': synthesisQueryTasks,
+      'planView': planView.toJson(),
+      'searchPlans': synthesisSearchPlans,
       AssistantPipelineStateKeys.retrievalProcessing:
           licensedRetrievalProcessingForSynthesis.toJson(),
       'evidenceEvaluation': evidenceEvaluationForSynthesis.toJson(),
@@ -1434,19 +1460,19 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         'webEvidencePacks':
             domainResultsForSynthesis['webEvidencePacks'] ?? const <Object?>[],
       'contextSlots': buildContextSlots(contextAssembly),
-      AssistantPipelinePromptKeys.entityAnchors: intentGraph.entityAnchors,
+      'entityRefs': planView.entityRefs,
     };
     final synthesisConversationSpine = buildConversationSpine(
       stageId: AssistantPipelineDiagnosticsKeys.answeringPhaseId,
       userQuery: latestUserQuery,
-      userGoal: intentGraph.userGoal.trim().isNotEmpty
-          ? intentGraph.userGoal.trim()
+      userGoal: planView.userGoal.trim().isNotEmpty
+          ? planView.userGoal.trim()
           : latestUserQuery,
-      primarySkill: intentGraph.primarySkill.trim().isNotEmpty
-          ? intentGraph.primarySkill.trim()
+      primarySkill: planView.primarySkill.trim().isNotEmpty
+          ? planView.primarySkill.trim()
           : domainId,
-      problemClass: intentGraph.problemClassWireName,
-      answerShape: intentGraph.answerShape.wireName,
+      problemClass: planView.problemClassWireName,
+      answerShape: planView.answerShape.wireName,
       historyAssessment: mergeHistoryAssessments(<Map<String, dynamic>>[
         buildHistoryAssessmentFromPolicy(
           policy: continuityPolicyForSynthesis,
@@ -1474,8 +1500,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final synthesisTemplateBundle = AssistantPipelineSynthesisTemplateBundle(
       templateVariables: templateVariables,
       conversationSpine: synthesisConversationSpine,
-      userGoal: intentGraph.userGoal.trim().isNotEmpty
-          ? intentGraph.userGoal.trim()
+      userGoal: planView.userGoal.trim().isNotEmpty
+          ? planView.userGoal.trim()
           : latestUserQuery,
       understandingSnapshot: carriedUnderstandingSnapshot,
       retrievalProcessing: licensedRetrievalProcessingForSynthesis.toJson(),
@@ -1484,11 +1510,11 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       dialogueContinuity: dialogueContinuityForSynthesis,
       evidenceContext: evidenceContextForSynthesis,
       searchIterationState: synthesisSearchIterationState.toJson(),
-      intentGraphJson: jsonEncode(intentGraph.toJson()),
-      queryTasksJson: synthesisQueryTasks,
-      entityAnchors: intentGraph.entityAnchors,
-      queryTasks: synthesisQueryTasks,
-      answerShape: intentGraph.answerShape.wireName,
+      planViewJson: jsonEncode(planView.toJson()),
+      searchPlansJson: synthesisSearchPlans,
+      entityRefs: planView.entityRefs,
+      searchPlans: synthesisSearchPlans,
+      answerShape: planView.answerShape.wireName,
       recentDialogueRounds: templateVariablesView.recentDialogueRounds,
     );
     final synthesisTemplateVars = buildSynthesisTemplateVariables(
@@ -1517,27 +1543,26 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         .buildExplicitSkillRunPlans(
           answerPayload: phaseOneAnswerPayload,
           latestUserQuery: latestUserQuery,
-          fallbackProblemClass: intentGraph.problemClassWireName,
+          fallbackProblemClass: planView.problemClassWireName,
           primaryDomainId: domainId,
         );
     final phaseOneContinuationCarryover = _hasContinuationCarryoverContext(
       AssistantPipelineTemplateVariablesView.fromMap(synthesisTemplateVars),
     );
+    final phaseOneCompatDirectAnswer =
+        rawDirectAnswerDecision.reason ==
+        PhaseOneDirectAnswerReason.compatDirectAnswer;
     final suppressDerivedPhaseOneSkillRunPlans =
-        phaseOneContinuationCarryover && synthesisReadiness.ready;
+        phaseOneContinuationCarryover || phaseOneCompatDirectAnswer;
     final derivedPhaseOneSkillRunPlans =
         explicitPhaseOneSkillRunPlans.isEmpty &&
             !suppressDerivedPhaseOneSkillRunPlans
         ? _subagentPlanCodec.buildDerivedSkillRunPlansFromIntent(
-            intentGraph: intentGraph,
+            planView: planView,
             latestUserQuery: latestUserQuery,
             primaryDomainId: domainId,
           )
         : const <SubagentPlan>[];
-    final preferFormalSynthesis =
-        phaseOneExecutionSignalsPresent ||
-        explicitPhaseOneSkillRunPlans.isNotEmpty ||
-        derivedPhaseOneSkillRunPlans.isNotEmpty;
     var effectivePhaseOneText = phaseOneText;
     var effectivePhaseOneAnswerPayload = phaseOneAnswerPayload;
     var effectivePhaseOneTurn = rawPhaseOneTurn;
@@ -1572,20 +1597,19 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       effectivePhaseOneFailureCode = '';
       directAnswerDecision = const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'phase_one_artifact_ignored',
+        reason: PhaseOneDirectAnswerReason.artifactIgnored,
       );
     }
     final allowPhaseOneContractRepair =
-        (!phaseOneExecutionSignalsPresent || phaseOneContinuationCarryover) &&
-        !preferFormalSynthesis;
+        explicitPhaseOneSkillRunPlans.isEmpty &&
+        (!phaseOneExecutionSignalsPresent ||
+            phaseOneContinuationCarryover ||
+            planView.answerShape == AnswerShape.directAnswer);
     if (explicitPhaseOneSkillRunPlans.isEmpty &&
         synthesisReadiness.ready &&
         !shouldIgnorePhaseOneArtifact &&
         allowPhaseOneContractRepair &&
-        (rawDirectAnswerDecision.reason == 'phase_one_not_structured' ||
-            rawDirectAnswerDecision.reason == 'phase_one_not_contract_turn' ||
-            rawDirectAnswerDecision.reason ==
-                'phase_one_contract_incomplete')) {
+        rawDirectAnswerDecision.reason.repairable) {
       final recoveredPhaseOneEnvelopeText =
           _recoverPhaseOneDirectAnswerEnvelopeText(
             rawText: phaseOneText,
@@ -1634,9 +1658,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         !directAnswerDecision.shouldSkipSynthesis &&
         phaseOneHasRenderableAnswer &&
         allowPhaseOneContractRepair &&
-        (directAnswerDecision.reason == 'phase_one_not_structured' ||
-            directAnswerDecision.reason == 'phase_one_not_contract_turn' ||
-            directAnswerDecision.reason == 'phase_one_contract_incomplete');
+        directAnswerDecision.reason.repairable;
     if (shouldAttemptPhaseOneModelRepair) {
       phaseOneModelRepairAttempted = true;
       final phaseOneRepairResult =
@@ -1734,9 +1756,15 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     ReactRuntimeResult mergedResult;
     late final Map<String, dynamic> answerPayloadBeforeSubagent;
     late final List<SubagentPlan> skillRunPlans;
+    final suppressDerivedPlanForDirectAnswer =
+        planView.answerShape == AnswerShape.directAnswer;
+    final suppressDerivedPlanExecution =
+        directAnswerDecision.shouldSkipSynthesis ||
+        phaseOneRecoveryApplied ||
+        phaseOneModelRepairApplied;
     final phaseOneSkillRunPlans = explicitPhaseOneSkillRunPlans.isNotEmpty
         ? explicitPhaseOneSkillRunPlans
-        : (directAnswerDecision.shouldSkipSynthesis
+        : ((suppressDerivedPlanExecution || suppressDerivedPlanForDirectAnswer)
               ? const <SubagentPlan>[]
               : derivedPhaseOneSkillRunPlans);
     if (phaseOneSkillRunPlans.isNotEmpty) {
@@ -1841,7 +1869,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             visibility: TraceVisibility.system,
             data: <String, dynamic>{
               'stage': 'phase_one_direct_answer',
-              'reason': directAnswerDecision.reason,
+              'reason': directAnswerDecision.reasonWireName,
             },
           ),
         );
@@ -2075,6 +2103,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         ],
         degraded: synthesisResult.degraded,
         failureCode: synthesisResult.failureCode,
+        runtimeFailure: synthesisResult.effectiveRuntimeFailure,
       );
       answerPayloadBeforeSubagent = parseAnswerPayload(
         rawFinalText: mergedResult.finalText,
@@ -2091,22 +2120,32 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         answerPayloadBeforeSubagent['subagentPlan'] =
             effectivePhaseOneAnswerPayloadView.subagentPlanMaps;
       }
-      skillRunPlans = directAnswerDecision.shouldSkipSynthesis
+      final suppressPostSynthesisSkillRunPlans =
+          directAnswerDecision.shouldSkipSynthesis ||
+          phaseOneRecoveryApplied ||
+          phaseOneModelRepairApplied ||
+          phaseOneCompatDirectAnswer ||
+          (planView.answerShape == AnswerShape.directAnswer &&
+              phaseOneHasRenderableAnswer);
+      skillRunPlans = suppressPostSynthesisSkillRunPlans
           ? const <SubagentPlan>[]
           : _subagentPlanCodec.buildSkillRunPlans(
-              intentGraph: intentGraph,
+              planView: planView,
               answerPayload: answerPayloadBeforeSubagent,
               latestUserQuery: latestUserQuery,
               primaryDomainId: domainId,
             );
     }
+    final phaseOneAnswerPayloadDiagnosticsView = AssistantAnswerPayloadReadView(
+      effectivePhaseOneAnswerPayload,
+    );
     final phaseOneRoutingDiagnostics = AssistantPipelineDiagnosticsHelper()
         .buildPhaseOneRoutingDiagnostics(
           phaseOneRoute: phaseOneRoute,
           synthesisReadinessReady: synthesisReadiness.ready,
           synthesisReadinessReason: synthesisReadiness.reason,
-          rawDirectAnswerReason: rawDirectAnswerDecision.reason,
-          directAnswerReason: directAnswerDecision.reason,
+          rawDirectAnswerReason: rawDirectAnswerDecision.reasonWireName,
+          directAnswerReason: directAnswerDecision.reasonWireName,
           directAnswerShouldSkipSynthesis:
               directAnswerDecision.shouldSkipSynthesis,
           phaseOneRecoveryApplied: phaseOneRecoveryApplied,
@@ -2117,36 +2156,25 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           phaseOneParsedContractTurn: effectivePhaseOneTurn != null,
           phaseOneNextAction:
               effectivePhaseOneTurn?.nextActionType.wireName ??
-              AssistantAnswerPayloadReadView(
-                effectivePhaseOneAnswerPayload,
-              ).nextActionWireName,
+              phaseOneAnswerPayloadDiagnosticsView.nextActionWireName,
           phaseOneMessageKind:
               effectivePhaseOneTurn?.messageKindType.wireName ??
-              AssistantAnswerPayloadReadView(
-                effectivePhaseOneAnswerPayload,
-              ).messageKindTrimmed,
+              phaseOneAnswerPayloadDiagnosticsView.messageKindTrimmed,
           phaseOnePhaseId:
               effectivePhaseOneTurn?.phaseIdType.wireName ??
-              (effectivePhaseOneAnswerPayload['phaseId'] as String?)?.trim() ??
-              '',
+              phaseOneAnswerPayloadDiagnosticsView.phaseIdTrimmed,
           phaseOneActionCode:
               effectivePhaseOneTurn?.actionCodeType.wireName ??
-              (effectivePhaseOneAnswerPayload['actionCode'] as String?)
-                  ?.trim() ??
-              '',
+              phaseOneAnswerPayloadDiagnosticsView.actionCodeTrimmed,
           phaseOneReasonCode:
               effectivePhaseOneTurn?.reasonCodeType.wireName ??
-              (effectivePhaseOneAnswerPayload['reasonCode'] as String?)
-                  ?.trim() ??
-              '',
+              phaseOneAnswerPayloadDiagnosticsView.reasonCodeTrimmed,
           phaseOneHasRenderableContent: phaseOneHasRenderableContent,
           phaseOneExplicitSkillRunPlanCount:
               explicitPhaseOneSkillRunPlans.length,
           phaseOneDerivedSkillRunPlanCount: derivedPhaseOneSkillRunPlans.length,
           phaseOneSkillRunPlanCount: phaseOneSkillRunPlans.length,
-          milestone3Ready:
-              phaseOneSkillRunPlans.isNotEmpty &&
-              phaseOneSkillRunPlans.every((item) => item.hasMilestone3Inputs),
+          typedExecutionReady: phaseOneSkillRunPlans.isNotEmpty,
           phaseOneSkillRunPlanSource: phaseOneSkillRunPlans.isNotEmpty
               ? (explicitPhaseOneSkillRunPlans.isNotEmpty
                     ? 'phase_one'
@@ -2167,13 +2195,13 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final primaryUiReferences = _buildUiReferences(
       primaryToolResults,
       isRealtimeLike: isRealtimeLikeRequest(
-        fallbackProblemClass: intentGraph.problemClassWireName,
+        fallbackProblemClass: planView.problemClassWireName,
         answerPayload: answerPayloadBeforeSubagent,
       ),
     );
     final primaryAcceptedEvidence = _uiReferenceWireMaps(primaryUiReferences);
     final primarySkillRun = _buildPrimarySkillRun(
-      intentGraph: intentGraph,
+      planView: planView,
       domainId: domainId,
       answerPayload: answerPayloadBeforeSubagent,
       result: mergedResult,
@@ -2182,7 +2210,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     );
     final skillRouteOutput = _buildSkillRouteOutput(
       userQuery: latestUserQuery,
-      intentGraph: intentGraph,
+      planView: planView,
       primaryDomainId: domainId,
       executionShell: effectiveExecutionShell,
       subagentPlans: skillRunPlans,
@@ -2207,7 +2235,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       ...subagentRuns.map(_skillRunFromLegacySubagentRun),
     ];
     final aggregationState = _buildAggregationState(
-      intentGraph: intentGraph,
+      planView: planView,
       skillRuns: skillRuns,
       answerPayload: answerPayloadBeforeSubagent,
     );
@@ -2234,10 +2262,6 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     );
     if (subagentRuns.isNotEmpty) {
       final runsForModel = subagentRunsForModel(subagentRuns);
-      final synthesisAnchors = synthesisTemplateBundle.entityAnchors
-          .map((item) => item.trim())
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false);
       final fusionTemplateVars = buildFusionTemplateVariables(
         bundle: synthesisTemplateBundle,
         skillRuns: skillRuns
@@ -2317,6 +2341,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         failureCode: subagentSynthesis.failureCode.isNotEmpty
             ? subagentSynthesis.failureCode
             : mergedResult.failureCode,
+        runtimeFailure:
+            subagentSynthesis.effectiveRuntimeFailure ??
+            mergedResult.effectiveRuntimeFailure,
       );
     }
     final responseTraces = <AssistantTraceEvent>[
@@ -2328,6 +2355,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       traces: responseTraces,
       degraded: mergedResult.degraded,
       failureCode: mergedResult.failureCode,
+      runtimeFailure: mergedResult.effectiveRuntimeFailure,
     );
     var finalResultTurn = _tryParseAssistantTurnFromRawText(
       finalResult.finalText,
@@ -2357,6 +2385,17 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         traces: responseTraces,
         degraded: true,
         failureCode: 'answer_organization_failed',
+        runtimeFailure: RuntimeFailure(
+          code: 'ASSISTANT.SYSTEM.answer_organization_failed',
+          origin: RuntimeFailureOrigin.system,
+          kind: RuntimeFailureKind.internal,
+          nature: RuntimeFailureNature.bug,
+          location: const RuntimeFailureLocation(
+            businessObject: 'assistant_turn',
+            functionModule: 'assistant_pipeline_engine',
+          ),
+          context: const RuntimeFailureContext(),
+        ),
       );
       finalResultTurn = _tryParseAssistantTurnFromRawText(
         finalResult.finalText,
@@ -2377,7 +2416,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       contextAssembly: contextAssembly,
       synthesisReadiness: synthesisReadiness,
       finalResult: finalResult,
-      intentGraph: intentGraph,
+      planView: planView,
       skillRuns: skillRuns,
       aggregationState: aggregationState,
       subagentPlan: skillRunPlans,
@@ -2423,7 +2462,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       contextAssembly: draft.contextAssembly,
       synthesisReadiness: draft.synthesisReadiness,
       result: draft.finalResult,
-      intentGraph: draft.intentGraph,
+      planView: draft.planView,
+      searchPlans: draft.planView.searchPlans,
       skillRuns: draft.skillRuns,
       aggregationState: draft.aggregationState,
       subagentPlan: draft.subagentPlan,
@@ -2963,15 +3003,15 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     if (turn == null) {
       return 'invalid_assistant_turn';
     }
-    final decision =
-        turn.decision.toJson() ??
-        (parsed['decision'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final nextAction = parseNextAction(
-      (decision['nextAction'] as String?)?.trim() ?? '',
-    );
+    final nextAction = turn.nextActionType;
     if (nextAction == AssistantNextAction.unknown) {
       return 'unknown_next_action';
+    }
+    if (nextAction == AssistantNextAction.toolCall) {
+      return 'tool_call_not_final_answer';
+    }
+    if (turn.messageKindType == AssistantMessageKind.progress) {
+      return 'progress_not_final_answer';
     }
     final projectedMarkdown = AssistantDisplayTextResolver.projectTurn(
       turn,
@@ -3075,8 +3115,10 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         'continuationReminder': continuationReminder,
       },
     );
-    if (rendered.isNotEmpty) return rendered;
-    return _buildSynthesisRepairFallback(repairReason);
+    final repairHeader = _buildSynthesisRepairFallback(repairReason);
+    if (rendered.isEmpty) return repairHeader;
+    if (rendered.contains('assistant_turn_repair|')) return rendered;
+    return '$repairHeader\n$rendered';
   }
 
   AssistantTurnOutput? _tryParseAssistantTurnFromRawText(String rawText) {
@@ -3249,13 +3291,15 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         'continuationReminder': continuationReminder,
       },
     );
-    if (rendered.isNotEmpty) return rendered;
-    return _buildPhaseOneDirectAnswerRepairFallback(
+    final fallback = _buildPhaseOneDirectAnswerRepairFallback(
       latestUserQuery: latestUserQuery,
       recoveredMarkdown: recoveredMarkdown,
       anchorReminder: anchorReminder,
       continuationReminder: continuationReminder,
     );
+    if (rendered.isEmpty) return fallback;
+    if (rendered.contains('assistant_turn_repair|')) return rendered;
+    return '$fallback\n$rendered';
   }
 
   String _buildSynthesisRepairFallback(String repairReason) {
@@ -3269,6 +3313,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     required String continuationReminder,
   }) {
     final buffer = StringBuffer()
+      ..writeln(
+        'assistant_turn_repair|phase=phase_one_direct_answer|output=single_assistant_turn_json',
+      )
       ..writeln('repair_mode=phase_one_direct_answer')
       ..writeln('latestUserQuery=$latestUserQuery')
       ..writeln('output=single_assistant_turn_json');
@@ -3314,25 +3361,6 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     AssistantPipelineTemplateVariablesView templateVariables,
   ) {
     return templateVariables.requiredTopicAnchors;
-  }
-
-  bool _isMeaningfulTopicAnchor(String value) {
-    final normalized = value.trim();
-    if (normalized.length < 2) return false;
-    var hasCjk = false;
-    var hasAsciiLetterOrDigit = false;
-    for (final rune in normalized.runes) {
-      if (rune >= 0x4e00 && rune <= 0x9fff) {
-        hasCjk = true;
-        break;
-      }
-      if ((rune >= 48 && rune <= 57) ||
-          (rune >= 65 && rune <= 90) ||
-          (rune >= 97 && rune <= 122)) {
-        hasAsciiLetterOrDigit = true;
-      }
-    }
-    return hasCjk || (normalized.length >= 3 && hasAsciiLetterOrDigit);
   }
 
   String _normalizeTopicAnchorText(String raw) {
@@ -3617,7 +3645,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
           AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
             normalized,
           ) ||
-          !_looksLikeRecoverableAnswerText(normalized)) {
+          !_looksLikeRenderableAnswerText(normalized)) {
         continue;
       }
       return normalized;
@@ -3671,7 +3699,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         )) {
       return '';
     }
-    if (!_looksLikeRecoverableAnswerText(sanitized)) {
+    if (!_looksLikeRenderableAnswerText(sanitized)) {
       return '';
     }
     return sanitized;
@@ -3720,7 +3748,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         )) {
       return '';
     }
-    return _looksLikeRecoverableAnswerText(candidate) ? candidate : '';
+    return _looksLikeRenderableAnswerText(candidate) ? candidate : '';
   }
 
   String _recoverDisplayMarkdownFromTraces(List<AssistantTraceEvent> traces) {
@@ -3794,19 +3822,25 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         default:
           break;
       }
-      final stage =
-          (trace.data?['stage'] as String?)?.trim().toLowerCase() ?? '';
-      if (stage.contains('tool') ||
-          stage.contains('search') ||
-          stage.contains('retrieval') ||
-          stage.contains('subagent')) {
+      final stageType = parseAssistantTraceEventType(
+        (trace.data?['stageType'] as String?)?.trim() ?? '',
+      );
+      if (stageType == AssistantTraceEventType.toolStart ||
+          stageType == AssistantTraceEventType.toolResult ||
+          stageType == AssistantTraceEventType.toolError ||
+          stageType == AssistantTraceEventType.searchQueryGenerated ||
+          stageType == AssistantTraceEventType.searchStarted ||
+          stageType == AssistantTraceEventType.searchCompleted ||
+          stageType == AssistantTraceEventType.subagentStart ||
+          stageType == AssistantTraceEventType.subagentResult ||
+          stageType == AssistantTraceEventType.subagentError) {
         return true;
       }
     }
     return false;
   }
 
-  bool _looksLikeRecoverableAnswerText(String text) {
+  bool _looksLikeRenderableAnswerText(String text) {
     final normalized = text.trim();
     if (normalized.isEmpty) return false;
     if (normalized.length >= 24) return true;
@@ -3840,7 +3874,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     final rawPlans = apv.subagentPlanMaps;
     final plans = rawPlans
         .map((item) => SubagentPlan.fromJson(item))
-        .where((item) => item.hasMilestone3Inputs)
+        .where((item) => item.domainId.trim().isNotEmpty)
         .toList(growable: false);
     if (plans.isEmpty) return const <AssistantSubagentRunRecord>[];
     // Build a single subagent execution closure for parallel dispatch
@@ -3878,7 +3912,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
             .resolveExecutionShellForProblemClass(
               domainId: subagentDomainId,
               baseShell: subagentSkillContext.executionShell,
-              rawProblemClass: plan.problemClass,
+              problemClass: parseProblemClass(plan.problemClass),
               mode: planMode,
               secondarySkills: const <String>[],
               queryText: executionGoal,
@@ -4197,39 +4231,6 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     return parseProblemClass(rawProblemClass) == ProblemClass.realtimeInfo;
   }
 
-  List<PreferenceFact> _buildSessionPreferenceFacts({
-    required AssistantRunRequest request,
-    required AssistantAnswerPayloadReadView apv,
-    required List<SkillRun> skillRuns,
-    required int uiReferenceCount,
-  }) {
-    final feedbackHint =
-        (request.contextScopeHint[AssistantPipelineStateKeys
-                    .preferenceFeedback] ??
-                '')
-            .toString()
-            .trim();
-    return _preferenceFactService.buildSessionPreferenceFacts(
-      problemClass: skillRuns.isNotEmpty ? skillRuns.first.problemClass : '',
-      uiReferenceCount: uiReferenceCount,
-      feedbackHint: feedbackHint,
-      followupPrompt: apv.followupPromptTrimmed,
-    );
-  }
-
-  List<PreferenceFact> _buildLongTermPreferenceFacts({
-    required AssistantRunRequest request,
-    required AssistantAnswerPayloadReadView apv,
-    required List<PreferenceFact> sessionFacts,
-  }) {
-    return _preferenceFactService.buildLongTermPreferenceFacts(
-      seedFactsRaw: request
-          .contextScopeHint[AssistantPipelineStateKeys.longTermPreferenceFacts],
-      emergedTagMaps: apv.diagnosticsEmergedTagMaps,
-      sessionFacts: sessionFacts,
-    );
-  }
-
   AssistantRunResponse _buildBlockedResponse({
     required String runId,
     required String traceId,
@@ -4260,6 +4261,21 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       visibility: TraceVisibility.system,
       data: const <String, dynamic>{'lifecycleOutcome': 'blocked'},
     );
+    final boundaryOutcome = const AssistantBoundaryErrorMapper().blocked(
+      boundary: 'assistant_turn',
+      stage: 'context_precheck',
+      failure: const RuntimeFailure(
+        code: 'ASSISTANT.USER.missing_context',
+        origin: RuntimeFailureOrigin.user,
+        kind: RuntimeFailureKind.validation,
+        nature: RuntimeFailureNature.requiresUserAction,
+        location: RuntimeFailureLocation(
+          businessObject: 'assistant_turn',
+          functionModule: 'context_precheck',
+        ),
+        context: RuntimeFailureContext(),
+      ),
+    );
     return AssistantRunResponse(
       finalText: finalText,
       traces: <AssistantTraceEvent>[traceStart, traceEnd],
@@ -4268,6 +4284,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       degraded: true,
       errorCode: 'missing_context',
       structuredResponse: <String, dynamic>{
+        'assistantBoundaryOutcome': boundaryOutcome.toJson(),
         'contextAssembly': contextAssembly.contextEnvelope,
         'domainPrecheck': <String, dynamic>{
           'canEnterDomain': false,
@@ -4320,8 +4337,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
   ProfileUpdateProposal? _buildProfileUpdateProposal({
     required AssistantRunRequest request,
   }) {
-    final proposalRaw = request
-        .contextScopeHint[AssistantPipelineStateKeys.profileUpdateProposal];
+    final proposalRaw = AssistantPipelineContextScopeHintView(
+      request.contextScopeHint,
+    ).value(AssistantPipelineStateKeys.profileUpdateProposal);
     if (proposalRaw is Map) {
       final parsed = ProfileUpdateProposal.fromJson(
         proposalRaw.cast<String, dynamic>(),
@@ -4336,7 +4354,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     required ContextAssemblyResult contextAssembly,
     required SynthesisReadinessResult synthesisReadiness,
     required ReactRuntimeResult result,
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
+    required List<SearchPlanItem> searchPlans,
     required List<SkillRun> skillRuns,
     required AggregationState aggregationState,
     required List<SubagentPlan> subagentPlan,
@@ -4388,7 +4407,8 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
       contextAssembly: contextAssembly,
       synthesisReadiness: synthesisReadiness,
       result: result,
-      intentGraph: intentGraph,
+      planView: planView,
+      searchPlans: searchPlans,
       skillRuns: skillRuns,
       aggregationState: aggregationState,
       skillRoute: skillRoute,
@@ -4420,75 +4440,14 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     );
   }
 
-  DomainPolicyBundle _buildDomainPolicyBundle({
-    required String domainId,
-    required SkillExecutionShell skillExecutionShell,
-    required SlotSchema slotSchema,
-    required DialogueRoundScript dialogueRoundScript,
-    required Map<String, dynamic> retrievalPolicy,
-    required EvidenceEvaluationResult evidenceEvaluation,
-    required ConversationStateDecision stateDecision,
-    DomainPolicyBundle? previous,
-  }) {
-    return buildDomainPolicyBundle(
-      domainId: domainId,
-      skillExecutionShell: skillExecutionShell,
-      slotSchema: slotSchema,
-      dialogueRoundScript: dialogueRoundScript,
-      retrievalPolicy: retrievalPolicy,
-      evidenceEvaluation: evidenceEvaluation,
-      stateDecision: stateDecision,
-      previous: previous,
-    );
-  }
-
-  List<SkillRun> _finalizeSkillRuns({
-    required List<SkillRun> skillRuns,
-    required String primaryDomainId,
-    required SlotStateSnapshot slotState,
-    required bool answerReady,
-    required String stopReason,
-    required List<Map<String, dynamic>> references,
-    required String resultSummary,
-  }) {
-    return finalizeSkillRuns(
-      skillRuns: skillRuns,
-      primaryDomainId: primaryDomainId,
-      slotState: slotState,
-      answerReady: answerReady,
-      stopReason: stopReason,
-      references: references,
-      resultSummary: resultSummary,
-    );
-  }
-
-  double _asDouble(Object? raw) {
-    if (raw is num) return raw.toDouble();
-    return double.tryParse(raw?.toString() ?? '') ?? 0;
-  }
-
   SearchIterationState _seedSearchIterationState({
     required AssistantRunRequest request,
-    IntentGraph? intentGraph,
+    required List<SearchPlanItem> searchPlans,
   }) {
-    final existing =
-        intentGraph?.searchIterationState ?? const SearchIterationState();
-    if (_hasSearchIterationState(existing)) {
-      return SearchIterationState(
-        maxIterations: existing.maxIterations > 0
-            ? existing.maxIterations
-            : request.maxIterations,
-        currentIteration: existing.currentIteration > 0
-            ? existing.currentIteration
-            : 1,
-        rounds: existing.rounds,
-      );
-    }
-    final queryTasks = intentGraph?.queryTasks ?? const <QueryTask>[];
     return SearchIterationState(
       maxIterations: request.maxIterations,
       currentIteration: 1,
-      rounds: queryTasks.isEmpty
+      rounds: searchPlans.isEmpty
           ? const <SearchIterationRound>[]
           : <SearchIterationRound>[
               SearchIterationRound(
@@ -4498,9 +4457,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
                     ? request.messages.last.content.trim()
                     : '',
                 plannerOutputSummary: _searchIterationPlannerOutputSummary(
-                  queryTasks,
+                  searchPlans,
                 ),
-                queryTasks: queryTasks,
+                searchPlans: searchPlans,
                 acceptedEvidenceCount: 0,
                 missingDimensions: const <String>[],
                 convergenceStatus: SearchIterationConvergenceStatus.improving,
@@ -4509,18 +4468,14 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     );
   }
 
-  bool _hasSearchIterationState(SearchIterationState state) {
-    return state.maxIterations > 0 ||
-        state.currentIteration > 0 ||
-        state.rounds.isNotEmpty;
-  }
-
-  String _searchIterationPlannerOutputSummary(List<QueryTask> queryTasks) {
-    if (queryTasks.isEmpty) {
+  String _searchIterationPlannerOutputSummary(
+    List<SearchPlanItem> searchPlans,
+  ) {
+    if (searchPlans.isEmpty) {
       return '';
     }
-    final labels = queryTasks
-        .map((task) => task.effectiveLabel.trim())
+    final labels = searchPlans
+        .map((plan) => plan.effectiveLabel.trim())
         .where((item) => item.isNotEmpty)
         .take(3)
         .toList(growable: false);
@@ -4550,7 +4505,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
   SearchIterationState _buildSynthesisSearchIterationState({
     required AssistantPipelineTemplateVariablesView templateVariables,
     required List<AssistantTraceEvent> phaseOneTraces,
-    required List<QueryTask> fallbackQueryTasks,
+    required List<SearchPlanItem> fallbackSearchPlans,
     required int maxIterations,
     required int acceptedEvidenceCount,
     required List<String> missingDimensions,
@@ -4567,13 +4522,11 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         .map((event) {
           final data = event.data ?? const <String, dynamic>{};
           final rawTasks =
-              (data['queryTasks'] as List?)?.whereType<Map>().toList(
+              (data['searchPlans'] as List?)?.whereType<Map>().toList(
                 growable: false,
               ) ??
               const <Map>[];
-          final queryTasks = rawTasks
-              .map((item) => QueryTask.fromJson(item.cast<String, dynamic>()))
-              .toList(growable: false);
+          final searchPlans = SearchPlanItem.normalizeList(rawTasks);
           final iteration = ((data['iteration'] as num?)?.toInt() ?? 0) > 0
               ? (data['iteration'] as num).toInt()
               : 0;
@@ -4588,7 +4541,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
                 : 'initial_plan',
             plannerInputSummary: (data['query'] as String?)?.trim() ?? '',
             plannerOutputSummary: event.message.trim(),
-            queryTasks: queryTasks,
+            searchPlans: searchPlans,
             acceptedEvidenceCount: 0,
             missingDimensions: const <String>[],
             convergenceStatus: SearchIterationConvergenceStatus.unknown,
@@ -4608,7 +4561,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
                   triggerReason: round.triggerReason,
                   plannerInputSummary: round.plannerInputSummary,
                   plannerOutputSummary: round.plannerOutputSummary,
-                  queryTasks: round.queryTasks,
+                  searchPlans: round.searchPlans,
                   acceptedEvidenceCount: round.acceptedEvidenceCount,
                   missingDimensions: round.missingDimensions,
                   convergenceStatus: round.convergenceStatus,
@@ -4617,7 +4570,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
               .toList(growable: false)
         : (base.rounds.isNotEmpty
               ? List<SearchIterationRound>.of(base.rounds)
-              : (fallbackQueryTasks.isEmpty
+              : (fallbackSearchPlans.isEmpty
                     ? <SearchIterationRound>[]
                     : <SearchIterationRound>[
                         SearchIterationRound(
@@ -4626,9 +4579,9 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
                           plannerInputSummary: '',
                           plannerOutputSummary:
                               _searchIterationPlannerOutputSummary(
-                                fallbackQueryTasks,
+                                fallbackSearchPlans,
                               ),
-                          queryTasks: fallbackQueryTasks,
+                          searchPlans: fallbackSearchPlans,
                           acceptedEvidenceCount: 0,
                           missingDimensions: const <String>[],
                           convergenceStatus:
@@ -4653,7 +4606,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         triggerReason: last.triggerReason,
         plannerInputSummary: last.plannerInputSummary,
         plannerOutputSummary: last.plannerOutputSummary,
-        queryTasks: last.queryTasks,
+        searchPlans: last.searchPlans,
         acceptedEvidenceCount: acceptedEvidenceCount,
         missingDimensions: missingDimensions,
         convergenceStatus: convergenceStatus,

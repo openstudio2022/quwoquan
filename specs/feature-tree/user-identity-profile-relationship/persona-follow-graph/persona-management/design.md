@@ -19,7 +19,7 @@
 | `persona-management/acceptance.yaml` | `A1/A2/A3/S1` 已明确，适合映射到 `P1~P4` |
 | Journey `persona-follow-graph/design.md` | 已冻结统一 `userId / personaId / userHandle` contract，管理台属于用户私有管理面 |
 | `owner-subaccount-homepage-unification/design.md` | 主页壳层不是本场景职责，管理台必须独立于公开主页 |
-| 当前代码现状 | 已存在 `persona_management_page.dart` 与 `sub_account_management_page.dart` 两套路由/页面，需要收口；metadata 与服务端仍残留旧 sub-account 路径 |
+| 当前代码现状 | 统一管理台、feature flag 与 create/activate/sync 契约已落地；剩余风险集中在 `retire` 持久化、`hasAttributedHistory` 真值来源与 `delete-empty` 真实空分身校验 |
 
 结论：
 
@@ -177,7 +177,14 @@ guard 不直接暴露底层风控或审计细节，只返回可执行语义：
 - `blocked_primary_persona`
 - `blocked_last_persona`
 - `blocked_active_persona`
+- `blocked_retired_persona`
 - `retire_instead_of_delete`
+
+并把真实退役状态持久化到 Persona 聚合：
+
+- `status = active | retired`
+- `retiredAt`
+- retired 后禁止继续作为新动作主体，但保留历史归因对象与审计链
 
 ### KD5：资料继承与同步建议
 

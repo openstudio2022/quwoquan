@@ -36,7 +36,7 @@
   - 直接读取 `answerPayload['...']`、`parsed['...']`、`payload['...']`
   - 直接读取 `decision`、`messageKind`、`phaseId`、`actionCode`、`reasonCode`
 - `lib/personal_assistant/engine/react_runtime.dart`
-  - 直接解析原始 JSON 里的 `decision`、`toolCalls`、`queryTasks`、`queryNormalization`
+  - 直接解析原始 JSON 里的 `decision`、`toolCalls`、`searchPlans`、`queryNormalization`
 - `lib/personal_assistant/engine/default_processing/problem_framer.dart`
   - 仍承载一部分结构化 query frame 规则
 - `lib/personal_assistant/engine/default_processing/retrieval_planner.dart`
@@ -77,8 +77,7 @@
 - `lib/assistant/contracts/assistant_turn_contract.dart`
 - `lib/assistant/contracts/runtime_enums.dart`
 - `lib/assistant/contracts/planner_contracts.dart`
-- `lib/assistant/contracts/query_task_contract.dart`
-- `lib/assistant/contracts/intent_graph.dart`
+- `lib/assistant/contracts/search_plan_contract.dart`
 - `lib/assistant/contracts/run_artifacts.dart`
 
 这些文件是当前 compatibility wrapper 边界，但未来目标不是继续扩写，而是逐步由：
@@ -151,7 +150,7 @@
 1. 冻结文档、SSOT、generated-only 门禁
 2. 以 metadata 生成 enum 与闭合小 DTO
 3. 先替换最常用的 typed contract 消费点
-4. 再拆开放结构：`assistant_turn`、`intent_graph`、`run_artifacts`
+4. 再拆开放结构：`assistant_turn`、`understanding_result`、`task_graph`、`run_artifacts`
 5. 再收口 sanitizer / process copy / tool copy
 6. 最后做目录重构与云侧 assistant-service 承接
 

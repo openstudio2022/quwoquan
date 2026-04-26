@@ -1,31 +1,31 @@
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_session_history_state.dart';
 import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
-import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
-import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
+import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_state_keys.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
-import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 
 class PrecomputedBootstrap {
   const PrecomputedBootstrap({
     required this.sessionId,
     required this.latestUserQuery,
     required this.historySummary,
+    this.systemContextEnvelope = const SystemContextEnvelope(),
     this.recentDialogueRounds = const <Map<String, dynamic>>[],
     this.recentDialogueRoundsLimit = 10,
     required this.recalledTexts,
-    this.previousIntentGraph,
     this.previousAnswerSummary = '',
+    this.previousUnderstandingResult = const UnderstandingResult(),
+    this.previousTaskGraph = const TaskGraph(),
     this.previousUnderstandingSnapshot =
         const RunArtifactsUnderstandingSnapshot(),
     this.previousAnswerProcessing = const RunArtifactsAnswerProcessing(),
@@ -48,11 +48,13 @@ class PrecomputedBootstrap {
   final String sessionId;
   final String latestUserQuery;
   final String historySummary;
+  final SystemContextEnvelope systemContextEnvelope;
   final List<Map<String, dynamic>> recentDialogueRounds;
   final int recentDialogueRoundsLimit;
   final List<String> recalledTexts;
-  final IntentGraph? previousIntentGraph;
   final String previousAnswerSummary;
+  final UnderstandingResult previousUnderstandingResult;
+  final TaskGraph previousTaskGraph;
   final RunArtifactsUnderstandingSnapshot previousUnderstandingSnapshot;
   final RunArtifactsAnswerProcessing previousAnswerProcessing;
   final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
@@ -137,11 +139,9 @@ PrecomputedBootstrap? recoverPrecomputedBootstrap(
           )
         : (previousRunArtifacts?.answerProcessing ??
               const RunArtifactsAnswerProcessing());
-    final historicalThinkingSnapshot =
-        raw['historicalThinkingSnapshot'] is Map
+    final historicalThinkingSnapshot = raw['historicalThinkingSnapshot'] is Map
         ? RunArtifactsHistoricalThinkingSnapshot.fromJson(
-            (raw['historicalThinkingSnapshot'] as Map)
-                .cast<String, dynamic>(),
+            (raw['historicalThinkingSnapshot'] as Map).cast<String, dynamic>(),
           )
         : (previousRunArtifacts?.historicalThinkingSnapshot ??
               const RunArtifactsHistoricalThinkingSnapshot());
@@ -150,24 +150,39 @@ PrecomputedBootstrap? recoverPrecomputedBootstrap(
             (raw['sessionHistoryState'] as Map).cast<String, dynamic>(),
           )
         : const AssistantSessionHistoryState();
+    final systemContextEnvelope = raw['systemContextEnvelope'] is Map
+        ? SystemContextEnvelope.fromJson(
+            (raw['systemContextEnvelope'] as Map).cast<String, dynamic>(),
+          )
+        : const SystemContextEnvelope();
+    final previousUnderstandingResult = raw['previousUnderstandingResult'] is Map
+        ? UnderstandingResult.fromJson(
+            (raw['previousUnderstandingResult'] as Map).cast<String, dynamic>(),
+          )
+        : const UnderstandingResult();
+    final previousTaskGraph = raw['previousTaskGraph'] is Map
+        ? TaskGraph.fromJson(
+            (raw['previousTaskGraph'] as Map).cast<String, dynamic>(),
+          )
+        : const TaskGraph();
     return PrecomputedBootstrap(
       sessionId: (raw['sessionId'] as String?)?.trim() ?? 'default',
       latestUserQuery: (raw['latestUserQuery'] as String?)?.trim() ?? '',
       historySummary: (raw['historySummary'] as String?) ?? '',
+      systemContextEnvelope: systemContextEnvelope,
       recalledTexts:
           (raw['recalledTexts'] as List?)
               ?.map((item) => item.toString().trim())
               .where((item) => item.isNotEmpty)
               .toList(growable: false) ??
           const <String>[],
-      previousIntentGraph: raw['previousIntentGraph'] is Map
-          ? IntentGraph.fromJson(
-              (raw['previousIntentGraph'] as Map).cast<String, dynamic>(),
-            )
-          : null,
       previousAnswerSummary:
           (raw['previousAnswerSummary'] as String?)?.trim() ?? '',
-      recentDialogueRounds: coerceRecentDialogueRounds(raw['recentDialogueRounds']),
+      previousUnderstandingResult: previousUnderstandingResult,
+      previousTaskGraph: previousTaskGraph,
+      recentDialogueRounds: coerceRecentDialogueRounds(
+        raw['recentDialogueRounds'],
+      ),
       recentDialogueRoundsLimit:
           (raw['recentDialogueRoundsLimit'] as num?)?.toInt() ??
           defaultRecentDialogueRoundsLimit,
@@ -285,32 +300,16 @@ PrecomputedRetrieval? recoverPrecomputedRetrieval(
   }
 }
 
-IntentGraph? recoverPrecomputedIntentGraph(
-  Map<String, dynamic> contextScopeHint,
-) {
-  final raw =
-      (contextScopeHint[AssistantPipelineStateKeys.precomputedIntentGraph]
-              as Map?)
-          ?.cast<String, dynamic>() ??
-      (contextScopeHint[AssistantPipelineStateKeys.intentGraph] as Map?)
-          ?.cast<String, dynamic>();
-  if (raw == null || raw.isEmpty) return null;
-  try {
-    return IntentGraph.fromJson(raw);
-  } catch (_) {
-    return null;
-  }
-}
-
 AssistantExecutionPreparation? recoverPrecomputedExecutionPreparation(
   Map<String, dynamic> contextScopeHint, {
   PrecomputedUnderstand? precomputedUnderstand,
   PrecomputedRetrieval? precomputedRetrieval,
 }) {
-  final raw = (contextScopeHint[
-          AssistantPipelineStateKeys.precomputedExecutionPreparation]
-      as Map?)
-      ?.cast<String, dynamic>();
+  final raw =
+      (contextScopeHint[AssistantPipelineStateKeys
+                  .precomputedExecutionPreparation]
+              as Map?)
+          ?.cast<String, dynamic>();
   if (raw != null && raw.isNotEmpty) {
     try {
       return AssistantExecutionPreparation.fromJson(raw);
@@ -337,8 +336,7 @@ AssistantExecutionPreparation? recoverPrecomputedExecutionPreparation(
         precomputedRetrieval?.allowedToolNames ?? const <String>[],
     executionShell:
         precomputedRetrieval?.executionShell ?? const SkillExecutionShell(),
-    plannerTemplateVersion:
-        precomputedRetrieval?.plannerTemplateVersion ?? '',
+    plannerTemplateVersion: precomputedRetrieval?.plannerTemplateVersion ?? '',
     postcheckTemplateVersion:
         precomputedRetrieval?.postcheckTemplateVersion ?? '',
     synthTemplateVersion: precomputedRetrieval?.synthTemplateVersion ?? '',
@@ -354,8 +352,9 @@ AssistantExecutionPreparation? recoverPrecomputedExecutionPreparation(
 RunArtifacts? recoverPreviousRunArtifacts(
   Map<String, dynamic> contextScopeHint,
 ) {
-  final raw = (contextScopeHint[AssistantPipelineStateKeys.runArtifacts] as Map?)
-      ?.cast<String, dynamic>();
+  final raw =
+      (contextScopeHint[AssistantPipelineStateKeys.runArtifacts] as Map?)
+          ?.cast<String, dynamic>();
   if (raw == null || raw.isEmpty) return null;
   try {
     return parseRunArtifacts(raw);

@@ -58,4 +58,3 @@ tool_contract:
     - subCategory
   internal_optional_fields:
     - queryVariants
-    - queryTasks

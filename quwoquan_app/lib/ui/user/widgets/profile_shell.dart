@@ -657,6 +657,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final summaryBorder = AppColors.iosSeparator(
       context,
     ).withValues(alpha: isDark ? 0.24 : 0.08);
+    final displayCapability = state.displayCapability;
     final summaryShadow = isDark
         ? AppColors.black.withValues(alpha: 0.18)
         : AppColors.black.withValues(alpha: 0.05);
@@ -708,13 +709,13 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
               ),
               SizedBox(height: AppSpacing.sm),
               if (widget.mode == ProfileMode.other &&
-                  state.capability == null) ...[
+                  displayCapability == null) ...[
                 SizedBox(height: AppSpacing.xl + AppSpacing.md),
               ] else ...[
                 ProfileActionBar(
                   mode: widget.mode,
                   isDark: isDark,
-                  capability: state.capability,
+                  capability: displayCapability,
                   onEditProfile: () => context.push(AppRoutePaths.profileEdit),
                   onManagePersonas: personaManagementEnabled
                       ? () => context.push(AppRoutePaths.profilePersonas)

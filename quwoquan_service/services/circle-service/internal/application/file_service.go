@@ -59,7 +59,7 @@ func (s *FileService) CreateFile(ctx context.Context, req CreateFileRequest) (*m
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found", false,
+			"圈子不存在", "circle not found",
 		)
 	}
 
@@ -72,13 +72,13 @@ func (s *FileService) CreateFile(ctx context.Context, req CreateFileRequest) (*m
 		if req.SizeBytes > 52428800 {
 			return nil, rterr.NewAppError(
 				rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "validation_failed"),
-				"文件大小超过限制（最大 50MB）", "file too large", false,
+				"文件大小超过限制（最大 50MB）", "file too large",
 			)
 		}
 		if c.StorageUsedBytes+req.SizeBytes > c.StorageQuotaBytes {
 			return nil, rterr.NewAppError(
 				rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "quota_exceeded"),
-				"存储空间已满，无法上传", "storage quota exceeded", false,
+				"存储空间已满，无法上传", "storage quota exceeded",
 			)
 		}
 	}
@@ -121,7 +121,7 @@ func (s *FileService) GetFile(ctx context.Context, circleID, fileID string) (*mo
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"文件不存在", "file not found", false,
+			"文件不存在", "file not found",
 		)
 	}
 	return f, nil
@@ -137,7 +137,7 @@ func (s *FileService) UpdateFile(ctx context.Context, circleID, fileID string, r
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"文件不存在", "file not found", false,
+			"文件不存在", "file not found",
 		)
 	}
 
@@ -166,7 +166,7 @@ func (s *FileService) DeleteFile(ctx context.Context, circleID, fileID string) e
 	if !ok {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"文件不存在", "file not found", false,
+			"文件不存在", "file not found",
 		)
 	}
 

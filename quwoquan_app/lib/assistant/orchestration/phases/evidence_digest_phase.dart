@@ -1,15 +1,13 @@
-import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
-import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
-import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
-import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/process_timeline_emitter.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
@@ -30,56 +28,35 @@ class EvidenceDigestPhase implements Phase {
   @override
   Future<PhaseOutput> run(PhaseInput input) async {
     final request = coerceAssistantRunRequest(input.request);
-    final executionSnapshot = input.state.executionBridgeSnapshot;
-    final phaseOneResult = executionSnapshot['phaseOneResult'];
-    if (phaseOneResult is! ReactRuntimeResult) {
+    final executionSnapshot = input.state.executionPhaseSnapshot;
+    if (executionSnapshot is! ExecutionPhaseSuccess) {
       return PhaseOutput(state: input.state);
     }
+    final phaseOneResult = executionSnapshot.phaseOneResult;
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content.trim()
         : '';
     if (latestUserQuery.isEmpty) {
       return PhaseOutput(state: input.state);
     }
-    final synthesisReadiness =
-        executionSnapshot['synthesisReadiness'] is SynthesisReadinessResult
-        ? executionSnapshot['synthesisReadiness'] as SynthesisReadinessResult
-        : const SynthesisReadinessResult();
-    final toolResults = executionSnapshot['toolResults'] is List
-        ? (executionSnapshot['toolResults'] as List)
-              .whereType<Map>()
-              .map((item) => AssistantToolResultRow.fromJson(
-                    item.cast<String, dynamic>(),
-                  ))
-              .toList(growable: false)
+    final synthesisReadiness = executionSnapshot.synthesisReadiness;
+    final toolResults = executionSnapshot.toolResults.isNotEmpty
+        ? executionSnapshot.toolResults
         : _collectToolResults(phaseOneResult.traces);
     final fallbackSnapshot = _buildFallbackRetrievalProcessing(
       toolResults: toolResults,
       synthesisReadiness: synthesisReadiness,
     );
-    final boundaryPolicy =
-        executionSnapshot['answerBoundaryPolicy'] is AnswerBoundaryPolicy
-        ? executionSnapshot['answerBoundaryPolicy'] as AnswerBoundaryPolicy
-        : const AnswerBoundaryPolicy();
-    final evidenceEvaluation =
-        executionSnapshot['evidenceEvaluation'] is EvidenceEvaluationResult
-        ? executionSnapshot['evidenceEvaluation'] as EvidenceEvaluationResult
-        : const EvidenceEvaluationResult();
-    final retrievalOutcome = executionSnapshot[assistantRetrievalOutcomeField]
-            is RetrievalOutcome
-        ? executionSnapshot[assistantRetrievalOutcomeField] as RetrievalOutcome
-        : _retrievalOutcomeResolver.resolve(
-            policy: boundaryPolicy,
-            retrievalProcessing: fallbackSnapshot,
-            evidenceEvaluation: evidenceEvaluation,
-            synthesisReadiness: synthesisReadiness,
-            queryTasks: input.state.queryTasks,
-            toolResults: toolResults,
-            referenceNowIso:
-                input.state.intentGraph?.queryNormalization.referenceNowIso ?? '',
-            timezone:
-                input.state.intentGraph?.queryNormalization.timezone ?? '',
-          );
+    final boundaryPolicy = executionSnapshot.answerBoundaryPolicy;
+    final evidenceEvaluation = executionSnapshot.evidenceEvaluation;
+    final retrievalOutcome = _retrievalOutcomeResolver.resolve(
+      policy: boundaryPolicy,
+      retrievalProcessing: fallbackSnapshot,
+      evidenceEvaluation: evidenceEvaluation,
+      synthesisReadiness: synthesisReadiness,
+      searchPlans: searchPlansFromTaskGraph(input.state.taskGraph),
+      toolResults: toolResults,
+    );
     final stageBlocked =
         !synthesisReadiness.ready ||
         (retrievalOutcome.evidenceRequired && !retrievalOutcome.retrievalReady);
@@ -114,47 +91,11 @@ class EvidenceDigestPhase implements Phase {
         acceptedReferences: snapshot.acceptedReferences,
       );
     }
-    if (!stageBlocked && snapshot.processingSummary.trim().isEmpty) {
-      final readyNarrative = _synthesizeReadyProcessingSummary(
-        understanding: input.state.understandingSnapshot,
-        references: snapshot.acceptedReferences,
-        keyPoints: snapshot.selectedKeyPoints,
-      );
-      if (readyNarrative.isNotEmpty) {
-        snapshot = RetrievalProcessingSnapshot(
-          processedDocumentCount: snapshot.processedDocumentCount,
-          acceptedDocumentCount: snapshot.acceptedDocumentCount,
-          processingSummary: readyNarrative,
-          selectedKeyPoints: snapshot.selectedKeyPoints,
-          expansionReason: snapshot.expansionReason,
-          acceptedReferences: snapshot.acceptedReferences,
-        );
-      }
-    }
-    final updatedExecutionSnapshot = <String, dynamic>{
-      ...executionSnapshot,
-      'retrievalProcessing': snapshot.toJson(),
-      assistantRetrievalOutcomeField: retrievalOutcome.toJson(),
-      'blockedProcessStepId': stageBlocked
-          ? ProcessStepId.retrievalProcessing.wireName
-          : '',
-      'blockedProcessMessage': stageBlocked
-          ? _buildRetrievalBlockedMessage(
-              retrievalOutcome.summary.trim().isNotEmpty
-                  ? retrievalOutcome.summary
-                  : synthesisReadiness.reason,
-            )
-          : '',
-      'skipAnswerStage': stageBlocked,
-    };
     if (stageBlocked) {
       _emitRetrievalProcessing(input: input, snapshot: snapshot, blocked: true);
     }
     return PhaseOutput(
-      state: input.state.copyWith(
-        executionBridgeSnapshot: updatedExecutionSnapshot,
-        retrievalProcessing: snapshot,
-      ),
+      state: input.state.copyWith(retrievalProcessing: snapshot),
     );
   }
 
@@ -176,9 +117,7 @@ class EvidenceDigestPhase implements Phase {
       acceptedDocumentCount: acceptedReferences.length,
       processingSummary: '',
       selectedKeyPoints: selectedKeyPoints,
-      expansionReason: synthesisReadiness.ready
-          ? ''
-          : synthesisReadiness.reason.trim(),
+      expansionReason: '',
       acceptedReferences: acceptedReferences,
     );
   }
@@ -199,11 +138,9 @@ class EvidenceDigestPhase implements Phase {
       acceptedDocumentCount: snapshot.acceptedDocumentCount > 0
           ? snapshot.acceptedDocumentCount
           : fallbackSnapshot.acceptedDocumentCount,
-      processingSummary: blockedMessage.trim(),
+      processingSummary: snapshot.processingSummary.trim(),
       selectedKeyPoints: const <String>[],
-      expansionReason: snapshot.expansionReason.trim().isNotEmpty
-          ? snapshot.expansionReason.trim()
-          : fallbackSnapshot.expansionReason,
+      expansionReason: snapshot.expansionReason.trim(),
       acceptedReferences: snapshot.acceptedReferences.isNotEmpty
           ? snapshot.acceptedReferences
           : fallbackSnapshot.acceptedReferences,
@@ -370,46 +307,5 @@ class EvidenceDigestPhase implements Phase {
 
   String _sanitizeKeyPoint(String raw) {
     return SafeReferenceNormalizer.normalizeFact(raw);
-  }
-
-  /// Ready 链路下，当 resolver 未给出 summary 时，用理解快照关注点 + 证据片段生成用户可见的处理摘要。
-  String _synthesizeReadyProcessingSummary({
-    required RunArtifactsUnderstandingSnapshot understanding,
-    required List<RetrievalProcessingReference> references,
-    required List<String> keyPoints,
-  }) {
-    final concerns = understanding.concernPoints
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    if (concerns.isEmpty) {
-      return '';
-    }
-    final evidencePoints = <String>[];
-    for (final point in keyPoints) {
-      final trimmed = point.trim();
-      if (trimmed.length >= 6 && evidencePoints.length < 2) {
-        final punctuated = trimmed.endsWith('。') ||
-                trimmed.endsWith('！') ||
-                trimmed.endsWith('？')
-            ? trimmed
-            : '$trimmed';
-        evidencePoints.add(punctuated);
-      }
-    }
-    if (evidencePoints.isEmpty) {
-      for (final ref in references) {
-        final snippet = ref.snippet.trim();
-        if (snippet.length >= 6 && evidencePoints.length < 2) {
-          evidencePoints.add(snippet);
-        }
-      }
-    }
-    if (evidencePoints.isEmpty) {
-      return '';
-    }
-    final joined = concerns.join('、');
-    final evidence = evidencePoints.join('；');
-    return '$joined方面，已有可信证据指向以下判断：$evidence。';
   }
 }

@@ -3,11 +3,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/assistant/debug/console_pretty_log_formatter.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
 import 'package:quwoquan_app/assistant/reasoning/temporal/relative_time_resolver.dart';
 import 'package:quwoquan_app/assistant/retrieval/domain/retrieval_broker.dart';
@@ -104,7 +103,12 @@ class WebSearchTool implements AssistantTool {
     }
     final args = arguments;
     final rawQuery = args.stringField('query') ?? '';
-    final queryTasks = _normalizeQueryTasks(rawArguments['queryTasks']);
+    final searchPlans = _normalizeSearchPlans(
+      rawArguments['taskGraphSearchPlan'] ??
+          rawArguments['searchPlans'] ??
+          rawArguments['queries'] ??
+          rawArguments['queryVariants'],
+    );
     final variants =
         (rawArguments['queryVariants'] as List?)
             ?.whereType<String>()
@@ -112,37 +116,37 @@ class WebSearchTool implements AssistantTool {
             .where((v) => v.isNotEmpty)
             .toList(growable: false) ??
         const <String>[];
-    if (queryTasks.length >= 2) {
-      return _executeMultiQuery(rawArguments, queryTasks);
+    if (searchPlans.length >= 2) {
+      return _executeMultiQuery(rawArguments, searchPlans);
     }
-    if (queryTasks.isEmpty && variants.isNotEmpty) {
-      final variantTasks = _queryTasksFromSeeds(rawQuery, variants);
-      if (variantTasks.length >= 2) {
-        return _executeMultiQuery(rawArguments, variantTasks);
+    if (searchPlans.isEmpty && variants.isNotEmpty) {
+      final variantPlans = _searchPlansFromSeeds(rawQuery, variants);
+      if (variantPlans.length >= 2) {
+        return _executeMultiQuery(rawArguments, variantPlans);
       }
     }
-    final singleTaskQuery = queryTasks.length == 1
-        ? ((queryTasks.first['query'] as String?)?.trim() ?? '')
+    final singlePlanQuery = searchPlans.length == 1
+        ? ((searchPlans.first['query'] as String?)?.trim() ?? '')
         : '';
     final queryNorm = rawArguments['queryNormalization'];
-    final normalizedQuery = singleTaskQuery.isNotEmpty
-        ? singleTaskQuery
+    final normalizedQuery = singlePlanQuery.isNotEmpty
+        ? singlePlanQuery
         : queryNorm is Map
         ? ((queryNorm['normalizedQuery'] as String?)?.trim() ?? rawQuery)
         : rawQuery;
     final query = normalizedQuery.isNotEmpty ? normalizedQuery : rawQuery;
-    final queryTask = _resolveSingleQueryTask(
+    final searchPlan = _resolveSingleSearchPlan(
       arguments: arguments,
       normalizedQuery: query,
-      normalizedTasks: queryTasks,
+      normalizedPlans: searchPlans,
     );
     final effectiveArguments = _withResolvedGeoArguments(
       arguments: _withResolvedTemporalArguments(
         arguments: rawArguments,
-        queryTask: queryTask,
+        searchPlan: searchPlan,
         query: query,
       ),
-      queryTask: queryTask,
+      searchPlan: searchPlan,
     );
     final calendarAwareQuery =
         (effectiveArguments['query'] as String?)?.trim().isNotEmpty == true
@@ -171,10 +175,16 @@ class WebSearchTool implements AssistantTool {
       count: count,
     );
     if (query.isEmpty) {
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: false,
         message: 'Missing query',
         errorCode: AssistantErrorCode.invalidArguments,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.invalidArguments,
+          message: 'Missing query',
+          functionModule: name,
+          stage: 'argument_validation',
+        ),
       );
     }
 
@@ -202,7 +212,7 @@ class WebSearchTool implements AssistantTool {
                   .toList(growable: false) ??
               const <String>[],
           timeConstraint: cachedTimeConstraint,
-          queryTask: queryTask,
+          searchPlan: searchPlan,
           retrievedAt: _stringValue(cachedData['retrievedAt']).isNotEmpty
               ? _stringValue(cachedData['retrievedAt'])
               : DateTime.now().toIso8601String(),
@@ -222,12 +232,12 @@ class WebSearchTool implements AssistantTool {
     final runtimeConfig = await _resolveRuntimeConfig();
     final timeContract = await _loadRetrievalTimeContract();
     final domainPolicy = await _loadDomainRetrievalPolicy(domainId);
-    final geoScopedQueryTask = _withResolvedGeoTask(
-      queryTask: queryTask,
+    final geoScopedSearchPlan = _withResolvedGeoSearchPlan(
+      searchPlan: searchPlan,
       arguments: effectiveArguments,
     );
-    final effectiveQueryTask = _withDomainPolicyTaskHints(
-      queryTask: geoScopedQueryTask,
+    final effectiveSearchPlan = _withDomainPolicySearchPlanHints(
+      searchPlan: geoScopedSearchPlan,
       domainPolicy: domainPolicy,
     );
     final timeConstraint = _resolveTimeConstraint(
@@ -289,6 +299,12 @@ class WebSearchTool implements AssistantTool {
         }),
         errorCode: AssistantErrorCode.invalidArguments,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.invalidArguments,
+          message: 'Web search provider is not configured',
+          functionModule: name,
+          stage: 'provider_resolution',
+        ),
       );
     }
     try {
@@ -312,10 +328,10 @@ class WebSearchTool implements AssistantTool {
           query: temporalGuard.searchQuery,
           authorityDomains: authorityDomains,
           timeConstraint: timeConstraint,
-          queryTask: effectiveQueryTask,
+          searchPlan: effectiveSearchPlan,
           retrievedAt: DateTime.now().toIso8601String(),
         ),
-        task: effectiveQueryTask,
+        searchPlan: effectiveSearchPlan,
       );
       final evidenceStats = _buildEvidenceStats(
         references: enrichedReferences,
@@ -366,10 +382,10 @@ class WebSearchTool implements AssistantTool {
             'authorityDomains': authorityDomains,
             'retrievalInsufficient': true,
             if (domainId.isNotEmpty) 'domainId': domainId,
-            if (_stringValue(effectiveQueryTask['id']).isNotEmpty)
-              'queryTaskId': _stringValue(effectiveQueryTask['id']),
-            if (_stringValue(effectiveQueryTask['dimension']).isNotEmpty)
-              'dimension': _stringValue(effectiveQueryTask['dimension']),
+            if (_stringValue(effectiveSearchPlan['id']).isNotEmpty)
+              'searchPlanId': _stringValue(effectiveSearchPlan['id']),
+            if (_stringValue(effectiveSearchPlan['dimension']).isNotEmpty)
+              'dimension': _stringValue(effectiveSearchPlan['dimension']),
             ...evidenceStats,
             'raw': decoded,
             'diagnostics': runtimeConfig.toDiagnostics(
@@ -386,10 +402,10 @@ class WebSearchTool implements AssistantTool {
         'temporalGuard': temporalGuard.toJson(),
         'authorityDomains': authorityDomains,
         if (domainId.isNotEmpty) 'domainId': domainId,
-        if (_stringValue(effectiveQueryTask['id']).isNotEmpty)
-          'queryTaskId': _stringValue(effectiveQueryTask['id']),
-        if (_stringValue(effectiveQueryTask['dimension']).isNotEmpty)
-          'dimension': _stringValue(effectiveQueryTask['dimension']),
+        if (_stringValue(effectiveSearchPlan['id']).isNotEmpty)
+          'searchPlanId': _stringValue(effectiveSearchPlan['id']),
+        if (_stringValue(effectiveSearchPlan['dimension']).isNotEmpty)
+          'dimension': _stringValue(effectiveSearchPlan['dimension']),
         ...evidenceStats,
         'raw': decoded,
         'diagnostics': runtimeConfig.toDiagnostics(
@@ -425,10 +441,10 @@ class WebSearchTool implements AssistantTool {
             query: temporalGuard.searchQuery,
             authorityDomains: authorityDomains,
             timeConstraint: timeConstraint,
-            queryTask: effectiveQueryTask,
+            searchPlan: effectiveSearchPlan,
             retrievedAt: DateTime.now().toIso8601String(),
           ),
-          task: effectiveQueryTask,
+          searchPlan: effectiveSearchPlan,
         );
         final evidenceStats = _buildEvidenceStats(
           references: enrichedFallbackReferences,
@@ -484,10 +500,10 @@ class WebSearchTool implements AssistantTool {
               'authorityDomains': authorityDomains,
               'retrievalInsufficient': true,
               if (domainId.isNotEmpty) 'domainId': domainId,
-              if (_stringValue(effectiveQueryTask['id']).isNotEmpty)
-                'queryTaskId': _stringValue(effectiveQueryTask['id']),
-              if (_stringValue(effectiveQueryTask['dimension']).isNotEmpty)
-                'dimension': _stringValue(effectiveQueryTask['dimension']),
+              if (_stringValue(effectiveSearchPlan['id']).isNotEmpty)
+                'searchPlanId': _stringValue(effectiveSearchPlan['id']),
+              if (_stringValue(effectiveSearchPlan['dimension']).isNotEmpty)
+                'dimension': _stringValue(effectiveSearchPlan['dimension']),
               ...evidenceStats,
               'raw': fallback.raw,
               'fallbackFrom': provider.name,
@@ -509,10 +525,10 @@ class WebSearchTool implements AssistantTool {
             'temporalGuard': temporalGuard.toJson(),
             'authorityDomains': authorityDomains,
             if (domainId.isNotEmpty) 'domainId': domainId,
-            if (_stringValue(effectiveQueryTask['id']).isNotEmpty)
-              'queryTaskId': _stringValue(effectiveQueryTask['id']),
-            if (_stringValue(effectiveQueryTask['dimension']).isNotEmpty)
-              'dimension': _stringValue(effectiveQueryTask['dimension']),
+            if (_stringValue(effectiveSearchPlan['id']).isNotEmpty)
+              'searchPlanId': _stringValue(effectiveSearchPlan['id']),
+            if (_stringValue(effectiveSearchPlan['dimension']).isNotEmpty)
+              'dimension': _stringValue(effectiveSearchPlan['dimension']),
             ...evidenceStats,
             'raw': fallback.raw,
             'fallbackFrom': provider.name,
@@ -551,7 +567,6 @@ class WebSearchTool implements AssistantTool {
         message: classifiedError.message,
         data: AssistantToolResultData(<String, Object?>{
           'provider': provider.name,
-          'retryable': classifiedError.retryable,
           'rawError': error.toString(),
           'diagnostics': runtimeConfig.toDiagnostics(
             selectedProvider: provider.name,
@@ -559,6 +574,12 @@ class WebSearchTool implements AssistantTool {
         }),
         errorCode: classifiedError.errorCode,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: classifiedError.errorCode,
+          message: classifiedError.message,
+          functionModule: name,
+          stage: 'provider_request',
+        ),
       );
     }
   }
@@ -571,37 +592,37 @@ class WebSearchTool implements AssistantTool {
     final rawData = toolResult.data;
     if (rawData == null || rawData.isEmpty) return toolResult;
     final sanitizedData = Map<String, dynamic>.from(rawData);
-    final normalizedTasks = _normalizeQueryTasks(
-      request.arguments['queryTasks'],
-    );
-    final singleTaskQuery = normalizedTasks.length == 1
-        ? ((normalizedTasks.first['query'] as String?)?.trim() ?? '')
+    final normalizedPlans = request.queryPlans
+        .map((item) => item.toJson().cast<String, dynamic>())
+        .toList(growable: false);
+    final singlePlanQuery = normalizedPlans.length == 1
+        ? ((normalizedPlans.first['query'] as String?)?.trim() ?? '')
         : '';
     final queryNorm = request.arguments['queryNormalization'];
-    final normalizedQuery = singleTaskQuery.isNotEmpty
-        ? singleTaskQuery
+    final normalizedQuery = singlePlanQuery.isNotEmpty
+        ? singlePlanQuery
         : queryNorm is Map
         ? ((queryNorm['normalizedQuery'] as String?)?.trim() ?? request.query)
         : request.query;
     final query = normalizedQuery.isNotEmpty ? normalizedQuery : request.query;
     final domainPolicy = await _loadDomainRetrievalPolicy(request.domainId);
     final timeContract = await _loadRetrievalTimeContract();
-    final queryTask = _resolveSingleQueryTask(
+    final searchPlan = _resolveSingleSearchPlan(
       arguments: request.arguments,
       normalizedQuery: query,
-      normalizedTasks: normalizedTasks,
+      normalizedPlans: normalizedPlans,
     );
     final effectiveArguments = _withResolvedGeoArguments(
       arguments: _withResolvedTemporalArguments(
         arguments: request.arguments,
-        queryTask: queryTask,
+        searchPlan: searchPlan,
         query: query,
       ),
-      queryTask: queryTask,
+      searchPlan: searchPlan,
     );
-    final effectiveQueryTask = _withDomainPolicyTaskHints(
-      queryTask: _withResolvedGeoTask(
-        queryTask: queryTask,
+    final effectiveSearchPlan = _withDomainPolicySearchPlanHints(
+      searchPlan: _withResolvedGeoSearchPlan(
+        searchPlan: searchPlan,
         arguments: effectiveArguments,
       ),
       domainPolicy: domainPolicy,
@@ -628,7 +649,7 @@ class WebSearchTool implements AssistantTool {
     final dataView = BrokerWebSearchResultDataView(sanitizedData);
     final referenceCandidates = _referenceCandidatesFromResultData(
       data: dataView,
-      queryTask: queryTask,
+      searchPlan: searchPlan,
       retrievedAt: retrievedAt,
     );
     if (referenceCandidates.isNotEmpty) {
@@ -637,24 +658,26 @@ class WebSearchTool implements AssistantTool {
         query: temporalGuard.searchQuery,
         authorityDomains: authorityDomains,
         timeConstraint: timeConstraint,
-        queryTask: effectiveQueryTask,
+        searchPlan: effectiveSearchPlan,
         retrievedAt: retrievedAt,
       );
       final filteredReferences = _applyTaskFilters(
         references,
-        task: effectiveQueryTask,
+        searchPlan: effectiveSearchPlan,
       );
       if (filteredReferences.isNotEmpty) {
         sanitizedData['references'] = filteredReferences;
         sanitizedData['timeConstraint'] = timeConstraint.toJson();
         sanitizedData['temporalGuard'] = temporalGuard.toJson();
         sanitizedData['authorityDomains'] = authorityDomains;
-        if (_stringValue(effectiveQueryTask['id']).isNotEmpty) {
-          sanitizedData['queryTaskId'] = _stringValue(effectiveQueryTask['id']);
+        if (_stringValue(effectiveSearchPlan['id']).isNotEmpty) {
+          sanitizedData['searchPlanId'] = _stringValue(
+            effectiveSearchPlan['id'],
+          );
         }
-        if (_stringValue(effectiveQueryTask['dimension']).isNotEmpty) {
+        if (_stringValue(effectiveSearchPlan['dimension']).isNotEmpty) {
           sanitizedData['dimension'] = _stringValue(
-            effectiveQueryTask['dimension'],
+            effectiveSearchPlan['dimension'],
           );
         }
         sanitizedData.addAll(
@@ -673,12 +696,20 @@ class WebSearchTool implements AssistantTool {
       data: AssistantToolResultData.fromJson(sanitizedData),
       errorCode: toolResult.errorCode,
       degraded: toolResult.degraded,
+      runtimeFailure: toolResult.success
+          ? null
+          : assistantToolRuntimeFailure(
+              errorCode: toolResult.errorCode,
+              message: toolResult.message,
+              functionModule: name,
+              stage: 'broker_search',
+            ),
     );
   }
 
   List<Map<String, dynamic>> _referenceCandidatesFromResultData({
     required BrokerWebSearchResultDataView data,
-    required Map<String, dynamic> queryTask,
+    required Map<String, dynamic> searchPlan,
     required String retrievedAt,
   }) {
     final refs = data.embeddedReferences;
@@ -698,12 +729,12 @@ class WebSearchTool implements AssistantTool {
         'sourceTier': data.valueOf('sourceTier'),
         'publishedAt': data.valueOf('publishedAt'),
         'observedAt': data.valueOf('observedAt'),
-        'queryTaskId': data.valueOf('queryTaskId').isNotEmpty
-            ? data.valueOf('queryTaskId')
-            : _stringValue(queryTask['id']),
+        'searchPlanId': data.valueOf('searchPlanId').isNotEmpty
+            ? data.valueOf('searchPlanId')
+            : _stringValue(searchPlan['id']),
         'dimension': data.valueOf('dimension').isNotEmpty
             ? data.valueOf('dimension')
-            : _stringValue(queryTask['dimension']),
+            : _stringValue(searchPlan['dimension']),
         'retrievedAt': retrievedAt,
       },
     ];
@@ -1006,60 +1037,6 @@ class WebSearchTool implements AssistantTool {
     );
   }
 
-  DateTime? _parseDateFromText(String text) {
-    if (text.isEmpty) return null;
-    final iso = RegExp(
-      r'(20\d{2})[-/年\.](\d{1,2})[-/月\.](\d{1,2})',
-    ).firstMatch(text);
-    if (iso == null) return null;
-    final y = int.tryParse(iso.group(1) ?? '');
-    final m = int.tryParse(iso.group(2) ?? '');
-    final d = int.tryParse(iso.group(3) ?? '');
-    if (y == null || m == null || d == null) return null;
-    return DateTime(y, m, d);
-  }
-
-  _InlineCalendarPoint? _resolveInlineCalendarPoint({
-    required String query,
-    required DateTime now,
-  }) {
-    final explicitDateMatch = RegExp(
-      r'(20\d{2}[-/年\.]\d{1,2}[-/月\.]\d{1,2}(?:日)?)',
-    ).firstMatch(query);
-    if (explicitDateMatch != null) {
-      final token = explicitDateMatch.group(0)?.trim() ?? '';
-      final parsed = _parseDateFromText(token);
-      if (parsed != null && !parsed.isAfter(now.add(const Duration(days: 1)))) {
-        return _InlineCalendarPoint(
-          date: DateTime(parsed.year, parsed.month, parsed.day),
-          matchedToken: token,
-          relativePhrase: false,
-        );
-      }
-    }
-    final relativePatterns = <MapEntry<RegExp, int>>[
-      MapEntry(RegExp(r'(前天)'), 2),
-      MapEntry(RegExp(r'(昨天|昨日|昨晚)'), 1),
-    ];
-    for (final entry in relativePatterns) {
-      final match = entry.key.firstMatch(query);
-      if (match == null) {
-        continue;
-      }
-      final token = match.group(0)?.trim() ?? '';
-      if (token.isEmpty) {
-        continue;
-      }
-      final date = now.subtract(Duration(days: entry.value));
-      return _InlineCalendarPoint(
-        date: DateTime(date.year, date.month, date.day),
-        matchedToken: token,
-        relativePhrase: true,
-      );
-    }
-    return null;
-  }
-
   String _rewriteQueryWithInlineCalendarPoint(
     String query, {
     String referenceNowIso = '',
@@ -1068,118 +1045,11 @@ class WebSearchTool implements AssistantTool {
     return query;
   }
 
-  _TemporalIntent _detectTemporalIntent(String query) {
-    final normalized = query.trim().toLowerCase();
-    if (normalized.isEmpty) {
-      return const _TemporalIntent();
-    }
-    final todayLike = RegExp(r'(今天|今日|当天)').hasMatch(normalized);
-    final latestLike = RegExp(r'(最新|实时|当前|刚刚|现在|盘中)').hasMatch(normalized);
-    final weeklyLike = RegExp(r'(本周|近一周|近1周|最近一周)').hasMatch(normalized);
-    if (todayLike) {
-      return const _TemporalIntent(realtimeLike: true, preferredScope: 'today');
-    }
-    if (weeklyLike) {
-      return const _TemporalIntent(
-        realtimeLike: true,
-        preferredScope: 'last_7d',
-      );
-    }
-    if (latestLike) {
-      return const _TemporalIntent(
-        realtimeLike: true,
-        preferredScope: 'latest',
-      );
-    }
-    return const _TemporalIntent();
-  }
-
   _TemporalGuardAssessment _evaluateTemporalGuard({
     required String query,
     required _SearchTimeConstraint constraint,
   }) {
     return _TemporalGuardAssessment(searchQuery: query);
-  }
-
-  List<_DetectedDateToken> _extractExplicitDateTokens(String query) {
-    final matches = RegExp(
-      r'(20\d{2}[-/年\.]\d{1,2}[-/月\.]\d{1,2}(?:日)?)|(20\d{2}[-/年\.]\d{1,2}(?:月)?)|(20\d{2}年?)',
-    ).allMatches(query);
-    final out = <_DetectedDateToken>[];
-    final seen = <String>{};
-    for (final match in matches) {
-      final raw = match.group(0)?.trim() ?? '';
-      if (raw.isEmpty || !seen.add(raw)) {
-        continue;
-      }
-      final token = _buildDetectedDateToken(raw);
-      if (token != null) {
-        out.add(token);
-      }
-    }
-    return out;
-  }
-
-  _DetectedDateToken? _buildDetectedDateToken(String raw) {
-    final ymd = RegExp(
-      r'^(20\d{2})[-/年\.](\d{1,2})[-/月\.](\d{1,2})(?:日)?$',
-    ).firstMatch(raw);
-    if (ymd != null) {
-      final year = int.tryParse(ymd.group(1) ?? '');
-      final month = int.tryParse(ymd.group(2) ?? '');
-      final day = int.tryParse(ymd.group(3) ?? '');
-      if (year == null || month == null || day == null) {
-        return null;
-      }
-      final start = DateTime(year, month, day);
-      if (start.year != year || start.month != month || start.day != day) {
-        return null;
-      }
-      return _DetectedDateToken(
-        raw: raw,
-        start: start,
-        end: DateTime(year, month, day, 23, 59, 59, 999),
-      );
-    }
-    final ym = RegExp(r'^(20\d{2})[-/年\.](\d{1,2})(?:月)?$').firstMatch(raw);
-    if (ym != null) {
-      final year = int.tryParse(ym.group(1) ?? '');
-      final month = int.tryParse(ym.group(2) ?? '');
-      if (year == null || month == null) {
-        return null;
-      }
-      final start = DateTime(year, month, 1);
-      return _DetectedDateToken(
-        raw: raw,
-        start: start,
-        end: DateTime(
-          year,
-          month + 1,
-          1,
-        ).subtract(const Duration(milliseconds: 1)),
-      );
-    }
-    final yearOnly = RegExp(r'^(20\d{2})年?$').firstMatch(raw);
-    if (yearOnly == null) {
-      return null;
-    }
-    final year = int.tryParse(yearOnly.group(1) ?? '');
-    if (year == null) {
-      return null;
-    }
-    return _DetectedDateToken(
-      raw: raw,
-      start: DateTime(year, 1, 1),
-      end: DateTime(year + 1, 1, 1).subtract(const Duration(milliseconds: 1)),
-    );
-  }
-
-  bool _dateTokenMatchesConstraint(
-    _DetectedDateToken token,
-    _SearchTimeConstraint constraint,
-  ) {
-    return !token.end.isBefore(constraint.start) &&
-        !token.start.isAfter(constraint.end);
   }
 
   _SearchTimeConstraint _resolveTimeConstraint({
@@ -1333,35 +1203,6 @@ class WebSearchTool implements AssistantTool {
     );
   }
 
-  _CalendarPointRange? _resolveRangeByInlineCalendarPoint({
-    required _InlineCalendarPoint? point,
-    required String scope,
-  }) {
-    if (point == null) {
-      return null;
-    }
-    final normalizedScope = _normalizeCalendarScope(scope);
-    if (normalizedScope != 'year_month_day') {
-      return null;
-    }
-    final start = DateTime(point.date.year, point.date.month, point.date.day);
-    return _CalendarPointRange(
-      scope: 'year_month_day',
-      range: _ResolvedTimeRange(
-        start: start,
-        end: DateTime(
-          point.date.year,
-          point.date.month,
-          point.date.day,
-          23,
-          59,
-          59,
-          999,
-        ),
-      ),
-    );
-  }
-
   String _normalizeCalendarScope(String scope) {
     switch (scope) {
       case 'yearly':
@@ -1411,49 +1252,6 @@ class WebSearchTool implements AssistantTool {
     return null;
   }
 
-  _ResolvedTimeRange _resolveRangeByScope({
-    required String scope,
-    required DateTime now,
-    required _RetrievalTimeContract timeContract,
-  }) {
-    if (scope == 'today') {
-      return _ResolvedTimeRange(
-        start: DateTime(now.year, now.month, now.day),
-        end: now,
-      );
-    }
-    if (scope == 'year_to_date') {
-      return _ResolvedTimeRange(start: DateTime(now.year, 1, 1), end: now);
-    }
-    final configuredHours = timeContract.windowHoursByScope[scope];
-    if (configuredHours != null && configuredHours > 0) {
-      return _ResolvedTimeRange(
-        start: now.subtract(Duration(hours: configuredHours)),
-        end: now,
-      );
-    }
-    return _ResolvedTimeRange(
-      start: now.subtract(const Duration(days: 30)),
-      end: now,
-    );
-  }
-
-  int _defaultFreshnessHoursForScope({
-    required String scope,
-    required _DomainRetrievalPolicy domainPolicy,
-    required _RetrievalTimeContract timeContract,
-  }) {
-    final configured = timeContract.freshnessHoursMaxByScope[scope];
-    if (configured != null && configured > 0) {
-      return configured;
-    }
-    final domainDefault = domainPolicy.defaultFreshnessHoursMax;
-    if (domainDefault != null && domainDefault > 0) {
-      return domainDefault;
-    }
-    return timeContract.defaultFreshnessHoursMax;
-  }
-
   String _resolveTemporalMode({
     required String scope,
     required _ResolvedTimeRange range,
@@ -1478,48 +1276,6 @@ class WebSearchTool implements AssistantTool {
     required _SearchTimeConstraint constraint,
   }) {
     return query;
-  }
-
-  List<String> _timeConstraintSearchHints(_SearchTimeConstraint constraint) {
-    switch (constraint.scope) {
-      case 'today':
-      case 'year_month_day':
-        return <String>[_formatIsoDate(constraint.start)];
-      case 'last_7d':
-      case 'last_30d':
-      case 'custom':
-        return <String>[
-          '${_formatIsoDate(constraint.start)} 至 ${_formatIsoDate(constraint.end)}',
-        ];
-      case 'year_month':
-        return <String>[
-          '${constraint.start.year.toString().padLeft(4, '0')}-${constraint.start.month.toString().padLeft(2, '0')}',
-        ];
-      case 'year':
-        return <String>[constraint.start.year.toString().padLeft(4, '0')];
-      default:
-        return const <String>[];
-    }
-  }
-
-  String _appendDistinctSearchHints(String query, List<String> hints) {
-    final base = _compressWhitespace(query.trim());
-    if (base.isEmpty) {
-      return hints
-          .map((hint) => hint.trim())
-          .where((hint) => hint.isNotEmpty)
-          .join(' ');
-    }
-    final existing = _searchTokenNormalized(base);
-    final additions = hints
-        .map((hint) => hint.trim())
-        .where((hint) => hint.isNotEmpty)
-        .where((hint) => !existing.contains(_searchTokenNormalized(hint)))
-        .toList(growable: false);
-    if (additions.isEmpty) {
-      return base;
-    }
-    return '$base ${additions.join(' ')}'.trim();
   }
 
   String _buildSearchCacheKey({
@@ -1557,68 +1313,12 @@ class WebSearchTool implements AssistantTool {
     return parts.join(' | ');
   }
 
-  String _searchTokenNormalized(String raw) {
-    return raw.replaceAll(RegExp(r'[\s:：|｜/、,，。！？!?._-]+'), '').toLowerCase();
-  }
-
-  String _formatIsoDate(DateTime date) {
-    final y = date.year.toString().padLeft(4, '0');
-    final m = date.month.toString().padLeft(2, '0');
-    final d = date.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
-  }
-
-  String _formatChineseDate(DateTime date) {
-    return '${date.year}年${date.month}月${date.day}日';
-  }
-
   String _withDomainContextQuery({
     required String query,
     required Map<String, dynamic> arguments,
     required _DomainRetrievalPolicy domainPolicy,
   }) {
     return query;
-  }
-
-  List<String> _compactSearchContextHints(List<String> rawHints) {
-    final compact = <String>[];
-    final seen = <String>{};
-    for (final raw in rawHints) {
-      final normalized = _normalizeSearchContextHint(raw);
-      if (normalized.isEmpty || !seen.add(normalized)) {
-        continue;
-      }
-      compact.add(normalized);
-      if (compact.length >= 2) {
-        break;
-      }
-    }
-    return compact;
-  }
-
-  String _normalizeSearchContextHint(String raw) {
-    final normalized = raw
-        .trim()
-        .replaceAll(RegExp(r'[，,。；;：:（）()]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    if (normalized.isEmpty) {
-      return '';
-    }
-    final tokenCount = normalized
-        .split(' ')
-        .where((item) => item.trim().isNotEmpty)
-        .length;
-    final sentenceLike =
-        normalized.contains('必须') ||
-        normalized.contains('优先') ||
-        normalized.contains('若') ||
-        normalized.contains('需要') ||
-        normalized.contains('说明');
-    if (normalized.length > 18 || tokenCount > 4 || sentenceLike) {
-      return '';
-    }
-    return normalized;
   }
 
   List<String> _resolveAuthorityDomains({
@@ -1693,7 +1393,7 @@ class WebSearchTool implements AssistantTool {
         defaultTimeScope: (map['defaultTimeScope'] as String?)?.trim() ?? '',
         defaultFreshnessHoursMax: (map['defaultFreshnessHoursMax'] as num?)
             ?.toInt(),
-        maxQueryTasks: (map['maxQueryTasks'] as num?)?.toInt() ?? 2,
+        maxSearchPlans: (map['maxSearchPlans'] as num?)?.toInt() ?? 2,
         minAcceptedRelevanceScore:
             (map['minAcceptedRelevanceScore'] as num?)?.toDouble() ?? 0.0,
         allowedTimeScopes:
@@ -1817,29 +1517,29 @@ class WebSearchTool implements AssistantTool {
           (entry['diagnostics'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
       final error = (entry['error'] as String?)?.trim() ?? '';
-      final queryTaskId = _consoleQueryTaskId(request, response);
+      final searchPlanId = _consoleSearchPlanId(request, response);
       final header = StringBuffer('[AssistantSearch][$kind] ');
       header.write(hasError ? 'ERROR' : 'OK');
       header.write(' stage=retrieval_processing');
       header.write(' tool=web_search');
       header.write(' provider=$provider');
-      if (queryTaskId.isNotEmpty) {
-        header.write(' queryTaskId=$queryTaskId');
+      if (searchPlanId.isNotEmpty) {
+        header.write(' searchPlanId=$searchPlanId');
       }
-      print(header.toString());
+      debugPrint(header.toString());
       for (final line in ConsolePrettyLogFormatter.renderSection(
         prefix: '[AssistantSearch] ',
         title: 'request',
         value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(request),
       )) {
-        print(line);
+        debugPrint(line);
       }
       for (final line in ConsolePrettyLogFormatter.renderSection(
         prefix: '[AssistantSearch] ',
         title: 'response',
         value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(response),
       )) {
-        print(line);
+        debugPrint(line);
       }
       if (diagnostics.isNotEmpty) {
         for (final line in ConsolePrettyLogFormatter.renderSection(
@@ -1847,7 +1547,7 @@ class WebSearchTool implements AssistantTool {
           title: 'diagnostics',
           value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(diagnostics),
         )) {
-          print(line);
+          debugPrint(line);
         }
       }
       if (error.isNotEmpty) {
@@ -1856,21 +1556,21 @@ class WebSearchTool implements AssistantTool {
           title: 'error',
           value: error,
         )) {
-          print(line);
+          debugPrint(line);
         }
       }
       return true;
     }());
   }
 
-  String _consoleQueryTaskId(
+  String _consoleSearchPlanId(
     Map<String, dynamic> request,
     Map<String, dynamic> response,
   ) {
     for (final source in <Map<String, dynamic>>[request, response]) {
-      final queryTaskId = (source['queryTaskId'] as String?)?.trim() ?? '';
-      if (queryTaskId.isNotEmpty) {
-        return queryTaskId;
+      final searchPlanId = (source['searchPlanId'] as String?)?.trim() ?? '';
+      if (searchPlanId.isNotEmpty) {
+        return searchPlanId;
       }
     }
     return '';
@@ -2108,9 +1808,9 @@ class WebSearchTool implements AssistantTool {
     if (providerDate.isNotEmpty) {
       item['date'] = providerDate;
     }
-    final queryTaskId = _stringValue(metadata['queryTaskId']);
-    if (queryTaskId.isNotEmpty) {
-      item['queryTaskId'] = queryTaskId;
+    final searchPlanId = _stringValue(metadata['searchPlanId']);
+    if (searchPlanId.isNotEmpty) {
+      item['searchPlanId'] = searchPlanId;
     }
     final dimension = _stringValue(metadata['dimension']);
     if (dimension.isNotEmpty) {
@@ -2354,14 +2054,12 @@ class WebSearchTool implements AssistantTool {
       return const _ClassifiedSearchError(
         errorCode: AssistantErrorCode.unauthorized,
         message: '搜索服务鉴权失败，请检查配置。',
-        retryable: false,
       );
     }
     if (normalized.contains('(429)') || normalized.contains('rate limit')) {
       return const _ClassifiedSearchError(
         errorCode: AssistantErrorCode.rateLimited,
         message: '搜索服务当前限流，请稍后重试。',
-        retryable: true,
       );
     }
     if (normalized.contains('timeout') ||
@@ -2378,13 +2076,11 @@ class WebSearchTool implements AssistantTool {
       return const _ClassifiedSearchError(
         errorCode: AssistantErrorCode.networkUnavailable,
         message: '搜索服务暂时不可用，已尝试自动恢复。',
-        retryable: true,
       );
     }
     return const _ClassifiedSearchError(
       errorCode: AssistantErrorCode.executionFailed,
       message: '搜索失败，请稍后重试。',
-      retryable: false,
     );
   }
 
@@ -2877,7 +2573,7 @@ class WebSearchTool implements AssistantTool {
   /// Executes multiple queries concurrently and merges references.
   Future<AssistantToolResult> _executeMultiQuery(
     Map<String, dynamic> arguments,
-    List<Map<String, dynamic>> queryTasks,
+    List<Map<String, dynamic>> searchPlans,
   ) async {
     final domainId =
         ((arguments['domainId'] as String?)?.trim().isNotEmpty == true
@@ -2885,48 +2581,48 @@ class WebSearchTool implements AssistantTool {
             : (arguments['__domainId'] as String?)?.trim()) ??
         '';
     final domainPolicy = await _loadDomainRetrievalPolicy(domainId);
-    final maxQueryTasks = domainPolicy.maxQueryTasks > 0
-        ? domainPolicy.maxQueryTasks
+    final maxSearchPlans = domainPolicy.maxSearchPlans > 0
+        ? domainPolicy.maxSearchPlans
         : 2;
-    final allTasks = _normalizeQueryTasks(queryTasks)
-        .take(maxQueryTasks)
+    final allPlans = _normalizeSearchPlans(searchPlans)
+        .take(maxSearchPlans)
         .map(
-          (task) => _withDomainPolicyTaskHints(
-            queryTask: task,
+          (plan) => _withDomainPolicySearchPlanHints(
+            searchPlan: plan,
             domainPolicy: domainPolicy,
           ),
         )
         .toList(growable: false);
-    final allQueries = allTasks
-        .map((task) => (task['query'] as String?)?.trim() ?? '')
+    final allQueries = allPlans
+        .map((plan) => (plan['query'] as String?)?.trim() ?? '')
         .where((query) => query.isNotEmpty)
         .toList(growable: false);
-    final labels = allTasks
-        .map((task) => (task['label'] as String?)?.trim() ?? '')
+    final labels = allPlans
+        .map((plan) => (plan['label'] as String?)?.trim() ?? '')
         .where((label) => label.isNotEmpty)
         .toList(growable: false);
-    final dimensions = allTasks
-        .map((task) => (task['dimension'] as String?)?.trim() ?? '')
+    final dimensions = allPlans
+        .map((plan) => (plan['dimension'] as String?)?.trim() ?? '')
         .where((dimension) => dimension.isNotEmpty)
         .toSet()
         .toList(growable: false);
-    final futures = allTasks
-        .map((task) {
+    final futures = allPlans
+        .map((plan) {
           final singleArgs = Map<String, dynamic>.from(arguments)
-            ..['query'] = (task['query'] as String?)?.trim() ?? ''
-            ..['queryTaskId'] = (task['id'] as String?)?.trim() ?? ''
-            ..['queryTaskLabel'] = (task['label'] as String?)?.trim() ?? ''
-            ..['dimension'] = (task['dimension'] as String?)?.trim() ?? ''
-            ..['entityAnchors'] = _stringList(task['entityAnchors'])
-            ..['negativeKeywords'] = _stringList(task['negativeKeywords'])
-            ..['timeScope'] = (task['timeScope'] as String?)?.trim() ?? ''
+            ..['query'] = (plan['query'] as String?)?.trim() ?? ''
+            ..['searchPlanId'] = (plan['id'] as String?)?.trim() ?? ''
+            ..['searchPlanLabel'] = (plan['label'] as String?)?.trim() ?? ''
+            ..['dimension'] = (plan['dimension'] as String?)?.trim() ?? ''
+            ..['entityRefs'] = _stringList(plan['entityRefs'])
+            ..['negativeKeywords'] = _stringList(plan['negativeKeywords'])
+            ..['timeScope'] = (plan['timeScope'] as String?)?.trim() ?? ''
             ..['timeRangeStart'] =
-                (task['timeRangeStart'] as String?)?.trim() ?? ''
-            ..['timeRangeEnd'] = (task['timeRangeEnd'] as String?)?.trim() ?? ''
-            ..['timePoint'] = (task['timePoint'] as String?)?.trim() ?? ''
-            ..['timezone'] = (task['timezone'] as String?)?.trim() ?? ''
+                (plan['timeRangeStart'] as String?)?.trim() ?? ''
+            ..['timeRangeEnd'] = (plan['timeRangeEnd'] as String?)?.trim() ?? ''
+            ..['timePoint'] = (plan['timePoint'] as String?)?.trim() ?? ''
+            ..['timezone'] = (plan['timezone'] as String?)?.trim() ?? ''
             ..remove('queryVariants')
-            ..remove('queryTasks');
+            ..remove('searchPlans');
           return execute(AssistantToolArguments.fromJson(singleArgs));
         })
         .toList(growable: false);
@@ -2944,8 +2640,8 @@ class WebSearchTool implements AssistantTool {
 
     for (var i = 0; i < results.length; i++) {
       final r = results[i];
-      final task = i < allTasks.length
-          ? allTasks[i]
+      final plan = i < allPlans.length
+          ? allPlans[i]
           : const <String, dynamic>{};
       if (r.success) anySuccess = true;
       final data = r.data ?? const <String, dynamic>{};
@@ -2974,11 +2670,11 @@ class WebSearchTool implements AssistantTool {
               .map((e) => e.cast<String, dynamic>())
               .toList(growable: false) ??
           const <Map<String, dynamic>>[];
-      final filteredRefs = _applyTaskFilters(refs, task: task);
+      final filteredRefs = _applyTaskFilters(refs, searchPlan: plan);
       if (filteredRefs.isNotEmpty) {
         final dimension =
-            (task['dimension'] as String?)?.trim() ??
-            (task['label'] as String?)?.trim() ??
+            (plan['dimension'] as String?)?.trim() ??
+            (plan['label'] as String?)?.trim() ??
             '';
         if (dimension.isNotEmpty) {
           coveredDimensions.add(dimension);
@@ -2989,7 +2685,7 @@ class WebSearchTool implements AssistantTool {
           ...ref,
           'rerankScore': _multiQueryReferenceScore(
             ref,
-            task: task,
+            searchPlan: plan,
             requestedDimensions: dimensions,
           ),
         });
@@ -3060,7 +2756,7 @@ class WebSearchTool implements AssistantTool {
             ? coveredDimensions.toList(growable: false)
             : labels,
         'missingDimensions': missingDimensions,
-        'queryTasks': allTasks,
+        'searchPlans': allPlans,
         'referenceCount': mergedRefs.length,
         'totalReferences': mergedRefs.length,
         'rerankStats': <String, dynamic>{
@@ -3079,16 +2775,18 @@ class WebSearchTool implements AssistantTool {
 
   List<Map<String, dynamic>> _applyTaskFilters(
     List<Map<String, dynamic>> references, {
-    required Map<String, dynamic> task,
+    Map<String, dynamic>? task,
+    Map<String, dynamic>? searchPlan,
   }) {
+    final effectivePlan = task ?? searchPlan ?? const <String, dynamic>{};
     final anchors = _stringList(
-      task['entityAnchors'],
+      effectivePlan['entityRefs'],
     ).map((item) => item.toLowerCase()).toList(growable: false);
     final negatives = _stringList(
-      task['negativeKeywords'],
+      effectivePlan['negativeKeywords'],
     ).map((item) => item.toLowerCase()).toList(growable: false);
     final minAcceptedRelevanceScore =
-        (task['minAcceptedRelevanceScore'] as num?)?.toDouble() ?? 0.0;
+        (effectivePlan['minAcceptedRelevanceScore'] as num?)?.toDouble() ?? 0.0;
     return references
         .where((ref) {
           final haystack =
@@ -3154,9 +2852,11 @@ class WebSearchTool implements AssistantTool {
 
   double _multiQueryReferenceScore(
     Map<String, dynamic> reference, {
-    required Map<String, dynamic> task,
+    Map<String, dynamic>? task,
+    Map<String, dynamic>? searchPlan,
     required List<String> requestedDimensions,
   }) {
+    final effectivePlan = task ?? searchPlan ?? const <String, dynamic>{};
     final relevance = (reference['relevanceScore'] as num?)?.toDouble() ?? 0.0;
     final authority = (reference['authorityScore'] as num?)?.toDouble() ?? 0.0;
     final sourceSemantic =
@@ -3171,7 +2871,9 @@ class WebSearchTool implements AssistantTool {
             (dimension.isNotEmpty && requestedDimensions.contains(dimension))
         ? 1.0
         : 0.6;
-    final anchorBonus = _stringList(task['entityAnchors']).isEmpty ? 1.0 : 1.08;
+    final anchorBonus = _stringList(effectivePlan['entityRefs']).isEmpty
+        ? 1.0
+        : 1.08;
     return (relevance * 0.38 +
             authority * 0.18 +
             freshnessScore * 0.16 +
@@ -3218,66 +2920,81 @@ class WebSearchTool implements AssistantTool {
     return fallbackSummary;
   }
 
-  List<Map<String, dynamic>> _normalizeQueryTasks(Object? raw) {
-    final tasks = QueryTask.normalizeList(raw);
+  List<Map<String, dynamic>> _normalizeSearchPlans(Object? raw) {
+    final rawItems = raw is List ? raw : const <Object?>[];
     final normalized = <Map<String, dynamic>>[];
     final seen = <String>{};
-    for (final task in tasks) {
-      final query = task.query.trim();
+    for (final item in rawItems) {
+      final rawPlan = item is Map
+          ? item.cast<String, dynamic>()
+          : <String, dynamic>{'query': item.toString()};
+      final query = _firstNonEmpty(<String>[
+        _stringValue(rawPlan['query']),
+        _stringValue(rawPlan['q']),
+        _stringValue(rawPlan['text']),
+      ]);
       if (query.isEmpty || !seen.add(query)) continue;
-      final normalizedTask = Map<String, dynamic>.from(task.toJson());
-      normalizedTask['id'] = task.id.trim().isNotEmpty
-          ? task.id.trim()
-          : _normalizeQueryTaskId(
+      final dimension = _firstNonEmpty(<String>[
+        _stringValue(rawPlan['dimension']),
+        _stringValue(rawPlan['dimensionCode']),
+      ]);
+      final label = _firstNonEmpty(<String>[
+        _stringValue(rawPlan['label']),
+        _stringValue(rawPlan['title']),
+      ]);
+      final normalizedPlan = Map<String, dynamic>.from(rawPlan);
+      normalizedPlan['id'] = _stringValue(rawPlan['id']).isNotEmpty
+          ? _stringValue(rawPlan['id'])
+          : _normalizeSearchPlanId(
               query,
-              preferred: task.dimensionCode.isNotEmpty
-                  ? task.dimensionCode
-                  : task.label,
+              preferred: dimension.isNotEmpty ? dimension : label,
             );
-      normalizedTask['query'] = query;
-      normalized.add(normalizedTask);
+      normalizedPlan['query'] = query;
+      if (dimension.isNotEmpty) normalizedPlan['dimension'] = dimension;
+      if (label.isNotEmpty) normalizedPlan['label'] = label;
+      normalized.add(normalizedPlan);
     }
     return normalized;
   }
 
-  List<Map<String, dynamic>> _queryTasksFromSeeds(
+  List<Map<String, dynamic>> _searchPlansFromSeeds(
     String mainQuery,
     List<String> variants,
   ) {
-    final tasks = <Map<String, dynamic>>[];
+    final plans = <Map<String, dynamic>>[];
     final seen = <String>{};
 
-    void addTask(String query) {
+    void addPlan(String query) {
       final normalized = query.trim();
       if (normalized.isEmpty || !seen.add(normalized)) return;
-      tasks.add(<String, dynamic>{'query': normalized, 'label': normalized});
+      plans.add(<String, dynamic>{'query': normalized, 'label': normalized});
     }
 
     if (mainQuery.isNotEmpty) {
-      addTask(mainQuery);
+      addPlan(mainQuery);
     }
     for (final variant in variants) {
-      addTask(variant);
+      addPlan(variant);
     }
-    return tasks;
+    return plans;
   }
 
-  Map<String, dynamic> _resolveSingleQueryTask({
+  Map<String, dynamic> _resolveSingleSearchPlan({
     required Map<String, dynamic> arguments,
     required String normalizedQuery,
-    required List<Map<String, dynamic>> normalizedTasks,
+    required List<Map<String, dynamic>> normalizedPlans,
   }) {
-    if (normalizedTasks.length == 1) {
-      return normalizedTasks.first;
+    if (normalizedPlans.length == 1) {
+      return normalizedPlans.first;
     }
-    final explicitId = (arguments['queryTaskId'] as String?)?.trim() ?? '';
+    final explicitId = (arguments['searchPlanId'] as String?)?.trim() ?? '';
     final explicitLabel =
-        (arguments['queryTaskLabel'] as String?)?.trim() ?? '';
+        (arguments['searchPlanLabel'] as String?)?.trim() ?? '';
     final explicitDimension = (arguments['dimension'] as String?)?.trim() ?? '';
     return <String, dynamic>{
       'id': explicitId.isNotEmpty
           ? explicitId
-          : _normalizeQueryTaskId(
+          : _normalizeSearchPlanId(
               normalizedQuery,
               preferred: explicitDimension.isNotEmpty
                   ? explicitDimension
@@ -3285,8 +3002,8 @@ class WebSearchTool implements AssistantTool {
             ),
       'label': explicitLabel.isNotEmpty ? explicitLabel : normalizedQuery,
       if (explicitDimension.isNotEmpty) 'dimension': explicitDimension,
-      if (_stringList(arguments['entityAnchors']).isNotEmpty)
-        'entityAnchors': _stringList(arguments['entityAnchors']),
+      if (_stringList(arguments['entityRefs']).isNotEmpty)
+        'entityRefs': _stringList(arguments['entityRefs']),
       if (_stringList(arguments['negativeKeywords']).isNotEmpty)
         'negativeKeywords': _stringList(arguments['negativeKeywords']),
       if ((arguments['answerShape'] as String?)?.trim().isNotEmpty == true)
@@ -3307,22 +3024,22 @@ class WebSearchTool implements AssistantTool {
     };
   }
 
-  Map<String, dynamic> _withDomainPolicyTaskHints({
-    required Map<String, dynamic> queryTask,
+  Map<String, dynamic> _withDomainPolicySearchPlanHints({
+    required Map<String, dynamic> searchPlan,
     required _DomainRetrievalPolicy domainPolicy,
   }) {
     if (domainPolicy.negativeKeywords.isEmpty &&
         domainPolicy.minAcceptedRelevanceScore <= 0) {
-      return queryTask;
+      return searchPlan;
     }
     final mergedNegativeKeywords = <String>{
       ..._stringList(
-        queryTask['negativeKeywords'],
+        searchPlan['negativeKeywords'],
       ).map((item) => item.trim()).where((item) => item.isNotEmpty),
       ...domainPolicy.negativeKeywords,
     }.toList(growable: false);
     return <String, dynamic>{
-      ...queryTask,
+      ...searchPlan,
       if (mergedNegativeKeywords.isNotEmpty)
         'negativeKeywords': mergedNegativeKeywords,
       if (domainPolicy.minAcceptedRelevanceScore > 0)
@@ -3332,9 +3049,10 @@ class WebSearchTool implements AssistantTool {
 
   Map<String, dynamic> _withResolvedTemporalArguments({
     required Map<String, dynamic> arguments,
-    required Map<String, dynamic> queryTask,
+    Map<String, dynamic>? searchPlan,
     required String query,
   }) {
+    final effectivePlan = searchPlan ?? const <String, dynamic>{};
     final queryNormalization =
         (arguments['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
@@ -3348,27 +3066,27 @@ class WebSearchTool implements AssistantTool {
         _stringValue(queryNormalization['referenceNowIso']),
       ]),
       'timezone': _firstNonEmpty(<String>[
-        _stringValue(queryTask['timezone']),
+        _stringValue(effectivePlan['timezone']),
         _stringValue(arguments['timezone']),
         _stringValue(queryNormalization['timezone']),
       ]),
       'timeScope': _firstNonEmpty(<String>[
-        _stringValue(queryTask['timeScope']),
+        _stringValue(effectivePlan['timeScope']),
         _stringValue(arguments['timeScope']),
         _stringValue(queryNormalization['timeScope']),
       ]),
       'timeRangeStart': _firstNonEmpty(<String>[
-        _stringValue(queryTask['timeRangeStart']),
+        _stringValue(effectivePlan['timeRangeStart']),
         _stringValue(arguments['timeRangeStart']),
         _stringValue(queryNormalization['timeRangeStart']),
       ]),
       'timeRangeEnd': _firstNonEmpty(<String>[
-        _stringValue(queryTask['timeRangeEnd']),
+        _stringValue(effectivePlan['timeRangeEnd']),
         _stringValue(arguments['timeRangeEnd']),
         _stringValue(queryNormalization['timeRangeEnd']),
       ]),
       'timePoint': _firstNonEmpty(<String>[
-        _stringValue(queryTask['timePoint']),
+        _stringValue(effectivePlan['timePoint']),
         _stringValue(arguments['timePoint']),
         _stringValue(queryNormalization['timePoint']),
       ]),
@@ -3387,11 +3105,12 @@ class WebSearchTool implements AssistantTool {
 
   Map<String, dynamic> _withResolvedGeoArguments({
     required Map<String, dynamic> arguments,
-    required Map<String, dynamic> queryTask,
+    Map<String, dynamic>? searchPlan,
   }) {
+    final effectivePlan = searchPlan ?? const <String, dynamic>{};
     final resolvedGeoScope = _resolvedGeoScopeFromArguments(
       arguments: arguments,
-      queryTask: queryTask,
+      searchPlan: effectivePlan,
     );
     if (!hasResolvedGeoScope(resolvedGeoScope)) {
       return arguments;
@@ -3409,29 +3128,29 @@ class WebSearchTool implements AssistantTool {
     return mergedArguments;
   }
 
-  Map<String, dynamic> _withResolvedGeoTask({
-    required Map<String, dynamic> queryTask,
+  Map<String, dynamic> _withResolvedGeoSearchPlan({
+    required Map<String, dynamic> searchPlan,
     required Map<String, dynamic> arguments,
   }) {
     final resolvedGeoScope = _resolvedGeoScopeFromArguments(
       arguments: arguments,
-      queryTask: queryTask,
+      searchPlan: searchPlan,
     );
     if (!hasResolvedGeoScope(resolvedGeoScope)) {
-      return queryTask;
+      return searchPlan;
     }
     return <String, dynamic>{
-      ...queryTask,
+      ...searchPlan,
       'resolvedGeoScope': resolvedGeoScope.toJson(),
     };
   }
 
   ResolvedGeoScope _resolvedGeoScopeFromArguments({
     required Map<String, dynamic> arguments,
-    required Map<String, dynamic> queryTask,
+    required Map<String, dynamic> searchPlan,
   }) {
     final rawScope =
-        (queryTask['resolvedGeoScope'] as Map?)?.cast<String, dynamic>() ??
+        (searchPlan['resolvedGeoScope'] as Map?)?.cast<String, dynamic>() ??
         (arguments['resolvedGeoScope'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     if (rawScope.isEmpty) {
@@ -3445,9 +3164,10 @@ class WebSearchTool implements AssistantTool {
     required String query,
     required List<String> authorityDomains,
     required _SearchTimeConstraint timeConstraint,
-    required Map<String, dynamic> queryTask,
+    Map<String, dynamic>? searchPlan,
     required String retrievedAt,
   }) {
+    final effectivePlan = searchPlan ?? const <String, dynamic>{};
     final normalizedRefs = references
         .map(SafeReferenceNormalizer.normalize)
         .whereType<Map<String, dynamic>>()
@@ -3490,7 +3210,7 @@ class WebSearchTool implements AssistantTool {
               _estimateReferenceRelevance(
                 query: query,
                 reference: enrichedRef,
-                queryTask: queryTask,
+                searchPlan: effectivePlan,
               );
           final sourceSemanticScore =
               (enrichedRef['sourceSemanticScore'] as num?)?.toDouble() ??
@@ -3519,15 +3239,17 @@ class WebSearchTool implements AssistantTool {
             'relevanceScore': relevanceScore,
             'sourceSemanticScore': sourceSemanticScore,
             'resultRankScore': resultRankScore,
-            'queryTaskId': _stringValue(queryTask['id']),
-            'queryTaskLabel': _stringValue(queryTask['label']),
-            'dimension': _stringValue(queryTask['dimension']).isNotEmpty
-                ? _stringValue(queryTask['dimension'])
-                : _stringValue(queryTask['label']),
-            if (_stringList(queryTask['entityAnchors']).isNotEmpty)
-              'entityAnchors': _stringList(queryTask['entityAnchors']),
-            if (_stringList(queryTask['negativeKeywords']).isNotEmpty)
-              'negativeKeywords': _stringList(queryTask['negativeKeywords']),
+            'searchPlanId': _stringValue(effectivePlan['id']),
+            'searchPlanLabel': _stringValue(effectivePlan['label']),
+            'dimension': _stringValue(effectivePlan['dimension']).isNotEmpty
+                ? _stringValue(effectivePlan['dimension'])
+                : _stringValue(effectivePlan['label']),
+            if (_stringList(effectivePlan['entityRefs']).isNotEmpty)
+              'entityRefs': _stringList(effectivePlan['entityRefs']),
+            if (_stringList(effectivePlan['negativeKeywords']).isNotEmpty)
+              'negativeKeywords': _stringList(
+                effectivePlan['negativeKeywords'],
+              ),
             'retrievedAt':
                 (enrichedRef['retrievedAt'] as String?)?.trim().isNotEmpty ==
                     true
@@ -3573,7 +3295,7 @@ class WebSearchTool implements AssistantTool {
   double _estimateReferenceRelevance({
     required String query,
     required Map<String, dynamic> reference,
-    required Map<String, dynamic> queryTask,
+    required Map<String, dynamic> searchPlan,
   }) {
     final tokens = query
         .toLowerCase()
@@ -3581,11 +3303,11 @@ class WebSearchTool implements AssistantTool {
         .map((item) => item.trim())
         .where((item) => item.length >= 2)
         .toSet();
-    final anchorTokens = _stringList(queryTask['entityAnchors'])
+    final anchorTokens = _stringList(searchPlan['entityRefs'])
         .map((item) => item.toLowerCase())
         .where((item) => item.length >= 2)
         .toSet();
-    final negativeTokens = _stringList(queryTask['negativeKeywords'])
+    final negativeTokens = _stringList(searchPlan['negativeKeywords'])
         .map((item) => item.toLowerCase())
         .where((item) => item.length >= 2)
         .toSet();
@@ -3738,14 +3460,14 @@ class WebSearchTool implements AssistantTool {
     return _stringValue(a['url']).compareTo(_stringValue(b['url']));
   }
 
-  String _normalizeQueryTaskId(String query, {String preferred = ''}) {
+  String _normalizeSearchPlanId(String query, {String preferred = ''}) {
     final base = preferred.trim().isNotEmpty ? preferred.trim() : query.trim();
     final normalized = base
         .toLowerCase()
         .replaceAll(RegExp(r'[^\w\u4e00-\u9fa5]+'), '_')
         .replaceAll(RegExp(r'_+'), '_')
         .replaceAll(RegExp(r'^_|_$'), '');
-    return normalized.isNotEmpty ? normalized : 'query_task';
+    return normalized.isNotEmpty ? normalized : 'search_plan';
   }
 
   int? _intValue(Object? value) {
@@ -3779,27 +3501,7 @@ class WebSearchTool implements AssistantTool {
     required Map<String, dynamic> evidenceStats,
     required _SearchTimeConstraint timeConstraint,
   }) {
-    if (temporalGuard.blocked) {
-      return '已有检索结果，但涉及的时间范围跨越了当前参考窗口，需要进一步核实后再作结论。';
-    }
-    if (evidenceStats['authoritySatisfied'] != true) {
-      return '已有检索结果，但尚未命中足够权威的来源，需要补充更可靠的证据再给出稳定判断。';
-    }
-    if (timeConstraint.isHistoricalLike &&
-        evidenceStats['freshnessKnown'] != true) {
-      return '已有检索结果，但资料缺少明确的时间标注，暂时无法确认它属于目标时间段。';
-    }
-    if (timeConstraint.isHistoricalLike &&
-        evidenceStats['freshnessSatisfied'] != true) {
-      return '已有检索结果，但未充分覆盖目标时间段的关键信息，需要继续补充对应时段的证据。';
-    }
-    if (evidenceStats['freshnessKnown'] != true) {
-      return '已有检索结果，但缺少明确的发布时间，暂时无法确认信息时效性。';
-    }
-    if (evidenceStats['freshnessSatisfied'] != true) {
-      return '已有检索结果，但信息时效性不足，需要获取更新的数据来源。';
-    }
-    return '已有检索结果，但当前证据尚不足以直接支撑稳定结论。';
+    return '';
   }
 
   _TemporalGuardAssessment _temporalGuardFromData(Map<String, dynamic> data) {
@@ -4016,13 +3718,6 @@ class _SearchTimeConstraint {
   }
 }
 
-class _TemporalIntent {
-  const _TemporalIntent({this.realtimeLike = false, this.preferredScope = ''});
-
-  final bool realtimeLike;
-  final String preferredScope;
-}
-
 class _TemporalGuardAssessment {
   const _TemporalGuardAssessment({
     required this.searchQuery,
@@ -4047,30 +3742,6 @@ class _TemporalGuardAssessment {
       'conflictingDateTokens': conflictingDateTokens,
     };
   }
-}
-
-class _DetectedDateToken {
-  const _DetectedDateToken({
-    required this.raw,
-    required this.start,
-    required this.end,
-  });
-
-  final String raw;
-  final DateTime start;
-  final DateTime end;
-}
-
-class _InlineCalendarPoint {
-  const _InlineCalendarPoint({
-    required this.date,
-    required this.matchedToken,
-    required this.relativePhrase,
-  });
-
-  final DateTime date;
-  final String matchedToken;
-  final bool relativePhrase;
 }
 
 class _FreshnessSignal {
@@ -4139,7 +3810,7 @@ class _DomainRetrievalPolicy {
   const _DomainRetrievalPolicy({
     this.defaultTimeScope = '',
     this.defaultFreshnessHoursMax,
-    this.maxQueryTasks = 2,
+    this.maxSearchPlans = 2,
     this.minAcceptedRelevanceScore = 0.0,
     this.allowedTimeScopes = const <String>[],
     this.authorityDomains = const <String>[],
@@ -4149,7 +3820,7 @@ class _DomainRetrievalPolicy {
 
   final String defaultTimeScope;
   final int? defaultFreshnessHoursMax;
-  final int maxQueryTasks;
+  final int maxSearchPlans;
   final double minAcceptedRelevanceScore;
   final List<String> allowedTimeScopes;
   final List<String> authorityDomains;
@@ -4176,10 +3847,8 @@ class _ClassifiedSearchError {
   const _ClassifiedSearchError({
     required this.errorCode,
     required this.message,
-    required this.retryable,
   });
 
   final AssistantErrorCode errorCode;
   final String message;
-  final bool retryable;
 }

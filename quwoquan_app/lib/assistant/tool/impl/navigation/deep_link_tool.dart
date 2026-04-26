@@ -25,10 +25,16 @@ class DeepLinkTool implements AssistantTool {
   Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final url = (arguments['url'] as String?)?.trim() ?? '';
     if (url.isEmpty) {
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: false,
         message: '缺少 url 参数',
         errorCode: AssistantErrorCode.invalidArguments,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.invalidArguments,
+          message: '缺少 url 参数',
+          functionModule: name,
+          stage: 'argument_validation',
+        ),
       );
     }
 
@@ -38,6 +44,12 @@ class DeepLinkTool implements AssistantTool {
         success: false,
         message: '无效的 URL: $url',
         errorCode: AssistantErrorCode.invalidArguments,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.invalidArguments,
+          message: '无效的 URL: $url',
+          functionModule: name,
+          stage: 'argument_validation',
+        ),
       );
     }
 
@@ -46,6 +58,12 @@ class DeepLinkTool implements AssistantTool {
         success: false,
         message: '不支持的 URL scheme: ${uri.scheme}',
         errorCode: AssistantErrorCode.permissionDenied,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.permissionDenied,
+          message: '不支持的 URL scheme: ${uri.scheme}',
+          functionModule: name,
+          stage: 'scheme_validation',
+        ),
       );
     }
 
@@ -57,6 +75,12 @@ class DeepLinkTool implements AssistantTool {
           message: '设备无法打开此链接: $url',
           errorCode: AssistantErrorCode.unsupportedTarget,
           degraded: true,
+          runtimeFailure: assistantToolRuntimeFailure(
+            errorCode: AssistantErrorCode.unsupportedTarget,
+            message: '设备无法打开此链接: $url',
+            functionModule: name,
+            stage: 'capability_check',
+          ),
         );
       }
 
@@ -73,6 +97,12 @@ class DeepLinkTool implements AssistantTool {
           message: '链接打开失败: $url',
           errorCode: AssistantErrorCode.executionFailed,
           degraded: true,
+          runtimeFailure: assistantToolRuntimeFailure(
+            errorCode: AssistantErrorCode.executionFailed,
+            message: '链接打开失败: $url',
+            functionModule: name,
+            stage: 'launch_url',
+          ),
         );
       }
 
@@ -90,6 +120,12 @@ class DeepLinkTool implements AssistantTool {
         message: '打开链接异常: $error',
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.executionFailed,
+          message: '打开链接异常: $error',
+          functionModule: name,
+          stage: 'unexpected_exception',
+        ),
       );
     }
   }

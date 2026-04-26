@@ -120,7 +120,7 @@ void main() {
           data: const <String, dynamic>{
             'toolName': 'web_search',
             'query': '深圳天气',
-            'queryTasks': <Map<String, dynamic>>[
+            'searchPlans': <Map<String, dynamic>>[
               <String, dynamic>{'label': '实时天气', 'query': '深圳天气 实时 降雨 温度'},
               <String, dynamic>{'label': '出行影响', 'query': '深圳天气 出行 影响 路况'},
             ],
@@ -170,10 +170,10 @@ void main() {
         AssistantTraceEvent(
           type: AssistantTraceEventType.toolError,
           message:
-              'Local context failed: MissingPluginException(No implementation found for method getLocalContext on channel personalassistant/nativeapi)',
+              'System context failed: MissingPluginException(No implementation found for method getSystemContext on channel personalassistant/nativeapi)',
           timestamp: DateTime.now(),
           data: const <String, dynamic>{
-            'toolName': 'local_context',
+            'toolName': 'system_context',
             'suppressed': true,
           },
         ),

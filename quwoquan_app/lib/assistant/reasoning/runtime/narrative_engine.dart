@@ -1,5 +1,4 @@
 // 用户文案应迁至 prompt asset / tool metadata，见 canonical_truth_sources.md。禁止新增。
-import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/problem_framer.dart';
 
 class NarrativeEngine {
@@ -9,7 +8,7 @@ class NarrativeEngine {
     required ProblemFrame frame,
     required bool hasReferences,
   }) {
-    return DefaultProcessingCopyBank.runtimeFallbackDisabledReason;
+    return '';
   }
 
   String fallbackReason({
@@ -19,7 +18,7 @@ class NarrativeEngine {
     required bool evidenceSafe,
     required bool hasToolError,
   }) {
-    return DefaultProcessingCopyBank.runtimeFallbackDisabledReason;
+    return '';
   }
 
   String askUserPrompt({required String slotId, required ProblemFrame frame}) {

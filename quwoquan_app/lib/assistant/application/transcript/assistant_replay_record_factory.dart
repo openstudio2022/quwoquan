@@ -1,7 +1,12 @@
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/transcript/replay/assistant_replay_record.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 
 /// 从运行响应构造 C6 回放记录（对齐 controller `_storeAssistantReplayRecord`）。
 class AssistantReplayRecordFactory {
@@ -34,13 +39,7 @@ class AssistantReplayRecordFactory {
               const <String, dynamic>{});
     final queryPlan =
         (replayPayload['queryPlan'] as Map?)?.cast<String, dynamic>() ??
-        <String, dynamic>{
-          'queryTasks':
-              (structured['queryTasks'] as List?) ?? const <dynamic>[],
-          'intentGraph':
-              (structured['intentGraph'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-        };
+        _queryPlanFromTypedMainline(structured);
     final policyDecision =
         (replayPayload['policyDecision'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{
@@ -75,6 +74,38 @@ class AssistantReplayRecordFactory {
               ?.cast<String, dynamic>() ??
           const <String, dynamic>{},
     );
+  }
+}
+
+Map<String, dynamic> _queryPlanFromTypedMainline(
+  Map<String, dynamic> structured,
+) {
+  final understandingRaw =
+      (structured[assistantUnderstandingResultField] as Map?)
+          ?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final taskGraphRaw =
+      (structured[assistantTaskGraphField] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  if (understandingRaw.isEmpty || taskGraphRaw.isEmpty) {
+    return const <String, dynamic>{};
+  }
+  try {
+    final understanding = UnderstandingResult.fromJson(understandingRaw);
+    final taskGraph = TaskGraph.fromJson(taskGraphRaw);
+    final planView = assistantPlanViewFromTypedMainline(
+      understandingResult: understanding,
+      taskGraph: taskGraph,
+    );
+    if (planView == null) {
+      return const <String, dynamic>{};
+    }
+    return <String, dynamic>{
+      'planView': planView.toJson(),
+      'searchPlans': SearchPlanItem.toJsonList(planView.searchPlans),
+    };
+  } catch (_) {
+    return const <String, dynamic>{};
   }
 }
 

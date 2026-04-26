@@ -25,7 +25,7 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 
 void main() {
   group('ProfileSubjectWireDto', () {
-    test('userId 别名填充 profileSubjectId / ownerUserId', () {
+    test('userId 仅填充 profileSubjectId，不再冒充 ownerUserId', () {
       final dto = ProfileSubjectWireDto.fromMap(<String, dynamic>{
         'userId': 'u_owner',
         'nickname': 'nick',
@@ -36,7 +36,7 @@ void main() {
         'likeCount': 5,
       });
       expect(dto.profileSubjectId, 'u_owner');
-      expect(dto.ownerUserId, 'u_owner');
+      expect(dto.ownerUserId, isEmpty);
       expect(dto.displayName, 'nick');
     });
 
@@ -53,10 +53,11 @@ void main() {
         'profileSubjectId': 'ps1',
         'ownerUserId': 'o1',
         'subAccountId': '',
+        'userHandle': 'handle_1',
         'nickname': 'n',
         'displayName': 'd',
         'username': 'u',
-        'subjectType': 'owner',
+        'subjectType': 'user',
         'avatarUrl': '',
         'backgroundUrl': '',
         'bio': '',
@@ -70,6 +71,7 @@ void main() {
       });
       final restored = ProfileSubjectWireDto.fromMap(dto.toMap());
       expect(restored.profileSubjectId, dto.profileSubjectId);
+      expect(restored.userHandle, 'handle_1');
       expect(restored.followerCount, dto.followerCount);
     });
   });
@@ -88,7 +90,8 @@ void main() {
       );
       expect(view.displayName, 'only_id');
       expect(view.username, 'only_id');
-      expect(view.subjectType, 'owner');
+      expect(view.userHandle, 'only_id');
+      expect(view.subjectType, 'user');
     });
   });
 
@@ -147,13 +150,14 @@ void main() {
 
   group('ProfileInteractionActivityViewData — Wire 映射', () {
     test('缺 activityId 时生成合成 id', () {
-      final view = ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
-        ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
-          'userId': 'u_x',
-          'activityType': 'comment',
-          'nickname': '某人',
-        }),
-      );
+      final view =
+          ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+            ProfileInteractionActivityWireDto.fromMap(<String, dynamic>{
+              'userId': 'u_x',
+              'activityType': 'comment',
+              'nickname': '某人',
+            }),
+          );
       expect(view.activityId, 'comment:u_x');
     });
   });
@@ -193,7 +197,7 @@ void main() {
   });
 
   group('PersonaManagementItemViewData — Wire 映射', () {
-    test('无 subAccountId 时 subjectType 归一为 owner', () {
+    test('无 subAccountId 时 subjectType 归一为 user', () {
       final view = PersonaManagementItemViewData.fromPersonaManagementItemWire(
         PersonaManagementItemWireDto.fromMap(<String, dynamic>{
           'profileSubjectId': 'owner_row',
@@ -201,19 +205,64 @@ void main() {
         }),
       );
       expect(view.subAccountId, '');
-      expect(view.subjectType, 'owner');
+      expect(view.subjectType, 'user');
     });
   });
 
   group('PersonaManagementQuotaViewData — Wire 映射', () {
     test('maxSubAccounts<=0 时抬升到 5', () {
-      final view = PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
-        PersonaManagementQuotaWireDto.fromMap(<String, dynamic>{
-          'maxSubAccounts': 0,
-          'usedSubAccounts': 0,
+      final view =
+          PersonaManagementQuotaViewData.fromPersonaManagementQuotaWire(
+            PersonaManagementQuotaWireDto.fromMap(<String, dynamic>{
+              'maxSubAccounts': 0,
+              'usedSubAccounts': 0,
+            }),
+          );
+      expect(view.maxSubAccounts, 5);
+    });
+  });
+
+  group('ActivePersonaContextWireDto', () {
+    test('persona envelope 字段可稳定解码', () {
+      final dto = ActivePersonaContextWireDto.fromMap(<String, dynamic>{
+        'personaId': 'persona_main',
+        'profileSubjectId': 'subject_main',
+        'subAccountId': 'persona_main',
+        'ownerUserId': 'user_main',
+        'contextVersion': 3,
+        'personaSnapshotVersion': 2,
+        'sourceSurfaceId': 'notification_center',
+        'explicitOverride': true,
+      });
+      expect(dto.personaId, 'persona_main');
+      expect(dto.profileSubjectId, 'subject_main');
+      expect(dto.ownerUserId, 'user_main');
+      expect(dto.personaContextVersion, '3');
+      expect(dto.personaSnapshotVersion, 2);
+      expect(dto.sourceSurfaceId, 'notification_center');
+      expect(dto.explicitOverride, isTrue);
+    });
+
+    test('view data 暴露 canonical personaId 与 typed envelope', () {
+      final view = ActivePersonaContextViewData.fromActivePersonaContextWire(
+        ActivePersonaContextWireDto.fromMap(<String, dynamic>{
+          'personaId': 'persona_photo',
+          'profileSubjectId': 'subject_photo',
+          'subAccountId': 'persona_photo',
+          'ownerUserId': 'user_owner',
+          'contextVersion': 5,
         }),
       );
-      expect(view.maxSubAccounts, 5);
+      expect(view.personaId, 'persona_photo');
+      expect(view.contextVersion, '5');
+      expect(
+        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
+        containsPair('personaId', 'persona_photo'),
+      );
+      expect(
+        view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
+        containsPair('sourceSurfaceId', 'create_editor'),
+      );
     });
   });
 
@@ -301,7 +350,9 @@ void main() {
         'userMessage': '提示',
         'canDelete': false,
       });
-      final v = PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(dto);
+      final v = PersonaLifecycleGuardViewData.fromPersonaLifecycleGuardWire(
+        dto,
+      );
       expect(v.message, '提示');
     });
   });
@@ -332,7 +383,10 @@ void main() {
         'quota': <String, dynamic>{'maxSubAccounts': 5, 'usedSubAccounts': 1},
       });
       expect(dto.items.length, 1);
-      final view = PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(dto);
+      final view =
+          PersonaManagementSummaryViewData.fromPersonaManagementSummaryWire(
+            dto,
+          );
       expect(view.items.length, 1);
       expect(view.quota.usedSubAccounts, 1);
     });

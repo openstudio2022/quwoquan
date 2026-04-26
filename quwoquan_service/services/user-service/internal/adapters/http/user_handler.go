@@ -1,11 +1,18 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
 
+	runtimegovernance "quwoquan_service/runtime/governance"
 	"quwoquan_service/services/user-service/internal/application"
+	followmodel "quwoquan_service/services/user-service/internal/domain/follow/model"
 	followrepo "quwoquan_service/services/user-service/internal/domain/follow/repository"
+	followtelemetry "quwoquan_service/services/user-service/internal/domain/follow/telemetry"
+	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
+	"quwoquan_service/services/user-service/internal/generated"
 )
 
 type UserHandler struct {
@@ -71,17 +78,17 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /v1/user/search/recent/{entryId}", h.handleDeleteRecentSearch)
 	mux.HandleFunc("DELETE /v1/user/search/recent", h.handleClearRecentSearches)
 
-	mux.HandleFunc("POST /v1/user/follow/{targetUserId}", h.handleFollow)
-	mux.HandleFunc("DELETE /v1/user/follow/{targetUserId}", h.handleUnfollow)
-	mux.HandleFunc("GET /v1/users/{userId}/following", h.handleListFollowing)
-	mux.HandleFunc("GET /v1/users/{userId}/followers", h.handleListFollowers)
-	mux.HandleFunc("GET /v1/users/{userId}/relationship", h.handleGetRelationship)
-	mux.HandleFunc("GET /v1/user/{userId}/relationship/capability", h.handleGetRelationshipCapability)
+	mux.HandleFunc("POST /v1/user/profile-subjects/{targetProfileSubjectId}/follow", h.handleFollow)
+	mux.HandleFunc("DELETE /v1/user/profile-subjects/{targetProfileSubjectId}/follow", h.handleUnfollow)
+	mux.HandleFunc("GET /v1/user/profile-subjects/{profileSubjectId}/following", h.handleListFollowing)
+	mux.HandleFunc("GET /v1/user/profile-subjects/{profileSubjectId}/followers", h.handleListFollowers)
+	mux.HandleFunc("GET /v1/user/profile-subjects/{profileSubjectId}/relationship", h.handleGetRelationship)
+	mux.HandleFunc("GET /v1/user/profile-subjects/{profileSubjectId}/relationship/capability", h.handleGetRelationshipCapability)
 
-	mux.HandleFunc("POST /v1/user/block/{targetUserId}", h.handleBlock)
-	mux.HandleFunc("DELETE /v1/user/block/{targetUserId}", h.handleUnblock)
+	mux.HandleFunc("POST /v1/user/profile-subjects/{targetProfileSubjectId}/block", h.handleBlock)
+	mux.HandleFunc("DELETE /v1/user/profile-subjects/{targetProfileSubjectId}/block", h.handleUnblock)
 	mux.HandleFunc("GET /v1/user/blocked", h.handleListBlocked)
-	mux.HandleFunc("GET /v1/user/block/check/{targetUserId}", h.handleCheckBlocked)
+	mux.HandleFunc("GET /v1/user/profile-subjects/{targetProfileSubjectId}/block/check", h.handleCheckBlocked)
 
 	mux.HandleFunc("GET /v1/user/personas", h.handleListPersonas)
 	mux.HandleFunc("GET /v1/user/personas/summary", h.handleGetPersonaManagementSummary)
@@ -90,7 +97,6 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /v1/user/personas/{personaId}", h.handleUpdatePersona)
 	mux.HandleFunc("POST /v1/user/personas/{personaId}/profile-sync", h.handleApplyPersonaProfileSync)
 	mux.HandleFunc("GET /v1/user/personas/{personaId}/lifecycle-guard", h.handleGetPersonaLifecycleGuard)
-	mux.HandleFunc("DELETE /v1/user/personas/{personaId}", h.handleDeletePersona)
 	mux.HandleFunc("POST /v1/user/personas/{personaId}/retire", h.handleRetirePersona)
 	mux.HandleFunc("DELETE /v1/user/personas/{personaId}/delete-empty", h.handleDeleteEmptyPersona)
 	mux.HandleFunc("POST /v1/user/personas/{personaId}/activate", h.handleActivatePersona)
@@ -131,16 +137,16 @@ func (h *UserHandler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 func (h *UserHandler) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 	userID := r.PathValue("userId")
 	if userID == "" {
-		writeInvalidArg(w, "userId is required")
+		writeInvalidArg(w, r, "userId is required")
 		return
 	}
 	snap, err := h.profile.GetProfile(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	if snap == nil {
-		writeNotFound(w, "user "+userID)
+		writeNotFound(w, r, "user "+userID)
 		return
 	}
 	writeJSON(w, http.StatusOK, snap)
@@ -149,25 +155,25 @@ func (h *UserHandler) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	data, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid request body")
+		writeInvalidArg(w, r, "invalid request body")
 		return
 	}
 	profile, err := h.profile.UpdateProfile(r.Context(), userID, data)
 	if err != nil {
 		if strings.Contains(err.Error(), "nickname_taken") {
-			writeHTTPError(w, appErrNicknameTaken(err.Error()))
+			writeHTTPError(w, r, appErrNicknameTaken(err.Error()))
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, err.Error())
+			writeNotFound(w, r, err.Error())
 			return
 		}
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, profile)
@@ -176,16 +182,16 @@ func (h *UserHandler) handleUpdateProfile(w http.ResponseWriter, r *http.Request
 func (h *UserHandler) handleGetMeProfile(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	view, err := h.subAccount.GetMeProfileView(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	if view == nil {
-		writeNotFound(w, "user "+userID)
+		writeNotFound(w, r, "user "+userID)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -194,12 +200,12 @@ func (h *UserHandler) handleGetMeProfile(w http.ResponseWriter, r *http.Request)
 func (h *UserHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	body, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid request body")
+		writeInvalidArg(w, r, "invalid request body")
 		return
 	}
 	afterSeq := int64(0)
@@ -217,7 +223,7 @@ func (h *UserHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request)
 	}
 	resp, err := h.profile.PullSync(r.Context(), userID, afterSeq, limit)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -226,7 +232,7 @@ func (h *UserHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request)
 func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http.Request) {
 	viewerID := userIDFromHeader(r)
 	if viewerID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("query"))
@@ -236,16 +242,18 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 	}
 	items, err := h.search.SearchSocialRelations(r.Context(), query, parseLimit(r, 20))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
+	}
+	if activeViewerID, resolveErr := h.resolveActorProfileSubjectID(r.Context(), r, ""); resolveErr == nil && activeViewerID != "" {
+		viewerID = activeViewerID
 	}
 	for _, item := range items {
 		targetProfileSubjectID := strings.TrimSpace(anyString(item["profileSubjectId"]))
-		targetOwnerID := strings.TrimSpace(anyString(item["ownerUserId"]))
 		targetSubAccountID := strings.TrimSpace(anyString(item["subAccountId"]))
-		relationTargetID := targetOwnerID
+		relationTargetID := targetProfileSubjectID
 		if relationTargetID == "" {
-			relationTargetID = targetProfileSubjectID
+			relationTargetID = targetSubAccountID
 		}
 
 		rel, _ := h.follow.GetRelationship(r.Context(), viewerID, relationTargetID)
@@ -262,6 +270,10 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 		if targetSubAccountID != "" {
 			capability["targetSubAccountId"] = targetSubAccountID
 		}
+		if item["chatAvailable"] != nil && item["chatAvailable"] != capability["canOpenConversation"] {
+			followtelemetry.Collector().RecordRelationshipCapabilityMismatch()
+			usertelemetry.RolloutCollector().RecordAttributionMismatch()
+		}
 		item["relationshipCapability"] = capability
 		item["chatAvailable"] = capability["canOpenConversation"] == true
 	}
@@ -271,12 +283,12 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 func (h *UserHandler) handleListRecentSearches(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	items, err := h.search.ListRecentSearches(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -285,26 +297,26 @@ func (h *UserHandler) handleListRecentSearches(w http.ResponseWriter, r *http.Re
 func (h *UserHandler) handleUpsertRecentSearch(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	entryID := strings.TrimSpace(r.PathValue("entryId"))
 	if entryID == "" {
-		writeInvalidArg(w, "entryId is required")
+		writeInvalidArg(w, r, "entryId is required")
 		return
 	}
 	body, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	if strings.TrimSpace(anyString(body["query"])) == "" {
-		writeInvalidArg(w, "query is required")
+		writeInvalidArg(w, r, "query is required")
 		return
 	}
 	entry, created, err := h.search.UpsertRecentSearch(r.Context(), userID, entryID, body)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	status := http.StatusOK
@@ -317,16 +329,16 @@ func (h *UserHandler) handleUpsertRecentSearch(w http.ResponseWriter, r *http.Re
 func (h *UserHandler) handleDeleteRecentSearch(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	entryID := strings.TrimSpace(r.PathValue("entryId"))
 	if entryID == "" {
-		writeInvalidArg(w, "entryId is required")
+		writeInvalidArg(w, r, "entryId is required")
 		return
 	}
 	if err := h.search.DeleteRecentSearch(r.Context(), userID, entryID); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -335,11 +347,11 @@ func (h *UserHandler) handleDeleteRecentSearch(w http.ResponseWriter, r *http.Re
 func (h *UserHandler) handleClearRecentSearches(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	if err := h.search.ClearRecentSearches(r.Context(), userID); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -379,73 +391,139 @@ type nickErr struct{ msg string }
 func (e *nickErr) Error() string { return e.msg }
 
 func (h *UserHandler) handleFollow(w http.ResponseWriter, r *http.Request) {
-	followerID := userIDFromHeader(r)
-	followeeID := r.PathValue("targetUserId")
-	if followerID == "" || followeeID == "" {
-		writeInvalidArg(w, "followerID and targetUserId required")
+	body := readOptionalBody(r)
+	followeeID := strings.TrimSpace(r.PathValue("targetProfileSubjectId"))
+	if followeeID == "" {
+		writeInvalidArg(w, r, "targetProfileSubjectId required")
 		return
 	}
-	if err := h.follow.Follow(r.Context(), followerID, followeeID); err != nil {
-		writeHTTPError(w, err)
+	followerID, err := h.resolveActorProfileSubjectID(r.Context(), r, anyString(body["actorProfileSubjectId"]))
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	created, err := h.follow.Follow(r.Context(), followerID, followeeID, anyString(body["source"]))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	rel, err := h.follow.GetRelationship(r.Context(), followerID, followeeID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"actorProfileSubjectId":  followerID,
+		"targetProfileSubjectId": followeeID,
+		"relationState":          relationshipState(rel, followerID, followeeID),
+		"idempotentReplay":       !created,
+		"updatedAt":              currentTimestampRFC3339(),
+	})
 }
 
 func (h *UserHandler) handleUnfollow(w http.ResponseWriter, r *http.Request) {
-	followerID := userIDFromHeader(r)
-	followeeID := r.PathValue("targetUserId")
-	if followerID == "" || followeeID == "" {
-		writeInvalidArg(w, "followerID and targetUserId required")
+	body := readOptionalBody(r)
+	followeeID := strings.TrimSpace(r.PathValue("targetProfileSubjectId"))
+	if followeeID == "" {
+		writeInvalidArg(w, r, "targetProfileSubjectId required")
 		return
 	}
-	if err := h.follow.Unfollow(r.Context(), followerID, followeeID); err != nil {
-		writeHTTPError(w, err)
+	followerID, err := h.resolveActorProfileSubjectID(r.Context(), r, anyString(body["actorProfileSubjectId"]))
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	deleted, err := h.follow.Unfollow(r.Context(), followerID, followeeID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	rel, err := h.follow.GetRelationship(r.Context(), followerID, followeeID)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"actorProfileSubjectId":  followerID,
+		"targetProfileSubjectId": followeeID,
+		"relationState":          relationshipState(rel, followerID, followeeID),
+		"idempotentReplay":       !deleted,
+		"updatedAt":              currentTimestampRFC3339(),
+	})
 }
 
 func (h *UserHandler) handleListFollowing(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
-	edges, next, err := h.follow.ListFollowing(r.Context(), userID, parseCursor(r), parseLimit(r, 20))
+	startedAt := time.Now()
+	defer func() {
+		followtelemetry.Collector().RecordGraphListLatency(time.Since(startedAt))
+	}()
+	profileSubjectID := strings.TrimSpace(r.PathValue("profileSubjectId"))
+	viewerID, _ := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	items, next, err := h.collectFollowListItems(
+		r.Context(),
+		viewerID,
+		profileSubjectID,
+		parseCursor(r),
+		parseLimit(r, 20),
+		true,
+	)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": edges, "nextCursor": next})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": next, "nextCursor": next})
 }
 
 func (h *UserHandler) handleListFollowers(w http.ResponseWriter, r *http.Request) {
-	userID := r.PathValue("userId")
-	edges, next, err := h.follow.ListFollowers(r.Context(), userID, parseCursor(r), parseLimit(r, 20))
+	startedAt := time.Now()
+	defer func() {
+		followtelemetry.Collector().RecordGraphListLatency(time.Since(startedAt))
+	}()
+	profileSubjectID := strings.TrimSpace(r.PathValue("profileSubjectId"))
+	viewerID, _ := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	items, next, err := h.collectFollowListItems(
+		r.Context(),
+		viewerID,
+		profileSubjectID,
+		parseCursor(r),
+		parseLimit(r, 20),
+		false,
+	)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": edges, "nextCursor": next})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": next, "nextCursor": next})
 }
 
 func (h *UserHandler) handleGetRelationship(w http.ResponseWriter, r *http.Request) {
-	userID := userIDFromHeader(r)
-	targetID := r.PathValue("userId")
-	if userID == "" || targetID == "" {
-		writeInvalidArg(w, "userId required")
+	targetID := strings.TrimSpace(r.PathValue("profileSubjectId"))
+	if targetID == "" {
+		writeInvalidArg(w, r, "profileSubjectId required")
+		return
+	}
+	userID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	rel, err := h.follow.GetRelationship(r.Context(), userID, targetID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, rel)
 }
 
 func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *http.Request) {
-	viewerID := userIDFromHeader(r)
-	targetID := r.PathValue("userId")
-	if viewerID == "" || targetID == "" {
-		writeInvalidArg(w, "userId required")
+	targetID := strings.TrimSpace(r.PathValue("profileSubjectId"))
+	if targetID == "" {
+		writeInvalidArg(w, r, "profileSubjectId required")
+		return
+	}
+	viewerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	if targetID == "me" {
@@ -453,88 +531,281 @@ func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *
 	}
 	rel, err := h.follow.GetRelationship(r.Context(), viewerID, targetID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	isBlocked, err := h.block.CheckBlocked(r.Context(), viewerID, targetID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	isBlockedBy, err := h.block.CheckBlocked(r.Context(), targetID, viewerID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, buildRelationshipCapabilityView(viewerID, targetID, rel, isBlocked, isBlockedBy))
 }
 
 func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
-	blockerID := userIDFromHeader(r)
-	blockedID := r.PathValue("targetUserId")
-	if blockerID == "" || blockedID == "" {
-		writeInvalidArg(w, "blockerID and targetUserId required")
+	blockedID := strings.TrimSpace(r.PathValue("targetProfileSubjectId"))
+	if blockedID == "" {
+		writeInvalidArg(w, r, "targetProfileSubjectId required")
+		return
+	}
+	blockerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	if err := h.block.Block(r.Context(), blockerID, blockedID); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
 func (h *UserHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
-	blockerID := userIDFromHeader(r)
-	blockedID := r.PathValue("targetUserId")
-	if blockerID == "" || blockedID == "" {
-		writeInvalidArg(w, "blockerID and targetUserId required")
+	blockedID := strings.TrimSpace(r.PathValue("targetProfileSubjectId"))
+	if blockedID == "" {
+		writeInvalidArg(w, r, "targetProfileSubjectId required")
+		return
+	}
+	blockerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	if err := h.block.Unblock(r.Context(), blockerID, blockedID); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
 func (h *UserHandler) handleListBlocked(w http.ResponseWriter, r *http.Request) {
-	blockerID := userIDFromHeader(r)
-	if blockerID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+	blockerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	edges, next, err := h.block.ListBlocked(r.Context(), blockerID, parseCursor(r), parseLimit(r, 20))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": edges, "nextCursor": next})
 }
 
 func (h *UserHandler) handleCheckBlocked(w http.ResponseWriter, r *http.Request) {
-	blockerID := userIDFromHeader(r)
-	blockedID := r.PathValue("targetUserId")
-	if blockerID == "" || blockedID == "" {
-		writeInvalidArg(w, "blockerID and targetUserId required")
+	blockedID := strings.TrimSpace(r.PathValue("targetProfileSubjectId"))
+	if blockedID == "" {
+		writeInvalidArg(w, r, "targetProfileSubjectId required")
+		return
+	}
+	blockerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	if err != nil {
+		writeHTTPError(w, r, err)
 		return
 	}
 	blocked, err := h.block.CheckBlocked(r.Context(), blockerID, blockedID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"blocked": blocked})
 }
 
+func (h *UserHandler) resolveActorProfileSubjectID(
+	ctx context.Context,
+	r *http.Request,
+	explicitActorID string,
+) (string, error) {
+	userID := strings.TrimSpace(userIDFromHeader(r))
+	if userID == "" {
+		return "", generated.AppErrorFromInvalidArgument("X-Client-User-Id header required")
+	}
+	actorID := strings.TrimSpace(explicitActorID)
+	legacyFallback := !runtimegovernance.PersonaContextEnabled() || !runtimegovernance.PersonaGraphEnabled()
+	if actorID == "" {
+		actorID = profileSubjectIDFromHeader(r)
+	}
+	if actorID == "" {
+		actorID = personaIDFromHeader(r)
+	}
+	if actorID != "" {
+		if legacyFallback {
+			followtelemetry.Collector().RecordLegacyGraphRead()
+		}
+		return actorID, nil
+	}
+	activeContext, err := h.subAccount.GetActivePersonaContextView(ctx, userID)
+	if err != nil {
+		if legacyFallback {
+			followtelemetry.Collector().RecordLegacyGraphRead()
+			return userID, nil
+		}
+		return "", err
+	}
+	actorID = strings.TrimSpace(anyString(activeContext["profileSubjectId"]))
+	if actorID == "" {
+		actorID = strings.TrimSpace(anyString(activeContext["subAccountId"]))
+	}
+	if actorID == "" {
+		actorID = userID
+		followtelemetry.Collector().RecordLegacyFollowRead()
+		return actorID, nil
+	}
+	if legacyFallback {
+		followtelemetry.Collector().RecordLegacyGraphRead()
+	}
+	return actorID, nil
+}
+
+func readOptionalBody(r *http.Request) map[string]any {
+	if r == nil || r.Body == nil || r.ContentLength == 0 {
+		return map[string]any{}
+	}
+	body, err := readBody(r)
+	if err != nil || body == nil {
+		return map[string]any{}
+	}
+	return body
+}
+
+func currentTimestampRFC3339() string {
+	return time.Now().UTC().Format(time.RFC3339)
+}
+
+func relationshipState(rel *followrepo.Relationship, viewerID, targetID string) string {
+	if viewerID == targetID {
+		return "self"
+	}
+	if rel == nil {
+		return "not_following"
+	}
+	switch {
+	case rel.IsMutual:
+		return "mutual"
+	case rel.IsFollowing:
+		return "following"
+	case rel.IsFollowedBy:
+		return "followed_by"
+	default:
+		return "not_following"
+	}
+}
+
+func (h *UserHandler) collectFollowListItems(
+	ctx context.Context,
+	viewerID, profileSubjectID, cursor string,
+	limit int,
+	listFollowing bool,
+) ([]map[string]any, string, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	items := make([]map[string]any, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	nextCursor := cursor
+	for len(items) < limit {
+		var (
+			edges []followmodel.FollowEdge
+			err   error
+		)
+		if listFollowing {
+			edges, nextCursor, err = h.follow.ListFollowing(ctx, profileSubjectID, nextCursor, limit)
+		} else {
+			edges, nextCursor, err = h.follow.ListFollowers(ctx, profileSubjectID, nextCursor, limit)
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		if len(edges) == 0 {
+			return items, "", nil
+		}
+		batch := h.buildFollowListItems(ctx, viewerID, edges, listFollowing)
+		if len(batch) < len(edges) {
+			followtelemetry.Collector().RecordGraphFilterMismatch()
+			usertelemetry.RolloutCollector().RecordAttributionMismatch()
+		}
+		for i := range batch {
+			subjectID := strings.TrimSpace(anyString(batch[i]["profileSubjectId"]))
+			if subjectID != "" {
+				if _, ok := seen[subjectID]; ok {
+					continue
+				}
+				seen[subjectID] = struct{}{}
+			}
+			items = append(items, batch[i])
+			if len(items) == limit {
+				return items, nextCursor, nil
+			}
+		}
+		if strings.TrimSpace(nextCursor) == "" {
+			return items, "", nil
+		}
+	}
+	return items, nextCursor, nil
+}
+
+func (h *UserHandler) buildFollowListItems(
+	ctx context.Context,
+	viewerID string,
+	edges []followmodel.FollowEdge,
+	listFollowing bool,
+) []map[string]any {
+	items := make([]map[string]any, 0, len(edges))
+	for i := range edges {
+		targetID := edges[i].FollowerID
+		if listFollowing {
+			targetID = edges[i].FolloweeID
+		}
+		if targetID == "" {
+			continue
+		}
+		if viewerID != "" {
+			blocked, _ := h.block.CheckBlocked(ctx, viewerID, targetID)
+			blockedBy, _ := h.block.CheckBlocked(ctx, targetID, viewerID)
+			if blocked || blockedBy {
+				continue
+			}
+		}
+		view, err := h.subAccount.GetSubAccountProfileView(ctx, targetID)
+		if err != nil || view == nil {
+			followtelemetry.Collector().RecordGraphPageDrift()
+			usertelemetry.RolloutCollector().RecordAttributionMismatch()
+			continue
+		}
+		item := map[string]any{
+			"profileSubjectId":  view["profileSubjectId"],
+			"subAccountId":      view["subAccountId"],
+			"username":          view["username"],
+			"displayName":       view["displayName"],
+			"avatarUrl":         view["avatarUrl"],
+			"profileVisibility": view["profileVisibility"],
+			"followedAt":        edges[i].CreatedAt.Format(time.RFC3339),
+		}
+		if viewerID != "" {
+			rel, _ := h.follow.GetRelationship(ctx, viewerID, targetID)
+			item["relationState"] = relationshipState(rel, viewerID, targetID)
+		} else {
+			item["relationState"] = "not_following"
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
 func (h *UserHandler) handleListPersonas(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	personas, err := h.subAccount.ListSubAccounts(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	items := make([]map[string]any, 0, len(personas))
@@ -547,12 +818,12 @@ func (h *UserHandler) handleListPersonas(w http.ResponseWriter, r *http.Request)
 func (h *UserHandler) handleGetPersonaManagementSummary(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	summary, err := h.subAccount.GetPersonaManagementSummary(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
@@ -561,12 +832,12 @@ func (h *UserHandler) handleGetPersonaManagementSummary(w http.ResponseWriter, r
 func (h *UserHandler) handleGetActivePersonaContext(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	view, err := h.subAccount.GetActivePersonaContextView(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -575,21 +846,21 @@ func (h *UserHandler) handleGetActivePersonaContext(w http.ResponseWriter, r *ht
 func (h *UserHandler) handleCreatePersona(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	data, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	p, err := h.subAccount.CreateSubAccount(r.Context(), userID, data)
 	if err != nil {
 		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, "用户号已被占用")
+			writeInvalidArg(w, r, "用户号已被占用")
 			return
 		}
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, application.BuildPersonaManagementItem(*p))
@@ -599,25 +870,29 @@ func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request
 	personaID := r.PathValue("personaId")
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	data, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	p, err := h.subAccount.UpdatePersona(r.Context(), userID, personaID, data)
 	if err != nil {
 		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, "用户号已被占用")
+			writeInvalidArg(w, r, "用户号已被占用")
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, err.Error())
+			writeNotFound(w, r, err.Error())
 			return
 		}
-		writeHTTPError(w, err)
+		if strings.Contains(err.Error(), "retired persona") {
+			writeInvalidArg(w, r, "已退役分身不可继续编辑")
+			return
+		}
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, application.BuildPersonaManagementItem(*p))
@@ -626,26 +901,30 @@ func (h *UserHandler) handleUpdatePersona(w http.ResponseWriter, r *http.Request
 func (h *UserHandler) handleApplyPersonaProfileSync(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	personaID := r.PathValue("personaId")
 	data, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	result, err := h.subAccount.ApplyPersonaProfileSync(r.Context(), userID, personaID, data)
 	if err != nil {
 		if strings.Contains(err.Error(), "persona_handle_taken") {
-			writeInvalidArg(w, "用户号已被占用")
+			writeInvalidArg(w, r, "用户号已被占用")
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, err.Error())
+			writeNotFound(w, r, err.Error())
 			return
 		}
-		writeHTTPError(w, err)
+		if strings.Contains(err.Error(), "retired persona") {
+			writeInvalidArg(w, r, "已退役分身不可继续同步资料")
+			return
+		}
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -654,13 +933,13 @@ func (h *UserHandler) handleApplyPersonaProfileSync(w http.ResponseWriter, r *ht
 func (h *UserHandler) handleGetPersonaLifecycleGuard(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	personaID := r.PathValue("personaId")
 	guard, err := h.subAccount.GetPersonaLifecycleGuard(r.Context(), userID, personaID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, guard)
@@ -669,22 +948,31 @@ func (h *UserHandler) handleGetPersonaLifecycleGuard(w http.ResponseWriter, r *h
 func (h *UserHandler) handleDeletePersona(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	personaID := r.PathValue("personaId")
 	err := h.subAccount.DeleteSubAccount(r.Context(), userID, personaID)
 	if err != nil {
 		if strings.Contains(err.Error(), "primary") ||
-			strings.Contains(err.Error(), "last") {
-			writeForbidden(w, err.Error())
+			strings.Contains(err.Error(), "last") ||
+			strings.Contains(err.Error(), "switch to another persona") {
+			writeForbidden(w, r, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "retired persona") {
+			writeInvalidArg(w, r, "已退役分身不可删除")
+			return
+		}
+		if strings.Contains(err.Error(), "must be retired") {
+			writeConflict(w, r, "该分身已有历史归因，请使用退役而不是删除", err.Error())
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, err.Error())
+			writeNotFound(w, r, err.Error())
 			return
 		}
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -693,13 +981,31 @@ func (h *UserHandler) handleDeletePersona(w http.ResponseWriter, r *http.Request
 func (h *UserHandler) handleRetirePersona(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	personaID := r.PathValue("personaId")
 	view, err := h.subAccount.RetirePersona(r.Context(), userID, personaID)
 	if err != nil {
-		writeHTTPError(w, err)
+		if strings.Contains(err.Error(), "not found") {
+			writeNotFound(w, r, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "primary") ||
+			strings.Contains(err.Error(), "last") ||
+			strings.Contains(err.Error(), "switch to another persona") {
+			writeForbidden(w, r, err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "retired persona") {
+			writeInvalidArg(w, r, "该分身已退役")
+			return
+		}
+		if strings.Contains(err.Error(), "empty persona should be deleted directly") {
+			writeInvalidArg(w, r, "空白分身请直接删除，无需退役")
+			return
+		}
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -708,17 +1014,30 @@ func (h *UserHandler) handleRetirePersona(w http.ResponseWriter, r *http.Request
 func (h *UserHandler) handleDeleteEmptyPersona(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	personaID := r.PathValue("personaId")
 	if err := h.subAccount.DeleteEmptyPersona(r.Context(), userID, personaID); err != nil {
 		if strings.Contains(err.Error(), "primary") ||
-			strings.Contains(err.Error(), "last") {
-			writeForbidden(w, err.Error())
+			strings.Contains(err.Error(), "last") ||
+			strings.Contains(err.Error(), "switch to another persona") {
+			writeForbidden(w, r, err.Error())
 			return
 		}
-		writeHTTPError(w, err)
+		if strings.Contains(err.Error(), "retired persona") {
+			writeInvalidArg(w, r, "已退役分身不可删除")
+			return
+		}
+		if strings.Contains(err.Error(), "must be retired") {
+			writeConflict(w, r, "该分身已有历史归因，请使用退役而不是删除", err.Error())
+			return
+		}
+		if strings.Contains(err.Error(), "not found") {
+			writeNotFound(w, r, err.Error())
+			return
+		}
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -728,16 +1047,20 @@ func (h *UserHandler) handleActivatePersona(w http.ResponseWriter, r *http.Reque
 	personaID := r.PathValue("personaId")
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	err := h.subAccount.ActivateSubAccount(r.Context(), userID, personaID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			writeNotFound(w, err.Error())
+			writeNotFound(w, r, err.Error())
 			return
 		}
-		writeHTTPError(w, err)
+		if strings.Contains(err.Error(), "retired persona") {
+			writeInvalidArg(w, r, "已退役分身不可再激活")
+			return
+		}
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -747,7 +1070,7 @@ func (h *UserHandler) handleListUserWorks(w http.ResponseWriter, r *http.Request
 	userID := r.PathValue("userId")
 	works, next, err := h.work.ListUserWorks(r.Context(), userID, parseCursor(r), parseLimit(r, 20))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": works, "nextCursor": next})
@@ -758,7 +1081,7 @@ func (h *UserHandler) handleListUserLifeItems(w http.ResponseWriter, r *http.Req
 	category := r.URL.Query().Get("category")
 	items, next, err := h.lifeItem.ListUserLifeItems(r.Context(), userID, category, parseCursor(r), parseLimit(r, 20))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextCursor": next})
@@ -771,12 +1094,12 @@ func (h *UserHandler) handleListUserLikes(w http.ResponseWriter, r *http.Request
 func (h *UserHandler) handleGetNotificationSettings(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	s, err := h.setting.GetNotificationSettings(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	if s == nil {
@@ -789,16 +1112,16 @@ func (h *UserHandler) handleGetNotificationSettings(w http.ResponseWriter, r *ht
 func (h *UserHandler) handleUpdateNotificationSettings(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	data, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	if err := h.setting.UpdateNotificationSettings(r.Context(), userID, data); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -807,12 +1130,12 @@ func (h *UserHandler) handleUpdateNotificationSettings(w http.ResponseWriter, r 
 func (h *UserHandler) handleGetPrivacySettings(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	s, err := h.setting.GetPrivacySettings(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	if s == nil {
@@ -825,16 +1148,16 @@ func (h *UserHandler) handleGetPrivacySettings(w http.ResponseWriter, r *http.Re
 func (h *UserHandler) handleUpdatePrivacySettings(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id header required")
+		writeInvalidArg(w, r, "X-Client-User-Id header required")
 		return
 	}
 	data, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	if err := h.setting.UpdatePrivacySettings(r.Context(), userID, data); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -845,19 +1168,19 @@ func (h *UserHandler) handleUpdatePrivacySettings(w http.ResponseWriter, r *http
 func (h *UserHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 	body, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	credType, _ := body["credentialType"].(string)
 	credKey, _ := body["credentialKey"].(string)
 	label, _ := body["displayLabel"].(string)
 	if credType == "" || credKey == "" {
-		writeInvalidArg(w, "credentialType and credentialKey required")
+		writeInvalidArg(w, r, "credentialType and credentialKey required")
 		return
 	}
 	result, err := h.auth.LoginWithCredential(r.Context(), credType, credKey, label)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -866,12 +1189,12 @@ func (h *UserHandler) handleLogin(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) handleListCredentials(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	creds, err := h.auth.ListCredentials(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"credentials": creds})
@@ -880,19 +1203,19 @@ func (h *UserHandler) handleListCredentials(w http.ResponseWriter, r *http.Reque
 func (h *UserHandler) handleBindCredential(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	body, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	credType, _ := body["credentialType"].(string)
 	credKey, _ := body["credentialKey"].(string)
 	label, _ := body["displayLabel"].(string)
 	if err := h.auth.BindCredential(r.Context(), userID, credType, credKey, label); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -901,12 +1224,12 @@ func (h *UserHandler) handleBindCredential(w http.ResponseWriter, r *http.Reques
 func (h *UserHandler) handleUnbindCredential(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	credType := r.PathValue("credType")
 	if err := h.auth.UnbindCredential(r.Context(), userID, credType); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -917,12 +1240,12 @@ func (h *UserHandler) handleUnbindCredential(w http.ResponseWriter, r *http.Requ
 func (h *UserHandler) handleListSubAccounts(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	accounts, err := h.subAccount.ListSubAccounts(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"subAccounts": accounts})
@@ -931,17 +1254,17 @@ func (h *UserHandler) handleListSubAccounts(w http.ResponseWriter, r *http.Reque
 func (h *UserHandler) handleCreateSubAccount(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	body, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	account, err := h.subAccount.CreateSubAccount(r.Context(), userID, body)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, account)
@@ -950,12 +1273,12 @@ func (h *UserHandler) handleCreateSubAccount(w http.ResponseWriter, r *http.Requ
 func (h *UserHandler) handleActivateSubAccount(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	subAccountID := r.PathValue("subAccountId")
 	if err := h.subAccount.ActivateSubAccount(r.Context(), userID, subAccountID); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -964,12 +1287,12 @@ func (h *UserHandler) handleActivateSubAccount(w http.ResponseWriter, r *http.Re
 func (h *UserHandler) handleDeleteSubAccount(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	subAccountID := r.PathValue("subAccountId")
 	if err := h.subAccount.DeleteSubAccount(r.Context(), userID, subAccountID); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -979,11 +1302,11 @@ func (h *UserHandler) handleGetSubAccountProfile(w http.ResponseWriter, r *http.
 	subAccountID := r.PathValue("subAccountId")
 	profile, err := h.subAccount.GetSubAccountProfileView(r.Context(), subAccountID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	if profile == nil {
-		http.NotFound(w, r)
+		writeNotFound(w, r, "resource not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, profile)
@@ -1050,12 +1373,12 @@ func buildRelationshipCapabilityView(viewerID, targetID string, rel *followrepo.
 func (h *UserHandler) handleInitiateContactDiscovery(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	body, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	rawPhones, _ := body["hashedPhones"].([]any)
@@ -1067,7 +1390,7 @@ func (h *UserHandler) handleInitiateContactDiscovery(w http.ResponseWriter, r *h
 	}
 	record, err := h.contactDiscovery.Initiate(r.Context(), userID, phones)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusAccepted, record)
@@ -1076,16 +1399,16 @@ func (h *UserHandler) handleInitiateContactDiscovery(w http.ResponseWriter, r *h
 func (h *UserHandler) handleGetLatestContactDiscovery(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	record, err := h.contactDiscovery.GetLatest(r.Context(), userID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	if record == nil {
-		http.NotFound(w, r)
+		writeNotFound(w, r, "resource not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, record)
@@ -1094,12 +1417,12 @@ func (h *UserHandler) handleGetLatestContactDiscovery(w http.ResponseWriter, r *
 func (h *UserHandler) handleDismissContactDiscovery(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	id := r.PathValue("id")
 	if err := h.contactDiscovery.Dismiss(r.Context(), userID, id); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -1110,24 +1433,27 @@ func (h *UserHandler) handleDismissContactDiscovery(w http.ResponseWriter, r *ht
 func (h *UserHandler) handleGenerateInvite(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	body, err := readBody(r)
 	if err != nil {
-		writeInvalidArg(w, "invalid body")
+		writeInvalidArg(w, r, "invalid body")
 		return
 	}
 	subAccountID, _ := body["subAccountId"].(string)
+	if strings.TrimSpace(subAccountID) == "" {
+		subAccountID, _ = body["personaId"].(string)
+	}
 	channel, _ := body["channel"].(string)
 	inviteePhone, _ := body["inviteePhone"].(string)
 	if subAccountID == "" || channel == "" {
-		writeInvalidArg(w, "subAccountId and channel required")
+		writeInvalidArg(w, r, "personaId and channel required")
 		return
 	}
 	record, err := h.invite.Generate(r.Context(), subAccountID, userID, channel, inviteePhone)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, record)
@@ -1136,14 +1462,17 @@ func (h *UserHandler) handleGenerateInvite(w http.ResponseWriter, r *http.Reques
 func (h *UserHandler) handleListInvites(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromHeader(r)
 	if userID == "" {
-		writeInvalidArg(w, "X-Client-User-Id required")
+		writeInvalidArg(w, r, "X-Client-User-Id required")
 		return
 	}
 	subAccountID := r.URL.Query().Get("subAccountId")
+	if strings.TrimSpace(subAccountID) == "" {
+		subAccountID = r.URL.Query().Get("personaId")
+	}
 	statusFilter := r.URL.Query().Get("status")
 	records, err := h.invite.ListByInviter(r.Context(), subAccountID, statusFilter, 20, 0)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"invites": records})
@@ -1153,11 +1482,11 @@ func (h *UserHandler) handleGetInviteByCode(w http.ResponseWriter, r *http.Reque
 	code := r.PathValue("code")
 	record, err := h.invite.GetByCode(r.Context(), code)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	if record == nil {
-		http.NotFound(w, r)
+		writeNotFound(w, r, "resource not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, record)
@@ -1167,7 +1496,7 @@ func (h *UserHandler) handleAcceptInvite(w http.ResponseWriter, r *http.Request)
 	code := r.PathValue("code")
 	record, err := h.invite.Accept(r.Context(), code)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, record)

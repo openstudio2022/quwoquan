@@ -19,8 +19,8 @@ export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart'
         parseTraceVisibility;
 
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 
 String slotValueStatusToWire(SlotValueStatus status) => status.wireName;
@@ -42,7 +42,7 @@ extension TraceVisibilityCompat on TraceVisibility {
 }
 
 extension EvidenceLedgerEntryCompat on EvidenceLedgerEntry {
-  QueryTaskDimension get dimensionType => parseQueryTaskDimension(
+  SearchPlanDimension get dimensionType => parseSearchPlanDimension(
     dimension.trim().isNotEmpty ? dimension : dimensionLabel,
   );
 

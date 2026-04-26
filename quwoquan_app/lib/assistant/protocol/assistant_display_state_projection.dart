@@ -305,13 +305,6 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
   return blocks;
 }
 
-String _composeNarrativeSegments(Iterable<String> segments) {
-  return segments
-      .map((segment) => segment.trim())
-      .where((segment) => segment.isNotEmpty)
-      .join('\n');
-}
-
 String _firstNonEmptyText(Iterable<String> values) {
   for (final value in values) {
     final trimmed = value.trim();
@@ -360,9 +353,7 @@ bool _isDuplicateNarrativeText(
     if (normalizedExisting.isEmpty) {
       continue;
     }
-    if (normalizedCandidate == normalizedExisting ||
-        normalizedCandidate.contains(normalizedExisting) ||
-        normalizedExisting.contains(normalizedCandidate)) {
+    if (normalizedCandidate == normalizedExisting) {
       return true;
     }
   }
@@ -370,17 +361,9 @@ bool _isDuplicateNarrativeText(
 }
 
 String _normalizeProcessTextKey(String raw) {
-  final trimmed = raw.trimLeft();
-  final prefixes = <String>['我会先', '我先', '先'];
-  var start = 0;
-  for (final prefix in prefixes) {
-    if (trimmed.startsWith(prefix)) {
-      start = prefix.length;
-      break;
-    }
-  }
+  final trimmed = raw.trim();
   final buffer = StringBuffer();
-  for (final rune in trimmed.substring(start).runes) {
+  for (final rune in trimmed.runes) {
     if (_isIgnorableNormalizationRune(rune)) {
       continue;
     }
@@ -401,7 +384,21 @@ String _resolveRetrievalSummary({
   if (frameDetail.isNotEmpty) {
     return frameDetail;
   }
-  return snapshot.processingSummary.trim();
+  final summary = snapshot.processingSummary.trim();
+  if (_isLowSignalRetrievalSummary(summary)) {
+    return '';
+  }
+  return summary;
+}
+
+bool _isLowSignalRetrievalSummary(String text) {
+  final normalized = text.trim();
+  if (normalized.isEmpty) return false;
+  return normalized == '已完成资料筛选并进入成答' ||
+      normalized == '已完成资料筛选' ||
+      normalized == '资料筛选完成' ||
+      normalized == '进入成答' ||
+      normalized == '已完成处理';
 }
 
 ProcessTimelineFrame? _frameForStep(
@@ -667,49 +664,6 @@ bool _hasVisibleAnswerBlock(AssistantAnswerDisplayBlock block) {
       );
 }
 
-String _stripSpacesAndPunctuation(String raw) {
-  final buffer = StringBuffer();
-  for (final rune in raw.runes) {
-    if (_isIgnorableNormalizationRune(rune)) {
-      continue;
-    }
-    buffer.writeCharCode(rune);
-  }
-  return buffer.toString();
-}
-
-String _removeWhitespace(String raw) {
-  final buffer = StringBuffer();
-  for (final rune in raw.runes) {
-    if (rune == 0x20 || rune == 0x09 || rune == 0x0a || rune == 0x0d) {
-      continue;
-    }
-    buffer.writeCharCode(rune);
-  }
-  return buffer.toString();
-}
-
-List<String> _splitDetailSegments(String text) {
-  final segments = <String>[];
-  final buffer = StringBuffer();
-  for (final rune in text.runes) {
-    if (_isDetailSegmentSeparatorRune(rune)) {
-      final segment = buffer.toString().trim();
-      if (segment.isNotEmpty) {
-        segments.add(segment);
-      }
-      buffer.clear();
-      continue;
-    }
-    buffer.writeCharCode(rune);
-  }
-  final tail = buffer.toString().trim();
-  if (tail.isNotEmpty) {
-    segments.add(tail);
-  }
-  return segments;
-}
-
 bool _isIgnorableNormalizationRune(int rune) {
   return rune == 0x20 ||
       rune == 0x09 ||
@@ -735,18 +689,6 @@ bool _isIgnorableNormalizationRune(int rune) {
       rune == 0x0029 ||
       rune == 0x002D ||
       rune == 0x005F;
-}
-
-bool _isDetailSegmentSeparatorRune(int rune) {
-  return rune == 0x20 ||
-      rune == 0x09 ||
-      rune == 0x0a ||
-      rune == 0x0d ||
-      rune == 0xFF0C ||
-      rune == 0x3001 ||
-      rune == 0x3002 ||
-      rune == 0xFF1B ||
-      rune == 0x003B;
 }
 
 String _renderAnswerBlockToMarkdown(AssistantAnswerDisplayBlock block) {

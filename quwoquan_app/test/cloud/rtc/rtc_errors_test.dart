@@ -6,99 +6,82 @@ void main() {
   // 常规契约
   // ──────────────────────────────────────────────────────────────────
   group('RtcErrorCode — 常规契约', () {
-    test('parse call_not_found → callNotFound, not retryable', () {
+    test('parse call_not_found → callNotFound', () {
       final code = RtcErrorCode.fromCode('RTC.USER.call_not_found');
       expect(code, RtcErrorCode.callNotFound);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 404);
+      expect(code!.httpStatus, 404);
     });
 
-    test('parse unauthorized → unauthorized, not retryable', () {
+    test('parse unauthorized → unauthorized', () {
       final code = RtcErrorCode.fromCode('RTC.USER.unauthorized');
       expect(code, RtcErrorCode.unauthorized);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 401);
+      expect(code!.httpStatus, 401);
     });
 
-    test('parse already_in_call → alreadyInCall, not retryable', () {
+    test('parse already_in_call → alreadyInCall', () {
       final code = RtcErrorCode.fromCode('RTC.USER.already_in_call');
       expect(code, RtcErrorCode.alreadyInCall);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 409);
+      expect(code!.httpStatus, 409);
     });
 
-    test('parse call_full → callFull, not retryable', () {
+    test('parse call_full → callFull', () {
       final code = RtcErrorCode.fromCode('RTC.USER.call_full');
       expect(code, RtcErrorCode.callFull);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 409);
+      expect(code!.httpStatus, 409);
     });
 
-    test('parse call_ended → callEnded, not retryable', () {
+    test('parse call_ended → callEnded', () {
       final code = RtcErrorCode.fromCode('RTC.USER.call_ended');
       expect(code, RtcErrorCode.callEnded);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 410);
+      expect(code!.httpStatus, 410);
     });
 
-    test('parse not_participant → notParticipant, not retryable', () {
+    test('parse not_participant → notParticipant', () {
       final code = RtcErrorCode.fromCode('RTC.USER.not_participant');
       expect(code, RtcErrorCode.notParticipant);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 403);
+      expect(code!.httpStatus, 403);
     });
 
-    test('parse cannot_answer → cannotAnswer, not retryable', () {
+    test('parse cannot_answer → cannotAnswer', () {
       final code = RtcErrorCode.fromCode('RTC.USER.cannot_answer');
       expect(code, RtcErrorCode.cannotAnswer);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 409);
+      expect(code!.httpStatus, 409);
     });
 
-    test('parse screen_share_conflict → screenShareConflict, not retryable',
-        () {
+    test('parse screen_share_conflict → screenShareConflict', () {
       final code = RtcErrorCode.fromCode('RTC.USER.screen_share_conflict');
       expect(code, RtcErrorCode.screenShareConflict);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 409);
+      expect(code!.httpStatus, 409);
     });
 
-    test('parse recording_not_allowed → recordingNotAllowed, not retryable',
-        () {
+    test('parse recording_not_allowed → recordingNotAllowed', () {
       final code = RtcErrorCode.fromCode('RTC.USER.recording_not_allowed');
       expect(code, RtcErrorCode.recordingNotAllowed);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 403);
+      expect(code!.httpStatus, 403);
     });
 
-    test('parse rate_limited → rateLimited, retryable', () {
+    test('parse rate_limited → rateLimited', () {
       final code = RtcErrorCode.fromCode('RTC.USER.rate_limited');
       expect(code, RtcErrorCode.rateLimited);
-      expect(code!.isRetryable, isTrue);
-      expect(code.httpStatus, 429);
+      expect(code!.httpStatus, 429);
     });
 
-    test('parse livekit_unavailable → livekitUnavailable, retryable', () {
+    test('parse livekit_unavailable → livekitUnavailable', () {
       final code = RtcErrorCode.fromCode('RTC.SYSTEM.livekit_unavailable');
       expect(code, RtcErrorCode.livekitUnavailable);
-      expect(code!.isRetryable, isTrue);
-      expect(code.httpStatus, 503);
+      expect(code!.httpStatus, 503);
     });
 
-    test('parse internal_error → internalError, not retryable', () {
+    test('parse internal_error → internalError', () {
       final code = RtcErrorCode.fromCode('RTC.SYSTEM.internal_error');
       expect(code, RtcErrorCode.internalError);
-      expect(code!.isRetryable, isFalse);
-      expect(code.httpStatus, 500);
+      expect(code!.httpStatus, 500);
     });
 
-    test('parse token_generation_failed → tokenGenerationFailed, retryable',
-        () {
-      final code =
-          RtcErrorCode.fromCode('RTC.SYSTEM.token_generation_failed');
+    test('parse token_generation_failed → tokenGenerationFailed', () {
+      final code = RtcErrorCode.fromCode('RTC.SYSTEM.token_generation_failed');
       expect(code, RtcErrorCode.tokenGenerationFailed);
-      expect(code!.isRetryable, isTrue);
-      expect(code.httpStatus, 500);
+      expect(code!.httpStatus, 500);
     });
   });
 
@@ -143,16 +126,6 @@ void main() {
       expect(RtcErrorCode.callNotFound.isSystemError, isFalse);
       expect(RtcErrorCode.rateLimited.isSystemError, isFalse);
     });
-
-    test('retryable 仅限 rateLimited + livekitUnavailable + tokenGenerationFailed',
-        () {
-      final retryable =
-          RtcErrorCode.values.where((e) => e.isRetryable).toList();
-      expect(retryable.length, 3);
-      expect(retryable, contains(RtcErrorCode.rateLimited));
-      expect(retryable, contains(RtcErrorCode.livekitUnavailable));
-      expect(retryable, contains(RtcErrorCode.tokenGenerationFailed));
-    });
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -173,17 +146,26 @@ void main() {
 
     test('每个 code 的 defaultMessage 非空', () {
       for (final value in RtcErrorCode.values) {
-        expect(value.defaultMessage, isNotEmpty,
-            reason: '${value.name} defaultMessage should not be empty');
+        expect(
+          value.defaultMessage,
+          isNotEmpty,
+          reason: '${value.name} defaultMessage should not be empty',
+        );
       }
     });
 
     test('每个 code 的 httpStatus 在合理范围', () {
       for (final value in RtcErrorCode.values) {
-        expect(value.httpStatus, greaterThanOrEqualTo(400),
-            reason: '${value.name} httpStatus should be >= 400');
-        expect(value.httpStatus, lessThanOrEqualTo(599),
-            reason: '${value.name} httpStatus should be <= 599');
+        expect(
+          value.httpStatus,
+          greaterThanOrEqualTo(400),
+          reason: '${value.name} httpStatus should be >= 400',
+        );
+        expect(
+          value.httpStatus,
+          lessThanOrEqualTo(599),
+          reason: '${value.name} httpStatus should be <= 599',
+        );
       }
     });
   });

@@ -1,19 +1,14 @@
 import 'dart:convert';
 
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_prompt_keys.dart';
-import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_state_keys.dart';
 
 class AssistantPipelineTemplateVariablesView {
-  static const String _queryTaskEntityAnchorsKey =
-      AssistantPipelinePromptKeys.entityAnchors;
-
   const AssistantPipelineTemplateVariablesView._(this._raw);
 
   const AssistantPipelineTemplateVariablesView.empty()
-      : _raw = const <String, dynamic>{};
+    : _raw = const <String, dynamic>{};
 
   factory AssistantPipelineTemplateVariablesView.fromMap(
     Map<String, dynamic> raw,
@@ -37,8 +32,9 @@ class AssistantPipelineTemplateVariablesView {
   Map<String, dynamic> get dialogueContinuityMap =>
       _decodedMap(dialogueContinuityJson);
 
-  Map<String, dynamic> get dialogueStateMap =>
-      _mapValue(currentRuntimeStateMap[AssistantPipelinePromptKeys.dialogueState]);
+  Map<String, dynamic> get dialogueStateMap => _mapValue(
+    currentRuntimeStateMap[AssistantPipelinePromptKeys.dialogueState],
+  );
 
   List<Map<String, dynamic>> get recentDialogueRounds {
     final raw = _raw[AssistantPipelinePromptKeys.recentDialogueRounds];
@@ -64,22 +60,19 @@ class AssistantPipelineTemplateVariablesView {
     return const <Map<String, dynamic>>[];
   }
 
-  ContextContinuityMode get continuityMode =>
-      parseContextContinuityMode(
-        _stringFromMap(
-          dialogueContinuityMap,
-          AssistantPipelinePromptKeys.continuityMode,
-        ),
-      );
+  ContextContinuityMode get continuityMode => parseContextContinuityMode(
+    _stringFromMap(
+      dialogueContinuityMap,
+      AssistantPipelinePromptKeys.continuityMode,
+    ),
+  );
 
   SearchIterationState get searchIterationState {
     final raw = _raw[AssistantPipelinePromptKeys.searchIterationState];
     if (raw is String && raw.trim().isNotEmpty) {
       final parsed = jsonDecode(raw);
       if (parsed is Map) {
-        return SearchIterationState.fromJson(
-          parsed.cast<String, dynamic>(),
-        );
+        return SearchIterationState.fromJson(parsed.cast<String, dynamic>());
       }
     }
     if (raw is Map) {
@@ -110,22 +103,21 @@ class AssistantPipelineTemplateVariablesView {
       }
     }
 
-    final directAnchors = _raw[IntentGraphFields.entityAnchors];
+    final directAnchors = _raw['entityRefs'];
     if (directAnchors is Iterable) {
       collect(directAnchors);
     } else if (directAnchors is String && directAnchors.trim().isNotEmpty) {
       collect(directAnchors.split(','));
     }
 
-    final queryTasks = _raw[AssistantPipelinePromptKeys.queryTasks];
-    if (queryTasks is Iterable) {
-      for (final item in queryTasks) {
+    final searchPlans = _raw['searchPlans'];
+    if (searchPlans is Iterable) {
+      for (final item in searchPlans) {
         if (item is Map) {
-          final taskAnchors = item[_queryTaskEntityAnchorsKey];
+          final taskAnchors = item['entityRefs'];
           if (taskAnchors is Iterable) {
             collect(taskAnchors);
-          } else if (taskAnchors is String &&
-              taskAnchors.trim().isNotEmpty) {
+          } else if (taskAnchors is String && taskAnchors.trim().isNotEmpty) {
             collect(taskAnchors.split(','));
           }
         }
@@ -168,6 +160,7 @@ class AssistantPipelineTemplateVariablesView {
         RegExp(r'[\u4e00-\u9fff]').hasMatch(normalized)) {
       return true;
     }
-    return normalized.length >= 3 && RegExp(r'[A-Za-z0-9]').hasMatch(normalized);
+    return normalized.length >= 3 &&
+        RegExp(r'[A-Za-z0-9]').hasMatch(normalized);
   }
 }

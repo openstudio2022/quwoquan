@@ -98,8 +98,8 @@ class PostSummaryView {
     Map<String, dynamic>? wire,
   }) {
     final author = PostAuthorSummary(
-      id: dto.authorId,
-      username: dto.authorId,
+      id: dto.authorProfileSubjectId,
+      username: dto.authorProfileSubjectId,
       name: dto.displayName,
       avatar: dto.avatarUrl,
     );

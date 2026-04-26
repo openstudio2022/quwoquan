@@ -1,100 +1,63 @@
-import 'package:flutter/services.dart';
+import 'package:quwoquan_app/assistant/contracts/app_action_contract.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart' as launcher;
 
-/// Executes device-level actions: phone calls, SMS, email, map navigation,
-/// clipboard copy.
 class AppActionTool implements AssistantTool {
   @override
   String get name => 'app_action';
 
   @override
   String get description =>
-      'Execute device actions like calling, texting, emailing, navigating, '
-      'or copying to clipboard.';
-
-  static const Set<String> _allowedActions = {
-    'call',
-    'sms',
-    'email',
-    'navigate',
-    'clipboard',
-  };
+      'Execute typed app actions and return structured outcomes.';
 
   @override
   Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
-    final action = (arguments['action'] as String?)?.trim() ?? '';
-    if (!_allowedActions.contains(action)) {
-      return AssistantToolResult(
-        success: false,
-        message: '不支持的 action: $action（可选: ${_allowedActions.join(", ")}）',
-        errorCode: AssistantErrorCode.invalidArguments,
-      );
-    }
+    final request = AppActionRequest.fromJson(arguments.toDynamicJson());
 
     try {
-      switch (action) {
-        case 'call':
-          return _launchUri('tel', arguments['phone'] as String?);
-        case 'sms':
-          final phone = (arguments['phone'] as String?)?.trim() ?? '';
-          final body = (arguments['body'] as String?)?.trim() ?? '';
-          final smsUri = body.isEmpty
-              ? Uri(scheme: 'sms', path: phone)
-              : Uri(scheme: 'sms', path: phone, queryParameters: {'body': body});
-          return _launch(smsUri, '短信');
-        case 'email':
-          final to = (arguments['to'] as String?)?.trim() ?? '';
-          final subject = (arguments['subject'] as String?)?.trim() ?? '';
-          final body = (arguments['body'] as String?)?.trim() ?? '';
-          final emailUri = Uri(
-            scheme: 'mailto',
-            path: to,
-            queryParameters: <String, String>{
-              if (subject.isNotEmpty) 'subject': subject,
-              if (body.isNotEmpty) 'body': body,
-            },
+      switch (request.actionType) {
+        case AppActionType.dial:
+          return _dial(request);
+        case AppActionType.share:
+          return _share(request);
+        case AppActionType.openConversation:
+          return _requiresUserAction(
+            request,
+            missingTool: 'in_app_navigation',
+            suggestedAlternative: '当前运行时未接入会话打开执行器，请在应用内手动进入对应聊天。',
           );
-          return _launch(emailUri, '邮件');
-        case 'navigate':
-          final address = (arguments['address'] as String?)?.trim() ?? '';
-          final lat = arguments['lat'];
-          final lng = arguments['lng'];
-          Uri mapsUri;
-          if (lat != null && lng != null) {
-            mapsUri = Uri.parse('https://maps.apple.com/?ll=$lat,$lng&q=$address');
-          } else if (address.isNotEmpty) {
-            mapsUri = Uri.parse(
-              'https://maps.apple.com/?q=${Uri.encodeComponent(address)}',
-            );
-          } else {
-            return const AssistantToolResult(
-              success: false,
-              message: '导航需要提供 address 或 lat/lng',
-              errorCode: AssistantErrorCode.invalidArguments,
-            );
-          }
-          return _launch(mapsUri, '导航');
-        case 'clipboard':
-          final text = (arguments['text'] as String?)?.trim() ?? '';
-          if (text.isEmpty) {
-            return const AssistantToolResult(
-              success: false,
-              message: '缺少要复制的 text',
-              errorCode: AssistantErrorCode.invalidArguments,
-            );
-          }
-          await Clipboard.setData(ClipboardData(text: text));
-          return AssistantToolResult(
-            success: true,
-            message: '已复制到剪贴板',
-            data: AssistantToolResultData(<String, Object?>{'length': text.length}),
+        case AppActionType.sendMessage:
+          return _requiresUserAction(
+            request,
+            missingTool: 'message_sender',
+            suggestedAlternative: '当前运行时未接入消息发送执行器，请确认内容后手动发送。',
           );
-        default:
-          return const AssistantToolResult(
-            success: false,
-            message: '未知操作',
-            errorCode: AssistantErrorCode.executionFailed,
+        case AppActionType.openPost:
+          return _requiresUserAction(
+            request,
+            missingTool: 'in_app_navigation',
+            suggestedAlternative: '当前运行时未接入帖子打开执行器，请在应用内手动打开对应内容。',
+          );
+        case AppActionType.navigateToPage:
+          return _requiresUserAction(
+            request,
+            missingTool: 'in_app_navigation',
+            suggestedAlternative: '当前运行时未接入页面跳转执行器，请在应用内手动前往目标页面。',
+          );
+        case AppActionType.capturePhoto:
+          return _requiresUserAction(
+            request,
+            missingTool: 'camera_capture',
+            missingPermission: 'camera',
+            suggestedAlternative: '请先授权相机，或手动拍照后继续。',
+          );
+        case AppActionType.pickPhoto:
+          return _requiresUserAction(
+            request,
+            missingTool: 'photo_picker',
+            missingPermission: 'photos',
+            suggestedAlternative: '请先授权相册访问，或手动选择照片后继续。',
           );
       }
     } catch (error) {
@@ -103,47 +66,191 @@ class AppActionTool implements AssistantTool {
         message: '操作执行异常: $error',
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
-      );
-    }
-  }
-
-  Future<AssistantToolResult> _launchUri(String scheme, String? value) {
-    final clean = (value ?? '').trim();
-    if (clean.isEmpty) {
-      return Future.value(
-        AssistantToolResult(
-          success: false,
-          message: '缺少 $scheme 参数值',
-          errorCode: AssistantErrorCode.invalidArguments,
+        data: AssistantToolResultData.fromJson(
+          const AppActionResult(
+            assessment: AppActionAssessment.unsupportedAction,
+            executed: false,
+          ).toJson(),
+        ),
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.executionFailed,
+          message: '操作执行异常: $error',
+          functionModule: name,
+          stage: 'unexpected_exception',
         ),
       );
     }
-    return _launch(Uri(scheme: scheme, path: clean), scheme);
   }
 
-  Future<AssistantToolResult> _launch(Uri uri, String label) async {
+  Future<AssistantToolResult> _dial(AppActionRequest request) {
+    final phone = _firstNonEmpty(<Object?>[
+      request.args.fields['phone'],
+      request.args.fields['phoneNumber'],
+    ]);
+    if (phone.isEmpty) {
+      return Future.value(
+        _toolFailure(
+          message: '拨号缺少电话号码',
+          errorCode: AssistantErrorCode.invalidArguments,
+          result: const AppActionResult(
+            assessment: AppActionAssessment.unsupportedAction,
+            executed: false,
+          ),
+        ),
+      );
+    }
+    return _launchUri(
+      Uri(scheme: 'tel', path: phone),
+      successMessage: '已打开拨号',
+    );
+  }
+
+  Future<AssistantToolResult> _share(AppActionRequest request) async {
+    final text = _firstNonEmpty(<Object?>[
+      request.args.fields['text'],
+      request.args.fields['shareText'],
+      request.args.fields['url'],
+    ]);
+    if (text.isEmpty) {
+      return _toolFailure(
+        message: '分享缺少可用内容',
+        errorCode: AssistantErrorCode.invalidArguments,
+        result: const AppActionResult(
+          assessment: AppActionAssessment.unsupportedAction,
+          executed: false,
+        ),
+      );
+    }
+
+    final result = await SharePlus.instance.share(
+      ShareParams(
+        text: text,
+        subject: _firstNonEmpty(<Object?>[
+          request.args.fields['subject'],
+          request.args.fields['title'],
+        ]),
+      ),
+    );
+    if (result.status == ShareResultStatus.success) {
+      return _toolSuccess(
+        message: '已触发系统分享',
+        result: AppActionResult(
+          assessment: AppActionAssessment.canExecuteWithTools,
+          executed: true,
+          result: AppActionArgs(<String, Object?>{
+            'status': result.status.name,
+            'text': text,
+          }),
+        ),
+      );
+    }
+    return _toolSuccess(
+      message: '用户取消了分享',
+      result: AppActionResult(
+        assessment: AppActionAssessment.requiresUserAction,
+        executed: false,
+        suggestedAlternative: '如需继续，请重新确认分享目标。',
+        result: AppActionArgs(<String, Object?>{'status': result.status.name}),
+      ),
+    );
+  }
+
+  Future<AssistantToolResult> _launchUri(
+    Uri uri, {
+    required String successMessage,
+  }) async {
     final canOpen = await launcher.canLaunchUrl(uri);
     if (!canOpen) {
-      return AssistantToolResult(
-        success: false,
-        message: '设备不支持此$label操作',
+      return _toolFailure(
+        message: '设备不支持当前操作',
         errorCode: AssistantErrorCode.unsupportedTarget,
-        degraded: true,
+        result: const AppActionResult(
+          assessment: AppActionAssessment.requiresUserAction,
+          executed: false,
+        ),
       );
     }
     final ok = await launcher.launchUrl(uri);
     if (!ok) {
-      return AssistantToolResult(
-        success: false,
-        message: '$label打开失败',
+      return _toolFailure(
+        message: '操作执行失败',
         errorCode: AssistantErrorCode.executionFailed,
-        degraded: true,
+        result: const AppActionResult(
+          assessment: AppActionAssessment.canExecuteWithTools,
+          executed: false,
+        ),
       );
     }
+
+    return _toolSuccess(
+      message: successMessage,
+      result: AppActionResult(
+        assessment: AppActionAssessment.canExecuteWithTools,
+        executed: true,
+        result: AppActionArgs(<String, Object?>{'uri': uri.toString()}),
+      ),
+    );
+  }
+
+  AssistantToolResult _requiresUserAction(
+    AppActionRequest request, {
+    required String missingTool,
+    String missingPermission = '',
+    required String suggestedAlternative,
+  }) {
+    return _toolSuccess(
+      message: suggestedAlternative,
+      result: AppActionResult(
+        assessment: AppActionAssessment.requiresUserAction,
+        executed: false,
+        missingTool: missingTool,
+        missingPermission: missingPermission,
+        suggestedAlternative: suggestedAlternative,
+        result: AppActionArgs(<String, Object?>{
+          'actionType': request.actionType.wireName,
+          'requiresConfirmation': request.requiresConfirmation,
+        }),
+      ),
+    );
+  }
+
+  AssistantToolResult _toolSuccess({
+    required String message,
+    required AppActionResult result,
+  }) {
     return AssistantToolResult(
       success: true,
-      message: '已打开$label',
-      data: AssistantToolResultData(<String, Object?>{'uri': uri.toString()}),
+      message: message,
+      data: AssistantToolResultData.fromJson(result.toJson()),
     );
+  }
+
+  AssistantToolResult _toolFailure({
+    required String message,
+    required AssistantErrorCode errorCode,
+    required AppActionResult result,
+  }) {
+    return AssistantToolResult(
+      success: false,
+      message: message,
+      errorCode: errorCode,
+      degraded: true,
+      data: AssistantToolResultData.fromJson(result.toJson()),
+      runtimeFailure: assistantToolRuntimeFailure(
+        errorCode: errorCode,
+        message: message,
+        functionModule: name,
+      ),
+    );
+  }
+
+  String _firstNonEmpty(List<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
   }
 }

@@ -4,13 +4,13 @@
     "web_search": {
       "requireConfirmation": false
     },
+    "app_search": {
+      "requireConfirmation": false
+    },
     "search": {
       "requireConfirmation": false
     },
     "web_fetch": {
-      "requireConfirmation": false
-    },
-    "local_context": {
       "requireConfirmation": false
     },
     "media_gallery": {
@@ -30,7 +30,16 @@
     },
     "app_action": {
       "requireConfirmation": true,
-      "allowedActions": ["call", "sms", "email", "navigate", "clipboard"]
+      "allowedActions": [
+        "open_conversation",
+        "send_message",
+        "open_post",
+        "navigate_to_page",
+        "capture_photo",
+        "pick_photo",
+        "share",
+        "dial"
+      ]
     }
   }
 }

@@ -43,20 +43,27 @@ Map<String, dynamic> _intentEnvelope({
       'summary': '进入理解阶段',
       'interpretation': inferredMotive,
     },
-    'intentGraph': <String, dynamic>{
-      'userGoal': inferredMotive,
-      'problemShape': 'single_skill',
-      'primarySkill': primarySkill,
-      'problemClass': problemClass,
-      'inferredMotive': inferredMotive,
-      'secondarySkills': const <String>[],
-      'queryNormalization': normalizedQuery.isNotEmpty
-          ? <String, dynamic>{'normalizedQuery': normalizedQuery}
-          : const <String, dynamic>{},
-      'queryTasks': const <Map<String, dynamic>>[],
-      'contextSlots': const <String, dynamic>{},
-      'globalConstraints': const <String, dynamic>{'mode': 'qa'},
-      'clarificationNeeded': false,
+    'understandingResult': <String, dynamic>{
+      'intents': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'intentId': 'intent_primary',
+          'intentType': '$primarySkill.${problemClass.isNotEmpty ? problemClass : 'general'}',
+          'goal': inferredMotive,
+          'requiresEvidence': normalizedQuery.isNotEmpty,
+        },
+      ],
+    },
+    'taskGraph': <String, dynamic>{
+      'tasks': normalizedQuery.isNotEmpty
+          ? <Map<String, dynamic>>[
+              <String, dynamic>{
+                'taskId': 'task_primary',
+                'intentId': 'intent_primary',
+                'toolName': 'web_search',
+                'toolArgs': <String, dynamic>{'query': normalizedQuery},
+              },
+            ]
+          : const <Map<String, dynamic>>[],
     },
     'selfCheck': const <String, dynamic>{
       'goalSatisfied': true,
@@ -248,7 +255,7 @@ bool _containsInternalLeak(String text) {
   return normalized.contains('assistant_turn') ||
       normalized.contains('contractId') ||
       normalized.contains('toolCalls') ||
-      normalized.contains('queryTasks') ||
+      normalized.contains('searchPlans') ||
       normalized.contains('runArtifacts') ||
       normalized.contains('machineEnvelope') ||
       normalized.contains('<tool_call>');
@@ -348,7 +355,8 @@ void main() {
     expect(phasedLoop.executionState.evidenceEvaluation?.entries, isNotEmpty);
     expect(phasedLoop.executionState.synthesisReadiness?.ready, isTrue);
     expect(
-      phasedLoop.executionState.conversationStateDecision?.finalAnswerReady,
+      phasedLoop.executionState.previousRunArtifacts?.answerDecision.core
+          .finalAnswerReady,
       isTrue,
     );
     expect(

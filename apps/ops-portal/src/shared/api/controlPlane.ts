@@ -1,3 +1,9 @@
+import {
+  RuntimeError,
+  fallbackRuntimeErrorResponse,
+  isRuntimeErrorResponse,
+} from "../runtime/errors/runtimeError.js";
+
 export interface ExperimentItem {
   id: string;
   name: string;
@@ -297,13 +303,62 @@ function envBaseUrl(key: 'VITE_PRODUCT_OPS_BASE_URL' | 'VITE_PLATFORM_OPS_BASE_U
 
 async function fetchJSON<T>(baseUrl: string, path: string): Promise<T> {
   if (!baseUrl) {
-    throw new Error('base url not configured');
+    throw new RuntimeError(
+      fallbackRuntimeErrorResponse({
+        code: "OPS.CONFIG.base_url_missing",
+        requestPath: path,
+      }),
+    );
   }
-  const response = await fetch(`${baseUrl}${path}`);
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`);
+  } catch (error) {
+    throw new RuntimeError(
+      fallbackRuntimeErrorResponse({
+        code: "OPS.NETWORK.fetch_failed",
+        requestPath: path,
+        cause: error,
+      }),
+    );
+  }
   if (!response.ok) {
-    throw new Error(`request failed: ${response.status}`);
+    const text = await response.text();
+    let decoded: unknown;
+    try {
+      decoded = text ? JSON.parse(text) : undefined;
+    } catch {
+      decoded = undefined;
+    }
+    throw new RuntimeError(
+      isRuntimeErrorResponse(decoded)
+        ? decoded
+        : fallbackRuntimeErrorResponse({
+            code:
+              response.status >= 500
+                ? "OPS.UNAVAILABLE.control_plane_unavailable"
+                : "OPS.NETWORK.request_failed",
+            statusCode: response.status,
+            requestPath: path,
+            requestId: response.headers.get("X-Request-Id") ?? undefined,
+            traceId: response.headers.get("X-Trace-Id") ?? undefined,
+          }),
+    );
   }
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch (error) {
+    throw new RuntimeError(
+      fallbackRuntimeErrorResponse({
+        code: "OPS.CONTRACT.invalid_json_response",
+        statusCode: response.status,
+        requestPath: path,
+        requestId: response.headers.get("X-Request-Id") ?? undefined,
+        traceId: response.headers.get("X-Trace-Id") ?? undefined,
+        cause: error,
+      }),
+    );
+  }
 }
 
 function withQuery(path: string, query: ProductEventQuery = {}): string {

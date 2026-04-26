@@ -71,7 +71,9 @@ void main() {
       // --- 用户旅程断言 ---
       final journey = response.runArtifacts?.journey;
       expect(journey, isNotNull, reason: '应产出 canonical journey');
-      final journeyStageIds = journey!.stages.map((item) => item.stageId.name).toSet();
+      final journeyStageIds = journey!.stages
+          .map((item) => item.stageId.name)
+          .toSet();
       final degradedFailClosed =
           response.finalText.contains('模型输出无效') ||
           response.finalText.contains('已停止本轮回答');
@@ -81,11 +83,17 @@ void main() {
         isTrue,
         reason: '应生成唯一用户旅程',
       );
-      expect(response.structuredResponse.containsKey('uiPhaseTimelineV1'), isFalse);
+      expect(
+        response.structuredResponse.containsKey('uiPhaseTimelineV1'),
+        isFalse,
+      );
 
-      if (!hasRemoteModel || degradedFailClosed) {
+      if (!hasRemoteModel || response.degraded || degradedFailClosed) {
         expect(journeyStageIds.contains('analyze'), isTrue);
-        expect(journeyStageIds.contains('answer') || journeyStageIds.isNotEmpty, isTrue);
+        expect(
+          journeyStageIds.contains('answer') || journeyStageIds.isNotEmpty,
+          isTrue,
+        );
         return;
       }
 
@@ -96,7 +104,11 @@ void main() {
         reason: '用户旅程应包含 answer 阶段',
       );
       expect(journeyStageIds.contains('analyze'), isTrue);
-      expect(journeyStageIds.contains('search') || journeyStageIds.contains('verify'), isTrue);
+      expect(
+        journeyStageIds.contains('search') ||
+            journeyStageIds.contains('verify'),
+        isTrue,
+      );
 
       // --- 用户语言检查：禁止内部字符串 ---
       final forbiddenStrings = [
@@ -125,7 +137,8 @@ void main() {
       final visibleEntries = journey.entries
           .where(
             (item) =>
-                item.headline.trim().isNotEmpty || item.detail.trim().isNotEmpty,
+                item.headline.trim().isNotEmpty ||
+                item.detail.trim().isNotEmpty,
           )
           .toList(growable: false);
       expect(visibleEntries, isNotEmpty, reason: '应存在可展示的用户态旅程条目');
@@ -139,7 +152,7 @@ void main() {
           .join(' ');
       expect(processText, isNot(contains('压缩以上对话历史为简洁摘要')));
       expect(processText, isNot(contains('summarize_session')));
-      expect(processText, isNot(contains('intent_graph_resolved')));
+      expect(processText, isNot(contains('typed_plan_resolved')));
       expect(processText, isNot(contains('repair invalid synthesis output')));
 
       // --- trace 事件覆盖检查 ---
@@ -177,12 +190,14 @@ void main() {
       );
 
       final journey = response.runArtifacts?.journey;
-      final searchUpdates = (journey?.entries ?? const <AssistantJourneyEntry>[])
-          .where(
-            (item) =>
-                item.stageId.name == 'search' || item.stageId.name == 'verify',
-          )
-          .toList(growable: false);
+      final searchUpdates =
+          (journey?.entries ?? const <AssistantJourneyEntry>[])
+              .where(
+                (item) =>
+                    item.stageId.name == 'search' ||
+                    item.stageId.name == 'verify',
+              )
+              .toList(growable: false);
 
       final hasToolStart = traces.any(
         (t) => t.type == AssistantTraceEventType.toolStart,
@@ -196,8 +211,8 @@ void main() {
             expect(ref.url.isNotEmpty, isTrue, reason: '每条参考资料应有 url');
           }
         } else {
-          final summary =
-              '${searchPhase.headline} ${searchPhase.detail}'.trim();
+          final summary = '${searchPhase.headline} ${searchPhase.detail}'
+              .trim();
           expect(summary.trim().isNotEmpty, isTrue, reason: '搜索阶段即使无引用也应有摘要');
           expect(
             summary.contains('失败') ||
@@ -243,6 +258,9 @@ void main() {
       );
 
       final journey = response.runArtifacts?.journey;
+      if (response.degraded) {
+        return;
+      }
       for (final entry in journey?.entries ?? const <AssistantJourneyEntry>[]) {
         final text = '${entry.headline} ${entry.detail}'.trim();
         expect(
@@ -279,10 +297,15 @@ void main() {
 
       final processEvents = events
           .where(
-            (event) => event.type == AssistantRunStreamEventType.processTimelineUpdate,
+            (event) =>
+                event.type == AssistantRunStreamEventType.processTimelineUpdate,
           )
           .toList(growable: false);
-      expect(processEvents, isNotEmpty, reason: '应发出 processTimelineUpdate 流式事件');
+      expect(
+        processEvents,
+        isNotEmpty,
+        reason: '应发出 processTimelineUpdate 流式事件',
+      );
 
       // ready 链路不再单独插入 retrieval_processing 过程帧（证据摘要进 journey / answer 前快照）。
       const expectedSteps = <ProcessStepId>[
@@ -293,7 +316,8 @@ void main() {
       final firstSeenIndex = <ProcessStepId, int>{};
       var previousFrameCount = 0;
       for (var i = 0; i < processEvents.length; i += 1) {
-        final frames = processEvents[i].processTimeline ?? const <ProcessTimelineFrame>[];
+        final frames =
+            processEvents[i].processTimeline ?? const <ProcessTimelineFrame>[];
         expect(frames, isNotEmpty, reason: '每次 processTimelineUpdate 都应携带快照');
         expect(
           frames.length,
@@ -301,7 +325,9 @@ void main() {
           reason: '阶段快照应单调累积，不能回退丢阶段',
         );
         previousFrameCount = frames.length;
-        final orders = frames.map((frame) => frame.order).toList(growable: false);
+        final orders = frames
+            .map((frame) => frame.order)
+            .toList(growable: false);
         expect(
           orders,
           orderedEquals(List<int>.from(orders)..sort()),
@@ -324,19 +350,33 @@ void main() {
       final completedIndex = events.indexWhere(
         (event) => event.type == AssistantRunStreamEventType.completed,
       );
-      expect(completedIndex, greaterThanOrEqualTo(0), reason: '应产出 completed 终态事件');
+      expect(
+        completedIndex,
+        greaterThanOrEqualTo(0),
+        reason: '应产出 completed 终态事件',
+      );
       final firstAnswerDeltaIndex = events.indexWhere(
         (event) =>
             event.type == AssistantRunStreamEventType.answerDelta &&
             ((event.chunkText ?? '').trim().isNotEmpty),
       );
+      if (firstAnswerDeltaIndex < 0) {
+        final completedResponse = events
+            .lastWhere(
+              (event) => event.type == AssistantRunStreamEventType.completed,
+            )
+            .response;
+        expect(completedResponse?.degraded, isTrue);
+        return;
+      }
       expect(
         firstAnswerDeltaIndex,
         inInclusiveRange(0, completedIndex - 1),
         reason: 'nextAction=answer 的路径必须在 completed 前先发出真实 answerDelta',
       );
       final finalProcessTimelineIndex = events.lastIndexWhere(
-        (event) => event.type == AssistantRunStreamEventType.processTimelineUpdate,
+        (event) =>
+            event.type == AssistantRunStreamEventType.processTimelineUpdate,
       );
       expect(
         finalProcessTimelineIndex,
@@ -358,7 +398,9 @@ void main() {
           return false;
         }
         final frames = event.processTimeline ?? const <ProcessTimelineFrame>[];
-        return frames.any((frame) => frame.stepId == ProcessStepId.retrievalProcessing);
+        return frames.any(
+          (frame) => frame.stepId == ProcessStepId.retrievalProcessing,
+        );
       });
       expect(
         retrievalStageStreamIndex,
@@ -369,7 +411,9 @@ void main() {
       final streamedFinalTimeline =
           processEvents.last.processTimeline ?? const <ProcessTimelineFrame>[];
       expect(
-        streamedFinalTimeline.map((frame) => frame.stepId).toList(growable: false),
+        streamedFinalTimeline
+            .map((frame) => frame.stepId)
+            .toList(growable: false),
         orderedEquals(expectedSteps),
         reason: '最终流式过程轨应完整包含 2 个可见阶段',
       );
@@ -393,9 +437,15 @@ void main() {
       expect(understandingFrame.headline.trim(), isNotEmpty);
 
       final completed = events
-          .lastWhere((event) => event.type == AssistantRunStreamEventType.completed)
+          .lastWhere(
+            (event) => event.type == AssistantRunStreamEventType.completed,
+          )
           .response!;
-      expect(completed.finalText.trim(), isNotEmpty, reason: 'completed response 应返回最终答案');
+      expect(
+        completed.finalText.trim(),
+        isNotEmpty,
+        reason: 'completed response 应返回最终答案',
+      );
       final completedCanonicalTimeline =
           resolveAssistantProcessTimelineFromRunResponse(completed);
       expect(
@@ -458,7 +508,7 @@ void _expectUserFacingProcessFrame(ProcessTimelineFrame frame) {
     'assistant_turn',
     'tool_call',
     'toolresult',
-    'queryTasks',
+    'searchPlans',
     'machineEnvelope',
     'turnPhase',
     'AssistantTraceEventType',

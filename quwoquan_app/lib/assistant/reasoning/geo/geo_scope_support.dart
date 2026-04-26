@@ -1,5 +1,62 @@
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+
+class ResolvedGeoScope {
+  const ResolvedGeoScope({
+    this.geoKind = 'none',
+    this.countryCode = '',
+    this.countryLabel = '',
+    this.regionLabel = '',
+    this.cityLabel = '',
+    this.marketCode = '',
+    this.marketLabel = '',
+    this.resolvedText = '',
+    this.source = '',
+    this.defaultApplied = false,
+    this.reason = '',
+  });
+
+  final String geoKind;
+  final String countryCode;
+  final String countryLabel;
+  final String regionLabel;
+  final String cityLabel;
+  final String marketCode;
+  final String marketLabel;
+  final String resolvedText;
+  final String source;
+  final bool defaultApplied;
+  final String reason;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'geoKind': geoKind,
+    'countryCode': countryCode,
+    'countryLabel': countryLabel,
+    'regionLabel': regionLabel,
+    'cityLabel': cityLabel,
+    'marketCode': marketCode,
+    'marketLabel': marketLabel,
+    'resolvedText': resolvedText,
+    'source': source,
+    'defaultApplied': defaultApplied,
+    'reason': reason,
+  };
+
+  factory ResolvedGeoScope.fromJson(Map<String, dynamic> json) {
+    return ResolvedGeoScope(
+      geoKind: (json['geoKind'] as String?)?.trim() ?? 'none',
+      countryCode: (json['countryCode'] as String?)?.trim() ?? '',
+      countryLabel: (json['countryLabel'] as String?)?.trim() ?? '',
+      regionLabel: (json['regionLabel'] as String?)?.trim() ?? '',
+      cityLabel: (json['cityLabel'] as String?)?.trim() ?? '',
+      marketCode: (json['marketCode'] as String?)?.trim() ?? '',
+      marketLabel: (json['marketLabel'] as String?)?.trim() ?? '',
+      resolvedText: (json['resolvedText'] as String?)?.trim() ?? '',
+      source: (json['source'] as String?)?.trim() ?? '',
+      defaultApplied: json['defaultApplied'] == true,
+      reason: (json['reason'] as String?)?.trim() ?? '',
+    );
+  }
+}
 
 class DefaultGeoPolicy {
   const DefaultGeoPolicy({
@@ -18,13 +75,13 @@ class DefaultGeoPolicy {
 }
 
 DefaultGeoPolicy parseDefaultGeoPolicy(Map<String, dynamic> retrievalPolicy) {
-  final raw = (retrievalPolicy['defaultGeoPolicy'] as Map?)
-          ?.cast<String, dynamic>() ??
+  final raw =
+      (retrievalPolicy['defaultGeoPolicy'] as Map?)?.cast<String, dynamic>() ??
       const <String, dynamic>{};
   final overrides = <String, String>{};
   final rawOverrides =
       (raw['marketOverrides'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      const <String, dynamic>{};
   for (final entry in rawOverrides.entries) {
     final key = entry.key.trim().toUpperCase();
     final value = entry.value.toString().trim();
@@ -48,9 +105,7 @@ bool hasAvailableGeoContext(AvailableGeoContext context) {
       context.regionLabel.trim().isNotEmpty ||
       context.cityLabel.trim().isNotEmpty ||
       context.districtLabel.trim().isNotEmpty ||
-      context.timezone.trim().isNotEmpty ||
-      context.lat.abs() > 0 ||
-      context.lng.abs() > 0;
+      context.timezone.trim().isNotEmpty;
 }
 
 bool hasResolvedGeoScope(ResolvedGeoScope scope) {
@@ -66,18 +121,17 @@ AvailableGeoContext buildAvailableGeoContext({
   Map<String, dynamic> scopeHint = const <String, dynamic>{},
   AvailableGeoContext seed = const AvailableGeoContext(),
 }) {
-  final explicit =
-      scopeHint['availableGeoContext'] is Map
-          ? AvailableGeoContext.fromJson(
-              (scopeHint['availableGeoContext'] as Map).cast<String, dynamic>(),
-            )
-          : seed;
+  final explicit = scopeHint['availableGeoContext'] is Map
+      ? AvailableGeoContext.fromJson(
+          (scopeHint['availableGeoContext'] as Map).cast<String, dynamic>(),
+        )
+      : seed;
   final gpsNested =
       (gpsLocation['location'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      const <String, dynamic>{};
   final scopeDevice =
       (scopeHint['device'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
+      const <String, dynamic>{};
   final locale = _firstNonEmpty(<String>[
     explicit.source == 'device_locale' ? explicit.countryCode : '',
     _stringValue(scopeHint['locale']),
@@ -131,21 +185,6 @@ AvailableGeoContext buildAvailableGeoContext({
     _stringValue(scopeHint['countryLabel']),
     _stringValue(gpsLocation['countryLabel']),
   ]);
-  final lat = _firstNonZeroDouble(<double?>[
-    explicit.lat,
-    _doubleValue(scopeHint['lat']),
-    _doubleValue(gpsLocation['lat']),
-    _doubleValue(gpsNested['latitude']),
-    _doubleValue(gpsNested['lat']),
-  ]);
-  final lng = _firstNonZeroDouble(<double?>[
-    explicit.lng,
-    _doubleValue(scopeHint['lng']),
-    _doubleValue(gpsLocation['lng']),
-    _doubleValue(gpsNested['longitude']),
-    _doubleValue(gpsNested['lon']),
-    _doubleValue(gpsNested['lng']),
-  ]);
   final capturedAt = _firstNonEmpty(<String>[
     explicit.capturedAt,
     _stringValue(scopeHint['locationTimestamp']),
@@ -154,24 +193,20 @@ AvailableGeoContext buildAvailableGeoContext({
   final source = _firstNonEmpty(<String>[
     explicit.source,
     _stringValue(scopeHint['geoSource']),
-    if (cityLabel.isNotEmpty || lat.abs() > 0 || lng.abs() > 0) 'device_gps',
+    if (cityLabel.isNotEmpty) 'device_location',
     if (countryCode.isNotEmpty || timezone.isNotEmpty) 'device_locale',
     'inferred',
   ]);
-  final confidence =
-      explicit.confidence > 0
-          ? explicit.confidence
-          : (lat.abs() > 0 || lng.abs() > 0)
-          ? 0.95
-          : cityLabel.isNotEmpty
-          ? 0.82
-          : countryCode.isNotEmpty
-          ? 0.68
-          : 0.0;
+  final confidence = explicit.confidence > 0
+      ? explicit.confidence
+      : cityLabel.isNotEmpty
+      ? 0.82
+      : countryCode.isNotEmpty
+      ? 0.68
+      : 0.0;
   final privacyTier = _firstNonEmpty(<String>[
     explicit.privacyTier,
     _stringValue(scopeHint['privacyTier']),
-    if (lat.abs() > 0 || lng.abs() > 0) 'coarse_location',
     if (cityLabel.isNotEmpty) 'city',
     if (countryCode.isNotEmpty || regionLabel.isNotEmpty) 'region_only',
     'none',
@@ -183,8 +218,6 @@ AvailableGeoContext buildAvailableGeoContext({
     regionLabel: regionLabel,
     cityLabel: cityLabel,
     districtLabel: districtLabel,
-    lat: lat,
-    lng: lng,
     timezone: timezone,
     source: source,
     confidence: confidence,
@@ -205,107 +238,12 @@ ResolvedGeoScope resolveGeoScope({
       : const ResolvedGeoScope();
 }
 
-List<String> mergeGeoAnchors(
-  List<String> baseAnchors,
-  ResolvedGeoScope scope,
-) {
+List<String> mergeGeoAnchors(List<String> baseAnchors, ResolvedGeoScope scope) {
   return baseAnchors
       .map((item) => item.trim())
       .where((item) => item.isNotEmpty)
       .toSet()
       .toList(growable: false);
-}
-
-ResolvedGeoScope _defaultCityScope({
-  required AvailableGeoContext availableGeoContext,
-  required List<String> fallbackSources,
-}) {
-  if (availableGeoContext.cityLabel.trim().isNotEmpty) {
-    return ResolvedGeoScope(
-      geoKind: 'city',
-      countryCode: availableGeoContext.countryCode,
-      countryLabel: availableGeoContext.countryLabel,
-      regionLabel: availableGeoContext.regionLabel,
-      cityLabel: availableGeoContext.cityLabel,
-      resolvedText: availableGeoContext.cityLabel,
-      source: 'available_geo_default',
-      defaultApplied: true,
-      reason: 'weather_without_city_use_device_city',
-    );
-  }
-  if (_containsSource(fallbackSources, 'available_geo.region') &&
-      availableGeoContext.regionLabel.trim().isNotEmpty) {
-    return ResolvedGeoScope(
-      geoKind: 'region',
-      countryCode: availableGeoContext.countryCode,
-      countryLabel: availableGeoContext.countryLabel,
-      regionLabel: availableGeoContext.regionLabel,
-      resolvedText: availableGeoContext.regionLabel,
-      source: 'available_geo_default',
-      defaultApplied: true,
-      reason: 'weather_without_city_use_region',
-    );
-  }
-  if (_containsSource(fallbackSources, 'available_geo.country') &&
-      (availableGeoContext.countryLabel.trim().isNotEmpty ||
-          availableGeoContext.countryCode.trim().isNotEmpty)) {
-    return _defaultCountryScope(availableGeoContext, reason: 'weather_without_city_use_country');
-  }
-  return const ResolvedGeoScope();
-}
-
-ResolvedGeoScope _defaultCountryScope(
-  AvailableGeoContext availableGeoContext, {
-  String reason = 'country_default_from_available_geo',
-}) {
-  final countryLabel = availableGeoContext.countryLabel.trim().isNotEmpty
-      ? availableGeoContext.countryLabel.trim()
-      : '';
-  if (countryLabel.isEmpty && availableGeoContext.countryCode.trim().isEmpty) {
-    return const ResolvedGeoScope();
-  }
-  return ResolvedGeoScope(
-    geoKind: 'country',
-    countryCode: availableGeoContext.countryCode,
-    countryLabel: countryLabel,
-    resolvedText: countryLabel.isNotEmpty
-        ? countryLabel
-        : availableGeoContext.countryCode,
-    source: 'available_geo_default',
-    defaultApplied: true,
-    reason: reason,
-  );
-}
-
-ResolvedGeoScope _defaultMarketScope({
-  required AvailableGeoContext availableGeoContext,
-  required DefaultGeoPolicy geoPolicy,
-}) {
-  final countryCode = availableGeoContext.countryCode.trim().toUpperCase();
-  final countryLabel = availableGeoContext.countryLabel.trim().isNotEmpty
-      ? availableGeoContext.countryLabel.trim()
-      : '';
-  final override = geoPolicy.marketOverrides[countryCode];
-  final marketLabel = override != null && override.trim().isNotEmpty
-      ? override.trim()
-      : geoPolicy.marketTemplate.trim().isNotEmpty && countryLabel.isNotEmpty
-      ? geoPolicy.marketTemplate.replaceAll('{countryLabel}', countryLabel)
-      : '';
-  if (marketLabel.isEmpty) {
-    return const ResolvedGeoScope();
-  }
-  return ResolvedGeoScope(
-    geoKind: 'market',
-    countryCode: countryCode,
-    countryLabel: countryLabel,
-    regionLabel: availableGeoContext.regionLabel,
-    marketCode: countryCode,
-    marketLabel: marketLabel,
-    resolvedText: marketLabel,
-    source: 'available_geo_default',
-    defaultApplied: true,
-    reason: 'market_without_geo_use_country_market',
-  );
 }
 
 ResolvedGeoScope _normalizeResolvedGeoScope(ResolvedGeoScope scope) {
@@ -322,39 +260,6 @@ ResolvedGeoScope _normalizeResolvedGeoScope(ResolvedGeoScope scope) {
     defaultApplied: scope.defaultApplied,
     reason: scope.reason.trim(),
   );
-}
-
-String _effectiveDefaultGeoScope({
-  required String requested,
-}) {
-  final normalized = requested.trim().toLowerCase();
-  return normalized.isEmpty ? 'none' : normalized;
-}
-
-bool _containsSource(List<String> fallbackSources, String candidate) {
-  if (fallbackSources.isEmpty) {
-    return true;
-  }
-  final normalizedCandidate = candidate.trim().toLowerCase();
-  return fallbackSources.any(
-    (item) => item.trim().toLowerCase() == normalizedCandidate,
-  );
-}
-
-List<String> _geoAliasTokens(ResolvedGeoScope scope) {
-  final normalized = _normalizeResolvedGeoScope(scope);
-  final tokens = <String>{
-    normalized.resolvedText.trim(),
-    normalized.cityLabel.trim(),
-    normalized.marketLabel.trim(),
-    normalized.countryLabel.trim(),
-  };
-  final slashSplit = normalized.resolvedText
-      .split(RegExp(r'[/|｜,，]'))
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty);
-  tokens.addAll(slashSplit);
-  return tokens.where((item) => item.isNotEmpty).toList(growable: false);
 }
 
 String _countryCodeFromLocale(String raw) {
@@ -379,22 +284,6 @@ List<String> _stringList(Object? raw) {
       .map((item) => item.toString().trim())
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
-}
-
-double? _doubleValue(Object? raw) {
-  if (raw is num) {
-    return raw.toDouble();
-  }
-  return double.tryParse(_stringValue(raw));
-}
-
-double _firstNonZeroDouble(List<double?> values) {
-  for (final value in values) {
-    if (value != null && value.abs() > 0) {
-      return value;
-    }
-  }
-  return 0;
 }
 
 String _firstNonEmpty(List<String> values) {

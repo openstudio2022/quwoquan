@@ -155,7 +155,7 @@ Decide -> 进入下一轮、切换阶段或结束
 
 - **等待体验**：用户在 30–60 秒长等待期间持续看到可信、用户语言、可解释的工作说明，过程流不出现长时间空白
 - **Single-pass-first**：默认一次深理解后，先产出 2–4 路互补检索 lanes，再并行执行；replan 仅作例外补救
-- **多路检索设计**：`QueryTask` 按证据维度驱动，不再只是 query 变体
+- **多路检索设计**：`SearchPlanItem` 按证据维度驱动，不再只是 query 变体
 - **Process narrative**：phase / trace 统一投影到 canonical `AssistantJourney`，只保留用户可理解的阶段、里程碑与来源摘要
 
 ---

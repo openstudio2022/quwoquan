@@ -76,7 +76,7 @@
 - [x] T17: 场景 `behavior_batch_report_reaches_service` — 已在 api_contract_runner.dart 实现
 - [x] T18: 场景 `feed_cursor_pagination_end_to_end` — 已实现（含两页无重叠断言 + aspectRatio 语义层）
 - [x] T19: 场景 `error_state_displayed_correctly` — 已实现（404 + 错误码映射 + 不可重试断言）
-- [x] T20: 场景 `media_not_ready_graceful_error` — 已实现（X-Test-Error-Inject header + isRetryable）
+- [x] T20: 场景 `media_not_ready_graceful_error` — 已实现（X-Test-Error-Inject header + recoveryAction）
 
 ### P2-门禁：gate 绑定
 

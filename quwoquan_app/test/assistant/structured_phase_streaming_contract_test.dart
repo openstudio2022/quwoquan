@@ -2,18 +2,28 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/application/assistant_process_timeline_projector.dart';
+import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
+import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
+import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/evidence_digest_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/understand_phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
+import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 
 void main() {
@@ -57,25 +67,33 @@ void main() {
                 'parseStatus': '',
                 'notes': const <String>[],
               },
-              'intentGraph': <String, dynamic>{
-                'userGoal': '判断今晚深圳是否适合出门',
-                'problemShape': 'single_skill',
-                'primarySkill': 'fallback_general_search',
-                'problemClass': 'realtime_info',
-                'answerShape': 'direct_answer',
-                'inferredMotive': '想快速判断今晚安排是否需要调整',
-                'queryNormalization': <String, dynamic>{
-                  'normalizedQuery': '深圳 今晚 天气 出门',
-                },
-                'queryTasks': <Map<String, dynamic>>[
+              'understandingResult': const <String, dynamic>{
+                'intents': <Map<String, dynamic>>[
                   <String, dynamic>{
-                    'id': 'weather_live',
-                    'query': '深圳 今晚 小时天气',
-                    'goal': '确认今晚实时天气与降雨变化',
-                    'successCriteria': '拿到实时天气与小时降雨信息',
+                    'intentId': 'intent_weather_live',
+                    'intentType': 'fallback_general_search.lookup',
+                    'goal': '判断今晚深圳是否适合出门',
+                    'requiresEvidence': true,
                   },
                 ],
-                'globalConstraints': <String, dynamic>{'mode': 'qa'},
+              },
+              'taskGraph': const <String, dynamic>{
+                'tasks': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'taskId': 'weather_live',
+                    'intentId': 'intent_weather_live',
+                    'toolName': 'web_search',
+                    'toolArgs': <String, dynamic>{
+                      'query': '深圳 今晚 小时天气',
+                      'searchPlans': <Map<String, dynamic>>[
+                        <String, dynamic>{
+                          'id': 'weather_live',
+                          'query': '深圳 今晚 小时天气',
+                        },
+                      ],
+                    },
+                  },
+                ],
               },
               'understandingSnapshot': <String, dynamic>{
                 'userFacingSummary': expectedSummary,
@@ -157,15 +175,25 @@ void main() {
                 'nextAction': 'tool_call',
                 'confidence': 0.88,
               },
-              'intentGraph': <String, dynamic>{
-                'userGoal': '确认深圳现在是否适合出门',
-                'problemShape': 'single_skill',
-                'primarySkill': 'fallback_general_search',
-                'problemClass': 'realtime_info',
-                'answerShape': 'direct_answer',
-                'queryNormalization': <String, dynamic>{
-                  'normalizedQuery': '深圳 实时天气 出门',
-                },
+              'understandingResult': const <String, dynamic>{
+                'intents': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'intentId': 'intent_weather_now',
+                    'intentType': 'fallback_general_search.lookup',
+                    'goal': '确认深圳现在是否适合出门',
+                    'requiresEvidence': true,
+                  },
+                ],
+              },
+              'taskGraph': const <String, dynamic>{
+                'tasks': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'taskId': 'weather_now',
+                    'intentId': 'intent_weather_now',
+                    'toolName': 'web_search',
+                    'toolArgs': <String, dynamic>{'query': '深圳 实时天气 出门'},
+                  },
+                ],
               },
               'understandingSnapshot': <String, dynamic>{
                 'userFacingSummary': '',
@@ -218,10 +246,8 @@ void main() {
     );
 
     test(
-      'evidence digest phase 在普通 ready 链路只缓存 fallback processingSummary，不单独发流式过程事件',
+      'evidence digest phase 不再生成 fallback processingSummary 或单独发流式过程事件',
       () async {
-        const expectedSummary =
-            '降雨风险、体感温度方面，已有可信证据指向以下判断：今晚前半夜降雨概率低，体感温度适中。';
         final traces = <AssistantTraceEvent>[];
         final phase = EvidenceDigestPhase();
         final phaseOneResult = ReactRuntimeResult(
@@ -259,12 +285,38 @@ void main() {
                 userFacingSummary: '我先确认你今晚最想知道的是能不能顺利出门。',
                 concernPoints: <String>['降雨风险', '体感温度'],
               ),
-              executionBridgeSnapshot: <String, dynamic>{
-                'phaseOneResult': phaseOneResult,
-                'synthesisReadiness': const SynthesisReadinessResult(
-                  ready: true,
-                ),
-              },
+              executionPhaseSnapshot: ExecutionPhaseSuccess(
+                runId: 'run_evidence_digest_streaming_contract',
+                traceId: 'trace_evidence_digest_streaming_contract',
+                runStartAt: DateTime(2026, 4, 26),
+                sessionId: 'evidence_digest_streaming_contract',
+                latestUserQuery: '深圳今晚适合出门吗',
+                domainId: 'weather',
+                contextAssembly: const ContextAssemblyResult(),
+                understandingResult: const UnderstandingResult(),
+                taskGraph: const TaskGraph(),
+                orchestratorState: const ConversationOrchestratorState(),
+                turnSynthesisState: const TurnSynthesisState(),
+                dialogueRoundScript: const DialogueRoundScript(),
+                domainCatalog: const <String>[],
+                domainCatalogVersion: '',
+                allowedToolNames: const <String>['web_search'],
+                executionShell: const SkillExecutionShell(),
+                previousSlotState: const SlotStateSnapshot(),
+                retrievalPolicy: const <String, dynamic>{},
+                answerBoundaryPolicy: const AnswerBoundaryPolicy(),
+                understandingSnapshot: const <String, dynamic>{},
+                templateVariables: const <String, dynamic>{},
+                messages: const <Map<String, dynamic>>[],
+                synthTemplateVersion: '',
+                fusionSynthTemplateVersion: '',
+                phaseOneResult: phaseOneResult,
+                synthesisReadiness: const SynthesisReadinessResult(ready: true),
+                evidenceLedger: const <EvidenceLedgerEntry>[],
+                evidenceEvaluation: const EvidenceEvaluationResult(),
+                toolResults: const [],
+                supplementalTraces: const <AssistantTraceEvent>[],
+              ),
             ),
             runId: 'run_evidence_digest_streaming_contract',
             traceId: 'trace_evidence_digest_streaming_contract',
@@ -273,10 +325,7 @@ void main() {
           ),
         );
 
-        expect(
-          output.state?.retrievalProcessing.processingSummary,
-          equals(expectedSummary),
-        );
+        expect(output.state?.retrievalProcessing.processingSummary, isEmpty);
         expect(
           traces.where(
             (trace) => trace.type == AssistantTraceEventType.streamDelta,

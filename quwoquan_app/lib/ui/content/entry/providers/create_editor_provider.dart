@@ -1727,7 +1727,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       final canSplitLegacyParagraph =
           rawSplitOffset != null && narrowParagraph.text.isNotEmpty;
       final clampedSplit = canSplitLegacyParagraph
-          ? rawSplitOffset!.clamp(0, narrowParagraph.text.length)
+          ? rawSplitOffset.clamp(0, narrowParagraph.text.length)
           : narrowParagraph.text.length;
       final leftText = canSplitLegacyParagraph
           ? narrowParagraph.text.substring(0, clampedSplit)

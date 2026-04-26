@@ -33,7 +33,7 @@ acceptance_criteria:
   - CloudErrorMapper.fromErrorResponse('{"code":"CONTENT.USER.post_not_found"}') →
     ContentErrorCode.postNotFound
   - ContentErrorMessages.zh[ContentErrorCode.postNotFound] == '内容不存在或已删除'
-  - ContentErrorCode.rateLimited.isRetryable == true
+  - ContentErrorCode.rateLimited.recoveryAction == true
   - 旧的 _readCode() 返回 'REMOTE_ERROR' 的行为已消除
 - id: A5
   description: 端侧 Discovery 页零硬编码 contentType

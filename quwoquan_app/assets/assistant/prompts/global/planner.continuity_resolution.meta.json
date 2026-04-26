@@ -8,7 +8,7 @@
     "conversationSpine",
     "referenceQueries",
     "historySummary",
-    "previousIntentGraph",
+    "previousPlanView",
     "previousUnderstandingSnapshot",
     "previousAnswerProcessing",
     "previousHistoricalThinkingSnapshot",

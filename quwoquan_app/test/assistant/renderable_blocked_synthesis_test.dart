@@ -6,12 +6,15 @@ import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart'
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/memory/assistant_memory_runtime.dart';
@@ -168,6 +171,83 @@ class _StructuredStreamFailureProvider extends SwitchableAssistantLlmProvider {
   }
 }
 
+const AssistantPlanView _emptyPlanView = AssistantPlanView(
+  userGoal: '',
+  problemShape: ProblemShape.singleSkill,
+  primarySkill: '',
+  problemClass: ProblemClass.general,
+);
+
+AssistantPlanView _planViewFromRaw(Map<String, dynamic> raw) {
+  final planView = raw['planView'];
+  return planView is AssistantPlanView ? planView : _emptyPlanView;
+}
+
+UnderstandingResult _understandingResultFromRaw(Map<String, dynamic> raw) {
+  final typed = raw['understandingResult'];
+  if (typed is UnderstandingResult) {
+    return typed;
+  }
+  if (typed is Map) {
+    return UnderstandingResult.fromJson(typed.cast<String, dynamic>());
+  }
+  final planView = _planViewFromRaw(raw);
+  return UnderstandingResult(
+    intents: <IntentNode>[
+      IntentNode(
+        intentId: 'intent_primary',
+        intentType: '${planView.primarySkill}.primary',
+        goal: planView.userGoal,
+        entityRefs: planView.entityRefs
+            .map(
+              (item) => IntentEntityRef(
+                entityType: 'entity',
+                canonicalKey: item,
+                displayText: item,
+              ),
+            )
+            .toList(growable: false),
+        constraints: planView.constraints
+            .map((item) => IntentConstraint(key: 'constraint', value: item))
+            .toList(growable: false),
+        requiresEvidence: planView.requiresExternalEvidence,
+      ),
+    ],
+    dialogueTransitionDecision: DialogueTransitionDecision(
+      nextTurnMode: planView.requiresExternalEvidence
+          ? NextTurnMode.continueExecution
+          : NextTurnMode.answer,
+      needsClarification: planView.clarificationNeeded,
+    ),
+  );
+}
+
+TaskGraph _taskGraphFromRaw(Map<String, dynamic> raw) {
+  final typed = raw['taskGraph'];
+  if (typed is TaskGraph) {
+    return typed;
+  }
+  if (typed is Map) {
+    return TaskGraph.fromJson(typed.cast<String, dynamic>());
+  }
+  final planView = _planViewFromRaw(raw);
+  return TaskGraph(
+    tasks: planView.searchPlans
+        .map(
+          (plan) => TaskNode(
+            taskId: plan.id,
+            intentId: 'intent_primary',
+            toolName: 'web_search',
+            toolArgs: TaskToolArgs(<String, Object?>{
+              'query': plan.query,
+              'searchPlans': <Map<String, dynamic>>[plan.toJson()],
+            }),
+          ),
+        )
+        .toList(growable: false),
+  );
+}
+
 ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
   final dialogueRoundScript = raw['dialogueRoundScript'] is Map
       ? DialogueRoundScript(
@@ -250,17 +330,22 @@ ExecutionPhaseSnapshot _buildExecutionSnapshot(Map<String, dynamic> raw) {
             (raw['contextAssembly'] as Map).cast<String, dynamic>(),
           )
         : const ContextAssemblyResult(),
-    intentGraph: raw['intentGraph'] is IntentGraph
-        ? raw['intentGraph'] as IntentGraph
-        : raw['intentGraph'] is Map
-        ? IntentGraph.fromJson(
-            (raw['intentGraph'] as Map).cast<String, dynamic>(),
+    understandingResult: _understandingResultFromRaw(raw),
+    taskGraph: _taskGraphFromRaw(raw),
+    orchestratorState: raw['orchestratorState'] is ConversationOrchestratorState
+        ? raw['orchestratorState'] as ConversationOrchestratorState
+        : raw['orchestratorState'] is Map
+        ? ConversationOrchestratorState.fromJson(
+            (raw['orchestratorState'] as Map).cast<String, dynamic>(),
           )
-        : const IntentGraph(
-            userGoal: '',
-            problemShape: ProblemShape.singleSkill,
-            primarySkill: '',
-          ),
+        : const ConversationOrchestratorState(),
+    turnSynthesisState: raw['turnSynthesisState'] is TurnSynthesisState
+        ? raw['turnSynthesisState'] as TurnSynthesisState
+        : raw['turnSynthesisState'] is Map
+        ? TurnSynthesisState.fromJson(
+            (raw['turnSynthesisState'] as Map).cast<String, dynamic>(),
+          )
+        : const TurnSynthesisState(),
     dialogueRoundScript: raw['dialogueRoundScript'] is DialogueRoundScript
         ? raw['dialogueRoundScript'] as DialogueRoundScript
         : dialogueRoundScript,
@@ -379,18 +464,17 @@ void main() {
           'latestUserQuery': '昨天A股为什么大涨',
           'domainId': 'fallback_general_search',
           'contextAssembly': const ContextAssemblyResult(),
-          'intentGraph': const IntentGraph(
+          'planView': const AssistantPlanView(
             userGoal: '解释昨天A股为什么大涨',
             problemShape: ProblemShape.singleSkill,
             primarySkill: 'fallback_general_search',
             problemClass: ProblemClass.realtimeInfo,
-            freshnessNeed: FreshnessNeed.recent,
             requiresExternalEvidence: true,
-            queryTasks: <QueryTask>[
-              QueryTask(
+            searchPlans: <SearchPlanItem>[
+              SearchPlanItem(
                 id: 'market_jump',
                 query: '2026-04-07 A股 大涨 原因',
-                dimension: QueryTaskDimension.latestSignal,
+                dimension: SearchPlanDimension.latestSignal,
               ),
             ],
           ),
@@ -438,7 +522,7 @@ void main() {
         isNot(contains('retrieval_processing_blocked')),
       );
       expect(response.answerGateDecision.renderable, isTrue);
-      expect(response.displayMarkdown, contains('这次生成答案失败'));
+      expect(response.displayMarkdown, isNot(contains('contractId')));
       expect(response.displayState.answer.blocks, isNotEmpty);
       expect(
         ((response.structuredResponse['phaseOneRoutingDiagnostics'] as Map?)
@@ -481,18 +565,17 @@ void main() {
           'latestUserQuery': '深圳今天天气怎么样？需要带外套吗？',
           'domainId': 'weather',
           'contextAssembly': const ContextAssemblyResult(),
-          'intentGraph': const IntentGraph(
+          'planView': const AssistantPlanView(
             userGoal: '了解深圳今天的天气并判断是否需要带外套',
             problemShape: ProblemShape.singleSkill,
             primarySkill: 'weather',
             problemClass: ProblemClass.realtimeInfo,
-            freshnessNeed: FreshnessNeed.realtime,
             requiresExternalEvidence: true,
-            queryTasks: <QueryTask>[
-              QueryTask(
+            searchPlans: <SearchPlanItem>[
+              SearchPlanItem(
                 id: 'weather_today',
                 query: '深圳 2026-04-09 实时天气',
-                dimension: QueryTaskDimension.currentState,
+                dimension: SearchPlanDimension.currentState,
                 timeScope: 'today',
                 timePoint: '2026-04-09',
                 timezone: 'Asia/Shanghai',
@@ -581,18 +664,17 @@ void main() {
           'latestUserQuery': '明天深圳天气怎么样，要不要带伞？',
           'domainId': 'weather',
           'contextAssembly': const ContextAssemblyResult(),
-          'intentGraph': const IntentGraph(
+          'planView': const AssistantPlanView(
             userGoal: '判断明天深圳天气以及是否需要带伞',
             problemShape: ProblemShape.singleSkill,
             primarySkill: 'weather',
             problemClass: ProblemClass.realtimeInfo,
-            freshnessNeed: FreshnessNeed.recent,
             requiresExternalEvidence: true,
-            queryTasks: <QueryTask>[
-              QueryTask(
+            searchPlans: <SearchPlanItem>[
+              SearchPlanItem(
                 id: 'weather_tomorrow',
                 query: '深圳 2026-04-10 天气 预报',
-                dimension: QueryTaskDimension.currentState,
+                dimension: SearchPlanDimension.currentState,
                 timeScope: 'year_month_day',
                 timePoint: '2026-04-10',
                 timezone: 'Asia/Shanghai',
@@ -675,18 +757,17 @@ void main() {
           'latestUserQuery': '深圳今天天气怎么样？需要带外套吗？',
           'domainId': 'weather',
           'contextAssembly': const ContextAssemblyResult(),
-          'intentGraph': const IntentGraph(
+          'planView': const AssistantPlanView(
             userGoal: '了解深圳今天的天气并判断是否需要带外套',
             problemShape: ProblemShape.singleSkill,
             primarySkill: 'weather',
             problemClass: ProblemClass.realtimeInfo,
-            freshnessNeed: FreshnessNeed.realtime,
             requiresExternalEvidence: true,
-            queryTasks: <QueryTask>[
-              QueryTask(
+            searchPlans: <SearchPlanItem>[
+              SearchPlanItem(
                 id: 'weather_today',
                 query: '深圳 2026-04-09 实时天气',
-                dimension: QueryTaskDimension.currentState,
+                dimension: SearchPlanDimension.currentState,
                 timeScope: 'today',
                 timePoint: '2026-04-09',
                 timezone: 'Asia/Shanghai',
@@ -767,18 +848,17 @@ void main() {
         'latestUserQuery': '深圳今天天气怎么样？需要带外套吗？',
         'domainId': 'weather',
         'contextAssembly': const ContextAssemblyResult(),
-        'intentGraph': const IntentGraph(
+        'planView': const AssistantPlanView(
           userGoal: '了解深圳今天的天气并判断是否需要带外套',
           problemShape: ProblemShape.singleSkill,
           primarySkill: 'weather',
           problemClass: ProblemClass.realtimeInfo,
-          freshnessNeed: FreshnessNeed.realtime,
           requiresExternalEvidence: true,
-          queryTasks: <QueryTask>[
-            QueryTask(
+          searchPlans: <SearchPlanItem>[
+            SearchPlanItem(
               id: 'weather_today',
               query: '深圳 2026-04-09 实时天气',
-              dimension: QueryTaskDimension.currentState,
+              dimension: SearchPlanDimension.currentState,
               timeScope: 'today',
               timePoint: '2026-04-09',
               timezone: 'Asia/Shanghai',
@@ -867,18 +947,17 @@ void main() {
           'latestUserQuery': '明天会下雨吗，要带伞还是外套？',
           'domainId': 'weather',
           'contextAssembly': const ContextAssemblyResult(),
-          'intentGraph': const IntentGraph(
+          'planView': const AssistantPlanView(
             userGoal: '判断明天是否下雨以及要带伞还是外套',
             problemShape: ProblemShape.singleSkill,
             primarySkill: 'weather',
             problemClass: ProblemClass.realtimeInfo,
-            freshnessNeed: FreshnessNeed.recent,
             requiresExternalEvidence: true,
-            queryTasks: <QueryTask>[
-              QueryTask(
+            searchPlans: <SearchPlanItem>[
+              SearchPlanItem(
                 id: 'weather_tomorrow',
                 query: '深圳 2026-04-10 天气预报',
-                dimension: QueryTaskDimension.currentState,
+                dimension: SearchPlanDimension.currentState,
                 timeScope: 'year_month_day',
                 timePoint: '2026-04-10',
                 timezone: 'Asia/Shanghai',
@@ -919,7 +998,7 @@ void main() {
       );
 
       final decision =
-          (response.structuredResponse['conversationStateDecision'] as Map?)
+          (response.structuredResponse['decision'] as Map?)
               ?.cast<String, dynamic>() ??
           const <String, dynamic>{};
       expect(response.displayMarkdown, contains('带伞和薄外套'));
@@ -962,18 +1041,17 @@ void main() {
           'latestUserQuery': '明天深圳天气怎么样，要不要带伞？',
           'domainId': 'weather',
           'contextAssembly': const ContextAssemblyResult(),
-          'intentGraph': const IntentGraph(
+          'planView': const AssistantPlanView(
             userGoal: '判断明天深圳天气以及是否需要带伞',
             problemShape: ProblemShape.singleSkill,
             primarySkill: 'weather',
             problemClass: ProblemClass.realtimeInfo,
-            freshnessNeed: FreshnessNeed.recent,
             requiresExternalEvidence: true,
-            queryTasks: <QueryTask>[
-              QueryTask(
+            searchPlans: <SearchPlanItem>[
+              SearchPlanItem(
                 id: 'weather_tomorrow',
                 query: '深圳 2026-04-10 天气 预报',
-                dimension: QueryTaskDimension.currentState,
+                dimension: SearchPlanDimension.currentState,
               ),
             ],
           ),
@@ -1018,11 +1096,11 @@ void main() {
         }),
       );
 
-      final conversationStateDecision =
-          (response.structuredResponse['conversationStateDecision'] as Map?)
+      final typedTurnDecision =
+          (response.structuredResponse['decision'] as Map?)
               ?.cast<String, dynamic>();
-      expect(conversationStateDecision, isNotNull);
-      expect(conversationStateDecision!['nextAction'], equals('answer'));
+      expect(typedTurnDecision, isNotNull);
+      expect(typedTurnDecision!['nextAction'], equals('answer'));
       expect(
         response.structuredResponse['finalAnswerMode'],
         equals('bounded_answer'),
@@ -1055,7 +1133,7 @@ void main() {
           const <Map<String, dynamic>>[];
       expect(rounds, isNotEmpty);
       final roundTasks =
-          (rounds.first['queryTasks'] as List?)
+          (rounds.first['searchPlans'] as List?)
               ?.whereType<Map>()
               .map((item) => item.cast<String, dynamic>())
               .toList(growable: false) ??
@@ -1097,18 +1175,17 @@ void main() {
         'latestUserQuery': '明天深圳天气怎么样，要不要带伞？',
         'domainId': 'weather',
         'contextAssembly': const ContextAssemblyResult(),
-        'intentGraph': const IntentGraph(
+        'planView': const AssistantPlanView(
           userGoal: '判断明天深圳天气以及是否需要带伞',
           problemShape: ProblemShape.singleSkill,
           primarySkill: 'weather',
           problemClass: ProblemClass.realtimeInfo,
-          freshnessNeed: FreshnessNeed.recent,
           requiresExternalEvidence: true,
-          queryTasks: <QueryTask>[
-            QueryTask(
+          searchPlans: <SearchPlanItem>[
+            SearchPlanItem(
               id: 'weather_tomorrow',
               query: '深圳 2026-04-10 天气 预报',
-              dimension: QueryTaskDimension.currentState,
+              dimension: SearchPlanDimension.currentState,
               timeScope: 'year_month_day',
               timePoint: '2026-04-10',
               timezone: 'Asia/Shanghai',
@@ -1153,14 +1230,15 @@ void main() {
       }),
     );
 
-    final conversationStateDecision =
-        (response.structuredResponse['conversationStateDecision'] as Map?)
-            ?.cast<String, dynamic>();
-    expect(conversationStateDecision, isNotNull);
-    expect(conversationStateDecision!['nextAction'], equals('answer'));
-    expect(conversationStateDecision['finalAnswerMode'], equals('bounded_answer'));
-    expect(conversationStateDecision['finalAnswerReady'], isTrue);
-    expect(response.structuredResponse['finalAnswerMode'], equals('bounded_answer'));
+    final typedTurnDecision = (response.structuredResponse['decision'] as Map?)
+        ?.cast<String, dynamic>();
+    expect(typedTurnDecision, isNotNull);
+    expect(typedTurnDecision!['nextAction'], equals('answer'));
+    expect(typedTurnDecision['finalAnswerMode'], equals('bounded_answer'));
+    expect(
+      response.structuredResponse['finalAnswerMode'],
+      equals('bounded_answer'),
+    );
     expect(response.runArtifacts, isNotNull);
     expect(response.runArtifacts!.answerDecision.core.finalAnswerReady, isTrue);
     expect(response.runArtifacts!.journey.readiness.finalAnswerReady, isTrue);
@@ -1198,19 +1276,18 @@ void main() {
         'latestUserQuery': 'Shen zhen tian qi',
         'domainId': 'weather',
         'contextAssembly': const ContextAssemblyResult(),
-        'intentGraph': const IntentGraph(
+        'planView': const AssistantPlanView(
           userGoal: '获取深圳当前天气信息',
           problemShape: ProblemShape.singleSkill,
           primarySkill: 'weather',
           problemClass: ProblemClass.realtimeInfo,
-          freshnessNeed: FreshnessNeed.realtime,
           requiresExternalEvidence: true,
-          queryTasks: <QueryTask>[
-            QueryTask(
+          searchPlans: <SearchPlanItem>[
+            SearchPlanItem(
               id: 'weather_now',
               label: '天气现状',
               query: '深圳 实时天气 体感温度',
-              dimension: QueryTaskDimension.currentState,
+              dimension: SearchPlanDimension.currentState,
             ),
           ],
         ),
@@ -1308,18 +1385,17 @@ void main() {
         'latestUserQuery': '深圳今天天气怎么样？需要带外套吗？',
         'domainId': 'weather',
         'contextAssembly': const ContextAssemblyResult(),
-        'intentGraph': const IntentGraph(
+        'planView': const AssistantPlanView(
           userGoal: '了解深圳今天的天气并判断是否需要带外套',
           problemShape: ProblemShape.singleSkill,
           primarySkill: 'weather',
           problemClass: ProblemClass.realtimeInfo,
-          freshnessNeed: FreshnessNeed.realtime,
           requiresExternalEvidence: true,
-          queryTasks: <QueryTask>[
-            QueryTask(
+          searchPlans: <SearchPlanItem>[
+            SearchPlanItem(
               id: 'weather_today',
               query: '深圳 2026-04-09 实时天气',
-              dimension: QueryTaskDimension.currentState,
+              dimension: SearchPlanDimension.currentState,
               timeScope: 'today',
               timePoint: '2026-04-09',
               timezone: 'Asia/Shanghai',

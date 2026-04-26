@@ -3,6 +3,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
+import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/assistant/application/assistant_backend.dart';
 import 'package:quwoquan_app/assistant/application/transcript/assistant_feedback_target.dart';
 import 'package:quwoquan_app/assistant/application/transcript/assistant_replay_record_factory.dart';
@@ -15,8 +17,9 @@ import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
-import 'package:quwoquan_app/assistant/intent_bridge/assistant_intent_bridge_runtime.dart';
-import 'package:quwoquan_app/assistant/orchestration/orchestration.dart';
+import 'package:quwoquan_app/assistant/infrastructure/streaming/assistant_stream_chunk_visibility.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_boundary_error_mapper.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_runtime_failure_mapper.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/session/session_transcript_service.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
@@ -25,8 +28,6 @@ import 'package:quwoquan_app/assistant/protocol/assistant_run_response_display_p
 import 'package:quwoquan_app/assistant/protocol/assistant_replay_trace_payload.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/understanding_snapshot_codec.dart';
-import 'package:quwoquan_app/assistant/reasoning/geo/geo_resolution_catalog.dart';
-import 'package:quwoquan_app/assistant/tool/impl/device/local_context_tool.dart';
 import 'package:quwoquan_app/assistant/transcript/assistant_answer/assistant_dialogue_runtime_read_view.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/assistant_transcript_row_patch.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
@@ -40,6 +41,7 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
+import 'package:quwoquan_app/ui/assistant/assistant_conversation_model_history_text.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_context_scope_read_view.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_privacy_policy_hint_read_view.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_structured_run_response_read_view.dart';
@@ -47,20 +49,23 @@ import 'package:quwoquan_app/ui/assistant/models/assistant_display_fallbacks.dar
 import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class AssistantConversationController extends ChangeNotifier {
   AssistantConversationController({required WidgetRef ref, this.openContext})
     : _ref = ref;
 
   static const int _assistantHistoryPageSize = 18;
+  static const MethodChannel _nativeApiChannel = MethodChannel(
+    'personal_assistant/native_api',
+  );
+  static const AssistantBoundaryErrorMapper _boundaryErrorMapper =
+      AssistantBoundaryErrorMapper();
 
   final WidgetRef _ref;
   final AssistantOpenContext? openContext;
   final AssistantStreamingAnswerDecoder _streamingAnswerDecoder =
       AssistantStreamingAnswerDecoder();
-  final LocalContextTool _localContextTool = LocalContextTool(
-    MethodChannelAdapter(),
-  );
 
   final Map<String, AssistantReplayRecord> _assistantReplayByMessageId =
       <String, AssistantReplayRecord>{};
@@ -68,7 +73,7 @@ class AssistantConversationController extends ChangeNotifier {
       <AssistantReplayRecord>[];
   final Map<String, String> _assistantFeedbackStatusByMessageId =
       <String, String>{};
-  _AssistantGeoRuntimeContext? _cachedGeoRuntimeContext;
+  _AssistantNativeSystemContext? _cachedNativeSystemContext;
 
   List<AssistantTranscriptTimelineRow> _transcriptRows =
       <AssistantTranscriptTimelineRow>[];
@@ -159,19 +164,9 @@ class AssistantConversationController extends ChangeNotifier {
     }
   }
 
-  /// 助手行送入模型的正文候选（与历史 Map 路径 [ _assistantHistoryContentForModel ] 对齐）。
-  String _assistantHistoryContentForAssistantRow(AssistantAnswerTranscriptRow row) {
-    final candidates = <String>[
-      row.persisted.displayPlainText,
-      row.persisted.displayMarkdown,
-      row.content,
-    ];
-    for (final candidate in candidates) {
-      final sanitized = _sanitizeAssistantHistoryContent(candidate);
-      if (sanitized.isNotEmpty) return sanitized;
-    }
-    return '';
-  }
+  String _assistantHistoryContentForAssistantRow(
+    AssistantAnswerTranscriptRow row,
+  ) => assistantHistoryTextForModelFromAnswerRow(row);
 
   void _ensureTranscriptRowsGrowable() {
     _transcriptRows = List<AssistantTranscriptTimelineRow>.from(
@@ -202,6 +197,52 @@ class AssistantConversationController extends ChangeNotifier {
     if (!_disposed && !synced) {
       await _startFreshAssistantSessionOnOpen();
     }
+  }
+
+  AssistantRunResponse _buildRuntimeFailureResponse({
+    required String code,
+    required String stage,
+    required String functionModule,
+  }) {
+    final failure = const AssistantRuntimeFailureMapper().fromRuntimeCode(
+      code,
+      boundary: 'assistant_turn',
+      stage: stage,
+      functionModule: functionModule,
+      businessObject: 'assistant_turn',
+    );
+    final recoveryDecision = const DefaultRuntimeRecoveryPolicy().decide(
+      failure,
+      EntryContext(
+        kind: 'assistant',
+        entryId: _assistantRuntimeSessionId,
+        actorType: 'user',
+        actorId: _currentProfileSubjectId(),
+        surfaceId: 'assistant_conversation',
+        sessionId: _assistantRuntimeSessionId,
+      ),
+      BoundaryContext(boundary: 'assistant_turn', stage: stage),
+    );
+    final outcome = _boundaryErrorMapper.blocked(
+      boundary: 'assistant_turn',
+      stage: stage,
+      failure: failure,
+      disruptionLevel: recoveryDecision.disruptionLevel,
+    );
+    final structuredResponse = <String, dynamic>{
+      assistantBoundaryOutcomeField: outcome.toJson(),
+      'runtimeRecoveryDecision': <String, dynamic>{
+        'action': recoveryDecision.action.name,
+        'disruptionLevel': recoveryDecision.disruptionLevel.name,
+        'policyId': recoveryDecision.policyId,
+      },
+    };
+    return AssistantRunResponse(
+      finalText: '',
+      traces: const <AssistantTraceEvent>[],
+      structuredResponse: structuredResponse,
+      boundaryOutcome: outcome,
+    );
   }
 
   Future<void> _startFreshAssistantSessionOnOpen() async {
@@ -277,10 +318,8 @@ class AssistantConversationController extends ChangeNotifier {
     if (_disposed || sessions.isEmpty) return false;
     final namespacedSessions = sessions
         .where(
-          (d) => isAssistantSessionForBackend(
-            d.sessionId,
-            AssistantBackend.local,
-          ),
+          (d) =>
+              isAssistantSessionForBackend(d.sessionId, AssistantBackend.local),
         )
         .toList(growable: false);
     if (namespacedSessions.isEmpty) return false;
@@ -311,7 +350,8 @@ class AssistantConversationController extends ChangeNotifier {
       detail: detail,
       pageSize: _assistantHistoryPageSize,
       profileSubjectId: _currentProfileSubjectId(),
-      normalizeAssistantContentForModel: _assistantHistoryContentForModel,
+      normalizeAssistantContentForModel:
+          assistantHistoryTextForModelFromMessageMap,
     );
     _assistantHiddenHistory = result.hiddenRows;
     _assistantLoadingOlderHistory = false;
@@ -392,7 +432,7 @@ class AssistantConversationController extends ChangeNotifier {
         profileSubjectId: activeContext.profileSubjectId,
         displayName: activeContext.displayName,
         avatarUrl: activeContext.avatarUrl,
-        subAccountId: activeContext.subAccountId,
+        subAccountId: activeContext.personaId,
       ),
     );
     final streamNow = DateTime.now();
@@ -437,14 +477,8 @@ class AssistantConversationController extends ChangeNotifier {
           .map(_rowAsRunMessage)
           .whereType<AssistantRunMessage>()
           .toList(growable: false);
-      final geoRuntimeContext = await _resolveAssistantGeoRuntimeContext();
-      final contextScope = _withGeoRuntimeContextScope(
-        _withActivePersonaContextScope(
-          buildContextScope(),
-          activeContext: activeContext,
-        ),
-        geoRuntimeContext,
-      );
+      final systemContext = await _resolveAssistantNativeSystemContext();
+      final contextScope = buildContextScope(activeContext: activeContext);
       final contextScopeView = AssistantContextScopeReadView(contextScope);
       final sourceQueryHint =
           openContext?.hints['sourceQuery']?.toString().trim() ?? '';
@@ -457,14 +491,14 @@ class AssistantConversationController extends ChangeNotifier {
       final request = AssistantRunRequest(
         messages: assistantMessages,
         sessionId: effectiveAssistantSessionId,
-        userId: activeContext.profileSubjectId,
+        userId: activeContext.ownerUserId,
         profileSubjectId: activeContext.profileSubjectId,
-        subAccountId: activeContext.subAccountId,
-        personaContextVersion: activeContext.personaContextVersion,
+        subAccountId: activeContext.personaId,
+        personaContextVersion: activeContext.contextVersion,
         deviceProfile: deviceProfile,
         channel: 'app',
         capabilityCatalog: AssistantCapabilityCatalog.defaultCatalog,
-        gpsLocation: geoRuntimeContext.gpsLocation,
+        gpsLocation: systemContext.gpsLocation,
         contextScopeHint: contextScope,
         privacyProfile: 'default',
         privacyPolicy: contextScopeView.privacyPolicy,
@@ -481,11 +515,10 @@ class AssistantConversationController extends ChangeNotifier {
             case AssistantRunStreamEventType.trace:
               continue;
             case AssistantRunStreamEventType.failed:
-              response = AssistantRunResponse(
-                finalText: streamEvent.errorMessage ?? '助手流式调用失败',
-                degraded: true,
-                errorCode: 'stream_failed',
-                traces: const <AssistantTraceEvent>[],
+              response = _buildRuntimeFailureResponse(
+                code: 'ASSISTANT.NETWORK.stream_failed',
+                stage: 'stream',
+                functionModule: 'assistant_stream',
               );
               break;
             case AssistantRunStreamEventType.chunk:
@@ -522,18 +555,16 @@ class AssistantConversationController extends ChangeNotifier {
         if (kDebugMode) {
           debugPrint('[AssistantConversation] stream error: $streamError');
         }
-        response = AssistantRunResponse(
-          finalText: '助手初始化异常: ${streamError.runtimeType}',
-          degraded: true,
-          errorCode: 'provider_or_stream_error',
-          traces: const <AssistantTraceEvent>[],
+        response = _buildRuntimeFailureResponse(
+          code: 'ASSISTANT.MIDDLEWARE.provider_or_stream_error',
+          stage: 'stream',
+          functionModule: 'assistant_provider',
         );
       }
-      response ??= const AssistantRunResponse(
-        finalText: '助手未返回有效响应',
-        degraded: true,
-        errorCode: 'no_response',
-        traces: <AssistantTraceEvent>[],
+      response ??= _buildRuntimeFailureResponse(
+        code: 'ASSISTANT.SYSTEM.no_response',
+        stage: 'stream',
+        functionModule: 'assistant_stream',
       );
       final runResponse = response;
       final finalAnswerReady = _responseMarksFinalAnswerReady(runResponse);
@@ -623,29 +654,30 @@ class AssistantConversationController extends ChangeNotifier {
       );
       final completedAssistantRow =
           AssistantTranscriptAssembler.completedAssistantAnswerTranscriptRow(
-        mergeFrom: existingIndex >= 0
-            ? clearedRow! as AssistantAnswerTranscriptRow
-            : null,
-        newRowId: assistantMessageId,
-        content: displayMarkdown,
-        timestamp: replyTime,
-        sourceQuery: trimmed,
-        runId: runResponse.runId ?? '',
-        traceId: runResponse.traceId ?? '',
-        degraded: runResponse.degraded,
-        templateVersionUsed: structuredRead.templateVersionUsedOrEmpty,
-        phaseOneRoutingDiagnostics: structuredRead.phaseOneRoutingDiagnosticsMap,
-        qualityMetrics: structuredRead.qualityMetricsMap,
-        heuristicFallbackUsed:
-            structuredRead.heuristicFallbackUsedFromQualityMetrics,
-        dialogueState: structuredRead.dialogueRuntime,
-        uiReferences: structuredRead.uiReferences,
-        uiActions: structuredRead.uiActions,
-        extraFields: _responseTranscriptExtraFields(runResponse),
-        mergedRunArtifacts: mergedRunArtifacts,
-        uiUsageStats: uiUsageStats,
-        persistedTurnFields: persistedTurnFields,
-      );
+            mergeFrom: existingIndex >= 0
+                ? clearedRow! as AssistantAnswerTranscriptRow
+                : null,
+            newRowId: assistantMessageId,
+            content: displayMarkdown,
+            timestamp: replyTime,
+            sourceQuery: trimmed,
+            runId: runResponse.runId ?? '',
+            traceId: runResponse.traceId ?? '',
+            degraded: runResponse.degraded,
+            templateVersionUsed: structuredRead.templateVersionUsedOrEmpty,
+            phaseOneRoutingDiagnostics:
+                structuredRead.phaseOneRoutingDiagnosticsMap,
+            qualityMetrics: structuredRead.qualityMetricsMap,
+            heuristicFallbackUsed:
+                structuredRead.heuristicFallbackUsedFromQualityMetrics,
+            dialogueState: structuredRead.dialogueRuntime,
+            uiReferences: structuredRead.uiReferences,
+            uiActions: structuredRead.uiActions,
+            extraFields: _responseTranscriptExtraFields(runResponse),
+            mergedRunArtifacts: mergedRunArtifacts,
+            uiUsageStats: uiUsageStats,
+            persistedTurnFields: persistedTurnFields,
+          );
       if (existingIndex >= 0) {
         _transcriptRows[existingIndex] = completedAssistantRow;
       } else {
@@ -690,11 +722,10 @@ class AssistantConversationController extends ChangeNotifier {
       _transcriptRows.removeWhere(
         (item) => item.id == streamingAssistantMessageId,
       );
-      final errorHint = kDebugMode ? '助手异常: ${e.runtimeType}' : '助手出现异常，请重试。';
       _transcriptRows.add(
         AssistantTranscriptAssembler.assistantErrorMessage(
           id: 'assistant_err_${DateTime.now().millisecondsSinceEpoch}',
-          errorHint: errorHint,
+          errorHint: '',
         ),
       );
       _stopAssistantProgress();
@@ -720,26 +751,20 @@ class AssistantConversationController extends ChangeNotifier {
         timestamp: ts,
       ),
     );
-    final geoRuntimeContext = await _resolveAssistantGeoRuntimeContext();
-    final contextScope = _withGeoRuntimeContextScope(
-      _withActivePersonaContextScope(
-        buildContextScope(),
-        activeContext: activeContext,
-      ),
-      geoRuntimeContext,
-    );
+    final systemContext = await _resolveAssistantNativeSystemContext();
+    final contextScope = buildContextScope(activeContext: activeContext);
     final request = AssistantRunRequest(
       messages: <AssistantRunMessage>[
         AssistantRunMessage(role: 'user', content: query),
       ],
       sessionId: _assistantRuntimeSessionId,
-      userId: activeContext.profileSubjectId,
+      userId: activeContext.ownerUserId,
       profileSubjectId: activeContext.profileSubjectId,
-      subAccountId: activeContext.subAccountId,
-      personaContextVersion: activeContext.personaContextVersion,
+      subAccountId: activeContext.personaId,
+      personaContextVersion: activeContext.contextVersion,
       maxIterations: rewrite.mode == RewriteMode.deepThink ? 6 : 1,
       capabilityCatalog: AssistantCapabilityCatalog.defaultCatalog,
-      gpsLocation: geoRuntimeContext.gpsLocation,
+      gpsLocation: systemContext.gpsLocation,
       contextScopeHint: contextScope,
       rewriteInstruction: rewrite,
     );
@@ -784,11 +809,10 @@ class AssistantConversationController extends ChangeNotifier {
             case AssistantRunStreamEventType.trace:
               continue;
             case AssistantRunStreamEventType.failed:
-              response = AssistantRunResponse(
-                finalText: streamEvent.errorMessage ?? '助手流式调用失败',
-                degraded: true,
-                errorCode: 'stream_failed',
-                traces: const <AssistantTraceEvent>[],
+              response = _buildRuntimeFailureResponse(
+                code: 'ASSISTANT.NETWORK.stream_failed',
+                stage: 'rewrite_stream',
+                functionModule: 'assistant_stream',
               );
               break;
             case AssistantRunStreamEventType.journeyUpdate:
@@ -817,20 +841,20 @@ class AssistantConversationController extends ChangeNotifier {
         }
       } catch (streamError) {
         if (kDebugMode) {
-          debugPrint('[AssistantConversation] rewrite stream error: $streamError');
+          debugPrint(
+            '[AssistantConversation] rewrite stream error: $streamError',
+          );
         }
-        response = AssistantRunResponse(
-          finalText: '助手初始化异常: ${streamError.runtimeType}',
-          degraded: true,
-          errorCode: 'provider_or_stream_error',
-          traces: const <AssistantTraceEvent>[],
+        response = _buildRuntimeFailureResponse(
+          code: 'ASSISTANT.MIDDLEWARE.provider_or_stream_error',
+          stage: 'rewrite_stream',
+          functionModule: 'assistant_provider',
         );
       }
-      response ??= const AssistantRunResponse(
-        finalText: '助手未返回有效响应',
-        degraded: true,
-        errorCode: 'no_response',
-        traces: <AssistantTraceEvent>[],
+      response ??= _buildRuntimeFailureResponse(
+        code: 'ASSISTANT.SYSTEM.no_response',
+        stage: 'rewrite_stream',
+        functionModule: 'assistant_stream',
       );
       if (!_disposed) {
         final finalResponse = response;
@@ -923,27 +947,28 @@ class AssistantConversationController extends ChangeNotifier {
           );
           _transcriptRows[idx] =
               AssistantTranscriptAssembler.completedAssistantAnswerTranscriptRow(
-            mergeFrom: mergeRow,
-            newRowId: streamingAssistantMessageId,
-            content: displayMarkdown,
-            timestamp: mergeRow.timestamp,
-            sourceQuery: query,
-            runId: finalResponse.runId ?? '',
-            traceId: finalResponse.traceId ?? '',
-            degraded: finalResponse.degraded,
-            templateVersionUsed: structuredRead.templateVersionUsedOrEmpty,
-            phaseOneRoutingDiagnostics:
-                structuredRead.phaseOneRoutingDiagnosticsMap,
-            qualityMetrics: structuredRead.qualityMetricsMap,
-            heuristicFallbackUsed:
-                structuredRead.heuristicFallbackUsedFromQualityMetrics,
-            dialogueState: structuredRead.dialogueRuntime,
-            uiReferences: structuredRead.uiReferences,
-            uiActions: structuredRead.uiActions,
-            mergedRunArtifacts: mergedRunArtifacts,
-            uiUsageStats: uiUsageStats,
-            persistedTurnFields: persistedTurnFields,
-          );
+                mergeFrom: mergeRow,
+                newRowId: streamingAssistantMessageId,
+                content: displayMarkdown,
+                timestamp: mergeRow.timestamp,
+                sourceQuery: query,
+                runId: finalResponse.runId ?? '',
+                traceId: finalResponse.traceId ?? '',
+                degraded: finalResponse.degraded,
+                templateVersionUsed: structuredRead.templateVersionUsedOrEmpty,
+                phaseOneRoutingDiagnostics:
+                    structuredRead.phaseOneRoutingDiagnosticsMap,
+                qualityMetrics: structuredRead.qualityMetricsMap,
+                heuristicFallbackUsed:
+                    structuredRead.heuristicFallbackUsedFromQualityMetrics,
+                dialogueState: structuredRead.dialogueRuntime,
+                uiReferences: structuredRead.uiReferences,
+                uiActions: structuredRead.uiActions,
+                mergedRunArtifacts: mergedRunArtifacts,
+                uiUsageStats: uiUsageStats,
+                persistedTurnFields: persistedTurnFields,
+                extraFields: _responseTranscriptExtraFields(finalResponse),
+              );
         }
         _answerGateOpen = finalAnswerReady;
       }
@@ -981,7 +1006,7 @@ class AssistantConversationController extends ChangeNotifier {
             traceId:
                 runResponse.traceId ??
                 'trace_${DateTime.now().millisecondsSinceEpoch}',
-            userId: activeContext.profileSubjectId,
+            userId: activeContext.ownerUserId,
             sessionId: sessionId,
             pageType: contextScopeView.pageType,
             queryText: trimmedQuery,
@@ -1059,9 +1084,7 @@ class AssistantConversationController extends ChangeNotifier {
   }) async {
     final contextScope = buildContextScope();
     final scopeView = AssistantContextScopeReadView(contextScope);
-    final tags = userTags.isNotEmpty
-        ? userTags
-        : scopeView.normalizedUserTags;
+    final tags = userTags.isNotEmpty ? userTags : scopeView.normalizedUserTags;
     await _ref
         .read(assistantLearningServiceProvider)
         .recordInteraction(
@@ -1138,16 +1161,128 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   Future<ActivePersonaContextViewData> _resolveActivePersonaContext() async {
-    final activeContext = await _ref.read(activePersonaContextProvider.future);
-    if (_assistantBackend == AssistantBackend.remote &&
-        activeContext.isFallback) {
-      throw StateError('active persona context unavailable');
+    try {
+      final activeContext = await _ref.read(
+        activePersonaContextProvider.future,
+      );
+      await _trackPersonaContextHints(activeContext);
+      if (_assistantBackend == AssistantBackend.remote &&
+          activeContext.isFallback) {
+        await _trackPersonaContextMetric(
+          'assistant_persona_drift_count',
+          properties: <String, dynamic>{
+            'surfaceId': _openContextSurfaceId,
+            'profileSubjectId': activeContext.profileSubjectId,
+            'personaId': activeContext.personaId,
+          },
+        );
+        throw StateError('active persona context unavailable');
+      }
+      return activeContext;
+    } catch (_) {
+      await _trackPersonaContextMetric(
+        'persona_context_stale_count',
+        properties: <String, dynamic>{
+          'surfaceId': _openContextSurfaceId,
+          'routeId': 'assistant_conversation',
+        },
+      );
+      rethrow;
     }
-    return activeContext;
   }
 
-  Map<String, dynamic> _withActivePersonaContextScope(
-    Map<String, dynamic> baseScope, {
+  String get _openContextSurfaceId =>
+      openContext?.hints['sourceSurfaceId']?.toString().trim() ?? '';
+
+  Future<void> _trackPersonaContextHints(
+    ActivePersonaContextViewData activeContext,
+  ) async {
+    final hints = openContext?.hints ?? const <String, dynamic>{};
+    final hintedPersonaId = (hints['personaId'] ?? hints['subAccountId'])
+        ?.toString()
+        .trim();
+    final hintedProfileSubjectId = hints['profileSubjectId']?.toString().trim();
+    final hintedContextVersion =
+        (hints['contextVersion'] ?? hints['personaContextVersion'])
+            ?.toString()
+            .trim();
+    final surfaceId = _openContextSurfaceId;
+    final personaMismatch =
+        hintedPersonaId != null &&
+            hintedPersonaId.isNotEmpty &&
+            hintedPersonaId != activeContext.personaId ||
+        hintedProfileSubjectId != null &&
+            hintedProfileSubjectId.isNotEmpty &&
+            hintedProfileSubjectId != activeContext.profileSubjectId;
+    if (personaMismatch) {
+      await _trackPersonaContextMetric(
+        'persona_context_mismatch_count',
+        properties: <String, dynamic>{
+          'surfaceId': surfaceId,
+          'profileSubjectId': activeContext.profileSubjectId,
+          'personaId': activeContext.personaId,
+          'hintedPersonaId': hintedPersonaId ?? '',
+          'hintedProfileSubjectId': hintedProfileSubjectId ?? '',
+        },
+      );
+      await _trackPersonaContextMetric(
+        'assistant_persona_drift_count',
+        properties: <String, dynamic>{
+          'surfaceId': surfaceId,
+          'profileSubjectId': activeContext.profileSubjectId,
+          'personaId': activeContext.personaId,
+        },
+      );
+      if (surfaceId.contains('notification')) {
+        await _trackPersonaContextMetric(
+          'notification_wrong_persona_open_count',
+          properties: <String, dynamic>{
+            'surfaceId': surfaceId,
+            'profileSubjectId': activeContext.profileSubjectId,
+            'personaId': activeContext.personaId,
+          },
+        );
+      }
+    }
+    if (hintedContextVersion != null &&
+        hintedContextVersion.isNotEmpty &&
+        hintedContextVersion != activeContext.contextVersion) {
+      await _trackPersonaContextMetric(
+        'persona_context_stale_count',
+        properties: <String, dynamic>{
+          'surfaceId': surfaceId,
+          'profileSubjectId': activeContext.profileSubjectId,
+          'personaId': activeContext.personaId,
+          'hintedContextVersion': hintedContextVersion,
+          'contextVersion': activeContext.contextVersion,
+        },
+      );
+    }
+  }
+
+  Future<void> _trackPersonaContextMetric(
+    String eventName, {
+    Map<String, dynamic> properties = const <String, dynamic>{},
+  }) async {
+    try {
+      await _ref
+          .read(analyticsProvider)
+          .trackEvent(
+            AnalyticsEvent(
+              eventType: 'persona_context',
+              eventName: eventName,
+              properties: <String, dynamic>{
+                'surfaceId': _openContextSurfaceId,
+                'routeId': 'assistant_conversation',
+                'targetType': 'persona_context',
+                ...properties,
+              },
+            ),
+          );
+    } catch (_) {}
+  }
+
+  Map<String, dynamic> _activePersonaContextScope({
     ActivePersonaContextViewData? activeContext,
   }) {
     final resolvedContext =
@@ -1155,26 +1290,30 @@ class AssistantConversationController extends ChangeNotifier {
         _ref
             .read(activePersonaContextProvider)
             .maybeWhen(data: (value) => value, orElse: () => null);
-    final profileSubjectId =
-        resolvedContext?.profileSubjectId.isNotEmpty == true
-        ? resolvedContext!.profileSubjectId
-        : _currentProfileSubjectId();
     return <String, dynamic>{
-      ...baseScope,
-      'userId': profileSubjectId,
+      'userId': resolvedContext?.ownerUserId ?? '',
+      if (resolvedContext?.personaId.isNotEmpty == true)
+        'personaId': resolvedContext!.personaId,
       if (resolvedContext?.profileSubjectId.isNotEmpty == true)
         'profileSubjectId': resolvedContext!.profileSubjectId,
       if (resolvedContext?.subAccountId.isNotEmpty == true)
         'subAccountId': resolvedContext!.subAccountId,
+      if (resolvedContext?.contextVersion.isNotEmpty == true)
+        'contextVersion': resolvedContext!.contextVersion,
       if (resolvedContext?.personaContextVersion.isNotEmpty == true)
         'personaContextVersion': resolvedContext!.personaContextVersion,
+      'personaSnapshotVersion': resolvedContext?.personaSnapshotVersion ?? '1',
+      'explicitOverride': false,
     };
   }
 
-  Map<String, dynamic> buildContextScope() {
+  Map<String, dynamic> buildContextScope({
+    ActivePersonaContextViewData? activeContext,
+  }) {
     final hints = openContext?.hints ?? const <String, dynamic>{};
-    final privacyView =
-        AssistantPrivacyPolicyHintReadView.fromOpenContextHints(hints);
+    final privacyView = AssistantPrivacyPolicyHintReadView.fromOpenContextHints(
+      hints,
+    );
     final contentAccessState = _ref.read(personalContentAccessProvider);
     final identityIndexFeatureFlag = _ref.read(
       contentFeatureFlagProvider('enable_assistant_content_identity_index'),
@@ -1202,11 +1341,12 @@ class AssistantConversationController extends ChangeNotifier {
             .toList(growable: false) ??
         const <String>[];
     final latestDialogueState = _latestAssistantDialogueState();
-    final dialogueRuntimeView =
-        AssistantDialogueRuntimeReadView(latestDialogueState);
+    final dialogueRuntimeView = AssistantDialogueRuntimeReadView(
+      latestDialogueState,
+    );
     final latestRunArtifacts = _latestAssistantRunArtifacts();
     final scope = <String, dynamic>{
-      'pageType': _assistantSourceToPageType(openContext?.source),
+      'pageType': assistantPageTypeForSource(openContext?.source),
       'sessionId': effectiveAssistantSessionId,
       'assistantBackend': _assistantBackend.wireName,
       if (openContext?.entityId != null) 'entityId': openContext!.entityId!,
@@ -1238,144 +1378,106 @@ class AssistantConversationController extends ChangeNotifier {
       },
       'privacyProfile': 'default',
       'privacyPolicy': normalizedPrivacyPolicy,
+      ..._activePersonaContextScope(activeContext: activeContext),
     };
-    return _withActivePersonaContextScope(scope);
+    return scope;
   }
 
-  Map<String, dynamic> _withGeoRuntimeContextScope(
-    Map<String, dynamic> scope,
-    _AssistantGeoRuntimeContext geoRuntimeContext,
-  ) {
-    if (geoRuntimeContext.availableGeoContext.isEmpty) {
-      return scope;
+  Future<_AssistantNativeSystemContext>
+  _resolveAssistantNativeSystemContext() async {
+    if (_cachedNativeSystemContext != null) {
+      return _cachedNativeSystemContext!;
     }
-    return <String, dynamic>{
-      ...scope,
-      'availableGeoContext': geoRuntimeContext.availableGeoContext,
-      if (geoRuntimeContext.availableGeoContext['cityLabel']
-              ?.toString()
-              .trim()
-              .isNotEmpty ==
-          true)
-        'city': geoRuntimeContext.availableGeoContext['cityLabel'],
-      if (geoRuntimeContext.availableGeoContext['countryCode']
-              ?.toString()
-              .trim()
-              .isNotEmpty ==
-          true)
-        'countryCode': geoRuntimeContext.availableGeoContext['countryCode'],
-      if (geoRuntimeContext.availableGeoContext['countryLabel']
-              ?.toString()
-              .trim()
-              .isNotEmpty ==
-          true)
-        'countryLabel': geoRuntimeContext.availableGeoContext['countryLabel'],
-      if (geoRuntimeContext.availableGeoContext['timezone']
-              ?.toString()
-              .trim()
-              .isNotEmpty ==
-          true)
-        'timezone': geoRuntimeContext.availableGeoContext['timezone'],
-    };
-  }
-
-  Future<_AssistantGeoRuntimeContext>
-  _resolveAssistantGeoRuntimeContext() async {
-    if (_cachedGeoRuntimeContext != null) {
-      return _cachedGeoRuntimeContext!;
-    }
-    try {
-      final result = await _localContextTool
-          .execute(AssistantToolArguments())
-          .timeout(const Duration(seconds: 2));
-      final data = result.data?.toDynamicJson() ?? const <String, dynamic>{};
-      final geoCatalog = await GeoResolutionCatalog.load();
-      final resolved = _AssistantGeoRuntimeContext(
-        gpsLocation: _buildGpsLocationFromLocalContext(data),
-        availableGeoContext: _buildAvailableGeoContextFromLocalContext(
-          data,
-          geoCatalog: geoCatalog,
-        ),
-      );
-      _cachedGeoRuntimeContext = resolved;
-      return resolved;
-    } catch (_) {
-      const empty = _AssistantGeoRuntimeContext();
-      _cachedGeoRuntimeContext = empty;
-      return empty;
-    }
-  }
-
-  Map<String, dynamic> _buildGpsLocationFromLocalContext(
-    Map<String, dynamic> data,
-  ) {
+    final raw = await _loadNativeSystemContext();
     final location =
-        (data['location'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final city = (data['city'] as String?)?.trim().isNotEmpty == true
-        ? (data['city'] as String).trim()
-        : (location['city'] as String?)?.trim() ?? '';
-    final latitude = _numValue(location['latitude']);
-    final longitude = _numValue(location['longitude']);
-    final accuracy = _numValue(location['accuracyM']);
-    return <String, dynamic>{
-      if (city.isNotEmpty) 'city': city,
-      if (latitude != null) 'lat': latitude,
-      if (longitude != null) 'lng': longitude,
-      if (accuracy != null)
-        'locationPrecision': accuracy <= 500 ? 'coarse' : 'approximate',
-      'locationTimestamp': DateTime.now().toIso8601String(),
-    };
-  }
-
-  Map<String, dynamic> _buildAvailableGeoContextFromLocalContext(
-    Map<String, dynamic> data, {
-    required GeoResolutionCatalog geoCatalog,
-  }) {
-    final location =
-        (data['location'] as Map?)?.cast<String, dynamic>() ??
+        (raw['location'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final device =
-        (data['device'] as Map?)?.cast<String, dynamic>() ??
+        (raw['device'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final city = (data['city'] as String?)?.trim().isNotEmpty == true
-        ? (data['city'] as String).trim()
-        : (location['city'] as String?)?.trim() ?? '';
-    final timezone = (device['timezone'] as String?)?.trim() ?? '';
-    final locale = (device['locale'] as String?)?.trim() ?? '';
-    final countryCode = geoCatalog.resolveCountryCode(
-      locale: locale,
-      timezone: timezone,
-    );
-    final latitude = _numValue(location['latitude']);
-    final longitude = _numValue(location['longitude']);
-    if (city.isEmpty &&
-        countryCode.isEmpty &&
-        timezone.isEmpty &&
-        latitude == null &&
-        longitude == null) {
-      return const <String, dynamic>{};
-    }
-    return <String, dynamic>{
-      if (countryCode.isNotEmpty) 'countryCode': countryCode,
-      if (countryCode.isNotEmpty)
-        'countryLabel': geoCatalog.countryLabelFor(countryCode),
-      if (city.isNotEmpty) 'cityLabel': city,
-      if (latitude != null) 'lat': latitude,
-      if (longitude != null) 'lng': longitude,
+
+    final city = _firstNonEmptyString(<Object?>[
+      raw['city'],
+      raw['currentCity'],
+      location['city'],
+      location['cityLabel'],
+    ]);
+    final timezone = _firstNonEmptyString(<Object?>[
+      raw['timezone'],
+      location['timezone'],
+      device['timezone'],
+    ]);
+    final locale = _firstNonEmptyString(<Object?>[
+      raw['locale'],
+      device['locale'],
+    ]);
+    final source = _firstNonEmptyString(<Object?>[
+      raw['locationSource'],
+      location['source'],
+    ]);
+    final gpsLocation = <String, dynamic>{
+      if (city.isNotEmpty) 'city': city,
       if (timezone.isNotEmpty) 'timezone': timezone,
-      'source': city.isNotEmpty ? 'device_gps' : 'device_locale',
-      'confidence': city.isNotEmpty ? 0.82 : 0.68,
-      'capturedAt': DateTime.now().toIso8601String(),
-      'privacyTier': city.isNotEmpty ? 'city' : 'region_only',
+      if (locale.isNotEmpty) 'locale': locale,
+      if (source.isNotEmpty) 'source': source,
+      if (_countryCodeFromLocale(locale).isNotEmpty)
+        'countryCode': _countryCodeFromLocale(locale),
+      if (_countryLabelFromLocale(locale).isNotEmpty)
+        'countryLabel': _countryLabelFromLocale(locale),
     };
+    final resolved = gpsLocation.isEmpty
+        ? const _AssistantNativeSystemContext()
+        : _AssistantNativeSystemContext(gpsLocation: gpsLocation);
+    _cachedNativeSystemContext = resolved;
+    return resolved;
   }
 
-  double? _numValue(Object? raw) {
-    if (raw is num) {
-      return raw.toDouble();
+  Future<Map<String, dynamic>> _loadNativeSystemContext() async {
+    try {
+      final raw = await _nativeApiChannel.invokeMethod<Object?>(
+        'getLocalContext',
+      );
+      if (raw is Map) {
+        return raw.cast<String, dynamic>();
+      }
+    } on PlatformException catch (error) {
+      debugPrint(
+        '[AssistantConversation] native system context unavailable: $error',
+      );
+    } catch (error) {
+      debugPrint(
+        '[AssistantConversation] native system context failed: $error',
+      );
     }
-    return double.tryParse(raw?.toString().trim() ?? '');
+    return const <String, dynamic>{};
+  }
+
+  static String _firstNonEmptyString(Iterable<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  static String _countryCodeFromLocale(String locale) {
+    final normalized = locale.trim().replaceAll('-', '_');
+    final segments = normalized.split('_');
+    if (segments.length < 2) {
+      return '';
+    }
+    return segments.last.toUpperCase();
+  }
+
+  static String _countryLabelFromLocale(String locale) {
+    switch (_countryCodeFromLocale(locale)) {
+      case 'CN':
+        return '中国';
+      default:
+        return '';
+    }
   }
 
   AssistantJourneyViewModel buildJourneyViewModel({
@@ -1548,10 +1650,11 @@ class AssistantConversationController extends ChangeNotifier {
   ) {
     if (_disposed || !_assistantResponding) return;
     final messageId = _activeAssistantStreamingMessageId;
-    _currentCanonicalProcessTimeline = rebuildCanonicalProcessTimelineFromVisible(
-      visibleProcessTimeline: processTimeline,
-      seedProcessTimeline: _currentCanonicalProcessTimeline,
-    );
+    _currentCanonicalProcessTimeline =
+        rebuildCanonicalProcessTimelineFromVisible(
+          visibleProcessTimeline: processTimeline,
+          seedProcessTimeline: _currentCanonicalProcessTimeline,
+        );
     _currentProcessTimeline = buildVisibleProcessTimeline(
       _currentCanonicalProcessTimeline,
     );
@@ -1663,10 +1766,10 @@ class AssistantConversationController extends ChangeNotifier {
   RunArtifactsAnswerProcessing _answerProcessingFromResponse(
     AssistantRunResponse response,
   ) {
-    final direct =
-        (response.structuredResponse[assistantAnswerProcessingField] as Map?)
-            ?.cast<String, dynamic>();
-    if (direct != null && direct.isNotEmpty) {
+    final direct = AssistantStructuredRunResponseReadView(
+      response.structuredResponse,
+    ).answerProcessingMap;
+    if (direct.isNotEmpty) {
       return RunArtifactsAnswerProcessing.fromJson(direct);
     }
     return response.runArtifacts?.answerProcessing ??
@@ -1710,16 +1813,15 @@ class AssistantConversationController extends ChangeNotifier {
         ? const RunArtifactsAnswerProcessing()
         : resolveAssistantAnswerProcessingFromTranscriptRow(existingRow);
     final responseUnderstandingSnapshot =
-        (response.structuredResponse[assistantUnderstandingSnapshotField]
-                as Map?)
-            ?.cast<String, dynamic>();
+        AssistantStructuredRunResponseReadView(
+          response.structuredResponse,
+        ).understandingSnapshotMap;
     final mergedUnderstandingSnapshot =
         _mergeUnderstandingSnapshots(<RunArtifactsUnderstandingSnapshot>[
           carriedUnderstandingSnapshot,
           _currentUnderstandingSnapshot,
           _understandingSnapshotFromTimeline(_currentCanonicalProcessTimeline),
-          if (responseUnderstandingSnapshot != null &&
-              responseUnderstandingSnapshot.isNotEmpty)
+          if (responseUnderstandingSnapshot.isNotEmpty)
             parseRunArtifactsUnderstandingSnapshotFromMap(
               responseUnderstandingSnapshot,
             ),
@@ -2146,7 +2248,7 @@ class AssistantConversationController extends ChangeNotifier {
     final messageId = _activeAssistantStreamingMessageId;
     if (messageId == null || messageId.isEmpty) return;
     final value = _visibleStreamingAnswerChunk(chunk);
-    if (value.isEmpty || _isInternalChunk(value)) {
+    if (value.isEmpty || isAssistantStreamInternalChunk(value)) {
       return;
     }
     final now = DateTime.now();
@@ -2185,9 +2287,9 @@ class AssistantConversationController extends ChangeNotifier {
           initialDisplayState: initialDisplayState,
         ),
       );
-      if (renderAnswerBlocksToMarkdown(initialDisplayState.answer.blocks)
-          .trim()
-          .isNotEmpty) {
+      if (renderAnswerBlocksToMarkdown(
+        initialDisplayState.answer.blocks,
+      ).trim().isNotEmpty) {
         _answerGateOpen = true;
       }
     }
@@ -2238,7 +2340,7 @@ class AssistantConversationController extends ChangeNotifier {
           carriedUnderstandingSnapshot,
           if (_hasStructuredUnderstandingSummary(_currentUnderstandingSnapshot))
             _currentUnderstandingSnapshot,
-          if (understandingSnapshot != null) understandingSnapshot,
+          ?understandingSnapshot,
         ]);
     final effectiveProcessTimeline = _currentCanonicalProcessTimeline.isNotEmpty
         ? _currentCanonicalProcessTimeline
@@ -2286,8 +2388,9 @@ class AssistantConversationController extends ChangeNotifier {
     }
     final carriedAnswer = existingRow == null
         ? const AssistantAnswerDisplayState()
-        : resolvePersistedAssistantDisplayStateFromTranscriptRow(existingRow)
-              .answer;
+        : resolvePersistedAssistantDisplayStateFromTranscriptRow(
+            existingRow,
+          ).answer;
     final carriedSummary = carriedAnswer.summary.trim();
     final resolvedSummary = completedSummary.isNotEmpty
         ? completedSummary
@@ -2312,13 +2415,41 @@ class AssistantConversationController extends ChangeNotifier {
   Map<String, dynamic> _responseTranscriptExtraFields(
     AssistantRunResponse response,
   ) {
-    final structured = response.structuredResponse;
+    final structured = AssistantStructuredRunResponseReadView(
+      response.structuredResponse,
+    );
     final extra = <String, dynamic>{};
     for (final entry in <MapEntry<String, Object?>>[
-      MapEntry('intentGraph', structured['intentGraph']),
-      MapEntry('conversationStateDecision', structured['conversationStateDecision']),
-      MapEntry('aggregationState', structured['aggregationState']),
-      MapEntry(assistantAnswerGateDecisionField, response.answerGateDecision.toJson()),
+      MapEntry('aggregationState', structured.value('aggregationState')),
+      MapEntry(
+        assistantSystemContextEnvelopeField,
+        structured.value(assistantSystemContextEnvelopeField),
+      ),
+      MapEntry(
+        assistantUnderstandingResultField,
+        structured.value(assistantUnderstandingResultField),
+      ),
+      MapEntry(
+        assistantTaskGraphField,
+        structured.value(assistantTaskGraphField),
+      ),
+      MapEntry(
+        assistantOrchestratorStateField,
+        structured.value(assistantOrchestratorStateField),
+      ),
+      MapEntry(
+        assistantTurnSynthesisStateField,
+        structured.value(assistantTurnSynthesisStateField),
+      ),
+      MapEntry(
+        assistantAnswerGateDecisionField,
+        response.answerGateDecision.toJson(),
+      ),
+      MapEntry(
+        assistantBoundaryOutcomeField,
+        structured.value(assistantBoundaryOutcomeField) ??
+            response.assistantBoundaryOutcome?.toJson(),
+      ),
     ]) {
       final value = entry.value;
       if (value is Map && value.isNotEmpty) {
@@ -2392,10 +2523,9 @@ class AssistantConversationController extends ChangeNotifier {
           allowJsonExtraction: allowJsonExtraction,
         );
     if (text.isEmpty) return '';
-    if (_isInternalChunk(text) ||
+    if (isAssistantStreamInternalChunk(text) ||
         _containsInternalDisplayFragment(text) ||
         AssistantContentFilters.isProgressPlaceholder(text) ||
-        AssistantContentFilters.isDegradedText(text) ||
         AssistantContentFilters.isJsonEnvelope(text)) {
       return '';
     }
@@ -2411,142 +2541,27 @@ class AssistantConversationController extends ChangeNotifier {
         );
   }
 
-  int _usageInt(Object? value) {
-    if (value is num) {
-      final n = value.toInt();
-      return n < 0 ? 0 : n;
-    }
-    final parsed = int.tryParse(value?.toString() ?? '');
-    if (parsed == null || parsed < 0) return 0;
-    return parsed;
-  }
-
   Map<String, dynamic> _buildConversationCumulativeUsageStats({
     required Map<String, dynamic> runUsageStats,
     String? excludeMessageId,
   }) {
-    final currentRunCalls = _usageInt(
-      runUsageStats['runModelCallCount'] ?? runUsageStats['modelCallCount'],
+    return buildAssistantCumulativeUsageStatsProtocolMap(
+      currentRunStats: runUsageStats,
+      previousRunStats: _transcriptRows
+          .whereType<AssistantAnswerTranscriptRow>()
+          .where(
+            (row) =>
+                row.senderId == AppConceptConstants.assistantSenderId &&
+                (excludeMessageId == null || row.id != excludeMessageId),
+          )
+          .map((row) => row.uiUsageStats),
     );
-    final currentRunTokens = _usageInt(
-      runUsageStats['runTotalTokens'] ?? runUsageStats['totalTokens'],
-    );
-    final currentRunMaxTokens = _usageInt(
-      runUsageStats['runMaxTokensPerCall'] ?? runUsageStats['maxTokensPerCall'],
-    );
-    final currentRunLedger =
-        (runUsageStats['usageLedger'] as List?)
-            ?.whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false) ??
-        const <Map<String, dynamic>>[];
-
-    var prevCalls = 0;
-    var prevTokens = 0;
-    var prevMaxTokens = 0;
-    final cumulativeLedger = <Map<String, dynamic>>[];
-    for (final row in _transcriptRows) {
-      if (row is! AssistantAnswerTranscriptRow) continue;
-      if (row.senderId != AppConceptConstants.assistantSenderId) continue;
-      if (excludeMessageId != null && row.id == excludeMessageId) continue;
-      final usageStats = row.uiUsageStats;
-      if (usageStats.isEmpty) continue;
-      prevCalls += _usageInt(
-        usageStats['runModelCallCount'] ?? usageStats['modelCallCount'],
-      );
-      prevTokens += _usageInt(
-        usageStats['runTotalTokens'] ?? usageStats['totalTokens'],
-      );
-      final maxTokens = _usageInt(
-        usageStats['runMaxTokensPerCall'] ?? usageStats['maxTokensPerCall'],
-      );
-      if (maxTokens > prevMaxTokens) prevMaxTokens = maxTokens;
-      final messageLedger =
-          ((usageStats['runUsageLedger'] ?? usageStats['usageLedger']) as List?)
-              ?.whereType<Map>()
-              .map((item) => item.cast<String, dynamic>())
-              .toList(growable: false) ??
-          const <Map<String, dynamic>>[];
-      cumulativeLedger.addAll(messageLedger);
-    }
-    cumulativeLedger.addAll(currentRunLedger);
-
-    final cumulativeCalls = prevCalls + currentRunCalls;
-    final cumulativeTokens = prevTokens + currentRunTokens;
-    final cumulativeMaxTokens = math.max(prevMaxTokens, currentRunMaxTokens);
-
-    return <String, dynamic>{
-      ...runUsageStats,
-      'runModelCallCount': currentRunCalls,
-      'runTotalTokens': currentRunTokens,
-      'runMaxTokensPerCall': currentRunMaxTokens,
-      'runUsageLedger': currentRunLedger,
-      'sessionUsageStats': <String, dynamic>{
-        'modelCallCount': cumulativeCalls,
-        'totalTokens': cumulativeTokens,
-        'maxTokensPerCall': cumulativeMaxTokens,
-        'usageLedger': cumulativeLedger,
-      },
-      'cumulativeModelCallCount': cumulativeCalls,
-      'cumulativeTotalTokens': cumulativeTokens,
-      'cumulativeMaxTokensPerCall': cumulativeMaxTokens,
-      'cumulativeUsageLedger': cumulativeLedger,
-      'modelCallCount': currentRunCalls,
-      'totalTokens': currentRunTokens,
-      'maxTokensPerCall': currentRunMaxTokens,
-    };
   }
-
-  static final RegExp _xmlToolCallTagRe = RegExp(
-    r'<tool_call>[\s\S]*?</tool_call>|'
-    r'<function=[^>]+>[\s\S]*?</function>|'
-    r'<tool_call>|</tool_call>|'
-    r'<function=[^>]*>|</function>|'
-    r'<parameter=[^>]*>[\s\S]*?</parameter>|'
-    r'</?parameter[^>]*>',
-  );
-  static final RegExp _xmlToolCallOpenRe = RegExp(r'<tool_call>|<function=');
-
-  bool _containsXmlToolCall(String text) => _xmlToolCallOpenRe.hasMatch(text);
-
-  String _stripXmlToolCallsPreservingWhitespace(String text) =>
-      text.replaceAll(_xmlToolCallTagRe, '');
-
-  String _stripXmlToolCalls(String text) =>
-      _stripXmlToolCallsPreservingWhitespace(text).trim();
 
   String _assistantDeviceProfileByWidth(double width) {
-    if (width >= 600) return 'pc';
-    if (width >= 360) return 'tablet';
+    if (width >= 1024) return 'pc';
+    if (width >= 600) return 'tablet';
     return 'mobile';
-  }
-
-  String _assistantHistoryContentForModel(Map<String, dynamic> message) {
-    final candidates = <String>[
-      (message['displayPlainText'] ?? '').toString(),
-      (message['displayMarkdown'] ?? '').toString(),
-      (message['content'] ?? '').toString(),
-    ];
-    for (final candidate in candidates) {
-      final sanitized = _sanitizeAssistantHistoryContent(candidate);
-      if (sanitized.isNotEmpty) return sanitized;
-    }
-    return '';
-  }
-
-  String _sanitizeAssistantHistoryContent(String raw) {
-    final sanitized =
-        AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(raw);
-    if (sanitized.isEmpty) return '';
-    if (_isInternalChunk(sanitized)) return '';
-    if (AssistantContentFilters.isDegradedText(sanitized)) return '';
-    if (AssistantContentFilters.isProgressPlaceholder(sanitized)) return '';
-    if (AssistantDisplayTextResolver.containsUnsafeDisplayProtocolLeak(
-      sanitized,
-    )) {
-      return '';
-    }
-    return sanitized;
   }
 
   Map<String, dynamic> _latestAssistantDialogueState() {
@@ -2576,10 +2591,9 @@ class AssistantConversationController extends ChangeNotifier {
   }
 
   Map<String, dynamic> _responseRunArtifactsMap(AssistantRunResponse response) {
-    final structured =
-        (response.structuredResponse['runArtifacts'] as Map?)
-            ?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
+    final structured = AssistantStructuredRunResponseReadView(
+      response.structuredResponse,
+    ).runArtifactsMap;
     if (structured.isNotEmpty) {
       return structured;
     }
@@ -2610,7 +2624,7 @@ class AssistantConversationController extends ChangeNotifier {
     if (actionFallback.isNotEmpty) {
       return actionFallback;
     }
-    return '助手未生成有效回答，请重试。';
+    return '';
   }
 
   String _resolveAssistantDisplayPlainText(AssistantRunResponse response) {
@@ -2648,14 +2662,14 @@ class AssistantConversationController extends ChangeNotifier {
     final runArtifacts = response.runArtifacts;
     final resolvedDisplayState =
         displayState ?? resolveAssistantDisplayStateFromRunResponse(response);
+    final structuredResponse = AssistantStructuredRunResponseReadView(
+      response.structuredResponse,
+    );
     final directUnderstandingSnapshot =
-        (response.structuredResponse[assistantUnderstandingSnapshotField]
-                as Map?)
-            ?.cast<String, dynamic>();
+        structuredResponse.understandingSnapshotMap;
     final resolvedUnderstandingSnapshot =
         understandingSnapshot ??
-        (directUnderstandingSnapshot != null &&
-                directUnderstandingSnapshot.isNotEmpty
+        (directUnderstandingSnapshot.isNotEmpty
             ? parseRunArtifactsUnderstandingSnapshotFromMap(
                 directUnderstandingSnapshot,
               )
@@ -2666,7 +2680,7 @@ class AssistantConversationController extends ChangeNotifier {
         resolveAssistantRetrievalProcessingFromResponse(response);
     final resolvedAnswerProcessing =
         answerProcessing ?? _answerProcessingFromResponse(response);
-    return buildPersistedAssistantTurnFields(
+    final fields = buildPersistedAssistantTurnFields(
       journey: journey,
       processTimeline: processTimeline,
       displayMarkdown: displayMarkdown,
@@ -2678,18 +2692,26 @@ class AssistantConversationController extends ChangeNotifier {
       understandingSnapshot: resolvedUnderstandingSnapshot.toJson(),
       answerProcessing: resolvedAnswerProcessing.toJson(),
       historicalThinkingSnapshot:
-          (response.structuredResponse[assistantHistoricalThinkingSnapshotField]
-                  as Map?)
-              ?.cast<String, dynamic>() ??
-          runArtifacts?.historicalThinkingSnapshot.toJson() ??
-          const <String, dynamic>{},
+          structuredResponse.historicalThinkingSnapshotMap.isNotEmpty
+          ? structuredResponse.historicalThinkingSnapshotMap
+          : runArtifacts?.historicalThinkingSnapshot.toJson() ??
+                const <String, dynamic>{},
       retrievalProcessing: resolvedRetrievalProcessing.toJson(),
+      assistantBoundaryOutcome:
+          structuredResponse.mapValue(assistantBoundaryOutcomeField).isNotEmpty
+          ? structuredResponse.mapValue(assistantBoundaryOutcomeField)
+          : response.assistantBoundaryOutcome?.toJson() ??
+                const <String, dynamic>{},
       providerReasoningContinuation:
-          (response.structuredResponse[assistantProviderReasoningContinuationField]
-                  as String?)
-              ?.trim() ??
-          '',
+          structuredResponse.providerReasoningContinuation,
     );
+    final boundaryOutcome = structuredResponse.mapValue(
+      assistantBoundaryOutcomeField,
+    );
+    if (boundaryOutcome.isNotEmpty) {
+      fields[assistantBoundaryOutcomeField] = boundaryOutcome;
+    }
+    return fields;
   }
 
   AssistantJourney _persistableAssistantJourney({
@@ -2727,47 +2749,6 @@ class AssistantConversationController extends ChangeNotifier {
 
   bool _responseMarksFinalAnswerReady(AssistantRunResponse response) {
     return response.answerGateDecision.finalAnswerReady;
-  }
-
-  bool _isInternalChunk(String value) {
-    final text = value.trim();
-    if (text.isEmpty) return false;
-    if (text == '</think>' || text == '<think>') return true;
-    if (AssistantContentFilters.isJsonEnvelope(text)) return true;
-    if (AssistantDisplayTextResolver.containsInternalAssistantProtocolFragment(
-      text,
-    )) {
-      return true;
-    }
-    if (_containsXmlToolCall(text)) {
-      final stripped = _stripXmlToolCalls(text);
-      if (stripped.isEmpty) return true;
-    }
-    if (text.startsWith('{') || text.startsWith('```')) {
-      final parsed = LlmResponseParser.parse(text);
-      if (parsed.ok) return true;
-    }
-    return false;
-  }
-
-  String _assistantSourceToPageType(AssistantSource? source) {
-    switch (source) {
-      case AssistantSource.discovery:
-        return 'discovery';
-      case AssistantSource.circles:
-        return 'circles';
-      case AssistantSource.article:
-      case AssistantSource.profile:
-        return 'home';
-      case AssistantSource.chat:
-        return 'chat';
-      case AssistantSource.create:
-        return 'create';
-      case AssistantSource.search:
-        return 'search';
-      case null:
-        return 'chat';
-    }
   }
 
   void _storeAssistantReplayRecord({
@@ -2812,14 +2793,12 @@ class AssistantConversationController extends ChangeNotifier {
   }
 }
 
-class _AssistantGeoRuntimeContext {
-  const _AssistantGeoRuntimeContext({
+class _AssistantNativeSystemContext {
+  const _AssistantNativeSystemContext({
     this.gpsLocation = const <String, dynamic>{},
-    this.availableGeoContext = const <String, dynamic>{},
   });
 
   final Map<String, dynamic> gpsLocation;
-  final Map<String, dynamic> availableGeoContext;
 }
 
 class _CompletedAssistantCanonicalState {

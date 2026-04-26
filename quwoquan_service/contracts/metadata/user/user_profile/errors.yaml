@@ -12,7 +12,7 @@ errors:
     kind: USER
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: userNotFound
     go_const: ErrUserNotFound
     user_message:
@@ -23,7 +23,7 @@ errors:
     kind: USER
     reason: unauthorized
     http_status: 401
-    retryable: false
+    recovery_action: surface
     dart_const: unauthorized
     go_const: ErrUnauthorized
     user_message:
@@ -34,7 +34,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: forbidden
     go_const: ErrForbidden
     user_message:
@@ -45,7 +45,7 @@ errors:
     kind: USER
     reason: conflict
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: nicknameTaken
     go_const: ErrNicknameTaken
     user_message:
@@ -56,7 +56,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidArgument
     go_const: ErrInvalidArgument
     user_message:
@@ -67,8 +67,8 @@ errors:
     kind: USER
     reason: rate_limited
     http_status: 429
-    retryable: true
-    retry_after_seconds: 60
+    recovery_action: retry
+    recovery_after_seconds: 60
     dart_const: rateLimited
     go_const: ErrRateLimited
     user_message:
@@ -79,7 +79,7 @@ errors:
     kind: SETTING
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidCallRingtone
     go_const: ErrInvalidCallRingtone
     user_message:
@@ -90,7 +90,7 @@ errors:
     kind: SETTING
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidAppearanceScope
     go_const: ErrInvalidAppearanceScope
     user_message:
@@ -101,7 +101,7 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: false
+    recovery_action: surface
     dart_const: internalError
     go_const: ErrInternalError
     user_message:
@@ -114,7 +114,7 @@ errors:
     kind: AUTH
     reason: otp_expired
     http_status: 400
-    retryable: true
+    recovery_action: retry
     dart_const: otpExpired
     go_const: ErrOtpExpired
     user_message:
@@ -125,7 +125,7 @@ errors:
     kind: AUTH
     reason: otp_mismatch
     http_status: 400
-    retryable: true
+    recovery_action: retry
     dart_const: otpMismatch
     go_const: ErrOtpMismatch
     user_message:
@@ -136,7 +136,7 @@ errors:
     kind: AUTH
     reason: conflict
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: credentialConflict
     go_const: ErrCredentialConflict
     user_message:
@@ -147,7 +147,7 @@ errors:
     kind: AUTH
     reason: constraint_violation
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: lastCredential
     go_const: ErrLastCredential
     user_message:
@@ -158,8 +158,8 @@ errors:
     kind: AUTH
     reason: locked
     http_status: 423
-    retryable: true
-    retry_after_seconds: 1800
+    recovery_action: retry
+    recovery_after_seconds: 1800
     dart_const: loginLocked
     go_const: ErrLoginLocked
     user_message:
@@ -170,7 +170,7 @@ errors:
     kind: AUTH
     reason: third_party_failure
     http_status: 502
-    retryable: true
+    recovery_action: retry
     dart_const: wechatAuthFailed
     go_const: ErrWechatAuthFailed
     user_message:
@@ -181,7 +181,7 @@ errors:
     kind: AUTH
     reason: third_party_failure
     http_status: 502
-    retryable: true
+    recovery_action: retry
     dart_const: appleAuthFailed
     go_const: ErrAppleAuthFailed
     user_message:
@@ -192,7 +192,7 @@ errors:
     kind: AUTH
     reason: token_expired
     http_status: 401
-    retryable: true
+    recovery_action: retry
     dart_const: tokenExpired
     go_const: ErrTokenExpired
     user_message:
@@ -205,7 +205,7 @@ errors:
     kind: SUB_ACCOUNT
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: subAccountNotFound
     go_const: ErrSubAccountNotFound
     user_message:
@@ -216,7 +216,7 @@ errors:
     kind: SUB_ACCOUNT
     reason: constraint_violation
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: lastSubAccount
     go_const: ErrLastSubAccount
     user_message:
@@ -227,7 +227,7 @@ errors:
     kind: SUB_ACCOUNT
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: subAccountStrictIsolation
     go_const: ErrSubAccountStrictIsolation
     user_message:
@@ -238,7 +238,7 @@ errors:
     kind: SUB_ACCOUNT
     reason: constraint_violation
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: subAccountQuotaReached
     go_const: ErrSubAccountQuotaReached
     user_message:
@@ -249,7 +249,7 @@ errors:
     kind: SUB_ACCOUNT
     reason: constraint_violation
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: primarySubAccountGuard
     go_const: ErrPrimarySubAccountGuard
     user_message:
@@ -260,7 +260,7 @@ errors:
     kind: SUB_ACCOUNT
     reason: constraint_violation
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: activeSubAccountGuard
     go_const: ErrActiveSubAccountGuard
     user_message:
@@ -271,7 +271,7 @@ errors:
     kind: SUB_ACCOUNT
     reason: constraint_violation
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: subAccountRetireRequired
     go_const: ErrSubAccountRetireRequired
     user_message:

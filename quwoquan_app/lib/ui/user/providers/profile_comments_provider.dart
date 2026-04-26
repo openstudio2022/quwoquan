@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class ProfileCommentsState {
   final List<CommentDto> comments;
@@ -52,7 +53,10 @@ class SentCommentsNotifier extends Notifier<ProfileCommentsState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: () => e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -61,8 +65,7 @@ class SentCommentsNotifier extends Notifier<ProfileCommentsState> {
     state = state.copyWith(isLoadingMore: true);
     final repo = ref.read(contentRepositoryProvider);
     try {
-      final page =
-          await repo.listCommentsByAuthor(cursor: state.nextCursor);
+      final page = await repo.listCommentsByAuthor(cursor: state.nextCursor);
       state = state.copyWith(
         comments: [...state.comments, ...page.items],
         nextCursor: () => page.nextCursor,
@@ -90,7 +93,10 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: () => e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -99,8 +105,9 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
     state = state.copyWith(isLoadingMore: true);
     final repo = ref.read(contentRepositoryProvider);
     try {
-      final page =
-          await repo.listCommentsForPostAuthor(cursor: state.nextCursor);
+      final page = await repo.listCommentsForPostAuthor(
+        cursor: state.nextCursor,
+      );
       state = state.copyWith(
         comments: [...state.comments, ...page.items],
         nextCursor: () => page.nextCursor,
@@ -114,10 +121,11 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
 
 final sentCommentsProvider =
     NotifierProvider.autoDispose<SentCommentsNotifier, ProfileCommentsState>(
-  SentCommentsNotifier.new,
-);
+      SentCommentsNotifier.new,
+    );
 
 final receivedCommentsProvider =
-    NotifierProvider.autoDispose<ReceivedCommentsNotifier, ProfileCommentsState>(
-  ReceivedCommentsNotifier.new,
-);
+    NotifierProvider.autoDispose<
+      ReceivedCommentsNotifier,
+      ProfileCommentsState
+    >(ReceivedCommentsNotifier.new);

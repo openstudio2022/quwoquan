@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 会话成员及设置的共享状态
 class ConversationMembersState {
@@ -11,13 +12,14 @@ class ConversationMembersState {
   final bool isLoading;
   final String? error;
 
-  static final ChatGroupSettingsDto _defaultGroupSettings = ChatGroupSettingsDto(
-    qrCodeJoinEnabled: true,
-    joinRequiresApproval: false,
-    nameEditableByAdminOnly: false,
-    privacyShieldAdminOnly: false,
-    conversationType: 'group',
-  );
+  static final ChatGroupSettingsDto _defaultGroupSettings =
+      ChatGroupSettingsDto(
+        qrCodeJoinEnabled: true,
+        joinRequiresApproval: false,
+        nameEditableByAdminOnly: false,
+        privacyShieldAdminOnly: false,
+        conversationType: 'group',
+      );
 
   ConversationMembersState({
     this.members = const [],
@@ -92,9 +94,8 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
       final raw = results[0] as List<ChatConversationMemberDto>;
       final members = raw
           .map(
-            (member) => member.copyWith(
-              isCurrentUser: member.userId == _currentUserId,
-            ),
+            (member) =>
+                member.copyWith(isCurrentUser: member.userId == _currentUserId),
           )
           .toList(growable: false);
       state = state.copyWith(
@@ -103,7 +104,10 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -162,9 +166,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
   ) {
     return members.map((m) {
       if (m.role == 'owner') return m;
-      return m.copyWith(
-        role: adminIds.contains(m.userId) ? 'admin' : 'member',
-      );
+      return m.copyWith(role: adminIds.contains(m.userId) ? 'admin' : 'member');
     }).toList();
   }
 

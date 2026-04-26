@@ -60,7 +60,7 @@ func (h *ChatHandler) handleListConversations(w http.ResponseWriter, r *http.Req
 		UserId: userId, Cursor: cursor, Limit: limit,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 		InitialMemberIds []string `json:"initialMemberIds"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
 
@@ -91,7 +91,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 		MaxGroupSize: body.MaxGroupSize, CreatorId: resolveUserID(r), InitialMemberIds: body.InitialMemberIds,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, conversationToWire(*conv))
@@ -101,7 +101,7 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}", "conversationId")
 	conv, err := h.conversationService.GetConversation(r.Context(), convId)
 	if err != nil {
-		writeHTTPError(w, newNotFound("会话", convId))
+		writeHTTPError(w, r, newNotFound("会话", convId))
 		return
 	}
 	writeJSON(w, http.StatusOK, conversationToWire(*conv))
@@ -119,7 +119,7 @@ func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request)
 		ConversationId: convId, Limit: limit, AfterSeq: afterSeq, BeforeSeq: beforeSeq,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 
@@ -127,35 +127,51 @@ func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request)
 	if len(msgs) > 0 {
 		cursor = msgs[len(msgs)-1].ID
 	}
+	items := make([]map[string]any, 0, len(msgs))
+	for i := range msgs {
+		items = append(items, messageToWire(msgs[i]))
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": msgs, "cursor": cursor,
+		"items": items, "cursor": cursor,
 	})
 }
 
 func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages", "conversationId")
 	var body struct {
-		Type             string         `json:"type"`
-		Content          string         `json:"content"`
-		MediaUrl         string         `json:"mediaUrl"`
-		Media            map[string]any `json:"media"`
-		CardPayload      map[string]any `json:"cardPayload"`
-		ReplyToMessageId string         `json:"replyToMessageId"`
-		Mentions         []string       `json:"mentions"`
-		ClientMsgId      string         `json:"clientMsgId"`
+		Type                      string         `json:"type"`
+		Content                   string         `json:"content"`
+		MediaUrl                  string         `json:"mediaUrl"`
+		Media                     map[string]any `json:"media"`
+		CardPayload               map[string]any `json:"cardPayload"`
+		ReplyToMessageId          string         `json:"replyToMessageId"`
+		Mentions                  []string       `json:"mentions"`
+		ClientMsgId               string         `json:"clientMsgId"`
+		SenderPersonaId           string         `json:"senderPersonaId"`
+		SenderProfileSubjectId    string         `json:"senderProfileSubjectId"`
+		PersonaContextVersion     int64          `json:"personaContextVersion"`
+		SenderDisplayNameSnapshot string         `json:"senderDisplayNameSnapshot"`
+		SenderAvatarUrlSnapshot   string         `json:"senderAvatarUrlSnapshot"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
 
+	senderID := strings.TrimSpace(body.SenderProfileSubjectId)
+	if senderID == "" {
+		senderID = resolveUserID(r)
+	}
 	resp, err := h.messageService.SendMessage(r.Context(), application.SendMessageRequest{
-		ConversationId: convId, SenderId: resolveUserID(r), Type: body.Type,
+		ConversationId: convId, SenderId: senderID, SenderPersonaId: strings.TrimSpace(body.SenderPersonaId),
+		PersonaContextVersion:     body.PersonaContextVersion,
+		SenderDisplayNameSnapshot: strings.TrimSpace(body.SenderDisplayNameSnapshot),
+		SenderAvatarUrlSnapshot:   strings.TrimSpace(body.SenderAvatarUrlSnapshot), Type: body.Type,
 		Content: body.Content, MediaUrl: body.MediaUrl, Media: body.Media, CardPayload: body.CardPayload,
 		ReplyToMessageId: body.ReplyToMessageId, Mentions: body.Mentions, ClientMsgId: body.ClientMsgId,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, resp)
@@ -167,7 +183,7 @@ func (h *ChatHandler) handleRecallMessage(w http.ResponseWriter, r *http.Request
 
 	err := h.messageService.RecallMessage(r.Context(), convId, msgId, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "recalled"})
@@ -180,7 +196,7 @@ func (h *ChatHandler) handleSyncMessages(w http.ResponseWriter, r *http.Request)
 		Limit   int   `json:"limit"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
 
@@ -188,10 +204,17 @@ func (h *ChatHandler) handleSyncMessages(w http.ResponseWriter, r *http.Request)
 		ConversationId: convId, LastSeq: body.LastSeq, Limit: body.Limit,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	items := make([]map[string]any, 0, len(resp.Messages))
+	for i := range resp.Messages {
+		items = append(items, messageToWire(resp.Messages[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"messages": items,
+		"hasMore":  resp.HasMore,
+	})
 }
 
 func (h *ChatHandler) handleMarkAsRead(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +225,7 @@ func (h *ChatHandler) handleMarkAsRead(w http.ResponseWriter, r *http.Request) {
 		ConversationId: convId, MessageId: msgId, UserId: resolveUserID(r),
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -215,7 +238,7 @@ func (h *ChatHandler) handleGetReceipts(w http.ResponseWriter, r *http.Request) 
 
 	receipts, err := h.messageService.GetReceipts(r.Context(), convId, msgId)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": receipts})
@@ -234,7 +257,7 @@ func (h *ChatHandler) handleListMembers(w http.ResponseWriter, r *http.Request) 
 		ConversationId: convId, Cursor: cursor, Limit: limit, Role: role, Sort: sort,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": members})
@@ -246,7 +269,7 @@ func (h *ChatHandler) handleAddMembers(w http.ResponseWriter, r *http.Request) {
 		UserIds []string `json:"userIds"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
 
@@ -254,7 +277,7 @@ func (h *ChatHandler) handleAddMembers(w http.ResponseWriter, r *http.Request) {
 		ConversationId: convId, UserIds: body.UserIds, InvitedBy: resolveUserID(r),
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -266,7 +289,7 @@ func (h *ChatHandler) handleRemoveMember(w http.ResponseWriter, r *http.Request)
 
 	err := h.memberService.RemoveMember(r.Context(), convId, userId)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -283,7 +306,7 @@ func (h *ChatHandler) handleInviteAssistant(w http.ResponseWriter, r *http.Reque
 		ConversationId: convId, SkillId: body.SkillId, InvitedBy: resolveUserID(r),
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -294,7 +317,7 @@ func (h *ChatHandler) handleRemoveAssistant(w http.ResponseWriter, r *http.Reque
 
 	err := h.memberService.RemoveAssistant(r.Context(), convId)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -307,7 +330,7 @@ func (h *ChatHandler) handleUpdateConversationSettings(w http.ResponseWriter, r 
 		Pinned *bool `json:"pinned"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
 
@@ -315,7 +338,7 @@ func (h *ChatHandler) handleUpdateConversationSettings(w http.ResponseWriter, r 
 		UserId: resolveUserID(r), ConversationId: convId, Muted: body.Muted, Pinned: body.Pinned,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -327,7 +350,7 @@ func (h *ChatHandler) handleTransferOwnership(w http.ResponseWriter, r *http.Req
 		NewOwnerId string `json:"newOwnerId"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
 	err := h.memberService.TransferOwnership(r.Context(), application.TransferOwnershipRequest{
@@ -336,7 +359,7 @@ func (h *ChatHandler) handleTransferOwnership(w http.ResponseWriter, r *http.Req
 		NewOwnerId:     body.NewOwnerId,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -348,7 +371,7 @@ func (h *ChatHandler) handleUpdateGroupAdmins(w http.ResponseWriter, r *http.Req
 		AdminIds []string `json:"adminIds"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
 	err := h.memberService.UpdateGroupAdmins(r.Context(), application.UpdateGroupAdminsRequest{
@@ -357,7 +380,7 @@ func (h *ChatHandler) handleUpdateGroupAdmins(w http.ResponseWriter, r *http.Req
 		AdminIds:       body.AdminIds,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -370,7 +393,7 @@ func (h *ChatHandler) handleDissolveConversation(w http.ResponseWriter, r *http.
 		OperatorId:     resolveUserID(r),
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
@@ -387,7 +410,7 @@ func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
 		UserId: userId, Cursor: cursor, Limit: limit,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": flattenInboxItems(items)})
@@ -401,7 +424,7 @@ func (h *ChatHandler) handleListContacts(w http.ResponseWriter, r *http.Request)
 
 	contacts, err := h.memberService.ListContacts(r.Context(), resolveUserID(r), limit, cursor)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": contacts})
@@ -420,7 +443,7 @@ func (h *ChatHandler) handleSearchContacts(w http.ResponseWriter, r *http.Reques
 		limit,
 	)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	items := make([]map[string]any, 0, len(contacts))
@@ -454,7 +477,7 @@ func (h *ChatHandler) handleSearchConversations(w http.ResponseWriter, r *http.R
 		},
 	)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	items := make([]map[string]any, 0, len(conversations))
@@ -496,7 +519,7 @@ func (h *ChatHandler) handleSearchMessages(w http.ResponseWriter, r *http.Reques
 		},
 	)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	items := make([]map[string]any, 0, len(hits))
@@ -588,8 +611,45 @@ func conversationToWire(conv model.Conversation) map[string]any {
 	}
 }
 
-func writeHTTPError(w http.ResponseWriter, err error) {
-	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptions{})
+func messageToWire(msg model.Message) map[string]any {
+	wire := map[string]any{
+		"id":               msg.ID,
+		"_id":              msg.ID,
+		"conversationId":   msg.ConversationId,
+		"seq":              msg.Seq,
+		"clientMsgId":      msg.ClientMsgId,
+		"senderId":         msg.SenderId,
+		"senderPersonaId":  msg.SenderPersonaId,
+		"type":             msg.Type,
+		"content":          msg.Content,
+		"mediaUrl":         msg.MediaUrl,
+		"media":            msg.Media,
+		"cardPayload":      msg.CardPayload,
+		"replyToMessageId": msg.ReplyToMessageId,
+		"mentions":         msg.Mentions,
+		"status":           msg.Status,
+		"metadata":         msg.Metadata,
+		"timestamp":        msg.Timestamp,
+	}
+	if msg.RecalledAt != nil {
+		wire["recalledAt"] = msg.RecalledAt
+	}
+	if msg.Metadata != nil {
+		if displayName, ok := msg.Metadata["senderDisplayNameSnapshot"]; ok {
+			wire["senderDisplayNameSnapshot"] = displayName
+		}
+		if avatarUrl, ok := msg.Metadata["senderAvatarUrlSnapshot"]; ok {
+			wire["senderAvatarUrlSnapshot"] = avatarUrl
+		}
+		if contextVersion, ok := msg.Metadata["personaContextVersion"]; ok {
+			wire["personaContextVersion"] = contextVersion
+		}
+	}
+	return wire
+}
+
+func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
+	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 func newNotFound(entity, id string) *rterr.AppError {
@@ -597,7 +657,6 @@ func newNotFound(entity, id string) *rterr.AppError {
 		rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "not_found"),
 		entity+"不存在",
 		entity+" not found: "+id,
-		false,
 	)
 }
 

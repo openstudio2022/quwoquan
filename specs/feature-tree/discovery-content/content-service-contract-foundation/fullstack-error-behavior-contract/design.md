@@ -9,7 +9,7 @@ CloudException.errorCode → typed error in UI
 ```
 
 All 13 error codes are defined once in YAML, then generated into:
-- Dart: `ContentErrorCode` enum with `isRetryable` getter, localized messages
+- Dart: `ContentErrorCode` enum with `recoveryAction` getter, localized messages
 - Go: Sentinel `var Err... = errors.New("CONTENT.domain.code")` constants
 
 ## Behavior Tracking

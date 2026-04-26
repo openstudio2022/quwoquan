@@ -1,7 +1,7 @@
 id: CR-20260321-001
 title: persona follow graph prd baseline expansion
 slug: persona-follow-graph-prd-baseline-expansion
-revision: 5
+revision: 12
 status: active
 
 affected_nodes:
@@ -16,6 +16,320 @@ affected_nodes:
   - specs/feature-tree/tree_index.yaml
 
 entries:
+  - timestamp: "2026-04-24T16:35:00+08:00"
+    summary: >
+      完成 M4 补全阶段：补齐 follow 事件/计数修正/rollback 证据，收口 graph 列表过滤、
+      owner 泄漏与 capability overlay，并把 observability 与验收状态回写到真实完成线。
+    reason: >
+      第一轮 M4 收口后，follow-relationship A3/S1 与 social-graph-read S1 仍停留在“代码锚点 +
+      部分测试”状态；同时 graph 搜索结果还保留 `ownerUserId` 泄漏面，UI 侧 capability 继续把
+      本地布尔组合伪装成最终真相源。若不继续补齐，M4 仍不能诚实宣告达到发布评估线。
+    change_type:
+      - implement
+      - refine
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/acceptance.yaml
+        sections:
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/acceptance.yaml
+        sections:
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/plan.yaml
+        sections:
+          - P4
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+        sections:
+          - J3
+          - R1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+        sections:
+          - P5
+          - P6
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - "FollowService 已新增 `UserFollowed / UserUnfollowed` 事件断言、owner profile follower/following 自动对账修正，以及 flag-off 下既有 persona edge 可读性的回退回归。"
+      - "user-service graph 读侧已改为 overfetch+fill，列表过滤不会因 strict/block/drift 直接缩页；搜索结果与公开 graph 列表不再暴露 `ownerUserId`。"
+      - "App 主页关系能力已收紧为“服务端 capability 真相 + 显式 optimistic follow overlay”，不再直接把本地 `fromFollowFlags()` 结果当成最终投影。"
+      - "graph/follow 关键指标现已具备最小触发断言：`follow_command_latency_ms`、`follow_duplicate_request_count`、`follow_block_rejection_count`、`follow_counter_mismatch_count`、`graph_list_latency_ms`、`graph_filter_mismatch_count`、`relationship_capability_mismatch_count`、`graph_legacy_edge_read_count`。"
+      - "本轮实测命令：`go test ./runtime/governance ./services/user-service/tests -run 'Test(FeatureEnabled|Persona|Follow_|GetRelationship_Mutual|ListFollowing_|ListFollowers_|ProfileSubjectView_|SearchSocialRelations_|RelationshipCapabilityView_)'`、`flutter test test/ui/user/providers/profile_state_provider_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart`。"
+  - timestamp: "2026-04-24T10:40:00+08:00"
+    summary: >
+      完成 M4 graph 写读闭环第一轮收口：补齐 circle persona 显式透传与 notification replay
+      指标证据，把 user-service follow/block/list/capability 单轨切到 `profile-subject` 路由，
+      并回写 follow/social-graph/Journey 的真实验收状态。
+    reason: >
+      M3 结束后仍有三个影响 graph 可信度的缺口：circle join/leave 仅“先读 active persona provider”
+      但未进入正式 request contract、notification replay 缺少专门 persona mismatch 回归、user-service
+      follow/block/list/capability 仍停留在旧 `/v1/user/follow/{targetUserId}` 与 owner/userId 主体语义。
+      若不先补齐这些基础问题，M4 无法诚实声称 graph 写读闭环。
+    change_type:
+      - implement
+      - refine
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+        sections:
+          - J2
+          - J3
+          - R1
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - "App 已新增显式 persona request headers helper，circle join/leave 从 UI 调用点开始传递 `ownerUserId / actorProfileSubjectId / personaId / personaContextVersion`，circle-service 以 `X-Profile-Subject-Id` 作为成员写入主体。"
+      - "assistant conversation controller 已新增 notification replay persona mismatch 回归测试；`persona_context_mismatch_count / assistant_persona_drift_count / notification_wrong_persona_open_count / persona_context_stale_count` 均有 T2 证据。"
+      - "user-service follow/block/list/capability 统一切到 `/v1/user/profile-subjects/...`，写侧主体优先取显式 persona，其次取 active persona，flag-off 时回退单 user 基线。"
+      - "follow graph 当前阶段把计数副作用收口为 owner profile 同步更新 + `follow_counter_mismatch_count` 指标，可支撑幂等与回退，但尚未升级为独立异步 projector，因此 A3/S1 保持 partial。"
+      - "本轮实测命令：`go test ./runtime/governance ./services/user-service/tests/... ./services/circle-service/tests/...`、`flutter test test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart test/cloud/user/contract/user_profile_repository_contract_test.dart test/cloud/user/contract/block_repository_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart test/ui/user/providers/profile_state_provider_test.dart test/cloud/user/contract/relationship_capability_repository_contract_test.dart`。"
+  - timestamp: "2026-04-24T03:20:00+08:00"
+    summary: >
+      完成 M3 persona-context-propagation 主链路：裁决 `personaId` 为跨域 internal canonical，
+      收紧 active persona fail-closed，补齐 content/chat/circle/invite/assistant 的 persona
+      envelope 与最小快照写链，并回写 acceptance/plan/telemetry 证据。
+    reason: >
+      M2 虽完成公开身份主链，但进入 M3 前仍存在三类关键风险：Journey 与 M2 对
+      `personaId/profileSubjectId` 主键口径双轨、remote active persona provider 仍可静默
+      fallback 到 user、content/chat/assistant/circle/invite 的跨域透传没有统一 envelope。
+      若不一次性收口，后续 notification/assistant replay 与首跳动作仍会继续串号。
+    change_type:
+      - refine
+      - implement
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/design.md
+        sections:
+          - KD6：跨域 canonical key 与透传 envelope
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/design.md
+        sections:
+          - KD5：公开 key 与内部 canonical key
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/design.md
+        sections:
+          - KD1
+          - KD2
+          - KD3
+          - 字段演进
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - "`ActivePersonaContextView` 已新增 `personaId / personaSnapshotVersion / sourceSurfaceId / explicitOverride`，并通过 verify/codegen/codegen-app 回灌端云生成物。"
+      - "App remote 模式下 `activePersonaContextProvider` 不再静默回退；content/comment/chat/assistant/circle 首跳写链统一改为读取 canonical active persona。"
+      - "content-service 已以 `profileSubjectId` 作为公开作者键、以 `personaId` 作为内部 canonical，并补齐 author snapshot / contextVersion 写入；chat-service 发送消息链补齐 sender persona metadata。"
+      - "invite 已接受 `personaId` alias 并补齐契约测试；assistant 已上报 `persona_context_mismatch_count / persona_context_stale_count / assistant_persona_drift_count / notification_wrong_persona_open_count`。"
+      - "本轮实测命令：`make -C quwoquan_service verify-metadata && make codegen && make codegen-app`、`go test ./services/content-service/... ./services/chat-service/... ./services/user-service/...`、`flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/content/entry/contract/publish_payload_contract_test.dart test/cloud/chat/contract/chat_repository_contract_test.dart test/ui/chat/journeys/chat_message_send_journey_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart`。"
+  - timestamp: "2026-04-24T01:35:00+08:00"
+    summary: >
+      完成 M2 复核补齐：A2 写入字段范围收口到真实支持子集，user-service 补齐
+      `ops.user.profile_subject_v1` 与四个运行时指标，discovery read model 显式投影
+      canonical `profileSubjectId`，并同步 Journey/L3/CR 阶段状态。
+    reason: >
+      上一轮虽然完成了 M2 主链路，但复核后仍发现四类不诚实缺口：A2 契约字段宽于实现、
+      `S1/P4` 缺少运行时 feature flag 与 telemetry、discovery 仍把 `authorId` 误当 canonical
+      作者主键、Journey 文档仍保留 `planned/pending` 状态。若不补齐，阶段结论会继续高估完成度。
+    change_type:
+      - refine
+      - implement
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md
+        sections:
+          - F2. owner 基线与分身覆写
+          - F3. 写入与同步范围
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/design.md
+        sections:
+          - KD2：owner 基线 + persona override
+          - KD3：写入 contract 必须显式携带同步范围
+          - feature flag、观测、SLO 验证与回滚方案
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/acceptance.yaml
+        sections:
+          - A2
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/plan.yaml
+        sections:
+          - P4
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+        sections:
+          - J3
+          - R1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P6
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - "A2 首批可写/可同步字段现已冻结为 `displayName / userHandle / phone / email / avatarUrl`；`backgroundUrl / bio` 保持 owner 基线只读，`profileVisibility` 继续由 `isolationLevel` 派生。"
+      - "user-service 已落地 `ops.user.profile_subject_v1`，flag-off 时公开读取退回 personaId fallback，但不回退 `profileSubjectId / userHandle / 历史快照` 真相源。"
+      - "`profile_subject_public_read_latency_ms / profile_subject_visibility_not_found_count / retired_subject_attribution_fallback_count / profile_subject_sync_scope_submit_count` 已具备运行时埋点与 T3 断言。"
+      - "discovery projector 已显式写入 `profileSubjectId`，App `FeedItemDto` 新增 `authorProfileSubjectId`，发现流不再假设 `authorId == canonical subject`。"
+      - "Journey 层现已诚实同步为：`J1=implemented`、`J3=partial`、`R1=partial`；M2 应表述为“主链路完成，阶段收尾完成，但 Journey 总体未完成”。"
+  - timestamp: "2026-04-23T23:55:00+08:00"
+    summary: >
+      完成 persona-profile-subject-and-visibility 的 M2 主链路：公开 `ProfileSubject`
+      统一到 `userHandle` + `profileSubjectId`，strict/retired 公开不可见，历史归因覆盖扩到
+      content/comment/chat/notification，并回写 A1/A2/A3/S1 证据。
+    reason: >
+      M1 已完成分身管理主链路，但 M2 复核发现公开身份仍混用 `username / subAccountId / ownerUserId`，
+      `ProfileVisibility / IsolationLevel` 语义冲突，内容作者仍可回退旧 `authorId`，且历史归因只覆盖
+      user 域局部来源。若不在本轮一次性收口，后续主页、内容、聊天会继续分叉解释“作者是谁”。
+    change_type:
+      - refine
+      - implement
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/spec.md
+        sections:
+          - 功能范围
+          - F4. 可见性与公开读取
+          - F6. 路由与引用合同
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/design.md
+        sections:
+          - KD1：`ProfileSubjectView` 是唯一公开身份真相源
+          - KD4：可见性与 retired attribution 分层
+          - KD5：路由使用 `userHandle`
+          - feature flag、观测、SLO 验证与回滚方案
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - S1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/plan.yaml
+        sections:
+          - P1
+          - P2
+          - P3
+          - P4
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - "metadata 已统一：`ProfileSubjectType=user|persona`，公开 `ProfileSubjectView` 新增 `userHandle / isolationLevel`，公开 response 不再暴露 `ownerUserId`。"
+      - "user-service 公开读改为按 `userHandle` 优先解析，strict/retired persona 返回 404；`profileVisibility` 由 `isolationLevel` 派生。"
+      - "App 公开消费入口已切到 canonical `profileSubjectId` 与 snapshot 字段，`PostBaseDto.authorProfileSubjectId` 不再回退 `authorId`。"
+      - "`HasAttributedHistory` 已扩展到 `invite/greeting + posts/comments/messages/notifications`，retired persona 生命周期 guard 与历史快照证据已补齐。"
+      - "`ops.user.profile_subject_v1` 与 `profile_subject_public_read_latency_ms / profile_subject_visibility_not_found_count / retired_subject_attribution_fallback_count / profile_subject_sync_scope_submit_count` 已在设计中冻结为 rollout 与回滚基线，但运行时 telemetry 埋点尚未接入，因此 S1 维持 partial。"
+  - timestamp: "2026-04-23T22:35:00+08:00"
+    summary: >
+      收口 persona-management 的退役真实语义、历史归因 guard 与 delete-empty 语义一致性，
+      并把 A3/S1/J1 从 partial 回写为 implemented。
+    reason: >
+      第二轮复核确认 M1 的主要残缺不在入口或测试数量，而在领域语义本身：`retire` 仅返回 guard 视图、
+      `hasAttributedHistory` 写死、`delete-empty` 名实不符，导致 Journey 文档虽有证据但不能诚实宣告完成。
+      本次修复把这些语义下沉到 user 域 Persona 聚合与 lifecycle guard 真相源。
+    change_type:
+      - refine
+      - implement
+      - validate
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+        sections:
+          - J1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md
+        sections:
+          - 背景与动机
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/design.md
+        sections:
+          - 上游输入评审
+          - KD4：删除与退役双语义
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/acceptance.yaml
+        sections:
+          - A3
+          - S1
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - "Persona 新增 `status / retiredAt`，`retire` 现在会真实持久化退役状态，并禁止退役分身继续激活、编辑与同步。"
+      - "`hasAttributedHistory` 改由 user 域已存在的分身级归因记录（邀请 / 招呼请求）驱动，delete-empty 与 retire 分流不再依赖写死布尔值。"
+      - "Journey 文档中的过期 blocker 已清理，A3/S1/J1 的 `tests.recorded` 已指向本次通过的 Go/Flutter 证据。"
   - timestamp: "2026-03-21T16:00:00+08:00"
     summary: >
       将 persona-follow-graph 收口为正式 PRD Journey baseline，新增分身公开身份与跨域透传两个
@@ -511,3 +825,65 @@ entries:
       - "`flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/content/post/contract/content_runtime_config_provider_test.dart test/ui/user/providers/persona_management_provider_test.dart test/cloud/integration/remote_api_path_contract_test.dart` 已通过。"
       - "本轮将 `A1 / A2` 回写为 implemented，`A3 / S1 / J1 / R1` 维持 partial。"
       - "`retire` 的历史归因持久化语义仍未落地到 user 域实体；当前退役主要是 guard/分流合同，而非完整的持久化状态机。"
+  - timestamp: "2026-04-24T19:15:00+08:00"
+    summary: >
+      执行 M5 rollout 基线：补齐 persona migration dry-run/validate 工具、flag 映射、
+      sync patch type、四类验收指标映射与本地 rehearsal runbook，并诚实回写 R1/P6 仍为 partial。
+    reason: >
+      M1~M4 已完成大部分功能主链路，但统一升级仍缺少一次性数据重整、开关矩阵、告警口径、
+      sync/rollback 底座与可重跑 rehearsal 工具，无法诚实宣告“可灰度可回滚”。本轮补齐 M5
+      的最小可上线治理工件，同时保留 staging/T4 与 M4 强泄漏验证缺口说明。
+    change_type:
+      - implement
+      - validate
+      - docs
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/m5-rollout-runbook.md
+        sections:
+          - M4 审计前提
+          - T5-1 迁移对象冻结
+          - T5-2 可重跑脚本与校验入口
+          - T5-3 Flag 能力矩阵
+          - T5-4 指标与告警口径
+          - T5-5 Sync 与回滚底座
+          - T5-6 Rehearsal 清单
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
+        sections:
+          - R1
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+        sections:
+          - P6
+      - path: quwoquan_service/runtime/persona/rollout.go
+        sections:
+          - migration plan
+          - validation report
+          - acceptance metrics
+      - path: quwoquan_service/runtime/governance/feature_flags.go
+        sections:
+          - persona rollout flags
+      - path: quwoquan_service/runtime/sync/persona_patch.go
+        sections:
+          - persona patch types
+      - path: quwoquan_service/tools/persona_rollout/main.go
+        sections:
+          - dry-run validate cli
+      - path: scripts/persona_migration_dry_run.sh
+        sections:
+          - local rehearsal entry
+      - path: scripts/persona_migration_validate.sh
+        sections:
+          - validation entry
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: false
+    notes:
+      - "`go test ./runtime/persona ./runtime/governance ./runtime/sync ./services/user-service/internal/domain/user/telemetry` 已通过。"
+      - "`go run ./tools/persona_rollout --input ./runtime/persona/testdata/rehearsal_input.json --switch-latency-ms 18.4` 已输出 0 migration failure / 0 public leakage / 0 attribution mismatch。"
+      - "本轮只补齐本地 rehearsal 与 runbook；真实 staging `T4_release_rehearsal` 仍未在本会话完成，因此 `R1 / P6` 维持 partial。"
+      - "M4 的共同粉丝 / mutual 更强泄漏验证仍属于未收口缺口，未在本轮伪装为已完成。"

@@ -20,7 +20,7 @@
       "web_pipeline"
     ]
   },
-  "queryTaskSchema": {
+  "searchPlanSchema": {
     "required": [
       "targetSlot",
       "reason",

@@ -5,13 +5,16 @@ import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_diagnostics_helper.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_usage_stats.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 
 Map<String, dynamic> buildStructuredResponseDomainResults({
   required List<AssistantToolResultRow> toolResults,
   required List<Map<String, dynamic>> toolErrors,
 }) {
   return <String, dynamic>{
-    'toolResults': toolResults.map((item) => item.toJson()).toList(growable: false),
+    'toolResults': toolResults
+        .map((item) => item.toJson())
+        .toList(growable: false),
     'toolErrors': toolErrors,
   };
 }
@@ -27,35 +30,29 @@ Map<String, dynamic> buildStructuredResponseRetrievalFeedback({
     'qualityScore': () {
       for (final r in toolResults.reversed) {
         final data = r.dataPayload;
-        if (data is Map) {
-          final qs = (data['qualityScore'] as num?)?.toDouble();
-          if (qs != null) return qs;
-        }
+        final qs = (data['qualityScore'] as num?)?.toDouble();
+        if (qs != null) return qs;
       }
       return 0.0;
     }(),
     'roundTraces': toolResults
         .where(
           (r) =>
-              r.toolName == 'search' ||
-              r.toolName == 'web_search' ||
+              AssistantToolNames.isRetrievalName(r.toolName) ||
               r.dataPayload['stepId'] != null,
         )
-        .map(
-          (r) {
-            final data = r.dataPayload;
-            return <String, dynamic>{
-              'stepId': (data['stepId'] ?? r.toolCallId).toString(),
-              'tool': data['tool']?.toString() ?? r.toolName,
-              'success': data['success'] == true,
-              'qualityScore':
-                  (data['qualityScore'] as num?)?.toDouble() ?? 0.0,
-              'authorityScore':
-                  (data['authorityScore'] as num?)?.toDouble() ?? 0.0,
-              'totalReferences': (data['totalReferences'] as int?) ?? 0,
-            };
-          },
-        )
+        .map((r) {
+          final data = r.dataPayload;
+          return <String, dynamic>{
+            'stepId': (data['stepId'] ?? r.toolCallId).toString(),
+            'tool': data['tool']?.toString() ?? r.toolName,
+            'success': data['success'] == true,
+            'qualityScore': (data['qualityScore'] as num?)?.toDouble() ?? 0.0,
+            'authorityScore':
+                (data['authorityScore'] as num?)?.toDouble() ?? 0.0,
+            'totalReferences': (data['totalReferences'] as int?) ?? 0,
+          };
+        })
         .toList(growable: false),
     'eligible':
         toolResults.isNotEmpty &&
@@ -140,8 +137,5 @@ Map<String, dynamic> assembleStructuredResponseRoot({
   required Map<String, dynamic> enrichedAnswerPayload,
   required Map<String, dynamic> rootPayload,
 }) {
-  return <String, dynamic>{
-    ...enrichedAnswerPayload,
-    ...rootPayload,
-  };
+  return <String, dynamic>{...enrichedAnswerPayload, ...rootPayload};
 }

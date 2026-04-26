@@ -3,7 +3,7 @@ name: policy_public_service
 description: 政策解读、办事流程、社保公积金、落户签证、材料清单。
 domain: policy_public_service
 mode: qa
-allowed_tools: web_search local_context
+allowed_tools: web_search
 trigger_keywords: []
 searchPolicy:
   maxReflection: 2
@@ -37,8 +37,8 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 竞争冲突：不确定时先 ask_user 澄清主诉求。
 - **重要提示**：政策信息以官方网站为准，本回复为参考性说明，不构成法律依据。
 
-## local_context 输出约束
-当调用 local_context 时，必须按 `local_context_v1` 解析，并明确 `media.included=false`。
+## 系统上下文约束
+位置、时间、设备与权限信息统一来自系统默认注入上下文，不再通过额外工具读取。
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
@@ -53,7 +53,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "contractId": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {
-    "city": {"value": "", "source": "local_context|memory|user_query|unknown"},
+    "city": {"value": "", "source": "system_context|memory|user_query|unknown"},
     "serviceType": {"value": "", "source": "user_query|memory|unknown"},
     "userIdentity": {"value": "", "source": "user_query|memory|unknown"}
   },

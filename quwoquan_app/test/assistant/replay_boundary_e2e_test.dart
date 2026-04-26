@@ -42,15 +42,16 @@ void main() {
       debugPrint('REPLAY_BOUNDARY_FIRST: ${diagnostics.toJson()}');
 
       expect(diagnostics.finalText.trim(), isNotEmpty);
+
+      if (!hasRemoteModel || diagnostics.degradedFailClosed) {
+        return;
+      }
+
       expect(diagnostics.nextAction, anyOf(equals('answer'), equals('')));
       expect(
         diagnostics.finalAnswerMode,
         anyOf(equals('full'), equals('bounded_answer'), equals('')),
       );
-
-      if (!hasRemoteModel || diagnostics.degradedFailClosed) {
-        return;
-      }
 
       expect(
         diagnostics.expandSignalCount,

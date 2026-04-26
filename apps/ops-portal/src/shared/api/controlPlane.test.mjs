@@ -7,7 +7,7 @@ import {
   fetchProductEventSummary,
   fetchProductProjectionSummary,
   fetchServiceCatalog,
-} from '../../../.test-dist/controlPlane.js';
+} from '../../../.test-dist/shared/api/controlPlane.js';
 
 const originalFetch = globalThis.fetch;
 const originalPlatformBaseUrl = process.env.VITE_PLATFORM_OPS_BASE_URL;
@@ -125,5 +125,89 @@ test('requests product event drilldown from configured base url', async () => {
 
   assert.equal(calls[0], 'http://product.test/v1/ops/events/drilldown?eventType=experience&limit=5');
   assert.equal(drilldown.items[0].eventId, 'evt-1');
+  restoreEnvAndFetch();
+});
+
+test('throws RuntimeError when base url is missing', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = '';
+
+  await assert.rejects(
+    () => fetchServiceCatalog(),
+    (error) => {
+      assert.equal(error.name, 'RuntimeError');
+      assert.equal(error.failure.code, 'OPS.CONFIG.base_url_missing');
+      return true;
+    },
+  );
+  restoreEnvAndFetch();
+});
+
+test('throws structured RuntimeError from non-2xx response', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 503,
+    headers: new Headers({
+      'X-Request-Id': 'req-1',
+      'X-Trace-Id': 'trace-1',
+    }),
+    text: async () => '',
+  });
+
+  await assert.rejects(
+    () => fetchServiceCatalog(),
+    (error) => {
+      assert.equal(error.name, 'RuntimeError');
+      assert.equal(error.failure.code, 'OPS.UNAVAILABLE.control_plane_unavailable');
+      assert.equal(error.requestId, 'req-1');
+      assert.equal(error.traceId, 'trace-1');
+      return true;
+    },
+  );
+  restoreEnvAndFetch();
+});
+
+test('wraps fetch failures as RuntimeError', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
+  globalThis.fetch = async () => {
+    throw new TypeError('network down');
+  };
+
+  await assert.rejects(
+    () => fetchServiceCatalog(),
+    (error) => {
+      assert.equal(error.name, 'RuntimeError');
+      assert.equal(error.failure.code, 'OPS.NETWORK.fetch_failed');
+      assert.equal(error.failure.context.attributes.at(-1).value, 'network down');
+      return true;
+    },
+  );
+  restoreEnvAndFetch();
+});
+
+test('wraps successful response JSON failures as RuntimeError', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({
+      'X-Request-Id': 'req-json',
+      'X-Trace-Id': 'trace-json',
+    }),
+    json: async () => {
+      throw new SyntaxError('bad json');
+    },
+  });
+
+  await assert.rejects(
+    () => fetchServiceCatalog(),
+    (error) => {
+      assert.equal(error.name, 'RuntimeError');
+      assert.equal(error.failure.code, 'OPS.CONTRACT.invalid_json_response');
+      assert.equal(error.requestId, 'req-json');
+      assert.equal(error.traceId, 'trace-json');
+      return true;
+    },
+  );
   restoreEnvAndFetch();
 });

@@ -5,6 +5,7 @@ class ProfileSubjectWireDto {
   final String profileSubjectId;
   final String ownerUserId;
   final String subAccountId;
+  final String userHandle;
   final String nickname;
   final String displayName;
   final String username;
@@ -18,6 +19,7 @@ class ProfileSubjectWireDto {
   final int circleCount;
   final int likeCount;
   final String profileVisibility;
+  final String isolationLevel;
   final bool inheritsFromOwner;
   final List<String>? overriddenFields;
   final DateTime? updatedAt;
@@ -26,6 +28,7 @@ class ProfileSubjectWireDto {
     this.profileSubjectId = '',
     this.ownerUserId = '',
     this.subAccountId = '',
+    this.userHandle = '',
     this.nickname = '',
     this.displayName = '',
     this.username = '',
@@ -39,6 +42,7 @@ class ProfileSubjectWireDto {
     this.circleCount = 0,
     this.likeCount = 0,
     this.profileVisibility = 'public',
+    this.isolationLevel = 'open',
     this.inheritsFromOwner = false,
     this.overriddenFields,
     this.updatedAt,
@@ -47,11 +51,12 @@ class ProfileSubjectWireDto {
   factory ProfileSubjectWireDto.fromMap(Map<String, dynamic> m) {
     return ProfileSubjectWireDto(
       profileSubjectId: _firstNonEmptyWireString(m, <String>['profileSubjectId', 'subAccountId', 'userId']) ?? '',
-      ownerUserId: _firstNonEmptyWireString(m, <String>['ownerUserId', 'userId']) ?? '',
+      ownerUserId: _firstNonEmptyWireString(m, <String>['ownerUserId']) ?? '',
       subAccountId: m['subAccountId']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['nickname']?.toString() ?? '',
       nickname: m['nickname']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
-      username: m['username']?.toString() ?? m['nickname']?.toString() ?? '',
+      username: m['username']?.toString() ?? m['userHandle']?.toString() ?? m['nickname']?.toString() ?? '',
       subjectType: m['subjectType']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       backgroundUrl: m['backgroundUrl']?.toString() ?? m['backgroundImage']?.toString() ?? '',
@@ -62,6 +67,7 @@ class ProfileSubjectWireDto {
       circleCount: (m['circleCount'] as num?)?.toInt() ?? 0,
       likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
       profileVisibility: m['profileVisibility']?.toString() ?? 'public',
+      isolationLevel: m['isolationLevel']?.toString() ?? 'open',
       inheritsFromOwner: m['inheritsFromOwner'] as bool? ?? false,
       overriddenFields: _parseStringList(m['overriddenFields']) ?? null,
       updatedAt: _parseDateTime(m['updatedAt']) ?? null,
@@ -73,6 +79,7 @@ class ProfileSubjectWireDto {
       'profileSubjectId': profileSubjectId,
       'ownerUserId': ownerUserId,
       'subAccountId': subAccountId,
+      'userHandle': userHandle,
       'nickname': nickname,
       'displayName': displayName,
       'username': username,
@@ -86,6 +93,7 @@ class ProfileSubjectWireDto {
       'circleCount': circleCount,
       'likeCount': likeCount,
       'profileVisibility': profileVisibility,
+      'isolationLevel': isolationLevel,
       'inheritsFromOwner': inheritsFromOwner,
       'overriddenFields': overriddenFields,
       'updatedAt': updatedAt,
@@ -96,6 +104,7 @@ class ProfileSubjectWireDto {
     String? profileSubjectId,
     String? ownerUserId,
     String? subAccountId,
+    String? userHandle,
     String? nickname,
     String? displayName,
     String? username,
@@ -109,6 +118,7 @@ class ProfileSubjectWireDto {
     int? circleCount,
     int? likeCount,
     String? profileVisibility,
+    String? isolationLevel,
     bool? inheritsFromOwner,
     List<String>? overriddenFields,
     DateTime? updatedAt,
@@ -117,6 +127,7 @@ class ProfileSubjectWireDto {
       profileSubjectId: profileSubjectId ?? this.profileSubjectId,
       ownerUserId: ownerUserId ?? this.ownerUserId,
       subAccountId: subAccountId ?? this.subAccountId,
+      userHandle: userHandle ?? this.userHandle,
       nickname: nickname ?? this.nickname,
       displayName: displayName ?? this.displayName,
       username: username ?? this.username,
@@ -130,6 +141,7 @@ class ProfileSubjectWireDto {
       circleCount: circleCount ?? this.circleCount,
       likeCount: likeCount ?? this.likeCount,
       profileVisibility: profileVisibility ?? this.profileVisibility,
+      isolationLevel: isolationLevel ?? this.isolationLevel,
       inheritsFromOwner: inheritsFromOwner ?? this.inheritsFromOwner,
       overriddenFields: overriddenFields ?? this.overriddenFields,
       updatedAt: updatedAt ?? this.updatedAt,

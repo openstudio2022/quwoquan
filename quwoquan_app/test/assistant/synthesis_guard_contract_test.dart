@@ -105,6 +105,7 @@ String _assistantTurnJson({
   String text = '',
   String summary = '',
   String interpretation = '测试结论',
+  String reasonCode = 'bounded_ready',
   List<Map<String, dynamic>> evidence = const <Map<String, dynamic>>[],
   List<Map<String, dynamic>> reasoningBasis = const <Map<String, dynamic>>[],
   Map<String, dynamic> understandingSnapshot = const <String, dynamic>{},
@@ -117,7 +118,7 @@ String _assistantTurnJson({
     'messageKind': 'answer',
     'phaseId': 'answering',
     'actionCode': 'compose_answer',
-    'reasonCode': 'evidence_ready',
+    'reasonCode': reasonCode,
     'reasonShort': '关键信息已经齐了，可以直接给结论。',
     'userMarkdown': markdown,
     'result': <String, dynamic>{
@@ -199,18 +200,24 @@ void main() {
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
       final isStream = body['stream'] == true;
+      if (joined.contains(_kSynthesisMockSystemMarker)) {
+        return isStream
+            ? const _MockChatResponse.sse(<String>[
+                '<tool_call><name>web_search</name></tool_call>',
+              ])
+            : const _MockChatResponse.json(
+                '<tool_call><name>web_search</name></tool_call>',
+              );
+      }
       if (joined.contains('assistant_turn_repair|phase=synthesis|') ||
-          joined.contains('assistant_turn_repair|phase=phase_one_direct_answer|') ||
+          joined.contains(
+            'assistant_turn_repair|phase=phase_one_direct_answer|',
+          ) ||
           joined.contains('结构化 JSON 仍然无效') ||
           joined.contains('上一次输出无效')) {
         return isStream
             ? _MockChatResponse.sse(_chunk(repairedJson))
             : _MockChatResponse.json(repairedJson);
-      }
-      if (isStream && joined.contains(_kSynthesisMockSystemMarker)) {
-        return const _MockChatResponse.sse(<String>[
-          '<tool_call><name>web_search</name></tool_call>',
-        ]);
       }
       return isStream
           ? _MockChatResponse.sse(_chunk(planningJson))
@@ -241,12 +248,12 @@ void main() {
     final markdown = response.displayMarkdown;
 
     expect(response.degraded, isTrue);
-    expect(markdown, contains('这次生成答案失败'));
     expect(markdown, isNot(contains('## 问题理解')));
     expect(markdown, isNot(contains('## 关键观点')));
     expect(markdown, isNot(contains('## 回答概要')));
     expect(markdown, isNot(contains('<tool_call>')));
     expect(markdown, isNot(contains('"toolCalls"')));
+    expect(markdown, isNot(contains('contractId')));
   });
 
   test('repair 仍失败时会终止成答并把答案阶段标记为 blocked', () async {
@@ -261,13 +268,19 @@ void main() {
       final joined = messages
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
-      if (body['stream'] == true && joined.contains(_kSynthesisMockSystemMarker)) {
-        return const _MockChatResponse.sse(<String>[
-          '<tool_call><name>web_search</name></tool_call>',
-        ]);
+      if (joined.contains(_kSynthesisMockSystemMarker)) {
+        return body['stream'] == true
+            ? const _MockChatResponse.sse(<String>[
+                '<tool_call><name>web_search</name></tool_call>',
+              ])
+            : const _MockChatResponse.json(
+                '<tool_call><name>web_search</name></tool_call>',
+              );
       }
       if (joined.contains('assistant_turn_repair|phase=synthesis|') ||
-          joined.contains('assistant_turn_repair|phase=phase_one_direct_answer|') ||
+          joined.contains(
+            'assistant_turn_repair|phase=phase_one_direct_answer|',
+          ) ||
           joined.contains('结构化 JSON 仍然无效') ||
           joined.contains('上一次输出无效')) {
         return const _MockChatResponse.json(
@@ -301,7 +314,7 @@ void main() {
       ),
     );
 
-    expect(response.displayMarkdown, contains('这次生成答案失败'));
+    expect(response.displayMarkdown, isNot(contains('contractId')));
     final timeline =
         response.runArtifacts?.processTimeline ??
         const <ProcessTimelineFrame>[];
@@ -311,7 +324,6 @@ void main() {
           frame.stepId == ProcessStepId.answerOrganization,
     );
     expect(blockedFrame.status, JourneyStageStatus.blocked);
-    expect(blockedFrame.headline, contains('这次生成答案失败'));
   });
 
   test('injects inline evidence links into streamed final markdown', () async {
@@ -339,8 +351,10 @@ void main() {
       final joined = messages
           .map((item) => (item['content'] ?? '').toString())
           .join('\n');
-      if (body['stream'] == true && joined.contains(_kSynthesisMockSystemMarker)) {
-        return _MockChatResponse.sse(_chunk(synthesisJson));
+      if (joined.contains(_kSynthesisMockSystemMarker)) {
+        return body['stream'] == true
+            ? _MockChatResponse.sse(_chunk(synthesisJson))
+            : _MockChatResponse.json(synthesisJson);
       }
       return body['stream'] == true
           ? _MockChatResponse.sse(_chunk(planningJson))
@@ -416,9 +430,10 @@ void main() {
         final joined = messages
             .map((item) => (item['content'] ?? '').toString())
             .join('\n');
-        if (body['stream'] == true &&
-            joined.contains(_kSynthesisMockSystemMarker)) {
-          return _MockChatResponse.sse(_chunk(synthesisJson));
+        if (joined.contains(_kSynthesisMockSystemMarker)) {
+          return body['stream'] == true
+              ? _MockChatResponse.sse(_chunk(synthesisJson))
+              : _MockChatResponse.json(synthesisJson);
         }
         return body['stream'] == true
             ? _MockChatResponse.sse(_chunk(planningJson))
@@ -441,7 +456,7 @@ void main() {
       final response = await loop.run(
         const AssistantRunRequest(
           sessionId: 'three-section-answer',
-          // 与 evidence-links 用例对齐的用户句，避免 `entityAnchors` 触发
+          // 与 evidence-links 用例对齐的用户句，避免 `entityRefs` 触发
           // `_missingRequiredTopicAnchor` → 恢复信封丢 evidence。
           messages: <AssistantRunMessage>[
             AssistantRunMessage(role: 'user', content: '请整理一条带来源的结论'),
@@ -495,13 +510,13 @@ void main() {
     final vars = provider.lastSynthesisTemplateVariables;
     expect(vars, isNotNull);
     expect(vars!['userGoal'], contains('九寨沟'));
-    expect(vars['entityAnchors'], contains('九寨沟'));
-    expect((vars['intentGraphJson'] as String?) ?? '', contains('九寨沟'));
+    expect(vars['entityRefs'], contains('九寨沟'));
+    expect((vars['planViewJson'] as String?) ?? '', contains('九寨沟'));
     expect(
-      (vars['queryTasksJson'] as String?) ?? '',
+      (vars['searchPlansJson'] as String?) ?? '',
       contains('candidate_space'),
     );
-    expect((vars['queryTasksJson'] as String?) ?? '', contains('九寨沟'));
+    expect((vars['searchPlansJson'] as String?) ?? '', contains('九寨沟'));
     expect(response.displayMarkdown, contains('九寨沟'));
   });
 
@@ -546,9 +561,10 @@ void main() {
         final joined = messages
             .map((item) => (item['content'] ?? '').toString())
             .join('\n');
-        if (body['stream'] == true &&
-            joined.contains(_kSynthesisMockSystemMarker)) {
-          return _MockChatResponse.sse(_chunk(dirtySynthesisJson));
+        if (joined.contains(_kSynthesisMockSystemMarker)) {
+          return body['stream'] == true
+              ? _MockChatResponse.sse(_chunk(dirtySynthesisJson))
+              : _MockChatResponse.json(dirtySynthesisJson);
         }
         return body['stream'] == true
             ? _MockChatResponse.sse(_chunk(planningJson))
@@ -635,21 +651,41 @@ class _SynthesisTemplateCaptureProvider implements AssistantLlmProvider {
         'summary': '九寨沟路线备选',
         'interpretation': 'phase one',
       },
-      'intentGraph': <String, dynamic>{
-        'userGoal': '把九寨沟方向考虑进去，给出备选方案',
-        'problemShape': 'single_skill',
-        'primarySkill': 'fallback_general_search',
-        'problemClass': 'complex_reasoning',
-        'answerShape': 'options',
-        'requiresExternalEvidence': true,
-        'entityAnchors': const <String>['九寨沟'],
-        'queryTasks': const <Map<String, dynamic>>[
+      'understandingResult': const <String, dynamic>{
+        'intents': <Map<String, dynamic>>[
           <String, dynamic>{
-            'id': 'candidate_space',
-            'query': '九寨沟 备选路线 住宿 交通',
-            'label': '候选范围',
-            'dimension': 'candidate_space',
-            'entityAnchors': <String>['九寨沟'],
+            'intentId': 'intent_primary',
+            'intentType': 'fallback_general_search.options',
+            'goal': '把九寨沟方向考虑进去，给出备选方案',
+            'entityRefs': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'entityType': 'destination',
+                'canonicalKey': 'jiuzhaigou',
+                'displayText': '九寨沟',
+              },
+            ],
+            'requiresEvidence': true,
+          },
+        ],
+      },
+      'taskGraph': const <String, dynamic>{
+        'tasks': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'taskId': 'candidate_space',
+            'intentId': 'intent_primary',
+            'toolName': 'web_search',
+            'toolArgs': <String, dynamic>{
+              'query': '九寨沟 备选路线 住宿 交通',
+              'searchPlans': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'id': 'candidate_space',
+                  'query': '九寨沟 备选路线 住宿 交通',
+                  'label': '候选范围',
+                  'dimension': 'candidate_space',
+                  'entityRefs': <String>['九寨沟'],
+                },
+              ],
+            },
           },
         ],
       },

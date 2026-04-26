@@ -25,6 +25,8 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
   bool _sceneUpdateScheduled = false;
   ArticleReadOnlyBookDebugState? _pendingDebugState;
   bool _debugUpdateScheduled = false;
+  String? _lastLoggedSceneSignature;
+  String? _lastLoggedDebugSignature;
 
   @override
   void dispose() {
@@ -82,7 +84,11 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
                                 }
                                 final nextScene = _pendingScene;
                                 _pendingScene = null;
+                                if (nextScene == null) {
+                                  return;
+                                }
                                 _sceneNotifier.value = nextScene;
+                                _logScene(nextScene);
                               });
                             },
                             onDebugStateChanged: (debugState) {
@@ -98,7 +104,11 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
                                 }
                                 final nextDebugState = _pendingDebugState;
                                 _pendingDebugState = null;
+                                if (nextDebugState == null) {
+                                  return;
+                                }
                                 _debugNotifier.value = nextDebugState;
+                                _logDebugState(nextDebugState);
                               });
                             },
                           ),
@@ -152,6 +162,126 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       ),
     );
   }
+
+  void _logScene(StPageFlipScene scene) {
+    final renderFrame = scene.renderFrame;
+    final progress =
+        renderFrame?.progress ??
+        ((scene.calculation?.getFlippingProgress() ?? 0) / 100)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    final renderDirection = scene.effectiveRenderDirection;
+    final signature = <Object?>[
+      scene.currentPageIndex,
+      scene.flippingPageIndex,
+      scene.bottomPageIndex,
+      scene.direction?.name,
+      renderDirection?.name,
+      progress.toStringAsFixed(3),
+    ].join('|');
+    if (signature == _lastLoggedSceneSignature) {
+      return;
+    }
+    _lastLoggedSceneSignature = signature;
+    debugPrint(
+      '[pageflip][scene] '
+      'state=${scene.state.name} '
+      'cur=${scene.currentPageIndex} '
+      'turn=${_pageLabel(scene.flippingPageIndex)} '
+      'under=${_pageLabel(scene.bottomPageIndex)} '
+      'dir=${scene.direction?.name ?? "-"} '
+      'render=${renderDirection?.name ?? "-"} '
+      'progress=${progress.toStringAsFixed(3)}',
+    );
+  }
+
+  void _logDebugState(ArticleReadOnlyBookDebugState debugState) {
+    final signature = debugState.signature;
+    if (signature == _lastLoggedDebugSignature) {
+      return;
+    }
+    _lastLoggedDebugSignature = signature;
+    debugPrint(
+      '[pageflip][debug] '
+      'branch=${debugState.renderBranch.name} '
+      'dir=${debugState.renderDirection?.name ?? "-"} '
+      'cur=${debugState.currentPageIndex} '
+      'turn=${_pageLabel(debugState.turningPageIndex)} '
+      'under=${_pageLabel(debugState.underlayPageIndex)} '
+      'req=${_tripletLabel(debugState.requestedRectoPageIndex, debugState.requestedVersoPageIndex, debugState.requestedBottomPageIndex)} '
+      'act=${_tripletLabel(debugState.activeRectoPageIndex, debugState.activeVersoPageIndex, debugState.activeBottomPageIndex)} '
+      'leaf=${_tripletLabel(debugState.backwardCoveredPageIndex, debugState.backwardLeafRectoPageIndex, debugState.backwardLeafVersoPageIndex)} '
+      'render=${debugState.renderSceneReady} '
+      'bundle=${debugState.sessionHasBundle} '
+      'guide=${_doubleLabel(debugState.guideX)} '
+      'flip=${_rectLabel(debugState.flippingClipBounds)} '
+      'clip=${_rectLabel(debugState.bottomClipBounds)} '
+      'front=${_rectLabel(debugState.frontBounds)} '
+      'back=${_rectLabel(debugState.backBounds)} '
+      'corner=${debugState.backwardCorner ?? "-"} '
+      'hinge=${_offsetLabel(debugState.backwardHinge)} '
+      'spineTop=${_offsetLabel(debugState.backwardSpineTop)} '
+      'spineBottom=${_offsetLabel(debugState.backwardSpineBottom)} '
+      'seam=${_doubleLabel(debugState.backwardSeamX)} '
+      'foldX=${_doubleLabel(debugState.backwardFoldX)} '
+      'pageEdgeX=${_doubleLabel(debugState.backwardPageEdgeX)} '
+      'foldLine=${_offsetLabel(debugState.backwardFoldLineTop)}>${_offsetLabel(debugState.backwardFoldLineBottom)} '
+      'pageEdgeLine=${_offsetLabel(debugState.backwardPageEdgeLineTop)}>${_offsetLabel(debugState.backwardPageEdgeLineBottom)} '
+      'coveredWidth=${_doubleLabel(debugState.backwardCoveredWidth)} '
+      'rectoCoverage=${_doubleLabel(debugState.backwardRectoCoverage)} '
+      'versoWidth=${_doubleLabel(debugState.backwardVersoWidth)} '
+      'rectoWidth=${_doubleLabel(debugState.backwardRectoWidth)} '
+      'bottomStart=${_doubleLabel(debugState.backwardBottomStart)} '
+      'frontLayers=${debugState.backwardReplayFrontLayerCount ?? "-"} '
+      'backSurface=${debugState.backwardReplayBackSurfaceStrategy ?? "-"} '
+      'bottomLayer=${_pageLabel(debugState.backwardBottomLayerPageIndex)} '
+      'flippingLayer=${_pageLabel(debugState.backwardFlippingLayerPageIndex)} '
+      'owned=[${debugState.backwardDynamicOwnedPages.join(",")}] '
+      'suppressed=[${debugState.backwardStaticSuppressedPages.join(",")}] '
+      'slices=${debugState.backwardReplaySlices ?? "-"} '
+      'composite=${debugState.backwardCompositeMode ?? "-"} '
+      'paintFront=${_rectLabel(debugState.backwardFrontPaintBounds)} '
+      'paintBack=${_rectLabel(debugState.backwardBackPaintBounds)} '
+      'paintCurrent=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
+      'paintVerso=${_doubleLabel(debugState.backwardPaintedVersoWidth)} '
+      'backPixels=${debugState.backwardBackPixelSurfaceStrategy ?? "-"} '
+      'frontCover=${_doubleLabel(debugState.backwardFrontCoverageRatio)} '
+      'spineLocked=${debugState.backwardLeftSpineLocked ?? "-"} '
+      'visualPhase=${debugState.backwardSimulatorVisualPhase ?? "-"} '
+      'flipAnchor=${_offsetLabel(debugState.flippingAnchor)} '
+      'backAnchor=${_offsetLabel(debugState.bottomAnchor)} '
+      'phase=${debugState.backwardPhase ?? "-"} '
+      'snap=[${debugState.availableSnapshotIndices.join(",")}] '
+      'pending=[${debugState.pendingCaptureIndices.join(",")}]',
+    );
+  }
+}
+
+String _pageLabel(int? pageIndex) => pageIndex?.toString() ?? '-';
+
+String _tripletLabel(int? a, int? b, int? c) {
+  return '${_pageLabel(a)}/${_pageLabel(b)}/${_pageLabel(c)}';
+}
+
+String _doubleLabel(double? value) => value?.toStringAsFixed(1) ?? '-';
+
+String _offsetLabel(Offset? value) {
+  if (value == null) {
+    return '-';
+  }
+  return '${value.dx.toStringAsFixed(1)},${value.dy.toStringAsFixed(1)}';
+}
+
+String _rectLabel(Rect? rect) {
+  if (rect == null) {
+    return '-';
+  }
+  return [
+    rect.left.toStringAsFixed(1),
+    rect.top.toStringAsFixed(1),
+    rect.right.toStringAsFixed(1),
+    rect.bottom.toStringAsFixed(1),
+  ].join(',');
 }
 
 class _SamplingPointsOverlay extends StatelessWidget {

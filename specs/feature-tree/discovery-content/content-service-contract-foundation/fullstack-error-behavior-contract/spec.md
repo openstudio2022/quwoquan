@@ -9,7 +9,7 @@
 
 **errors.yaml**：
 - content 域全量错误码（MODULE.KIND.REASON 三段格式）
-- 每个 code 含 http_status / retryable / i18n user_message / dart_const / go_const
+- 每个 code 含 http_status / recovery action / i18n user_message / dart_const / go_const
 - codegen → Dart ContentErrorCode enum + ContentErrorMessages（含 zh/en i18n）
 - codegen → Go errors.go 错误码常量
 - CloudErrorMapper 升级：解析 response body "code" 字段 → ContentErrorCode

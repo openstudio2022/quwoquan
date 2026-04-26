@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react';
-import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated';
-import { fetchRunbooks, type RunbookItem } from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated.js';
+import { fetchRunbooks, type RunbookItem } from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function PlatformRunbookPage() {
   const runbookObject = platformControlPlane.object_types.find((item) => item.object_type === 'runbook');
   const [runbooks, setRunbooks] = useState<RunbookItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     fetchRunbooks()
       .then((items) => {
         setRunbooks(items);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -31,6 +35,7 @@ export function PlatformRunbookPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实演练对象已接入' : '当前展示回退到门户样例'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">创建演练计划</button>}

@@ -51,10 +51,6 @@ class ReactReflector {
     if (policy.replanStatuses.contains(observation.status)) {
       return true;
     }
-    if (observation.retryable &&
-        policy.replanRetryableErrorClasses.contains(observation.errorClass)) {
-      return true;
-    }
     if ((observation.coverage > 0 &&
             observation.coverage < policy.replanCoverageMin) ||
         (observation.confidence > 0 &&

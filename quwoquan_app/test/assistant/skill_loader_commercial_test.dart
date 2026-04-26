@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/skill/domain/skill_router.dart';
 import 'package:quwoquan_app/assistant/skills/assistant_skill_runtime.dart';
+import 'package:quwoquan_app/assistant/conversation/explainability/dialogue_state_runtime.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -122,5 +123,75 @@ void main() {
         expect(knowledge.first.toolChainProfile, equals('knowledge_qa'));
       },
     );
+
+    test('all bundled skills expose explicit shell and dialogue runtime state', () async {
+      final loader = const PersonalAssistantSkillLoader();
+      final dialogueRuntime = DialogueStateRuntime();
+      final skills = await loader.loadBundledSkills();
+      final domainSkills = skills
+          .where((skill) => skill.domainId.trim().isNotEmpty)
+          .toList(growable: false);
+
+      expect(domainSkills.length, greaterThanOrEqualTo(19));
+
+      for (final skill in domainSkills) {
+        expect(skill.id.trim(), isNotEmpty, reason: '${skill.domainId}: skill id');
+        expect(
+          skill.description.trim(),
+          isNotEmpty,
+          reason: '${skill.id}: description',
+        );
+        expect(
+          skill.skillInstructionMarkdown.trim(),
+          isNotEmpty,
+          reason: '${skill.id}: SKILL.md body',
+        );
+        expect(skill.allowedTools, isNotEmpty, reason: '${skill.id}: allowed_tools');
+        expect(
+          skill.executionShell.maxIterations,
+          greaterThan(0),
+          reason: '${skill.id}: execution_shell.maxIterations',
+        );
+        expect(
+          skill.executionShell.toolBudget,
+          greaterThan(0),
+          reason: '${skill.id}: execution_shell.toolBudget',
+        );
+
+        final shellMap =
+            (skill.frontmatter['execution_shell'] as Map?)
+                ?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+        final hasExplicitProblemClass =
+            ((shellMap['problemClass'] as String?)?.trim().isNotEmpty ?? false) ||
+            ((skill.frontmatter['problem_class'] as String?)?.trim().isNotEmpty ??
+                false);
+        if (!hasExplicitProblemClass) {
+          expect(
+            skill.executionShell.problemClass,
+            equals('general'),
+            reason:
+                '${skill.id}: runtime 不得再从 mode 推导 problemClass，缺显式配置时只能保持 general',
+          );
+        }
+
+        final script = await dialogueRuntime.buildRoundScript(
+          domainId: skill.domainId,
+          userQuery: '验证 ${skill.domainId} 技能状态',
+          contextScopeHint: const <String, dynamic>{},
+        );
+        expect(script.enabled, isTrue, reason: '${skill.id}: dialogue enabled');
+        expect(
+          script.currentStateId.trim(),
+          isNotEmpty,
+          reason: '${skill.id}: current state',
+        );
+        expect(
+          script.suggestedNextStateId.trim(),
+          isNotEmpty,
+          reason: '${skill.id}: suggested next state',
+        );
+      }
+    });
   });
 }

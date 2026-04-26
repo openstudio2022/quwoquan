@@ -50,7 +50,7 @@ func (h *Handler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 func (h *Handler) handleGetPolicy(w http.ResponseWriter, r *http.Request) {
 	view, err := h.service.GetPolicy(r.Context(), resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -59,12 +59,12 @@ func (h *Handler) handleGetPolicy(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleReportPageContext(w http.ResponseWriter, r *http.Request) {
 	var input assistant.PageContextInput
 	if err := readJSON(r, &input); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
 	ack, err := h.service.ReportPageContext(r.Context(), resolveUserID(r), input)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, ack)
@@ -73,7 +73,7 @@ func (h *Handler) handleReportPageContext(w http.ResponseWriter, r *http.Request
 func (h *Handler) handleGetSuggestedActions(w http.ResponseWriter, r *http.Request) {
 	view, err := h.service.GetSuggestedActions(r.Context(), resolveUserID(r), strings.TrimSpace(r.URL.Query().Get("pageType")), strings.TrimSpace(r.URL.Query().Get("objectId")))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -82,12 +82,12 @@ func (h *Handler) handleGetSuggestedActions(w http.ResponseWriter, r *http.Reque
 func (h *Handler) handleReportInteractionEvent(w http.ResponseWriter, r *http.Request) {
 	payload, err := readJSONObject(r)
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
 	events, err := decodeInteractionEvents(payload)
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
 	for i := range events {
@@ -95,7 +95,7 @@ func (h *Handler) handleReportInteractionEvent(w http.ResponseWriter, r *http.Re
 	}
 	resp, err := h.service.ReportInteractionEvents(r.Context(), events)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -104,12 +104,12 @@ func (h *Handler) handleReportInteractionEvent(w http.ResponseWriter, r *http.Re
 func (h *Handler) handleReportScorecard(w http.ResponseWriter, r *http.Request) {
 	payload, err := readJSONObject(r)
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
 	scores, err := decodeScorecards(payload)
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
 	for i := range scores {
@@ -117,7 +117,7 @@ func (h *Handler) handleReportScorecard(w http.ResponseWriter, r *http.Request) 
 	}
 	resp, err := h.service.ReportScorecards(r.Context(), scores)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -126,12 +126,12 @@ func (h *Handler) handleReportScorecard(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) handleSearchXiaoqu(w http.ResponseWriter, r *http.Request) {
 	var req assistant.SearchRequest
 	if err := readJSON(r, &req); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
 	view, err := h.service.SearchXiaoquResults(r.Context(), req)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -141,7 +141,7 @@ func (h *Handler) handleListTasks(w http.ResponseWriter, r *http.Request) {
 	limit := parseLimit(r, 32)
 	view, err := h.service.ListAssistantTasks(r.Context(), resolveUserID(r), limit, strings.TrimSpace(r.URL.Query().Get("status")))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -151,7 +151,7 @@ func (h *Handler) handleListMemories(w http.ResponseWriter, r *http.Request) {
 	limit := parseLimit(r, 32)
 	view, err := h.service.ListAssistantMemories(r.Context(), resolveUserID(r), limit)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -160,7 +160,7 @@ func (h *Handler) handleListMemories(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetLearningOpsSummary(w http.ResponseWriter, r *http.Request) {
 	view, err := h.service.GetLearningOpsSummary(r.Context(), resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -170,7 +170,7 @@ func (h *Handler) handleListSkills(w http.ResponseWriter, r *http.Request) {
 	limit := parseLimit(r, 64)
 	view, err := h.service.ListSkills(r.Context(), resolveUserID(r), limit)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
@@ -179,7 +179,7 @@ func (h *Handler) handleListSkills(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleListConsents(w http.ResponseWriter, r *http.Request) {
 	items, err := h.service.ListConsents(r.Context(), resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -189,7 +189,7 @@ func (h *Handler) handleSkillConsentRoutes(w http.ResponseWriter, r *http.Reques
 	path := strings.TrimPrefix(r.URL.Path, "/v1/assistant/skills/")
 	parts := strings.Split(path, "/")
 	if len(parts) != 2 || parts[1] != "consent" {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "无效路径", "expected /v1/assistant/skills/{skillId}/consent"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "无效路径", "expected /v1/assistant/skills/{skillId}/consent"))
 		return
 	}
 	skillID := strings.TrimSpace(parts[0])
@@ -199,30 +199,30 @@ func (h *Handler) handleSkillConsentRoutes(w http.ResponseWriter, r *http.Reques
 			GrantedScope string `json:"grantedScope"`
 		}
 		if err := readJSON(r, &body); err != nil && err != io.EOF {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 			return
 		}
 		consent, err := h.service.GrantSkillConsent(r.Context(), resolveUserID(r), skillID, strings.TrimSpace(body.GrantedScope))
 		if err != nil {
-			writeHTTPError(w, err)
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"consent": consent})
 	case http.MethodDelete:
 		if err := h.service.RevokeSkillConsent(r.Context(), resolveUserID(r), skillID); err != nil {
-			writeHTTPError(w, err)
+			writeHTTPError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "skillId": skillID})
 	default:
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "方法不支持", "only POST/DELETE"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "方法不支持", "only POST/DELETE"))
 	}
 }
 
 func (h *Handler) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 	var req map[string]any
 	if err := readJSON(r, &req); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
 	query := strings.TrimSpace(fmtString(req["userQuery"]))
@@ -243,7 +243,7 @@ func (h *Handler) handleCreateRun(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleCreateRunStream(w http.ResponseWriter, r *http.Request) {
 	var req map[string]any
 	if err := readJSON(r, &req); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
 		return
 	}
 	query := strings.TrimSpace(fmtString(req["userQuery"]))
@@ -273,8 +273,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeHTTPError(w http.ResponseWriter, err error) {
-	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptions{})
+func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
+	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 func readJSON(r *http.Request, v any) error {

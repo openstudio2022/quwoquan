@@ -9,9 +9,11 @@ import 'package:quwoquan_app/assistant/application/assistant_stream_projector.da
 import 'package:quwoquan_app/assistant/application/assistant_streaming_answer_decoder.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_structured_response_wire.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
 import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
@@ -23,8 +25,10 @@ import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_boundary_error_mapper.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class RemoteAssistantEntry {
   const RemoteAssistantEntry({
@@ -155,9 +159,8 @@ class RemoteAssistantEntry {
         final resolvedJourney = projector.resolveCompletedJourney(
           resolvedResponse,
         );
-        final canonicalProcessTimeline = projector.resolveCompletedProcessTimeline(
-          resolvedResponse,
-        );
+        final canonicalProcessTimeline = projector
+            .resolveCompletedProcessTimeline(resolvedResponse);
         if (!controller.isClosed &&
             !hasStructuredProcessTimeline(canonicalProcessTimeline)) {
           controller.add(
@@ -207,9 +210,8 @@ class RemoteAssistantEntry {
           errorTypeName: error.runtimeType.toString(),
         );
         final resolvedJourney = projector.resolveCompletedJourney(fallback);
-        final canonicalProcessTimeline = projector.resolveCompletedProcessTimeline(
-          fallback,
-        );
+        final canonicalProcessTimeline = projector
+            .resolveCompletedProcessTimeline(fallback);
         if (!controller.isClosed &&
             !hasStructuredProcessTimeline(canonicalProcessTimeline)) {
           controller.add(
@@ -279,6 +281,23 @@ class RemoteAssistantEntry {
     if (finalText.isEmpty) {
       return null;
     }
+    final boundaryOutcome = const AssistantBoundaryErrorMapper().failed(
+      boundary: 'assistant_stream',
+      stage: 'remote_stream_terminal_payload_missing',
+      code: 'ASSISTANT.CONTRACT.remote_stream_terminal_payload_missing',
+      kind: RuntimeFailureKind.contract,
+      nature: RuntimeFailureNature.transient,
+      businessObject: 'assistant_turn',
+      functionModule: 'remote_assistant_entry',
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(
+          key: 'streamedAnswerLength',
+          value: finalText.length.toString(),
+        ),
+      ],
+      canContinue: true,
+      canAnswerPartially: true,
+    );
     return AssistantRunResponse(
       finalText: finalText,
       traces: <AssistantTraceEvent>[
@@ -302,6 +321,7 @@ class RemoteAssistantEntry {
       traceId: request.traceId,
       degraded: true,
       errorCode: 'remote_stream_terminal_payload_missing',
+      boundaryOutcome: boundaryOutcome,
       structuredResponse: _structuredResponseWithRunArtifacts(
         wire: AssistantStructuredResponseWire(
           qualityMetrics: <String, dynamic>{
@@ -371,11 +391,17 @@ class RemoteAssistantEntry {
       arguments: arguments,
     );
     if (result == null) {
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: false,
         message: '远端技能调用不可用',
         errorCode: AssistantErrorCode.networkUnavailable,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.networkUnavailable,
+          message: '远端技能调用不可用',
+          functionModule: skillId,
+          stage: 'remote_skill_unavailable',
+        ),
       );
     }
     return result;
@@ -399,33 +425,54 @@ class RemoteAssistantEntry {
     final traceMessage = errorTypeName != null
         ? 'remote_entry_error[$source]: $errorTypeName: $errorDescription'
         : 'remote_entry_error[$source]: $errorDescription';
+    final boundaryOutcome = const AssistantBoundaryErrorMapper().failed(
+      boundary: 'assistant_entry',
+      stage: source,
+      code: 'ASSISTANT.SYSTEM.remote_entry_failure',
+      kind: RuntimeFailureKind.internal,
+      businessObject: 'assistant_turn',
+      functionModule: 'remote_assistant_entry',
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(key: 'source', value: source),
+        if (errorTypeName != null)
+          RuntimeContextAttribute(key: 'errorType', value: errorTypeName),
+      ],
+    );
+    final traceData = <String, dynamic>{
+      'source': source,
+      'errorMessage': errorDescription,
+    };
+    if (errorTypeName != null) {
+      traceData['errorType'] = errorTypeName;
+    }
+    if (stackTrace != null) {
+      traceData['stackTrace'] = stackTrace.toString();
+    }
     return _ensureCanonicalGate(
       AssistantRunResponse(
-      finalText: '远端助手执行异常，请重试。（$source）',
-      degraded: true,
-      errorCode: 'remote_entry_failure',
-      traces: <AssistantTraceEvent>[
-        AssistantTraceEvent(
-          type: AssistantTraceEventType.toolError,
-          message: traceMessage,
-          timestamp: DateTime.now(),
-          data: <String, dynamic>{
-            'source': source,
-            if (errorTypeName != null) 'errorType': errorTypeName,
-            'errorMessage': errorDescription,
-            if (stackTrace != null) 'stackTrace': stackTrace.toString(),
+        finalText: '',
+        degraded: true,
+        errorCode: 'remote_entry_failure',
+        traces: <AssistantTraceEvent>[
+          AssistantTraceEvent(
+            type: AssistantTraceEventType.toolError,
+            message: traceMessage,
+            timestamp: DateTime.now(),
+            data: traceData,
+          ),
+        ],
+        structuredResponse: AssistantStructuredResponseWire(
+          qualityMetrics: <String, dynamic>{
+            'decisionParseSuccess': false,
+            'hardCutSource': source,
           },
-        ),
-      ],
-      structuredResponse: AssistantStructuredResponseWire(
-        qualityMetrics: <String, dynamic>{
-          'decisionParseSuccess': false,
-          'hardCutSource': source,
-        },
-      ).toJson(),
+        ).toJson(),
+        boundaryOutcome: boundaryOutcome,
       ),
       reasonCode: 'degraded_response',
-      reason: '远端助手当前未形成稳定终态，先不按成功完成处理。',
+      reason:
+          boundaryOutcome.failure?.code ??
+          'ASSISTANT.SYSTEM.remote_entry_failure',
     );
   }
 
@@ -507,9 +554,9 @@ class RemoteAssistantEntry {
           ra.displayMarkdown.trim().isNotEmpty
               ? ra.displayMarkdown
               : ((structured['userMarkdown'] as String?)?.trim().isNotEmpty ==
-                      true
-                  ? (structured['userMarkdown'] as String)
-                  : response.finalText),
+                        true
+                    ? (structured['userMarkdown'] as String)
+                    : response.finalText),
         );
     if (normalizedMarkdown.isEmpty) {
       return response;
@@ -528,6 +575,7 @@ class RemoteAssistantEntry {
       'displayPlainText': displayPlainFallback,
     });
     structured['runArtifacts'] = merged.toJson();
+    _ensureTypedMainlineDecisionState(structured);
     final normalizedResponse = AssistantRunResponse(
       finalText: response.finalText,
       traces: response.traces,
@@ -552,12 +600,11 @@ class RemoteAssistantEntry {
       }
       return _ensureCanonicalGate(
         normalizedResponse,
-        reasonCode: response.errorCode == 'remote_stream_terminal_payload_missing'
+        reasonCode:
+            response.errorCode == 'remote_stream_terminal_payload_missing'
             ? 'missing_terminal_payload'
             : 'degraded_response',
-        reason: response.errorCode == 'remote_stream_terminal_payload_missing'
-            ? '远端流式结果缺少终态 payload，当前只保留可见增量，不按成功完成处理。'
-            : '远端结果处于降级态，当前不按成功完成处理。',
+        reason: '',
         terminalPayloadComplete:
             response.errorCode != 'remote_stream_terminal_payload_missing',
       );
@@ -565,30 +612,30 @@ class RemoteAssistantEntry {
     return normalizedResponse;
   }
 
-  bool _shouldPreserveRenderableDegradedAnswer(Map<String, dynamic> structured) {
+  void _ensureTypedMainlineDecisionState(Map<String, dynamic> structured) {}
+
+  bool _shouldPreserveRenderableDegradedAnswer(
+    Map<String, dynamic> structured,
+  ) {
     final ra = _runArtifactsFromStructured(structured);
     final hasRenderableAnswer =
         ra.displayMarkdown.trim().isNotEmpty ||
         ra.displayPlainText.trim().isNotEmpty ||
         ((structured['userMarkdown'] as String?)?.trim().isNotEmpty ?? false) ||
-        ((structured['result'] as Map?)?['text'] as String?)?.trim().isNotEmpty ==
+        ((structured['result'] as Map?)?['text'] as String?)
+                ?.trim()
+                .isNotEmpty ==
             true;
     if (!hasRenderableAnswer) {
       return false;
     }
-    final decision =
-        (structured['conversationStateDecision'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final nextAction = (decision['nextAction'] as String?)?.trim() ?? '';
-    final finalAnswerReady = decision['finalAnswerReady'] == true;
+    final decision = _typedDecisionFromStructured(structured);
+    final nextAction = decision?.nextActionWireName ?? '';
+    final finalAnswerReady = decision?.finalAnswerReady == true;
     if (nextAction == AssistantNextAction.answer.wireName || finalAnswerReady) {
       return true;
     }
-    final rawDecision =
-        (structured['decision'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    return (rawDecision['nextAction'] as String?)?.trim() ==
-        AssistantNextAction.answer.wireName;
+    return false;
   }
 
   AssistantRunResponse _ensureCanonicalGate(
@@ -626,23 +673,25 @@ class RemoteAssistantEntry {
       degraded: true,
       retrievalProcessing: ra.retrievalProcessing,
     ).toJson();
-    structured['conversationStateDecision'] = ConversationStateDecision(
-      nextAction: AssistantNextAction.abort,
-      finalAnswerMode: FinalAnswerMode.blocked,
-      answerEligibility: AnswerEligibility.blocked,
-      finalAnswerReady: false,
+    const blockedDirective = InteractionDirective(
+      kind: InteractionDirectiveKind.blocked,
+    );
+    structured[assistantOrchestratorStateField] =
+        const ConversationOrchestratorState(
+          interactionDirective: blockedDirective,
+        ).toJson();
+    structured[assistantTurnSynthesisStateField] = const TurnSynthesisState(
+      interactionDirective: blockedDirective,
     ).toJson();
     final wire = assistantStructuredWireFromStructuredRoot(structured);
-    structured['qualityMetrics'] = wire
-        .mergeQualityMetrics(<String, dynamic>{
-          'answerGateReady': false,
-          'answerGateReasonCode': reasonCode,
-          'hardCutSource':
-              wire.qualityMetrics['hardCutSource'] ??
-              response.errorCode ??
-              reasonCode,
-        })
-        .qualityMetrics;
+    structured['qualityMetrics'] = wire.mergeQualityMetrics(<String, dynamic>{
+      'answerGateReady': false,
+      'answerGateReasonCode': reasonCode,
+      'hardCutSource':
+          wire.qualityMetrics['hardCutSource'] ??
+          response.errorCode ??
+          reasonCode,
+    }).qualityMetrics;
     final mergedAnswerDecisionWire = <String, dynamic>{
       ...ra.answerDecision.toWireMap(),
       'nextAction': 'abort',
@@ -668,6 +717,31 @@ class RemoteAssistantEntry {
     );
   }
 
+  AssistantTypedTurnDecision? _typedDecisionFromStructured(
+    Map<String, dynamic> structured,
+  ) {
+    final orchestratorRaw = structured[assistantOrchestratorStateField];
+    final synthesisRaw = structured[assistantTurnSynthesisStateField];
+    if (orchestratorRaw is Map || synthesisRaw is Map) {
+      try {
+        final orchestratorState = orchestratorRaw is Map
+            ? ConversationOrchestratorState.fromJson(
+                orchestratorRaw.cast<String, dynamic>(),
+              )
+            : const ConversationOrchestratorState();
+        final synthesisState = synthesisRaw is Map
+            ? TurnSynthesisState.fromJson(synthesisRaw.cast<String, dynamic>())
+            : const TurnSynthesisState();
+        return AssistantTypedTurnDecision.fromTypedState(
+          orchestratorState: orchestratorState,
+          turnSynthesisState: synthesisState,
+        );
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
 }
 
 RunArtifacts _runArtifactsFromStructured(Map<String, dynamic> structured) {

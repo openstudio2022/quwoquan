@@ -12,7 +12,7 @@ errors:
     kind: USER
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: conversationNotFound
     go_const: ErrConversationNotFound
     user_message:
@@ -23,7 +23,7 @@ errors:
     kind: USER
     reason: unauthorized
     http_status: 401
-    retryable: false
+    recovery_action: surface
     dart_const: unauthorized
     go_const: ErrUnauthorized
     user_message:
@@ -34,7 +34,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: messageTooLong
     go_const: ErrMessageTooLong
     user_message:
@@ -45,8 +45,8 @@ errors:
     kind: USER
     reason: rate_limited
     http_status: 429
-    retryable: true
-    retry_after_seconds: 5
+    recovery_action: retry
+    recovery_after_seconds: 5
     dart_const: rateLimited
     go_const: ErrRateLimited
     user_message:
@@ -57,7 +57,7 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: false
+    recovery_action: surface
     dart_const: internalError
     go_const: ErrInternalError
     user_message:

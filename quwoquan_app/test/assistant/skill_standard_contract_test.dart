@@ -41,7 +41,6 @@ void main() {
       'web_search',
       'web_fetch',
       'memory_search',
-      'local_context',
       'media_gallery',
       'intent_bridge',
       'scheduler',
@@ -122,20 +121,6 @@ void main() {
             allowedToolSet.contains(tool),
             isTrue,
             reason: '$normalizedPath 包含未注册工具: $tool',
-          );
-        }
-        if (allowedTools.contains('local_context')) {
-          expect(
-            raw.contains('local_context_v1'),
-            isTrue,
-            reason: '$normalizedPath 使用 local_context 时必须声明 local_context_v1',
-          );
-          expect(
-            raw.contains('media.included') ||
-                raw.contains('"media": {"included": false}') ||
-                raw.contains('"media":{"included":false}'),
-            isTrue,
-            reason: '$normalizedPath 使用 local_context 时必须声明不含相册数据',
           );
         }
 

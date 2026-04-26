@@ -13,8 +13,10 @@ import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_boundary_error_mapper.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class LocalAssistantEntry {
   const LocalAssistantEntry({
@@ -64,9 +66,8 @@ class LocalAssistantEntry {
             projector.emitTrace(event, controller);
           },
         );
-        final canonicalProcessTimeline = projector.resolveCompletedProcessTimeline(
-          response,
-        );
+        final canonicalProcessTimeline = projector
+            .resolveCompletedProcessTimeline(response);
         if (!controller.isClosed &&
             !hasStructuredProcessTimeline(canonicalProcessTimeline)) {
           controller.add(
@@ -122,9 +123,8 @@ class LocalAssistantEntry {
         for (final trace in fallback.traces) {
           projector.emitTrace(trace, controller);
         }
-        final canonicalProcessTimeline = projector.resolveCompletedProcessTimeline(
-          fallback,
-        );
+        final canonicalProcessTimeline = projector
+            .resolveCompletedProcessTimeline(fallback);
         if (!controller.isClosed &&
             !hasStructuredProcessTimeline(canonicalProcessTimeline)) {
           controller.add(
@@ -204,8 +204,31 @@ class LocalAssistantEntry {
     final traceMessage = errorTypeName != null
         ? 'local_entry_error[$source]: $errorTypeName: $errorDescription'
         : 'local_entry_error[$source]: $errorDescription';
+    final boundaryOutcome = const AssistantBoundaryErrorMapper().failed(
+      boundary: 'assistant_entry',
+      stage: source,
+      code: 'ASSISTANT.SYSTEM.local_entry_failure',
+      kind: RuntimeFailureKind.internal,
+      businessObject: 'assistant_turn',
+      functionModule: 'local_assistant_entry',
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(key: 'source', value: source),
+        if (errorTypeName != null)
+          RuntimeContextAttribute(key: 'errorType', value: errorTypeName),
+      ],
+    );
+    final traceData = <String, dynamic>{
+      'source': source,
+      'errorMessage': errorDescription,
+    };
+    if (errorTypeName != null) {
+      traceData['errorType'] = errorTypeName;
+    }
+    if (stackTrace != null) {
+      traceData['stackTrace'] = stackTrace.toString();
+    }
     return AssistantRunResponse(
-      finalText: '本地助手执行异常，请重试。（$source）',
+      finalText: '',
       degraded: true,
       errorCode: AssistantErrorCode.executionFailed.name,
       traces: <AssistantTraceEvent>[
@@ -213,12 +236,7 @@ class LocalAssistantEntry {
           type: AssistantTraceEventType.toolError,
           message: traceMessage,
           timestamp: DateTime.now(),
-          data: <String, dynamic>{
-            'source': source,
-            if (errorTypeName != null) 'errorType': errorTypeName,
-            'errorMessage': errorDescription,
-            if (stackTrace != null) 'stackTrace': stackTrace.toString(),
-          },
+          data: traceData,
         ),
       ],
       structuredResponse: <String, dynamic>{
@@ -227,6 +245,7 @@ class LocalAssistantEntry {
           'hardCutSource': source,
         },
       },
+      boundaryOutcome: boundaryOutcome,
     );
   }
 

@@ -51,8 +51,12 @@ scenario_acceptance:
       planned:
         - active persona propagation integration test
         - switch then first action end-to-end test
-      recorded: []
-    status: pending
+      recorded:
+        - "make -C quwoquan_service verify-metadata && make codegen && make codegen-app"
+        - "go test ./services/content-service/... ./services/chat-service/... ./services/user-service/..."
+        - "go test ./services/circle-service/tests/..."
+        - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/content/entry/contract/publish_payload_contract_test.dart test/cloud/chat/contract/chat_repository_contract_test.dart test/ui/chat/journeys/chat_message_send_journey_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart"
+    status: implemented
   A2:
     title: 下游域正确落库 persona 身份与历史快照
     scenario: content/chat/circle/invite/notification 消费 persona 标识与作者快照
@@ -79,8 +83,11 @@ scenario_acceptance:
         - comment persona attribution contract test
         - chat sender persona contract test
         - notification persona replay test
-      recorded: []
-    status: pending
+      recorded:
+        - "go test ./services/content-service/... ./services/chat-service/... ./services/user-service/..."
+        - "go test ./services/circle-service/tests/..."
+        - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/content/entry/contract/publish_payload_contract_test.dart test/cloud/chat/contract/chat_repository_contract_test.dart test/ui/chat/journeys/chat_message_send_journey_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart"
+    status: implemented
   A3:
     title: persona 上下文缺失时系统阻断或恢复，不允许静默串号
     scenario: 下游在提交或回放时拿不到有效 persona 上下文
@@ -107,8 +114,11 @@ scenario_acceptance:
         - stale persona context recovery test
         - assistant persona drift regression test
         - notification mismatch blocking test
-      recorded: []
-    status: pending
+      recorded:
+        - "go test ./services/circle-service/tests/..."
+        - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart"
+        - "代码已在 assistant controller 中落地 `persona_context_mismatch_count / persona_context_stale_count / assistant_persona_drift_count / notification_wrong_persona_open_count` 事件上报"
+    status: implemented
 
 story_readiness:
   S1:
@@ -127,5 +137,9 @@ story_readiness:
       planned:
         - propagation flag rollback rehearsal
         - mismatch telemetry verification
-      recorded: []
-    status: pending
+      recorded:
+        - "make -C quwoquan_service verify-metadata && make codegen && make codegen-app"
+        - "go test ./services/content-service/... ./services/chat-service/... ./services/user-service/..."
+        - "go test ./services/circle-service/tests/..."
+        - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart"
+    status: implemented

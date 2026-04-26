@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:quwoquan_app/assistant/persistence/assistant_storage_path.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 
 class AssistantSessionStore {
@@ -42,7 +41,8 @@ class AssistantSessionStore {
     if (root == null) {
       return await _wipePersistedHistoryFile(file);
     }
-    if ((root['version'] ?? '').toString().trim() != assistantHistoryStorageVersion) {
+    if ((root['version'] ?? '').toString().trim() !=
+        assistantHistoryStorageVersion) {
       return await _wipePersistedHistoryFile(file);
     }
     final rawSessions = root['sessions'];
@@ -96,9 +96,12 @@ class AssistantSessionStore {
     }
     final snapshot = AssistantSessionStoreSnapshot(
       sessions: sessions,
-      metadata: metadata
-          .map((key, value) => MapEntry(key, Map<String, dynamic>.from(value))),
-      activeSessionId: sessions.containsKey(activeSessionId) ? activeSessionId : '',
+      metadata: metadata.map(
+        (key, value) => MapEntry(key, Map<String, dynamic>.from(value)),
+      ),
+      activeSessionId: sessions.containsKey(activeSessionId)
+          ? activeSessionId
+          : '',
     );
     if (mutated) {
       await save(snapshot);
@@ -124,7 +127,9 @@ class AssistantSessionStore {
     return _wipePersistedHistoryFile(file);
   }
 
-  Future<AssistantSessionStoreSnapshot> _wipePersistedHistoryFile(File file) async {
+  Future<AssistantSessionStoreSnapshot> _wipePersistedHistoryFile(
+    File file,
+  ) async {
     final snapshot = const AssistantSessionStoreSnapshot();
     await file.parent.create(recursive: true);
     await file.writeAsString(
@@ -298,7 +303,6 @@ class AssistantSessionStore {
       } catch (_) {}
     }
     if (_containsInternalHistoryText(stripped)) return '';
-    if (AssistantContentFilters.isDegradedText(stripped)) return '';
     if (AssistantContentFilters.isProgressPlaceholder(stripped)) return '';
     return stripped;
   }
@@ -324,20 +328,27 @@ class AssistantSessionStore {
       text.replaceAll(_xmlToolCallTagRe, '').trim();
 
   bool _containsInternalHistoryText(String text) {
-    if (text.trim().isEmpty) return false;
+    final normalized = text.trim();
+    if (normalized.isEmpty) return false;
+    final protocolShaped =
+        normalized.startsWith('{') ||
+        normalized.startsWith('[') ||
+        normalized.contains('<tool_call') ||
+        normalized.contains('</tool_call>') ||
+        normalized.contains('<function') ||
+        normalized.contains('</function>');
+    if (!protocolShaped) return false;
     const fragments = <String>[
       'contractId',
       'assistant_turn',
       'turnPhase',
-      'queryTasks',
+      'searchPlans',
       'tool_call',
       '<tool_call>',
-      'provider',
       'machineEnvelope',
-      '正在调用工具',
     ];
     for (final fragment in fragments) {
-      if (text.contains(fragment)) return true;
+      if (normalized.contains(fragment)) return true;
     }
     return false;
   }

@@ -48,7 +48,7 @@ void main() {
           'query': '摄影',
           'mode': 'result',
           'objectTypes': <String>['web.document', 'content.post'],
-          'queryTasks': <Map<String, dynamic>>[
+          'searchPlans': <Map<String, dynamic>>[
             <String, dynamic>{
               'id': 'facts',
               'label': '关键事实',

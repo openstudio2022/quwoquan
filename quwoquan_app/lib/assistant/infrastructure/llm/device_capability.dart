@@ -1,3 +1,5 @@
+import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
+
 enum AssistantDeviceProfile {
   mobile,
   tablet,
@@ -28,19 +30,18 @@ class AssistantCapabilityRouter {
     required String capabilityName,
   }) {
     final profile = _parseProfile(deviceProfile);
-    final normalized = capabilityName.trim().toLowerCase();
 
     if (profile == AssistantDeviceProfile.mobile &&
-        (normalized.contains('web') || normalized.contains('search'))) {
+        AssistantToolNames.isRetrievalName(capabilityName)) {
       return const AssistantCapabilityDecision(
         mode: AssistantCapabilityMode.hybrid,
         reason: 'mobile web capability prefers hybrid fallback',
       );
     }
 
+    final normalized = capabilityName.trim().toLowerCase();
     if (profile == AssistantDeviceProfile.pc &&
-        (normalized.contains('local_context') ||
-            normalized.contains('gallery'))) {
+        normalized.contains('gallery')) {
       return const AssistantCapabilityDecision(
         mode: AssistantCapabilityMode.remotePreferred,
         reason: 'pc can forward heavy or privileged tasks to remote node',

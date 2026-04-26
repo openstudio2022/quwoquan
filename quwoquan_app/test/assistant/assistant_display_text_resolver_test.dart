@@ -37,5 +37,18 @@ void main() {
         ),
       );
     });
+
+    test('process narration 不再因自然语言片段被过滤', () {
+      const raw = '我已经处理了检索结果，收拢到可回答的证据。';
+
+      expect(
+        AssistantDisplayTextResolver.normalizeUserFacingProcessNarration(raw),
+        raw,
+      );
+      expect(
+        AssistantDisplayTextResolver.containsInternalProcessFragment(raw),
+        isFalse,
+      );
+    });
   });
 }

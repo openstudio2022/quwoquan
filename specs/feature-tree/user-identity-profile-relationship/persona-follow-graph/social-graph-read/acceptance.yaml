@@ -52,8 +52,10 @@ scenario_acceptance:
       planned:
         - follower list pagination contract test
         - following list visibility filtering test
-      recorded: []
-    status: pending
+      recorded:
+        - "T3: `go test ./services/user-service/tests/...`"
+        - "列表读路径已统一返回 `ProfileSubject` 公共字段，并在 block/strict/retired 无法公开读取时从页内过滤"
+    status: implemented
   A2:
     title: "`GetRelationship` 与 `RelationshipCapabilityView` 成为统一读投影"
     scenario: 主页、聊天与 RTC 读取当前 viewer 对 target 的关系能力
@@ -81,8 +83,10 @@ scenario_acceptance:
         - relationship capability schema contract test
         - profile action bar matrix widget test
         - rtc gate capability integration test
-      recorded: []
-    status: pending
+      recorded:
+        - "T2: `flutter test test/cloud/user/contract/relationship_capability_repository_contract_test.dart test/ui/user/providers/profile_state_provider_test.dart`"
+        - "T3: `go test ./services/user-service/tests/...`"
+    status: implemented
   A3:
     title: 图谱读取遵守分身隔离与 owner 不泄露原则
     scenario: 外部通过粉丝列表、能力查询和公开主页间接观察图谱
@@ -107,8 +111,10 @@ scenario_acceptance:
       planned:
         - graph isolation leakage regression test
         - owner mapping hidden contract test
-      recorded: []
-    status: pending
+      recorded:
+        - "T3: `go test ./services/user-service/tests -run 'Test(ProfileSubjectView_|SearchSocialRelations_|ListFollowers_)'`"
+        - "公开 graph 列表、搜索结果与 capability 响应已不再透传 `ownerUserId`，并补齐同 owner 多分身粉丝列表的隐藏映射回归；共同粉丝 / mutual 反推同 owner 的跨域 T4 旅程仍待补齐"
+    status: partial
 
 story_readiness:
   S1:
@@ -127,5 +133,7 @@ story_readiness:
       planned:
         - graph read rollback rehearsal
         - capability telemetry verification
-      recorded: []
-    status: pending
+      recorded:
+        - "T1/T3: `go test ./runtime/governance ./services/user-service/tests -run 'Test(FeatureEnabled|Persona|ListFollowing_|SearchSocialRelations_)'`"
+        - "代码已落地 `graph_list_latency_ms / graph_page_drift_count / graph_filter_mismatch_count / relationship_capability_mismatch_count / graph_legacy_edge_read_count` 与 `ops.user.persona_graph_v1`，并补齐 capability mismatch 与 graph rollback 的最小触发回归"
+    status: implemented

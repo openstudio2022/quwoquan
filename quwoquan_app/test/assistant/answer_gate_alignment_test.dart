@@ -1,14 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
 import 'package:quwoquan_app/assistant/orchestration/answer_outcome_resolver.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
 
@@ -53,11 +57,11 @@ void main() {
         summary: '已命中目标时段资料。',
       ),
       synthesisReadiness: const SynthesisReadinessResult(ready: true),
-      queryTasks: const <QueryTask>[
-        QueryTask(
+      searchPlans: const <SearchPlanItem>[
+        SearchPlanItem(
           id: 'stock_yesterday',
           query: '2026-04-07 A股 大涨 原因',
-          dimension: QueryTaskDimension.latestSignal,
+          dimension: SearchPlanDimension.latestSignal,
           timeScope: 'year_month_day',
           timePoint: '2026-04-07',
           timezone: 'Asia/Shanghai',
@@ -99,7 +103,7 @@ void main() {
 
     final gate = gateResolver.resolve(
       retrievalOutcome: outcome,
-      conversationStateDecision: const ConversationStateDecision(
+      typedTurnDecision: const AssistantTypedTurnDecision(
         nextAction: AssistantNextAction.answer,
         finalAnswerMode: FinalAnswerMode.boundedAnswer,
         answerEligibility: AnswerEligibility.eligible,
@@ -130,7 +134,7 @@ void main() {
 
     final gate = gateResolver.resolve(
       retrievalOutcome: outcome,
-      conversationStateDecision: const ConversationStateDecision(
+      typedTurnDecision: const AssistantTypedTurnDecision(
         nextAction: AssistantNextAction.answer,
         finalAnswerMode: FinalAnswerMode.boundedAnswer,
         answerEligibility: AnswerEligibility.eligible,
@@ -162,7 +166,7 @@ void main() {
 
     final gate = gateResolver.resolve(
       retrievalOutcome: outcome,
-      conversationStateDecision: const ConversationStateDecision(
+      typedTurnDecision: const AssistantTypedTurnDecision(
         nextAction: AssistantNextAction.answer,
         finalAnswerMode: FinalAnswerMode.boundedAnswer,
         answerEligibility: AnswerEligibility.eligible,
@@ -205,12 +209,11 @@ void main() {
           'degraded': false,
           'incomplete': false,
         },
-        'conversationStateDecision': const ConversationStateDecision(
-          nextAction: AssistantNextAction.answer,
-          finalAnswerMode: FinalAnswerMode.boundedAnswer,
-          answerEligibility: AnswerEligibility.eligible,
-          finalAnswerReady: true,
-        ).toDecisionMap(),
+        assistantTurnSynthesisStateField: const TurnSynthesisState(
+          interactionDirective: InteractionDirective(
+            kind: InteractionDirectiveKind.partialAnswer,
+          ),
+        ).toJson(),
         'userMarkdown': '目前我还没查到昨天 A 股大涨的具体原因。',
       },
     );
@@ -238,12 +241,11 @@ void main() {
             'acceptedDocumentCount': 0,
             'terminalPayloadComplete': true,
           },
-          'conversationStateDecision': const ConversationStateDecision(
-            nextAction: AssistantNextAction.answer,
-            finalAnswerMode: FinalAnswerMode.boundedAnswer,
-            answerEligibility: AnswerEligibility.eligible,
-            finalAnswerReady: true,
-          ).toDecisionMap(),
+          assistantTurnSynthesisStateField: const TurnSynthesisState(
+            interactionDirective: InteractionDirective(
+              kind: InteractionDirectiveKind.partialAnswer,
+            ),
+          ).toJson(),
           'answerGateDecision': <String, dynamic>{
             'eligible': true,
             'finalAnswerReady': true,
@@ -272,22 +274,106 @@ void main() {
   test('AnswerOutcomeResolver 会把 journey readiness 视为最终成答材料化信号', () {
     const resolver = AnswerOutcomeResolver();
     final snapshot = resolver.resolve(
-      structured: const <String, dynamic>{
-        'answerOutcome': <String, dynamic>{},
-      },
-      runArtifacts: RunArtifacts.fromJson(
-        const <String, dynamic>{
-          'journey': <String, dynamic>{
-            'readiness': <String, dynamic>{
-              'finalAnswerReady': true,
-            },
-          },
+      structured: const <String, dynamic>{'answerOutcome': <String, dynamic>{}},
+      runArtifacts: RunArtifacts.fromJson(const <String, dynamic>{
+        'journey': <String, dynamic>{
+          'readiness': <String, dynamic>{'finalAnswerReady': true},
         },
-      ),
+      }),
     );
 
     expect(snapshot.journey.readiness.finalAnswerReady, isTrue);
     expect(snapshot.synthesisReadiness.ready, isTrue);
+  });
+
+  test(
+    'AnswerOutcomeResolver 不再把 structured root aggregationState 视为主线成答信号',
+    () {
+      const resolver = AnswerOutcomeResolver();
+      final snapshot = resolver.resolve(
+        structured: const <String, dynamic>{
+          'aggregationState': <String, dynamic>{'finalAnswerReady': true},
+        },
+      );
+
+      expect(snapshot.synthesisReadiness.ready, isFalse);
+      expect(snapshot.answerGateDecision.finalAnswerReady, isFalse);
+    },
+  );
+
+  test('RetrievalOutcomeResolver 会优先从 typed taskGraph 恢复 searchPlans', () {
+    const resolver = RetrievalOutcomeResolver();
+    final outcome = resolver.resolveFromStructured(
+      structured: <String, dynamic>{
+        assistantTaskGraphField: const TaskGraph(
+          tasks: <TaskNode>[
+            TaskNode(
+              taskId: 'stock_yesterday',
+              intentId: 'intent_stock',
+              toolName: 'web_search',
+              toolArgs: TaskToolArgs(<String, Object?>{
+                'query': '2026-04-07 A股 大涨 原因',
+                'timePoint': '2026-04-07',
+                'timeScope': 'year_month_day',
+                'timezone': 'Asia/Shanghai',
+              }),
+              status: TaskStatus.completed,
+            ),
+          ],
+        ).toJson(),
+        'retrievalProcessing': const <String, dynamic>{
+          'processedDocumentCount': 1,
+          'acceptedDocumentCount': 1,
+        },
+        'evidenceEvaluation': const <String, dynamic>{
+          'status': 'bounded',
+          'passed': false,
+          'authoritySatisfied': true,
+          'freshnessSatisfied': false,
+          'evidenceRequired': true,
+          'coveredDimensions': <String>['latest_signal'],
+          'missingDimensions': <String>[],
+          'summary': '已命中目标时段资料。',
+        },
+        'answerBoundaryPolicy': const <String, dynamic>{
+          'evidenceRequired': true,
+          'allowBoundedAnswer': true,
+          'freshnessHoursMax': 24,
+        },
+        'domainResults': <String, dynamic>{
+          'toolResults': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'toolName': 'web_search',
+              'toolCallId': 'stock_yesterday',
+              'message': '查询完成',
+              'data': <String, dynamic>{
+                'freshnessKnown': true,
+                'freshnessSatisfied': true,
+                'timeConstraint': <String, dynamic>{
+                  'scope': 'year_month_day',
+                  'timeRangeStart': '2026-04-07T00:00:00.000',
+                  'timeRangeEnd': '2026-04-07T23:59:59.999',
+                  'referenceNowIso': '2026-04-08T10:30:00.000',
+                  'temporalMode': 'historical',
+                },
+                'references': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'title': 'A股盘后解读',
+                    'url': 'https://news.example.com/analysis/market-recap',
+                    'snippet': '2026-04-07 A股大涨，主要由权重板块共振驱动。',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+    );
+
+    expect(outcome.timeWindowKnown, isTrue);
+    expect(outcome.timeWindowSatisfied, isTrue);
+    expect(outcome.freshnessRequired, isFalse);
+    expect(outcome.status, equals('ready'));
   });
 
   test('实时 query 仍然保持严格 freshness gate', () {
@@ -314,11 +400,11 @@ void main() {
         summary: '拿到了天气候选，但时效还不够稳。',
       ),
       synthesisReadiness: const SynthesisReadinessResult(ready: true),
-      queryTasks: const <QueryTask>[
-        QueryTask(
+      searchPlans: const <SearchPlanItem>[
+        SearchPlanItem(
           id: 'weather_today',
           query: '深圳 2026-04-09 实时天气',
-          dimension: QueryTaskDimension.currentState,
+          dimension: SearchPlanDimension.currentState,
           timeScope: 'today',
           timePoint: '2026-04-09',
           timezone: 'Asia/Shanghai',
@@ -358,7 +444,7 @@ void main() {
 
     final gate = gateResolver.resolve(
       retrievalOutcome: outcome,
-      conversationStateDecision: const ConversationStateDecision(
+      typedTurnDecision: const AssistantTypedTurnDecision(
         nextAction: AssistantNextAction.answer,
         finalAnswerMode: FinalAnswerMode.boundedAnswer,
         answerEligibility: AnswerEligibility.blocked,
@@ -396,11 +482,11 @@ void main() {
         summary: '已拿到明日天气预报。',
       ),
       synthesisReadiness: const SynthesisReadinessResult(ready: true),
-      queryTasks: const <QueryTask>[
-        QueryTask(
+      searchPlans: const <SearchPlanItem>[
+        SearchPlanItem(
           id: 'weather_tomorrow',
           query: '2026-04-10 深圳 天气 预报',
-          dimension: QueryTaskDimension.latestSignal,
+          dimension: SearchPlanDimension.latestSignal,
           timeScope: 'year_month_day',
           timePoint: '2026-04-10',
           freshnessHoursMax: 1,
@@ -438,7 +524,7 @@ void main() {
 
     final gate = gateResolver.resolve(
       retrievalOutcome: outcome,
-      conversationStateDecision: const ConversationStateDecision(
+      typedTurnDecision: const AssistantTypedTurnDecision(
         nextAction: AssistantNextAction.answer,
         finalAnswerMode: FinalAnswerMode.full,
         answerEligibility: AnswerEligibility.eligible,
@@ -496,7 +582,7 @@ void main() {
 
     expect(outcome.evidencePassed, isFalse);
     expect(outcome.status, equals('need_more_evidence'));
-    expect(outcome.summary, contains('关联度'));
+    expect(outcome.summary, equals('已拿到若干网页，但命中度一般。'));
   });
 
   test('historical 判定会优先使用 referenceNowIso 而不是当前墙钟时间', () {
@@ -506,11 +592,11 @@ void main() {
       retrievalProcessing: const RetrievalProcessingSnapshot(),
       evidenceEvaluation: const EvidenceEvaluationResult(),
       synthesisReadiness: const SynthesisReadinessResult(ready: true),
-      queryTasks: const <QueryTask>[
-        QueryTask(
+      searchPlans: const <SearchPlanItem>[
+        SearchPlanItem(
           id: 'future_anchor',
           query: '2099-01-01 市场回顾',
-          dimension: QueryTaskDimension.latestSignal,
+          dimension: SearchPlanDimension.latestSignal,
           timeScope: 'year_month_day',
           timePoint: '2099-01-01',
           timezone: 'Asia/Shanghai',

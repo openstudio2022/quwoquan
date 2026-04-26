@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 
-import { domainOnboardingDomains } from '../../generated/control-plane/domainOnboardingDomains.generated';
-import { domainOnboardingSchema } from '../../generated/control-plane/domainOnboardingSchema.generated';
-import { fetchOnboardingDomains, type OnboardingDomainItem } from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+import { domainOnboardingDomains } from '../../generated/control-plane/domainOnboardingDomains.generated.js';
+import { domainOnboardingSchema } from '../../generated/control-plane/domainOnboardingSchema.generated.js';
+import { fetchOnboardingDomains, type OnboardingDomainItem } from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 type DomainEntry = OnboardingDomainItem;
 
@@ -24,15 +25,18 @@ function toBadgeTone(status: string) {
 export function PlatformDomainOnboardingPage() {
   const [remoteDomains, setRemoteDomains] = useState<DomainEntry[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     fetchOnboardingDomains()
       .then((items) => {
         setRemoteDomains(items);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -81,6 +85,7 @@ export function PlatformDomainOnboardingPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实接入矩阵已接入' : '当前展示回退到 codegen 快照'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">导出接入报告</button>}

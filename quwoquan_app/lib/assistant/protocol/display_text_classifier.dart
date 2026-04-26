@@ -36,32 +36,12 @@ class DisplayTextClassifier {
   bool isDegradedText(String value) {
     final t = value.trim();
     if (t.isEmpty) return false;
-    for (final prefix in _policy.degradedPrefixes) {
-      if (prefix.isNotEmpty && t.startsWith(prefix)) return true;
-    }
-    for (final part in _policy.degradedSubstrings) {
-      if (part.isNotEmpty && t.contains(part)) return true;
-    }
     return false;
   }
 
   bool isProgressPlaceholder(String value) {
     final t = value.trim();
     if (t.isEmpty) return false;
-    final hasMarkdownStructure = t.contains('\n') &&
-        (t.contains('## ') ||
-            t.contains('### ') ||
-            t.contains('- ') ||
-            t.contains('> ') ||
-            t.contains('**'));
-    if (hasMarkdownStructure) return false;
-    final lowered = t.toLowerCase();
-    for (final lexeme in _policy.progressLexicon) {
-      final token = lexeme.trim();
-      if (token.isEmpty) continue;
-      final lowerToken = token.toLowerCase();
-      if (t.contains(token) || lowered.contains(lowerToken)) return true;
-    }
     return false;
   }
 }

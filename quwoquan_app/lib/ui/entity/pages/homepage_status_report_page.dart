@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class HomepageStatusReportPage extends ConsumerStatefulWidget {
   const HomepageStatusReportPage({super.key, required this.homepageId});
@@ -92,7 +93,9 @@ class _HomepageStatusReportPageState
                         : '如果主页信息失效、重复或长期停用，可以发起状态上报。',
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                   if (_errorText != null) ...<Widget>[
@@ -114,7 +117,9 @@ class _HomepageStatusReportPageState
                     '选择原因',
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                   SizedBox(height: AppSpacing.intraGroupSm),
@@ -164,7 +169,9 @@ class _HomepageStatusReportPageState
                     '补充说明',
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                   SizedBox(height: AppSpacing.intraGroupXs),
@@ -275,7 +282,7 @@ class _HomepageStatusReportPageState
         return;
       }
       setState(() {
-        _errorText = error.toString();
+        _errorText = runtimeErrorDisplayMessage(error);
       });
     } finally {
       if (mounted) {

@@ -1,11 +1,6 @@
-import 'dart:convert';
-
-import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
+import 'package:quwoquan_app/assistant/debug/console_pretty_log_formatter.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_prompt_keys.dart';
@@ -14,8 +9,6 @@ import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipelin
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_synthesis_template_bundle.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
-import 'package:quwoquan_app/assistant/reasoning/temporal/relative_time_resolver.dart';
-import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 
 const List<String> _uiOnlyTemplateContextKeys = <String>[
   AssistantPipelineStateKeys.runArtifacts,
@@ -85,9 +78,13 @@ void _applyPrecomputedStateScopeHint(
   Map<String, dynamic> contextScopeHint,
   AgentExecutionState state,
 ) {
-  if (state.intentGraph != null) {
-    contextScopeHint[AssistantPipelineStateKeys.precomputedIntentGraph] =
-        state.intentGraph!.toJson();
+  if (state.understandingResult.intents.isNotEmpty) {
+    contextScopeHint[AssistantPipelineStateKeys.precomputedUnderstandingResult] =
+        state.understandingResult.toJson();
+  }
+  if (state.taskGraph.tasks.isNotEmpty) {
+    contextScopeHint[AssistantPipelineStateKeys.precomputedTaskGraph] =
+        state.taskGraph.toJson();
   }
   if (state.dialogueRoundScript != null || state.executionPreparation != null) {
     contextScopeHint[AssistantPipelineStateKeys.precomputedUnderstand] =
@@ -104,10 +101,6 @@ void _applyPrecomputedStateScopeHint(
           executionPreparation: state.executionPreparation!,
         );
   }
-  if (state.queryTasks.isNotEmpty) {
-    contextScopeHint[AssistantPipelineStateKeys.precomputedQueryTasks] =
-        state.queryTasks.map((item) => item.toJson()).toList(growable: false);
-  }
 }
 
 Map<String, dynamic> _buildPrecomputedBootstrapPayload({
@@ -119,18 +112,28 @@ Map<String, dynamic> _buildPrecomputedBootstrapPayload({
     AssistantPipelineStateKeys.latestUserQuery: bootstrap.latestUserQuery,
     if (bootstrap.compactHistorySummary.trim().isNotEmpty)
       AssistantPipelineStateKeys.historySummary: bootstrap.compactHistorySummary,
+    AssistantPipelineStateKeys.systemContextEnvelope:
+        bootstrap.systemContextEnvelope.toJson(),
     if (bootstrap.recentDialogueRounds.isNotEmpty)
       AssistantPipelineStateKeys.recentDialogueRounds:
           bootstrap.recentDialogueRounds,
     AssistantPipelineStateKeys.recentDialogueRoundsLimit:
         bootstrap.recentDialogueRoundsLimit,
     AssistantPipelineStateKeys.recalledTexts: bootstrap.recalledTexts,
-    if (bootstrap.previousIntentGraph != null)
-      AssistantPipelineStateKeys.previousIntentGraph:
-          bootstrap.previousIntentGraph!.toJson(),
+    if (state.understandingResult.intents.isNotEmpty)
+      AssistantPipelineStateKeys.understandingResult:
+          state.understandingResult.toJson(),
+    if (state.taskGraph.tasks.isNotEmpty)
+      AssistantPipelineStateKeys.taskGraph: state.taskGraph.toJson(),
     if (bootstrap.previousAnswerSummary.isNotEmpty)
       AssistantPipelineStateKeys.previousAnswerSummary:
           bootstrap.previousAnswerSummary,
+    if (bootstrap.previousUnderstandingResult.intents.isNotEmpty)
+      AssistantPipelineStateKeys.previousUnderstandingResult:
+          bootstrap.previousUnderstandingResult.toJson(),
+    if (bootstrap.previousTaskGraph.tasks.isNotEmpty)
+      AssistantPipelineStateKeys.previousTaskGraph:
+          bootstrap.previousTaskGraph.toJson(),
     if (_hasStructuredContent(bootstrap.previousUnderstandingSnapshot.toJson()) &&
         state.previousRunArtifacts == null)
       AssistantPipelineStateKeys.previousUnderstandingSnapshot:
@@ -252,15 +255,14 @@ Map<String, dynamic> buildPipelineTemplateVariables({
   final plannerTemplateVariables = buildPlannerTemplateVariables(
     userQuery: query,
     skillCatalog: bundle.skillCatalog,
-    conversationSpineJson: jsonEncode(bundle.conversationSpine),
-    sharedContextJson: jsonEncode(_buildSharedContext(bundle)),
-    currentRuntimeStateJson: jsonEncode(_buildCurrentRuntimeState(bundle)),
-    dialogueContinuityJson: jsonEncode(_buildDialogueContinuity(bundle)),
-    recentDialogueRoundsJson: jsonEncode(recentDialogueRounds),
-    searchIterationStateJson: jsonEncode(bundle.searchIterationState.toJson()),
+    conversationSpineJson: _prettyJson(bundle.conversationSpine),
+    sharedContextJson: _prettyJson(_buildSharedContext(bundle)),
+    currentRuntimeStateJson: _prettyJson(_buildCurrentRuntimeState(bundle)),
+    dialogueContinuityJson: _prettyJson(_buildDialogueContinuity(bundle)),
+    recentDialogueRoundsJson: _prettyJson(recentDialogueRounds),
+    searchIterationStateJson: _prettyJson(bundle.searchIterationState.toJson()),
     continuityMode: bundle.continuityPolicy.continuityMode.wireName,
-    problemClass: bundle.intentGraph?.problemClass.wireName ??
-        bundle.skillExecutionShell.problemClass,
+    problemClass: bundle.skillExecutionShell.problemClass,
   );
   return <String, dynamic>{
     ...plannerTemplateVariables,
@@ -282,19 +284,16 @@ Map<String, dynamic> buildPipelineTemplateVariables({
         bundle.continuityOverrideSlots,
     AssistantPipelinePromptKeys.contextEnvelope:
         bundle.contextAssembly.contextEnvelope,
-    AssistantPipelinePromptKeys.queryTasks:
-        bundle.intentGraph?.queryTasks.map((item) => item.toJson()).toList(
-              growable: false,
-            ) ??
-        const <Map<String, dynamic>>[],
-    AssistantPipelinePromptKeys.entityAnchors:
-        bundle.intentGraph?.entityAnchors ?? const <String>[],
+    AssistantPipelinePromptKeys.searchPlans: bundle.searchPlans
+        .map((item) => item.toJson())
+        .toList(growable: false),
+    AssistantPipelinePromptKeys.entityRefs:
+        bundle.planView.entityRefs,
     'domainSkillName': bundle.domainSkillName,
     'domainSkillInstruction': bundle.domainSkillInstruction,
     'availableTools': bundle.availableToolNames,
     'availableToolNames': bundle.availableToolNames,
     'toolGuidelines': bundle.toolGuidelines,
-    'skillPersona': bundle.skillPersona,
     'answerBoundaryPolicy': bundle.answerBoundaryPolicy.toJson(),
     if (bundle.previousDomainPolicyBundle != null)
       AssistantPipelineStateKeys.previousDomainPolicyBundle:
@@ -308,29 +307,28 @@ Map<String, dynamic> buildSynthesisTemplateVariables({
   return <String, dynamic>{
     ...bundle.templateVariables,
     AssistantPipelinePromptKeys.conversationSpine:
-        jsonEncode(bundle.conversationSpine),
+        _prettyJson(bundle.conversationSpine),
     AssistantPipelineStateKeys.userGoal: bundle.userGoal,
     AssistantPipelineStateKeys.understandingSnapshot:
-        jsonEncode(bundle.understandingSnapshot),
+        _prettyJson(bundle.understandingSnapshot),
     AssistantPipelineStateKeys.retrievalProcessing:
-        jsonEncode(bundle.retrievalProcessing),
-    AssistantPipelinePromptKeys.sharedContext: jsonEncode(bundle.sharedContext),
+        _prettyJson(bundle.retrievalProcessing),
+    AssistantPipelinePromptKeys.sharedContext: _prettyJson(bundle.sharedContext),
     AssistantPipelinePromptKeys.currentRuntimeState:
-        jsonEncode(bundle.currentRuntimeState),
+        _prettyJson(bundle.currentRuntimeState),
     AssistantPipelinePromptKeys.dialogueContinuity:
-        jsonEncode(bundle.dialogueContinuity),
+        _prettyJson(bundle.dialogueContinuity),
     AssistantPipelinePromptKeys.evidenceContext:
-        jsonEncode(bundle.evidenceContext),
+        _prettyJson(bundle.evidenceContext),
     AssistantPipelinePromptKeys.searchIterationState:
-        jsonEncode(bundle.searchIterationState),
-    AssistantPipelinePromptKeys.intentGraphJson: bundle.intentGraphJson,
-    AssistantPipelinePromptKeys.queryTasksJson:
-        jsonEncode(bundle.queryTasksJson),
-    AssistantPipelinePromptKeys.entityAnchors: bundle.entityAnchors,
-    AssistantPipelinePromptKeys.queryTasks: bundle.queryTasks,
+        _prettyJson(bundle.searchIterationState),
+    'planViewJson': _prettyJson(bundle.planViewJson),
+    'searchPlansJson': _prettyJson(bundle.searchPlansJson),
+    'entityRefs': bundle.entityRefs,
+    'searchPlans': bundle.searchPlans,
     AssistantPipelineStateKeys.answerShape: bundle.answerShape,
     AssistantPipelinePromptKeys.recentDialogueRounds:
-        jsonEncode(bundle.recentDialogueRounds),
+        _prettyJson(bundle.recentDialogueRounds),
   };
 }
 
@@ -343,12 +341,16 @@ Map<String, dynamic> buildFusionTemplateVariables({
 }) {
   return <String, dynamic>{
     ...buildSynthesisTemplateVariables(bundle: bundle),
-    AssistantPipelinePromptKeys.skillRuns: jsonEncode(skillRuns),
+    AssistantPipelinePromptKeys.skillRuns: _prettyJson(skillRuns),
     AssistantPipelinePromptKeys.aggregationState:
-        jsonEncode(aggregationState),
-    AssistantPipelinePromptKeys.subagentRuns: jsonEncode(subagentRuns),
-    AssistantPipelinePromptKeys.skillSynthesis: jsonEncode(skillSynthesis),
+        _prettyJson(aggregationState),
+    AssistantPipelinePromptKeys.subagentRuns: _prettyJson(subagentRuns),
+    AssistantPipelinePromptKeys.skillSynthesis: _prettyJson(skillSynthesis),
   };
+}
+
+String _prettyJson(Object? value) {
+  return ConsolePrettyLogFormatter.prettyJsonLikeString(value);
 }
 
 Map<String, dynamic> _buildSharedContext(AssistantPipelineTemplateBundle bundle) {
@@ -399,10 +401,9 @@ Map<String, dynamic> _buildSkillExecutionShellTemplate(
 ) {
   return <String, dynamic>{
     ...bundle.skillExecutionShell.toJson(),
-    if (bundle.intentGraph?.queryTasks != null &&
-        bundle.intentGraph!.queryTasks.isNotEmpty)
-      AssistantPipelineStateKeys.executionShellPrecomputedQueryTasks:
-          bundle.intentGraph!.queryTasks
+    if (bundle.searchPlans.isNotEmpty)
+      'executionShellPrecomputedSearchPlans':
+          bundle.searchPlans
               .map((t) => t.toJson())
               .toList(growable: false),
   };

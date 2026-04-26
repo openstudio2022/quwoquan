@@ -15,7 +15,8 @@ class CloudHttpClient {
     CloudAuthTokenProvider? authTokenProvider,
     Duration? timeout,
   }) : _client = client ?? http.Client(),
-       _authTokenProvider = authTokenProvider ?? const StubCloudAuthTokenProvider(),
+       _authTokenProvider =
+           authTokenProvider ?? const StubCloudAuthTokenProvider(),
        _timeout = timeout ?? const Duration(seconds: 12);
 
   final http.Client _client;
@@ -30,6 +31,7 @@ class CloudHttpClient {
     final merged = await _mergeHeaders(headers);
     final res = await _guardRequest(
       () => _client.get(uri, headers: merged).timeout(_timeout),
+      requestPath: uri.path,
     );
     _guardStatus(res, uri.path);
     return _decodeBody(res.body, uri.path);
@@ -48,7 +50,10 @@ class CloudHttpClient {
       'Content-Type': 'application/json',
     };
     final res = await _guardRequest(
-      () => _client.post(uri, headers: requestHeaders, body: payload).timeout(_timeout),
+      () => _client
+          .post(uri, headers: requestHeaders, body: payload)
+          .timeout(_timeout),
+      requestPath: uri.path,
     );
     _guardStatus(res, uri.path);
     return _decodeBody(res.body, uri.path);
@@ -66,7 +71,10 @@ class CloudHttpClient {
       'Content-Type': 'application/json',
     };
     final res = await _guardRequest(
-      () => _client.patch(uri, headers: requestHeaders, body: payload).timeout(_timeout),
+      () => _client
+          .patch(uri, headers: requestHeaders, body: payload)
+          .timeout(_timeout),
+      requestPath: uri.path,
     );
     _guardStatus(res, uri.path);
     return _decodeBody(res.body, uri.path);
@@ -84,7 +92,10 @@ class CloudHttpClient {
       'Content-Type': 'application/json',
     };
     final res = await _guardRequest(
-      () => _client.put(uri, headers: requestHeaders, body: payload).timeout(_timeout),
+      () => _client
+          .put(uri, headers: requestHeaders, body: payload)
+          .timeout(_timeout),
+      requestPath: uri.path,
     );
     _guardStatus(res, uri.path);
     return _decodeBody(res.body, uri.path);
@@ -97,6 +108,7 @@ class CloudHttpClient {
     final merged = await _mergeHeaders(headers);
     final res = await _guardRequest(
       () => _client.delete(uri, headers: merged).timeout(_timeout),
+      requestPath: uri.path,
     );
     _guardStatus(res, uri.path);
     if (res.body.isEmpty) return const <String, dynamic>{};
@@ -118,11 +130,7 @@ class CloudHttpClient {
     Uri uri, {
     required Map<String, String> headers,
     required String context,
-    List<String> listKeys = const <String>[
-      'items',
-      'subAccounts',
-      'personas',
-    ],
+    List<String> listKeys = const <String>['items', 'subAccounts', 'personas'],
   }) async {
     final decoded = await getJson(uri, headers: headers);
     if (decoded is List) {
@@ -160,36 +168,22 @@ class CloudHttpClient {
   Future<Map<String, String>> _mergeHeaders(Map<String, String> headers) async {
     final token = await _authTokenProvider.getAccessToken();
     if (token == null || token.isEmpty) return headers;
-    return <String, String>{
-      ...headers,
-      'Authorization': 'Bearer $token',
-    };
+    return <String, String>{...headers, 'Authorization': 'Bearer $token'};
   }
 
   Future<http.Response> _guardRequest(
-    Future<http.Response> Function() run,
-  ) async {
+    Future<http.Response> Function() run, {
+    required String requestPath,
+  }) async {
     try {
       return await run();
     } on TimeoutException catch (e) {
-      throw CloudException(
-        type: CloudErrorType.timeout,
-        message: 'Request timed out',
-        cause: e,
-      );
+      throw CloudErrorMapper.fromException(e, requestPath: requestPath);
     } on SocketException catch (e) {
-      throw CloudException(
-        type: CloudErrorType.network,
-        message: 'Network unavailable',
-        cause: e,
-      );
+      throw CloudErrorMapper.fromException(e, requestPath: requestPath);
     } catch (e) {
       if (e is CloudException) rethrow;
-      throw CloudException(
-        type: CloudErrorType.unknown,
-        message: 'Request failed',
-        cause: e,
-      );
+      throw CloudErrorMapper.fromException(e, requestPath: requestPath);
     }
   }
 
@@ -207,11 +201,7 @@ class CloudHttpClient {
     try {
       return jsonDecode(body) as Object?;
     } catch (e) {
-      throw CloudException(
-        type: CloudErrorType.invalidResponse,
-        message: 'Invalid JSON response ($path)',
-        cause: e,
-      );
+      throw CloudErrorMapper.fromException(e, requestPath: path);
     }
   }
 }

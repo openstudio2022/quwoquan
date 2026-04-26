@@ -25,7 +25,7 @@ level_acceptance:
     - test/cloud/chat/dto/contract/user_state_dto_contract_test.dart
   A2:
     criteria: 'Chat 错误码枚举覆盖 — ChatErrorCode 5 个码（conversationNotFound/ unauthorized/messageTooLong/rateLimited/internalError）全部通过
-      fromCode round-trip、httpStatus 正确、isRetryable 属性正确、 unknown 降级安全。
+      fromCode round-trip、httpStatus 正确、recoveryAction 属性正确、 unknown 降级安全。
 
       '
     status: implemented
@@ -322,7 +322,7 @@ level_acceptance:
     - services/chat-service/tests/conversation_settings_contract_test.go
   A20:
     criteria: '端侧 staging HTTP 契约 — 17 个 API 端点在 staging 环境下： 协议层（HTTP status + Content-Type）正确
-      + 结构层（响应 JSON 全字段可解析为 DTO）+ 语义层（错误码枚举映射 + isRetryable + cursor 分页无重叠）。 SLO：会话列表
+      + 结构层（响应 JSON 全字段可解析为 DTO）+ 语义层（错误码枚举映射 + recoveryAction + cursor 分页无重叠）。 SLO：会话列表
       p95 <800ms、消息列表 p95 <500ms。
 
       '

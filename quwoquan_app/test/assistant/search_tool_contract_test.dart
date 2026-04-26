@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/retrieval/domain/retrieval_broker.dart';
 import 'package:quwoquan_app/assistant/tool/impl/search/search_tool_contract.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
@@ -17,7 +18,7 @@ void main() {
             'A股 大涨 原因',
             '2026-04-07 A股 大涨 原因',
           ],
-          SearchToolFieldNames.queryTasks: <Map<String, dynamic>>[
+          SearchToolFieldNames.searchPlans: <Map<String, dynamic>>[
             <String, dynamic>{
               'id': 'market_reason',
               'label': '盘面原因',
@@ -37,23 +38,23 @@ void main() {
       expect(contract.objectTypes, contains(SearchObjectType.webDocument));
       expect(contract.limit, 4);
       expect(contract.queryVariants.length, 2);
-      expect(contract.queryTasks.single.id, 'market_reason');
-      expect(contract.queryTasks.single.dimension, 'latest_signal');
+      expect(contract.searchPlans.single.id, 'market_reason');
+      expect(contract.searchPlans.single.dimension, 'latest_signal');
       expect(contract.bridgePayload['provider'], 'serpapi');
       expect(contract.bridgePayload['queryNormalization'], isA<Map>());
 
       final webArgs = contract.toWebSearchArguments(
         query: '2026-04-07 A股 大涨 原因',
         count: 4,
-        queryTasks: contract.queryTasks,
+        searchPlans: contract.searchPlans,
       );
       expect(webArgs['query'], '2026-04-07 A股 大涨 原因');
       expect(webArgs['count'], 4);
       expect(webArgs['provider'], 'serpapi');
-      expect((webArgs['queryTasks'] as List?)?.length, 1);
+      expect((webArgs['taskGraphSearchPlan'] as List?)?.length, 1);
     });
 
-    test('typed result payload serializes references and query tasks', () {
+    test('typed result payload serializes references and search plans', () {
       const payload = SearchToolResultPayload(
         query: '摄影 入门',
         mode: SearchMode.result,
@@ -64,12 +65,12 @@ void main() {
             url: 'https://example.com/photo',
             source: 'example.com',
             snippet: '网页资料',
-            queryTaskId: 'facts',
+            searchPlanId: 'facts',
             dimension: 'key_facts',
           ),
         ],
-        queryTasks: <SearchToolQueryTask>[
-          SearchToolQueryTask(
+        searchPlans: <RetrievalSearchPlan>[
+          RetrievalSearchPlan(
             id: 'facts',
             label: '关键事实',
             dimension: 'key_facts',
@@ -84,12 +85,12 @@ void main() {
       expect(references, isNotNull);
       expect(references, isNotEmpty);
       expect(references!.first['url'], 'https://example.com/photo');
-      expect(references.first['queryTaskId'], 'facts');
-      final queryTasks = (data[SearchToolFieldNames.queryTasks] as List?)
+      expect(references.first['searchPlanId'], 'facts');
+      final searchPlans = (data[SearchToolFieldNames.searchPlans] as List?)
           ?.whereType<Map>()
           .toList();
-      expect(queryTasks, isNotNull);
-      expect(queryTasks!.single['dimension'], 'key_facts');
+      expect(searchPlans, isNotNull);
+      expect(searchPlans!.single['dimension'], 'key_facts');
     });
   });
 }

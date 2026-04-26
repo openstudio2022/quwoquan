@@ -1,9 +1,10 @@
 import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/safe_reference_normalizer.dart';
+import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 
 class EvidenceEvaluationResult {
   const EvidenceEvaluationResult({
@@ -18,7 +19,7 @@ class EvidenceEvaluationResult {
     this.freshnessSatisfied = false,
     this.evidenceRequired = false,
     this.coveredDimensions = const <String>[],
-    this.coveredQueryTaskIds = const <String>[],
+    this.coveredSearchPlanIds = const <String>[],
     this.blockingDimensions = const <String>[],
     this.missingDimensions = const <String>[],
     this.summary = '',
@@ -35,7 +36,7 @@ class EvidenceEvaluationResult {
   final bool freshnessSatisfied;
   final bool evidenceRequired;
   final List<String> coveredDimensions;
-  final List<String> coveredQueryTaskIds;
+  final List<String> coveredSearchPlanIds;
   final List<String> blockingDimensions;
   final List<String> missingDimensions;
   final String summary;
@@ -51,7 +52,7 @@ class EvidenceEvaluationResult {
     'freshnessSatisfied': freshnessSatisfied,
     'evidenceRequired': evidenceRequired,
     'coveredDimensions': coveredDimensions,
-    'coveredQueryTaskIds': coveredQueryTaskIds,
+    'coveredSearchPlanIds': coveredSearchPlanIds,
     'blockingDimensions': blockingDimensions,
     'missingDimensions': missingDimensions,
     'summary': summary,
@@ -105,8 +106,8 @@ class DefaultEvidenceEvaluator {
                 host: host,
                 authorityDomains: authorityDomains,
               );
-        final queryTaskId = _stringValue(ref['queryTaskId']);
-        final dimension = parseQueryTaskDimension(
+        final searchPlanId = _stringValue(ref['searchPlanId']);
+        final dimension = parseSearchPlanDimension(
           _stringValue(ref['dimension']),
         );
         final slotContributions = _buildSlotContributions(
@@ -120,13 +121,13 @@ class DefaultEvidenceEvaluator {
             evidenceId: _buildEvidenceId(
               domainId: domainId,
               toolName: toolName,
-              queryTaskId: queryTaskId,
+              searchPlanId: searchPlanId,
               url: url,
             ),
             domainId: domainId,
             dimension: dimension.wireName,
             dimensionLabel: dimension.displayLabel,
-            queryTaskId: queryTaskId,
+            searchPlanId: searchPlanId,
             title: title.isNotEmpty ? title : host,
             url: url,
             source: source.isNotEmpty ? source : host,
@@ -214,11 +215,11 @@ class DefaultEvidenceEvaluator {
               )
               .toList(growable: false),
         ),
-        coveredQueryTaskIds: _nonEmptyUnique(
-          ledger.map((item) => item.queryTaskId).toList(growable: false),
+        coveredSearchPlanIds: _nonEmptyUnique(
+          ledger.map((item) => item.searchPlanId).toList(growable: false),
         ),
         blockingDimensions: normalizedBlockingDimensions,
-        summary: '当前问题不强制依赖外部证据账。',
+        summary: '',
       );
     }
     if (ledger.isEmpty) {
@@ -229,7 +230,7 @@ class DefaultEvidenceEvaluator {
         freshnessSatisfied: false,
         evidenceRequired: true,
         blockingDimensions: normalizedBlockingDimensions,
-        summary: '还没有拿到可用证据。',
+        summary: '',
       );
     }
     final coverageScore = (ledger.length / 4).clamp(0.0, 1.0).toDouble();
@@ -251,8 +252,8 @@ class DefaultEvidenceEvaluator {
           )
           .toList(growable: false),
     );
-    final coveredQueryTaskIds = _nonEmptyUnique(
-      ledger.map((item) => item.queryTaskId).toList(growable: false),
+    final coveredSearchPlanIds = _nonEmptyUnique(
+      ledger.map((item) => item.searchPlanId).toList(growable: false),
     );
     final effectiveBlockingDimensions = normalizedBlockingDimensions;
     final missingDimensions = effectiveBlockingDimensions
@@ -297,14 +298,10 @@ class DefaultEvidenceEvaluator {
       freshnessSatisfied: freshnessSatisfied,
       evidenceRequired: true,
       coveredDimensions: coveredDimensions,
-      coveredQueryTaskIds: coveredQueryTaskIds,
+      coveredSearchPlanIds: coveredSearchPlanIds,
       blockingDimensions: effectiveBlockingDimensions,
       missingDimensions: missingDimensions,
-      summary: status == EvidenceStatus.full
-          ? '已收拢 ${ledger.length} 条证据，关键维度已经覆盖。'
-          : status == EvidenceStatus.bounded
-          ? '已收拢 ${ledger.length} 条证据，可以先回答已确认部分。'
-          : '证据还不够稳，需要继续补一轮。',
+      summary: '',
     );
   }
 
@@ -337,11 +334,11 @@ class DefaultEvidenceEvaluator {
           ? (data['source'] as String).trim()
           : (data['sourceHost'] as String?)?.trim() ?? '',
       'sourceHost': (data['sourceHost'] as String?)?.trim() ?? '',
-      'sourceTier': toolName == 'web_fetch'
+      'sourceTier': toolName == AssistantToolNames.webFetch
           ? EvidenceSourceTier.page.wireName
           : '',
       'retrievedAt': retrievedAt,
-      'queryTaskId': _stringValue(data['queryTaskId']),
+      'searchPlanId': _stringValue(data['searchPlanId']),
       'dimension': _stringValue(data['dimension']),
       if (data['freshnessHours'] != null)
         'freshnessHours': data['freshnessHours'],
@@ -392,10 +389,10 @@ class DefaultEvidenceEvaluator {
   String _buildEvidenceId({
     required String domainId,
     required String toolName,
-    required String queryTaskId,
+    required String searchPlanId,
     required String url,
   }) {
-    final scope = queryTaskId.isNotEmpty ? queryTaskId : toolName;
+    final scope = searchPlanId.isNotEmpty ? searchPlanId : toolName;
     return '$domainId::$scope::$url';
   }
 
@@ -466,8 +463,8 @@ class DefaultEvidenceEvaluator {
           .map((raw) {
             final normalized = raw.trim();
             if (normalized.isEmpty) return '';
-            final parsed = parseQueryTaskDimension(normalized);
-            return parsed != QueryTaskDimension.unknown
+            final parsed = parseSearchPlanDimension(normalized);
+            return parsed != SearchPlanDimension.unknown
                 ? parsed.wireName
                 : normalized;
           })

@@ -26,10 +26,16 @@ class MemorySearchTool implements AssistantTool {
   Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
     final query = (arguments['query'] as String?)?.trim() ?? '';
     if (query.isEmpty) {
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: false,
         message: 'Missing required parameter: query',
         errorCode: AssistantErrorCode.invalidArguments,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.invalidArguments,
+          message: 'Missing required parameter: query',
+          functionModule: name,
+          stage: 'argument_validation',
+        ),
       );
     }
 
@@ -87,6 +93,12 @@ class MemorySearchTool implements AssistantTool {
         message: '记忆检索失败: $e',
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.executionFailed,
+          message: '记忆检索失败: $e',
+          functionModule: name,
+          stage: 'memory_recall',
+        ),
       );
     }
   }

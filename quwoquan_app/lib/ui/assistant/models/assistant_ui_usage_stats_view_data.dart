@@ -8,6 +8,63 @@ Map<String, dynamic> assistantUiUsageStatsMapFromMessageField(Object? raw) {
   );
 }
 
+Map<String, dynamic> buildAssistantCumulativeUsageStatsProtocolMap({
+  required Map<String, dynamic> currentRunStats,
+  required Iterable<Map<String, dynamic>> previousRunStats,
+}) {
+  final currentRun = AssistantUiUsageStatsViewData.fromProtocolMap(
+    currentRunStats,
+  );
+  final currentRunLedger = _ledgerMaps(
+    currentRunStats['runUsageLedger'] ?? currentRunStats['usageLedger'],
+  );
+
+  var previousCalls = 0;
+  var previousTokens = 0;
+  var previousMaxTokens = 0;
+  final cumulativeLedger = <Map<String, dynamic>>[];
+  for (final stats in previousRunStats) {
+    if (stats.isEmpty) continue;
+    final run = AssistantUiUsageStatsViewData.fromProtocolMap(stats);
+    previousCalls += run.runModelCallCount;
+    previousTokens += run.runTotalTokens;
+    if (run.runMaxTokensPerCall > previousMaxTokens) {
+      previousMaxTokens = run.runMaxTokensPerCall;
+    }
+    cumulativeLedger.addAll(
+      _ledgerMaps(stats['runUsageLedger'] ?? stats['usageLedger']),
+    );
+  }
+  cumulativeLedger.addAll(currentRunLedger);
+
+  final cumulativeCalls = previousCalls + currentRun.runModelCallCount;
+  final cumulativeTokens = previousTokens + currentRun.runTotalTokens;
+  final cumulativeMaxTokens = previousMaxTokens > currentRun.runMaxTokensPerCall
+      ? previousMaxTokens
+      : currentRun.runMaxTokensPerCall;
+
+  return <String, dynamic>{
+    ...currentRunStats,
+    'runModelCallCount': currentRun.runModelCallCount,
+    'runTotalTokens': currentRun.runTotalTokens,
+    'runMaxTokensPerCall': currentRun.runMaxTokensPerCall,
+    'runUsageLedger': currentRunLedger,
+    'sessionUsageStats': <String, dynamic>{
+      'modelCallCount': cumulativeCalls,
+      'totalTokens': cumulativeTokens,
+      'maxTokensPerCall': cumulativeMaxTokens,
+      'usageLedger': cumulativeLedger,
+    },
+    'cumulativeModelCallCount': cumulativeCalls,
+    'cumulativeTotalTokens': cumulativeTokens,
+    'cumulativeMaxTokensPerCall': cumulativeMaxTokens,
+    'cumulativeUsageLedger': cumulativeLedger,
+    'modelCallCount': currentRun.runModelCallCount,
+    'totalTokens': currentRun.runTotalTokens,
+    'maxTokensPerCall': currentRun.runMaxTokensPerCall,
+  };
+}
+
 /// 与助手消息 `uiUsageStats` 协议 Map 对齐的只读视图（用于 journey / UI，不参与持久化编码）。
 final class AssistantUsageLedgerEntryViewData {
   const AssistantUsageLedgerEntryViewData({
@@ -74,13 +131,9 @@ final class AssistantUiUsageStatsViewData {
   ) {
     if (m.isEmpty) return AssistantUiUsageStatsViewData.empty;
 
-    final runCalls = _usageInt(
-      m['runModelCallCount'] ?? m['modelCallCount'],
-    );
+    final runCalls = _usageInt(m['runModelCallCount'] ?? m['modelCallCount']);
     final runTokens = _usageInt(m['runTotalTokens'] ?? m['totalTokens']);
-    final runMax = _usageInt(
-      m['runMaxTokensPerCall'] ?? m['maxTokensPerCall'],
-    );
+    final runMax = _usageInt(m['runMaxTokensPerCall'] ?? m['maxTokensPerCall']);
     final runLedgerRaw =
         (m['runUsageLedger'] ?? m['usageLedger']) as List? ?? const [];
     final runLedger = _parseLedger(runLedgerRaw);
@@ -125,6 +178,16 @@ List<AssistantUsageLedgerEntryViewData> _parseLedger(List<dynamic> raw) {
           e.cast<String, dynamic>(),
         ),
       )
+      .toList(growable: false);
+}
+
+List<Map<String, dynamic>> _ledgerMaps(Object? raw) {
+  if (raw is! List) {
+    return const <Map<String, dynamic>>[];
+  }
+  return raw
+      .whereType<Map>()
+      .map((item) => item.cast<String, dynamic>())
       .toList(growable: false);
 }
 

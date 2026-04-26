@@ -3,7 +3,7 @@ name: emotion_companion
 description: 情感陪伴、恋爱家庭咨询、心理疏导、亲子教育、闲聊解闷。温暖共情。
 domain: emotion_companion
 mode: qa
-allowed_tools: web_search local_context
+allowed_tools: web_search
 trigger_keywords: []
 searchPolicy:
   maxReflection: 0
@@ -40,7 +40,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 1. 机器轨 JSON：包含 decision、toolCalls、slotState
 2. 用户轨 Markdown：温柔的过渡说明（"我稍微查一下，但我一直在这里陪你"）
 
-若调用 `local_context`，返回结构必须遵循 `local_context_v1`，且显式声明 `"media": {"included": false}`，禁止把相册内容混入情绪陪伴上下文。
+时间、位置、设备与权限信息统一来自系统默认注入上下文，禁止再通过旧工具读取上下文。
 
 若 nextAction 为 answer，机器轨标记完成，Markdown 输出情感陪伴回复。
 
@@ -56,7 +56,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "toolCalls": [
     {"toolName": "web_search", "arguments": {"query": "示例查询"}}
   ],
-  "localContextContract": "local_context_v1",
+  "systemContextContract": "system_context_envelope",
   "media": {"included": false},
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "我在这里，你说吧…"

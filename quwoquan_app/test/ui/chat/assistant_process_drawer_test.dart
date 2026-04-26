@@ -864,7 +864,7 @@ void main() {
         ),
       );
 
-      expect(find.text('已完成深度思考'), findsOneWidget);
+      expect(find.text('已完成处理'), findsOneWidget);
       expect(find.text('先把问题主线立住'), findsOneWidget);
     });
 
@@ -945,7 +945,7 @@ void main() {
         ),
       );
 
-      expect(find.text('已完成深度思考'), findsOneWidget);
+      expect(find.text('已完成处理'), findsOneWidget);
       expect(find.text('处理 2 篇'), findsOneWidget);
       expect(find.text('接纳 2 篇'), findsOneWidget);
       expect(find.text('耗时 4 秒'), findsOneWidget);

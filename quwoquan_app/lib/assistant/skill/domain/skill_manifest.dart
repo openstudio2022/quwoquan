@@ -63,34 +63,28 @@ class SkillExecutionShell {
         (map['executionShell'] as Map?)?.cast<String, dynamic>() ??
         (frontmatter['executionShell'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final searchPolicy =
-        (frontmatter['searchPolicy'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final mode = (frontmatter['mode'] as String?)?.trim() ?? '';
-    final modeType = parseSkillMode(mode);
-    final derivedProblemClass =
-        (frontmatter['problem_class'] as String?)?.trim().isNotEmpty == true
-        ? (frontmatter['problem_class'] as String).trim()
-        : _deriveProblemClass(modeType);
-    final derivedProblemClassType = parseProblemClass(derivedProblemClass);
-    final defaultVariantBudget = derivedProblemClassType.isFastConvergence
+    final explicitProblemClass =
+        (shellMap['problemClass'] as String?)?.trim().isNotEmpty == true
+        ? (shellMap['problemClass'] as String).trim()
+        : ((frontmatter['problem_class'] as String?)?.trim().isNotEmpty == true
+              ? (frontmatter['problem_class'] as String).trim()
+              : ProblemClass.general.wireName);
+    final explicitProblemClassType = parseProblemClass(explicitProblemClass);
+    final defaultVariantBudget = explicitProblemClassType.isFastConvergence
         ? 0
-        : (modeType == SkillMode.task ? 0 : 2);
-    final defaultReflectionBudget = derivedProblemClassType.isFastConvergence
+        : 2;
+    final defaultReflectionBudget = explicitProblemClassType.isFastConvergence
         ? 0
-        : ((searchPolicy['maxReflection'] as num?)?.toInt() ?? 2);
+        : 2;
     return SkillExecutionShell(
-      problemClass:
-          (shellMap['problemClass'] as String?)?.trim().isNotEmpty == true
-          ? (shellMap['problemClass'] as String).trim()
-          : derivedProblemClass,
+      problemClass: explicitProblemClass,
       maxIterations: _positiveInt(
         shellMap['maxIterations'],
-        fallback: derivedProblemClassType.isFastConvergence ? 2 : 6,
+        fallback: explicitProblemClassType.isFastConvergence ? 2 : 6,
       ),
       toolBudget: _positiveInt(
         shellMap['toolBudget'],
-        fallback: derivedProblemClassType.isFastConvergence ? 1 : 12,
+        fallback: explicitProblemClassType.isFastConvergence ? 1 : 12,
       ),
       variantBudget: _nonNegativeInt(
         shellMap['variantBudget'],
@@ -156,17 +150,6 @@ class SkillExecutionShell {
     'authorityDomains': authorityDomains,
     'freshnessHoursMax': freshnessHoursMax,
   };
-
-  static String _deriveProblemClass(SkillMode mode) {
-    switch (mode) {
-      case SkillMode.task:
-        return ProblemClass.taskExecution.wireName;
-      case SkillMode.hybrid:
-        return ProblemClass.complexReasoning.wireName;
-      case SkillMode.qa:
-        return ProblemClass.simpleQa.wireName;
-    }
-  }
 
   static int _positiveInt(Object? value, {required int fallback}) {
     if (value is num && value.toInt() > 0) return value.toInt();

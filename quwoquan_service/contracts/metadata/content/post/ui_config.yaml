@@ -353,7 +353,7 @@ empty_states:
     illustration: slow_down
     title_key: feed_rate_limited_title
     subtitle_key: feed_rate_limited_subtitle
-    show_countdown: true                # 展示倒计时（retry_after_seconds 来自 errors.yaml）
+    show_countdown: true                # 展示倒计时（recovery_after_seconds 来自 errors.yaml）
 
   post_not_found:
     illustration: post_deleted

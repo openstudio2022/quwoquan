@@ -50,8 +50,10 @@ scenario_acceptance:
       planned:
         - follow edge command contract test
         - persona follow attribution integration test
-      recorded: []
-    status: pending
+      recorded:
+        - "T1/T3: `go test ./runtime/governance ./services/user-service/tests/...`"
+        - "T2: `flutter test test/cloud/user/contract/user_profile_repository_contract_test.dart test/ui/user/providers/profile_state_provider_test.dart`"
+    status: implemented
   A2:
     title: "`FollowEdge` 满足幂等、唯一约束与 Block 门禁"
     scenario: 同一对分身重复关注、取关或遇到 block 时执行写入
@@ -79,8 +81,10 @@ scenario_acceptance:
         - duplicate follow idempotent test
         - block gate follow rejection test
         - unfollow no-op regression test
-      recorded: []
-    status: pending
+      recorded:
+        - "T3: `go test ./services/user-service/tests/...`"
+        - "T2/T3: `flutter test test/cloud/user/contract/block_repository_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart`"
+    status: implemented
   A3:
     title: "follow 写入通过事件同步 `UserProfile` 统计"
     scenario: 关注边写入后更新 follower / following 计数和下游事件
@@ -106,8 +110,10 @@ scenario_acceptance:
       planned:
         - follow counter sync contract test
         - event publication verification
-      recorded: []
-    status: pending
+      recorded:
+        - "T3: `go test ./services/user-service/tests -run 'Test(Follow_|GetRelationship_Mutual|ListFollowing_|ListFollowers_)'`"
+        - "代码已在 `FollowService` 落地 `UserFollowed / UserUnfollowed` 发布、owner profile 计数副作用、重复请求幂等与 `follow_counter_mismatch_count` 自动修正回归；当前阶段仍以同步副作用 + 对账修正作为验收标准"
+    status: implemented
 
 story_readiness:
   S1:
@@ -126,5 +132,7 @@ story_readiness:
       planned:
         - follow write rollback rehearsal
         - audit metric verification
-      recorded: []
-    status: pending
+      recorded:
+        - "T1/T3: `go test ./runtime/governance ./services/user-service/tests -run 'Test(FeatureEnabled|Persona|Follow_)'`"
+        - "代码已统一使用 `ops.user.persona_graph_v1` / `ops.user.persona_context_v1`，并对 `follow_command_latency_ms / follow_duplicate_request_count / follow_block_rejection_count / follow_counter_mismatch_count / follow_legacy_edge_read_count` 增加最小触发断言；flag-off 关系读取回归已证明不会破坏既有 persona follow edge"
+    status: implemented

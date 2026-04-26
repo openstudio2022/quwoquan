@@ -40,7 +40,7 @@ func (h *ContentHandler) Routes() http.Handler {
 	mux.HandleFunc("/startupz", h.handleHealthz)
 	mux.HandleFunc("/v1/content/users/posts", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET"))
 			return
 		}
 		h.handleListUserPosts(w, r)
@@ -52,7 +52,7 @@ func (h *ContentHandler) Routes() http.Handler {
 		case http.MethodPost:
 			h.handleCreateReport(w, r)
 		default:
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET/POST"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET/POST"))
 		}
 	})
 	mux.HandleFunc("/v1/content/reports/", func(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +62,7 @@ func (h *ContentHandler) Routes() http.Handler {
 		case http.MethodPatch:
 			h.handleResolveReport(w, r)
 		default:
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET/PATCH"))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET/PATCH"))
 		}
 	})
 	mux.HandleFunc("GET /v1/content/profile-subjects/{profileSubjectId}/interactions/received", h.handleListProfileInteractionActivitiesReceived)
@@ -78,7 +78,7 @@ func (h *ContentHandler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 
 func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
 		return
 	}
 	params := BindGeneratedGetFeedParams(r, 20)
@@ -95,7 +95,7 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		BlockedKeywords: resolveBlockedKeywords(r),
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -103,7 +103,7 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 
 func (h *ContentHandler) handleSearchPosts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
 		return
 	}
 	q := r.URL.Query()
@@ -121,7 +121,7 @@ func (h *ContentHandler) handleSearchPosts(w http.ResponseWriter, r *http.Reques
 		Limit:         limit,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -132,12 +132,12 @@ func (h *ContentHandler) handleSearchPosts(w http.ResponseWriter, r *http.Reques
 
 func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
 		return
 	}
 	postID := strings.TrimPrefix(r.URL.Path, "/v1/content/posts/")
 	if postID == "" || strings.Contains(postID, "/") {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid post id", "missing postId path segment"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid post id", "missing postId path segment"))
 		return
 	}
 	post, ok, deleted, forbidden := h.postService.GetPostForViewer(
@@ -148,28 +148,25 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 	)
 	if !ok {
 		if deleted {
-			writeHTTPError(w, rterr.NewAppError(
+			writeHTTPError(w, r, rterr.NewAppError(
 				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict"),
 				"内容已删除",
 				"post deleted",
-				false,
 			))
 			return
 		}
 		if forbidden {
-			writeHTTPError(w, rterr.NewAppError(
+			writeHTTPError(w, r, rterr.NewAppError(
 				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden"),
 				"无权查看该内容",
 				"post visibility blocked",
-				false,
 			))
 			return
 		}
-		writeHTTPError(w, rterr.NewAppError(
+		writeHTTPError(w, r, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"内容不存在",
 			"post not found",
-			false,
 		))
 		return
 	}
@@ -196,7 +193,7 @@ func projectPostForClient(post any) map[string]any {
 func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
 	payload, err := BindGeneratedWritableBodyFromRequest(r, "CreatePost")
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"请求体字段不合法",
 			err.Error(),
@@ -206,13 +203,17 @@ func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request
 	// Inject authorId from auth header if not in payload
 	existingAuthor, _ := payload["authorId"].(string)
 	if strings.TrimSpace(existingAuthor) == "" {
-		if uid := resolveUserID(r); uid != "" {
+		if profileSubjectID, _ := payload["profileSubjectId"].(string); strings.TrimSpace(profileSubjectID) != "" {
+			payload["authorId"] = profileSubjectID
+		} else if personaID, _ := payload["personaId"].(string); strings.TrimSpace(personaID) != "" {
+			payload["authorId"] = personaID
+		} else if uid := resolveUserID(r); uid != "" {
 			payload["authorId"] = uid
 		}
 	}
 	post, err := h.postService.CreatePost(r.Context(), payload)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, post)
@@ -221,7 +222,7 @@ func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request
 func (h *ContentHandler) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
 	payload, err := BindGeneratedWritableBodyFromRequest(r, "UpdatePost")
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"请求体字段不合法",
 			err.Error(),
@@ -231,7 +232,7 @@ func (h *ContentHandler) handleUpdatePost(w http.ResponseWriter, r *http.Request
 	postID := strings.TrimPrefix(r.URL.Path, "/v1/content/posts/")
 	post, err := h.postService.UpdatePost(r.Context(), strings.TrimSpace(postID), payload)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, post)
@@ -244,12 +245,12 @@ func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Reque
 	}
 	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	report, err := h.reportService.CreateReport(r.Context(), resolveUserID(r), body)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, report)
@@ -268,7 +269,7 @@ func (h *ContentHandler) handleListReports(w http.ResponseWriter, r *http.Reques
 	}
 	items, err := h.reportService.ListReports(r.Context(), limit)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -285,7 +286,7 @@ func (h *ContentHandler) handleGetReport(w http.ResponseWriter, r *http.Request)
 	reportID := pathParamAfter(r.URL.Path, "/v1/content/reports/", "")
 	report, err := h.reportService.GetReport(r.Context(), reportID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, report)
@@ -299,12 +300,12 @@ func (h *ContentHandler) handleResolveReport(w http.ResponseWriter, r *http.Requ
 	reportID := pathParamAfter(r.URL.Path, "/v1/content/reports/", "")
 	var body map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	report, err := h.reportService.ResolveReport(r.Context(), reportID, resolveUserID(r), body)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, report)
@@ -314,7 +315,7 @@ func (h *ContentHandler) handlePublishPost(w http.ResponseWriter, r *http.Reques
 	postID := postIDFromPath(r.URL.Path)
 	payload, err := BindGeneratedWritableBodyFromRequest(r, "PublishPost")
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"请求体字段不合法",
 			err.Error(),
@@ -323,7 +324,7 @@ func (h *ContentHandler) handlePublishPost(w http.ResponseWriter, r *http.Reques
 	}
 	post, err := h.postService.PublishPost(r.Context(), postID, payload)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, post)
@@ -332,7 +333,7 @@ func (h *ContentHandler) handlePublishPost(w http.ResponseWriter, r *http.Reques
 func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http.Request) {
 	payload, err := BindGeneratedWritableBodyFromRequest(r, "UpdatePostSettings")
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"请求体字段不合法",
 			err.Error(),
@@ -342,7 +343,7 @@ func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http
 	postID := postIDFromPath(r.URL.Path)
 	post, err := h.postService.UpdatePostSettings(r.Context(), postID, resolveUserID(r), payload)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, post)
@@ -351,7 +352,7 @@ func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http
 func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.Request) {
 	payload, err := BindGeneratedWritableBodyFromRequest(r, "PromotePostToWork")
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"请求体字段不合法",
 			err.Error(),
@@ -361,7 +362,7 @@ func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.
 	postID := postIDFromPath(r.URL.Path)
 	post, err := h.postService.PromotePostToWork(r.Context(), postID, resolveUserID(r), payload)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, post)
@@ -370,7 +371,7 @@ func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.
 func (h *ContentHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 	postID := postIDFromPath(r.URL.Path)
 	if err := h.postService.DeletePost(r.Context(), postID, resolveUserID(r)); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"postId": postID, "status": "deleted"})
@@ -383,12 +384,12 @@ func (h *ContentHandler) handleUpdatePostCircles(w http.ResponseWriter, r *http.
 		Remove []string `json:"remove"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	resp, err := h.postService.UpdatePostCircles(r.Context(), postID, resolveUserID(r), body.Add, body.Remove)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -400,12 +401,12 @@ func (h *ContentHandler) handleRepostToCircle(w http.ResponseWriter, r *http.Req
 		CircleID string `json:"circleId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	resp, err := h.postService.RepostToCircle(r.Context(), postID, resolveUserID(r), body.CircleID, "")
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -418,12 +419,12 @@ func (h *ContentHandler) handleQuoteToCircle(w http.ResponseWriter, r *http.Requ
 		Quote    string `json:"quoteText"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	resp, err := h.postService.RepostToCircle(r.Context(), postID, resolveUserID(r), body.CircleID, body.Quote)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	resp["sourceType"] = "quote"
@@ -443,7 +444,7 @@ func (h *ContentHandler) handleCompleteMediaUpload(w http.ResponseWriter, r *htt
 	sessionID := pathParamAfter(r.URL.Path, "/v1/content/media/uploads/", ":complete")
 	asset, err := h.postService.CompleteMediaUpload(r.Context(), sessionID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, asset)
@@ -452,7 +453,7 @@ func (h *ContentHandler) handleCompleteMediaUpload(w http.ResponseWriter, r *htt
 func (h *ContentHandler) handleAbortMediaUpload(w http.ResponseWriter, r *http.Request) {
 	sessionID := pathParamAfter(r.URL.Path, "/v1/content/media/uploads/", ":abort")
 	if err := h.postService.AbortMediaUpload(r.Context(), sessionID); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessionId": sessionID, "status": "aborted"})
@@ -465,11 +466,10 @@ func (h *ContentHandler) handleGetMediaAsset(w http.ResponseWriter, r *http.Requ
 	}
 	asset, ok := h.postService.GetMediaAsset(mediaID)
 	if !ok {
-		writeHTTPError(w, rterr.NewAppError(
+		writeHTTPError(w, r, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
 			"媒体不存在",
 			"media not found",
-			false,
 		))
 		return
 	}
@@ -480,7 +480,7 @@ func (h *ContentHandler) handleSelectAutoVideoCover(w http.ResponseWriter, r *ht
 	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "/cover:auto")
 	asset, err := h.postService.SelectAutoVideoCover(r.Context(), mediaID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, asset)
@@ -492,12 +492,12 @@ func (h *ContentHandler) handleSelectManualVideoCover(w http.ResponseWriter, r *
 		CoverAssetID string `json:"coverAssetId"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	asset, err := h.postService.SelectManualVideoCover(r.Context(), mediaID, body.CoverAssetID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, asset)
@@ -509,7 +509,7 @@ func (h *ContentHandler) handleGenerateArticleSummary(w http.ResponseWriter, r *
 		Body  string `json:"body"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	summary := h.postService.GenerateArticleSummary(body.Title, body.Body)
@@ -519,7 +519,7 @@ func (h *ContentHandler) handleGenerateArticleSummary(w http.ResponseWriter, r *
 func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Request) {
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体读取失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体读取失败", err.Error()))
 		return
 	}
 	var batch struct {
@@ -528,11 +528,11 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		Events    []application.BehaviorEventInput `json:"events"`
 	}
 	if err := json.Unmarshal(raw, &batch); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	if len(batch.Events) == 0 {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "events 不能为空", "empty events"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "events 不能为空", "empty events"))
 		return
 	}
 	// Fallback: body-level → header-level for userId/sessionId
@@ -551,7 +551,7 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		}
 	}
 	if err := h.behaviorService.ProcessBatch(r.Context(), batch.Events); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -565,7 +565,7 @@ func (h *ContentHandler) handleGetRecommendation(w http.ResponseWriter, r *http.
 	if r.Body != nil {
 		defer r.Body.Close()
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
-			writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 			return
 		}
 	}
@@ -578,7 +578,7 @@ func (h *ContentHandler) handleGetRecommendation(w http.ResponseWriter, r *http.
 	}
 	resp, err := h.feedService.Recommend(r.Context(), req)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -587,7 +587,7 @@ func (h *ContentHandler) handleGetRecommendation(w http.ResponseWriter, r *http.
 func (h *ContentHandler) handleLikePost(w http.ResponseWriter, r *http.Request, postID string) {
 	likeCount, changed, err := h.postService.LikePost(r.Context(), postID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -601,7 +601,7 @@ func (h *ContentHandler) handleLikePost(w http.ResponseWriter, r *http.Request, 
 func (h *ContentHandler) handleUnlikePost(w http.ResponseWriter, r *http.Request, postID string) {
 	likeCount, changed, err := h.postService.UnlikePost(r.Context(), postID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -615,7 +615,7 @@ func (h *ContentHandler) handleUnlikePost(w http.ResponseWriter, r *http.Request
 func (h *ContentHandler) handleFavoritePost(w http.ResponseWriter, r *http.Request, postID string) {
 	favoriteCount, changed, err := h.postService.FavoritePost(r.Context(), postID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -629,7 +629,7 @@ func (h *ContentHandler) handleFavoritePost(w http.ResponseWriter, r *http.Reque
 func (h *ContentHandler) handleUnfavoritePost(w http.ResponseWriter, r *http.Request, postID string) {
 	favoriteCount, changed, err := h.postService.UnfavoritePost(r.Context(), postID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -654,12 +654,14 @@ func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.R
 
 func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Request, postID string) {
 	var body struct {
-		Content          string `json:"content"`
-		ReplyToCommentID string `json:"replyToCommentId"`
-		PersonaId        string `json:"personaId"`
+		Content               string `json:"content"`
+		ReplyToCommentID      string `json:"replyToCommentId"`
+		PersonaId             string `json:"personaId"`
+		ProfileSubjectID      string `json:"profileSubjectId"`
+		PersonaContextVersion string `json:"personaContextVersion"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
 	personaId := body.PersonaId
@@ -673,9 +675,11 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 		body.Content,
 		body.ReplyToCommentID,
 		personaId,
+		body.ProfileSubjectID,
+		body.PersonaContextVersion,
 	)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
@@ -695,7 +699,7 @@ func (h *ContentHandler) handleListComments(w http.ResponseWriter, r *http.Reque
 	}
 	comments, nextCursor, err := h.postService.ListComments(r.Context(), postID, cursor, sort, limit)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	resp := map[string]any{"items": comments}
@@ -710,13 +714,13 @@ func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Requ
 	parts := strings.Split(path, "/")
 	// /v1/content/posts/{postId}/comments/{commentId}
 	if len(parts) < 6 {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid path", "missing commentId"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid path", "missing commentId"))
 		return
 	}
 	postID := parts[3]
 	commentID := parts[5]
 	if err := h.postService.DeleteComment(r.Context(), postID, commentID, resolveUserID(r)); err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -725,7 +729,7 @@ func (h *ContentHandler) handleDeleteComment(w http.ResponseWriter, r *http.Requ
 func (h *ContentHandler) handleLikeComment(w http.ResponseWriter, r *http.Request, commentID string) {
 	likeCount, changed, err := h.postService.LikeComment(r.Context(), commentID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -739,7 +743,7 @@ func (h *ContentHandler) handleLikeComment(w http.ResponseWriter, r *http.Reques
 func (h *ContentHandler) handleUnlikeComment(w http.ResponseWriter, r *http.Request, commentID string) {
 	likeCount, changed, err := h.postService.UnlikeComment(r.Context(), commentID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -760,7 +764,7 @@ func (h *ContentHandler) handleListCommentsByAuthor(w http.ResponseWriter, r *ht
 	}
 	comments, nextCursor, err := h.postService.ListCommentsByAuthor(r.Context(), resolveUserID(r), cursor, limit)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	resp := map[string]any{"items": comments}
@@ -780,7 +784,7 @@ func (h *ContentHandler) handleListCommentsForPostAuthor(w http.ResponseWriter, 
 	}
 	comments, nextCursor, err := h.postService.ListCommentsForPostAuthor(r.Context(), resolveUserID(r), cursor, limit)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	resp := map[string]any{"items": comments}
@@ -801,7 +805,7 @@ func (h *ContentHandler) handleListProfileInteractionActivitiesSent(w http.Respo
 func (h *ContentHandler) handleListProfileInteractionActivities(w http.ResponseWriter, r *http.Request, direction string) {
 	profileSubjectID := r.PathValue("profileSubjectId")
 	if strings.TrimSpace(profileSubjectID) == "" {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleContent, "profileSubjectId 不能为空", "missing profileSubjectId"))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "profileSubjectId 不能为空", "missing profileSubjectId"))
 		return
 	}
 	limit := 20
@@ -812,7 +816,7 @@ func (h *ContentHandler) handleListProfileInteractionActivities(w http.ResponseW
 	}
 	items, err := h.postService.ListProfileInteractionActivities(r.Context(), profileSubjectID, direction, limit)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -835,7 +839,7 @@ func commentIDFromPath(path string) string {
 func (h *ContentHandler) handleGetCounters(w http.ResponseWriter, r *http.Request, postID string) {
 	counters, err := h.postService.GetCounters(r.Context(), postID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, counters)
@@ -845,7 +849,7 @@ func (h *ContentHandler) handleGetHelperRead(w http.ResponseWriter, r *http.Requ
 	contentID := pathParamAfter(r.URL.Path, "/v1/content/helper-read/", "")
 	result, err := h.postService.GetHelperRead(r.Context(), contentID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -882,7 +886,7 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 		limit,
 	)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	items := make([]map[string]any, 0, len(posts))
@@ -1005,11 +1009,10 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		h.handleGetAppConfig(w, r)
 		return
 	}
-	writeHTTPError(w, rterr.NewAppError(
+	writeHTTPError(w, r, rterr.NewAppError(
 		rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "unavailable"),
 		"接口暂未开放",
 		"operation not implemented: "+operation+" "+r.Method+" "+r.URL.Path,
-		true,
 	))
 }
 
@@ -1027,8 +1030,8 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func writeHTTPError(w http.ResponseWriter, err error) {
-	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptions{})
+func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
+	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 // resolveSessionID extracts sessionId from query param → body → X-Client-Session-Id header.

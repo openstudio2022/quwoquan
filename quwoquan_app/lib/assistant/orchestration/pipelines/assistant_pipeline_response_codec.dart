@@ -1,29 +1,16 @@
-import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_answer_payload_read_view.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_subagent_run_record.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
-import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
-import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
-import 'package:quwoquan_app/assistant/contracts/user_events.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
-import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
-import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
-import 'package:quwoquan_app/assistant/retrieval/contracts/retrieval_models.dart';
-import 'package:quwoquan_app/assistant/conversation/explainability/dialogue_state_runtime.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 mixin AssistantPipelineResponseCodecMixin {
   List<Map<String, dynamic>> normalizeToolCalls(Object? value) {
@@ -33,7 +20,9 @@ mixin AssistantPipelineResponseCodecMixin {
           .map((item) => item.cast<String, dynamic>())
           .toList(growable: false);
     }
-    if (value is Map) return <Map<String, dynamic>>[value.cast<String, dynamic>()];
+    if (value is Map) {
+      return <Map<String, dynamic>>[value.cast<String, dynamic>()];
+    }
     return const <Map<String, dynamic>>[];
   }
 
@@ -63,7 +52,7 @@ mixin AssistantPipelineResponseCodecMixin {
   Map<String, dynamic> materializedUnderstandingSnapshotRaw({
     required Map<String, dynamic> answerPayload,
     required Map<String, dynamic> carriedUnderstandingSnapshot,
-    required ConversationStateDecision stateDecision,
+    required AssistantTypedTurnDecision stateDecision,
     required SynthesisReadinessResult synthesisReadiness,
   }) {
     final current = AssistantAnswerPayloadReadView(
@@ -84,7 +73,7 @@ mixin AssistantPipelineResponseCodecMixin {
   Map<String, dynamic> materializedHistoricalThinkingSnapshotRaw({
     required Map<String, dynamic> answerPayload,
     required Map<String, dynamic> carriedHistoricalThinkingSnapshot,
-    required ConversationStateDecision stateDecision,
+    required AssistantTypedTurnDecision stateDecision,
     required SynthesisReadinessResult synthesisReadiness,
   }) {
     final current = AssistantAnswerPayloadReadView(
@@ -103,7 +92,7 @@ mixin AssistantPipelineResponseCodecMixin {
   }
 
   bool shouldAllowSecondTurnUnderstandingRewrite({
-    required ConversationStateDecision stateDecision,
+    required AssistantTypedTurnDecision stateDecision,
     required SynthesisReadinessResult synthesisReadiness,
   }) {
     return stateDecision.nextActionType == AssistantNextAction.toolCall ||
@@ -194,10 +183,7 @@ mixin AssistantPipelineResponseCodecMixin {
     };
   }
 
-  String extractUiSummary(
-    Map<String, dynamic> answerPayload,
-    String fallback,
-  ) {
+  String extractUiSummary(Map<String, dynamic> answerPayload, String fallback) {
     final turn = tryParseAssistantTurnOutput(answerPayload);
     final apv = AssistantAnswerPayloadReadView(answerPayload);
     final interpretation =
@@ -332,23 +318,45 @@ mixin AssistantPipelineResponseCodecMixin {
         .where((e) => e.type == AssistantTraceEventType.toolResult)
         .map(AssistantToolResultRow.fromTraceEvent)
         .toList(growable: false);
-    final toolErrors = traces
+    final runtimeFailures = traces
         .where((e) => e.type == AssistantTraceEventType.toolError)
-        .map(
-          (e) => <String, dynamic>{
-            'message': e.message,
-            'data': e.data ?? const <String, dynamic>{},
-          },
-        )
+        .map(_runtimeFailureFromToolErrorTrace)
         .toList(growable: false);
     final webEvidencePacks = extractWebEvidencePacks(toolResults);
     return <String, dynamic>{
-      'toolResults': toolResults.map((item) => item.toJson()).toList(growable: false),
-      'toolErrors': toolErrors,
+      'toolResults': toolResults
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'runtimeFailures': runtimeFailures
+          .map((failure) => failure.toJson())
+          .toList(growable: false),
       'toolResultCount': toolResults.length,
-      'toolErrorCount': toolErrors.length,
+      'runtimeFailureCount': runtimeFailures.length,
       'webEvidencePacks': webEvidencePacks,
     };
+  }
+
+  RuntimeFailure _runtimeFailureFromToolErrorTrace(AssistantTraceEvent event) {
+    final rawFailure = (event.data?['runtimeFailure'] as Map?)
+        ?.cast<String, dynamic>();
+    if (rawFailure != null && rawFailure.isNotEmpty) {
+      return RuntimeFailure.fromJson(rawFailure);
+    }
+    return RuntimeFailure(
+      code: 'ASSISTANT.SYSTEM.tool_error_trace',
+      origin: RuntimeFailureOrigin.system,
+      kind: RuntimeFailureKind.internal,
+      nature: RuntimeFailureNature.bug,
+      location: const RuntimeFailureLocation(
+        businessObject: 'assistant_turn',
+        functionModule: 'assistant_pipeline_response_codec',
+      ),
+      context: RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(key: 'traceType', value: event.type.name),
+        ],
+      ),
+    );
   }
 
   String extractUiMarkdown(Map<String, dynamic> answerPayload) {
@@ -392,9 +400,12 @@ mixin AssistantPipelineResponseCodecMixin {
     final turn = tryParseAssistantTurnOutput(parsed);
     if (turn != null) {
       final json = turn.toJson();
-      final result = (json['result'] as Map?)?.cast<String, dynamic>() ??
+      final result =
+          (json['result'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{'text': rawFinalText};
-      final understandingSnapshot = normalizeMap(parsed['understandingSnapshot']);
+      final understandingSnapshot = normalizeMap(
+        parsed['understandingSnapshot'],
+      );
       final retrievalProcessing = normalizeMap(parsed['retrievalProcessing']);
       final answerProcessing = normalizeMap(parsed['answerProcessing']);
       final historicalThinkingSnapshot = normalizeMap(
@@ -403,7 +414,8 @@ mixin AssistantPipelineResponseCodecMixin {
       final journey = normalizeMap(parsed['journey']);
       final aggregationState = normalizeMap(parsed['aggregationState']);
       final nextAction = turn.decision.nextAction.wireName;
-      if (nextAction.isNotEmpty && nextAction != AssistantNextAction.unknown.wireName) {
+      if (nextAction.isNotEmpty &&
+          nextAction != AssistantNextAction.unknown.wireName) {
         result['nextAction'] = nextAction;
       }
       json['result'] = result;
@@ -425,13 +437,17 @@ mixin AssistantPipelineResponseCodecMixin {
       if (aggregationState.isNotEmpty) {
         json['aggregationState'] = aggregationState;
       }
-      json['parseStatus'] = parsed.isEmpty ? 'fallback_text' : 'assistant_turn_parsed';
+      json['parseStatus'] = parsed.isEmpty
+          ? 'fallback_text'
+          : 'assistant_turn_parsed';
       return json;
     }
 
-    final decisionMap = (parsed['decision'] as Map?)?.cast<String, dynamic>() ??
+    final decisionMap =
+        (parsed['decision'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final resultMap = (parsed['result'] as Map?)?.cast<String, dynamic>() ??
+    final resultMap =
+        (parsed['result'] as Map?)?.cast<String, dynamic>() ??
         <String, dynamic>{};
     if ((resultMap['text'] as String?)?.trim().isEmpty ?? true) {
       resultMap['text'] = rawFinalText;
@@ -442,12 +458,15 @@ mixin AssistantPipelineResponseCodecMixin {
       'decision': <String, dynamic>{
         'nextAction': (decisionMap['nextAction'] as String?)?.trim() ?? '',
       },
-      'messageKind': (parsed['messageKind'] as String?)?.trim().isNotEmpty == true
+      'messageKind':
+          (parsed['messageKind'] as String?)?.trim().isNotEmpty == true
           ? (parsed['messageKind'] as String).trim()
           : AssistantMessageKind.fallback.wireName,
-      'userMarkdown': (parsed['userMarkdown'] as String?)?.trim() ?? rawFinalText,
+      'userMarkdown':
+          (parsed['userMarkdown'] as String?)?.trim() ?? rawFinalText,
       'result': resultMap,
-      'displayState': (parsed['displayState'] as Map?)?.cast<String, dynamic>() ??
+      'displayState':
+          (parsed['displayState'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
       'evidence': normalizeMapList(parsed['evidence'], textKey: 'text'),
       'reasoningBasis': normalizeMapList(
@@ -461,7 +480,8 @@ mixin AssistantPipelineResponseCodecMixin {
       'toolCalls': normalizeToolCalls(parsed['toolCalls']),
       'slotState': normalizeMap(parsed['slotState']),
       'subagentPlan': normalizeMapList(parsed['subagentPlan'], textKey: 'goal'),
-      'intentGraph': normalizeMap(parsed['intentGraph']),
+      'planView': normalizeMap(parsed['planView']),
+      'searchPlans': normalizeMapList(parsed['searchPlans'], textKey: 'query'),
       'skillRuns': normalizeMapList(parsed['skillRuns'], textKey: 'goal'),
       'aggregationState': normalizeMap(parsed['aggregationState']),
       'journey': normalizeMap(parsed['journey']),
@@ -478,8 +498,9 @@ mixin AssistantPipelineResponseCodecMixin {
       'understandingSnapshot': normalizeMap(parsed['understandingSnapshot']),
       'retrievalProcessing': normalizeMap(parsed['retrievalProcessing']),
       'answerProcessing': normalizeMap(parsed['answerProcessing']),
-      'historicalThinkingSnapshot':
-          normalizeMap(parsed['historicalThinkingSnapshot']),
+      'historicalThinkingSnapshot': normalizeMap(
+        parsed['historicalThinkingSnapshot'],
+      ),
       'sessionPreferenceFacts': normalizeMapList(
         parsed['sessionPreferenceFacts'],
         textKey: 'key',
@@ -581,8 +602,6 @@ mixin AssistantPipelineResponseCodecMixin {
     if (interpretationText.isNotEmpty) return interpretationText;
     return normalizedMarkdown.trim();
   }
-
-  String _safeString(Object? raw) => raw?.toString() ?? '';
 
   double _asDouble(Object? raw) {
     if (raw is num) return raw.toDouble();

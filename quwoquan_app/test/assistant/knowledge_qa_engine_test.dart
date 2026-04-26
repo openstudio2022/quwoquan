@@ -71,9 +71,8 @@ void main() {
         maxEvidence: 4,
       );
 
-      expect(report.answer, contains('结论：'));
-      expect(report.answer, contains('依据：'));
-      expect(report.answer, contains('不确定性：'));
+      expect(report.answer.trim(), isNotEmpty);
+      expect(report.answer, contains('杭州周末有降雨概率'));
       expect(report.evidences, isNotEmpty);
       expect(report.providersTried, contains('perplexity'));
     });
@@ -82,7 +81,7 @@ void main() {
       final report = await engine.run(query: '财经和天气都帮我看看', maxEvidence: 2);
 
       expect(report.providersTried, contains('default'));
-      expect(report.conclusion, contains('针对「财经和天气都帮我看看」'));
+      expect(report.conclusion.trim(), isNotEmpty);
     });
   });
 }

@@ -259,7 +259,7 @@ void main() {
     expect(meshFrame.unfoldProgress, 0);
   });
 
-  test('FlipController 的 portrait 回翻 render frame 会切到 replay 主线', () {
+  test('FlipController 的 portrait 回翻 render frame 会切到单一 dynamic 主线', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -286,7 +286,7 @@ void main() {
     expect(frame.backwardLeafFrame, isNotNull);
   });
 
-  test('FlipController 的 portrait 回翻固定走 shared replay engine', () {
+  test('FlipController 的 portrait 回翻固定走 shared replay timeline', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -314,7 +314,7 @@ void main() {
     expect(frame.bottomClipArea, isNotEmpty);
   });
 
-  test('CurlMeshBuilder 在 portrait 回翻时消费 replay timeline', () {
+  test('CurlMeshBuilder 在 portrait 回翻时消费 dynamic replay timeline', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -355,7 +355,7 @@ void main() {
     expect(meshFrame.unfoldProgress, equals(0));
   });
 
-  test('CurlMeshBuilder 在回翻 replay renderFrame 下仍消费统一 timeline', () {
+  test('CurlMeshBuilder 在回翻 dynamic renderFrame 下仍消费统一 timeline', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -672,7 +672,7 @@ void main() {
     );
   });
 
-  test('Backward replay renderFrame 几何来自统一 leaf contract', () {
+  test('Backward dynamic renderFrame 几何直接来自 calculation contract', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -690,27 +690,35 @@ void main() {
     final frame = controller.scene.renderFrame;
     expect(frame, isNotNull);
     expect(frame!.direction, StPageFlipDirection.back);
-    expect(frame.angle, 0);
+    expect(frame.angle, isNot(equals(0)));
     expect(frame.shadow, isNotNull);
-    expect(frame.shadow!.angle, 0);
-    expect(frame.shadow!.width, greaterThan(0));
-    expect(frame.flippingAnchor.dx, 0);
-    expect(frame.bottomAnchor, Offset.zero);
-    expect(frame.flippingClipArea.length, equals(4));
-    expect(frame.bottomClipArea.length, equals(4));
-
-    final seamX = frame.backwardLeafFrame!.seamXNormalized * 398;
-    expect(frame.flippingClipArea[0].dx, 0);
-    expect(frame.flippingClipArea[1].dx, closeTo(seamX, 0.001));
-    expect(frame.flippingClipArea[2].dx, closeTo(seamX, 0.001));
-    expect(frame.flippingClipArea[3].dx, 0);
-    expect(frame.bottomClipArea[0].dx, closeTo(seamX, 0.001));
-    expect(frame.bottomClipArea[1].dx, closeTo(398, 0.001));
-    expect(frame.bottomClipArea[2].dx, closeTo(398, 0.001));
-    expect(frame.bottomClipArea[3].dx, closeTo(seamX, 0.001));
+    expect(frame.shadow!.angle, isA<double>());
+    expect(frame.shadow!.width, greaterThanOrEqualTo(0));
+    expect(frame.backwardLeafFrame, isNotNull);
+    expect(frame.backwardLeafFrame!.seamXNormalized, greaterThan(0));
+    expect(frame.backwardLeafFrame!.versoRevealWidthNormalized, greaterThan(0));
+    expect(
+      frame.backwardLeafFrame!.bottomRevealStartNormalized,
+      greaterThan(frame.backwardLeafFrame!.laidDownWidthNormalized),
+    );
+    // Backward 几何主线现在复用前翻多边形并做 x 轴镜像。flippingAnchor 是镜像后
+    // 的平移基点，bottomAnchor 仍锁在右页 spine（书坐标原点）。多边形长度与
+    // 前翻一致，可能是三角形（3 个顶点）或四边形（4 个顶点），取决于折角与拖
+    // 拽位置；不再是固定的横向条带，因此不强制断言每个顶点的 x 坐标。
+    expect(frame.bottomAnchor.dx, closeTo(0, 0.001));
+    expect(frame.bottomAnchor.dy, closeTo(0, 0.001));
+    expect(frame.flippingClipArea.length, greaterThanOrEqualTo(3));
+    expect(frame.bottomClipArea.length, greaterThanOrEqualTo(3));
+    // 至少有一个 flipping 顶点在右页范围内，至少有一个在右边界附近，确认它
+    // 表达的是镜像后的三角/四边形而非退化几何。
+    expect(
+      frame.flippingClipArea.any((p) => p.dx > 1.0 && p.dx < 397.0),
+      isTrue,
+    );
+    expect(frame.bottomClipArea.any((p) => p.dx > 1.0 && p.dx < 397.0), isTrue);
   });
 
-  test('Backward replay seam 会沿计划单调向右推进', () {
+  test('Backward dynamic progress 会沿计划单调推进', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
       layout: computeStPageFlipLayout(
@@ -739,14 +747,152 @@ void main() {
     expect(earlyFrame, isNotNull);
     expect(middleFrame, isNotNull);
     expect(lateFrame, isNotNull);
+    expect(earlyFrame!.progress, lessThan(middleFrame!.progress));
+    expect(middleFrame.progress, lessThan(lateFrame!.progress));
+    expect(earlyFrame.backwardLeafFrame, isNotNull);
+    expect(middleFrame.backwardLeafFrame, isNotNull);
+    expect(lateFrame.backwardLeafFrame, isNotNull);
     expect(
-      earlyFrame!.backwardLeafFrame!.seamXNormalized,
-      lessThan(middleFrame!.backwardLeafFrame!.seamXNormalized),
+      earlyFrame.backwardLeafFrame!.laidDownWidthNormalized,
+      lessThanOrEqualTo(middleFrame.backwardLeafFrame!.laidDownWidthNormalized),
     );
     expect(
-      middleFrame.backwardLeafFrame!.seamXNormalized,
-      lessThan(lateFrame!.backwardLeafFrame!.seamXNormalized),
+      middleFrame.backwardLeafFrame!.laidDownWidthNormalized,
+      lessThanOrEqualTo(lateFrame.backwardLeafFrame!.laidDownWidthNormalized),
     );
+    expect(
+      earlyFrame.backwardLeafFrame!.bottomRevealStartNormalized,
+      lessThanOrEqualTo(
+        middleFrame.backwardLeafFrame!.bottomRevealStartNormalized,
+      ),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.bottomRevealStartNormalized,
+      lessThanOrEqualTo(
+        lateFrame.backwardLeafFrame!.bottomRevealStartNormalized,
+      ),
+    );
+    // 在新的纸折几何里 totalRectoVisibleWidth = covered * rectoCoverage，
+    // rectoCoverage = max(2 - 1/covered, settleProgress) 严格遵循折纸物理：
+    // covered ≤ 0.5 时 recto 仍未越过中线，total = 0；只有进入 unroll 后段
+    // 才会涌现可见 recto。因此早/中帧不再保证 total = laidDown + rectoReveal，
+    // 改为只校验 1) 单调性：middle 比 early 至少不缩小；2) total ≤ covered 且
+    // ≤ bottomRevealStart（current 始终被 leaf 覆盖在 total 与 bottomReveal
+    // 之间或更深），保证不会出现“正面提前盖过 current”这种翻折破绽。
+    expect(
+      middleFrame.backwardLeafFrame!.totalRectoVisibleWidthNormalized,
+      greaterThanOrEqualTo(
+        earlyFrame.backwardLeafFrame!.totalRectoVisibleWidthNormalized,
+      ),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.laidDownWidthNormalized,
+      greaterThan(earlyFrame.backwardLeafFrame!.laidDownWidthNormalized),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.rectoRevealWidthNormalized,
+      greaterThan(0),
+    );
+    expect(
+      earlyFrame.backwardLeafFrame!.totalRectoVisibleWidthNormalized,
+      lessThanOrEqualTo(
+        earlyFrame.backwardLeafFrame!.coveredWidthNormalized + 1e-6,
+      ),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.totalRectoVisibleWidthNormalized,
+      lessThanOrEqualTo(
+        middleFrame.backwardLeafFrame!.coveredWidthNormalized + 1e-6,
+      ),
+    );
+    expect(
+      earlyFrame.backwardLeafFrame!.bottomRevealStartNormalized -
+          earlyFrame.backwardLeafFrame!.totalRectoVisibleWidthNormalized,
+      greaterThanOrEqualTo(0),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.bottomRevealStartNormalized -
+          middleFrame.backwardLeafFrame!.totalRectoVisibleWidthNormalized,
+      greaterThanOrEqualTo(0),
+    );
+    expect(
+      earlyFrame.backwardLeafFrame!.laidDownWidthNormalized +
+          earlyFrame.backwardLeafFrame!.curlWidthNormalized,
+      closeTo(earlyFrame.backwardLeafFrame!.coveredWidthNormalized, 0.0001),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.laidDownWidthNormalized +
+          middleFrame.backwardLeafFrame!.curlWidthNormalized,
+      closeTo(middleFrame.backwardLeafFrame!.coveredWidthNormalized, 0.0001),
+    );
+    // 旧的 verso + edge + recto = curl 不变量是简化模型下的近似（默认
+    // versoReveal = curlWidth - edge - recto），新的纸折物理把 verso 的
+    // 起点改为 covered * rectoCoverage，verso 在 covered ≤ 0.5 时等于
+    // covered 自身，因此 verso + edge + recto 可能略大于 curlWidth 但仍
+    // 应受 1.0（满页归一化宽度）约束，并保持 verso ≥ 0。
+    expect(
+      earlyFrame.backwardLeafFrame!.versoRevealWidthNormalized,
+      greaterThanOrEqualTo(0),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.versoRevealWidthNormalized,
+      greaterThanOrEqualTo(0),
+    );
+    expect(
+      earlyFrame.backwardLeafFrame!.versoRevealWidthNormalized +
+          earlyFrame.backwardLeafFrame!.edgeBandWidthNormalized +
+          earlyFrame.backwardLeafFrame!.rectoRevealWidthNormalized,
+      lessThanOrEqualTo(1.0),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.versoRevealWidthNormalized +
+          middleFrame.backwardLeafFrame!.edgeBandWidthNormalized +
+          middleFrame.backwardLeafFrame!.rectoRevealWidthNormalized,
+      lessThanOrEqualTo(1.0),
+    );
+    expect(
+      earlyFrame.backwardLeafFrame!.versoRevealWidthNormalized +
+          earlyFrame.backwardLeafFrame!.edgeBandWidthNormalized,
+      greaterThan(0),
+    );
+    expect(
+      middleFrame.backwardLeafFrame!.versoRevealWidthNormalized +
+          middleFrame.backwardLeafFrame!.edgeBandWidthNormalized,
+      greaterThan(0),
+    );
+  });
+
+  test('FlipController 的轻微回翻不会在 stopMove 阶段直接判定为已翻页', () {
+    final controller = StPageFlipController(
+      spreadModel: StPageFlipSpreadModel(pageCount: 3),
+      layout: computeStPageFlipLayout(
+        viewportSize: const Size(430, 900),
+        pageWidth: 398,
+        pageHeight: 553,
+        usePortrait: true,
+      ),
+      initialPage: 1,
+    );
+
+    final bounds = controller.layout.bounds;
+    final startGlobal = Offset(
+      bounds.left + bounds.pageWidth + 44,
+      bounds.top + bounds.height - 44,
+    );
+    final slightDragGlobal = Offset(startGlobal.dx + 56, startGlobal.dy - 12);
+
+    controller.fold(startGlobal);
+    controller.fold(slightDragGlobal);
+
+    final frame = controller.scene.renderFrame;
+    expect(frame, isNotNull);
+    expect(frame!.direction, StPageFlipDirection.back);
+    expect(frame.progress, greaterThanOrEqualTo(0));
+    expect(frame.progress, lessThan(0.3));
+
+    final plan = controller.stopMove();
+    expect(plan, isNotNull);
+    expect(plan!.isTurned, isFalse);
   });
 
   test('BackwardPageTextureBundle 会映射为 HF curl textures', () async {

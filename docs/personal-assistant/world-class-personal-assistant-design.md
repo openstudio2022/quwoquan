@@ -109,7 +109,7 @@ UI(聊天/时间线/动作卡片)
 
 必须结构化返回：
 
-- `ok/status/errorCode/errorClass/retryable/slotDelta/data`
+- `ok/status/errorCode/failureKind/recovery action/slotDelta/data`
 - 禁止决策依赖中文文案字符串 `contains(...)`
 
 ### 4.3 子代理协议

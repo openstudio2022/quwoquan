@@ -12,7 +12,7 @@ e2e.yaml        → Full-stack integration tests
 
 | File | Coverage |
 |------|----------|
-| `error_code_contract_test.dart` | All 13 error codes × fromCode × isRetryable |
+| `error_code_contract_test.dart` | All 13 error codes × fromCode × recoveryAction |
 | `behavior_tracker_contract_test.dart` | Queue semantics, batch route, event shapes |
 | `ui_config_contract_test.dart` | Tab count, layouts, feature flag completeness |
 

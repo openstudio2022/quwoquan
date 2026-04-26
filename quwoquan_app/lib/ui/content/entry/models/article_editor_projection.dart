@@ -90,15 +90,15 @@ class ArticleEditorWrapGroupProjection extends ArticleEditorProjectionContentEnt
          'wrap_${figure.id}',
          leadingSemantic: ArticleSpacingSemantic.figure,
          trailingSemantic: belowParagraphNode != null
-             ? _semanticForNode(belowParagraphNode!)
+             ? _semanticForNode(belowParagraphNode)
              : narrowParagraphNode != null
-                 ? _semanticForNode(narrowParagraphNode!)
+                 ? _semanticForNode(narrowParagraphNode)
                  : ArticleSpacingSemantic.figure,
          leadingNodeId: figure.id,
          trailingNodeId: belowParagraphNode != null
-             ? belowParagraphNode!.id
+             ? belowParagraphNode.id
              : narrowParagraphNode != null
-                 ? narrowParagraphNode!.id
+                 ? narrowParagraphNode.id
                  : figure.id,
        );
 

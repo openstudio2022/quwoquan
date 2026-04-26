@@ -5,6 +5,54 @@ import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 
+enum PhaseOneDirectAnswerReason {
+  notStructured,
+  notContractTurn,
+  compatDirectAnswer,
+  notAnswer,
+  progressMessage,
+  notRenderable,
+  synthesisNotReady,
+  contractIncomplete,
+  executionSignalsRequireSynthesis,
+  directAnswer,
+  artifactIgnored,
+}
+
+extension PhaseOneDirectAnswerReasonX on PhaseOneDirectAnswerReason {
+  String get wireName {
+    switch (this) {
+      case PhaseOneDirectAnswerReason.notStructured:
+        return 'phase_one_not_structured';
+      case PhaseOneDirectAnswerReason.notContractTurn:
+        return 'phase_one_not_contract_turn';
+      case PhaseOneDirectAnswerReason.compatDirectAnswer:
+        return 'phase_one_compat_direct_answer';
+      case PhaseOneDirectAnswerReason.notAnswer:
+        return 'phase_one_not_answer';
+      case PhaseOneDirectAnswerReason.progressMessage:
+        return 'phase_one_is_progress_message';
+      case PhaseOneDirectAnswerReason.notRenderable:
+        return 'phase_one_not_renderable';
+      case PhaseOneDirectAnswerReason.synthesisNotReady:
+        return 'synthesis_not_ready';
+      case PhaseOneDirectAnswerReason.contractIncomplete:
+        return 'phase_one_contract_incomplete';
+      case PhaseOneDirectAnswerReason.executionSignalsRequireSynthesis:
+        return 'execution_signals_require_synthesis';
+      case PhaseOneDirectAnswerReason.directAnswer:
+        return 'phase_one_direct_answer';
+      case PhaseOneDirectAnswerReason.artifactIgnored:
+        return 'phase_one_artifact_ignored';
+    }
+  }
+
+  bool get repairable =>
+      this == PhaseOneDirectAnswerReason.notStructured ||
+      this == PhaseOneDirectAnswerReason.notContractTurn ||
+      this == PhaseOneDirectAnswerReason.contractIncomplete;
+}
+
 class PhaseOneDirectAnswerDecision {
   const PhaseOneDirectAnswerDecision({
     required this.shouldSkipSynthesis,
@@ -13,8 +61,10 @@ class PhaseOneDirectAnswerDecision {
   });
 
   final bool shouldSkipSynthesis;
-  final String reason;
+  final PhaseOneDirectAnswerReason reason;
   final String normalizedEnvelopeText;
+
+  String get reasonWireName => reason.wireName;
 }
 
 class PhaseOneDirectAnswerGate {
@@ -31,7 +81,7 @@ class PhaseOneDirectAnswerGate {
     if (!parseResult.ok || parseResult.json == null) {
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'phase_one_not_structured',
+        reason: PhaseOneDirectAnswerReason.notStructured,
       );
     }
     final parsed = parseResult.json!;
@@ -39,75 +89,70 @@ class PhaseOneDirectAnswerGate {
     if (turn == null) {
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'phase_one_not_contract_turn',
+        reason: PhaseOneDirectAnswerReason.notContractTurn,
       );
     }
     final normalizedTurn = AssistantDisplayTextResolver.normalizeTurn(turn);
     final projection = AssistantDisplayTextResolver.projectTurn(normalizedTurn);
-    final rawToolCalls =
-        (parsed['toolCalls'] as List?)?.whereType<Object>().toList() ??
-        const <Object>[];
-    final phaseId = (parsed['phaseId'] as String?)?.trim() ?? '';
-    final actionCode = (parsed['actionCode'] as String?)?.trim() ?? '';
-    final reasonCode = (parsed['reasonCode'] as String?)?.trim() ?? '';
-    final rawResult =
-        (parsed['result'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final rawResultText = (rawResult['text'] as String?)?.trim() ?? '';
+    final rawToolCalls = normalizedTurn.toolCalls;
+    final phaseId = normalizedTurn.phaseIdType;
+    final actionCode = normalizedTurn.actionCodeType;
+    final reasonCode = normalizedTurn.reasonCodeType;
+    final rawResultText = normalizedTurn.result.text.trim();
     final staleProgressCompat =
         rawToolCalls.isEmpty &&
         projection.hasRenderableContent &&
         normalizedTurn.messageKindType == AssistantMessageKind.progress &&
-        (phaseId == 'answering' || rawResultText.isNotEmpty);
+        (phaseId == PlannerPhaseId.answering || rawResultText.isNotEmpty);
     if (staleProgressCompat && !executionSignalsPresent) {
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'phase_one_progress_answer_compat',
+        reason: PhaseOneDirectAnswerReason.compatDirectAnswer,
       );
     }
     if (normalizedTurn.nextActionType != AssistantNextAction.answer) {
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'phase_one_not_answer',
+        reason: PhaseOneDirectAnswerReason.notAnswer,
       );
     }
     if (normalizedTurn.messageKindType == AssistantMessageKind.progress) {
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'phase_one_is_progress_message',
+        reason: PhaseOneDirectAnswerReason.progressMessage,
       );
     }
     if (!projection.hasRenderableContent) {
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'phase_one_not_renderable',
+        reason: PhaseOneDirectAnswerReason.notRenderable,
       );
     }
     final hasDirectAnswerContract =
-        phaseId == 'answering' &&
-        actionCode == 'compose_answer' &&
-        reasonCode == 'evidence_ready';
+        phaseId == PlannerPhaseId.answering &&
+        actionCode == PlannerActionCode.composeAnswer &&
+        reasonCode == PlannerReasonCode.evidenceReady;
     if (!hasDirectAnswerContract) {
       if (!synthesisReadiness.ready) {
         return const PhaseOneDirectAnswerDecision(
           shouldSkipSynthesis: false,
-          reason: 'synthesis_not_ready',
+          reason: PhaseOneDirectAnswerReason.synthesisNotReady,
         );
       }
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'phase_one_contract_incomplete',
+        reason: PhaseOneDirectAnswerReason.contractIncomplete,
       );
     }
     if (executionSignalsPresent) {
       return const PhaseOneDirectAnswerDecision(
         shouldSkipSynthesis: false,
-        reason: 'execution_signals_require_synthesis',
+        reason: PhaseOneDirectAnswerReason.executionSignalsRequireSynthesis,
       );
     }
     return PhaseOneDirectAnswerDecision(
       shouldSkipSynthesis: true,
-      reason: 'phase_one_direct_answer',
+      reason: PhaseOneDirectAnswerReason.directAnswer,
       normalizedEnvelopeText: jsonEncode(normalizedTurn.toEnvelopeMap()),
     );
   }

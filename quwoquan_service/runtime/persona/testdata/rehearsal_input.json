@@ -1,0 +1,34 @@
+{
+  "reservedHandles": ["main"],
+  "personas": [
+    {
+      "userId": "user_001",
+      "personaId": "pa_primary",
+      "username": "main",
+      "nickname": "主分身",
+      "phone": "13800000000",
+      "email": "primary@example.com",
+      "isPrimary": true,
+      "contentSubjectIds": ["pa_primary"],
+      "messageSubjectIds": ["pa_primary"],
+      "followSubjectIds": ["pa_primary"]
+    },
+    {
+      "userId": "user_001",
+      "personaId": "pa_sidecar",
+      "username": "main",
+      "nickname": "副分身",
+      "contentSubjectIds": ["pa_sidecar"],
+      "messageSubjectIds": ["pa_sidecar"],
+      "followSubjectIds": ["pa_sidecar"]
+    }
+  ],
+  "publicSamples": [
+    {
+      "surface": "graph_followers",
+      "payload": {
+        "profileSubjectId": "pa_sidecar"
+      }
+    }
+  ]
+}

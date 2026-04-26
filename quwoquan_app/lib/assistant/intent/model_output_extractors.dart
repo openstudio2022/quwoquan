@@ -1,115 +1,66 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 
-IntentGraph? extractIntentGraphFromModelPayload(
+UnderstandingResult? extractUnderstandingResultFromModelPayload(
   Map<String, dynamic> payload, {
   AssistantTurnOutput? parsedTurn,
 }) {
-  final turnIntentGraph = parsedTurn?.intentGraph;
+  final turnUnderstanding = parsedTurn?.understandingResult;
   final candidates = <Map<String, dynamic>>[
-    if (turnIntentGraph != null) turnIntentGraph.toJson(),
-    if (payload['intentGraph'] is Map)
-      (payload['intentGraph'] as Map).cast<String, dynamic>(),
+    if (turnUnderstanding != null && turnUnderstanding.intents.isNotEmpty)
+      turnUnderstanding.toJson(),
+    if (payload['understandingResult'] is Map)
+      (payload['understandingResult'] as Map).cast<String, dynamic>(),
     if (payload['result'] is Map &&
-        ((payload['result'] as Map)['intentGraph'] is Map))
-      (((payload['result'] as Map)['intentGraph'] as Map)
+        ((payload['result'] as Map)['understandingResult'] is Map))
+      (((payload['result'] as Map)['understandingResult'] as Map)
           .cast<String, dynamic>()),
-    if (_looksLikeIntentGraphPayload(payload)) payload,
   ];
   for (final candidate in candidates) {
-    final parsed = _tryParseIntentGraph(candidate);
-    if (parsed != null) {
+    final parsed = _tryParseUnderstandingResult(candidate);
+    if (parsed != null && parsed.intents.isNotEmpty) {
       return parsed;
     }
   }
   return null;
 }
 
-List<QueryTask> extractQueryTasksFromModelPayload(
+TaskGraph? extractTaskGraphFromModelPayload(
   Map<String, dynamic> payload, {
   AssistantTurnOutput? parsedTurn,
-  IntentGraph? extractedIntentGraph,
 }) {
-  final turnIntentGraph = parsedTurn?.intentGraph;
-  final candidates = <Object?>[
-    payload['queryTasks'],
-    if (turnIntentGraph?.queryTasks.isNotEmpty ?? false)
-      QueryTask.toJsonList(turnIntentGraph!.queryTasks),
-    if (payload['intentGraph'] is Map)
-      (payload['intentGraph'] as Map)['queryTasks'],
-    if (payload['result'] is Map) (payload['result'] as Map)['queryTasks'],
-    _extractToolCallQueryTasks(payload),
-    if (extractedIntentGraph?.queryTasks.isNotEmpty ?? false)
-      QueryTask.toJsonList(extractedIntentGraph!.queryTasks),
+  final turnTaskGraph = parsedTurn?.taskGraph;
+  final candidates = <Map<String, dynamic>>[
+    if (turnTaskGraph != null && turnTaskGraph.tasks.isNotEmpty)
+      turnTaskGraph.toJson(),
+    if (payload['taskGraph'] is Map)
+      (payload['taskGraph'] as Map).cast<String, dynamic>(),
+    if (payload['result'] is Map && ((payload['result'] as Map)['taskGraph'] is Map))
+      (((payload['result'] as Map)['taskGraph'] as Map).cast<String, dynamic>()),
   ];
   for (final candidate in candidates) {
-    final normalized = QueryTask.normalizeList(candidate);
-    if (normalized.isNotEmpty) {
-      return normalized;
-    }
-  }
-  return const <QueryTask>[];
-}
-
-IntentGraph? _tryParseIntentGraph(Map<String, dynamic> candidate) {
-  try {
-    return IntentGraph.fromJson(candidate);
-  } catch (_) {
-    return null;
-  }
-}
-
-Object? _extractToolCallQueryTasks(Map<String, dynamic> payload) {
-  final toolCalls = payload['toolCalls'];
-  if (toolCalls is! List) {
-    return null;
-  }
-  for (final rawCall in toolCalls) {
-    if (rawCall is! Map) {
-      continue;
-    }
-    final arguments = (rawCall['arguments'] as Map?)?.cast<String, dynamic>();
-    if (arguments == null) {
-      continue;
-    }
-    final queryTasks = arguments['queryTasks'];
-    if (queryTasks is List && queryTasks.isNotEmpty) {
-      return queryTasks;
+    final parsed = _tryParseTaskGraph(candidate);
+    if (parsed != null && parsed.tasks.isNotEmpty) {
+      return parsed;
     }
   }
   return null;
 }
 
-bool _looksLikeIntentGraphPayload(Map<String, dynamic> payload) {
-  var score = 0;
-  const keys = <String>[
-    'userGoal',
-    'problemShape',
-    'primarySkill',
-    'problemClass',
-    'inferredMotive',
-    'secondarySkills',
-    'queryNormalization',
-    'contextSlots',
-    'globalConstraints',
-    'clarificationNeeded',
-  ];
-  for (final key in keys) {
-    final value = payload[key];
-    if (value == null) {
-      continue;
-    }
-    if (value is String && value.trim().isEmpty) {
-      continue;
-    }
-    if (value is List && value.isEmpty) {
-      continue;
-    }
-    if (value is Map && value.isEmpty) {
-      continue;
-    }
-    score += 1;
+UnderstandingResult? _tryParseUnderstandingResult(Map<String, dynamic> candidate) {
+  try {
+    return UnderstandingResult.fromJson(candidate);
+  } catch (_) {
+    return null;
   }
-  return score >= 2;
 }
+
+TaskGraph? _tryParseTaskGraph(Map<String, dynamic> candidate) {
+  try {
+    return TaskGraph.fromJson(candidate);
+  } catch (_) {
+    return null;
+  }
+}
+

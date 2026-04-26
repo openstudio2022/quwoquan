@@ -1,8 +1,11 @@
 package runtimeobservability
 
 import (
+	"fmt"
 	"net/http"
 	"time"
+
+	rterr "quwoquan_service/runtime/errors"
 )
 
 type HTTPMiddlewareConfig struct {
@@ -20,14 +23,23 @@ type responseRecorder struct {
 	http.ResponseWriter
 	status int
 	size   int64
+	wrote  bool
 }
 
 func (r *responseRecorder) WriteHeader(statusCode int) {
+	if r.wrote {
+		return
+	}
 	r.status = statusCode
+	r.wrote = true
 	r.ResponseWriter.WriteHeader(statusCode)
 }
 
 func (r *responseRecorder) Write(data []byte) (int, error) {
+	if !r.wrote {
+		r.status = http.StatusOK
+		r.wrote = true
+	}
 	n, err := r.ResponseWriter.Write(data)
 	r.size += int64(n)
 	return n, err
@@ -93,7 +105,17 @@ func HTTPServerMiddleware(
 
 			defer func() {
 				if recovered := recover(); recovered != nil {
-					rec.WriteHeader(http.StatusInternalServerError)
+					if !rec.wrote {
+						rterr.WriteHTTPError(
+							rec,
+							rterr.NewAppError(
+								rterr.NewCode(rterr.ModuleUnknown, rterr.KindSystem, rterr.DefaultInternalReason),
+								rterr.DefaultUserMessage,
+								fmt.Sprintf("panic recovered: %v", recovered),
+							),
+							rterr.HTTPWriteOptionsFromRequest(r),
+						)
+					}
 					_ = exceptionLogger.Write(ExceptionLog{
 						SchemaVersion:     defaultSchemaVersion,
 						Service:           cfg.Service,
@@ -235,4 +257,3 @@ func HTTPServerMiddleware(
 		})
 	}
 }
-

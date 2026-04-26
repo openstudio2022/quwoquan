@@ -162,3 +162,20 @@ func TestInvite_ListByInviter(t *testing.T) {
 		t.Errorf("expected at least 1 invite, got %d", len(invites))
 	}
 }
+
+func TestInvite_PersonaIdAliasAccepted(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "alias_owner", "alias_user")
+	createTestPersonaFull(t, "alias_persona", "alias_owner", "sa_alias", "AliasSub", "open", true)
+
+	rec := doRequest(t, http.MethodPost, "/v1/user/invites",
+		`{"personaId":"sa_alias","channel":"direct"}`,
+		authHeaders("alias_owner"))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("generate with personaId alias: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	result := parseJSON(t, rec)
+	if result["inviterSubAccountId"] != "sa_alias" {
+		t.Fatalf("expected inviterSubAccountId=sa_alias, got %v", result["inviterSubAccountId"])
+	}
+}

@@ -54,7 +54,7 @@ api_routes:
     operation: SendMessage
     description: 发送消息（clientMsgId 幂等 + seq 分配，返回 messageId + seq + timestamp）
     request_entity: Message
-    writable_fields: [type, content, mediaUrl, media, cardPayload, replyToMessageId, mentions, clientMsgId, senderPersonaId, senderProfileSubjectId, personaContextVersion]
+    writable_fields: [type, content, mediaUrl, media, cardPayload, replyToMessageId, mentions, clientMsgId, senderPersonaId, senderProfileSubjectId, senderDisplayNameSnapshot, senderAvatarUrlSnapshot, personaContextVersion]
 
   - method: POST
     path: /v1/chat/conversations/{conversationId}/messages/{messageId}/recall

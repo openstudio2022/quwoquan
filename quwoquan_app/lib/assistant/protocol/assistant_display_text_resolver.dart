@@ -33,9 +33,6 @@ abstract final class AssistantDisplayTextResolver {
     final displayStateMarkdown = renderAnswerBlocksToMarkdown(
       turn.displayState.answer.blocks,
     );
-    final displayStatePlainText = renderAnswerBlocksToPlainText(
-      turn.displayState.answer.blocks,
-    );
     final sanitizedMarkdown = stabilizeFinalAnswerMarkdown(
       normalizeMarkdown(turn.userMarkdown),
     );
@@ -47,12 +44,6 @@ abstract final class AssistantDisplayTextResolver {
         : sanitizedMarkdown.isNotEmpty
         ? sanitizedMarkdown
         : fallbackMarkdown;
-    final sanitizedPlain = normalizePlainText(turn.resultText);
-    final plainText = displayStatePlainText.isNotEmpty
-        ? displayStatePlainText
-        : sanitizedPlain.isNotEmpty
-        ? sanitizedPlain
-        : (markdown.isNotEmpty ? stripMarkdown(markdown) : '');
     return AssistantDisplayProjection(markdown: markdown);
   }
 
@@ -85,7 +76,10 @@ abstract final class AssistantDisplayTextResolver {
       toolCalls: turn.toolCalls,
       slotState: turn.slotState,
       subagentPlan: turn.subagentPlan,
-      intentGraph: turn.intentGraph,
+      understandingResult: turn.understandingResult,
+      taskGraph: turn.taskGraph,
+      orchestratorState: turn.orchestratorState,
+      turnSynthesisState: turn.turnSynthesisState,
       skillRuns: turn.skillRuns,
       aggregationState: turn.aggregationState,
       journey: turn.journey,
@@ -173,8 +167,7 @@ abstract final class AssistantDisplayTextResolver {
     text = _stripWrappedMarkdownEnvelope(text).trim();
     if (text.isEmpty) return '';
     if (AssistantContentFilters.isJsonEnvelope(text) ||
-        AssistantContentFilters.isProgressPlaceholder(text) ||
-        AssistantContentFilters.isDegradedText(text)) {
+        AssistantContentFilters.isProgressPlaceholder(text)) {
       return '';
     }
     if (_containsInternalProtocolFields(text) && !_looksLikeAnswerBody(text)) {
@@ -290,7 +283,6 @@ abstract final class AssistantDisplayTextResolver {
     final text = raw.trim();
     if (text.isEmpty) return false;
     return containsInternalAssistantProtocolFragment(text) ||
-        _containsProcessOnlyMarkers(text) ||
         containsTechnicalFailureFragment(text);
   }
 
@@ -337,12 +329,9 @@ abstract final class AssistantDisplayTextResolver {
     if (text.contains('{{') && text.contains('}}')) {
       return '';
     }
-    if (_containsProcessOnlyMarkers(text) ||
-        _containsReportStyleMarkers(text) ||
-        containsInternalAssistantProtocolFragment(text) ||
+    if (containsInternalAssistantProtocolFragment(text) ||
         containsTechnicalFailureFragment(text) ||
-        AssistantContentFilters.isJsonEnvelope(text) ||
-        AssistantContentFilters.isDegradedText(text)) {
+        AssistantContentFilters.isJsonEnvelope(text)) {
       return '';
     }
     if (text.startsWith('{') || text.startsWith('[')) {
@@ -382,7 +371,6 @@ abstract final class AssistantDisplayTextResolver {
         continue;
       }
       if (_containsRomanizedQueryLeakFragment(line) ||
-          AssistantContentFilters.isDegradedText(line) ||
           containsInternalAssistantProtocolFragment(line) ||
           containsTechnicalFailureFragment(line)) {
         continue;
@@ -591,42 +579,10 @@ abstract final class AssistantDisplayTextResolver {
       'contractId',
       'machineEnvelope',
       'runArtifacts',
-      'queryTasks',
+      'searchPlans',
       'queryVariants',
       'tool_call',
       'toolResult',
-    ]);
-  }
-
-  static bool _containsProcessOnlyMarkers(String text) {
-    return _containsAnyMarker(text, const <String>[
-      'provider',
-      'freshnessHoursMax',
-      'timeScope',
-      'nextAction',
-      'finalAnswerReady',
-      'clarificationNeeded',
-      'needExpansion',
-      'phaseOneRoutingDiagnostics',
-      'modelCallCount',
-      'runModelCallCount',
-      'assistantElapsedMs',
-      'tokens',
-      '模型调用',
-      '中间结果',
-      '{{',
-      '已完成',
-      '步',
-    ]);
-  }
-
-  static bool _containsReportStyleMarkers(String text) {
-    return _containsAnyMarker(text, const <String>[
-      '处理了',
-      '检索了',
-      '交叉核对',
-      '信息已就位',
-      '收拢到',
     ]);
   }
 

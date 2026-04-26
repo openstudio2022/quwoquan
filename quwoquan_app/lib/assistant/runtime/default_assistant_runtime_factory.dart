@@ -89,6 +89,7 @@ AssistantRuntime _createAssistantRuntime({
   );
   final toolRegistry =
       AssistantToolRegistry(metadataRegistry: toolMetadataRegistry)
+        ..register(AppSearchTool(searchRepository: unifiedSearchRepository))
         ..register(
           SearchTool(
             searchRepository: unifiedSearchRepository,
@@ -98,7 +99,6 @@ AssistantRuntime _createAssistantRuntime({
         ..register(webSearchTool)
         ..register(WebFetchTool(broker: retrievalBroker))
         ..register(MemorySearchTool(memoryRepository: memoryRepository))
-        ..register(LocalContextTool(channelAdapter))
         ..register(MediaGalleryTool(channelAdapter))
         ..register(
           IntentBridgeTool(

@@ -1,13 +1,16 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_run_structured_bundle.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_boundary_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_structured_response_wire.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_run_structured_interaction_view.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/protocol/profile_update_proposal.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/answer_gate_resolver.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/retrieval_outcome_resolver.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class AssistantRunResponse {
   static const RetrievalOutcomeResolver _retrievalOutcomeResolver =
@@ -22,8 +25,9 @@ class AssistantRunResponse {
     this.degraded = false,
     this.errorCode,
     this.structuredResponse = const <String, dynamic>{},
+    AssistantBoundaryOutcome? boundaryOutcome,
     this.profileUpdateProposal,
-  });
+  }) : _boundaryOutcome = boundaryOutcome;
 
   final String finalText;
   final List<AssistantTraceEvent> traces;
@@ -32,6 +36,7 @@ class AssistantRunResponse {
   final bool degraded;
   final String? errorCode;
   final Map<String, dynamic> structuredResponse;
+  final AssistantBoundaryOutcome? _boundaryOutcome;
   final ProfileUpdateProposal? profileUpdateProposal;
 
   /// metadata [`assistant_structured_response_wire`](quwoquan_service/contracts/metadata/assistant/assistant_structured_response_wire/schema.yaml) 子树视图。
@@ -44,7 +49,9 @@ class AssistantRunResponse {
 
   /// 与 [structuredResponse] 同根的只读 bundle（runArtifacts + structured wire 子树）。
   AssistantRunStructuredBundle get structuredBundle =>
-      AssistantRunStructuredBundle.fromStructuredResponseRoot(structuredResponse);
+      AssistantRunStructuredBundle.fromStructuredResponseRoot(
+        structuredResponse,
+      );
 
   RunArtifacts? get runArtifacts {
     final raw = (structuredResponse['runArtifacts'] as Map?)
@@ -73,10 +80,11 @@ class AssistantRunResponse {
     return runArtifacts?.machineEnvelope.trim() ?? '';
   }
 
-  String get displayMarkdown => runArtifacts?.displayMarkdown.trim() ?? '';
+  String get displayMarkdown =>
+      _suppressStructuredDisplayLeak(runArtifacts?.displayMarkdown ?? '');
 
   String get displayPlainText =>
-      runArtifacts?.displayPlainText.trim() ?? '';
+      _suppressStructuredDisplayLeak(runArtifacts?.displayPlainText ?? '');
 
   AssistantDisplayState get displayState {
     final raw = (structuredResponse['displayState'] as Map?)
@@ -89,6 +97,47 @@ class AssistantRunResponse {
       return resolveAssistantDisplayStateFromRunArtifacts(artifacts);
     }
     return const AssistantDisplayState();
+  }
+
+  AssistantBoundaryOutcome? get assistantBoundaryOutcome {
+    if (_boundaryOutcome != null) return _boundaryOutcome;
+    final raw = (structuredResponse['assistantBoundaryOutcome'] as Map?)
+        ?.cast<String, dynamic>();
+    if (raw != null && raw.isNotEmpty) {
+      return AssistantBoundaryOutcome.fromJson(raw);
+    }
+    if (!degraded && (errorCode == null || errorCode!.trim().isEmpty)) {
+      return const AssistantBoundaryOutcome.ok(
+        boundary: 'assistant_turn',
+        stage: 'response',
+      );
+    }
+    return AssistantBoundaryOutcome(
+      status: AssistantBoundaryStatus.failed,
+      boundary: 'assistant_turn',
+      stage: 'runtime_failure_fallback',
+      failure: RuntimeFailure(
+        code: _runtimeFailureCodeFromErrorCode(errorCode),
+        origin: RuntimeFailureOrigin.system,
+        kind: RuntimeFailureKind.internal,
+        nature: RuntimeFailureNature.bug,
+        location: const RuntimeFailureLocation(
+          businessObject: 'assistant_turn',
+          functionModule: 'assistant_run_response_fallback',
+        ),
+        context: RuntimeFailureContext(
+          attributes: <RuntimeContextAttribute>[
+            if (errorCode != null && errorCode!.trim().isNotEmpty)
+              RuntimeContextAttribute(
+                key: 'sourceErrorCode',
+                value: errorCode!.trim(),
+              ),
+          ],
+        ),
+      ),
+      disruptionLevel: UserDisruptionLevel.inlineCard,
+      canContinue: false,
+    );
   }
 
   String get followupPrompt =>
@@ -105,6 +154,12 @@ class AssistantRunResponse {
   }
 
   Map<String, dynamic> toJson() {
+    final structured = _boundaryOutcome == null
+        ? structuredResponse
+        : <String, dynamic>{
+            ...structuredResponse,
+            'assistantBoundaryOutcome': _boundaryOutcome.toJson(),
+          };
     return <String, dynamic>{
       'finalText': finalText,
       'traces': traces.map((t) => t.toJson()).toList(growable: false),
@@ -112,7 +167,7 @@ class AssistantRunResponse {
       'traceId': traceId,
       'degraded': degraded,
       'errorCode': errorCode,
-      'structuredResponse': structuredResponse,
+      'structuredResponse': structured,
       'profileUpdateProposal': profileUpdateProposal?.toJson(),
     };
   }
@@ -140,4 +195,22 @@ class AssistantRunResponse {
           : ProfileUpdateProposal.fromJson(rawProposal),
     );
   }
+}
+
+String _runtimeFailureCodeFromErrorCode(String? raw) {
+  final value = raw?.trim() ?? '';
+  if (value.contains('.')) return value;
+  if (value.isEmpty) return 'ASSISTANT.SYSTEM.internal_error';
+  return 'ASSISTANT.SYSTEM.$value';
+}
+
+String _suppressStructuredDisplayLeak(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) return '';
+  if (AssistantDisplayTextResolver.containsUnsafeDisplayProtocolLeak(
+    normalized,
+  )) {
+    return '';
+  }
+  return normalized;
 }

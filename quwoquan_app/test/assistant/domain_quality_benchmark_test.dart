@@ -9,7 +9,7 @@ void main() {
       'test/assistant/domain_quality_benchmark_cases.json',
     );
 
-    test('benchmark dataset is complete for 19 domains', () {
+    test('benchmark dataset is complete for 21 domains', () {
       expect(benchmarkFile.existsSync(), isTrue);
       final decoded = jsonDecode(benchmarkFile.readAsStringSync()) as Map;
       final domains =
@@ -17,7 +17,7 @@ void main() {
             growable: false,
           ) ??
           const <Map>[];
-      expect(domains.length, equals(19));
+      expect(domains.length, equals(21));
       for (final domain in domains) {
         final cases =
             (domain['cases'] as List?)?.whereType<Map>().toList(
@@ -140,6 +140,8 @@ const Map<String, String> _migratedSkillByDomain = <String, String>{
   'astrology_constellation':
       'assets/assistant/skills/astrology_constellation/SKILL.md',
   'family_parenting': 'assets/assistant/skills/family_parenting/SKILL.md',
+  'fortune_astrology': 'assets/assistant/skills/fortune_astrology/SKILL.md',
+  'huawei_cloud_qa': 'assets/assistant/skills/huawei_cloud_qa/SKILL.md',
   'fallback_general_search':
       'assets/assistant/skills/fallback_general_search/SKILL.md',
 };

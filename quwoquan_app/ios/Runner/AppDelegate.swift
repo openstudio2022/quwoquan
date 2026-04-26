@@ -1,27 +1,145 @@
 import AVFoundation
+import CoreLocation
 import Flutter
 import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let videoEditingPlugin = VideoEditingPlugin()
+  private let personalAssistantNativeApiPlugin = PersonalAssistantNativeApiPlugin()
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    if let controller = window?.rootViewController as? FlutterViewController {
+      registerMethodChannels(binaryMessenger: controller.binaryMessenger)
+    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    registerMethodChannels(binaryMessenger: engineBridge.applicationRegistrar.messenger())
+  }
 
-    let channel = FlutterMethodChannel(
+  private func registerMethodChannels(binaryMessenger: FlutterBinaryMessenger) {
+    let videoEditingChannel = FlutterMethodChannel(
       name: "quwoquan/video_editing",
-      binaryMessenger: engineBridge.applicationRegistrar.messenger()
+      binaryMessenger: binaryMessenger
     )
-    channel.setMethodCallHandler { [weak self] call, result in
+    videoEditingChannel.setMethodCallHandler { [weak self] call, result in
       self?.videoEditingPlugin.handle(call: call, result: result)
+    }
+
+    let assistantChannel = FlutterMethodChannel(
+      name: "personal_assistant/native_api",
+      binaryMessenger: binaryMessenger
+    )
+    assistantChannel.setMethodCallHandler { [weak self] call, result in
+      self?.personalAssistantNativeApiPlugin.handle(call: call, result: result)
+    }
+  }
+}
+
+private final class PersonalAssistantNativeApiPlugin {
+  func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "getLocalContext":
+      handleGetLocalContext(call: call, result: result)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func handleGetLocalContext(
+    call: FlutterMethodCall,
+    result: @escaping FlutterResult
+  ) {
+    let arguments = call.arguments as? [String: Any] ?? [:]
+    let requestedFields = Set((arguments["requestedFields"] as? [String] ?? []))
+    let includeLocation = requestedFields.isEmpty || requestedFields.contains("location")
+    let includePermissions = requestedFields.isEmpty || requestedFields.contains("permissions")
+    let includeDevice = requestedFields.isEmpty || requestedFields.contains("device")
+
+    var payload: [String: Any] = [:]
+    let locale = Locale.preferredLanguages.first ?? Locale.current.identifier
+    let timezone = TimeZone.current.identifier
+
+    if includeDevice {
+      payload["device"] = [
+        "os": "iOS",
+        "model": UIDevice.current.model,
+        "locale": locale,
+        "timezone": timezone,
+      ]
+    }
+
+    let authorizationStatus = CLLocationManager.authorizationStatus()
+    if includePermissions {
+      payload["permissions"] = [
+        "location": locationPermissionLabel(for: authorizationStatus),
+      ]
+    }
+
+    guard includeLocation else {
+      result(payload)
+      return
+    }
+
+    let manager = CLLocationManager()
+    guard
+      authorizationStatus == .authorizedAlways ||
+      authorizationStatus == .authorizedWhenInUse
+    else {
+      result(payload)
+      return
+    }
+
+    guard let location = manager.location else {
+      result(payload)
+      return
+    }
+
+    var locationPayload: [String: Any] = [
+      "latitude": location.coordinate.latitude,
+      "longitude": location.coordinate.longitude,
+      "accuracyM": location.horizontalAccuracy,
+      "source": "core_location",
+    ]
+
+    CLGeocoder().reverseGeocodeLocation(location) { placemarks, _ in
+      if let placemark = placemarks?.first {
+        let city = placemark.locality ?? placemark.subAdministrativeArea ?? ""
+        if !city.isEmpty {
+          payload["city"] = city
+          payload["currentCity"] = city
+          locationPayload["city"] = city
+        }
+        let countryCode = placemark.isoCountryCode ?? ""
+        if !countryCode.isEmpty {
+          locationPayload["countryCode"] = countryCode
+        }
+      }
+      payload["locationSource"] = "core_location"
+      payload["location"] = locationPayload
+      payload["gpsLocation"] = locationPayload
+      result(payload)
+    }
+  }
+
+  private func locationPermissionLabel(for status: CLAuthorizationStatus) -> String {
+    switch status {
+    case .authorizedAlways, .authorizedWhenInUse:
+      return "granted"
+    case .denied:
+      return "denied"
+    case .restricted:
+      return "restricted"
+    case .notDetermined:
+      return "not_determined"
+    @unknown default:
+      return "unknown"
     }
   }
 }

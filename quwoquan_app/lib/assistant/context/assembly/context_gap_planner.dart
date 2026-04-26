@@ -20,9 +20,9 @@ class ContextGapPlanner {
     final fillTasks = <ContextFillTask>[];
     final missingSlots =
         (contextAssembly.contextEnvelope['missingSlots'] as List?)
-                ?.whereType<String>()
-                .toList(growable: false) ??
-            <String>[];
+            ?.whereType<String>()
+            .toList(growable: false) ??
+        <String>[];
 
     if (contextAssembly.hasLongtermNeed && recalledTexts.isEmpty) {
       if (!missingSlots.contains('longterm_memory')) {
@@ -30,10 +30,9 @@ class ContextGapPlanner {
           const ContextFillTask(
             fillType: ContextFillType.contextFill,
             targetSlot: ContextTargetSlot.longtermMemory,
-            reason: '该问题涉及长期历史回顾，需要补齐长期记忆检索结果。',
+            reason: '',
             generatedQueryConditions: [],
-            scopeExpansionPolicy:
-                ContextScopeExpansionPolicy.expandTimeWindow,
+            scopeExpansionPolicy: ContextScopeExpansionPolicy.expandTimeWindow,
           ),
         );
       }
@@ -41,22 +40,22 @@ class ContextGapPlanner {
 
     final typedProblemClass =
         (contextAssembly.contextEnvelope['typedSignals'] as Map?)
-                ?.cast<String, dynamic>()['problemClass']
-                ?.toString()
-                .trim() ??
-            '';
+            ?.cast<String, dynamic>()['problemClass']
+            ?.toString()
+            .trim() ??
+        '';
     if (parseProblemClass(typedProblemClass) == ProblemClass.realtimeInfo) {
       final sourceStatus =
           (contextAssembly.contextEnvelope['sourceStatus'] as Map?)
-                  ?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+              ?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
       final realtimeEvidence = sourceStatus['realtimeEvidence'];
       if (realtimeEvidence != 'ready') {
         fillTasks.add(
           ContextFillTask(
             fillType: ContextFillType.replan,
             targetSlot: ContextTargetSlot.realtimeEvidence,
-            reason: '实时问题需要检索证据支撑回答。',
+            reason: '',
             generatedQueryConditions: [query],
             scopeExpansionPolicy:
                 ContextScopeExpansionPolicy.expandScopeAndRequery,
@@ -73,7 +72,7 @@ class ContextGapPlanner {
             ContextFillTask(
               fillType: ContextFillType.contextFill,
               targetSlot: parseContextTargetSlot(slotId),
-              reason: '需要用户补充槽位: $slotId',
+              reason: '',
               generatedQueryConditions: [query],
               scopeExpansionPolicy: ContextScopeExpansionPolicy.none,
             ),

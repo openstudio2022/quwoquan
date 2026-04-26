@@ -22,7 +22,7 @@ slices:
       - list item、cursor、relationship/capability projection 可由 metadata 表达
       - block、strict isolation、retired persona 的读取过滤语义冻结
       - `ProfileSubject` 成为图谱展示唯一主键
-    status: planned
+    status: implemented
 
   - id: P2
     title: establish codegen and graph consumer baseline
@@ -39,7 +39,7 @@ slices:
       - "`verify-metadata / codegen / codegen-app` 通过"
       - 主页、粉丝页、聊天门禁有统一 graph read 接入口
       - 旧 `RelationTier` 只保留 adapter 兼容层
-    status: planned
+    status: implemented
 
   - id: P3
     title: implement filtered pagination and capability projection
@@ -56,7 +56,7 @@ slices:
       - follower/following 分页在过滤场景下不重复、不漏页、不串页
       - `RelationshipCapabilityView` 覆盖主页按钮矩阵与聊天/RTC 门禁
       - legacy owner edge 双读与主分身映射稳定
-    status: planned
+    status: partial
 
   - id: P4
     title: validate graph telemetry and rollback
@@ -73,4 +73,4 @@ slices:
       - graph 读开关关闭后可退回旧只读路径
       - page drift、capability mismatch、legacy edge read 指标可观测
       - rollback rehearsal 与 graph read regression 清单完成
-    status: planned
+    status: implemented

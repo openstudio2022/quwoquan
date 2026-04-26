@@ -17,6 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/runtime/controlplane"
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/product-ops-service/internal/application"
 	"quwoquan_service/services/product-ops-service/internal/infrastructure/messaging"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
@@ -174,65 +175,65 @@ func newServerMux(service *productService) *http.ServeMux {
 		case strings.HasSuffix(path, "/stats") && r.Method == http.MethodGet:
 			service.handleGetStats(w, r)
 		default:
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 		}
 	})
 	mux.HandleFunc("/v1/ops/visits", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleRecordVisit(w, r)
 	})
 	mux.HandleFunc("/v1/ops/visits/stats", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleGetVisitStats(w, r)
 	})
 	mux.HandleFunc("/v1/ops/events", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleReportEventBatch(w, r)
 	})
 	mux.HandleFunc("/v1/ops/events/summary", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleGetEventSummary(w, r)
 	})
 	mux.HandleFunc("/v1/ops/events/drilldown", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		service.handleGetEventDrilldown(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/experiments", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "only GET"})
+			writeRuntimeError(w, r, http.StatusMethodNotAllowed, "请求处理失败", "only GET")
 			return
 		}
-		service.handleListExperiments(w)
+		service.handleListExperiments(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":rollout"):
 			service.handleRollout(w, r)
 		default:
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 		}
 	})
 	mux.HandleFunc("/v1/control-plane/product/moderation/cases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListModerationCases(w)
+		service.handleListModerationCases(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/moderation/cases/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -243,15 +244,15 @@ func newServerMux(service *productService) *http.ServeMux {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":applyAction"):
 			service.handleApplyEnforcementAction(w, r)
 		default:
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 		}
 	})
 	mux.HandleFunc("/v1/control-plane/product/recovery/cases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListRecoveryCases(w)
+		service.handleListRecoveryCases(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/recovery/cases/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -260,15 +261,15 @@ func newServerMux(service *productService) *http.ServeMux {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":submitDecision"):
 			service.handleSubmitRecoveryDecision(w, r)
 		default:
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 		}
 	})
 	mux.HandleFunc("/v1/control-plane/product/appeal/cases", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListAppealCases(w)
+		service.handleListAppealCases(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/appeal/cases/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -277,15 +278,15 @@ func newServerMux(service *productService) *http.ServeMux {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":submitDecision"):
 			service.handleSubmitAppealDecision(w, r)
 		default:
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 		}
 	})
 	mux.HandleFunc("/v1/control-plane/product/recommendation/policies", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListRecommendationPolicies(w)
+		service.handleListRecommendationPolicies(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/recommendation/policies/", func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -294,36 +295,36 @@ func newServerMux(service *productService) *http.ServeMux {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":activate"):
 			service.handleActivateRecommendationPolicy(w, r)
 		default:
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 		}
 	})
 	mux.HandleFunc("/v1/control-plane/product/workflows", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListWorkflows(w)
+		service.handleListWorkflows(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/audits", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListAudits(w)
+		service.handleListAudits(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/approvals", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListApprovals(w)
+		service.handleListApprovals(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/product/projections/summary", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleProjectionSummary(w)
+		service.handleProjectionSummary(w, r)
 	})
 	return mux
 }
@@ -457,7 +458,7 @@ func (s *productService) handleGetBucket(w http.ResponseWriter, r *http.Request)
 	}
 	result, err := s.resolveExperimentAssignment(experimentID, subjectKey)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -471,12 +472,12 @@ func (s *productService) handleAssignBucket(w http.ResponseWriter, r *http.Reque
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	subjectKey := strings.TrimSpace(body.SubjectKey)
 	if subjectKey == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "subjectKey is required"})
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "subjectKey is required")
 		return
 	}
 	result, err := s.resolveExperimentAssignment(experimentID, subjectKey)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -486,11 +487,11 @@ func (s *productService) handleGetStats(w http.ResponseWriter, r *http.Request) 
 	experimentID := segmentBetween(r.URL.Path, "/v1/ops/experiments/", "/stats")
 	experiment, ok, err := s.getExperiment(experimentID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "experiment not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "experiment not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -502,17 +503,17 @@ func (s *productService) handleGetStats(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func (s *productService) handleListExperiments(w http.ResponseWriter) {
+func (s *productService) handleListExperiments(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListDocuments("experiments")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
 		experiment, err := decodeDocument[experimentDef](item)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 			return
 		}
 		out = append(out, map[string]any{
@@ -541,11 +542,11 @@ func (s *productService) handleRollout(w http.ResponseWriter, r *http.Request) {
 
 	experiment, ok, err := s.getExperiment(experimentID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "experiment not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "experiment not found")
 		return
 	}
 	before := documentFromStruct(experiment)
@@ -557,7 +558,7 @@ func (s *productService) handleRollout(w http.ResponseWriter, r *http.Request) {
 		experiment.Assignments = map[string]assignment{}
 	}
 	if err := s.putDocument("experiments", experiment.ID, experiment); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	workflow := controlplane.WorkflowState{
@@ -606,10 +607,10 @@ func (s *productService) handleRollout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *productService) handleListModerationCases(w http.ResponseWriter) {
+func (s *productService) handleListModerationCases(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListDocuments("moderation_cases")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -622,11 +623,11 @@ func (s *productService) handleGetModerationCase(w http.ResponseWriter, r *http.
 	caseID = strings.Trim(caseID, "/")
 	item, ok, err := s.store.GetDocument("moderation_cases", caseID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "moderation case not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "moderation case not found")
 		return
 	}
 	workflow, _, _ := s.store.GetWorkflow("moderation_case", caseID)
@@ -642,18 +643,18 @@ func (s *productService) handleStartModerationReview(w http.ResponseWriter, r *h
 	caseID := segmentBetween(r.URL.Path, "/v1/control-plane/product/moderation/cases/", ":startReview")
 	item, ok, err := s.store.GetDocument("moderation_cases", caseID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "moderation case not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "moderation case not found")
 		return
 	}
 	before := cloneMap(item)
 	item["status"] = "reviewing"
 	item["updatedAt"] = nowRFC3339()
 	if err := s.store.PutDocument("moderation_cases", caseID, item); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	workflow := controlplane.WorkflowState{
@@ -705,11 +706,11 @@ func (s *productService) handleApplyEnforcementAction(w http.ResponseWriter, r *
 	}
 	item, ok, err := s.store.GetDocument("moderation_cases", caseID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "moderation case not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "moderation case not found")
 		return
 	}
 	before := cloneMap(item)
@@ -734,7 +735,7 @@ func (s *productService) handleApplyEnforcementAction(w http.ResponseWriter, r *
 	}
 	item["updatedAt"] = nowRFC3339()
 	if err := s.store.PutDocument("moderation_cases", caseID, item); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	workflow := controlplane.WorkflowState{
@@ -774,10 +775,10 @@ func (s *productService) handleApplyEnforcementAction(w http.ResponseWriter, r *
 	})
 }
 
-func (s *productService) handleListRecoveryCases(w http.ResponseWriter) {
+func (s *productService) handleListRecoveryCases(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListDocuments("recovery_cases")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -789,11 +790,11 @@ func (s *productService) handleGetRecoveryCase(w http.ResponseWriter, r *http.Re
 	caseID = strings.Trim(caseID, "/")
 	item, ok, err := s.store.GetDocument("recovery_cases", caseID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "recovery case not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "recovery case not found")
 		return
 	}
 	workflow, _, _ := s.store.GetWorkflow("recovery_case", caseID)
@@ -822,11 +823,11 @@ func (s *productService) handleSubmitRecoveryDecision(w http.ResponseWriter, r *
 	}
 	item, ok, err := s.store.GetDocument("recovery_cases", caseID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "recovery case not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "recovery case not found")
 		return
 	}
 	before := cloneMap(item)
@@ -850,7 +851,7 @@ func (s *productService) handleSubmitRecoveryDecision(w http.ResponseWriter, r *
 	item["decision"] = decision
 	item["updatedAt"] = nowRFC3339()
 	if err := s.store.PutDocument("recovery_cases", caseID, item); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	workflow := controlplane.WorkflowState{
@@ -890,10 +891,10 @@ func (s *productService) handleSubmitRecoveryDecision(w http.ResponseWriter, r *
 	})
 }
 
-func (s *productService) handleListAppealCases(w http.ResponseWriter) {
+func (s *productService) handleListAppealCases(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListDocuments("appeal_cases")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -905,11 +906,11 @@ func (s *productService) handleGetAppealCase(w http.ResponseWriter, r *http.Requ
 	caseID = strings.Trim(caseID, "/")
 	item, ok, err := s.store.GetDocument("appeal_cases", caseID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "appeal case not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "appeal case not found")
 		return
 	}
 	workflow, _, _ := s.store.GetWorkflow("appeal_case", caseID)
@@ -938,11 +939,11 @@ func (s *productService) handleSubmitAppealDecision(w http.ResponseWriter, r *ht
 	}
 	item, ok, err := s.store.GetDocument("appeal_cases", caseID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "appeal case not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "appeal case not found")
 		return
 	}
 	before := cloneMap(item)
@@ -957,7 +958,7 @@ func (s *productService) handleSubmitAppealDecision(w http.ResponseWriter, r *ht
 	item["decision"] = decision
 	item["updatedAt"] = nowRFC3339()
 	if err := s.store.PutDocument("appeal_cases", caseID, item); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	workflow := controlplane.WorkflowState{
@@ -995,10 +996,10 @@ func (s *productService) handleSubmitAppealDecision(w http.ResponseWriter, r *ht
 	})
 }
 
-func (s *productService) handleListRecommendationPolicies(w http.ResponseWriter) {
+func (s *productService) handleListRecommendationPolicies(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListDocuments("recommendation_policies")
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
@@ -1008,18 +1009,18 @@ func (s *productService) handleSimulateRecommendationPolicy(w http.ResponseWrite
 	policyID := segmentBetween(r.URL.Path, "/v1/control-plane/product/recommendation/policies/", ":simulate")
 	policy, ok, err := s.getRecommendationPolicy(policyID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "recommendation policy not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "recommendation policy not found")
 		return
 	}
 	before := documentFromStruct(policy)
 	policy.Status = "simulated"
 	policy.UpdatedAt = nowRFC3339()
 	if err := s.putDocument("recommendation_policies", policy.ID, policy); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	_ = s.store.UpsertWorkflow(controlplane.WorkflowState{
@@ -1056,18 +1057,18 @@ func (s *productService) handleActivateRecommendationPolicy(w http.ResponseWrite
 	policyID := segmentBetween(r.URL.Path, "/v1/control-plane/product/recommendation/policies/", ":activate")
 	policy, ok, err := s.getRecommendationPolicy(policyID)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]any{"error": "recommendation policy not found"})
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "recommendation policy not found")
 		return
 	}
 	before := documentFromStruct(policy)
 	policy.Status = "active"
 	policy.UpdatedAt = nowRFC3339()
 	if err := s.putDocument("recommendation_policies", policy.ID, policy); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	_ = s.store.AppendApproval(controlplane.ApprovalDecision{
@@ -1120,11 +1121,11 @@ func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Reques
 		Source     string `json:"source"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid json body"})
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "invalid json body")
 		return
 	}
 	if strings.TrimSpace(body.TargetType) == "" || strings.TrimSpace(body.TargetKey) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "targetType and targetKey are required"})
+		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", "targetType and targetKey are required")
 		return
 	}
 	record, err := s.telemetry.RecordVisit(r.Context(), application.VisitInput{
@@ -1135,7 +1136,7 @@ func (s *productService) handleRecordVisit(w http.ResponseWriter, r *http.Reques
 		Source:     body.Source,
 	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, record)
@@ -1147,53 +1148,53 @@ func (s *productService) handleGetVisitStats(w http.ResponseWriter, r *http.Requ
 		TargetKey:  strings.TrimSpace(r.URL.Query().Get("targetKey")),
 	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
 }
 
-func (s *productService) handleListWorkflows(w http.ResponseWriter) {
+func (s *productService) handleListWorkflows(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListWorkflows()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *productService) handleListAudits(w http.ResponseWriter) {
+func (s *productService) handleListAudits(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListAudits()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *productService) handleListApprovals(w http.ResponseWriter) {
+func (s *productService) handleListApprovals(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListAllApprovals()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
-func (s *productService) handleProjectionSummary(w http.ResponseWriter) {
+func (s *productService) handleProjectionSummary(w http.ResponseWriter, r *http.Request) {
 	workflows, err := s.store.ListWorkflows()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	approvals, err := s.store.ListAllApprovals()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	audits, err := s.store.ListAudits()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
 	pendingDualReview := 0
@@ -1433,6 +1434,34 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeRuntimeNotFound(w http.ResponseWriter, r *http.Request) {
+	writeRuntimeError(w, r, http.StatusNotFound, "接口不存在", "route not found")
+}
+
+func writeRuntimeError(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	userMessage string,
+	debugMessage string,
+) {
+	reason := "internal_error"
+	kind := rterr.KindSystem
+	if status == http.StatusBadRequest || status == http.StatusMethodNotAllowed || status == http.StatusNotFound {
+		reason = "invalid_argument"
+		kind = rterr.KindUser
+	}
+	rterr.WriteHTTPError(
+		w,
+		rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleOps, kind, reason),
+			userMessage,
+			debugMessage,
+		),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
 }
 
 func must(err error) {

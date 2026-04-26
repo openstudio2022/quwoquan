@@ -29,17 +29,6 @@ enum IntegrationLocationErrorCode {
     }
   }
 
-  bool get isRetryable {
-    switch (this) {
-      case IntegrationLocationErrorCode.locationUnavailable:
-      case IntegrationLocationErrorCode.upstreamTimeout:
-      case IntegrationLocationErrorCode.internalError:
-        return true;
-      default:
-        return false;
-    }
-  }
-
   /// 从云端 code 字符串解析为枚举
   static IntegrationLocationErrorCode fromCode(String? code) {
     switch (code) {

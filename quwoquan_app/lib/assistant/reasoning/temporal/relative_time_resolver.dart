@@ -1,6 +1,3 @@
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
-
 final RegExp relativeTemporalTokenPattern = RegExp(
   r'(昨天|昨日|明天|后天|今天|周[一二三四五六日天]|上周[一二三四五六日天]|下周[一二三四五六日天]|最近)',
 );
@@ -56,8 +53,6 @@ class RelativeTimeResolution {
   String get timePointIso =>
       timePoint == null ? '' : _formatIsoDate(timePoint!);
 }
-
-enum _WeekdayDirection { past, future, neutral }
 
 class RelativeTimeResolver {
   const RelativeTimeResolver();
@@ -148,107 +143,6 @@ class RelativeTimeResolver {
     );
   }
 
-  QueryNormalization applyToQueryNormalization({
-    required QueryNormalization normalization,
-    required String query,
-    String referenceNowIso = '',
-    String timezone = '',
-  }) {
-    final baseQuery = normalization.normalizedQuery.trim().isNotEmpty
-        ? normalization.normalizedQuery.trim()
-        : query.trim();
-    final reference = resolveReferenceContext(
-      referenceNowIso: referenceNowIso.trim().isNotEmpty
-          ? referenceNowIso.trim()
-          : normalization.referenceNowIso.trim(),
-      timezone: timezone.trim().isNotEmpty
-          ? timezone.trim()
-          : normalization.timezone.trim(),
-    );
-    return QueryNormalization(
-      normalizedQuery: baseQuery,
-      rewrittenQuery: normalization.rewrittenQuery.trim().isNotEmpty
-          ? normalization.rewrittenQuery.trim()
-          : baseQuery,
-      issues: normalization.issues,
-      language: normalization.language,
-      hints: normalization.hints,
-      referenceNowIso: normalization.referenceNowIso.trim().isNotEmpty
-          ? normalization.referenceNowIso.trim()
-          : reference.referenceNowIso,
-      timezone: normalization.timezone.trim().isNotEmpty
-          ? normalization.timezone.trim()
-          : reference.timezone,
-      resolvedTemporalHints: normalization.resolvedTemporalHints,
-      timeScope: normalization.timeScope.trim(),
-      timeRangeStart: normalization.timeRangeStart.trim(),
-      timeRangeEnd: normalization.timeRangeEnd.trim(),
-      timePoint: normalization.timePoint.trim(),
-    );
-  }
-
-  QueryTask applyToQueryTask({
-    required QueryTask task,
-    required RelativeTimeResolution fallbackResolution,
-    String referenceNowIso = '',
-    String timezone = '',
-  }) {
-    return task.copyWith(
-      query: task.query.trim().isNotEmpty
-          ? task.query.trim()
-          : fallbackResolution.rewrittenQuery,
-      timeScope: task.timeScope.trim(),
-      timeRangeStart: task.timeRangeStart.trim(),
-      timeRangeEnd: task.timeRangeEnd.trim(),
-      timePoint: task.timePoint.trim(),
-      timezone: task.timezone.trim().isNotEmpty
-          ? task.timezone.trim()
-          : (timezone.isNotEmpty ? timezone : fallbackResolution.timezone),
-    );
-  }
-
-  IntentGraph applyToIntentGraph({
-    required IntentGraph intentGraph,
-    required String latestUserQuery,
-    String referenceNowIso = '',
-    String timezone = '',
-  }) {
-    final queryNormalization = applyToQueryNormalization(
-      normalization: intentGraph.queryNormalization,
-      query: intentGraph.queryNormalization.normalizedQuery.trim().isNotEmpty
-          ? intentGraph.queryNormalization.normalizedQuery.trim()
-          : latestUserQuery.trim(),
-      referenceNowIso: referenceNowIso,
-      timezone: timezone,
-    );
-    final fallbackResolution = resolve(
-      query: queryNormalization.normalizedQuery.trim().isNotEmpty
-          ? queryNormalization.normalizedQuery.trim()
-          : latestUserQuery.trim(),
-      referenceNowIso: queryNormalization.referenceNowIso,
-      timezone: queryNormalization.timezone,
-      timeScope: queryNormalization.timeScope,
-      timeRangeStart: queryNormalization.timeRangeStart,
-      timeRangeEnd: queryNormalization.timeRangeEnd,
-      timePoint: queryNormalization.timePoint,
-    );
-    final queryTasks = intentGraph.queryTasks
-        .map(
-          (task) => applyToQueryTask(
-            task: task,
-            fallbackResolution: fallbackResolution,
-            referenceNowIso: queryNormalization.referenceNowIso,
-            timezone: queryNormalization.timezone,
-          ),
-        )
-        .toList(growable: false);
-    return IntentGraph.fromJson(<String, dynamic>{
-      ...intentGraph.toJson(),
-      'queryNormalization': queryNormalization.toJson(),
-      'queryTasks': queryTasks.map((item) => item.toJson()).toList(growable: false),
-    });
-  }
-
   RelativeTimeResolution? _resolveStructuredRange({
     required String query,
     required TemporalReferenceContext reference,
@@ -302,112 +196,6 @@ class RelativeTimeResolver {
     return null;
   }
 
-  RelativeTimeResolution? _resolveRelativeDay(
-    String query,
-    TemporalReferenceContext reference,
-  ) {
-    const relativeDays = <String, int>{
-      '前天': -2,
-      '昨天': -1,
-      '昨日': -1,
-      '昨晚': -1,
-      '今天': 0,
-      '今日': 0,
-      '当天': 0,
-      '明天': 1,
-      '后天': 2,
-    };
-    for (final entry in relativeDays.entries) {
-      if (!query.contains(entry.key)) {
-        continue;
-      }
-      final point = _startOfDay(
-        reference.referenceNow.add(Duration(days: entry.value)),
-      );
-      final scope = entry.value == 0 ? 'today' : 'year_month_day';
-      final end = entry.value == 0 ? reference.referenceNow : _endOfDay(point);
-      return _buildResolution(
-        query: query,
-        reference: reference,
-        scope: scope,
-        start: point,
-        end: end,
-        point: point,
-        matchedToken: entry.key,
-      );
-    }
-    return null;
-  }
-
-  RelativeTimeResolution? _resolveWeekday(
-    String query,
-    TemporalReferenceContext reference,
-  ) {
-    final match = RegExp(
-      r'((?:上周|下周|本周|这周)?)(周|星期|礼拜)([一二三四五六日天])',
-    ).firstMatch(query);
-    if (match == null) {
-      return null;
-    }
-    final prefix = (match.group(1) ?? '').trim();
-    final weekdayToken = (match.group(3) ?? '').trim();
-    final weekday = _weekdayFromToken(weekdayToken);
-    if (weekday == null) {
-      return null;
-    }
-    final target = _resolveWeekdayDate(
-      referenceDate: _startOfDay(reference.referenceNow),
-      query: query,
-      prefix: prefix,
-      targetWeekday: weekday,
-    );
-    return _buildResolution(
-      query: query,
-      reference: reference,
-      scope: _sameDay(target, reference.referenceNow)
-          ? 'today'
-          : 'year_month_day',
-      start: target,
-      end: _sameDay(target, reference.referenceNow)
-          ? reference.referenceNow
-          : _endOfDay(target),
-      point: target,
-      matchedToken: match.group(0)?.trim() ?? '',
-    );
-  }
-
-  RelativeTimeResolution? _resolveExplicitDate(
-    String query,
-    TemporalReferenceContext reference,
-  ) {
-    final match = RegExp(
-      r'(20\d{2}[-/年\.]\d{1,2}[-/月\.]\d{1,2}(?:日)?)',
-    ).firstMatch(query);
-    if (match == null) {
-      return null;
-    }
-    final token = (match.group(0) ?? '').trim();
-    final point = _parseDateToken(token);
-    if (point == null) {
-      return null;
-    }
-    final start = _startOfDay(point);
-    final end = _sameDay(point, reference.referenceNow)
-        ? reference.referenceNow
-        : _endOfDay(point);
-    return _buildResolution(
-      query: query,
-      reference: reference,
-      scope: _sameDay(point, reference.referenceNow)
-          ? 'today'
-          : 'year_month_day',
-      start: start,
-      end: end,
-      point: start,
-      matchedToken: token,
-    );
-  }
-
   RelativeTimeResolution _buildResolution({
     required String query,
     required TemporalReferenceContext reference,
@@ -450,78 +238,6 @@ class RelativeTimeResolver {
       ),
       resolvedTemporalHints: hints,
     );
-  }
-
-  DateTime _resolveWeekdayDate({
-    required DateTime referenceDate,
-    required String query,
-    required String prefix,
-    required int targetWeekday,
-  }) {
-    final weekStart = _startOfWeek(referenceDate);
-    if (prefix == '上周') {
-      return weekStart.subtract(Duration(days: 7 - (targetWeekday - 1)));
-    }
-    if (prefix == '下周') {
-      return weekStart.add(Duration(days: 7 + (targetWeekday - 1)));
-    }
-    if (prefix == '本周' || prefix == '这周') {
-      return weekStart.add(Duration(days: targetWeekday - 1));
-    }
-    final thisWeekTarget = weekStart.add(Duration(days: targetWeekday - 1));
-    switch (_weekdayDirection(query)) {
-      case _WeekdayDirection.past:
-        return thisWeekTarget.isAfter(referenceDate)
-            ? thisWeekTarget.subtract(const Duration(days: 7))
-            : thisWeekTarget;
-      case _WeekdayDirection.future:
-        return thisWeekTarget.isBefore(referenceDate)
-            ? thisWeekTarget.add(const Duration(days: 7))
-            : thisWeekTarget;
-      case _WeekdayDirection.neutral:
-        if (_sameDay(thisWeekTarget, referenceDate)) {
-          return thisWeekTarget;
-        }
-        final delta = thisWeekTarget.difference(referenceDate).inDays;
-        if (delta.abs() <= 3) {
-          return thisWeekTarget;
-        }
-        return delta < 0
-            ? thisWeekTarget.add(const Duration(days: 7))
-            : thisWeekTarget;
-    }
-  }
-
-  _WeekdayDirection _weekdayDirection(String query) {
-    if (RegExp(r'(为什么|为何|原因|复盘|回顾|发生了什么|发生什么|怎么了|怎么样了)').hasMatch(query)) {
-      return _WeekdayDirection.past;
-    }
-    if (RegExp(r'(会不会|会怎样|将会|预报|预测|预计|适合|要不要)').hasMatch(query)) {
-      return _WeekdayDirection.future;
-    }
-    return _WeekdayDirection.neutral;
-  }
-
-  int? _weekdayFromToken(String token) {
-    switch (token) {
-      case '一':
-        return DateTime.monday;
-      case '二':
-        return DateTime.tuesday;
-      case '三':
-        return DateTime.wednesday;
-      case '四':
-        return DateTime.thursday;
-      case '五':
-        return DateTime.friday;
-      case '六':
-        return DateTime.saturday;
-      case '日':
-      case '天':
-        return DateTime.sunday;
-      default:
-        return null;
-    }
   }
 
   List<String> _resolvedTemporalHints({

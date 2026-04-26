@@ -7,12 +7,8 @@ class PersonaUpdateRequestDto {
   final String? phone;
   final String? email;
   final String? avatarUrl;
-  final String? backgroundUrl;
-  final String? bio;
-  final String? callerRingtoneId;
   final String? isolationLevel;
   final String? purposeHint;
-  final String? profileVisibility;
   final String? applyScope;
   final List<String>? syncTargetIds;
   final List<String>? fieldsMask;
@@ -23,12 +19,8 @@ class PersonaUpdateRequestDto {
     this.phone,
     this.email,
     this.avatarUrl,
-    this.backgroundUrl,
-    this.bio,
-    this.callerRingtoneId,
     this.isolationLevel,
     this.purposeHint,
-    this.profileVisibility,
     this.applyScope,
     this.syncTargetIds,
     this.fieldsMask,
@@ -41,12 +33,8 @@ class PersonaUpdateRequestDto {
       phone: m['phone']?.toString() ?? null,
       email: m['email']?.toString() ?? null,
       avatarUrl: m['avatarUrl']?.toString() ?? null,
-      backgroundUrl: m['backgroundUrl']?.toString() ?? null,
-      bio: m['bio']?.toString() ?? null,
-      callerRingtoneId: m['callerRingtoneId']?.toString() ?? null,
       isolationLevel: m['isolationLevel']?.toString() ?? null,
       purposeHint: m['purposeHint']?.toString() ?? null,
-      profileVisibility: m['profileVisibility']?.toString() ?? null,
       applyScope: m['applyScope']?.toString() ?? null,
       syncTargetIds: _parseStringList(m['syncTargetIds']) ?? null,
       fieldsMask: _parseStringList(m['fieldsMask']) ?? null,
@@ -60,12 +48,8 @@ class PersonaUpdateRequestDto {
       'phone': phone,
       'email': email,
       'avatarUrl': avatarUrl,
-      'backgroundUrl': backgroundUrl,
-      'bio': bio,
-      'callerRingtoneId': callerRingtoneId,
       'isolationLevel': isolationLevel,
       'purposeHint': purposeHint,
-      'profileVisibility': profileVisibility,
       'applyScope': applyScope,
       'syncTargetIds': syncTargetIds,
       'fieldsMask': fieldsMask,
@@ -78,12 +62,8 @@ class PersonaUpdateRequestDto {
     String? phone,
     String? email,
     String? avatarUrl,
-    String? backgroundUrl,
-    String? bio,
-    String? callerRingtoneId,
     String? isolationLevel,
     String? purposeHint,
-    String? profileVisibility,
     String? applyScope,
     List<String>? syncTargetIds,
     List<String>? fieldsMask,
@@ -94,12 +74,8 @@ class PersonaUpdateRequestDto {
       phone: phone ?? this.phone,
       email: email ?? this.email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
-      backgroundUrl: backgroundUrl ?? this.backgroundUrl,
-      bio: bio ?? this.bio,
-      callerRingtoneId: callerRingtoneId ?? this.callerRingtoneId,
       isolationLevel: isolationLevel ?? this.isolationLevel,
       purposeHint: purposeHint ?? this.purposeHint,
-      profileVisibility: profileVisibility ?? this.profileVisibility,
       applyScope: applyScope ?? this.applyScope,
       syncTargetIds: syncTargetIds ?? this.syncTargetIds,
       fieldsMask: fieldsMask ?? this.fieldsMask,

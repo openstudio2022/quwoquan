@@ -333,9 +333,6 @@ void main() {
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       expect(body['code'], 'CONTENT.USER.post_not_found',
           reason: 'error code must match errors.yaml');
-      expect(body['isRetryable'], false,
-          reason: 'post_not_found is not retryable per errors.yaml');
-
       // 语义层：端侧 ErrorCode 映射正确
       final exception = CloudErrorMapper.fromStatusCode(
         resp.statusCode,
@@ -351,7 +348,7 @@ void main() {
   // ── 场景 4：media_not_ready_graceful_error ────────────────────────────────
   // e2e.yaml: media_not_ready_graceful_error [test_type: api_contract]
   group('media_not_ready_graceful_error', () {
-    test('X-Test-Error-Inject 触发 media_not_ready → 422 + isRetryable=true',
+    test('X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry',
         () async {
       if (!_stagingAvailable) return markTestSkipped('staging unavailable');
       // 此 header 仅在 staging profile 开启，生产不生效
@@ -376,9 +373,6 @@ void main() {
       // 结构层
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       expect(body['code'], 'CONTENT.USER.media_not_ready');
-      expect(body['isRetryable'], true,
-          reason: 'media_not_ready is retryable per errors.yaml');
-
       // 语义层：端侧消息正确
       final code = ContentErrorCode.fromCode(body['code'] as String);
       expect(code, ContentErrorCode.mediaNotReady);

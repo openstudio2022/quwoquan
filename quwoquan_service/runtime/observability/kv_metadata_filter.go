@@ -87,4 +87,3 @@ func applyKVStrategy(strategy string, value any) (any, error) {
 		return nil, fmt.Errorf("unsupported strategy: %s", strategy)
 	}
 }
-

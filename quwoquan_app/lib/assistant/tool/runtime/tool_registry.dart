@@ -1,6 +1,8 @@
 import 'package:quwoquan_app/assistant/tool/runtime/tool_loop_detection.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_runtime_failure_mapper.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class AssistantToolRegistry {
   AssistantToolRegistry({ToolMetadataRegistry? metadataRegistry})
@@ -31,11 +33,11 @@ class AssistantToolRegistry {
   ) async {
     final tool = _tools[name];
     if (tool == null) {
-      return const AssistantToolResult(
-        success: false,
-        message: 'Tool not found',
+      return _failureResult(
+        toolName: name,
         errorCode: AssistantErrorCode.toolNotFound,
-        degraded: true,
+        message: 'Tool not found',
+        stage: 'tool_lookup',
       );
     }
     await _metadataRegistry?.ensureLoaded();
@@ -48,11 +50,11 @@ class AssistantToolRegistry {
     final loopCheck = _callHistory.detectLoop();
     if (loopCheck.detected && loopCheck.severity == LoopSeverity.critical) {
       _callHistory.recordOutcome(record, false, loopCheck.message, null);
-      return AssistantToolResult(
-        success: false,
-        message: loopCheck.message,
+      return _failureResult(
+        toolName: name,
         errorCode: AssistantErrorCode.executionFailed,
-        degraded: true,
+        message: loopCheck.message,
+        stage: 'tool_loop_guard',
         data: AssistantToolResultData(<String, Object?>{
           'loopDetected': true,
           'loopPattern': loopCheck.pattern,
@@ -92,6 +94,7 @@ class AssistantToolRegistry {
           message: result.message,
           errorCode: result.errorCode,
           degraded: result.degraded,
+          runtimeFailure: result.effectiveRuntimeFailure,
           data: AssistantToolResultData.fromJson(augmentedData),
         );
       }
@@ -104,6 +107,17 @@ class AssistantToolRegistry {
         message: 'Tool execution failed: $error',
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
+        runtimeFailure: const AssistantRuntimeFailureMapper()
+            .fromAssistantErrorCode(
+              errorCode: AssistantErrorCode.executionFailed,
+              boundary: 'assistant_tool',
+              stage: 'tool_registry_execute',
+              functionModule: name,
+              businessObject: 'assistant_tool',
+              attributes: <RuntimeContextAttribute>[
+                RuntimeContextAttribute(key: 'errorType', value: 'exception'),
+              ],
+            ),
       );
     }
   }
@@ -124,11 +138,11 @@ class AssistantToolRegistry {
       try {
         lastResult = await tool.execute(arguments);
       } catch (error) {
-        lastResult = AssistantToolResult(
-          success: false,
-          message: 'Tool execution failed: $error',
+        lastResult = _failureResult(
+          toolName: name,
           errorCode: AssistantErrorCode.executionFailed,
-          degraded: true,
+          message: 'Tool execution failed: $error',
+          stage: 'tool_execution',
         );
       }
       if (lastResult.success) {
@@ -139,9 +153,9 @@ class AssistantToolRegistry {
           recovered: attempt > 1,
         );
       }
-      final retryable = _isRetryableFailure(name: name, result: lastResult);
-      if (!retryable || attempt >= maxAttempts) {
-        if (retryable) {
+      final shouldRetry = _shouldRetryFailure(name: name, result: lastResult);
+      if (!shouldRetry || attempt >= maxAttempts) {
+        if (shouldRetry) {
           policy?.recordTransientFailure();
         } else {
           policy?.recordNonTransientFailure();
@@ -155,11 +169,11 @@ class AssistantToolRegistry {
       await Future<void>.delayed(policy?.retryDelay ?? Duration.zero);
     }
     return lastResult ??
-        const AssistantToolResult(
-          success: false,
-          message: 'Tool execution failed',
+        _failureResult(
+          toolName: name,
           errorCode: AssistantErrorCode.executionFailed,
-          degraded: true,
+          message: 'Tool execution failed',
+          stage: 'tool_execution',
         );
   }
 
@@ -174,6 +188,7 @@ class AssistantToolRegistry {
       message: result.message,
       errorCode: result.errorCode,
       degraded: result.degraded,
+      runtimeFailure: result.effectiveRuntimeFailure,
       data: AssistantToolResultData(<String, Object?>{
         ...?result.data,
         'retry': <String, dynamic>{
@@ -184,7 +199,7 @@ class AssistantToolRegistry {
     );
   }
 
-  bool _isRetryableFailure({
+  bool _shouldRetryFailure({
     required String name,
     required AssistantToolResult result,
   }) {
@@ -192,9 +207,31 @@ class AssistantToolRegistry {
     if (policy == null || result.success) {
       return false;
     }
-    return result.degraded &&
-        (result.errorCode == AssistantErrorCode.networkUnavailable ||
-            result.errorCode == AssistantErrorCode.rateLimited);
+    final failure =
+        result.effectiveRuntimeFailure ??
+        const AssistantRuntimeFailureMapper().fromAssistantErrorCode(
+          errorCode: result.errorCode,
+          boundary: 'assistant_tool',
+          stage: 'tool_retry_policy',
+          functionModule: name,
+          businessObject: 'assistant_tool',
+        );
+    final decision = const DefaultRuntimeRecoveryPolicy().decide(
+      failure,
+      const EntryContext(
+        kind: 'assistant_tool',
+        entryId: '',
+        actorType: 'assistant',
+        actorId: '',
+        surfaceId: 'assistant',
+      ),
+      BoundaryContext(
+        boundary: 'assistant_tool',
+        stage: 'tool_retry_policy',
+        remainingBudget: policy.maxAttempts - 1,
+      ),
+    );
+    return decision.action == RuntimeRecoveryAction.retry;
   }
 
   AssistantToolResult? _validateArguments({
@@ -213,19 +250,19 @@ class AssistantToolRegistry {
     for (final key in requiredKeys) {
       final value = normalizedArgs[key];
       if (value == null) {
-        return AssistantToolResult(
-          success: false,
-          message: 'Tool argument invalid: missing required "$key"',
+        return _failureResult(
+          toolName: name,
           errorCode: AssistantErrorCode.invalidArguments,
-          degraded: true,
+          message: 'Tool argument invalid: missing required "$key"',
+          stage: 'tool_argument_validation',
         );
       }
       if (value is String && value.trim().isEmpty) {
-        return AssistantToolResult(
-          success: false,
-          message: 'Tool argument invalid: empty required "$key"',
+        return _failureResult(
+          toolName: name,
           errorCode: AssistantErrorCode.invalidArguments,
-          degraded: true,
+          message: 'Tool argument invalid: empty required "$key"',
+          stage: 'tool_argument_validation',
         );
       }
     }
@@ -235,15 +272,16 @@ class AssistantToolRegistry {
       final expectedType = typedSchema.type;
       if (expectedType.isEmpty) continue;
       if (!_matchesType(expectedType, entry.value)) {
-        return AssistantToolResult(
-          success: false,
+        return _failureResult(
+          toolName: name,
+          errorCode: AssistantErrorCode.invalidArguments,
           message:
               'Tool argument invalid: "${entry.key}" expects $expectedType',
-          errorCode: AssistantErrorCode.invalidArguments,
-          degraded: true,
+          stage: 'tool_argument_validation',
         );
       }
       final enumError = _validateEnum(
+        toolName: name,
         key: entry.key,
         schema: typedSchema,
         value: entry.value,
@@ -267,15 +305,42 @@ class AssistantToolRegistry {
     final data = result.data?.toDynamicJson() ?? const <String, dynamic>{};
     for (final path in requiredPaths) {
       if (!_hasPath(data, path)) {
-        return AssistantToolResult(
-          success: false,
-          message: 'Tool output invalid: missing "$path"',
+        return _failureResult(
+          toolName: name,
           errorCode: AssistantErrorCode.executionFailed,
-          degraded: true,
+          message: 'Tool output invalid: missing "$path"',
+          stage: 'tool_output_validation',
         );
       }
     }
     return null;
+  }
+
+  AssistantToolResult _failureResult({
+    required String toolName,
+    required AssistantErrorCode errorCode,
+    required String message,
+    required String stage,
+    AssistantToolResultData? data,
+  }) {
+    return AssistantToolResult(
+      success: false,
+      message: message,
+      errorCode: errorCode,
+      degraded: true,
+      data: data,
+      runtimeFailure: const AssistantRuntimeFailureMapper()
+          .fromAssistantErrorCode(
+            errorCode: errorCode,
+            boundary: 'assistant_tool',
+            stage: stage,
+            functionModule: toolName,
+            businessObject: 'assistant_tool',
+            attributes: <RuntimeContextAttribute>[
+              RuntimeContextAttribute(key: 'toolName', value: toolName),
+            ],
+          ),
+    );
   }
 
   bool _matchesType(String expectedType, Object? value) {
@@ -298,6 +363,7 @@ class AssistantToolRegistry {
   }
 
   AssistantToolResult? _validateEnum({
+    required String toolName,
     required String key,
     required AssistantToolSchemaField schema,
     required Object? value,
@@ -305,12 +371,12 @@ class AssistantToolRegistry {
     final enumValues = schema.enumValues.toSet();
     if (enumValues.isNotEmpty) {
       if (value is! String || !enumValues.contains(value)) {
-        return AssistantToolResult(
-          success: false,
+        return _failureResult(
+          toolName: toolName,
+          errorCode: AssistantErrorCode.invalidArguments,
           message:
               'Tool argument invalid: "$key" must be one of ${enumValues.join(", ")}',
-          errorCode: AssistantErrorCode.invalidArguments,
-          degraded: true,
+          stage: 'tool_argument_validation',
         );
       }
     }
@@ -325,23 +391,23 @@ class AssistantToolRegistry {
     final itemType = itemSchema.type;
     if (itemType.isNotEmpty &&
         value.any((item) => !_matchesType(itemType, item))) {
-      return AssistantToolResult(
-        success: false,
+      return _failureResult(
+        toolName: toolName,
+        errorCode: AssistantErrorCode.invalidArguments,
         message:
             'Tool argument invalid: "$key" contains item that is not $itemType',
-        errorCode: AssistantErrorCode.invalidArguments,
-        degraded: true,
+        stage: 'tool_argument_validation',
       );
     }
     final itemEnums = itemSchema.enumValues.toSet();
     if (itemEnums.isNotEmpty &&
         value.any((item) => item is! String || !itemEnums.contains(item))) {
-      return AssistantToolResult(
-        success: false,
+      return _failureResult(
+        toolName: toolName,
+        errorCode: AssistantErrorCode.invalidArguments,
         message:
             'Tool argument invalid: "$key" contains unsupported enum value',
-        errorCode: AssistantErrorCode.invalidArguments,
-        degraded: true,
+        stage: 'tool_argument_validation',
       );
     }
     return null;
@@ -419,8 +485,19 @@ class _ToolResiliencePolicy {
         degraded: true,
         data: AssistantToolResultData(<String, Object?>{
           'breakerOpen': true,
-          'retryAfterSeconds': remainingSeconds,
+          'recoveryAfterSeconds': remainingSeconds,
         }),
+        runtimeFailure: const AssistantRuntimeFailureMapper()
+            .fromAssistantErrorCode(
+              errorCode: AssistantErrorCode.networkUnavailable,
+              boundary: 'assistant_tool',
+              stage: 'tool_breaker_open',
+              functionModule: toolName,
+              businessObject: 'assistant_tool',
+              attributes: <RuntimeContextAttribute>[
+                RuntimeContextAttribute(key: 'toolName', value: toolName),
+              ],
+            ),
       );
     }
     if (_breakerOpenUntil != null && !now.isBefore(_breakerOpenUntil!)) {

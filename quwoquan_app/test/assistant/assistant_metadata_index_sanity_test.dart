@@ -17,7 +17,7 @@ void main() {
         .where((f) => f.existsSync())
         .toList(growable: false);
 
-    expect(schemas.length, 23);
+    expect(schemas.length, 21);
 
     for (final file in schemas) {
       final doc = loadYaml(file.readAsStringSync());
@@ -46,6 +46,8 @@ void main() {
         .toSet();
     expect(names.contains('journey'), isTrue);
     expect(names.contains('contractId'), isTrue);
+    expect(names.contains('understandingResult'), isTrue);
+    expect(names.contains('taskGraph'), isTrue);
 
     final turnRaw =
         File('${base.path}/assistant_turn/schema.yaml').readAsStringSync();
@@ -60,14 +62,6 @@ void main() {
     expect(jStr, contains('AssistantJourney'));
     expect(jStr, contains('JourneyStageId'));
     expect(jStr, contains('referenceSummary'));
-
-    final intentYaml = loadYaml(
-          File('${base.path}/intent_graph/schema.yaml').readAsStringSync(),
-        )
-        as YamlMap;
-    final iStr = intentYaml.toString();
-    expect(iStr, contains('query_normalization'));
-    expect(iStr, contains('queryTasks'));
 
     final runYaml = loadYaml(
           File('${base.path}/run_artifacts/schema.yaml').readAsStringSync(),

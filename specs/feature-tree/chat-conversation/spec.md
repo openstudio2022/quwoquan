@@ -176,7 +176,7 @@
 | 维度 | 内容 |
 |------|------|
 | DTO 契约 | 6 个业务对象 DTO 全字段解析（常规/兼容/异常三维度） |
-| 错误码契约 | 5 个 ChatErrorCode round-trip + fromCode + httpStatus + isRetryable |
+| 错误码契约 | 5 个 ChatErrorCode round-trip + fromCode + httpStatus + recoveryAction |
 | Repository 契约 | 17 方法 Mock 实现与 Abstract 一致，返回结构与 service.yaml 对齐 |
 | metadata 一致性 | fields.yaml → codegen → Go struct / Dart DTO 字段零偏差 |
 | 目录迁移 | `lib/features/chat/` 清空，所有代码在 `lib/ui/chat/` 下 |

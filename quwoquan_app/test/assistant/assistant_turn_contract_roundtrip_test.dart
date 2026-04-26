@@ -63,32 +63,12 @@ void main() {
       expect(parsed!.missingContextSlots, <String>['city']);
     });
 
-    test('missing messageKind is rejected under strict contract parsing', () {
+    test('missing messageKind is accepted and normalized by typed parser', () {
       final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
         'contractId': kAssistantTurnCurrentContractId,
         'decision': <String, dynamic>{
           'nextAction': AssistantNextAction.answer.wireName,
         },
-        'phaseId': PlannerPhaseId.answering.wireName,
-        'actionCode': PlannerActionCode.composeAnswer.wireName,
-        'reasonCode': PlannerReasonCode.evidenceReady.wireName,
-        'userMarkdown': '## 已整理\n\n这是最终回答。',
-        'result': const <String, dynamic>{
-          'text': '这是最终回答。',
-          'summary': '最终回答摘要',
-        },
-      });
-
-      expect(parsed, isNull);
-    });
-
-    test('answer-phase turn keeps explicit messageKind without compatibility rewrite', () {
-      final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
-        'contractId': kAssistantTurnCurrentContractId,
-        'decision': <String, dynamic>{
-          'nextAction': AssistantNextAction.answer.wireName,
-        },
-        'messageKind': AssistantMessageKind.progress.wireName,
         'phaseId': PlannerPhaseId.answering.wireName,
         'actionCode': PlannerActionCode.composeAnswer.wireName,
         'reasonCode': PlannerReasonCode.evidenceReady.wireName,
@@ -100,8 +80,33 @@ void main() {
       });
 
       expect(parsed, isNotNull);
-      expect(parsed!.messageKindType, AssistantMessageKind.progress);
+      expect(parsed!.messageKindType, AssistantMessageKind.answer);
       expect(parsed.nextActionType, AssistantNextAction.answer);
     });
+
+    test(
+      'answer-phase turn keeps explicit messageKind without compatibility rewrite',
+      () {
+        final parsed = tryParseAssistantTurnOutput(<String, dynamic>{
+          'contractId': kAssistantTurnCurrentContractId,
+          'decision': <String, dynamic>{
+            'nextAction': AssistantNextAction.answer.wireName,
+          },
+          'messageKind': AssistantMessageKind.progress.wireName,
+          'phaseId': PlannerPhaseId.answering.wireName,
+          'actionCode': PlannerActionCode.composeAnswer.wireName,
+          'reasonCode': PlannerReasonCode.evidenceReady.wireName,
+          'userMarkdown': '## 已整理\n\n这是最终回答。',
+          'result': const <String, dynamic>{
+            'text': '这是最终回答。',
+            'summary': '最终回答摘要',
+          },
+        });
+
+        expect(parsed, isNotNull);
+        expect(parsed!.messageKindType, AssistantMessageKind.progress);
+        expect(parsed.nextActionType, AssistantNextAction.answer);
+      },
+    );
   });
 }

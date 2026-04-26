@@ -15,8 +15,9 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
     return ProfileSubjectViewData(
       profileSubjectId: userId,
       ownerUserId: 'owner-1',
-      subjectType: 'sub_account',
+      subjectType: 'persona',
       subAccountId: userId,
+      userHandle: 'user_name',
       username: 'user_name',
       displayName: '展示名',
       avatarUrl: '',
@@ -27,6 +28,7 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
       postCount: 0,
       circleCount: 0,
       likeCount: 0,
+      isolationLevel: 'open',
       profileVisibility: 'public',
       inheritsFromOwner: true,
       overriddenFields: const <String>[],
@@ -46,12 +48,24 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
   }
 
   @override
-  Future<void> followUser(String targetUserId) async {
+  Future<void> followUser(
+    String targetUserId, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  }) async {
     followCalls += 1;
   }
 
   @override
-  Future<void> unfollowUser(String targetUserId) async {
+  Future<void> unfollowUser(
+    String targetUserId, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  }) async {
     unfollowCalls += 1;
   }
 }
@@ -77,7 +91,7 @@ class _TestRelationshipCapabilityRepository
 }
 
 void main() {
-  test('toggleFollow 会同步 capability relationState 与 shared provider', () async {
+  test('toggleFollow 仅通过 optimistic overlay 更新展示 capability', () async {
     final userRepo = _TestUserProfileRepository();
     final container = ProviderContainer(
       overrides: [
@@ -89,12 +103,17 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    final notifier = container.read(profileNotifierProvider('profile-1').notifier);
+    final notifier = container.read(
+      profileNotifierProvider('profile-1').notifier,
+    );
     await Future<void>.delayed(const Duration(milliseconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 1));
 
     expect(
-      container.read(profileNotifierProvider('profile-1')).capability?.relationState,
+      container
+          .read(profileNotifierProvider('profile-1'))
+          .capability
+          ?.relationState,
       'not_following',
     );
     expect(
@@ -105,8 +124,18 @@ void main() {
     await notifier.toggleFollow();
 
     expect(
-      container.read(profileNotifierProvider('profile-1')).capability?.relationState,
+      container
+          .read(profileNotifierProvider('profile-1'))
+          .displayCapability
+          ?.relationState,
       'following',
+    );
+    expect(
+      container
+          .read(profileNotifierProvider('profile-1'))
+          .capability
+          ?.relationState,
+      'not_following',
     );
     expect(
       container.read(userRelationshipStateProvider).isFollowing('profile-1'),
@@ -119,7 +148,7 @@ void main() {
     );
   });
 
-  test('shared follow 快照已知时，mock capability 不覆盖为未关注', () async {
+  test('shared follow 快照已知时，仅以 optimistic overlay 覆盖展示态', () async {
     final container = ProviderContainer(
       overrides: [
         userProfileRepositoryProvider.overrideWithValue(
@@ -141,6 +170,7 @@ void main() {
 
     final profileState = container.read(profileNotifierProvider('profile-1'));
     expect(profileState.isFollowing, isTrue);
-    expect(profileState.capability?.relationState, 'following');
+    expect(profileState.displayCapability?.relationState, 'following');
+    expect(profileState.capability?.relationState, 'not_following');
   });
 }

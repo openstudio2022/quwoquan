@@ -1,0 +1,16 @@
+---
+description: Runtime error cutover standards
+alwaysApply: true
+---
+
+# Runtime Error Cutover
+
+- Runtime failures must use `RuntimeFailure` plus `RuntimeRecoveryPolicy`; recovery behavior is never stored as a direct error fact.
+- Stable error codes use `MODULE.KIND.REASON`; context belongs in string-only `context.attributes`.
+- Go HTTP boundaries must emit `RuntimeErrorResponse` through `runtime/errors` helpers and preserve request/trace ids.
+- Flutter `CloudException` must be produced through the runtime mapper and expose `runtimeFailure`.
+- Assistant tool failures must include explicit `runtimeFailure`; `effectiveRuntimeFailure` is only a defensive boundary fallback.
+- UI/provider error states must consume structured runtime failures or `runtimeErrorDisplayMessage`, not raw exception strings.
+- Ops runtime errors must use `RuntimeError`/`RuntimeErrorResponse`; NodeNext imports in Ops pages must include explicit `.js` or `/index.js`.
+- Any new metadata/docs/spec examples must describe `recovery.action` / `disruptionLevel`, not legacy per-code retry flags.
+- Run `dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart` after changing error contracts, assistant tools, cloud/runtime code, Ops pages, or service HTTP boundaries.

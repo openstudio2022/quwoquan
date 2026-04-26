@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/pageflip/pageflip.dart';
+import 'package:quwoquan_app/ui/content/pageflip/backward_paper_geometry.dart';
+import 'package:quwoquan_app/ui/content/pageflip/backward_render_frame_builder.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_mesh_builder.dart';
 import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
 import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
@@ -110,40 +112,31 @@ void main() {
       expect(renderFrame, isNotNull);
       expect(renderFrame!.direction, PageflipDirection.back);
       expect(renderFrame.canonicalFrame.reversePose, isNull);
+      // backwardLeafFrame is retained for diagnostics/timeline use only and is
+      // no longer the source of geometry. Keep the existence check so we know
+      // the timeline pipeline still runs.
       expect(renderFrame.canonicalFrame.backwardLeafFrame, isNotNull);
       expect(scene.turningPageIndex, 1);
+      expect(scene.underlayPageIndex, 2);
       expect(scene.coveredPageIndex, 2);
-      expect(renderFrame.canonicalFrame.flippingClipArea, hasLength(4));
-      expect(renderFrame.canonicalFrame.bottomClipArea, hasLength(4));
-      final seamX =
-          renderFrame.canonicalFrame.backwardLeafFrame!.seamXNormalized * 420;
-      expect(renderFrame.canonicalFrame.flippingAnchor.dx, 0);
+      expect(scene.turningPageIndex, isNot(scene.underlayPageIndex));
+      // Backward 主线统一：polygon 来自前翻 StPageFlipCalculation 的镜像输出，
+      // 形状随手势从 3 顶点（最初的小三角）到 4/5 顶点（含 page 上侧/底侧
+      // 交点）变化。这里只断言 polygon 至少形成一个有效面，并且 spine 一侧
+      // 的 anchor 锁在 x=0（镜像后从前翻 W → 0）。
+      expect(
+        renderFrame.canonicalFrame.flippingClipArea.length,
+        greaterThanOrEqualTo(3),
+      );
+      expect(
+        renderFrame.canonicalFrame.bottomClipArea.length,
+        greaterThanOrEqualTo(3),
+      );
+      // flippingAnchor 来自前翻 _rect.topLeft 的镜像 → 旋转后的页面平移基准
+      // 点（一般会落到 spine 之外，是用来配合 polygon 渲染的位置）。这里
+      // 只断言 bottomAnchor 仍锚定在 spine 原点，并且角度非零。
       expect(renderFrame.canonicalFrame.bottomAnchor, Offset.zero);
-      expect(renderFrame.canonicalFrame.angle, 0);
-      expect(
-        renderFrame.canonicalFrame.flippingClipArea[1].dx,
-        closeTo(seamX, 0.001),
-      );
-      expect(
-        renderFrame.canonicalFrame.flippingClipArea[2].dx,
-        closeTo(seamX, 0.001),
-      );
-      expect(
-        renderFrame.canonicalFrame.bottomClipArea[0].dx,
-        closeTo(seamX, 0.001),
-      );
-      expect(
-        renderFrame.canonicalFrame.bottomClipArea[1].dx,
-        closeTo(420, 0.001),
-      );
-      expect(
-        renderFrame.canonicalFrame.bottomClipArea[2].dx,
-        closeTo(420, 0.001),
-      );
-      expect(
-        renderFrame.canonicalFrame.bottomClipArea[3].dx,
-        closeTo(seamX, 0.001),
-      );
+      expect(renderFrame.canonicalFrame.angle.abs(), greaterThan(0.0));
       final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
         localPagePoint: renderFrame.canonicalFrame.localPagePoint,
         pageSize: const Size(420, 584),
@@ -156,6 +149,112 @@ void main() {
           corner: renderFrame.canonicalFrame.corner,
         ),
       );
+    });
+
+    test('backward dynamic render frame mirrors forward geometry contract', () {
+      const pageSize = Size(420, 584);
+      const localPagePoint = Offset(96, 496);
+      final mirroredPoint = _mirrorX(localPagePoint, pageSize.width);
+      final forwardCalculation = StPageFlipCalculation(
+        direction: StPageFlipDirection.forward,
+        corner: StPageFlipCorner.bottom,
+        pageWidth: pageSize.width,
+        pageHeight: pageSize.height,
+      );
+      expect(forwardCalculation.calc(mirroredPoint), isTrue);
+
+      final frame = buildBackwardDynamicRenderFrame(
+        BackwardRenderFrameData(
+          localPagePoint: localPagePoint,
+          progress: 0.42,
+          orientation: StPageFlipOrientation.portrait,
+          corner: StPageFlipCorner.bottom,
+          pageSize: pageSize,
+          flippingClipArea: const <Offset>[],
+          bottomClipArea: const <Offset>[],
+          flippingAnchor: Offset.zero,
+          bottomAnchor: Offset.zero,
+          angle: 0,
+          maxShadowOpacity: 0.2,
+        ),
+      );
+
+      expect(frame.direction, StPageFlipDirection.back);
+      expect(frame.renderDirection, StPageFlipDirection.back);
+      expect(
+        frame.flippingClipArea,
+        _mirroredPolygon(
+          forwardCalculation.getFlippingClipArea(),
+          pageSize.width,
+        ),
+      );
+      expect(
+        frame.bottomClipArea,
+        _mirroredPolygon(
+          forwardCalculation.getBottomClipArea(),
+          pageSize.width,
+        ),
+      );
+      expect(
+        frame.flippingAnchor,
+        _mirrorX(forwardCalculation.getActiveCorner(), pageSize.width),
+      );
+      expect(frame.bottomAnchor, Offset.zero);
+      expect(frame.angle, closeTo(-forwardCalculation.getAngle(), 1e-9));
+    });
+
+    test('backward paper geometry produces bounded topology polygons', () {
+      const pageSize = Size(420, 584);
+      const pageRect = Rect.fromLTWH(240, 308, 420, 584);
+      final frame = buildBackwardDynamicRenderFrame(
+        BackwardRenderFrameData(
+          localPagePoint: const Offset(112, 520),
+          progress: 0.46,
+          orientation: StPageFlipOrientation.portrait,
+          corner: StPageFlipCorner.bottom,
+          pageSize: pageSize,
+          flippingClipArea: const <Offset>[],
+          bottomClipArea: const <Offset>[],
+          flippingAnchor: Offset.zero,
+          bottomAnchor: Offset.zero,
+          angle: 0,
+          maxShadowOpacity: 0.2,
+        ),
+      );
+
+      final geometry = buildBackwardPaperGeometry(
+        pageRect: pageRect,
+        pageSize: pageSize,
+        flippingClipArea: frame.flippingClipArea,
+        progress: frame.progress,
+        localPagePoint: frame.localPagePoint,
+        corner: frame.corner,
+      );
+
+      expect(geometry.hasPreviousFront, isTrue);
+      expect(geometry.hasPreviousBack, isTrue);
+      expect(geometry.hasCurrentResidual, isTrue);
+      expect(geometry.pageEdgeLineTop.dx, lessThan(geometry.foldLineTop.dx));
+      expect(
+        geometry.pageEdgeLineBottom.dx,
+        lessThan(geometry.foldLineBottom.dx),
+      );
+      expect(
+        (geometry.foldLineTop.dx - geometry.foldLineBottom.dx).abs(),
+        greaterThan(1),
+      );
+
+      for (final bounds in <Rect?>[
+        geometry.previousFrontBounds,
+        geometry.previousBackBounds,
+        geometry.currentResidualBounds,
+      ]) {
+        expect(bounds, isNotNull);
+        expect(bounds!.left, greaterThanOrEqualTo(pageRect.left));
+        expect(bounds.top, greaterThanOrEqualTo(pageRect.top));
+        expect(bounds.right, lessThanOrEqualTo(pageRect.right));
+        expect(bounds.bottom, lessThanOrEqualTo(pageRect.bottom));
+      }
     });
 
     test('backward mesh keeps spine and seam vertically aligned', () {
@@ -339,4 +438,11 @@ void main() {
       expect(clipPath.getBounds().height, equals(pageRect.height));
     });
   });
+}
+
+Offset _mirrorX(Offset point, double width) =>
+    Offset(width - point.dx, point.dy);
+
+List<Offset> _mirroredPolygon(List<Offset> polygon, double width) {
+  return polygon.map((point) => _mirrorX(point, width)).toList(growable: false);
 }

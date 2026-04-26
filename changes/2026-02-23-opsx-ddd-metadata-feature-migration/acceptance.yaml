@@ -40,7 +40,7 @@ global_acceptance:
     access_log: "requestId/traceId/pageId/sessionId/userId/device/appVersion + latency + status"
     operation_log_user: "用户关键行为（chat_open/send/feed_scroll）可追踪"
     operation_log_operator: "运营配置发布/回滚全量审计"
-    error_log: "code/userMessage/debugMessage/module/kind/reason/retryable"
+    error_log: "runtimeFailure.code/origin/kind/nature/location/context + recovery.action/disruptionLevel"
     debug_log: "仅在 debug 开关开启时输出，SENSITIVE/PII 字段强制脱敏"
     metrics_alert_slo: "错误率、p95/p99、依赖失败、队列积压、配置发布失败告警"
   A5_product_ops:

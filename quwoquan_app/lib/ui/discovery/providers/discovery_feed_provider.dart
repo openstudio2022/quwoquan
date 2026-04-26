@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 单类 feed 状态：items + nextCursor
 class DiscoveryFeedState {
@@ -105,7 +106,9 @@ class DiscoveryFeedMapNotifier
       debugPrint('DiscoveryFeedMapNotifier load error: $e $st');
       state = {
         ...state,
-        tabId: AsyncData(DiscoveryFeedState(error: e.toString())),
+        tabId: AsyncData(
+          DiscoveryFeedState(error: runtimeErrorDisplayMessage(e)),
+        ),
       };
     }
   }
@@ -155,7 +158,12 @@ class DiscoveryFeedMapNotifier
       debugPrint('DiscoveryFeedMapNotifier append error: $e $st');
       state = {
         ...state,
-        tabId: AsyncData(value.copyWith(isLoading: false, error: e.toString())),
+        tabId: AsyncData(
+          value.copyWith(
+            isLoading: false,
+            error: runtimeErrorDisplayMessage(e),
+          ),
+        ),
       };
     }
   }

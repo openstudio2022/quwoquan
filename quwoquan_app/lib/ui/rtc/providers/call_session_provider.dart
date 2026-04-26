@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class CallSessionState {
   final CallSessionDto? session;
@@ -154,7 +155,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       _startTimeoutTimer();
       return session.id;
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: runtimeErrorDisplayMessage(e),
+      );
       return null;
     }
   }
@@ -168,7 +172,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       final answer = await _repo.answerCall(callId);
       final session = answer.session ?? state.session;
       if (session == null) {
-        state = state.copyWith(isLoading: false, error: 'answerCall: empty session');
+        state = state.copyWith(
+          isLoading: false,
+          error: 'answerCall: empty session',
+        );
         return;
       }
       // Preserve the call type established during the ringing phase;
@@ -197,7 +204,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         await _connectToLiveKit(token, enableVideo: type.isVideo);
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -207,7 +217,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _repo.rejectCall(callId);
       _endCallState();
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
       _endCallState();
     }
   }
@@ -220,7 +230,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _repo.hangUp(callId);
       _endCallState();
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
       _endCallState();
     }
   }
@@ -233,7 +243,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _repo.hangUp(callId);
       _endCallState();
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
       _endCallState();
     }
   }
@@ -268,7 +278,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         await _connectToLiveKit(token, enableVideo: type.isVideo);
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -279,7 +292,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _repo.hangUp(callId);
       _endCallState();
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
       _endCallState();
     }
   }
@@ -292,7 +305,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       final session = await _repo.getCallSession(callId);
       state = state.copyWith(session: session);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
     }
   }
 
@@ -348,7 +361,9 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       isLoading: false,
       error: null,
     );
-    ref.read(activeCallProvider.notifier).startCall(
+    ref
+        .read(activeCallProvider.notifier)
+        .startCall(
           callId: answered.id,
           callType: answered.callType,
           participants: answered.participants,
@@ -385,7 +400,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _lkRoom.setMicrophoneEnabled(!newMuted);
       await _repo.muteToggle(callId: callId, muted: newMuted);
     } catch (e) {
-      state = state.copyWith(isMuted: !newMuted, error: e.toString());
+      state = state.copyWith(
+        isMuted: !newMuted,
+        error: runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -398,7 +416,10 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _lkRoom.setCameraEnabled(newCameraOn);
       await _repo.cameraToggle(callId: callId, cameraOn: newCameraOn);
     } catch (e) {
-      state = state.copyWith(isCameraOn: !newCameraOn, error: e.toString());
+      state = state.copyWith(
+        isCameraOn: !newCameraOn,
+        error: runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -409,7 +430,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _repo.startRecording(callId);
       state = state.copyWith(isRecording: true);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
     }
   }
 
@@ -420,7 +441,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _repo.stopRecording(callId);
       state = state.copyWith(isRecording: false);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
     }
   }
 
@@ -432,7 +453,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _repo.startScreenShare(callId);
       state = state.copyWith(isScreenSharing: true);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
     }
   }
 
@@ -444,7 +465,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
       await _repo.stopScreenShare(callId);
       state = state.copyWith(isScreenSharing: false);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
     }
   }
 

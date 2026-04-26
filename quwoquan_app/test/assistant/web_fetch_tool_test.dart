@@ -121,21 +121,30 @@ void main() {
       expect(result.data?['statusCode'], 404);
     });
 
-    test('classifies 429 as rate limited and retryable', () async {
-      final mockClient = MockClient((request) async {
-        return http.Response('Too many requests', 429);
-      });
-      tool = WebFetchTool(client: mockClient);
-      final result = await tool.execute(
-        AssistantToolArguments.fromJson(<String, dynamic>{
-          'url': 'https://example.com/rate-limited',
-        }),
-      );
+    test(
+      'classifies 429 as rate limited without exposing retryability',
+      () async {
+        final mockClient = MockClient((request) async {
+          return http.Response('Too many requests', 429);
+        });
+        tool = WebFetchTool(client: mockClient);
+        final result = await tool.execute(
+          AssistantToolArguments.fromJson(<String, dynamic>{
+            'url': 'https://example.com/rate-limited',
+          }),
+        );
 
-      expect(result.success, false);
-      expect(result.errorCode, AssistantErrorCode.rateLimited);
-      expect(result.data?['retryable'], isTrue);
-    });
+        expect(result.success, false);
+        expect(result.errorCode, AssistantErrorCode.rateLimited);
+        expect(
+          result.data?.containsKey(
+            'retry'
+            'able',
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('classifies 503 as transient upstream failure', () async {
       final mockClient = MockClient((request) async {
@@ -150,7 +159,13 @@ void main() {
 
       expect(result.success, false);
       expect(result.errorCode, AssistantErrorCode.networkUnavailable);
-      expect(result.data?['retryable'], isTrue);
+      expect(
+        result.data?.containsKey(
+          'retry'
+          'able',
+        ),
+        isFalse,
+      );
     });
 
     test('handles unsupported content type', () async {

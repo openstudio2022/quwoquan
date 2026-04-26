@@ -1,14 +1,13 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/slot_schema.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
-import 'package:quwoquan_app/assistant/conversation/explainability/default_processing_copy_bank.dart';
 
 class ConversationStateKernel {
   const ConversationStateKernel();
@@ -41,11 +40,11 @@ class ConversationStateKernel {
     );
   }
 
-  ConversationStateDecision evaluate({
+  AssistantTypedTurnDecision evaluate({
     required String domainId,
     required String problemClass,
-    required IntentGraph intentGraph,
-    required List<QueryTask> queryTasks,
+    required AssistantPlanView planView,
+    required List<SearchPlanItem> searchPlans,
     required DialogueRoundScript dialogueRoundScript,
     required AggregationState aggregationState,
     required Map<String, dynamic> answerPayload,
@@ -174,9 +173,9 @@ class ConversationStateKernel {
               : EvidenceStatus.retry);
     final requiresEvidenceContinuation =
         evidenceEvaluation.evidenceRequired ||
-        queryTasks.isNotEmpty ||
-        intentGraph.requiresExternalEvidence ||
-        intentGraph.mustVerifyClaims;
+        searchPlans.isNotEmpty ||
+        planView.requiresExternalEvidence ||
+        planView.mustVerifyClaims;
     final hasGroundingEvidence =
         evidenceEvaluation.entries.isNotEmpty ||
         aggregationState.canGivePartialAnswer ||
@@ -291,7 +290,7 @@ class ConversationStateKernel {
         nextActionType == AssistantNextAction.answer &&
         (finalAnswerModeType == FinalAnswerMode.full ||
             finalAnswerModeType == FinalAnswerMode.boundedAnswer);
-    final qualityGates = QualityGatesDto(
+    final qualityGates = AssistantTurnQualityGates(
       structureSafe: true,
       taskSafe:
           missingCriticalSlots.isEmpty ||
@@ -301,7 +300,7 @@ class ConversationStateKernel {
           evidenceStatusType == EvidenceStatus.bounded,
       renderSafe: finalAnswerModeType != FinalAnswerMode.replan,
     );
-    return ConversationStateDecision(
+    return AssistantTypedTurnDecision(
       nextAction: nextActionType,
       finalAnswerMode: finalAnswerModeType,
       answerEligibility: finalAnswerReady
@@ -414,6 +413,6 @@ class ConversationStateKernel {
   }
 
   String _defaultAskUserPrompt({required String slotId}) {
-    return DefaultProcessingCopyBank.conversationKernelAskPrompt(slotId);
+    return '';
   }
 }

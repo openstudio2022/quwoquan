@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/media/upload_policy.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// Orchestrates: record result → upload → send voice message.
 enum VoiceSendStatus { idle, uploading, sending, completed, failed }
@@ -37,8 +38,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
 
   final String conversationId;
 
-  MediaUploadManager get _uploadManager =>
-      ref.read(mediaUploadManagerProvider);
+  MediaUploadManager get _uploadManager => ref.read(mediaUploadManagerProvider);
   ChatMessageNotifier get _messageNotifier =>
       ref.read(chatMessageProvider(conversationId).notifier);
 
@@ -57,9 +57,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
         fileSize: result.fileSize,
         ownerId: 'current_user',
         fileName: result.filePath.split('/').last,
-        completionMetadata: {
-          'durationMs': result.durationMs,
-        },
+        completionMetadata: {'durationMs': result.durationMs},
       );
 
       final enqueued = await _uploadManager.enqueue(task);
@@ -102,7 +100,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
     } catch (e) {
       state = state.copyWith(
         status: VoiceSendStatus.failed,
-        error: e.toString(),
+        error: runtimeErrorDisplayMessage(e),
       );
     }
   }
@@ -113,7 +111,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
 }
 
 /// Creates a VoiceSendNotifier for a specific conversation.
-final voiceSendProvider = NotifierProvider.family<
-    VoiceSendNotifier, VoiceSendState, String>(
-  VoiceSendNotifier.new,
-);
+final voiceSendProvider =
+    NotifierProvider.family<VoiceSendNotifier, VoiceSendState, String>(
+      VoiceSendNotifier.new,
+    );

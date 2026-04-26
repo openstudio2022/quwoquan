@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -15,6 +14,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/providers/persona_management_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_ios_components.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class PersonaManagementPage extends ConsumerStatefulWidget {
   const PersonaManagementPage({super.key});
@@ -426,7 +426,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
                   );
                 } catch (e) {
                   if (mounted) {
-                    AppToast.show(context, '$e');
+                    AppToast.show(context, runtimeErrorDisplayMessage(e));
                   }
                 }
               },
@@ -516,7 +516,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       }
     } catch (e) {
       if (mounted) {
-        AppToast.show(context, '$e');
+        AppToast.show(context, runtimeErrorDisplayMessage(e));
       }
     }
   }
@@ -529,7 +529,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       await notifier.applySyncSuggestion(suggestion: suggestion);
     } catch (e) {
       if (mounted) {
-        AppToast.show(context, '$e');
+        AppToast.show(context, runtimeErrorDisplayMessage(e));
       }
     }
   }
@@ -683,6 +683,7 @@ class _PersonaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRetired = persona.isRetired;
     final inheritanceLabel = persona.inheritsProfileFromOwner
         ? (persona.lastProfileSyncAt != null
               ? UITextConstants.personaInheritanceSynced
@@ -770,17 +771,21 @@ class _PersonaCard extends StatelessWidget {
                   vertical: AppSpacing.intraGroupXs,
                 ),
                 decoration: BoxDecoration(
-                  color: isCurrent
+                  color: isRetired
+                      ? AppColors.iosFill(context)
+                      : isCurrent
                       ? AppColors.iosAccent(context)
                       : AppColors.iosFill(context),
                   borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
                 ),
                 child: Text(
-                  isCurrent
+                  isRetired
+                      ? UITextConstants.personaRetired
+                      : isCurrent
                       ? UITextConstants.personaCurrentUsing
                       : UITextConstants.personaInactive,
                   style: TextStyle(
-                    color: isCurrent
+                    color: !isRetired && isCurrent
                         ? CupertinoColors.white
                         : AppColors.iosSecondaryLabel(context),
                   ),
@@ -795,19 +800,21 @@ class _PersonaCard extends StatelessWidget {
             children: <Widget>[
               CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: isCurrent ? null : onActivate,
+                onPressed: isCurrent || isRetired ? null : onActivate,
                 child: Text(
-                  isCurrent
+                  isRetired
+                      ? UITextConstants.personaRetired
+                      : isCurrent
                       ? UITextConstants.personaCurrentUsing
                       : UITextConstants.personaSwitchNow,
                 ),
               ),
               CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: onEdit,
+                onPressed: isRetired ? null : onEdit,
                 child: const Text(UITextConstants.profileEditLabel),
               ),
-              if (!persona.isPrimary)
+              if (!persona.isPrimary && !isRetired)
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   onPressed: onDelete,

@@ -191,10 +191,10 @@ class KnowledgeQaEngine {
     required List<KnowledgeQaEvidence> evidences,
   }) {
     if (evidences.isEmpty) {
-      return '当前未检索到足够可信的信息，建议补充问题范围后再查询。';
+      return '';
     }
     final top = evidences.first;
-    return '针对「$query」的当前结论：${top.snippet.isEmpty ? top.title : top.snippet}';
+    return top.snippet.isEmpty ? top.title : top.snippet;
   }
 
   String _buildUncertainty({
@@ -202,11 +202,7 @@ class KnowledgeQaEngine {
     required List<String> providersTried,
     required bool degraded,
   }) {
-    final base = '已使用 ${providersTried.join('/')} 检索，证据条数 $evidenceCount。';
-    if (degraded || evidenceCount < 2) {
-      return '$base 交叉验证不足，请谨慎参考并建议二次确认。';
-    }
-    return '$base 信息一致性良好。';
+    return '';
   }
 
   String _buildStructuredAnswer({
@@ -214,14 +210,7 @@ class KnowledgeQaEngine {
     required List<KnowledgeQaEvidence> evidences,
     required String uncertainty,
   }) {
-    final evidenceLines = evidences
-        .take(3)
-        .map(
-          (e) =>
-              '- [${e.provider}] ${e.title.isEmpty ? '摘要' : e.title}${e.url.isEmpty ? '' : ' (${e.url})'}',
-        )
-        .join('\n');
-    return '结论：$conclusion\n\n依据：\n$evidenceLines\n\n不确定性：$uncertainty';
+    return conclusion.trim();
   }
 
   String _resolveRetrievalToolName(String explicitToolName) {

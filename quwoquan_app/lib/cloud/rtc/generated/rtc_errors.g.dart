@@ -32,11 +32,6 @@ enum RtcErrorCode {
     return null;
   }
 
-  bool get isRetryable =>
-      this == rateLimited ||
-      this == livekitUnavailable ||
-      this == tokenGenerationFailed;
-
   bool get isUserError => code.startsWith('RTC.USER.');
 
   bool get isSystemError => code.startsWith('RTC.SYSTEM.');

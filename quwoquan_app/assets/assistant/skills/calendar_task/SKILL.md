@@ -3,7 +3,7 @@ name: calendar_task
 description: 日程管理、提醒设置、待办跟踪、会议安排。纯任务执行，确认后立即操作。
 domain: calendar_task
 mode: task
-allowed_tools: intent_bridge local_context
+allowed_tools: intent_bridge
 trigger_keywords: []
 searchPolicy:
   maxReflection: 0
@@ -35,9 +35,6 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 禁用信号：明显属于其他垂类时不应强行触发。
 - 竞争冲突：不确定时先 ask_user 澄清主诉求。
 
-## local_context 输出约束
-当调用 local_context 时，必须按 `local_context_v1` 解析，并明确 `media.included=false`。
-
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
 1. 机器轨 JSON：包含 decision、toolCalls、slotState
@@ -52,12 +49,10 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {
     "taskContent": {"value": "", "source": "user_query|memory|unknown"},
-    "deadline": {"value": "", "source": "user_query|memory|local_context|unknown"},
+    "deadline": {"value": "", "source": "user_query|memory|system_context|unknown"},
     "priority": {"value": "", "source": "user_query|memory|unknown"}
   },
-  "toolCalls": [
-    {"toolName": "local_context", "arguments": {"requestedFields": ["time"]}}
-  ],
+  "toolCalls": [],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "正在整理你的任务清单…"
 }

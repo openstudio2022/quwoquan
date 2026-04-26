@@ -284,7 +284,6 @@ void main() {
       // 语义层：端侧 ErrorCode 映射
       final code = ChatErrorCode.fromCode(body['code'] as String);
       expect(code, ChatErrorCode.conversationNotFound);
-      expect(code.isRetryable, isFalse);
     });
   });
 

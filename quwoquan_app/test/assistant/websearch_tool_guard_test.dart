@@ -493,7 +493,7 @@ void main() {
         AssistantToolArguments.fromJson(<String, dynamic>{
           'query': '昨天A股为什么大涨',
           'domainId': 'finance_consumer',
-          'queryTasks': <Map<String, dynamic>>[
+          'searchPlans': <Map<String, dynamic>>[
             <String, dynamic>{'id': 'q1', 'query': '2026-04-09 A股 大涨 原因'},
             <String, dynamic>{'id': 'q2', 'query': '2026-04-09 中国股市 表现'},
             <String, dynamic>{'id': 'q3', 'query': '2026-04-09 A股 领涨板块'},
@@ -549,9 +549,9 @@ void main() {
       AssistantToolArguments.fromJson(<String, dynamic>{
         'query': '昨天A股为什么大涨',
         'domainId': 'finance_consumer',
-        'queryTaskId': 'stock_reason',
-        'queryTaskLabel': '上涨原因',
-        'entityAnchors': <String>['A股'],
+        'searchPlanId': 'stock_reason',
+        'searchPlanLabel': '上涨原因',
+        'entityRefs': <String>['A股'],
         'referenceNowIso': '2026-04-10T10:30:00.000',
         'timezone': 'Asia/Shanghai',
       }),
@@ -651,7 +651,7 @@ Future<String> _testTextLoader(String path) async {
     return jsonEncode(<String, dynamic>{
       'defaultTimeScope': 'latest',
       'defaultFreshnessHoursMax': 6,
-      'maxQueryTasks': 2,
+      'maxSearchPlans': 2,
       'minAcceptedRelevanceScore': 0.45,
       'authorityDomains': <String>['eastmoney.com', 'sina.com.cn'],
     });

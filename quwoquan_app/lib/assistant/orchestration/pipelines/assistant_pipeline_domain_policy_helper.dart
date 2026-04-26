@@ -1,5 +1,4 @@
-import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
@@ -14,7 +13,7 @@ DomainPolicyBundle buildDomainPolicyBundle({
   required DialogueRoundScript dialogueRoundScript,
   required Map<String, dynamic> retrievalPolicy,
   required EvidenceEvaluationResult evidenceEvaluation,
-  required ConversationStateDecision stateDecision,
+  required AssistantTypedTurnDecision stateDecision,
   DomainPolicyBundle? previous,
 }) {
   return DomainPolicyBundle(
@@ -57,7 +56,7 @@ DomainPolicyBundle buildDomainPolicyBundle({
       ...retrievalPolicy,
       'coveredDimensions': evidenceEvaluation.coveredDimensions,
       'missingDimensions': evidenceEvaluation.missingDimensions,
-      'coveredQueryTaskIds': evidenceEvaluation.coveredQueryTaskIds,
+      'coveredSearchPlanIds': evidenceEvaluation.coveredSearchPlanIds,
     },
     answerPolicy: <String, dynamic>{
       ...?previous?.answerPolicy,

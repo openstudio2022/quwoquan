@@ -10,10 +10,10 @@ class AssistantPipelineSynthesisTemplateBundle {
     required this.dialogueContinuity,
     required this.evidenceContext,
     required this.searchIterationState,
-    required this.intentGraphJson,
-    required this.queryTasksJson,
-    required this.entityAnchors,
-    required this.queryTasks,
+    required this.planViewJson,
+    required this.searchPlansJson,
+    required this.entityRefs,
+    required this.searchPlans,
     required this.answerShape,
     required this.recentDialogueRounds,
   });
@@ -28,10 +28,10 @@ class AssistantPipelineSynthesisTemplateBundle {
   final Map<String, dynamic> dialogueContinuity;
   final Map<String, dynamic> evidenceContext;
   final Map<String, dynamic> searchIterationState;
-  final String intentGraphJson;
-  final List<Map<String, dynamic>> queryTasksJson;
-  final List<String> entityAnchors;
-  final List<Map<String, dynamic>> queryTasks;
+  final String planViewJson;
+  final List<Map<String, dynamic>> searchPlansJson;
+  final List<String> entityRefs;
+  final List<Map<String, dynamic>> searchPlans;
   final String answerShape;
   final List<Map<String, dynamic>> recentDialogueRounds;
 }

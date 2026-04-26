@@ -189,7 +189,7 @@
 
 ### KD6：跨域 canonical key 与透传 envelope
 
-所有下游域统一以 `personaId` 作为内部主体主键，以 `userHandle` 作为公开引用句柄。
+所有下游域统一以 `personaId` 作为内部主体主键，以 `userHandle` 作为公开引用句柄；`profileSubjectId` 只保留为当前公开读模型与兼容投影层字段。
 
 统一透传 envelope：
 

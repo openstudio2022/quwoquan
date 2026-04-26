@@ -15,7 +15,7 @@ errors:
     kind: USER
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: postNotFound
     go_const: ErrPostNotFound
     user_message:
@@ -26,7 +26,7 @@ errors:
     kind: USER
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: commentNotFound
     go_const: ErrCommentNotFound
     user_message:
@@ -37,7 +37,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: forbiddenEdit
     go_const: ErrForbiddenEdit
     user_message:
@@ -48,7 +48,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: forbiddenDelete
     go_const: ErrForbiddenDelete
     user_message:
@@ -59,7 +59,7 @@ errors:
     kind: USER
     reason: unauthorized
     http_status: 401
-    retryable: false
+    recovery_action: surface
     dart_const: unauthorized
     go_const: ErrUnauthorized
     user_message:
@@ -70,7 +70,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidArgument
     go_const: ErrInvalidArgument
     user_message:
@@ -81,7 +81,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidContentType
     go_const: ErrInvalidContentType
     user_message:
@@ -92,8 +92,8 @@ errors:
     kind: USER
     reason: rate_limited
     http_status: 429
-    retryable: true
-    retry_after_seconds: 60
+    recovery_action: retry
+    recovery_after_seconds: 60
     dart_const: rateLimited
     go_const: ErrRateLimited
     user_message:
@@ -104,7 +104,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: commentTooLong
     go_const: ErrCommentTooLong
     user_message:
@@ -115,8 +115,8 @@ errors:
     kind: USER
     reason: rate_limited
     http_status: 429
-    retryable: true
-    retry_after_seconds: 60
+    recovery_action: retry
+    recovery_after_seconds: 60
     dart_const: commentRateLimited
     go_const: ErrCommentRateLimited
     user_message:
@@ -127,7 +127,7 @@ errors:
     kind: USER
     reason: conflict
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: commentLikeDuplicate
     go_const: ErrCommentLikeDuplicate
     user_message:
@@ -138,7 +138,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: commentForbiddenDelete
     go_const: ErrCommentForbiddenDelete
     user_message:
@@ -149,7 +149,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: contentTooLong
     go_const: ErrContentTooLong
     user_message:
@@ -160,8 +160,8 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: true
-    retry_after_seconds: 3
+    recovery_action: retry
+    recovery_after_seconds: 3
     dart_const: mediaNotReady
     go_const: ErrMediaNotReady
     user_message:
@@ -172,7 +172,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: postImmutableAfterPublish
     go_const: ErrPostImmutableAfterPublish
     user_message:
@@ -183,7 +183,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: publicRequiredForCircleDistribution
     go_const: ErrPublicRequiredForCircleDistribution
     user_message:
@@ -194,7 +194,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidMomentPayload
     go_const: ErrInvalidMomentPayload
     user_message:
@@ -205,7 +205,7 @@ errors:
     kind: USER
     reason: gone
     http_status: 410
-    retryable: false
+    recovery_action: surface
     dart_const: contentDeleted
     go_const: ErrContentDeleted
     user_message:
@@ -216,7 +216,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: circleDistributionForbidden
     go_const: ErrCircleDistributionForbidden
     user_message:
@@ -229,8 +229,8 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: true
-    retry_after_seconds: 5
+    recovery_action: retry
+    recovery_after_seconds: 5
     dart_const: storageWriteFailed
     go_const: ErrStorageWriteFailed
     user_message:
@@ -241,7 +241,7 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: false
+    recovery_action: surface
     dart_const: internalError
     go_const: ErrInternalError
     user_message:
@@ -254,8 +254,8 @@ errors:
     kind: MIDDLEWARE
     reason: timeout
     http_status: 504
-    retryable: true
-    retry_after_seconds: 10
+    recovery_action: retry
+    recovery_after_seconds: 10
     dart_const: upstreamTimeout
     go_const: ErrUpstreamTimeout
     user_message:

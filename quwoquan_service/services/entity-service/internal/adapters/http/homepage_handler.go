@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/entity-service/internal/application"
 )
 
@@ -36,7 +37,7 @@ func (h *Handler) Routes() http.Handler {
 
 func (h *Handler) handleSearchHomepages(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.NotFound(w, r)
+		writeRuntimeNotFound(w, r)
 		return
 	}
 	query := r.URL.Query()
@@ -56,17 +57,17 @@ func (h *Handler) handleSearchHomepages(w http.ResponseWriter, r *http.Request) 
 
 func (h *Handler) handleCandidates(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost || r.URL.Path != "/v1/homepages/candidates" {
-		http.NotFound(w, r)
+		writeRuntimeNotFound(w, r)
 		return
 	}
 	var input application.HomepageInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, newBadRequest(err.Error()))
+		writeError(w, r, newBadRequest(err.Error()))
 		return
 	}
 	homepage, err := h.service.IntakeHomepageCandidate(r.Context(), input, "owner_created")
 	if err != nil {
-		writeError(w, err)
+		writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, homepage)
@@ -74,17 +75,17 @@ func (h *Handler) handleCandidates(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleSuggestCandidate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.NotFound(w, r)
+		writeRuntimeNotFound(w, r)
 		return
 	}
 	var input application.HomepageInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, newBadRequest(err.Error()))
+		writeError(w, r, newBadRequest(err.Error()))
 		return
 	}
 	homepage, err := h.service.SuggestHomepageCandidate(r.Context(), input)
 	if err != nil {
-		writeError(w, err)
+		writeError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, homepage)
@@ -93,19 +94,19 @@ func (h *Handler) handleSuggestCandidate(w http.ResponseWriter, r *http.Request)
 func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 	remainder := strings.TrimPrefix(r.URL.Path, homepagesPrefix)
 	if remainder == r.URL.Path {
-		http.NotFound(w, r)
+		writeRuntimeNotFound(w, r)
 		return
 	}
 	segments := strings.Split(strings.Trim(remainder, "/"), "/")
 	if len(segments) == 0 || segments[0] == "" {
-		http.NotFound(w, r)
+		writeRuntimeNotFound(w, r)
 		return
 	}
 	if segments[0] == "candidates" && len(segments) == 2 && r.Method == http.MethodPost && strings.HasSuffix(segments[1], ":publish") {
 		homepageID := strings.TrimSuffix(segments[1], ":publish")
 		homepage, err := h.service.PublishHomepageCandidate(r.Context(), homepageID)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, homepage)
@@ -114,12 +115,12 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 	homepageID := segments[0]
 	if len(segments) == 1 {
 		if r.Method != http.MethodGet {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		homepage, err := h.service.GetHomepage(r.Context(), homepageID)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, homepage)
@@ -129,34 +130,34 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 	switch segments[1] {
 	case "shell":
 		if r.Method != http.MethodGet || len(segments) != 2 {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		shell, err := h.service.GetHomepageShell(r.Context(), homepageID)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, shell)
 	case "review-summary":
 		if r.Method != http.MethodGet || len(segments) != 2 {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		summary, err := h.service.GetHomepageReviewSummary(r.Context(), homepageID)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, summary)
 	case "related-groups":
 		if r.Method != http.MethodGet || len(segments) != 2 {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		summary, err := h.service.GetHomepageRelatedGroups(r.Context(), homepageID)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, summary)
@@ -164,17 +165,17 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 		h.handleClaimRequests(w, r, homepageID, segments)
 	case "claimed-basics":
 		if r.Method != http.MethodPatch || len(segments) != 2 {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		var input application.HomepageBasicInput
 		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, newBadRequest(err.Error()))
+			writeError(w, r, newBadRequest(err.Error()))
 			return
 		}
 		homepage, err := h.service.UpdateClaimedHomepageBasics(r.Context(), homepageID, input)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, homepage)
@@ -183,22 +184,22 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 	default:
 		if strings.HasSuffix(segments[0], ":publish") && r.Method == http.MethodPost {
 			// Unreachable for current routes, retained for forward compatibility.
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		if len(segments) == 1 && strings.HasSuffix(homepageID, ":publish") {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		if len(segments) == 1 && strings.HasSuffix(segments[0], ":publish") {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
 		if len(segments) == 0 {
-			http.NotFound(w, r)
+			writeRuntimeNotFound(w, r)
 			return
 		}
-		http.NotFound(w, r)
+		writeRuntimeNotFound(w, r)
 	}
 }
 
@@ -211,7 +212,7 @@ func (h *Handler) handleClaimRequests(
 	if len(segments) == 2 && r.Method == http.MethodPost {
 		var input application.ClaimRequestInput
 		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, newBadRequest(err.Error()))
+			writeError(w, r, newBadRequest(err.Error()))
 			return
 		}
 		if strings.TrimSpace(input.RequesterUserID) == "" {
@@ -219,7 +220,7 @@ func (h *Handler) handleClaimRequests(
 		}
 		request, err := h.service.CreateHomepageClaimRequest(r.Context(), homepageID, input)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, request)
@@ -228,19 +229,19 @@ func (h *Handler) handleClaimRequests(
 	if len(segments) == 3 && r.Method == http.MethodPost && strings.HasSuffix(segments[2], ":review") {
 		var input application.ClaimReviewInput
 		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, newBadRequest(err.Error()))
+			writeError(w, r, newBadRequest(err.Error()))
 			return
 		}
 		claimRequestID := strings.TrimSuffix(segments[2], ":review")
 		request, err := h.service.ReviewHomepageClaimRequest(r.Context(), homepageID, claimRequestID, input)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, request)
 		return
 	}
-	http.NotFound(w, r)
+	writeRuntimeNotFound(w, r)
 }
 
 func (h *Handler) handleStatusReports(
@@ -252,7 +253,7 @@ func (h *Handler) handleStatusReports(
 	if len(segments) == 2 && r.Method == http.MethodPost {
 		var input application.StatusReportInput
 		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, newBadRequest(err.Error()))
+			writeError(w, r, newBadRequest(err.Error()))
 			return
 		}
 		if strings.TrimSpace(input.ReporterUserID) == "" {
@@ -260,7 +261,7 @@ func (h *Handler) handleStatusReports(
 		}
 		report, err := h.service.CreateHomepageStatusReport(r.Context(), homepageID, input)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, report)
@@ -269,19 +270,19 @@ func (h *Handler) handleStatusReports(
 	if len(segments) == 3 && r.Method == http.MethodPost && strings.HasSuffix(segments[2], ":review") {
 		var input application.StatusReportReviewInput
 		if err := decodeJSON(r, &input); err != nil {
-			writeError(w, newBadRequest(err.Error()))
+			writeError(w, r, newBadRequest(err.Error()))
 			return
 		}
 		reportID := strings.TrimSuffix(segments[2], ":review")
 		report, err := h.service.ReviewHomepageStatusReport(r.Context(), homepageID, reportID, input)
 		if err != nil {
-			writeError(w, err)
+			writeError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, report)
 		return
 	}
-	http.NotFound(w, r)
+	writeRuntimeNotFound(w, r)
 }
 
 func decodeJSON(r *http.Request, target any) error {
@@ -308,7 +309,7 @@ func newBadRequest(debugMessage string) *application.AppError {
 	}
 }
 
-func writeError(w http.ResponseWriter, err error) {
+func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	appErr, ok := err.(*application.AppError)
 	if !ok {
 		appErr = &application.AppError{
@@ -318,11 +319,27 @@ func writeError(w http.ResponseWriter, err error) {
 			DebugMessage: err.Error(),
 		}
 	}
-	writeJSON(w, appErr.StatusCode, map[string]any{
-		"code":         appErr.Code,
-		"userMessage":  appErr.UserMessage,
-		"debugMessage": appErr.DebugMessage,
-	})
+	code, parseErr := rterr.ParseCode(appErr.Code)
+	if parseErr != nil {
+		code = rterr.NewCode(rterr.ModuleEntity, rterr.KindSystem, "internal_error")
+	}
+	rterr.WriteHTTPError(
+		w,
+		rterr.NewAppError(
+			code,
+			appErr.UserMessage,
+			appErr.DebugMessage,
+		),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
+}
+
+func writeRuntimeNotFound(w http.ResponseWriter, r *http.Request) {
+	rterr.WriteHTTPError(
+		w,
+		rterr.NewInvalidArgument(rterr.ModuleUser, "接口不存在", "route not found"),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

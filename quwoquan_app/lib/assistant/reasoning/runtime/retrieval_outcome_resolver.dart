@@ -4,12 +4,14 @@ import 'dart:math' as math;
 
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/reasoning/temporal/relative_time_resolver.dart';
 
 const RelativeTimeResolver _relativeTimeResolver = RelativeTimeResolver();
@@ -23,7 +25,7 @@ class RetrievalOutcomeResolver {
     required RetrievalProcessingSnapshot retrievalProcessing,
     required EvidenceEvaluationResult evidenceEvaluation,
     required SynthesisReadinessResult synthesisReadiness,
-    List<QueryTask> queryTasks = const <QueryTask>[],
+    List<SearchPlanItem> searchPlans = const <SearchPlanItem>[],
     List<AssistantToolResultRow> toolResults = const <AssistantToolResultRow>[],
     bool terminalPayloadComplete = true,
     bool degraded = false,
@@ -52,7 +54,7 @@ class RetrievalOutcomeResolver {
     );
     final temporalAssessment = _resolveTemporalAssessment(
       policy: policy,
-      queryTasks: queryTasks,
+      searchPlans: searchPlans,
       toolResults: toolResults,
       evidenceEvaluation: evidenceEvaluation,
       referenceNowIso: temporalAnchor.referenceNowIso,
@@ -88,10 +90,8 @@ class RetrievalOutcomeResolver {
                       missingDimensions.isEmpty)) &&
               relevanceSatisfied;
     final summary = _firstNonEmpty(<String>[
-      !relevanceSatisfied ? '当前检索到的资料与问题核心关联度不够，需要补充更有针对性的证据后再给出结论。' : '',
-      synthesisReadiness.ready ? evidenceEvaluation.summary : '',
       retrievalProcessing.processingSummary,
-      synthesisReadiness.reason,
+      synthesisReadiness.ready ? evidenceEvaluation.summary : '',
     ]);
     final status = _resolveStatus(
       degraded: degraded,
@@ -109,7 +109,7 @@ class RetrievalOutcomeResolver {
       evidenceRequired: policy.evidenceRequired,
     );
     return RetrievalOutcome(
-      status: status,
+      status: status.wireName,
       summary: summary,
       evidenceRequired: policy.evidenceRequired,
       authorityRequired: policy.authorityRequired,
@@ -121,7 +121,7 @@ class RetrievalOutcomeResolver {
       acceptedDocumentCount: acceptedDocumentCount,
       coveredDimensions: coveredDimensions,
       missingDimensions: missingDimensions,
-      coveredQueryTaskIds: evidenceEvaluation.coveredQueryTaskIds,
+      coveredSearchPlanIds: evidenceEvaluation.coveredSearchPlanIds,
       authorityDomains: policy.authorityDomains,
       authoritySatisfied: authoritySatisfied,
       freshnessHoursMax: policy.freshnessHoursMax,
@@ -132,10 +132,7 @@ class RetrievalOutcomeResolver {
       timeWindowSatisfied: temporalAssessment.timeWindowSatisfied,
       evidencePassed: evidencePassed,
       evidenceStatus: evidenceEvaluation.status.wireName,
-      expansionReason: _firstNonEmpty(<String>[
-        retrievalProcessing.expansionReason,
-        synthesisReadiness.ready ? '' : synthesisReadiness.reason,
-      ]),
+      expansionReason: retrievalProcessing.expansionReason,
       terminalPayloadComplete: terminalPayloadComplete,
       degraded: degraded,
       retrievalProcessing: retrievalProcessing,
@@ -185,16 +182,33 @@ class RetrievalOutcomeResolver {
       retrievalProcessing: retrievalProcessing,
       evidenceEvaluation: evidenceEvaluation,
       synthesisReadiness: synthesisReadiness,
-      queryTasks: _parseQueryTasks(
-        structured['queryTasks'] ??
-            ((structured['intentGraph'] as Map?)?['queryTasks']),
-      ),
+      searchPlans: _resolveSearchPlansFromStructured(structured),
       toolResults: _toolResultsFromStructured(structured),
       terminalPayloadComplete: _terminalPayloadComplete(structured),
       degraded: degraded,
       referenceNowIso: temporalReference.referenceNowIso,
       timezone: temporalReference.timezone,
     );
+  }
+
+  List<SearchPlanItem> _resolveSearchPlansFromStructured(
+    Map<String, dynamic> structured,
+  ) {
+    final taskGraphRaw = structured[assistantTaskGraphField];
+    if (taskGraphRaw is Map) {
+      try {
+        final taskGraph = TaskGraph.fromJson(
+          taskGraphRaw.cast<String, dynamic>(),
+        );
+        final typedPlans = searchPlansFromTaskGraph(taskGraph);
+        if (typedPlans.isNotEmpty) {
+          return typedPlans;
+        }
+      } catch (_) {
+        // Fall through to compatibility parsing.
+      }
+    }
+    return _parseSearchPlans(structured['searchPlans']);
   }
 
   bool _relevanceSatisfied({
@@ -320,8 +334,8 @@ class RetrievalOutcomeResolver {
             ? (resultData['coveredDimensions'] as List).cast<String>()
             : const <String>[],
       ),
-      coveredQueryTaskIds:
-          (resultData['coveredQueryTaskIds'] as List?)
+      coveredSearchPlanIds:
+          (resultData['coveredSearchPlanIds'] as List?)
               ?.map((item) => item.toString().trim())
               .where((item) => item.isNotEmpty)
               .toList(growable: false) ??
@@ -339,7 +353,7 @@ class RetrievalOutcomeResolver {
       retrievalProcessing: retrievalProcessing,
       evidenceEvaluation: evidenceEvaluation,
       synthesisReadiness: const SynthesisReadinessResult(ready: true),
-      queryTasks: _parseQueryTasks(resultData['queryTasks']),
+      searchPlans: _parseSearchPlans(resultData['searchPlans']),
       toolResults: <AssistantToolResultRow>[
         AssistantToolResultRow(
           toolName: '',
@@ -360,8 +374,7 @@ class RetrievalOutcomeResolver {
     var mergedRef = referenceNowIso.trim();
     var mergedTz = timezone.trim();
     for (final item in toolResults) {
-      final data =
-          item.dataPayload;
+      final data = item.dataPayload;
       final tc =
           (data['timeConstraint'] as Map?)?.cast<String, Object?>() ??
           const <String, Object?>{};
@@ -381,14 +394,14 @@ class RetrievalOutcomeResolver {
 
   _TemporalAssessment _resolveTemporalAssessment({
     required AnswerBoundaryPolicy policy,
-    required List<QueryTask> queryTasks,
+    required List<SearchPlanItem> searchPlans,
     required List<AssistantToolResultRow> toolResults,
     required EvidenceEvaluationResult evidenceEvaluation,
     required String referenceNowIso,
     required String timezone,
   }) {
     final historicalWindowRequired = _requiresHistoricalWindow(
-      queryTasks: queryTasks,
+      searchPlans: searchPlans,
       toolResults: toolResults,
       referenceNowIso: referenceNowIso,
       timezone: timezone,
@@ -397,7 +410,7 @@ class RetrievalOutcomeResolver {
         !historicalWindowRequired &&
         _requiresStrictFreshness(
           policy: policy,
-          queryTasks: queryTasks,
+          searchPlans: searchPlans,
           toolResults: toolResults,
         );
     if (historicalWindowRequired) {
@@ -441,22 +454,21 @@ class RetrievalOutcomeResolver {
 
   bool _requiresStrictFreshness({
     required AnswerBoundaryPolicy policy,
-    required List<QueryTask> queryTasks,
+    required List<SearchPlanItem> searchPlans,
     required List<AssistantToolResultRow> toolResults,
   }) {
-    if (queryTasks.any(
-      (task) =>
-          task.freshnessNeed == FreshnessNeed.recent ||
-          task.freshnessNeed == FreshnessNeed.realtime,
+    if (searchPlans.any(
+      (plan) =>
+          plan.freshnessNeed == FreshnessNeed.recent ||
+          plan.freshnessNeed == FreshnessNeed.realtime,
     )) {
       return true;
     }
-    if (queryTasks.any(_queryTaskNeedsStrictFreshness)) {
+    if (searchPlans.any(_searchPlanNeedsStrictFreshness)) {
       return true;
     }
     for (final item in toolResults) {
-      final data =
-          item.dataPayload;
+      final data = item.dataPayload;
       if (data['freshnessRequired'] == true) {
         return true;
       }
@@ -470,30 +482,32 @@ class RetrievalOutcomeResolver {
         return true;
       }
     }
-    return queryTasks.isEmpty &&
+    return searchPlans.isEmpty &&
         policy.freshnessHoursMax > 0 &&
         policy.freshnessHoursMax < 24 * 30;
   }
 
-  bool _queryTaskNeedsStrictFreshness(QueryTask task) {
-    return task.freshnessHoursMax > 0;
+  bool _searchPlanNeedsStrictFreshness(SearchPlanItem plan) {
+    if (_hasExplicitTimeWindow(plan)) {
+      return false;
+    }
+    return plan.freshnessHoursMax > 0;
   }
 
-  bool _hasExplicitTimeWindow(QueryTask task) {
-    return task.timePoint.trim().isNotEmpty ||
-        task.timeRangeStart.trim().isNotEmpty ||
-        task.timeRangeEnd.trim().isNotEmpty;
+  bool _hasExplicitTimeWindow(SearchPlanItem plan) {
+    return plan.timePoint.trim().isNotEmpty ||
+        plan.timeRangeStart.trim().isNotEmpty ||
+        plan.timeRangeEnd.trim().isNotEmpty;
   }
 
   bool _requiresHistoricalWindow({
-    required List<QueryTask> queryTasks,
+    required List<SearchPlanItem> searchPlans,
     required List<AssistantToolResultRow> toolResults,
     required String referenceNowIso,
     required String timezone,
   }) {
     for (final item in toolResults) {
-      final data =
-          item.dataPayload;
+      final data = item.dataPayload;
       final timeConstraint =
           (data['timeConstraint'] as Map?)?.cast<String, Object?>() ??
           const <String, Object?>{};
@@ -511,9 +525,9 @@ class RetrievalOutcomeResolver {
         return true;
       }
     }
-    return queryTasks.any(
-      (task) => _isHistoricalQueryTask(
-        task,
+    return searchPlans.any(
+      (plan) => _isHistoricalSearchPlan(
+        plan,
         referenceNowIso: referenceNowIso,
         timezone: timezone,
       ),
@@ -522,8 +536,7 @@ class RetrievalOutcomeResolver {
 
   bool _resolveFreshnessKnown(List<AssistantToolResultRow> toolResults) {
     for (final item in toolResults) {
-      final data =
-          item.dataPayload;
+      final data = item.dataPayload;
       if (data['freshnessKnown'] == true) {
         return true;
       }
@@ -550,8 +563,7 @@ class RetrievalOutcomeResolver {
     List<AssistantToolResultRow> toolResults,
   ) {
     for (final item in toolResults) {
-      final data =
-          item.dataPayload;
+      final data = item.dataPayload;
       if (data['freshnessSatisfied'] == true) {
         return true;
       }
@@ -570,20 +582,20 @@ class RetrievalOutcomeResolver {
     return false;
   }
 
-  bool _isHistoricalQueryTask(
-    QueryTask task, {
+  bool _isHistoricalSearchPlan(
+    SearchPlanItem plan, {
     String referenceNowIso = '',
     String timezone = '',
   }) {
-    if (task.timeScope.trim().isEmpty &&
-        task.timePoint.trim().isEmpty &&
-        task.timeRangeStart.trim().isEmpty &&
-        task.timeRangeEnd.trim().isEmpty) {
+    if (plan.timeScope.trim().isEmpty &&
+        plan.timePoint.trim().isEmpty &&
+        plan.timeRangeStart.trim().isEmpty &&
+        plan.timeRangeEnd.trim().isEmpty) {
       return false;
     }
     final referenceNow = _resolveReferenceNow(
       referenceNowIso: referenceNowIso,
-      timezone: _firstNonEmpty(<String>[task.timezone, timezone]),
+      timezone: _firstNonEmpty(<String>[plan.timezone, timezone]),
     );
     final dayFloor = DateTime(
       referenceNow.year,
@@ -591,9 +603,9 @@ class RetrievalOutcomeResolver {
       referenceNow.day,
     );
     final end =
-        _parseDateTime(task.timeRangeEnd) ??
-        _parseDateTime(task.timePoint) ??
-        _parseDateTime(task.timeRangeStart);
+        _parseDateTime(plan.timeRangeEnd) ??
+        _parseDateTime(plan.timePoint) ??
+        _parseDateTime(plan.timeRangeStart);
     return end != null && end.isBefore(dayFloor);
   }
 
@@ -717,7 +729,7 @@ class RetrievalOutcomeResolver {
         .toList(growable: false);
   }
 
-  String _resolveStatus({
+  RetrievalStatus _resolveStatus({
     required bool degraded,
     required bool terminalPayloadComplete,
     required bool evidenceRequired,
@@ -732,30 +744,30 @@ class RetrievalOutcomeResolver {
     required bool timeWindowSatisfied,
     required List<String> missingDimensions,
   }) {
-    if (degraded) return 'degraded';
-    if (!terminalPayloadComplete) return 'incomplete';
+    if (degraded) return RetrievalStatus.degraded;
+    if (!terminalPayloadComplete) return RetrievalStatus.incomplete;
     if (!evidenceRequired) {
-      if (!authoritySatisfied) return 'need_more_evidence';
+      if (!authoritySatisfied) return RetrievalStatus.needMoreEvidence;
       if (freshnessRequired && (!freshnessKnown || !freshnessSatisfied)) {
-        return 'need_more_evidence';
+        return RetrievalStatus.needMoreEvidence;
       }
       if (timeWindowRequired && (!timeWindowKnown || !timeWindowSatisfied)) {
-        return 'need_more_evidence';
+        return RetrievalStatus.needMoreEvidence;
       }
-      if (missingDimensions.isNotEmpty) return 'need_more_evidence';
-      return 'ready';
+      if (missingDimensions.isNotEmpty) return RetrievalStatus.needMoreEvidence;
+      return RetrievalStatus.ready;
     }
-    if (!hasToolResult) return 'empty';
-    if (!evidencePassed) return 'need_more_evidence';
-    if (!authoritySatisfied) return 'need_more_evidence';
+    if (!hasToolResult) return RetrievalStatus.empty;
+    if (!evidencePassed) return RetrievalStatus.needMoreEvidence;
+    if (!authoritySatisfied) return RetrievalStatus.needMoreEvidence;
     if (freshnessRequired && (!freshnessKnown || !freshnessSatisfied)) {
-      return 'need_more_evidence';
+      return RetrievalStatus.needMoreEvidence;
     }
     if (timeWindowRequired && (!timeWindowKnown || !timeWindowSatisfied)) {
-      return 'need_more_evidence';
+      return RetrievalStatus.needMoreEvidence;
     }
-    if (missingDimensions.isNotEmpty) return 'need_more_evidence';
-    return 'ready';
+    if (missingDimensions.isNotEmpty) return RetrievalStatus.needMoreEvidence;
+    return RetrievalStatus.ready;
   }
 
   RetrievalProcessingSnapshot? _parseRetrievalProcessing(Object? raw) {
@@ -802,8 +814,8 @@ class RetrievalOutcomeResolver {
                 .where((item) => item.isNotEmpty)
                 .toList(growable: false) ??
             const <String>[],
-        coveredQueryTaskIds:
-            (json['coveredQueryTaskIds'] as List?)
+        coveredSearchPlanIds:
+            (json['coveredSearchPlanIds'] as List?)
                 ?.map((item) => item.toString().trim())
                 .where((item) => item.isNotEmpty)
                 .toList(growable: false) ??
@@ -844,8 +856,8 @@ class RetrievalOutcomeResolver {
     }
   }
 
-  List<QueryTask> _parseQueryTasks(Object? raw) {
-    return QueryTask.normalizeList(raw);
+  List<SearchPlanItem> _parseSearchPlans(Object? raw) {
+    return SearchPlanItem.normalizeList(raw);
   }
 
   List<AssistantToolResultRow> _toolResultsFromStructured(
@@ -856,7 +868,10 @@ class RetrievalOutcomeResolver {
         const <String, Object?>{};
     return (domainResults['toolResults'] as List?)
             ?.whereType<Map>()
-            .map((item) => AssistantToolResultRow.fromJson(item.cast<String, dynamic>()))
+            .map(
+              (item) =>
+                  AssistantToolResultRow.fromJson(item.cast<String, dynamic>()),
+            )
             .toList(growable: false) ??
         const <AssistantToolResultRow>[];
   }
@@ -891,11 +906,6 @@ class RetrievalOutcomeResolver {
     final topLevel =
         (structured['queryNormalization'] as Map?)?.cast<String, Object?>() ??
         const <String, Object?>{};
-    final intentGraph = (structured['intentGraph'] as Map?)
-        ?.cast<String, Object?>();
-    final nested =
-        (intentGraph?['queryNormalization'] as Map?)?.cast<String, Object?>() ??
-        const <String, Object?>{};
     final diagnostics =
         (runArtifacts?.diagnostics.extensions['queryNormalization'] as Map?)
             ?.cast<String, Object?>() ??
@@ -903,12 +913,10 @@ class RetrievalOutcomeResolver {
     return _StructuredTemporalReference(
       referenceNowIso: _firstNonEmpty(<String>[
         (topLevel['referenceNowIso'] as String?) ?? '',
-        (nested['referenceNowIso'] as String?) ?? '',
         (diagnostics['referenceNowIso'] as String?) ?? '',
       ]),
       timezone: _firstNonEmpty(<String>[
         (topLevel['timezone'] as String?) ?? '',
-        (nested['timezone'] as String?) ?? '',
         (diagnostics['timezone'] as String?) ?? '',
       ]),
     );

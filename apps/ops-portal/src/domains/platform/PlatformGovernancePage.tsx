@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated';
+import { platformControlPlane } from '../../generated/control-plane/platformControlPlane.generated.js';
 import {
   fetchGovernanceBindings,
   fetchGovernanceTemplates,
   type GovernanceBindingItem,
   type GovernanceTemplateItem,
-} from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+} from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function PlatformGovernancePage() {
   const governanceObjects = platformControlPlane.object_types.filter((item) =>
@@ -16,6 +17,7 @@ export function PlatformGovernancePage() {
   const [policies, setPolicies] = useState<GovernanceBindingItem[]>([]);
   const [templates, setTemplates] = useState<GovernanceTemplateItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     Promise.all([fetchGovernanceBindings(), fetchGovernanceTemplates()])
@@ -23,9 +25,11 @@ export function PlatformGovernancePage() {
         setPolicies(bindingItems);
         setTemplates(templateItems);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -40,6 +44,7 @@ export function PlatformGovernancePage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实治理绑定已接入' : '当前展示回退到门户样例'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">创建策略模板</button>}

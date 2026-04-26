@@ -28,17 +28,20 @@ func NewMessageService(repo persistence.ChatRepository, cache *cache.Conversatio
 }
 
 type SendMessageRequest struct {
-	ConversationId   string
-	SenderId         string
-	SenderPersonaId  string
-	Type             string
-	Content          string
-	MediaUrl         string
-	Media            map[string]any
-	CardPayload      map[string]any
-	ReplyToMessageId string
-	Mentions         []string
-	ClientMsgId      string
+	ConversationId            string
+	SenderId                  string
+	SenderPersonaId           string
+	PersonaContextVersion     int64
+	SenderDisplayNameSnapshot string
+	SenderAvatarUrlSnapshot   string
+	Type                      string
+	Content                   string
+	MediaUrl                  string
+	Media                     map[string]any
+	CardPayload               map[string]any
+	ReplyToMessageId          string
+	Mentions                  []string
+	ClientMsgId               string
 }
 
 type SendMessageResponse struct {
@@ -85,7 +88,12 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 		ReplyToMessageId: req.ReplyToMessageId,
 		Mentions:         req.Mentions,
 		Status:           "sent",
-		Timestamp:        now,
+		Metadata: map[string]any{
+			"senderDisplayNameSnapshot": req.SenderDisplayNameSnapshot,
+			"senderAvatarUrlSnapshot":   req.SenderAvatarUrlSnapshot,
+			"personaContextVersion":     req.PersonaContextVersion,
+		},
+		Timestamp: now,
 	}
 
 	if err := s.repo.CreateMessage(ctx, msg); err != nil {
@@ -107,15 +115,18 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 
 	go func() {
 		if err := s.publisher.PublishDomainEvent(context.Background(), event.MessageSent, req.ConversationId, req.SenderId, map[string]any{
-			"messageId":   msg.ID,
-			"seq":         seq,
-			"type":        msg.Type,
-			"content":     msg.Content,
-			"mediaUrl":    msg.MediaUrl,
-			"media":       msg.Media,
-			"mentions":    msg.Mentions,
-			"clientMsgId": req.ClientMsgId,
-			"timestamp":   msg.Timestamp,
+			"messageId":              msg.ID,
+			"seq":                    seq,
+			"type":                   msg.Type,
+			"content":                msg.Content,
+			"mediaUrl":               msg.MediaUrl,
+			"media":                  msg.Media,
+			"mentions":               msg.Mentions,
+			"clientMsgId":            req.ClientMsgId,
+			"timestamp":              msg.Timestamp,
+			"senderProfileSubjectId": req.SenderId,
+			"senderPersonaId":        req.SenderPersonaId,
+			"personaContextVersion":  req.PersonaContextVersion,
 		}); err != nil {
 			slog.Error("publish MessageSent failed", "err", err, "conversationId", req.ConversationId)
 		}

@@ -221,7 +221,6 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
 			"圈子群不可解散",
 			"circle conversation cannot be dissolved",
-			false,
 		)
 	}
 	owner, err := s.repo.FindMember(ctx, req.ConversationId, req.OperatorId)
@@ -230,7 +229,6 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
 			"仅群主可解散群聊",
 			"only owner can dissolve conversation",
-			false,
 		)
 	}
 	conv.Status = "deleted"

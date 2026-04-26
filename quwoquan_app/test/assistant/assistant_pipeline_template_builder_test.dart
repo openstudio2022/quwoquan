@@ -71,12 +71,12 @@ void main() {
         dialogueContinuity: <String, dynamic>{'continuity': 3},
         evidenceContext: <String, dynamic>{'evidence': 4},
         searchIterationState: <String, dynamic>{'round': 1},
-        intentGraphJson: '{"goal":"weather"}',
-        queryTasksJson: <Map<String, dynamic>>[
+        planViewJson: '{"goal":"weather"}',
+        searchPlansJson: <Map<String, dynamic>>[
           <String, dynamic>{'id': 'q1'},
         ],
-        entityAnchors: const <String>['深圳'],
-        queryTasks: <Map<String, dynamic>>[
+        entityRefs: const <String>['深圳'],
+        searchPlans: <Map<String, dynamic>>[
           <String, dynamic>{'id': 'q1'},
         ],
         answerShape: 'general',
@@ -108,10 +108,10 @@ void main() {
         dialogueContinuity: const <String, dynamic>{},
         evidenceContext: const <String, dynamic>{},
         searchIterationState: const <String, dynamic>{},
-        intentGraphJson: '{}',
-        queryTasksJson: const <Map<String, dynamic>>[],
-        entityAnchors: const <String>[],
-        queryTasks: const <Map<String, dynamic>>[],
+        planViewJson: '{}',
+        searchPlansJson: const <Map<String, dynamic>>[],
+        entityRefs: const <String>[],
+        searchPlans: const <Map<String, dynamic>>[],
         answerShape: 'general',
         recentDialogueRounds: const <Map<String, dynamic>>[],
       );

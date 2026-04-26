@@ -12,7 +12,7 @@ const (
 	metricGroupAvatarPatchFanoutBatch    = "quwoquan_runtime_media_patch_fanout_batch_total"
 	metricGroupAvatarPatchRecipientTotal = "quwoquan_runtime_media_patch_fanout_recipient_total"
 	metricGroupAvatarTaskTerminalFailed  = "quwoquan_runtime_media_group_avatar_task_terminal_failed_total"
-	metricGroupAvatarTaskRetryableFailed = "quwoquan_runtime_media_group_avatar_task_retryable_failed_total"
+	metricGroupAvatarTaskTransientFailed = "quwoquan_runtime_media_group_avatar_task_transient_failed_total"
 	metricGroupAvatarTaskQueueDepth      = "quwoquan_runtime_media_group_avatar_task_queue_depth"
 )
 
@@ -23,7 +23,7 @@ type groupAvatarSchedulerMetrics struct {
 	patchFanoutBatchTotal  atomic.Int64
 	patchRecipientTotal    atomic.Int64
 	taskTerminalFailed     atomic.Int64
-	taskRetryableFailed    atomic.Int64
+	taskTransientFailed    atomic.Int64
 }
 
 func newGroupAvatarSchedulerMetrics() *groupAvatarSchedulerMetrics {
@@ -52,11 +52,11 @@ func (m *groupAvatarSchedulerMetrics) recordPatchBatch(recipientCount int) {
 	m.patchRecipientTotal.Add(int64(recipientCount))
 }
 
-func (m *groupAvatarSchedulerMetrics) recordRetryableFailure() {
+func (m *groupAvatarSchedulerMetrics) recordTransientFailure() {
 	if m == nil {
 		return
 	}
-	m.taskRetryableFailed.Add(1)
+	m.taskTransientFailed.Add(1)
 }
 
 func (m *groupAvatarSchedulerMetrics) recordTerminalFailure() {
@@ -84,7 +84,7 @@ func (m *groupAvatarSchedulerMetrics) snapshot(queueDepth int64) map[string]floa
 		metricGroupAvatarPatchFanoutBatch:    float64(m.patchFanoutBatchTotal.Load()),
 		metricGroupAvatarPatchRecipientTotal: float64(m.patchRecipientTotal.Load()),
 		metricGroupAvatarTaskTerminalFailed:  float64(m.taskTerminalFailed.Load()),
-		metricGroupAvatarTaskRetryableFailed: float64(m.taskRetryableFailed.Load()),
+		metricGroupAvatarTaskTransientFailed: float64(m.taskTransientFailed.Load()),
 		metricGroupAvatarTaskQueueDepth:      float64(queueDepth),
 	}
 }

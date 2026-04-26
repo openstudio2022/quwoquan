@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	rerrors "quwoquan_service/runtime/errors"
 )
 
 // SSEEvent represents a server-sent event.
@@ -18,10 +20,10 @@ type SSEEvent struct {
 
 // SSEClient represents a connected SSE client.
 type SSEClient struct {
-	ID       string
-	UserID   string
-	Events   chan SSEEvent
-	Done     chan struct{}
+	ID        string
+	UserID    string
+	Events    chan SSEEvent
+	Done      chan struct{}
 	closeOnce sync.Once
 }
 
@@ -62,7 +64,11 @@ func (s *SSEServer) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
-			http.Error(w, "streaming not supported", http.StatusInternalServerError)
+			rerrors.WriteHTTPError(
+				w,
+				rerrors.NewUnavailable(rerrors.ModuleGateway, "当前连接不支持实时流", "streaming not supported"),
+				rerrors.HTTPWriteOptionsFromRequest(r),
+			)
 			return
 		}
 

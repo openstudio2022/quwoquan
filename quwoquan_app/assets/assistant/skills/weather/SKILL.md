@@ -3,7 +3,7 @@ name: weather-realtime
 description: 天气查询、出行建议、穿衣推荐、空气质量、紫外线指数。可设出行提醒。
 domain: weather
 mode: hybrid
-allowed_tools: local_context search web_search web_fetch memory_search
+allowed_tools: search web_search web_fetch memory_search
 trigger_keywords: [天气, 气温, 降雨, 风力, 湿度, 体感, 预报, 实时天气, 天气预报, 穿衣建议, 出行建议]
 problem_class: realtime_info
 searchPolicy:
@@ -40,14 +40,14 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 城市解析顺序如下：
 1. 当前用户问题中直接提取城市；
 2. 若缺失，读取近期对话与历史记忆；
-3. 若仍缺失，调用 `local_context` 获取本地城市；
+3. 若仍缺失，使用系统默认注入的 `SystemContextEnvelope` 读取位置摘要；
 4. 最后才追问用户城市。
 
 ## 工具调用策略
 - 缺城市时禁止直接查天气，先补槽位。
 - 城市就绪后优先调用 `search` 查询实时天气与短时趋势，必要时再回退到 `web_search`。
 - 工具失败可重试 1 次，仍失败执行降级策略。
-- 调用 `local_context` 时遵循 `local_context_v1` 契约，仅请求位置与权限字段，不含相册数据：`"media": {"included": false}`。
+- 位置、权限、设备与时间信息统一来自系统默认注入上下文，不再调用额外上下文工具。
 
 ## 成答策略
 - 这类问题优先走“直接报结果 + 1-2 条简洁建议”，不要把实时天气问题展开成长卡片或百科说明。
@@ -82,13 +82,9 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "contractId": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|replan|retry|abort"},
   "slotState": {
-    "city": {"value": "", "source": "user_query|memory|local_context|unknown"}
+    "city": {"value": "", "source": "user_query|memory|system_context|unknown"}
   },
   "toolCalls": [
-    {
-      "toolName": "local_context",
-      "arguments": {"requestedFields": ["location", "permissions", "device"]}
-    },
     {"toolName": "search", "arguments": {"query": "深圳天气", "mode": "result", "limit": 6}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},

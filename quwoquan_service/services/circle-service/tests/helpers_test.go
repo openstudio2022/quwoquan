@@ -36,6 +36,32 @@ func doRequestAs(t *testing.T, method, path, userID string, body any) *httptest.
 	return rec
 }
 
+func doRequestAsWithHeaders(
+	t *testing.T,
+	method,
+	path,
+	userID string,
+	headers map[string]string,
+	body any,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	var buf bytes.Buffer
+	if body != nil {
+		json.NewEncoder(&buf).Encode(body)
+	}
+	req := httptest.NewRequest(method, path, &buf)
+	req.Header.Set("Content-Type", "application/json")
+	if userID != "" {
+		req.Header.Set("X-User-Id", userID)
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	return rec
+}
+
 func decodeBody(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var result map[string]any

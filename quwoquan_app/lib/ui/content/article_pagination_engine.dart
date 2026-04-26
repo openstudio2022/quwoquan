@@ -661,8 +661,7 @@ class ArticlePaginationEngine {
       ),
     );
     // 环绕布局分两段测量：图旁窄列（leading）+ 图下通栏（trailing）。
-    // 旧实现把全部文字按 besideWidth 测量，导致图下文字高度被高估、分页提前截断。
-    final besideWidth = wrap.layout.besideWidth;
+    // 旧实现把全部文字按图旁窄列测量，导致图下文字高度被高估、分页提前截断。
     final besideHeight = wrap.layout.besideHeight;
     final splitOffset = wrap.layout.splitOffset;
     final trailingSpacing = wrap.layout.trailingSpacing;

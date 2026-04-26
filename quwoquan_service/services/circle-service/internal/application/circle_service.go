@@ -155,7 +155,7 @@ func (s *CircleService) GetCircle(ctx context.Context, circleID string) (*model.
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found", false,
+			"圈子不存在", "circle not found",
 		)
 	}
 	return c, nil
@@ -200,22 +200,22 @@ type SearchCirclesRequest struct {
 
 // CircleSearchItemWire aligns with contracts/metadata/social/circle/fields.yaml CircleSearchItemView.
 type CircleSearchItemWire struct {
-	CircleID             string `json:"circleId"`
-	Name                 string `json:"name"`
-	Description          string `json:"description,omitempty"`
-	CoverURL             string `json:"coverUrl,omitempty"`
-	CategoryID           string `json:"categoryId,omitempty"`
-	SubCategory          string `json:"subCategory,omitempty"`
-	DomainID             string `json:"domainId,omitempty"`
-	Kind                 string `json:"kind,omitempty"`
-	DisplaySubjectType   string `json:"displaySubjectType,omitempty"`
-	MemberCount          int64  `json:"memberCount"`
-	PostCount            int64  `json:"postCount"`
-	HighlightText        string `json:"highlightText,omitempty"`
-	MatchedField         string `json:"matchedField,omitempty"`
-	LinkedHomepageID     string `json:"linkedHomepageId,omitempty"`
-	LinkedHomepageType   string `json:"linkedHomepageType,omitempty"`
-	LinkedHomepageTitle  string `json:"linkedHomepageTitle,omitempty"`
+	CircleID            string `json:"circleId"`
+	Name                string `json:"name"`
+	Description         string `json:"description,omitempty"`
+	CoverURL            string `json:"coverUrl,omitempty"`
+	CategoryID          string `json:"categoryId,omitempty"`
+	SubCategory         string `json:"subCategory,omitempty"`
+	DomainID            string `json:"domainId,omitempty"`
+	Kind                string `json:"kind,omitempty"`
+	DisplaySubjectType  string `json:"displaySubjectType,omitempty"`
+	MemberCount         int64  `json:"memberCount"`
+	PostCount           int64  `json:"postCount"`
+	HighlightText       string `json:"highlightText,omitempty"`
+	MatchedField        string `json:"matchedField,omitempty"`
+	LinkedHomepageID    string `json:"linkedHomepageId,omitempty"`
+	LinkedHomepageType  string `json:"linkedHomepageType,omitempty"`
+	LinkedHomepageTitle string `json:"linkedHomepageTitle,omitempty"`
 }
 
 // CircleFacetBucketWire aligns with CircleFacetBucketView.
@@ -228,9 +228,9 @@ type CircleFacetBucketWire struct {
 }
 
 type SearchCirclesResponse struct {
-	Items        []CircleSearchItemWire `json:"items"`
+	Items        []CircleSearchItemWire  `json:"items"`
 	FacetBuckets []CircleFacetBucketWire `json:"facetBuckets"`
-	Cursor       string                 `json:"cursor,omitempty"`
+	Cursor       string                  `json:"cursor,omitempty"`
 }
 
 func (s *CircleService) SearchCircles(
@@ -328,7 +328,7 @@ func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data 
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found", false,
+			"圈子不存在", "circle not found",
 		)
 	}
 
@@ -360,7 +360,7 @@ func (s *CircleService) ArchiveCircle(ctx context.Context, circleID string) erro
 	if !s.circles.Archive(ctx, circleID) {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found", false,
+			"圈子不存在", "circle not found",
 		)
 	}
 	s.publishEvent(ctx, "CircleArchived", circleID, map[string]any{"_id": circleID, "status": "archived"})
@@ -374,21 +374,21 @@ func (s *CircleService) JoinCircle(ctx context.Context, circleID, userID string)
 	if !ok {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found", false,
+			"圈子不存在", "circle not found",
 		)
 	}
 
 	if _, exists := s.members.FindByCircleAndUser(ctx, circleID, userID); exists {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "conflict"),
-			"您已经是该圈子成员", "already a member", false,
+			"您已经是该圈子成员", "already a member",
 		)
 	}
 
 	if c.JoinPolicy == model.CircleJoinPolicyApproval {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "forbidden"),
-			"该圈子需要审批才能加入", "join approval required", false,
+			"该圈子需要审批才能加入", "join approval required",
 		)
 	}
 
@@ -418,14 +418,14 @@ func (s *CircleService) LeaveCircle(ctx context.Context, circleID, userID string
 	if !ok {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "forbidden"),
-			"您不是该圈子成员", "not a member", false,
+			"您不是该圈子成员", "not a member",
 		)
 	}
 
 	if member.Role == model.CircleMemberRoleOwner {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "forbidden"),
-			"圈主不能退出圈子", "owner cannot leave", false,
+			"圈主不能退出圈子", "owner cannot leave",
 		)
 	}
 
@@ -471,7 +471,7 @@ func (s *CircleService) UpdateMemberRole(ctx context.Context, circleID, userID s
 	if !s.members.UpdateRole(ctx, circleID, userID, memberRole) {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"成员不存在", "member not found", false,
+			"成员不存在", "member not found",
 		)
 	}
 	return nil
@@ -484,7 +484,7 @@ func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (ma
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found", false,
+			"圈子不存在", "circle not found",
 		)
 	}
 	return map[string]any{

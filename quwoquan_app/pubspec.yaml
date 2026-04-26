@@ -79,6 +79,8 @@ dependencies:
   # Repository 抽象（Mock/Remote 共用）；见 packages/quwoquan_cloud_contracts
   quwoquan_cloud_contracts:
     path: ../packages/quwoquan_cloud_contracts
+  quwoquan_runtime_errors:
+    path: ../packages/quwoquan_runtime_errors
 
 dev_dependencies:
   flutter_test:

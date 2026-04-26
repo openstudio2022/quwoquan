@@ -46,14 +46,16 @@ String _resolveAssistantVisibleAnswerTextFromTranscriptRow({
 }) {
   if (row is! AssistantAnswerTranscriptRow) return content;
   final answerRow = row;
-  final runArtifacts = answerRow.runArtifacts;
+  final runArtifacts = answerRow.runArtifacts.isEmpty
+      ? null
+      : parseRunArtifacts(answerRow.runArtifacts);
   final candidates = isStreaming
       ? <String>[previewAnswer]
       : <String>[
           answerRow.persisted.displayMarkdown,
           answerRow.persisted.displayPlainText,
-          (runArtifacts['displayMarkdown'] as String?) ?? '',
-          (runArtifacts['displayPlainText'] as String?) ?? '',
+          runArtifacts?.displayMarkdown ?? '',
+          runArtifacts?.displayPlainText ?? '',
           content,
         ];
   for (final candidate in candidates) {
@@ -174,9 +176,8 @@ class AssistantMessageBubble extends StatelessWidget {
         r.senderId == AppConceptConstants.assistantSenderId,
       _ => false,
     };
-    final legacyEnvelope = (type == 'task_card' ||
-            type == 'image' ||
-            type == 'audio')
+    final legacyEnvelope =
+        (type == 'task_card' || type == 'image' || type == 'audio')
         ? AssistantLegacyBubbleEnvelope.fromCodecMap(
             PersistedTimelineTurnCodec.encode(row),
           )
@@ -219,8 +220,9 @@ class AssistantMessageBubble extends StatelessWidget {
             understandingSnapshot:
                 resolveAssistantUnderstandingSnapshotFromTranscriptRow(row),
             retrievalProcessing: resolvedRetrievalProcessing,
-            answerProcessing:
-                resolveAssistantAnswerProcessingFromTranscriptRow(row),
+            answerProcessing: resolveAssistantAnswerProcessingFromTranscriptRow(
+              row,
+            ),
             answerMarkdown:
                 persistedDisplayState.answer.blocks.isEmpty &&
                     displayMarkdownForBuild.isNotEmpty

@@ -20,25 +20,30 @@ class AssistantPipelineStateKeys {
   static const String providerReasoningContinuation =
       'providerReasoningContinuation';
   static const String precomputedBootstrap = 'precomputedBootstrap';
-  static const String precomputedIntentGraph = 'precomputedIntentGraph';
-  static const String intentGraph = 'intentGraph';
+  static const String precomputedUnderstandingResult =
+      'precomputedUnderstandingResult';
+  static const String precomputedTaskGraph = 'precomputedTaskGraph';
+  static const String understandingResult = 'understandingResult';
+  static const String taskGraph = 'taskGraph';
   static const String precomputedUnderstand = 'precomputedUnderstand';
   static const String precomputedExecutionPreparation =
       'precomputedExecutionPreparation';
   static const String precomputedRetrieval = 'precomputedRetrieval';
-  static const String precomputedQueryTasks = 'precomputedQueryTasks';
+  static const String precomputedSearchPlans = 'precomputedSearchPlans';
   static const String skillName = 'skillName';
   static const String skillInstructionMarkdown = 'skillInstructionMarkdown';
   static const String skillPersona = 'skillPersona';
   static const String sessionId = 'sessionId';
   static const String latestUserQuery = 'latestUserQuery';
   static const String historySummary = 'historySummary';
+  static const String systemContextEnvelope = 'systemContextEnvelope';
   static const String recentDialogueRounds = 'recentDialogueRounds';
   static const String recentDialogueRoundsLimit = 'recentDialogueRoundsLimit';
   static const String sessionHistoryState = 'sessionHistoryState';
   static const String recalledTexts = 'recalledTexts';
-  static const String previousIntentGraph = 'previousIntentGraph';
   static const String previousAnswerSummary = 'previousAnswerSummary';
+  static const String previousUnderstandingResult = 'previousUnderstandingResult';
+  static const String previousTaskGraph = 'previousTaskGraph';
   static const String contextContinuityPolicy = 'contextContinuityPolicy';
   static const String continuityOverrideSlots = 'continuityOverrideSlots';
   static const String recallResult = 'recallResult';
@@ -91,8 +96,8 @@ class AssistantPipelineStateKeys {
   static const String continuityActive = 'continuationActive';
   static const String dialogueState = 'dialogueState';
   static const String searchIterationState = 'searchIterationState';
-  static const String executionShellPrecomputedQueryTasks =
-      'executionShellPrecomputedQueryTasks';
+  static const String executionShellPrecomputedSearchPlans =
+      'executionShellPrecomputedSearchPlans';
   static const String machineEnvelope = 'machineEnvelope';
   static const String displayMarkdown = 'displayMarkdown';
   static const String displayPlainText = 'displayPlainText';

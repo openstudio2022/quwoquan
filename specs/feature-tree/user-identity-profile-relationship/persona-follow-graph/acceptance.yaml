@@ -34,9 +34,7 @@ journey_acceptance:
       - 用户可以从个人主页与设置进入统一的分身管理台
       - 分身支持创建、切换、停用/删除保护、配额与主分身约束
       - 新分身默认继承主分身资料基线，并可进入分身资料编辑
-    blockers:
-      - 分身管理入口的 feature flag 行为仍不一致，设置页与个人主页未完全同口径
-      - "`summary / update / lifecycle-guard / retire / profile-sync` 仍缺正式 HTTP/旅程级证据"
+    blockers: []
     evidence:
       primary:
         - T2_module_interaction
@@ -52,11 +50,11 @@ journey_acceptance:
       recorded:
         - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/persona_management_page_test.dart`"
         - "T1/T2: `flutter test test/cloud/user/contract/user_repository_contract_test.dart test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart`"
-        - "T1/T3: `go test ./services/user-service/tests -run 'Test(CreatePersona|ActivatePersona|DeletePersona|GetPersonaManagementSummary|UpdatePersona|ApplyPersonaProfileSync|GetPersonaLifecycleGuard|RetirePersona|SubAccount_)'`"
+        - "T1/T3: `go test ./services/user-service/tests -run 'Test(CreatePersona|ActivatePersona|DeletePersona|GetPersonaManagementSummary|UpdatePersona|ApplyPersonaProfileSync|GetPersonaLifecycleGuard|RetirePersona|DeleteEmptyPersona|RetiredPersona)'`"
     notes:
-      - "J1 中 `persona-management` 的 A1/A2 已收口到 implemented，入口、列表、create/activate/sync contract 与路径证据已补齐。"
-      - "但 delete/retire 的“历史归因分身真实退役”语义仍未实体化，因此 Journey 级 J1 继续保持 partial。"
-    status: partial
+      - "J1 中 `persona-management` 的入口统一、create/activate/sync、delete-empty 与 retire 语义现已闭环。"
+      - "`retire` 已具备真实持久化状态，`hasAttributedHistory` 与 delete/retire 分流已有 T3 契约证据支撑。"
+    status: implemented
   J2:
     title: 分身成为内容、聊天、圈子、助手与邀请的统一动作主体
     journey: activate persona -> publish/comment/chat/circle/assistant/invite -> observe downstream consistency
@@ -83,8 +81,10 @@ journey_acceptance:
         - persona propagation integration test
         - publish comment chat assistant end-to-end journey test
         - notification attribution verification
-      recorded: []
-    status: pending
+      recorded:
+        - "T3: `go test ./services/circle-service/tests/... ./services/user-service/tests/...`"
+        - "T2: `flutter test test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart`"
+    status: partial
   J3:
     title: 外部只看到分身主体，内部保留用户归属链
     journey: public read -> social graph -> historical activity -> internal audit
@@ -111,8 +111,16 @@ journey_acceptance:
         - profile subject visibility contract test
         - isolation leakage regression test
         - audit mapping verification
-      recorded: []
-    status: pending
+      recorded:
+        - "T1: `make -C quwoquan_service verify-metadata && make codegen && make codegen-app`"
+        - "T2: `flutter test test/cloud/integration/remote_api_path_contract_test.dart test/cloud/content/post/contract/post_feed_dto_contract_test.dart test/ui/content/post_read_projection_facade_test.dart test/ui/user/providers/profile_state_provider_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/cloud/user/contract/relationship_capability_repository_contract_test.dart`"
+        - "T3: `go test ./services/user-service/tests -run 'Test(ProfileSubjectView_|RelationshipCapabilityView_|Follow_|Block_|ListFollowing_|ListFollowers_|SearchSocialRelations_)'`"
+        - "T3: `go test ./services/content-service/tests -run 'TestDiscoveryProjectionPersistsProfileSubjectID'`"
+    notes:
+      - "`persona-profile-subject-and-visibility` 已把公开 `ProfileSubject`、strict/retired 不可见、历史快照与 discovery canonical subject 收口完成。"
+      - "M4 补全后，follow/capability/list/search 主链路已切到 `ProfileSubject` 单轨，并把公开 graph 列表与搜索结果统一压平为不暴露 `ownerUserId` 的读投影。"
+      - "但跨内容/共同联系人/审计映射的全面泄漏验证仍未完成，因此 J3 继续保持 partial。"
+    status: partial
 
 release_guardrails:
   R1:
@@ -133,7 +141,13 @@ release_guardrails:
         - observability dashboard verification
       recorded:
         - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/content/post/contract/content_runtime_config_provider_test.dart test/ui/user/providers/persona_management_provider_test.dart`"
+        - "T1/T3: `go test ./runtime/governance ./services/user-service/tests/...`"
+        - "T1/T3: `go test ./runtime/persona ./runtime/governance ./runtime/sync ./services/user-service/internal/domain/user/telemetry`"
+        - "T3: `go run ./tools/persona_rollout --input ./runtime/persona/testdata/rehearsal_input.json --switch-latency-ms 18.4`"
     notes:
       - "persona-management 相关入口开关、flag-off 降级与成功/失败 telemetry 已补齐。"
-      - "Journey 级其它 scenario（公开身份、上下文透传）尚未一起进入本轮回归，因此 R1 仍保持 partial。"
+      - "M2 已补齐 `ops.user.profile_subject_v1`、四个 `profile_subject_*` 指标、personaId fallback rollback，以及 discovery canonical subject 回归。"
+      - "M4 补全后，`ops.user.persona_context_v1 / ops.user.persona_graph_v1`、follow/graph 指标最小触发断言以及 flag-off rollback rehearsal 已补齐；graph actor 解析在 flag-off 下优先保留既有 persona edge 可读性。"
+      - "M5 已新增 `ops.user.persona_model_v2 / persona_sync_v2 / persona_graph_v2` 映射、persona rollout dry-run/validate 工具、persona sync patch type，以及四类验收指标的本地 rehearsal 输出。"
+      - "但本会话仅完成本地 dry-run 与单测证据，尚未完成真实 staging 的 T4 发布演练；同时 M4 的共同粉丝 / mutual 更强泄漏验证仍未闭环，因此 R1 仍保持 partial。"
     status: partial

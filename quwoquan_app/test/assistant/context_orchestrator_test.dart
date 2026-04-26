@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/domain/conversation/conversation.dart';
 import 'package:quwoquan_app/assistant/context/assembly/context_orchestrator.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
@@ -9,8 +10,9 @@ import 'package:test/test.dart';
 import 'assistant_test_fixture_paths.dart';
 
 Map<String, dynamic> _sessionTurnRunArtifacts(String userFacingSummary) {
-  final path =
-      assistantMetadataFixturePath('wire_session_turn_run_artifacts.json');
+  final path = assistantMetadataFixturePath(
+    'wire_session_turn_run_artifacts.json',
+  );
   final m = jsonDecode(File(path).readAsStringSync()) as Map<String, dynamic>;
   final us = Map<String, dynamic>.from(
     (m['understandingSnapshot'] as Map).cast<String, dynamic>(),
@@ -18,6 +20,15 @@ Map<String, dynamic> _sessionTurnRunArtifacts(String userFacingSummary) {
   us['userFacingSummary'] = userFacingSummary;
   return <String, dynamic>{...m, 'understandingSnapshot': us};
 }
+
+const AssistantPlanView _weatherPlanView = AssistantPlanView(
+  userGoal: '杭州今天天气',
+  primarySkill: 'weather',
+  problemShape: ProblemShape.singleSkill,
+  problemClass: ProblemClass.realtimeInfo,
+  requiresExternalEvidence: true,
+  mustVerifyClaims: true,
+);
 
 void main() {
   group('PersonalAssistantContextOrchestrator', () {
@@ -80,104 +91,101 @@ void main() {
       expect(result.hasRealtimeNeed, isFalse);
     });
 
-    test('buildContinuityPolicy 优先使用 structured recent rounds 的 user queries', () {
-      final policy = continuity(
-        '第三问怎么继续',
-        recentRoundsLimit: 2,
-        sessionHistory: <Map<String, dynamic>>[
-          <String, dynamic>{'role': 'user', 'content': '第一问'},
-          <String, dynamic>{
-            'role': 'assistant',
-            'content': '第一答',
-            'id': 'turn_1',
-            'runArtifacts': _sessionTurnRunArtifacts('第一轮理解'),
-          },
-          <String, dynamic>{'role': 'user', 'content': '第二问'},
-          <String, dynamic>{
-            'role': 'assistant',
-            'content': '第二答',
-            'id': 'turn_2',
-            'runArtifacts': _sessionTurnRunArtifacts('第二轮理解'),
-          },
-          <String, dynamic>{'role': 'user', 'content': '第三问'},
-        ],
-      );
-
-      expect(
-        policy.referenceQueries,
-        equals(const <String>['第二问', '第一问']),
-      );
-    });
-
-    test('buildContinuityPolicy 会按 recent + older limits 组合 reference queries', () {
-      final now = DateTime.now().toUtc();
-      final policy = continuity(
-        '刚刚问怎么继续',
-        recentRoundsLimit: 1,
-        recentOlderRoundsLimit: 1,
-        sessionHistory: <Map<String, dynamic>>[
-          <String, dynamic>{
-            'role': 'user',
-            'content': '两天前问',
-            'timestamp': now
-                .subtract(const Duration(days: 2, hours: 1))
-                .toIso8601String(),
-          },
-          <String, dynamic>{
-            'role': 'assistant',
-            'content': '两天前答',
-            'id': 'turn_old',
-            'timestamp': now
-                .subtract(const Duration(days: 2))
-                .toIso8601String(),
-            'runArtifacts': _sessionTurnRunArtifacts('两天前理解'),
-          },
-          <String, dynamic>{
-            'role': 'user',
-            'content': '刚刚问',
-            'timestamp': now
-                .subtract(const Duration(hours: 3))
-                .toIso8601String(),
-          },
-          <String, dynamic>{
-            'role': 'assistant',
-            'content': '刚刚答',
-            'id': 'turn_recent',
-            'timestamp': now
-                .subtract(const Duration(hours: 2))
-                .toIso8601String(),
-            'runArtifacts': _sessionTurnRunArtifacts('刚刚理解'),
-          },
-        ],
-      );
-
-      expect(
-        policy.referenceQueries,
-        equals(const <String>['刚刚问', '两天前问']),
-      );
-    });
-
     test(
-      'location scope remains suppressed without typed continuity grant',
+      'buildContinuityPolicy 优先使用 structured recent rounds 的 user queries',
       () {
-        final result = orchestrator.assemble(
-          query: '今天天气怎么样',
-          historySummary: '',
-          recalledTexts: const <String>[],
-          deviceProfile: 'mobile',
-          deviceModel: 'iphone',
-          deviceOs: 'ios',
-          gpsLocation: const <String, dynamic>{'city': '深圳'},
-          contextScopeHint: const <String, dynamic>{},
-          continuityPolicy: continuity('今天天气怎么样'),
+        final policy = continuity(
+          '第三问怎么继续',
+          recentRoundsLimit: 2,
+          sessionHistory: <Map<String, dynamic>>[
+            <String, dynamic>{'role': 'user', 'content': '第一问'},
+            <String, dynamic>{
+              'role': 'assistant',
+              'content': '第一答',
+              'id': 'turn_1',
+              'runArtifacts': _sessionTurnRunArtifacts('第一轮理解'),
+            },
+            <String, dynamic>{'role': 'user', 'content': '第二问'},
+            <String, dynamic>{
+              'role': 'assistant',
+              'content': '第二答',
+              'id': 'turn_2',
+              'runArtifacts': _sessionTurnRunArtifacts('第二轮理解'),
+            },
+            <String, dynamic>{'role': 'user', 'content': '第三问'},
+          ],
         );
 
-        expect(result.canEnterDomain, isTrue);
-        expect(result.fillTasks, isEmpty);
-        final gpsLocation = result.contextEnvelope['gpsLocation'] as Map?;
-        expect(gpsLocation?.containsKey('city'), isFalse);
+        expect(policy.referenceQueries, equals(const <String>['第二问', '第一问']));
       },
     );
+
+    test(
+      'buildContinuityPolicy 会按 recent + older limits 组合 reference queries',
+      () {
+        final now = DateTime.now().toUtc();
+        final policy = continuity(
+          '刚刚问怎么继续',
+          recentRoundsLimit: 1,
+          recentOlderRoundsLimit: 1,
+          sessionHistory: <Map<String, dynamic>>[
+            <String, dynamic>{
+              'role': 'user',
+              'content': '两天前问',
+              'timestamp': now
+                  .subtract(const Duration(days: 2, hours: 1))
+                  .toIso8601String(),
+            },
+            <String, dynamic>{
+              'role': 'assistant',
+              'content': '两天前答',
+              'id': 'turn_old',
+              'timestamp': now
+                  .subtract(const Duration(days: 2))
+                  .toIso8601String(),
+              'runArtifacts': _sessionTurnRunArtifacts('两天前理解'),
+            },
+            <String, dynamic>{
+              'role': 'user',
+              'content': '刚刚问',
+              'timestamp': now
+                  .subtract(const Duration(hours: 3))
+                  .toIso8601String(),
+            },
+            <String, dynamic>{
+              'role': 'assistant',
+              'content': '刚刚答',
+              'id': 'turn_recent',
+              'timestamp': now
+                  .subtract(const Duration(hours: 2))
+                  .toIso8601String(),
+              'runArtifacts': _sessionTurnRunArtifacts('刚刚理解'),
+            },
+          ],
+        );
+
+        expect(policy.referenceQueries, equals(const <String>['刚刚问', '两天前问']));
+      },
+    );
+
+    test('system context carries available location without tool lookup', () {
+      final result = orchestrator.assemble(
+        query: '今天天气怎么样',
+        historySummary: '',
+        recalledTexts: const <String>[],
+        deviceProfile: 'mobile',
+        deviceModel: 'iphone',
+        deviceOs: 'ios',
+        gpsLocation: const <String, dynamic>{'city': '深圳'},
+        contextScopeHint: const <String, dynamic>{},
+        continuityPolicy: continuity('今天天气怎么样'),
+      );
+
+      expect(result.canEnterDomain, isTrue);
+      expect(result.fillTasks, isEmpty);
+      final gpsLocation = result.contextEnvelope['gpsLocation'] as Map?;
+      expect(gpsLocation?.containsKey('city'), isTrue);
+    });
 
     test('returns gap fill only when typed realtime evidence is required', () {
       final assembled = orchestrator.assemble(
@@ -200,20 +208,13 @@ void main() {
         hasToolResult: false,
         problemClass: ProblemClass.realtimeInfo.wireName,
         contextAssembly: assembled,
-        intentGraph: const IntentGraph(
-          userGoal: '杭州今天天气',
-          problemShape: ProblemShape.singleSkill,
-          primarySkill: 'weather',
-          problemClass: ProblemClass.realtimeInfo,
-          requiresExternalEvidence: true,
-          mustVerifyClaims: true,
-        ),
-        queryTasks: const <QueryTask>[
-          QueryTask(
+        planView: _weatherPlanView,
+        searchPlans: const <SearchPlanItem>[
+          SearchPlanItem(
             id: 'current_state',
             query: '杭州今天天气 当前状态',
             label: '当前状态',
-            dimension: QueryTaskDimension.currentState,
+            dimension: SearchPlanDimension.currentState,
           ),
         ],
       );
@@ -244,20 +245,13 @@ void main() {
         hasToolResult: true,
         problemClass: ProblemClass.realtimeInfo.wireName,
         contextAssembly: assembled,
-        intentGraph: const IntentGraph(
-          userGoal: '杭州今天天气',
-          problemShape: ProblemShape.singleSkill,
-          primarySkill: 'weather',
-          problemClass: ProblemClass.realtimeInfo,
-          requiresExternalEvidence: true,
-          mustVerifyClaims: true,
-        ),
-        queryTasks: const <QueryTask>[
-          QueryTask(
+        planView: _weatherPlanView,
+        searchPlans: const <SearchPlanItem>[
+          SearchPlanItem(
             id: 'current_state',
             query: '杭州今天天气 当前状态',
             label: '当前状态',
-            dimension: QueryTaskDimension.currentState,
+            dimension: SearchPlanDimension.currentState,
           ),
         ],
         evidenceEvaluation: const EvidenceEvaluationResult(
@@ -294,20 +288,13 @@ void main() {
         hasToolResult: true,
         problemClass: ProblemClass.realtimeInfo.wireName,
         contextAssembly: assembled,
-        intentGraph: const IntentGraph(
-          userGoal: '杭州今天天气',
-          problemShape: ProblemShape.singleSkill,
-          primarySkill: 'weather',
-          problemClass: ProblemClass.realtimeInfo,
-          requiresExternalEvidence: true,
-          mustVerifyClaims: true,
-        ),
-        queryTasks: const <QueryTask>[
-          QueryTask(
+        planView: _weatherPlanView,
+        searchPlans: const <SearchPlanItem>[
+          SearchPlanItem(
             id: 'current_state',
             query: '杭州今天天气 当前状态',
             label: '当前状态',
-            dimension: QueryTaskDimension.currentState,
+            dimension: SearchPlanDimension.currentState,
           ),
         ],
         evidenceEvaluation: const EvidenceEvaluationResult(
@@ -384,9 +371,9 @@ void main() {
       final slotFillHints = result.contextEnvelope['slotFillHints'] as Map?;
       expect(policy.allowHistorySummary, isFalse);
       expect(policy.allowLongtermMemory, isFalse);
-      expect(policy.allowLocationHints, isFalse);
+      expect(policy.allowLocationHints, isTrue);
       expect(slotFillHints?.containsKey('historySummarySnippet'), isFalse);
-      expect(slotFillHints?.containsKey('gpsCity'), isFalse);
+      expect(slotFillHints?.containsKey('gpsCity'), isTrue);
       expect(
         result.contextEnvelope.containsKey('longtermMemorySummary'),
         isFalse,

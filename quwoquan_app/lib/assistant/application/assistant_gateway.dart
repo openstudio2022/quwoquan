@@ -6,6 +6,7 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/runtime/assistant_runtime.dart';
 import 'package:quwoquan_app/assistant/skills/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/tools/tool_schema.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class AssistantGateway {
   AssistantGateway(this._runtime);
@@ -96,35 +97,44 @@ class AssistantGateway {
       }
     }
     if (skillInfo == null) {
-      return const AssistantToolResult(
-        success: false,
-        message: 'Skill not found',
-        errorCode: AssistantErrorCode.skillNotFound,
-        degraded: true,
+      return _skillFailureResult(
+        code: 'ASSISTANT.NOT_FOUND.skill_not_found',
+        kind: RuntimeFailureKind.notFound,
+        reason: 'skill_not_found',
+        skillId: skillId,
       );
     }
     if (!skillInfo.enabled && !skillInfo.isDefaultFree) {
-      return const AssistantToolResult(
-        success: false,
-        message: 'Skill requires subscription',
-        errorCode: AssistantErrorCode.permissionDenied,
-        degraded: true,
+      return _skillFailureResult(
+        code: 'ASSISTANT.PERMISSION.skill_subscription_required',
+        kind: RuntimeFailureKind.permission,
+        nature: RuntimeFailureNature.requiresUserAction,
+        reason: 'skill_subscription_required',
+        skillId: skillId,
       );
     }
     if (!skillInfo.manifest.channelScopes.contains(channel)) {
-      return AssistantToolResult(
-        success: false,
-        message: 'Skill unavailable on channel: $channel',
-        errorCode: AssistantErrorCode.permissionDenied,
-        degraded: true,
+      return _skillFailureResult(
+        code: 'ASSISTANT.PERMISSION.skill_channel_unavailable',
+        kind: RuntimeFailureKind.permission,
+        nature: RuntimeFailureNature.permanent,
+        reason: 'skill_channel_unavailable',
+        skillId: skillId,
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(key: 'channel', value: channel),
+        ],
       );
     }
     if (!skillInfo.manifest.deviceScopes.contains(deviceProfile)) {
-      return AssistantToolResult(
-        success: false,
-        message: 'Skill unavailable on device profile: $deviceProfile',
-        errorCode: AssistantErrorCode.permissionDenied,
-        degraded: true,
+      return _skillFailureResult(
+        code: 'ASSISTANT.PERMISSION.skill_device_unavailable',
+        kind: RuntimeFailureKind.permission,
+        nature: RuntimeFailureNature.permanent,
+        reason: 'skill_device_unavailable',
+        skillId: skillId,
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(key: 'deviceProfile', value: deviceProfile),
+        ],
       );
     }
 
@@ -141,17 +151,53 @@ class AssistantGateway {
       ),
     );
     if (skill.id.isEmpty) {
-      return const AssistantToolResult(
-        success: false,
-        message: 'Skill not found',
-        errorCode: AssistantErrorCode.skillNotFound,
-        degraded: true,
+      return _skillFailureResult(
+        code: 'ASSISTANT.NOT_FOUND.skill_not_found',
+        kind: RuntimeFailureKind.notFound,
+        reason: 'skill_not_found',
+        skillId: skillId,
       );
     }
     return _runtime.invokeSkill(
       skill: skill,
       arguments: arguments,
       deviceProfile: deviceProfile,
+    );
+  }
+
+  AssistantToolResult _skillFailureResult({
+    required String code,
+    required RuntimeFailureKind kind,
+    required String reason,
+    required String skillId,
+    RuntimeFailureNature nature = RuntimeFailureNature.permanent,
+    List<RuntimeContextAttribute> attributes =
+        const <RuntimeContextAttribute>[],
+  }) {
+    final sourceErrorCode = kind == RuntimeFailureKind.notFound
+        ? AssistantErrorCode.skillNotFound
+        : AssistantErrorCode.permissionDenied;
+    return AssistantToolResult(
+      success: false,
+      message: reason,
+      errorCode: sourceErrorCode,
+      degraded: true,
+      runtimeFailure: RuntimeFailure(
+        code: code,
+        origin: RuntimeFailureOrigin.system,
+        kind: kind,
+        nature: nature,
+        location: const RuntimeFailureLocation(
+          businessObject: 'assistant_skill',
+          functionModule: 'assistant_gateway',
+        ),
+        context: RuntimeFailureContext(
+          attributes: <RuntimeContextAttribute>[
+            RuntimeContextAttribute(key: 'skillId', value: skillId),
+            ...attributes,
+          ],
+        ),
+      ),
     );
   }
 }

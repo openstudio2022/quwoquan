@@ -9,9 +9,9 @@ discarding any remaining alternative mainline routes.
 
 ## Canonical Reference Scope
 
-Only the long-form forward page-flip path is treated as the target contract.
-The long-form backward path is known to be incorrect and is **not** accepted as
-an implementation target.
+The long-form page-flip pipeline is treated as the target contract.
+Forward motion remains the canonical baseline, and backward motion is accepted
+only as the mirrored replay of that same rendering pipeline.
 
 Canonical references for the freeze:
 
@@ -24,17 +24,17 @@ Canonical references for the freeze:
 - `lib/ui/content/pageflip/release_policy.dart`
 
 Reference behavior from `@react-pageflip` is used only as an industry comparator
-for the single-page forward flip semantics, not as a separate runtime route.
+for shared single-page flip semantics. It does not justify a separate runtime
+route for backward motion.
 
 ## Freeze Decisions
 
-1. `pageflip` must keep only one main rendering line: the long-form forward
-   rendering contract.
+1. `pageflip` must keep only one main rendering line: the long-form article
+   rendering contract that is already validated by forward motion.
 2. Any soft-flip simplification, mesh-only fallback, or independent page-turn
    overlay route is considered legacy and must not be treated as a primary path.
-3. Backward motion in the new component is allowed only as a route to compare,
-   diagnose, and align with the long-form contract; it is not a separate source
-   of truth.
+3. Backward motion must reuse that same rendering line as the mirrored replay
+   of forward motion; it is not allowed to keep a separate runtime route.
 4. Page selection, texture binding, and render order must be defined by the
    long-form article pipeline, not by `pageflip`-local heuristics.
 5. The new component must not keep a second compatibility implementation once
@@ -57,8 +57,8 @@ next steps can be written against one contract.
   surface, and ambient/spine shading must be preserved as the only accepted
   ordering model.
 - Freeze the source-of-truth list for page snapshots and binding selection.
-- Mark backward page-turn behavior as non-canonical and keep it only for
-  comparison against the long-form reference.
+- Freeze backward page-turn behavior as the mirrored replay of the long-form
+  forward reference, sharing the same renderer and texture-selection contract.
 
 ## Current State
 
@@ -69,8 +69,8 @@ That means:
   route,
 - but it still needs full alignment with the article pipeline for page
   selection, texture binding, and layer composition,
-- and the backward path still needs to be treated as a gap, not as the target
-  truth.
+- and the backward path still needs final cleanup so it fully rejoins that same
+  canonical pipeline without legacy branches.
 
 In short, the route is chosen, but the freeze is about ensuring there is no
 second route left alive.
@@ -79,11 +79,11 @@ second route left alive.
 
 Milestone 1 is accepted only when all of the following are true:
 
-- The long-form forward path is the only declared mainline for `pageflip`.
+- The long-form article pipeline is the only declared mainline for `pageflip`.
 - The component documentation explicitly rejects a second runtime route.
 - The forward render contract is mapped to the long-form article pipeline.
-- The backward route is marked as non-canonical and kept only as diagnostic
-  comparison material.
+- The backward route is explicitly defined as the mirrored replay of the same
+  canonical pipeline, not as diagnostic-only material.
 - There is a clear file-level migration plan for page selection, texture
   binding, and render ordering.
 - No milestone note or implementation note still treats soft-flip simplification
@@ -93,7 +93,7 @@ Milestone 1 is accepted only when all of the following are true:
 
 Development can start when this freeze is stable and the following are locked:
 
-- one canonical forward route
+- one canonical render route
 - one page-role semantic mapping
 - one render-order contract
 - one texture-binding contract
@@ -102,7 +102,7 @@ Development can start when this freeze is stable and the following are locked:
 ## Out Of Scope
 
 - Reintroducing a second mainline rendering route
-- Treating long-form backward behavior as canonical
+- Reintroducing a backward-only runtime route outside the canonical pipeline
 - Keeping compatibility shims that can route rendering away from the long-form
   forward pipeline
 - Trying to preserve both the simplified route and the article route in parallel

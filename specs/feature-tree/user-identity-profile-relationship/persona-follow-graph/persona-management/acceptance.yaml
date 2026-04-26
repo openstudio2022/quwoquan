@@ -133,18 +133,18 @@ scenario_acceptance:
         - last persona delete forbidden test
         - retired persona management flow test
       recorded:
-        - "T1/T3: `go test ./services/user-service/tests -run 'Test(DeletePersona|GetPersonaLifecycleGuard|RetirePersona|SubAccount_)'`"
+        - "T1/T3: `go test ./services/user-service/tests -run 'Test(DeletePersona|GetPersonaLifecycleGuard|RetirePersona|DeleteEmptyPersona|RetiredPersona)'`"
         - "T2: `flutter test test/ui/user/widgets/persona_management_page_test.dart`"
     notes:
-      - "主管理页已接入 lifecycle guard、delete-empty 与 retire 分流。"
-      - "`lifecycle-guard / retire` 的独立 HTTP 契约证据已补齐。"
-      - "但 `hasAttributedHistory -> retire instead of delete` 的真实持久化语义仍未落到 user 域实体；当前 `retire` 仍主要表现为 guard/分流合同，因此本项继续保持 partial。"
+      - "主管理页已接入 lifecycle guard、delete-empty 与 retire 分流，并能显示已退役分身状态。"
+      - "`retire` 已写入 Persona `status / retiredAt`，退役后不可再作为激活、编辑或同步主体。"
+      - "`hasAttributedHistory` 已接入 user 域真实分身级归因来源，delete-empty 与 retire 的分流不再依赖写死布尔值。"
     test_layers:
       T1: required
       T2: required
       T3: required
       T4: optional
-    status: partial
+    status: implemented
 
 story_readiness:
   S1:
@@ -165,13 +165,14 @@ story_readiness:
         - error telemetry verification
       recorded:
         - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/content/post/contract/content_runtime_config_provider_test.dart test/ui/user/providers/persona_management_provider_test.dart`"
+        - "T1/T3: `go test ./services/user-service/tests -run 'Test(GetPersonaLifecycleGuard|RetirePersona|DeleteEmptyPersona|RetiredPersona)'`"
     notes:
       - "`create_succeeded / activate_succeeded / retire_succeeded / create_failed / activate_failed / delete_blocked / quota_reached / retired_count / profile_sync_suggested / profile_sync_applied / profile_sync_rejected` 已纳入 telemetry。"
       - "分身管理与资料同步入口现支持 runtime config 关闭，并验证了设置页与个人主页在 flag-off 时的一致降级。"
-      - "由于 A3 的历史归因退役语义仍未实体化，回退证明当前只覆盖 UI/入口降级与单 active persona 安全基线，不宣告 full implemented。"
+      - "在 flag-off 回退到单 active persona 管理基线时，退役状态与历史归因仍由 user 域持久化保留，不依赖 UI 临时状态。"
     test_layers:
       T1: optional
       T2: required
       T3: optional
       T4: optional
-    status: partial
+    status: implemented

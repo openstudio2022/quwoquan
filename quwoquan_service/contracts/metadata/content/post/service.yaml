@@ -28,7 +28,7 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, personaId, profileSubjectId, personaContextVersion]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, personaId, profileSubjectId, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
 
   - method: GET
     path: /v1/content/profile-subjects/{profileSubjectId}/posts
@@ -92,7 +92,7 @@ api_routes:
     operation: CreateComment
     description: 发表评论
     request_entity: Comment
-    writable_fields: [content, replyToCommentId, personaId, profileSubjectId, personaContextVersion]
+    writable_fields: [content, replyToCommentId, personaId, profileSubjectId, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
 
   - method: DELETE
     path: /v1/content/posts/{postId}/comments/{commentId}

@@ -8,12 +8,7 @@ List<Offset> interpolatePoints(Offset start, Offset end) {
   final sizeY = (start.dy - end.dy).abs();
   final length = math.max(sizeX, sizeY).round().clamp(1, 100000);
   final points = <Offset>[start];
-  double resolveCoord(
-    double from,
-    double to,
-    double size,
-    int index,
-  ) {
+  double resolveCoord(double from, double to, double size, int index) {
     if (to > from) {
       return from + (index * (size / length));
     }
@@ -39,8 +34,7 @@ double distanceBetweenPoints(Offset? a, Offset? b) {
     return double.infinity;
   }
   return math.sqrt(
-    math.pow(b.dx - a.dx, 2).toDouble() +
-        math.pow(b.dy - a.dy, 2).toDouble(),
+    math.pow(b.dx - a.dx, 2).toDouble() + math.pow(b.dy - a.dy, 2).toDouble(),
   );
 }
 
@@ -61,8 +55,8 @@ double angleBetweenLines(List<Offset> line1, List<Offset> line2) {
   final b1 = line1[1].dx - line1[0].dx;
   final b2 = line2[1].dx - line2[0].dx;
   final numerator = (a1 * a2) + (b1 * b2);
-  final denominator = math.sqrt((a1 * a1) + (b1 * b1)) *
-      math.sqrt((a2 * a2) + (b2 * b2));
+  final denominator =
+      math.sqrt((a1 * a1) + (b1 * b1)) * math.sqrt((a2 * a2) + (b2 * b2));
   if (denominator == 0) {
     return 0;
   }
@@ -96,7 +90,8 @@ Offset limitPointToCircle(
   final n = limitedPoint.dx;
   final m = limitedPoint.dy;
 
-  var x = math.sqrt(
+  var x =
+      math.sqrt(
         (math.pow(radius, 2) * math.pow(a - n, 2)) /
             (math.pow(a - n, 2) + math.pow(b - m, 2)),
       ) +
@@ -182,6 +177,15 @@ class StPageFlipCalculation {
   }
 
   List<Offset> getFlippingClipArea() {
+    if (direction == StPageFlipDirection.back) {
+      final seamX = _backwardSeamX;
+      return <Offset>[
+        Offset.zero,
+        Offset(seamX, 0),
+        Offset(seamX, pageHeight),
+        Offset(0, pageHeight),
+      ];
+    }
     final result = <Offset>[_rect.topLeft];
     if (_topIntersectPoint != null) {
       result.add(_topIntersectPoint!);
@@ -208,6 +212,15 @@ class StPageFlipCalculation {
   }
 
   List<Offset> getBottomClipArea() {
+    if (direction == StPageFlipDirection.back) {
+      final seamX = _backwardSeamX;
+      return <Offset>[
+        Offset(seamX, 0),
+        Offset(pageWidth, 0),
+        Offset(pageWidth, pageHeight),
+        Offset(seamX, pageHeight),
+      ];
+    }
     final result = <Offset>[];
     if (_topIntersectPoint != null) {
       result.add(_topIntersectPoint!);
@@ -223,7 +236,8 @@ class StPageFlipCalculation {
     }
 
     if (_sideIntersectPoint != null) {
-      if (distanceBetweenPoints(_sideIntersectPoint, _topIntersectPoint) >= 10) {
+      if (distanceBetweenPoints(_sideIntersectPoint, _topIntersectPoint) >=
+          10) {
         result.add(_sideIntersectPoint!);
       }
     } else if (corner == StPageFlipCorner.top) {
@@ -254,16 +268,25 @@ class StPageFlipCalculation {
     if (direction == StPageFlipDirection.forward) {
       return _rect.topLeft;
     }
-    return _rect.topRight;
+    return corner == StPageFlipCorner.bottom
+        ? Offset(0, pageHeight)
+        : Offset.zero;
   }
 
+  Offset getBackwardSpineTop() => Offset.zero;
+
+  Offset getBackwardSpineBottom() => Offset(0, pageHeight);
+
   double getFlippingProgress() {
+    if (direction == StPageFlipDirection.back) {
+      return ((-_position.dx / pageWidth) * 100).clamp(0.0, 100.0).toDouble();
+    }
     return (((_position.dx - pageWidth) / (2 * pageWidth)) * 100).abs();
   }
 
   Offset getBottomPagePosition() {
     if (direction == StPageFlipDirection.back) {
-      return Offset(pageWidth, 0);
+      return Offset.zero;
     }
     return Offset.zero;
   }
@@ -279,15 +302,19 @@ class StPageFlipCalculation {
   }
 
   double getShadowAngle() {
-    final angle = angleBetweenLines(
-      _segmentToShadowLine(),
-      <Offset>[Offset.zero, Offset(pageWidth, 0)],
-    );
+    final angle = angleBetweenLines(_segmentToShadowLine(), <Offset>[
+      Offset.zero,
+      Offset(pageWidth, 0),
+    ]);
     if (direction == StPageFlipDirection.forward) {
       return angle;
     }
     return math.pi - angle;
   }
+
+  double get backwardSeamX => _backwardSeamX;
+
+  double get _backwardSeamX => (-_position.dx).clamp(0.0, pageWidth).toDouble();
 
   Offset _calcAngleAndPosition(Offset pos) {
     var result = pos;
@@ -325,7 +352,8 @@ class StPageFlipCalculation {
         ? pageHeight - pos.dy
         : pos.dy;
 
-    var angle = 2 *
+    var angle =
+        2 *
         math.acos(
           (left / math.sqrt((top * top) + (left * left)))
               .clamp(-1.0, 1.0)
@@ -347,25 +375,19 @@ class StPageFlipCalculation {
 
   StPageFlipRectPoints _getPageRect(Offset localPos) {
     if (corner == StPageFlipCorner.top) {
-      return _rectFromBasePoint(
-        <Offset>[
-          Offset.zero,
-          Offset(pageWidth, 0),
-          Offset(0, pageHeight),
-          Offset(pageWidth, pageHeight),
-        ],
-        localPos,
-      );
-    }
-    return _rectFromBasePoint(
-      <Offset>[
-        Offset(0, -pageHeight),
-        Offset(pageWidth, -pageHeight),
+      return _rectFromBasePoint(<Offset>[
         Offset.zero,
         Offset(pageWidth, 0),
-      ],
-      localPos,
-    );
+        Offset(0, pageHeight),
+        Offset(pageWidth, pageHeight),
+      ], localPos);
+    }
+    return _rectFromBasePoint(<Offset>[
+      Offset(0, -pageHeight),
+      Offset(pageWidth, -pageHeight),
+      Offset.zero,
+      Offset(pageWidth, 0),
+    ], localPos);
   }
 
   StPageFlipRectPoints _rectFromBasePoint(
@@ -433,7 +455,9 @@ class StPageFlipCalculation {
       _updateAngleAndGeometry(result);
     }
 
-    final radius = math.sqrt((pageWidth * pageWidth) + (pageHeight * pageHeight));
+    final radius = math.sqrt(
+      (pageWidth * pageWidth) + (pageHeight * pageHeight),
+    );
     var checkPointOne = _rect.bottomRight;
     var checkPointTwo = _rect.topLeft;
     if (corner == StPageFlipCorner.bottom) {
@@ -454,8 +478,7 @@ class StPageFlipCalculation {
 
   List<Offset> _segmentToShadowLine() {
     final first = getShadowStartPoint();
-    final second =
-        first != _sideIntersectPoint && _sideIntersectPoint != null
+    final second = first != _sideIntersectPoint && _sideIntersectPoint != null
         ? _sideIntersectPoint!
         : (_bottomIntersectPoint ?? first);
     return <Offset>[first, second];

@@ -7,20 +7,22 @@ class WebFetchToolArgs {
   const WebFetchToolArgs({
     required this.url,
     this.maxChars,
-    this.queryTaskId = '',
+    this.searchPlanId = '',
     this.dimension = '',
   });
 
   final String url;
   final int? maxChars;
-  final String queryTaskId;
+  final String searchPlanId;
   final String dimension;
 
-  factory WebFetchToolArgs.fromAssistantArguments(AssistantToolArguments arguments) {
+  factory WebFetchToolArgs.fromAssistantArguments(
+    AssistantToolArguments arguments,
+  ) {
     return WebFetchToolArgs(
       url: arguments.stringField('url') ?? '',
       maxChars: arguments.intField('maxChars'),
-      queryTaskId: arguments.stringField('queryTaskId') ?? '',
+      searchPlanId: arguments.stringField('searchPlanId') ?? '',
       dimension: arguments.stringField('dimension') ?? '',
     );
   }
@@ -29,20 +31,18 @@ class WebFetchToolArgs {
     return RetrievalFetchRequest(
       url: url,
       maxChars: maxChars,
-      queryTaskId: queryTaskId,
+      searchPlanId: searchPlanId,
       dimension: dimension,
     );
   }
 
   AssistantToolArguments toAssistantArguments() {
-    return AssistantToolArguments(
-      <String, Object?>{
-        'url': url,
-        if (maxChars != null) 'maxChars': maxChars,
-        if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
-        if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
-      },
-    );
+    return AssistantToolArguments(<String, Object?>{
+      'url': url,
+      if (maxChars != null) 'maxChars': maxChars,
+      if (searchPlanId.trim().isNotEmpty) 'searchPlanId': searchPlanId.trim(),
+      if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
+    });
   }
 }
 
@@ -54,7 +54,7 @@ class WebFetchReference {
     this.sourceHost = '',
     this.snippet = '',
     this.sourceTier = '',
-    this.queryTaskId = '',
+    this.searchPlanId = '',
     this.dimension = '',
     this.retrievedAt = '',
   });
@@ -65,7 +65,7 @@ class WebFetchReference {
   final String sourceHost;
   final String snippet;
   final String sourceTier;
-  final String queryTaskId;
+  final String searchPlanId;
   final String dimension;
   final String retrievedAt;
 
@@ -78,13 +78,15 @@ class WebFetchReference {
       sourceHost: payload.stringField('sourceHost') ?? '',
       snippet: payload.stringField('snippet') ?? '',
       sourceTier: payload.stringField('sourceTier') ?? '',
-      queryTaskId: payload.stringField('queryTaskId') ?? '',
+      searchPlanId: payload.stringField('searchPlanId') ?? '',
       dimension: payload.stringField('dimension') ?? '',
       retrievedAt: payload.stringField('retrievedAt') ?? '',
     );
   }
 
-  factory WebFetchReference.fromRetrievalReference(RetrievalFetchReference value) {
+  factory WebFetchReference.fromRetrievalReference(
+    RetrievalFetchReference value,
+  ) {
     return WebFetchReference(
       url: value.url,
       title: value.title,
@@ -92,7 +94,7 @@ class WebFetchReference {
       sourceHost: value.sourceHost,
       snippet: value.snippet,
       sourceTier: value.sourceTier,
-      queryTaskId: value.queryTaskId,
+      searchPlanId: value.searchPlanId,
       dimension: value.dimension,
       retrievedAt: value.retrievedAt,
     );
@@ -105,8 +107,7 @@ class WebFetchReference {
     return raw
         .map(WebFetchReference.fromJson)
         .where(
-          (item) =>
-              item.url.trim().isNotEmpty || item.title.trim().isNotEmpty,
+          (item) => item.url.trim().isNotEmpty || item.title.trim().isNotEmpty,
         )
         .toList(growable: false);
   }
@@ -119,7 +120,7 @@ class WebFetchReference {
       sourceHost: sourceHost,
       snippet: snippet,
       sourceTier: sourceTier,
-      queryTaskId: queryTaskId,
+      searchPlanId: searchPlanId,
       dimension: dimension,
       retrievedAt: retrievedAt,
     );
@@ -133,7 +134,7 @@ class WebFetchReference {
       if (sourceHost.trim().isNotEmpty) 'sourceHost': sourceHost.trim(),
       if (snippet.trim().isNotEmpty) 'snippet': snippet.trim(),
       if (sourceTier.trim().isNotEmpty) 'sourceTier': sourceTier.trim(),
-      if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
+      if (searchPlanId.trim().isNotEmpty) 'searchPlanId': searchPlanId.trim(),
       if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
       if (retrievedAt.trim().isNotEmpty) 'retrievedAt': retrievedAt.trim(),
     };
@@ -152,7 +153,7 @@ class WebFetchToolSuccessPayload {
     this.contentType = '',
     this.sourceHost = '',
     this.sourceTier = '',
-    this.queryTaskId = '',
+    this.searchPlanId = '',
     this.dimension = '',
     this.references = const <WebFetchReference>[],
   });
@@ -167,7 +168,7 @@ class WebFetchToolSuccessPayload {
   final String contentType;
   final String sourceHost;
   final String sourceTier;
-  final String queryTaskId;
+  final String searchPlanId;
   final String dimension;
   final List<WebFetchReference> references;
 
@@ -184,7 +185,7 @@ class WebFetchToolSuccessPayload {
       contentType: payload.stringField('contentType') ?? '',
       sourceHost: payload.stringField('sourceHost') ?? '',
       sourceTier: payload.stringField('sourceTier') ?? '',
-      queryTaskId: payload.stringField('queryTaskId') ?? '',
+      searchPlanId: payload.stringField('searchPlanId') ?? '',
       dimension: payload.stringField('dimension') ?? '',
       references: WebFetchReference.listFromJson(payload['references']),
     );
@@ -204,7 +205,7 @@ class WebFetchToolSuccessPayload {
       contentType: payload.contentType,
       sourceHost: payload.sourceHost,
       sourceTier: payload.sourceTier,
-      queryTaskId: payload.queryTaskId,
+      searchPlanId: payload.searchPlanId,
       dimension: payload.dimension,
       references: payload.references
           .map(WebFetchReference.fromRetrievalReference)
@@ -223,7 +224,7 @@ class WebFetchToolSuccessPayload {
     String? contentType,
     String? sourceHost,
     String? sourceTier,
-    String? queryTaskId,
+    String? searchPlanId,
     String? dimension,
     List<WebFetchReference>? references,
   }) {
@@ -238,58 +239,51 @@ class WebFetchToolSuccessPayload {
       contentType: contentType ?? this.contentType,
       sourceHost: sourceHost ?? this.sourceHost,
       sourceTier: sourceTier ?? this.sourceTier,
-      queryTaskId: queryTaskId ?? this.queryTaskId,
+      searchPlanId: searchPlanId ?? this.searchPlanId,
       dimension: dimension ?? this.dimension,
       references: references ?? this.references,
     );
   }
 
   AssistantToolResultData toResultData() {
-    return AssistantToolResultData(
-      <String, Object?>{
-        'contractVersion': webFetchToolContractVersion,
-        if (url.trim().isNotEmpty) 'url': url.trim(),
-        if (title.trim().isNotEmpty) 'title': title.trim(),
-        if (source.trim().isNotEmpty) 'source': source.trim(),
-        if (content.trim().isNotEmpty) 'content': content.trim(),
-        if (summary.trim().isNotEmpty) 'summary': summary.trim(),
-        if (charCount != null) 'charCount': charCount,
-        if (truncated != null) 'truncated': truncated,
-        if (contentType.trim().isNotEmpty) 'contentType': contentType.trim(),
-        if (sourceHost.trim().isNotEmpty) 'sourceHost': sourceHost.trim(),
-        if (sourceTier.trim().isNotEmpty) 'sourceTier': sourceTier.trim(),
-        if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
-        if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
-        'references': references
-            .map((item) => item.toJson())
-            .toList(growable: false),
-      },
-    );
+    return AssistantToolResultData(<String, Object?>{
+      'contractVersion': webFetchToolContractVersion,
+      if (url.trim().isNotEmpty) 'url': url.trim(),
+      if (title.trim().isNotEmpty) 'title': title.trim(),
+      if (source.trim().isNotEmpty) 'source': source.trim(),
+      if (content.trim().isNotEmpty) 'content': content.trim(),
+      if (summary.trim().isNotEmpty) 'summary': summary.trim(),
+      if (charCount != null) 'charCount': charCount,
+      if (truncated != null) 'truncated': truncated,
+      if (contentType.trim().isNotEmpty) 'contentType': contentType.trim(),
+      if (sourceHost.trim().isNotEmpty) 'sourceHost': sourceHost.trim(),
+      if (sourceTier.trim().isNotEmpty) 'sourceTier': sourceTier.trim(),
+      if (searchPlanId.trim().isNotEmpty) 'searchPlanId': searchPlanId.trim(),
+      if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
+      'references': references
+          .map((item) => item.toJson())
+          .toList(growable: false),
+    });
   }
 }
 
 class WebFetchFailurePayload {
   const WebFetchFailurePayload({
     this.statusCode,
-    this.retryable,
     this.contentType = '',
     this.detail = '',
   });
 
   final int? statusCode;
-  final bool? retryable;
   final String contentType;
   final String detail;
 
   AssistantToolResultData toResultData() {
-    return AssistantToolResultData(
-      <String, Object?>{
-        'contractVersion': webFetchToolContractVersion,
-        if (statusCode != null) 'statusCode': statusCode,
-        if (retryable != null) 'retryable': retryable,
-        if (contentType.trim().isNotEmpty) 'contentType': contentType.trim(),
-        if (detail.trim().isNotEmpty) 'detail': detail.trim(),
-      },
-    );
+    return AssistantToolResultData(<String, Object?>{
+      'contractVersion': webFetchToolContractVersion,
+      if (statusCode != null) 'statusCode': statusCode,
+      if (contentType.trim().isNotEmpty) 'contentType': contentType.trim(),
+      if (detail.trim().isNotEmpty) 'detail': detail.trim(),
+    });
   }
 }

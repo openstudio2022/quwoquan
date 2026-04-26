@@ -7,8 +7,12 @@ kind: output_contract
 imports:
   - package:quwoquan_app/assistant/contracts/assistant_journey.dart
   - package:quwoquan_app/assistant/contracts/aggregation_state.dart
+  - package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart
   - package:quwoquan_app/assistant/contracts/skill_run.dart
   - package:quwoquan_app/assistant/contracts/run_artifacts.dart
+  - package:quwoquan_app/assistant/contracts/task_graph_contract.dart
+  - package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart
+  - package:quwoquan_app/assistant/contracts/understanding_result_contract.dart
 fields:
   - name: contractId
     type: string
@@ -68,9 +72,22 @@ fields:
     type: list<object>
     ref: SubagentPlan
     default: []
-  - name: intentGraph
+  - name: understandingResult
     type: object
-    ref: IntentGraph
+    ref: UnderstandingResult
+    default: {}
+  - name: taskGraph
+    type: object
+    ref: TaskGraph
+    default: {}
+  - name: orchestratorState
+    type: object
+    ref: ConversationOrchestratorState
+    default: {}
+  - name: turnSynthesisState
+    type: object
+    ref: TurnSynthesisState
+    default: {}
   - name: skillRuns
     type: list<object>
     ref: SkillRun

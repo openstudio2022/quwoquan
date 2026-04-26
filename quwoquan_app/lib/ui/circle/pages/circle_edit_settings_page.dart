@@ -125,8 +125,9 @@ class _CircleEditSettingsPageState
 
   Future<void> _loadCategoryLabelsFromRepo() async {
     try {
-      final cfg =
-          await ref.read(circleRepositoryProvider).getCircleCategoryConfig();
+      final cfg = await ref
+          .read(circleRepositoryProvider)
+          .getCircleCategoryConfig();
       if (!mounted) {
         return;
       }
@@ -340,6 +341,7 @@ class _CircleEditSettingsPageState
     String? createdCircleId;
     if (_isCreateMode) {
       try {
+        await ref.read(activePersonaContextProvider.future);
         final repo = ref.read(circleRepositoryProvider);
         final created = await repo.createCircle(wireDto);
         final merged = mergeCreateCircleWireWithCreated(wireDto, created);
@@ -352,7 +354,9 @@ class _CircleEditSettingsPageState
         success = false;
       }
     } else {
-      final circleCtrl = ref.read(circleStateProvider(widget.circleId!).notifier);
+      final circleCtrl = ref.read(
+        circleStateProvider(widget.circleId!).notifier,
+      );
       success = await circleCtrl.updateCircleDetails(payload.toUpdateWireDto());
     }
     if (!mounted) {
@@ -1116,12 +1120,7 @@ class _CircleEditSettingsPageState
   }) {
     final labels = _categoryLabelsFromRepo;
     final categories = _categoryIds
-        .map(
-          (id) => MapEntry(
-            id,
-            labels[id]?.label ?? id,
-          ),
-        )
+        .map((id) => MapEntry(id, labels[id]?.label ?? id))
         .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

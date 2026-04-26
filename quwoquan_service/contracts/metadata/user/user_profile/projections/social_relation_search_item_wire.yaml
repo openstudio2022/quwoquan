@@ -27,7 +27,14 @@ client_projection:
       dart_type: String
       nullable: false
       source: username
-      aliases: [username, subAccountId]
+      aliases: [username, userHandle, subAccountId]
+      default: "''"
+
+    - name: userHandle
+      dart_type: String
+      nullable: false
+      source: userHandle
+      aliases: [userHandle, username, subAccountId]
       default: "''"
 
     - name: displayName

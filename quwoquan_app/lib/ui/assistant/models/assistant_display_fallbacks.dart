@@ -41,11 +41,8 @@ String resolveActionLikeCompletedFallback(AssistantRunResponse response) {
   if (!looksActionLike) {
     return '';
   }
-  if (nextAction == 'ask_user' || nextAction == 'clarify') {
+  if (nextAction == 'ask_user' || messageKind == 'ask_user') {
     return '我还需要你再补充一点信息，这样才能继续。';
-  }
-  if (nextAction == 'retry') {
-    return '这次没有拿到可靠结果，请稍后再试一次。';
   }
   return '这个操作我暂时还没拿到可展示结果，请再试一次。';
 }

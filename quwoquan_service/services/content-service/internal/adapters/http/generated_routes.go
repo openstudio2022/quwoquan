@@ -8,13 +8,15 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	rterr "quwoquan_service/runtime/errors"
 )
 
 func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		op, ok := resolveGeneratedOperation(r.Method, r.URL.Path)
 		if !ok {
-			http.NotFound(w, r)
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "接口不存在", "route not found"))
 			return
 		}
 		dispatchGeneratedOperation(h, op, w, r)
@@ -229,41 +231,45 @@ func BindGeneratedGetFeedParams(r *http.Request, defaultLimit int) GeneratedGetF
 
 var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 	"CreateComment": {
-		"content":               {},
-		"replyToCommentId":      {},
-		"personaId":             {},
-		"profileSubjectId":      {},
-		"personaContextVersion": {},
+		"content":                   {},
+		"replyToCommentId":          {},
+		"personaId":                 {},
+		"profileSubjectId":          {},
+		"authorDisplayNameSnapshot": {},
+		"authorAvatarUrlSnapshot":   {},
+		"personaContextVersion":     {},
 	},
 	"CreatePost": {
-		"contentType":             {},
-		"contentIdentity":         {},
-		"title":                   {},
-		"body":                    {},
-		"summary":                 {},
-		"tags":                    {},
-		"mediaUrls":               {},
-		"coverUrl":                {},
-		"articleDocument":         {},
-		"videoUrl":                {},
-		"illustrationAssetId":     {},
-		"location":                {},
-		"locationName":            {},
-		"primaryHomepageId":       {},
-		"primaryHomepageType":     {},
-		"primaryHomepageSnapshot": {},
-		"visibility":              {},
-		"circleIds":               {},
-		"groupId":                 {},
-		"nodeId":                  {},
-		"assistantUsePolicy":      {},
-		"sourcePostId":            {},
-		"sourceType":              {},
-		"deviceInfo":              {},
-		"publishLocation":         {},
-		"personaId":               {},
-		"profileSubjectId":        {},
-		"personaContextVersion":   {},
+		"contentType":               {},
+		"contentIdentity":           {},
+		"title":                     {},
+		"body":                      {},
+		"summary":                   {},
+		"tags":                      {},
+		"mediaUrls":                 {},
+		"coverUrl":                  {},
+		"articleDocument":           {},
+		"videoUrl":                  {},
+		"illustrationAssetId":       {},
+		"location":                  {},
+		"locationName":              {},
+		"primaryHomepageId":         {},
+		"primaryHomepageType":       {},
+		"primaryHomepageSnapshot":   {},
+		"visibility":                {},
+		"circleIds":                 {},
+		"groupId":                   {},
+		"nodeId":                    {},
+		"assistantUsePolicy":        {},
+		"sourcePostId":              {},
+		"sourceType":                {},
+		"deviceInfo":                {},
+		"publishLocation":           {},
+		"personaId":                 {},
+		"profileSubjectId":          {},
+		"authorDisplayNameSnapshot": {},
+		"authorAvatarUrlSnapshot":   {},
+		"personaContextVersion":     {},
 	},
 	"PromotePostToWork": {
 		"contentType":             {},

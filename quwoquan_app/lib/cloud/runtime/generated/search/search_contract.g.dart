@@ -2,8 +2,7 @@
 
 enum SearchMode {
   suggest('suggest'),
-  result('result'),
-  ;
+  result('result');
 
   const SearchMode(this.wireValue);
 
@@ -24,8 +23,7 @@ enum SearchMode {
 enum SearchExecutionStrategy {
   localOnly('local_only'),
   remoteOnly('remote_only'),
-  hybridRemoteFallbackLocal('hybrid_remote_fallback_local'),
-  ;
+  hybridRemoteFallbackLocal('hybrid_remote_fallback_local');
 
   const SearchExecutionStrategy(this.wireValue);
 
@@ -48,8 +46,7 @@ enum SearchExecutionStrategy {
 enum SearchResolvedFrom {
   local('local'),
   remote('remote'),
-  localFallback('local_fallback'),
-  ;
+  localFallback('local_fallback');
 
   const SearchResolvedFrom(this.wireValue);
 
@@ -71,8 +68,7 @@ enum SearchResolvedFrom {
 
 enum SearchConversationType {
   direct('direct'),
-  group('group'),
-  ;
+  group('group');
 
   const SearchConversationType(this.wireValue);
 
@@ -94,8 +90,7 @@ enum SearchToolContentType {
   article('article'),
   image('image'),
   video('video'),
-  moment('moment'),
-  ;
+  moment('moment');
 
   const SearchToolContentType(this.wireValue);
 
@@ -139,7 +134,7 @@ class SearchToolFieldNames {
   static const String categoryId = 'categoryId';
   static const String subCategory = 'subCategory';
   static const String queryVariants = 'queryVariants';
-  static const String queryTasks = 'queryTasks';
+  static const String searchPlans = 'searchPlans';
 }
 
 // ignore: avoid_classes_with_only_static_members
@@ -149,10 +144,23 @@ class SearchToolContract {
   static const String name = 'search';
   static const String description = '统一检索网页与趣我圈对象的 query-first tool';
   static const List<String> requiredFields = <String>['query'];
-  static const List<String> optionalFields = <String>['mode', 'objectTypes', 'limit', 'conversationType', 'contentTypes', 'categoryId', 'subCategory'];
-  static const List<String> internalOptionalFields = <String>['queryVariants', 'queryTasks'];
+  static const List<String> optionalFields = <String>[
+    'mode',
+    'objectTypes',
+    'limit',
+    'conversationType',
+    'contentTypes',
+    'categoryId',
+    'subCategory',
+  ];
+  static const List<String> internalOptionalFields = <String>['queryVariants'];
   static const List<String> conversationTypes = <String>['direct', 'group'];
-  static const List<String> contentTypes = <String>['article', 'image', 'video', 'moment'];
+  static const List<String> contentTypes = <String>[
+    'article',
+    'image',
+    'video',
+    'moment',
+  ];
   static const List<String> allFields = <String>[
     ...requiredFields,
     ...optionalFields,

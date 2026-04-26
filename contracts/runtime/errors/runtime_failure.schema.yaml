@@ -1,0 +1,84 @@
+schemaVersion: 1
+types:
+  RuntimeFailure:
+    fields:
+      code:
+        type: string
+        required: true
+      origin:
+        type: RuntimeFailureOrigin
+        required: true
+      kind:
+        type: RuntimeFailureKind
+        required: true
+      nature:
+        type: RuntimeFailureNature
+        required: true
+      location:
+        type: RuntimeFailureLocation
+        required: true
+      context:
+        type: RuntimeFailureContext
+        required: true
+  RuntimeFailureLocation:
+    fields:
+      businessObject:
+        type: string
+        required: true
+      functionModule:
+        type: string
+        required: true
+      sourceFilePath:
+        type: string
+        required: false
+      sourceLineNumber:
+        type: int
+        required: false
+      sourceLineText:
+        type: string
+        required: false
+  RuntimeFailureContext:
+    fields:
+      attributes:
+        type: RuntimeContextAttributeList
+        required: true
+  RuntimeContextAttributeList:
+    listOf: RuntimeContextAttribute
+  RuntimeContextAttribute:
+    fields:
+      key:
+        type: string
+        required: true
+      value:
+        type: string
+        required: true
+enums:
+  RuntimeFailureOrigin:
+    - user
+    - environment
+    - localClient
+    - remoteDependency
+    - system
+    - developer
+  RuntimeFailureKind:
+    - validation
+    - contract
+    - permission
+    - auth
+    - network
+    - rateLimited
+    - unavailable
+    - timeout
+    - notFound
+    - unsupported
+    - cancelled
+    - storage
+    - parsing
+    - model
+    - internal
+  RuntimeFailureNature:
+    - transient
+    - permanent
+    - requiresUserAction
+    - requiresPermission
+    - bug

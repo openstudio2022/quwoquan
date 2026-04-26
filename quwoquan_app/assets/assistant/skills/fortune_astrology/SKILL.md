@@ -3,7 +3,7 @@ name: fortune_astrology
 description: 星座运势、占卜塔罗、八字运程、每日运势、配对分析。轻松娱乐趣味解读。
 domain: fortune_astrology
 mode: qa
-allowed_tools: web_search local_context
+allowed_tools: web_search
 trigger_keywords: []
 searchPolicy:
   maxReflection: 0
@@ -35,7 +35,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 默认以知识推理 + 已有上下文回答，不强制外部工具
 - 用户请求实时黄历/节气/天象时可调用 `web_search`
 - 工具失败可重试 1 次，仍失败需降级说明
-- 若调用 `local_context`，返回结构必须遵循 `local_context_v1`，并显式声明 `"media": {"included": false}`，不得携带相册内容
+- 时间、位置、设备与权限信息统一来自系统默认注入上下文，禁止再通过旧工具读取上下文
 
 ## 触发与禁用条件
 - 触发信号：命中星座、塔罗、黄历、配对、运势、星盘等主题词

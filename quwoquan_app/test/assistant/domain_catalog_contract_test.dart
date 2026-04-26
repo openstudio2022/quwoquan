@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 void main() {
   group('Domain catalog contract', () {
     test(
-      'routing catalog has at least 15 domains and all domains use skill dialogue',
+      'routing catalog exposes every bundled skill domain and all domains use skill dialogue',
       () {
         final routingCatalog = File(
           'assets/assistant/prompts/domain_routing/domain_routing_catalog.json',
@@ -23,9 +23,22 @@ void main() {
             .where((id) => id.isNotEmpty)
             .toSet()
             .toList(growable: false);
-        expect(domains.length, greaterThanOrEqualTo(15));
+        final skillDomains = Directory('assets/assistant/skills')
+            .listSync()
+            .whereType<Directory>()
+            .where((dir) => File('${dir.path}/SKILL.md').existsSync())
+            .map((dir) => dir.uri.pathSegments[dir.uri.pathSegments.length - 2])
+            .toSet();
+        expect(domains.toSet(), equals(skillDomains));
+        expect(domains.length, equals(21));
         expect(domains.contains('emotion_companion'), isTrue);
         expect(domains.contains('fortune_astrology'), isTrue);
+        expect(domains.contains('huawei_cloud_qa'), isTrue);
+        expect(domains.contains('social_companion_chat'), isTrue);
+        expect(domains.contains('relationship_matchmaking'), isTrue);
+        expect(domains.contains('family_parenting'), isTrue);
+        expect(domains.contains('divination_fortune'), isTrue);
+        expect(domains.contains('astrology_constellation'), isTrue);
         expect(domains.contains('fallback_general_search'), isTrue);
 
         for (final item in domainItems) {

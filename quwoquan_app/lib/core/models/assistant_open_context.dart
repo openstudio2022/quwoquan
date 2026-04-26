@@ -11,6 +11,26 @@ enum AssistantSource {
   search,
 }
 
+String assistantPageTypeForSource(AssistantSource? source) {
+  switch (source) {
+    case AssistantSource.discovery:
+      return 'discovery';
+    case AssistantSource.circles:
+      return 'circles';
+    case AssistantSource.article:
+    case AssistantSource.profile:
+      return 'home';
+    case AssistantSource.chat:
+      return 'chat';
+    case AssistantSource.create:
+      return 'create';
+    case AssistantSource.search:
+      return 'search';
+    case null:
+      return 'chat';
+  }
+}
+
 /// 打开小趣时的上下文，供半弹窗与会话页共用。
 class AssistantOpenContext {
   const AssistantOpenContext({
@@ -24,14 +44,18 @@ class AssistantOpenContext {
   });
 
   final AssistantSource source;
+
   /// 发现页 tab id、创作子步骤等。
   final String? tab;
+
   /// 圈子页维度 id。
   final String? dimension;
+
   /// 作者/圈子等实体 id。
   final String? entityId;
   final VisitTarget visitTarget;
   final ExperienceLevel experienceLevel;
+
   /// 可选提示，如 hasAddedMedia、channelCount。
   final Map<String, dynamic> hints;
 

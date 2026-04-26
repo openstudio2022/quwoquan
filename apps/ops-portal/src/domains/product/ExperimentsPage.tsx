@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react';
-import { productWorkflow } from '../../generated/control-plane/productWorkflow.generated';
-import { fetchExperiments, type ExperimentItem } from '../../shared/api/controlPlane';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+import { productWorkflow } from '../../generated/control-plane/productWorkflow.generated.js';
+import { fetchExperiments, type ExperimentItem } from '../../shared/api/controlPlane.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function ExperimentsPage() {
   const experimentWorkflow = productWorkflow.workflows.find((item) => item.object_type === 'experiment');
   const [experiments, setExperiments] = useState<ExperimentItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     fetchExperiments()
       .then((items) => {
         setExperiments(items);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -30,6 +34,7 @@ export function ExperimentsPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实实验服务已接入' : '当前展示回退到门户样例'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">新建实验</button>}

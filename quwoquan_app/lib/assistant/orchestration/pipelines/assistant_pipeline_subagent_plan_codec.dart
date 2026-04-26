@@ -1,17 +1,15 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_answer_payload_read_view.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_response_codec.dart';
-import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_prompt_keys.dart';
-import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_state_keys.dart';
 
 class AssistantPipelineSubagentPlanCodec
     with AssistantPipelineResponseCodecMixin {
   const AssistantPipelineSubagentPlanCodec();
 
   List<SubagentPlan> buildSkillRunPlans({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required Map<String, dynamic> answerPayload,
     required String latestUserQuery,
     required String primaryDomainId,
@@ -19,14 +17,13 @@ class AssistantPipelineSubagentPlanCodec
     final explicitPlans = _buildExplicitSkillRunPlans(
       answerPayload: answerPayload,
       latestUserQuery: latestUserQuery,
-      fallbackProblemClass: intentGraph.problemClassWireName,
       primaryDomainId: primaryDomainId,
     );
     if (explicitPlans.isNotEmpty) {
       return explicitPlans;
     }
     return _buildDerivedSkillRunPlansFromIntent(
-      intentGraph: intentGraph,
+      planView: planView,
       latestUserQuery: latestUserQuery,
       primaryDomainId: primaryDomainId,
     );
@@ -41,18 +38,17 @@ class AssistantPipelineSubagentPlanCodec
     return _buildExplicitSkillRunPlans(
       answerPayload: answerPayload,
       latestUserQuery: latestUserQuery,
-      fallbackProblemClass: fallbackProblemClass,
       primaryDomainId: primaryDomainId,
     );
   }
 
   List<SubagentPlan> buildDerivedSkillRunPlansFromIntent({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required String latestUserQuery,
     required String primaryDomainId,
   }) {
     return _buildDerivedSkillRunPlansFromIntent(
-      intentGraph: intentGraph,
+      planView: planView,
       latestUserQuery: latestUserQuery,
       primaryDomainId: primaryDomainId,
     );
@@ -61,7 +57,6 @@ class AssistantPipelineSubagentPlanCodec
   List<SubagentPlan> _buildExplicitSkillRunPlans({
     required Map<String, dynamic> answerPayload,
     required String latestUserQuery,
-    required String fallbackProblemClass,
     required String primaryDomainId,
   }) {
     final existingPlans = AssistantAnswerPayloadReadView(
@@ -80,70 +75,52 @@ class AssistantPipelineSubagentPlanCodec
           (item) => _normalizeSubagentPlan(
             plan: item,
             latestUserQuery: latestUserQuery,
-            fallbackProblemClass: fallbackProblemClass,
           ),
         )
         .toList(growable: false);
   }
 
   List<SubagentPlan> _buildDerivedSkillRunPlansFromIntent({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required String latestUserQuery,
     required String primaryDomainId,
   }) {
-    final routeNarrative = _buildSkillRouteNarrative(
-      intentGraph: intentGraph,
-      latestUserQuery: latestUserQuery,
-      primaryDomainId: primaryDomainId,
-    );
-    return intentGraph.secondarySkills
-        .where(
-          (item) => item.trim().isNotEmpty && item.trim() != primaryDomainId,
-        )
-        .map(
-          (skillId) => _normalizeSubagentPlan(
-            plan: <String, dynamic>{
-              SubagentPlanFields.subagentId: 'skill_${skillId}_1',
-              SubagentPlanFields.domainId: skillId,
-              SubagentPlanFields.problemClass:
-                  intentGraph.problemClassWireName.isNotEmpty
-                  ? intentGraph.problemClassWireName
-                  : ProblemClass.general.wireName,
-              SubagentPlanFields.mode: 'qa',
-              SubagentPlanFields.goal:
-                  latestUserQuery.trim().isNotEmpty
-                  ? latestUserQuery.trim()
-                  : skillId,
-              SubagentPlanFields.taskBrief: skillId,
-              SubagentPlanFields.routeNarrative: routeNarrative,
-              SubagentPlanFields.localContextSeed: _buildSkillLocalContextSeed(
-                intentGraph: intentGraph,
-                latestUserQuery: latestUserQuery,
-                skillId: skillId,
-                primaryDomainId: primaryDomainId,
-              ),
-              SubagentPlanFields.role: 'supporting',
-              SubagentPlanFields.needClarify: intentGraph.clarificationNeeded,
-              SubagentPlanFields.pendingClarifications: const <String>[],
-              SubagentPlanFields.maxIterations: 2,
-              SubagentPlanFields.toolBudget: 2,
-              SubagentPlanFields.stopPolicy: StopPolicy.balanced.wireName,
-              SubagentPlanFields.searchIntensity:
-                  intentGraph.problemClass == ProblemClass.realtimeInfo
-                  ? SearchIntensity.low.wireName
-                  : SearchIntensity.medium.wireName,
-            },
-            latestUserQuery: latestUserQuery,
-            fallbackProblemClass: intentGraph.problemClassWireName,
-          ),
-        )
+    final _ = (planView, latestUserQuery, primaryDomainId);
+    return const <SubagentPlan>[];
+  }
+
+  String _buildSkillLocalContextSeed({
+    required String userGoal,
+    required String problemClass,
+    required String latestUserQuery,
+    required String skillId,
+    required String primaryDomainId,
+    List<String> entityRefs = const <String>[],
+  }) {
+    final anchors = entityRefs
+        .where((item) => item.trim().isNotEmpty)
+        .map((item) => item.trim())
         .toList(growable: false);
+    final goal = userGoal.trim().isNotEmpty ? userGoal.trim() : latestUserQuery.trim();
+    final buffer = StringBuffer()
+      ..write('query=')
+      ..write(goal)
+      ..write('; primary=')
+      ..write(primaryDomainId)
+      ..write('; skill=')
+      ..write(skillId)
+      ..write('; class=')
+      ..write(problemClass.trim());
+    if (anchors.isNotEmpty) {
+      buffer.write('; entities=');
+      buffer.write(anchors.join('、'));
+    }
+    return buffer.toString();
   }
 
   SubagentPlan _normalizeSubagentPlan({
     required Map<String, dynamic> plan,
     required String latestUserQuery,
-    required String fallbackProblemClass,
   }) {
     final domainId = (plan[SubagentPlanFields.domainId] as String?)?.trim() ?? '';
     final goal = (plan[SubagentPlanFields.goal] as String?)?.trim() ?? '';
@@ -159,8 +136,7 @@ class AssistantPipelineSubagentPlanCodec
         '';
     final mode = (plan[SubagentPlanFields.mode] as String?)?.trim() ?? 'qa';
     final rawProblemClass =
-        (plan[SubagentPlanFields.problemClass] as String?)?.trim() ??
-        fallbackProblemClass;
+        (plan[SubagentPlanFields.problemClass] as String?)?.trim() ?? '';
     return SubagentPlan.fromJson(<String, dynamic>{
       ...plan,
       SubagentPlanFields.domainId: domainId,
@@ -172,15 +148,8 @@ class AssistantPipelineSubagentPlanCodec
       SubagentPlanFields.localContextSeed: localContextSeed.isNotEmpty
           ? localContextSeed
           : _buildSkillLocalContextSeed(
-              intentGraph: IntentGraph.fromJson(<String, dynamic>{
-                AssistantPipelineStateKeys.userGoal:
-                    goal.isNotEmpty ? goal : latestUserQuery,
-                'primarySkill': domainId,
-                'problemClass': rawProblemClass,
-                'secondarySkills': const <String>[],
-                AssistantPipelinePromptKeys.queryTasks:
-                    const <Map<String, dynamic>>[],
-              }),
+              userGoal: goal.isNotEmpty ? goal : latestUserQuery,
+              problemClass: rawProblemClass,
               latestUserQuery: latestUserQuery,
               skillId: domainId,
               primaryDomainId: domainId,
@@ -215,50 +184,6 @@ class AssistantPipelineSubagentPlanCodec
     });
   }
 
-  String _buildSkillRouteNarrative({
-    required IntentGraph intentGraph,
-    required String latestUserQuery,
-    required String primaryDomainId,
-  }) {
-    final secondarySkills = intentGraph.secondarySkills
-        .where(
-          (item) => item.trim().isNotEmpty && item.trim() != primaryDomainId,
-        )
-        .map((item) => item.trim())
-        .toList(growable: false);
-    if (secondarySkills.isEmpty) {
-      return 'primary=$primaryDomainId; secondary=[]; query=${latestUserQuery.trim()}';
-    }
-    return 'primary=$primaryDomainId; secondary=${secondarySkills.join(',')}; '
-        'query=${latestUserQuery.trim()}';
-  }
-
-  String _buildSkillLocalContextSeed({
-    required IntentGraph intentGraph,
-    required String latestUserQuery,
-    required String skillId,
-    required String primaryDomainId,
-  }) {
-    final anchors = intentGraph.entityAnchors
-        .where((item) => item.trim().isNotEmpty)
-        .map((item) => item.trim())
-        .toList(growable: false);
-    final buffer = StringBuffer()
-      ..write('query=')
-      ..write(latestUserQuery.trim())
-      ..write('; primary=')
-      ..write(primaryDomainId)
-      ..write('; skill=')
-      ..write(skillId)
-      ..write('; class=')
-      ..write(intentGraph.problemClassWireName);
-    if (anchors.isNotEmpty) {
-      buffer.write('; anchors=');
-      buffer.write(anchors.join('、'));
-    }
-    return buffer.toString();
-  }
-
   String _defaultRouteNarrative(String domainId) {
     return 'primary=$domainId';
   }
@@ -266,8 +191,9 @@ class AssistantPipelineSubagentPlanCodec
   String normalizeProblemClassForQuery({
     required String raw,
   }) {
-    final normalized = parseProblemClass(raw.trim()).wireName;
-    return normalized.isNotEmpty ? normalized : ProblemClass.general.wireName;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    return parseProblemClass(trimmed).wireName;
   }
 
   int nonNegativeInt(Object? value, {required int fallback}) {

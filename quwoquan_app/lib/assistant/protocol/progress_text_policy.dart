@@ -151,9 +151,7 @@ class ReactPolicy {
     required this.reflectionQualityScoreMin,
     required this.reflectionMaxRounds,
     required this.replanStatuses,
-    required this.replanRetryableErrorClasses,
-    required this.errorClassMap,
-    required this.retryableErrorCodes,
+    required this.failureKindMap,
     required this.suppressUserErrorRules,
     required this.toolStatusRules,
     required this.llmRetryWithoutToolsStatusCodes,
@@ -168,9 +166,7 @@ class ReactPolicy {
   final double reflectionQualityScoreMin;
   final int reflectionMaxRounds;
   final List<String> replanStatuses;
-  final List<String> replanRetryableErrorClasses;
-  final Map<String, String> errorClassMap;
-  final List<String> retryableErrorCodes;
+  final Map<String, String> failureKindMap;
   final List<ReactSuppressRule> suppressUserErrorRules;
   final List<ReactToolStatusRule> toolStatusRules;
   final List<int> llmRetryWithoutToolsStatusCodes;
@@ -189,8 +185,7 @@ class ReactPolicy {
       'retrieval_no_data',
       'retrieval_error',
     ],
-    replanRetryableErrorClasses: <String>['timeout', 'network', 'rate_limited'],
-    errorClassMap: <String, String>{
+    failureKindMap: <String, String>{
       'none': 'none',
       'invalidArguments': 'invalid_args',
       'permissionDenied': 'permission',
@@ -199,7 +194,6 @@ class ReactPolicy {
       'unauthorized': 'unauthorized',
       'toolNotFound': 'tool_not_found',
     },
-    retryableErrorCodes: <String>['rateLimited', 'networkUnavailable'],
     suppressUserErrorRules: <ReactSuppressRule>[
       ReactSuppressRule(
         toolName: 'search',
@@ -267,14 +261,6 @@ class ReactPolicy {
         permissionDeniedStatus: 'retrieval_permission_denied',
         errorStatus: 'retrieval_error',
       ),
-      ReactToolStatusRule(
-        toolName: 'local_context',
-        successWithSummary: 'context_fetched',
-        successWithoutSummary: 'context_fetched',
-        invalidArgumentsStatus: 'context_invalid_args',
-        permissionDeniedStatus: 'context_permission_denied',
-        errorStatus: 'context_error',
-      ),
     ],
     llmRetryWithoutToolsStatusCodes: <int>[400, 422, 500],
     llmRetryWithoutToolsKeywords: <String>[
@@ -299,11 +285,11 @@ class ReactPolicy {
     final reflectionThresholds =
         (json['reflectionThresholds'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final errorClassRaw =
-        (json['errorClassMap'] as Map?)?.cast<String, dynamic>() ??
+    final failureKindRaw =
+        (json['failureKindMap'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final errorClassMap = <String, String>{
-      for (final entry in errorClassRaw.entries)
+    final failureKindMap = <String, String>{
+      for (final entry in failureKindRaw.entries)
         entry.key: entry.value.toString().trim(),
     };
     final suppressRules =
@@ -378,23 +364,9 @@ class ReactPolicy {
               .where((e) => e.isNotEmpty)
               .toList(growable: false) ??
           defaults.replanStatuses,
-      replanRetryableErrorClasses:
-          (json['replanRetryableErrorClasses'] as List?)
-              ?.whereType<String>()
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toList(growable: false) ??
-          defaults.replanRetryableErrorClasses,
-      errorClassMap: errorClassMap.isEmpty
-          ? defaults.errorClassMap
-          : errorClassMap,
-      retryableErrorCodes:
-          (json['retryableErrorCodes'] as List?)
-              ?.whereType<String>()
-              .map((e) => e.trim())
-              .where((e) => e.isNotEmpty)
-              .toList(growable: false) ??
-          defaults.retryableErrorCodes,
+      failureKindMap: failureKindMap.isEmpty
+          ? defaults.failureKindMap
+          : failureKindMap,
       suppressUserErrorRules: suppressRules.isEmpty
           ? defaults.suppressUserErrorRules
           : suppressRules,

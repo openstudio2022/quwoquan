@@ -13,6 +13,8 @@ class PersonaManagementItemWireDto {
   final String profileVisibility;
   final bool isPrimary;
   final bool isActive;
+  final String status;
+  final DateTime? retiredAt;
   final bool hasAttributedHistory;
   final bool hasPublishedContent;
   final bool inheritsProfileFromOwner;
@@ -34,6 +36,8 @@ class PersonaManagementItemWireDto {
     this.profileVisibility = 'public',
     this.isPrimary = false,
     this.isActive = false,
+    this.status = 'active',
+    this.retiredAt,
     this.hasAttributedHistory = false,
     this.hasPublishedContent = false,
     this.inheritsProfileFromOwner = true,
@@ -41,7 +45,7 @@ class PersonaManagementItemWireDto {
     this.lastProfileSyncAt,
     this.lastProfileSyncSource = '',
     this.lastActivatedAt,
-    this.subjectType = 'sub_account',
+    this.subjectType = 'persona',
   });
 
   factory PersonaManagementItemWireDto.fromMap(Map<String, dynamic> m) {
@@ -57,6 +61,8 @@ class PersonaManagementItemWireDto {
       profileVisibility: m['profileVisibility']?.toString() ?? 'public',
       isPrimary: m['isPrimary'] as bool? ?? false,
       isActive: m['isActive'] as bool? ?? false,
+      status: m['status']?.toString() ?? 'active',
+      retiredAt: _parseDateTime(m['retiredAt']) ?? null,
       hasAttributedHistory: m['hasAttributedHistory'] as bool? ?? false,
       hasPublishedContent: m['hasPublishedContent'] as bool? ?? false,
       inheritsProfileFromOwner: m['inheritsProfileFromOwner'] as bool? ?? m['inheritsFromOwner'] as bool? ?? true,
@@ -64,7 +70,7 @@ class PersonaManagementItemWireDto {
       lastProfileSyncAt: _parseDateTime(m['lastProfileSyncAt']) ?? null,
       lastProfileSyncSource: m['lastProfileSyncSource']?.toString() ?? '',
       lastActivatedAt: _parseDateTime(m['lastActivatedAt']) ?? null,
-      subjectType: m['subjectType']?.toString() ?? 'sub_account',
+      subjectType: m['subjectType']?.toString() ?? 'persona',
     );
   }
 
@@ -81,6 +87,8 @@ class PersonaManagementItemWireDto {
       'profileVisibility': profileVisibility,
       'isPrimary': isPrimary,
       'isActive': isActive,
+      'status': status,
+      'retiredAt': retiredAt,
       'hasAttributedHistory': hasAttributedHistory,
       'hasPublishedContent': hasPublishedContent,
       'inheritsProfileFromOwner': inheritsProfileFromOwner,
@@ -104,6 +112,8 @@ class PersonaManagementItemWireDto {
     String? profileVisibility,
     bool? isPrimary,
     bool? isActive,
+    String? status,
+    DateTime? retiredAt,
     bool? hasAttributedHistory,
     bool? hasPublishedContent,
     bool? inheritsProfileFromOwner,
@@ -125,6 +135,8 @@ class PersonaManagementItemWireDto {
       profileVisibility: profileVisibility ?? this.profileVisibility,
       isPrimary: isPrimary ?? this.isPrimary,
       isActive: isActive ?? this.isActive,
+      status: status ?? this.status,
+      retiredAt: retiredAt ?? this.retiredAt,
       hasAttributedHistory: hasAttributedHistory ?? this.hasAttributedHistory,
       hasPublishedContent: hasPublishedContent ?? this.hasPublishedContent,
       inheritsProfileFromOwner: inheritsProfileFromOwner ?? this.inheritsProfileFromOwner,

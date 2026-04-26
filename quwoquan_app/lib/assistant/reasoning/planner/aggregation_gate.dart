@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 
 /// Stateless evaluator that builds [AggregationState] from the current
@@ -10,7 +10,7 @@ class AggregationGate {
   const AggregationGate();
 
   AggregationState evaluate({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required List<SkillRun> skillRuns,
     required Map<String, dynamic> answerPayload,
   }) {
@@ -34,9 +34,10 @@ class AggregationGate {
     final allSkillsReady = skillRuns.isNotEmpty && blockingSkills.isEmpty;
     final canGivePartialAnswer =
         skillRuns.any((item) => item.answerReady) && blockingSkills.isNotEmpty;
+    final turnDecision = AssistantTurnDecision.fromAnswerPayload(answerPayload);
     final clarificationNeeded =
-        intentGraph.clarificationNeeded ||
-        ((answerPayload['messageKind'] as String?)?.trim() ?? '') == 'ask_user';
+        planView.clarificationNeeded ||
+        turnDecision.messageKind == AssistantMessageKind.askUser;
     final needExpansion =
         !allSkillsReady && !canGivePartialAnswer && !clarificationNeeded;
     final answerOwner = skillRuns

@@ -118,6 +118,7 @@
 
 user 域统一提供 `ActivePersonaContextView`，至少包含：
 
+- `personaId`
 - `profileSubjectId`
 - `subAccountId`
 - `profileVisibility`
@@ -131,6 +132,7 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 
 透传字段统一收口为：
 
+- `personaId`
 - `profileSubjectId`
 - `subAccountId`
 - `contextVersion`
@@ -157,6 +159,7 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 
 快照至少包括：
 
+- `personaId`
 - `profileSubjectId`
 - `displayName`
 - `avatarUrl`
@@ -213,7 +216,7 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 
 - runtime 不根据文案、label、中文词汇识别分身
 - planner / react / tool registry 不新增 persona 特判分支
-- 若 prompt 需要展示当前身份，只能消费 typed `profileSubjectId` 对应的已解析资料变量
+- 若 prompt 需要展示当前身份，只能消费 typed `personaId/profileSubjectId` 对应的已解析资料变量
 
 ### 兼容逻辑与退出条件
 
@@ -232,7 +235,7 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 - `messages/conversation`
   - `senderPersonaId` 与 persona snapshot
 - `assistant/*`
-  - session/request payload 中的 `profileSubjectId`、`contextVersion`
+  - session/request payload 中的 `personaId`、`profileSubjectId`、`contextVersion`
 
 执行：
 
@@ -249,14 +252,15 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 
 ### 字段演进
 
-- 新写链路统一优先写 `profileSubjectId`
-- `personaId / senderPersonaId / subAccountId` 作为兼容字段保留，但必须能映射回当前主体
+- 新写链路对内统一优先写 `personaId`
+- `profileSubjectId` 保留为公开读取与兼容投影字段
+- `subAccountId / senderPersonaId` 只作为 legacy alias 保留，但必须能映射回当前 `personaId`
 - 新对象增加 `contextVersion` 与 `personaSnapshotVersion`
 
 ### 迁移 / 回填
 
 - 旧内容/评论/消息历史对象不重写主体，只补充读取优先级与 snapshot adapter
-- assistant 旧会话若只有 legacy persona 字段，读取时映射成 `profileSubjectId`
+- assistant 旧会话若只有 legacy persona 字段，读取时先映射成 `personaId`，再生成兼容 `profileSubjectId`
 - circle 若当前仍是 app/local 状态，先统一消费 provider 中的 typed context，等正式服务化后迁到 metadata contract
 
 ### 退出条件

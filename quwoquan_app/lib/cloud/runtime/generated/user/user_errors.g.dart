@@ -21,6 +21,4 @@ enum UserErrorCode {
     }
     return null;
   }
-
-  bool get isRetryable => this == rateLimited;
 }

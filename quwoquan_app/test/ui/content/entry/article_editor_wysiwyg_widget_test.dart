@@ -94,9 +94,6 @@ class _EditorHarness extends StatefulWidget {
     this.onInsertImageAtSelection,
     this.onInsertTextNodeAfter,
     this.onStateReady,
-    this.onUpdateNodeType,
-    this.onToggleInlineStyle,
-    this.onCommitTextEdit,
   });
 
   final bool wrapInScrollView;
@@ -105,9 +102,6 @@ class _EditorHarness extends StatefulWidget {
   final Future<void> Function(String, int)? onInsertImageAtSelection;
   final String Function(String, {String initialText})? onInsertTextNodeAfter;
   final ValueChanged<CreateEditorState>? onStateReady;
-  final void Function(String nodeId, ArticleDocumentNodeType type)? onUpdateNodeType;
-  final void Function(String nodeId, int start, int end, {bool? bold, bool? italic, bool? underline, bool? strikethrough})? onToggleInlineStyle;
-  final VoidCallback? onCommitTextEdit;
 
   @override
   State<_EditorHarness> createState() => _EditorHarnessState();
@@ -413,7 +407,6 @@ class _EditorHarnessState extends State<_EditorHarness> {
         canUndo: false,
         canRedo: false,
         onUpdateNodeType: (nodeId, type) {
-          widget.onUpdateNodeType?.call(nodeId, type);
           // 默认行为：更新节点类型
           final doc = state.articleDocument;
           final newId = 'typed_${doc.nodes.length}';
@@ -439,12 +432,8 @@ class _EditorHarnessState extends State<_EditorHarness> {
             );
           });
         },
-        onToggleInlineStyle: (nodeId, start, end, {bool? bold, bool? italic, bool? underline, bool? strikethrough}) {
-          widget.onToggleInlineStyle?.call(nodeId, start, end, bold: bold, italic: italic, underline: underline, strikethrough: strikethrough);
-        },
-        onCommitTextEdit: () {
-          widget.onCommitTextEdit?.call();
-        },
+        onToggleInlineStyle: (_, _, _, {bold, italic, underline, strikethrough}) {},
+        onCommitTextEdit: () {},
       ),
     );
 
@@ -1183,9 +1172,6 @@ void main() {
   // ── 阶段二：节点类型切换与行内样式 Widget 测试 ──
 
   testWidgets('样式面板 H2 按钮切换节点类型', (tester) async {
-    ArticleDocumentNodeType? capturedType;
-    String? capturedNodeId;
-
     final doc = _buildDocumentWithNodes(<ArticleDocumentNode>[
       const ArticleDocumentNode(
         id: 'title_1',
@@ -1199,13 +1185,7 @@ void main() {
       ),
     ]);
 
-    await tester.pumpWidget(_EditorHarness(
-      seedDocument: doc,
-      onUpdateNodeType: (nodeId, type) {
-        capturedNodeId = nodeId;
-        capturedType = type;
-      },
-    ));
+    await tester.pumpWidget(_EditorHarness(seedDocument: doc));
     await tester.pumpAndSettle();
 
     // 先点击正文段落获取焦点

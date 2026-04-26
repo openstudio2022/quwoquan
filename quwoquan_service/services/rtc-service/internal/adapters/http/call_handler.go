@@ -12,7 +12,7 @@ import (
 )
 
 type CallHandler struct {
-	orchestrator *application.CallOrchestrator
+	orchestrator  *application.CallOrchestrator
 	signalHandler *ws.SignalHandler
 }
 
@@ -74,7 +74,7 @@ func (h *CallHandler) dispatchOperation(operation string, w http.ResponseWriter,
 	case "StopScreenShare":
 		h.handleStopScreenShare(w, r)
 	default:
-		http.NotFound(w, r)
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleRTC, "接口不存在", "route not found"))
 	}
 }
 
@@ -92,7 +92,7 @@ func (h *CallHandler) handleInitiateCall(w http.ResponseWriter, r *http.Request)
 		InviteeIDs     []string `json:"inviteeIds"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
 		return
 	}
 
@@ -104,7 +104,7 @@ func (h *CallHandler) handleInitiateCall(w http.ResponseWriter, r *http.Request)
 		InviteeIDs:     body.InviteeIDs,
 	})
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, resp)
@@ -114,7 +114,7 @@ func (h *CallHandler) handleAnswerCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	resp, err := h.orchestrator.AnswerCall(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -124,7 +124,7 @@ func (h *CallHandler) handleRejectCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.RejectCall(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -134,7 +134,7 @@ func (h *CallHandler) handleCancelCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.CancelCall(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -144,7 +144,7 @@ func (h *CallHandler) handleHangupCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.HangupCall(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -154,7 +154,7 @@ func (h *CallHandler) handleJoinCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	session, token, err := h.orchestrator.JoinCall(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"session": session, "token": token})
@@ -164,7 +164,7 @@ func (h *CallHandler) handleLeaveCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.LeaveCall(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -176,12 +176,12 @@ func (h *CallHandler) handleInviteToCall(w http.ResponseWriter, r *http.Request)
 		InviteeIDs []string `json:"inviteeIds"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
 		return
 	}
 	session, err := h.orchestrator.InviteToCall(r.Context(), callID, resolveUserID(r), body.InviteeIDs)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -193,7 +193,7 @@ func (h *CallHandler) handleGetCall(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.GetCall(r.Context(), callID)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -206,7 +206,7 @@ func (h *CallHandler) handleListCalls(w http.ResponseWriter, r *http.Request) {
 
 	calls, err := h.orchestrator.ListCalls(r.Context(), userID, limit, cursor)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 
@@ -223,12 +223,12 @@ func (h *CallHandler) handleToggleMute(w http.ResponseWriter, r *http.Request) {
 	callID := r.PathValue("callId")
 	var body application.ToggleMuteRequest
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
 		return
 	}
 	session, err := h.orchestrator.ToggleMute(r.Context(), callID, resolveUserID(r), body.Muted)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -238,12 +238,12 @@ func (h *CallHandler) handleToggleCamera(w http.ResponseWriter, r *http.Request)
 	callID := r.PathValue("callId")
 	var body application.ToggleCameraRequest
 	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleRTC, "请求格式错误", err.Error()))
 		return
 	}
 	session, err := h.orchestrator.ToggleCamera(r.Context(), callID, resolveUserID(r), body.CameraOn)
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -255,7 +255,7 @@ func (h *CallHandler) handleStartRecording(w http.ResponseWriter, r *http.Reques
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.StartRecording(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -265,7 +265,7 @@ func (h *CallHandler) handleStopRecording(w http.ResponseWriter, r *http.Request
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.StopRecording(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -277,7 +277,7 @@ func (h *CallHandler) handleStartScreenShare(w http.ResponseWriter, r *http.Requ
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.StartScreenShare(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -287,7 +287,7 @@ func (h *CallHandler) handleStopScreenShare(w http.ResponseWriter, r *http.Reque
 	callID := r.PathValue("callId")
 	session, err := h.orchestrator.StopScreenShare(r.Context(), callID, resolveUserID(r))
 	if err != nil {
-		writeHTTPError(w, err)
+		writeHTTPError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, session)
@@ -305,8 +305,8 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-func writeHTTPError(w http.ResponseWriter, err error) {
-	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptions{})
+func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
+	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
 }
 
 func readJSON(r *http.Request, v any) error {

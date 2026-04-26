@@ -93,7 +93,7 @@ func TestMain(m *testing.M) {
 
 	// 4. Stores
 	profileStore := persistence.NewPgProfileStore(pgPool)
-	personaStore := persistence.NewPgPersonaStore(pgPool)
+	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
 	settingStore := persistence.NewPgSettingStore(pgPool)
 	blockStore := persistence.NewPgBlockStore(pgPool)
 	workStore := persistence.NewPgWorkStore(pgPool)
@@ -125,7 +125,14 @@ func TestMain(m *testing.M) {
 		userSyncService,
 	)
 	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
-	followService := application.NewFollowService(followStore, profileStore, profileCache)
+	followService := application.NewFollowService(
+		followStore,
+		profileStore,
+		personaStore,
+		profileCache,
+		blockStore,
+		userEventPublisher,
+	)
 	blockService := application.NewBlockService(blockStore, blockCache)
 	personaService := application.NewPersonaService(personaStore, pgPool, profileCache)
 	workService := application.NewWorkService(workStore)

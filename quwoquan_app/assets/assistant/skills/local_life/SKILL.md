@@ -3,7 +3,7 @@ name: local_life
 description: 餐厅美食推荐、本地服务、周边好去处、团购优惠。可导航到店。
 domain: local_life
 mode: hybrid
-allowed_tools: web_search local_context
+allowed_tools: web_search
 trigger_keywords: []
 searchPolicy:
   maxReflection: 1
@@ -36,8 +36,8 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 禁用信号：明显属于其他垂类时不应强行触发。
 - 竞争冲突：不确定时先 ask_user 澄清主诉求。
 
-## local_context 输出约束
-当调用 local_context 时，必须按 `local_context_v1` 解析，并明确 `media.included=false`。
+## 系统上下文约束
+位置、时间、设备与权限信息统一来自系统默认注入上下文，不再通过额外工具读取。
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
@@ -52,12 +52,11 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "contractId": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {
-    "city": {"value": "", "source": "local_context|memory|user_query|unknown"},
+    "city": {"value": "", "source": "system_context|memory|user_query|unknown"},
     "category": {"value": "", "source": "user_query|memory|unknown"},
     "budget": {"value": "", "source": "user_query|memory|unknown"}
   },
   "toolCalls": [
-    {"toolName": "local_context", "arguments": {"requestedFields": ["location"]}},
     {"toolName": "web_search", "arguments": {"query": "深圳福田区 川菜馆 推荐 2025", "freshnessHoursMax": 168}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
@@ -105,7 +104,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 若用户有特殊需求（素食/不辣/无障碍/儿童友好），直接在结果里过滤标注
 - 推荐数量控制在 3-5 家，不要给 10 家让用户选择困难
 - 对排队严重的热门店，主动告知等待时间和预订方式
-- 发现城市/区域信息不足时，主动调用 local_context 补全
+- 发现城市/区域信息不足时，优先读取系统默认注入的位置摘要；仍不足再向用户澄清
 
 ## 参考资料
 - `references/domain-knowledge.md`: 领域边界、关键槽位与风险约束

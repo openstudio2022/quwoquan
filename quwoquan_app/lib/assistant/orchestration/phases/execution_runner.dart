@@ -34,14 +34,16 @@ class ExecutionRunner {
         state: input.state.copyWith(
           pendingResponse: response,
           executionPhaseSnapshot: snapshot,
-          executionBridgeSnapshot: const <String, dynamic>{},
         ),
       ),
       ExecutionPhaseSuccess() => PhaseOutput(
         state: input.state.copyWith(
           executionPhaseSnapshot: snapshot,
-          executionBridgeSnapshot: snapshot.toLegacyMap(),
           synthesisReadiness: snapshot.synthesisReadiness,
+          understandingResult: snapshot.understandingResult,
+          taskGraph: snapshot.taskGraph,
+          orchestratorState: snapshot.orchestratorState,
+          turnSynthesisState: snapshot.turnSynthesisState,
         ),
       ),
     };

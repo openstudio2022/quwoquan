@@ -4,6 +4,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 圈子内用户角色
 enum CircleRole { owner, admin, member, visitor }
@@ -110,7 +111,10 @@ class CircleStateNotifier extends Notifier<CircleState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -142,12 +146,20 @@ class CircleStateNotifier extends Notifier<CircleState> {
   Future<void> joinCircle() async {
     final previousStatus = state.joinStatus;
     final previousFollowed = state.isFollowed;
-    final nextJoinStatus =
-        state.circleData?.joinPolicy == 'approval' ? 'pending' : 'joined';
+    final nextJoinStatus = state.circleData?.joinPolicy == 'approval'
+        ? 'pending'
+        : 'joined';
     state = state.copyWith(joinStatus: nextJoinStatus, isFollowed: true);
     try {
+      final activeContext = await ref.read(activePersonaContextProvider.future);
       final repo = ref.read(circleRepositoryProvider);
-      await repo.joinCircle(_circleId);
+      await repo.joinCircle(
+        _circleId,
+        ownerUserId: activeContext.ownerUserId,
+        actorProfileSubjectId: activeContext.profileSubjectId,
+        personaId: activeContext.personaId,
+        personaContextVersion: activeContext.contextVersion,
+      );
     } catch (_) {
       state = state.copyWith(
         joinStatus: previousStatus,
@@ -161,8 +173,15 @@ class CircleStateNotifier extends Notifier<CircleState> {
     final previousFollowed = state.isFollowed;
     state = state.copyWith(joinStatus: 'none', isFollowed: false);
     try {
+      final activeContext = await ref.read(activePersonaContextProvider.future);
       final repo = ref.read(circleRepositoryProvider);
-      await repo.leaveCircle(_circleId);
+      await repo.leaveCircle(
+        _circleId,
+        ownerUserId: activeContext.ownerUserId,
+        actorProfileSubjectId: activeContext.profileSubjectId,
+        personaId: activeContext.personaId,
+        personaContextVersion: activeContext.contextVersion,
+      );
     } catch (_) {
       state = state.copyWith(
         joinStatus: previousStatus,
@@ -175,11 +194,24 @@ class CircleStateNotifier extends Notifier<CircleState> {
     final wasFollowed = state.isFollowed;
     state = state.copyWith(isFollowed: !wasFollowed);
     try {
+      final activeContext = await ref.read(activePersonaContextProvider.future);
       final repo = ref.read(circleRepositoryProvider);
       if (wasFollowed) {
-        await repo.leaveCircle(_circleId);
+        await repo.leaveCircle(
+          _circleId,
+          ownerUserId: activeContext.ownerUserId,
+          actorProfileSubjectId: activeContext.profileSubjectId,
+          personaId: activeContext.personaId,
+          personaContextVersion: activeContext.contextVersion,
+        );
       } else {
-        await repo.joinCircle(_circleId);
+        await repo.joinCircle(
+          _circleId,
+          ownerUserId: activeContext.ownerUserId,
+          actorProfileSubjectId: activeContext.profileSubjectId,
+          personaId: activeContext.personaId,
+          personaContextVersion: activeContext.contextVersion,
+        );
       }
     } catch (_) {
       state = state.copyWith(isFollowed: wasFollowed);
@@ -190,10 +222,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
     try {
       final repo = ref.read(circleRepositoryProvider);
       final patch = wire.toMap();
-      final updated = await repo.updateCircle(
-        _circleId,
-        wire,
-      );
+      final updated = await repo.updateCircle(_circleId, wire);
       final merged = <String, dynamic>{
         ...?state.circleData?.toMap(),
         ...updated.toMap(),
@@ -203,13 +232,12 @@ class CircleStateNotifier extends Notifier<CircleState> {
         circleData: CircleDto.fromMap(merged),
         role: _circleRoleFromRaw(merged['role']),
         joinStatus: (merged['joinStatus'] ?? state.joinStatus).toString(),
-        isFollowed:
-            merged['isFollowed'] as bool? ?? state.isFollowed,
+        isFollowed: merged['isFollowed'] as bool? ?? state.isFollowed,
         error: null,
       );
       return true;
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
       return false;
     }
   }

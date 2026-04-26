@@ -23,6 +23,7 @@ PostSummaryView _momentPost({
     identity: 'moment',
     assistantUsePolicy: 'inherit',
     authorId: 'u1',
+    authorProfileSubjectId: 'u1',
     displayName: '测试用户',
     avatarUrl: 'https://example.com/avatar.jpg',
     body: body,

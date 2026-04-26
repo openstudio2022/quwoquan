@@ -126,6 +126,33 @@
       "intentKeywords": ["难过", "焦虑", "压力", "崩溃", "陪我聊聊", "恋爱", "婚配", "婚姻", "结婚", "分手", "相处", "关系", "育儿", "孩子", "亲子", "家庭教育", "青春期", "闲聊", "聊天", "在吗", "哈哈", "随便聊"]
     },
     {
+      "domainId": "social_companion_chat",
+      "description": "自然闲聊、陪伴聊天、轻松互动、无聊解闷，保持安全边界与轻松氛围。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 87,
+      "dialoguePath": "assets/assistant/skills/social_companion_chat/dialogue",
+      "intentKeywords": ["闲聊", "聊天", "在吗", "哈哈", "随便聊", "无聊", "陪我"]
+    },
+    {
+      "domainId": "relationship_matchmaking",
+      "description": "恋爱关系、相处策略、沟通技巧、婚配与情感建议。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 86,
+      "dialoguePath": "assets/assistant/skills/relationship_matchmaking/dialogue",
+      "intentKeywords": ["恋爱", "相处", "关系", "婚配", "分手", "沟通", "表白", "挽回"]
+    },
+    {
+      "domainId": "family_parenting",
+      "description": "家庭教育、亲子沟通、儿童成长、育儿方法与青春期陪伴。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 85,
+      "dialoguePath": "assets/assistant/skills/family_parenting/dialogue",
+      "intentKeywords": ["育儿", "孩子", "亲子", "家庭教育", "青春期", "陪伴", "早教", "叛逆"]
+    },
+    {
       "domainId": "fortune_astrology",
       "description": "星座运势、占卜塔罗、八字运程、趣味解读。轻松娱乐。",
       "mode": "qa",
@@ -133,6 +160,33 @@
       "priority": 84,
       "dialoguePath": "assets/assistant/skills/fortune_astrology/dialogue",
       "intentKeywords": ["算命", "卜卦", "求签", "八字", "运势", "气运", "时运", "星座", "上升", "水逆", "星盘"]
+    },
+    {
+      "domainId": "divination_fortune",
+      "description": "今日运势、短期运程、卜卦八字、桃花财运事业等趣味建议。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 83,
+      "dialoguePath": "assets/assistant/skills/divination_fortune/dialogue",
+      "intentKeywords": ["运势", "运程", "卜卦", "八字", "今日运势", "桃花", "财运", "事业"]
+    },
+    {
+      "domainId": "astrology_constellation",
+      "description": "星座、星盘、上升星座、水逆、行星相位与占星运势解读。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 82,
+      "dialoguePath": "assets/assistant/skills/astrology_constellation/dialogue",
+      "intentKeywords": ["星座", "星盘", "上升", "水逆", "占星", "太阳月亮", "行星", "合相"]
+    },
+    {
+      "domainId": "huawei_cloud_qa",
+      "description": "华为云售前咨询、售中方案、售后支持、故障诊断、产品能力与云服务选型。",
+      "mode": "qa",
+      "enabled": true,
+      "priority": 81,
+      "dialoguePath": "assets/assistant/skills/huawei_cloud_qa/dialogue",
+      "intentKeywords": ["华为云", "云服务", "云服务器", "对象存储", "容器引擎", "大模型服务", "盘古", "昇腾", "鲲鹏", "高斯数据库", "工单", "华为"]
     },
     {
       "domainId": "fallback_general_search",

@@ -48,63 +48,59 @@ void main() {
       expect(result.success, isFalse);
       expect(result.errorCode, AssistantErrorCode.invalidArguments);
       expect(result.message, contains('missing required "query"'));
+      expect(result.runtimeFailure, isNotNull);
+      expect(result.runtimeFailure?.code, contains('ASSISTANT.VALIDATION'));
       expect(fakeWeb.executeCount, equals(0));
     });
 
-    test('post-validates required output paths for local_context', () async {
+    test('post-validates required output paths for app_search', () async {
       final metadata = ToolMetadataRegistry();
       await metadata.ensureLoaded();
       final registry = AssistantToolRegistry(metadataRegistry: metadata);
-      final fakeLocal = _FakeTool(
-        toolName: 'local_context',
+      final fakeAppSearch = _FakeTool(
+        toolName: 'app_search',
         resultFactory: (_) => AssistantToolResult(
           success: true,
           message: 'ok',
-          data: AssistantToolResultData.fromJson(<String, dynamic>{
-            // Missing required "contextVersion"
-            'location': <String, dynamic>{'city': '深圳'},
-            'permissions': <String, dynamic>{'location': true},
-            'media': <String, dynamic>{'included': false},
-          }),
+          data: AssistantToolResultData.fromJson(<String, dynamic>{}),
         ),
       );
-      registry.register(fakeLocal);
+      registry.register(fakeAppSearch);
 
-      final result = await registry.execute('local_context', <String, dynamic>{
-        'requestedFields': <String>['location'],
+      final result = await registry.execute('app_search', <String, dynamic>{
+        'query': '张三',
       });
 
       expect(result.success, isFalse);
       expect(result.errorCode, AssistantErrorCode.executionFailed);
-      expect(result.message, contains('missing "contextVersion"'));
-      expect(fakeLocal.executeCount, equals(1));
+      expect(result.message, contains('missing "results"'));
+      expect(result.runtimeFailure, isNotNull);
+      expect(result.runtimeFailure?.code, contains('ASSISTANT.SYSTEM'));
+      expect(fakeAppSearch.executeCount, equals(1));
     });
 
     test('passes when output satisfies contract', () async {
       final metadata = ToolMetadataRegistry();
       await metadata.ensureLoaded();
       final registry = AssistantToolRegistry(metadataRegistry: metadata);
-      final fakeLocal = _FakeTool(
-        toolName: 'local_context',
+      final fakeAppSearch = _FakeTool(
+        toolName: 'app_search',
         resultFactory: (_) => AssistantToolResult(
           success: true,
           message: 'ok',
           data: AssistantToolResultData.fromJson(<String, dynamic>{
-            'contextVersion': 'local_context_v1',
-            'location': <String, dynamic>{'city': '深圳'},
-            'permissions': <String, dynamic>{'location': true},
-            'media': <String, dynamic>{'included': false},
+            'results': <Map<String, dynamic>>[],
           }),
         ),
       );
-      registry.register(fakeLocal);
+      registry.register(fakeAppSearch);
 
-      final result = await registry.execute('local_context', <String, dynamic>{
-        'requestedFields': <String>['location'],
+      final result = await registry.execute('app_search', <String, dynamic>{
+        'query': '张三',
       });
 
       expect(result.success, isTrue);
-      expect(fakeLocal.executeCount, equals(1));
+      expect(fakeAppSearch.executeCount, equals(1));
     });
 
     test('rejects unsupported enum argument for search', () async {
@@ -133,6 +129,8 @@ void main() {
       expect(result.success, isFalse);
       expect(result.errorCode, AssistantErrorCode.invalidArguments);
       expect(result.message, contains('"mode"'));
+      expect(result.runtimeFailure, isNotNull);
+      expect(result.runtimeFailure?.location.functionModule, equals('search'));
       expect(fakeSearch.executeCount, equals(0));
     });
 
@@ -249,6 +247,12 @@ void main() {
       expect(second.success, isFalse);
       expect(third.success, isFalse);
       expect(third.data?['breakerOpen'], isTrue);
+      expect(third.data?['recoveryAfterSeconds'], isA<int>());
+      expect(third.runtimeFailure, isNotNull);
+      expect(
+        third.runtimeFailure?.location.functionModule,
+        equals('web_fetch'),
+      );
       expect(fakeFetch.executeCount, equals(4));
     });
   });

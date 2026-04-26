@@ -1,10 +1,10 @@
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/context_fill_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
 import 'package:quwoquan_app/assistant/context/assembly/answer_boundary_resolver.dart';
 import 'package:quwoquan_app/assistant/context/assembly/continuity_resolver.dart';
@@ -46,7 +46,7 @@ class PersonalAssistantContextOrchestrator {
       topicOverlap: 0,
       allowHistorySummary: typedHints['allowHistorySummary'] == true,
       allowLongtermMemory: typedHints['allowLongtermMemory'] == true,
-      allowLocationHints: typedHints['allowLocationHints'] == true,
+      allowLocationHints: typedHints['allowLocationHints'] != false,
       referenceQueries: referenceQueries,
     );
   }
@@ -65,15 +65,11 @@ class PersonalAssistantContextOrchestrator {
     final typedProblemClass = _strValue(
       contextScopeHint['problemClass'] ?? continuityPolicy.problemClass,
     );
-    final hasRealtimeNeed =
-        contextScopeHint['requiresRealtimeEvidence'] == true ||
-        parseProblemClass(typedProblemClass) == ProblemClass.realtimeInfo;
+    final hasRealtimeNeed = contextScopeHint['requiresRealtimeEvidence'] == true;
     final hasLongtermNeed =
         contextScopeHint['requiresLongtermMemory'] == true ||
         continuityPolicy.allowLongtermMemory;
 
-    final lat = _numValue(gpsLocation['lat'] ?? contextScopeHint['lat']);
-    final lng = _numValue(gpsLocation['lng'] ?? contextScopeHint['lng']);
     final cityFromContext = _strValue(
       gpsLocation['city'] ?? contextScopeHint['city'],
     );
@@ -98,7 +94,6 @@ class PersonalAssistantContextOrchestrator {
         (contextScopeHint['continuityOverrideSlots'] as Map?)
             ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final hasPreciseLocation = allowGpsSignals && lat != null && lng != null;
     final hasCoarseLocation = allowGpsSignals && cityFromContext.isNotEmpty;
 
     final hasLongtermMemory =
@@ -112,7 +107,7 @@ class PersonalAssistantContextOrchestrator {
         ContextFillTask(
           fillType: ContextFillType.contextFill,
           targetSlot: ContextTargetSlot.longtermMemory,
-          reason: '该问题涉及长期历史回顾，需要补齐长期记忆检索结果。',
+          reason: '',
           generatedQueryConditions: <String>[query],
           scopeExpansionPolicy: ContextScopeExpansionPolicy.expandTimeWindow,
         ),
@@ -121,23 +116,15 @@ class PersonalAssistantContextOrchestrator {
 
     final slotFillHints = <String, dynamic>{
       'slotFillPolicy': _buildSlotFillPolicy(
-        allowGpsSignals:
-            allowGpsSignals &&
-            (cityFromContext.isNotEmpty || lat != null || lng != null),
+        allowGpsSignals: allowGpsSignals && cityFromContext.isNotEmpty,
         allowHistorySummary: historySnippet.isNotEmpty,
       ),
     };
     if (allowGpsSignals && cityFromContext.isNotEmpty) {
       slotFillHints['gpsCity'] = cityFromContext;
-      slotFillHints['gpsCityConfidence'] = hasPreciseLocation
-          ? 'high'
-          : (hasCoarseLocation ? 'medium' : 'none');
-    }
-    if (allowGpsSignals && lat != null) {
-      slotFillHints['gpsLat'] = lat;
-    }
-    if (allowGpsSignals && lng != null) {
-      slotFillHints['gpsLng'] = lng;
+      slotFillHints['gpsCityConfidence'] = hasCoarseLocation
+          ? 'medium'
+          : 'none';
     }
     if (historySnippet.isNotEmpty) {
       slotFillHints['historySummarySnippet'] = historySnippet;
@@ -149,12 +136,6 @@ class PersonalAssistantContextOrchestrator {
       'locationPrecision': allowGpsSignals ? precision : '',
       'locationTimestamp': allowGpsSignals ? locationTimestamp : '',
     };
-    if (allowGpsSignals && lat != null) {
-      gpsLocationEnvelope['lat'] = lat;
-    }
-    if (allowGpsSignals && lng != null) {
-      gpsLocationEnvelope['lng'] = lng;
-    }
     if (allowGpsSignals && cityFromContext.isNotEmpty) {
       gpsLocationEnvelope['city'] = cityFromContext;
       gpsLocationEnvelope['citySource'] = 'device_or_scope';
@@ -169,9 +150,7 @@ class PersonalAssistantContextOrchestrator {
             ? (hasLongtermMemory ? 'ready' : 'missing')
             : 'gated',
         'location': continuityPolicy.allowLocationHints
-            ? (hasPreciseLocation
-                  ? 'precise'
-                  : (hasCoarseLocation ? 'coarse' : 'missing'))
+            ? (hasCoarseLocation ? 'coarse' : 'missing')
             : 'suppressed',
       },
       'freshness': <String, dynamic>{
@@ -179,9 +158,7 @@ class PersonalAssistantContextOrchestrator {
       },
       'confidence': <String, dynamic>{
         'locationConfidence': continuityPolicy.allowLocationHints
-            ? (hasPreciseLocation
-                  ? 'high'
-                  : (hasCoarseLocation ? 'medium' : 'low'))
+            ? (hasCoarseLocation ? 'medium' : 'low')
             : 'suppressed',
         'memoryConfidence': continuityPolicy.allowLongtermMemory
             ? (hasLongtermMemory ? 'medium' : 'low')
@@ -283,8 +260,8 @@ class PersonalAssistantContextOrchestrator {
     required bool hasToolResult,
     required String problemClass,
     required ContextAssemblyResult contextAssembly,
-    required IntentGraph intentGraph,
-    required List<QueryTask> queryTasks,
+    required AssistantPlanView planView,
+    required List<SearchPlanItem> searchPlans,
     AnswerBoundaryPolicy? boundaryPolicy,
     EvidenceEvaluationResult? evidenceEvaluation,
   }) {
@@ -292,20 +269,20 @@ class PersonalAssistantContextOrchestrator {
     final policy =
         boundaryPolicy ??
         _answerBoundaryResolver.resolve(
-          intentGraph: intentGraph,
+          planView: planView,
           contextAssembly: contextAssembly,
           retrievalPolicy: const <String, dynamic>{},
-          queryTasks: queryTasks,
+          searchPlans: searchPlans,
         );
-    final generatedQueryConditions = queryTasks
-        .map((task) => task.query.trim())
+    final generatedQueryConditions = searchPlans
+        .map((plan) => plan.query.trim())
         .where((item) => item.isNotEmpty)
         .take(3)
         .toList(growable: false);
     if (policy.requireToolResultBeforeSynthesis && !hasToolResult) {
       return SynthesisReadinessResult(
         ready: false,
-        reason: policy.summary.isNotEmpty ? policy.summary : '外部证据尚未形成。',
+        reason: policy.summary,
         replanTask: _buildEvidenceReplanTask(
           query: query,
           generatedQueryConditions: generatedQueryConditions,
@@ -315,12 +292,11 @@ class PersonalAssistantContextOrchestrator {
     }
     final evaluation = evidenceEvaluation;
     if (evaluation != null && evaluation.status == EvidenceStatus.retry) {
-      final reason = evaluation.summary.trim().isNotEmpty
-          ? evaluation.summary.trim()
-          : (policy.summary.isNotEmpty ? policy.summary : '外部证据仍需继续补齐。');
       return SynthesisReadinessResult(
         ready: false,
-        reason: reason,
+        reason: evaluation.summary.trim().isNotEmpty
+            ? evaluation.summary.trim()
+            : policy.summary.trim(),
         replanTask: _buildEvidenceReplanTask(
           query: query,
           generatedQueryConditions: generatedQueryConditions,
@@ -333,12 +309,11 @@ class PersonalAssistantContextOrchestrator {
           hasToolResult ||
           (evaluation != null && evaluation.entries.isNotEmpty);
       if (!hasUsableEvidence) {
-        final reason = (evaluation?.summary.trim().isNotEmpty ?? false)
-            ? evaluation!.summary.trim()
-            : (policy.summary.isNotEmpty ? policy.summary : '外部证据尚未形成。');
         return SynthesisReadinessResult(
           ready: false,
-          reason: reason,
+          reason: (evaluation?.summary.trim().isNotEmpty ?? false)
+              ? evaluation!.summary.trim()
+              : policy.summary.trim(),
           replanTask: _buildEvidenceReplanTask(
             query: query,
             generatedQueryConditions: generatedQueryConditions,
@@ -347,7 +322,7 @@ class PersonalAssistantContextOrchestrator {
         );
       }
     }
-    return const SynthesisReadinessResult(ready: true, reason: 'ok');
+    return const SynthesisReadinessResult(ready: true);
   }
 
   SlotStateSnapshot bindEvidenceToSlots({
@@ -410,7 +385,7 @@ class PersonalAssistantContextOrchestrator {
     return ContextFillTask(
       fillType: ContextFillType.replan,
       targetSlot: ContextTargetSlot.realtimeEvidence,
-      reason: '需要先完成至少一轮证据检索，再进入最终成答。',
+      reason: '',
       generatedQueryConditions: generatedQueryConditions.isNotEmpty
           ? generatedQueryConditions
           : <String>[query],
@@ -438,13 +413,6 @@ class PersonalAssistantContextOrchestrator {
   }
 
   String _strValue(Object? raw) => raw?.toString().trim() ?? '';
-
-  double? _numValue(Object? raw) {
-    if (raw is num) return raw.toDouble();
-    final text = _strValue(raw);
-    if (text.isEmpty) return null;
-    return double.tryParse(text);
-  }
 
   List<String> _recentUserQueries(
     List<Map<String, dynamic>> sessionHistory, {
@@ -519,9 +487,8 @@ class PersonalAssistantContextOrchestrator {
     }
     final nested = (sanitized['location'] as Map?)?.cast<String, dynamic>();
     if (nested != null && nested.isNotEmpty) {
-      sanitized['location'] = <String, dynamic>{
-        ...nested,
-      }..removeWhere(
+      sanitized['location'] = <String, dynamic>{...nested}
+        ..removeWhere(
           (key, _) =>
               key == 'lat' ||
               key == 'lng' ||

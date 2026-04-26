@@ -1,9 +1,10 @@
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/reasoning/temporal/relative_time_resolver.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
@@ -27,9 +28,9 @@ class AssistantPipelineTemplateBundle {
     required this.skillCatalog,
     required this.previousSlotState,
     required this.previousDomainPolicyBundle,
-    required this.intentGraph,
+    required this.planView,
+    required this.searchPlans,
     required this.answerBoundaryPolicy,
-    required this.previousIntentGraph,
     required this.previousAnswerSummary,
     required this.continuityPolicy,
     required this.continuityOverrideSlots,
@@ -52,9 +53,9 @@ class AssistantPipelineTemplateBundle {
   final String skillCatalog;
   final SlotStateSnapshot previousSlotState;
   final DomainPolicyBundle? previousDomainPolicyBundle;
-  final IntentGraph? intentGraph;
+  final AssistantPlanView planView;
+  final List<SearchPlanItem> searchPlans;
   final AnswerBoundaryPolicy answerBoundaryPolicy;
-  final IntentGraph? previousIntentGraph;
   final String previousAnswerSummary;
   final ContextContinuityPolicy continuityPolicy;
   final Map<String, dynamic> continuityOverrideSlots;

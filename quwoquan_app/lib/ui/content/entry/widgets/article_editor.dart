@@ -13,7 +13,6 @@ import 'package:quwoquan_app/ui/content/article_theme.dart';
 import 'package:quwoquan_app/ui/content/entry/models/article_editor_projection.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_editor_accessory_panels.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/article_wrap_layout.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_wrap_paragraph_editor.dart';
 
 const String _kEmptyDocumentBodyFocusId = '__article_editor_empty_body__';
@@ -499,13 +498,6 @@ class _ArticleEditorState extends State<ArticleEditor> {
         ? ArticleDocumentNodeType.paragraph
         : type;
     widget.onUpdateNodeType?.call(focusedId, targetType);
-  }
-
-  /// 当前焦点节点的选区范围（用于行内样式 toggle）。
-  TextSelection? _focusedNodeSelection() {
-    final focusedId = _focusedNodeId;
-    if (focusedId == null || focusedId == 'title') return null;
-    return _nodeSelections[focusedId];
   }
 
   /// 当前焦点节点的 spans（用于行内样式按钮状态）。
@@ -1003,62 +995,6 @@ class _ArticleEditorState extends State<ArticleEditor> {
       );
     }
 
-    final controller = _ensureActiveSlotController();
-    final focusNode = _ensureActiveSlotFocusNode();
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        if (!focusNode.hasFocus) {
-          focusNode.requestFocus();
-        }
-      },
-      child: CupertinoTextField(
-        key: ValueKey<String>('article_slot_input_${slot.id}'),
-        controller: controller,
-        focusNode: focusNode,
-        keyboardType: TextInputType.multiline,
-        textInputAction: TextInputAction.newline,
-        textAlignVertical: TextAlignVertical.top,
-        maxLines: null,
-        minLines: 1,
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
-        decoration: const BoxDecoration(),
-        style: typography.bodyStyle,
-        placeholderStyle: typography.placeholderStyle,
-        onChanged: (value) {
-          if (value.trim().isEmpty) {
-            return;
-          }
-          final newNodeId = widget.onInsertTextNodeAfter(
-            slot.anchorNodeId,
-            initialText: value,
-          );
-          if (newNodeId.trim().isEmpty) {
-            return;
-          }
-          final selectionOffset = value.length;
-          _nodeSelections[newNodeId] = TextSelection.collapsed(
-            offset: selectionOffset,
-          );
-          setState(() {
-            _pendingFocusNodeId = newNodeId;
-            _pendingFocusSelectionOffset = selectionOffset;
-            _focusedNodeId = newNodeId;
-            _activeSlotId = null;
-            controller.clear();
-          });
-        },
-      ),
-    );
-  }
-
-  /// 渲染激活状态的 slot TextField，不含图片缓冲 padding。
-  /// 供 [_buildWrapGroup] 在图片旁边内联渲染激活的 slot 使用。
-  Widget _buildInsertionSlotTextField(
-    BuildContext context,
-    ArticleEditorSlotProjection slot,
-    ArticleTypographySpec typography,
-  ) {
     final controller = _ensureActiveSlotController();
     final focusNode = _ensureActiveSlotFocusNode();
     return GestureDetector(

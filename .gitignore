@@ -16,8 +16,10 @@
 *.log
 
 # Build artifacts
+.dart_tool/
 build/
 dist/
+.test-dist/
 *.o
 *.a
 

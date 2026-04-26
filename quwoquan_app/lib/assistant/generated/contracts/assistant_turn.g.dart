@@ -4,12 +4,15 @@
 
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 
 class AssistantTurnAnswerProcessing {
   const AssistantTurnAnswerProcessing({
@@ -647,7 +650,10 @@ class AssistantTurnOutput {
     this.toolCalls = const <AssistantTurnToolCall>[],
     this.slotState = const SlotStateSnapshot(),
     this.subagentPlan = const <SubagentPlan>[],
-    this.intentGraph,
+    this.understandingResult = const UnderstandingResult(),
+    this.taskGraph = const TaskGraph(),
+    this.orchestratorState = const ConversationOrchestratorState(),
+    this.turnSynthesisState = const TurnSynthesisState(),
     this.skillRuns = const <SkillRun>[],
     this.aggregationState,
     this.journey = const AssistantJourney(),
@@ -681,7 +687,10 @@ class AssistantTurnOutput {
   final List<AssistantTurnToolCall> toolCalls;
   final SlotStateSnapshot slotState;
   final List<SubagentPlan> subagentPlan;
-  final IntentGraph? intentGraph;
+  final UnderstandingResult understandingResult;
+  final TaskGraph taskGraph;
+  final ConversationOrchestratorState orchestratorState;
+  final TurnSynthesisState turnSynthesisState;
   final List<SkillRun> skillRuns;
   final AggregationState? aggregationState;
   final AssistantJourney journey;
@@ -715,7 +724,10 @@ class AssistantTurnOutput {
         'toolCalls': toolCalls.map((item) => item.toJson()).toList(growable: false),
         'slotState': slotState.toJson(),
         'subagentPlan': subagentPlan.map((item) => item.toJson()).toList(growable: false),
-        'intentGraph': intentGraph?.toJson(),
+        'understandingResult': understandingResult.toJson(),
+        'taskGraph': taskGraph.toJson(),
+        'orchestratorState': orchestratorState.toJson(),
+        'turnSynthesisState': turnSynthesisState.toJson(),
         'skillRuns': skillRuns.map((item) => item.toJson()).toList(growable: false),
         'aggregationState': aggregationState?.toJson(),
         'journey': journey.toJson(),
@@ -751,7 +763,10 @@ class AssistantTurnOutput {
       toolCalls: (json['toolCalls'] as List?)?.whereType<Map>().map((item) => AssistantTurnToolCall.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <AssistantTurnToolCall>[],
       slotState: json['slotState'] is Map ? SlotStateSnapshot.fromJson((json['slotState'] as Map).cast<String, dynamic>()) : const SlotStateSnapshot(),
       subagentPlan: (json['subagentPlan'] as List?)?.whereType<Map>().map((item) => SubagentPlan.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <SubagentPlan>[],
-      intentGraph: json['intentGraph'] is Map ? IntentGraph.fromJson((json['intentGraph'] as Map).cast<String, dynamic>()) : null,
+      understandingResult: json['understandingResult'] is Map ? UnderstandingResult.fromJson((json['understandingResult'] as Map).cast<String, dynamic>()) : const UnderstandingResult(),
+      taskGraph: json['taskGraph'] is Map ? TaskGraph.fromJson((json['taskGraph'] as Map).cast<String, dynamic>()) : const TaskGraph(),
+      orchestratorState: json['orchestratorState'] is Map ? ConversationOrchestratorState.fromJson((json['orchestratorState'] as Map).cast<String, dynamic>()) : const ConversationOrchestratorState(),
+      turnSynthesisState: json['turnSynthesisState'] is Map ? TurnSynthesisState.fromJson((json['turnSynthesisState'] as Map).cast<String, dynamic>()) : const TurnSynthesisState(),
       skillRuns: (json['skillRuns'] as List?)?.whereType<Map>().map((item) => SkillRun.fromJson(item.cast<String, dynamic>())).toList(growable: false) ?? const <SkillRun>[],
       aggregationState: json['aggregationState'] is Map ? AggregationState.fromJson((json['aggregationState'] as Map).cast<String, dynamic>()) : null,
       journey: json['journey'] is Map ? AssistantJourney.fromJson((json['journey'] as Map).cast<String, dynamic>()) : const AssistantJourney(),
@@ -795,7 +810,10 @@ class AssistantTurnOutputFields {
   static const String toolCalls = 'toolCalls';
   static const String slotState = 'slotState';
   static const String subagentPlan = 'subagentPlan';
-  static const String intentGraph = 'intentGraph';
+  static const String understandingResult = 'understandingResult';
+  static const String taskGraph = 'taskGraph';
+  static const String orchestratorState = 'orchestratorState';
+  static const String turnSynthesisState = 'turnSynthesisState';
   static const String skillRuns = 'skillRuns';
   static const String aggregationState = 'aggregationState';
   static const String journey = 'journey';

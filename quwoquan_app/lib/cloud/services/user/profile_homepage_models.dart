@@ -18,6 +18,7 @@ class ProfileSubjectViewData {
     required this.ownerUserId,
     required this.subjectType,
     required this.subAccountId,
+    required this.userHandle,
     required this.username,
     required this.displayName,
     required this.avatarUrl,
@@ -28,6 +29,7 @@ class ProfileSubjectViewData {
     required this.postCount,
     required this.circleCount,
     required this.likeCount,
+    required this.isolationLevel,
     required this.profileVisibility,
     required this.inheritsFromOwner,
     required this.overriddenFields,
@@ -38,6 +40,7 @@ class ProfileSubjectViewData {
   final String ownerUserId;
   final String subjectType;
   final String subAccountId;
+  final String userHandle;
   final String username;
   final String displayName;
   final String avatarUrl;
@@ -48,6 +51,7 @@ class ProfileSubjectViewData {
   final int postCount;
   final int circleCount;
   final int likeCount;
+  final String isolationLevel;
   final String profileVisibility;
   final bool inheritsFromOwner;
   final List<String> overriddenFields;
@@ -63,17 +67,19 @@ class ProfileSubjectViewData {
         ? w.displayName
         : (nickname.isNotEmpty ? nickname : subjectId);
     final subAccountId = w.subAccountId;
+    final userHandle = w.userHandle.isNotEmpty
+        ? w.userHandle
+        : (w.username.isNotEmpty ? w.username : subjectId);
     final subjectType = w.subjectType.isNotEmpty
         ? w.subjectType
-        : (subAccountId.isNotEmpty ? 'sub_account' : 'owner');
-    final username = w.username.isNotEmpty
-        ? w.username
-        : (nickname.isNotEmpty ? nickname : subjectId);
+        : (subAccountId.isNotEmpty ? 'persona' : 'user');
+    final username = w.username.isNotEmpty ? w.username : userHandle;
     return ProfileSubjectViewData(
       profileSubjectId: subjectId,
       ownerUserId: w.ownerUserId,
       subjectType: subjectType,
       subAccountId: subAccountId,
+      userHandle: userHandle,
       username: username,
       displayName: displayName,
       avatarUrl: w.avatarUrl,
@@ -84,6 +90,7 @@ class ProfileSubjectViewData {
       postCount: w.postCount,
       circleCount: w.circleCount,
       likeCount: w.likeCount,
+      isolationLevel: w.isolationLevel,
       profileVisibility: w.profileVisibility,
       inheritsFromOwner: w.inheritsFromOwner,
       overriddenFields: w.overriddenFields ?? const <String>[],
@@ -105,6 +112,7 @@ class ProfileSubjectViewData {
       ownerUserId: ownerUserId,
       subjectType: subjectType,
       subAccountId: subAccountId,
+      userHandle: userHandle,
       username: username,
       displayName: displayName,
       avatarUrl: avatarUrl,
@@ -115,6 +123,7 @@ class ProfileSubjectViewData {
       postCount: stats.postCount,
       circleCount: stats.circleCount,
       likeCount: stats.likeCount,
+      isolationLevel: isolationLevel,
       profileVisibility: profileVisibility,
       inheritsFromOwner: inheritsFromOwner,
       overriddenFields: overriddenFields,
@@ -378,7 +387,32 @@ class ActivePersonaContextViewData {
   final bool isPrimary;
   final bool isFallback;
 
+  String get personaId =>
+      subAccountId.isNotEmpty ? subAccountId : profileSubjectId;
+
+  String get contextVersion => personaContextVersion;
+
+  String get personaSnapshotVersion => '1';
+
   bool get hasSubAccount => subAccountId.isNotEmpty;
+
+  Map<String, Object?> toTypedEnvelope({
+    String sourceSurfaceId = '',
+    bool explicitOverride = false,
+  }) {
+    return <String, Object?>{
+      'personaId': personaId,
+      'profileSubjectId': profileSubjectId,
+      'subAccountId': subAccountId,
+      if (contextVersion.isNotEmpty) 'contextVersion': contextVersion,
+      if (personaContextVersion.isNotEmpty)
+        'personaContextVersion': personaContextVersion,
+      'personaSnapshotVersion': personaSnapshotVersion,
+      if (sourceSurfaceId.trim().isNotEmpty)
+        'sourceSurfaceId': sourceSurfaceId.trim(),
+      'explicitOverride': explicitOverride,
+    };
+  }
 
   factory ActivePersonaContextViewData.fromActivePersonaContextWire(
     ActivePersonaContextWireDto w,
@@ -394,7 +428,7 @@ class ActivePersonaContextViewData {
         : profileSubjectId;
     final subjectType = w.subjectType.isNotEmpty
         ? w.subjectType
-        : (subAccountId.isNotEmpty ? 'sub_account' : 'owner');
+        : (subAccountId.isNotEmpty ? 'persona' : 'user');
     return ActivePersonaContextViewData(
       profileSubjectId: profileSubjectId,
       ownerUserId: ownerUserId,
@@ -420,7 +454,7 @@ class ActivePersonaContextViewData {
     required String displayName,
     required String avatarUrl,
     String subAccountId = '',
-    String subjectType = 'owner',
+    String subjectType = 'user',
     String personaContextVersion = '',
   }) {
     return ActivePersonaContextViewData(
@@ -450,6 +484,8 @@ class PersonaManagementItemViewData {
     required this.profileVisibility,
     required this.isPrimary,
     required this.isActive,
+    required this.status,
+    required this.retiredAt,
     required this.hasAttributedHistory,
     required this.hasPublishedContent,
     required this.inheritsProfileFromOwner,
@@ -471,6 +507,8 @@ class PersonaManagementItemViewData {
   final String profileVisibility;
   final bool isPrimary;
   final bool isActive;
+  final String status;
+  final DateTime? retiredAt;
   final bool hasAttributedHistory;
   final bool hasPublishedContent;
   final bool inheritsProfileFromOwner;
@@ -481,8 +519,9 @@ class PersonaManagementItemViewData {
   final String subjectType;
 
   bool get hasContactInfo => phone.isNotEmpty || email.isNotEmpty;
+  bool get isRetired => status == 'retired';
 
-  /// 纠正 wire 默认 `subjectType: sub_account`：无 `subAccountId` 时视为 owner 主行。
+  /// 纠正 wire 默认 `subjectType: persona`：无 `subAccountId` 时视为 user 主行。
   factory PersonaManagementItemViewData.fromPersonaManagementItemWire(
     PersonaManagementItemWireDto w,
   ) {
@@ -493,10 +532,10 @@ class PersonaManagementItemViewData {
         ? w.displayName
         : profileSubjectId;
     final subjectType = w.subAccountId.isEmpty
-        ? (w.subjectType.isEmpty || w.subjectType == 'sub_account'
-              ? 'owner'
+        ? (w.subjectType.isEmpty || w.subjectType == 'persona'
+              ? 'user'
               : w.subjectType)
-        : (w.subjectType.isNotEmpty ? w.subjectType : 'sub_account');
+        : (w.subjectType.isNotEmpty ? w.subjectType : 'persona');
     return PersonaManagementItemViewData(
       subAccountId: w.subAccountId,
       profileSubjectId: profileSubjectId,
@@ -509,6 +548,8 @@ class PersonaManagementItemViewData {
       profileVisibility: w.profileVisibility,
       isPrimary: w.isPrimary,
       isActive: w.isActive,
+      status: w.status,
+      retiredAt: w.retiredAt,
       hasAttributedHistory: w.hasAttributedHistory,
       hasPublishedContent: w.hasPublishedContent,
       inheritsProfileFromOwner: w.inheritsProfileFromOwner,

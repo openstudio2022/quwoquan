@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class HomepageClaimPage extends ConsumerStatefulWidget {
   const HomepageClaimPage({super.key, required this.homepageId});
@@ -106,7 +107,9 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                         : '提交后会进入审核，审核通过后即可维护主页基本信息。',
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                   if (_errorText != null) ...<Widget>[
@@ -293,7 +296,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         return;
       }
       setState(() {
-        _errorText = error.toString();
+        _errorText = runtimeErrorDisplayMessage(error);
       });
     } finally {
       if (mounted) {

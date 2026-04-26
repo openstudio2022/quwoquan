@@ -20,16 +20,6 @@ class PhaseOrchestrator {
     var state = input.initialState;
     dynamic response;
 
-    // 首条用户可见消息：1 秒内发出，符合 world-class 等待体验
-    input.onTraceEvent?.call(
-      _phaseNarrativeEvent(
-        narrative: '正在处理你的请求…',
-        phaseId: 'bootstrap',
-        runId: input.runId,
-        traceId: input.traceId,
-      ),
-    );
-
     for (final phase in _phases) {
       final narrative = _phaseNarrativeFor(phase.phaseId);
       if (narrative != null && phase.phaseId != 'bootstrap') {
@@ -112,21 +102,5 @@ AssistantTraceEvent _phaseNarrativeEvent({
 }
 
 String? _phaseNarrativeFor(String phaseId) {
-  switch (phaseId) {
-    case 'bootstrap':
-      return '正在处理你的请求…';
-    case 'understand':
-      return '我先把问题主线理清，再决定怎么查。';
-    case 'retrieval_design':
-      return '我先把检索拆成几路并行推进。';
-    case 'execution':
-      return '我开始并行核对关键资料。';
-    case 'evidence_digest':
-      return '我先把检索结果里真正有用的点筛出来。';
-    case 'synthesis':
-      return '关键信息差不多齐了，我来生成答案。';
-    case 'finalize':
-      return '我在收尾并准备把结果交给你。';
-  }
   return null;
 }

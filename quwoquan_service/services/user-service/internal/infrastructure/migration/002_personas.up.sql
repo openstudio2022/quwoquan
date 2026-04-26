@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS personas (
     is_primary               BOOLEAN NOT NULL DEFAULT false,
     is_private               BOOLEAN NOT NULL DEFAULT false,
     is_active                BOOLEAN NOT NULL DEFAULT false,
+    status                   VARCHAR(16) NOT NULL DEFAULT 'active',
+    retired_at               TIMESTAMPTZ,
     sub_account_id           VARCHAR(36) NOT NULL UNIQUE,
     isolation_level          VARCHAR(16) NOT NULL DEFAULT 'open',
     purpose_hint             VARCHAR(128),
@@ -30,6 +32,8 @@ CREATE TABLE IF NOT EXISTS personas (
 );
 
 CREATE INDEX IF NOT EXISTS idx_personas_user_id ON personas (user_id);
+
+CREATE INDEX IF NOT EXISTS idx_personas_user_status ON personas (user_id, status);
 
 CREATE INDEX IF NOT EXISTS idx_personas_sub_account_id ON personas (sub_account_id);
 

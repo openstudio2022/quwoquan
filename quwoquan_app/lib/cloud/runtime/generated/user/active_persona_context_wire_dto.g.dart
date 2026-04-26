@@ -2,6 +2,7 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class ActivePersonaContextWireDto {
+  final String personaId;
   final String profileSubjectId;
   final String ownerUserId;
   final String subAccountId;
@@ -9,9 +10,13 @@ class ActivePersonaContextWireDto {
   final String displayName;
   final String avatarUrl;
   final String personaContextVersion;
+  final int personaSnapshotVersion;
+  final String sourceSurfaceId;
+  final bool explicitOverride;
   final bool isPrimary;
 
   ActivePersonaContextWireDto({
+    this.personaId = '',
     this.profileSubjectId = '',
     this.ownerUserId = '',
     this.subAccountId = '',
@@ -19,11 +24,15 @@ class ActivePersonaContextWireDto {
     this.displayName = '',
     this.avatarUrl = '',
     this.personaContextVersion = '',
+    this.personaSnapshotVersion = 1,
+    this.sourceSurfaceId = '',
+    this.explicitOverride = false,
     this.isPrimary = false,
   });
 
   factory ActivePersonaContextWireDto.fromMap(Map<String, dynamic> m) {
     return ActivePersonaContextWireDto(
+      personaId: _firstNonEmptyWireString(m, <String>['personaId', 'subAccountId', 'profileSubjectId']) ?? '',
       profileSubjectId: _firstNonEmptyWireString(m, <String>['profileSubjectId', 'subAccountId', 'userId']) ?? '',
       ownerUserId: _firstNonEmptyWireString(m, <String>['ownerUserId', 'userId']) ?? '',
       subAccountId: m['subAccountId']?.toString() ?? '',
@@ -31,12 +40,16 @@ class ActivePersonaContextWireDto {
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? m['avatarUrlSnapshot']?.toString() ?? '',
       personaContextVersion: m['personaContextVersion']?.toString() ?? m['contextVersion']?.toString() ?? '',
+      personaSnapshotVersion: (m['personaSnapshotVersion'] as num?)?.toInt() ?? 1,
+      sourceSurfaceId: m['sourceSurfaceId']?.toString() ?? '',
+      explicitOverride: m['explicitOverride'] as bool? ?? false,
       isPrimary: m['isPrimary'] as bool? ?? false,
     );
   }
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'personaId': personaId,
       'profileSubjectId': profileSubjectId,
       'ownerUserId': ownerUserId,
       'subAccountId': subAccountId,
@@ -44,11 +57,15 @@ class ActivePersonaContextWireDto {
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'personaContextVersion': personaContextVersion,
+      'personaSnapshotVersion': personaSnapshotVersion,
+      'sourceSurfaceId': sourceSurfaceId,
+      'explicitOverride': explicitOverride,
       'isPrimary': isPrimary,
     };
   }
 
   ActivePersonaContextWireDto copyWith({
+    String? personaId,
     String? profileSubjectId,
     String? ownerUserId,
     String? subAccountId,
@@ -56,9 +73,13 @@ class ActivePersonaContextWireDto {
     String? displayName,
     String? avatarUrl,
     String? personaContextVersion,
+    int? personaSnapshotVersion,
+    String? sourceSurfaceId,
+    bool? explicitOverride,
     bool? isPrimary,
   }) {
     return ActivePersonaContextWireDto(
+      personaId: personaId ?? this.personaId,
       profileSubjectId: profileSubjectId ?? this.profileSubjectId,
       ownerUserId: ownerUserId ?? this.ownerUserId,
       subAccountId: subAccountId ?? this.subAccountId,
@@ -66,6 +87,9 @@ class ActivePersonaContextWireDto {
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       personaContextVersion: personaContextVersion ?? this.personaContextVersion,
+      personaSnapshotVersion: personaSnapshotVersion ?? this.personaSnapshotVersion,
+      sourceSurfaceId: sourceSurfaceId ?? this.sourceSurfaceId,
+      explicitOverride: explicitOverride ?? this.explicitOverride,
       isPrimary: isPrimary ?? this.isPrimary,
     );
   }

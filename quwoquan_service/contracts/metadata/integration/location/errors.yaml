@@ -10,8 +10,8 @@ errors:
     kind: USER
     reason: unavailable
     http_status: 400
-    retryable: true
-    retry_after_seconds: 3
+    recovery_action: retry
+    recovery_after_seconds: 3
     dart_const: locationUnavailable
     l10n_key: locationLoadFailed
     go_const: ErrLocationUnavailable
@@ -23,7 +23,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidArgument
     l10n_key: locationSearchKeywordRequired
     go_const: ErrInvalidArgument
@@ -35,7 +35,7 @@ errors:
     kind: USER
     reason: permission_denied
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: locationPermissionRequired
     l10n_key: locationPermissionRequired
     go_const: ErrLocationPermissionRequired
@@ -47,8 +47,8 @@ errors:
     kind: MIDDLEWARE
     reason: timeout
     http_status: 504
-    retryable: true
-    retry_after_seconds: 5
+    recovery_action: retry
+    recovery_after_seconds: 5
     dart_const: upstreamTimeout
     l10n_key: locationUpstreamTimeout
     go_const: ErrUpstreamTimeout
@@ -60,8 +60,8 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: true
-    retry_after_seconds: 5
+    recovery_action: retry
+    recovery_after_seconds: 5
     dart_const: internalError
     l10n_key: locationInternalError
     go_const: ErrInternalError

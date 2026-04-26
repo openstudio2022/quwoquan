@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/assistant/application/assistant_gateway.dart';
 import 'package:quwoquan_app/assistant/contracts/user_events.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_boundary_error_mapper.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_runtime_failure_mapper.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 enum OpenClawRemoteStreamEventType {
   chunk,
@@ -109,36 +112,47 @@ class OpenClawBridge {
       );
       if (response.statusCode >= 400) {
         final reason = _extractErrorMessage(response.body);
-        return AssistantRunResponse(
+        return _remoteRunFailureResponse(
+          request,
           finalText:
               '远端模型调用失败: HTTP ${response.statusCode}${reason.isEmpty ? '' : ' - $reason'}',
-          traces: const [],
-          runId: request.traceId,
-          traceId: request.traceId,
-          degraded: true,
-          errorCode: 'remote_model_http_${response.statusCode}',
+          stage: 'remote_model_http',
+          code: 'ASSISTANT.NETWORK.remote_model_http',
+          kind: RuntimeFailureKind.unavailable,
+          attributes: <RuntimeContextAttribute>[
+            RuntimeContextAttribute(
+              key: 'statusCode',
+              value: response.statusCode.toString(),
+            ),
+            if (reason.isNotEmpty)
+              RuntimeContextAttribute(key: 'reason', value: reason),
+          ],
         );
       }
       final body = jsonDecode(response.body);
       if (body is! Map<String, dynamic>) {
-        return AssistantRunResponse(
+        return _remoteRunFailureResponse(
+          request,
           finalText: '远端模型返回格式异常',
-          traces: const [],
-          runId: request.traceId,
-          traceId: request.traceId,
-          degraded: true,
-          errorCode: 'remote_model_invalid_payload',
+          stage: 'remote_model_invalid_payload',
+          code: 'ASSISTANT.CONTRACT.remote_model_invalid_payload',
+          kind: RuntimeFailureKind.contract,
         );
       }
       return AssistantRunResponse.fromJson(body);
     } catch (e) {
-      return AssistantRunResponse(
+      return _remoteRunFailureResponse(
+        request,
         finalText: '远端模型调用异常: $e',
-        traces: const [],
-        runId: request.traceId,
-        traceId: request.traceId,
-        degraded: true,
-        errorCode: 'remote_model_exception',
+        stage: 'remote_model_exception',
+        code: 'ASSISTANT.SYSTEM.remote_model_exception',
+        kind: RuntimeFailureKind.internal,
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'errorType',
+            value: e.runtimeType.toString(),
+          ),
+        ],
       );
     }
   }
@@ -228,13 +242,24 @@ class OpenClawBridge {
           ? body
           : body.cast<String, dynamic>();
       try {
+        final rawFailure = map['runtimeFailure'];
+        if (rawFailure is Map &&
+            ((rawFailure['code'] as String?)?.trim().isEmpty ?? true)) {
+          throw const FormatException('runtimeFailure.code missing');
+        }
         return AssistantToolResult.fromJson(map);
       } catch (_) {
-        return const AssistantToolResult(
+        return AssistantToolResult(
           success: false,
           message: '远端技能返回格式异常',
           errorCode: AssistantErrorCode.executionFailed,
           degraded: true,
+          runtimeFailure: assistantToolRuntimeFailure(
+            errorCode: AssistantErrorCode.executionFailed,
+            message: '远端技能返回格式异常',
+            functionModule: skillId,
+            stage: 'remote_skill_invalid_payload',
+          ),
         );
       }
     } catch (_) {
@@ -261,6 +286,49 @@ class OpenClawBridge {
     final trimmed = body.trim();
     if (trimmed.length <= 160) return trimmed;
     return '${trimmed.substring(0, 160)}...';
+  }
+
+  AssistantRunResponse _remoteRunFailureResponse(
+    AssistantRunRequest request, {
+    required String finalText,
+    required String stage,
+    required String code,
+    required RuntimeFailureKind kind,
+    List<RuntimeContextAttribute> attributes =
+        const <RuntimeContextAttribute>[],
+  }) {
+    final boundaryOutcome = const AssistantBoundaryErrorMapper().failed(
+      boundary: 'assistant_remote_model',
+      stage: stage,
+      code: code,
+      kind: kind,
+      businessObject: 'assistant_turn',
+      functionModule: 'openclaw_bridge',
+      attributes: attributes,
+      disruptionLevel: UserDisruptionLevel.inlineCard,
+      canContinue: false,
+    );
+    return AssistantRunResponse(
+      finalText: finalText,
+      traces: <AssistantTraceEvent>[
+        AssistantTraceEvent(
+          type: AssistantTraceEventType.toolError,
+          message: finalText,
+          timestamp: DateTime.now(),
+          data: <String, dynamic>{
+            'stage': stage,
+            if (boundaryOutcome.failure != null)
+              'runtimeFailure': runtimeFailureBaseToJson(
+                boundaryOutcome.failure!,
+              ),
+          },
+        ),
+      ],
+      runId: request.traceId,
+      traceId: request.traceId,
+      degraded: true,
+      boundaryOutcome: boundaryOutcome,
+    );
   }
 
   OpenClawRemoteStreamEvent? _parseSseFrame(String frame) {
@@ -319,16 +387,15 @@ class OpenClawBridge {
     if (eventName == 'answer_delta') {
       if (decoded != null &&
           (decoded['scope'] != null || decoded['type'] != null)) {
-        final eventJson =
-            _OpenClawSseVendorPayload(decoded).wireAnswerDeltaStructured();
+        final eventJson = _OpenClawSseVendorPayload(
+          decoded,
+        ).wireAnswerDeltaStructured();
         return OpenClawRemoteStreamEvent.userEvent(
           UserEvent.fromJson(eventJson),
         );
       }
       final chunk = decoded != null
-          ? _OpenClawSseVendorPayload(decoded).chunkOrTextFallback(
-              payloadRaw,
-            )
+          ? _OpenClawSseVendorPayload(decoded).chunkOrTextFallback(payloadRaw)
           : payloadRaw;
       if (chunk.isNotEmpty) {
         return OpenClawRemoteStreamEvent.chunk(chunk);
@@ -337,8 +404,9 @@ class OpenClawBridge {
     }
     if (eventName == 'chunk' || eventName == 'delta' || eventName == 'token') {
       if (decoded != null) {
-        final chunk =
-            _OpenClawSseVendorPayload(decoded).chunkOrTextForTokenEvent();
+        final chunk = _OpenClawSseVendorPayload(
+          decoded,
+        ).chunkOrTextForTokenEvent();
         if (chunk.isNotEmpty) return OpenClawRemoteStreamEvent.chunk(chunk);
       }
       return OpenClawRemoteStreamEvent.chunk(payloadRaw);
@@ -459,8 +527,7 @@ final class _OpenClawSseVendorPayload {
           '',
       'nodeId': (map['nodeId'] as String? ?? ''),
       'runId': (map['runId'] as String? ?? ''),
-      'payload':
-          (map['payload'] as Map?)?.cast<String, dynamic>() ?? map,
+      'payload': (map['payload'] as Map?)?.cast<String, dynamic>() ?? map,
     };
   }
 

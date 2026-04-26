@@ -121,7 +121,7 @@ mode=retrieval_unavailable
 fallback=stable_degraded_answer
 <!-- snippet:end -->
 
-<!-- snippet:local_context_unavailable_notice -->
-mode=local_context_unavailable
+<!-- snippet:system_context_unavailable_notice -->
+mode=system_context_unavailable
 fallback=continue_with_explicit_user_inputs
 <!-- snippet:end -->

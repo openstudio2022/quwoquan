@@ -1,24 +1,25 @@
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/generated/enums/assistant_runtime_enums.g.dart';
+import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/orchestration/execution_preparation_resolver.dart';
 import 'package:quwoquan_app/assistant/orchestration/assistant_orchestration_runtime.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
+import 'package:quwoquan_app/assistant/orchestration/retrieval_tool_selection_policy.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
+import 'package:quwoquan_app/assistant/orchestration/task_scheduler.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
-import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/mode_decider.dart';
 import 'package:quwoquan_app/assistant/reasoning/routing/domain_router.dart';
-import 'package:quwoquan_app/assistant/skill/domain/skill_manifest.dart';
 import 'package:quwoquan_app/assistant/skill/domain/skill_router.dart';
 import 'package:quwoquan_app/assistant/skill/loading/skill_loader.dart';
 import 'package:quwoquan_app/assistant/template_runtime/assistant_template_runtime.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 
-/// Retrieval design: normalize planned QueryTask list for execution.
+/// Retrieval design: normalize planned TaskGraph for execution.
 class RetrievalDesignPhase implements Phase {
   const RetrievalDesignPhase({
     this.runtime,
@@ -45,116 +46,74 @@ class RetrievalDesignPhase implements Phase {
     final latestUserQuery = request.messages.isNotEmpty
         ? request.messages.last.content.trim()
         : '';
+    final availableToolNames =
+        runtime?.listAvailableToolNames() ?? const <String>[];
     final bootstrapContext = input.state.bootstrapContext;
-    final intentGraph = input.state.intentGraph;
     final forceRefreshCatalog = bootstrapContext?.forceRefreshCatalog ?? false;
     final dialogueRoundScript = input.state.dialogueRoundScript;
-    if (latestUserQuery.isEmpty || intentGraph == null) {
+    final understandingResult = input.state.understandingResult;
+    if (latestUserQuery.isEmpty || understandingResult.intents.isEmpty) {
       return PhaseOutput(state: input.state);
     }
-    final temporalizedIntentGraph = intentGraph;
     await _templateCatalogRuntime.ensureLoaded(
       forceRefresh: forceRefreshCatalog,
     );
     await toolMetadataRegistry?.ensureLoaded();
-
-    final authorityDomains = temporalizedIntentGraph.authorityDomains;
-    final freshnessHoursMax = temporalizedIntentGraph.freshnessHoursMax;
-    final seededTasks = temporalizedIntentGraph.queryTasks;
-    final continuitySlotState = _recoverPreviousSlotState(
-      fallbackDomainId: temporalizedIntentGraph.primarySkill.trim(),
-      runArtifacts: input.state.previousRunArtifacts,
-    );
-    final continuityAnchors = _seedEntityAnchorsFromContext(
-      intentGraph: temporalizedIntentGraph,
-      previousSlotState: continuitySlotState,
-      continuityOverrideSlots:
-          bootstrapContext?.continuityOverrideSlots ??
-          const <String, dynamic>{},
-    );
-    final resolvedEntityAnchors = mergeGeoAnchors(
-      continuityAnchors,
-      temporalizedIntentGraph.resolvedGeoScope,
-    );
-
-    final queryTasks = _normalizeDomainQueryTasks(
-      queryTasks: seededTasks
-          .map(
-            (task) => task.copyWith(
-              entityAnchors: task.entityAnchors.isNotEmpty
-                  ? mergeGeoAnchors(
-                      task.entityAnchors,
-                      temporalizedIntentGraph.resolvedGeoScope,
-                    )
-                  : resolvedEntityAnchors,
-              negativeKeywords: task.negativeKeywords.isNotEmpty
-                  ? task.negativeKeywords
-                  : intentGraph.negativeKeywords,
-              authorityDomains: task.authorityDomains.isNotEmpty
-                  ? task.authorityDomains
-                  : authorityDomains,
-              freshnessHoursMax: task.freshnessHoursMax > 0
-                  ? task.freshnessHoursMax
-                  : freshnessHoursMax,
-              answerShape: task.answerShape != AnswerShape.unspecified
-                  ? task.answerShape
-                  : intentGraph.answerShape,
-              freshnessNeed: task.freshnessNeed != FreshnessNeed.unspecified
-                  ? task.freshnessNeed
-                  : intentGraph.freshnessNeed,
-            ),
-          )
-          .toList(growable: false),
-    );
-    final updatedIntentGraph = IntentGraph.fromJson(<String, dynamic>{
-      ...temporalizedIntentGraph.toJson(),
-      'entityAnchors': resolvedEntityAnchors,
-      'queryTasks': QueryTask.toJsonList(queryTasks),
-      'authorityDomains': authorityDomains,
-      'freshnessHoursMax': freshnessHoursMax,
-    });
-    final resolvedIntentGraph = updatedIntentGraph;
-    final resolvedQueryTasks = updatedIntentGraph.queryTasks;
+    final taskGraph = input.state.taskGraph.tasks.isNotEmpty
+        ? input.state.taskGraph
+        : _fallbackTaskGraph(
+            understandingResult: understandingResult,
+            latestUserQuery: latestUserQuery,
+          );
     final updatedUnderstandingSnapshot = _updatedUnderstandingSnapshot(
       current: input.state.understandingSnapshot,
-      queryTasks: resolvedQueryTasks,
     );
     final domainId =
         input.state.executionPreparation?.domainId.isNotEmpty == true
         ? input.state.executionPreparation!.domainId
-        : resolvedIntentGraph.primarySkill.trim();
-    final updatedPreparation = await _executionPreparationResolver.resolve(
+        : _domainIdForTypedUnderstanding(understandingResult);
+    final modeDecision = const ModeDecider().decide(
+      understandingResult: understandingResult,
+      taskGraph: taskGraph,
+    );
+    final updatedPreparation = await _executionPreparationResolver.resolveTyped(
       domainId: domainId,
       base:
           input.state.executionPreparation ??
           AssistantExecutionPreparation(
             domainId: domainId,
-            modeDecision: const ModeDecision(
-              mode: AgentMode.singleAgent,
-              reason: 'default_single',
-            ),
+            modeDecision: modeDecision,
           ),
       userQuery: latestUserQuery,
-      intentGraph: resolvedIntentGraph,
+      understandingResult: understandingResult,
+      taskGraph: taskGraph,
       request: request,
       dialogueRoundScript: dialogueRoundScript,
       previousRunArtifacts: input.state.previousRunArtifacts,
-      runtimeToolNames: runtime?.listAvailableToolNames() ?? const <String>[],
+      runtimeToolNames: availableToolNames,
     );
+    final updatedOrchestratorState = const TaskScheduler()
+        .schedule(taskGraph)
+        .copyWithInteractionDirective(
+          input.state.orchestratorState.interactionDirective,
+        );
 
-    if (resolvedQueryTasks.isNotEmpty) {
+    if (taskGraph.tasks.isNotEmpty) {
       final traceToolName = _preferredRetrievalToolName(
         updatedPreparation.allowedToolNames.isNotEmpty
             ? updatedPreparation.allowedToolNames
             : (runtime?.listAvailableToolNames() ?? const <String>[]),
+        searchPlans: searchPlansFromTaskGraph(taskGraph),
       );
       final retrievalDesignNarrative =
-          updatedUnderstandingSnapshot.retrievalDesignNarrative.trim().isNotEmpty
+          updatedUnderstandingSnapshot.retrievalDesignNarrative
+              .trim()
+              .isNotEmpty
           ? updatedUnderstandingSnapshot.retrievalDesignNarrative.trim()
           : (updatedUnderstandingSnapshot.intentSummary.trim() !=
-                        updatedUnderstandingSnapshot.userFacingSummary.trim()
-                    ? updatedUnderstandingSnapshot.intentSummary.trim()
-                    : '');
+                    updatedUnderstandingSnapshot.userFacingSummary.trim()
+                ? updatedUnderstandingSnapshot.intentSummary.trim()
+                : '');
       input.onTraceEvent?.call(
         AssistantTraceEvent(
           type: AssistantTraceEventType.searchQueryGenerated,
@@ -163,21 +122,19 @@ class RetrievalDesignPhase implements Phase {
           runId: input.runId,
           traceId: input.traceId,
           data: <String, dynamic>{
-            'toolName': traceToolName.isNotEmpty ? traceToolName : 'search',
-            'queryTasks': QueryTask.toJsonList(resolvedQueryTasks),
+            'toolName': traceToolName.isNotEmpty
+                ? traceToolName
+                : AssistantToolNames.search,
+            'taskGraph': taskGraph.toJson(),
             'query': latestUserQuery,
-            'problemClass': resolvedIntentGraph.problemClassWireName,
-            'queryNormalization': resolvedIntentGraph.queryNormalization
-                .toJson(),
-            'entityAnchors': resolvedIntentGraph.entityAnchors,
           },
         ),
       );
     }
     return PhaseOutput(
       state: input.state.copyWith(
-        intentGraph: resolvedIntentGraph,
-        queryTasks: resolvedQueryTasks,
+        taskGraph: taskGraph,
+        orchestratorState: updatedOrchestratorState,
         understandingSnapshot: updatedUnderstandingSnapshot,
         executionPreparation: updatedPreparation,
       ),
@@ -186,7 +143,6 @@ class RetrievalDesignPhase implements Phase {
 
   RunArtifactsUnderstandingSnapshot _updatedUnderstandingSnapshot({
     required RunArtifactsUnderstandingSnapshot current,
-    required List<QueryTask> queryTasks,
   }) {
     return RunArtifactsUnderstandingSnapshot(
       intentSummary: current.intentSummary,
@@ -202,77 +158,73 @@ class RetrievalDesignPhase implements Phase {
     );
   }
 
-  List<QueryTask> _normalizeDomainQueryTasks({
-    required List<QueryTask> queryTasks,
+  TaskGraph _fallbackTaskGraph({
+    required UnderstandingResult understandingResult,
+    required String latestUserQuery,
   }) {
-    return QueryTask.normalizeList(QueryTask.toJsonList(queryTasks));
-  }
-
-  String _preferredRetrievalToolName(List<String> toolNames) {
-    if (toolNames.contains('search')) {
-      return 'search';
+    if (understandingResult.intents.isEmpty) {
+      return const TaskGraph();
     }
-    if (toolNames.contains('web_search')) {
-      return 'web_search';
-    }
-    return '';
-  }
-
-  SkillExecutionShell inputSkillExecutionShell(IntentGraph intentGraph) {
-    return SkillExecutionShell(
-      problemClass: intentGraph.problemClassWireName,
-      authorityDomains: intentGraph.authorityDomains,
-      freshnessHoursMax: intentGraph.freshnessHoursMax > 0
-          ? intentGraph.freshnessHoursMax
-          : 72,
+    final primaryIntent = understandingResult.intents.first;
+    final searchPlans = primaryIntent.requiresEvidence
+        ? <SearchPlanItem>[
+            SearchPlanItem(
+              id: 'fallback_retrieval',
+              query: primaryIntent.goal.trim().isNotEmpty
+                  ? primaryIntent.goal.trim()
+                  : latestUserQuery,
+              dimension: SearchPlanDimension.latestSignal,
+              freshnessNeed: FreshnessNeed.realtime,
+            ),
+          ]
+        : const <SearchPlanItem>[];
+    final selectedToolName = _preferredRetrievalToolName(
+      runtime?.listAvailableToolNames() ??
+          const <String>[
+            AssistantToolNames.appSearch,
+            AssistantToolNames.search,
+            AssistantToolNames.webSearch,
+          ],
+      searchPlans: searchPlans,
+    );
+    return TaskGraph(
+      tasks: <TaskNode>[
+        TaskNode(
+          taskId: 'task_retrieval',
+          intentId: primaryIntent.intentId,
+          toolName: selectedToolName,
+          toolArgs: TaskToolArgs(<String, Object?>{
+            'query': primaryIntent.goal.trim().isNotEmpty
+                ? primaryIntent.goal.trim()
+                : latestUserQuery,
+          }),
+        ),
+      ],
     );
   }
 
-  List<String> _seedEntityAnchorsFromContext({
-    required IntentGraph intentGraph,
-    required SlotStateSnapshot previousSlotState,
-    required Map<String, dynamic> continuityOverrideSlots,
-  }) {
-    final anchors = <String>{
-      ...intentGraph.entityAnchors
-          .map((item) => item.trim())
-          .where((item) => item.isNotEmpty),
-    };
-    for (final value in continuityOverrideSlots.values) {
-      final normalized = _normalizedAnchorValue(value);
-      if (normalized.isNotEmpty) {
-        anchors.add(normalized);
-      }
+  String _domainIdForTypedUnderstanding(
+    UnderstandingResult understandingResult,
+  ) {
+    if (understandingResult.intents.isEmpty) {
+      return _domainRouter.fallbackDomainId;
     }
-    for (final snapshot in previousSlotState.slotValues.values) {
-      final normalized = _normalizedAnchorValue(
-        SlotValueCodec.displayForSlotMerge(snapshot.value),
-      );
-      if (normalized.isNotEmpty) {
-        anchors.add(normalized);
-      }
-    }
-    return anchors.toList(growable: false);
+    final type = understandingResult.intents.first.intentType.trim();
+    final separatorIndex = type.indexOf('.');
+    final domainId = separatorIndex > 0
+        ? type.substring(0, separatorIndex)
+        : type;
+    return domainId.trim().isEmpty ? _domainRouter.fallbackDomainId : domainId;
   }
 
-  String _normalizedAnchorValue(Object? value) {
-    final candidate = value?.toString().trim() ?? '';
-    if (candidate.isEmpty) return '';
-    if (candidate.length > 48) return '';
-    return candidate;
-  }
-
-  SlotStateSnapshot _recoverPreviousSlotState({
-    required String fallbackDomainId,
-    RunArtifacts? runArtifacts,
+  String _preferredRetrievalToolName(
+    List<String> toolNames, {
+    Iterable<SearchPlanItem> searchPlans = const <SearchPlanItem>[],
   }) {
-    final fromArtifacts = runArtifacts?.slotState;
-    if (fromArtifacts != null &&
-        (fromArtifacts.slotValues.isNotEmpty ||
-            fromArtifacts.missingSlots.isNotEmpty)) {
-      return fromArtifacts;
-    }
-    return SlotStateSnapshot(domainId: fallbackDomainId);
+    return const RetrievalToolSelectionPolicy().select(
+      availableToolNames: toolNames,
+      searchPlans: searchPlans,
+    );
   }
 
   AssistantDomainRouter get _domainRouter =>

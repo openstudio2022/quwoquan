@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
 
@@ -115,7 +114,9 @@ Future<void> reportCreateEditorSurfaceEvent(
       'timestamp': DateTime.now().toIso8601String(),
       ...extras,
     };
-    await ref.read(contentRepositoryProvider).reportBehaviors(
+    await ref
+        .read(contentRepositoryProvider)
+        .reportBehaviors(
           events: <ContentBehaviorBatchEventDto>[
             ContentBehaviorBatchEventDto.fromMap(
               Map<String, dynamic>.from(row),
@@ -148,12 +149,11 @@ Future<Map<String, Object?>> attachActivePersonaToCreatePayload(
   }
   return <String, Object?>{
     ...payload,
-    if (activeContext.subAccountId.isNotEmpty)
-      'personaId': activeContext.subAccountId,
-    if (activeContext.profileSubjectId.isNotEmpty)
-      'profileSubjectId': activeContext.profileSubjectId,
-    if (activeContext.personaContextVersion.isNotEmpty)
-      'personaContextVersion': activeContext.personaContextVersion,
+    ...activeContext.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
+    if (activeContext.displayName.isNotEmpty)
+      'authorDisplayNameSnapshot': activeContext.displayName,
+    if (activeContext.avatarUrl.isNotEmpty)
+      'authorAvatarUrlSnapshot': activeContext.avatarUrl,
   };
 }
 
@@ -162,9 +162,7 @@ Future<PostBaseDto> repositoryCreatePost(
   Map<String, Object?> payload,
 ) async {
   return repository.createPost(
-    body: CreatePostRequestWire.fromMap(
-      Map<String, dynamic>.from(payload),
-    ),
+    body: CreatePostRequestWire.fromMap(Map<String, dynamic>.from(payload)),
   );
 }
 
@@ -172,43 +170,35 @@ Future<PostBaseDto> repositoryCreatePost(
 
 Map<String, Object?> createEditorSurfaceExtrasEditorKind(
   CreateEditorKind kind,
-) =>
-    <String, Object?>{'editorKind': kind.name};
+) => <String, Object?>{'editorKind': kind.name};
 
 Map<String, Object?> createEditorSurfaceExtrasReady({
   required CreateEditorKind editorKind,
   required bool unifiedCreateEditorEnabled,
-}) =>
-    <String, Object?>{
-      'editorKind': editorKind.name,
-      'flag': unifiedCreateEditorEnabled,
-    };
+}) => <String, Object?>{
+  'editorKind': editorKind.name,
+  'flag': unifiedCreateEditorEnabled,
+};
 
 Map<String, Object?> createEditorSurfaceExtrasMediaBatch({
   required int count,
   required CreateEditorKind editorKind,
-}) =>
-    <String, Object?>{
-      'count': count,
-      'editorKind': editorKind.name,
-    };
+}) => <String, Object?>{'count': count, 'editorKind': editorKind.name};
 
 Map<String, Object?> createEditorSurfaceExtrasVideoEdited({
   required bool muted,
   required int trimStartMs,
   required int trimEndMs,
-}) =>
-    <String, Object?>{
-      'muted': muted,
-      'trimStartMs': trimStartMs,
-      'trimEndMs': trimEndMs,
-    };
+}) => <String, Object?>{
+  'muted': muted,
+  'trimStartMs': trimStartMs,
+  'trimEndMs': trimEndMs,
+};
 
 /// 与 [buildCreatePostPayloadMap] 写入的 `contentType` 一致，供发布成功打点使用。
 Map<String, Object?> createEditorSurfaceExtrasPublishSuccess(
   Map<String, Object?> payload,
-) =>
-    <String, Object?>{'contentType': payload['contentType']};
+) => <String, Object?>{'contentType': payload['contentType']};
 
 Future<void> repositoryPublishPostWithSettings(
   ContentRepository repository, {
@@ -220,4 +210,3 @@ Future<void> repositoryPublishPostWithSettings(
     body: PublishPostRequestWire.fromMap(settings.toPayloadFields()),
   );
 }
-

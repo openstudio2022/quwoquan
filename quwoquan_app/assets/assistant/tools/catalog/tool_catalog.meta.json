@@ -13,7 +13,7 @@
       ],
       "routing": {
         "toolKind": "retrieval",
-        "supportsQueryTasks": true
+        "supportsTaskGraphArgs": true
       },
       "uiContribution": {
         "references": true,
@@ -96,6 +96,93 @@
       }
     },
     {
+      "toolName": "app_search",
+      "displayName": "应用信息检索",
+      "purpose": "统一检索应用内个人、他人及全站内容信息",
+      "whenToUse": [
+        "需要检索聊天消息、帖子、浏览历史、用户或圈子",
+        "需要从应用内内容补充事实依据",
+        "需要限制站内对象类型并返回结构化命中结果"
+      ],
+      "routing": {
+        "toolKind": "retrieval",
+        "supportsTaskGraphArgs": false
+      },
+      "uiContribution": {
+        "references": false,
+        "locationContext": false
+      },
+      "userInteraction": {
+        "journeyStageId": "search",
+        "phaseTitle": "检索应用信息",
+        "phaseIcon": "search",
+        "reasoning": {
+          "label": "应用检索规划",
+          "promptHint": "请解释为什么需要检索应用内信息，以及你会检索哪类对象。",
+          "example": "用户在问和张三的聊天内容，我会先检索聊天消息并按对象类型过滤。"
+        },
+        "executing": {
+          "startLabel": "正在检索应用内信息",
+          "progressTemplate": "正在筛选相关聊天、内容和用户线索",
+          "completedTemplate": "已整理 {{results.length}} 条应用检索结果"
+        },
+        "resultDisplay": {
+          "showKeywords": true,
+          "showReferences": false
+        },
+        "replanLabel": "补充更多应用检索"
+      },
+      "parameterSummary": [
+        {"name": "query", "type": "string", "required": true, "description": "应用内检索词"},
+        {"name": "contentTypes", "type": "array<string>", "required": false, "description": "对象类型：chat_message/post/history_post/user/circle"},
+        {"name": "filters", "type": "object", "required": false, "description": "结构化过滤条件，如时间、用户、关键词"},
+        {"name": "page", "type": "integer", "required": false, "description": "页码"},
+        {"name": "pageSize", "type": "integer", "required": false, "description": "单页条数"},
+        {"name": "nextPageToken", "type": "string", "required": false, "description": "上一页返回的分页游标"},
+        {"name": "sort", "type": "string", "required": false, "description": "排序方式：relevance 或 latest"}
+      ],
+      "requiredOutputPaths": ["results"],
+      "openAiFunction": {
+        "name": "app_search",
+        "description": "检索应用内个人、他人及全站信息，返回结构化命中结果。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string", "description": "应用内检索词"},
+            "contentTypes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["chat_message", "post", "history_post", "user", "circle"]
+              }
+            },
+            "filters": {
+              "type": "object",
+              "properties": {
+                "timeStart": {"type": "string"},
+                "timeEnd": {"type": "string"},
+                "userId": {"type": "string"},
+                "username": {"type": "string"},
+                "keywords": {
+                  "type": "array",
+                  "items": {"type": "string"}
+                },
+                "isMine": {"type": "boolean"}
+              }
+            },
+            "page": {"type": "integer"},
+            "pageSize": {"type": "integer"},
+            "nextPageToken": {"type": "string"},
+            "sort": {
+              "type": "string",
+              "enum": ["relevance", "latest"]
+            }
+          },
+          "required": ["query"]
+        }
+      }
+    },
+    {
       "toolName": "search",
       "displayName": "统一检索",
       "purpose": "统一检索网页与趣我圈内部对象，使用 query-first 的简单接口",
@@ -106,8 +193,8 @@
       ],
       "routing": {
         "toolKind": "retrieval",
-        "supportsQueryTasks": true,
-        "internalOnlyParameters": ["queryVariants", "queryTasks"]
+        "supportsTaskGraphArgs": true,
+        "internalOnlyParameters": ["queryVariants"]
       },
       "uiContribution": {
         "references": true,
@@ -199,87 +286,6 @@
       }
     },
     {
-      "toolName": "local_context",
-      "displayName": "本地上下文",
-      "purpose": "获取设备上下文与地理位置信息（不包含相册数据）",
-      "whenToUse": [
-        "需要设备态信息",
-        "需要城市或位置信息"
-      ],
-      "routing": {
-        "toolKind": "context",
-        "supportsQueryTasks": false
-      },
-      "uiContribution": {
-        "references": false,
-        "locationContext": true
-      },
-      "slotOutputs": [
-        {
-          "slotId": "city",
-          "path": "city",
-          "source": "tool_data"
-        }
-      ],
-      "userInteraction": {
-        "journeyStageId": "analyze",
-        "phaseTitle": "获取位置",
-        "phaseIcon": "location",
-        "reasoning": {
-          "label": "位置获取",
-          "promptHint": "请用用户可见的过程说明向用户解释：你需要获取用户当前位置来精准回答问题",
-          "example": "为了查询您所在城市的天气，我需要获取您的位置信息。"
-        },
-        "executing": {
-          "startLabel": "正在获取您的位置",
-          "progressTemplate": "读取设备信息...",
-          "completedTemplate": "已定位到 {{city}}"
-        },
-        "resultDisplay": {
-          "showKeywords": false,
-          "showReferences": false,
-          "summaryPath": "city"
-        },
-        "replanLabel": null
-      },
-      "parameterSummary": [
-        {"name": "requestedFields", "type": "array<string>", "required": false, "description": "按需请求字段，例如 location permissions device"},
-        {"name": "needPreciseLocation", "type": "boolean", "required": false, "description": "是否请求高精度位置"},
-        {"name": "maxAgeSeconds", "type": "integer", "required": false, "description": "可接受的缓存秒数"}
-      ],
-      "responseSummary": [
-        {"name": "contextVersion", "type": "string", "description": "上下文契约版本，固定 local_context_v1"},
-        {"name": "city", "type": "string", "description": "当前城市"},
-        {"name": "location", "type": "object", "description": "位置对象，含经纬度与精度"},
-        {"name": "permissions", "type": "object", "description": "权限状态对象"},
-        {"name": "device", "type": "object", "description": "设备信息对象"},
-        {"name": "media.included", "type": "boolean", "description": "是否包含相册数据，固定 false"}
-      ],
-      "requiredOutputPaths": ["contextVersion", "location", "permissions", "media.included"],
-      "openAiFunction": {
-        "name": "local_context",
-        "description": "获取设备本地上下文和地理位置信息。注意：不包含相册内容，相册请使用 media_gallery。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "requestedFields": {
-              "type": "array",
-              "items": {"type": "string"},
-              "description": "按需请求字段: location, permissions, device"
-            },
-            "needPreciseLocation": {
-              "type": "boolean",
-              "description": "是否请求高精度位置"
-            },
-            "maxAgeSeconds": {
-              "type": "integer",
-              "description": "可接受的缓存秒数"
-            }
-          }
-        }
-      }
-    },
-    {
       "toolName": "media_gallery",
       "displayName": "相册媒体",
       "purpose": "访问设备媒体资源",
@@ -288,7 +294,7 @@
       ],
       "routing": {
         "toolKind": "media",
-        "supportsQueryTasks": false
+        "supportsTaskGraphArgs": false
       },
       "uiContribution": {
         "references": false,
@@ -337,7 +343,7 @@
       ],
       "routing": {
         "toolKind": "action",
-        "supportsQueryTasks": false
+        "supportsTaskGraphArgs": false
       },
       "uiContribution": {
         "references": false,
@@ -389,7 +395,7 @@
       ],
       "routing": {
         "toolKind": "retrieval",
-        "supportsQueryTasks": false
+        "supportsTaskGraphArgs": false
       },
       "uiContribution": {
         "references": false,
@@ -445,7 +451,7 @@
       ],
       "routing": {
         "toolKind": "retrieval",
-        "supportsQueryTasks": false
+        "supportsTaskGraphArgs": false
       },
       "uiContribution": {
         "references": false,
@@ -502,7 +508,7 @@
       ],
       "routing": {
         "toolKind": "action",
-        "supportsQueryTasks": false
+        "supportsTaskGraphArgs": false
       },
       "uiContribution": {
         "references": false,
@@ -568,7 +574,7 @@
       ],
       "routing": {
         "toolKind": "action",
-        "supportsQueryTasks": false
+        "supportsTaskGraphArgs": false
       },
       "uiContribution": {
         "references": false,
@@ -611,16 +617,16 @@
     },
     {
       "toolName": "app_action",
-      "displayName": "设备操作",
-      "purpose": "执行打电话、发短信、发邮件、导航、复制到剪贴板等设备操作",
+      "displayName": "应用操作",
+      "purpose": "统一执行应用内动作与系统协同动作，并返回结构化执行结果",
       "whenToUse": [
-        "用户请求打电话或发短信",
-        "用户需要导航到某个地址",
-        "用户想复制内容"
+        "用户希望打开聊天、帖子或指定页面",
+        "用户希望发送消息、发起拨号、触发分享",
+        "用户希望拍照或选择照片"
       ],
       "routing": {
         "toolKind": "action",
-        "supportsQueryTasks": false
+        "supportsTaskGraphArgs": false
       },
       "uiContribution": {
         "references": false,
@@ -632,12 +638,12 @@
         "phaseIcon": "action",
         "reasoning": {
           "label": "操作准备",
-          "promptHint": "请解释你要执行什么设备操作、为什么",
-          "example": "用户想给客服打电话，我来拨号。"
+          "promptHint": "请解释你要执行什么应用动作、是否需要用户确认，以及可能的能力限制。",
+          "example": "用户想给张三发消息，我会检查当前是否有可执行能力，否则返回结构化的需用户处理状态。"
         },
         "executing": {
           "startLabel": "正在执行操作",
-          "progressTemplate": "正在准备执行设备操作",
+          "progressTemplate": "正在准备执行应用操作",
           "completedTemplate": "操作已完成"
         },
         "resultDisplay": {
@@ -647,41 +653,124 @@
         "replanLabel": null
       },
       "parameterSummary": [
-        {"name": "action", "type": "string", "required": true, "description": "操作类型: call/sms/email/navigate/clipboard"},
-        {"name": "phone", "type": "string", "required": false, "description": "电话号码（call/sms）"},
-        {"name": "to", "type": "string", "required": false, "description": "邮箱地址（email）"},
-        {"name": "address", "type": "string", "required": false, "description": "导航地址（navigate）"},
-        {"name": "text", "type": "string", "required": false, "description": "要复制的文本（clipboard）"}
+        {"name": "actionType", "type": "string", "required": true, "description": "动作类型，如 open_conversation/send_message/share/dial"},
+        {"name": "args", "type": "object", "required": false, "description": "动作参数对象，由意图编译结果直接传入"},
+        {"name": "requiresConfirmation", "type": "boolean", "required": false, "description": "是否需要用户确认后再执行"}
       ],
       "openAiFunction": {
         "name": "app_action",
-        "description": "执行设备操作：打电话(call)、发短信(sms)、发邮件(email)、地图导航(navigate)、复制到剪贴板(clipboard)。敏感操作需用户确认。",
+        "description": "执行应用操作。输入使用结构化 actionType + args，输出为结构化执行结果。",
         "parameters": {
           "type": "object",
           "properties": {
-            "action": {"type": "string", "enum": ["call", "sms", "email", "navigate", "clipboard"], "description": "操作类型"},
-            "phone": {"type": "string", "description": "电话号码"},
-            "to": {"type": "string", "description": "收件邮箱"},
-            "subject": {"type": "string", "description": "邮件主题"},
-            "body": {"type": "string", "description": "内容正文（sms/email）"},
-            "address": {"type": "string", "description": "导航地址"},
-            "lat": {"type": "number", "description": "纬度"},
-            "lng": {"type": "number", "description": "经度"},
-            "text": {"type": "string", "description": "要复制的文本"}
+            "actionType": {
+              "type": "string",
+              "enum": [
+                "open_conversation",
+                "send_message",
+                "open_post",
+                "navigate_to_page",
+                "capture_photo",
+                "pick_photo",
+                "share",
+                "dial"
+              ],
+              "description": "动作类型"
+            },
+            "args": {
+              "type": "object",
+              "description": "动作参数对象"
+            },
+            "requiresConfirmation": {
+              "type": "boolean",
+              "description": "是否需要用户确认"
+            }
           },
-          "required": ["action"]
+          "required": ["actionType"]
         }
       }
     }
   ],
   "domainToolMatrix": [
     {
+      "domainId": "astrology_constellation",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "calendar_task",
+      "allowedTools": ["intent_bridge"]
+    },
+    {
+      "domainId": "education_learning",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "emotion_companion",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "family_parenting",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "finance_consumer",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "fortune_astrology",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "health_wellness",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "huawei_cloud_qa",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "knowledge_general",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "local_life",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "policy_public_service",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "relationship_matchmaking",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "shopping_decision",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "social_companion_chat",
+      "allowedTools": ["memory_search"]
+    },
+    {
+      "domainId": "travel_planning",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "travel_transport",
+      "allowedTools": ["web_search"]
+    },
+    {
+      "domainId": "work_productivity",
+      "allowedTools": ["web_search"]
+    },
+    {
       "domainId": "weather",
-      "allowedTools": ["local_context", "search", "web_search", "web_fetch"]
+      "allowedTools": ["search", "web_search", "web_fetch", "memory_search"]
     },
     {
       "domainId": "fallback_general_search",
-      "allowedTools": ["search", "web_search", "local_context", "web_fetch"]
+      "allowedTools": ["search", "web_search", "web_fetch"]
     },
     {
       "domainId": "divination_fortune",

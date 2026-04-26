@@ -20,6 +20,8 @@ type Persona struct {
 	IsPrimary                   bool       `json:"isPrimary" db:"is_primary"`
 	IsPrivate                   bool       `json:"isPrivate" db:"is_private"`
 	IsActive                    bool       `json:"isActive" db:"is_active"`
+	Status                      string     `json:"status" db:"status"`
+	RetiredAt                   *time.Time `json:"retiredAt" db:"retired_at"`
 	SubAccountID                string     `json:"subAccountId" db:"sub_account_id"`
 	IsolationLevel              string     `json:"isolationLevel" db:"isolation_level"`
 	PurposeHint                 string     `json:"-" db:"purpose_hint"`

@@ -77,10 +77,7 @@ abstract class ChatRepository {
   Future<ConversationDto> getConversation(String conversationId);
 
   /// 更新会话展示标题（群名等）。Remote 侧按资源 PATCH；无独立 operation 元数据时用 GetConversation 上下文。
-  Future<void> updateConversationTitle(
-    String conversationId,
-    String title,
-  );
+  Future<void> updateConversationTitle(String conversationId, String title);
 
   // ── 消息 ────────────────────────────────────────────────────────────────────
   Future<List<ChatMessageDto>> listMessages({
@@ -106,6 +103,8 @@ abstract class ChatRepository {
     String? senderPersonaId,
     String? senderProfileSubjectId,
     String? personaContextVersion,
+    String? senderDisplayNameSnapshot,
+    String? senderAvatarUrlSnapshot,
     required String clientMsgId,
   });
 
@@ -137,6 +136,7 @@ abstract class ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
     String? role,
+
     /// 与 metadata 一致：`joined_asc`（默认）、`display_name_asc`；`null` 时 Remote 传 `joined_asc`。
     String? sort,
   });

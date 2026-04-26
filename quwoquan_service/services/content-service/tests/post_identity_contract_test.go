@@ -467,6 +467,34 @@ func TestProjectionRebuildDryRunBackfillsLegacyFields(t *testing.T) {
 	}
 }
 
+func TestDiscoveryProjectionPersistsProfileSubjectID(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPostWithAuthor(t, "projection_author", `{
+		"contentType":"article",
+		"title":"作者主键投影",
+		"body":"发现流必须保留 canonical profileSubjectId",
+		"profileSubjectId":"persona_projection_author"
+	}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("expected post id")
+	}
+
+	var projected bson.M
+	if err := mongoDB.Collection("rm_discovery_feed").
+		FindOne(context.Background(), bson.M{"postId": postID}).
+		Decode(&projected); err != nil {
+		t.Fatalf("expected discovery projection, got %v", err)
+	}
+	if projected["authorId"] != "projection_author" {
+		t.Fatalf("expected authorId=projection_author, got %v", projected["authorId"])
+	}
+	if projected["profileSubjectId"] != "persona_projection_author" {
+		t.Fatalf("expected profileSubjectId=persona_projection_author, got %v", projected["profileSubjectId"])
+	}
+}
+
 func TestListUserPostsByIdentity(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 

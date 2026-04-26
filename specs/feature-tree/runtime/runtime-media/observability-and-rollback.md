@@ -13,7 +13,7 @@
 - `quwoquan_runtime_media_patch_fanout_total`
 - `quwoquan_runtime_media_patch_fanout_batch_total`
 - `quwoquan_runtime_media_patch_fanout_recipient_total`
-- `quwoquan_runtime_media_group_avatar_task_retryable_failed_total`
+- `quwoquan_runtime_media_group_avatar_task_recovery policy_failed_total`
 - `quwoquan_runtime_media_group_avatar_task_terminal_failed_total`
 - `quwoquan_runtime_media_group_avatar_task_queue_depth`
 - `quwoquan_runtime_media_sync_append_total`

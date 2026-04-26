@@ -3,6 +3,7 @@ import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class PersonaManagementState {
   const PersonaManagementState({
@@ -73,7 +74,10 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
         isLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: () => e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
     }
   }
 
@@ -97,8 +101,13 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       });
       return created;
     } catch (e) {
-      await _track('create_failed', <String, dynamic>{'message': e.toString()});
-      state = state.copyWith(isMutating: false, error: () => e.toString());
+      await _track('create_failed', <String, dynamic>{
+        'message': runtimeErrorDisplayMessage(e),
+      });
+      state = state.copyWith(
+        isMutating: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
       rethrow;
     }
   }
@@ -113,9 +122,12 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       });
     } catch (e) {
       await _track('activate_failed', <String, dynamic>{
-        'message': e.toString(),
+        'message': runtimeErrorDisplayMessage(e),
       });
-      state = state.copyWith(isMutating: false, error: () => e.toString());
+      state = state.copyWith(
+        isMutating: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
       rethrow;
     }
   }
@@ -152,7 +164,10 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       }
       return updated;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: () => e.toString());
+      state = state.copyWith(
+        isMutating: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
       rethrow;
     }
   }
@@ -168,9 +183,12 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       await _reloadAfterMutation();
     } catch (e) {
       await _track('delete_blocked', <String, dynamic>{
-        'message': e.toString(),
+        'message': runtimeErrorDisplayMessage(e),
       });
-      state = state.copyWith(isMutating: false, error: () => e.toString());
+      state = state.copyWith(
+        isMutating: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
       rethrow;
     }
   }
@@ -185,7 +203,10 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
         'personaId': personaId,
       });
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: () => e.toString());
+      state = state.copyWith(
+        isMutating: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
       rethrow;
     }
   }
@@ -213,7 +234,10 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       state = state.copyWith(pendingSyncSuggestion: () => null);
       return appliedCount;
     } catch (e) {
-      state = state.copyWith(isMutating: false, error: () => e.toString());
+      state = state.copyWith(
+        isMutating: false,
+        error: () => runtimeErrorDisplayMessage(e),
+      );
       rethrow;
     }
   }

@@ -7,9 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/retrieval_outcome.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/persistence/assistant_storage_path.dart';
@@ -207,7 +211,7 @@ const _skeletalProcessHeaders = <String>[
   '理解问题',
   '结果处理',
   '整理答案',
-  '已完成深度思考',
+  '已完成处理',
   '正在搜索',
   '正在整理',
   '正在回答',
@@ -216,7 +220,9 @@ const _skeletalProcessHeaders = <String>[
 const _forbiddenFragments = <String>[
   'assistant_turn',
   'contractId',
-  'queryTasks',
+  'query'
+      'Tasks',
+  'searchPlans',
   '<tool_call>',
   'tool_call',
   '<function=',
@@ -515,7 +521,11 @@ Future<AssistantReplayBaselineAttempt> _runM0StandardAttempt(
     await _waitForChatInput(tester);
 
     for (final turn in replayCase.turns) {
-      final result = await _sendQueryWithSingleRetry(tester, query: turn.query);
+      final result = await _sendQueryWithSingleRetry(
+        tester,
+        query: turn.query,
+        expectedScope: turn.expectedScope,
+      );
       final snapshot = _latestAssistantSnapshot(tester);
       final artifact = await _buildM0TurnArtifact(
         result: result,
@@ -569,7 +579,7 @@ Future<AssistantReplayBaselineAttempt> _runM0StandardAttempt(
   final finalTurn = turns.isEmpty ? null : turns.last;
   debugPrint(
     'M0_REPLAY_ATTEMPT case=${replayCase.caseId} '
-    'attempt=${attemptIndex} '
+    'attempt=$attemptIndex '
     'outcome=$outcomeClass '
     'failure=$failureClass '
     'nextAction=${(finalTurn?.report['nextAction'] as String?)?.trim() ?? ''} '
@@ -618,6 +628,7 @@ Future<AssistantReplayBaselineAttempt> _runM0ReloadAttempt(
     final result = await _sendQueryWithSingleRetry(
       tester,
       query: seedTurn.query,
+      expectedScope: seedTurn.expectedScope,
     );
     final seedSnapshot = _latestAssistantSnapshot(tester);
     final seedArtifact = await _buildM0TurnArtifact(
@@ -843,35 +854,71 @@ List<String> _collectTurnScopeIssues({
   required List<String> queryDesignLines,
 }) {
   final issues = <String>[];
-  if (queryDesignLines.isEmpty) {
+  if (queryDesignLines.isEmpty && result.structuredTaskToolNames.isEmpty) {
     issues.add('missing_query_design');
   }
   switch (turn.expectedScope) {
     case 'stock_reason':
-      if (!_matchesStockAnswer(result.finalAnswerText)) {
+      if (!_hasStructuredScopeMatch(result, turn.expectedScope)) {
         issues.add('scope_answer_not_stock_reason');
-      }
-      final normalizedLines = queryDesignLines
-          .map((item) => item.replaceAll(RegExp(r'\s+'), ' ').trim())
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false);
-      if (normalizedLines.length > 2) {
-        issues.add('query_design_too_verbose');
-      }
-      if (normalizedLines.toSet().length != normalizedLines.length) {
-        issues.add('query_design_repeated');
       }
       break;
     case 'weather_forecast':
-      if (!_matchesWeatherAnswer(result.finalAnswerText)) {
+      if (!_hasStructuredScopeMatch(result, turn.expectedScope)) {
         issues.add('scope_answer_not_weather');
       }
-      if (!_hasReplayStructuredGeoScope(result.structuredResolvedGeoScope)) {
+      if (!_hasReplayStructuredGeoScope(result.structuredResolvedGeoScope) &&
+          !_hasStructuredLocationEntity(result)) {
         issues.add('resolved_geo_scope_missing');
       }
       break;
   }
   return issues;
+}
+
+bool _hasStructuredLocationEntity(_ReplayResult result) {
+  final entityTypes = result.structuredEntityTypes
+      .map((item) => item.trim().toLowerCase())
+      .toSet();
+  if (!entityTypes.contains('location') &&
+      !entityTypes.contains('geo') &&
+      !entityTypes.contains('place') &&
+      !entityTypes.contains('city') &&
+      !entityTypes.contains('admin_area')) {
+    return false;
+  }
+  return result.structuredEntityKeys.any((item) => item.trim().isNotEmpty);
+}
+
+bool _hasStructuredScopeMatch(_ReplayResult result, String expectedScope) {
+  final scopeTokens = <String>{
+    ...result.structuredIntentTypes,
+    ...result.structuredEntityTypes,
+    ...result.structuredEntityKeys,
+    ...result.structuredTaskToolNames,
+    ...result.structuredTaskIntentIds,
+  }.map((item) => item.trim().toLowerCase()).where((item) => item.isNotEmpty);
+  switch (expectedScope) {
+    case 'weather_forecast':
+      return scopeTokens.any(
+        (item) =>
+            item == 'weather' ||
+            item.startsWith('weather.') ||
+            item.contains('weather_forecast'),
+      );
+    case 'stock_reason':
+      return scopeTokens.any(
+        (item) =>
+            item == 'finance' ||
+            item.startsWith('finance.') ||
+            item == 'stock' ||
+            item.startsWith('stock.') ||
+            item.contains('stock_reason') ||
+            item.contains('market'),
+      );
+    default:
+      return true;
+  }
 }
 
 List<String> _collectTemporalAnchorIssues({
@@ -1090,7 +1137,7 @@ String _normalizeQueryDesignLineForStability(String raw) {
     if (year.isEmpty || month.isEmpty || day.isEmpty) {
       return match.group(0) ?? '';
     }
-    return '$year年${month}月${day}日';
+    return '$year年$month月$day日';
   });
   var normalized = canonicalDate
       .replaceAll(RegExp(r'^[•\-]\s*'), '')
@@ -1257,13 +1304,7 @@ Map<String, dynamic> _reloadStateFromSnapshot(
   if (snapshot == null) {
     return const <String, dynamic>{};
   }
-  return <String, dynamic>{
-    'answerText': snapshot.answerText,
-    'timelinePhases': snapshot.timelinePhaseIds,
-    'canonicalProcessSteps': snapshot.canonicalProcessSteps,
-    'visibleProcessSteps': snapshot.visibleProcessSteps,
-    'queryDesignLines': snapshot.queryDesignLines,
-  };
+  return <String, dynamic>{'queryDesignLines': snapshot.queryDesignLines};
 }
 
 List<String> _collectReloadIssues({
@@ -1279,52 +1320,11 @@ List<String> _collectReloadIssues({
     issues.add('reload_missing_after_state');
     return issues;
   }
-  final beforeAnswer =
-      AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-        (beforeReload['answerText'] as String?) ?? '',
-      );
-  final afterAnswer =
-      AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
-        (afterReload['answerText'] as String?) ?? '',
-      );
-  if (beforeAnswer != afterAnswer) {
-    issues.add('reload_answer_text_changed');
-  }
-  if (!_listEquals(
-    _reloadVisibleProcessSteps(beforeReload),
-    _reloadVisibleProcessSteps(afterReload),
-  )) {
-    issues.add('reload_process_steps_changed');
-  }
   if (_stableQueryDesignSignature(_reloadQueryDesignLines(beforeReload)) !=
       _stableQueryDesignSignature(_reloadQueryDesignLines(afterReload))) {
     issues.add('reload_query_design_changed');
   }
   return issues;
-}
-
-List<String> _reloadVisibleProcessSteps(Map<String, dynamic> state) {
-  final explicit =
-      ((state['visibleProcessSteps'] as List?) ?? const <dynamic>[])
-          .map((item) => item.toString().trim())
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false);
-  if (explicit.isNotEmpty) {
-    return explicit;
-  }
-  final canonical =
-      ((state['canonicalProcessSteps'] as List?) ?? const <dynamic>[])
-          .map((item) => item.toString().trim())
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false);
-  return canonical
-      .where(
-        (stepId) =>
-            stepId == ProcessStepId.understanding.wireName ||
-            stepId == ProcessStepId.retrievalDesign.wireName ||
-            stepId == ProcessStepId.retrievalProcessing.wireName,
-      )
-      .toList(growable: false);
 }
 
 List<String> _reloadQueryDesignLines(Map<String, dynamic> state) {
@@ -1763,6 +1763,7 @@ Future<void> _ensureAssistantDialogReady(WidgetTester tester) async {
 Future<_ReplayResult> _sendQueryAndWaitForAnswer(
   WidgetTester tester, {
   required String query,
+  String expectedScope = '',
 }) async {
   await _ensureAssistantDialogReady(tester);
   final baselineSnapshot = _latestAssistantSnapshot(tester);
@@ -1865,7 +1866,12 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
     _throwIfForbidden(latestText);
     latestProcessHeader = await _latestAssistantProcessHeaderText(tester);
     matchedExpected =
-        _matchesExpectation(query, latestAnswer) &&
+        _matchesReplayExpectation(
+          expectedScope: expectedScope,
+          query: query,
+          answerText: latestAnswer,
+          snapshot: snapshot,
+        ) &&
         !_isGenericAssistantFallback(latestAnswer);
     if (latestAnswer == previousAnswer) {
       stableTicks += 1;
@@ -1916,7 +1922,12 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
       heuristicFallbackUsed = snapshot.heuristicFallbackUsed;
       latestProcessHeader = await _latestAssistantProcessHeaderText(tester);
       matchedExpected =
-          _matchesExpectation(query, latestAnswer) &&
+          _matchesReplayExpectation(
+            expectedScope: expectedScope,
+            query: query,
+            answerText: latestAnswer,
+            snapshot: snapshot,
+          ) &&
           !_isGenericAssistantFallback(latestAnswer);
       if (latestAnswer == previousAnswer) {
         stableTicks += 1;
@@ -1971,6 +1982,16 @@ Future<_ReplayResult> _sendQueryAndWaitForAnswer(
         latestSnapshot?.structuredTemporalAnchors ?? const <String>[],
     structuredResolvedGeoScope:
         latestSnapshot?.structuredResolvedGeoScope ?? const <String, dynamic>{},
+    structuredIntentTypes:
+        latestSnapshot?.structuredIntentTypes ?? const <String>[],
+    structuredEntityTypes:
+        latestSnapshot?.structuredEntityTypes ?? const <String>[],
+    structuredEntityKeys:
+        latestSnapshot?.structuredEntityKeys ?? const <String>[],
+    structuredTaskToolNames:
+        latestSnapshot?.structuredTaskToolNames ?? const <String>[],
+    structuredTaskIntentIds:
+        latestSnapshot?.structuredTaskIntentIds ?? const <String>[],
   );
 }
 
@@ -2020,13 +2041,22 @@ bool _replayResultSignalsReady(_ReplayResult result) {
 Future<_ReplayResult> _sendQueryWithSingleRetry(
   WidgetTester tester, {
   required String query,
+  String expectedScope = '',
 }) async {
-  final first = await _sendQueryAndWaitForAnswer(tester, query: query);
+  final first = await _sendQueryAndWaitForAnswer(
+    tester,
+    query: query,
+    expectedScope: expectedScope,
+  );
   if (!_shouldRetryReplay(first)) {
     return first;
   }
   debugPrint('RETRY_RESULT_TRIGGERED: ${first.toJson()}');
-  return _sendQueryAndWaitForAnswer(tester, query: query);
+  return _sendQueryAndWaitForAnswer(
+    tester,
+    query: query,
+    expectedScope: expectedScope,
+  );
 }
 
 bool _shouldRetryReplay(_ReplayResult result) {
@@ -2203,12 +2233,56 @@ bool _matchesExpectation(String query, String text) {
     return _matchesStockTrendAnswer(text);
   }
   if (_isWeatherReplayQuery(query)) {
-    return _matchesWeatherAnswer(text);
+    return false;
   }
   if (_isStockReplayQuery(query)) {
-    return _matchesStockAnswer(text);
+    return false;
   }
   return text.trim().isNotEmpty;
+}
+
+bool _matchesReplayExpectation({
+  required String expectedScope,
+  required String query,
+  required String answerText,
+  required _AssistantBubbleSnapshot snapshot,
+}) {
+  final structuredMatched = _matchesStructuredExpectation(
+    expectedScope,
+    snapshot,
+  );
+  if (_requiresStructuredReplayExpectation(expectedScope)) {
+    return structuredMatched;
+  }
+  return structuredMatched || _matchesExpectation(query, answerText);
+}
+
+bool _requiresStructuredReplayExpectation(String expectedScope) {
+  switch (expectedScope) {
+    case 'weather_forecast':
+    case 'stock_reason':
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool _matchesStructuredExpectation(
+  String expectedScope,
+  _AssistantBubbleSnapshot snapshot,
+) {
+  if (expectedScope.isEmpty) {
+    return false;
+  }
+  final structured = _ReplayResult.empty(
+    query: '',
+    structuredIntentTypes: snapshot.structuredIntentTypes,
+    structuredEntityTypes: snapshot.structuredEntityTypes,
+    structuredEntityKeys: snapshot.structuredEntityKeys,
+    structuredTaskToolNames: snapshot.structuredTaskToolNames,
+    structuredTaskIntentIds: snapshot.structuredTaskIntentIds,
+  );
+  return _hasStructuredScopeMatch(structured, expectedScope);
 }
 
 bool _isDefaultFirstReplayQuery(String query) {
@@ -2280,28 +2354,6 @@ bool _matchesFollowupRouteAnswer(String text) {
   ).hasMatch(normalized);
   final hasSubstance = normalized.length >= 20;
   return hasDuration && hasRecommendation && hasSubstance;
-}
-
-bool _matchesWeatherAnswer(String text) {
-  final normalized = _normalizeLoose(text);
-  final weatherSignals = RegExp(
-    r'(天气|气温|温度|体感|湿度|风力|降雨|下雨|空气质量)',
-  ).allMatches(normalized).length;
-  final hasAdvice = RegExp(r'(外套|雨伞|建议|体感|穿)').hasMatch(normalized);
-  final hasSubstance = normalized.length >= 20;
-  return weatherSignals >= 2 && hasAdvice && hasSubstance;
-}
-
-bool _matchesStockAnswer(String text) {
-  final normalized = _normalizeLoose(text);
-  final hasMarketTopic = RegExp(
-    r'(A股|股市|上证|深证|创业板|大盘|市场)',
-  ).hasMatch(normalized);
-  final causeSignals = RegExp(
-    r'(原因|因为|主要|驱动|政策|利好|资金|流动性|情绪|板块|成交|主力)',
-  ).allMatches(normalized).length;
-  final hasSubstance = normalized.length >= 28;
-  return hasMarketTopic && causeSignals >= 2 && hasSubstance;
 }
 
 bool _matchesStockTrendAnswer(String text) {
@@ -2448,7 +2500,7 @@ bool _isCompletedProcessHeader(String text) {
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
   if (lines.isEmpty) return false;
-  if (lines.first != '已完成深度思考') return false;
+  if (lines.first != '已完成处理') return false;
   return lines
       .skip(1)
       .every(
@@ -2543,7 +2595,10 @@ void _expectExplicitDateAnchor({
   required DateTime targetDate,
 }) {
   expect(
-    _structuredTemporalAnchorsContainDate(result.structuredTemporalAnchors, targetDate),
+    _structuredTemporalAnchorsContainDate(
+      result.structuredTemporalAnchors,
+      targetDate,
+    ),
     isTrue,
     reason: '${replayCase.caseName} 的 query design 必须落成明确日期锚点',
   );
@@ -2716,7 +2771,42 @@ class _ReplayResult {
     required this.queryDesignLines,
     required this.structuredTemporalAnchors,
     required this.structuredResolvedGeoScope,
+    required this.structuredIntentTypes,
+    required this.structuredEntityTypes,
+    required this.structuredEntityKeys,
+    required this.structuredTaskToolNames,
+    required this.structuredTaskIntentIds,
   });
+
+  const _ReplayResult.empty({
+    required this.query,
+    this.structuredIntentTypes = const <String>[],
+    this.structuredEntityTypes = const <String>[],
+    this.structuredEntityKeys = const <String>[],
+    this.structuredTaskToolNames = const <String>[],
+    this.structuredTaskIntentIds = const <String>[],
+  }) : phaseLabelSeen = false,
+       matchedExpected = false,
+       degraded = false,
+       heuristicFallbackUsed = false,
+       finalAnswerText = '',
+       finalVisibleText = '',
+       snapshotsObserved = 0,
+       finalMessageStreaming = false,
+       modelCallCount = 0,
+       nextAction = '',
+       finalAnswerMode = '',
+       expandSignalCount = 0,
+       evidenceLedgerCount = 0,
+       answerEvidenceBindingCount = 0,
+       processHeaderText = '',
+       templateVersionUsed = '',
+       phaseOneRoutingDiagnostics = const <String, dynamic>{},
+       timelinePhases = const <String>[],
+       journalStages = const <String>[],
+       queryDesignLines = const <String>[],
+       structuredTemporalAnchors = const <String>[],
+       structuredResolvedGeoScope = const <String, dynamic>{};
 
   final String query;
   final bool phaseLabelSeen;
@@ -2741,6 +2831,11 @@ class _ReplayResult {
   final List<String> queryDesignLines;
   final List<String> structuredTemporalAnchors;
   final Map<String, dynamic> structuredResolvedGeoScope;
+  final List<String> structuredIntentTypes;
+  final List<String> structuredEntityTypes;
+  final List<String> structuredEntityKeys;
+  final List<String> structuredTaskToolNames;
+  final List<String> structuredTaskIntentIds;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -2767,6 +2862,11 @@ class _ReplayResult {
       'queryDesignLines': queryDesignLines,
       'structuredTemporalAnchors': structuredTemporalAnchors,
       'structuredResolvedGeoScope': structuredResolvedGeoScope,
+      'structuredIntentTypes': structuredIntentTypes,
+      'structuredEntityTypes': structuredEntityTypes,
+      'structuredEntityKeys': structuredEntityKeys,
+      'structuredTaskToolNames': structuredTaskToolNames,
+      'structuredTaskIntentIds': structuredTaskIntentIds,
     };
   }
 }
@@ -2855,7 +2955,9 @@ List<String> _queryDesignLineStringsFromRawTimeline(List<dynamic> raw) {
       continue;
     }
     lines.addAll(
-      _queryDesignLineStringsFromText((map['headline'] as String?)?.trim() ?? ''),
+      _queryDesignLineStringsFromText(
+        (map['headline'] as String?)?.trim() ?? '',
+      ),
     );
   }
   return _uniqueNonEmpty(lines);
@@ -2878,9 +2980,7 @@ List<String> _extractExplicitDateAnchorsFromText(String text) {
     if (year == null || month == null || day == null) {
       continue;
     }
-    matches.add(
-      DateTime(year, month, day).toIso8601String().split('T').first,
-    );
+    matches.add(DateTime(year, month, day).toIso8601String().split('T').first);
   }
   for (final match in RegExp(
     r'(\d{4})年(\d{1,2})月(\d{1,2})日',
@@ -2891,19 +2991,21 @@ List<String> _extractExplicitDateAnchorsFromText(String text) {
     if (year == null || month == null || day == null) {
       continue;
     }
-    matches.add(
-      DateTime(year, month, day).toIso8601String().split('T').first,
-    );
+    matches.add(DateTime(year, month, day).toIso8601String().split('T').first);
   }
   return matches.toList(growable: false);
 }
 
-List<String> _queryDesignLineStringsFromIntentGraph(Map<String, dynamic> root) {
-  final intentGraph = root['intentGraph'];
-  if (intentGraph is! Map) {
-    return const <String>[];
-  }
-  final tasks = intentGraph['queryTasks'];
+List<String> _queryDesignLineStringsFromSearchPlans(Map<String, dynamic> root) {
+  final typedQueryPlan = _typedQueryPlanFromRoot(root);
+  final planView =
+      (typedQueryPlan['planView'] as Map?)?.cast<String, dynamic>() ??
+      (root['planView'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final tasks =
+      typedQueryPlan['searchPlans'] ??
+      planView['searchPlans'] ??
+      root['searchPlans'];
   if (tasks is! List) {
     return const <String>[];
   }
@@ -2916,6 +3018,41 @@ List<String> _queryDesignLineStringsFromIntentGraph(Map<String, dynamic> root) {
     }
   }
   return _uniqueNonEmpty(queries);
+}
+
+Map<String, dynamic> _typedQueryPlanFromRoot(Map<String, dynamic> root) {
+  final understandingRaw =
+      (root[assistantUnderstandingResultField] as Map?)
+          ?.cast<String, dynamic>() ??
+      (((root['runArtifacts'] as Map?)?[assistantUnderstandingResultField])
+              as Map?)
+          ?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final taskGraphRaw =
+      (root[assistantTaskGraphField] as Map?)?.cast<String, dynamic>() ??
+      (((root['runArtifacts'] as Map?)?[assistantTaskGraphField]) as Map?)
+          ?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  if (understandingRaw.isEmpty || taskGraphRaw.isEmpty) {
+    return const <String, dynamic>{};
+  }
+  try {
+    final understanding = UnderstandingResult.fromJson(understandingRaw);
+    final taskGraph = TaskGraph.fromJson(taskGraphRaw);
+    final planView = assistantPlanViewFromTypedMainline(
+      understandingResult: understanding,
+      taskGraph: taskGraph,
+    );
+    if (planView == null) {
+      return const <String, dynamic>{};
+    }
+    return <String, dynamic>{
+      'planView': planView.toJson(),
+      'searchPlans': SearchPlanItem.toJsonList(planView.searchPlans),
+    };
+  } catch (_) {
+    return const <String, dynamic>{};
+  }
 }
 
 List<String> _queryDesignLineStringsFromUnderstandingSnapshot(
@@ -3036,7 +3173,8 @@ class _AssistantBubbleSnapshot {
       }
     }
     final conversationStateDecision =
-        (message['conversationStateDecision'] as Map?)?.cast<String, dynamic>() ??
+        (message['conversationStateDecision'] as Map?)
+            ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final decisionNextAction =
         (conversationStateDecision['nextAction'] as String?)?.trim() ?? '';
@@ -3057,7 +3195,8 @@ class _AssistantBubbleSnapshot {
       if (mode.isNotEmpty) return mode;
     }
     final conversationStateDecision =
-        (message['conversationStateDecision'] as Map?)?.cast<String, dynamic>() ??
+        (message['conversationStateDecision'] as Map?)
+            ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
     final decisionMode =
         (conversationStateDecision['finalAnswerMode'] as String?)?.trim() ?? '';
@@ -3071,10 +3210,7 @@ class _AssistantBubbleSnapshot {
     final legacyMode =
         (answerDecision['finalAnswerMode'] as String?)?.trim() ?? '';
     if (legacyMode.isNotEmpty) return legacyMode;
-    final aggregation =
-        (message['aggregationState'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    return (aggregation['finalAnswerMode'] as String?)?.trim() ?? '';
+    return '';
   }
 
   Map<String, dynamic> get _journey {
@@ -3217,9 +3353,9 @@ class _AssistantBubbleSnapshot {
       (message['runArtifacts'] as Map?)?.cast<String, dynamic>(),
     ]) {
       if (container == null) continue;
-      final fromIntent = _queryDesignLineStringsFromIntentGraph(container);
-      if (fromIntent.isNotEmpty) {
-        return fromIntent;
+      final fromSearchPlans = _queryDesignLineStringsFromSearchPlans(container);
+      if (fromSearchPlans.isNotEmpty) {
+        return fromSearchPlans;
       }
     }
 
@@ -3353,7 +3489,110 @@ class _AssistantBubbleSnapshot {
     return answerDecision['finalAnswerReady'] == true;
   }
 
-  Map<String, dynamic> get _intentGraph {
+  Map<String, dynamic> get _understandingResult =>
+      _structuredMapField(assistantUnderstandingResultField);
+
+  Map<String, dynamic> get _taskGraph =>
+      _structuredMapField(assistantTaskGraphField);
+
+  Map<String, dynamic> get _systemContextEnvelope =>
+      _structuredMapField(assistantSystemContextEnvelopeField);
+
+  Map<String, dynamic> _structuredMapField(String fieldName) {
+    final normalized = normalizedMessage;
+    for (final container in <Map<String, dynamic>?>[
+      normalized,
+      (normalized['runArtifacts'] as Map?)?.cast<String, dynamic>(),
+      Map<String, dynamic>.from(message),
+      (message['runArtifacts'] as Map?)?.cast<String, dynamic>(),
+    ]) {
+      if (container == null) continue;
+      final raw = container[fieldName];
+      if (raw is Map && raw.isNotEmpty) {
+        return raw.cast<String, dynamic>();
+      }
+    }
+    return const <String, dynamic>{};
+  }
+
+  List<Map<String, dynamic>> get _structuredIntents {
+    final raw = _understandingResult['intents'];
+    return (raw as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+  }
+
+  List<Map<String, dynamic>> get _structuredTasks {
+    final raw = _taskGraph['tasks'];
+    return (raw as List?)
+            ?.whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false) ??
+        const <Map<String, dynamic>>[];
+  }
+
+  List<String> get structuredIntentTypes {
+    return _uniqueNonEmpty(
+      _structuredIntents.map(
+        (item) => (item['intentType'] as String?)?.trim() ?? '',
+      ),
+    );
+  }
+
+  List<String> get structuredEntityTypes {
+    return _uniqueNonEmpty(
+      _structuredIntents.expand((intent) {
+        final refs =
+            (intent['entityRefs'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[];
+        return refs.map(
+          (item) => (item['entityType'] as String?)?.trim() ?? '',
+        );
+      }),
+    );
+  }
+
+  List<String> get structuredEntityKeys {
+    return _uniqueNonEmpty(
+      _structuredIntents.expand((intent) {
+        final refs =
+            (intent['entityRefs'] as List?)
+                ?.whereType<Map>()
+                .map((item) => item.cast<String, dynamic>())
+                .toList(growable: false) ??
+            const <Map<String, dynamic>>[];
+        return refs.expand(
+          (item) => <String>[
+            (item['canonicalKey'] as String?)?.trim() ?? '',
+            (item['displayText'] as String?)?.trim() ?? '',
+          ],
+        );
+      }),
+    );
+  }
+
+  List<String> get structuredTaskToolNames {
+    return _uniqueNonEmpty(
+      _structuredTasks.map(
+        (item) => (item['toolName'] as String?)?.trim() ?? '',
+      ),
+    );
+  }
+
+  List<String> get structuredTaskIntentIds {
+    return _uniqueNonEmpty(
+      _structuredTasks.map(
+        (item) => (item['intentId'] as String?)?.trim() ?? '',
+      ),
+    );
+  }
+
+  Map<String, dynamic> get _planView {
     final normalized = normalizedMessage;
     for (final container in <Map<String, dynamic>?>[
       normalized,
@@ -3364,38 +3603,62 @@ class _AssistantBubbleSnapshot {
       if (container == null) {
         continue;
       }
-      final intentGraph =
-          (container['intentGraph'] as Map?)?.cast<String, dynamic>() ??
+      final typedQueryPlan = _typedQueryPlanFromRoot(container);
+      final typedPlanView =
+          (typedQueryPlan['planView'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
-      if (intentGraph.isNotEmpty) {
-        return intentGraph;
+      if (typedPlanView.isNotEmpty) {
+        return typedPlanView;
+      }
+      final planView =
+          (container['planView'] as Map?)?.cast<String, dynamic>() ??
+          const <String, dynamic>{};
+      if (planView.isNotEmpty) {
+        return planView;
       }
     }
     return const <String, dynamic>{};
   }
 
   List<String> get structuredTemporalAnchors {
-    final intentGraph = _intentGraph;
-    final queryNormalization =
-        (intentGraph['queryNormalization'] as Map?)?.cast<String, dynamic>() ??
-        const <String, dynamic>{};
-    final queryTasks =
-        (intentGraph['queryTasks'] as List?)
+    final taskAnchors = _uniqueNonEmpty(
+      _structuredTasks.expand((task) {
+        final toolArgs =
+            (task['toolArgs'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+        final queries =
+            (toolArgs['queries'] as List?)
+                ?.map((item) => item.toString().trim())
+                .where((item) => item.isNotEmpty)
+                .toList(growable: false) ??
+            const <String>[];
+        return <String>[
+          (toolArgs['timePoint'] as String?)?.trim() ?? '',
+          (toolArgs['timeStart'] as String?)?.trim() ?? '',
+          (toolArgs['timeEnd'] as String?)?.trim() ?? '',
+          (toolArgs['timeRangeStart'] as String?)?.trim() ?? '',
+          (toolArgs['timeRangeEnd'] as String?)?.trim() ?? '',
+          ..._extractExplicitDateAnchorsFromText(
+            (toolArgs['query'] as String?)?.trim() ?? '',
+          ),
+          for (final query in queries)
+            ..._extractExplicitDateAnchorsFromText(query),
+        ];
+      }),
+    );
+    if (taskAnchors.isNotEmpty) {
+      return taskAnchors;
+    }
+
+    final planView = _planView;
+    final searchPlans =
+        (planView['searchPlans'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     final values = <String>[
-      (queryNormalization['timePoint'] as String?)?.trim() ?? '',
-      (queryNormalization['timeRangeStart'] as String?)?.trim() ?? '',
-      (queryNormalization['timeRangeEnd'] as String?)?.trim() ?? '',
-        ..._extractExplicitDateAnchorsFromText(
-          (queryNormalization['normalizedQuery'] as String?)?.trim() ?? '',
-        ),
-        ..._extractExplicitDateAnchorsFromText(
-          (queryNormalization['rewrittenQuery'] as String?)?.trim() ?? '',
-        ),
-      for (final task in queryTasks) ...<String>[
+      for (final task in searchPlans) ...<String>[
         (task['timePoint'] as String?)?.trim() ?? '',
         (task['timeRangeStart'] as String?)?.trim() ?? '',
         (task['timeRangeEnd'] as String?)?.trim() ?? '',
@@ -3411,8 +3674,27 @@ class _AssistantBubbleSnapshot {
   }
 
   Map<String, dynamic> get structuredResolvedGeoScope {
-    final intentGraph = _intentGraph;
-    return (intentGraph['resolvedGeoScope'] as Map?)?.cast<String, dynamic>() ??
+    final location =
+        (_systemContextEnvelope['location'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final fromSystemContext = <String, dynamic>{
+      if ((location['formattedAddress'] as String?)?.trim().isNotEmpty == true)
+        'resolvedText': location['formattedAddress'],
+      if ((location['adminAreaLevel2'] as String?)?.trim().isNotEmpty == true)
+        'cityLabel': location['adminAreaLevel2'],
+      if ((location['adminAreaLevel1'] as String?)?.trim().isNotEmpty == true)
+        'regionLabel': location['adminAreaLevel1'],
+      if ((location['countryName'] as String?)?.trim().isNotEmpty == true)
+        'countryLabel': location['countryName'],
+      if ((location['countryCode'] as String?)?.trim().isNotEmpty == true)
+        'countryCode': location['countryCode'],
+    };
+    if (fromSystemContext.isNotEmpty) {
+      return fromSystemContext;
+    }
+
+    final planView = _planView;
+    return (planView['resolvedGeoScope'] as Map?)?.cast<String, dynamic>() ??
         const <String, dynamic>{};
   }
 

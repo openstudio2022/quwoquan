@@ -3,33 +3,32 @@ import 'package:quwoquan_app/assistant/protocol/display_text_classifier.dart';
 /// 集中管理 assistant 内容过滤逻辑的唯一真相。
 ///
 /// **设计目标**：
-/// - 消灭散落在 phase owner / session manager 等处的重复词表。
-/// - 所有过滤函数优先使用结构化协议字段（decision.nextAction / degraded / failureCode），
-///   文案关键词匹配只作最后一道兜底，应对极少数模型不守约场景。
-/// - 词表维护在同一处，避免跨文件不一致漂移。
+/// - 展示与历史写入不再通过自然语言词表判断业务状态。
+/// - 仅保留结构化 envelope 识别，业务分流必须使用 typed state / wire 字段。
 abstract final class AssistantContentFilters {
   static final DisplayTextClassifier _classifier =
       DisplayTextClassifier.instance;
 
   static Future<void> ensureLoaded() => _classifier.ensureLoaded();
 
-  /// 判断文本是否是降级/错误输出（纯文本兜底，优先使用 `degraded`）。
-  static bool isDegradedText(String text) => _classifier.isDegradedText(text);
+  /// 旧自然语言降级判断已禁用；调用方应读取 typed runtime state。
+  static bool isDegradedText(String text) => false;
 
-  /// 判断文本是否是进度占位（纯文本兜底，优先使用 `decision.nextAction != answer`）。
+  /// 旧自然语言进度判断已禁用；调用方应读取 typed interaction directive。
   static bool isProgressPlaceholder(String text) =>
       _classifier.isProgressPlaceholder(text);
 
   /// 判断文本是否是 JSON 信封原文（不应展示给用户）。
-  static bool isJsonEnvelope(String text) => _classifier.isJsonEnvelopeLike(text);
+  static bool isJsonEnvelope(String text) =>
+      _classifier.isJsonEnvelopeLike(text);
 
   /// 综合判断：文本是否不可展示给用户（降级 | 进度占位 | JSON 信封）。
   static bool isNotDisplayable(String text) {
     final t = text.trim();
     if (t.isEmpty) return true;
-    return isDegradedText(t) || isProgressPlaceholder(t) || isJsonEnvelope(t);
+    return isJsonEnvelope(t);
   }
 
-  /// 判断文本是否应跳过写入 session/memory（降级文本不应污染历史）。
-  static bool shouldSkipSessionWrite(String text) => isDegradedText(text);
+  /// 旧自然语言 session 过滤已禁用；是否写入历史由结构化状态决定。
+  static bool shouldSkipSessionWrite(String text) => false;
 }

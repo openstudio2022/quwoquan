@@ -15,6 +15,13 @@ client_projection:
   base_class: ""
   output_path: cloud/runtime/generated/user/active_persona_context_wire_dto.g.dart
   fields:
+    - name: personaId
+      dart_type: String
+      nullable: false
+      source: personaId
+      aliases: [personaId, subAccountId, profileSubjectId]
+      default: "''"
+      skip_empty_string_aliases: true
     - name: profileSubjectId
       dart_type: String
       nullable: false
@@ -59,6 +66,24 @@ client_projection:
       source: personaContextVersion
       aliases: [personaContextVersion, contextVersion]
       default: "''"
+    - name: personaSnapshotVersion
+      dart_type: int
+      nullable: false
+      source: personaSnapshotVersion
+      aliases: [personaSnapshotVersion]
+      default: "1"
+    - name: sourceSurfaceId
+      dart_type: String
+      nullable: false
+      source: sourceSurfaceId
+      aliases: [sourceSurfaceId]
+      default: "''"
+    - name: explicitOverride
+      dart_type: bool
+      nullable: false
+      source: explicitOverride
+      aliases: [explicitOverride]
+      default: "false"
     - name: isPrimary
       dart_type: bool
       nullable: false

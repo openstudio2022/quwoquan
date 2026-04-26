@@ -106,7 +106,7 @@ func (s *OSSMediaStore) CompleteUpload(ctx context.Context, sessionID string, op
 	if err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "session_not_found"),
-			"上传会话不存在", fmt.Sprintf("session %s not found", sessionID), false,
+			"上传会话不存在", fmt.Sprintf("session %s not found", sessionID),
 		)
 	}
 
@@ -171,7 +171,7 @@ func (s *OSSMediaStore) GetAsset(ctx context.Context, assetID string) (*MediaAss
 	if err != nil {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "asset_not_found"),
-			"媒体资源不存在", fmt.Sprintf("asset %s not found", assetID), false,
+			"媒体资源不存在", fmt.Sprintf("asset %s not found", assetID),
 		)
 	}
 

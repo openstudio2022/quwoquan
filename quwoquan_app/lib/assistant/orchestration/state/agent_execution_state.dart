@@ -4,13 +4,15 @@ import 'package:quwoquan_app/assistant/contracts/assistant_session_history_state
 import 'package:quwoquan_app/assistant/contracts/context_assembly_result.dart';
 import 'package:quwoquan_app/assistant/contracts/context_continuity_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/dialogue_round_script.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
 import 'package:quwoquan_app/assistant/contracts/synthesis_readiness_result.dart';
-import 'package:quwoquan_app/assistant/contracts/conversation_state_decision.dart';
+import 'package:quwoquan_app/assistant/contracts/system_context_envelope.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 import 'package:quwoquan_app/assistant/context/assembly/evidence_evaluator.dart';
 import 'package:quwoquan_app/assistant/protocol/recent_dialogue_rounds.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
@@ -24,12 +26,14 @@ class AssistantBootstrapContext {
     this.sessionId = 'default',
     this.latestUserQuery = '',
     this.historySummary = '',
+    this.systemContextEnvelope = const SystemContextEnvelope(),
     // ASSISTANT_WEAK_TYPE: LLM serde boundary — session messages
     this.recentDialogueRounds = const <Map<String, dynamic>>[],
     this.recentDialogueRoundsLimit = 10,
     this.recalledTexts = const <String>[],
-    this.previousIntentGraph,
     this.previousAnswerSummary = '',
+    this.previousUnderstandingResult = const UnderstandingResult(),
+    this.previousTaskGraph = const TaskGraph(),
     this.previousUnderstandingSnapshot =
         const RunArtifactsUnderstandingSnapshot(),
     this.previousAnswerProcessing = const RunArtifactsAnswerProcessing(),
@@ -50,12 +54,14 @@ class AssistantBootstrapContext {
   final String sessionId;
   final String latestUserQuery;
   final String historySummary;
+  final SystemContextEnvelope systemContextEnvelope;
   // ASSISTANT_WEAK_TYPE: LLM serde boundary — session message list from persistence
   final List<Map<String, dynamic>> recentDialogueRounds;
   final int recentDialogueRoundsLimit;
   final List<String> recalledTexts;
-  final IntentGraph? previousIntentGraph;
   final String previousAnswerSummary;
+  final UnderstandingResult previousUnderstandingResult;
+  final TaskGraph previousTaskGraph;
   final RunArtifactsUnderstandingSnapshot previousUnderstandingSnapshot;
   final RunArtifactsAnswerProcessing previousAnswerProcessing;
   final RunArtifactsHistoricalThinkingSnapshot historicalThinkingSnapshot;
@@ -85,11 +91,13 @@ class AssistantBootstrapContext {
     String? sessionId,
     String? latestUserQuery,
     String? historySummary,
+    SystemContextEnvelope? systemContextEnvelope,
     List<Map<String, dynamic>>? recentDialogueRounds,
     int? recentDialogueRoundsLimit,
     List<String>? recalledTexts,
-    IntentGraph? previousIntentGraph,
     String? previousAnswerSummary,
+    UnderstandingResult? previousUnderstandingResult,
+    TaskGraph? previousTaskGraph,
     RunArtifactsUnderstandingSnapshot? previousUnderstandingSnapshot,
     RunArtifactsAnswerProcessing? previousAnswerProcessing,
     RunArtifactsHistoricalThinkingSnapshot? historicalThinkingSnapshot,
@@ -109,13 +117,17 @@ class AssistantBootstrapContext {
       sessionId: sessionId ?? this.sessionId,
       latestUserQuery: latestUserQuery ?? this.latestUserQuery,
       historySummary: historySummary ?? this.historySummary,
+      systemContextEnvelope:
+          systemContextEnvelope ?? this.systemContextEnvelope,
       recentDialogueRounds: recentDialogueRounds ?? this.recentDialogueRounds,
       recentDialogueRoundsLimit:
           recentDialogueRoundsLimit ?? this.recentDialogueRoundsLimit,
       recalledTexts: recalledTexts ?? this.recalledTexts,
-      previousIntentGraph: previousIntentGraph ?? this.previousIntentGraph,
       previousAnswerSummary:
           previousAnswerSummary ?? this.previousAnswerSummary,
+      previousUnderstandingResult:
+          previousUnderstandingResult ?? this.previousUnderstandingResult,
+      previousTaskGraph: previousTaskGraph ?? this.previousTaskGraph,
       previousUnderstandingSnapshot:
           previousUnderstandingSnapshot ?? this.previousUnderstandingSnapshot,
       previousAnswerProcessing:
@@ -299,9 +311,12 @@ class AgentExecutionState {
   const AgentExecutionState({
     this.bootstrapContext,
     this.executionPreparation,
-    this.executionBridgeSnapshot = const <String, dynamic>{},
     this.executionPhaseSnapshot,
-    this.intentGraph,
+    this.systemContextEnvelope = const SystemContextEnvelope(),
+    this.understandingResult = const UnderstandingResult(),
+    this.taskGraph = const TaskGraph(),
+    this.orchestratorState = const ConversationOrchestratorState(),
+    this.turnSynthesisState = const TurnSynthesisState(),
     this.understandingSnapshot = const RunArtifactsUnderstandingSnapshot(),
     this.retrievalProcessing = const RetrievalProcessingSnapshot(),
     this.contextAssembly,
@@ -311,11 +326,9 @@ class AgentExecutionState {
     this.answerEvidenceBindings = const <AnswerEvidenceBinding>[],
     this.evidenceEvaluation,
     this.aggregationState,
-    this.queryTasks = const [],
     this.subagentPlans = const [],
     this.previousRunArtifacts,
     this.domainPolicyBundle,
-    this.conversationStateDecision,
     this.journey = const AssistantJourney(),
     this.synthesisReadiness,
     this.synthesisDraft,
@@ -324,10 +337,12 @@ class AgentExecutionState {
 
   final AssistantBootstrapContext? bootstrapContext;
   final AssistantExecutionPreparation? executionPreparation;
-  @Deprecated('Use executionPhaseSnapshot instead')
-  final Map<String, dynamic> executionBridgeSnapshot;
   final ExecutionPhaseSnapshot? executionPhaseSnapshot;
-  final IntentGraph? intentGraph;
+  final SystemContextEnvelope systemContextEnvelope;
+  final UnderstandingResult understandingResult;
+  final TaskGraph taskGraph;
+  final ConversationOrchestratorState orchestratorState;
+  final TurnSynthesisState turnSynthesisState;
   final RunArtifactsUnderstandingSnapshot understandingSnapshot;
   final RetrievalProcessingSnapshot retrievalProcessing;
   final ContextAssemblyResult? contextAssembly;
@@ -337,11 +352,9 @@ class AgentExecutionState {
   final List<AnswerEvidenceBinding> answerEvidenceBindings;
   final EvidenceEvaluationResult? evidenceEvaluation;
   final AggregationState? aggregationState;
-  final List<QueryTask> queryTasks;
   final List<SubagentPlan> subagentPlans;
   final RunArtifacts? previousRunArtifacts;
   final DomainPolicyBundle? domainPolicyBundle;
-  final ConversationStateDecision? conversationStateDecision;
   final AssistantJourney journey;
   final SynthesisReadinessResult? synthesisReadiness;
   final SynthesisDraft? synthesisDraft;
@@ -350,10 +363,12 @@ class AgentExecutionState {
   AgentExecutionState copyWith({
     AssistantBootstrapContext? bootstrapContext,
     AssistantExecutionPreparation? executionPreparation,
-    @Deprecated('Use executionPhaseSnapshot')
-    Map<String, dynamic>? executionBridgeSnapshot,
     ExecutionPhaseSnapshot? executionPhaseSnapshot,
-    IntentGraph? intentGraph,
+    SystemContextEnvelope? systemContextEnvelope,
+    UnderstandingResult? understandingResult,
+    TaskGraph? taskGraph,
+    ConversationOrchestratorState? orchestratorState,
+    TurnSynthesisState? turnSynthesisState,
     RunArtifactsUnderstandingSnapshot? understandingSnapshot,
     RetrievalProcessingSnapshot? retrievalProcessing,
     ContextAssemblyResult? contextAssembly,
@@ -363,11 +378,9 @@ class AgentExecutionState {
     List<AnswerEvidenceBinding>? answerEvidenceBindings,
     EvidenceEvaluationResult? evidenceEvaluation,
     AggregationState? aggregationState,
-    List<QueryTask>? queryTasks,
     List<SubagentPlan>? subagentPlans,
     RunArtifacts? previousRunArtifacts,
     DomainPolicyBundle? domainPolicyBundle,
-    ConversationStateDecision? conversationStateDecision,
     AssistantJourney? journey,
     SynthesisReadinessResult? synthesisReadiness,
     SynthesisDraft? synthesisDraft,
@@ -376,12 +389,16 @@ class AgentExecutionState {
     return AgentExecutionState(
       bootstrapContext: bootstrapContext ?? this.bootstrapContext,
       executionPreparation: executionPreparation ?? this.executionPreparation,
-      executionBridgeSnapshot:
-          executionBridgeSnapshot ?? this.executionBridgeSnapshot,
       executionPhaseSnapshot:
           executionPhaseSnapshot ?? this.executionPhaseSnapshot,
-      intentGraph: intentGraph ?? this.intentGraph,
-      understandingSnapshot: understandingSnapshot ?? this.understandingSnapshot,
+      systemContextEnvelope:
+          systemContextEnvelope ?? this.systemContextEnvelope,
+      understandingResult: understandingResult ?? this.understandingResult,
+      taskGraph: taskGraph ?? this.taskGraph,
+      orchestratorState: orchestratorState ?? this.orchestratorState,
+      turnSynthesisState: turnSynthesisState ?? this.turnSynthesisState,
+      understandingSnapshot:
+          understandingSnapshot ?? this.understandingSnapshot,
       retrievalProcessing: retrievalProcessing ?? this.retrievalProcessing,
       contextAssembly: contextAssembly ?? this.contextAssembly,
       dialogueRoundScript: dialogueRoundScript ?? this.dialogueRoundScript,
@@ -391,12 +408,9 @@ class AgentExecutionState {
           answerEvidenceBindings ?? this.answerEvidenceBindings,
       evidenceEvaluation: evidenceEvaluation ?? this.evidenceEvaluation,
       aggregationState: aggregationState ?? this.aggregationState,
-      queryTasks: queryTasks ?? this.queryTasks,
       subagentPlans: subagentPlans ?? this.subagentPlans,
       previousRunArtifacts: previousRunArtifacts ?? this.previousRunArtifacts,
       domainPolicyBundle: domainPolicyBundle ?? this.domainPolicyBundle,
-      conversationStateDecision:
-          conversationStateDecision ?? this.conversationStateDecision,
       journey: journey ?? this.journey,
       synthesisReadiness: synthesisReadiness ?? this.synthesisReadiness,
       synthesisDraft: synthesisDraft ?? this.synthesisDraft,

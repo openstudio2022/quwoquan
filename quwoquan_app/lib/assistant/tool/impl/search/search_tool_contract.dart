@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/assistant/retrieval/domain/retrieval_broker.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
@@ -17,7 +18,7 @@ class SearchToolArgumentsContract {
     this.categoryId,
     this.subCategory,
     this.queryVariants = const <String>[],
-    this.queryTasks = const <SearchToolQueryTask>[],
+    this.searchPlans = const <RetrievalSearchPlan>[],
     this.bridgePayload = const <String, Object?>{},
   });
 
@@ -30,7 +31,7 @@ class SearchToolArgumentsContract {
   final String? categoryId;
   final String? subCategory;
   final List<String> queryVariants;
-  final List<SearchToolQueryTask> queryTasks;
+  final List<RetrievalSearchPlan> searchPlans;
 
   /// 仅用于工具间桥接的剩余上下文，不作为业务模型参与推导。
   final Map<String, Object?> bridgePayload;
@@ -70,8 +71,8 @@ class SearchToolArgumentsContract {
         arguments.stringField(SearchToolFieldNames.subCategory),
       ),
       queryVariants: arguments.stringListField(SearchToolFieldNames.queryVariants),
-      queryTasks: SearchToolQueryTask.listFromJson(
-        arguments[SearchToolFieldNames.queryTasks],
+      searchPlans: RetrievalSearchPlan.listFromJson(
+        arguments[SearchToolFieldNames.searchPlans],
       ),
       bridgePayload: bridgePayload,
     );
@@ -87,7 +88,7 @@ class SearchToolArgumentsContract {
     String? categoryId,
     String? subCategory,
     List<String>? queryVariants,
-    List<SearchToolQueryTask>? queryTasks,
+    List<RetrievalSearchPlan>? searchPlans,
     Map<String, Object?>? bridgePayload,
   }) {
     return SearchToolArgumentsContract(
@@ -100,7 +101,7 @@ class SearchToolArgumentsContract {
       categoryId: categoryId ?? this.categoryId,
       subCategory: subCategory ?? this.subCategory,
       queryVariants: queryVariants ?? this.queryVariants,
-      queryTasks: queryTasks ?? this.queryTasks,
+      searchPlans: searchPlans ?? this.searchPlans,
       bridgePayload: bridgePayload ?? this.bridgePayload,
     );
   }
@@ -121,7 +122,7 @@ class SearchToolArgumentsContract {
   AssistantToolArguments toWebSearchArguments({
     required String query,
     required int count,
-    List<SearchToolQueryTask> queryTasks = const <SearchToolQueryTask>[],
+    List<RetrievalSearchPlan> searchPlans = const <RetrievalSearchPlan>[],
     List<String> queryVariants = const <String>[],
   }) {
     return AssistantToolArguments(
@@ -129,79 +130,14 @@ class SearchToolArgumentsContract {
         ...bridgePayload,
         'query': query,
         'count': count,
-        if (queryTasks.isNotEmpty)
-          'queryTasks': queryTasks
+        if (searchPlans.isNotEmpty)
+          'taskGraphSearchPlan': searchPlans
               .map((item) => item.toJson())
               .toList(growable: false),
         if (queryVariants.isNotEmpty)
           'queryVariants': queryVariants.toList(growable: false),
       },
     );
-  }
-}
-
-class SearchToolQueryTask {
-  const SearchToolQueryTask({
-    this.id = '',
-    this.label = '',
-    this.dimension = '',
-    required this.query,
-  });
-
-  final String id;
-  final String label;
-  final String dimension;
-  final String query;
-
-  factory SearchToolQueryTask.fromJson(Object? raw) {
-    if (raw is! Map) {
-      return const SearchToolQueryTask(query: '');
-    }
-    final map = AssistantToolPayload.fromJson(raw);
-    return SearchToolQueryTask(
-      id: map.stringField('id') ?? '',
-      label: map.stringField('label') ?? '',
-      dimension: map.stringField('dimension') ?? '',
-      query: map.stringField('query') ?? '',
-    );
-  }
-
-  static List<SearchToolQueryTask> listFromJson(Object? raw) {
-    if (raw is! List) {
-      return const <SearchToolQueryTask>[];
-    }
-    return raw
-        .map(SearchToolQueryTask.fromJson)
-        .where((item) => item.query.trim().isNotEmpty)
-        .toList(growable: false);
-  }
-
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      if (id.trim().isNotEmpty) 'id': id.trim(),
-      if (label.trim().isNotEmpty) 'label': label.trim(),
-      if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
-      'query': query.trim(),
-    };
-  }
-
-  List<String> dimensionLabels() {
-    final normalizedDimension = dimension.trim();
-    final normalizedLabel = label.trim();
-    return <String>[
-      if (normalizedDimension.isNotEmpty)
-        normalizedDimension
-      else if (normalizedLabel.isNotEmpty)
-        normalizedLabel,
-    ];
-  }
-
-  List<String> labels() {
-    final normalized = label.trim();
-    if (normalized.isEmpty) {
-      return const <String>[];
-    }
-    return <String>[normalized];
   }
 }
 
@@ -214,7 +150,7 @@ class SearchToolReference {
     this.sourceTier = '',
     this.snippet = '',
     this.summary = '',
-    this.queryTaskId = '',
+    this.searchPlanId = '',
     this.dimension = '',
     this.retrievedAt = '',
     this.observedAt = '',
@@ -234,7 +170,7 @@ class SearchToolReference {
   final String sourceTier;
   final String snippet;
   final String summary;
-  final String queryTaskId;
+  final String searchPlanId;
   final String dimension;
   final String retrievedAt;
   final String observedAt;
@@ -262,7 +198,7 @@ class SearchToolReference {
       sourceTier: payload.stringField('sourceTier') ?? '',
       snippet: payload.stringField('snippet') ?? '',
       summary: payload.stringField('summary') ?? '',
-      queryTaskId: payload.stringField('queryTaskId') ?? '',
+      searchPlanId: payload.stringField('searchPlanId') ?? '',
       dimension: payload.stringField('dimension') ?? '',
       retrievedAt: payload.stringField('retrievedAt') ?? '',
       observedAt: payload.stringField('observedAt') ?? '',
@@ -326,7 +262,7 @@ class SearchToolReference {
       if (sourceTier.trim().isNotEmpty) 'sourceTier': sourceTier.trim(),
       if (snippet.trim().isNotEmpty) 'snippet': snippet.trim(),
       if (summary.trim().isNotEmpty) 'summary': summary.trim(),
-      if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
+      if (searchPlanId.trim().isNotEmpty) 'searchPlanId': searchPlanId.trim(),
       if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
       if (retrievedAt.trim().isNotEmpty) 'retrievedAt': retrievedAt.trim(),
       if (observedAt.trim().isNotEmpty) 'observedAt': observedAt.trim(),
@@ -384,7 +320,7 @@ class SearchToolResultPayload {
     this.referenceCount = 0,
     this.totalReferences = 0,
     this.queriesUsed = const <String>[],
-    this.queryTasks = const <SearchToolQueryTask>[],
+    this.searchPlans = const <RetrievalSearchPlan>[],
     this.provider = '',
     this.internalResponse,
   });
@@ -405,7 +341,7 @@ class SearchToolResultPayload {
   final int referenceCount;
   final int totalReferences;
   final List<String> queriesUsed;
-  final List<SearchToolQueryTask> queryTasks;
+  final List<RetrievalSearchPlan> searchPlans;
   final String provider;
   final SearchResponse? internalResponse;
 
@@ -435,8 +371,8 @@ class SearchToolResultPayload {
         'totalReferences': totalReferences,
         'queriesUsed': queriesUsed.toList(growable: false),
         if (provider.trim().isNotEmpty) 'provider': provider.trim(),
-        if (queryTasks.isNotEmpty)
-          SearchToolFieldNames.queryTasks: queryTasks
+        if (searchPlans.isNotEmpty)
+          SearchToolFieldNames.searchPlans: searchPlans
               .map((item) => item.toJson())
               .toList(growable: false),
         if (internalResponse != null) 'internal': internalResponse!.toMap(),

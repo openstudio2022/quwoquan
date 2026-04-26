@@ -53,15 +53,15 @@ type fieldsFile struct {
 // ── post/service.yaml ─────────────────────────────────────────────────────────
 
 type routeDef struct {
-	Method          string   `yaml:"method"`
-	Path            string   `yaml:"path"`
-	Operation       string   `yaml:"operation"`
-	Description     string   `yaml:"description"`
-	QueryParams     []string `yaml:"query_params"`
-	WritableFields  []string `yaml:"writable_fields"`
-	RequestFields   []string `yaml:"request_fields"`
-	ResponseFields  []string `yaml:"response_fields"`
-	ResponseEntity  string   `yaml:"response_entity"`
+	Method         string   `yaml:"method"`
+	Path           string   `yaml:"path"`
+	Operation      string   `yaml:"operation"`
+	Description    string   `yaml:"description"`
+	QueryParams    []string `yaml:"query_params"`
+	WritableFields []string `yaml:"writable_fields"`
+	RequestFields  []string `yaml:"request_fields"`
+	ResponseFields []string `yaml:"response_fields"`
+	ResponseEntity string   `yaml:"response_entity"`
 }
 
 type serviceInfo struct {
@@ -83,14 +83,14 @@ type integrationLocationServiceFile struct {
 // ── {domain}/{entity}/projections/*.yaml ─────────────────────────────────────
 
 type projectionFieldDef struct {
-	Name                     string   `yaml:"name"`
-	DartType                 string   `yaml:"dart_type"`
-	Nullable                 bool     `yaml:"nullable"`
-	Source                   string   `yaml:"source"`
-	Aliases                  []string `yaml:"aliases"`
-	Default                  string   `yaml:"default"`
-	Description              string   `yaml:"description"`
-	SkipEmptyStringAliases   bool     `yaml:"skip_empty_string_aliases"`
+	Name                   string   `yaml:"name"`
+	DartType               string   `yaml:"dart_type"`
+	Nullable               bool     `yaml:"nullable"`
+	Source                 string   `yaml:"source"`
+	Aliases                []string `yaml:"aliases"`
+	Default                string   `yaml:"default"`
+	Description            string   `yaml:"description"`
+	SkipEmptyStringAliases bool     `yaml:"skip_empty_string_aliases"`
 	// When dart_type is List<SomeDto>, set to SomeDto; fromMap uses SomeDto.fromMap per element.
 	ListElementDartClass string `yaml:"list_element_dart_class"`
 	// When dart_type is a class with SomeDto.fromMap(Map<String,dynamic>) and wire is a JSON object.
@@ -126,8 +126,8 @@ type errorDef struct {
 	Kind              string            `yaml:"kind"`
 	Reason            string            `yaml:"reason"`
 	HTTPStatus        int               `yaml:"http_status"`
-	Retryable         bool              `yaml:"retryable"`
-	RetryAfterSeconds int               `yaml:"retry_after_seconds"`
+	RecoveryAction    string            `yaml:"recovery_action"`
+	RecoveryAfterSecs int               `yaml:"recovery_after_seconds"`
 	DartConst         string            `yaml:"dart_const"`
 	GoConst           string            `yaml:"go_const"`
 	L10nKey           string            `yaml:"l10n_key"` // AppLocalizations getter name for display message
@@ -351,10 +351,10 @@ type searchContractDefaultsDef struct {
 }
 
 type searchToolContractDef struct {
-	Name                  string   `yaml:"name"`
-	Description           string   `yaml:"description"`
-	RequiredFields        []string `yaml:"required_fields"`
-	OptionalFields        []string `yaml:"optional_fields"`
+	Name                   string   `yaml:"name"`
+	Description            string   `yaml:"description"`
+	RequiredFields         []string `yaml:"required_fields"`
+	OptionalFields         []string `yaml:"optional_fields"`
 	InternalOptionalFields []string `yaml:"internal_optional_fields"`
 }
 
@@ -2784,20 +2784,6 @@ func renderContentErrorsDart(ef *errorsFile) string {
 	}
 	b.WriteString("  unknown;\n\n")
 
-	// isRetryable getter
-	b.WriteString("  bool get isRetryable {\n")
-	b.WriteString("    switch (this) {\n")
-	for _, e := range ef.Errors {
-		if e.Retryable {
-			b.WriteString(fmt.Sprintf("      case ContentErrorCode.%s:\n", e.DartConst))
-		}
-	}
-	b.WriteString("        return true;\n")
-	b.WriteString("      default:\n")
-	b.WriteString("        return false;\n")
-	b.WriteString("    }\n")
-	b.WriteString("  }\n\n")
-
 	// fromCode factory
 	b.WriteString("  static ContentErrorCode fromCode(String code) {\n")
 	b.WriteString("    switch (code) {\n")
@@ -2858,19 +2844,6 @@ func renderIntegrationLocationErrorsDart(ef *errorsFile) string {
 		b.WriteString(fmt.Sprintf("      case IntegrationLocationErrorCode.%s:\n        return '%s';\n", e.DartConst, e.Code))
 	}
 	b.WriteString("      case IntegrationLocationErrorCode.unknown:\n        return '';\n")
-	b.WriteString("    }\n")
-	b.WriteString("  }\n\n")
-
-	b.WriteString("  bool get isRetryable {\n")
-	b.WriteString("    switch (this) {\n")
-	for _, e := range ef.Errors {
-		if e.Retryable {
-			b.WriteString(fmt.Sprintf("      case IntegrationLocationErrorCode.%s:\n", e.DartConst))
-		}
-	}
-	b.WriteString("        return true;\n")
-	b.WriteString("      default:\n")
-	b.WriteString("        return false;\n")
 	b.WriteString("    }\n")
 	b.WriteString("  }\n\n")
 
@@ -2966,7 +2939,7 @@ func renderIntegrationLocationErrorsGo(ef *errorsFile) string {
 		b.WriteString(fmt.Sprintf("// %s returns *AppError for %s (user_message from errors.yaml).\n", funcName, e.Code))
 		b.WriteString(fmt.Sprintf("func %s(debugMessage string) *rerrors.AppError {\n", funcName))
 		b.WriteString(fmt.Sprintf("\tcode, _ := rerrors.ParseCode(string(%s.Error()))\n", e.GoConst))
-		b.WriteString(fmt.Sprintf("\treturn rerrors.NewAppError(code, %q, debugMessage, %v)\n", msgZh, e.Retryable))
+		b.WriteString(fmt.Sprintf("\treturn rerrors.NewAppError(code, %q, debugMessage)\n", msgZh))
 		b.WriteString("}\n\n")
 	}
 	b.WriteString("// IsTimeout returns true if err is context.DeadlineExceeded or contains upstream timeout semantics.\n")

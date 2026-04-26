@@ -34,8 +34,7 @@ class PromptSnippetRenderer {
           _snippetCache = loadedSnippets;
           return;
         }
-      } catch (_) {
-      }
+      } catch (_) {}
       final fallbackPaths = <String>[
         assetPath,
         'quwoquan_app/$assetPath',
@@ -72,15 +71,17 @@ class PromptSnippetRenderer {
       // 必须先于 “snippet:ID” 判断：`<!-- snippet:end -->` 也会被
       // `snippet:([A-Za-z0-9_.-]+)` 误匹配为 id=end 的开始标记。
       if (trimmed == '<!-- snippet:end -->') {
-        if (currentId != null && currentId!.trim().isNotEmpty) {
-          snippets[currentId!.trim()] = buffer.toString().trimRight();
+        final snippetId = currentId?.trim() ?? '';
+        if (snippetId.isNotEmpty) {
+          snippets[snippetId] = buffer.toString().trimRight();
         }
         currentId = null;
         buffer = StringBuffer();
         continue;
       }
-      final startMatch = RegExp(r'^<!-- snippet:([A-Za-z0-9_.-]+) -->$')
-          .firstMatch(trimmed);
+      final startMatch = RegExp(
+        r'^<!-- snippet:([A-Za-z0-9_.-]+) -->$',
+      ).firstMatch(trimmed);
       if (startMatch != null) {
         currentId = startMatch.group(1);
         buffer = StringBuffer();
@@ -93,10 +94,7 @@ class PromptSnippetRenderer {
     return snippets;
   }
 
-  String _renderContent(
-    String content,
-    Map<String, dynamic> variables,
-  ) {
+  String _renderContent(String content, Map<String, dynamic> variables) {
     var rendered = content;
     for (final entry in variables.entries) {
       rendered = rendered.replaceAll(

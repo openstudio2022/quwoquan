@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
+	rterr "quwoquan_service/runtime/errors"
 	"quwoquan_service/services/rtc-service/internal/infrastructure/cache"
 )
 
@@ -25,6 +27,21 @@ type userConn struct {
 	cancel context.CancelFunc
 }
 
+type acceptResponseRecorder struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (r *acceptResponseRecorder) WriteHeader(statusCode int) {
+	r.wrote = true
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (r *acceptResponseRecorder) Write(data []byte) (int, error) {
+	r.wrote = true
+	return r.ResponseWriter.Write(data)
+}
+
 func NewSignalHandler(c *cache.CallStateCache, logger *slog.Logger) *SignalHandler {
 	return &SignalHandler{
 		cache:       c,
@@ -39,15 +56,37 @@ func (h *SignalHandler) HandleSignal(w http.ResponseWriter, r *http.Request) {
 		userID = r.Header.Get("X-Client-User-Id")
 	}
 	if userID == "" {
-		http.Error(w, "userId required", http.StatusBadRequest)
+		rterr.WriteHTTPError(
+			w,
+			rterr.NewInvalidArgument(rterr.ModuleRTC, "缺少用户标识", "userId required"),
+			rterr.HTTPWriteOptionsFromRequest(r),
+		)
+		return
+	}
+	if !isWebSocketUpgradeRequest(r) {
+		rterr.WriteHTTPError(
+			w,
+			rterr.NewInvalidArgument(rterr.ModuleRTC, "信令连接请求无效", "websocket upgrade required"),
+			rterr.HTTPWriteOptionsFromRequest(r),
+		)
 		return
 	}
 
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+	rec := &acceptResponseRecorder{ResponseWriter: w}
+	conn, err := websocket.Accept(rec, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
-		h.logger.Error("ws accept failed", "error", err)
+		if h.logger != nil {
+			h.logger.Error("ws accept failed", "error", err)
+		}
+		if !rec.wrote {
+			rterr.WriteHTTPError(
+				rec,
+				rterr.NewUnavailable(rterr.ModuleRTC, "信令连接不可用", err.Error()),
+				rterr.HTTPWriteOptionsFromRequest(r),
+			)
+		}
 		return
 	}
 
@@ -59,6 +98,21 @@ func (h *SignalHandler) HandleSignal(w http.ResponseWriter, r *http.Request) {
 
 	go h.writePump(ctx, uc)
 	h.readPump(ctx, uc)
+}
+
+func isWebSocketUpgradeRequest(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSpace(r.Header.Get("Upgrade")), "websocket") {
+		return false
+	}
+	for _, part := range strings.Split(r.Header.Get("Connection"), ",") {
+		if strings.EqualFold(strings.TrimSpace(part), "upgrade") {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *SignalHandler) readPump(ctx context.Context, uc *userConn) {

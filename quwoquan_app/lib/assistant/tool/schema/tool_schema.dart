@@ -1,12 +1,15 @@
 import 'dart:collection';
 
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+
 /// Typed payload wrapper used across tool schema / tool call / tool result.
 ///
 /// We still serialize to JSON maps at provider/tool boundaries, but runtime
 /// surfaces no longer expose raw `Map<String, dynamic>` as their public shape.
 class AssistantToolPayload extends MapBase<String, Object?> {
-  AssistantToolPayload([Map<String, Object?> fields = const <String, Object?>{}])
-    : _fields = Map.unmodifiable(_normalizeObjectMap(fields));
+  AssistantToolPayload([
+    Map<String, Object?> fields = const <String, Object?>{},
+  ]) : _fields = Map.unmodifiable(_normalizeObjectMap(fields));
 
   factory AssistantToolPayload.fromJson(Object? raw) {
     return AssistantToolPayload(_normalizeObjectMap(raw));
@@ -127,10 +130,8 @@ class AssistantToolPayload extends MapBase<String, Object?> {
     }
     if (value is Map) {
       return value.map<String, dynamic>(
-        (key, nested) => MapEntry<String, dynamic>(
-          key.toString(),
-          _toDynamicValue(nested),
-        ),
+        (key, nested) =>
+            MapEntry<String, dynamic>(key.toString(), _toDynamicValue(nested)),
       );
     }
     if (value is List) {
@@ -141,8 +142,7 @@ class AssistantToolPayload extends MapBase<String, Object?> {
 }
 
 class AssistantToolArguments extends AssistantToolPayload {
-  AssistantToolArguments([Map<String, Object?> fields = const <String, Object?>{}])
-    : super(fields);
+  AssistantToolArguments([super.fields = const <String, Object?>{}]);
 
   factory AssistantToolArguments.fromJson(Object? raw) {
     return AssistantToolArguments(AssistantToolPayload.fromJson(raw).toJson());
@@ -158,8 +158,7 @@ class AssistantToolArguments extends AssistantToolPayload {
 }
 
 class AssistantToolResultData extends AssistantToolPayload {
-  AssistantToolResultData([Map<String, Object?> fields = const <String, Object?>{}])
-    : super(fields);
+  AssistantToolResultData([super.fields = const <String, Object?>{}]);
 
   factory AssistantToolResultData.fromJson(Object? raw) {
     return AssistantToolResultData(AssistantToolPayload.fromJson(raw).toJson());
@@ -167,11 +166,12 @@ class AssistantToolResultData extends AssistantToolPayload {
 }
 
 class AssistantToolSchemaField extends AssistantToolPayload {
-  AssistantToolSchemaField([Map<String, Object?> fields = const <String, Object?>{}])
-    : super(fields);
+  AssistantToolSchemaField([super.fields = const <String, Object?>{}]);
 
   factory AssistantToolSchemaField.fromJson(Object? raw) {
-    return AssistantToolSchemaField(AssistantToolPayload.fromJson(raw).toJson());
+    return AssistantToolSchemaField(
+      AssistantToolPayload.fromJson(raw).toJson(),
+    );
   }
 
   String get type => stringField('type') ?? '';
@@ -202,11 +202,12 @@ class AssistantToolSchemaField extends AssistantToolPayload {
 }
 
 class AssistantToolInputSchema extends AssistantToolPayload {
-  AssistantToolInputSchema([Map<String, Object?> fields = const <String, Object?>{}])
-    : super(fields);
+  AssistantToolInputSchema([super.fields = const <String, Object?>{}]);
 
   factory AssistantToolInputSchema.fromJson(Object? raw) {
-    return AssistantToolInputSchema(AssistantToolPayload.fromJson(raw).toJson());
+    return AssistantToolInputSchema(
+      AssistantToolPayload.fromJson(raw).toJson(),
+    );
   }
 
   List<String> get requiredFields => stringListField('required');
@@ -353,6 +354,8 @@ class AssistantToolResult {
     this.data,
     this.errorCode = AssistantErrorCode.none,
     this.degraded = false,
+    this.runtimeFailure,
+    this.searchPlan,
   });
 
   final bool success;
@@ -360,14 +363,23 @@ class AssistantToolResult {
   final AssistantToolResultData? data;
   final AssistantErrorCode errorCode;
   final bool degraded;
+  final RuntimeFailureBase? runtimeFailure;
+  final Map<String, Object?>? searchPlan;
+
+  RuntimeFailureBase? get effectiveRuntimeFailure =>
+      runtimeFailure ??
+      (success ? null : _fallbackRuntimeFailureForToolResult(this));
 
   Map<String, Object?> toJson() {
+    final failure = effectiveRuntimeFailure;
     return <String, Object?>{
       'success': success,
       'message': message,
       'data': data?.toJson(),
       'errorCode': errorCode.name,
       'degraded': degraded,
+      if (failure != null) 'runtimeFailure': _runtimeFailureToJson(failure),
+      if (searchPlan != null) 'searchPlan': searchPlan,
     };
   }
 
@@ -377,7 +389,12 @@ class AssistantToolResult {
       (e) => e.name == codeName,
       orElse: () => AssistantErrorCode.none,
     );
-    return AssistantToolResult(
+    final parsedFailure = json['runtimeFailure'] is Map
+        ? RuntimeFailure.fromJson(
+            (json['runtimeFailure'] as Map).cast<String, dynamic>(),
+          )
+        : null;
+    final result = AssistantToolResult(
       success: json['success'] == true,
       message: (json['message'] as String?) ?? '',
       data: json['data'] is Map
@@ -385,8 +402,156 @@ class AssistantToolResult {
           : null,
       errorCode: code,
       degraded: json['degraded'] == true,
+      runtimeFailure: parsedFailure,
+      searchPlan: json['searchPlan'] is Map
+          ? (json['searchPlan'] as Map).cast<String, Object?>()
+          : null,
+    );
+    if (result.success || result.runtimeFailure != null) return result;
+    return AssistantToolResult(
+      success: result.success,
+      message: result.message,
+      data: result.data,
+      errorCode: result.errorCode,
+      degraded: result.degraded,
+      runtimeFailure: _fallbackRuntimeFailureForToolResult(result),
+      searchPlan: result.searchPlan,
     );
   }
+}
+
+Map<String, Object?> _runtimeFailureToJson(RuntimeFailureBase failure) {
+  return <String, Object?>{
+    'code': failure.code,
+    'origin': failure.origin.name,
+    'kind': failure.kind.name,
+    'nature': failure.nature.name,
+    'location': failure.location.toJson(),
+    'context': failure.context.toJson(),
+  };
+}
+
+RuntimeFailure _fallbackRuntimeFailureForToolResult(
+  AssistantToolResult result,
+) {
+  final code = switch (result.errorCode) {
+    AssistantErrorCode.none => 'ASSISTANT.SYSTEM.execution_failed',
+    AssistantErrorCode.invalidArguments =>
+      'ASSISTANT.VALIDATION.invalid_arguments',
+    AssistantErrorCode.toolNotFound => 'ASSISTANT.NOT_FOUND.tool_not_found',
+    AssistantErrorCode.skillNotFound => 'ASSISTANT.NOT_FOUND.skill_not_found',
+    AssistantErrorCode.unsupportedTarget =>
+      'ASSISTANT.UNSUPPORTED.unsupported_target',
+    AssistantErrorCode.permissionDenied =>
+      'ASSISTANT.PERMISSION.permission_denied',
+    AssistantErrorCode.networkUnavailable =>
+      'ASSISTANT.NETWORK.network_unavailable',
+    AssistantErrorCode.executionFailed => 'ASSISTANT.SYSTEM.execution_failed',
+    AssistantErrorCode.unauthorized => 'ASSISTANT.AUTH.unauthorized',
+    AssistantErrorCode.rateLimited => 'ASSISTANT.RATE_LIMITED.rate_limited',
+  };
+  return RuntimeFailure(
+    code: code,
+    origin: _originForAssistantToolCode(code),
+    kind: _kindForAssistantToolCode(code),
+    nature: _natureForAssistantToolCode(code),
+    location: const RuntimeFailureLocation(
+      businessObject: 'assistant_tool',
+      functionModule: 'assistant_tool_result',
+    ),
+    context: RuntimeFailureContext(
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(
+          key: 'assistantErrorCode',
+          value: result.errorCode.name,
+        ),
+        if (result.message.trim().isNotEmpty)
+          RuntimeContextAttribute(key: 'message', value: result.message.trim()),
+      ],
+    ),
+  );
+}
+
+RuntimeFailure assistantToolRuntimeFailure({
+  required AssistantErrorCode errorCode,
+  required String message,
+  required String functionModule,
+  String stage = 'tool_impl',
+}) {
+  final code = switch (errorCode) {
+    AssistantErrorCode.none => 'ASSISTANT.SYSTEM.execution_failed',
+    AssistantErrorCode.invalidArguments =>
+      'ASSISTANT.VALIDATION.invalid_arguments',
+    AssistantErrorCode.toolNotFound => 'ASSISTANT.NOT_FOUND.tool_not_found',
+    AssistantErrorCode.skillNotFound => 'ASSISTANT.NOT_FOUND.skill_not_found',
+    AssistantErrorCode.unsupportedTarget =>
+      'ASSISTANT.UNSUPPORTED.unsupported_target',
+    AssistantErrorCode.permissionDenied =>
+      'ASSISTANT.PERMISSION.permission_denied',
+    AssistantErrorCode.networkUnavailable =>
+      'ASSISTANT.NETWORK.network_unavailable',
+    AssistantErrorCode.executionFailed => 'ASSISTANT.SYSTEM.execution_failed',
+    AssistantErrorCode.unauthorized => 'ASSISTANT.AUTH.unauthorized',
+    AssistantErrorCode.rateLimited => 'ASSISTANT.RATE_LIMITED.rate_limited',
+  };
+  return RuntimeFailure(
+    code: code,
+    origin: _originForAssistantToolCode(code),
+    kind: _kindForAssistantToolCode(code),
+    nature: _natureForAssistantToolCode(code),
+    location: RuntimeFailureLocation(
+      businessObject: 'assistant_tool',
+      functionModule: functionModule,
+    ),
+    context: RuntimeFailureContext(
+      attributes: <RuntimeContextAttribute>[
+        RuntimeContextAttribute(key: 'stage', value: stage),
+        RuntimeContextAttribute(
+          key: 'assistantErrorCode',
+          value: errorCode.name,
+        ),
+        if (message.trim().isNotEmpty)
+          RuntimeContextAttribute(key: 'message', value: message.trim()),
+      ],
+    ),
+  );
+}
+
+RuntimeFailureOrigin _originForAssistantToolCode(String code) {
+  if (code.contains('.VALIDATION.') ||
+      code.contains('.PERMISSION.') ||
+      code.contains('.AUTH.')) {
+    return RuntimeFailureOrigin.user;
+  }
+  if (code.contains('.NETWORK.') || code.contains('.RATE_LIMITED.')) {
+    return RuntimeFailureOrigin.remoteDependency;
+  }
+  return RuntimeFailureOrigin.system;
+}
+
+RuntimeFailureKind _kindForAssistantToolCode(String code) {
+  if (code.contains('.VALIDATION.')) return RuntimeFailureKind.validation;
+  if (code.contains('.PERMISSION.')) return RuntimeFailureKind.permission;
+  if (code.contains('.AUTH.')) return RuntimeFailureKind.auth;
+  if (code.contains('.NETWORK.')) return RuntimeFailureKind.network;
+  if (code.contains('.RATE_LIMITED.')) return RuntimeFailureKind.rateLimited;
+  if (code.contains('.NOT_FOUND.')) return RuntimeFailureKind.notFound;
+  if (code.contains('.UNSUPPORTED.')) return RuntimeFailureKind.unsupported;
+  return RuntimeFailureKind.internal;
+}
+
+RuntimeFailureNature _natureForAssistantToolCode(String code) {
+  if (code.contains('.NETWORK.') || code.contains('.RATE_LIMITED.')) {
+    return RuntimeFailureNature.transient;
+  }
+  if (code.contains('.PERMISSION.')) {
+    return RuntimeFailureNature.requiresPermission;
+  }
+  if (code.contains('.AUTH.')) {
+    return RuntimeFailureNature.requiresUserAction;
+  }
+  if (code.contains('.SYSTEM.')) return RuntimeFailureNature.bug;
+  return RuntimeFailureNature.permanent;
 }
 
 abstract class AssistantTool {

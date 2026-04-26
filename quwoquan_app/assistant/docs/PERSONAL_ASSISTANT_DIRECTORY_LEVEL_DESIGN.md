@@ -177,8 +177,10 @@ assets/assistant/skills/{domain}/
 - 作为模型输出、工具输入、运行时状态、UI 投影的数据载体
 
 应保留的核心类型：
-- `IntentGraph`
-- `QueryTask`
+- `UnderstandingResult`
+- `TaskGraph`
+- `AssistantPlanView`
+- `SearchPlanItem`
 - `SubagentPlan`
 - `AssistantTurnOutput`
 - `AssistantToolResultRow`
@@ -251,20 +253,20 @@ assets/assistant/skills/{domain}/
 - 只放 codegen 产物
 - 不允许手写业务逻辑
 
-### 3.3 Intent / Session / Memory 模块补全
+### 3.3 Understanding / Session / Memory 模块补全
 
-这一节补齐工程目录中最容易被混淆但必须明确归位的三条能力线：**意图管理**、**会话管理**、**记忆管理**。它们都属于 assistant 的核心能力，但职责不同，不能混成一层。
+这一节补齐工程目录中最容易被混淆但必须明确归位的三条能力线：**理解与路由管理**、**会话管理**、**记忆管理**。它们都属于 assistant 的核心能力，但职责不同，不能混成一层。
 
-#### 3.3.1 Intent 模块
+#### 3.3.1 Understanding 模块
 
-意图模块负责把用户原始输入变成可执行的路由与检索起点，产出 `IntentGraph`、`QueryTask`、路由技能选择和连续性所需的最小上下文。
+理解模块负责把用户原始输入变成可执行的 typed mainline，产出 `UnderstandingResult`、`TaskGraph`、`AssistantPlanView`、`SearchPlanItem`、路由技能选择和连续性所需的最小上下文。
 
 建议目录：
 
 ```text
 lib/assistant/intent/
 ├── intent_route_service.dart
-├── intent_graph_builder.dart
+├── typed_plan_builder.dart
 ├── intent_route_catalog.dart
 ├── intent_continuity_policy.dart
 └── intent_route_validator.dart
@@ -272,17 +274,17 @@ lib/assistant/intent/
 
 职责边界：
 - `intent_route_service.dart`：统一承接用户问题到 skill 路由
-- `intent_graph_builder.dart`：从模型输出或预计算载荷构建 `IntentGraph`
+- `typed_plan_builder.dart`：从模型输出或预计算载荷构建 `UnderstandingResult`、`TaskGraph` 与 `AssistantPlanView`
 - `intent_route_catalog.dart`：提供目录树摘要、推荐 skill、路由元数据
 - `intent_continuity_policy.dart`：给出当前轮是否延续、是否补查、是否澄清的策略输入
 - `intent_route_validator.dart`：校验 route 输出是否满足后续检索与 subagent 输入要求
 
 与现有代码的对应关系：
-- `intent/model_output_extractors.dart` 负责从模型输出或预计算载荷构建 `IntentGraph`
-- `understand_phase.dart` 负责调用理解阶段模型并产出 `IntentGraph`
+- `intent/model_output_extractors.dart` 负责从模型输出或预计算载荷提取 typed contracts
+- `understand_phase.dart` 负责调用理解阶段模型并产出 `UnderstandingResult` 与 `TaskGraph`
 - `reasoning/planner/problem_framer.dart` 负责把问题整理成规划载荷
-- `context/assembly/answer_boundary_resolver.dart` 负责基于 `IntentGraph` 约束证据边界
-- `execution_preparation_resolver.dart` 负责把 `IntentGraph` 转成执行壳和工具约束
+- `context/assembly/answer_boundary_resolver.dart` 负责基于 `AssistantPlanView` 约束证据边界
+- `execution_preparation_resolver.dart` 负责把 typed plan 转成执行壳和工具约束
 
 #### 3.3.2 Session 模块
 
@@ -351,7 +353,7 @@ lib/assistant/memory/
 - `AssistantSessionManager` 负责短期会话语义；持久化与历史归一化已下放到 `assistant_session_store.dart`
 - `RecallCoordinator` 是 skill shortlist recall，不属于长期记忆模块，必须与 `memory_recall_service.dart` 分开命名
 
-#### 3.3.4 意图 / 会话 / 记忆的协同关系
+#### 3.3.4 理解 / 会话 / 记忆的协同关系
 
 ```mermaid
 flowchart TD
@@ -359,22 +361,22 @@ flowchart TD
   sessionStore[session_store]
   sessionSummary[session_summary]
   continuity[continuity_policy]
-  intent[intent_route_service]
+  understanding[typed_understanding]
   memoryRecall[memory_recall_service]
-  intentGraph[IntentGraph]
+  planView[AssistantPlanView]
   retrieval[retrieval_design]
   execution[execution_phase]
   finalize[finalize_runner]
   longMemory[long_term_memory]
 
-  user --> sessionStore --> sessionSummary --> continuity --> intent
-  user --> memoryRecall --> intent
-  intent --> intentGraph --> retrieval --> execution --> finalize --> longMemory
+  user --> sessionStore --> sessionSummary --> continuity --> understanding
+  user --> memoryRecall --> understanding
+  understanding --> planView --> retrieval --> execution --> finalize --> longMemory
   finalize --> sessionStore
 ```
 
 协同原则：
-- **Intent** 先决定“要做什么”
+- **Understanding** 先决定“要做什么”
 - **Session** 决定“这轮对话继承什么”
 - **Memory** 决定“跨轮还能记住什么”
 - 三者都不能直接替代对方
@@ -436,8 +438,8 @@ flowchart TD
 - 约束 fresh/authority/coverage
 
 输入：
-- `IntentGraph`
-- `QueryTask`
+- `AssistantPlanView`
+- `SearchPlanItem`
 - 上轮检索结果
 - skill 约束
 

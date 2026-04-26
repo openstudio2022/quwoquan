@@ -1,6 +1,6 @@
-import { productAuditSchema } from '../../generated/control-plane/productAudit.generated';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+import { productAuditSchema } from '../../generated/control-plane/productAudit.generated.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
 
 export function AuditPage() {
   return (

@@ -2,7 +2,7 @@
 
 ## Status: archived
 
-- [x] T2.2: Generate `content_errors.g.dart` (ContentErrorCode enum + messages + fromCode + isRetryable)
+- [x] T2.2: Generate `content_errors.g.dart` (ContentErrorCode enum + messages + fromCode + recoveryAction)
 - [x] T2.3: Generate `services/content-service/internal/generated/errors.go` (Go error sentinels)
 - [x] T2.4: Upgrade `CloudErrorMapper` to parse structured error codes from JSON responses
 - [x] T2.4: Add `ContentErrorCode? errorCode` field to `CloudException`

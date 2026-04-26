@@ -14,7 +14,6 @@ import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_perf_probe.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
-import 'package:quwoquan_app/assistant/orchestration/pipelines/assistant_pipeline_state_keys.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
@@ -43,8 +42,9 @@ class FinalizeRunner {
     required ExecutionPhaseSnapshot executionSnapshot,
     required AssistantRunResponse response,
   }) async {
-    final successSnapshot =
-        executionSnapshot is ExecutionPhaseSuccess ? executionSnapshot : null;
+    final successSnapshot = executionSnapshot is ExecutionPhaseSuccess
+        ? executionSnapshot
+        : null;
     final sessionId =
         successSnapshot?.sessionId ?? (request.sessionId ?? 'default');
     final latestUserQuery = successSnapshot?.latestUserQuery.trim() ?? '';
@@ -62,42 +62,38 @@ class FinalizeRunner {
     final structuredResponse = response.structuredResponse;
     final structuredBundle =
         AssistantRunStructuredBundle.fromStructuredResponseRoot(
-      structuredResponse,
-    );
+          structuredResponse,
+        );
     final skillSynthesisSection =
-        (structuredResponse['skillSynthesis'] as Map?)?.cast<String, dynamic>() ??
+        (structuredResponse['skillSynthesis'] as Map?)
+            ?.cast<String, dynamic>() ??
         const <String, dynamic>{};
-    final skillSynthesisInput =
-        skillSynthesisSection['input'] is Map
+    final skillSynthesisInput = skillSynthesisSection['input'] is Map
         ? SkillSynthesisInput.fromJson(
             (skillSynthesisSection['input'] as Map).cast<String, dynamic>(),
           )
         : null;
-    final skillSynthesisOutput =
-        skillSynthesisSection['output'] is Map
+    final skillSynthesisOutput = skillSynthesisSection['output'] is Map
         ? SkillSynthesisOutput.fromJson(
             (skillSynthesisSection['output'] as Map).cast<String, dynamic>(),
           )
         : null;
-    final structuredRunArtifacts = structuredBundle.runArtifacts?.toJson() ??
-        const <String, dynamic>{};
+    final structuredRunArtifacts =
+        structuredBundle.runArtifacts?.toJson() ?? const <String, dynamic>{};
     final canonicalDisplayState = resolveAssistantDisplayStateFromRunResponse(
       response,
     );
     final canonicalProcessTimeline =
         resolveAssistantProcessTimelineFromRunResponse(response);
     final persistedJourney = resolveAssistantJourneyFromRunResponse(response);
-    final understandingSnapshot =
-        normalizeRunArtifactsUnderstandingSnapshotJson(
-          _resolvedStructuredMap(
-            structuredResponse[assistantUnderstandingSnapshotField],
-            _resolvedStructuredMap(
-              structuredRunArtifacts[assistantUnderstandingSnapshotField],
-              completedArtifact?.understandingSnapshot.toJson() ??
-                  const <String, dynamic>{},
-            ),
-          ),
-        );
+    final understandingSnapshot = _resolvedUnderstandingSnapshotMap(
+      structuredResponse[assistantUnderstandingSnapshotField],
+      _resolvedUnderstandingSnapshotMap(
+        structuredRunArtifacts[assistantUnderstandingSnapshotField],
+        completedArtifact?.understandingSnapshot.toJson() ??
+            const <String, dynamic>{},
+      ),
+    );
     final answerProcessing = _resolvedStructuredMap(
       structuredResponse[assistantAnswerProcessingField],
       _resolvedStructuredMap(
@@ -121,6 +117,26 @@ class FinalizeRunner {
         completedArtifact?.retrievalProcessing.toJson() ??
             const <String, dynamic>{},
       ),
+    );
+    final systemContextEnvelope = _resolvedStructuredMap(
+      structuredResponse[assistantSystemContextEnvelopeField],
+      const <String, dynamic>{},
+    );
+    final understandingResult = _resolvedStructuredMap(
+      structuredResponse[assistantUnderstandingResultField],
+      const <String, dynamic>{},
+    );
+    final taskGraph = _resolvedStructuredMap(
+      structuredResponse[assistantTaskGraphField],
+      const <String, dynamic>{},
+    );
+    final orchestratorState = _resolvedStructuredMap(
+      structuredResponse[assistantOrchestratorStateField],
+      const <String, dynamic>{},
+    );
+    final turnSynthesisState = _resolvedStructuredMap(
+      structuredResponse[assistantTurnSynthesisStateField],
+      const <String, dynamic>{},
     );
     final displayMarkdown = canonicalDisplayState.answer.blocks.isNotEmpty
         ? renderAnswerBlocksToMarkdown(
@@ -170,6 +186,11 @@ class FinalizeRunner {
       answerProcessing: answerProcessing,
       historicalThinkingSnapshot: historicalThinkingSnapshot,
       retrievalProcessing: retrievalProcessing,
+      systemContextEnvelope: systemContextEnvelope,
+      understandingResult: understandingResult,
+      taskGraph: taskGraph,
+      orchestratorState: orchestratorState,
+      turnSynthesisState: turnSynthesisState,
       providerReasoningContinuation:
           (structuredResponse[assistantProviderReasoningContinuationField]
                   as String?)
@@ -221,24 +242,15 @@ class FinalizeRunner {
           'uiUsageStats':
               (structuredResponse['uiUsageStats'] as Map?) ??
               const <String, dynamic>{},
-          'intentGraph':
-              (structuredResponse['intentGraph'] as Map?) ??
-              const <String, dynamic>{},
-          'skillRuns':
-              (structuredResponse['skillRuns'] as List?) ?? const <dynamic>[],
-          AssistantPipelineStateKeys.uiTimeline:
-              (structuredResponse[AssistantPipelineStateKeys.uiTimeline]
-                  as List?) ??
-              const <dynamic>[],
-          'subagentRuns':
-              (structuredResponse['subagentRuns'] as List?) ??
-              const <dynamic>[],
-          'skillSynthesis':
-              (structuredResponse['skillSynthesis'] as Map?) ??
-              const <String, dynamic>{},
-          'aggregationState':
-              (structuredResponse['aggregationState'] as Map?) ??
-              const <String, dynamic>{},
+          if (systemContextEnvelope.isNotEmpty)
+            assistantSystemContextEnvelopeField: systemContextEnvelope,
+          if (understandingResult.isNotEmpty)
+            assistantUnderstandingResultField: understandingResult,
+          if (taskGraph.isNotEmpty) assistantTaskGraphField: taskGraph,
+          if (orchestratorState.isNotEmpty)
+            assistantOrchestratorStateField: orchestratorState,
+          if (turnSynthesisState.isNotEmpty)
+            assistantTurnSynthesisStateField: turnSynthesisState,
         },
       );
     }
@@ -364,6 +376,35 @@ class FinalizeRunner {
     return fallback;
   }
 
+  Map<String, dynamic> _resolvedUnderstandingSnapshotMap(
+    Object? raw,
+    Map<String, dynamic> fallback,
+  ) {
+    if (raw is Map) {
+      final normalized = normalizeRunArtifactsUnderstandingSnapshotJson(
+        raw.cast<String, dynamic>(),
+      );
+      if (_hasUnderstandingSnapshotContent(normalized)) {
+        return normalized;
+      }
+    }
+    return fallback;
+  }
+
+  bool _hasUnderstandingSnapshotContent(Map<String, dynamic> raw) {
+    if (raw.isEmpty) return false;
+    final parsed = RunArtifactsUnderstandingSnapshot.fromJson(raw);
+    return parsed.intentSummary.trim().isNotEmpty ||
+        parsed.userFacingSummary.trim().isNotEmpty ||
+        parsed.retrievalDesignNarrative.trim().isNotEmpty ||
+        parsed.concernPoints.isNotEmpty ||
+        parsed.resolutionItems.isNotEmpty ||
+        parsed.assumptions.isNotEmpty ||
+        parsed.mismatchSignal.trim().isNotEmpty ||
+        parsed.carryForwardFacts.isNotEmpty ||
+        parsed.discardedAssumptions.isNotEmpty;
+  }
+
   String _resolvedStructuredText(Object? raw, String fallback) {
     if (raw is String && raw.trim().isNotEmpty) {
       return raw.trim();
@@ -445,7 +486,9 @@ class FinalizeRunner {
     return items
         .whereType<Map>()
         .map((item) => PreferenceFact.fromJson(item.cast<String, dynamic>()))
-        .where((fact) => fact.key.trim().isNotEmpty && fact.value.trim().isNotEmpty)
+        .where(
+          (fact) => fact.key.trim().isNotEmpty && fact.value.trim().isNotEmpty,
+        )
         .toList(growable: false);
   }
 

@@ -142,7 +142,7 @@ void main() {
       expect(feed, isNotNull);
       expect(
         feed!.error,
-        contains('NETWORK_TIMEOUT'),
+        '操作失败，请稍后重试',
         reason: '错误消息应传播到 feed state',
       );
       expect(feed.items, isEmpty);

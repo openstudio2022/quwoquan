@@ -3,7 +3,7 @@ name: health_wellness
 description: 健康咨询、养生建议、运动指导、饮食营养、睡眠改善。
 domain: health_wellness
 mode: qa
-allowed_tools: web_search local_context
+allowed_tools: web_search
 trigger_keywords: []
 searchPolicy:
   maxReflection: 2
@@ -61,8 +61,8 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 }
 ```
 
-## local_context 输出约束
-当调用 local_context 时，必须按 `local_context_v1` 解析，并明确 `media.included=false`。
+## 系统上下文约束
+位置、时间、设备与权限信息统一来自系统默认注入上下文，不再通过额外工具读取。
 
 ## Markdown 卡片结构
 

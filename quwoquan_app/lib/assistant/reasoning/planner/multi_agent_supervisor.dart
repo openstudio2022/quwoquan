@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/assistant/contracts/aggregation_state.dart';
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_plan_view.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/contracts/skill_run.dart';
 import 'package:quwoquan_app/assistant/contracts/subagent_plan.dart';
@@ -69,7 +69,7 @@ class SupervisorDispatch {
       subagentBudgets.fold(0, (sum, b) => sum + b.toolBudget);
 }
 
-/// Orchestrates multi-agent runs: splits the intent graph into sub-agent
+/// Orchestrates multi-agent runs: splits the typed plan into sub-agent
 /// tasks, assigns budgets, decides execution order, and evaluates the
 /// aggregated results.
 ///
@@ -85,9 +85,9 @@ class MultiAgentSupervisor {
   final int maxParallelSubagents;
   final int totalBudgetCeiling;
 
-  /// Dispatch sub-agents based on the intent graph and mode decision.
+  /// Dispatch sub-agents based on the typed plan and mode decision.
   SupervisorDispatch dispatch({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required ModeDecision modeDecision,
     required List<SubagentPlan> subagentPlans,
   }) {
@@ -134,12 +134,12 @@ class MultiAgentSupervisor {
 
   /// Evaluate whether all sub-agents have completed and determine next step.
   AggregationState evaluateAggregation({
-    required IntentGraph intentGraph,
+    required AssistantPlanView planView,
     required List<SkillRun> skillRuns,
     required Map<String, dynamic> answerPayload,
   }) {
     return _gate.evaluate(
-      intentGraph: intentGraph,
+      planView: planView,
       skillRuns: skillRuns,
       answerPayload: answerPayload,
     );

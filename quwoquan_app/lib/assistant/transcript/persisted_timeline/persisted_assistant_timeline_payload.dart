@@ -16,14 +16,13 @@ const Set<String> kPersistedAssistantTimelinePayloadKeys = {
   assistantDisplayPlainTextField,
   assistantFollowupPromptField,
   assistantActionHintsField,
+  assistantBoundaryOutcomeField,
   'assistantElapsedMs',
 };
 
 dynamic _deepCloneJson(dynamic value) {
   if (value is Map) {
-    return value.map(
-      (k, v) => MapEntry(k.toString(), _deepCloneJson(v)),
-    );
+    return value.map((k, v) => MapEntry(k.toString(), _deepCloneJson(v)));
   }
   if (value is List) {
     return value.map(_deepCloneJson).toList(growable: false);
@@ -66,6 +65,11 @@ class PersistedAssistantTimelinePayload {
 
   String get displayPlainText =>
       (_entries[assistantDisplayPlainTextField] as String?)?.trim() ?? '';
+
+  Map<String, dynamic> get assistantBoundaryOutcome =>
+      (_entries[assistantBoundaryOutcomeField] as Map?)
+          ?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
 
   PersistedAssistantTimelinePayload copyWithMerged(Map<String, dynamic> patch) {
     final next = Map<String, dynamic>.from(_entries);

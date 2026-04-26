@@ -26,6 +26,7 @@ class _PageflipWidgetDiagnosticsAppState
       ValueNotifier<PageflipWidgetDebugState?>(null);
   PageflipWidgetDebugState? _pendingDebugState;
   bool _debugUpdateScheduled = false;
+  String? _lastLoggedDebugSignature;
 
   @override
   void dispose() {
@@ -75,7 +76,11 @@ class _PageflipWidgetDiagnosticsAppState
                           }
                           final nextDebugState = _pendingDebugState;
                           _pendingDebugState = null;
+                          if (nextDebugState == null) {
+                            return;
+                          }
                           _debugNotifier.value = nextDebugState;
+                          _logDebugState(nextDebugState);
                         });
                       },
                       pageBuilder: (context, pageIndex) {
@@ -114,6 +119,54 @@ class _PageflipWidgetDiagnosticsAppState
       ),
     );
   }
+
+  void _logDebugState(PageflipWidgetDebugState debugState) {
+    final signature = debugState.signature;
+    if (signature == _lastLoggedDebugSignature) {
+      return;
+    }
+    _lastLoggedDebugSignature = signature;
+    debugPrint(
+      '[pageflip_widget][debug] '
+      'cur=${_pageflipPageLabel(debugState.currentPageIndex)} '
+      'turn=${_pageflipPageLabel(debugState.turningPageIndex)} '
+      'under=${_pageflipPageLabel(debugState.underlayPageIndex)} '
+      'cover=${_pageflipPageLabel(debugState.coveredPageIndex)} '
+      'static=${_pageflipPageLabel(debugState.staticPageIndex)} '
+      'dir=${debugState.renderDirection?.name ?? "-"} '
+      'mesh=${debugState.meshReady} '
+      'render=${debugState.renderSceneReady} '
+      'bundle=${debugState.sessionHasBundle} '
+      'hf=${debugState.sessionPrefersHighFidelity} '
+      'req=${_pageflipTripletLabel(debugState.requestedRectoPageIndex, debugState.requestedVersoPageIndex, debugState.requestedBottomPageIndex)} '
+      'act=${_pageflipTripletLabel(debugState.activeRectoPageIndex, debugState.activeVersoPageIndex, debugState.activeBottomPageIndex)} '
+      'clip=${_pageflipRectLabel(debugState.bottomClipBounds)} '
+      'front=${_pageflipRectLabel(debugState.frontBounds)} '
+      'back=${_pageflipRectLabel(debugState.backBounds)} '
+      'spine=${debugState.spineDelta?.toStringAsFixed(3) ?? "-"} '
+      'seam=${debugState.seamDelta?.toStringAsFixed(3) ?? "-"} '
+      'missing=[${debugState.missingSnapshotIndices.join(",")}] '
+      'pending=[${debugState.pendingCaptureIndices.join(",")}]',
+    );
+  }
+}
+
+String _pageflipPageLabel(int? pageIndex) => pageIndex?.toString() ?? '-';
+
+String _pageflipTripletLabel(int? a, int? b, int? c) {
+  return '${_pageflipPageLabel(a)}/${_pageflipPageLabel(b)}/${_pageflipPageLabel(c)}';
+}
+
+String _pageflipRectLabel(Rect? rect) {
+  if (rect == null) {
+    return '-';
+  }
+  return [
+    rect.left.toStringAsFixed(1),
+    rect.top.toStringAsFixed(1),
+    rect.right.toStringAsFixed(1),
+    rect.bottom.toStringAsFixed(1),
+  ].join(',');
 }
 
 class _PageflipWidgetDiagnosticsHeader extends StatelessWidget {

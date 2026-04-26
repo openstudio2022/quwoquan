@@ -87,7 +87,7 @@ flutter test \
   test/assistant/no_hardcoded_prompt_test.dart \
   test/assistant/observability_completeness_test.dart \
   test/assistant/runtime_enums_roundtrip_test.dart \
-  test/assistant/query_task_contract_test.dart \
+  test/assistant/search_plan_contract_test.dart \
   test/assistant/llm_response_parser_test.dart \
   test/assistant/message_history_protocol_contract_test.dart \
   test/assistant/full_phase_pipeline_test.dart \

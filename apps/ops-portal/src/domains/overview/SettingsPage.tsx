@@ -1,6 +1,6 @@
-import { portalShell } from '../../generated/control-plane/portalShell.generated';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+import { portalShell } from '../../generated/control-plane/portalShell.generated.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
 
 export function SettingsPage() {
   return (

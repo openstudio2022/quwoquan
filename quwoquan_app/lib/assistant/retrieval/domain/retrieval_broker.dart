@@ -44,12 +44,9 @@ class RetrievalSearchRequest {
 
   String get traceId => (arguments['__traceId'] as String?)?.trim() ?? '';
 
-  List<Map<String, dynamic>> get queryTasks =>
-      (arguments['queryTasks'] as List?)
-          ?.whereType<Map>()
-          .map((item) => item.cast<String, dynamic>())
-          .toList(growable: false) ??
-      const <Map<String, dynamic>>[];
+  List<RetrievalSearchPlan> get queryPlans => RetrievalSearchPlan.listFromJson(
+    arguments['taskGraphSearchPlan'] ?? arguments['searchPlans'],
+  );
 
   Map<String, dynamic> toToolArguments() => <String, dynamic>{
         ...arguments,
@@ -58,17 +55,118 @@ class RetrievalSearchRequest {
       };
 }
 
+class RetrievalSearchPlan {
+  const RetrievalSearchPlan({
+    this.id = '',
+    this.label = '',
+    this.dimension = '',
+    required this.query,
+    this.entityRefs = const <String>[],
+    this.negativeKeywords = const <String>[],
+    this.answerShape = '',
+    this.freshnessNeed = '',
+    this.timeScope = '',
+    this.timeRangeStart = '',
+    this.timeRangeEnd = '',
+    this.timePoint = '',
+    this.timezone = '',
+  });
+
+  final String id;
+  final String label;
+  final String dimension;
+  final String query;
+  final List<String> entityRefs;
+  final List<String> negativeKeywords;
+  final String answerShape;
+  final String freshnessNeed;
+  final String timeScope;
+  final String timeRangeStart;
+  final String timeRangeEnd;
+  final String timePoint;
+  final String timezone;
+
+  factory RetrievalSearchPlan.fromJson(Object? raw) {
+    final payload = AssistantToolPayload.fromJson(raw);
+    return RetrievalSearchPlan(
+      id: payload.stringField('id') ?? '',
+      label: payload.stringField('label') ?? '',
+      dimension: payload.stringField('dimension') ?? '',
+      query: payload.stringField('query') ?? '',
+      entityRefs: payload.stringListField('entityRefs'),
+      negativeKeywords: payload.stringListField('negativeKeywords'),
+      answerShape: payload.stringField('answerShape') ?? '',
+      freshnessNeed: payload.stringField('freshnessNeed') ?? '',
+      timeScope: payload.stringField('timeScope') ?? '',
+      timeRangeStart: payload.stringField('timeRangeStart') ?? '',
+      timeRangeEnd: payload.stringField('timeRangeEnd') ?? '',
+      timePoint: payload.stringField('timePoint') ?? '',
+      timezone: payload.stringField('timezone') ?? '',
+    );
+  }
+
+  static List<RetrievalSearchPlan> listFromJson(Object? raw) {
+    if (raw is! List) {
+      return const <RetrievalSearchPlan>[];
+    }
+    return raw
+        .map(RetrievalSearchPlan.fromJson)
+        .where((item) => item.query.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      if (id.trim().isNotEmpty) 'id': id.trim(),
+      if (label.trim().isNotEmpty) 'label': label.trim(),
+      if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
+      'query': query.trim(),
+      if (entityRefs.isNotEmpty) 'entityRefs': entityRefs.toList(growable: false),
+      if (negativeKeywords.isNotEmpty)
+        'negativeKeywords': negativeKeywords.toList(growable: false),
+      if (answerShape.trim().isNotEmpty) 'answerShape': answerShape.trim(),
+      if (freshnessNeed.trim().isNotEmpty)
+        'freshnessNeed': freshnessNeed.trim(),
+      if (timeScope.trim().isNotEmpty) 'timeScope': timeScope.trim(),
+      if (timeRangeStart.trim().isNotEmpty)
+        'timeRangeStart': timeRangeStart.trim(),
+      if (timeRangeEnd.trim().isNotEmpty) 'timeRangeEnd': timeRangeEnd.trim(),
+      if (timePoint.trim().isNotEmpty) 'timePoint': timePoint.trim(),
+      if (timezone.trim().isNotEmpty) 'timezone': timezone.trim(),
+    };
+  }
+
+  List<String> dimensionLabels() {
+    final normalizedDimension = dimension.trim();
+    final normalizedLabel = label.trim();
+    return <String>[
+      if (normalizedDimension.isNotEmpty)
+        normalizedDimension
+      else if (normalizedLabel.isNotEmpty)
+        normalizedLabel,
+    ];
+  }
+
+  List<String> labels() {
+    final normalized = label.trim();
+    if (normalized.isEmpty) {
+      return const <String>[];
+    }
+    return <String>[normalized];
+  }
+}
+
 class RetrievalFetchRequest {
   const RetrievalFetchRequest({
     required this.url,
     this.maxChars,
-    this.queryTaskId = '',
+    this.searchPlanId = '',
     this.dimension = '',
   });
 
   final String url;
   final int? maxChars;
-  final String queryTaskId;
+  final String searchPlanId;
   final String dimension;
 
   factory RetrievalFetchRequest.fromToolArguments(Map<String, dynamic> arguments) {
@@ -76,7 +174,7 @@ class RetrievalFetchRequest {
     return RetrievalFetchRequest(
       url: (arguments['url'] as String?)?.trim() ?? '',
       maxChars: rawMaxChars is num ? rawMaxChars.toInt() : null,
-      queryTaskId: (arguments['queryTaskId'] as String?)?.trim() ?? '',
+      searchPlanId: (arguments['searchPlanId'] as String?)?.trim() ?? '',
       dimension: (arguments['dimension'] as String?)?.trim() ?? '',
     );
   }
@@ -84,7 +182,8 @@ class RetrievalFetchRequest {
   Map<String, dynamic> toToolArguments() => <String, dynamic>{
         'url': url,
         if (maxChars != null) 'maxChars': maxChars,
-        if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
+        if (searchPlanId.trim().isNotEmpty)
+          'searchPlanId': searchPlanId.trim(),
         if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
       };
 }
@@ -159,7 +258,7 @@ class RetrievalFetchReference {
     this.sourceHost = '',
     this.snippet = '',
     this.sourceTier = '',
-    this.queryTaskId = '',
+    this.searchPlanId = '',
     this.dimension = '',
     this.retrievedAt = '',
   });
@@ -170,7 +269,7 @@ class RetrievalFetchReference {
   final String sourceHost;
   final String snippet;
   final String sourceTier;
-  final String queryTaskId;
+  final String searchPlanId;
   final String dimension;
   final String retrievedAt;
 
@@ -183,7 +282,7 @@ class RetrievalFetchReference {
       sourceHost: payload.stringField('sourceHost') ?? '',
       snippet: payload.stringField('snippet') ?? '',
       sourceTier: payload.stringField('sourceTier') ?? '',
-      queryTaskId: payload.stringField('queryTaskId') ?? '',
+      searchPlanId: payload.stringField('searchPlanId') ?? '',
       dimension: payload.stringField('dimension') ?? '',
       retrievedAt: payload.stringField('retrievedAt') ?? '',
     );
@@ -210,7 +309,8 @@ class RetrievalFetchReference {
       if (sourceHost.trim().isNotEmpty) 'sourceHost': sourceHost.trim(),
       if (snippet.trim().isNotEmpty) 'snippet': snippet.trim(),
       if (sourceTier.trim().isNotEmpty) 'sourceTier': sourceTier.trim(),
-      if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
+      if (searchPlanId.trim().isNotEmpty)
+        'searchPlanId': searchPlanId.trim(),
       if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
       if (retrievedAt.trim().isNotEmpty) 'retrievedAt': retrievedAt.trim(),
     };
@@ -226,7 +326,7 @@ class RetrievalFetchResultPayload {
     this.content = '',
     this.summary = '',
     this.sourceTier = '',
-    this.queryTaskId = '',
+    this.searchPlanId = '',
     this.dimension = '',
     this.contentType = '',
     this.charCount,
@@ -241,7 +341,7 @@ class RetrievalFetchResultPayload {
   final String content;
   final String summary;
   final String sourceTier;
-  final String queryTaskId;
+  final String searchPlanId;
   final String dimension;
   final String contentType;
   final int? charCount;
@@ -258,7 +358,7 @@ class RetrievalFetchResultPayload {
       content: payload['content']?.toString().trim() ?? '',
       summary: payload.stringField('summary') ?? '',
       sourceTier: payload.stringField('sourceTier') ?? '',
-      queryTaskId: payload.stringField('queryTaskId') ?? '',
+      searchPlanId: payload.stringField('searchPlanId') ?? '',
       dimension: payload.stringField('dimension') ?? '',
       contentType: payload.stringField('contentType') ?? '',
       charCount: payload.intField('charCount'),
@@ -283,7 +383,7 @@ class RetrievalFetchResultPayload {
     String? content,
     String? summary,
     String? sourceTier,
-    String? queryTaskId,
+    String? searchPlanId,
     String? dimension,
     String? contentType,
     int? charCount,
@@ -298,7 +398,7 @@ class RetrievalFetchResultPayload {
       content: content ?? this.content,
       summary: summary ?? this.summary,
       sourceTier: sourceTier ?? this.sourceTier,
-      queryTaskId: queryTaskId ?? this.queryTaskId,
+      searchPlanId: searchPlanId ?? this.searchPlanId,
       dimension: dimension ?? this.dimension,
       contentType: contentType ?? this.contentType,
       charCount: charCount ?? this.charCount,
@@ -317,7 +417,8 @@ class RetrievalFetchResultPayload {
         if (content.trim().isNotEmpty) 'content': content.trim(),
         if (summary.trim().isNotEmpty) 'summary': summary.trim(),
         if (sourceTier.trim().isNotEmpty) 'sourceTier': sourceTier.trim(),
-        if (queryTaskId.trim().isNotEmpty) 'queryTaskId': queryTaskId.trim(),
+        if (searchPlanId.trim().isNotEmpty)
+          'searchPlanId': searchPlanId.trim(),
         if (dimension.trim().isNotEmpty) 'dimension': dimension.trim(),
         if (contentType.trim().isNotEmpty) 'contentType': contentType.trim(),
         if (charCount != null) 'charCount': charCount,

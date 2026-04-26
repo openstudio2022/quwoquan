@@ -23,6 +23,7 @@ void main() {
       expect(dto.id, equals('d1'));
       expect(dto.type, equals('image'));
       expect(dto.authorId, equals('nature_photographer'));
+      expect(dto.authorProfileSubjectId, equals('nature_photographer'));
       expect(dto.displayName, equals('自然摄影师'));
       expect(dto.avatarUrl, contains('unsplash.com'));
       expect(dto.coverUrl, contains('unsplash.com'));
@@ -44,6 +45,7 @@ void main() {
       expect(dto.id, equals('v1'));
       expect(dto.type, equals('video'));
       expect(dto.authorId, equals('a1'));
+      expect(dto.authorProfileSubjectId, equals('a1'));
       expect(dto.displayName, equals('楹语小筑'));
       expect(dto.coverUrl, contains('unsplash.com'));
       expect(dto.body, contains('东京'));
@@ -60,6 +62,7 @@ void main() {
       expect(dto.id, equals('m4'));
       expect(dto.type, equals('micro'));
       expect(dto.authorId, equals('u4'));
+      expect(dto.authorProfileSubjectId, equals('u4'));
       expect(dto.displayName, equals('李想'));
       expect(dto.likeCount, equals(1581));
       expect(dto.commentCount, equals(301));
@@ -73,6 +76,7 @@ void main() {
       expect(dto.id, equals('web-dev'));
       expect(dto.type, equals('article'));
       expect(dto.authorId, equals('tech_daily'));
+      expect(dto.authorProfileSubjectId, equals('tech_daily'));
       expect(dto.displayName, equals('TechDaily'));
       expect(dto.title, contains('Web开发'));
       expect(dto.likeCount, equals(1240));
@@ -86,10 +90,43 @@ void main() {
         ...ContentMockData.discoveryArticleData,
       ]) {
         final dto = FeedItemDto.fromMap(item.toDiscoveryWireMap());
-        expect(dto.id, isNotEmpty, reason: 'id must be non-empty for ${item.id}');
-        expect(dto.authorId, isNotEmpty, reason: 'authorId must be set for ${item.id}');
-        expect(dto.displayName, isNotEmpty, reason: 'displayName must be set for ${item.id}');
+        expect(
+          dto.id,
+          isNotEmpty,
+          reason: 'id must be non-empty for ${item.id}',
+        );
+        expect(
+          dto.authorId,
+          isNotEmpty,
+          reason: 'authorId must be set for ${item.id}',
+        );
+        expect(
+          dto.authorProfileSubjectId,
+          isNotEmpty,
+          reason: 'authorProfileSubjectId must be set for ${item.id}',
+        );
+        expect(
+          dto.displayName,
+          isNotEmpty,
+          reason: 'displayName must be set for ${item.id}',
+        );
       }
+    });
+
+    test('authorProfileSubjectId 优先消费 canonical profileSubjectId', () {
+      const serverRaw = <String, dynamic>{
+        'postId': 'v_subject',
+        'contentType': 'video',
+        'authorId': 'legacy_author',
+        'profileSubjectId': 'persona_author',
+        'authorNickname': 'Server Author',
+        'authorAvatarUrl': 'https://example.com/avatar.jpg',
+        'thumbnailUrl': 'https://example.com/thumb.jpg',
+        'publishedAt': '2025-06-01T00:00:00Z',
+      };
+      final dto = FeedItemDto.fromMap(serverRaw);
+      expect(dto.authorId, equals('legacy_author'));
+      expect(dto.authorProfileSubjectId, equals('persona_author'));
     });
   });
 
@@ -97,27 +134,30 @@ void main() {
   // 兼容性契约：旧字段/alias 仍正确解析；round-trip 稳定
   // ──────────────────────────────────────────────────────────────────
   group('PostFeedDto — 兼容性契约', () {
-    test('resolves server-side alias fields: postId, authorNickname, likesCount', () {
-      const serverRaw = <String, dynamic>{
-        'postId': 'v_server',
-        'contentType': 'video',
-        'authorId': 'a_server',
-        'authorNickname': 'Server Author',
-        'authorAvatarUrl': 'https://example.com/avatar.jpg',
-        'thumbnailUrl': 'https://example.com/thumb.jpg',
-        'likesCount': 200,
-        'commentsCount': 20,
-        'savesCount': 5,
-        'publishedAt': '2025-06-01T00:00:00Z',
-      };
-      final dto = FeedItemDto.fromMap(serverRaw);
-      expect(dto.id, equals('v_server'));
-      expect(dto.displayName, equals('Server Author'));
-      expect(dto.likeCount, equals(200));
-      expect(dto.commentCount, equals(20));
-      expect(dto.favoriteCount, equals(5));
-      expect(dto.createdAt.year, equals(2025));
-    });
+    test(
+      'resolves server-side alias fields: postId, authorNickname, likesCount',
+      () {
+        const serverRaw = <String, dynamic>{
+          'postId': 'v_server',
+          'contentType': 'video',
+          'authorId': 'a_server',
+          'authorNickname': 'Server Author',
+          'authorAvatarUrl': 'https://example.com/avatar.jpg',
+          'thumbnailUrl': 'https://example.com/thumb.jpg',
+          'likesCount': 200,
+          'commentsCount': 20,
+          'savesCount': 5,
+          'publishedAt': '2025-06-01T00:00:00Z',
+        };
+        final dto = FeedItemDto.fromMap(serverRaw);
+        expect(dto.id, equals('v_server'));
+        expect(dto.displayName, equals('Server Author'));
+        expect(dto.likeCount, equals(200));
+        expect(dto.commentCount, equals(20));
+        expect(dto.favoriteCount, equals(5));
+        expect(dto.createdAt.year, equals(2025));
+      },
+    );
 
     test('toMap round-trips canonical fields correctly', () {
       final dto = ContentMockData.discoveryPhotoData.first;
@@ -126,20 +166,27 @@ void main() {
       expect(map['id'], equals(dto.id));
       expect(map['type'], equals(dto.type));
       expect(map['authorId'], equals(dto.authorId));
+      expect(map['authorProfileSubjectId'], equals(dto.authorProfileSubjectId));
       expect(map['displayName'], equals(dto.displayName));
       expect(map['likeCount'], equals(dto.likeCount));
       expect(map['imageUrls'], equals(dto.imageUrls));
     });
 
-    test('copyWith produces correct partial update while preserving other fields', () {
-      final original = ContentMockData.discoveryPhotoData.first;
-      final updated = original.copyWith(likeCount: 9999, displayName: 'Updated Name');
+    test(
+      'copyWith produces correct partial update while preserving other fields',
+      () {
+        final original = ContentMockData.discoveryPhotoData.first;
+        final updated = original.copyWith(
+          likeCount: 9999,
+          displayName: 'Updated Name',
+        );
 
-      expect(updated.likeCount, equals(9999));
-      expect(updated.displayName, equals('Updated Name'));
-      expect(updated.id, equals(original.id));
-      expect(updated.type, equals(original.type));
-    });
+        expect(updated.likeCount, equals(9999));
+        expect(updated.displayName, equals('Updated Name'));
+        expect(updated.id, equals(original.id));
+        expect(updated.type, equals(original.type));
+      },
+    );
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -176,10 +223,16 @@ void main() {
         items: [ContentMockData.discoveryPhotoData.first],
         nextCursor: cursorValue,
       );
-      expect(page.nextCursor, equals(cursorValue),
-          reason: 'nextCursor must be preserved in CursorPage for pagination');
-      expect(page.items, isNotEmpty,
-          reason: 'items must be non-empty when cursor is set');
+      expect(
+        page.nextCursor,
+        equals(cursorValue),
+        reason: 'nextCursor must be preserved in CursorPage for pagination',
+      );
+      expect(
+        page.items,
+        isNotEmpty,
+        reason: 'items must be non-empty when cursor is set',
+      );
     });
 
     test('CursorPage with null nextCursor indicates last page', () {
@@ -187,8 +240,11 @@ void main() {
         items: [ContentMockData.discoveryPhotoData.first],
         // no nextCursor — this is the last page
       );
-      expect(page.nextCursor, isNull,
-          reason: 'null nextCursor signals the last page to the consumer');
+      expect(
+        page.nextCursor,
+        isNull,
+        reason: 'null nextCursor signals the last page to the consumer',
+      );
     });
 
     test('null imageUrls field returns empty list (not null)', () {

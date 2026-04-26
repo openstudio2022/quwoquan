@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart'
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class ChatInboxListState {
   const ChatInboxListState({
@@ -96,7 +97,7 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
         state = state.copyWith(
           items: fallback,
           isLoading: false,
-          error: error.toString(),
+          error: runtimeErrorDisplayMessage(error),
         );
       }
     }();

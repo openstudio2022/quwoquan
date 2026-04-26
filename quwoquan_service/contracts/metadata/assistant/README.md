@@ -20,9 +20,11 @@
 - `_shared/enums.yaml`
 - `assistant_journey/schema.yaml`
 - `assistant_turn/schema.yaml`
-- `intent_graph/schema.yaml`
 - `run_artifacts/schema.yaml`
-- `query_task/schema.yaml`
+- `understanding_result/schema.yaml`
+- `task_graph/schema.yaml`
+- `conversation_orchestrator_state/schema.yaml`
+- `turn_synthesis_state/schema.yaml`
 - `subagent_plan/schema.yaml`
 - `preference_fact/schema.yaml`
 - `recall_result/schema.yaml`
@@ -58,7 +60,7 @@
 
 - `services/assistant-service/` 未来必须通过 `/qwq-extend new-service` 创建，禁止手动建服务目录。
 - 服务目录必须遵循仓库根规则中的 DDD 分层与 runtime 统一能力约束。
-- `assistant_journey`、`assistant_turn`、`intent_graph`、`run_artifacts` 属于共享协议，不应在 `services/assistant-service/internal/` 中手写第二套字段定义。
+- `assistant_journey`、`assistant_turn`、`understanding_result`、`task_graph`、`run_artifacts` 属于共享协议，不应在 `services/assistant-service/internal/` 中手写第二套字段定义。
 - assistant-service 若需要扩展字段，必须先改 metadata，再做 Go/Dart 双端 codegen。
 
 ## 演进顺序

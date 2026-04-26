@@ -337,7 +337,8 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
           if (frame.stepId == ProcessStepId.retrievalProcessing &&
               refs.isNotEmpty) {
             final summary = retrievalProcessing.processingSummary.trim();
-            if (summary.isNotEmpty) {
+            final summaryHasSignal = !_isLowSignalRetrievalProcessSummary(summary);
+            if (summary.isNotEmpty && summaryHasSignal) {
               headline = _stripRetrievalProcessingSummaryFromCopy(
                 headline,
                 retrievalProcessing.processingSummary,
@@ -347,9 +348,15 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
                 retrievalProcessing.processingSummary,
               );
             }
-            if (headline.isEmpty && summary.isNotEmpty) {
+            if (headline.isEmpty && summary.isNotEmpty && summaryHasSignal) {
               headline = summary;
             }
+          }
+          if (frame.stepId == ProcessStepId.retrievalProcessing &&
+              refs.isNotEmpty &&
+              headline.isEmpty &&
+              detail.isEmpty) {
+            return null;
           }
           return AssistantJourneyBlockViewModel(
             kind: frame.stepId == ProcessStepId.retrievalProcessing
@@ -366,6 +373,7 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
           );
         },
       )
+      .whereType<AssistantJourneyBlockViewModel>()
       .toList(growable: false);
 }
 
@@ -547,8 +555,16 @@ AssistantJourneyBlockViewModel? _buildJourneyBlockFromDisplayStateBlock({
     );
   }
 
-  final title = _sanitizeProcessText(block.title.trim(), stepId: stepId);
-  final body = _sanitizeProcessText(block.body.trim(), stepId: stepId);
+  var title = _sanitizeProcessText(block.title.trim(), stepId: stepId);
+  var body = _sanitizeProcessText(block.body.trim(), stepId: stepId);
+  if (stepId == ProcessStepId.retrievalProcessing) {
+    if (_isLowSignalRetrievalProcessSummary(title)) {
+      title = '';
+    }
+    if (_isLowSignalRetrievalProcessSummary(body)) {
+      body = '';
+    }
+  }
   final items = block.items
       .map(
         (item) => _sanitizeProcessText(
@@ -787,10 +803,21 @@ String _headlineForFrame(ProcessTimelineFrame? frame) {
   if (frame == null) return '';
   final lines = _sanitizeProcessLines(frame.headline, stepId: frame.stepId);
   if (lines.isNotEmpty) {
-    return lines.join('\n');
+    final headline = lines.join('\n');
+    if (frame.stepId == ProcessStepId.retrievalProcessing &&
+        _isLowSignalRetrievalProcessSummary(headline)) {
+      return '';
+    }
+    return headline;
   }
   final detailLines = _sanitizeProcessLines(frame.detail, stepId: frame.stepId);
-  return detailLines.isNotEmpty ? detailLines.join('\n') : '';
+  if (detailLines.isEmpty) return '';
+  final detail = detailLines.join('\n');
+  if (frame.stepId == ProcessStepId.retrievalProcessing &&
+      _isLowSignalRetrievalProcessSummary(detail)) {
+    return '';
+  }
+  return detail;
 }
 
 String _detailForFrame(
@@ -903,4 +930,14 @@ String _stripRetrievalProcessingSummaryFromCopy(String text, String summary) {
     return '';
   }
   return t;
+}
+
+bool _isLowSignalRetrievalProcessSummary(String text) {
+  final normalized = text.trim();
+  if (normalized.isEmpty) return false;
+  return normalized == '已完成资料筛选并进入成答' ||
+      normalized == '已完成资料筛选' ||
+      normalized == '资料筛选完成' ||
+      normalized == '进入成答' ||
+      normalized == '已完成处理';
 }

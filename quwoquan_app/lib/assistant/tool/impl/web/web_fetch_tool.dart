@@ -41,24 +41,35 @@ class WebFetchTool implements AssistantTool {
     }
     final url = request.url.trim();
     if (url.isEmpty) {
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: false,
         message: 'Missing required parameter: url',
         errorCode: AssistantErrorCode.invalidArguments,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.invalidArguments,
+          message: 'Missing required parameter: url',
+          functionModule: name,
+          stage: 'argument_validation',
+        ),
       );
     }
 
     final maxChars =
-        request.maxChars?.clamp(100, _absoluteMaxChars) ??
-        _defaultMaxChars;
+        request.maxChars?.clamp(100, _absoluteMaxChars) ?? _defaultMaxChars;
 
     try {
       final uri = Uri.parse(url);
       if (!uri.hasScheme || (!uri.isScheme('http') && !uri.isScheme('https'))) {
-        return const AssistantToolResult(
+        return AssistantToolResult(
           success: false,
           message: 'Invalid URL scheme: only http/https supported',
           errorCode: AssistantErrorCode.invalidArguments,
+          runtimeFailure: assistantToolRuntimeFailure(
+            errorCode: AssistantErrorCode.invalidArguments,
+            message: 'Invalid URL scheme: only http/https supported',
+            functionModule: name,
+            stage: 'argument_validation',
+          ),
         );
       }
 
@@ -92,8 +103,13 @@ class WebFetchTool implements AssistantTool {
           degraded: errorCode != AssistantErrorCode.invalidArguments,
           data: WebFetchFailurePayload(
             statusCode: response.statusCode,
-            retryable: _isRetryableStatusCode(response.statusCode),
           ).toResultData(),
+          runtimeFailure: assistantToolRuntimeFailure(
+            errorCode: errorCode,
+            message: _statusCodeToMessage(response.statusCode, url),
+            functionModule: name,
+            stage: 'http_response',
+          ),
         );
       }
 
@@ -126,6 +142,12 @@ class WebFetchTool implements AssistantTool {
           errorCode: AssistantErrorCode.unsupportedTarget,
           degraded: true,
           data: WebFetchFailurePayload(contentType: contentType).toResultData(),
+          runtimeFailure: assistantToolRuntimeFailure(
+            errorCode: AssistantErrorCode.unsupportedTarget,
+            message: 'Unsupported content type: $contentType',
+            functionModule: name,
+            stage: 'content_type_validation',
+          ),
         );
       }
 
@@ -136,7 +158,7 @@ class WebFetchTool implements AssistantTool {
       final content = truncated ? bodyText.substring(0, maxChars) : bodyText;
       final charCount = content.length;
       final sourceHost = uri.host.toLowerCase().trim();
-      final queryTaskId = request.queryTaskId.trim();
+      final searchPlanId = request.searchPlanId.trim();
       final dimension = request.dimension.trim();
       final snippet = content.length <= 180
           ? content
@@ -168,7 +190,7 @@ class WebFetchTool implements AssistantTool {
               WebFetchReference.fromJson(<String, Object?>{
                 ...safeReference,
                 'sourceTier': 'page',
-                'queryTaskId': queryTaskId,
+                'searchPlanId': searchPlanId,
                 'dimension': dimension,
                 'retrievedAt': retrievedAt,
               }),
@@ -184,7 +206,7 @@ class WebFetchTool implements AssistantTool {
         contentType: contentType,
         sourceHost: canonicalSourceHost,
         sourceTier: 'page',
-        queryTaskId: queryTaskId,
+        searchPlanId: searchPlanId,
         dimension: dimension,
         references: references,
       );
@@ -194,7 +216,7 @@ class WebFetchTool implements AssistantTool {
           'method': 'GET',
           'headers': _buildHeaders(),
           'maxChars': maxChars,
-          if (queryTaskId.isNotEmpty) 'queryTaskId': queryTaskId,
+          if (searchPlanId.isNotEmpty) 'searchPlanId': searchPlanId,
           if (dimension.isNotEmpty) 'dimension': dimension,
         },
         response: <String, dynamic>{
@@ -220,6 +242,12 @@ class WebFetchTool implements AssistantTool {
         success: false,
         message: 'Invalid URL format: $url',
         errorCode: AssistantErrorCode.invalidArguments,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.invalidArguments,
+          message: 'Invalid URL format: $url',
+          functionModule: name,
+          stage: 'argument_validation',
+        ),
       );
     } on TimeoutException {
       if (kDebugMode) {
@@ -231,11 +259,17 @@ class WebFetchTool implements AssistantTool {
         hasError: true,
         error: 'timeout',
       );
-      return const AssistantToolResult(
+      return AssistantToolResult(
         success: false,
         message: '网页加载超时，请稍后重试',
         errorCode: AssistantErrorCode.networkUnavailable,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.networkUnavailable,
+          message: '网页加载超时，请稍后重试',
+          functionModule: name,
+          stage: 'http_timeout',
+        ),
       );
     } on http.ClientException catch (e) {
       if (kDebugMode) {
@@ -253,6 +287,12 @@ class WebFetchTool implements AssistantTool {
         errorCode: AssistantErrorCode.networkUnavailable,
         degraded: true,
         data: WebFetchFailurePayload(detail: e.message).toResultData(),
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.networkUnavailable,
+          message: '网页读取失败，网络连接异常',
+          functionModule: name,
+          stage: 'http_client',
+        ),
       );
     } catch (e) {
       if (kDebugMode) {
@@ -269,6 +309,12 @@ class WebFetchTool implements AssistantTool {
         message: '网页读取失败: $e',
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.executionFailed,
+          message: '网页读取失败: $e',
+          functionModule: name,
+          stage: 'unexpected_exception',
+        ),
       );
     }
   }
@@ -280,28 +326,28 @@ class WebFetchTool implements AssistantTool {
     String error = '',
   }) {
     assert(() {
-      final queryTaskId = (request['queryTaskId'] as String?)?.trim() ?? '';
+      final searchPlanId = (request['searchPlanId'] as String?)?.trim() ?? '';
       final header = StringBuffer('[AssistantSearch][fetch] ');
       header.write(hasError ? 'ERROR' : 'OK');
       header.write(' stage=retrieval_processing');
       header.write(' tool=web_fetch');
-      if (queryTaskId.isNotEmpty) {
-        header.write(' queryTaskId=$queryTaskId');
+      if (searchPlanId.isNotEmpty) {
+        header.write(' searchPlanId=$searchPlanId');
       }
-      print(header.toString());
+      debugPrint(header.toString());
       for (final line in ConsolePrettyLogFormatter.renderSection(
         prefix: '[AssistantSearch] ',
         title: 'request',
         value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(request),
       )) {
-        print(line);
+        debugPrint(line);
       }
       for (final line in ConsolePrettyLogFormatter.renderSection(
         prefix: '[AssistantSearch] ',
         title: 'response',
         value: ConsolePrettyLogFormatter.normalizeJsonLikeValue(response),
       )) {
-        print(line);
+        debugPrint(line);
       }
       if (error.trim().isNotEmpty) {
         for (final line in ConsolePrettyLogFormatter.renderSection(
@@ -309,7 +355,7 @@ class WebFetchTool implements AssistantTool {
           title: 'error',
           value: error,
         )) {
-          print(line);
+          debugPrint(line);
         }
       }
       return true;
@@ -322,7 +368,23 @@ class WebFetchTool implements AssistantTool {
   }) {
     final brokerPayload = result.payloadOrNull;
     if (brokerPayload == null) {
-      return result.toToolResult();
+      final toolResult = result.toToolResult();
+      if (toolResult.success || toolResult.runtimeFailure != null) {
+        return toolResult;
+      }
+      return AssistantToolResult(
+        success: toolResult.success,
+        message: toolResult.message,
+        data: toolResult.data,
+        errorCode: toolResult.errorCode,
+        degraded: toolResult.degraded,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: toolResult.errorCode,
+          message: toolResult.message,
+          functionModule: name,
+          stage: 'broker_fetch',
+        ),
+      );
     }
     final sanitizedPayload = _sanitizeBrokerFetchPayload(
       request: request,
@@ -334,6 +396,14 @@ class WebFetchTool implements AssistantTool {
       data: sanitizedPayload.toResultData(),
       errorCode: result.errorCode,
       degraded: result.degraded,
+      runtimeFailure: result.success
+          ? null
+          : assistantToolRuntimeFailure(
+              errorCode: result.errorCode,
+              message: result.message,
+              functionModule: name,
+              stage: 'broker_fetch',
+            ),
     );
   }
 
@@ -348,7 +418,9 @@ class WebFetchTool implements AssistantTool {
         .map(
           (item) => _normalizeFetchReference(
             raw: WebFetchReference.fromRetrievalReference(item),
-            fallbackUrl: payload.url.trim().isNotEmpty ? payload.url : request.url,
+            fallbackUrl: payload.url.trim().isNotEmpty
+                ? payload.url
+                : request.url,
             fallbackTitle: payload.title,
             fallbackSource: payload.source.trim().isNotEmpty
                 ? payload.source
@@ -356,11 +428,11 @@ class WebFetchTool implements AssistantTool {
             fallbackSnippet: item.snippet.trim().isNotEmpty
                 ? item.snippet
                 : fallbackSnippet,
-            queryTaskId: item.queryTaskId.trim().isNotEmpty
-                ? item.queryTaskId
-                : (payload.queryTaskId.trim().isNotEmpty
-                      ? payload.queryTaskId
-                      : request.queryTaskId),
+            searchPlanId: item.searchPlanId.trim().isNotEmpty
+                ? item.searchPlanId
+                : (payload.searchPlanId.trim().isNotEmpty
+                      ? payload.searchPlanId
+                      : request.searchPlanId),
             dimension: item.dimension.trim().isNotEmpty
                 ? item.dimension
                 : (payload.dimension.trim().isNotEmpty
@@ -391,9 +463,9 @@ class WebFetchTool implements AssistantTool {
                   ? payload.source
                   : payload.sourceHost,
               fallbackSnippet: fallbackSnippet,
-              queryTaskId: payload.queryTaskId.trim().isNotEmpty
-                  ? payload.queryTaskId
-                  : request.queryTaskId,
+              searchPlanId: payload.searchPlanId.trim().isNotEmpty
+                  ? payload.searchPlanId
+                  : request.searchPlanId,
               dimension: payload.dimension.trim().isNotEmpty
                   ? payload.dimension
                   : request.dimension,
@@ -429,12 +501,14 @@ class WebFetchTool implements AssistantTool {
           : payload.sourceHost,
       sourceTier: primary?.sourceTier.trim().isNotEmpty == true
           ? primary!.sourceTier
-          : (payload.sourceTier.trim().isNotEmpty ? payload.sourceTier : 'page'),
-      queryTaskId: primary?.queryTaskId.trim().isNotEmpty == true
-          ? primary!.queryTaskId
-          : (payload.queryTaskId.trim().isNotEmpty
-                ? payload.queryTaskId
-                : request.queryTaskId),
+          : (payload.sourceTier.trim().isNotEmpty
+                ? payload.sourceTier
+                : 'page'),
+      searchPlanId: primary?.searchPlanId.trim().isNotEmpty == true
+          ? primary!.searchPlanId
+          : (payload.searchPlanId.trim().isNotEmpty
+                ? payload.searchPlanId
+                : request.searchPlanId),
       dimension: primary?.dimension.trim().isNotEmpty == true
           ? primary!.dimension
           : (payload.dimension.trim().isNotEmpty
@@ -450,7 +524,7 @@ class WebFetchTool implements AssistantTool {
     required String fallbackTitle,
     required String fallbackSource,
     required String fallbackSnippet,
-    required String queryTaskId,
+    required String searchPlanId,
     required String dimension,
     required String sourceTier,
     required String retrievedAt,
@@ -458,7 +532,9 @@ class WebFetchTool implements AssistantTool {
     final normalized = SafeReferenceNormalizer.normalize(<String, dynamic>{
       'url': raw.url.trim().isNotEmpty ? raw.url.trim() : fallbackUrl,
       'title': raw.title.trim().isNotEmpty ? raw.title.trim() : fallbackTitle,
-      'source': raw.source.trim().isNotEmpty ? raw.source.trim() : fallbackSource,
+      'source': raw.source.trim().isNotEmpty
+          ? raw.source.trim()
+          : fallbackSource,
       'snippet': raw.snippet.trim().isNotEmpty
           ? raw.snippet.trim()
           : fallbackSnippet,
@@ -467,7 +543,7 @@ class WebFetchTool implements AssistantTool {
     return WebFetchReference.fromJson(<String, Object?>{
       ...normalized,
       'sourceTier': sourceTier,
-      'queryTaskId': queryTaskId,
+      'searchPlanId': searchPlanId,
       'dimension': dimension,
       'retrievedAt': retrievedAt,
     });
@@ -498,10 +574,6 @@ class WebFetchTool implements AssistantTool {
       return AssistantErrorCode.networkUnavailable;
     }
     return AssistantErrorCode.executionFailed;
-  }
-
-  bool _isRetryableStatusCode(int statusCode) {
-    return statusCode == 429 || statusCode >= 500;
   }
 
   String _statusCodeToMessage(int statusCode, String url) {

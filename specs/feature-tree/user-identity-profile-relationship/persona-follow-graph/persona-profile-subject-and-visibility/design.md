@@ -7,7 +7,7 @@
 本场景需要同时解决：
 
 1. 公开身份到底是 `Persona` 本体、额外 `PublicProfile` 实体，还是 user 域合成读模型。
-2. owner 基线、分身覆写、同步范围如何表达，避免 UI 私藏规则。
+2. 用户基线、分身覆写、同步范围如何表达，避免 UI 私藏规则。
 3. strict isolation 与 retired attribution 如何做到“公开最小暴露，但历史可稳定渲染”。
 
 ## 上游输入评审
@@ -119,11 +119,13 @@
 - `profileSubjectId`
 - `subjectType`
 - `subAccountId`
+- `userHandle`
 - `username`
 - `displayName`
 - `avatarUrl`
 - `backgroundUrl`
 - `bio`
+- `isolationLevel`
 - `profileVisibility`
 - 统计字段
 
@@ -131,17 +133,22 @@
 
 - 公开主页首屏直接消费 `PersonaDto`
 - 评论、内容卡、聊天列表直接拼 owner 字段
-- 普通接口返回 owner 管理字段
+- 公开接口返回可反推同一用户多分身关系的内部字段
 
 ### KD2：owner 基线 + persona override，而不是完整副本
 
 owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 
 - `displayName`
+- `userHandle`
+- `phone`
+- `email`
 - `avatarUrl`
-- `backgroundUrl`
-- `bio`
-- `profileVisibility`
+
+其中：
+
+- `backgroundUrl / bio` 继续作为 owner 基线读字段返回，不在 M2 内扩成 persona 级持久化覆写。
+- `profileVisibility` 继续作为 `isolationLevel` 的兼容读枚举，不再单独进入 persona 写入链路。
 
 对应新增：
 
@@ -162,10 +169,12 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 建议冻结 `ProfileSubjectMutation`：
 
 - `displayName`
+- `userHandle`
+- `phone`
+- `email`
 - `avatarUrl`
-- `backgroundUrl`
-- `bio`
-- `profileVisibility`
+- `isolationLevel`
+- `purposeHint`
 - `applyScope`
 - `syncTargetIds`
 - `fieldsMask`
@@ -178,6 +187,7 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 - `selected_subjects`
 
 这样同步语义由 user 域 contract 保证，而不是由 UI 自己猜。
+其中 `fieldsMask` 首批只允许同步 `displayName / userHandle / phone / email / avatarUrl`。
 
 ### KD4：可见性与 retired attribution 分层
 
@@ -189,22 +199,25 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 
 语义：
 
+- `IsolationLevel` 是公开访问边界真相源，决定能否发现、能否按公开路径读取。
+- `ProfileVisibility` 是对旧消费方保留的展示层兼容枚举，固定映射为 `open -> public`、`semi -> friends`、`strict -> private`。
 - `strict` 仅影响公开读取，不影响 owner 管理和审计。
 - retired persona 默认不再作为新动作主体，但历史对象继续使用不可变作者快照。
 - “公开主页是否还能访问”与“历史对象是否还能渲染”是两条独立规则。
 
-### KD5：路由继续使用 `username`，内部 key 统一使用 `profileSubjectId`
+### KD5：路由使用 `userHandle`，公开 key 使用 `profileSubjectId`，内部 canonical key 使用 `personaId`
 
 对外：
 
-- 路由仍可保持 `/user/{username}`
+- 路由使用 `/user/{userHandle}`
 
 对内：
 
-- Repository / provider / graph / context 一律使用 `profileSubjectId`
-- `username` 只承担 URL 和展示职责
+- Repository / provider / graph / context 一律使用 `personaId`
+- `ProfileSubjectView.profileSubjectId` 仅作为公开读取与兼容投影字段
+- `userHandle` 承担公开句柄职责；`username` 仅保留为兼容别名
 
-这可以避免 username 变更时内部引用漂移。
+这可以避免 `userHandle` 变更时内部引用漂移。
 
 ### KD6：消费边界必须统一
 
@@ -233,7 +246,7 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 
 下游配合：
 
-- `content/post` 与 `messages/conversation` 补齐 `profileSubjectId` 和 snapshot 字段
+- `content/post`、`messages/conversation` 与通知消费链补齐 `personaId + profileSubjectId` 与 snapshot 字段
 - `make -C quwoquan_service verify-metadata`
 - `make codegen`
 - `make codegen-app`
@@ -244,7 +257,7 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
 
 ### 字段演进
 
-- 新写链路统一补齐 `profileSubjectId`
+- 新写链路统一补齐 `personaId`，并同步生成公开 `profileSubjectId`
 - `PersonaDto` 保留为管理视角兼容模型，不再作为公开首屏模型
 - 旧字段优先级：
   - 新对象读 `ProfileSubjectView`
@@ -276,7 +289,7 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
 
 回滚原则：
 
-- 关闭开关后，可退回旧公开读取路径
+- 关闭开关后，可退回旧公开读取实现，但不回退 `profileSubjectId`、`userHandle` 与历史快照真相源
 - 已生成的 `profileSubjectId` 和历史快照不删除
 - retired attribution 不允许回滚到 owner 重绑
 

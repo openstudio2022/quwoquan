@@ -7,8 +7,13 @@ import 'package:quwoquan_app/assistant/orchestration/phases/phase.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/synthesis_materializer.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/synthesis_runner.dart';
 import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
+import 'package:quwoquan_app/assistant/orchestration/state/agent_execution_state.dart';
 import 'package:quwoquan_app/assistant/orchestration/state/execution_phase_snapshot.dart';
+import 'package:quwoquan_app/assistant/contracts/assistant_typed_turn_decision_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
+import 'package:quwoquan_app/assistant/protocol/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
+import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 
 /// Synthesis: finalize answer and hydrate grounding state.
 class SynthesisPhase implements Phase {
@@ -38,10 +43,9 @@ class SynthesisPhase implements Phase {
            runner ??
            SynthesisRunner(
              buildDraft: owner.synthesizeDraftBridge,
-             materialize:
-                 materializer != null
-                     ? materializer.materialize
-                     : ResponseMaterializer(owner: owner).materialize,
+             materialize: materializer != null
+                 ? materializer.materialize
+                 : ResponseMaterializer(owner: owner).materialize,
            ),
        _outcomeResolver = outcomeResolver;
 
@@ -73,10 +77,17 @@ class SynthesisPhase implements Phase {
             ? null
             : (event) => input.onTraceEvent!(event),
       );
+      pendingResponse = _attachTypedMainlineState(pendingResponse, input.state);
     }
     if (pendingResponse == null) {
       return PhaseOutput(state: input.state);
     }
+    final fallbackAssistantTypedTurnDecision =
+        AssistantTypedTurnDecision.fromTypedState(
+          orchestratorState: input.state.orchestratorState,
+          turnSynthesisState: input.state.turnSynthesisState,
+          groundedSlotState: input.state.slotState ?? const SlotStateSnapshot(),
+        );
     final runArtifacts = pendingResponse.runArtifacts;
     final outcome = (_outcomeResolver ?? const AnswerOutcomeResolver()).resolve(
       structured: pendingResponse.structuredResponse,
@@ -85,7 +96,7 @@ class SynthesisPhase implements Phase {
       fallbackAnswerEvidenceBindings: input.state.answerEvidenceBindings,
       fallbackEvidenceEvaluation: input.state.evidenceEvaluation,
       fallbackAggregationState: input.state.aggregationState,
-      fallbackConversationStateDecision: input.state.conversationStateDecision,
+      fallbackAssistantTypedTurnDecision: fallbackAssistantTypedTurnDecision,
       fallbackSynthesisReadiness: input.state.synthesisReadiness,
       fallbackSlotState: input.state.slotState,
       fallbackDomainPolicyBundle: input.state.domainPolicyBundle,
@@ -102,10 +113,36 @@ class SynthesisPhase implements Phase {
         aggregationState: outcome.aggregationState,
         evidenceEvaluation: outcome.evidenceEvaluation,
         domainPolicyBundle: outcome.domainPolicyBundle,
-        conversationStateDecision: outcome.conversationStateDecision,
         journey: outcome.journey,
         synthesisReadiness: outcome.synthesisReadiness,
       ),
+    );
+  }
+
+  AssistantRunResponse _attachTypedMainlineState(
+    AssistantRunResponse response,
+    AgentExecutionState state,
+  ) {
+    final structured = Map<String, dynamic>.from(response.structuredResponse);
+    structured[assistantSystemContextEnvelopeField] = state
+        .systemContextEnvelope
+        .toJson();
+    structured[assistantUnderstandingResultField] = state.understandingResult
+        .toJson();
+    structured[assistantTaskGraphField] = state.taskGraph.toJson();
+    structured[assistantOrchestratorStateField] = state.orchestratorState
+        .toJson();
+    structured[assistantTurnSynthesisStateField] = state.turnSynthesisState
+        .toJson();
+    return AssistantRunResponse(
+      finalText: response.finalText,
+      traces: response.traces,
+      degraded: response.degraded,
+      runId: response.runId,
+      traceId: response.traceId,
+      structuredResponse: structured,
+      profileUpdateProposal: response.profileUpdateProposal,
+      errorCode: response.errorCode,
     );
   }
 }

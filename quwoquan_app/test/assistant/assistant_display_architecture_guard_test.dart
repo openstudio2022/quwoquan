@@ -54,7 +54,7 @@ void main() {
       'normalizeThreeSectionResponseMarkdown',
       'rewriteRetrievalQueryLeakForDisplay',
       'hasThreeSectionAnswerShape',
-      '_queryTaskLeadLine',
+      '_searchPlanLeadLine',
       '_isLowSignalSearchPlanningMessage',
       '_isLowSignalJourneyNarrative',
       '_looksLikeOverExpandedDisplayPlainText',
@@ -84,7 +84,7 @@ void main() {
     const inlineProtocolPatterns = <String>[
       r"contains\('assistant_turn'\)",
       r"contains\('contractId'\)",
-      r"contains\('queryTasks'\)",
+      r"contains\('searchPlans'\)",
       r"contains\('queryVariants'\)",
       r"contains\('machineEnvelope'\)",
       r"contains\('tool_call'\)",

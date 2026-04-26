@@ -12,6 +12,8 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       'identity': identity,
       'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
+      'authorProfileSubjectId': authorProfileSubjectId,
+      'profileSubjectId': authorProfileSubjectId,
       'authorNickname': displayName,
       'displayName': displayName,
       'authorAvatarUrl': avatarUrl,
@@ -47,11 +49,14 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       if (circleSummaries != null && circleSummaries!.isNotEmpty)
         'circleSummaries': circleSummaries,
       if (circleIds != null && circleIds!.isNotEmpty) 'circleIds': circleIds,
-      if (circleNames != null && circleNames!.isNotEmpty) 'circleNames': circleNames,
+      if (circleNames != null && circleNames!.isNotEmpty)
+        'circleNames': circleNames,
       if (circleId != null && circleId!.trim().isNotEmpty) 'circleId': circleId,
-      if (circleName != null && circleName!.trim().isNotEmpty) 'circleName': circleName,
+      if (circleName != null && circleName!.trim().isNotEmpty)
+        'circleName': circleName,
       if (tags != null && tags!.isNotEmpty) 'tags': tags,
-      if (visibility != null && visibility!.trim().isNotEmpty) 'visibility': visibility,
+      if (visibility != null && visibility!.trim().isNotEmpty)
+        'visibility': visibility,
     };
   }
 }

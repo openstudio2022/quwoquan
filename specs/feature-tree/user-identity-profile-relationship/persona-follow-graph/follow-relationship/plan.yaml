@@ -22,7 +22,7 @@ slices:
       - `FollowCommandRequest / Result`、`UnfollowCommandRequest`、事件与错误码冻结
       - `ProfileSubject` 成为 command 主键
       - block gate 与 request context 由 metadata 表达
-    status: planned
+    status: implemented
 
   - id: P2
     title: establish codegen and command repository baseline
@@ -39,7 +39,7 @@ slices:
       - "`verify-metadata / codegen / codegen-app` 通过"
       - follow 按钮与关系操作入口统一调用同一 repository / facade
       - UI 不再以局部 `isFollowing` 布尔值充当写入真相源
-    status: planned
+    status: implemented
 
   - id: P3
     title: implement idempotent edge write and counter sync
@@ -55,7 +55,7 @@ slices:
       - duplicate follow / unfollow no-op 行为稳定
       - `UserFollowed / UserUnfollowed` 可驱动计数修正
       - legacy owner-level follow edge 回填到主分身并支持双读兼容
-    status: planned
+    status: partial
 
   - id: P4
     title: validate rollout, rollback, and audit metrics
@@ -72,4 +72,4 @@ slices:
       - duplicate follow、block rejection、counter mismatch、legacy edge read 指标可观测
       - persona-aware graph 开关关闭后可回退旧写路径
       - migration rehearsal 与 rollback rehearsal 完成
-    status: planned
+    status: partial

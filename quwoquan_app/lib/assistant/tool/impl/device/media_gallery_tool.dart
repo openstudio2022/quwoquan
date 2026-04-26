@@ -21,6 +21,12 @@ class MediaGalleryTool implements AssistantTool {
         message: 'Gallery query failed: ${result['error']}',
         errorCode: AssistantErrorCode.executionFailed,
         degraded: true,
+        runtimeFailure: assistantToolRuntimeFailure(
+          errorCode: AssistantErrorCode.executionFailed,
+          message: 'Gallery query failed: ${result['error']}',
+          functionModule: name,
+          stage: 'gallery_query',
+        ),
       );
     }
     return AssistantToolResult(

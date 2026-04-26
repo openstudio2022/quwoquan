@@ -695,14 +695,6 @@ class ArticlePageBinding {
   bool get hasAsset => resolvedAssetIds.isNotEmpty;
 }
 
-ArticleDocumentTitleStyle _articleDocumentTitleStyleFromString(String? value) {
-  return switch ((value ?? '').trim()) {
-    'none' => ArticleDocumentTitleStyle.none,
-    'minor' => ArticleDocumentTitleStyle.minor,
-    _ => ArticleDocumentTitleStyle.major,
-  };
-}
-
 List<ArticleDocumentNode> _normalizeDocumentNodes(
   List<ArticleDocumentNode> nodes,
 ) {

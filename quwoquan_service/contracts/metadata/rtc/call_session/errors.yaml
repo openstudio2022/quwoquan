@@ -12,7 +12,7 @@ errors:
     kind: USER
     reason: not_found
     http_status: 404
-    retryable: false
+    recovery_action: surface
     dart_const: callNotFound
     go_const: ErrCallNotFound
     user_message:
@@ -23,7 +23,7 @@ errors:
     kind: USER
     reason: unauthorized
     http_status: 401
-    retryable: false
+    recovery_action: surface
     dart_const: unauthorized
     go_const: ErrUnauthorized
     user_message:
@@ -34,7 +34,7 @@ errors:
     kind: USER
     reason: conflict
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: alreadyInCall
     go_const: ErrAlreadyInCall
     user_message:
@@ -45,7 +45,7 @@ errors:
     kind: USER
     reason: limit_exceeded
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: callFull
     go_const: ErrCallFull
     user_message:
@@ -56,7 +56,7 @@ errors:
     kind: USER
     reason: invalid_state
     http_status: 410
-    retryable: false
+    recovery_action: surface
     dart_const: callEnded
     go_const: ErrCallEnded
     user_message:
@@ -67,7 +67,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: notParticipant
     go_const: ErrNotParticipant
     user_message:
@@ -78,7 +78,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: notSameInterest
     go_const: ErrNotSameInterest
     user_message:
@@ -89,7 +89,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: blocked
     go_const: ErrBlocked
     user_message:
@@ -100,7 +100,7 @@ errors:
     kind: USER
     reason: invalid_state
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: cannotAnswer
     go_const: ErrCannotAnswer
     user_message:
@@ -111,7 +111,7 @@ errors:
     kind: USER
     reason: conflict
     http_status: 409
-    retryable: false
+    recovery_action: surface
     dart_const: screenShareConflict
     go_const: ErrScreenShareConflict
     user_message:
@@ -122,7 +122,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: recordingNotAllowed
     go_const: ErrRecordingNotAllowed
     user_message:
@@ -133,8 +133,8 @@ errors:
     kind: USER
     reason: rate_limited
     http_status: 429
-    retryable: true
-    retry_after_seconds: 5
+    recovery_action: retry
+    recovery_after_seconds: 5
     dart_const: rateLimited
     go_const: ErrRateLimited
     user_message:
@@ -145,8 +145,8 @@ errors:
     kind: SYSTEM
     reason: upstream_error
     http_status: 503
-    retryable: true
-    retry_after_seconds: 3
+    recovery_action: retry
+    recovery_after_seconds: 3
     dart_const: livekitUnavailable
     go_const: ErrLivekitUnavailable
     user_message:
@@ -157,7 +157,7 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: false
+    recovery_action: surface
     dart_const: internalError
     go_const: ErrInternalError
     user_message:
@@ -168,8 +168,8 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: true
-    retry_after_seconds: 2
+    recovery_action: retry
+    recovery_after_seconds: 2
     dart_const: tokenGenerationFailed
     go_const: ErrTokenGenerationFailed
     user_message:

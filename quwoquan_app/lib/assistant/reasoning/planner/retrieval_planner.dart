@@ -1,5 +1,6 @@
-import 'package:quwoquan_app/assistant/contracts/query_task_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
+import 'package:quwoquan_app/assistant/orchestration/retrieval_tool_selection_policy.dart';
 import 'package:quwoquan_app/assistant/reasoning/geo/geo_scope_support.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/problem_framer.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
@@ -8,13 +9,13 @@ class BaselineRetrievalPlan {
   const BaselineRetrievalPlan({
     required this.reasoning,
     required this.calls,
-    this.queryTasks = const <QueryTask>[],
+    this.searchPlans = const <SearchPlanItem>[],
     this.blockingDimensions = const <String>[],
   });
 
   final String reasoning;
   final List<AssistantToolCall> calls;
-  final List<QueryTask> queryTasks;
+  final List<SearchPlanItem> searchPlans;
   final List<String> blockingDimensions;
 }
 
@@ -26,22 +27,25 @@ class DefaultRetrievalPlanner {
   BaselineRetrievalPlan? plan({
     required ProblemFrame frame,
     required List<String> availableTools,
-    List<QueryTask>? preComputedQueryTasks,
+    List<SearchPlanItem>? preComputedSearchPlans,
   }) {
     if (frame.normalizedQuery.isEmpty) return null;
-    final retrievalToolName = _preferredRetrievalToolName(availableTools);
+    final searchPlans =
+        (preComputedSearchPlans != null && preComputedSearchPlans.isNotEmpty)
+        ? preComputedSearchPlans
+        : _buildSearchPlans(frame);
+    final retrievalToolName = _preferredRetrievalToolName(
+      availableTools,
+      searchPlans: searchPlans,
+    );
     if (retrievalToolName.isEmpty) return null;
-    final queryTasks =
-        (preComputedQueryTasks != null && preComputedQueryTasks.isNotEmpty)
-        ? preComputedQueryTasks
-        : _buildQueryTasks(frame);
-    final blockingDimensions = queryTasks
+    final blockingDimensions = searchPlans
         .map((item) => item.dimension.displayLabel)
         .where((item) => item.trim().isNotEmpty)
         .toList(growable: false);
     return BaselineRetrievalPlan(
       reasoning: '',
-      queryTasks: queryTasks,
+      searchPlans: searchPlans,
       blockingDimensions: blockingDimensions,
       calls: <AssistantToolCall>[
         AssistantToolCall(
@@ -58,12 +62,11 @@ class DefaultRetrievalPlanner {
               'timeRangeEnd': frame.timeRangeEnd,
             if (frame.timePoint.isNotEmpty) 'timePoint': frame.timePoint,
             if (frame.timezone.isNotEmpty) 'timezone': frame.timezone,
-            if (queryTasks.isNotEmpty)
-              'queryTasks': queryTasks
+            if (searchPlans.isNotEmpty)
+              'searchPlans': searchPlans
                   .map((item) => item.toJson())
                   .toList(growable: false),
-            if (frame.entityAnchors.isNotEmpty)
-              'entityAnchors': frame.entityAnchors,
+            if (frame.entityRefs.isNotEmpty) 'entityRefs': frame.entityRefs,
             if (frame.negativeKeywords.isNotEmpty)
               'negativeKeywords': frame.negativeKeywords,
           },
@@ -72,21 +75,21 @@ class DefaultRetrievalPlanner {
     );
   }
 
-  String _preferredRetrievalToolName(List<String> availableTools) {
-    if (availableTools.contains('search')) {
-      return 'search';
-    }
-    if (availableTools.contains('web_search')) {
-      return 'web_search';
-    }
-    return '';
+  String _preferredRetrievalToolName(
+    List<String> availableTools, {
+    required List<SearchPlanItem> searchPlans,
+  }) {
+    return const RetrievalToolSelectionPolicy().select(
+      availableToolNames: availableTools,
+      searchPlans: searchPlans,
+    );
   }
 
   Map<String, dynamic> _queryNormalization(ProblemFrame frame) {
     return <String, dynamic>{
       'normalizedQuery': frame.normalizedQuery,
       'query': frame.normalizedQuery,
-      'entityAnchors': frame.entityAnchors,
+      'entityRefs': frame.entityRefs,
       'negativeKeywords': frame.negativeKeywords,
       'answerShape': frame.answerShapeKind.wireName,
       'freshnessNeed': frame.freshnessNeedKind.wireName,
@@ -105,19 +108,19 @@ class DefaultRetrievalPlanner {
     };
   }
 
-  QueryTask _queryTask({
+  SearchPlanItem _searchPlan({
     required ProblemFrame frame,
     required String id,
     required String query,
     required String label,
-    required QueryTaskDimension dimension,
+    required SearchPlanDimension dimension,
   }) {
-    return QueryTask(
+    return SearchPlanItem(
       id: id,
       query: query,
       label: label,
       dimension: dimension,
-      entityAnchors: mergeGeoAnchors(frame.entityAnchors, frame.resolvedGeoScope),
+      entityRefs: mergeGeoAnchors(frame.entityRefs, frame.resolvedGeoScope),
       negativeKeywords: frame.negativeKeywords,
       timeScope: frame.timeScope,
       timeRangeStart: frame.timeRangeStart,
@@ -127,97 +130,97 @@ class DefaultRetrievalPlanner {
     );
   }
 
-  List<QueryTask> _buildQueryTasks(ProblemFrame frame) {
-    if (!frame.requiresExternalEvidence) return const <QueryTask>[];
+  List<SearchPlanItem> _buildSearchPlans(ProblemFrame frame) {
+    if (!frame.requiresExternalEvidence) return const <SearchPlanItem>[];
     switch (frame.answerShapeKind) {
       case AnswerShape.comparison:
       case AnswerShape.options:
-        return <QueryTask>[
-          _queryTask(
+        return <SearchPlanItem>[
+          _searchPlan(
             frame: frame,
             id: 'candidate_space',
             query: '${frame.normalizedQuery} 备选 方案',
             label: '候选范围',
-            dimension: QueryTaskDimension.candidateSpace,
+            dimension: SearchPlanDimension.candidateSpace,
           ),
-          _queryTask(
+          _searchPlan(
             frame: frame,
             id: 'fit_scenarios',
             query: '${frame.normalizedQuery} 适用 场景',
             label: '适用场景',
-            dimension: QueryTaskDimension.fitScenarios,
+            dimension: SearchPlanDimension.fitScenarios,
           ),
-          _queryTask(
+          _searchPlan(
             frame: frame,
             id: 'risks',
             query: '${frame.normalizedQuery} 风险 注意事项',
             label: '风险边界',
-            dimension: QueryTaskDimension.riskBoundaries,
+            dimension: SearchPlanDimension.riskBoundaries,
           ),
         ];
       case AnswerShape.decisionReady:
-        return <QueryTask>[
-          _queryTask(
+        return <SearchPlanItem>[
+          _searchPlan(
             frame: frame,
             id: 'key_facts',
             query: '${frame.normalizedQuery} 关键事实',
             label: '关键事实',
-            dimension: QueryTaskDimension.keyFacts,
+            dimension: SearchPlanDimension.keyFacts,
           ),
-          _queryTask(
+          _searchPlan(
             frame: frame,
             id: 'decision_threshold',
             query: '${frame.normalizedQuery} 判断条件',
             label: '判断条件',
-            dimension: QueryTaskDimension.decisionThreshold,
+            dimension: SearchPlanDimension.decisionThreshold,
           ),
         ];
       default:
         break;
     }
     if (frame.problemClassKind == ProblemClass.complexReasoning) {
-      return <QueryTask>[
-        _queryTask(
+      return <SearchPlanItem>[
+        _searchPlan(
           frame: frame,
           id: 'candidate_space',
           query: '${frame.normalizedQuery} 备选 方案',
           label: '候选范围',
-          dimension: QueryTaskDimension.candidateSpace,
+          dimension: SearchPlanDimension.candidateSpace,
         ),
-        _queryTask(
+        _searchPlan(
           frame: frame,
           id: 'fit_scenarios',
           query: '${frame.normalizedQuery} 适用 场景',
           label: '适用场景',
-          dimension: QueryTaskDimension.fitScenarios,
+          dimension: SearchPlanDimension.fitScenarios,
         ),
-        _queryTask(
+        _searchPlan(
           frame: frame,
           id: 'risks',
           query: '${frame.normalizedQuery} 风险 注意事项',
           label: '风险边界',
-          dimension: QueryTaskDimension.riskBoundaries,
+          dimension: SearchPlanDimension.riskBoundaries,
         ),
       ];
     }
     if (frame.problemClassKind == ProblemClass.evidenceLookup) {
-      return <QueryTask>[
-        _queryTask(
+      return <SearchPlanItem>[
+        _searchPlan(
           frame: frame,
           id: 'key_facts',
           query: '${frame.normalizedQuery} 关键事实',
           label: '关键事实',
-          dimension: QueryTaskDimension.keyFacts,
+          dimension: SearchPlanDimension.keyFacts,
         ),
-        _queryTask(
+        _searchPlan(
           frame: frame,
           id: 'decision_threshold',
           query: '${frame.normalizedQuery} 判断条件',
           label: '判断条件',
-          dimension: QueryTaskDimension.decisionThreshold,
+          dimension: SearchPlanDimension.decisionThreshold,
         ),
       ];
     }
-    return const <QueryTask>[];
+    return const <SearchPlanItem>[];
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_file_dto.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 圈子存储空间板块：容量条 + 文件列表 + 上传按钮（含独立 loading/error 状态）
 class SectionStorage extends ConsumerStatefulWidget {
@@ -52,7 +53,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = e.toString();
+          _error = runtimeErrorDisplayMessage(e);
         });
       }
     }
@@ -95,9 +96,18 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
       return _buildErrorCard();
     }
 
-    final fgPrimary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundSecondary);
-    final borderColor = AppColorsFunctional.getColor(widget.isDark, ColorType.borderPrimary);
+    final fgPrimary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.borderPrimary,
+    );
     final bgSecondary = AppColorsFunctional.getColor(
       widget.isDark,
       ColorType.backgroundSecondary,
@@ -106,28 +116,29 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     return Padding(
       padding: EdgeInsets.all(AppSpacing.containerSm),
       child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildCapacityBar(
-          fgPrimary: fgPrimary,
-          fgSecondary: fgSecondary,
-          borderColor: borderColor,
-          backgroundColor: bgSecondary,
-        ),
-        SizedBox(height: AppSpacing.md),
-        ..._files.map(
-          (file) => _buildFileItem(
-            file,
-            fgPrimary,
-            fgSecondary,
-            borderColor,
-            bgSecondary,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCapacityBar(
+            fgPrimary: fgPrimary,
+            fgSecondary: fgSecondary,
+            borderColor: borderColor,
+            backgroundColor: bgSecondary,
           ),
-        ),
-        SizedBox(height: AppSpacing.sm),
-        _buildUploadButton(),
-      ],
-    ));
+          SizedBox(height: AppSpacing.md),
+          ..._files.map(
+            (file) => _buildFileItem(
+              file,
+              fgPrimary,
+              fgSecondary,
+              borderColor,
+              bgSecondary,
+            ),
+          ),
+          SizedBox(height: AppSpacing.sm),
+          _buildUploadButton(),
+        ],
+      ),
+    );
   }
 
   Widget _buildCapacityBar({
@@ -270,7 +281,10 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
                 width: AppSpacing.largeButtonSize,
                 height: AppSpacing.largeButtonSize,
                 decoration: BoxDecoration(
-                  color: _fileIconColor(mimeType, fileType).withValues(alpha: 0.15),
+                  color: _fileIconColor(
+                    mimeType,
+                    fileType,
+                  ).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 ),
                 child: Icon(
@@ -350,13 +364,20 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
   }
 
   Widget _buildErrorCard() {
-    final fgSecondary = AppColorsFunctional.getColor(widget.isDark, ColorType.foregroundSecondary);
+    final fgSecondary = AppColorsFunctional.getColor(
+      widget.isDark,
+      ColorType.foregroundSecondary,
+    );
     return Container(
       padding: EdgeInsets.all(AppSpacing.lg),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.error_outline, color: AppColors.error, size: AppSpacing.iconLarge),
+          Icon(
+            Icons.error_outline,
+            color: AppColors.error,
+            size: AppSpacing.iconLarge,
+          ),
           SizedBox(height: AppSpacing.sm),
           Text(
             UITextConstants.loadFailed,
@@ -405,10 +426,7 @@ class _StorageStatChip extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(
-              fontSize: AppTypography.xs,
-              color: fgSecondary,
-            ),
+            style: TextStyle(fontSize: AppTypography.xs, color: fgSecondary),
           ),
           SizedBox(height: AppSpacing.intraGroupXs / 2),
           Text(

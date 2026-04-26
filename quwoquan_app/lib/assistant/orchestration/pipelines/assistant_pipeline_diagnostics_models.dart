@@ -23,7 +23,7 @@ class AssistantPhaseOneRoutingDiagnostics {
     required this.phaseOneExplicitSkillRunPlanCount,
     required this.phaseOneDerivedSkillRunPlanCount,
     required this.phaseOneSkillRunPlanCount,
-    required this.milestone3Ready,
+    required this.typedExecutionReady,
     required this.phaseOneSkillRunPlanSource,
     required this.phaseOneExecutionSignalsPresent,
     required this.phaseOneContinuationCarryover,
@@ -53,7 +53,7 @@ class AssistantPhaseOneRoutingDiagnostics {
   final int phaseOneExplicitSkillRunPlanCount;
   final int phaseOneDerivedSkillRunPlanCount;
   final int phaseOneSkillRunPlanCount;
-  final bool milestone3Ready;
+  final bool typedExecutionReady;
   final String phaseOneSkillRunPlanSource;
   final bool phaseOneExecutionSignalsPresent;
   final bool phaseOneContinuationCarryover;
@@ -83,7 +83,7 @@ class AssistantPhaseOneRoutingDiagnostics {
         'phaseOneExplicitSkillRunPlanCount': phaseOneExplicitSkillRunPlanCount,
         'phaseOneDerivedSkillRunPlanCount': phaseOneDerivedSkillRunPlanCount,
         'phaseOneSkillRunPlanCount': phaseOneSkillRunPlanCount,
-        'milestone3Ready': milestone3Ready,
+        'typedExecutionReady': typedExecutionReady,
         'phaseOneSkillRunPlanSource': phaseOneSkillRunPlanSource,
         'phaseOneExecutionSignalsPresent': phaseOneExecutionSignalsPresent,
         'phaseOneContinuationCarryover': phaseOneContinuationCarryover,

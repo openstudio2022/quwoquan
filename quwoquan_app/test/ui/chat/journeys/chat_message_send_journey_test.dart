@@ -189,8 +189,7 @@ class _MessageSendTestPageState extends State<_MessageSendTestPage> {
           Expanded(
             child: ListView(
               children: [
-                for (final msg in _sentMessages)
-                  ListTile(title: Text(msg)),
+                for (final msg in _sentMessages) ListTile(title: Text(msg)),
                 if (_errorText != null)
                   ListTile(
                     leading: const Icon(Icons.error_outline),
@@ -231,6 +230,8 @@ class _TrackingSendChatRepository extends MockChatRepository {
     String? senderPersonaId,
     String? senderProfileSubjectId,
     String? personaContextVersion,
+    String? senderDisplayNameSnapshot,
+    String? senderAvatarUrlSnapshot,
     required String clientMsgId,
   }) async {
     sendCallCount++;
@@ -245,6 +246,8 @@ class _TrackingSendChatRepository extends MockChatRepository {
       senderPersonaId: senderPersonaId,
       senderProfileSubjectId: senderProfileSubjectId,
       personaContextVersion: personaContextVersion,
+      senderDisplayNameSnapshot: senderDisplayNameSnapshot,
+      senderAvatarUrlSnapshot: senderAvatarUrlSnapshot,
       clientMsgId: clientMsgId,
     );
   }
@@ -264,6 +267,8 @@ class _ErrorSendChatRepository extends MockChatRepository {
     String? senderPersonaId,
     String? senderProfileSubjectId,
     String? personaContextVersion,
+    String? senderDisplayNameSnapshot,
+    String? senderAvatarUrlSnapshot,
     required String clientMsgId,
   }) async {
     throw Exception('发送失败：网络异常');

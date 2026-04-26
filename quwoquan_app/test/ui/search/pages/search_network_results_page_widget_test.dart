@@ -10,8 +10,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/models/search_hit_payload.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_summary_card.dart';

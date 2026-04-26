@@ -3,7 +3,7 @@ name: travel_transport
 description: 交通路线规划、地铁公交查询、打车叫车、导航。可打开导航App。
 domain: travel_transport
 mode: hybrid
-allowed_tools: web_search local_context
+allowed_tools: web_search
 trigger_keywords: []
 searchPolicy:
   maxReflection: 1
@@ -36,8 +36,8 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 禁用信号：明显属于其他垂类时不应强行触发。
 - 竞争冲突：不确定时先 ask_user 澄清主诉求。
 
-## local_context 输出约束
-当调用 local_context 时，必须按 `local_context_v1` 解析，并明确 `media.included=false`。
+## 系统上下文约束
+位置、时间、设备与权限信息统一来自系统默认注入上下文，不再通过额外工具读取。
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
@@ -52,13 +52,12 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "contractId": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {
-    "origin": {"value": "", "source": "user_query|local_context|memory|unknown"},
+    "origin": {"value": "", "source": "user_query|system_context|memory|unknown"},
     "destination": {"value": "", "source": "user_query|memory|unknown"},
-    "departureTime": {"value": "", "source": "user_query|local_context|unknown"},
+    "departureTime": {"value": "", "source": "user_query|system_context|unknown"},
     "preference": {"value": "fastest", "source": "user_query|default"}
   },
   "toolCalls": [
-    {"toolName": "local_context", "arguments": {"requestedFields": ["location", "time"]}},
     {"toolName": "web_search", "arguments": {"query": "深圳 福田 到 南山 地铁路线 换乘", "freshnessHoursMax": 24}}
   ],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},

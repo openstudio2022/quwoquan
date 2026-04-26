@@ -57,7 +57,6 @@ func (s *ReportService) CreateReport(ctx context.Context, reporterID string, pay
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "create_report_failed"),
 			"提交举报失败",
 			err.Error(),
-			true,
 		)
 	}
 
@@ -86,7 +85,6 @@ func (s *ReportService) GetReport(ctx context.Context, id string) (*reportmodel.
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "query_report_failed"),
 			"查询举报失败",
 			err.Error(),
-			true,
 		)
 	}
 	if !ok {
@@ -94,7 +92,6 @@ func (s *ReportService) GetReport(ctx context.Context, id string) (*reportmodel.
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "report_not_found"),
 			"举报不存在",
 			"report not found",
-			false,
 		)
 	}
 	return report, nil
@@ -107,7 +104,6 @@ func (s *ReportService) ListReports(ctx context.Context, limit int) ([]*reportmo
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "list_reports_failed"),
 			"查询举报列表失败",
 			err.Error(),
-			true,
 		)
 	}
 	return items, nil
@@ -120,7 +116,6 @@ func (s *ReportService) ResolveReport(ctx context.Context, reportID, reviewerID 
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "query_report_failed"),
 			"查询举报失败",
 			err.Error(),
-			true,
 		)
 	}
 	if !ok {
@@ -128,7 +123,6 @@ func (s *ReportService) ResolveReport(ctx context.Context, reportID, reviewerID 
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "report_not_found"),
 			"举报不存在",
 			"report not found",
-			false,
 		)
 	}
 
@@ -159,7 +153,6 @@ func (s *ReportService) ResolveReport(ctx context.Context, reportID, reviewerID 
 			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_report_state"),
 			"举报状态不可再处理",
 			"report already closed",
-			false,
 		)
 	}
 
@@ -179,7 +172,6 @@ func (s *ReportService) ResolveReport(ctx context.Context, reportID, reviewerID 
 			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_report_failed"),
 			"处理举报失败",
 			err.Error(),
-			true,
 		)
 	}
 

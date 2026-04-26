@@ -1,7 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_wrap_paragraph_editor.dart';
 
@@ -85,25 +83,6 @@ class _WrapEditorHarnessState extends State<_WrapEditorHarness> {
       ),
     );
   }
-}
-
-TextEditingController? _controllerByKey(WidgetTester tester, String key) {
-  final finder = find.byKey(ValueKey<String>(key));
-  if (!tester.any(finder)) {
-    return null;
-  }
-  final widget = tester.widget(finder);
-  if (widget is EditableText) {
-    return widget.controller;
-  }
-  final descendant = find.descendant(
-    of: finder,
-    matching: find.byType(EditableText),
-  );
-  if (tester.any(descendant)) {
-    return tester.widget<EditableText>(descendant).controller;
-  }
-  return null;
 }
 
 String _textByKey(WidgetTester tester, String key) {

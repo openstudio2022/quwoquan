@@ -72,66 +72,63 @@ void main() {
       expect(output.text.trim().isNotEmpty, isTrue);
     });
 
-    test(
-      'falls through to next remote model when primary model is unreachable',
-      () async {
-        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-        addTearDown(() async {
-          await server.close(force: true);
-        });
-        server.listen((request) async {
-          expect(request.uri.path, equals('/v1/chat/completions'));
-          final body = await utf8.decoder.bind(request).join();
-          final decoded = jsonDecode(body) as Map<String, dynamic>;
-          expect(decoded['model'], equals('healthy-model'));
-          request.response
-            ..statusCode = HttpStatus.ok
-            ..headers.contentType = ContentType.json
-            ..write(
-              jsonEncode(<String, dynamic>{
-                'choices': <Map<String, dynamic>>[
-                  <String, dynamic>{
-                    'message': <String, dynamic>{'content': '备选模型响应成功'},
-                  },
-                ],
-              }),
-            );
-          await request.response.close();
-        });
+    test('fails closed when selected remote model is unreachable', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() async {
+        await server.close(force: true);
+      });
+      server.listen((request) async {
+        expect(request.uri.path, equals('/v1/chat/completions'));
+        final body = await utf8.decoder.bind(request).join();
+        final decoded = jsonDecode(body) as Map<String, dynamic>;
+        expect(decoded['model'], equals('healthy-model'));
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode(<String, dynamic>{
+              'choices': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'message': <String, dynamic>{'content': '备选模型响应成功'},
+                },
+              ],
+            }),
+          );
+        await request.response.close();
+      });
 
-        final provider = SwitchableAssistantLlmProvider(
-          fallbackProvider: const HeuristicLocalLlmProvider(),
-          templateRuntime: buildTemplateRuntime(),
-        );
-        provider.registerRemoteModels(<AssistantModelRuntimeConfig>[
-          const AssistantModelRuntimeConfig(
-            modelRef: 'broken/primary-model',
-            providerId: 'broken',
-            modelId: 'primary-model',
-            baseUrl: 'http://127.0.0.1:9/v1',
-            apiKey: 'broken-key',
-          ),
-          AssistantModelRuntimeConfig(
-            modelRef: 'healthy/healthy-model',
-            providerId: 'healthy',
-            modelId: 'healthy-model',
-            baseUrl: 'http://127.0.0.1:${server.port}/v1',
-            apiKey: 'healthy-key',
-          ),
-        ]);
+      final provider = SwitchableAssistantLlmProvider(
+        fallbackProvider: const HeuristicLocalLlmProvider(),
+        templateRuntime: buildTemplateRuntime(),
+      );
+      provider.registerRemoteModels(<AssistantModelRuntimeConfig>[
+        const AssistantModelRuntimeConfig(
+          modelRef: 'broken/primary-model',
+          providerId: 'broken',
+          modelId: 'primary-model',
+          baseUrl: 'http://127.0.0.1:9/v1',
+          apiKey: 'broken-key',
+        ),
+        AssistantModelRuntimeConfig(
+          modelRef: 'healthy/healthy-model',
+          providerId: 'healthy',
+          modelId: 'healthy-model',
+          baseUrl: 'http://127.0.0.1:${server.port}/v1',
+          apiKey: 'healthy-key',
+        ),
+      ]);
 
-        final output = await provider.reason(
-          messages: const <Map<String, String>>[
-            <String, String>{'role': 'user', 'content': '你好'},
-          ],
-          availableTools: const <String>[],
-        );
+      final output = await provider.reason(
+        messages: const <Map<String, String>>[
+          <String, String>{'role': 'user', 'content': '你好'},
+        ],
+        availableTools: const <String>[],
+      );
 
-        expect(output.degraded, isFalse);
-        expect(output.text, equals('备选模型响应成功'));
-        expect(provider.activeModelRef, equals('healthy/healthy-model'));
-      },
-    );
+      expect(output.degraded, isTrue);
+      expect(output.text, contains('heuristic_fallback_disabled'));
+      expect(provider.activeModelRef, equals('broken/primary-model'));
+    });
 
     test('independent config loader does not require moltbot', () {
       final loader = const AssistantModelConfigLoader();
@@ -299,10 +296,7 @@ void main() {
               'data: ${jsonEncode(<String, dynamic>{
                 'choices': <Map<String, dynamic>>[
                   <String, dynamic>{
-                    'delta': <String, dynamic>{
-                      'content':
-                          '{"understandingSnapshot":{"userFacingSummary":"我先确认你的问题焦点"}}',
-                    },
+                    'delta': <String, dynamic>{'content': '{"understandingSnapshot":{"userFacingSummary":"我先确认你的问题焦点"}}'},
                   },
                 ],
               })}\n\n',
@@ -361,9 +355,7 @@ void main() {
             'data: ${jsonEncode(<String, dynamic>{
               'choices': <Map<String, dynamic>>[
                 <String, dynamic>{
-                  'delta': <String, dynamic>{
-                    'reasoning_content': '先确认问题焦点',
-                  },
+                  'delta': <String, dynamic>{'reasoning_content': '先确认问题焦点'},
                 },
               ],
             })}\n\n',
@@ -374,9 +366,7 @@ void main() {
             'data: ${jsonEncode(<String, dynamic>{
               'choices': <Map<String, dynamic>>[
                 <String, dynamic>{
-                  'delta': <String, dynamic>{
-                    'reasoning_content': '，再核对最新信息',
-                  },
+                  'delta': <String, dynamic>{'reasoning_content': '，再核对最新信息'},
                 },
               ],
             })}\n\n',

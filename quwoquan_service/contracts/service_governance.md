@@ -58,7 +58,7 @@
 ## 3. 统一可观测性要求（必须）
 
 - HTTP/GRPC 请求 MUST 产出访问日志（含 durationMs、status、traceId、requestId、pageId）。
-- 所有异常 MUST 产出错误日志（含 error.code/module/kind/reason、retryable）。
+- 所有异常 MUST 产出错误日志（含 runtimeFailure.code/origin/kind/nature、location、context.attributes、recovery.action、disruptionLevel）。
 - 核心指标 MUST 覆盖：请求量、错误率、延迟分布（p95/p99）、依赖失败、队列积压（如适用）。
 - SLO 告警 MUST 以“用户旅程/关键接口”为主（避免只看 CPU/Mem）。
 

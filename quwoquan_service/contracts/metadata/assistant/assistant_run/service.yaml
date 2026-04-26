@@ -125,11 +125,11 @@ contract_test:
       scenarios:
         - name: sync_run
           route: POST /v1/assistant/runs
-          assertions: [status_200, run_id_returned, response_type_valid, intent_graph_present, aggregation_state_present, subagent_plan_present, journey_present, preference_facts_present]
+          assertions: [status_200, run_id_returned, response_type_valid, understanding_result_present, task_graph_present, typed_synthesis_state_present, aggregation_state_present, subagent_plan_present, journey_present, preference_facts_present]
 
         - name: stream_run
           route: POST /v1/assistant/runs/stream
-          assertions: [sse_connection_established, events_streamed, run_completed, intent_graph_present, aggregation_state_present, subagent_plan_present, journey_present, journey_stream_emitted, preference_facts_present]
+          assertions: [sse_connection_established, events_streamed, run_completed, understanding_result_present, task_graph_present, typed_synthesis_state_present, aggregation_state_present, subagent_plan_present, journey_present, journey_stream_emitted, preference_facts_present]
 
         - name: page_context_report
           route: POST /v1/assistant/page-context
@@ -164,7 +164,9 @@ contract_test:
           assertions:
             - "db.assistant_runs.FindOne({_id}) → status='running' then 'completed'"
             - "db.assistant_runs.FindOne({_id}).latencyMs → > 0"
-            - "db.assistant_runs.FindOne({_id}).intentGraph → exists"
+            - "db.assistant_runs.FindOne({_id}).understandingResult → exists"
+            - "db.assistant_runs.FindOne({_id}).taskGraph → exists"
+            - "db.assistant_runs.FindOne({_id}).turnSynthesisState → exists"
             - "db.assistant_runs.FindOne({_id}).aggregationState → exists"
             - "db.assistant_runs.FindOne({_id}).subagentPlan → appendable"
             - "db.assistant_runs.FindOne({_id}).journey → exists"

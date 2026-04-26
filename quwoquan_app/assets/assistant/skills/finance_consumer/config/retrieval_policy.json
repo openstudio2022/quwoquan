@@ -3,7 +3,7 @@
   "domainId": "finance_consumer",
   "defaultTimeScope": "latest",
   "defaultFreshnessHoursMax": 6,
-  "maxQueryTasks": 2,
+  "maxSearchPlans": 2,
   "minAcceptedRelevanceScore": 0.45,
   "authorityRequired": true,
   "defaultGeoPolicy": {

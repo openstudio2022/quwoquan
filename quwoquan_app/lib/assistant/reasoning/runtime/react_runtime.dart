@@ -6,8 +6,11 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:quwoquan_app/assistant/contracts/answer_boundary_policy.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_policies.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/infrastructure/assistant_model_runtime.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
+import 'package:quwoquan_app/assistant/orchestration/assistant_runtime_failure_mapper.dart';
+import 'package:quwoquan_app/assistant/orchestration/retrieval_tool_selection_policy.dart';
 import 'package:quwoquan_app/assistant/reasoning/planner/react_planner.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_state.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/tool_execution_guard.dart';
@@ -18,6 +21,7 @@ import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_metadata_registry.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class ReactRuntimeResult {
   const ReactRuntimeResult({
@@ -25,6 +29,7 @@ class ReactRuntimeResult {
     required this.traces,
     this.degraded = false,
     this.failureCode = '',
+    this.runtimeFailure,
   });
 
   final String finalText;
@@ -35,6 +40,21 @@ class ReactRuntimeResult {
 
   /// 对应 [AssistantFailureCode] 或 [AssistantErrorCode.name]，空串表示无错误。
   final String failureCode;
+
+  final RuntimeFailureBase? runtimeFailure;
+
+  RuntimeFailureBase? get effectiveRuntimeFailure =>
+      runtimeFailure ??
+      (degraded || failureCode.trim().isNotEmpty
+          ? const AssistantRuntimeFailureMapper().fromRuntimeCode(
+              failureCode.trim().isEmpty
+                  ? 'ASSISTANT.SYSTEM.execution_failed'
+                  : 'ASSISTANT.SYSTEM.$failureCode',
+              boundary: 'assistant_runtime',
+              stage: 'react_runtime_result',
+              functionModule: 'react_runtime',
+            )
+          : null);
 }
 
 class ReactRuntime {
@@ -81,8 +101,9 @@ class ReactRuntime {
   final ToolResultAssessor _assessor;
   final ToolExecutionGuard _executionGuard;
   final ToolResultTruncator _resultTruncator;
-  final PromptSnippetRenderer _promptSnippetRenderer =
-      PromptSnippetRenderer();
+  final PromptSnippetRenderer _promptSnippetRenderer = PromptSnippetRenderer();
+  final RetrievalToolSelectionPolicy _retrievalToolSelectionPolicy =
+      const RetrievalToolSelectionPolicy();
   static const String _reactPolicyPath =
       'assets/assistant/config/react_policy.json';
   static const String _phaseHintsPath =
@@ -353,7 +374,7 @@ class ReactRuntime {
         state,
         availableToolNames,
         templateId: templateId,
-        hasPrecomputedSearch: executionShell.preComputedQueryTasks.isNotEmpty,
+        hasPrecomputedSearch: executionShell.preComputedSearchPlans.isNotEmpty,
       );
       final phaseHint = _buildPhaseHint(currentPhase, availableToolNames);
       if (phaseHint.isNotEmpty) {
@@ -475,8 +496,10 @@ class ReactRuntime {
       }
       for (final call in effectiveToolCalls) {
         if (!_isRetrievalLikeTool(call.name)) continue;
-        final plannedTasks = _coerceSearchTasks(call.arguments['queryTasks']);
-        if (plannedTasks.isEmpty) continue;
+        final plannedSearchPlans = _coerceSearchPlans(
+          call.arguments['searchPlans'],
+        );
+        if (plannedSearchPlans.isEmpty) continue;
         pushTrace(
           AssistantTraceEvent(
             type: AssistantTraceEventType.searchQueryGenerated,
@@ -489,7 +512,7 @@ class ReactRuntime {
               'toolName': call.name,
               'problemClass': executionShell.problemClass,
               'query': (call.arguments['query'] as String?)?.trim() ?? '',
-              'queryTasks': plannedTasks,
+              'searchPlans': plannedSearchPlans,
               if (call.arguments['queryNormalization'] is Map)
                 'queryNormalization':
                     (call.arguments['queryNormalization'] as Map)
@@ -518,7 +541,6 @@ class ReactRuntime {
             traceId: traceId,
             data: <String, dynamic>{
               'consecutiveEmptyIterations': state.consecutiveEmptyIterations,
-              'userMessage': '这轮补不到更稳的信息了，我先把已经确认的内容整理给你。',
               'lifecycleOutcome': 'degraded',
             },
           ),
@@ -545,6 +567,13 @@ class ReactRuntime {
             traces: traces,
             degraded: true,
             failureCode: output.failureCode,
+            runtimeFailure: const AssistantRuntimeFailureMapper()
+                .fromRuntimeCode(
+                  output.failureCode,
+                  boundary: 'assistant_react',
+                  stage: 'model_output',
+                  functionModule: 'react_runtime',
+                ),
           );
         }
         break;
@@ -675,7 +704,7 @@ class ReactRuntime {
           );
         }
         final toolKind = _toolKind(step.toolName);
-        if (toolKind != 'context') {
+        if (toolKind != ToolKind.context) {
           state.usedTools += 1;
         }
         final retrievalLike = _isRetrievalLikeTool(step.toolName);
@@ -748,6 +777,13 @@ class ReactRuntime {
         );
         final shouldSuppressToolErrorForUser =
             !isOk && _shouldSuppressToolErrorForUser(step.toolName, result);
+        final runtimeFailure = isOk
+            ? null
+            : const AssistantRuntimeFailureMapper().fromToolResult(
+                toolName: step.toolName,
+                result: result,
+                stage: 'react_runtime',
+              );
         state.evidences.add(<String, dynamic>{
           'stepId': step.id,
           'tool': step.toolName,
@@ -758,12 +794,14 @@ class ReactRuntime {
         final traceData = <String, dynamic>{
           ...?result.data,
           'toolName': step.toolName,
-          if (toolKind.isNotEmpty) 'toolKind': toolKind,
+          if (toolKind != ToolKind.unknown) 'toolKind': toolKind.wireName,
           'problemClass': executionShell.problemClass,
           'retrievalLike': retrievalLike,
           if ((result.data?['references'] as List?) != null)
             'referenceCount': (result.data?['references'] as List).length,
           if (!isOk && shouldSuppressToolErrorForUser) 'suppressed': true,
+          if (runtimeFailure != null)
+            'runtimeFailure': runtimeFailureBaseToJson(runtimeFailure),
         };
         pushTrace(
           AssistantTraceEvent(
@@ -819,6 +857,7 @@ class ReactRuntime {
           final failureContext = _buildToolFailureContext(
             toolName: step.toolName,
             message: result.message,
+            runtimeFailure: runtimeFailure,
             goal: state.goal,
             messages: messages,
           );
@@ -864,6 +903,7 @@ class ReactRuntime {
                 .toList();
             final retryToolName = _preferredRetrievalToolName(
               availableToolNames,
+              shell: executionShell,
             );
             final reflectionMessage = await _renderPromptSnippet(
               'retrieval_reflection',
@@ -896,9 +936,9 @@ class ReactRuntime {
               'role': 'system',
               'content': retrievalNotice,
             });
-          } else if (toolKind == 'context') {
+          } else if (toolKind == ToolKind.context) {
             final localContextNotice = await _renderPromptSnippet(
-              'local_context_unavailable_notice',
+              'system_context_unavailable_notice',
             );
             messages.add(<String, String>{
               'role': 'system',
@@ -1009,7 +1049,7 @@ class ReactRuntime {
       if (lastDeltaIndex >= 0) {
         finalText = traces[lastDeltaIndex].message;
       } else {
-        finalText = '本次任务已完成，但没有生成可展示结果。';
+        finalText = '';
       }
     }
 
@@ -1033,6 +1073,14 @@ class ReactRuntime {
       finalText: finalText,
       traces: traces,
       degraded: hasDegradedInTrace,
+      runtimeFailure: hasDegradedInTrace
+          ? const AssistantRuntimeFailureMapper().fromRuntimeCode(
+              'ASSISTANT.SYSTEM.trace_degraded',
+              boundary: 'assistant_react',
+              stage: 'trace_degraded',
+              functionModule: 'react_runtime',
+            )
+          : null,
     );
   }
 
@@ -1079,12 +1127,14 @@ class ReactRuntime {
   Map<String, dynamic> _buildToolFailureContext({
     required String toolName,
     required String message,
+    required RuntimeFailureBase? runtimeFailure,
     required String goal,
     required List<Map<String, dynamic>> messages,
   }) {
     return <String, dynamic>{
       'toolName': toolName,
-      'errorMessage': message,
+      if (runtimeFailure != null)
+        'runtimeFailure': runtimeFailureBaseToJson(runtimeFailure),
       'goal': goal,
     };
   }
@@ -1096,21 +1146,25 @@ class ReactRuntime {
     final data =
         (result.data as Map?)?.cast<String, Object?>() ??
         const <String, Object?>{};
+    final runtimeFailure = result.success
+        ? null
+        : const AssistantRuntimeFailureMapper().fromToolResult(
+            toolName: toolName,
+            result: result,
+            stage: 'react_tool_observation',
+          );
     return <String, dynamic>{
       'toolName': toolName,
       'ok': result.success == true,
       'status': _deriveToolStatus(toolName: toolName, result: result),
-      'errorCode': result.errorCode.name,
-      'errorClass': _deriveErrorClass(result.errorCode.name),
-      'retryable': _isRetryableError(result.errorCode.name),
-      'message': result.message,
+      if (runtimeFailure != null)
+        'runtimeFailure': runtimeFailureBaseToJson(runtimeFailure),
       'slotDelta': _extractSlotDelta(
         toolName: toolName,
         message: result.message,
         data: data,
       ),
       'data': data,
-      'legacyMessage': result.message,
     };
   }
 
@@ -1133,14 +1187,6 @@ class ReactRuntime {
       return rule.permissionDeniedStatus;
     }
     return rule.errorStatus;
-  }
-
-  String _deriveErrorClass(String codeName) {
-    return _reactPolicy.errorClassMap[codeName] ?? 'tool_error';
-  }
-
-  bool _isRetryableError(String codeName) {
-    return _reactPolicy.retryableErrorCodes.contains(codeName);
   }
 
   List<String> _extractPlannedSearchQueries(List<AssistantToolCall> toolCalls) {
@@ -1174,19 +1220,19 @@ class ReactRuntime {
     return registry?.isRetrievalLikeTool(toolName) ?? false;
   }
 
-  String _preferredRetrievalToolName(List<String> toolNames) {
-    if (toolNames.contains('search')) {
-      return 'search';
-    }
-    if (toolNames.contains('web_search')) {
-      return 'web_search';
-    }
-    return '';
+  String _preferredRetrievalToolName(
+    List<String> toolNames, {
+    required _RuntimeExecutionShell shell,
+  }) {
+    return _retrievalToolSelectionPolicy.select(
+      availableToolNames: toolNames,
+      searchPlans: SearchPlanItem.normalizeList(shell.preComputedSearchPlans),
+    );
   }
 
-  String _toolKind(String toolName) {
+  ToolKind _toolKind(String toolName) {
     final registry = _toolMetadataRegistry;
-    return registry?.toolKindByName(toolName) ?? '';
+    return registry?.toolKindTypeByName(toolName) ?? ToolKind.unknown;
   }
 
   _RuntimeExecutionShell _resolveExecutionShell(
@@ -1228,16 +1274,16 @@ class ReactRuntime {
     final sanitized = toolCalls
         .map((call) {
           final args = _flattenToolArguments(call.arguments);
-          if (!(metadata?.supportsQueryTasks(call.name) ?? false)) {
+          if (!(metadata?.supportsSearchPlans(call.name) ?? false)) {
             return AssistantToolCall(
               name: call.name,
               arguments: args,
               id: call.id,
             );
           }
-          final queryTasks = _buildSearchQueryTasks(args: args, shell: shell);
-          if (queryTasks.isNotEmpty) {
-            args['queryTasks'] = queryTasks;
+          final searchPlans = _buildSearchPlans(args: args, shell: shell);
+          if (searchPlans.isNotEmpty) {
+            args['searchPlans'] = searchPlans;
             final count = _RuntimeExecutionShell._positiveInt(
               args['count'],
               fallback: 5,
@@ -1246,7 +1292,7 @@ class ReactRuntime {
               args['count'] = 4;
             }
           } else {
-            args.remove('queryTasks');
+            args.remove('searchPlans');
           }
           if (shell.providerPolicyType == ProviderPolicy.authorityFirst) {
             args.remove('provider');
@@ -1274,23 +1320,25 @@ class ReactRuntime {
       (call) => _isRetrievalLikeTool(call.name),
     );
     final hasContextCall = sanitized.any(
-      (call) => _toolKind(call.name) == 'context',
+      (call) => _toolKind(call.name) == ToolKind.context,
     );
     final preferredRetrievalTool = _preferredRetrievalToolName(
       availableToolNames,
+      shell: shell,
     );
     final shouldAutoInjectRetrieval =
         !hasRetrievalCall &&
-        shell.preComputedQueryTasks.isNotEmpty &&
+        shell.preComputedSearchPlans.isNotEmpty &&
         preferredRetrievalTool.isNotEmpty &&
         (sanitized.isEmpty || hasContextCall);
     if (shouldAutoInjectRetrieval) {
-      final queryTasks = _buildSearchQueryTasks(
+      final searchPlans = _buildSearchPlans(
         args: const <String, Object?>{},
         shell: shell,
       );
-      if (queryTasks.isNotEmpty) {
-        final firstQuery = (queryTasks.first['query'] as String?)?.trim() ?? '';
+      if (searchPlans.isNotEmpty) {
+        final firstQuery =
+            (searchPlans.first['query'] as String?)?.trim() ?? '';
         if (firstQuery.isNotEmpty) {
           sanitized.add(
             AssistantToolCall(
@@ -1298,11 +1346,11 @@ class ReactRuntime {
               arguments: <String, dynamic>{
                 'query': firstQuery,
                 'mode': 'result',
-                'queryTasks': queryTasks,
+                'searchPlans': searchPlans,
               },
               id: hasContextCall
                   ? 'auto_${preferredRetrievalTool}_after_context'
-                  : 'auto_${preferredRetrievalTool}_from_precomputed_tasks',
+                  : 'auto_${preferredRetrievalTool}_from_precomputed_search_plans',
             ),
           );
         }
@@ -1331,7 +1379,7 @@ class ReactRuntime {
     return flattened;
   }
 
-  List<Map<String, dynamic>> _buildSearchQueryTasks({
+  List<Map<String, dynamic>> _buildSearchPlans({
     required Map<String, dynamic> args,
     required _RuntimeExecutionShell shell,
   }) {
@@ -1340,10 +1388,10 @@ class ReactRuntime {
         const <String, Object?>{};
     final commonTaskMetadata = <String, dynamic>{
       if (_RuntimeExecutionShell._stringList(
-        queryNormalization['entityAnchors'],
+        queryNormalization['entityRefs'],
       ).isNotEmpty)
-        'entityAnchors': _RuntimeExecutionShell._stringList(
-          queryNormalization['entityAnchors'],
+        'entityRefs': _RuntimeExecutionShell._stringList(
+          queryNormalization['entityRefs'],
         ),
       if (_RuntimeExecutionShell._stringList(
         queryNormalization['negativeKeywords'],
@@ -1358,31 +1406,31 @@ class ReactRuntime {
           true)
         'freshnessNeed': (queryNormalization['freshnessNeed'] as String).trim(),
     };
-    final existingTasks = _coerceSearchTasks(args['queryTasks']);
-    if (existingTasks.isNotEmpty) {
-      final taskBudget = _queryTaskBudget(
-        availableCount: existingTasks.length,
+    final existingPlans = _coerceSearchPlans(args['searchPlans']);
+    if (existingPlans.isNotEmpty) {
+      final planBudget = _searchPlanBudget(
+        availableCount: existingPlans.length,
         shell: shell,
       );
-      return _normalizeSearchTasks(
-        existingTasks,
+      return _normalizeSearchPlans(
+        existingPlans,
         commonMetadata: commonTaskMetadata,
-      ).take(taskBudget).toList(growable: false);
+      ).take(planBudget).toList(growable: false);
     }
-    if (shell.preComputedQueryTasks.isNotEmpty) {
-      final taskBudget = _queryTaskBudget(
-        availableCount: shell.preComputedQueryTasks.length,
+    if (shell.preComputedSearchPlans.isNotEmpty) {
+      final planBudget = _searchPlanBudget(
+        availableCount: shell.preComputedSearchPlans.length,
         shell: shell,
       );
-      return _normalizeSearchTasks(
-        shell.preComputedQueryTasks,
+      return _normalizeSearchPlans(
+        shell.preComputedSearchPlans,
         commonMetadata: commonTaskMetadata,
-      ).take(taskBudget).toList(growable: false);
+      ).take(planBudget).toList(growable: false);
     }
     return const <Map<String, dynamic>>[];
   }
 
-  int _queryTaskBudget({
+  int _searchPlanBudget({
     required int availableCount,
     required _RuntimeExecutionShell shell,
   }) {
@@ -1395,7 +1443,7 @@ class ReactRuntime {
         : availableCount;
   }
 
-  List<Map<String, dynamic>> _coerceSearchTasks(Object? raw) {
+  List<Map<String, dynamic>> _coerceSearchPlans(Object? raw) {
     if (raw is List) {
       return raw
           .whereType<Map>()
@@ -1409,7 +1457,7 @@ class ReactRuntime {
     if (text.isEmpty) return const <Map<String, dynamic>>[];
     if (text.startsWith('[') || text.startsWith('{')) {
       try {
-        return _coerceSearchTasks(jsonDecode(text));
+        return _coerceSearchPlans(jsonDecode(text));
       } catch (_) {
         return const <Map<String, dynamic>>[];
       }
@@ -1417,47 +1465,43 @@ class ReactRuntime {
     return const <Map<String, dynamic>>[];
   }
 
-  List<Map<String, dynamic>> _normalizeSearchTasks(
-    List<Map<String, dynamic>> tasks, {
+  List<Map<String, dynamic>> _normalizeSearchPlans(
+    List<Map<String, dynamic>> plans, {
     Map<String, dynamic> commonMetadata = const <String, Object?>{},
   }) {
     final normalized = <Map<String, dynamic>>[];
     final seen = <String>{};
-    for (final task in tasks) {
-      final query = (task['query'] as String?)?.trim() ?? '';
+    for (final plan in plans) {
+      final query = (plan['query'] as String?)?.trim() ?? '';
       if (query.isEmpty || !seen.add(query)) continue;
       normalized.add(<String, dynamic>{
         ...commonMetadata,
-        if ((task['id'] as String?)?.trim().isNotEmpty == true)
-          'id': (task['id'] as String).trim(),
+        if ((plan['id'] as String?)?.trim().isNotEmpty == true)
+          'id': (plan['id'] as String).trim(),
         'query': query,
-        'label': (task['label'] as String?)?.trim().isNotEmpty == true
-            ? (task['label'] as String).trim()
-            : _compactTaskLabel(query),
-        if ((task['dimension'] as String?)?.trim().isNotEmpty == true)
-          'dimension': (task['dimension'] as String).trim(),
+        'label': (plan['label'] as String?)?.trim().isNotEmpty == true
+            ? (plan['label'] as String).trim()
+            : _compactSearchPlanLabel(query),
+        if ((plan['dimension'] as String?)?.trim().isNotEmpty == true)
+          'dimension': (plan['dimension'] as String).trim(),
+        if (_RuntimeExecutionShell._stringList(plan['entityRefs']).isNotEmpty)
+          'entityRefs': _RuntimeExecutionShell._stringList(plan['entityRefs']),
         if (_RuntimeExecutionShell._stringList(
-          task['entityAnchors'],
-        ).isNotEmpty)
-          'entityAnchors': _RuntimeExecutionShell._stringList(
-            task['entityAnchors'],
-          ),
-        if (_RuntimeExecutionShell._stringList(
-          task['negativeKeywords'],
+          plan['negativeKeywords'],
         ).isNotEmpty)
           'negativeKeywords': _RuntimeExecutionShell._stringList(
-            task['negativeKeywords'],
+            plan['negativeKeywords'],
           ),
-        if ((task['answerShape'] as String?)?.trim().isNotEmpty == true)
-          'answerShape': (task['answerShape'] as String).trim(),
-        if ((task['freshnessNeed'] as String?)?.trim().isNotEmpty == true)
-          'freshnessNeed': (task['freshnessNeed'] as String).trim(),
+        if ((plan['answerShape'] as String?)?.trim().isNotEmpty == true)
+          'answerShape': (plan['answerShape'] as String).trim(),
+        if ((plan['freshnessNeed'] as String?)?.trim().isNotEmpty == true)
+          'freshnessNeed': (plan['freshnessNeed'] as String).trim(),
       });
     }
     return normalized;
   }
 
-  String _compactTaskLabel(String query) {
+  String _compactSearchPlanLabel(String query) {
     final normalized = query.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (normalized.length <= 18) return normalized;
     return '${normalized.substring(0, 18)}...';
@@ -1528,7 +1572,6 @@ class ReactRuntime {
     final rawToolCalls = (turn?.toolCalls.isNotEmpty ?? false)
         ? turn!.toolCalls.map((item) => item.toJson()).toList(growable: false)
         : ((payload['toolCalls'] as List?) ?? const <Object?>[]);
-    if (rawToolCalls is! List) return const <AssistantToolCall>[];
 
     final calls = <AssistantToolCall>[];
     for (final item in rawToolCalls) {
@@ -1699,7 +1742,7 @@ class _RuntimeExecutionShell {
     required this.preferredProviders,
     required this.authorityDomains,
     required this.freshnessHoursMax,
-    this.preComputedQueryTasks = const [],
+    this.preComputedSearchPlans = const [],
   });
 
   final int toolBudget;
@@ -1710,14 +1753,16 @@ class _RuntimeExecutionShell {
   final List<String> preferredProviders;
   final List<String> authorityDomains;
   final int freshnessHoursMax;
-  final List<Map<String, dynamic>> preComputedQueryTasks;
+  final List<Map<String, dynamic>> preComputedSearchPlans;
 
   ProviderPolicy get providerPolicyType => parseProviderPolicy(providerPolicy);
 
   factory _RuntimeExecutionShell.fromMap(Map<String, dynamic> map) {
-    final rawTasks = map['preComputedQueryTasks'];
-    final tasks = rawTasks is List
-        ? rawTasks
+    final rawPlans =
+        map['preComputedSearchPlans'] ??
+        map['executionShellPrecomputedSearchPlans'];
+    final plans = rawPlans is List
+        ? rawPlans
               .whereType<Map>()
               .map((item) => item.cast<String, Object?>())
               .toList(growable: false)
@@ -1734,7 +1779,7 @@ class _RuntimeExecutionShell {
       preferredProviders: _stringList(map['preferredProviders']),
       authorityDomains: _stringList(map['authorityDomains']),
       freshnessHoursMax: _positiveInt(map['freshnessHoursMax'], fallback: 72),
-      preComputedQueryTasks: tasks,
+      preComputedSearchPlans: plans,
     );
   }
 

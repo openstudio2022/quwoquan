@@ -410,7 +410,7 @@ class EvidenceLedgerEntry {
     this.domainId = "",
     this.dimension = "",
     this.dimensionLabel = "",
-    this.queryTaskId = "",
+    this.searchPlanId = "",
     this.title = "",
     this.url = "",
     this.source = "",
@@ -428,7 +428,7 @@ class EvidenceLedgerEntry {
   final String domainId;
   final String dimension;
   final String dimensionLabel;
-  final String queryTaskId;
+  final String searchPlanId;
   final String title;
   final String url;
   final String source;
@@ -446,7 +446,7 @@ class EvidenceLedgerEntry {
         'domainId': domainId,
         'dimension': dimension,
         'dimensionLabel': dimensionLabel,
-        'queryTaskId': queryTaskId,
+        'searchPlanId': searchPlanId,
         'title': title,
         'url': url,
         'source': source,
@@ -466,7 +466,7 @@ class EvidenceLedgerEntry {
       domainId: (json['domainId'] as String?)?.trim() ?? "",
       dimension: (json['dimension'] as String?)?.trim() ?? "",
       dimensionLabel: (json['dimensionLabel'] as String?)?.trim() ?? "",
-      queryTaskId: (json['queryTaskId'] as String?)?.trim() ?? "",
+      searchPlanId: (json['searchPlanId'] as String?)?.trim() ?? "",
       title: (json['title'] as String?)?.trim() ?? "",
       url: (json['url'] as String?)?.trim() ?? "",
       source: (json['source'] as String?)?.trim() ?? "",
@@ -487,7 +487,7 @@ class EvidenceLedgerEntryFields {
   static const String domainId = 'domainId';
   static const String dimension = 'dimension';
   static const String dimensionLabel = 'dimensionLabel';
-  static const String queryTaskId = 'queryTaskId';
+  static const String searchPlanId = 'searchPlanId';
   static const String title = 'title';
   static const String url = 'url';
   static const String source = 'source';

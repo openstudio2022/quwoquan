@@ -26,17 +26,20 @@ Map<String, dynamic> buildOpenAiNonStreamingChatCompletionRequest({
   required bool forceJsonObject,
   required bool supportsJsonMode,
 }) {
-  return <String, dynamic>{
+  final request = <String, dynamic>{
     'model': modelId,
     'messages': requestMessages,
     if (enableTools && toolSchemas.isNotEmpty) 'tools': toolSchemas,
     if (enableTools && toolSchemas.isNotEmpty) 'tool_choice': 'auto',
     'temperature': temperature,
-    if (maxTokens != null) 'max_tokens': maxTokens,
     ...reasoningRequestEntries,
     if (forceJsonObject && supportsJsonMode)
       'response_format': const <String, dynamic>{'type': 'json_object'},
   };
+  if (maxTokens != null) {
+    request['max_tokens'] = maxTokens;
+  }
+  return request;
 }
 
 /// 带 tools 的流式 `POST /chat/completions`（`stream: true`），与 [_requestCompletionStreaming] 一致。

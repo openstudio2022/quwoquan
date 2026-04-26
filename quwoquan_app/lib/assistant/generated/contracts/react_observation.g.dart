@@ -5,34 +5,26 @@
 class ReactObservationDto {
   const ReactObservationDto({
     this.status = "",
-    this.retryable = false,
-    this.errorClass = "",
     this.coverage = 0,
     this.confidence = 0,
     this.freshnessHours = 0,
   });
 
   final String status;
-  final bool retryable;
-  final String errorClass;
   final double coverage;
   final double confidence;
   final double freshnessHours;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'status': status,
-        'retryable': retryable,
-        'errorClass': errorClass,
-        'coverage': coverage,
-        'confidence': confidence,
-        'freshnessHours': freshnessHours,
-      };
+    'status': status,
+    'coverage': coverage,
+    'confidence': confidence,
+    'freshnessHours': freshnessHours,
+  };
 
   factory ReactObservationDto.fromJson(Map<String, dynamic> json) {
     return ReactObservationDto(
       status: (json['status'] as String?)?.trim() ?? "",
-      retryable: json['retryable'] == true,
-      errorClass: (json['errorClass'] as String?)?.trim() ?? "",
       coverage: (json['coverage'] as num?)?.toDouble() ?? 0,
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
       freshnessHours: (json['freshnessHours'] as num?)?.toDouble() ?? 0,
@@ -42,8 +34,6 @@ class ReactObservationDto {
 
 class ReactObservationDtoFields {
   static const String status = 'status';
-  static const String retryable = 'retryable';
-  static const String errorClass = 'errorClass';
   static const String coverage = 'coverage';
   static const String confidence = 'confidence';
   static const String freshnessHours = 'freshnessHours';

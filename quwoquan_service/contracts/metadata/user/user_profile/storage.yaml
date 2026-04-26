@@ -54,6 +54,8 @@ tables:
       - { name: is_primary, type: BOOLEAN, constraints: [NOT_NULL], default: false }
       - { name: is_private, type: BOOLEAN, constraints: [NOT_NULL], default: false }
       - { name: is_active, type: BOOLEAN, constraints: [NOT_NULL], default: false }
+      - { name: status, type: VARCHAR(16), constraints: [NOT_NULL], default: "'active'" }
+      - { name: retired_at, type: TIMESTAMPTZ }
       - { name: sub_account_id, type: VARCHAR(36), constraints: [NOT_NULL, UNIQUE] }
       - { name: isolation_level, type: VARCHAR(16), constraints: [NOT_NULL], default: "'open'" }
       - { name: purpose_hint, type: VARCHAR(128) }
@@ -67,6 +69,7 @@ tables:
       - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
     indexes:
       - { name: idx_personas_user_id, columns: [user_id] }
+      - { name: idx_personas_user_status, columns: [user_id, status] }
       - { name: idx_personas_sub_account_id, columns: [sub_account_id] }
       - { name: idx_personas_user_handle, columns: [user_handle] }
     unique_constraints:

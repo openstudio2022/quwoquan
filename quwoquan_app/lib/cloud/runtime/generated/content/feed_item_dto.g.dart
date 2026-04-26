@@ -7,6 +7,7 @@ class FeedItemDto {
   final String identity;
   final String assistantUsePolicy;
   final String authorId;
+  final String authorProfileSubjectId;
   final String displayName;
   final String avatarUrl;
   final String? title;
@@ -44,6 +45,7 @@ class FeedItemDto {
     required this.identity,
     required this.assistantUsePolicy,
     required this.authorId,
+    required this.authorProfileSubjectId,
     required this.displayName,
     required this.avatarUrl,
     this.title,
@@ -83,6 +85,7 @@ class FeedItemDto {
       identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? ((m['contentType']?.toString() == 'micro' || m['contentType']?.toString() == 'moment') ? 'moment' : 'work'),
       assistantUsePolicy: m['assistantUsePolicy']?.toString() ?? 'inherit',
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
+      authorProfileSubjectId: m['profileSubjectId']?.toString() ?? m['authorProfileSubjectId']?.toString() ?? m['personaId']?.toString() ?? m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',
       displayName: m['authorNickname']?.toString() ?? m['nickname']?.toString() ?? m['username']?.toString() ?? m['displayName']?.toString() ?? '',
       avatarUrl: m['authorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? m['avatar']?.toString() ?? '',
       title: m['title']?.toString() ?? null,
@@ -123,6 +126,7 @@ class FeedItemDto {
       'identity': identity,
       'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
+      'authorProfileSubjectId': authorProfileSubjectId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'title': title,
@@ -162,6 +166,7 @@ class FeedItemDto {
     String? identity,
     String? assistantUsePolicy,
     String? authorId,
+    String? authorProfileSubjectId,
     String? displayName,
     String? avatarUrl,
     String? title,
@@ -199,6 +204,7 @@ class FeedItemDto {
       identity: identity ?? this.identity,
       assistantUsePolicy: assistantUsePolicy ?? this.assistantUsePolicy,
       authorId: authorId ?? this.authorId,
+      authorProfileSubjectId: authorProfileSubjectId ?? this.authorProfileSubjectId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       title: title ?? this.title,

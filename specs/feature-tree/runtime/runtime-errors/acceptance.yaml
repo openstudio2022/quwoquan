@@ -22,7 +22,7 @@ global_acceptance:
   A2_experience:
   - 用户错误提示可理解，不暴露内部细节
   A3_service_governance:
-  - retryable 标记可驱动重试策略
+  - recovery policy 标记可驱动重试策略
   A4_observability:
   - 错误日志可按 code/module/kind/reason 检索
   A5_product_ops:

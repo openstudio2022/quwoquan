@@ -1,11 +1,11 @@
+export 'package:quwoquan_app/assistant/tool/impl/app/app_search_tool.dart'
+    show AppSearchTool;
 export 'package:quwoquan_app/assistant/tool/impl/device/app_action_tool.dart'
     show AppActionTool;
 export 'package:quwoquan_app/assistant/tool/impl/navigation/deep_link_tool.dart'
     show DeepLinkTool;
 export 'package:quwoquan_app/assistant/tool/impl/device/intent_bridge_tool.dart'
     show IntentBridgeTool;
-export 'package:quwoquan_app/assistant/tool/impl/device/local_context_tool.dart'
-    show LocalContextTool;
 export 'package:quwoquan_app/assistant/tool/impl/device/media_gallery_tool.dart'
     show MediaGalleryTool;
 export 'package:quwoquan_app/assistant/tool/impl/memory/memory_search_tool.dart'

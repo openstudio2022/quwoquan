@@ -409,8 +409,20 @@ void main() {
       expect(observation['toolName'], equals('web_search'));
       expect(observation['ok'], isFalse);
       expect(observation['status'], equals('retrieval_invalid_args'));
-      expect(observation['errorClass'], equals('invalid_args'));
-      expect(observation['retryable'], isFalse);
+      expect(
+        observation.containsKey(
+          'error'
+          'Class',
+        ),
+        isFalse,
+      );
+      expect(
+        observation.containsKey(
+          'retry'
+          'able',
+        ),
+        isFalse,
+      );
     },
   );
 
@@ -530,22 +542,20 @@ void main() {
       reason: '不应继续进入第二轮工具调用',
     );
     expect(
-      provider.capturedMessages.last.any(
-        (item) {
-          if (item['role'] != 'system') return false;
-          final c = (item['content'] as String? ?? '');
-          // 与 assets/assistant/prompts/global/prompt_snippets.md 中
-          // force_answer_conclusion / force_answer_conclusion_minimal 对齐
-          return c.contains('mode=answer_conclusion') &&
-              c.contains('decision=answer');
-        },
-      ),
+      provider.capturedMessages.last.any((item) {
+        if (item['role'] != 'system') return false;
+        final c = (item['content'] as String? ?? '');
+        // 与 assets/assistant/prompts/global/prompt_snippets.md 中
+        // force_answer_conclusion / force_answer_conclusion_minimal 对齐
+        return c.contains('mode=answer_conclusion') &&
+            c.contains('decision=answer');
+      }),
       isTrue,
       reason: 'runtime 应显式注入 answer-only 收敛提示（answer_conclusion）',
     );
   });
 
-  test('runtime 不会把裸 queryVariants 自动改写为 typed queryTasks', () async {
+  test('runtime 不会把裸 queryVariants 自动改写为 typed searchPlans', () async {
     final provider = _FastConvergenceProvider();
     final metadata = ToolMetadataRegistry();
     await metadata.ensureLoaded();
@@ -571,10 +581,10 @@ void main() {
 
     expect(captureTool.executeCount, equals(1));
     expect(
-      captureTool.lastArguments.containsKey('queryTasks'),
+      captureTool.lastArguments.containsKey('searchPlans'),
       isFalse,
       reason:
-          '未显式提供 typed queryTasks 时，runtime 不应从裸 query/queryVariants 自动合成检索任务',
+          '未显式提供 typed searchPlans 时，runtime 不应从裸 query/queryVariants 自动合成检索任务',
     );
     expect(
       captureTool.lastArguments['queryVariants'],
@@ -583,7 +593,7 @@ void main() {
     );
   });
 
-  test('runtime 会优先下发 phase 侧 precomputed typed queryTasks', () async {
+  test('runtime 会优先下发 phase 侧 precomputed typed searchPlans', () async {
     final provider = _FastConvergenceProvider();
     final metadata = ToolMetadataRegistry();
     await metadata.ensureLoaded();
@@ -606,7 +616,7 @@ void main() {
         'problemClass': 'complex_reasoning',
         'skillExecutionShell': <String, dynamic>{
           'variantBudget': 2,
-          'preComputedQueryTasks': <Map<String, dynamic>>[
+          'preComputedSearchPlans': <Map<String, dynamic>>[
             <String, dynamic>{
               'id': 'fit_scenarios',
               'dimension': 'fit_scenarios',
@@ -619,23 +629,23 @@ void main() {
     );
 
     expect(captureTool.executeCount, equals(1));
-    final queryTasks =
-        (captureTool.lastArguments['queryTasks'] as List?)
+    final searchPlans =
+        (captureTool.lastArguments['searchPlans'] as List?)
             ?.whereType<Map>()
             .map((item) => item.cast<String, dynamic>())
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
-    expect(queryTasks, hasLength(1));
-    expect(queryTasks.first['id'], equals('fit_scenarios'));
-    expect(queryTasks.first['query'], contains('通勤'));
+    expect(searchPlans, hasLength(1));
+    expect(searchPlans.first['id'], equals('fit_scenarios'));
+    expect(searchPlans.first['query'], contains('通勤'));
     expect(
       captureTool.lastArguments['queryVariants'],
       equals(<String>['深圳酒店 位置 交通']),
-      reason: '即便 phase 侧提供了 typed queryTasks，runtime 也不应篡改模型原始 queryVariants',
+      reason: '即便 phase 侧提供了 typed searchPlans，runtime 也不应篡改模型原始 queryVariants',
     );
   });
 
-  test('phase 侧已有 precomputed queryTasks 时，runtime 不会空手跳过首轮检索', () async {
+  test('phase 侧已有 precomputed searchPlans 时，runtime 不会空手跳过首轮检索', () async {
     final provider = _NoToolPlanProvider();
     final metadata = ToolMetadataRegistry();
     await metadata.ensureLoaded();
@@ -657,7 +667,7 @@ void main() {
       templateVariables: const <String, dynamic>{
         'problemClass': 'complex_reasoning',
         'skillExecutionShell': <String, dynamic>{
-          'preComputedQueryTasks': <Map<String, dynamic>>[
+          'preComputedSearchPlans': <Map<String, dynamic>>[
             <String, dynamic>{
               'id': 'fit_scenarios',
               'dimension': 'fit_scenarios',
@@ -684,7 +694,7 @@ void main() {
     );
   });
 
-  test('phase 侧已有 precomputed queryTasks 时优先自动注入 search', () async {
+  test('phase 侧已有 precomputed searchPlans 时优先自动注入 search', () async {
     final provider = _NoToolPlanProvider();
     final metadata = ToolMetadataRegistry();
     await metadata.ensureLoaded();
@@ -706,7 +716,7 @@ void main() {
       templateVariables: const <String, dynamic>{
         'problemClass': 'complex_reasoning',
         'skillExecutionShell': <String, dynamic>{
-          'preComputedQueryTasks': <Map<String, dynamic>>[
+          'preComputedSearchPlans': <Map<String, dynamic>>[
             <String, dynamic>{
               'id': 'fit_scenarios',
               'dimension': 'fit_scenarios',

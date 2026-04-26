@@ -7,7 +7,11 @@ import (
 
 func TestErrorCode_UserNotFound(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	rec := doRequest(t, http.MethodGet, "/v1/user/profile/nonexistent_user", "", nil)
+	headers := map[string]string{
+		"X-Request-Id": "user-req-1",
+		"X-Trace-Id":   "user-trace-1",
+	}
+	rec := doRequest(t, http.MethodGet, "/v1/user/profile/nonexistent_user", "", headers)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
 	}
@@ -17,6 +21,12 @@ func TestErrorCode_UserNotFound(t *testing.T) {
 	}
 	if result["userMessage"] != "用户不存在" {
 		t.Errorf("expected userMessage=用户不存在, got %v", result["userMessage"])
+	}
+	if result["requestId"] != "user-req-1" || result["traceId"] != "user-trace-1" {
+		t.Errorf("expected request/trace propagation, got request=%v trace=%v", result["requestId"], result["traceId"])
+	}
+	if rec.Header().Get("X-Request-Id") != "user-req-1" || rec.Header().Get("X-Trace-Id") != "user-trace-1" {
+		t.Errorf("expected request/trace response headers, got request=%q trace=%q", rec.Header().Get("X-Request-Id"), rec.Header().Get("X-Trace-Id"))
 	}
 }
 

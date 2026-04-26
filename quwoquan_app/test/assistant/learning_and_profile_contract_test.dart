@@ -105,11 +105,8 @@ void main() {
         );
         final response = await agentLoop.run(request);
         final structured = response.structuredResponse;
-        expect(
-          (structured['learningSignals'] as Map?)?['profileTagDelta'],
-          isNotNull,
-        );
-        expect((structured['basicIdentity'] as Map?)?['age'], equals(30));
+        expect(structured.containsKey('learningSignals'), isFalse);
+        expect(structured.containsKey('basicIdentity'), isFalse);
         expect(
           response.profileUpdateProposal?.proposalId,
           equals('proposal-1'),

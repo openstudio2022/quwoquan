@@ -41,7 +41,6 @@ class AssistantSessionSummaryBuilder {
       final compressed = await summarizer(raw);
       final result = compressed.trim();
       if (result.isEmpty) return raw;
-      if (AssistantContentFilters.isDegradedText(result)) return raw;
       final sanitized = _sanitizeForSummary(result);
       return sanitized.isNotEmpty ? sanitized : raw;
     } catch (_) {
@@ -63,7 +62,9 @@ class AssistantSessionSummaryBuilder {
     final query = userQuery.trim();
     final answer = assistantReply.trim();
     if (query.isEmpty && answer.isEmpty) return '';
-    final shortAnswer = answer.length > 80 ? '${answer.substring(0, 80)}...' : answer;
+    final shortAnswer = answer.length > 80
+        ? '${answer.substring(0, 80)}...'
+        : answer;
     return '$query\n$shortAnswer'.trim();
   }
 
@@ -144,7 +145,6 @@ class AssistantSessionSummaryBuilder {
       } catch (_) {}
     }
     if (_containsInternalHistoryText(stripped)) return '';
-    if (AssistantContentFilters.isDegradedText(stripped)) return '';
     if (AssistantContentFilters.isProgressPlaceholder(stripped)) return '';
     return stripped;
   }
@@ -183,20 +183,27 @@ class AssistantSessionSummaryBuilder {
       text.replaceAll(_xmlToolCallTagRe, '').trim();
 
   bool _containsInternalHistoryText(String text) {
-    if (text.trim().isEmpty) return false;
+    final normalized = text.trim();
+    if (normalized.isEmpty) return false;
+    final protocolShaped =
+        normalized.startsWith('{') ||
+        normalized.startsWith('[') ||
+        normalized.contains('<tool_call') ||
+        normalized.contains('</tool_call>') ||
+        normalized.contains('<function') ||
+        normalized.contains('</function>');
+    if (!protocolShaped) return false;
     const fragments = <String>[
       'contractId',
       'assistant_turn',
       'turnPhase',
-      'queryTasks',
+      'searchPlans',
       'tool_call',
       '<tool_call>',
-      'provider',
       'machineEnvelope',
-      '正在调用工具',
     ];
     for (final fragment in fragments) {
-      if (text.contains(fragment)) return true;
+      if (normalized.contains(fragment)) return true;
     }
     return false;
   }

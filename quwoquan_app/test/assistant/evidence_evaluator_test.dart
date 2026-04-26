@@ -21,7 +21,7 @@ void main() {
               'title': 'Ã¤Â¸Â­å›½å¤©æ°”',
               'source': '中国气象局',
               'content': '深圳今天晴，约 25°C。',
-              'queryTaskId': 'weather_now',
+              'searchPlanId': 'weather_now',
               'dimension': 'current_weather',
             },
           ),

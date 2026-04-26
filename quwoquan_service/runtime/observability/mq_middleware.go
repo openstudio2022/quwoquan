@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	runtimefailures "quwoquan_service/runtime/failures"
 )
 
 type MQMessage struct {
@@ -105,7 +107,7 @@ func WrapMQConsumer(
 				ServiceInstanceID: cfg.ServiceInstanceID,
 				ErrorCode:         errorCode,
 				ErrorModule:       "MQ",
-				ErrorKind:         "SYSTEM",
+				ErrorKind:         string(runtimefailures.KindInternal),
 				ErrorReason:       "consume_failed",
 				UserMessage:       "消息消费失败，请稍后重试",
 				DebugMessage:      err.Error(),
@@ -163,6 +165,8 @@ func WrapMQConsumer(
 			Status:            status,
 			DurationMs:        time.Since(start).Milliseconds(),
 			ErrorCode:         errorCode,
+			ErrorLocation:     "mq/message_consumer",
+			ErrorContext:      "topic=" + msg.Topic + ";messageId=" + msg.ID,
 			MessageSize:       int64(len(msg.Payload)),
 		})
 		return err
@@ -219,7 +223,7 @@ func WrapMQPublisher(
 				ServiceInstanceID: cfg.ServiceInstanceID,
 				ErrorCode:         errorCode,
 				ErrorModule:       "MQ",
-				ErrorKind:         "SYSTEM",
+				ErrorKind:         string(runtimefailures.KindInternal),
 				ErrorReason:       "publish_failed",
 				UserMessage:       "消息发送失败，请稍后重试",
 				DebugMessage:      err.Error(),
@@ -277,9 +281,10 @@ func WrapMQPublisher(
 			Status:            status,
 			DurationMs:        time.Since(start).Milliseconds(),
 			ErrorCode:         errorCode,
+			ErrorLocation:     "mq/message_publisher",
+			ErrorContext:      "topic=" + msg.Topic + ";messageId=" + msg.ID,
 			MessageSize:       int64(len(msg.Payload)),
 		})
 		return err
 	}
 }
-

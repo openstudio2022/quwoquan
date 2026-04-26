@@ -17,7 +17,7 @@ class _NoopPhase implements Phase {
 }
 
 void main() {
-  test('PhaseOrchestrator 为 phase 发用户态 narrative', () async {
+  test('PhaseOrchestrator 不再为 phase 拼接用户态 narrative', () async {
     final traces = <AssistantTraceEvent>[];
     final orchestrator = PhaseOrchestrator(
       phases: const <Phase>[
@@ -41,16 +41,10 @@ void main() {
       ),
     );
 
-    final narratives = traces
+    final lifecycleStarts = traces
         .where((event) => event.type == AssistantTraceEventType.lifecycleStart)
         .map((event) => (event.data?['phaseId'] as String?) ?? '')
         .toList(growable: false);
-    expect(narratives, containsAll(<String>[
-      'bootstrap',
-      'understand',
-      'retrieval_design',
-      'execution',
-      'evidence_digest',
-    ]));
+    expect(lifecycleStarts, isEmpty);
   });
 }

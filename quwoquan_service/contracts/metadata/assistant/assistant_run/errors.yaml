@@ -11,7 +11,7 @@ errors:
     kind: USER
     reason: forbidden
     http_status: 403
-    retryable: false
+    recovery_action: surface
     dart_const: skillConsentRequired
     go_const: ErrSkillConsentRequired
     l10n_key: assistant.error.skill_consent_required
@@ -23,7 +23,7 @@ errors:
     kind: USER
     reason: invalid_argument
     http_status: 400
-    retryable: false
+    recovery_action: surface
     dart_const: invalidActionPayload
     go_const: ErrInvalidActionPayload
     l10n_key: assistant.error.invalid_action_payload
@@ -35,8 +35,8 @@ errors:
     kind: SYSTEM
     reason: unavailable
     http_status: 503
-    retryable: true
-    retry_after_seconds: 3
+    recovery_action: retry
+    recovery_after_seconds: 3
     dart_const: streamUnavailable
     go_const: ErrStreamUnavailable
     l10n_key: assistant.error.stream_unavailable
@@ -48,8 +48,8 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: true
-    retry_after_seconds: 1
+    recovery_action: retry
+    recovery_after_seconds: 1
     dart_const: markdownBlockParseFailed
     go_const: ErrMarkdownBlockParseFailed
     l10n_key: assistant.error.markdown_block_parse_failed
@@ -61,8 +61,8 @@ errors:
     kind: MIDDLEWARE
     reason: timeout
     http_status: 504
-    retryable: true
-    retry_after_seconds: 8
+    recovery_action: retry
+    recovery_after_seconds: 8
     dart_const: upstreamTimeout
     go_const: ErrUpstreamTimeout
     l10n_key: assistant.error.upstream_timeout
@@ -74,8 +74,8 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: true
-    retry_after_seconds: 1
+    recovery_action: retry
+    recovery_after_seconds: 1
     dart_const: toolObservationInvalid
     go_const: ErrToolObservationInvalid
     l10n_key: assistant.error.tool_observation_invalid
@@ -87,8 +87,8 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: true
-    retry_after_seconds: 1
+    recovery_action: retry
+    recovery_after_seconds: 1
     dart_const: decisionParseFailed
     go_const: ErrDecisionParseFailed
     l10n_key: assistant.error.decision_parse_failed
@@ -100,8 +100,8 @@ errors:
     kind: SYSTEM
     reason: timeout
     http_status: 504
-    retryable: true
-    retry_after_seconds: 3
+    recovery_action: retry
+    recovery_after_seconds: 3
     dart_const: subagentTimeout
     go_const: ErrSubagentTimeout
     l10n_key: assistant.error.subagent_timeout
@@ -113,7 +113,7 @@ errors:
     kind: SYSTEM
     reason: internal_error
     http_status: 500
-    retryable: false
+    recovery_action: surface
     dart_const: subagentContractInvalid
     go_const: ErrSubagentContractInvalid
     l10n_key: assistant.error.subagent_contract_invalid

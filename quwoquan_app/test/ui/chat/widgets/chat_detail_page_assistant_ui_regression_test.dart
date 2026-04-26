@@ -297,7 +297,7 @@ void main() {
                 'status': 'completed',
                 'order': 0,
                 'headline': '先确认问题落点，后面的资料才更容易收敛。',
-                'detail': '{"contractId":"assistant_turn","queryTasks":[1]}',
+                'detail': '{"contractId":"assistant_turn","searchPlans":[1]}',
               },
             ],
             summary: '先确认问题落点，后面的资料才更容易收敛。',
@@ -313,7 +313,7 @@ void main() {
 
     expect(find.textContaining('先确认问题落点'), findsAtLeastNWidgets(1));
     expect(find.textContaining('contractId'), findsNothing);
-    expect(find.textContaining('queryTasks'), findsNothing);
+    expect(find.textContaining('searchPlans'), findsNothing);
   });
 
   testWidgets('多阶段多条目 journey 可同时恢复分析检索核实与成答文案', (tester) async {
@@ -398,7 +398,7 @@ void main() {
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.textContaining('已完成深度思考'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('已完成处理'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
@@ -655,7 +655,7 @@ void main() {
   testWidgets('completed displayMarkdown 会优先渲染自然最终成答并保留引用', (tester) async {
     AssistantCitation? tappedRef;
     const structuredMarkdown =
-        '深圳今天有雨，外出建议带伞。[来源1](https://weather.cma.cn/shenzhen)\n\n'
+        '深圳今天有雨，外出建议带伞。[1](https://weather.cma.cn/shenzhen)\n\n'
         '如果你会晚点出门，带把折叠伞更稳妥。';
     final message = _assistantMessage(
       id: 'assistant_msg_natural_completed',
@@ -665,7 +665,8 @@ void main() {
         'displayPlainText': '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
         'runArtifacts': <String, dynamic>{
           'displayMarkdown': structuredMarkdown,
-          'displayPlainText': '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
+          'displayPlainText':
+              '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
           'answerEvidenceBindings': <Map<String, dynamic>>[
             <String, dynamic>{
               'bindingId': 'binding_weather_1',
@@ -709,7 +710,7 @@ void main() {
     final message = _assistantMessage(
       id: 'assistant_msg_citations',
       content:
-          '这条结论来自官方仓库[来源1](https://github.com/flutter/flutter)，补充解释见文档中心[来源2](https://developer.mozilla.org/zh-CN/)。',
+          '这条结论来自官方仓库[1](https://github.com/flutter/flutter)，补充解释见文档中心[2](https://developer.mozilla.org/zh-CN/)。',
       extra: {
         'runArtifacts': <String, dynamic>{
           'answerEvidenceBindings': <Map<String, dynamic>>[

@@ -1,11 +1,11 @@
 // ASSISTANT_WEAK_TYPE: VENDOR_JSON — 站内/聚合搜索桥接；结果归一化后进入工具协议。
 
+import 'package:quwoquan_app/assistant/retrieval/domain/retrieval_broker.dart';
 import 'package:quwoquan_app/assistant/tool/impl/web/websearch_tool.dart';
 import 'package:quwoquan_app/assistant/tool/impl/search/search_tool_contract.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
-import 'package:quwoquan_app/core/models/search_models.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 
 class SearchTool implements AssistantTool {
@@ -26,45 +26,47 @@ class SearchTool implements AssistantTool {
 
   @override
   Future<AssistantToolResult> execute(AssistantToolArguments arguments) async {
-    final request = SearchToolArgumentsContract.fromAssistantArguments(arguments);
-    final queryTasks = request.queryTasks;
+    final request = SearchToolArgumentsContract.fromAssistantArguments(
+      arguments,
+    );
+    final searchPlans = request.searchPlans;
     final queryVariants = request.queryVariants;
-    if (queryTasks.length >= 2) {
-      return _executeMultiQuery(request, queryTasks);
+    if (searchPlans.length >= 2) {
+      return _executeMultiQuery(request, searchPlans);
     }
-    if (queryTasks.isEmpty && queryVariants.isNotEmpty) {
-      final variantTasks = _queryTasksFromSeeds(request.query, queryVariants);
-      if (variantTasks.length >= 2) {
-        return _executeMultiQuery(request, variantTasks);
+    if (searchPlans.isEmpty && queryVariants.isNotEmpty) {
+      final variantPlans = _searchPlansFromSeeds(request.query, queryVariants);
+      if (variantPlans.length >= 2) {
+        return _executeMultiQuery(request, variantPlans);
       }
     }
-    final singleTask = queryTasks.isNotEmpty ? queryTasks.first : null;
-    return _executeSingleQuery(request, queryTask: singleTask);
+    final singlePlan = searchPlans.isNotEmpty ? searchPlans.first : null;
+    return _executeSingleQuery(request, searchPlan: singlePlan);
   }
 
   Future<AssistantToolResult> _executeSingleQuery(
     SearchToolArgumentsContract arguments, {
-    SearchToolQueryTask? queryTask,
+    RetrievalSearchPlan? searchPlan,
   }) async {
-    final outcome = await _runSingleQuery(arguments, queryTask: queryTask);
+    final outcome = await _runSingleQuery(arguments, searchPlan: searchPlan);
     return outcome.toToolResult();
   }
 
   Future<AssistantToolResult> _executeMultiQuery(
     SearchToolArgumentsContract arguments,
-    List<SearchToolQueryTask> queryTasks,
+    List<RetrievalSearchPlan> searchPlans,
   ) async {
-    final tasks = queryTasks
+    final plans = searchPlans
         .where((item) => item.query.trim().isNotEmpty)
         .toList(growable: false);
     final taskResults = await Future.wait<_SearchToolExecutionOutcome>(
-      tasks.map((task) {
+      plans.map((plan) {
         final singleArgs = arguments.copyWith(
-          query: task.query,
-          queryTasks: const <SearchToolQueryTask>[],
+          query: plan.query,
+          searchPlans: const <RetrievalSearchPlan>[],
           queryVariants: const <String>[],
         );
-        return _runSingleQuery(singleArgs, queryTask: task);
+        return _runSingleQuery(singleArgs, searchPlan: plan);
       }),
       eagerError: false,
     );
@@ -83,7 +85,9 @@ class SearchTool implements AssistantTool {
     for (var i = 0; i < taskResults.length; i += 1) {
       final result = taskResults[i];
       final payload = result.payload;
-      final task = i < tasks.length ? tasks[i] : const SearchToolQueryTask(query: '');
+      final plan = i < plans.length
+          ? plans[i]
+          : const RetrievalSearchPlan(query: '');
       _mergeSections(sections: sections, incoming: payload.sections);
       _mergeHits(target: hits, incoming: payload.hits);
       _mergeReferences(target: references, incoming: payload.references);
@@ -95,21 +99,23 @@ class SearchTool implements AssistantTool {
       if (provider.isEmpty) {
         provider = payload.provider.trim();
       }
-      if (result.success || payload.references.isNotEmpty || payload.hits.isNotEmpty) {
+      if (result.success ||
+          payload.references.isNotEmpty ||
+          payload.hits.isNotEmpty) {
         anySuccess = true;
-        coveredDimensions.addAll(_taskDimensions(task));
+        coveredDimensions.addAll(_planDimensions(plan));
       } else {
         failureCode = result.errorCode;
       }
-      queryLabels.addAll(_taskLabels(task));
-      final query = task.query.trim();
+      queryLabels.addAll(_planLabels(plan));
+      final query = plan.query.trim();
       if (query.isNotEmpty) {
         queriesUsed.add(query);
       }
     }
 
-    final missingDimensions = tasks
-        .expand(_taskDimensions)
+    final missingDimensions = plans
+        .expand(_planDimensions)
         .where(
           (item) => item.trim().isNotEmpty && !coveredDimensions.contains(item),
         )
@@ -143,17 +149,17 @@ class SearchTool implements AssistantTool {
         qualityScore: _qualityScore(
           hitCount: hits.length,
           referenceCount: references.length,
-          queryCount: tasks.length,
+          queryCount: plans.length,
           includesWeb: references.isNotEmpty,
           includesInternal: hits.any(
             (item) => item.objectType != SearchObjectType.webDocument,
           ),
         ),
-        queryCount: tasks.length,
+        queryCount: plans.length,
         queryLabels: queryLabels,
         coveredDimensions: coveredDimensions.toList(growable: false),
         missingDimensions: missingDimensions,
-        queryTasks: tasks,
+        searchPlans: plans,
         referenceCount: references.length,
         totalReferences: references.length,
         queriesUsed: queriesUsed,
@@ -185,7 +191,7 @@ class SearchTool implements AssistantTool {
 
   Future<_SearchToolExecutionOutcome> _runSingleQuery(
     SearchToolArgumentsContract arguments, {
-    SearchToolQueryTask? queryTask,
+    RetrievalSearchPlan? searchPlan,
   }) async {
     final request = arguments.toSearchRequest();
     final normalized = request.normalized();
@@ -249,10 +255,10 @@ class SearchTool implements AssistantTool {
         arguments.toWebSearchArguments(
           query: normalized.query,
           count: normalized.limit,
-          queryTasks: queryTask == null
-              ? const <SearchToolQueryTask>[]
-              : <SearchToolQueryTask>[queryTask],
-          queryVariants: queryTask == null
+          searchPlans: searchPlan == null
+              ? const <RetrievalSearchPlan>[]
+              : <RetrievalSearchPlan>[searchPlan],
+          queryVariants: searchPlan == null
               ? arguments.queryVariants
               : const <String>[],
         ),
@@ -297,7 +303,7 @@ class SearchTool implements AssistantTool {
 
     final success = hits.isNotEmpty || references.isNotEmpty;
     final coveredDimensions = success
-        ? _taskDimensions(queryTask)
+        ? _planDimensions(searchPlan)
         : const <String>[];
     final summary = _buildSingleQuerySummary(
       hitCount: hits.length,
@@ -306,7 +312,7 @@ class SearchTool implements AssistantTool {
       includesWeb: includesWeb,
       includesInternal: internalObjectTypes.isNotEmpty,
     );
-    final queryLabels = _taskLabels(queryTask);
+    final queryLabels = _planLabels(searchPlan);
     return _SearchToolExecutionOutcome(
       success: success,
       message: success ? '已完成统一检索' : '未找到相关结果',
@@ -336,19 +342,19 @@ class SearchTool implements AssistantTool {
         totalReferences: references.length,
         queriesUsed: <String>[normalized.query],
         provider: provider,
-        queryTasks: queryTask == null
-            ? const <SearchToolQueryTask>[]
-            : <SearchToolQueryTask>[queryTask],
+        searchPlans: searchPlan == null
+            ? const <RetrievalSearchPlan>[]
+            : <RetrievalSearchPlan>[searchPlan],
         internalResponse: internalResponse,
       ),
     );
   }
 
-  List<SearchToolQueryTask> _queryTasksFromSeeds(
+  List<RetrievalSearchPlan> _searchPlansFromSeeds(
     String query,
     List<String> queryVariants,
   ) {
-    final tasks = <SearchToolQueryTask>[];
+    final plans = <RetrievalSearchPlan>[];
     final seen = <String>{};
     final seeds = <String>[query.trim(), ...queryVariants];
     for (var i = 0; i < seeds.length; i += 1) {
@@ -356,8 +362,8 @@ class SearchTool implements AssistantTool {
       if (item.isEmpty || !seen.add(item)) {
         continue;
       }
-      tasks.add(
-        SearchToolQueryTask(
+      plans.add(
+        RetrievalSearchPlan(
           id: 'query_${i + 1}',
           label: '检索${i + 1}',
           dimension: 'query_${i + 1}',
@@ -365,7 +371,7 @@ class SearchTool implements AssistantTool {
         ),
       );
     }
-    return tasks;
+    return plans;
   }
 
   void _mergeSections({
@@ -373,8 +379,7 @@ class SearchTool implements AssistantTool {
     required Iterable<SearchSection> incoming,
   }) {
     final index = <String, int>{
-      for (var i = 0; i < sections.length; i += 1)
-        sections[i].id.trim(): i,
+      for (var i = 0; i < sections.length; i += 1) sections[i].id.trim(): i,
     };
     for (final raw in incoming) {
       final id = raw.id.trim();
@@ -468,18 +473,18 @@ class SearchTool implements AssistantTool {
     return '${signal.code}:${signal.objectType?.wireValue ?? ""}';
   }
 
-  List<String> _taskDimensions(SearchToolQueryTask? queryTask) {
-    if (queryTask == null) {
+  List<String> _planDimensions(RetrievalSearchPlan? searchPlan) {
+    if (searchPlan == null) {
       return const <String>[];
     }
-    return queryTask.dimensionLabels();
+    return searchPlan.dimensionLabels();
   }
 
-  List<String> _taskLabels(SearchToolQueryTask? queryTask) {
-    if (queryTask == null) {
+  List<String> _planLabels(RetrievalSearchPlan? searchPlan) {
+    if (searchPlan == null) {
       return const <String>[];
     }
-    return queryTask.labels();
+    return searchPlan.labels();
   }
 
   String _buildSingleQuerySummary({
@@ -570,6 +575,13 @@ class _SearchToolExecutionOutcome {
       errorCode: errorCode,
       degraded: degraded,
       data: payload.toAssistantToolResultData(),
+      runtimeFailure: success
+          ? null
+          : assistantToolRuntimeFailure(
+              errorCode: errorCode,
+              message: message,
+              functionModule: 'search',
+            ),
     );
   }
 }

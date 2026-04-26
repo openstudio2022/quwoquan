@@ -10,8 +10,8 @@ import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projecti
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
-import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/search_plan_contract.dart';
 import 'package:quwoquan_app/assistant/reasoning/runtime/react_runtime.dart';
 import 'package:quwoquan_app/assistant/tool/runtime/tool_registry.dart';
 import 'package:quwoquan_app/assistant/tool/schema/tool_schema.dart';
@@ -107,13 +107,20 @@ void main() {
         ),
       );
       final understandState = understandOutput.state!;
+      final understandSearchPlans = searchPlansFromTaskGraph(
+        understandState.taskGraph,
+      );
 
+      expect(understandSearchPlans, isNotEmpty, reason: testCase.query);
       expect(
-        understandState.intentGraph?.queryNormalization.referenceNowIso,
-        testCase.referenceNowIso,
+        understandSearchPlans.first.timeRangeStart.isNotEmpty ||
+            understandSearchPlans.first.timePoint.isNotEmpty ||
+            understandSearchPlans.first.query.contains('2026'),
+        isTrue,
+        reason: testCase.query,
       );
       expect(
-        understandState.intentGraph?.queryNormalization.timezone,
+        understandSearchPlans.first.timezone,
         testCase.timezone,
       );
 
@@ -126,13 +133,16 @@ void main() {
         ),
       );
       final retrievalState = retrievalOutput.state!;
+      final retrievalSearchPlans = searchPlansFromTaskGraph(
+        retrievalState.taskGraph,
+      );
 
-      expect(retrievalState.queryTasks, isNotEmpty, reason: testCase.query);
-      for (final task in retrievalState.queryTasks) {
-        expect(task.timeScope, isEmpty, reason: testCase.query);
-        expect(task.timePoint, isEmpty, reason: testCase.query);
+      expect(retrievalSearchPlans, isNotEmpty, reason: testCase.query);
+      for (final plan in retrievalSearchPlans) {
+        expect(plan.timeScope, isEmpty, reason: testCase.query);
+        expect(plan.timePoint, isEmpty, reason: testCase.query);
         expect(
-          task.query,
+          plan.query,
           equals(testCase.expectedQuery),
           reason: testCase.query,
         );
@@ -148,7 +158,7 @@ void main() {
           buildProcessTimelineFrame(
             stepId: ProcessStepId.retrievalDesign,
             status: JourneyStageStatus.completed,
-            detail: '执行检索：${retrievalState.queryTasks.first.query}',
+            detail: '执行检索：${retrievalSearchPlans.first.query}',
           ),
           const ProcessTimelineFrame(
             frameId: 'r',
@@ -173,7 +183,6 @@ void main() {
       );
 
       final narrative = displayState.process.blocks
-          .where((block) => block.blockId == 'understanding_narrative')
           .map((block) => '${block.title}\n${block.body}')
           .join('\n');
       expect(
@@ -189,7 +198,7 @@ void main() {
     }
   });
 
-  test('模型回传错误 retrieval design 时，展示仍以 canonical queryTasks 为准', () async {
+  test('模型回传错误 retrieval design 时，展示仍以 canonical searchPlans 为准', () async {
     final provider = _ConflictingTemporalQueryGroupProvider();
     final toolRegistry = AssistantToolRegistry()
       ..register(_NoopWebSearchTool());
@@ -224,7 +233,9 @@ void main() {
         traceId: 'trace_conflicting_query_groups',
       ),
     );
-    final canonicalQuery = retrievalOutput.state!.queryTasks.first.query;
+    final canonicalQuery = searchPlansFromTaskGraph(
+      retrievalOutput.state!.taskGraph,
+    ).first.query;
     final displayState = buildAssistantDisplayState(
       processTimeline: <ProcessTimelineFrame>[
         buildProcessTimelineFrame(
@@ -252,7 +263,6 @@ void main() {
     expect(canonicalQuery, contains('2026-04-08'));
     expect(canonicalQuery, isNot(contains('2026-04-09 A股 大涨 原因')));
     final narrative = displayState.process.blocks
-        .where((block) => block.blockId == 'understanding_narrative')
         .map((block) => '${block.title}\n${block.body}')
         .join('\n');
     expect(narrative, contains('2026-04-08 A股 大涨 原因'));
@@ -307,31 +317,38 @@ class _DeterministicPlannerProvider implements AssistantLlmProvider {
           'intentSummary': '用户需要实时/指定日期的信息结论。',
           'concernPoints': <String>['时间落点', '外部证据'],
         },
-        'intentGraph': <String, dynamic>{
-          'userGoal': '获取相对时间对应的外部结论',
-          'problemShape': 'single_skill',
-          'primarySkill': 'general_search',
-          'problemClass': 'realtime_info',
-          'inferredMotive': '需要基于外部证据回答',
-          'secondarySkills': <String>[],
-          'queryNormalization': <String, dynamic>{
-            'normalizedQuery': expectedQuery,
-          },
-          'queryTasks': <Map<String, dynamic>>[
+        'understandingResult': <String, dynamic>{
+          'intents': <Map<String, dynamic>>[
             <String, dynamic>{
-              'id': 'time_anchor_lookup',
-              'query': expectedQuery,
-              'dimension': 'latest_signal',
-              'why': '直接输出最终可执行检索词，运行时不再二次改写时间。',
+              'intentId': 'intent_time_anchor_lookup',
+              'intentType': 'general_search.lookup',
+              'goal': '获取相对时间对应的外部结论',
+              'requiresEvidence': true,
             },
           ],
-          'contextSlots': <String, dynamic>{},
-          'globalConstraints': <String, dynamic>{'mode': 'qa'},
-          'clarificationNeeded': false,
-          'requiresExternalEvidence': true,
-          'answerShape': 'decision_ready',
-          'freshnessNeed': 'latest',
-          'freshnessHoursMax': 6,
+        },
+        'taskGraph': <String, dynamic>{
+          'tasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'taskId': 'time_anchor_lookup',
+              'intentId': 'intent_time_anchor_lookup',
+              'toolName': 'web_search',
+              'toolArgs': <String, dynamic>{
+                'query': expectedQuery,
+                'searchPlans': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'id': 'time_anchor_lookup',
+                    'query': expectedQuery,
+                    'dimension': 'latest_signal',
+                    'timezone':
+                        templateVariables['timezone'] ??
+                        templateContext['timezone'] ??
+                        '',
+                  },
+                ],
+              },
+            },
+          ],
         },
         'selfCheck': const <String, dynamic>{
           'goalSatisfied': true,
@@ -375,30 +392,35 @@ class _ConflictingTemporalQueryGroupProvider implements AssistantLlmProvider {
         'understandingSnapshot': const <String, dynamic>{
           'userFacingSummary': '我先把周三对应到具体交易日，再组织检索。',
         },
-        'intentGraph': <String, dynamic>{
-          'userGoal': '获取周三A股上涨原因',
-          'problemShape': 'single_skill',
-          'primarySkill': 'general_search',
-          'problemClass': 'realtime_info',
-          'secondarySkills': <String>[],
-          'queryNormalization': <String, dynamic>{
-            'normalizedQuery': '2026-04-08 A股 大涨 原因',
-          },
-          'queryTasks': <Map<String, dynamic>>[
+        'understandingResult': const <String, dynamic>{
+          'intents': <Map<String, dynamic>>[
             <String, dynamic>{
-              'id': 'market_jump',
-              'query': '2026-04-08 A股 大涨 原因',
-              'dimension': 'latest_signal',
-              'why': '先锁定具体交易日，再看对应盘面和消息面。',
+              'intentId': 'intent_market_jump',
+              'intentType': 'general_search.lookup',
+              'goal': '获取周三A股上涨原因',
+              'requiresEvidence': true,
             },
           ],
-          'contextSlots': <String, dynamic>{},
-          'globalConstraints': <String, dynamic>{'mode': 'qa'},
-          'clarificationNeeded': false,
-          'requiresExternalEvidence': true,
-          'answerShape': 'decision_ready',
-          'freshnessNeed': 'latest',
-          'freshnessHoursMax': 6,
+        },
+        'taskGraph': const <String, dynamic>{
+          'tasks': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'taskId': 'market_jump',
+              'intentId': 'intent_market_jump',
+              'toolName': 'web_search',
+              'toolArgs': <String, dynamic>{
+                'query': '2026-04-08 A股 大涨 原因',
+                'searchPlans': <Map<String, dynamic>>[
+                  <String, dynamic>{
+                    'id': 'market_jump',
+                    'query': '2026-04-08 A股 大涨 原因',
+                    'dimension': 'latest_signal',
+                    'timezone': 'Asia/Shanghai',
+                  },
+                ],
+              },
+            },
+          ],
         },
         'selfCheck': const <String, dynamic>{
           'goalSatisfied': true,

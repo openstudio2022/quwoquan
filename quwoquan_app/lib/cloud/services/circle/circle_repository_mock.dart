@@ -64,14 +64,17 @@ class MockCircleRepository implements CircleRepository {
     final now = DateTime.now().toIso8601String();
     final circleName = circle.name.trim().isEmpty ? '群组' : circle.name.trim();
     final description = (circle.description ?? '').trim();
-    final ownerUserId =
-        circle.ownerId.trim().isEmpty ? 'owner_user' : circle.ownerId.trim();
+    final ownerUserId = circle.ownerId.trim().isEmpty
+        ? 'owner_user'
+        : circle.ownerId.trim();
     final groups = <CircleGroupDto>[
       CircleGroupDto.fromMap(
         _normalizedCircleGroup(
           <String, dynamic>{
             'name': '$circleName主群',
-            'description': description.isEmpty ? '默认公共群' : '$description · 默认公共群',
+            'description': description.isEmpty
+                ? '默认公共群'
+                : '$description · 默认公共群',
             'groupType': 'public_group',
             'visibility': 'public',
             'joinPolicy': 'apply_only',
@@ -323,7 +326,8 @@ class MockCircleRepository implements CircleRepository {
     final facetBuckets = filtered
         .map(
           (circle) => <String, dynamic>{
-            'facetKey': (circle.subCategory ?? circle.category ?? '').toString(),
+            'facetKey': (circle.subCategory ?? circle.category ?? '')
+                .toString(),
             'label': (circle.subCategory ?? circle.category ?? '').toString(),
             'categoryId': circle.category,
             'subCategory': circle.subCategory,
@@ -397,10 +401,22 @@ class MockCircleRepository implements CircleRepository {
   Future<void> archiveCircle(String circleId) async {}
 
   @override
-  Future<void> joinCircle(String circleId) async {}
+  Future<void> joinCircle(
+    String circleId, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  }) async {}
 
   @override
-  Future<void> leaveCircle(String circleId) async {}
+  Future<void> leaveCircle(
+    String circleId, {
+    String? ownerUserId,
+    String? actorProfileSubjectId,
+    String? personaId,
+    String? personaContextVersion,
+  }) async {}
 
   @override
   Future<List<CircleMemberRosterItemDto>> listMembers(
@@ -490,10 +506,7 @@ class MockCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<CircleGroupDto> getCircleGroup(
-    String circleId,
-    String groupId,
-  ) async {
+  Future<CircleGroupDto> getCircleGroup(String circleId, String groupId) async {
     for (final g in _ensureGroupCache(circleId)) {
       if (g.id == groupId) return g;
     }
@@ -861,7 +874,8 @@ class MockCircleRepository implements CircleRepository {
   }
 
   @override
-  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig() async {
+  Future<Map<String, CircleCategoryTabConfigDto>>
+  getCircleCategoryConfig() async {
     return CircleCategoryTabsLoader.loadFromAsset();
   }
 }

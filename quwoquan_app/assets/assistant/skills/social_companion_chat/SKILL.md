@@ -2,7 +2,7 @@
 name: social_companion_chat
 description: 进行自然、有趣的日常闲聊，保持安全边界与轻松氛围。
 domain: social_companion_chat
-allowed_tools: local_context
+allowed_tools: memory_search
 trigger_keywords: 闲聊 聊天 在吗 哈哈 随便聊 无聊 陪我
 output_contract: assistant_turn
 tool_observation_contract: tool_observation_v1
@@ -20,16 +20,13 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 
 ## 工具调用策略
 - 优先以闲聊互动为主，不强制调用外部工具。
-- 可调用 `local_context` 获取时间/天气背景，让对话更有时效感。
+- 时间、天气与位置背景统一从系统默认注入上下文读取，不再调用额外上下文工具。
 - 工具失败允许一次重试；失败后继续纯闲聊模式。
 
 ## 触发与禁用条件
 - 触发信号：命中本技能关键词与领域语义。
 - 禁用信号：明显属于其他垂类时不应强行触发。
 - 竞争冲突：不确定时先 ask_user 澄清主诉求。
-
-## local_context 输出约束
-当调用 local_context 时，必须按 `local_context_v1` 解析，并明确 `media.included=false`。
 
 ## 双轨输出契约
 若 nextAction 为 tool_call，必须同时返回：
@@ -44,9 +41,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
   "contractId": "assistant_turn",
   "decision": {"nextAction": "tool_call|answer|ask_user|retry|abort"},
   "slotState": {},
-  "toolCalls": [
-    {"toolName": "local_context", "arguments": {"requestedFields": ["time", "location"]}}
-  ],
+  "toolCalls": [],
   "askUser": {"slotId": "", "prompt": "", "required": false, "suggestions": []},
   "userMarkdown": "哈，我在！"
 }

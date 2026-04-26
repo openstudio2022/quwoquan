@@ -1,6 +1,6 @@
-import 'package:quwoquan_app/assistant/contracts/intent_graph.dart';
 import 'package:quwoquan_app/assistant/contracts/recall_result.dart';
-import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/contracts/task_graph_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/understanding_result_contract.dart';
 
 /// Execution mode for the current assistant turn.
 enum AgentMode {
@@ -61,54 +61,27 @@ class ModeDecider {
   final int multiAgentThreshold;
 
   ModeDecision decide({
-    required IntentGraph intentGraph,
+    required UnderstandingResult understandingResult,
+    required TaskGraph taskGraph,
     RecallResult? recallResult,
   }) {
-    final orchestrationMode =
-        (intentGraph.globalConstraints['orchestrationMode'] as String?)
-            ?.trim() ??
-        (intentGraph.globalConstraints['agentMode'] as String?)?.trim() ??
-        '';
-    if (orchestrationMode == 'multi_agent' ||
-        orchestrationMode == 'multiAgent') {
-      final count = 1 + intentGraph.secondarySkills.length;
+    final intentCount = understandingResult.intents.length;
+    final toolCount = taskGraph.tasks
+        .map((task) => task.toolName.trim())
+        .where((toolName) => toolName.isNotEmpty)
+        .toSet()
+        .length;
+    if (intentCount >= multiAgentThreshold && toolCount >= multiAgentThreshold) {
       return ModeDecision(
         mode: AgentMode.multiAgent,
-        reason: 'model_requested_multi_agent',
-        subagentCount: count <= 1 ? 2 : count,
+        reason: 'multi_intent_task_graph',
+        subagentCount: intentCount,
         budgetMultiplier: 0.8,
       );
     }
-    if (intentGraph.isFastConvergence) {
-      return const ModeDecision(
-        mode: AgentMode.singleAgent,
-        reason: 'fast_convergence_problem',
-      );
-    }
-
-    if (intentGraph.isMultiSkill &&
-        intentGraph.secondarySkills.length >= multiAgentThreshold - 1) {
-      return ModeDecision(
-        mode: AgentMode.multiAgent,
-        reason: 'multi_skill_intent',
-        subagentCount: 1 + intentGraph.secondarySkills.length,
-        budgetMultiplier: 0.7,
-      );
-    }
-
-    if (intentGraph.problemClass == ProblemClass.complexReasoning &&
-        intentGraph.secondarySkills.isNotEmpty) {
-      return ModeDecision(
-        mode: AgentMode.multiAgent,
-        reason: 'complex_reasoning_with_secondary',
-        subagentCount: 1 + intentGraph.secondarySkills.length,
-        budgetMultiplier: 0.8,
-      );
-    }
-
     return const ModeDecision(
       mode: AgentMode.singleAgent,
-      reason: 'default_single',
+      reason: 'typed_default_single',
     );
   }
 }

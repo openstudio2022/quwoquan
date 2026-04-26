@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class HomepageMaintenancePage extends ConsumerStatefulWidget {
   const HomepageMaintenancePage({super.key, required this.homepageId});
@@ -105,7 +106,9 @@ class _HomepageMaintenancePageState
                         : '当前主页尚未完成认领，暂不可维护。',
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,
-                      color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
                     ),
                   ),
                   if (_errorText != null) ...<Widget>[
@@ -271,7 +274,7 @@ class _HomepageMaintenancePageState
         return;
       }
       setState(() {
-        _errorText = error.toString();
+        _errorText = runtimeErrorDisplayMessage(error);
       });
     } finally {
       if (mounted) {

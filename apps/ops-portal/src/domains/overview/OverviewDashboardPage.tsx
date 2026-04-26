@@ -16,10 +16,11 @@ import {
   type ProductProjectionSummary,
   type ReleaseItem,
   type WorkflowItem,
-} from '../../shared/api/controlPlane';
-import { KpiCard } from '../../shared/components/KpiCard';
-import { SectionCard } from '../../shared/components/SectionCard';
-import { PageScaffold } from '../../shared/layout/PageScaffold';
+} from '../../shared/api/controlPlane.js';
+import { KpiCard } from '../../shared/components/KpiCard.js';
+import { SectionCard } from '../../shared/components/SectionCard.js';
+import { PageScaffold } from '../../shared/layout/PageScaffold.js';
+import { RuntimeErrorBadge, coerceRuntimeError, type RuntimeError } from '../../shared/runtime/errors/index.js';
 
 export function OverviewDashboardPage() {
   const [audits, setAudits] = useState<PlatformAuditItem[]>([]);
@@ -30,6 +31,7 @@ export function OverviewDashboardPage() {
   const [behaviorSummary, setBehaviorSummary] = useState<ProductEventSummary | null>(null);
   const [drilldownItems, setDrilldownItems] = useState<ProductEventDrilldownItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -50,9 +52,11 @@ export function OverviewDashboardPage() {
         setBehaviorSummary(behaviorItem);
         setDrilldownItems(drilldown.items);
         setRemoteReady(true);
+        setRuntimeError(null);
       })
-      .catch(() => {
+      .catch((error) => {
         setRemoteReady(false);
+        setRuntimeError(coerceRuntimeError(error));
       });
   }, []);
 
@@ -102,6 +106,7 @@ export function OverviewDashboardPage() {
           <span className={`badge ${remoteReady ? 'badge--success' : 'badge--warning'}`}>
             {remoteReady ? '真实总览数据已接入' : '等待控制面连接'}
           </span>
+          <RuntimeErrorBadge error={runtimeError} />
         </>
       }
       actions={<button className="button button--primary">创建跨域观察视图</button>}

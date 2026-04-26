@@ -50,7 +50,7 @@ void main() {
 
       expect(planner, contains('understandingSnapshot.userFacingSummary'));
       expect(planner, contains('search_iteration_state'));
-      expect(planner, contains('intentGraph.queryTasks[*].query'));
+      expect(planner, contains('taskGraph.tasks[*].toolArgs.query'));
       expect(planner, contains('calendarContext'));
       expect(planner, contains('不要在本阶段输出 `decision.nextAction=answer`'));
       expect(synth, contains('retrievalProcessing.processingSummary'));
@@ -80,7 +80,7 @@ void main() {
 
       expect(phasePlan, contains('decision.nextAction'));
       expect(phasePlan, contains('understandingSnapshot.userFacingSummary'));
-      expect(phasePlan, contains('queryTasks.query'));
+      expect(phasePlan, contains('toolArgs.query'));
       expect(phasePlan, contains('toolCalls'));
       expect(phasePlan, contains('reasonShort / result.*'));
       expect(phasePlan, isNot(contains('  - `answer`')));

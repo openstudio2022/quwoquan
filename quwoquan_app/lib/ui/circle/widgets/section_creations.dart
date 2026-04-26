@@ -15,6 +15,7 @@ import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 圈子"创作"板块：SubTab 过滤 + 排序 + 二列网格。
 ///
@@ -90,8 +91,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       );
       if (mounted) {
         setState(() {
-          _feedEntries =
-              items.map(CircleHubFeedPostEntry.fromPostDto).toList(growable: false);
+          _feedEntries = items
+              .map(CircleHubFeedPostEntry.fromPostDto)
+              .toList(growable: false);
           _circleCategoryId = circleDetail.categoryId;
           _isLoading = false;
         });
@@ -100,7 +102,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = e.toString();
+          _error = runtimeErrorDisplayMessage(e);
         });
       }
     }
@@ -207,10 +209,20 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             borderColor: borderColor,
             child: Column(
               children: [
-                _buildIdentityFilterRow(circleState, circleCtrl, fg, fgSecondary),
+                _buildIdentityFilterRow(
+                  circleState,
+                  circleCtrl,
+                  fg,
+                  fgSecondary,
+                ),
                 if (_isWorkLikeSubTab(circleState.activeSubTab)) ...[
                   SizedBox(height: AppSpacing.sm),
-                  _buildWorkFormatFilterRow(circleState, circleCtrl, fg, fgSecondary),
+                  _buildWorkFormatFilterRow(
+                    circleState,
+                    circleCtrl,
+                    fg,
+                    fgSecondary,
+                  ),
                 ],
                 if (_isAdminOrOwner) ...[
                   SizedBox(height: AppSpacing.sm),
@@ -381,7 +393,10 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
-  bool _matchesIdentityFilter(CircleHubFeedPostEntry entry, CreationSubTab tab) {
+  bool _matchesIdentityFilter(
+    CircleHubFeedPostEntry entry,
+    CreationSubTab tab,
+  ) {
     switch (tab) {
       case CreationSubTab.moment:
         return _entryIdentity(entry) == 'moment';
@@ -505,12 +520,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   String _entrySupportingText(CircleHubFeedPostEntry entry) {
     final rp = entry.tryReadPresentation();
     if (rp == null) return _rawSupportingText(entry.raw);
-    final headline =
-        rp.title.isNotEmpty ? rp.title : _entryTypeLabel(entry);
+    final headline = rp.title.isNotEmpty ? rp.title : _entryTypeLabel(entry);
     final summary = rp.body.trim();
-    if (_entryIsArticle(entry) &&
-        summary.isNotEmpty &&
-        summary != headline) {
+    if (_entryIsArticle(entry) && summary.isNotEmpty && summary != headline) {
       return summary;
     }
     return _rawSupportingText(entry.raw);
@@ -691,10 +703,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     if (activeSubTab == CreationSubTab.article ||
         activeWorkFormat == CreationWorkFormat.note) {
       filtered.sort((left, right) {
-        final leftHasTemplate =
-            _entryArticleTemplate(left).trim().isNotEmpty;
-        final rightHasTemplate =
-            _entryArticleTemplate(right).trim().isNotEmpty;
+        final leftHasTemplate = _entryArticleTemplate(left).trim().isNotEmpty;
+        final rightHasTemplate = _entryArticleTemplate(right).trim().isNotEmpty;
         if (leftHasTemplate != rightHasTemplate) {
           return leftHasTemplate ? -1 : 1;
         }
@@ -1421,7 +1431,9 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         border: Border.all(color: borderColor.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.black.withValues(alpha: widget.isDark ? 0.16 : 0.05),
+            color: AppColors.black.withValues(
+              alpha: widget.isDark ? 0.16 : 0.05,
+            ),
             blurRadius: AppSpacing.md,
             offset: const Offset(0, 8),
           ),

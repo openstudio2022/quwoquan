@@ -1,5 +1,4 @@
 import 'package:test/test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_app_config_client_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_reaction_state.dart';
 import 'package:quwoquan_app/cloud/runtime/models/post_engagement_counters.dart';

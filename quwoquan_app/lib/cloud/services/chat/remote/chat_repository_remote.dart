@@ -209,7 +209,10 @@ class RemoteChatRepository implements ChatRepository {
       ),
     );
     return ConversationDto.fromMap(
-      CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.getConversation),
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ChatRequestPageIds.getConversation,
+      ),
     );
   }
 
@@ -307,6 +310,8 @@ class RemoteChatRepository implements ChatRepository {
     String? senderPersonaId,
     String? senderProfileSubjectId,
     String? personaContextVersion,
+    String? senderDisplayNameSnapshot,
+    String? senderAvatarUrlSnapshot,
     required String clientMsgId,
   }) async {
     final uri = _uri(
@@ -335,10 +340,19 @@ class RemoteChatRepository implements ChatRepository {
           'senderProfileSubjectId': senderProfileSubjectId,
         if (personaContextVersion != null && personaContextVersion.isNotEmpty)
           'personaContextVersion': personaContextVersion,
+        if (senderDisplayNameSnapshot != null &&
+            senderDisplayNameSnapshot.isNotEmpty)
+          'senderDisplayNameSnapshot': senderDisplayNameSnapshot,
+        if (senderAvatarUrlSnapshot != null &&
+            senderAvatarUrlSnapshot.isNotEmpty)
+          'senderAvatarUrlSnapshot': senderAvatarUrlSnapshot,
       },
     );
     return SendMessageResponse.fromMap(
-      CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.sendMessage),
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ChatRequestPageIds.sendMessage,
+      ),
     );
   }
 
@@ -383,7 +397,10 @@ class RemoteChatRepository implements ChatRepository {
       body: {'lastSeq': lastSeq, 'limit': limit},
     );
     return SyncResponse.fromMap(
-      CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.syncMessages),
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ChatRequestPageIds.syncMessages,
+      ),
     );
   }
 
@@ -430,14 +447,17 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.getReceipts,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.getReceipts);
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ChatRequestPageIds.getReceipts,
+    );
     final items = obj['items'];
     if (items is List) {
       return items
           .whereType<Map>()
-          .map((m) => ChatMessageReceiptDto.fromMap(
-                Map<String, dynamic>.from(m),
-              ))
+          .map(
+            (m) => ChatMessageReceiptDto.fromMap(Map<String, dynamic>.from(m)),
+          )
           .toList(growable: false);
     }
     return const [];
@@ -470,7 +490,10 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listMembers,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.listMembers);
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ChatRequestPageIds.listMembers,
+    );
     final items = obj['items'];
     if (items is! List) {
       return [];
@@ -538,9 +561,7 @@ class RemoteChatRepository implements ChatRepository {
         operationId: ChatApiMetadata.inviteAssistantOperation,
         clientPageId: ChatRequestPageIds.inviteAssistant,
       ),
-      body: {
-        if (skillId != null && skillId.isNotEmpty) 'skillId': skillId,
-      },
+      body: {if (skillId != null && skillId.isNotEmpty) 'skillId': skillId},
     );
   }
 
@@ -608,7 +629,10 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.listContacts,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.listContacts);
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ChatRequestPageIds.listContacts,
+    );
     final items = obj['items'];
     if (items is! List) {
       return [];
@@ -662,7 +686,10 @@ class RemoteChatRepository implements ChatRepository {
         clientPageId: ChatRequestPageIds.searchContacts,
       ),
     );
-    final obj = CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.searchContacts);
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ChatRequestPageIds.searchContacts,
+    );
     final items = obj['items'];
     if (items is! List) {
       return [];
@@ -694,18 +721,18 @@ class RemoteChatRepository implements ChatRepository {
     if (items is List) {
       return items
           .whereType<Map>()
-          .map((m) => ChatConversationTimestampDto.fromMap(
-                Map<String, dynamic>.from(m),
-              ))
+          .map(
+            (m) => ChatConversationTimestampDto.fromMap(
+              Map<String, dynamic>.from(m),
+            ),
+          )
           .toList(growable: false);
     }
     return const [];
   }
 
   @override
-  Future<List<ConversationDto>> batchGetConversations(
-    List<String> ids,
-  ) async {
+  Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
     final uri = _uri(ChatApiMetadata.batchGetConversationsPath);
     final decoded = await _httpClient.postJson(
       uri,
@@ -746,7 +773,10 @@ class RemoteChatRepository implements ChatRepository {
       ),
     );
     return ChatGroupSettingsDto.fromMap(
-      CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.getConversation),
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ChatRequestPageIds.getConversation,
+      ),
     );
   }
 

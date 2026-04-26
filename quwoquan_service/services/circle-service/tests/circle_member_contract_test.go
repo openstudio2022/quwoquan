@@ -51,6 +51,50 @@ func TestJoinOpenCircle(t *testing.T) {
 	}
 }
 
+func TestJoinCircle_UsesPersonaSubjectHeader(t *testing.T) {
+	defer cleanCollections(t)
+
+	circleID := createTestCircle(t, "分身透传圈子")
+	rec := doRequestAsWithHeaders(
+		t,
+		http.MethodPost,
+		"/v1/circles/"+circleID+"/join",
+		"user_joiner_owner",
+		map[string]string{
+			"X-Client-User-Id":          "user_joiner_owner",
+			"X-Profile-Subject-Id":      "persona_joiner_01",
+			"X-Persona-Id":              "persona_joiner_01",
+			"X-Persona-Context-Version": "ctx_v1",
+		},
+		nil,
+	)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	count, err := mongoDB.Collection("circle_members").CountDocuments(
+		context.Background(),
+		bson.M{"circleId": circleID, "userId": "persona_joiner_01"},
+	)
+	if err != nil {
+		t.Fatalf("count persona member: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected persona member persisted once, got %d", count)
+	}
+
+	ownerCount, err := mongoDB.Collection("circle_members").CountDocuments(
+		context.Background(),
+		bson.M{"circleId": circleID, "userId": "user_joiner_owner"},
+	)
+	if err != nil {
+		t.Fatalf("count owner member: %v", err)
+	}
+	if ownerCount != 0 {
+		t.Fatalf("expected owner id not persisted as member, got %d", ownerCount)
+	}
+}
+
 // --- join_circle_idempotent (contract.yaml scenario) ---
 
 func TestJoinDuplicateIdempotent(t *testing.T) {

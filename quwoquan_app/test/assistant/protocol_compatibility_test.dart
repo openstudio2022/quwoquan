@@ -44,7 +44,7 @@ void main() {
         'customProbe': 42,
       });
       expect(req.messages, hasLength(1));
-      expect(req.maxIterations, 8);
+      expect(req.maxIterations, 5);
       expect(req.jsonExtension['modelRef'], 'm1');
       expect(req.jsonExtension['customProbe'], 42);
       final roundTrip = AssistantRunRequest.fromJson(req.toJson());
@@ -55,8 +55,9 @@ void main() {
     test('run response supports json roundtrip', () {
       final structuredPath =
           '../quwoquan_service/contracts/metadata/assistant/test_fixtures/wire_protocol_compatibility_structured_response.json';
-      final structuredResponse = jsonDecode(File(structuredPath).readAsStringSync())
-          as Map<String, dynamic>;
+      final structuredResponse =
+          jsonDecode(File(structuredPath).readAsStringSync())
+              as Map<String, dynamic>;
       final response = AssistantRunResponse(
         finalText: 'ok',
         traces: <AssistantTraceEvent>[

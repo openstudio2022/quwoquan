@@ -24,6 +24,7 @@ class ProfileState {
     this.isLoading = false,
     this.isFollowing = false,
     this.capability,
+    this.optimisticFollowOverride,
   });
 
   final String userId;
@@ -43,6 +44,16 @@ class ProfileState {
 
   /// 关系能力位投影（null = 未载入）
   final RelationshipCapabilityDto? capability;
+  final bool? optimisticFollowOverride;
+
+  RelationshipCapabilityDto? get displayCapability {
+    final base = capability;
+    final override = optimisticFollowOverride;
+    if (base == null || override == null) {
+      return base;
+    }
+    return _copyCapabilityWithFollowState(base, override);
+  }
 
   ProfileState copyWith({
     ProfileSubjectViewData? profile,
@@ -59,7 +70,9 @@ class ProfileState {
     bool? isLoading,
     bool? isFollowing,
     RelationshipCapabilityDto? capability,
+    bool? optimisticFollowOverride,
     bool clearCapability = false,
+    bool clearOptimisticFollowOverride = false,
   }) {
     return ProfileState(
       userId: userId,
@@ -77,6 +90,9 @@ class ProfileState {
       isLoading: isLoading ?? this.isLoading,
       isFollowing: isFollowing ?? this.isFollowing,
       capability: clearCapability ? null : (capability ?? this.capability),
+      optimisticFollowOverride: clearOptimisticFollowOverride
+          ? null
+          : (optimisticFollowOverride ?? this.optimisticFollowOverride),
     );
   }
 }
@@ -108,6 +124,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
           .read(relationshipCapabilityRepositoryProvider)
           .reconcilesCapabilityWithSharedRelationshipState;
       RelationshipCapabilityDto? seededCapability;
+      bool? optimisticFollowOverride;
       final sharedFollowing = ref
           .read(userRelationshipStateProvider)
           .isFollowing(profileSubjectId);
@@ -116,18 +133,17 @@ class ProfileNotifier extends Notifier<ProfileState> {
           seededCapability = await ref
               .read(relationshipCapabilityRepositoryProvider)
               .getCapability(profileSubjectId);
-          if (sharedFollowing && !seededCapability.viewerFollowsTarget) {
-            seededCapability = _copyCapabilityWithFollowState(
-              seededCapability,
-              true,
-            );
+          if (sharedFollowing != seededCapability.viewerFollowsTarget) {
+            optimisticFollowOverride = sharedFollowing;
           }
         } catch (_) {
           seededCapability = null;
         }
       }
       final seededFollowing =
-          seededCapability?.viewerFollowsTarget ?? sharedFollowing;
+          optimisticFollowOverride ??
+          seededCapability?.viewerFollowsTarget ??
+          sharedFollowing;
       state = state.copyWith(
         profile: profile,
         creations: posts,
@@ -137,6 +153,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
         isLoading: false,
         isFollowing: seededFollowing,
         capability: seededCapability,
+        optimisticFollowOverride: optimisticFollowOverride,
       );
       ref
           .read(userRelationshipStateProvider.notifier)
@@ -165,7 +182,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
               .reconcilesCapabilityWithSharedRelationshipState &&
           seededFollowing &&
           !cap.viewerFollowsTarget) {
-        cap = _copyCapabilityWithFollowState(cap, true);
+        state = state.copyWith(optimisticFollowOverride: true);
       }
       final latestTargetId = state.profile?.profileSubjectId.isNotEmpty == true
           ? state.profile!.profileSubjectId
@@ -179,23 +196,20 @@ class ProfileNotifier extends Notifier<ProfileState> {
       state = state.copyWith(
         capability: cap,
         isFollowing: cap.viewerFollowsTarget,
+        clearOptimisticFollowOverride: true,
       );
     } catch (_) {
       final targetUserId = state.profile?.profileSubjectId.isNotEmpty == true
           ? state.profile!.profileSubjectId
           : _userId;
-      final viewerId = ref.read(currentUserIdProvider);
       final seededFollowing = ref
           .read(userRelationshipStateProvider)
           .isFollowing(targetUserId);
       state = state.copyWith(
-        capability: RelationshipCapabilityDto.fromFollowFlags(
-          viewerId: viewerId,
-          targetId: targetUserId,
-          isFollowing: seededFollowing,
-          isFollowedBy: false,
-        ),
         isFollowing: seededFollowing,
+        optimisticFollowOverride: state.capability == null
+            ? null
+            : seededFollowing,
       );
     }
   }
@@ -242,18 +256,9 @@ class ProfileNotifier extends Notifier<ProfileState> {
           profileSubjectId: profileSubjectId,
           shouldFollow: nextFollowing,
         );
-    final existing = state.capability;
-    final base =
-        existing ??
-        RelationshipCapabilityDto.fromFollowFlags(
-          viewerId: ref.read(currentUserIdProvider),
-          targetId: profileSubjectId,
-          isFollowing: wasFollowing,
-          isFollowedBy: false,
-        );
     state = state.copyWith(
       isFollowing: nextFollowing,
-      capability: _copyCapabilityWithFollowState(base, nextFollowing),
+      optimisticFollowOverride: state.capability == null ? null : nextFollowing,
     );
   }
 }

@@ -4,6 +4,7 @@
 class SocialRelationSearchItemWireDto {
   final String profileSubjectId;
   final String username;
+  final String userHandle;
   final String displayName;
   final String? avatarUrl;
   final String? headline;
@@ -13,6 +14,7 @@ class SocialRelationSearchItemWireDto {
   SocialRelationSearchItemWireDto({
     this.profileSubjectId = '',
     this.username = '',
+    this.userHandle = '',
     this.displayName = '',
     this.avatarUrl,
     this.headline,
@@ -23,7 +25,8 @@ class SocialRelationSearchItemWireDto {
   factory SocialRelationSearchItemWireDto.fromMap(Map<String, dynamic> m) {
     return SocialRelationSearchItemWireDto(
       profileSubjectId: _firstNonEmptyWireString(m, <String>['profileSubjectId', 'userId']) ?? '',
-      username: m['username']?.toString() ?? m['subAccountId']?.toString() ?? '',
+      username: m['username']?.toString() ?? m['userHandle']?.toString() ?? m['subAccountId']?.toString() ?? '',
+      userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['subAccountId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? null,
       headline: m['headline']?.toString() ?? m['bio']?.toString() ?? null,
@@ -36,6 +39,7 @@ class SocialRelationSearchItemWireDto {
     return <String, dynamic>{
       'profileSubjectId': profileSubjectId,
       'username': username,
+      'userHandle': userHandle,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'headline': headline,
@@ -47,6 +51,7 @@ class SocialRelationSearchItemWireDto {
   SocialRelationSearchItemWireDto copyWith({
     String? profileSubjectId,
     String? username,
+    String? userHandle,
     String? displayName,
     String? avatarUrl,
     String? headline,
@@ -56,6 +61,7 @@ class SocialRelationSearchItemWireDto {
     return SocialRelationSearchItemWireDto(
       profileSubjectId: profileSubjectId ?? this.profileSubjectId,
       username: username ?? this.username,
+      userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       headline: headline ?? this.headline,

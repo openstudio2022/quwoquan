@@ -11,6 +11,6 @@
 
 ## 验收标准
 - A1：核心服务统一错误响应结构可用。
-- A3：`retryable` 可用于重试与降级决策。
+- A3：`recovery policy` 可用于重试与降级决策。
 - A7：错误码字典、OpenAPI、SDK 实现三方一致。
 - A8：unit/contract/integration/uat 自动化完整。

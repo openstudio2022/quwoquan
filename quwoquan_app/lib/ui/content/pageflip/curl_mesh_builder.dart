@@ -657,219 +657,19 @@ class ArticlePageCurlMeshBuilder {
     required _CurlTimeline timeline,
     required ArticlePageBackwardLeafFrame? backwardLeafFrame,
   }) {
-    if (backwardLeafFrame != null) {
-      return _projectBackwardReplayPoint(
-        pageRect: pageRect,
-        pageSize: pageSize,
-        localX: localX,
-        localY: localY,
-        corner: corner,
-        timeline: timeline,
-        backwardLeafFrame: backwardLeafFrame,
-      );
-    }
-    if (timeline.reversePose != null) {
-      return _projectReversePoint(
-        pageRect: pageRect,
-        pageSize: pageSize,
-        localX: localX,
-        localY: localY,
-        corner: corner,
-        foldTheta: foldTheta,
-        timeline: timeline,
-      );
-    }
-    final rowCurlDistance = math.max(0.0, localX - rowPivot);
-    final theta = math.min(math.pi, rowCurlDistance / math.max(rowRadius, 1.0));
-    final foldDepth = theta <= 0 ? 0.0 : (1 - math.cos(foldTheta)) * rowRadius;
-    final frontDepth = theta <= foldTheta
-        ? theta <= 0
-              ? 0.0
-              : (1 - math.cos(theta)) * rowRadius
-        : foldDepth;
-    final rigidAngleT = timeline.forwardAngle == null
-        ? 0.0
-        : (timeline.forwardAngle!.abs() / math.pi).clamp(0.0, 1.0).toDouble();
-    final backTravelMultiplier = ui.lerpDouble(1.18, 1.42, rigidAngleT) ?? 1.25;
-    final backTravel = theta <= foldTheta
-        ? 0.0
-        : ((theta - foldTheta) / math.max(math.pi - foldTheta, 0.0001))
-                  .clamp(0.0, 1.0)
-                  .toDouble() *
-              rowRadius *
-              backTravelMultiplier;
-    final curledX = theta <= foldTheta
-        ? rowPivot - frontDepth
-        : (rowPivot - foldDepth) - backTravel;
-    final cornerFactor = corner == StPageFlipCorner.top
-        ? 1 - (localY / math.max(pageSize.height, 1.0))
-        : localY / math.max(pageSize.height, 1.0);
-    final displayDepth = theta <= foldTheta ? frontDepth : foldDepth;
-    final curlHeightOffset =
-        (1 - cornerFactor) *
-        displayDepth *
-        (corner == StPageFlipCorner.top
-            ? -timeline.heightLiftBias
-            : timeline.heightLiftBias);
-    final curlInfluence = (theta <= 0 ? 0.0 : (theta / math.pi))
-        .clamp(0.0, 1.0)
-        .toDouble();
-    final effectiveX = timeline.mirrored ? pageSize.width - curledX : curledX;
-    final rectoTexX = timeline.mirrored ? pageSize.width - localX : localX;
-    final versoTexX = timeline.mirrored ? localX : pageSize.width - localX;
-    final seamMetric = localX - seamX;
-    final worldX =
-        pageRect.left + effectiveX + timeline.sheetShift * curlInfluence;
-    final worldY = pageRect.top + localY + curlHeightOffset;
-    final projected = Offset(worldX, worldY);
-    return _CurlMeshPoint(
-      projected: projected,
-      rectoTexture: Offset(rectoTexX, localY),
-      versoTexture: Offset(versoTexX, localY),
-      theta: theta,
-      seamMetric: seamMetric,
-      depth: displayDepth,
-    );
-  }
-
-  _CurlMeshPoint _projectReversePoint({
-    required Rect pageRect,
-    required Size pageSize,
-    required double localX,
-    required double localY,
-    required StPageFlipCorner corner,
-    required double foldTheta,
-    required _CurlTimeline timeline,
-  }) {
-    final reversePose = timeline.reversePose!;
-    final coveredWidth = reversePose.coveredWidth
-        .clamp(0.0, pageSize.width)
-        .toDouble();
-    final flatWidth = reversePose.unrollWidth
-        .clamp(0.0, coveredWidth)
-        .toDouble();
-    final visibleCurlWidth = math.max(1.0, coveredWidth - flatWidth);
-    final cylinderRadius = math.max(
-      reversePose.cylinderRadius,
-      visibleCurlWidth / math.pi,
-    );
-    double theta;
-    double visualX;
-    double depth;
-    if (localX <= flatWidth) {
-      theta = 0.0;
-      visualX = localX;
-      depth = 0.0;
-    } else if (localX <= coveredWidth) {
-      final bandT = ((localX - flatWidth) / visibleCurlWidth)
-          .clamp(0.0, 1.0)
-          .toDouble();
-      theta = bandT * math.pi;
-      visualX = flatWidth + (1 - math.cos(theta)) * visibleCurlWidth * 0.5;
-      depth = math.sin(theta) * cylinderRadius;
-    } else {
-      theta = math.pi;
-      visualX = coveredWidth;
-      depth = 0.0;
-    }
-    final cornerFactor = corner == StPageFlipCorner.top
-        ? 1 - (localY / math.max(pageSize.height, 1.0))
-        : localY / math.max(pageSize.height, 1.0);
-    final liftPx =
-        pageSize.height *
-        reversePose.lift *
-        0.16 *
-        (theta <= 0 ? 0.0 : math.sin(theta));
-    final curlHeightOffset =
-        reversePose.cornerBiasY * (1 - cornerFactor) * liftPx;
-    final worldX = pageRect.left + visualX;
-    final worldY = pageRect.top + localY + curlHeightOffset;
-    final projectionCenterX = pageRect.left + flatWidth;
-    final projectionCenterY = pageRect.top + localY;
-    final scale = depth <= 0
-        ? 1.0
-        : timeline.perspective / (timeline.perspective + depth * 0.35);
-    final projected = Offset(
-      projectionCenterX + (worldX - projectionCenterX) * scale,
-      projectionCenterY + (worldY - projectionCenterY) * scale,
-    );
-    return _CurlMeshPoint(
-      projected: projected,
-      rectoTexture: Offset(localX, localY),
-      versoTexture: Offset(pageSize.width - localX, localY),
-      theta: theta,
-      seamMetric: theta - foldTheta,
-      depth: depth,
-    );
-  }
-
-  _CurlMeshPoint _projectBackwardReplayPoint({
-    required Rect pageRect,
-    required Size pageSize,
-    required double localX,
-    required double localY,
-    required StPageFlipCorner corner,
-    required _CurlTimeline timeline,
-    required ArticlePageBackwardLeafFrame backwardLeafFrame,
-  }) {
-    final coveredWidth =
-        (backwardLeafFrame.coveredWidthNormalized * pageSize.width)
-            .clamp(0.0, pageSize.width)
-            .toDouble();
-    final flatWidth =
-        (backwardLeafFrame.laidDownWidthNormalized * pageSize.width)
-            .clamp(0.0, coveredWidth)
-            .toDouble();
-    final visibleCurlWidth = math.max(1.0, coveredWidth - flatWidth).toDouble();
-    final rectoRevealWidth =
-        (backwardLeafFrame.rectoRevealWidthNormalized * pageSize.width)
-            .clamp(0.0, visibleCurlWidth)
-            .toDouble();
-    final edgeBandWidth =
-        (backwardLeafFrame.edgeBandWidthNormalized * pageSize.width)
-            .clamp(0.0, math.max(0.0, visibleCurlWidth - rectoRevealWidth))
-            .toDouble();
-    final seamSplitWidth = (rectoRevealWidth + edgeBandWidth * 0.5)
-        .clamp(visibleCurlWidth * 0.08, visibleCurlWidth * 0.92)
-        .toDouble();
-    final seamTheta = (seamSplitWidth / visibleCurlWidth * math.pi)
-        .clamp(math.pi * 0.08, math.pi * 0.92)
-        .toDouble();
-    final cylinderRadius = math.max(
-      visibleCurlWidth / math.pi,
-      pageSize.width * 0.028,
-    );
-
-    double theta;
-    double visualX;
-    double depth;
-    if (localX <= flatWidth) {
-      theta = 0.0;
-      visualX = localX;
-      depth = 0.0;
-    } else if (localX <= coveredWidth) {
-      final bandT = ((localX - flatWidth) / visibleCurlWidth)
-          .clamp(0.0, 1.0)
-          .toDouble();
-      theta = bandT * math.pi;
-      visualX = flatWidth + (1 - math.cos(theta)) * visibleCurlWidth * 0.5;
-      depth = math.sin(theta) * cylinderRadius;
-    } else {
-      theta = math.pi;
-      visualX = coveredWidth;
-      depth = 0.0;
-    }
-
-    final worldX = pageRect.left + visualX;
-    final worldY = pageRect.top + localY;
-    final projected = Offset(worldX, worldY);
-    return _CurlMeshPoint(
-      projected: projected,
-      rectoTexture: Offset(localX, localY),
-      versoTexture: Offset(pageSize.width - localX, localY),
-      theta: theta,
-      seamMetric: theta - seamTheta,
-      depth: depth,
+    return _resolveProjection(
+      pageRect: pageRect,
+      pageSize: pageSize,
+      corner: corner,
+      timeline: timeline,
+      foldTheta: foldTheta,
+      backwardLeafFrame: backwardLeafFrame,
+    ).project(
+      localX: localX,
+      localY: localY,
+      rowPivot: rowPivot,
+      rowRadius: rowRadius,
+      seamX: seamX,
     );
   }
 
@@ -884,47 +684,79 @@ class ArticlePageCurlMeshBuilder {
       frame: backwardLeafFrame,
       pageSize: pageSize,
     );
-    final topSpine = _projectBackwardReplayPoint(
+    final projection = _BackwardLeafCurlProjection(
       pageRect: pageRect,
       pageSize: pageSize,
+      timeline: timeline,
+      backwardLeafFrame: backwardLeafFrame,
+    );
+    final topSpine = projection.project(
       localX: 0,
       localY: 0,
-      corner: corner,
-      timeline: timeline,
-      backwardLeafFrame: backwardLeafFrame,
+      rowPivot: 0,
+      rowRadius: 1,
+      seamX: 0,
     );
-    final bottomSpine = _projectBackwardReplayPoint(
-      pageRect: pageRect,
-      pageSize: pageSize,
+    final bottomSpine = projection.project(
       localX: 0,
       localY: pageSize.height,
-      corner: corner,
-      timeline: timeline,
-      backwardLeafFrame: backwardLeafFrame,
+      rowPivot: 0,
+      rowRadius: 1,
+      seamX: 0,
     );
-    final topSeam = _projectBackwardReplayPoint(
-      pageRect: pageRect,
-      pageSize: pageSize,
+    final topSeam = projection.project(
       localX: seamX,
       localY: 0,
-      corner: corner,
-      timeline: timeline,
-      backwardLeafFrame: backwardLeafFrame,
+      rowPivot: 0,
+      rowRadius: 1,
+      seamX: 0,
     );
-    final bottomSeam = _projectBackwardReplayPoint(
-      pageRect: pageRect,
-      pageSize: pageSize,
+    final bottomSeam = projection.project(
       localX: seamX,
       localY: pageSize.height,
-      corner: corner,
-      timeline: timeline,
-      backwardLeafFrame: backwardLeafFrame,
+      rowPivot: 0,
+      rowRadius: 1,
+      seamX: 0,
     );
     return ArticlePageCurlAlignmentDiagnostics(
       spineTopX: topSpine.projected.dx,
       spineBottomX: bottomSpine.projected.dx,
       seamTopX: topSeam.projected.dx,
       seamBottomX: bottomSeam.projected.dx,
+    );
+  }
+
+  _CurlProjection _resolveProjection({
+    required Rect pageRect,
+    required Size pageSize,
+    required StPageFlipCorner corner,
+    required _CurlTimeline timeline,
+    required double foldTheta,
+    required ArticlePageBackwardLeafFrame? backwardLeafFrame,
+  }) {
+    if (backwardLeafFrame != null) {
+      return _BackwardLeafCurlProjection(
+        pageRect: pageRect,
+        pageSize: pageSize,
+        timeline: timeline,
+        backwardLeafFrame: backwardLeafFrame,
+      );
+    }
+    if (timeline.reversePose != null) {
+      return _ReversePoseCurlProjection(
+        pageRect: pageRect,
+        pageSize: pageSize,
+        corner: corner,
+        timeline: timeline,
+        foldTheta: foldTheta,
+      );
+    }
+    return _ForwardCurlProjection(
+      pageRect: pageRect,
+      pageSize: pageSize,
+      corner: corner,
+      timeline: timeline,
+      foldTheta: foldTheta,
     );
   }
 }
@@ -1043,4 +875,254 @@ class _CurlTimeline {
   final double heightLiftBias;
   final double? forwardAngle;
   final ReverseFlipPose? reversePose;
+}
+
+abstract class _CurlProjection {
+  _CurlMeshPoint project({
+    required double localX,
+    required double localY,
+    required double rowPivot,
+    required double rowRadius,
+    required double seamX,
+  });
+}
+
+class _ForwardCurlProjection implements _CurlProjection {
+  const _ForwardCurlProjection({
+    required this.pageRect,
+    required this.pageSize,
+    required this.corner,
+    required this.timeline,
+    required this.foldTheta,
+  });
+
+  final Rect pageRect;
+  final Size pageSize;
+  final StPageFlipCorner corner;
+  final _CurlTimeline timeline;
+  final double foldTheta;
+
+  @override
+  _CurlMeshPoint project({
+    required double localX,
+    required double localY,
+    required double rowPivot,
+    required double rowRadius,
+    required double seamX,
+  }) {
+    final rowCurlDistance = math.max(0.0, localX - rowPivot);
+    final theta = math.min(math.pi, rowCurlDistance / math.max(rowRadius, 1.0));
+    final foldDepth = theta <= 0 ? 0.0 : (1 - math.cos(foldTheta)) * rowRadius;
+    final frontDepth = theta <= foldTheta
+        ? theta <= 0
+              ? 0.0
+              : (1 - math.cos(theta)) * rowRadius
+        : foldDepth;
+    final rigidAngleT = timeline.forwardAngle == null
+        ? 0.0
+        : (timeline.forwardAngle!.abs() / math.pi).clamp(0.0, 1.0).toDouble();
+    final backTravelMultiplier = ui.lerpDouble(1.18, 1.42, rigidAngleT) ?? 1.25;
+    final backTravel = theta <= foldTheta
+        ? 0.0
+        : ((theta - foldTheta) / math.max(math.pi - foldTheta, 0.0001))
+                  .clamp(0.0, 1.0)
+                  .toDouble() *
+              rowRadius *
+              backTravelMultiplier;
+    final curledX = theta <= foldTheta
+        ? rowPivot - frontDepth
+        : (rowPivot - foldDepth) - backTravel;
+    final cornerFactor = corner == StPageFlipCorner.top
+        ? 1 - (localY / math.max(pageSize.height, 1.0))
+        : localY / math.max(pageSize.height, 1.0);
+    final displayDepth = theta <= foldTheta ? frontDepth : foldDepth;
+    final curlHeightOffset =
+        (1 - cornerFactor) *
+        displayDepth *
+        (corner == StPageFlipCorner.top
+            ? -timeline.heightLiftBias
+            : timeline.heightLiftBias);
+    final curlInfluence = (theta <= 0 ? 0.0 : (theta / math.pi))
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final effectiveX = timeline.mirrored ? pageSize.width - curledX : curledX;
+    final rectoTexX = timeline.mirrored ? pageSize.width - localX : localX;
+    final versoTexX = timeline.mirrored ? localX : pageSize.width - localX;
+    return _CurlMeshPoint(
+      projected: Offset(
+        pageRect.left + effectiveX + timeline.sheetShift * curlInfluence,
+        pageRect.top + localY + curlHeightOffset,
+      ),
+      rectoTexture: Offset(rectoTexX, localY),
+      versoTexture: Offset(versoTexX, localY),
+      theta: theta,
+      seamMetric: localX - seamX,
+      depth: displayDepth,
+    );
+  }
+}
+
+class _ReversePoseCurlProjection implements _CurlProjection {
+  const _ReversePoseCurlProjection({
+    required this.pageRect,
+    required this.pageSize,
+    required this.corner,
+    required this.timeline,
+    required this.foldTheta,
+  });
+
+  final Rect pageRect;
+  final Size pageSize;
+  final StPageFlipCorner corner;
+  final _CurlTimeline timeline;
+  final double foldTheta;
+
+  @override
+  _CurlMeshPoint project({
+    required double localX,
+    required double localY,
+    required double rowPivot,
+    required double rowRadius,
+    required double seamX,
+  }) {
+    final reversePose = timeline.reversePose!;
+    final coveredWidth = reversePose.coveredWidth
+        .clamp(0.0, pageSize.width)
+        .toDouble();
+    final flatWidth = reversePose.unrollWidth
+        .clamp(0.0, coveredWidth)
+        .toDouble();
+    final visibleCurlWidth = math.max(1.0, coveredWidth - flatWidth);
+    final cylinderRadius = math.max(
+      reversePose.cylinderRadius,
+      visibleCurlWidth / math.pi,
+    );
+    double theta;
+    double visualX;
+    double depth;
+    if (localX <= flatWidth) {
+      theta = 0.0;
+      visualX = localX;
+      depth = 0.0;
+    } else if (localX <= coveredWidth) {
+      final bandT = ((localX - flatWidth) / visibleCurlWidth)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      theta = bandT * math.pi;
+      visualX = flatWidth + (1 - math.cos(theta)) * visibleCurlWidth * 0.5;
+      depth = math.sin(theta) * cylinderRadius;
+    } else {
+      theta = math.pi;
+      visualX = coveredWidth;
+      depth = 0.0;
+    }
+    final cornerFactor = corner == StPageFlipCorner.top
+        ? 1 - (localY / math.max(pageSize.height, 1.0))
+        : localY / math.max(pageSize.height, 1.0);
+    final liftPx =
+        pageSize.height *
+        reversePose.lift *
+        0.16 *
+        (theta <= 0 ? 0.0 : math.sin(theta));
+    final curlHeightOffset =
+        reversePose.cornerBiasY * (1 - cornerFactor) * liftPx;
+    final worldX = pageRect.left + visualX;
+    final worldY = pageRect.top + localY + curlHeightOffset;
+    final projectionCenterX = pageRect.left + flatWidth;
+    final projectionCenterY = pageRect.top + localY;
+    final scale = depth <= 0
+        ? 1.0
+        : timeline.perspective / (timeline.perspective + depth * 0.35);
+    return _CurlMeshPoint(
+      projected: Offset(
+        projectionCenterX + (worldX - projectionCenterX) * scale,
+        projectionCenterY + (worldY - projectionCenterY) * scale,
+      ),
+      rectoTexture: Offset(localX, localY),
+      versoTexture: Offset(pageSize.width - localX, localY),
+      theta: theta,
+      seamMetric: theta - foldTheta,
+      depth: depth,
+    );
+  }
+}
+
+class _BackwardLeafCurlProjection implements _CurlProjection {
+  const _BackwardLeafCurlProjection({
+    required this.pageRect,
+    required this.pageSize,
+    required this.timeline,
+    required this.backwardLeafFrame,
+  });
+
+  final Rect pageRect;
+  final Size pageSize;
+  final _CurlTimeline timeline;
+  final ArticlePageBackwardLeafFrame backwardLeafFrame;
+
+  @override
+  _CurlMeshPoint project({
+    required double localX,
+    required double localY,
+    required double rowPivot,
+    required double rowRadius,
+    required double seamX,
+  }) {
+    final coveredWidth =
+        (backwardLeafFrame.coveredWidthNormalized * pageSize.width)
+            .clamp(0.0, pageSize.width)
+            .toDouble();
+    final flatWidth =
+        (backwardLeafFrame.laidDownWidthNormalized * pageSize.width)
+            .clamp(0.0, coveredWidth)
+            .toDouble();
+    final visibleCurlWidth = math.max(1.0, coveredWidth - flatWidth).toDouble();
+    final rectoRevealWidth =
+        (backwardLeafFrame.rectoRevealWidthNormalized * pageSize.width)
+            .clamp(0.0, visibleCurlWidth)
+            .toDouble();
+    final edgeBandWidth =
+        (backwardLeafFrame.edgeBandWidthNormalized * pageSize.width)
+            .clamp(0.0, math.max(0.0, visibleCurlWidth - rectoRevealWidth))
+            .toDouble();
+    final seamSplitWidth = (rectoRevealWidth + edgeBandWidth * 0.5)
+        .clamp(visibleCurlWidth * 0.08, visibleCurlWidth * 0.92)
+        .toDouble();
+    final seamTheta = (seamSplitWidth / visibleCurlWidth * math.pi)
+        .clamp(math.pi * 0.08, math.pi * 0.92)
+        .toDouble();
+    final cylinderRadius = math.max(
+      visibleCurlWidth / math.pi,
+      pageSize.width * 0.028,
+    );
+
+    double theta;
+    double visualX;
+    double depth;
+    if (localX <= flatWidth) {
+      theta = 0.0;
+      visualX = localX;
+      depth = 0.0;
+    } else if (localX <= coveredWidth) {
+      final bandT = ((localX - flatWidth) / visibleCurlWidth)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      theta = bandT * math.pi;
+      visualX = flatWidth + (1 - math.cos(theta)) * visibleCurlWidth * 0.5;
+      depth = math.sin(theta) * cylinderRadius;
+    } else {
+      theta = math.pi;
+      visualX = coveredWidth;
+      depth = 0.0;
+    }
+
+    return _CurlMeshPoint(
+      projected: Offset(pageRect.left + visualX, pageRect.top + localY),
+      rectoTexture: Offset(localX, localY),
+      versoTexture: Offset(pageSize.width - localX, localY),
+      theta: theta,
+      seamMetric: theta - seamTheta,
+      depth: depth,
+    );
+  }
 }

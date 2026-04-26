@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 圈子/关注/粉丝列表页。根据 type 调用 Repository 获取数据，移除硬编码。
 /// 路由：/profile/stats?type=circles|following|fans&userId=...
@@ -45,6 +46,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
   List<CircleDto>? _circles;
   List<ProfileSocialRelationRowViewData>? _users;
   bool _loading = true;
+
   /// 非 null 表示加载失败（展示固定文案，不保留裸 Object?）。
   String? _loadErrorMessage;
 
@@ -102,7 +104,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
           _circles = null;
           _users = null;
           _loading = false;
-          _loadErrorMessage = e.toString();
+          _loadErrorMessage = runtimeErrorDisplayMessage(e);
         });
     }
   }

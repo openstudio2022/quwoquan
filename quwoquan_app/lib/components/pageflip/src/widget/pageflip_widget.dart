@@ -3,12 +3,10 @@ import 'dart:collection';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:quwoquan_app/components/pageflip/src/core/pageflip_engine.dart';
 import 'package:quwoquan_app/components/pageflip/src/core/pageflip_mode.dart';
-import 'package:quwoquan_app/components/pageflip/src/render/pageflip_render_frame.dart';
 import 'package:quwoquan_app/components/pageflip/src/scene/pageflip_scene.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -728,10 +726,6 @@ class _PageflipWidgetState extends State<PageflipWidget> {
       leafRecto: leafRecto,
       leafVerso: leafVerso,
     ).toCurlTextureBundle();
-  }
-
-  ArticlePageTextureSnapshot? _snapshotForIndex(int index) {
-    return _pageSnapshots[index];
   }
 
   ArticlePageTextureSnapshot? _validSnapshotForIndex(
