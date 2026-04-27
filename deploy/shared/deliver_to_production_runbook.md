@@ -1,5 +1,7 @@
 # Deliver → Prod 端到端运行手册
 
+**五环境、波次与 `STAGING_*` 含义**见 [environment_matrix.md](environment_matrix.md)（与本文阶段编号一致：integration → L3/L4 → prod 灰度/全量）。
+
 ## 1. 目标
 
 从特性到入库（L1/L2 自测通过），再到集成验证（L3/L4），再到生产端到端打通，含灰度/滚动发布。

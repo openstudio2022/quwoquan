@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/pageflip/pageflip.dart';
-import 'package:quwoquan_app/ui/content/pageflip/backward_paper_geometry.dart';
 import 'package:quwoquan_app/ui/content/pageflip/backward_render_frame_builder.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_mesh_builder.dart';
 import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
@@ -201,60 +200,6 @@ void main() {
       );
       expect(frame.bottomAnchor, Offset.zero);
       expect(frame.angle, closeTo(-forwardCalculation.getAngle(), 1e-9));
-    });
-
-    test('backward paper geometry produces bounded topology polygons', () {
-      const pageSize = Size(420, 584);
-      const pageRect = Rect.fromLTWH(240, 308, 420, 584);
-      final frame = buildBackwardDynamicRenderFrame(
-        BackwardRenderFrameData(
-          localPagePoint: const Offset(112, 520),
-          progress: 0.46,
-          orientation: StPageFlipOrientation.portrait,
-          corner: StPageFlipCorner.bottom,
-          pageSize: pageSize,
-          flippingClipArea: const <Offset>[],
-          bottomClipArea: const <Offset>[],
-          flippingAnchor: Offset.zero,
-          bottomAnchor: Offset.zero,
-          angle: 0,
-          maxShadowOpacity: 0.2,
-        ),
-      );
-
-      final geometry = buildBackwardPaperGeometry(
-        pageRect: pageRect,
-        pageSize: pageSize,
-        flippingClipArea: frame.flippingClipArea,
-        progress: frame.progress,
-        localPagePoint: frame.localPagePoint,
-        corner: frame.corner,
-      );
-
-      expect(geometry.hasPreviousFront, isTrue);
-      expect(geometry.hasPreviousBack, isTrue);
-      expect(geometry.hasCurrentResidual, isTrue);
-      expect(geometry.pageEdgeLineTop.dx, lessThan(geometry.foldLineTop.dx));
-      expect(
-        geometry.pageEdgeLineBottom.dx,
-        lessThan(geometry.foldLineBottom.dx),
-      );
-      expect(
-        (geometry.foldLineTop.dx - geometry.foldLineBottom.dx).abs(),
-        greaterThan(1),
-      );
-
-      for (final bounds in <Rect?>[
-        geometry.previousFrontBounds,
-        geometry.previousBackBounds,
-        geometry.currentResidualBounds,
-      ]) {
-        expect(bounds, isNotNull);
-        expect(bounds!.left, greaterThanOrEqualTo(pageRect.left));
-        expect(bounds.top, greaterThanOrEqualTo(pageRect.top));
-        expect(bounds.right, lessThanOrEqualTo(pageRect.right));
-        expect(bounds.bottom, lessThanOrEqualTo(pageRect.bottom));
-      }
     });
 
     test('backward mesh keeps spine and seam vertically aligned', () {

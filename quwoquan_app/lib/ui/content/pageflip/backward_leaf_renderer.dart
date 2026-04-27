@@ -35,13 +35,17 @@ class ArticlePageBackwardLeafRenderer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final laidDownWidth = scene.pageSize.width * scene.frame.laidDownWidthNormalized;
+    final laidDownWidth =
+        scene.pageSize.width * scene.frame.laidDownWidthNormalized;
     final curlWidth = scene.pageSize.width * scene.frame.curlWidthNormalized;
-    final versoRevealWidth = scene.pageSize.width *
+    final versoRevealWidth =
+        scene.pageSize.width *
         scene.frame.versoRevealWidthNormalized.clamp(0.0, 1.0).toDouble();
-    final edgeBandWidth = scene.pageSize.width *
+    final edgeBandWidth =
+        scene.pageSize.width *
         scene.frame.edgeBandWidthNormalized.clamp(0.0, 1.0).toDouble();
-    final rectoRevealWidth = scene.pageSize.width *
+    final rectoRevealWidth =
+        scene.pageSize.width *
         scene.frame.rectoRevealWidthNormalized.clamp(0.0, 1.0).toDouble();
     final boundaryShadowWidth = math.max(
       scene.pageSize.width * 0.08,
@@ -182,7 +186,8 @@ class _BackwardLeafCurlFlap extends StatelessWidget {
       versoRevealWidth,
       math.max(0.0, curlWidth - clampedRectoWidth - clampedEdgeBandWidth),
     );
-    final flapAngle = (ui.lerpDouble(-1.34, -0.2, unrollProgress) ?? -0.64) *
+    final flapAngle =
+        (ui.lerpDouble(-1.34, -0.2, unrollProgress) ?? -0.64) *
         (1 - settleProgress * 0.72);
     final flapShadow = 0.1 + (1 - settleProgress) * 0.12;
     final paperWashAlpha = 0.04 + (1 - settleProgress) * 0.06;
@@ -191,16 +196,15 @@ class _BackwardLeafCurlFlap extends StatelessWidget {
         alignment: Alignment.centerLeft,
         transform: Matrix4.identity()
           ..setEntry(3, 2, 0.002)
-          ..translate(0.0, liftPx * 0.12, 0.0)
+          ..translateByDouble(0.0, liftPx * 0.12, 0.0, 1.0)
           ..rotateY(flapAngle),
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
             _ClippedLeafSurface(
               surface: leafVerso,
-              visibleWidth: clampedRectoWidth +
-                  clampedEdgeBandWidth +
-                  clampedVersoWidth,
+              visibleWidth:
+                  clampedRectoWidth + clampedEdgeBandWidth + clampedVersoWidth,
               pageSize: pageSize,
               alignment: Alignment.centerLeft,
             ),
@@ -254,7 +258,9 @@ class _BackwardLeafCurlFlap extends StatelessWidget {
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                     colors: <Color>[
-                      highlightColor.withValues(alpha: 0.14 + unrollProgress * 0.1),
+                      highlightColor.withValues(
+                        alpha: 0.14 + unrollProgress * 0.1,
+                      ),
                       paperTintColor.withValues(alpha: paperWashAlpha),
                       shadowColor.withValues(alpha: flapShadow),
                     ],
@@ -270,7 +276,9 @@ class _BackwardLeafCurlFlap extends StatelessWidget {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: <Color>[
-                      highlightColor.withValues(alpha: 0.08 + unrollProgress * 0.04),
+                      highlightColor.withValues(
+                        alpha: 0.08 + unrollProgress * 0.04,
+                      ),
                       AppColors.transparent,
                       shadowColor.withValues(alpha: 0.05 + flapShadow * 0.35),
                     ],

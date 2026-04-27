@@ -7,6 +7,7 @@
 - [x] T3 修改 pre-release-gate.yml 增加 on.push.branches: [main]，并处理 merge 场景版本号
 - [x] T4 更新 deliver_to_production_runbook、ci_cd_end_to_end_design 与 branch_strategy 一致
 - [x] T5 更新 workflow_consolidation_plan 增加 07 merge-dev1.0-to-main 说明
+- [x] T6 落地 `deploy/shared/environment_matrix.md` 五环境 + 与 ci_cd / deploy_prod_design 交叉引用；`non_markdown_apply_queue.md` 记录 Makefile/Workflow/tree 等待合入项
 
 ### T — 实施
 
@@ -17,6 +18,7 @@
 | T3 | pre-release-gate 增加 push main 触发 | [x] |
 | T4 | runbook、ci_cd_end_to_end_design 引用 branch_strategy | [x] |
 | T5 | workflow_consolidation_plan 增加 07 序号 | [x] |
+| T6 | environment_matrix 与 A6 验收、非 MD 合入清单 | [x] 文档；非 MD 见 queue |
 
 ## 搁置任务
 

@@ -7,6 +7,7 @@ import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 @immutable
 class BackwardPaperGeometry {
   const BackwardPaperGeometry({
+    required this.previousBackMovingSurface,
     required this.pageEdgeLineTop,
     required this.pageEdgeLineBottom,
     required this.foldLineTop,
@@ -16,6 +17,7 @@ class BackwardPaperGeometry {
     required this.currentResidualPolygon,
   });
 
+  final BackwardPaperMovingSurface previousBackMovingSurface;
   final Offset pageEdgeLineTop;
   final Offset pageEdgeLineBottom;
   final Offset foldLineTop;
@@ -25,7 +27,7 @@ class BackwardPaperGeometry {
   final List<Offset> currentResidualPolygon;
 
   Rect? get previousFrontBounds => _polygonBounds(previousFrontPolygon);
-  Rect? get previousBackBounds => _polygonBounds(previousBackPolygon);
+  Rect? get previousBackBounds => previousBackMovingSurface.paintBounds;
   Rect? get currentResidualBounds => _polygonBounds(currentResidualPolygon);
 
   bool get hasPreviousFront => previousFrontBounds != null;
@@ -33,57 +35,95 @@ class BackwardPaperGeometry {
   bool get hasCurrentResidual => currentResidualBounds != null;
 }
 
+@immutable
+class BackwardPaperMovingSurface {
+  const BackwardPaperMovingSurface({
+    required this.clipArea,
+    required this.anchor,
+    required this.angle,
+    required this.viewportPolygon,
+    required this.paintBounds,
+  });
+
+  final List<Offset> clipArea;
+  final Offset anchor;
+  final double angle;
+  final List<Offset> viewportPolygon;
+  final Rect? paintBounds;
+
+  bool get isNotEmpty => paintBounds != null;
+}
+
 BackwardPaperGeometry buildBackwardPaperGeometry({
   required Rect pageRect,
   required Size pageSize,
   required List<Offset>? flippingClipArea,
+  required Offset? flippingAnchor,
+  required double? pageEdgeProgress,
+  required double angle,
   required double progress,
   required Offset? localPagePoint,
   required StPageFlipCorner corner,
 }) {
-  final foldT = _resolveFoldT(
-    pageWidth: pageSize.width,
-    progress: progress,
-    flippingClipArea: flippingClipArea,
-  );
-  final skew = _resolveLineSkew(
+  final safeClipArea = flippingClipArea == null || flippingClipArea.length < 3
+      ? const <Offset>[]
+      : List<Offset>.unmodifiable(flippingClipArea);
+  final safeAnchor =
+      flippingAnchor ??
+      Offset(0, corner == StPageFlipCorner.bottom ? pageSize.height : 0);
+  final viewportPolygon = safeClipArea
+      .map(
+        (point) => _transformLocalPointToViewport(
+          point: point,
+          anchor: safeAnchor,
+          angle: angle,
+          pageRect: pageRect,
+        ),
+      )
+      .toList(growable: false);
+  final movingBounds = _polygonBounds(viewportPolygon)?.intersect(pageRect);
+  final foldLine =
+      _lineFromMinXPolygon(viewportPolygon) ??
+      _transformedPageEdgeLine(
+        pageRect: pageRect,
+        pageSize: pageSize,
+        anchor: safeAnchor,
+        angle: angle,
+        x: 0,
+      );
+  final movingEdgeLine = _transformedPageEdgeLine(
+    pageRect: pageRect,
     pageSize: pageSize,
-    localPagePoint: localPagePoint,
-    corner: corner,
+    anchor: safeAnchor,
+    angle: angle,
+    x: pageSize.width,
   );
-  final foldBaseX = _lerp(pageRect.left, pageRect.right, foldT);
-  final edgeBaseX = _lerp(pageRect.left, foldBaseX, 0.38);
-  final foldLine = _lineForBaseX(
-    pageRect: pageRect,
-    baseX: foldBaseX,
-    skew: skew,
-  );
-  final edgeLine = _lineForBaseX(
-    pageRect: pageRect,
-    baseX: edgeBaseX,
-    skew: skew * 0.82,
+  final edgeProgress = (pageEdgeProgress ?? progress)
+      .clamp(0.0, 1.0)
+      .toDouble();
+  final edgeLine = _shiftLineToAverageX(
+    movingEdgeLine,
+    pageRect.left + pageRect.width * edgeProgress,
   );
 
-  final previousFront = _validPolygon(<Offset>[
-    pageRect.topLeft,
-    edgeLine.$1,
-    edgeLine.$2,
-    pageRect.bottomLeft,
-  ]);
-  final previousBack = _validPolygon(<Offset>[
-    edgeLine.$1,
-    foldLine.$1,
-    foldLine.$2,
-    edgeLine.$2,
-  ]);
-  final currentResidual = _validPolygon(<Offset>[
-    foldLine.$1,
-    pageRect.topRight,
-    pageRect.bottomRight,
-    foldLine.$2,
-  ]);
+  final previousFront = _validPolygon(
+    _clipPageRectByLine(pageRect: pageRect, line: edgeLine, keepLeft: true),
+  );
+  final previousBack = _validPolygon(viewportPolygon);
+  final currentResidual = _validPolygon(
+    _clipPageRectByLine(pageRect: pageRect, line: edgeLine, keepLeft: false),
+  );
 
   return BackwardPaperGeometry(
+    previousBackMovingSurface: BackwardPaperMovingSurface(
+      clipArea: safeClipArea,
+      anchor: safeAnchor,
+      angle: angle,
+      viewportPolygon: List<Offset>.unmodifiable(viewportPolygon),
+      paintBounds: movingBounds == null || movingBounds.isEmpty
+          ? null
+          : movingBounds,
+    ),
     pageEdgeLineTop: edgeLine.$1,
     pageEdgeLineBottom: edgeLine.$2,
     foldLineTop: foldLine.$1,
@@ -94,50 +134,174 @@ BackwardPaperGeometry buildBackwardPaperGeometry({
   );
 }
 
-double _resolveFoldT({
-  required double pageWidth,
-  required double progress,
-  required List<Offset>? flippingClipArea,
-}) {
-  if (flippingClipArea != null &&
-      flippingClipArea.isNotEmpty &&
-      pageWidth > 0) {
-    final maxX = flippingClipArea.fold<double>(
-      0,
-      (value, point) => math.max(value, point.dx),
-    );
-    return (maxX / pageWidth).clamp(0.04, 0.985).toDouble();
+(Offset, Offset) _shiftLineToAverageX((Offset, Offset) line, double targetX) {
+  final currentX = (line.$1.dx + line.$2.dx) / 2;
+  final deltaX = targetX - currentX;
+  return (
+    Offset(line.$1.dx + deltaX, line.$1.dy),
+    Offset(line.$2.dx + deltaX, line.$2.dy),
+  );
+}
+
+(Offset, Offset)? _lineFromMinXPolygon(List<Offset> polygon) {
+  if (polygon.length < 2) {
+    return null;
   }
-  return progress.clamp(0.04, 0.985).toDouble();
+  final sorted = polygon.toList(growable: false)
+    ..sort((a, b) {
+      final x = a.dx.compareTo(b.dx);
+      return x == 0 ? a.dy.compareTo(b.dy) : x;
+    });
+  final pair = sorted.take(2).toList(growable: false);
+  if (pair.length < 2 || (pair.first.dy - pair.last.dy).abs() <= 0.5) {
+    return null;
+  }
+  return pair.first.dy <= pair.last.dy
+      ? (pair.first, pair.last)
+      : (pair.last, pair.first);
 }
 
-double _resolveLineSkew({
-  required Size pageSize,
-  required Offset? localPagePoint,
-  required StPageFlipCorner corner,
-}) {
-  final normalizedY = pageSize.height <= 0 || localPagePoint == null
-      ? 0.5
-      : (localPagePoint.dy / pageSize.height).clamp(0.0, 1.0).toDouble();
-  final centered = normalizedY - 0.5;
-  final cornerSign = corner == StPageFlipCorner.bottom ? -1.0 : 1.0;
-  return centered * pageSize.width * 0.34 * cornerSign;
-}
-
-(Offset, Offset) _lineForBaseX({
+(Offset, Offset) _transformedPageEdgeLine({
   required Rect pageRect,
-  required double baseX,
-  required double skew,
+  required Size pageSize,
+  required Offset anchor,
+  required double angle,
+  required double x,
 }) {
-  final top = Offset(
-    (baseX - skew).clamp(pageRect.left, pageRect.right).toDouble(),
-    pageRect.top,
+  final top = _transformLocalPointToViewport(
+    point: Offset(x, 0),
+    anchor: anchor,
+    angle: angle,
+    pageRect: pageRect,
   );
-  final bottom = Offset(
-    (baseX + skew).clamp(pageRect.left, pageRect.right).toDouble(),
-    pageRect.bottom,
+  final bottom = _transformLocalPointToViewport(
+    point: Offset(x, pageSize.height),
+    anchor: anchor,
+    angle: angle,
+    pageRect: pageRect,
   );
-  return (top, bottom);
+  return (
+    _clampPointToRect(top, pageRect),
+    _clampPointToRect(bottom, pageRect),
+  );
+}
+
+Offset _transformLocalPointToViewport({
+  required Offset point,
+  required Offset anchor,
+  required double angle,
+  required Rect pageRect,
+}) {
+  final translated = point - anchor;
+  final rotated = Offset(
+    translated.dx * math.cos(angle) + translated.dy * math.sin(angle),
+    translated.dy * math.cos(angle) - translated.dx * math.sin(angle),
+  );
+  return pageRect.topLeft + anchor + rotated;
+}
+
+Offset _clampPointToRect(Offset point, Rect rect) {
+  return Offset(
+    point.dx.clamp(rect.left, rect.right).toDouble(),
+    point.dy.clamp(rect.top, rect.bottom).toDouble(),
+  );
+}
+
+List<Offset> _clipPageRectByLine({
+  required Rect pageRect,
+  required (Offset, Offset) line,
+  required bool keepLeft,
+}) {
+  return _clipPolygonByLine(
+    polygon: <Offset>[
+      pageRect.topLeft,
+      pageRect.topRight,
+      pageRect.bottomRight,
+      pageRect.bottomLeft,
+    ],
+    lineTop: line.$1,
+    lineBottom: line.$2,
+    keepLeft: keepLeft,
+  );
+}
+
+List<Offset> _clipPolygonByLine({
+  required List<Offset> polygon,
+  required Offset lineTop,
+  required Offset lineBottom,
+  required bool keepLeft,
+}) {
+  if (polygon.isEmpty) {
+    return const <Offset>[];
+  }
+  final result = <Offset>[];
+  var previous = polygon.last;
+  var previousInside = _isPointInsideLineSide(
+    previous,
+    lineTop,
+    lineBottom,
+    keepLeft: keepLeft,
+  );
+  for (final current in polygon) {
+    final currentInside = _isPointInsideLineSide(
+      current,
+      lineTop,
+      lineBottom,
+      keepLeft: keepLeft,
+    );
+    if (currentInside != previousInside) {
+      final intersection = _intersectSegmentWithLine(
+        previous,
+        current,
+        lineTop,
+        lineBottom,
+      );
+      if (intersection != null) {
+        result.add(intersection);
+      }
+    }
+    if (currentInside) {
+      result.add(current);
+    }
+    previous = current;
+    previousInside = currentInside;
+  }
+  return result;
+}
+
+bool _isPointInsideLineSide(
+  Offset point,
+  Offset lineTop,
+  Offset lineBottom, {
+  required bool keepLeft,
+}) {
+  final cross =
+      (lineBottom.dx - lineTop.dx) * (point.dy - lineTop.dy) -
+      (lineBottom.dy - lineTop.dy) * (point.dx - lineTop.dx);
+  return keepLeft ? cross >= -0.001 : cross <= 0.001;
+}
+
+Offset? _intersectSegmentWithLine(
+  Offset segmentStart,
+  Offset segmentEnd,
+  Offset lineStart,
+  Offset lineEnd,
+) {
+  final segment = segmentEnd - segmentStart;
+  final line = lineEnd - lineStart;
+  final denominator = segment.dx * line.dy - segment.dy * line.dx;
+  if (denominator.abs() < 0.0001) {
+    return null;
+  }
+  final delta = lineStart - segmentStart;
+  final t = (delta.dx * line.dy - delta.dy * line.dx) / denominator;
+  if (t < -0.001 || t > 1.001) {
+    return null;
+  }
+  return Offset(
+    segmentStart.dx + segment.dx * t.clamp(0.0, 1.0),
+    segmentStart.dy + segment.dy * t.clamp(0.0, 1.0),
+  );
 }
 
 List<Offset> _validPolygon(List<Offset> polygon) {
@@ -167,5 +331,3 @@ Rect? _polygonBounds(List<Offset> polygon) {
   }
   return Rect.fromLTRB(left, top, right, bottom);
 }
-
-double _lerp(double a, double b, double t) => a + (b - a) * t;

@@ -60,6 +60,23 @@
 
 ## 执行要求
 
+### 实体纠错与历史误解修正规则
+
+- 如果用户输入包含拼音、ASR 误听、错别字、近音词、简称或上一轮已纠正过的实体，你必须先由语义和最近对话判断用户真正指向的实体；不要把原始拼音或误听词直接当作检索实体
+- 如果最近轮次里用户已经纠正过实体，本轮要优先采用用户纠正后的实体，并在 `understandingSnapshot.userFacingSummary` 中自然说明“我会按哪个实体处理、不会沿用哪个误听写法”；不要等到最终答案才第一次解释
+- 如果你采用了纠正后的实体，必须把同一个决定同步写入：
+  - `understandingSnapshot.resolutionItems[]`，`kind` 使用 `entity_resolution`
+  - `understandingResult.intents[].entityRefs[]`
+  - `taskGraph.tasks[].toolArgs.query` 或 `queries[]`
+- `entity_resolution` 用于你的自我反思、过程叙事和日志分析；运行时代码不会依赖这些文本替你做实体判断，所以你必须自己保持 `userFacingSummary`、`entityRefs` 与 `taskGraph` 的语义一致
+- 如果实体仍然有多种合理解释且无法根据当前轮和最近对话消解，输出 `decision.nextAction=ask_user` 并自然询问用户确认；不要泛搜多个互相冲突的实体
+- 如果你推翻了历史误解，要把被丢弃的假设写入 `understandingSnapshot.discardedAssumptions` 或 `historicalThinkingSnapshot.discardedAssumptions`，把纠错原因写入 `mismatchSignal` 或 `resolutionItems.detail`
+
+正确写法要求（拼音/历史纠错自然进入理解叙事）：
+```
+我理解你这轮要解决的是一个主问题和一个相关判断。你前面已经纠正过某个拼音 / 误听实体，所以这轮我会按纠正后的规范实体处理，不再沿用之前的误听写法；接下来我会分别核对主问题需要的事实依据，以及该规范实体相关的最新信息、判断依据和风险。
+```
+
 ### 检索词生成规则
 
 - `taskGraph.tasks[*].toolArgs.query` 或 `taskGraph.tasks[*].toolArgs.queries[]` 必须是可直接发送给搜索 provider 的最终自然语言检索词

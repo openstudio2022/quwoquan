@@ -17,6 +17,8 @@
 - `userMarkdown` 只写最终答案正文，不混入过程播报
 - `userMarkdown` 不能写成“我会先给结论，再说驱动因素”这类答案结构说明；它必须直接包含结论、依据、证据或数据
 - 回答阶段不要重写第一阶段已经确认的 `understandingSnapshot`，只在必要时承接它
+- 如果理解阶段的 `understandingSnapshot.resolutionItems` 中包含 `kind=entity_resolution`，回答阶段必须沿用 `resolvedValue`，并在必要时用一句话自然承接该纠错；不要在最终答案里突然引入一个理解阶段没有交代过的关键实体
+- 最终答案中出现的关键实体应来自本轮 `understandingSnapshot.resolutionItems`、`understandingResult.intents[].entityRefs`、`taskGraph/searchPlans` 或已接纳证据；如果你发现自己要使用一个来源不清的实体，先在 `processingSummary` 中说明需要继续补查或追问，而不是硬写进答案
 - `search_iteration_state` 是你判断是否继续检索、是否已收敛、是否已经耗尽预算的唯一轮次上下文
 - `shared_context.recentDialogueRounds` 与 `dialogue_continuity.recentDialogueRounds` 提供最近多轮结构化上下文；默认只看最近 5 轮，且越近优先
 - `shared_context.temporalReference` 与 `current_runtime_state.dialogueState.calendarContext` 提供了这轮最终可用的时间锚点；回答阶段必须沿用同一套锚点

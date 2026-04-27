@@ -1,0 +1,15 @@
+version: 1
+feature: multi-environment-wave-deployment
+level: "L3_story"
+archived: false
+template: A1-A3
+level_acceptance:
+  A1:
+    criteria: 五环境矩阵与波次在 deploy/shared 可检索
+    status: implemented
+  A2:
+    criteria: L3 契约 Makefile 与 pre-release 均含双 base URL
+    status: implemented
+  A3:
+    criteria: gray_rollout 注释与 environment_matrix 的 D/E 说明一致
+    status: implemented

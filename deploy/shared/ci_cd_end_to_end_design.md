@@ -4,6 +4,8 @@
 
 **当前部署目标**：CI/CD 仅考虑**阿里云 ACK** 部署。pre-release-gate、service_pipeline 使用 `CLOUD_PROVIDER=aliyun` 和 `deploy/kustomization/aliyun-integration`、`deploy/kustomization/aliyun-prod`。
 
+**五环境总览**（本地 / CI / integration / 生产灰度 / 生产全量、波次关系、`STAGING_*` 与 integration 的对应）：见 **[environment_matrix.md](environment_matrix.md)**。
+
 ---
 
 ## 1. 当前 CI/CD 现状
@@ -128,8 +130,9 @@ deploy-integration:
 
 | Secret | 用途 |
 |--------|------|
-| `STAGING_BASE_URL` | integration API 地址，L3/L4 使用 |
-| `STAGING_TEST_AUTH_TOKEN` | L3/L4 鉴权（对应 env TEST_AUTH_TOKEN） |
+| `STAGING_BASE_URL` | integration API 基址，L3/L4 使用（语义同 `INTEGRATION_BASE_URL`，见 `environment_matrix.md`） |
+| `STAGING_PRODUCT_OPS_BASE_URL` | integration 上 Ops/产品面 API 基址，`make test-api-contract` 必需 |
+| `STAGING_TEST_AUTH_TOKEN` | L3/L4 鉴权（对应 env `TEST_AUTH_TOKEN`） |
 | `INTEGRATION_KUBECONFIG` | integration 集群 kubeconfig（或 OIDC 等效） |
 | `GCP_SERVICE_ACCOUNT_KEY` | FTL 用 |
 | `FTL_RESULTS_BUCKET` | FTL 结果存储 |
@@ -165,6 +168,7 @@ deploy-integration:
 
 ## 6. 参考
 
+- `deploy/shared/environment_matrix.md` — 五环境矩阵、STAGING=integration 语义、各环境验证命令
 - `deploy/shared/branch_strategy.md` — 分支策略（dev1.0 日常合入、main 定时 merge）
 - `deploy/shared/deliver_to_production_runbook.md` — 端到端运行手册
 - `.github/workflows/pre-release-gate.yml` — 当前 pre-release 流程

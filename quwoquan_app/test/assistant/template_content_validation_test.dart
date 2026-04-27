@@ -159,9 +159,26 @@ void main() {
         reason: 'planner.global_plan 应明确禁止 query literal 残留模糊时间词',
       );
       expect(
+        planner,
+        contains('实体纠错与历史误解修正规则'),
+        reason: 'planner.global_plan 应引导模型在理解阶段处理实体纠错',
+      );
+      expect(
+        planner,
+        contains('运行时代码不会依赖这些文本替你做实体判断'),
+        reason: 'planner.global_plan 应明确模型主导实体纠错，代码不替模型判断',
+      );
+      expect(
         synth,
         contains('`retrievalProcessing.processingSummary` 是本轮唯一流式展示的过程字段'),
         reason: 'synthesizer.final_answer 应明确声明 processingSummary 是唯一流式展示的过程字段',
+      );
+      expect(
+        synth,
+        contains(
+          '`understandingSnapshot.resolutionItems` 中包含 `kind=entity_resolution`',
+        ),
+        reason: 'synthesizer.final_answer 应承接理解阶段实体纠错',
       );
       expect(
         synth,
@@ -216,6 +233,12 @@ void main() {
         contains('`toolArgs.query` 或 `toolArgs.queries[]` 必须是最终可执行检索词'),
       );
       expect(phasePlan, contains('`understandingSnapshot.userFacingSummary`'));
+      expect(phasePlan, contains('`kind: "entity_resolution"`'));
+      expect(
+        phasePlan,
+        contains('代码只会透传、展示或记录，不会据此判断 planner 是否合格'),
+        reason: '规划阶段 contract 必须禁止代码用纠错字段裁判 planner',
+      );
       expect(phasePlan, isNot(contains('  - `answer`')));
       expect(
         phaseAnswer,

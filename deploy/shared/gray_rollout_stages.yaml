@@ -1,6 +1,9 @@
 # 灰度阶段配置（可扩展）
 # 供 deploy-prod-auto 等 workflow 读取，计算 STEP 与各阶段是否需审批
 #
+# 与五环境/波次：D（生产灰度）与 E（生产全量）在 process_domain_mapping 中均为 prod，差别仅本 stages；
+# 非第二套拓扑。详见 deploy/shared/environment_matrix.md。
+#
 # STEP 映射：STEP = (replicas / total_replicas) * 100，取最接近 5|25|50|100
 # 当前 2 副本：1 -> 50，2 -> 100
 

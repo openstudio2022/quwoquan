@@ -84,6 +84,7 @@ jobs:
     if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
     env:
       STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+      STAGING_PRODUCT_OPS_BASE_URL: ${{ secrets.STAGING_PRODUCT_OPS_BASE_URL }}
       TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4

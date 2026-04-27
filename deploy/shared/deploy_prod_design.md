@@ -51,6 +51,13 @@ stages:
 | **Stage 2 Carry-on** | 100% | 是 | 2 pod（100%） |
 | **未来 4 副本** | 可配多阶段 | 每阶段可配 | 如 1→2→4，1 自动、2/4 审批 |
 
+### 1.4 与 environment_matrix 中 D（灰度）/E（全量）的对应
+
+- **D（生产灰度）**、**E（生产全量）** 在 `process_domain_mapping` 中均为 **prod**；不引入第二套领域拓扑。
+- **D**：对应 `gray_rollout_stages.yaml` 中未达 `total_replicas` 或 `auto: true` 的步进（小流量/自动段）。
+- **E**：对应 `full` 阶段或 `replicas == total_replicas`，通常为放量完成与发版元数据锁定。
+- 与「大波段」关系：**C（integration）+ L3/L4 通过** 后再进入本节的 prod 步进，见 [environment_matrix.md](environment_matrix.md) 与 [ci_cd_end_to_end_design.md](ci_cd_end_to_end_design.md)。
+
 ---
 
 ## 2. 半自动方案（workflow_dispatch）

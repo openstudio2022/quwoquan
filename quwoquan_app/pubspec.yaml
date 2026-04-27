@@ -162,6 +162,11 @@ flutter:
     - assets/assistant/skills/health_wellness/dialogue/
     - assets/assistant/skills/health_wellness/references/
     - assets/assistant/skills/health_wellness/scripts/
+    - assets/assistant/skills/huawei_cloud_qa/
+    - assets/assistant/skills/huawei_cloud_qa/config/
+    - assets/assistant/skills/huawei_cloud_qa/dialogue/
+    - assets/assistant/skills/huawei_cloud_qa/references/
+    - assets/assistant/skills/huawei_cloud_qa/scripts/
     - assets/assistant/skills/knowledge_general/
     - assets/assistant/skills/knowledge_general/config/
     - assets/assistant/skills/knowledge_general/dialogue/

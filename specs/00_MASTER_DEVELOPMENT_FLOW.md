@@ -247,6 +247,7 @@ make gate
 - 必须完成 `T3/T4`、SLO 卡点、观测确认与回滚演练
 - 发布对象是 release batch / CR 范围，不再只看单个 Scenario
 - 未达到 SLO 或回滚条件不清时不得放量
+- **多环境统一口径**（本地 / CI / integration / 生产灰度与全量、波次推进、`STAGING_*` 与 integration 的对应）：[`deploy/shared/environment_matrix.md`](../deploy/shared/environment_matrix.md)
 
 ### 3.9 `/try`
 

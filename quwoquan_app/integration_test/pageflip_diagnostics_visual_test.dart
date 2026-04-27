@@ -95,8 +95,7 @@ void main() {
       );
 
       debugCursor = debugStates.length;
-      // Push the fold past W/2 so the paper-fold formula
-      // E = max(0, 2F - W) starts exposing the recto on the spine side.
+      // 推进到中段，验证同一个 flippingClipArea 持续驱动背面区域。
       await backwardGesture.moveBy(const Offset(320, -24));
       for (var i = 0; i < 8; i += 1) {
         await tester.pump(const Duration(milliseconds: 16));
@@ -129,8 +128,8 @@ void main() {
       debugPrint('[pageflip][visual-test] $middle');
       debugPrint('[pageflip][visual-test] $late');
 
-      // 后翻纸张拓扑由 E/F/current/front/back 同源驱动，不再要求 E 线
-      // 锁死在 spine；这里先校验页面角色在所有阶段保持稳定。
+      // 后翻采用镜像前翻同构路径：current/background 来自 bottomClipArea，
+      // 上一页背面来自 flippingClipArea，页面角色在所有阶段保持稳定。
       expect(early.bottomLayerPageIndex, equals(3));
       expect(early.flippingLayerPageIndex, equals(2));
       expect(middle.bottomLayerPageIndex, equals(3));
@@ -138,23 +137,35 @@ void main() {
       expect(late.bottomLayerPageIndex, equals(3));
       expect(late.flippingLayerPageIndex, equals(2));
 
-      // flipping polygon 绑定上一页 X-1，bottom polygon 绑定当前页 X。
-      // 所有阶段都应能看到上一页正面从翻动纸张区域出现，而不是由当前页背面
-      // 先占据主区域。
-      expect(early.frontVisible, isTrue);
+      // previousFront 不再作为独立静态拓扑层铺开；它只能在同一个
+      // genericDynamic flipping surface 内由 E 线左侧逐步出现。
+      expect(early.frontVisible, isFalse);
       expect(middle.frontVisible, isTrue);
       expect(late.frontVisible, isTrue);
+      expect(early.backContainsPreviousFront, isFalse);
       expect(early.currentVisible, isTrue);
       expect(middle.currentVisible, isTrue);
       expect(late.currentVisible, isTrue);
 
-      // 翻折面（page X-1 被掀起）随手势进入更大的旋转角度：middle/late 阶段
-      // 必须有 visible back（旋转角度跨过 π/2 后切到纸背）。
+      // 翻折面（page X-1 被掀起）随手势进入更大的旋转角度：各阶段
+      // 必须有可见的 flipping/back bounds；具体像素会受纸张阴影和纹理叠加影响。
+      expect(early.backVisible, isTrue);
+      expect(early.visibleBackWidth, greaterThan(20));
+      expect(early.surfaceTopAligned, isTrue);
+      expect(early.pivotAtSurfaceBottom, isTrue);
+      expect(early.backTextureCoversRows, isTrue);
       expect(middle.backVisible, isTrue);
       expect(middle.visibleBackWidth, greaterThan(20));
+      expect(middle.surfaceTopAligned, isTrue);
+      expect(middle.pivotAtSurfaceBottom, isTrue);
+      expect(middle.backTextureCoversRows, isTrue);
       expect(middle.foldLineNonVertical, isTrue);
       expect(middle.pageEdgeLineNonVertical, isTrue);
       expect(late.backVisible, isTrue);
+      expect(late.visibleBackWidth, greaterThan(20));
+      expect(late.surfaceTopAligned, isTrue);
+      expect(late.pivotAtSurfaceBottom, isTrue);
+      expect(late.backTextureCoversRows, isTrue);
     },
   );
 }
@@ -215,13 +226,13 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
       ? phaseStates.lastWhere(
           (state) =>
               state.renderDirection == StPageFlipDirection.back &&
-              state.backwardCompositeMode == 'backwardPaperTopology' &&
+              state.backwardCompositeMode == 'mirroredForwardDynamic' &&
               state.backwardBackPaintBounds != null,
         )
       : phaseStates.lastWhere(
           (state) =>
               state.renderDirection == StPageFlipDirection.back &&
-              state.backwardCompositeMode == 'backwardPaperTopology',
+              state.backwardCompositeMode == 'mirroredForwardDynamic',
         );
   final image = await _captureBoundaryImage(boundaryKey);
   final bytes = await _rawRgbaBytes(image);
@@ -303,8 +314,17 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
         ),
         color: _ProbeColor.previousBack,
       );
-  // 当前页 residual 现在有独立拓扑，但视觉探针仍扫描整页以避免只验证
-  // 诊断 bounds 而漏掉真实像素。
+  final backTextureCoversRows =
+      visibleBackWidth > 1 &&
+      _rectContainsProbeColorRows(
+        image: image,
+        bytes: bytes,
+        rect: visibleBackRect,
+        color: _ProbeColor.previousBack,
+        yFractions: const <double>[0.18, 0.5, 0.82],
+      );
+  // 当前页背景来自 bottomClipArea；视觉探针仍扫描整页以避免只验证诊断
+  // bounds 而漏掉真实像素。
   final fullPageRect = Rect.fromLTWH(
     0,
     0,
@@ -349,9 +369,15 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
     'edgeX=${debugState.backwardPageEdgeX} '
     'bottomLayer=${debugState.backwardBottomLayerPageIndex} '
     'flippingLayer=${debugState.backwardFlippingLayerPageIndex} '
+    'surface=${_rectLabel(debugState.backwardSurfaceViewportRect)} '
+    'pivot=${debugState.backwardPivotViewport} '
+    'clipLocal=${_rectLabel(debugState.backwardClipLocalBounds)} '
+    'clipViewport=${_rectLabel(debugState.backwardClipViewportBounds)} '
     'verso=${debugState.backwardVersoWidth} '
     'paintVerso=${debugState.backwardPaintedVersoWidth}',
   );
+  final surfaceRect = debugState.backwardSurfaceViewportRect;
+  final pivotViewport = debugState.backwardPivotViewport;
   return _BackwardVisualFrame(
     label: label,
     frontVisible: frontVisible,
@@ -365,6 +391,16 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
         frontBounds.right <= debugState.guideX! + 1.0,
     backContainsPreviousFront: backContainsPreviousFront,
     backContainsPreviousBack: backContainsPreviousBack,
+    backTextureCoversRows: backTextureCoversRows,
+    surfaceTopAligned:
+        surfaceRect != null &&
+        pivotViewport != null &&
+        (surfaceRect.top - (pivotViewport.dy - surfaceRect.height)).abs() <=
+            1.0,
+    pivotAtSurfaceBottom:
+        surfaceRect != null &&
+        pivotViewport != null &&
+        (pivotViewport.dy - surfaceRect.bottom).abs() <= 1.0,
     foldLineNonVertical: _lineNonVertical(
       debugState.backwardFoldLineTop,
       debugState.backwardFoldLineBottom,
@@ -380,7 +416,7 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
     backSample: backSample == null ? '-' : _rgbLabel(backSample),
     currentSample: _rgbLabel(currentSample),
     geometry:
-        'image=${image.width}x${image.height} front=${_rectLabel(frontBounds)} back=${_rectLabel(backBounds)} sample=${visibleBackLeft.toStringAsFixed(1)}-${visibleBackRight.toStringAsFixed(1)}',
+        'image=${image.width}x${image.height} front=${_rectLabel(frontBounds)} back=${_rectLabel(backBounds)} surface=${_rectLabel(surfaceRect)} pivot=$pivotViewport sample=${visibleBackLeft.toStringAsFixed(1)}-${visibleBackRight.toStringAsFixed(1)}',
   );
 }
 
@@ -435,6 +471,56 @@ bool _rectContainsProbeColor({
   return false;
 }
 
+bool _rectContainsProbeColorRows({
+  required ui.Image image,
+  required Uint8List bytes,
+  required Rect rect,
+  required _ProbeColor color,
+  required List<double> yFractions,
+}) {
+  for (final fraction in yFractions) {
+    final y = rect.top + rect.height * fraction.clamp(0.0, 1.0);
+    if (!_rectContainsProbeColorOnRow(
+      image: image,
+      bytes: bytes,
+      rect: rect,
+      color: color,
+      y: y,
+    )) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _rectContainsProbeColorOnRow({
+  required ui.Image image,
+  required Uint8List bytes,
+  required Rect rect,
+  required _ProbeColor color,
+  required double y,
+}) {
+  final sampledY = y.round().clamp(0, image.height - 1).toInt();
+  final left = rect.left.ceil().clamp(0, image.width - 1).toInt();
+  final right = rect.right.floor().clamp(0, image.width - 1).toInt();
+  if (right <= left) {
+    return false;
+  }
+  final step = math.max(1, ((right - left) / 32).floor());
+  for (var x = left; x <= right; x += step) {
+    final sampled = _colorAtBytes(
+      image.width,
+      image.height,
+      bytes,
+      Offset(x.toDouble(), sampledY.toDouble()),
+    );
+    if (_classifyProbeColor(sampled) == color) {
+      return true;
+    }
+  }
+  return false;
+}
+
 Color _colorAtBytes(int width, int height, Uint8List bytes, Offset position) {
   final x = position.dx.round().clamp(0, width - 1).toInt();
   final y = position.dy.round().clamp(0, height - 1).toInt();
@@ -480,6 +566,9 @@ class _BackwardVisualFrame {
     required this.frontWithinFold,
     required this.backContainsPreviousFront,
     required this.backContainsPreviousBack,
+    required this.backTextureCoversRows,
+    required this.surfaceTopAligned,
+    required this.pivotAtSurfaceBottom,
     required this.foldLineNonVertical,
     required this.pageEdgeLineNonVertical,
     required this.leftSpineLocked,
@@ -500,6 +589,9 @@ class _BackwardVisualFrame {
   final bool frontWithinFold;
   final bool backContainsPreviousFront;
   final bool backContainsPreviousBack;
+  final bool backTextureCoversRows;
+  final bool surfaceTopAligned;
+  final bool pivotAtSurfaceBottom;
   final bool foldLineNonVertical;
   final bool pageEdgeLineNonVertical;
   final bool leftSpineLocked;
@@ -517,6 +609,8 @@ class _BackwardVisualFrame {
         'backAtPageEdge=$backStartsAtPageEdge frontWithinFold=$frontWithinFold '
         'backHasFront=$backContainsPreviousFront '
         'backHasBack=$backContainsPreviousBack '
+        'backRows=$backTextureCoversRows '
+        'surfaceTop=$surfaceTopAligned pivotBottom=$pivotAtSurfaceBottom '
         'foldTilted=$foldLineNonVertical edgeTilted=$pageEdgeLineNonVertical '
         'spine=$leftSpineLocked '
         'bottomLayer=$bottomLayerPageIndex flippingLayer=$flippingLayerPageIndex '

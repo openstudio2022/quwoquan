@@ -172,19 +172,20 @@ config-slo-gate:
 l2-content:
 	@bash scripts/run_l2_content_tests.sh
 
-# L3 API Contract runner (staging HTTP).
-# Requires: STAGING_BASE_URL, STAGING_PRODUCT_OPS_BASE_URL, TEST_AUTH_TOKEN env vars.
-# 缺配置或 staging 不可用时直接失败，不能以 skip 视作通过。
+# L3：对 integration 的 HTTP 基址（历史变量名 STAGING_*；语义见 deploy/shared/environment_matrix.md）。
+# 需 content + ops 两基址（STAGING_* 或 INTEGRATION_*）与 TEST_AUTH_TOKEN；缺则失败。
 test-api-contract:
-	@if [ -z "$(STAGING_BASE_URL)" ] || [ -z "$(STAGING_PRODUCT_OPS_BASE_URL)" ]; then \
-		echo "[L3] FAIL: STAGING_BASE_URL and STAGING_PRODUCT_OPS_BASE_URL are required"; \
+	@STAGING_BU="$${STAGING_BASE_URL:-$${INTEGRATION_BASE_URL}}"; \
+	STAGING_OPS="$${STAGING_PRODUCT_OPS_BASE_URL:-$${INTEGRATION_PRODUCT_OPS_BASE_URL}}"; \
+	if [ -z "$$STAGING_BU" ] || [ -z "$$STAGING_OPS" ]; then \
+		echo "[L3] FAIL: set STAGING_BASE_URL+STAGING_PRODUCT_OPS_BASE_URL or INTEGRATION_BASE_URL+INTEGRATION_PRODUCT_OPS_BASE_URL"; \
 		exit 2; \
-	fi
+	fi; \
 	cd quwoquan_app && flutter test test/cloud/content/api_contract_runner.dart \
-		--dart-define=STAGING_BASE_URL=$(STAGING_BASE_URL) \
-		--dart-define=TEST_AUTH_TOKEN=$(TEST_AUTH_TOKEN)
+		--dart-define=STAGING_BASE_URL=$$STAGING_BU \
+		--dart-define=TEST_AUTH_TOKEN=$(TEST_AUTH_TOKEN) && \
 	cd quwoquan_app && flutter test test/cloud/ops/api_contract_runner.dart \
-		--dart-define=STAGING_PRODUCT_OPS_BASE_URL=$(STAGING_PRODUCT_OPS_BASE_URL)
+		--dart-define=STAGING_PRODUCT_OPS_BASE_URL=$$STAGING_OPS
 
 # gate-full: L1+L2+L3（daily CI / pre-release）
 # PR 日常开发用 make gate；pre-release 用 make gate-full。

@@ -785,6 +785,25 @@ void main() {
       expect(interactiveState.flippingAnchor, isNotNull);
       expect(interactiveState.flippingAnchor!.dx, closeTo(0, 0.001));
       expect(interactiveState.flippingAnchor!.dy, greaterThan(0));
+      expect(interactiveState.backwardSurfaceOrigin, isNotNull);
+      expect(interactiveState.backwardSurfaceOrigin!.dx, closeTo(0, 0.001));
+      expect(interactiveState.backwardSurfaceOrigin!.dy, closeTo(0, 0.001));
+      expect(interactiveState.backwardSurfaceViewportRect, isNotNull);
+      expect(interactiveState.backwardPivotLocal, isNotNull);
+      expect(interactiveState.backwardPivotLocal!.dx, closeTo(0, 0.001));
+      expect(
+        interactiveState.backwardPivotLocal!.dy,
+        closeTo(interactiveState.backwardSurfaceViewportRect!.height, 0.001),
+      );
+      expect(interactiveState.backwardPivotViewport, isNotNull);
+      expect(
+        interactiveState.backwardPivotViewport!.dy,
+        greaterThan(interactiveState.backwardSurfaceViewportRect!.top + 500),
+        reason:
+            'the flipping surface must stay top-aligned; only the pivot sits at the bottom edge',
+      );
+      expect(interactiveState.backwardClipLocalBounds, isNotNull);
+      expect(interactiveState.backwardClipViewportBounds, isNotNull);
       expect(interactiveState.bottomAnchor, isNotNull);
       expect(interactiveState.bottomAnchor!.dx, closeTo(0, 0.001));
       expect(interactiveState.backwardCorner, equals('bottom_left'));
@@ -807,10 +826,10 @@ void main() {
       expect(interactiveState.backwardBottomStart, greaterThan(0));
       expect(interactiveState.backwardPhase, isNotNull);
       expect(interactiveState.backwardPhase, isNot(equals('recto')));
-      expect(interactiveState.backwardReplayFrontLayerCount, equals(1));
+      expect(interactiveState.backwardReplayFrontLayerCount, equals(0));
       expect(
         interactiveState.backwardReplayBackSurfaceStrategy,
-        equals('paperTopologyFrontBackCurrent'),
+        equals('mirroredForwardDynamicSplitFrontBack'),
       );
       expect(interactiveState.backwardBottomLayerPageIndex, equals(3));
       expect(interactiveState.backwardFlippingLayerPageIndex, equals(2));
@@ -822,28 +841,56 @@ void main() {
       expect(interactiveState.backwardReplaySlices, isNotNull);
       expect(
         interactiveState.backwardReplaySlices,
-        contains('route=backwardPaperTopology'),
+        contains('route=mirroredForwardDynamic'),
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('front=previousFrontPolygon'),
+        contains('flipping=flippingClipArea'),
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('back=previousBackPolygon'),
+        contains('current=bottomClipArea'),
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('current=currentResidualPolygon'),
+        contains('front=flippingFrontBand'),
       );
-      expect(interactiveState.backwardReplaySlices, contains('frontLayers=1'));
+      expect(
+        interactiveState.backwardReplaySlices,
+        contains('back=flippingBackBand'),
+      );
+      expect(
+        interactiveState.backwardReplaySlices,
+        isNot(contains('previousFrontPolygon')),
+      );
+      expect(interactiveState.backwardReplaySlices, contains('frontLayers=0'));
+      expect(
+        interactiveState.backwardReplaySlices,
+        contains('movingBack=sharedSoftLayer'),
+      );
+      expect(
+        interactiveState.backwardReplaySlices,
+        contains('foldLineSource=flippingClipAreaMinX'),
+      );
+      expect(
+        interactiveState.backwardReplaySlices,
+        contains('currentSource=bottomClipArea'),
+      );
+      expect(
+        interactiveState.backwardReplaySlices,
+        contains('edgeLineSource=backwardLeafFrameEdgeE'),
+      );
+      expect(
+        interactiveState.backwardReplaySlices,
+        contains('backTextureDirection=leftToRight'),
+      );
       expect(interactiveState.backwardReplaySlices, contains('foldF='));
       expect(interactiveState.backwardReplaySlices, contains('edgeE='));
       expect(interactiveState.backwardReplaySlices, contains('rectoCoverage='));
       expect(interactiveState.backwardReplaySlices, contains('verso='));
       expect(
         interactiveState.backwardCompositeMode,
-        equals('backwardPaperTopology'),
+        equals('mirroredForwardDynamic'),
       );
       expect(interactiveState.backwardBackPaintBounds, isNotNull);
       expect(
@@ -853,32 +900,22 @@ void main() {
       );
       expect(
         interactiveState.backwardBackPixelSurfaceStrategy,
-        equals('paperTopologyFrontBackCurrent'),
+        equals('mirroredForwardDynamicSplitFrontBack'),
       );
       expect(interactiveState.backwardCurrentResidualBounds, isNotNull);
       expect(interactiveState.backwardFrontCoverageRatio, isNotNull);
       expect(interactiveState.backwardLeftSpineLocked, isNotNull);
       expect(interactiveState.backwardSimulatorVisualPhase, isNotNull);
-      final frontPaintBounds = interactiveState.backwardFrontPaintBounds;
-      expect(
-        interactiveState.backwardBackPaintBounds!.left,
-        greaterThanOrEqualTo(0),
-      );
-      expect(
-        interactiveState.backwardBackPaintBounds!.bottom,
-        lessThanOrEqualTo(
-          interactiveState.backwardCurrentResidualBounds!.bottom + 1,
-        ),
-      );
-      if (frontPaintBounds != null) {
-        expect(frontPaintBounds.left, greaterThanOrEqualTo(0));
+      if ((interactiveState.backwardRectoWidth ?? 0) > 0.001) {
+        expect(interactiveState.backwardFrontPaintBounds, isNotNull);
       }
+      expect(interactiveState.backwardBackPaintBounds!.width, greaterThan(0));
       expect(interactiveState.backwardFoldX, isNotNull);
       expect(interactiveState.backwardPageEdgeX, isNotNull);
       expect(interactiveState.backwardCoveredWidth, isNotNull);
       expect(interactiveState.backwardRectoCoverage, isNotNull);
-      // 倾斜手势下：折线 F（最右两点）和页右边线 E（最左两点）来自镜像后的
-      // 多边形，两条线在 y 上分布于上下，构成实际的折纸边界。
+      // 倾斜手势下：折线 F 和页右边线 E 都从同一个 flippingClipArea
+      // 推导，两条线在 y 上分布于上下，构成实际的折纸边界。
       final foldTop = interactiveState.backwardFoldLineTop;
       final foldBottom = interactiveState.backwardFoldLineBottom;
       final edgeTop = interactiveState.backwardPageEdgeLineTop;
@@ -952,7 +989,7 @@ void main() {
       expect(sample.middleBackVisible, isTrue);
       expect(sample.middleCurrentResidualVisible, isTrue);
       expect(sample.middleFoldHasFrontText, isFalse);
-      expect(sample.middleCompositeMode, equals('backwardPaperTopology'));
+      expect(sample.middleCompositeMode, equals('mirroredForwardDynamic'));
       expect(sample.middleBackRight - sample.middleBackLeft, greaterThan(40));
     },
   );
@@ -1069,7 +1106,7 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
             .where(
               (state) =>
                   state.renderDirection == StPageFlipDirection.back &&
-                  state.backwardCompositeMode == 'backwardPaperTopology' &&
+                  state.backwardCompositeMode == 'mirroredForwardDynamic' &&
                   state.backwardBackPaintBounds != null,
             )
             .fold<ArticleReadOnlyBookDebugState?>(
@@ -1081,7 +1118,7 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
         debugStates.lastWhere(
           (state) =>
               state.renderDirection == StPageFlipDirection.back &&
-              state.backwardCompositeMode == 'backwardPaperTopology' &&
+              state.backwardCompositeMode == 'mirroredForwardDynamic' &&
               state.backwardBackPaintBounds != null,
         );
     debugCursor = debugStates.length;

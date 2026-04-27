@@ -17,6 +17,8 @@ description: 部署 release batch / CR，并执行 Journey 验证
 4. 验证受影响的 `L2_journey` 组合验收与发布 guardrails
 5. 满足 SLO 与回滚条件后进入生产放量
 
+**环境与波次**（五环境一套代码、B→C→(D→E) 大波段、prod 内灰度小 wave）：见 [`deploy/shared/environment_matrix.md`](../../deploy/shared/environment_matrix.md) 与 [`deploy/shared/ci_cd_end_to_end_design.md`](../../deploy/shared/ci_cd_end_to_end_design.md)。
+
 ## 验证口径
 
 - `T3`：API contract、真实存储、集成环境验证

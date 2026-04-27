@@ -31,10 +31,20 @@ class PersonalAssistantSkillLoader {
             skillAssetPath: path,
             relativePath: 'config/retrieval_policy.json',
           );
+          final skillName = (parsed.frontmatter['name'] ?? 'unknown_skill')
+              .toString()
+              .trim();
+          final frontmatterDomain = (parsed.frontmatter['domain'] ?? '')
+              .toString()
+              .trim();
+          final pathDomain = _domainIdFromSkillAssetPath(path);
+          final domainId = frontmatterDomain.isNotEmpty
+              ? frontmatterDomain
+              : pathDomain.isNotEmpty
+              ? pathDomain
+              : _domainIdFromSkillName(skillName);
           final map = <String, dynamic>{
-            'id': (parsed.frontmatter['name'] ?? 'unknown_skill')
-                .toString()
-                .trim(),
+            'id': skillName,
             'name': (parsed.frontmatter['name'] ?? 'Unknown Skill')
                 .toString()
                 .trim(),
@@ -56,7 +66,7 @@ class PersonalAssistantSkillLoader {
             'deviceScopes': const <String>['mobile', 'tablet', 'pc'],
             'versionPolicy': 'semver',
             'defaultEnabled': true,
-            'domain': (parsed.frontmatter['domain'] ?? '').toString().trim(),
+            'domain': domainId,
             'allowed_tools': _toStringList(parsed.frontmatter['allowed_tools']),
             'frontmatter': parsed.frontmatter,
             'retrievalPolicy': retrievalPolicy,
@@ -111,6 +121,26 @@ class PersonalAssistantSkillLoader {
     }
     final sorted = assets.toList()..sort();
     return sorted;
+  }
+
+  String _domainIdFromSkillAssetPath(String path) {
+    final normalized = path.replaceAll('\\', '/');
+    final segments = normalized.split('/');
+    final skillsIndex = segments.indexOf('skills');
+    if (skillsIndex < 0 || skillsIndex + 1 >= segments.length) {
+      return '';
+    }
+    return segments[skillsIndex + 1].trim();
+  }
+
+  String _domainIdFromSkillName(String name) {
+    final normalized = name
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    return normalized == 'unknown_skill' ? '' : normalized;
   }
 
   List<String> _toStringList(dynamic value) {
