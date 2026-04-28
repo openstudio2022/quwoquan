@@ -552,6 +552,48 @@ void main() {
     );
   });
 
+  test('finalize 会修复历史中缺失的最新用户 query', () async {
+    final storagePath = '${tempDir.path}/sessions_repair_user_query.json';
+    final sessionManager = AssistantSessionManager(storagePath: storagePath);
+    await sessionManager.load();
+    sessionManager.appendMessage(
+      sessionId: 'assistant_only_history',
+      role: 'assistant',
+      content: '上一轮回答',
+    );
+    final runner = FinalizeRunner(
+      sessionManager: sessionManager,
+      memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
+      buildObservabilityPayload: ({required response, required request}) =>
+          <String, dynamic>{},
+    );
+
+    await runner.finalize(
+      const AssistantRunRequest(
+        sessionId: 'assistant_only_history',
+        messages: <AssistantRunMessage>[
+          AssistantRunMessage(role: 'user', content: '今天A股走势怎样'),
+        ],
+      ),
+      executionSnapshot: _buildExecutionSnapshot(
+        sessionId: 'assistant_only_history',
+        latestUserQuery: '今天A股走势怎样',
+        runId: 'repair_user_query_run',
+        traceId: 'repair_user_query_trace',
+      ),
+      response: _buildFinalizeResponse(includeAnswer: true),
+    );
+
+    final messages = sessionManager.getOrCreateSession(
+      'assistant_only_history',
+    );
+    expect(
+      messages.map((item) => item['role']),
+      containsAllInOrder(<String>['assistant', 'user', 'assistant']),
+    );
+    expect(messages[1]['content'], equals('今天A股走势怎样'));
+  });
+
   test('finalize 会持久化 typed mainline contracts 供后续 UI 与回放读取', () async {
     final storagePath = '${tempDir.path}/sessions_typed.json';
     final sessionManager = AssistantSessionManager(storagePath: storagePath);

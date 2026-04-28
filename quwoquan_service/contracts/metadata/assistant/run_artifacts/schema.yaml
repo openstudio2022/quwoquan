@@ -223,6 +223,7 @@ subcontracts:
   retrieval_processing:
     class_name: RetrievalProcessingSnapshot
     fields:
+      - { name: searchedDocumentCount, type: int, default: 0 }
       - { name: processedDocumentCount, type: int, default: 0 }
       - { name: acceptedDocumentCount, type: int, default: 0 }
       - { name: processingSummary, type: string, default: '' }

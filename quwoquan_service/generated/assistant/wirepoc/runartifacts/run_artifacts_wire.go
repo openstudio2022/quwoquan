@@ -5,222 +5,223 @@ package runartifacts
 import "encoding/json"
 
 type RunArtifactsAnswerDecisionCore struct {
-	NextAction        string  `json:"nextAction"`
-	AnswerEligibility string  `json:"answerEligibility"`
-	FinalAnswerReady  bool    `json:"finalAnswerReady"`
-	EvidenceSummary   string  `json:"evidenceSummary"`
-	Confidence        float64 `json:"confidence"`
-	Reasoning         string  `json:"reasoning"`
-	SynthesisReady    bool    `json:"synthesisReady"`
-	SynthesisReason   string  `json:"synthesisReason"`
+	NextAction string `json:"nextAction"`
+	AnswerEligibility string `json:"answerEligibility"`
+	FinalAnswerReady bool `json:"finalAnswerReady"`
+	EvidenceSummary string `json:"evidenceSummary"`
+	Confidence float64 `json:"confidence"`
+	Reasoning string `json:"reasoning"`
+	SynthesisReady bool `json:"synthesisReady"`
+	SynthesisReason string `json:"synthesisReason"`
 }
 
 type AssistantDisplayItem struct {
-	ItemId       string   `json:"itemId"`
-	Title        string   `json:"title"`
-	Body         string   `json:"body"`
+	ItemId string `json:"itemId"`
+	Title string `json:"title"`
+	Body string `json:"body"`
 	ReferenceIds []string `json:"referenceIds"`
 }
 
 type AssistantAnswerDisplayBlock struct {
-	BlockId   string                 `json:"blockId"`
-	Kind      string                 `json:"kind"`
-	ListStyle string                 `json:"listStyle"`
-	Title     string                 `json:"title"`
-	Body      string                 `json:"body"`
-	Items     []AssistantDisplayItem `json:"items"`
+	BlockId string `json:"blockId"`
+	Kind string `json:"kind"`
+	ListStyle string `json:"listStyle"`
+	Title string `json:"title"`
+	Body string `json:"body"`
+	Items []AssistantDisplayItem `json:"items"`
 }
 
 type AssistantAnswerDisplayState struct {
-	Summary string                        `json:"summary"`
-	Blocks  []AssistantAnswerDisplayBlock `json:"blocks"`
+	Summary string `json:"summary"`
+	Blocks []AssistantAnswerDisplayBlock `json:"blocks"`
 }
 
 type AnswerEvidenceBinding struct {
-	BindingId  string `json:"bindingId"`
-	Label      string `json:"label"`
-	Claim      string `json:"claim"`
+	BindingId string `json:"bindingId"`
+	Label string `json:"label"`
+	Claim string `json:"claim"`
 	EvidenceId string `json:"evidenceId"`
-	Url        string `json:"url"`
-	Title      string `json:"title"`
-	Source     string `json:"source"`
-	Snippet    string `json:"snippet"`
+	Url string `json:"url"`
+	Title string `json:"title"`
+	Source string `json:"source"`
+	Snippet string `json:"snippet"`
 }
 
 type RunArtifactsAnswerProcessing struct {
-	ReadinessSummary   string   `json:"readinessSummary"`
-	KeyFacts           []string `json:"keyFacts"`
-	MissingDimensions  []string `json:"missingDimensions"`
-	RetrieveMoreReason string   `json:"retrieveMoreReason"`
+	ReadinessSummary string `json:"readinessSummary"`
+	KeyFacts []string `json:"keyFacts"`
+	MissingDimensions []string `json:"missingDimensions"`
+	RetrieveMoreReason string `json:"retrieveMoreReason"`
 }
 
 type RunArtifactsDiagnosticsCore struct {
-	DomainId              string          `json:"domainId"`
-	RenderMode            string          `json:"renderMode"`
-	RenderFallback        string          `json:"renderFallback"`
-	AnswerEligibility     string          `json:"answerEligibility"`
-	QualityGates          json.RawMessage `json:"qualityGates"`
-	EvidenceEvaluation    json.RawMessage `json:"evidenceEvaluation"`
-	AnswerBoundaryPolicy  json.RawMessage `json:"answerBoundaryPolicy"`
-	EvidenceSummary       string          `json:"evidenceSummary"`
-	EvidencePassed        bool            `json:"evidencePassed"`
-	FinalAnswerMode       string          `json:"finalAnswerMode"`
-	SynthesisReady        bool            `json:"synthesisReady"`
-	SynthesisReason       string          `json:"synthesisReason"`
-	HeuristicFallbackUsed bool            `json:"heuristicFallbackUsed"`
-	EmergedTags           []string        `json:"emergedTags"`
+	DomainId string `json:"domainId"`
+	RenderMode string `json:"renderMode"`
+	RenderFallback string `json:"renderFallback"`
+	AnswerEligibility string `json:"answerEligibility"`
+	QualityGates json.RawMessage `json:"qualityGates"`
+	EvidenceEvaluation json.RawMessage `json:"evidenceEvaluation"`
+	AnswerBoundaryPolicy json.RawMessage `json:"answerBoundaryPolicy"`
+	EvidenceSummary string `json:"evidenceSummary"`
+	EvidencePassed bool `json:"evidencePassed"`
+	FinalAnswerMode string `json:"finalAnswerMode"`
+	SynthesisReady bool `json:"synthesisReady"`
+	SynthesisReason string `json:"synthesisReason"`
+	HeuristicFallbackUsed bool `json:"heuristicFallbackUsed"`
+	EmergedTags []string `json:"emergedTags"`
 }
 
 type RetrievalProcessingReference struct {
-	Title   string `json:"title"`
-	Url     string `json:"url"`
-	Source  string `json:"source"`
+	Title string `json:"title"`
+	Url string `json:"url"`
+	Source string `json:"source"`
 	Snippet string `json:"snippet"`
-	Rank    int    `json:"rank"`
+	Rank int `json:"rank"`
 }
 
 type AssistantProcessDisplayBlock struct {
-	BlockId    string                         `json:"blockId"`
-	StepId     string                         `json:"stepId"`
-	Status     string                         `json:"status"`
-	Kind       string                         `json:"kind"`
-	Title      string                         `json:"title"`
-	Body       string                         `json:"body"`
-	Items      []AssistantDisplayItem         `json:"items"`
+	BlockId string `json:"blockId"`
+	StepId string `json:"stepId"`
+	Status string `json:"status"`
+	Kind string `json:"kind"`
+	Title string `json:"title"`
+	Body string `json:"body"`
+	Items []AssistantDisplayItem `json:"items"`
 	References []RetrievalProcessingReference `json:"references"`
 }
 
 type AssistantProcessDisplayState struct {
-	ActiveStepId     string                         `json:"activeStepId"`
-	Summary          string                         `json:"summary"`
-	Blocks           []AssistantProcessDisplayBlock `json:"blocks"`
-	FinalAnswerReady bool                           `json:"finalAnswerReady"`
+	ActiveStepId string `json:"activeStepId"`
+	Summary string `json:"summary"`
+	Blocks []AssistantProcessDisplayBlock `json:"blocks"`
+	FinalAnswerReady bool `json:"finalAnswerReady"`
 }
 
 type AssistantDisplayState struct {
 	Process *AssistantProcessDisplayState `json:"process"`
-	Answer  *AssistantAnswerDisplayState  `json:"answer"`
+	Answer *AssistantAnswerDisplayState `json:"answer"`
 }
 
 type EvidenceLedgerEntry struct {
-	EvidenceId        string          `json:"evidenceId"`
-	DomainId          string          `json:"domainId"`
-	Dimension         string          `json:"dimension"`
-	DimensionLabel    string          `json:"dimensionLabel"`
-	SearchPlanId      string          `json:"searchPlanId"`
-	Title             string          `json:"title"`
-	Url               string          `json:"url"`
-	Source            string          `json:"source"`
-	SourceHost        string          `json:"sourceHost"`
-	SourceTier        string          `json:"sourceTier"`
-	FreshnessHours    int             `json:"freshnessHours"`
-	AuthorityScore    float64         `json:"authorityScore"`
-	RelevanceScore    float64         `json:"relevanceScore"`
+	EvidenceId string `json:"evidenceId"`
+	DomainId string `json:"domainId"`
+	Dimension string `json:"dimension"`
+	DimensionLabel string `json:"dimensionLabel"`
+	SearchPlanId string `json:"searchPlanId"`
+	Title string `json:"title"`
+	Url string `json:"url"`
+	Source string `json:"source"`
+	SourceHost string `json:"sourceHost"`
+	SourceTier string `json:"sourceTier"`
+	FreshnessHours int `json:"freshnessHours"`
+	AuthorityScore float64 `json:"authorityScore"`
+	RelevanceScore float64 `json:"relevanceScore"`
 	SlotContributions json.RawMessage `json:"slotContributions"`
-	Snippet           string          `json:"snippet"`
-	RetrievedAt       string          `json:"retrievedAt"`
+	Snippet string `json:"snippet"`
+	RetrievedAt string `json:"retrievedAt"`
 }
 
 type RunArtifactsHistoricalThinkingSnapshot struct {
-	ContinuityMode       string   `json:"continuityMode"`
-	MismatchSignal       string   `json:"mismatchSignal"`
-	CarryForwardFacts    []string `json:"carryForwardFacts"`
-	NeedsRecheckFacts    []string `json:"needsRecheckFacts"`
+	ContinuityMode string `json:"continuityMode"`
+	MismatchSignal string `json:"mismatchSignal"`
+	CarryForwardFacts []string `json:"carryForwardFacts"`
+	NeedsRecheckFacts []string `json:"needsRecheckFacts"`
 	DiscardedAssumptions []string `json:"discardedAssumptions"`
 }
 
 type DomainPolicyBundle struct {
-	DomainId        string          `json:"domainId"`
+	DomainId string `json:"domainId"`
 	ExecutionPolicy json.RawMessage `json:"executionPolicy"`
-	SlotSchema      json.RawMessage `json:"slotSchema"`
-	DialoguePolicy  json.RawMessage `json:"dialoguePolicy"`
+	SlotSchema json.RawMessage `json:"slotSchema"`
+	DialoguePolicy json.RawMessage `json:"dialoguePolicy"`
 	AuthorityPolicy json.RawMessage `json:"authorityPolicy"`
 	RetrievalPolicy json.RawMessage `json:"retrievalPolicy"`
-	AnswerPolicy    json.RawMessage `json:"answerPolicy"`
+	AnswerPolicy json.RawMessage `json:"answerPolicy"`
 	NarrativePolicy json.RawMessage `json:"narrativePolicy"`
 }
 
 type RunArtifactsUnderstandingResolutionItem struct {
-	Kind                   string `json:"kind"`
-	Title                  string `json:"title"`
-	Detail                 string `json:"detail"`
-	Source                 string `json:"source"`
-	OriginalValue          string `json:"originalValue"`
-	ResolvedValue          string `json:"resolvedValue"`
-	DefaultApplied         bool   `json:"defaultApplied"`
-	VisibleInUnderstanding bool   `json:"visibleInUnderstanding"`
+	Kind string `json:"kind"`
+	Title string `json:"title"`
+	Detail string `json:"detail"`
+	Source string `json:"source"`
+	OriginalValue string `json:"originalValue"`
+	ResolvedValue string `json:"resolvedValue"`
+	DefaultApplied bool `json:"defaultApplied"`
+	VisibleInUnderstanding bool `json:"visibleInUnderstanding"`
 }
 
 type RunArtifactsUnderstandingSnapshot struct {
-	IntentSummary            string                                    `json:"intentSummary"`
-	UserFacingSummary        string                                    `json:"userFacingSummary"`
-	RetrievalDesignNarrative string                                    `json:"retrievalDesignNarrative"`
-	ConcernPoints            []string                                  `json:"concernPoints"`
-	EmotionSignal            string                                    `json:"emotionSignal"`
-	ResolutionItems          []RunArtifactsUnderstandingResolutionItem `json:"resolutionItems"`
-	Assumptions              []string                                  `json:"assumptions"`
-	MismatchSignal           string                                    `json:"mismatchSignal"`
-	CarryForwardFacts        []string                                  `json:"carryForwardFacts"`
-	DiscardedAssumptions     []string                                  `json:"discardedAssumptions"`
+	IntentSummary string `json:"intentSummary"`
+	UserFacingSummary string `json:"userFacingSummary"`
+	RetrievalDesignNarrative string `json:"retrievalDesignNarrative"`
+	ConcernPoints []string `json:"concernPoints"`
+	EmotionSignal string `json:"emotionSignal"`
+	ResolutionItems []RunArtifactsUnderstandingResolutionItem `json:"resolutionItems"`
+	Assumptions []string `json:"assumptions"`
+	MismatchSignal string `json:"mismatchSignal"`
+	CarryForwardFacts []string `json:"carryForwardFacts"`
+	DiscardedAssumptions []string `json:"discardedAssumptions"`
 }
 
 type RetrievalProcessingSnapshot struct {
-	ProcessedDocumentCount int                            `json:"processedDocumentCount"`
-	AcceptedDocumentCount  int                            `json:"acceptedDocumentCount"`
-	ProcessingSummary      string                         `json:"processingSummary"`
-	SelectedKeyPoints      []string                       `json:"selectedKeyPoints"`
-	ExpansionReason        string                         `json:"expansionReason"`
-	AcceptedReferences     []RetrievalProcessingReference `json:"acceptedReferences"`
+	SearchedDocumentCount int `json:"searchedDocumentCount"`
+	ProcessedDocumentCount int `json:"processedDocumentCount"`
+	AcceptedDocumentCount int `json:"acceptedDocumentCount"`
+	ProcessingSummary string `json:"processingSummary"`
+	SelectedKeyPoints []string `json:"selectedKeyPoints"`
+	ExpansionReason string `json:"expansionReason"`
+	AcceptedReferences []RetrievalProcessingReference `json:"acceptedReferences"`
 }
 
 type ProcessTimelineFrame struct {
-	FrameId               string                             `json:"frameId"`
-	StepId                string                             `json:"stepId"`
-	Status                string                             `json:"status"`
-	Order                 int                                `json:"order"`
-	Headline              string                             `json:"headline"`
-	Detail                string                             `json:"detail"`
-	References            []RetrievalProcessingReference     `json:"references"`
+	FrameId string `json:"frameId"`
+	StepId string `json:"stepId"`
+	Status string `json:"status"`
+	Order int `json:"order"`
+	Headline string `json:"headline"`
+	Detail string `json:"detail"`
+	References []RetrievalProcessingReference `json:"references"`
 	UnderstandingSnapshot *RunArtifactsUnderstandingSnapshot `json:"understandingSnapshot"`
-	RetrievalProcessing   *RetrievalProcessingSnapshot       `json:"retrievalProcessing"`
-	AnswerProcessing      *RunArtifactsAnswerProcessing      `json:"answerProcessing"`
+	RetrievalProcessing *RetrievalProcessingSnapshot `json:"retrievalProcessing"`
+	AnswerProcessing *RunArtifactsAnswerProcessing `json:"answerProcessing"`
 }
 
 type SlotValueSnapshot struct {
-	SlotId      string          `json:"slotId"`
-	Status      string          `json:"status"`
-	Value       json.RawMessage `json:"value,omitempty"`
-	Source      string          `json:"source"`
-	Confidence  float64         `json:"confidence"`
-	UpdatedAt   string          `json:"updatedAt"`
-	Note        string          `json:"note"`
-	Candidates  []string        `json:"candidates"`
-	EvidenceIds []string        `json:"evidenceIds"`
+	SlotId string `json:"slotId"`
+	Status string `json:"status"`
+	Value json.RawMessage `json:"value,omitempty"`
+	Source string `json:"source"`
+	Confidence float64 `json:"confidence"`
+	UpdatedAt string `json:"updatedAt"`
+	Note string `json:"note"`
+	Candidates []string `json:"candidates"`
+	EvidenceIds []string `json:"evidenceIds"`
 }
 
 type SlotStateSnapshot struct {
-	DomainId     string          `json:"domainId"`
-	Slots        json.RawMessage `json:"slots"`
-	SlotValues   json.RawMessage `json:"slotValues"`
-	MissingSlots []string        `json:"missingSlots"`
-	UpdatedAt    string          `json:"updatedAt"`
+	DomainId string `json:"domainId"`
+	Slots json.RawMessage `json:"slots"`
+	SlotValues json.RawMessage `json:"slotValues"`
+	MissingSlots []string `json:"missingSlots"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 type RunArtifacts struct {
-	MachineEnvelope            string                                  `json:"machineEnvelope"`
-	DisplayMarkdown            string                                  `json:"displayMarkdown"`
-	DisplayPlainText           string                                  `json:"displayPlainText"`
-	DisplayState               *AssistantDisplayState                  `json:"displayState"`
-	Journey                    json.RawMessage                         `json:"journey"`
-	ProcessTimeline            []ProcessTimelineFrame                  `json:"processTimeline"`
-	UnderstandingSnapshot      *RunArtifactsUnderstandingSnapshot      `json:"understandingSnapshot"`
-	AnswerProcessing           *RunArtifactsAnswerProcessing           `json:"answerProcessing"`
+	MachineEnvelope string `json:"machineEnvelope"`
+	DisplayMarkdown string `json:"displayMarkdown"`
+	DisplayPlainText string `json:"displayPlainText"`
+	DisplayState *AssistantDisplayState `json:"displayState"`
+	Journey json.RawMessage `json:"journey"`
+	ProcessTimeline []ProcessTimelineFrame `json:"processTimeline"`
+	UnderstandingSnapshot *RunArtifactsUnderstandingSnapshot `json:"understandingSnapshot"`
+	AnswerProcessing *RunArtifactsAnswerProcessing `json:"answerProcessing"`
 	HistoricalThinkingSnapshot *RunArtifactsHistoricalThinkingSnapshot `json:"historicalThinkingSnapshot"`
-	RetrievalProcessing        *RetrievalProcessingSnapshot            `json:"retrievalProcessing"`
-	EvidenceLedger             []EvidenceLedgerEntry                   `json:"evidenceLedger"`
-	AnswerEvidenceBindings     []AnswerEvidenceBinding                 `json:"answerEvidenceBindings"`
-	SlotState                  *SlotStateSnapshot                      `json:"slotState"`
-	AnswerDecision             json.RawMessage                         `json:"answerDecision"`
-	Diagnostics                json.RawMessage                         `json:"diagnostics"`
-	DomainPolicyBundle         *DomainPolicyBundle                     `json:"domainPolicyBundle,omitempty"`
+	RetrievalProcessing *RetrievalProcessingSnapshot `json:"retrievalProcessing"`
+	EvidenceLedger []EvidenceLedgerEntry `json:"evidenceLedger"`
+	AnswerEvidenceBindings []AnswerEvidenceBinding `json:"answerEvidenceBindings"`
+	SlotState *SlotStateSnapshot `json:"slotState"`
+	AnswerDecision json.RawMessage `json:"answerDecision"`
+	Diagnostics json.RawMessage `json:"diagnostics"`
+	DomainPolicyBundle *DomainPolicyBundle `json:"domainPolicyBundle,omitempty"`
 }

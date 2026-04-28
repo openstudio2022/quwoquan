@@ -51,14 +51,14 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     final acceptedCount = _viewModel.acceptedDocumentCount > 0
         ? _viewModel.acceptedDocumentCount
         : _viewModel.referenceCount;
-    final processedCount = _viewModel.processedDocumentCount > 0
-        ? _viewModel.processedDocumentCount
-        : acceptedCount;
-    if (processedCount > 0) {
+    final searchedCount = _viewModel.searchedDocumentCount > 0
+        ? _viewModel.searchedDocumentCount
+        : _viewModel.processedDocumentCount;
+    if (searchedCount > 0) {
       metrics.add(
         UITextConstants.assistantProcessProcessedCountTemplate.replaceFirst(
           '%s',
-          processedCount.toString(),
+          searchedCount.toString(),
         ),
       );
     }
@@ -90,8 +90,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final bgColor = AppColorsFunctional.getColor(
       isDark,
       ColorType.backgroundPrimary,
@@ -517,12 +516,12 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     return GestureDetector(
       onTap: url.isNotEmpty
           ? () => widget.onReferenceTap?.call(
-                AssistantCitation(
-                  url: url,
-                  title: reference.title,
-                  source: reference.source,
-                ),
-              )
+              AssistantCitation(
+                url: url,
+                title: reference.title,
+                source: reference.source,
+              ),
+            )
           : null,
       behavior: HitTestBehavior.opaque,
       child: Column(
@@ -567,10 +566,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: EdgeInsets.only(
-              top: AppSpacing.xs,
-              right: AppSpacing.xs,
-            ),
+            padding: EdgeInsets.only(top: AppSpacing.xs, right: AppSpacing.xs),
             child: Container(
               width: AppSpacing.xs,
               height: AppSpacing.xs,

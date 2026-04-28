@@ -59,3 +59,18 @@ jobs:
       - name: Gate (quwoquan_app)
         run: |
           bash scripts/gate_repo.sh --scope app
+
+  ops_portal:
+    name: Delivery Gate — Ops Portal
+    runs-on: ubuntu-latest
+    needs: topology_regression
+    steps:
+      - uses: actions/checkout@v4
+      - name: 设置 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+          cache: npm
+      - name: Gate (ops-portal)
+        run: |
+          bash scripts/gate_repo.sh --scope portal

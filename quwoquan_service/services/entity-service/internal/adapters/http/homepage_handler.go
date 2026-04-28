@@ -337,7 +337,11 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 func writeRuntimeNotFound(w http.ResponseWriter, r *http.Request) {
 	rterr.WriteHTTPError(
 		w,
-		rterr.NewInvalidArgument(rterr.ModuleUser, "接口不存在", "route not found"),
+		rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleEntity, rterr.KindUser, "not_found"),
+			"接口不存在",
+			"route not found",
+		),
 		rterr.HTTPWriteOptionsFromRequest(r),
 	)
 }

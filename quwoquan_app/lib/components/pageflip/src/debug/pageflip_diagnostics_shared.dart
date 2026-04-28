@@ -20,7 +20,7 @@ List<ArticlePageData> buildPageflipDiagnosticPages() {
       title: 'SEAM TRACE / 01',
       summary:
           'Top-heavy layout with hero image, intro paragraphs, and a dense lower block.',
-      imageUrl: 'https://picsum.photos/seed/pageflip_diag_01/1200/760',
+      imageUrl: 'diagnostic://pageflip/01',
       imageLayout: 'wrapRight',
       caption: 'Figure 01A: current-page anchor.',
       sectionLabel: 'Header / Hero / Footer',
@@ -39,7 +39,7 @@ List<ArticlePageData> buildPageflipDiagnosticPages() {
       title: 'SEAM TRACE / 02',
       summary:
           'Wrapped image layout to expose fold-line behavior in the middle and lower-right areas.',
-      imageUrl: 'https://picsum.photos/seed/pageflip_diag_02/820/820',
+      imageUrl: 'diagnostic://pageflip/02',
       imageLayout: 'wrapRight',
       caption: 'Figure 02A: wrapped block stays synchronized.',
       sectionLabel: 'Wrap / Fold / Corner',
@@ -58,7 +58,7 @@ List<ArticlePageData> buildPageflipDiagnosticPages() {
       title: 'SEAM TRACE / 03',
       summary:
           'Center-dense page with section rhythm, full-width image, and a long bottom paragraph.',
-      imageUrl: 'https://picsum.photos/seed/pageflip_diag_03/1200/700',
+      imageUrl: 'diagnostic://pageflip/03',
       imageLayout: 'wrapLeft',
       caption: 'Figure 03A: center-weighted backface check.',
       sectionLabel: 'Center / Caption / Baseline',
@@ -77,7 +77,7 @@ List<ArticlePageData> buildPageflipDiagnosticPages() {
       title: 'SEAM TRACE / 04',
       summary:
           'Image-forward page with alternating paragraph lengths for front/back identity checks.',
-      imageUrl: 'https://picsum.photos/seed/pageflip_diag_04/1100/760',
+      imageUrl: 'diagnostic://pageflip/04',
       imageLayout: 'wrapRight',
       caption: 'Figure 04A: front/back identity check.',
       sectionLabel: 'Image / Backface / Reveal',
@@ -96,7 +96,7 @@ List<ArticlePageData> buildPageflipDiagnosticPages() {
       title: 'SEAM TRACE / 05',
       summary:
           'Closing page with note-like blocks, checklist rows, and a strong bottom marker.',
-      imageUrl: 'https://picsum.photos/seed/pageflip_diag_05/900/720',
+      imageUrl: 'diagnostic://pageflip/05',
       imageLayout: 'wrapLeft',
       caption: 'Figure 05A: final-page marker.',
       sectionLabel: 'List / Note / Marker',

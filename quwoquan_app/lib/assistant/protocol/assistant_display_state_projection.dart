@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
@@ -269,7 +270,12 @@ List<AssistantProcessDisplayBlock> _buildRetrievalBlocks(
   final acceptedCount = snapshot.acceptedDocumentCount > 0
       ? snapshot.acceptedDocumentCount
       : refs.length;
-  final processedCount = snapshot.processedDocumentCount > 0
+  final searchedCount = snapshot.searchedDocumentCount > 0
+      ? snapshot.searchedDocumentCount
+      : snapshot.processedDocumentCount;
+  final processedCount = searchedCount > 0
+      ? searchedCount
+      : snapshot.processedDocumentCount > 0
       ? snapshot.processedDocumentCount
       : acceptedCount;
   final statsLabel = (processedCount > 0 || acceptedCount > 0)
@@ -657,10 +663,12 @@ bool _hasVisibleProcessBlock(AssistantProcessDisplayBlock block) {
 }
 
 bool _hasVisibleAnswerBlock(AssistantAnswerDisplayBlock block) {
-  return block.title.trim().isNotEmpty ||
-      block.body.trim().isNotEmpty ||
+  return _normalizeMarkdownLeaf(block.title).isNotEmpty ||
+      _normalizeMarkdownLeaf(block.body).isNotEmpty ||
       block.items.any(
-        (item) => item.title.trim().isNotEmpty || item.body.trim().isNotEmpty,
+        (item) =>
+            _normalizeMarkdownLeaf(item.title).isNotEmpty ||
+            _normalizeMarkdownLeaf(item.body).isNotEmpty,
       );
 }
 
@@ -692,8 +700,8 @@ bool _isIgnorableNormalizationRune(int rune) {
 }
 
 String _renderAnswerBlockToMarkdown(AssistantAnswerDisplayBlock block) {
-  final title = block.title.trim();
-  final body = block.body.trim();
+  final title = _normalizeMarkdownLeaf(block.title);
+  final body = _normalizeMarkdownLeaf(block.body);
   switch (block.kind) {
     case DisplayBlockKind.markdown:
       return body;
@@ -732,8 +740,8 @@ String _renderAnswerBlockToMarkdown(AssistantAnswerDisplayBlock block) {
 }
 
 String _renderAnswerBlockToPlainText(AssistantAnswerDisplayBlock block) {
-  final title = block.title.trim();
-  final body = block.body.trim();
+  final title = _normalizePlainText(block.title);
+  final body = _normalizePlainText(block.body);
   switch (block.kind) {
     case DisplayBlockKind.markdown:
       return _normalizePlainText(_stripMarkdown(body));
@@ -770,17 +778,55 @@ String _normalizeMarkdownLeaf(String raw) {
   if (text.isEmpty) {
     return '';
   }
+  text = _repairPreviouslyBrokenMarkdown(text);
+  if (_isInternalProtocolText(text)) {
+    return '';
+  }
   text = text.replaceAll(RegExp(r'\n{3,}'), '\n\n');
   return text.trim();
 }
 
+String _repairPreviouslyBrokenMarkdown(String raw) {
+  var text = raw.replaceAll('\r\n', '\n');
+  text = text.replaceAllMapped(
+    RegExp(r'\|\s*:\s*\n\s*-\s*--'),
+    (_) => '| :---',
+  );
+  text = text.replaceAllMapped(
+    RegExp(r'([：:])\s*\n+\s*(\d+)\.\s+(\d+)(?=\D)'),
+    (match) =>
+        '${match.group(1) ?? ''}${match.group(2) ?? ''}.${match.group(3) ?? ''}',
+  );
+  return text.trim();
+}
+
 String _normalizePlainText(String raw) {
+  if (_isInternalProtocolText(raw)) {
+    return '';
+  }
   final stripped = _stripMarkdown(raw);
+  if (_isInternalProtocolText(stripped)) {
+    return '';
+  }
   return stripped
       .replaceAll('\r\n', '\n')
       .replaceAll(RegExp(r'[ \t]+'), ' ')
       .replaceAll(RegExp(r'\n{3,}'), '\n\n')
       .trim();
+}
+
+bool _isInternalProtocolText(String raw) {
+  final text = raw.trim();
+  if (text.isEmpty) return false;
+  if (AssistantContentFilters.isJsonEnvelope(text)) return true;
+  if ((text.startsWith('{') || text.startsWith('[')) &&
+      (text.contains('"contractId"') ||
+          text.contains('assistant_turn') ||
+          text.contains('"toolCalls"') ||
+          text.contains('"runArtifacts"'))) {
+    return true;
+  }
+  return false;
 }
 
 String _stripMarkdown(String raw) {

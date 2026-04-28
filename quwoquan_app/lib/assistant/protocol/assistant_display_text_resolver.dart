@@ -165,6 +165,7 @@ abstract final class AssistantDisplayTextResolver {
     text = _stripLeadingStructuredFragments(text);
     text = _stripResidualXmlToolFragments(text);
     text = _stripWrappedMarkdownEnvelope(text).trim();
+    text = _repairPreviouslyBrokenMarkdown(text);
     if (text.isEmpty) return '';
     if (AssistantContentFilters.isJsonEnvelope(text) ||
         AssistantContentFilters.isProgressPlaceholder(text)) {
@@ -175,6 +176,20 @@ abstract final class AssistantDisplayTextResolver {
     }
     text = _normalizeMarkdownStructuralSpacing(text, aggressive: false);
     return text;
+  }
+
+  static String _repairPreviouslyBrokenMarkdown(String raw) {
+    var text = raw.replaceAll('\r\n', '\n');
+    text = text.replaceAllMapped(
+      RegExp(r'\|\s*:\s*\n\s*-\s*--'),
+      (_) => '| :---',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'([：:])\s*\n+\s*(\d+)\.\s+(\d+)(?=\D)'),
+      (match) =>
+          '${match.group(1) ?? ''}${match.group(2) ?? ''}.${match.group(3) ?? ''}',
+    );
+    return text.trim();
   }
 
   static String stabilizeStreamingMarkdownCandidate(String raw) {
@@ -210,6 +225,19 @@ abstract final class AssistantDisplayTextResolver {
     required bool aggressive,
   }) {
     var text = raw.replaceAll('\r\n', '\n');
+    final protectedTableSeparators = <String>[];
+    text = text
+        .split('\n')
+        .map((line) {
+          if (!RegExp(r'^\s*\|[\s:|-]+\|\s*$').hasMatch(line)) {
+            return line;
+          }
+          final token =
+              '@@ASSISTANT_TABLE_SEPARATOR_${protectedTableSeparators.length}@@';
+          protectedTableSeparators.add(line);
+          return token;
+        })
+        .join('\n');
     text = text.replaceAllMapped(
       RegExp(r'(^|\n)(#{1,6})(?=[^\s#])', multiLine: true),
       (match) => '${match.group(1) ?? ''}${match.group(2) ?? ''} ',
@@ -223,7 +251,7 @@ abstract final class AssistantDisplayTextResolver {
       (match) => '${match.group(1) ?? ''}${match.group(2) ?? ''} ',
     );
     text = text.replaceAllMapped(
-      RegExp(r'([。！？!?：:])([ \t]*)(\d+)\.(?=\S)'),
+      RegExp(r'([。！？!?：:])([ \t]*)(\d+)\.(?!\d)(?=\S)'),
       (match) => '${match.group(1) ?? ''}\n\n${match.group(3) ?? ''}. ',
     );
     text = text.replaceAllMapped(
@@ -235,13 +263,19 @@ abstract final class AssistantDisplayTextResolver {
       (match) => '${match.group(1) ?? ''}- ',
     );
     text = text.replaceAllMapped(
-      RegExp(r'(^|\n)(\d+)\.(?=\S)', multiLine: true),
+      RegExp(r'(^|\n)(\d+)\.(?!\d)(?=\S)', multiLine: true),
       (match) => '${match.group(1) ?? ''}${match.group(2) ?? ''}. ',
     );
     if (aggressive) {
       text = text.replaceAllMapped(
         RegExp(r'^(\*\*.+\*\*)\n(?!\n)', multiLine: true),
         (match) => '${match.group(1) ?? ''}\n\n',
+      );
+    }
+    for (var index = 0; index < protectedTableSeparators.length; index++) {
+      text = text.replaceAll(
+        '@@ASSISTANT_TABLE_SEPARATOR_$index@@',
+        protectedTableSeparators[index],
       );
     }
     return text.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();

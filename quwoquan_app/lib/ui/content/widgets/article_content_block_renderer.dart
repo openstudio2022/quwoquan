@@ -252,16 +252,25 @@ class ArticleContentBlockRenderer extends StatelessWidget {
 class ArticleAdaptiveImage extends StatelessWidget {
   const ArticleAdaptiveImage({super.key, required this.imageUrl});
 
+  static const String diagnosticSchemePrefix = 'diagnostic://pageflip/';
+
   final String imageUrl;
 
   @override
   Widget build(BuildContext context) {
-    if (imageUrl.trim().isEmpty) {
+    final resolvedImageUrl = imageUrl.trim();
+    if (resolvedImageUrl.isEmpty) {
       return Container(color: CupertinoColors.systemGrey5.resolveFrom(context));
     }
-    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    if (resolvedImageUrl.startsWith(diagnosticSchemePrefix)) {
+      return _ArticleDiagnosticImage(
+        label: resolvedImageUrl.substring(diagnosticSchemePrefix.length),
+      );
+    }
+    if (resolvedImageUrl.startsWith('http://') ||
+        resolvedImageUrl.startsWith('https://')) {
       return CachedNetworkImage(
-        imageUrl: imageUrl,
+        imageUrl: resolvedImageUrl,
         imageBuilder: (context, imageProvider) => Image(
           image: imageProvider,
           fit: BoxFit.cover,
@@ -274,11 +283,66 @@ class ArticleAdaptiveImage extends StatelessWidget {
       );
     }
     return Image.file(
-      File(imageUrl),
+      File(resolvedImageUrl),
       fit: BoxFit.cover,
       filterQuality: FilterQuality.high,
       errorBuilder: (context, error, stackTrace) =>
           Container(color: CupertinoColors.systemGrey5.resolveFrom(context)),
+    );
+  }
+}
+
+class _ArticleDiagnosticImage extends StatelessWidget {
+  const _ArticleDiagnosticImage({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = <Color>[
+      AppColors.primaryColor,
+      AppColors.warning,
+      AppColors.success,
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: palette,
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Align(
+            alignment: Alignment.topLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.52,
+              heightFactor: 0.46,
+              child: ColoredBox(color: AppColors.white.withValues(alpha: 0.28)),
+            ),
+          ),
+          Align(
+            alignment: Alignment.bottomRight,
+            child: FractionallySizedBox(
+              widthFactor: 0.42,
+              heightFactor: 0.5,
+              child: ColoredBox(color: AppColors.black.withValues(alpha: 0.18)),
+            ),
+          ),
+          Center(
+            child: Text(
+              'PAGE $label',
+              style: TextStyle(
+                color: AppColors.white,
+                fontSize: AppTypography.iosTitle3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

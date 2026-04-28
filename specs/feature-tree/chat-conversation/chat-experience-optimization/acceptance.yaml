@@ -15,21 +15,43 @@ level_acceptance:
     test_layers:
       T2: required
       T4: required
+    tests:
+      - file: test/ui/chat/journeys/chat_conversation_list_journey_test.dart
+        functions: [会话列表正常加载并显示会话]
+      - file: test/ui/chat/widgets/chat_message_bubble_widget_test.dart
+        functions: [ChatMessageBubble]
   A2:
     criteria: 会话列表本地缓存后，冷启动到首屏渲染 ≤100ms，无白屏
     status: implemented
     test_layers:
       T2: required
       T4: required
+    tests:
+      - file: test/ui/chat/journeys/chat_conversation_list_journey_test.dart
+        functions: [会话列表正常加载并显示会话, 空状态展示]
+      - file: test/ui/chat/providers/chat_inbox_provider_test.dart
+        functions: [ChatInboxProvider]
   A3:
     criteria: 进入对话页可见对方用户头像（圆角方形），点击可跳转用户主页
     status: implemented
     test_layers:
       T2: required
       T3: required
+    tests:
+      - file: test/ui/chat/widgets/chat_detail_page_widget_test.dart
+        functions: [ChatDetailPage]
+      - file: test/cloud/chat/contract/chat_repository_contract_test.dart
+        functions: [ChatRepository]
   A4:
     criteria: 群管理页面完整：群主转让、管理员设置（最多 3 人）、群名称权限、隐私屏障权限
     status: implemented
     test_layers:
       T2: required
       T3: required
+    tests:
+      - file: test/ui/chat/journeys/chat_group_management_journey_test.dart
+        functions: [GroupManagePage, TransferOwnershipPage, GroupAdminsPage]
+      - file: services/chat-service/tests/group_lifecycle_contract_test.go
+        functions: [TestTransferOwnership, TestUpdateGroupAdmins]
+      - file: services/chat-service/tests/member_management_contract_test.go
+        functions: [TestAddMembersUpdatesCount, TestRemoveMember]

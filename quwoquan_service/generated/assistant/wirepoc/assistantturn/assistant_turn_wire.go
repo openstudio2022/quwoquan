@@ -127,7 +127,10 @@ type AssistantTurnOutput struct {
 	ToolCalls []AssistantTurnToolCall `json:"toolCalls"`
 	SlotState json.RawMessage `json:"slotState"`
 	SubagentPlan []json.RawMessage `json:"subagentPlan"`
-	PlanView json.RawMessage `json:"planView,omitempty"`
+	UnderstandingResult json.RawMessage `json:"understandingResult"`
+	TaskGraph json.RawMessage `json:"taskGraph"`
+	OrchestratorState json.RawMessage `json:"orchestratorState"`
+	TurnSynthesisState json.RawMessage `json:"turnSynthesisState"`
 	SkillRuns []json.RawMessage `json:"skillRuns"`
 	AggregationState json.RawMessage `json:"aggregationState,omitempty"`
 	Journey json.RawMessage `json:"journey"`

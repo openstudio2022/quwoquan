@@ -28,15 +28,14 @@ class AssistantPrivacyPolicyHintReadView {
     ],
     'maxWebRounds': 1,
     'redactBeforeWeb': true,
-    'allowedReferenceHosts':
-        AppConceptConstants.assistantReferenceHostWhitelist,
+    'blockedReferenceHosts':
+        AppConceptConstants.assistantReferenceHostBlocklist,
   };
 
   factory AssistantPrivacyPolicyHintReadView.fromOpenContextHints(
     Map<String, dynamic> hints,
   ) {
-    final nested =
-        (hints['privacyPolicy'] as Map?)?.cast<String, dynamic>();
+    final nested = (hints['privacyPolicy'] as Map?)?.cast<String, dynamic>();
     if (nested == null || nested.isEmpty) {
       return AssistantPrivacyPolicyHintReadView._(
         Map<String, dynamic>.from(defaultPrivacyPolicyMap()),
@@ -63,10 +62,9 @@ class AssistantPrivacyPolicyHintReadView {
   Map<String, dynamic> copyWithProviderLists({
     required List<String> allowedProviders,
     required List<String> blockedProviders,
-  }) =>
-      <String, dynamic>{
-        ..._raw,
-        'allowedProviders': allowedProviders,
-        'blockedProviders': blockedProviders,
-      };
+  }) => <String, dynamic>{
+    ..._raw,
+    'allowedProviders': allowedProviders,
+    'blockedProviders': blockedProviders,
+  };
 }

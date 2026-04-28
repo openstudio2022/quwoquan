@@ -38,15 +38,8 @@ class AppConceptConstants {
   static String get assistantClearMemoryWarning =>
       '此操作将彻底删除$assistantLabel记录的关于你的所有行为数据、偏好模型及历史总结，操作不可撤销。';
 
-  /// 助理参考外链默认白名单；可通过 contextScopeHint.privacyPolicy.allowedReferenceHosts 扩展或覆盖。
-  static const List<String> assistantReferenceHostWhitelist = <String>[
-    'wikipedia.org',
-    'baike.baidu.com',
-    'zhihu.com',
-    'juejin.cn',
-    'github.com',
-    'developer.mozilla.org',
-  ];
+  /// 助理参考外链默认黑名单；可通过 contextScopeHint.privacyPolicy.blockedReferenceHosts 覆盖。
+  static const List<String> assistantReferenceHostBlocklist = <String>[];
 
   // ==================== 内容与创作概念 ====================
   /// 微趣：快速记录当下（照片九宫格、纯文字、短视频）

@@ -16,11 +16,11 @@ class ReactObservationDto {
   final double freshnessHours;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'status': status,
-    'coverage': coverage,
-    'confidence': confidence,
-    'freshnessHours': freshnessHours,
-  };
+        'status': status,
+        'coverage': coverage,
+        'confidence': confidence,
+        'freshnessHours': freshnessHours,
+      };
 
   factory ReactObservationDto.fromJson(Map<String, dynamic> json) {
     return ReactObservationDto(

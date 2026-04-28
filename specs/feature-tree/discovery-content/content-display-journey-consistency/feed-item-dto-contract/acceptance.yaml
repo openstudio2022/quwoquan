@@ -1,6 +1,7 @@
 version: 1
 feature: feed-item-dto-contract
 level: "L3_story"
+archived: true
 template: A1-A8
 execution:
   local_gate: make gate

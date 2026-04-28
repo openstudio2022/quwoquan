@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -31,6 +33,8 @@ class _AssistantReferenceWebViewPageState
   bool _isLoading = true;
   bool _hasError = false;
   bool? _webViewSurfaceIsDark;
+  int _loadingProgress = 6;
+  Timer? _hideProgressTimer;
 
   @override
   void initState() {
@@ -40,25 +44,42 @@ class _AssistantReferenceWebViewPageState
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
+          onProgress: (progress) {
+            if (!mounted) return;
+            _hideProgressTimer?.cancel();
+            setState(() {
+              _loadingProgress = progress.clamp(0, 100);
+              _isLoading = _loadingProgress < 100;
+            });
+            if (_loadingProgress >= 100) {
+              _scheduleHideProgress();
+            }
+          },
           onPageStarted: (_) {
             if (!mounted) return;
+            _hideProgressTimer?.cancel();
             setState(() {
               _isLoading = true;
               _hasError = false;
+              _loadingProgress = 6;
             });
           },
           onPageFinished: (_) {
             if (!mounted) return;
+            _hideProgressTimer?.cancel();
             setState(() {
-              _isLoading = false;
               _hasError = false;
+              _loadingProgress = 100;
             });
+            _scheduleHideProgress();
           },
           onWebResourceError: (_) {
             if (!mounted) return;
+            _hideProgressTimer?.cancel();
             setState(() {
               _isLoading = false;
               _hasError = true;
+              _loadingProgress = 0;
             });
           },
         ),
@@ -67,10 +88,15 @@ class _AssistantReferenceWebViewPageState
   }
 
   @override
+  void dispose() {
+    _hideProgressTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     if (_webViewSurfaceIsDark != isDark) {
       _webViewSurfaceIsDark = isDark;
       _controller.setBackgroundColor(
@@ -84,21 +110,12 @@ class _AssistantReferenceWebViewPageState
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final title = widget.source.trim().isNotEmpty
-        ? widget.source.trim()
-        : widget.title.trim().isNotEmpty
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final title = widget.title.trim().isNotEmpty
         ? widget.title.trim()
+        : widget.source.trim().isNotEmpty
+        ? widget.source.trim()
         : UITextConstants.assistantReferenceSectionTitle;
-    final cardSurface =
-        AppColorsFunctional.getColor(isDark, ColorType.chromeInfoCardBackground);
-    final cardBorder =
-        AppColorsFunctional.getColor(isDark, ColorType.chromeInfoCardBorder);
-    final primaryFg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final secondaryFg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
     return AppScaffold(
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: AppNavigationBar(
@@ -112,100 +129,28 @@ class _AssistantReferenceWebViewPageState
           icon: CupertinoIcons.back,
           onPressed: () => Navigator.of(context).pop(),
         ),
-        trailing: _isLoading
-            ? const Padding(
-                padding: EdgeInsetsDirectional.only(end: 4),
-                child: CupertinoActivityIndicator(),
-              )
-            : null,
       ),
       child: SafeArea(
         top: false,
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              margin: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
-                AppSpacing.sm,
-                AppSpacing.containerMd,
-                AppSpacing.sm,
-              ),
-              padding: EdgeInsets.all(AppSpacing.containerSm),
-              decoration: BoxDecoration(
-                color: cardSurface,
-                borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                border: Border.all(color: cardBorder),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.title.trim().isNotEmpty) ...[
-                    Text(
-                      widget.title.trim(),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        fontWeight: FontWeight.w600,
-                        color: primaryFg,
-                        height: AppTypography.bodyLineHeight,
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.xs),
-                  ],
-                  Text(
-                    widget.initialUrl,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.sm,
-                      color: secondaryFg,
-                    ),
-                  ),
-                ],
+            SizedBox(
+              height: AppSpacing.xs,
+              child: AnimatedOpacity(
+                opacity: _isLoading ? 1 : 0,
+                duration: const Duration(milliseconds: 120),
+                child: LinearProgressIndicator(
+                  value: _loadingProgress / 100,
+                  minHeight: AppSpacing.xs,
+                  backgroundColor: AppColors.transparent,
+                  color: AppColors.primaryColor,
+                ),
               ),
             ),
             Expanded(
-              child: Container(
-                margin: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  0,
-                  AppSpacing.containerMd,
-                  AppSpacing.containerMd,
-                ),
-                decoration: BoxDecoration(
-                  color: cardSurface,
-                  borderRadius: BorderRadius.circular(
-                    AppSpacing.largeBorderRadius,
-                  ),
-                  border: Border.all(color: cardBorder),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: _hasError
-                          ? _ReferenceLoadError(
-                              onRetry: _reload,
-                              host: _uri.host,
-                            )
-                          : WebViewWidget(controller: _controller),
-                    ),
-                    if (_isLoading)
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: LinearProgressIndicator(
-                          minHeight: 2,
-                          backgroundColor: AppColors.transparent,
-                          color: AppColors.primaryColor,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+              child: _hasError
+                  ? _ReferenceLoadError(onRetry: _reload, host: _uri.host)
+                  : WebViewWidget(controller: _controller),
             ),
           ],
         ),
@@ -214,11 +159,22 @@ class _AssistantReferenceWebViewPageState
   }
 
   void _reload() {
+    _hideProgressTimer?.cancel();
     setState(() {
       _isLoading = true;
       _hasError = false;
+      _loadingProgress = 6;
     });
     _controller.loadRequest(_uri);
+  }
+
+  void _scheduleHideProgress() {
+    _hideProgressTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    });
   }
 }
 
@@ -230,12 +186,15 @@ class _ReferenceLoadError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final muted =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
     return Center(
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
@@ -262,10 +221,7 @@ class _ReferenceLoadError extends StatelessWidget {
                   ? host.trim()
                   : UITextConstants.assistantReferenceSectionTitle,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: muted,
-              ),
+              style: TextStyle(fontSize: AppTypography.sm, color: muted),
             ),
             SizedBox(height: AppSpacing.md),
             CupertinoButton.filled(

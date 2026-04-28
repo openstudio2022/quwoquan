@@ -1,9 +1,9 @@
 import { Bell, ChevronDown, Search } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 
-import { portalMenu } from '../../generated/control-plane/portalMenu.generated';
-import { portalShell } from '../../generated/control-plane/portalShell.generated';
-import { getPortalIcon } from '../navigation/icons';
+import { portalMenu } from '../../generated/control-plane/portalMenu.generated.js';
+import { portalShell } from '../../generated/control-plane/portalShell.generated.js';
+import { getPortalIcon } from '../navigation/icons.js';
 
 function buildMenuGroups() {
   const roots = [...portalMenu.menus]

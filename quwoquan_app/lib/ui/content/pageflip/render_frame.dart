@@ -82,6 +82,7 @@ class StPageFlipRenderFrame {
     required this.timeline,
     this.reversePose,
     this.backwardLeafFrame,
+    this.backwardProjectedFrame,
   });
 
   final ui.Offset localPagePoint;
@@ -98,11 +99,38 @@ class StPageFlipRenderFrame {
   final StPageFlipTimeline timeline;
   final ReverseFlipPose? reversePose;
   final ArticlePageBackwardLeafFrame? backwardLeafFrame;
+  final ArticlePageBackwardProjectedFrame? backwardProjectedFrame;
 
   bool get usesThreeStageBackflow =>
       direction == StPageFlipDirection.back &&
       renderDirection == StPageFlipDirection.forward &&
       reversePose != null;
+}
+
+@immutable
+class ArticlePageBackwardProjectedFrame {
+  const ArticlePageBackwardProjectedFrame({
+    required this.foldLine,
+    required this.projectedRightEdgeLine,
+    required this.previousBackPolygon,
+    required this.previousFrontPolygon,
+    required this.currentResidualPolygon,
+    required this.edgeEnteredPage,
+    required this.foldLineSource,
+    required this.edgeLineSource,
+  });
+
+  final (ui.Offset, ui.Offset) foldLine;
+  final (ui.Offset, ui.Offset) projectedRightEdgeLine;
+  final List<ui.Offset> previousBackPolygon;
+  final List<ui.Offset> previousFrontPolygon;
+  final List<ui.Offset> currentResidualPolygon;
+  final bool edgeEnteredPage;
+  final String foldLineSource;
+  final String edgeLineSource;
+
+  int get previousBackVertexCount => previousBackPolygon.length;
+  int get previousFrontVertexCount => previousFrontPolygon.length;
 }
 
 enum ArticlePageBackwardLeafPhase { emerge, unroll, settle }
@@ -400,7 +428,7 @@ ui.Offset resolveBackwardReplayLocalPagePoint({
   required ui.Size pageSize,
 }) {
   return ui.Offset(
-    pageSize.width - localPagePoint.dx.clamp(0.0, pageSize.width),
+    (pageSize.width + localPagePoint.dx).clamp(0.0, pageSize.width).toDouble(),
     localPagePoint.dy.clamp(0.0, pageSize.height),
   );
 }

@@ -1,6 +1,7 @@
 version: 1
 feature: rec-model-service
 level: "L2_feature"
+archived: true
 template: A1-A8
 tree_context:
   feature_path: capability.recommendation-platform.component.rec-model-service

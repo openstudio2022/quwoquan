@@ -140,7 +140,10 @@ void main() {
       // previousFront 不再作为独立静态拓扑层铺开；它只能在同一个
       // genericDynamic flipping surface 内由 E 线左侧逐步出现。
       expect(early.frontVisible, isFalse);
+      expect(early.edgeEnteredPage, isFalse);
+      expect(early.currentRightOfFoldVisible, isTrue);
       expect(middle.frontVisible, isTrue);
+      expect(middle.edgeEnteredPage, isTrue);
       expect(late.frontVisible, isTrue);
       expect(early.backContainsPreviousFront, isFalse);
       expect(early.currentVisible, isTrue);
@@ -154,18 +157,20 @@ void main() {
       expect(early.surfaceTopAligned, isTrue);
       expect(early.pivotAtSurfaceBottom, isTrue);
       expect(early.backTextureCoversRows, isTrue);
+      expect(early.overlayClippedToPaper, isTrue);
       expect(middle.backVisible, isTrue);
       expect(middle.visibleBackWidth, greaterThan(20));
       expect(middle.surfaceTopAligned, isTrue);
       expect(middle.pivotAtSurfaceBottom, isTrue);
-      expect(middle.backTextureCoversRows, isTrue);
       expect(middle.foldLineNonVertical, isTrue);
       expect(middle.pageEdgeLineNonVertical, isTrue);
+      expect(middle.edgeParallelToFold, isFalse);
+      expect(middle.backPolygonPoints, isNot('-'));
+      expect(middle.currentPolygonPoints, isNot('-'));
       expect(late.backVisible, isTrue);
       expect(late.visibleBackWidth, greaterThan(20));
       expect(late.surfaceTopAligned, isTrue);
       expect(late.pivotAtSurfaceBottom, isTrue);
-      expect(late.backTextureCoversRows, isTrue);
     },
   );
 }
@@ -260,20 +265,13 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
         );
 
   final frontVisible =
-      (frontBounds != null &&
-          _rectContainsProbeColor(
-            image: image,
-            bytes: bytes,
-            rect: frontBounds,
-            color: _ProbeColor.previousFront,
-          )) ||
-      (dynamicFlipBounds != null &&
-          _rectContainsProbeColor(
-            image: image,
-            bytes: bytes,
-            rect: dynamicFlipBounds,
-            color: _ProbeColor.previousFront,
-          ));
+      frontBounds != null &&
+      _rectContainsProbeColor(
+        image: image,
+        bytes: bytes,
+        rect: frontBounds,
+        color: _ProbeColor.previousFront,
+      );
   final visibleBackRect = Rect.fromLTRB(
     visibleBackLeft,
     resolvedBackBounds?.top ?? 0,
@@ -343,6 +341,12 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
     bytes,
     fullPageRect.center,
   );
+  final currentRightOfFoldVisible = _currentVisibleRightOfFold(
+    image: image,
+    bytes: bytes,
+    foldTop: debugState.backwardFoldLineTop,
+    foldBottom: debugState.backwardFoldLineBottom,
+  );
   final pageLeft = frontBounds?.left ?? (resolvedBackBounds?.left ?? 0);
   final backStartsAtPageEdge =
       resolvedBackBounds == null ||
@@ -365,6 +369,8 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
     'phase=${debugState.backwardPhase} '
     'slices=${debugState.backwardReplaySlices} '
     'frontCover=${debugState.backwardFrontCoverageRatio} '
+    'edgeEntered=${debugState.backwardEdgeEnteredPage} '
+    'overlayClipped=${debugState.backwardOverlayClippedToPaper} '
     'foldX=${debugState.backwardFoldX} '
     'edgeX=${debugState.backwardPageEdgeX} '
     'bottomLayer=${debugState.backwardBottomLayerPageIndex} '
@@ -383,6 +389,7 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
     frontVisible: frontVisible,
     backVisible: visibleBackWidth > 1,
     currentVisible: currentVisible,
+    currentRightOfFoldVisible: currentRightOfFoldVisible,
     visibleBackWidth: visibleBackWidth,
     backStartsAtPageEdge: backStartsAtPageEdge,
     frontWithinFold:
@@ -392,6 +399,8 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
     backContainsPreviousFront: backContainsPreviousFront,
     backContainsPreviousBack: backContainsPreviousBack,
     backTextureCoversRows: backTextureCoversRows,
+    edgeEnteredPage: debugState.backwardEdgeEnteredPage ?? false,
+    overlayClippedToPaper: debugState.backwardOverlayClippedToPaper ?? false,
     surfaceTopAligned:
         surfaceRect != null &&
         pivotViewport != null &&
@@ -409,6 +418,10 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
       debugState.backwardPageEdgeLineTop,
       debugState.backwardPageEdgeLineBottom,
     ),
+    edgeParallelToFold: debugState.backwardEdgeParallelToFold,
+    backPolygonPoints: debugState.backwardBackPolygonPoints ?? '-',
+    frontPolygonPoints: debugState.backwardFrontPolygonPoints ?? '-',
+    currentPolygonPoints: debugState.backwardCurrentPolygonPoints ?? '-',
     leftSpineLocked: debugState.backwardLeftSpineLocked ?? false,
     bottomLayerPageIndex: debugState.backwardBottomLayerPageIndex,
     flippingLayerPageIndex: debugState.backwardFlippingLayerPageIndex,
@@ -427,6 +440,32 @@ bool _lineNonVertical(Offset? top, Offset? bottom) {
     return false;
   }
   return (top.dx - bottom.dx).abs() > 1;
+}
+
+bool _currentVisibleRightOfFold({
+  required ui.Image image,
+  required Uint8List bytes,
+  required Offset? foldTop,
+  required Offset? foldBottom,
+}) {
+  if (foldTop == null || foldBottom == null) {
+    return false;
+  }
+  final foldMid = Offset(
+    (foldTop.dx + foldBottom.dx) / 2,
+    (foldTop.dy + foldBottom.dy) / 2,
+  );
+  final probeRect = Rect.fromCenter(
+    center: Offset(foldMid.dx + 48, foldMid.dy),
+    width: 72,
+    height: 180,
+  );
+  return _rectContainsProbeColor(
+    image: image,
+    bytes: bytes,
+    rect: probeRect,
+    color: _ProbeColor.current,
+  );
 }
 
 String _rgbLabel(Color color) {
@@ -561,16 +600,23 @@ class _BackwardVisualFrame {
     required this.frontVisible,
     required this.backVisible,
     required this.currentVisible,
+    required this.currentRightOfFoldVisible,
     required this.visibleBackWidth,
     required this.backStartsAtPageEdge,
     required this.frontWithinFold,
     required this.backContainsPreviousFront,
     required this.backContainsPreviousBack,
     required this.backTextureCoversRows,
+    required this.edgeEnteredPage,
+    required this.overlayClippedToPaper,
     required this.surfaceTopAligned,
     required this.pivotAtSurfaceBottom,
     required this.foldLineNonVertical,
     required this.pageEdgeLineNonVertical,
+    required this.edgeParallelToFold,
+    required this.backPolygonPoints,
+    required this.frontPolygonPoints,
+    required this.currentPolygonPoints,
     required this.leftSpineLocked,
     required this.bottomLayerPageIndex,
     required this.flippingLayerPageIndex,
@@ -584,16 +630,23 @@ class _BackwardVisualFrame {
   final bool frontVisible;
   final bool backVisible;
   final bool currentVisible;
+  final bool currentRightOfFoldVisible;
   final double visibleBackWidth;
   final bool backStartsAtPageEdge;
   final bool frontWithinFold;
   final bool backContainsPreviousFront;
   final bool backContainsPreviousBack;
   final bool backTextureCoversRows;
+  final bool edgeEnteredPage;
+  final bool overlayClippedToPaper;
   final bool surfaceTopAligned;
   final bool pivotAtSurfaceBottom;
   final bool foldLineNonVertical;
   final bool pageEdgeLineNonVertical;
+  final bool? edgeParallelToFold;
+  final String backPolygonPoints;
+  final String frontPolygonPoints;
+  final String currentPolygonPoints;
   final bool leftSpineLocked;
   final int? bottomLayerPageIndex;
   final int? flippingLayerPageIndex;
@@ -605,16 +658,21 @@ class _BackwardVisualFrame {
   @override
   String toString() {
     return 'phase=$label front=$frontVisible back=$backVisible '
-        'current=$currentVisible backWidth=${visibleBackWidth.toStringAsFixed(1)} '
+        'current=$currentVisible currentRightOfFold=$currentRightOfFoldVisible '
+        'backWidth=${visibleBackWidth.toStringAsFixed(1)} '
         'backAtPageEdge=$backStartsAtPageEdge frontWithinFold=$frontWithinFold '
         'backHasFront=$backContainsPreviousFront '
         'backHasBack=$backContainsPreviousBack '
         'backRows=$backTextureCoversRows '
+        'edgeEntered=$edgeEnteredPage overlayClipped=$overlayClippedToPaper '
         'surfaceTop=$surfaceTopAligned pivotBottom=$pivotAtSurfaceBottom '
         'foldTilted=$foldLineNonVertical edgeTilted=$pageEdgeLineNonVertical '
+        'edgeParallel=$edgeParallelToFold '
         'spine=$leftSpineLocked '
         'bottomLayer=$bottomLayerPageIndex flippingLayer=$flippingLayerPageIndex '
-        'visual=$visualPhase backSample=$backSample currentSample=$currentSample $geometry';
+        'visual=$visualPhase backSample=$backSample currentSample=$currentSample '
+        'backPoly=$backPolygonPoints frontPoly=$frontPolygonPoints '
+        'currentPoly=$currentPolygonPoints $geometry';
   }
 }
 

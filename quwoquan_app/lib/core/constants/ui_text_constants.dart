@@ -558,11 +558,11 @@ class UITextConstants {
   static const String assistantProcessStatusCompleted = '已完成';
   static const String assistantProcessStatusSkipped = '已跳过';
   static const String assistantProcessStatusFailed = '待补稳';
-  static const String assistantProcessProcessedCountTemplate = '处理 %s 篇';
+  static const String assistantProcessProcessedCountTemplate = '搜索 %s 篇';
   static const String assistantProcessAcceptedCountChipTemplate = '接纳 %s 篇';
   static const String assistantProcessReferenceCountTemplate = '接纳 %s 篇资料';
   static const String assistantProcessReferenceDigestTemplate =
-      '处理了 %s 篇，接纳了 %s 篇';
+      '搜索了 %s 篇，接纳了 %s 篇';
   static const String assistantProcessStepProgressTemplate = '已完成 %s/%s 步';
   static const String assistantProcessRunningSummary = '处理过程';
   static const String assistantProcessCompletedSummary = '已完成处理';

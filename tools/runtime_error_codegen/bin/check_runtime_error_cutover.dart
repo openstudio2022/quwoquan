@@ -77,9 +77,25 @@ void main() {
       repoRoot,
       relativePath: 'changes',
       pattern: RegExp(
-        r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class)\b',
+        r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
       ),
       message: 'change record uses legacy runtime error semantics',
+    ),
+    ..._reject(
+      repoRoot,
+      relativePath: 'openspec/changes',
+      pattern: RegExp(
+        r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
+      ),
+      message: 'openspec change record uses legacy runtime error semantics',
+    ),
+    ..._reject(
+      repoRoot,
+      relativePath: 'quwoquan_service/changes',
+      pattern: RegExp(
+        r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
+      ),
+      message: 'service change record uses legacy runtime error semantics',
     ),
     ..._reject(
       repoRoot,
@@ -130,6 +146,15 @@ void main() {
       relativePath: 'quwoquan_app/assets/assistant',
       pattern: RegExp(r'\b(retryable|isRetryable|retry_after_seconds)\b'),
       message: 'assistant assets use legacy retryable naming',
+    ),
+    ..._reject(
+      repoRoot,
+      relativePath: 'quwoquan_app/assets/assistant/prompts',
+      pattern: RegExp(
+        r'\b(failureReason|retryProvider|retryToolName|stable_degraded_answer)\b',
+      ),
+      message:
+          'assistant prompt exposes legacy error/degraded/retry contract field',
     ),
     ..._reject(
       repoRoot,
@@ -190,6 +215,7 @@ void main() {
       ),
       message: 'ops page import must be NodeNext explicit',
     ),
+    ..._rejectOpsExtensionlessRelativeImports(repoRoot),
     ..._reject(
       repoRoot,
       relativePath: 'apps/ops-portal/src/domains',
@@ -377,6 +403,42 @@ List<String> _rejectGoNewAppErrorBoolArgs(Directory repoRoot) {
     }
   }
   return failures;
+}
+
+List<String> _rejectOpsExtensionlessRelativeImports(Directory repoRoot) {
+  final root = Directory('${repoRoot.path}/apps/ops-portal/src');
+  if (!root.existsSync()) return const <String>[];
+  final failures = <String>[];
+  final importPattern = RegExp(
+    r'\b(?:import|export)\b[\s\S]*?\bfrom\s+["'
+    "'"
+    r'](\.{1,2}/[^"'
+    "'"
+    r']+)["'
+    "'"
+    r']',
+  );
+  for (final entity in root.listSync(recursive: true, followLinks: false)) {
+    if (entity is! File) continue;
+    if (!entity.path.endsWith('.ts') && !entity.path.endsWith('.tsx')) {
+      continue;
+    }
+    if (_isIgnored(entity.path)) continue;
+    final text = _readUtf8(entity);
+    if (text == null) continue;
+    for (final match in importPattern.allMatches(text)) {
+      final specifier = match.group(1)!;
+      if (specifier.endsWith('.js') ||
+          specifier.endsWith('.css') ||
+          specifier.endsWith('.json')) {
+        continue;
+      }
+      failures.add(
+        'ops source uses extensionless NodeNext import ${specifier}: ${entity.path.substring(repoRoot.path.length + 1)}',
+      );
+    }
+  }
+  return failures.toSet().toList()..sort();
 }
 
 List<String> _topLevelArgs(String callBody) {

@@ -3,6 +3,7 @@ feature: location-nearby-search-gateway
 level: "L3_story"
 template: A1-A8
 status: specified
+archived: true
 level_acceptance:
   A1:
     criteria: GET /v1/integration/location/nearby 契约完整并通过 metadata 验证

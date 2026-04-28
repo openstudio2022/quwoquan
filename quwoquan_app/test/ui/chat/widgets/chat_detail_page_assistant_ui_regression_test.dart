@@ -173,7 +173,10 @@ void main() {
     await tester.pumpWidget(_bubbleHarness(message));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text(UITextConstants.assistantProcessCompletedSummary), findsOneWidget);
+    expect(
+      find.text(UITextConstants.assistantProcessCompletedSummary),
+      findsOneWidget,
+    );
     expect(find.text('耗时 4 秒'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
@@ -254,15 +257,18 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text(UITextConstants.assistantProcessCompletedSummary), findsOneWidget);
-    expect(find.text('处理 1 篇'), findsOneWidget);
+    expect(
+      find.text(UITextConstants.assistantProcessCompletedSummary),
+      findsOneWidget,
+    );
+    expect(find.text('搜索 1 篇'), findsOneWidget);
     expect(find.text('接纳 1 篇'), findsOneWidget);
     expect(find.text('耗时 4 秒'), findsOneWidget);
 
     await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('正在整理可直接参考的结论'), findsAtLeastNWidgets(1));
-    await tester.tap(find.textContaining('处理了 1 篇').last);
+    await tester.tap(find.textContaining('搜索了 1 篇').last);
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('1. 中国气象局 · weather.cma.cn'), findsOneWidget);
@@ -408,10 +414,7 @@ void main() {
       findsNothing,
     );
     expect(find.textContaining('先拆清楚天气和出游两个判断面'), findsAtLeastNWidgets(1));
-    expect(
-      find.textContaining('已经交叉核实关键差异'),
-      findsAtLeastNWidgets(1),
-    );
+    expect(find.textContaining('已经交叉核实关键差异'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('助理 Markdown 与 card block 按层次渲染', (tester) async {
@@ -665,8 +668,7 @@ void main() {
         'displayPlainText': '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
         'runArtifacts': <String, dynamic>{
           'displayMarkdown': structuredMarkdown,
-          'displayPlainText':
-              '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
+          'displayPlainText': '深圳今天有雨，外出建议带伞。如果你会晚点出门，带把折叠伞更稳妥。',
           'answerEvidenceBindings': <Map<String, dynamic>>[
             <String, dynamic>{
               'bindingId': 'binding_weather_1',

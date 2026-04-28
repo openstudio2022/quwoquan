@@ -1,6 +1,6 @@
 feature: runtime-skillstore
 level: "L2_feature"
-archived: false
+archived: true
 execution:
   local_gate: make gate
   full_gate: make gate-full

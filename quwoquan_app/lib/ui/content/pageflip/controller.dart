@@ -157,13 +157,18 @@ class StPageFlipController {
     required StPageFlipLayout layout,
     int? currentPage,
   }) {
+    final targetPage = currentPage ?? _currentPageIndex;
+    final preservesCurrentPage = targetPage == _currentPageIndex;
+    final preservesSpread =
+        spreadModel.pageCount == _spreadModel.pageCount &&
+        spreadModel.showCover == _spreadModel.showCover;
+    final preservesLayout = _sameLayout(layout, _layout);
     _spreadModel = spreadModel;
     _layout = layout;
-    if (currentPage != null) {
-      setCurrentPage(currentPage);
+    if (preservesCurrentPage && preservesSpread && preservesLayout) {
       return;
     }
-    setCurrentPage(_currentPageIndex);
+    setCurrentPage(targetPage);
   }
 
   void setCurrentPage(int pageIndex) {
@@ -624,6 +629,17 @@ class StPageFlipController {
     _corner = null;
     _shadow = null;
     _renderFrame = null;
+  }
+
+  bool _sameLayout(StPageFlipLayout a, StPageFlipLayout b) {
+    final aBounds = a.bounds;
+    final bBounds = b.bounds;
+    return a.orientation == b.orientation &&
+        aBounds.left == bBounds.left &&
+        aBounds.top == bBounds.top &&
+        aBounds.width == bBounds.width &&
+        aBounds.height == bBounds.height &&
+        aBounds.pageWidth == bBounds.pageWidth;
   }
 
   StPageFlipCalculation _createCalculation({

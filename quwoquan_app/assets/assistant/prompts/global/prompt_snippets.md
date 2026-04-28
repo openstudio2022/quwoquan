@@ -103,7 +103,7 @@ failureMessage={{failureMessage}}
 authorityDomains={{authorityDomains}}
 snippets={{snippets}}
 reflectionRound={{reflectionRound}}/{{allowedReflectionRounds}}
-retryToolName={{retryToolName}}
+nextToolName={{nextToolName}}
 <!-- snippet:end -->
 
 <!-- snippet:force_answer_conclusion -->
@@ -118,7 +118,7 @@ decision=answer
 
 <!-- snippet:retrieval_unavailable_notice -->
 mode=retrieval_unavailable
-fallback=stable_degraded_answer
+fallback=structured_fallback_answer
 <!-- snippet:end -->
 
 <!-- snippet:system_context_unavailable_notice -->

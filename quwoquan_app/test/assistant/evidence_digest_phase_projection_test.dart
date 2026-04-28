@@ -29,6 +29,7 @@ void main() {
         message: 'ok',
         data: <String, dynamic>{
           'summary': 'stale trace-derived summary',
+          'candidateCount': 12,
           'totalReferences': 4,
           'references': <Map<String, dynamic>>[
             <String, dynamic>{
@@ -96,6 +97,7 @@ void main() {
     final nextState = output.state;
     expect(nextState, isNotNull);
     expect(nextState!.executionPhaseSnapshot, isA<ExecutionPhaseSuccess>());
+    expect(nextState.retrievalProcessing.searchedDocumentCount, 12);
     expect(nextState.retrievalProcessing.processedDocumentCount, 4);
     expect(nextState.retrievalProcessing.acceptedDocumentCount, 1);
     expect(

@@ -118,6 +118,7 @@ Map<String, dynamic> _canonicalAssistantMessage({
   String content = '深圳今天晴，25°C，适合出行。',
   String? id,
   String? timestamp,
+  String? sourceQuery,
   String? understandingSummary,
 }) {
   final journey = _canonicalJourney();
@@ -136,6 +137,8 @@ Map<String, dynamic> _canonicalAssistantMessage({
     'role': 'assistant',
     if ((id ?? '').trim().isNotEmpty) 'id': id!.trim(),
     if ((timestamp ?? '').trim().isNotEmpty) 'timestamp': timestamp!.trim(),
+    if ((sourceQuery ?? '').trim().isNotEmpty)
+      'sourceQuery': sourceQuery!.trim(),
     'content': content,
     ...buildPersistedAssistantTurnFields(
       journey: journey,
@@ -216,17 +219,54 @@ void main() {
     expect(assistantMsg.containsKey('streamFinalAnswer'), isFalse);
   });
 
-  test('Rule-2b: load() 会把已完成 canonical assistant turn 的 streaming 残留清掉', () async {
+  test(
+    'Rule-2b: load() 会把已完成 canonical assistant turn 的 streaming 残留清掉',
+    () async {
+      final sm = await _loadFrom(tempDir, {
+        'version': assistantHistoryStorageVersion,
+        'activeSessionId': 'assistant',
+        'sessions': {
+          'assistant': [
+            {'role': 'user', 'content': '深圳天气'},
+            {
+              ..._canonicalAssistantMessage(),
+              'streaming': true,
+              'streamFinalAnswer': '正在流式输出中的旧残留',
+            },
+          ],
+        },
+        'metadata': const <String, dynamic>{},
+      });
+
+      final messages = sm.getOrCreateSession('assistant');
+      expect(messages.length, equals(2));
+      final assistantMsg = messages.last;
+      expect(assistantMsg['streaming'], isFalse);
+      expect(assistantMsg.containsKey('streamFinalAnswer'), isFalse);
+      expect(
+        resolvePersistedAssistantDisplayPlainText(assistantMsg),
+        contains('深圳今天晴'),
+      );
+    },
+  );
+
+  test('Rule-2c: load() 会从旧 journey 摘要修复缺失用户消息', () async {
     final sm = await _loadFrom(tempDir, {
       'version': assistantHistoryStorageVersion,
       'activeSessionId': 'assistant',
       'sessions': {
         'assistant': [
-          {'role': 'user', 'content': '深圳天气'},
           {
             ..._canonicalAssistantMessage(),
-            'streaming': true,
-            'streamFinalAnswer': '正在流式输出中的旧残留',
+            'journey': {
+              'stages': [
+                {
+                  'stageId': 'analyze',
+                  'status': 'completed',
+                  'summary': '我先确认你的核心问题：比较三家云厂商的 AI 能力',
+                },
+              ],
+            },
           },
         ],
       },
@@ -234,11 +274,10 @@ void main() {
     });
 
     final messages = sm.getOrCreateSession('assistant');
-    expect(messages.length, equals(2));
-    final assistantMsg = messages.last;
-    expect(assistantMsg['streaming'], isFalse);
-    expect(assistantMsg.containsKey('streamFinalAnswer'), isFalse);
-    expect(resolvePersistedAssistantDisplayPlainText(assistantMsg), contains('深圳今天晴'));
+    expect(messages, hasLength(2));
+    expect(messages.first['role'], equals('user'));
+    expect(messages.first['content'], equals('比较三家云厂商的 AI 能力'));
+    expect(messages.last['role'], equals('assistant'));
   });
 
   test('Rule-3: 当前 v1 assistant 历史不满足 canonical schema 时整段清理', () async {
@@ -332,47 +371,50 @@ void main() {
     expect(summary.contains('{{'), isFalse);
   });
 
-  test('Rule-5b: summarizeRecent(roundsLimit) 会优先输出结构化 recent rounds transcript', () async {
-    final sm = await _loadFrom(tempDir, {
-      'version': assistantHistoryStorageVersion,
-      'activeSessionId': 'assistant',
-      'sessions': {
-        'assistant': [
-          {'role': 'user', 'content': '第一问'},
-          {
-            ..._canonicalAssistantMessage(content: '第一答'),
-            'id': 'turn_1',
-            'runArtifacts': {
-              ...((_canonicalAssistantMessage(content: '第一答')['runArtifacts']
-                      as Map<String, dynamic>)),
-              'understandingSnapshot': const <String, dynamic>{
-                'userFacingSummary': '第一轮理解摘要',
+  test(
+    'Rule-5b: summarizeRecent(roundsLimit) 会优先输出结构化 recent rounds transcript',
+    () async {
+      final sm = await _loadFrom(tempDir, {
+        'version': assistantHistoryStorageVersion,
+        'activeSessionId': 'assistant',
+        'sessions': {
+          'assistant': [
+            {'role': 'user', 'content': '第一问'},
+            {
+              ..._canonicalAssistantMessage(content: '第一答'),
+              'id': 'turn_1',
+              'runArtifacts': {
+                ...((_canonicalAssistantMessage(content: '第一答')['runArtifacts']
+                    as Map<String, dynamic>)),
+                'understandingSnapshot': const <String, dynamic>{
+                  'userFacingSummary': '第一轮理解摘要',
+                },
               },
             },
-          },
-          {'role': 'user', 'content': '第二问'},
-          {
-            ..._canonicalAssistantMessage(content: '第二答'),
-            'id': 'turn_2',
-            'runArtifacts': {
-              ...((_canonicalAssistantMessage(content: '第二答')['runArtifacts']
-                      as Map<String, dynamic>)),
-              'understandingSnapshot': const <String, dynamic>{
-                'userFacingSummary': '第二轮理解摘要',
+            {'role': 'user', 'content': '第二问'},
+            {
+              ..._canonicalAssistantMessage(content: '第二答'),
+              'id': 'turn_2',
+              'runArtifacts': {
+                ...((_canonicalAssistantMessage(content: '第二答')['runArtifacts']
+                    as Map<String, dynamic>)),
+                'understandingSnapshot': const <String, dynamic>{
+                  'userFacingSummary': '第二轮理解摘要',
+                },
               },
             },
-          },
-        ],
-      },
-      'metadata': {},
-    });
+          ],
+        },
+        'metadata': {},
+      });
 
-    final summary = sm.summarizeRecent('assistant', roundsLimit: 1);
-    expect(summary, contains('user: 第二问'));
-    expect(summary, contains('understanding: 第二轮理解摘要'));
-    expect(summary, contains('assistant: 第二答'));
-    expect(summary, isNot(contains('第一问')));
-  });
+      final summary = sm.summarizeRecent('assistant', roundsLimit: 1);
+      expect(summary, contains('user: 第二问'));
+      expect(summary, contains('understanding: 第二轮理解摘要'));
+      expect(summary, contains('assistant: 第二答'));
+      expect(summary, isNot(contains('第一问')));
+    },
+  );
 
   test('Rule-5d: recent rounds 会按时间窗保留 recent + older transcript', () async {
     final now = DateTime.now().toUtc();
@@ -500,6 +542,37 @@ void main() {
     final stored = await _readStoredPayload(tempDir);
     expect(stored['version'], equals(assistantHistoryStorageVersion));
     expect(stored['sessions'], isEmpty);
+  });
+
+  test('Rule-2b: load() 会从 assistant sourceQuery 修复缺失用户消息', () async {
+    final sm = await _loadFrom(tempDir, {
+      'version': assistantHistoryStorageVersion,
+      'activeSessionId': 'assistant',
+      'sessions': {
+        'assistant': [
+          _canonicalAssistantMessage(
+            sourceQuery: '今天A股走势怎样',
+            timestamp: '10:30',
+          ),
+        ],
+      },
+      'metadata': {},
+    });
+
+    final messages = sm.sessions['assistant'] ?? const <Map<String, dynamic>>[];
+    expect(messages, hasLength(2));
+    expect(messages.first['role'], equals('user'));
+    expect(messages.first['content'], equals('今天A股走势怎样'));
+    expect(messages.last['role'], equals('assistant'));
+
+    final stored = await _readStoredPayload(tempDir);
+    final storedSessions = (stored['sessions'] as Map).cast<String, dynamic>();
+    final storedMessages = (storedSessions['assistant'] as List)
+        .cast<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
+    expect(storedMessages.first['role'], equals('user'));
+    expect(storedMessages.first['content'], equals('今天A股走势怎样'));
   });
 
   test('Rule-7: load() with missing file does not throw', () async {

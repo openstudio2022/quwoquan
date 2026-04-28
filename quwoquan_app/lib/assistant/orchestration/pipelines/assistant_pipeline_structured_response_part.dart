@@ -1896,7 +1896,16 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       acceptedReferences: acceptedReferences,
       toolResults: toolResults,
     );
+    final resolvedSearchedDocumentCount = parsed.searchedDocumentCount > 0
+        ? parsed.searchedDocumentCount
+        : _fallbackSearchedDocumentCount(
+            toolResults: toolResults,
+            processedDocumentCount: parsed.processedDocumentCount,
+            acceptedDocumentCount: resolvedAcceptedDocumentCount,
+            uiReferenceCount: uiReferences.length,
+          );
     return RetrievalProcessingSnapshot(
+      searchedDocumentCount: resolvedSearchedDocumentCount,
       processedDocumentCount: parsed.processedDocumentCount > 0
           ? parsed.processedDocumentCount
           : _fallbackProcessedDocumentCount(
@@ -2081,6 +2090,38 @@ extension AssistantPipelineStructuredResponseAssemblyCore
       }
     }
     return accepted;
+  }
+
+  int _fallbackSearchedDocumentCount({
+    required List<AssistantToolResultRow> toolResults,
+    required int processedDocumentCount,
+    required int acceptedDocumentCount,
+    required int uiReferenceCount,
+  }) {
+    var maxSearched = math.max(
+      math.max(processedDocumentCount, acceptedDocumentCount),
+      uiReferenceCount,
+    );
+    var summed = 0;
+    for (final item in toolResults) {
+      final data = item.dataPayload;
+      final rerankStats = (data['rerankStats'] as Map?)
+          ?.cast<String, dynamic>();
+      final total =
+          (rerankStats?['candidateCount'] as num?)?.toInt() ??
+          (data['candidateCount'] as num?)?.toInt() ??
+          (data['totalCandidates'] as num?)?.toInt() ??
+          (data['totalReferences'] as num?)?.toInt() ??
+          ((data['references'] as List?)?.length ?? 0);
+      if (total > maxSearched) {
+        maxSearched = total;
+      }
+      summed += total;
+    }
+    if (summed > maxSearched) {
+      maxSearched = summed;
+    }
+    return maxSearched;
   }
 
   int _fallbackProcessedDocumentCount({

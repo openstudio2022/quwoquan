@@ -3,7 +3,7 @@ feature: circle-feed-viewer-handoff-contract
 level: L3_scenario
 source_path: discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract
 parent_journey: content-display-journey-consistency
-archived: false
+archived: true
 
 execution:
   local_gate: make gate

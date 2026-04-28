@@ -13,11 +13,11 @@ import (
 //
 //nolint:gochecknoglobals
 var (
-	ErrLocationUnavailable        = errors.New("INTEGRATION.USER.location_unavailable")
-	ErrInvalidArgument            = errors.New("INTEGRATION.USER.invalid_argument")
+	ErrLocationUnavailable = errors.New("INTEGRATION.USER.location_unavailable")
+	ErrInvalidArgument = errors.New("INTEGRATION.USER.invalid_argument")
 	ErrLocationPermissionRequired = errors.New("INTEGRATION.USER.location_permission_required")
-	ErrUpstreamTimeout            = errors.New("INTEGRATION.MIDDLEWARE.upstream_timeout")
-	ErrInternalError              = errors.New("INTEGRATION.SYSTEM.internal_error")
+	ErrUpstreamTimeout = errors.New("INTEGRATION.MIDDLEWARE.upstream_timeout")
+	ErrInternalError = errors.New("INTEGRATION.SYSTEM.internal_error")
 )
 
 // AppErrorFromLocationUnavailable returns *AppError for INTEGRATION.USER.location_unavailable (user_message from errors.yaml).

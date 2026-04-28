@@ -276,7 +276,7 @@ func runtimeKindFromLegacy(kind Kind, reason string) string {
 			return "auth"
 		case "forbidden", "permission_denied", "location_permission_required":
 			return "permission"
-		case "not_found":
+		case "not_found", "route_not_found":
 			return "notFound"
 		case "rate_limited":
 			return "rateLimited"
@@ -334,7 +334,7 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusUnauthorized
 		case "forbidden":
 			return http.StatusForbidden
-		case "not_found":
+		case "not_found", "route_not_found":
 			return http.StatusNotFound
 		case "conflict":
 			return http.StatusConflict

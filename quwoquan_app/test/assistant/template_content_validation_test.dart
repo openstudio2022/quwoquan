@@ -339,6 +339,34 @@ void main() {
       expect(evidenceDigest, contains('不能退化成“处理了 x 篇 / 接纳了 x 篇”这类纯统计播报'));
       expect(synth, contains('`userMarkdown` 不能写成“我会先给结论，再说驱动因素”这类答案结构说明'));
     });
+
+    test('prompt 不再暴露旧错误/降级/重试契约字段', () {
+      const promptRoot = 'assets/assistant/prompts';
+      const forbidden = <String>[
+        'stable_degraded_answer',
+        'retryProvider',
+        'retryToolName',
+        'failureReason',
+      ];
+      final offenders = <String>[];
+      for (final entity in Directory(promptRoot).listSync(recursive: true)) {
+        if (entity is! File) continue;
+        if (!entity.path.endsWith('.md') && !entity.path.endsWith('.json')) {
+          continue;
+        }
+        final content = entity.readAsStringSync();
+        for (final token in forbidden) {
+          if (content.contains(token)) {
+            offenders.add('${entity.path}: $token');
+          }
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'assistant prompt 不应再要求模型输出旧错误/降级/重试契约字段',
+      );
+    });
   });
 }
 

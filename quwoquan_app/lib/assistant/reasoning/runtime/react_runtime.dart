@@ -901,7 +901,7 @@ class ReactRuntime {
                 .map((r) => r['snippet'] ?? r['title'] ?? '')
                 .where((s) => s.isNotEmpty)
                 .toList();
-            final retryToolName = _preferredRetrievalToolName(
+            final nextToolName = _preferredRetrievalToolName(
               availableToolNames,
               shell: executionShell,
             );
@@ -914,8 +914,8 @@ class ReactRuntime {
                 'snippets': snippets.join(' | '),
                 'reflectionRound': reflectionRound + 1,
                 'allowedReflectionRounds': allowedReflectionRounds,
-                'retryToolName': retryToolName.isNotEmpty
-                    ? retryToolName
+                'nextToolName': nextToolName.isNotEmpty
+                    ? nextToolName
                     : step.toolName,
               },
             );

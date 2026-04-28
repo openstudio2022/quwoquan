@@ -1,23 +1,23 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
-import { AuditPage } from '../domains/overview/AuditPage';
-import { OverviewDashboardPage } from '../domains/overview/OverviewDashboardPage';
-import { SettingsPage } from '../domains/overview/SettingsPage';
-import { PlatformDependencyPage } from '../domains/platform/PlatformDependencyPage';
-import { PlatformConfigPage } from '../domains/platform/PlatformConfigPage';
-import { PlatformDomainOnboardingPage } from '../domains/platform/PlatformDomainOnboardingPage';
-import { PlatformGatePage } from '../domains/platform/PlatformGatePage';
-import { PlatformGovernancePage } from '../domains/platform/PlatformGovernancePage';
-import { PlatformObservabilityPage } from '../domains/platform/PlatformObservabilityPage';
-import { PlatformRolloutPage } from '../domains/platform/PlatformRolloutPage';
-import { PlatformRunbookPage } from '../domains/platform/PlatformRunbookPage';
-import { PlatformServiceCatalogPage } from '../domains/platform/PlatformServiceCatalogPage';
-import { ExperimentsPage } from '../domains/product/ExperimentsPage';
-import { GovernancePage } from '../domains/product/GovernancePage';
-import { ProductDashboardPage } from '../domains/product/ProductDashboardPage';
-import { RecommendationPage } from '../domains/product/RecommendationPage';
-import { SegmentsPage } from '../domains/product/SegmentsPage';
-import { PortalLayout } from '../shared/layout/PortalLayout';
+import { AuditPage } from '../domains/overview/AuditPage.js';
+import { OverviewDashboardPage } from '../domains/overview/OverviewDashboardPage.js';
+import { SettingsPage } from '../domains/overview/SettingsPage.js';
+import { PlatformDependencyPage } from '../domains/platform/PlatformDependencyPage.js';
+import { PlatformConfigPage } from '../domains/platform/PlatformConfigPage.js';
+import { PlatformDomainOnboardingPage } from '../domains/platform/PlatformDomainOnboardingPage.js';
+import { PlatformGatePage } from '../domains/platform/PlatformGatePage.js';
+import { PlatformGovernancePage } from '../domains/platform/PlatformGovernancePage.js';
+import { PlatformObservabilityPage } from '../domains/platform/PlatformObservabilityPage.js';
+import { PlatformRolloutPage } from '../domains/platform/PlatformRolloutPage.js';
+import { PlatformRunbookPage } from '../domains/platform/PlatformRunbookPage.js';
+import { PlatformServiceCatalogPage } from '../domains/platform/PlatformServiceCatalogPage.js';
+import { ExperimentsPage } from '../domains/product/ExperimentsPage.js';
+import { GovernancePage } from '../domains/product/GovernancePage.js';
+import { ProductDashboardPage } from '../domains/product/ProductDashboardPage.js';
+import { RecommendationPage } from '../domains/product/RecommendationPage.js';
+import { SegmentsPage } from '../domains/product/SegmentsPage.js';
+import { PortalLayout } from '../shared/layout/PortalLayout.js';
 
 export function App() {
   return (

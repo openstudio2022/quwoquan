@@ -5,6 +5,53 @@ import 'package:test/test.dart';
 
 void main() {
   group('AssistantDisplayStateProjection', () {
+    test('renderAnswerBlocksToMarkdown 会修复历史 displayState 中的坏表格和小数', () {
+      final markdown =
+          renderAnswerBlocksToMarkdown(const <AssistantAnswerDisplayBlock>[
+            AssistantAnswerDisplayBlock(
+              blockId: 'answer_markdown',
+              kind: DisplayBlockKind.markdown,
+              body:
+                  '| 维度 | 华为云 | 阿里云 | 腾讯云 |\n'
+                  '| :\n'
+                  '- -- | :\n'
+                  '- -- | :\n'
+                  '- -- | :\n'
+                  '- -- |\n'
+                  '| 核心优势 | 算力强 | 生态成熟 | 社交生态强 |\n'
+                  '\n'
+                  '- 上证指数：\n'
+                  '\n'
+                  '3288. 41点，下跌0.20%',
+            ),
+          ]);
+
+      expect(markdown, contains('| :--- | :--- | :--- | :--- |'));
+      expect(markdown, contains('上证指数：3288.41点，下跌0.20%'));
+    });
+
+    test('renderAnswerBlocksToMarkdown 不展示 assistant_turn 协议 JSON', () {
+      const internalEnvelope =
+          '{"contractId":"assistant_turn","decision":{"nextAction":"abort"},'
+          '"messageKind":"fallback","userMarkdown":"",'
+          '"result":{"interpretation":"answer_organization_failed"}}';
+
+      final markdown =
+          renderAnswerBlocksToMarkdown(const <AssistantAnswerDisplayBlock>[
+            AssistantAnswerDisplayBlock(
+              blockId: 'answer_markdown',
+              kind: DisplayBlockKind.markdown,
+              body: internalEnvelope,
+            ),
+          ]);
+      final state = buildAssistantDisplayState(
+        answerMarkdown: internalEnvelope,
+      );
+
+      expect(markdown, isEmpty);
+      expect(state.answer.blocks, isEmpty);
+    });
+
     test('检索引用展示优先使用 timeline 中的完整 references 列表', () {
       const allReferences = <RetrievalProcessingReference>[
         RetrievalProcessingReference(
@@ -33,6 +80,7 @@ void main() {
           ),
         ],
         retrievalProcessing: const RetrievalProcessingSnapshot(
+          searchedDocumentCount: 24,
           processedDocumentCount: 8,
           acceptedDocumentCount: 2,
           processingSummary: '已完成检索筛选。',
@@ -49,7 +97,7 @@ void main() {
       final statsBlock = state.process.blocks.firstWhere(
         (block) => block.blockId == 'retrieval_reference_stats',
       );
-      expect(statsBlock.title, '处理了 8 篇，接纳了 2 篇');
+      expect(statsBlock.title, '搜索了 24 篇，接纳了 2 篇');
       expect(statsBlock.references, hasLength(3));
       expect(statsBlock.references.last.url, 'https://docs.example.com/c');
     });
@@ -67,8 +115,7 @@ void main() {
             stepId: ProcessStepId.retrievalDesign,
             status: JourneyStageStatus.completed,
             headline: '我会先按关键信号拆开检索。',
-            detail:
-                '检索词会围绕“昨天A股 大涨 原因”、“昨日 A股 涨停 板块”展开',
+            detail: '检索词会围绕“昨天A股 大涨 原因”、“昨日 A股 涨停 板块”展开',
           ),
           ProcessTimelineFrame(
             frameId: 'r',
@@ -118,10 +165,7 @@ void main() {
       );
 
       expect(state.process.activeStepId, ProcessStepId.answerOrganization);
-      expect(
-        state.process.blocks.first.title,
-        contains('我先确认你的核心问题和约束'),
-      );
+      expect(state.process.blocks.first.title, contains('我先确认你的核心问题和约束'));
       final understandingBlock = state.process.blocks.firstWhere(
         (block) => block.blockId == 'understanding_narrative',
       );
@@ -137,7 +181,7 @@ void main() {
       final statsBlock = state.process.blocks.firstWhere(
         (block) => block.blockId == 'retrieval_reference_stats',
       );
-      expect(statsBlock.title, '处理了 4 篇，接纳了 2 篇');
+      expect(statsBlock.title, '搜索了 4 篇，接纳了 2 篇');
       final retrievalNarrativeBlock = state.process.blocks.firstWhere(
         (block) => block.blockId == 'retrieval_narrative',
       );
@@ -148,8 +192,7 @@ void main() {
           (block) => block.blockId == 'understanding_resolution_items',
         ),
         isFalse,
-        reason:
-            '不应再有独立的 resolution items 列表块，信息已融入 summary',
+        reason: '不应再有独立的 resolution items 列表块，信息已融入 summary',
       );
       expect(
         state.process.blocks.any(
@@ -255,7 +298,10 @@ void main() {
       );
 
       expect(state.answer.blocks.length, 1);
-      expect(renderAnswerBlocksToPlainText(state.answer.blocks), contains('深圳明天有雨'));
+      expect(
+        renderAnswerBlocksToPlainText(state.answer.blocks),
+        contains('深圳明天有雨'),
+      );
       expect(
         renderAnswerBlocksToPlainText(state.answer.blocks),
         isNot(contains('2026-04-10')),
@@ -552,10 +598,7 @@ void main() {
         queryDesignBlock.body,
         contains('我会先沿着交易日确认这一条线继续核对，先把相对时间落成具体日期'),
       );
-      expect(
-        queryDesignBlock.body,
-        contains('检索词会围绕“2026-04-07 A股 大涨 原因”展开'),
-      );
+      expect(queryDesignBlock.body, contains('检索词会围绕“2026-04-07 A股 大涨 原因”展开'));
     });
   });
 }

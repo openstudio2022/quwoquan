@@ -284,6 +284,14 @@ class RetrievalOutcomeResolver {
             .toList(growable: false) ??
         const <Map<String, dynamic>>[];
     final retrievalProcessing = RetrievalProcessingSnapshot(
+      searchedDocumentCount:
+          (resultData['searchedDocumentCount'] as num?)?.toInt() ??
+          ((resultData['rerankStats'] as Map?)?['candidateCount'] as num?)
+              ?.toInt() ??
+          (resultData['candidateCount'] as num?)?.toInt() ??
+          (resultData['totalCandidates'] as num?)?.toInt() ??
+          (resultData['totalReferences'] as num?)?.toInt() ??
+          references.length,
       processedDocumentCount:
           (resultData['totalReferences'] as num?)?.toInt() ?? references.length,
       acceptedDocumentCount:

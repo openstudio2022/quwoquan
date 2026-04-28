@@ -235,6 +235,21 @@ scenarios:
       - eventSpy.AssertPublished("ContentModerated") for each transition
 
   # ── 未覆盖 API 占位（status: pending，实施时补 go_func）────────────────
+  - name: search_posts_contract
+    operation: SearchPosts
+    go_func: TestSearchPostsContract
+    status: pending
+    command: SearchPosts
+  - name: list_profile_interaction_activities_received_contract
+    operation: ListProfileInteractionActivitiesReceived
+    go_func: TestListProfileInteractionActivitiesReceivedContract
+    status: pending
+    command: ListProfileInteractionActivitiesReceived
+  - name: list_profile_interaction_activities_sent_contract
+    operation: ListProfileInteractionActivitiesSent
+    go_func: TestListProfileInteractionActivitiesSentContract
+    status: pending
+    command: ListProfileInteractionActivitiesSent
   - name: publish_post_contract
     operation: PublishPost
     go_func: TestPublishPostContract

@@ -93,6 +93,51 @@ void main() {
           );
     });
 
+    test('引用链接默认允许，并按可配置黑名单通配拦截', () {
+      expect(
+        assistantReferenceHostBlockedByPatterns(
+          'finance.sina.com.cn',
+          const <String>[],
+        ),
+        isFalse,
+      );
+
+      const patterns = <String>[
+        'blocked.example.com',
+        '*.ads.example.com',
+        'bad-*.example.org',
+      ];
+      expect(
+        assistantReferenceHostBlockedByPatterns(
+          'blocked.example.com',
+          patterns,
+        ),
+        isTrue,
+      );
+      expect(
+        assistantReferenceHostBlockedByPatterns(
+          'news.blocked.example.com',
+          patterns,
+        ),
+        isTrue,
+      );
+      expect(
+        assistantReferenceHostBlockedByPatterns('ads.example.com', patterns),
+        isFalse,
+      );
+      expect(
+        assistantReferenceHostBlockedByPatterns('m.ads.example.com', patterns),
+        isTrue,
+      );
+      expect(
+        assistantReferenceHostBlockedByPatterns(
+          'bad-news.example.org',
+          patterns,
+        ),
+        isTrue,
+      );
+    });
+
     testWidgets('initialize 会按分页窗口拆分本地历史并支持继续上拉加载', (tester) async {
       final sessionId = 'local_assistant_test_history';
       final gateway = _FakeAssistantGateway(

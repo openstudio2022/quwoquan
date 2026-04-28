@@ -131,6 +131,9 @@ List<ProcessTimelineFrame> buildProcessTimelineFramesFromJourneyFallback(
     // 不在帧快照里重复 headline：否则 _resolveRetrievalProcessing 会优先采用帧内
     // processingSummary，与 headline 相同后触发去重把整条 headline 剥空（读侧 journey 恢复）。
     final rpSnapshot = RetrievalProcessingSnapshot(
+      searchedDocumentCount: processingRefs.isNotEmpty
+          ? processingRefs.length
+          : 0,
       processedDocumentCount: processingRefs.isNotEmpty
           ? processingRefs.length
           : 0,
@@ -468,8 +471,9 @@ List<ProcessTimelineFrame> buildProcessTimelineFromSnapshots({
     );
   }
 
-  final retrievalDesignNarrative =
-      understandingSnapshot.retrievalDesignNarrative.trim();
+  final retrievalDesignNarrative = understandingSnapshot
+      .retrievalDesignNarrative
+      .trim();
   if (retrievalDesignNarrative.isNotEmpty) {
     frames.add(
       buildProcessTimelineFrame(
@@ -687,7 +691,8 @@ ProcessTimelineFrame? _reconstructRetrievalDesignFromVisibleUnderstanding(
 ) {
   final understandingSnapshot = visibleUnderstanding.understandingSnapshot;
   final designHeadline = understandingSnapshot.intentSummary.trim();
-  final visibleHeadline = understandingSnapshot.userFacingSummary.trim().isNotEmpty
+  final visibleHeadline =
+      understandingSnapshot.userFacingSummary.trim().isNotEmpty
       ? understandingSnapshot.userFacingSummary.trim()
       : visibleUnderstanding.headline.trim();
   if (designHeadline.isEmpty || designHeadline == visibleHeadline) {
@@ -806,6 +811,10 @@ RetrievalProcessingSnapshot _firstStructuredRetrievalProcessing(
       continue;
     }
     merged = RetrievalProcessingSnapshot(
+      searchedDocumentCount: _maxInt(<int>[
+        merged.searchedDocumentCount,
+        candidate.searchedDocumentCount,
+      ]),
       processedDocumentCount: _maxInt(<int>[
         merged.processedDocumentCount,
         candidate.processedDocumentCount,
@@ -902,5 +911,3 @@ int _maxInt(Iterable<int> values) {
   }
   return maxValue;
 }
-
-

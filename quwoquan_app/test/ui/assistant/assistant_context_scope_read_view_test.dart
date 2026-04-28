@@ -5,12 +5,14 @@ void main() {
   test('AssistantContextScopeReadView reads privacyPolicy, tags, pageType', () {
     final view = AssistantContextScopeReadView(<String, dynamic>{
       'privacyPolicy': <String, dynamic>{
-        'allowedReferenceHosts': <String>['example.com'],
+        'blockedReferenceHosts': <String>['*.blocked.example.com'],
       },
       'userTags': <dynamic>[' a ', '', 'b'],
       'pageType': 'create',
     });
-    expect(view.privacyPolicy['allowedReferenceHosts'], ['example.com']);
+    expect(view.privacyPolicy['blockedReferenceHosts'], [
+      '*.blocked.example.com',
+    ]);
     expect(view.normalizedUserTags, ['a', 'b']);
     expect(view.pageType, 'create');
   });

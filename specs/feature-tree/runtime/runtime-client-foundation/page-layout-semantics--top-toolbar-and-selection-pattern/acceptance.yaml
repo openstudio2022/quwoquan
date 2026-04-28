@@ -1,6 +1,6 @@
 feature: runtime-client-foundation--page-layout-semantics--top-toolbar-and-selection-pattern
 level: "L3_story"
-archived: false
+archived: true
 execution:
   local_gate: make gate
   full_gate: make gate-full

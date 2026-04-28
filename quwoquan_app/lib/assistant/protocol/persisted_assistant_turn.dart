@@ -755,8 +755,16 @@ Map<String, dynamic>? normalizeCanonicalPersistedAssistantTurnMessage(
     message,
     assistantBoundaryOutcomeField,
   );
-  final displayMarkdown = resolvePersistedAssistantDisplayMarkdown(message);
-  final displayPlainText = resolvePersistedAssistantDisplayPlainText(message);
+  final displayMarkdown =
+      AssistantDisplayTextResolver.normalizeCompletedDisplayCandidate(
+        resolvePersistedAssistantDisplayMarkdown(message),
+        allowJsonExtraction: false,
+      );
+  final displayPlainText =
+      AssistantDisplayTextResolver.normalizeCompletedPlainTextCandidate(
+        resolvePersistedAssistantDisplayPlainText(message),
+        allowJsonExtraction: false,
+      );
   final providerReasoningContinuation =
       (message[assistantProviderReasoningContinuationField] as String?)
           ?.trim() ??

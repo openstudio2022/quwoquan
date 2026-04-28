@@ -233,6 +233,40 @@ func TestHomepageInvalidJSONUsesRuntimeErrorResponse(t *testing.T) {
 	}
 }
 
+func TestHomepageRouteNotFoundUsesRuntimeNotFound(t *testing.T) {
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	req, err := http.NewRequest(
+		http.MethodGet,
+		server.URL+"/v1/homepages/unknown/not-a-route",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", resp.StatusCode)
+	}
+	var out map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if out["code"] != "ENTITY.USER.not_found" {
+		t.Fatalf("expected runtime code ENTITY.USER.not_found, got %v", out["code"])
+	}
+	if out["kind"] != "notFound" {
+		t.Fatalf("expected runtime kind notFound, got %v", out["kind"])
+	}
+}
+
 func requestJSON(
 	t *testing.T,
 	client *http.Client,

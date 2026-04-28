@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:quwoquan_app/assistant/contracts/assistant_tool_result_row.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
@@ -81,6 +83,7 @@ class EvidenceDigestPhase implements Phase {
         snapshot.processingSummary.trim().isEmpty &&
         retrievalOutcome.summary.trim().isNotEmpty) {
       snapshot = RetrievalProcessingSnapshot(
+        searchedDocumentCount: snapshot.searchedDocumentCount,
         processedDocumentCount: snapshot.processedDocumentCount,
         acceptedDocumentCount: snapshot.acceptedDocumentCount,
         processingSummary: retrievalOutcome.summary.trim(),
@@ -108,11 +111,17 @@ class EvidenceDigestPhase implements Phase {
       toolResults: toolResults,
       acceptedDocumentCount: acceptedReferences.length,
     );
+    final searchedDocumentCount = _resolveSearchedDocumentCount(
+      toolResults: toolResults,
+      processedDocumentCount: processedDocumentCount,
+      acceptedDocumentCount: acceptedReferences.length,
+    );
     final selectedKeyPoints = _fallbackSelectedKeyPoints(
       acceptedReferences: acceptedReferences,
       toolResults: toolResults,
     );
     return RetrievalProcessingSnapshot(
+      searchedDocumentCount: searchedDocumentCount,
       processedDocumentCount: processedDocumentCount,
       acceptedDocumentCount: acceptedReferences.length,
       processingSummary: '',
@@ -132,6 +141,9 @@ class EvidenceDigestPhase implements Phase {
       return snapshot;
     }
     return RetrievalProcessingSnapshot(
+      searchedDocumentCount: snapshot.searchedDocumentCount > 0
+          ? snapshot.searchedDocumentCount
+          : fallbackSnapshot.searchedDocumentCount,
       processedDocumentCount: snapshot.processedDocumentCount > 0
           ? snapshot.processedDocumentCount
           : fallbackSnapshot.processedDocumentCount,
@@ -201,6 +213,34 @@ class EvidenceDigestPhase implements Phase {
       }
     }
     return byUrl.values.take(5).toList(growable: false);
+  }
+
+  int _resolveSearchedDocumentCount({
+    required List<AssistantToolResultRow> toolResults,
+    required int processedDocumentCount,
+    required int acceptedDocumentCount,
+  }) {
+    var maxSearched = math.max(processedDocumentCount, acceptedDocumentCount);
+    var summed = 0;
+    for (final item in toolResults) {
+      final data = item.dataPayload;
+      final rerankStats = (data['rerankStats'] as Map?)
+          ?.cast<String, dynamic>();
+      final total =
+          (rerankStats?['candidateCount'] as num?)?.toInt() ??
+          (data['candidateCount'] as num?)?.toInt() ??
+          (data['totalCandidates'] as num?)?.toInt() ??
+          (data['totalReferences'] as num?)?.toInt() ??
+          ((data['references'] as List?)?.length ?? 0);
+      if (total > maxSearched) {
+        maxSearched = total;
+      }
+      summed += total;
+    }
+    if (summed > maxSearched) {
+      maxSearched = summed;
+    }
+    return maxSearched;
   }
 
   int _resolveProcessedDocumentCount({

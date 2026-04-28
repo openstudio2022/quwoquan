@@ -375,7 +375,7 @@ void main() {
     expect(find.byType(PageflipWidget), findsNothing);
     expect(
       find.byKey(const ValueKey('article_read_only_book_debug_card')),
-      findsOneWidget,
+      findsNothing,
     );
   });
 
@@ -420,7 +420,7 @@ void main() {
   );
 
   testWidgets(
-    'PageflipDiagnosticsApp keeps ArticleReadOnlyBookDeck size stable after debug overlay appears',
+    'PageflipDiagnosticsApp keeps ArticleReadOnlyBookDeck size stable without debug overlay',
     (WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(900, 1200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -434,7 +434,7 @@ void main() {
       expect(tester.getSize(find.byType(ArticleReadOnlyBookDeck)), initialSize);
       expect(
         find.byKey(const ValueKey('article_read_only_book_debug_card')),
-        findsOneWidget,
+        findsNothing,
       );
     },
   );
@@ -833,11 +833,12 @@ void main() {
       );
       expect(interactiveState.backwardBottomLayerPageIndex, equals(3));
       expect(interactiveState.backwardFlippingLayerPageIndex, equals(2));
+      expect(interactiveState.backwardDynamicOwnedPages, contains(2));
+      expect(interactiveState.backwardDynamicOwnedPages, isNot(contains(3)));
       expect(
-        interactiveState.backwardDynamicOwnedPages,
-        containsAll(<int>[2, 3]),
+        interactiveState.backwardStaticSuppressedPages,
+        isNot(contains(3)),
       );
-      expect(interactiveState.backwardStaticSuppressedPages, contains(3));
       expect(interactiveState.backwardReplaySlices, isNotNull);
       expect(
         interactiveState.backwardReplaySlices,
@@ -849,15 +850,15 @@ void main() {
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('current=bottomClipArea'),
+        contains('current=projectedCurrentResidualPolygon'),
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('front=flippingFrontBand'),
+        contains('front=projectedPreviousFrontPolygon'),
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('back=flippingBackBand'),
+        contains('back=projectedPreviousBackPolygon'),
       );
       expect(
         interactiveState.backwardReplaySlices,
@@ -870,15 +871,19 @@ void main() {
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('foldLineSource=flippingClipAreaMinX'),
+        contains('foldLineSource=forwardRealGeometryMirrored'),
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('currentSource=bottomClipArea'),
+        contains('currentSource=projectedCurrentResidualPolygon'),
       );
       expect(
         interactiveState.backwardReplaySlices,
-        contains('edgeLineSource=backwardLeafFrameEdgeE'),
+        contains('edgeLineSource=reflectedOriginalRightEdge'),
+      );
+      expect(
+        interactiveState.backwardReplaySlices,
+        contains('overlayClippedToPaper=true'),
       );
       expect(
         interactiveState.backwardReplaySlices,
@@ -906,16 +911,37 @@ void main() {
       expect(interactiveState.backwardFrontCoverageRatio, isNotNull);
       expect(interactiveState.backwardLeftSpineLocked, isNotNull);
       expect(interactiveState.backwardSimulatorVisualPhase, isNotNull);
+      expect(interactiveState.backwardEdgeEnteredPage, isNotNull);
+      expect(interactiveState.backwardOverlayClippedToPaper, isTrue);
+      expect(interactiveState.backwardBackVertexCount, greaterThanOrEqualTo(3));
+      expect(
+        interactiveState.backwardReplaySlices,
+        contains('projectedGeometrySource=renderFrameMirroredForward'),
+      );
+      expect(interactiveState.backwardReplaySlices, contains('backVertices='));
+      expect(interactiveState.backwardReplaySlices, contains('frontVertices='));
+      expect(interactiveState.backwardBackPolygonPoints, isNotNull);
+      expect(interactiveState.backwardCurrentPolygonPoints, isNotNull);
       if ((interactiveState.backwardRectoWidth ?? 0) > 0.001) {
         expect(interactiveState.backwardFrontPaintBounds, isNotNull);
       }
       expect(interactiveState.backwardBackPaintBounds!.width, greaterThan(0));
       expect(interactiveState.backwardFoldX, isNotNull);
       expect(interactiveState.backwardPageEdgeX, isNotNull);
+      expect(
+        interactiveState.backwardFoldX!,
+        greaterThan(0),
+        reason: 'fold line must stay inside the page, not collapse off-screen',
+      );
+      expect(
+        interactiveState.backwardFoldX!,
+        lessThan(interactiveState.backwardSurfaceViewportRect!.width),
+        reason: 'fold line must stay inside the page width',
+      );
       expect(interactiveState.backwardCoveredWidth, isNotNull);
       expect(interactiveState.backwardRectoCoverage, isNotNull);
-      // 倾斜手势下：折线 F 和页右边线 E 都从同一个 flippingClipArea
-      // 推导，两条线在 y 上分布于上下，构成实际的折纸边界。
+      // 倾斜手势下：F 来自镜像前翻 flipping polygon，E 来自 F 对原页右边线
+      // 的投影反射，不能再退化成与 F 平行的矩形 band。
       final foldTop = interactiveState.backwardFoldLineTop;
       final foldBottom = interactiveState.backwardFoldLineBottom;
       final edgeTop = interactiveState.backwardPageEdgeLineTop;
@@ -944,17 +970,43 @@ void main() {
         greaterThan(1),
         reason: 'page edge must rotate with the folding page',
       );
+      expect(interactiveState.backwardEdgeParallelToFold, isFalse);
       expect(interactiveState.backwardPaintedVersoWidth, isNotNull);
       expect(interactiveState.backwardPaintedVersoWidth, greaterThan(0));
       expect(
         interactiveState.backwardPageEdgeX!,
-        lessThanOrEqualTo(interactiveState.backwardFoldX! + 1.0),
+        lessThan(interactiveState.backwardFoldX!),
       );
       expect(find.byType(ArticlePageCurlRenderer), findsNothing);
       expect(find.byType(ArticlePageBackwardLeafRenderer), findsNothing);
 
       await gesture.up();
       await tester.pumpAndSettle();
+
+      final backwardAnimationStates = debugStates.where(
+        (state) =>
+            state.renderDirection == StPageFlipDirection.back &&
+            state.backwardCompositeMode == 'mirroredForwardDynamic',
+      );
+      expect(backwardAnimationStates, isNotEmpty);
+      for (final state in backwardAnimationStates) {
+        final foldX = state.backwardFoldX;
+        final surfaceWidth = state.backwardSurfaceViewportRect?.width;
+        expect(foldX, isNotNull);
+        expect(surfaceWidth, isNotNull);
+        expect(
+          foldX!,
+          greaterThan(0),
+          reason: 'backward animation fold line must not collapse off-screen',
+        );
+        expect(
+          foldX,
+          lessThan(surfaceWidth!),
+          reason: 'backward animation fold line must stay inside page width',
+        );
+        expect(state.backwardBackPaintBounds, isNotNull);
+        expect(state.backwardBackPaintBounds!.width, greaterThan(0));
+      }
 
       expect(
         scenes.any(

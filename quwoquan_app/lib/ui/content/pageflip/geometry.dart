@@ -3,6 +3,26 @@ import 'dart:ui';
 
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
+class StPageFlipFoldGeometry {
+  const StPageFlipFoldGeometry({
+    required this.foldLine,
+    required this.originalLeftEdgeLine,
+    required this.originalRightEdgeLine,
+    required this.transformedLeftEdgeLine,
+    required this.transformedRightEdgeLine,
+    required this.flippingClipArea,
+    required this.bottomClipArea,
+  });
+
+  final (Offset, Offset) foldLine;
+  final (Offset, Offset) originalLeftEdgeLine;
+  final (Offset, Offset) originalRightEdgeLine;
+  final (Offset, Offset) transformedLeftEdgeLine;
+  final (Offset, Offset) transformedRightEdgeLine;
+  final List<Offset> flippingClipArea;
+  final List<Offset> bottomClipArea;
+}
+
 List<Offset> interpolatePoints(Offset start, Offset end) {
   final sizeX = (start.dx - end.dx).abs();
   final sizeY = (start.dy - end.dy).abs();
@@ -169,9 +189,17 @@ class StPageFlipCalculation {
   bool calc(Offset localPos) {
     try {
       _position = _calcAngleAndPosition(localPos);
-      _calculateIntersectPoint(_position);
+      try {
+        _calculateIntersectPoint(_position);
+      } catch (_) {
+        return direction == StPageFlipDirection.back;
+      }
       return true;
     } catch (_) {
+      if (direction == StPageFlipDirection.back) {
+        _position = localPos;
+        return true;
+      }
       return false;
     }
   }
@@ -263,6 +291,28 @@ class StPageFlipCalculation {
   StPageFlipRectPoints getRect() => _rect;
 
   Offset getPosition() => _position;
+
+  StPageFlipFoldGeometry? getForwardFoldGeometry() {
+    if (direction != StPageFlipDirection.forward) {
+      return null;
+    }
+    final foldLine = _resolveForwardFoldLine();
+    if (foldLine == null) {
+      return null;
+    }
+    return StPageFlipFoldGeometry(
+      foldLine: foldLine,
+      originalLeftEdgeLine: (Offset.zero, Offset(0, pageHeight)),
+      originalRightEdgeLine: (
+        Offset(pageWidth, 0),
+        Offset(pageWidth, pageHeight),
+      ),
+      transformedLeftEdgeLine: (_rect.topLeft, _rect.bottomLeft),
+      transformedRightEdgeLine: (_rect.topRight, _rect.bottomRight),
+      flippingClipArea: List<Offset>.unmodifiable(getFlippingClipArea()),
+      bottomClipArea: List<Offset>.unmodifiable(getBottomClipArea()),
+    );
+  }
 
   Offset getActiveCorner() {
     if (direction == StPageFlipDirection.forward) {
@@ -441,6 +491,72 @@ class StPageFlipCalculation {
         <Offset>[Offset(0, pageHeight), Offset(pageWidth, pageHeight)],
       );
     }
+  }
+
+  (Offset, Offset)? _resolveForwardFoldLine() {
+    final analyticLine = _resolveAnalyticForwardFoldLine();
+    if (analyticLine != null) {
+      return analyticLine;
+    }
+    final intersections = <Offset>[
+      ?_topIntersectPoint,
+      ?_sideIntersectPoint,
+      ?_bottomIntersectPoint,
+    ];
+    if (intersections.length >= 2) {
+      return (intersections.first, intersections.last);
+    }
+    return null;
+  }
+
+  (Offset, Offset)? _resolveAnalyticForwardFoldLine() {
+    final originalCorner = corner == StPageFlipCorner.top
+        ? Offset(pageWidth, 0)
+        : Offset(pageWidth, pageHeight);
+    final midpoint = Offset(
+      (originalCorner.dx + _position.dx) / 2,
+      (originalCorner.dy + _position.dy) / 2,
+    );
+    final dx = _position.dx - originalCorner.dx;
+    final dy = _position.dy - originalCorner.dy;
+    if ((dx * dx + dy * dy) <= 0.000001) {
+      return null;
+    }
+    final direction = Offset(-dy, dx);
+    final line = <Offset>[
+      midpoint - direction * 10000,
+      midpoint + direction * 10000,
+    ];
+    final rectEdges = <List<Offset>>[
+      <Offset>[Offset.zero, Offset(pageWidth, 0)],
+      <Offset>[Offset(pageWidth, 0), Offset(pageWidth, pageHeight)],
+      <Offset>[Offset(pageWidth, pageHeight), Offset(0, pageHeight)],
+      <Offset>[Offset(0, pageHeight), Offset.zero],
+    ];
+    final intersections = <Offset>[];
+    final bounds = Rect.fromLTWH(-0.5, -0.5, pageWidth + 1, pageHeight + 1);
+    for (final edge in rectEdges) {
+      Offset? point;
+      try {
+        point = pointInRect(bounds, intersectLines(line, edge));
+      } catch (_) {
+        continue;
+      }
+      if (point != null &&
+          intersections.every(
+            (existing) => distanceBetweenPoints(existing, point) > 0.5,
+          )) {
+        intersections.add(point);
+      }
+    }
+    if (intersections.length < 2) {
+      return null;
+    }
+    intersections.sort((a, b) {
+      final byY = a.dy.compareTo(b.dy);
+      return byY == 0 ? a.dx.compareTo(b.dx) : byY;
+    });
+    return (intersections.first, intersections.last);
   }
 
   Offset _checkPositionAtCenterLine(

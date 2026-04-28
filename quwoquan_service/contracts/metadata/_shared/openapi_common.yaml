@@ -107,12 +107,28 @@ components:
   schemas:
     ErrorResponse:
       type: object
-      required: [code, userMessage, debugMessage, module, kind, reason]
+      required: [code, origin, nature, userMessage, debugMessage, module, kind, reason, location, context]
       properties:
         code:
           type: string
           description: 统一错误码：<MODULE>.<KIND>.<REASON>
           pattern: '^[A-Z_]+\.(USER|SYSTEM|NETWORK|MIDDLEWARE)\.[a-z0-9_]+$'
+        origin:
+          type: string
+          description: 运行时失败来源；由 runtime/errors 统一映射，业务逻辑不得从文案推断
+          enum:
+            - user
+            - environment
+            - remoteDependency
+            - system
+        nature:
+          type: string
+          description: 运行时失败性质；恢复行为由 RuntimeRecoveryPolicy 决定，不在错误事实中存放恢复判定
+          enum:
+            - permanent
+            - transient
+            - requiresPermission
+            - bug
         userMessage:
           type: string
           description: 面向用户的友好提示语（可 i18n）
@@ -142,12 +158,17 @@ components:
             - UNKNOWN
         kind:
           type: string
-          description: 错误类型（USER/SYSTEM/NETWORK/MIDDLEWARE）
+          description: 运行时失败类型；wire 层使用 runtime kind，不再暴露 legacy USER/SYSTEM/NETWORK/MIDDLEWARE 作为业务判定字段
           enum:
-            - USER
-            - SYSTEM
-            - NETWORK
-            - MIDDLEWARE
+            - validation
+            - auth
+            - permission
+            - notFound
+            - rateLimited
+            - timeout
+            - network
+            - unavailable
+            - internal
         reason:
           type: string
           description: 稳定原因码（如 invalid_argument/timeout/connection_refused）
@@ -159,6 +180,34 @@ components:
           type: string
         traceId:
           type: string
+        location:
+          type: object
+          required: [businessObject, functionModule]
+          properties:
+            businessObject:
+              type: string
+            functionModule:
+              type: string
+            sourceFilePath:
+              type: string
+            sourceLineNumber:
+              type: integer
+            sourceLineText:
+              type: string
+        context:
+          type: object
+          required: [attributes]
+          properties:
+            attributes:
+              type: array
+              items:
+                type: object
+                required: [key, value]
+                properties:
+                  key:
+                    type: string
+                  value:
+                    type: string
     CursorPage:
       type: object
       required: [items]

@@ -86,6 +86,7 @@ class AssistantJourneyViewModel {
     this.summary = '',
     this.activeStageId = ProcessStepId.unknown,
     this.activeStageLabel = '',
+    this.searchedDocumentCount = 0,
     this.processedDocumentCount = 0,
     this.acceptedDocumentCount = 0,
     this.referenceCount = 0,
@@ -106,6 +107,7 @@ class AssistantJourneyViewModel {
   final String summary;
   final ProcessStepId activeStageId;
   final String activeStageLabel;
+  final int searchedDocumentCount;
   final int processedDocumentCount;
   final int acceptedDocumentCount;
   final int referenceCount;
@@ -220,10 +222,14 @@ AssistantJourneyViewModel buildAssistantJourneyViewModel({
     summary: summary,
     activeStageId: activeStage.stageId,
     activeStageLabel: activeStage.label,
-    processedDocumentCount:
-        effectiveRetrievalProcessing.processedDocumentCount > 0
-        ? effectiveRetrievalProcessing.processedDocumentCount
-        : effectiveRetrievalProcessing.acceptedDocumentCount,
+    searchedDocumentCount: _searchedCountForSnapshot(
+      effectiveRetrievalProcessing,
+      fallbackReferenceCount: referenceCount,
+    ),
+    processedDocumentCount: _processedCountForSnapshot(
+      effectiveRetrievalProcessing,
+      fallbackReferenceCount: referenceCount,
+    ),
     acceptedDocumentCount: effectiveRetrievalProcessing.acceptedDocumentCount,
     referenceCount: referenceCount,
     isRunning: isRunning,
@@ -314,65 +320,65 @@ List<AssistantJourneyBlockViewModel> _buildBlocks({
 }) {
   return processTimeline
       .where((frame) => frame.hasVisibleContent)
-      .map(
-        (frame) {
-          var headline = _headlineForFrame(frame);
-          var detail = _detailForFrame(
+      .map((frame) {
+        var headline = _headlineForFrame(frame);
+        var detail = _detailForFrame(
+          frame,
+          fallbackRetrievalProcessing: retrievalProcessing,
+        );
+        final refs = frame.references
+            .map(
+              (reference) => AssistantJourneyReferenceViewModel(
+                title: reference.title.trim(),
+                url: reference.url.trim(),
+                source: reference.source.trim(),
+              ),
+            )
+            .where(
+              (reference) =>
+                  reference.title.isNotEmpty || reference.url.isNotEmpty,
+            )
+            .toList(growable: false);
+        if (frame.stepId == ProcessStepId.retrievalProcessing &&
+            refs.isNotEmpty) {
+          final summary = retrievalProcessing.processingSummary.trim();
+          final summaryHasSignal = !_isLowSignalRetrievalProcessSummary(
+            summary,
+          );
+          if (summary.isNotEmpty && summaryHasSignal) {
+            headline = _stripRetrievalProcessingSummaryFromCopy(
+              headline,
+              retrievalProcessing.processingSummary,
+            );
+            detail = _stripRetrievalProcessingSummaryFromCopy(
+              detail,
+              retrievalProcessing.processingSummary,
+            );
+          }
+          if (headline.isEmpty && summary.isNotEmpty && summaryHasSignal) {
+            headline = summary;
+          }
+        }
+        if (frame.stepId == ProcessStepId.retrievalProcessing &&
+            refs.isNotEmpty &&
+            headline.isEmpty &&
+            detail.isEmpty) {
+          return null;
+        }
+        return AssistantJourneyBlockViewModel(
+          kind: frame.stepId == ProcessStepId.retrievalProcessing
+              ? AssistantJourneyBlockKind.searchSummary
+              : AssistantJourneyBlockKind.narrative,
+          stageId: frame.stepId,
+          headline: headline,
+          detail: detail,
+          referenceLabel: _referenceLabelForFrame(
             frame,
             fallbackRetrievalProcessing: retrievalProcessing,
-          );
-          final refs = frame.references
-              .map(
-                (reference) => AssistantJourneyReferenceViewModel(
-                  title: reference.title.trim(),
-                  url: reference.url.trim(),
-                  source: reference.source.trim(),
-                ),
-              )
-              .where(
-                (reference) =>
-                    reference.title.isNotEmpty || reference.url.isNotEmpty,
-              )
-              .toList(growable: false);
-          if (frame.stepId == ProcessStepId.retrievalProcessing &&
-              refs.isNotEmpty) {
-            final summary = retrievalProcessing.processingSummary.trim();
-            final summaryHasSignal = !_isLowSignalRetrievalProcessSummary(summary);
-            if (summary.isNotEmpty && summaryHasSignal) {
-              headline = _stripRetrievalProcessingSummaryFromCopy(
-                headline,
-                retrievalProcessing.processingSummary,
-              );
-              detail = _stripRetrievalProcessingSummaryFromCopy(
-                detail,
-                retrievalProcessing.processingSummary,
-              );
-            }
-            if (headline.isEmpty && summary.isNotEmpty && summaryHasSignal) {
-              headline = summary;
-            }
-          }
-          if (frame.stepId == ProcessStepId.retrievalProcessing &&
-              refs.isNotEmpty &&
-              headline.isEmpty &&
-              detail.isEmpty) {
-            return null;
-          }
-          return AssistantJourneyBlockViewModel(
-            kind: frame.stepId == ProcessStepId.retrievalProcessing
-                ? AssistantJourneyBlockKind.searchSummary
-                : AssistantJourneyBlockKind.narrative,
-            stageId: frame.stepId,
-            headline: headline,
-            detail: detail,
-            referenceLabel: _referenceLabelForFrame(
-              frame,
-              fallbackRetrievalProcessing: retrievalProcessing,
-            ),
-            references: refs,
-          );
-        },
-      )
+          ),
+          references: refs,
+        );
+      })
       .whereType<AssistantJourneyBlockViewModel>()
       .toList(growable: false);
 }
@@ -567,10 +573,7 @@ AssistantJourneyBlockViewModel? _buildJourneyBlockFromDisplayStateBlock({
   }
   final items = block.items
       .map(
-        (item) => _sanitizeProcessText(
-          _displayItemText(item),
-          stepId: stepId,
-        ),
+        (item) => _sanitizeProcessText(_displayItemText(item), stepId: stepId),
       )
       .where((item) => item.isNotEmpty)
       .toList(growable: false);
@@ -619,15 +622,39 @@ String _referenceDigestLabel({
   final acceptedCount = retrievalProcessing.acceptedDocumentCount > 0
       ? retrievalProcessing.acceptedDocumentCount
       : references.length;
-  final processedCount = retrievalProcessing.processedDocumentCount > 0
-      ? retrievalProcessing.processedDocumentCount
-      : acceptedCount;
-  if (processedCount <= 0 && acceptedCount <= 0) {
+  final searchedCount = _searchedCountForSnapshot(
+    retrievalProcessing,
+    fallbackReferenceCount: references.length,
+  );
+  if (searchedCount <= 0 && acceptedCount <= 0) {
     return '';
   }
   return UITextConstants.assistantProcessReferenceDigestTemplate
-      .replaceFirst('%s', processedCount.toString())
+      .replaceFirst('%s', searchedCount.toString())
       .replaceFirst('%s', acceptedCount.toString());
+}
+
+int _searchedCountForSnapshot(
+  RetrievalProcessingSnapshot snapshot, {
+  required int fallbackReferenceCount,
+}) {
+  if (snapshot.searchedDocumentCount > 0) {
+    return snapshot.searchedDocumentCount;
+  }
+  if (snapshot.processedDocumentCount > 0) {
+    return snapshot.processedDocumentCount;
+  }
+  return fallbackReferenceCount;
+}
+
+int _processedCountForSnapshot(
+  RetrievalProcessingSnapshot snapshot, {
+  required int fallbackReferenceCount,
+}) {
+  if (snapshot.processedDocumentCount > 0) {
+    return snapshot.processedDocumentCount;
+  }
+  return fallbackReferenceCount;
 }
 
 JourneyStageStatus _statusForProcessBlocks(
@@ -732,6 +759,7 @@ bool _retrievalFrameHasSnapshotFallbackSignals(ProcessTimelineFrame frame) {
   return frame.references.isNotEmpty ||
       rp.acceptedReferences.isNotEmpty ||
       rp.selectedKeyPoints.isNotEmpty ||
+      rp.searchedDocumentCount > 0 ||
       rp.processedDocumentCount > 0 ||
       rp.acceptedDocumentCount > 0;
 }
@@ -749,8 +777,12 @@ RetrievalProcessingSnapshot _mergeRetrievalSnapshotWithFrameReferences(
       : (refs.isNotEmpty ? refs.length : 0);
   final processedCount = snapshot.processedDocumentCount > 0
       ? snapshot.processedDocumentCount
-      : acceptedCount;
+      : refs.length;
+  final searchedCount = snapshot.searchedDocumentCount > 0
+      ? snapshot.searchedDocumentCount
+      : processedCount;
   return RetrievalProcessingSnapshot(
+    searchedDocumentCount: searchedCount,
     processedDocumentCount: processedCount,
     acceptedDocumentCount: acceptedCount,
     processingSummary: snapshot.processingSummary,
@@ -780,6 +812,9 @@ RetrievalProcessingSnapshot _mergeRetrievalSnapshots({
   absorb(primary.acceptedReferences);
   absorb(fallback.acceptedReferences);
   return RetrievalProcessingSnapshot(
+    searchedDocumentCount: primary.searchedDocumentCount > 0
+        ? primary.searchedDocumentCount
+        : fallback.searchedDocumentCount,
     processedDocumentCount: primary.processedDocumentCount > 0
         ? primary.processedDocumentCount
         : fallback.processedDocumentCount,
@@ -852,23 +887,24 @@ String _referenceLabelForFrame(
   var acceptedCount = snapshot.acceptedDocumentCount > 0
       ? snapshot.acceptedDocumentCount
       : snapshot.acceptedReferences.length;
-  var processedCount = snapshot.processedDocumentCount > 0
-      ? snapshot.processedDocumentCount
-      : acceptedCount;
-  if (processedCount <= 0 && acceptedCount <= 0) {
+  var searchedCount = _searchedCountForSnapshot(
+    snapshot,
+    fallbackReferenceCount: snapshot.acceptedReferences.length,
+  );
+  if (searchedCount <= 0 && acceptedCount <= 0) {
     final refCount = frame.references
         .where((r) => r.title.trim().isNotEmpty || r.url.trim().isNotEmpty)
         .length;
     if (refCount > 0) {
       acceptedCount = refCount;
-      processedCount = refCount;
+      searchedCount = refCount;
     }
   }
-  if (processedCount <= 0 && acceptedCount <= 0) {
+  if (searchedCount <= 0 && acceptedCount <= 0) {
     return '';
   }
   return UITextConstants.assistantProcessReferenceDigestTemplate
-      .replaceFirst('%s', processedCount.toString())
+      .replaceFirst('%s', searchedCount.toString())
       .replaceFirst('%s', acceptedCount.toString());
 }
 

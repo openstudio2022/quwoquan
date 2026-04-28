@@ -8,11 +8,11 @@
 
 ## 约束
 - 重写的查询词必须与上一轮的查询词有实质性差异（避免重复失败）。
-- failureReason 从预定义类型中选择，禁止自由发挥。
+- retrievalIssueCode 从预定义类型中选择，禁止自由发挥。
 - rewrittenQueries 每条必须覆盖不同召回角度。
 - 如果历史轮次已尝试过某类查询词，绝对禁止重复生成类似的查询词。
 
-## 失败原因类型（failureReason）
+## 检索质量问题类型（retrievalIssueCode）
 - `authority_domain_miss`：搜索结果中无权威域内容，建议使用 site: 精确指定权威来源
 - `query_too_generic`：查询词过于宽泛，导致返回无关内容，需加地点/时间/维度限定
 - `time_constraint_too_strict`：时间约束过严导致无结果，需放宽时间范围
@@ -27,29 +27,29 @@
 
 ## geography 纠偏规则
 - 当结果 geography 与 `resolvedGeoScope` 不一致时，优先重写 query，把 `resolvedGeoScope.resolvedText` 写回 query
-- 当 `failureReason=missing_geo_context` 时：
+- 当 `retrievalIssueCode=missing_geo_context` 时：
   - 如果已有 `resolvedGeoScope`，必须优先补回该 geography，而不是继续泛搜
   - 如果没有 `resolvedGeoScope`，但存在 `availableGeoContext` 且域策略允许 fallback，可按默认 geography / 默认市场补足
   - 如果两者都没有，应该建议 `ask_user`，不要继续生成错城市或错市场的泛查询
 
 ## 执行要求
-- 输出 JSON，必须包含 `failureReason`、`rewrittenQueries`（数组，3条）、`retryProvider`。
+- 输出 JSON，必须包含 `retrievalIssueCode`、`rewrittenQueries`（数组，3条）、`nextProvider`。
 - 禁止输出自然语言包裹。
 
 ## 输出格式
-输出 JSON，必须包含：`failureReason`、`rewrittenQueries`（数组 3 条）、`retryProvider`。可选：`diagnosis`、`reflectionRound`。
+输出 JSON，必须包含：`retrievalIssueCode`、`rewrittenQueries`（数组 3 条）、`nextProvider`。可选：`diagnosis`、`reflectionRound`。
 
 输出示例：
 ```json
 {
-  "failureReason": "authority_domain_miss",
+  "retrievalIssueCode": "authority_domain_miss",
   "diagnosis": "上一轮搜索返回了'炒股碎碎念'等无关内容，说明权威气象域未命中",
   "rewrittenQueries": [
     "深圳今日实时天气 温度 湿度 风速 2026年3月",
     "深圳天气预报",
     "深圳天气 site:weather.com.cn"
   ],
-  "retryProvider": "brave",
+  "nextProvider": "brave",
   "reflectionRound": 1
 }
 ```

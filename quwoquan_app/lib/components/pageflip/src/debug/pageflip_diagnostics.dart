@@ -9,7 +9,9 @@ import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 class PageflipDiagnosticsApp extends StatefulWidget {
-  const PageflipDiagnosticsApp({super.key});
+  const PageflipDiagnosticsApp({super.key, this.showDebugOverlay = false});
+
+  final bool showDebugOverlay;
 
   @override
   State<PageflipDiagnosticsApp> createState() => _PageflipDiagnosticsAppState();
@@ -113,44 +115,46 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
                             },
                           ),
                         ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child:
-                                ValueListenableBuilder<
-                                  ArticleReadOnlyBookDebugState?
-                                >(
-                                  valueListenable: _debugNotifier,
-                                  builder: (context, debugState, _) {
-                                    return _DiagnosticsDebugHeader(
-                                      debugState: debugState,
-                                    );
-                                  },
-                                ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: ValueListenableBuilder<StPageFlipScene?>(
-                              valueListenable: _sceneNotifier,
-                              builder: (context, scene, _) {
-                                if (scene == null) {
-                                  return const SizedBox.shrink();
-                                }
-                                return ValueListenableBuilder<
-                                  ArticleReadOnlyBookDebugState?
-                                >(
-                                  valueListenable: _debugNotifier,
-                                  builder: (context, debugState, _) {
-                                    return _SamplingPointsOverlay(
-                                      scene: scene,
-                                      debugState: debugState,
-                                    );
-                                  },
-                                );
-                              },
+                        if (widget.showDebugOverlay) ...<Widget>[
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child:
+                                  ValueListenableBuilder<
+                                    ArticleReadOnlyBookDebugState?
+                                  >(
+                                    valueListenable: _debugNotifier,
+                                    builder: (context, debugState, _) {
+                                      return _DiagnosticsDebugHeader(
+                                        debugState: debugState,
+                                      );
+                                    },
+                                  ),
                             ),
                           ),
-                        ),
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: ValueListenableBuilder<StPageFlipScene?>(
+                                valueListenable: _sceneNotifier,
+                                builder: (context, scene, _) {
+                                  if (scene == null) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return ValueListenableBuilder<
+                                    ArticleReadOnlyBookDebugState?
+                                  >(
+                                    valueListenable: _debugNotifier,
+                                    builder: (context, debugState, _) {
+                                      return _SamplingPointsOverlay(
+                                        scene: scene,
+                                        debugState: debugState,
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -254,6 +258,14 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'frontCover=${_doubleLabel(debugState.backwardFrontCoverageRatio)} '
       'spineLocked=${debugState.backwardLeftSpineLocked ?? "-"} '
       'visualPhase=${debugState.backwardSimulatorVisualPhase ?? "-"} '
+      'edgeEntered=${debugState.backwardEdgeEnteredPage ?? "-"} '
+      'overlayClipped=${debugState.backwardOverlayClippedToPaper ?? "-"} '
+      'backVertices=${debugState.backwardBackVertexCount ?? "-"} '
+      'frontVertices=${debugState.backwardFrontVertexCount ?? "-"} '
+      'edgeParallelToFold=${debugState.backwardEdgeParallelToFold ?? "-"} '
+      'backPoly=${debugState.backwardBackPolygonPoints ?? "-"} '
+      'frontPoly=${debugState.backwardFrontPolygonPoints ?? "-"} '
+      'currentPoly=${debugState.backwardCurrentPolygonPoints ?? "-"} '
       'flipAnchor=${_offsetLabel(debugState.flippingAnchor)} '
       'backAnchor=${_offsetLabel(debugState.bottomAnchor)} '
       'phase=${debugState.backwardPhase ?? "-"} '

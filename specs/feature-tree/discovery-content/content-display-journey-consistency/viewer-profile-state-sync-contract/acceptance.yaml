@@ -3,7 +3,7 @@ feature: viewer-profile-state-sync-contract
 level: L3_scenario
 source_path: discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
 parent_journey: content-display-journey-consistency
-archived: false
+archived: true
 
 execution:
   local_gate: make gate

@@ -46,6 +46,30 @@ func TestWriteHTTPErrorPropagatesIDs(t *testing.T) {
 	}
 }
 
+func TestRouteNotFoundMapsToHTTPNotFound(t *testing.T) {
+	rec := httptest.NewRecorder()
+	WriteHTTPError(
+		rec,
+		NewAppError(
+			NewCode(ModuleContent, KindUser, "route_not_found"),
+			"接口不存在",
+			"route not found",
+		),
+		HTTPWriteOptions{},
+	)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for route_not_found, got %d", rec.Code)
+	}
+	var body ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Code != "CONTENT.USER.route_not_found" {
+		t.Fatalf("expected route_not_found code, got %q", body.Code)
+	}
+}
+
 func TestRuntimeOriginFromLegacyKindUsesCanonicalMapping(t *testing.T) {
 	cases := []struct {
 		name   string

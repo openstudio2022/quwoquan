@@ -51,6 +51,43 @@ import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_journey_view
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
+String normalizeAssistantReferenceHostPattern(String value) {
+  var normalized = value.trim().toLowerCase();
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+    normalized = Uri.tryParse(normalized)?.host.trim().toLowerCase() ?? '';
+  }
+  while (normalized.endsWith('.')) {
+    normalized = normalized.substring(0, normalized.length - 1);
+  }
+  return normalized;
+}
+
+bool assistantReferenceHostBlockedByPatterns(
+  String host,
+  Iterable<String> patterns,
+) {
+  final normalizedHost = normalizeAssistantReferenceHostPattern(host);
+  if (normalizedHost.isEmpty) return true;
+  return patterns.any(
+    (pattern) => assistantReferenceHostMatchesPattern(normalizedHost, pattern),
+  );
+}
+
+bool assistantReferenceHostMatchesPattern(String host, String pattern) {
+  final normalizedPattern = normalizeAssistantReferenceHostPattern(pattern);
+  if (normalizedPattern.isEmpty) return false;
+  if (!normalizedPattern.contains('*')) {
+    return host == normalizedPattern || host.endsWith('.$normalizedPattern');
+  }
+  if (normalizedPattern.startsWith('*.') &&
+      normalizedPattern.indexOf('*', 1) < 0) {
+    final suffix = normalizedPattern.substring(2);
+    return host.endsWith('.$suffix') && host != suffix;
+  }
+  final escaped = RegExp.escape(normalizedPattern).replaceAll(r'\*', '.*');
+  return RegExp('^$escaped\$').hasMatch(host);
+}
+
 class AssistantConversationController extends ChangeNotifier {
   AssistantConversationController({required WidgetRef ref, this.openContext})
     : _ref = ref;
@@ -597,7 +634,7 @@ class AssistantConversationController extends ChangeNotifier {
       final resolvedJourney = resolveAssistantJourneyFromResponse(runResponse);
       final effectiveJourney = _persistableAssistantJourney(
         response: runResponse,
-        journey: resolvedJourney.isEmpty ? _currentJourney : resolvedJourney,
+        journey: _currentJourney.isEmpty ? resolvedJourney : _currentJourney,
       );
       _ensureTranscriptRowsGrowable();
       final existingIndex = _findStreamingAssistantMessageIndex(
@@ -614,7 +651,9 @@ class AssistantConversationController extends ChangeNotifier {
         journey: effectiveJourney,
         completedDisplayState: completedDisplayState,
         incomingCanonicalProcessTimeline:
-            resolveAssistantProcessTimelineFromRunResponse(runResponse),
+            _currentCanonicalProcessTimeline.isEmpty
+            ? resolveAssistantProcessTimelineFromRunResponse(runResponse)
+            : const <ProcessTimelineFrame>[],
         incomingAnswerProcessing: _answerProcessingFromResponse(runResponse),
         existingRow: clearedRow,
         finalAnswerReady: finalAnswerReady,
@@ -871,7 +910,7 @@ class AssistantConversationController extends ChangeNotifier {
         );
         final effectiveJourney = _persistableAssistantJourney(
           response: finalResponse,
-          journey: resolvedJourney.isEmpty ? _currentJourney : resolvedJourney,
+          journey: _currentJourney.isEmpty ? resolvedJourney : _currentJourney,
         );
         final finalText = _resolveAssistantDisplayText(finalResponse);
         final displayPlainText = _resolveAssistantDisplayPlainText(
@@ -900,7 +939,9 @@ class AssistantConversationController extends ChangeNotifier {
           journey: effectiveJourney,
           completedDisplayState: completedDisplayState,
           incomingCanonicalProcessTimeline:
-              resolveAssistantProcessTimelineFromRunResponse(finalResponse),
+              _currentCanonicalProcessTimeline.isEmpty
+              ? resolveAssistantProcessTimelineFromRunResponse(finalResponse)
+              : const <ProcessTimelineFrame>[],
           incomingAnswerProcessing: _answerProcessingFromResponse(
             finalResponse,
           ),
@@ -1114,27 +1155,28 @@ class AssistantConversationController extends ChangeNotifier {
         );
   }
 
-  bool isReferenceHostAllowed(Uri uri) {
-    if (uri.scheme != 'https') return false;
+  bool isReferenceUriAllowed(Uri uri) {
+    final scheme = uri.scheme.trim().toLowerCase();
+    if (scheme != 'https' && scheme != 'http') return false;
     final host = uri.host.trim().toLowerCase();
     if (host.isEmpty) return false;
-    final whitelist = referenceWhitelistHosts();
-    if (whitelist.isEmpty) return true;
-    for (final allowed in whitelist) {
-      if (host == allowed || host.endsWith('.$allowed')) {
-        return true;
-      }
-    }
-    return false;
+    return !isReferenceHostBlocked(host);
   }
 
-  List<String> referenceWhitelistHosts() {
+  bool isReferenceHostBlocked(String host) {
+    return assistantReferenceHostBlockedByPatterns(
+      host,
+      referenceBlockedHostPatterns(),
+    );
+  }
+
+  List<String> referenceBlockedHostPatterns() {
     final scopeView = AssistantContextScopeReadView(buildContextScope());
     final privacyPolicy = scopeView.privacyPolicy;
     final rawHosts =
-        (privacyPolicy['allowedReferenceHosts'] as List?)
+        (privacyPolicy['blockedReferenceHosts'] as List?)
             ?.whereType<String>()
-            .map((item) => item.trim().toLowerCase())
+            .map(normalizeAssistantReferenceHostPattern)
             .where((item) => item.isNotEmpty)
             .toList(growable: false) ??
         const <String>[];
@@ -2038,6 +2080,10 @@ class AssistantConversationController extends ChangeNotifier {
         continue;
       }
       merged = RetrievalProcessingSnapshot(
+        searchedDocumentCount: math.max(
+          merged.searchedDocumentCount,
+          candidate.searchedDocumentCount,
+        ),
         processedDocumentCount: math.max(
           merged.processedDocumentCount,
           candidate.processedDocumentCount,

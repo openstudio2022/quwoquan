@@ -60,11 +60,15 @@ List<ProcessTimelineFrame> _processTimelineFromJourney(
       : '${designFrame.first.headline.trim()}\n${designFrame.first.detail.trim()}';
   final processingSummary = retrievalProcessing.processingSummary.trim();
   final shouldSupplementRetrievalProcessing =
-      baseFrames.any((frame) => frame.stepId == ProcessStepId.retrievalProcessing) ||
+      baseFrames.any(
+        (frame) => frame.stepId == ProcessStepId.retrievalProcessing,
+      ) ||
       retrievalProcessing.acceptedReferences.isNotEmpty ||
       retrievalProcessing.processedDocumentCount > 0 ||
       retrievalProcessing.acceptedDocumentCount > 0 ||
-      retrievalProcessing.selectedKeyPoints.any((item) => item.trim().isNotEmpty) ||
+      retrievalProcessing.selectedKeyPoints.any(
+        (item) => item.trim().isNotEmpty,
+      ) ||
       retrievalProcessing.expansionReason.trim().isNotEmpty ||
       (processingSummary.isNotEmpty &&
           processingSummary != designNarrative.trim());
@@ -371,9 +375,15 @@ void main() {
         ),
       );
 
-      expect(find.text(UITextConstants.assistantProcessRunningSummary), findsOneWidget);
+      expect(
+        find.text(UITextConstants.assistantProcessRunningSummary),
+        findsOneWidget,
+      );
       expect(find.text('耗时 9 秒'), findsOneWidget);
-      expect(find.text(UITextConstants.assistantProcessStageUnderstand), findsNothing);
+      expect(
+        find.text(UITextConstants.assistantProcessStageUnderstand),
+        findsNothing,
+      );
     });
 
     testWidgets('更长等待时顶部栏继续展示耗时而不是 reassurance', (tester) async {
@@ -436,9 +446,9 @@ void main() {
       );
 
       expect(find.text('我先把问题立住'), findsOneWidget);
-      expect(find.text('处理 1 篇'), findsOneWidget);
+      expect(find.text('搜索 1 篇'), findsOneWidget);
       expect(find.text('接纳 1 篇'), findsOneWidget);
-      expect(find.textContaining('处理了 1 篇'), findsOneWidget);
+      expect(find.textContaining('搜索了 1 篇'), findsOneWidget);
       expect(
         find.text(UITextConstants.assistantProcessStageUnderstand),
         findsNothing,
@@ -456,7 +466,7 @@ void main() {
       expect(find.text('整理回答'), findsNothing);
       expect(find.text('来源：官方'), findsNothing);
 
-      await tester.tap(find.textContaining('处理了 1 篇').last);
+      await tester.tap(find.textContaining('搜索了 1 篇').last);
       await tester.pump();
 
       expect(find.text('1. 四川文旅公告 · 官方'), findsOneWidget);
@@ -631,6 +641,7 @@ void main() {
         readiness: AssistantJourneyReadiness(finalAnswerReady: true),
       );
       const retrievalProcessing = RetrievalProcessingSnapshot(
+        searchedDocumentCount: 32,
         processedDocumentCount: 10,
         acceptedDocumentCount: 3,
         processingSummary: '已获取深圳官方及权威气象站的实时天气数据，信息完整，可直接作答。',
@@ -671,8 +682,11 @@ void main() {
       expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.narrative);
       expect(viewModel.blocks[1].headline, contains('围绕深圳实时天气'));
       expect(viewModel.blocks[1].items, isEmpty);
-      expect(viewModel.blocks[2].kind, AssistantJourneyBlockKind.referenceStats);
-      expect(viewModel.blocks[2].headline, '处理了 10 篇，接纳了 3 篇');
+      expect(
+        viewModel.blocks[2].kind,
+        AssistantJourneyBlockKind.referenceStats,
+      );
+      expect(viewModel.blocks[2].headline, '搜索了 32 篇，接纳了 3 篇');
       expect(viewModel.blocks[2].references, hasLength(3));
       expect(viewModel.blocks[3].kind, AssistantJourneyBlockKind.searchSummary);
       expect(viewModel.blocks[3].headline, contains('已获取深圳官方及权威气象站'));
@@ -722,10 +736,7 @@ void main() {
         ]),
       );
       expect(built.blocks.first.detail, isEmpty);
-      expect(
-        built.blocks[1].headline,
-        contains('我会先按天气现状和出门建议两路来核对'),
-      );
+      expect(built.blocks[1].headline, contains('我会先按天气现状和出门建议两路来核对'));
     });
 
     test('两段叙事会连续带出检索词设计与成答组织', () {
@@ -946,7 +957,7 @@ void main() {
       );
 
       expect(find.text('已完成处理'), findsOneWidget);
-      expect(find.text('处理 2 篇'), findsOneWidget);
+      expect(find.text('搜索 2 篇'), findsOneWidget);
       expect(find.text('接纳 2 篇'), findsOneWidget);
       expect(find.text('耗时 4 秒'), findsOneWidget);
       expect(find.text('已核对 2 个来源'), findsNothing);

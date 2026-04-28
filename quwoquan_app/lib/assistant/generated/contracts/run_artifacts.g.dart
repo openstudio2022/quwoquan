@@ -771,6 +771,7 @@ class ProcessTimelineFrameFields {
 
 class RetrievalProcessingSnapshot {
   const RetrievalProcessingSnapshot({
+    this.searchedDocumentCount = 0,
     this.processedDocumentCount = 0,
     this.acceptedDocumentCount = 0,
     this.processingSummary = "",
@@ -779,6 +780,7 @@ class RetrievalProcessingSnapshot {
     this.acceptedReferences = const <RetrievalProcessingReference>[],
   });
 
+  final int searchedDocumentCount;
   final int processedDocumentCount;
   final int acceptedDocumentCount;
   final String processingSummary;
@@ -787,6 +789,7 @@ class RetrievalProcessingSnapshot {
   final List<RetrievalProcessingReference> acceptedReferences;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
+        'searchedDocumentCount': searchedDocumentCount,
         'processedDocumentCount': processedDocumentCount,
         'acceptedDocumentCount': acceptedDocumentCount,
         'processingSummary': processingSummary,
@@ -797,6 +800,7 @@ class RetrievalProcessingSnapshot {
 
   factory RetrievalProcessingSnapshot.fromJson(Map<String, dynamic> json) {
     return RetrievalProcessingSnapshot(
+      searchedDocumentCount: (json['searchedDocumentCount'] as num?)?.toInt() ?? 0,
       processedDocumentCount: (json['processedDocumentCount'] as num?)?.toInt() ?? 0,
       acceptedDocumentCount: (json['acceptedDocumentCount'] as num?)?.toInt() ?? 0,
       processingSummary: (json['processingSummary'] as String?)?.trim() ?? "",
@@ -815,6 +819,7 @@ class RetrievalProcessingSnapshot {
 }
 
 class RetrievalProcessingSnapshotFields {
+  static const String searchedDocumentCount = 'searchedDocumentCount';
   static const String processedDocumentCount = 'processedDocumentCount';
   static const String acceptedDocumentCount = 'acceptedDocumentCount';
   static const String processingSummary = 'processingSummary';

@@ -159,9 +159,130 @@ class AssistantSessionStore {
       if (result.mutated) {
         mutated = true;
       }
+      final repairedUser = _missingUserMessageBeforeAssistant(
+        normalized,
+        result.message,
+      );
+      if (repairedUser != null) {
+        normalized.add(repairedUser);
+        mutated = true;
+      }
       normalized.add(result.message);
     }
     return _NormalizedSessionMessages(messages: normalized, mutated: mutated);
+  }
+
+  Map<String, dynamic>? _missingUserMessageBeforeAssistant(
+    List<Map<String, dynamic>> normalized,
+    Map<String, dynamic> message,
+  ) {
+    if ((message['role'] ?? '').toString().trim() != 'assistant') {
+      return null;
+    }
+    final sourceQuery = _recoverAssistantSourceQuery(message);
+    if (sourceQuery.isEmpty) return null;
+    if (normalized.isNotEmpty) {
+      final previous = normalized.last;
+      final previousRole = (previous['role'] ?? '').toString().trim();
+      final previousContent = (previous['content'] ?? '').toString().trim();
+      if (previousRole == 'user') {
+        return null;
+      }
+      if (previousContent == sourceQuery) return null;
+    }
+    final timestamp = (message['timestamp'] ?? '').toString().trim();
+    return <String, dynamic>{
+      'role': 'user',
+      'content': sourceQuery,
+      if (timestamp.isNotEmpty) 'timestamp': timestamp,
+    };
+  }
+
+  String _recoverAssistantSourceQuery(Map<String, dynamic> message) {
+    final direct = (message['sourceQuery'] ?? '').toString().trim();
+    if (direct.isNotEmpty) return direct;
+    final journey = (message['journey'] as Map?)?.cast<String, dynamic>();
+    final journeyQuery = _recoverQueryFromJourney(journey);
+    if (journeyQuery.isNotEmpty) return journeyQuery;
+    final runArtifacts = (message['runArtifacts'] as Map?)
+        ?.cast<String, dynamic>();
+    final nestedJourney = (runArtifacts?['journey'] as Map?)
+        ?.cast<String, dynamic>();
+    final nestedJourneyQuery = _recoverQueryFromJourney(nestedJourney);
+    if (nestedJourneyQuery.isNotEmpty) return nestedJourneyQuery;
+    return _recoverQueryFromAssistantContent(
+      (message['content'] ?? '').toString(),
+    );
+  }
+
+  String _recoverQueryFromJourney(Map<String, dynamic>? journey) {
+    if (journey == null || journey.isEmpty) return '';
+    final stages = journey['stages'];
+    if (stages is List) {
+      for (final item in stages.whereType<Map>()) {
+        final stage = item.cast<String, dynamic>();
+        if ((stage['stageId'] ?? '').toString().trim() != 'analyze') {
+          continue;
+        }
+        final summary = (stage['summary'] ?? '').toString().trim();
+        final query = _queryFromSummary(summary);
+        if (query.isNotEmpty) return query;
+      }
+    }
+    final entries = journey['entries'];
+    if (entries is List) {
+      for (final item in entries.whereType<Map>()) {
+        final entry = item.cast<String, dynamic>();
+        if ((entry['stageId'] ?? '').toString().trim() != 'analyze') {
+          continue;
+        }
+        final headline = (entry['headline'] ?? '').toString().trim();
+        final query = _queryFromSummary(headline);
+        if (query.isNotEmpty) return query;
+      }
+    }
+    return '';
+  }
+
+  String _queryFromSummary(String summary) {
+    final text = summary.trim();
+    if (text.isEmpty) return '';
+    final coreIndex = text.indexOf('核心问题：');
+    if (coreIndex >= 0) {
+      return _cleanRecoveredQuery(text.substring(coreIndex + '核心问题：'.length));
+    }
+    final colonIndex = text.indexOf('：');
+    if (colonIndex >= 0 && colonIndex + 1 < text.length) {
+      return _cleanRecoveredQuery(text.substring(colonIndex + 1));
+    }
+    return '';
+  }
+
+  String _recoverQueryFromAssistantContent(String content) {
+    final text = content.trim();
+    if (text.isEmpty) return '';
+    final firstLine = text.split('\n').first.trim();
+    final demandMatch = RegExp(r'^针对你(.+?)的需求').firstMatch(firstLine);
+    if (demandMatch != null) {
+      return _cleanRecoveredQuery('你${demandMatch.group(1) ?? ''}的需求');
+    }
+    final firstSentence = text
+        .split(RegExp(r'[。！？!?]\s*'))
+        .first
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (firstSentence.isEmpty) return '';
+    if (firstSentence.length <= 64) {
+      return _cleanRecoveredQuery(firstSentence);
+    }
+    return _cleanRecoveredQuery(firstSentence.substring(0, 64));
+  }
+
+  String _cleanRecoveredQuery(String raw) {
+    return raw
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll(RegExp(r'[。！？!?]+$'), '')
+        .trim();
   }
 
   /// 判断一条消息是否是降级/错误/JSON原文内容，加载时需过滤，避免污染后续 LLM 历史。

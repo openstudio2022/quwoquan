@@ -171,6 +171,10 @@ class FinalizeRunner {
     final displayTextForSession = displayMarkdown.isNotEmpty
         ? displayMarkdown
         : displayPlainText;
+    _ensureLatestUserTurnPersisted(
+      sessionId: sessionId,
+      latestUserQuery: latestUserQuery,
+    );
     final persistedTurnFields = buildPersistedAssistantTurnFields(
       journey: persistedJourney,
       displayMarkdown: displayMarkdown,
@@ -326,6 +330,27 @@ class FinalizeRunner {
       },
     );
     return response;
+  }
+
+  void _ensureLatestUserTurnPersisted({
+    required String sessionId,
+    required String latestUserQuery,
+  }) {
+    final normalizedQuery = latestUserQuery.trim();
+    if (normalizedQuery.isEmpty) return;
+    final messages = sessionManager.getOrCreateSession(sessionId);
+    if (messages.isEmpty) return;
+    final last = messages.last;
+    final lastRole = (last['role'] ?? '').toString().trim();
+    final lastContent = (last['content'] ?? '').toString().trim();
+    if (lastRole == 'user' && lastContent == normalizedQuery) {
+      return;
+    }
+    sessionManager.appendMessage(
+      sessionId: sessionId,
+      role: 'user',
+      content: normalizedQuery,
+    );
   }
 
   Map<String, dynamic> _buildPersistedRunArtifactsPayload({

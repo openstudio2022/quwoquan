@@ -1,6 +1,7 @@
 version: 1
 feature: ios-native-page-enforcement
 level: "L3_story"
+archived: true
 template: A1-A5
 tree_context:
   feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.ios-native-page-enforcement

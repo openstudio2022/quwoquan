@@ -152,15 +152,19 @@ void main() {
 
     test('backward dynamic render frame mirrors forward geometry contract', () {
       const pageSize = Size(420, 584);
-      const localPagePoint = Offset(96, 496);
-      final mirroredPoint = _mirrorX(localPagePoint, pageSize.width);
+      const localPagePoint = Offset(-96, 496);
+      final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
+        localPagePoint: localPagePoint,
+        pageSize: pageSize,
+      );
       final forwardCalculation = StPageFlipCalculation(
         direction: StPageFlipDirection.forward,
         corner: StPageFlipCorner.bottom,
         pageWidth: pageSize.width,
         pageHeight: pageSize.height,
       );
-      expect(forwardCalculation.calc(mirroredPoint), isTrue);
+      expect(replayLocalPoint.dx, closeTo(324, 0.001));
+      expect(forwardCalculation.calc(replayLocalPoint), isTrue);
 
       final frame = buildBackwardDynamicRenderFrame(
         BackwardRenderFrameData(
@@ -194,12 +198,32 @@ void main() {
           pageSize.width,
         ),
       );
-      expect(
-        frame.flippingAnchor,
-        _mirrorX(forwardCalculation.getActiveCorner(), pageSize.width),
-      );
+      expect(frame.flippingAnchor, Offset.zero);
       expect(frame.bottomAnchor, Offset.zero);
       expect(frame.angle, closeTo(-forwardCalculation.getAngle(), 1e-9));
+      final forwardFoldGeometry = forwardCalculation.getForwardFoldGeometry();
+      expect(forwardFoldGeometry, isNotNull);
+      final projectedFrame = frame.backwardProjectedFrame;
+      expect(projectedFrame, isNotNull);
+      expect(projectedFrame!.previousBackPolygon, frame.flippingClipArea);
+      expect(
+        projectedFrame.foldLine,
+        _mirroredLine(forwardFoldGeometry!.foldLine, pageSize.width),
+      );
+      expect(projectedFrame.foldLineSource, 'forwardRealGeometryMirrored');
+      expect(projectedFrame.edgeLineSource, 'reflectedOriginalRightEdge');
+      expect(projectedFrame.previousBackVertexCount, greaterThanOrEqualTo(3));
+      expect(
+        _linesAreParallel(
+          projectedFrame.foldLine,
+          projectedFrame.projectedRightEdgeLine,
+        ),
+        isFalse,
+      );
+      expect(
+        projectedFrame.currentResidualPolygon.length,
+        greaterThanOrEqualTo(3),
+      );
     });
 
     test('backward mesh keeps spine and seam vertically aligned', () {
@@ -390,4 +414,16 @@ Offset _mirrorX(Offset point, double width) =>
 
 List<Offset> _mirroredPolygon(List<Offset> polygon, double width) {
   return polygon.map((point) => _mirrorX(point, width)).toList(growable: false);
+}
+
+(Offset, Offset) _mirroredLine((Offset, Offset) line, double width) {
+  return (_mirrorX(line.$1, width), _mirrorX(line.$2, width));
+}
+
+bool _linesAreParallel((Offset, Offset) a, (Offset, Offset) b) {
+  final ax = a.$2.dx - a.$1.dx;
+  final ay = a.$2.dy - a.$1.dy;
+  final bx = b.$2.dx - b.$1.dx;
+  final by = b.$2.dy - b.$1.dy;
+  return (ax * by - ay * bx).abs() < 0.01;
 }

@@ -201,11 +201,14 @@ case "$scope" in
   app)
     run_app
     ;;
+  portal|ops-portal)
+    run_portal
+    ;;
   patrol)
     run_patrol_local
     ;;
   *)
-    echo "[gate] FAIL: invalid scope: $scope (expected all|service|app|patrol)" 1>&2
+    echo "[gate] FAIL: invalid scope: $scope (expected all|service|app|portal|patrol)" 1>&2
     exit 2
     ;;
 esac

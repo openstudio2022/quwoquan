@@ -16,6 +16,7 @@ require_cmd() {
 }
 
 require_cmd ruby
+require_cmd dart
 
 has_rg() {
   command -v rg >/dev/null 2>&1
@@ -164,7 +165,7 @@ ruby -ryaml -e '
   end
 ' 
 
-# 1.4) runtime/errors contract sync (module/kind enums)
+# 1.4) runtime/errors contract sync (module enum + runtime wire shape)
 echo "[gate] checking runtime/errors contract sync"
 ruby -ryaml -e '
   def fail(msg)
@@ -175,20 +176,43 @@ ruby -ryaml -e '
   openapi = YAML.load_file("contracts/metadata/_shared/openapi_common.yaml") || {}
   schema = (((openapi["components"] || {})["schemas"] || {})["ErrorResponse"] || {})
   props = schema["properties"] || {}
+  required = (schema["required"] || []).map(&:to_s)
   module_enum = (props.dig("module", "enum") || []).map(&:to_s).sort
   kind_enum = (props.dig("kind", "enum") || []).map(&:to_s).sort
+  origin_enum = (props.dig("origin", "enum") || []).map(&:to_s).sort
+  nature_enum = (props.dig("nature", "enum") || []).map(&:to_s).sort
 
   go = File.read("runtime/errors/errors.go")
   module_constants = go.scan(/Module[A-Za-z0-9_]+\s+Module\s*=\s*"([A-Z_]+)"/).flatten.sort
-  kind_constants = go.scan(/Kind[A-Za-z0-9_]+\s+Kind\s*=\s*"([A-Z_]+)"/).flatten.sort
 
   unless module_enum == module_constants
     fail("module enum mismatch between openapi common.yaml and runtime/errors/errors.go")
   end
-  unless kind_enum == kind_constants
-    fail("kind enum mismatch between openapi common.yaml and runtime/errors/errors.go")
+  %w[code origin nature userMessage debugMessage module kind reason location context].each do |field|
+    fail("ErrorResponse required fields missing #{field}") unless required.include?(field)
+  end
+  %w[validation auth permission notFound rateLimited timeout network unavailable internal].each do |kind|
+    fail("ErrorResponse kind enum missing #{kind}") unless kind_enum.include?(kind)
+  end
+  %w[user environment remoteDependency system].each do |origin|
+    fail("ErrorResponse origin enum missing #{origin}") unless origin_enum.include?(origin)
+  end
+  %w[permanent transient requiresPermission bug].each do |nature|
+    fail("ErrorResponse nature enum missing #{nature}") unless nature_enum.include?(nature)
+  end
+  location_required = (props.dig("location", "required") || []).map(&:to_s)
+  %w[businessObject functionModule].each do |field|
+    fail("ErrorResponse location required fields missing #{field}") unless location_required.include?(field)
+  end
+  context_attrs = props.dig("context", "properties", "attributes", "items", "properties") || {}
+  unless context_attrs.dig("key", "type") == "string" && context_attrs.dig("value", "type") == "string"
+    fail("ErrorResponse context.attributes must be string key/value pairs")
   end
 '
+
+echo "[gate] checking repository runtime error cutover guard"
+(cd "$ROOT/.." && dart tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check)
+(cd "$ROOT/.." && dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart)
 
 # 1.5) io access log baseline sync
 echo "[gate] checking io access log baseline sync"

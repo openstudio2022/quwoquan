@@ -1,6 +1,7 @@
 version: 1
 feature: dart-semantic-gate
 level: "L3_story"
+archived: true
 template: A1-A8
 tree_context:
   feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.dart-semantic-gate

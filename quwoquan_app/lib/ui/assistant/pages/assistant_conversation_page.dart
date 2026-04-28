@@ -363,8 +363,8 @@ class _AssistantConversationPageState
     final usageMap = switch (row) {
       AssistantAnswerTranscriptRow r => r.uiUsageStats,
       _ => assistantUiUsageStatsMapFromMessageField(
-          assistantTranscriptRowToProtocolMap(row)['uiUsageStats'],
-        ),
+        assistantTranscriptRowToProtocolMap(row)['uiUsageStats'],
+      ),
     };
     final elapsedMs = switch (row) {
       AssistantAnswerTranscriptRow r => r.persisted.assistantElapsedMs,
@@ -377,8 +377,9 @@ class _AssistantConversationPageState
       displayState: resolvePersistedAssistantDisplayStateFromTranscriptRow(row),
       understandingSnapshot:
           resolveAssistantUnderstandingSnapshotFromTranscriptRow(row),
-      retrievalProcessing:
-          resolveAssistantRetrievalProcessingFromTranscriptRow(row),
+      retrievalProcessing: resolveAssistantRetrievalProcessingFromTranscriptRow(
+        row,
+      ),
       answerProcessing: resolveAssistantAnswerProcessingFromTranscriptRow(row),
       usageStats: AssistantUiUsageStatsViewData.fromProtocolMap(usageMap),
       elapsedMs: elapsedMs,
@@ -792,7 +793,7 @@ class _AssistantConversationPageState
     final url = citation.url.trim();
     if (url.isEmpty) return;
     final uri = Uri.tryParse(url);
-    final allowOpen = uri != null && _controller.isReferenceHostAllowed(uri);
+    final allowOpen = uri != null && _controller.isReferenceUriAllowed(uri);
     if (!allowOpen) {
       await Clipboard.setData(ClipboardData(text: url));
       if (!mounted) return;
@@ -1144,16 +1145,16 @@ class _AssistantConversationPageState
                             isRunning: true,
                             displayState:
                                 resolvePersistedAssistantDisplayStateFromTranscriptRow(
-                              row,
-                            ),
+                                  row,
+                                ),
                             understandingSnapshot:
                                 _controller.currentUnderstandingSnapshot,
                             retrievalProcessing:
                                 _controller.currentRetrievalProcessing,
                             answerProcessing:
                                 resolveAssistantAnswerProcessingFromTranscriptRow(
-                              row,
-                            ),
+                                  row,
+                                ),
                             elapsedMs: _controller.currentJourneyElapsedMs,
                           )
                         : (isAssistantMessage
