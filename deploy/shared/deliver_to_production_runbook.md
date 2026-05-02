@@ -126,7 +126,7 @@ cd quwoquan_app && patrol test test/patrol/ \
   --dart-define=TEST_AUTH_TOKEN=<token>
 ```
 
-CI 可用 `.github/workflows/pre-release-gate.yml` 在 Firebase Test Lab 执行 L4（Android + iOS）。
+CI 使用 `.github/workflows/pre-release-gate.yml` 在 GitHub hosted runner 执行 L4：Android 为 `ubuntu-latest` + Android Emulator，iOS 为 `macos-latest` + iOS Simulator。
 
 失败 → 不得进入 G5c。
 

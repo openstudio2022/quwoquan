@@ -71,23 +71,34 @@
 | **GAMMA_PRODUCT_OPS_BASE_URL** | gamma Product Ops API 地址（L3 使用） |
 | **GAMMA_TEST_AUTH_TOKEN** | L3/L4 鉴权 Token |
 | **GAMMA_KUBECONFIG** | gamma 集群 kubeconfig，**base64 编码** |
-| **GCP_SERVICE_ACCOUNT_KEY** | Firebase Test Lab 凭证 |
-| **FTL_RESULTS_BUCKET** | FTL 结果存储桶（如 `gs://my-bucket`） |
-
-### 可选（iOS 签名）
-
-| Secret | 用途 |
-|--------|------|
-| MATCH_PASSWORD | fastlane match 证书密码（iOS build） |
 
 ### 说明
 
 - `GAMMA_KUBECONFIG` 未配置时，deploy-integration 仅 skip，不 fail。
 - L3/L4 依赖 deploy-integration 完成，需 gamma 已部署且 `GAMMA_BASE_URL` 可访问。
+- L4 Android 使用 GitHub hosted `ubuntu-latest` + Android Emulator；L4 iOS 使用 GitHub hosted `macos-latest` + iOS Simulator，不再依赖 Firebase Test Lab / GCP 凭证。
 
 ---
 
-## 六、项目结构与路径
+## 六、App Env Device Matrix（app-env-device-matrix.yml）
+
+### 必须配置（gamma 覆盖时）
+
+| Secret | 用途 |
+|--------|------|
+| **GAMMA_BASE_URL** | gamma 端侧远端网关地址 |
+
+### 说明
+
+- 覆盖矩阵为 `alpha/beta/gamma × Android/iOS`。
+- `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
+- `beta` 在 GitHub hosted runner 内启动本地 beta assistant-service + gateway；Android 通过 `10.0.2.2` 访问 runner，iOS 通过 `127.0.0.1` 访问 runner。
+- `gamma` 连接公网可达的 `GAMMA_BASE_URL`，不依赖本地 DNS/TLS。
+- beta CI 默认使用 deterministic provider，避免端侧环境 smoke 被外部模型供应商可用性阻塞；真实模型链路仍以人工/专门 beta 验证为准。
+
+---
+
+## 七、项目结构与路径
 
 ```
 ├── quwoquan_service/     # Go monorepo + rec-model-service (Python)

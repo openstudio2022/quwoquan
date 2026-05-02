@@ -29,7 +29,7 @@ v*-rc* tag
   → gate: make gate（L1+L2）+ kustomize build（G3）
   → deploy-integration: kubectl apply（G5a，需 INTEGRATION_KUBECONFIG）
   → l3-api-contract: make test-api-contract（G5b，部署完成后）
-  → l4-android / l4-ios: Firebase Test Lab（G5b，部署完成后）
+  → l4-android / l4-ios: GitHub hosted Android Emulator / iOS Simulator（G5b，部署完成后）
 ```
 
 **已落实**：gate 仅 L1+L2；L3/L4 必须等待 deploy-integration 完成后执行，验证真实部署环境。
@@ -50,8 +50,8 @@ pre-release-gate
     ├─ Job1: gate（L1+L2）
     ├─ Job2: deploy-integration（kubectl apply）  ✓ 已实现
     ├─ Job3: l3-api-contract（需 Job2 完成）      ✓ 已实现
-    ├─ Job4: l4-android（需 Job2 完成）           ✓ 已实现
-    └─ Job5: l4-ios（需 Job2 完成）               ✓ 已实现
+    ├─ Job4: l4-android（GitHub hosted emulator，需 Job2 完成） ✓ 已实现
+    └─ Job5: l4-ios（GitHub hosted simulator，需 Job2 完成）    ✓ 已实现
     ↓
 全部通过 → 允许灰度到 prod（人工或下游 workflow）
     ↓
@@ -134,9 +134,6 @@ deploy-integration:
 | `GAMMA_PRODUCT_OPS_BASE_URL` | gamma 上 Ops/产品面 API 基址，`make test-api-contract` 必需 |
 | `GAMMA_TEST_AUTH_TOKEN` | L3/L4 鉴权 |
 | `GAMMA_KUBECONFIG` | gamma 集群 kubeconfig（或 OIDC 等效） |
-| `GCP_SERVICE_ACCOUNT_KEY` | FTL 用 |
-| `FTL_RESULTS_BUCKET` | FTL 结果存储 |
-| `MATCH_PASSWORD` | iOS 签名（如需要） |
 
 ### 4.2 基础设施
 
