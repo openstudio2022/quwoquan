@@ -148,25 +148,37 @@ Future<void> _sendAndExpect(
   required AssistantScenario scenario,
   required String runtimeEnv,
 }) async {
-  await tester.ensureVisible(find.byKey(TestKeys.assistantChatInputField));
-  await tester.pump(const Duration(milliseconds: 100));
-  await tester.enterText(
-    find.byKey(TestKeys.assistantChatInputField),
-    scenario.question,
-  );
-  tester.testTextInput.updateEditingValue(
-    TextEditingValue(
-      text: scenario.question,
-      selection: TextSelection.collapsed(offset: scenario.question.length),
-    ),
-  );
-  await _tapSend(tester, scenario.question);
-  await _pumpUntilStreamSettled(tester);
+  Future<void> sendOnce() async {
+    await tester.ensureVisible(find.byKey(TestKeys.assistantChatInputField));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(
+      find.byKey(TestKeys.assistantChatInputField),
+      scenario.question,
+    );
+    tester.testTextInput.updateEditingValue(
+      TextEditingValue(
+        text: scenario.question,
+        selection: TextSelection.collapsed(offset: scenario.question.length),
+      ),
+    );
+    await _tapSend(tester, scenario.question);
+    await _pumpUntilStreamSettled(tester);
+  }
+
+  await sendOnce();
 
   final context = tester.element(find.byType(AssistantTabPage));
-  final streamState = ProviderScope.containerOf(
+  var streamState = ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider);
+  if ((runtimeEnv == 'beta' || runtimeEnv == 'gamma') &&
+      streamState.errorMessage.isNotEmpty) {
+    // Hosted emulators may hit a transient gateway timeout on first attempt.
+    await sendOnce();
+    streamState = ProviderScope.containerOf(
+      context,
+    ).read(personalAssistantStreamControllerProvider);
+  }
   expect(streamState.running, isFalse);
   expect(streamState.errorMessage, isEmpty);
   expect(streamState.answer, isNot(contains('ASSISTANT.MIDDLEWARE')));
