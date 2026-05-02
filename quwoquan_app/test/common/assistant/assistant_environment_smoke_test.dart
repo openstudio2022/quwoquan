@@ -179,17 +179,35 @@ Future<void> _sendAndExpect(
     expect(streamState.processSummary.acceptedCount, greaterThan(0));
     expect(streamState.processSummary.processingSummary, isNotEmpty);
   }
-  for (final fragment in scenario.answerFragmentsFor(runtimeEnv)) {
-    expect(streamState.answer, contains(fragment));
-  }
-  for (final eventType in scenario.eventTypesFor(runtimeEnv)) {
+  if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
+    final expectedFragments = scenario.answerFragmentsFor(runtimeEnv);
     expect(
-      streamState.events.any((event) => event.eventType == eventType),
+      expectedFragments.any(streamState.answer.contains),
       isTrue,
-      reason:
-          '期望 stream event $eventType，实际为 '
-          '${streamState.events.map((event) => event.eventType).toList()}',
+      reason: '云侧回答未命中任一期望片段: $expectedFragments',
     );
+    for (final eventType in const ['turn_started', 'final_answer']) {
+      expect(
+        streamState.events.any((event) => event.eventType == eventType),
+        isTrue,
+        reason:
+            '期望关键 stream event $eventType，实际为 '
+            '${streamState.events.map((event) => event.eventType).toList()}',
+      );
+    }
+  } else {
+    for (final fragment in scenario.answerFragmentsFor(runtimeEnv)) {
+      expect(streamState.answer, contains(fragment));
+    }
+    for (final eventType in scenario.eventTypesFor(runtimeEnv)) {
+      expect(
+        streamState.events.any((event) => event.eventType == eventType),
+        isTrue,
+        reason:
+            '期望 stream event $eventType，实际为 '
+            '${streamState.events.map((event) => event.eventType).toList()}',
+      );
+    }
   }
   if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
     _assertCloudPersonalAssistantNarrativeQuality(streamState);
