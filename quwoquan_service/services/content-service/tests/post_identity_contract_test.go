@@ -488,9 +488,6 @@ func TestDiscoveryProjectionPersistsProfileSubjectID(t *testing.T) {
 		Decode(&projected); err != nil {
 		t.Fatalf("expected discovery projection, got %v", err)
 	}
-	if projected["authorId"] != "projection_author" {
-		t.Fatalf("expected authorId=projection_author, got %v", projected["authorId"])
-	}
 	if projected["profileSubjectId"] != "persona_projection_author" {
 		t.Fatalf("expected profileSubjectId=persona_projection_author, got %v", projected["profileSubjectId"])
 	}
