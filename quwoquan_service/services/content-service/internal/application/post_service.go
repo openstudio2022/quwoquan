@@ -639,7 +639,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 			"author mismatch",
 		)
 	}
-	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
+	if err := applyPostSettingsPayload(post, payload); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
@@ -722,7 +722,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if articleDocument, exists := payload["articleDocument"]; exists {
 		post.ArticleDocument = asMap(articleDocument)
 	}
-	if err := applyPostSettingsPayload(post, payload); err != nil {
+	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
 		return nil, err
 	}
 	s.syncArticleDocumentSnapshot(post)
