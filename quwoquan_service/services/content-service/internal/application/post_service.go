@@ -412,6 +412,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 			Payload: map[string]any{
 				"_id":                post.ID,
 				"authorId":           post.AuthorId,
+				"profileSubjectId":   post.ProfileSubjectId,
 				"contentType":        post.ContentType,
 				"contentIdentity":    post.ContentIdentity,
 				"status":             post.Status,
@@ -568,6 +569,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 			Payload: map[string]any{
 				"_id":                post.ID,
 				"authorId":           post.AuthorId,
+				"profileSubjectId":   post.ProfileSubjectId,
 				"contentType":        post.ContentType,
 				"contentIdentity":    post.ContentIdentity,
 				"status":             post.Status,
@@ -587,6 +589,7 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 			Payload: map[string]any{
 				"_id":                post.ID,
 				"authorId":           post.AuthorId,
+				"profileSubjectId":   post.ProfileSubjectId,
 				"contentType":        post.ContentType,
 				"contentIdentity":    post.ContentIdentity,
 				"status":             post.Status,
@@ -599,6 +602,25 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 		})
 	}
 	return post, nil
+}
+
+func promoteSettingsPayload(payload map[string]any) map[string]any {
+	settings := map[string]any{}
+	for _, key := range []string{
+		"primaryHomepageId",
+		"primaryHomepageType",
+		"primaryHomepageSnapshot",
+		"visibility",
+		"circleIds",
+		"groupId",
+		"nodeId",
+		"assistantUsePolicy",
+	} {
+		if value, exists := payload[key]; exists {
+			settings[key] = value
+		}
+	}
+	return settings
 }
 
 func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID string, payload map[string]any) (*postmodel.Post, error) {
@@ -617,7 +639,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 			"author mismatch",
 		)
 	}
-	if err := applyPostSettingsPayload(post, payload); err != nil {
+	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
@@ -633,6 +655,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 	s.publishPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
 		"_id":                post.ID,
 		"authorId":           post.AuthorId,
+		"profileSubjectId":   post.ProfileSubjectId,
 		"contentType":        post.ContentType,
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
@@ -647,6 +670,7 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 	s.projectPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
 		"_id":                post.ID,
 		"authorId":           post.AuthorId,
+		"profileSubjectId":   post.ProfileSubjectId,
 		"contentType":        post.ContentType,
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
@@ -715,6 +739,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	s.publishPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
 		"_id":                post.ID,
 		"authorId":           post.AuthorId,
+		"profileSubjectId":   post.ProfileSubjectId,
 		"contentType":        post.ContentType,
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
@@ -730,6 +755,7 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	s.projectPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
 		"_id":                post.ID,
 		"authorId":           post.AuthorId,
+		"profileSubjectId":   post.ProfileSubjectId,
 		"contentType":        post.ContentType,
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,

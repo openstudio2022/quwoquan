@@ -347,7 +347,7 @@ func TestCircleVisiblePostAllowsCircleMemberViewer(t *testing.T) {
 
 	outsiderReq := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/users/circle_author/posts?identity=work&type=article",
+		"/v1/content/profile-subjects/circle_author/posts?identity=work&type=article",
 		nil,
 	)
 	outsiderReq.Header.Set("X-Client-User-Id", "outsider")
@@ -368,7 +368,7 @@ func TestCircleVisiblePostAllowsCircleMemberViewer(t *testing.T) {
 
 	memberListReq := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/users/circle_author/posts?identity=work&type=article",
+		"/v1/content/profile-subjects/circle_author/posts?identity=work&type=article",
 		nil,
 	)
 	memberListReq.Header.Set("X-Client-User-Id", "circle_member")
@@ -513,7 +513,7 @@ func TestListUserPostsByIdentity(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/users/identity_feed_author/posts?identity=work&type=article&limit=20",
+		"/v1/content/profile-subjects/identity_feed_author/posts?identity=work&type=article&limit=20",
 		nil,
 	)
 	rec := httptest.NewRecorder()

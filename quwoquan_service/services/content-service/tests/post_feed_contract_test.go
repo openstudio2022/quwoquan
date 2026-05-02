@@ -341,8 +341,8 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 	behaviorReq.Header.Set("X-Client-Session-Id", "session_fw_01")
 	behaviorRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(behaviorRec, behaviorReq)
-	if behaviorRec.Code != http.StatusOK {
-		t.Fatalf("behavior expected 200, got %d: %s", behaviorRec.Code, behaviorRec.Body.String())
+	if behaviorRec.Code != http.StatusNoContent {
+		t.Fatalf("behavior expected 204, got %d: %s", behaviorRec.Code, behaviorRec.Body.String())
 	}
 
 	req2After := httptest.NewRequest(

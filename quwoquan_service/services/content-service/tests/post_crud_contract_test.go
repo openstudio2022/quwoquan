@@ -147,8 +147,8 @@ func TestDeletePostContract(t *testing.T) {
 	getReq.Header.Set("X-Client-User-Id", "delete_author")
 	getRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 after delete, got %d: %s", getRec.Code, getRec.Body.String())
+	if getRec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 after delete, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 }
 

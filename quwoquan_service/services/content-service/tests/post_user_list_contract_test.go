@@ -17,7 +17,7 @@ func TestListUserPosts(t *testing.T) {
 	}
 	createPostWithAuthor(t, "other_author", `{"contentType":"image","title":"other post","mediaUrls":["https://example.com/img.jpg"]}`)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/users/posts?userId="+authorID+"&limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/profile-subjects/"+authorID+"/posts?limit=20", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -36,7 +36,7 @@ func TestListUserPosts(t *testing.T) {
 func TestListUserPostsEmpty(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/users/posts?userId=nonexistent_user&limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/profile-subjects/nonexistent_user/posts?limit=20", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

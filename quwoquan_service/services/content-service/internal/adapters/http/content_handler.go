@@ -881,6 +881,11 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			userID = strings.TrimSpace(raw[:idx])
 		}
 	}
+	if raw := strings.TrimPrefix(r.URL.Path, "/v1/content/profile-subjects/"); raw != r.URL.Path {
+		if idx := strings.Index(raw, "/posts"); idx > 0 {
+			userID = strings.TrimSpace(raw[:idx])
+		}
+	}
 	if queryUserID := strings.TrimSpace(r.URL.Query().Get("userId")); queryUserID != "" {
 		userID = queryUserID
 	}
