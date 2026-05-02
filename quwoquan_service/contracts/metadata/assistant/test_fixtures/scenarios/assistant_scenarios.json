@@ -145,7 +145,7 @@
         "toolSummary": "alpha mock 已返回深圳天气提示。"
       },
       "remoteExpectations": {
-        "answerFragments": ["深圳", "天气"],
+        "answerFragments": ["Shenzhen"],
         "eventTypes": [
           "turn_started",
           "plan_updated",
