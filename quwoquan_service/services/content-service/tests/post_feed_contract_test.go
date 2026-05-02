@@ -286,7 +286,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 		))
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&sort=recommend&limit=4", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=4", nil)
 	req1.Header.Set("X-Client-User-Id", "user_fw_01")
 	req1.Header.Set("X-Client-Session-Id", "session_fw_01")
 	rec1 := httptest.NewRecorder()
@@ -347,7 +347,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 
 	req2After := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?type=photo&sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		"/v1/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	req2After.Header.Set("X-Client-User-Id", "user_fw_01")
