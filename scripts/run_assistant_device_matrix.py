@@ -123,7 +123,7 @@ def discover_devices() -> list[dict[str, Any]]:
     devices = []
     for device in raw_devices:
         target = str(device.get("targetPlatform", "")).lower()
-        if target not in {"ios", "android"}:
+        if target != "ios" and not target.startswith("android"):
             continue
         if not device.get("id"):
             continue
