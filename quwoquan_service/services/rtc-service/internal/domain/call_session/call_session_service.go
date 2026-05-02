@@ -155,12 +155,12 @@ func (s *CallSessionService) JoinCall(session *model.CallSession, userID string)
 	if session.Status == model.StatusEnded {
 		return errors.New("cannot join an ended call")
 	}
-	if countActiveParticipants(session) >= session.MaxParticipants {
-		return errors.New("call is full")
-	}
 
 	now := time.Now()
 	p := findParticipant(session, userID)
+	if p == nil && countActiveParticipants(session) >= session.MaxParticipants {
+		return errors.New("call is full")
+	}
 	if p != nil {
 		p.Status = model.ParticipantConnected
 		p.JoinedAt = &now
