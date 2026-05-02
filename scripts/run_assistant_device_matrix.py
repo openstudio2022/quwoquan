@@ -389,19 +389,21 @@ def run_matrix_test(
         "找私助暂时不可用",
         "assistant beta gateway upstream failed",
         "SocketException",
+        "Shell subprocess crashed with SIGTERM",
+        "PathNotFoundException",
     ]
     if env_name in {"beta", "gamma"} and result["exitCode"] != 0:
         retries: list[dict[str, Any]] = []
         max_retries = max(0, args.remote_retry_attempts)
         while len(retries) < max_retries:
             summary = str(result.get("outputSummary", ""))
-            if not any(marker in summary for marker in retry_markers):
-                break
+            matched_markers = [marker for marker in retry_markers if marker in summary]
             retries.append(
                 {
                     "attempt": len(retries) + 1,
                     "exitCode": result.get("exitCode", 1),
                     "timedOut": result.get("timedOut", False),
+                    "matchedRetryMarkers": matched_markers,
                 }
             )
             health_base = (
