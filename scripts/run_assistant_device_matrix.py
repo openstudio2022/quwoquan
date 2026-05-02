@@ -381,26 +381,46 @@ def run_matrix_test(
         cwd=APP_DIR,
         timeout_seconds=args.test_timeout_seconds,
     )
-    if env_name == "beta" and result["exitCode"] != 0:
-        summary = str(result.get("outputSummary", ""))
-        retry_markers = [
-            "Connection timed out",
-            "Connection refused",
-            "找私助暂时不可用",
-            "assistant beta gateway upstream failed",
-        ]
-        if any(marker in summary for marker in retry_markers):
-            wait_for_gateway(args.gateway_health_url.rstrip("/"), 30)
-            time.sleep(2)
-            retry_result = run_command(
+    retry_markers = [
+        "Connection timed out",
+        "Connection refused",
+        "Operation timed out",
+        "timed out",
+        "找私助暂时不可用",
+        "assistant beta gateway upstream failed",
+        "SocketException",
+    ]
+    if env_name in {"beta", "gamma"} and result["exitCode"] != 0:
+        retries: list[dict[str, Any]] = []
+        max_retries = max(0, args.remote_retry_attempts)
+        while len(retries) < max_retries:
+            summary = str(result.get("outputSummary", ""))
+            if not any(marker in summary for marker in retry_markers):
+                break
+            retries.append(
+                {
+                    "attempt": len(retries) + 1,
+                    "exitCode": result.get("exitCode", 1),
+                    "timedOut": result.get("timedOut", False),
+                }
+            )
+            health_base = (
+                args.gateway_health_url.rstrip("/")
+                if env_name == "beta"
+                else str(device["gatewayBaseUrl"]).rstrip("/")
+            )
+            wait_for_gateway(health_base, args.retry_wait_timeout_seconds)
+            time.sleep(args.retry_sleep_seconds)
+            result = run_command(
                 command,
                 cwd=APP_DIR,
                 timeout_seconds=args.test_timeout_seconds,
             )
-            retry_result["retryAttempted"] = True
-            retry_result["firstAttemptExitCode"] = result.get("exitCode", 1)
-            retry_result["firstAttemptTimedOut"] = result.get("timedOut", False)
-            result = retry_result
+            if result["exitCode"] == 0:
+                break
+        if retries:
+            result["retryAttempted"] = True
+            result["retryAttempts"] = retries
     result.update(
         {
             "env": env_name,
@@ -436,6 +456,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--assistant-seed-refs", default="assistant_p0_core")
     parser.add_argument("--service-start-timeout-seconds", type=int, default=45)
     parser.add_argument("--test-timeout-seconds", type=int, default=420)
+    parser.add_argument("--remote-retry-attempts", type=int, default=2)
+    parser.add_argument("--retry-wait-timeout-seconds", type=int, default=30)
+    parser.add_argument("--retry-sleep-seconds", type=int, default=2)
     return parser.parse_args()
 
 
