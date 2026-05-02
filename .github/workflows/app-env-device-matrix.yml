@@ -34,7 +34,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -99,7 +107,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
       - uses: actions/setup-go@v5
         with:
           go-version-file: quwoquan_service/go.mod

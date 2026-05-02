@@ -38,7 +38,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
 
       - name: 缓存 Flutter 依赖
         uses: actions/cache@v4
@@ -83,7 +91,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
 
       - name: 缓存 Flutter 依赖
         uses: actions/cache@v4

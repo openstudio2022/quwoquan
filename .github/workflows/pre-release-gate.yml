@@ -31,7 +31,15 @@ jobs:
       - name: 安装 Python 依赖 (rec-model-service)
         run: pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -52,7 +60,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -76,7 +92,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -142,7 +166,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -160,7 +192,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -217,7 +257,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          elif [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            : > quwoquan_app/personal_assistant/.env
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
