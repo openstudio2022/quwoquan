@@ -73,6 +73,7 @@ jobs:
           arch: x86_64
           profile: pixel_7
           script: |
+            bash -lc '
             set -euo pipefail
             if [ "${API_CONTRACT_ENV}" = "gamma" ] && [ -z "${GAMMA_BASE_URL:-}" ]; then
               echo "::error::缺少 GAMMA_BASE_URL，无法执行 gamma Android 端侧矩阵"
@@ -82,7 +83,11 @@ jobs:
             if [ "${API_CONTRACT_ENV}" = "gamma" ]; then
               args+=(--skip-beta-services --gateway-base-url "${GAMMA_BASE_URL}")
             fi
+            if [ "${API_CONTRACT_ENV}" = "beta" ]; then
+              args+=(--service-start-timeout-seconds 180)
+            fi
             python3 scripts/run_assistant_device_matrix.py "${args[@]}"
+            '
       - name: Upload Android matrix report
         if: always()
         uses: actions/upload-artifact@v4
@@ -176,6 +181,9 @@ jobs:
           args=(--env "${API_CONTRACT_ENV}" --device-id "${IOS_DEVICE_ID}" --report "artifacts/device-matrix/${API_CONTRACT_ENV}-ios.json")
           if [ "${API_CONTRACT_ENV}" = "gamma" ]; then
             args+=(--skip-beta-services --gateway-base-url "${GAMMA_BASE_URL}")
+          fi
+          if [ "${API_CONTRACT_ENV}" = "beta" ]; then
+            args+=(--service-start-timeout-seconds 180)
           fi
           python3 scripts/run_assistant_device_matrix.py "${args[@]}"
       - name: Upload iOS matrix report
