@@ -12,7 +12,7 @@ tests:
 execution:
   local_gate: make gate
   full_gate: make gate-full
-legacy_merged_acceptance:
+current_merged_acceptance:
 - source_path: user-identity-profile-relationship/onboarding-and-identity-entry/post-login-landing/landing-bootstrap-context/bootstrap-fallback-guard
   task_bucket: bootstrap-fallback-guard
   migrated_as: L3_task

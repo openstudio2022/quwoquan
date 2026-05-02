@@ -74,8 +74,8 @@
 - [ ] T50: [业务逻辑] 在 `CapabilityGateway` 中引入 `UserEventTranslator`，统一翻译本地 trace 与远端 SSE。
 - [ ] T51: [业务逻辑] 扩展 `OpenClawBridge`，兼容新的 `user_event/*` SSE 事件与回放语义。
 - [ ] T52: [业务逻辑] 将 `ChatDetailPage` 改为 reducer 驱动，统一消费 `UserEvent` 与完成态消息载荷。
-- [ ] T53: [业务逻辑] 持久化消息级 `uiProcessTimelineV2`，修复过程抽屉在完成态与历史重载态消失的问题。
-- [ ] T54: [测试/Red] 建立 UI regression，覆盖流式过程先起、答案后起、完成态保留、历史重载恢复。
+- [ ] T53: [业务逻辑] 持久化消息级 `uiProcessTimelineV2`，修复过程抽屉在完成态与记录重载态消失的问题。
+- [ ] T54: [测试/Red] 建立 UI regression，覆盖流式过程先起、答案后起、完成态保留、记录重载恢复。
 - [ ] T55: [业务逻辑] 收紧 UI 展示白名单，禁止 `query`、`provider`、`freshnessHoursMax`、`assistant_turn_v4`、tool args、XML tool_call 泄漏到用户。
 - [ ] T56: [测试/Green] 转绿“结构脏输出 / XML tool_call / contractVersion 泄漏 / 内部关键字泄漏”回归测试。
 - [ ] T57: [发布] 为统一主线增加灰度开关：`intent_graph_enabled`、`multi_skill_orchestrator_enabled`、`aggregation_state_enabled`、`user_event_stream_enabled`、`ui_process_timeline_v2_enabled`。

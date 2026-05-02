@@ -5,7 +5,7 @@
 - `L1_capability`: `user-identity-profile-relationship`
 - `L2_journey`: `persona-follow-graph`
 
-该节点保留历史路径名 `persona-follow-graph`，但本次 PRD baseline 将其正式收口为“分身生命周期、公开身份、关系隔离与跨域透传”的统一 Journey。
+该节点保留记录路径名 `persona-follow-graph`，但本次 PRD baseline 将其正式收口为“分身生命周期、公开身份、关系隔离与跨域透传”的统一 Journey。
 
 产品文案可使用“分身 / 作者分身”，领域实体统一使用 `Persona / SubAccount`，对外展示统一使用 `ProfileSubject`。`作者分身` 不是 content/chat/assistant 的独立实体，而是 user 域 `Persona` 在创作与社交表面的产品化称呼。
 
@@ -44,7 +44,7 @@
 | L3 Scenario | 负责的问题 | 归属域 | 说明 |
 |---|---|---|---|
 | `persona-management` | owner 视角的创建、切换、停用/删除保护、配额与管理入口 | `user` | 管理台，不承载公开主页壳层 |
-| `persona-profile-subject-and-visibility` | 分身公开身份、资料继承/覆写、可见性与历史归因 | `user` | 提供 `ProfileSubject` 契约，供主页/内容消费 |
+| `persona-profile-subject-and-visibility` | 分身公开身份、资料继承/覆写、可见性与记录归因 | `user` | 提供 `ProfileSubject` 契约，供主页/内容消费 |
 | `persona-context-propagation` | 激活分身向 content/chat/circle/assistant/invite/notification 透传 | `user` 主导，`content/chat/circle/assistant` 消费 | 保证“谁在发言/创作”始终一致 |
 | `follow-relationship` | 关注/回关等关系写入 | `user` | 维持关系建立的分身归属 |
 | `social-graph-read` | 粉丝/关注分页读取与图谱读取 | `user` | 维持按分身隔离的图谱读取 |
@@ -73,7 +73,7 @@
 消费 user 域分身身份。负责：
 
 - 发帖、评论、互动活动的作者归属
-- 内容侧作者展示与历史快照
+- 内容侧作者展示与记录快照
 - 基于当前激活分身或显式选择分身写入 `personaId / profileSubjectId`
 
 禁止：
@@ -85,7 +85,7 @@
 
 消费 user 域分身身份。负责：
 
-- `senderPersonaId`、会话发言主体、消息历史快照
+- `senderPersonaId`、会话发言主体、消息记录快照
 - 基于激活分身决定谁在发消息、谁承接邀请与实时通话入口
 
 ### circle 域
@@ -126,7 +126,7 @@
 - `UserProfile + Persona` 负责 owner plane 与公开身份读模型 `ProfileSubject`。
 - `FollowEdge` 负责社交图谱 write/read 的主对象，但计数冗余通过事件同步回 `UserProfile`。
 - `BlockEdge` 是独立门禁对象，不与 `FollowEdge` 或 `Persona` 混成单一聚合。
-- `content/chat/circle/assistant` 只保存 user 域下发的稳定身份标识与历史快照，不回写 owner 映射。
+- `content/chat/circle/assistant` 只保存 user 域下发的稳定身份标识与记录快照，不回写 owner 映射。
 
 ### metadata SSOT 边界
 
@@ -148,15 +148,15 @@
 - 每个 owner 默认且至少持有 1 个分身；同一时刻恰有 1 个 active persona。
 - 分身创建时默认继承 owner 基线资料；仅覆写字段持久化到 persona 侧。
 - 用户可见“删除分身”的领域语义分两类：
-  - **无历史数据的空白分身**：允许物理删除。
-  - **已有内容/评论/聊天/圈子/邀请历史的分身**：第一版按“停用/退役”处理，禁止继续作为新动作主体，但保留历史归因与内部审计链。
-- 历史内容、评论、聊天消息与通知必须保留不可变作者快照，不因分身停用而改绑到 owner 或其它分身。
+  - **无记录数据的空白分身**：允许物理删除。
+  - **已有内容/评论/聊天/圈子/邀请记录的分身**：第一版按“停用/退役”处理，禁止继续作为新动作主体，但保留记录归因与内部审计链。
+- 记录内容、评论、聊天消息与通知必须保留不可变作者快照，不因分身停用而改绑到 owner 或其它分身。
 - 普通读接口不得返回 owner 与分身映射；审计与风控链路允许内部追踪。
 
 ## 范围
 
 - 分身管理台：创建、切换、停用/删除保护、配额、低打扰入口。
-- 分身公开身份：作者资料、公开主页主体、继承/覆写、可见性、历史归因。
+- 分身公开身份：作者资料、公开主页主体、继承/覆写、可见性、记录归因。
 - 分身上下文透传：发帖、评论、聊天、圈子、邀请、助手、通知。
 - 分身关系隔离：关注、粉丝、分页读取、推荐上下文与展示边界。
 
@@ -207,8 +207,8 @@
 ### 灰度与回滚
 
 - 必须支持按功能面灰度：管理台、公开身份、跨域透传可分别开关。
-- 任一开关关闭后，必须退回“单 active persona + 只读历史归因”安全基线。
-- 发生串号、公开映射泄露或停用后历史归因丢失时，必须可单独回退相关开关。
+- 任一开关关闭后，必须退回“单 active persona + 只读记录归因”安全基线。
+- 发生串号、公开映射泄露或停用后记录归因丢失时，必须可单独回退相关开关。
 
 ## 验收重点
 

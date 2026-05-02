@@ -42,13 +42,13 @@ void main() {
       }
     });
 
-    const legacyHelperFiles = <String>[
+    const currentHelperFiles = <String>[
       'lib/assistant/protocol/assistant_display_text_resolver.dart',
       'lib/assistant/application/assistant_journey_projector.dart',
       'lib/assistant/orchestration/pipelines/assistant_pipeline_engine.dart',
     ];
 
-    const removedLegacyHelpers = <String>[
+    const removedCurrentHelpers = <String>[
       'compactMarkdownForAnswerShape',
       'normalizeThreeSectionAnswerMarkdown',
       'normalizeThreeSectionResponseMarkdown',
@@ -61,9 +61,9 @@ void main() {
     ];
 
     test('显示链路不再保留旧字符串启发式 helper', () {
-      for (final path in legacyHelperFiles) {
+      for (final path in currentHelperFiles) {
         final content = File(path).readAsStringSync();
-        for (final helperName in removedLegacyHelpers) {
+        for (final helperName in removedCurrentHelpers) {
           expect(
             content.contains(helperName),
             isFalse,

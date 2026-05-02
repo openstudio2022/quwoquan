@@ -20,7 +20,7 @@
 - A7：规则与 fields.yaml 一致。
 - A8：全场景单元测试 + 契约测试。
 
-## Folded legacy node `event-hook-metric-emit-integration`
+## Folded current node `event-hook-metric-emit-integration`
 
 # L5 横切：event-hook-metric-emit-integration
 

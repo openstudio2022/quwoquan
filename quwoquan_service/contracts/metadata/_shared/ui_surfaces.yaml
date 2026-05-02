@@ -129,6 +129,19 @@ surfaces:
       - ReportPageContext
       - GetSuggestedActions
 
+  - id: personalAssistantDialog
+    owner: assistant
+    route_id: assistantPersonal
+    path_template: /assistant/personal
+    description: 找私助云端优先对话入口
+    operation_ids:
+      - CreateAssistantConversation
+      - CreateAssistantTurn
+      - StreamAssistantTurn
+      - ListSkills
+      - ListAppMessages
+      - GetAppMessageUnreadCount
+
   - id: assistantSettings
     owner: assistant
     route_id: chatDetail
@@ -147,7 +160,7 @@ surfaces:
     owner: assistant
     route_id: chatDetail
     path_template: /chat/{id}
-    description: 私助历史抽屉与分页
+    description: 私助记录抽屉与分页
     operation_ids: []
 
   - id: assistantFeedback
@@ -163,7 +176,7 @@ surfaces:
     owner: search
     route_id: globalSearch
     path_template: /search
-    description: 全局搜索历史页与历史管理态
+    description: 全局搜索记录页与记录管理态
     operation_ids:
       - ListRecentSearches
       - UpsertRecentSearch

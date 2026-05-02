@@ -2689,7 +2689,7 @@ void main() {
           },
           'synthesisReadiness': const <String, dynamic>{
             'ready': false,
-            'reason': 'legacy_fallback_should_not_win',
+            'reason': 'current_fallback_should_not_win',
           },
         },
       );

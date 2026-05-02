@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -164,7 +165,7 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeHTTPError(w, r, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "post_not_found"),
 			"内容不存在",
 			"post not found",
 		))
@@ -191,6 +192,14 @@ func projectPostForClient(post any) map[string]any {
 }
 
 func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request) {
+	if shouldHonorTestErrorInject(r, "CONTENT.USER.media_not_ready") {
+		writeHTTPError(w, r, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_ready"),
+			"媒体文件正在处理中，请稍后发布",
+			"test injected media_not_ready",
+		))
+		return
+	}
 	payload, err := BindGeneratedWritableBodyFromRequest(r, "CreatePost")
 	if err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
@@ -217,6 +226,14 @@ func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusCreated, post)
+}
+
+func shouldHonorTestErrorInject(r *http.Request, code string) bool {
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	if appEnv == "prod" || appEnv == "prod-gray" {
+		return false
+	}
+	return strings.TrimSpace(r.Header.Get("X-Test-Error-Inject")) == code
 }
 
 func (h *ContentHandler) handleUpdatePost(w http.ResponseWriter, r *http.Request) {
@@ -248,7 +265,11 @@ func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Reque
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
-	report, err := h.reportService.CreateReport(r.Context(), resolveUserID(r), body)
+	reporterID := resolveUserID(r)
+	if strings.TrimSpace(reporterID) == "" {
+		reporterID = "guest"
+	}
+	report, err := h.reportService.CreateReport(r.Context(), reporterID, body)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -554,10 +575,7 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"accepted": len(batch.Events),
-		"status":   "ok",
-	})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *ContentHandler) handleGetRecommendation(w http.ResponseWriter, r *http.Request) {
@@ -863,6 +881,11 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			userID = strings.TrimSpace(raw[:idx])
 		}
 	}
+	if raw := strings.TrimPrefix(r.URL.Path, "/v1/content/profile-subjects/"); raw != r.URL.Path {
+		if idx := strings.Index(raw, "/posts"); idx > 0 {
+			userID = strings.TrimSpace(raw[:idx])
+		}
+	}
 	if queryUserID := strings.TrimSpace(r.URL.Query().Get("userId")); queryUserID != "" {
 		userID = queryUserID
 	}
@@ -913,7 +936,7 @@ func postIDFromPath(path string) string {
 	if parts[0] != "v1" || parts[1] != "content" || parts[2] != "posts" {
 		return ""
 	}
-	return strings.TrimSpace(parts[3])
+	return strings.TrimSpace(strings.SplitN(parts[3], ":", 2)[0])
 }
 
 func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Request, operation string) {

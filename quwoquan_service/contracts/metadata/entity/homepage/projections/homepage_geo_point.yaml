@@ -2,7 +2,7 @@ version: 1
 read_model: HomepageGeoPoint
 
 description: |
-  主页地理坐标 wire（与 fields.yaml / homepage_models 历史形状一致）；由 codegen_app_metadata 生成，供 HomepageDetail 等引用。
+  主页地理坐标 wire（与 fields.yaml / homepage_models 记录形状一致）；由 codegen_app_metadata 生成，供 HomepageDetail 等引用。
 
 source_entities:
   - Homepage

@@ -6,7 +6,7 @@
 
 1. **过程与答案耦合**：`trace`、`thinkingProgress`、`chunk`、`answer_delta` 同时参与用户态渲染，导致 raw reasoning、内部查询词、过程占位文案可能泄漏进 UI。
 2. **终态封口不稳**：remote terminal payload 缺失时，当前实现可能直接拿 partial stream 合成 completed；local repair 路径还会把 `thinkingProgress(streaming=true)` 当作答案恢复来源。
-3. **完成态口径分叉**：流式态过程抽屉、completed response、历史重载三条链路各自做投影和兜底，无法保证摘要、来源计数、耗时和阶段轨迹一致。
+3. **完成态口径分叉**：流式态过程抽屉、completed response、记录重载三条链路各自做投影和兜底，无法保证摘要、来源计数、耗时和阶段轨迹一致。
 
 本设计的目标是把流式链路收口成一条正式主线：**`process_* -> AssistantJourney`、`answer_delta -> StreamingAnswerDecoder`、`completed -> final reconcile`**，并明确 `trace` 只留给调试与回放。
 
@@ -156,7 +156,7 @@ flowchart LR
 - 完成态摘要模板按 asset/config 驱动，耗时统一取整数秒。
 - `_PhaseActivityIndicator` 改为基于 typed stage 选择动效，不再用 `contains('搜索')` 等字符串判断。
 
-### 5. Config / metadata / legacy 清理
+### 5. Config / metadata / current 清理
 
 涉及文件：
 
@@ -169,7 +169,7 @@ flowchart LR
 
 - `display_text_classifier.dart` 读取路径切到 `assets/assistant/config/progress_text_policy.json`。
 - 与过程/终态摘要相关的新模板优先进入 assistant config 或 tool metadata，而不是散落到 widget。
-- 清理旧 timeline copy 与 legacy compatibility 路径，避免第二真相源继续存在。
+- 清理旧 timeline copy 与 current compatibility 路径，避免第二真相源继续存在。
 
 ## 数据与状态口径
 

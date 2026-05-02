@@ -1,0 +1,44 @@
+dart_class: AssistantReplayCaseWire
+library_path: assistant/generated/contracts/assistant_replay_case.g.dart
+output_path: assistant/generated/contracts/assistant_replay_case.g.dart
+contract: assistant_replay_case
+version: assistant_replay_case.m5
+kind: test_fixture_contract
+imports:
+  - package:quwoquan_app/assistant/generated/contracts/assistant_run_response.g.dart
+  - package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart
+  - package:quwoquan_app/assistant/generated/contracts/assistant_trace_event.g.dart
+fields:
+  - { name: replayCaseId, type: string, required: true }
+  - { name: title, type: string, default: '' }
+  - { name: request, type: object, ref: request, default: {} }
+  - { name: fakeModelScript, type: list<object>, ref: model_step, default: [] }
+  - { name: fakeToolScript, type: list<object>, ref: tool_step, default: [] }
+  - { name: fakeDeviceContext, type: map, default: {} }
+  - { name: expectedStreamEvents, type: list<object>, ref: AssistantStreamEventWire, default: [] }
+  - { name: expectedTraceEvents, type: list<object>, ref: AssistantTraceEventWire, default: [] }
+  - { name: expectedRunResponse, type: object, ref: AssistantRunResponseWire, default: {} }
+subcontracts:
+  request:
+    class_name: AssistantReplayRequestWire
+    fields:
+      - { name: conversationId, type: string, required: true }
+      - { name: turnId, type: string, required: true }
+      - { name: userId, type: string, default: '' }
+      - { name: inputText, type: string, default: '' }
+      - { name: clientContext, type: map, default: {} }
+  model_step:
+    class_name: AssistantReplayModelStepWire
+    fields:
+      - { name: stage, type: string, required: true }
+      - { name: text, type: string, default: '' }
+      - { name: structuredDelta, type: map, default: {} }
+      - { name: usage, type: map, default: {} }
+      - { name: finishReason, type: string, default: '' }
+  tool_step:
+    class_name: AssistantReplayToolStepWire
+    fields:
+      - { name: toolName, type: string, required: true }
+      - { name: input, type: map, default: {} }
+      - { name: result, type: map, default: {} }
+      - { name: failure, type: map, default: {} }

@@ -1,0 +1,61 @@
+{
+	admin 0.0.0.0:2019
+	local_certs
+}
+
+(local_gamma_tls) {
+	tls internal
+}
+
+gamma-api.quwoquan-env.test {
+	import local_gamma_tls
+	handle /healthz {
+		reverse_proxy content-service:18080
+	}
+	handle /livez {
+		reverse_proxy content-service:18080
+	}
+	handle /startupz {
+		reverse_proxy content-service:18080
+	}
+	handle /v1/content/* {
+		reverse_proxy content-service:18080
+	}
+	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle {
+		respond "local-gamma mirror route is not ready for this path" 404
+	}
+}
+
+gamma-product-ops.quwoquan-env.test {
+	import local_gamma_tls
+	handle /healthz {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle {
+		respond "local-gamma product-ops route is not ready for this path" 404
+	}
+}
+
+gamma-avatar.quwoquan-env.test,
+gamma-image.quwoquan-env.test,
+gamma-video.quwoquan-env.test,
+gamma-upload.quwoquan-env.test {
+	import local_gamma_tls
+	root * /srv/media
+	file_server
+}
+
+:80 {
+	handle /healthz {
+		reverse_proxy content-service:18080
+	}
+	handle {
+		respond "local-gamma mirror http endpoint is ready" 200
+	}
+}

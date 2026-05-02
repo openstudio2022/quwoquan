@@ -12,6 +12,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dt
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
@@ -19,20 +20,164 @@ import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_co
 import 'package:quwoquan_app/core/models/search_models.dart';
 
 class MockChatRepository implements ChatRepository {
+  MockChatRepository({
+    List<Map<String, dynamic>>? seedConversations,
+    Map<String, List<Map<String, dynamic>>>? seedMembers,
+    Map<String, List<Map<String, dynamic>>>? seedMessages,
+  }) {
+    final contractSeed = ContractFixtureRuntimeLoader.chatSeedSet();
+    final contactSeed = ContractFixtureRuntimeLoader.chatSeedSet(
+      'chat_contacts_core',
+    );
+    final contractConversations = _listOfMap(contractSeed?['conversations']);
+    final contractMembers = _mapOfList(contractSeed?['members']);
+    final contractMessages = _mapOfList(contractSeed?['messages']);
+    _contactRows = _mergeRowsByKeys(
+      _listOfMap(contactSeed?['contacts']),
+      <Map<String, dynamic>>[
+        ...AppContentPrototypeBundle.instance.chatMockContacts.map(
+          (contact) => contact.toMap(),
+        ),
+        ...ChatMockData.contacts,
+      ],
+      const <String>['userId', 'contactId', 'id'],
+    );
+    _contactCircleIds =
+        (contactSeed?['circleIds'] as List?)
+            ?.map((id) => id.toString())
+            .where((id) => id.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    _contactGroupConversationIds =
+        (contactSeed?['groupConversationIds'] as List?)
+            ?.map((id) => id.toString())
+            .where((id) => id.isNotEmpty)
+            .toList(growable: false) ??
+        const <String>[];
+    final repositoryConversations =
+        seedConversations ??
+        _mergeRowsById(contractConversations, ChatMockData.conversations);
+    final inboxRows =
+        seedConversations ??
+        _mergeRowsById(contractConversations, ChatMockData.inboxItems);
+    _conversationCache = repositoryConversations
+        .map((conversation) => Map<String, dynamic>.from(conversation))
+        .toList(growable: true);
+    _inboxOverrides = {
+      for (final item in inboxRows)
+        ((item['conversationId'] ?? item['id'] ?? item['_id']) as String):
+            Map<String, dynamic>.from(item),
+    };
+    final initialMembers = seedMembers ?? contractMembers;
+    if (initialMembers != null) {
+      for (final entry in initialMembers.entries) {
+        _membersCache[entry.key] = entry.value
+            .map((member) => Map<String, dynamic>.from(member))
+            .toList(growable: true);
+      }
+    }
+    final initialMessages = seedMessages ?? contractMessages;
+    if (initialMessages != null) {
+      for (final entry in initialMessages.entries) {
+        _messagesCache[entry.key] = entry.value
+            .map((message) => Map<String, dynamic>.from(message))
+            .toList(growable: true);
+      }
+    }
+  }
+
+  static List<Map<String, dynamic>>? _listOfMap(Object? value) {
+    if (value is! List) {
+      return null;
+    }
+    return value
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  static List<Map<String, dynamic>> _mergeRowsById(
+    List<Map<String, dynamic>>? primary,
+    List<Map<String, dynamic>> fallback,
+  ) {
+    final byId = <String, Map<String, dynamic>>{};
+    void put(Map<String, dynamic> row, {required bool overwrite}) {
+      final id = (row['conversationId'] ?? row['id'] ?? row['_id'] ?? '')
+          .toString();
+      if (id.isEmpty) {
+        return;
+      }
+      if (overwrite || !byId.containsKey(id)) {
+        byId[id] = row;
+      }
+    }
+
+    for (final row in primary ?? const <Map<String, dynamic>>[]) {
+      put(row, overwrite: true);
+    }
+    for (final row in fallback) {
+      put(row, overwrite: false);
+    }
+    return byId.values.toList(growable: false);
+  }
+
+  static List<Map<String, dynamic>> _mergeRowsByKeys(
+    List<Map<String, dynamic>>? primary,
+    List<Map<String, dynamic>> fallback,
+    List<String> keys,
+  ) {
+    final byId = <String, Map<String, dynamic>>{};
+    void put(Map<String, dynamic> row, {required bool overwrite}) {
+      var id = '';
+      for (final key in keys) {
+        id = (row[key] ?? '').toString();
+        if (id.isNotEmpty) {
+          break;
+        }
+      }
+      if (id.isEmpty) {
+        return;
+      }
+      if (overwrite || !byId.containsKey(id)) {
+        byId[id] = row;
+      }
+    }
+
+    for (final row in primary ?? const <Map<String, dynamic>>[]) {
+      put(row, overwrite: true);
+    }
+    for (final row in fallback) {
+      put(row, overwrite: false);
+    }
+    return byId.values.toList(growable: false);
+  }
+
+  static Map<String, List<Map<String, dynamic>>>? _mapOfList(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return value.map(
+      (key, raw) => MapEntry(
+        key.toString(),
+        ((raw as List?) ?? const <dynamic>[])
+            .whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false),
+      ),
+    );
+  }
+
   int _seqCounter = 100;
-  final List<Map<String, dynamic>> _conversationCache = ChatMockData
-      .conversations
-      .map((conversation) => Map<String, dynamic>.from(conversation))
-      .toList(growable: true);
-  final Map<String, Map<String, dynamic>> _inboxOverrides = {
-    for (final item in ChatMockData.inboxItems)
-      ((item['conversationId'] ?? item['id'] ?? item['_id']) as String):
-          Map<String, dynamic>.from(item),
-  };
+  late final List<Map<String, dynamic>> _conversationCache;
+  late final List<Map<String, dynamic>> _contactRows;
+  late final List<String> _contactCircleIds;
+  late final List<String> _contactGroupConversationIds;
+  late final Map<String, Map<String, dynamic>> _inboxOverrides;
 
   // 实例级可变成员缓存（key: conversationId），首次访问时从 ChatMockData 深拷贝初始化
   // 使用实例级（非 static）保证测试隔离；在同一 ProviderContainer 内 Provider 返回同一实例，故应用内有效
   final Map<String, List<Map<String, dynamic>>> _membersCache = {};
+  final Map<String, List<Map<String, dynamic>>> _messagesCache = {};
 
   // 实例级可变设置缓存（key: conversationId）
   final Map<String, Map<String, dynamic>> _settingsCache = {};
@@ -57,6 +202,16 @@ class MockChatRepository implements ChatRepository {
     return _membersCache[conversationId]!;
   }
 
+  List<Map<String, dynamic>> _messagesFor(String conversationId) {
+    final seeded = _messagesCache[conversationId];
+    if (seeded != null) {
+      return seeded;
+    }
+    return ChatMockData.messagesFor(
+      conversationId,
+    ).map((message) => Map<String, dynamic>.from(message)).toList();
+  }
+
   void _bumpMembersRosterAfterMemberChange(
     String conversationId,
     int memberCount,
@@ -69,12 +224,56 @@ class MockChatRepository implements ChatRepository {
     }
     final cur = Map<String, dynamic>.from(_conversationCache[index]);
     final prevRev = (cur['membersRosterRevision'] as num?)?.toInt() ?? 0;
-    _conversationCache[index] = <String, dynamic>{
+    final next = <String, dynamic>{
       ...cur,
       'memberCount': memberCount,
       'membersRosterRevision': prevRev + 1,
       'updatedAt': DateTime.now().toIso8601String(),
     };
+    if ((cur['type'] ?? '').toString() == 'group') {
+      final members = _ensureMembersCache(conversationId);
+      final sourceHash = _groupAvatarSourceHash(members);
+      final previousSourceHash = (cur['groupAvatarSourceHash'] ?? '')
+          .toString();
+      if (sourceHash.isNotEmpty && sourceHash != previousSourceHash) {
+        final nextVersion =
+            ((cur['groupAvatarVersion'] as num?)?.toInt() ?? 0) + 1;
+        final renderedUrl = _renderedGroupAvatarUrl(
+          conversationId,
+          sourceHash,
+          nextVersion,
+        );
+        next['avatarUrl'] = renderedUrl;
+        next['groupAvatarVersion'] = nextVersion;
+        next['groupAvatarSourceHash'] = sourceHash;
+      }
+    }
+    _conversationCache[index] = next;
+    final override = _inboxOverrides[conversationId];
+    if (override != null) {
+      _inboxOverrides[conversationId] = <String, dynamic>{...override, ...next};
+    }
+  }
+
+  static String _groupAvatarSourceHash(List<Map<String, dynamic>> members) {
+    return members
+        .take(9)
+        .map(
+          (member) =>
+              '${member['userId'] ?? ''}:${member['avatarUrl'] ?? member['avatar'] ?? ''}',
+        )
+        .join('|');
+  }
+
+  static String _renderedGroupAvatarUrl(
+    String conversationId,
+    String sourceHash,
+    int version,
+  ) {
+    final stableHash = sourceHash.hashCode & 0x7fffffff;
+    final encodedConversationId = Uri.encodeComponent(conversationId);
+    return 'https://i.pravatar.cc/150?u=group_$encodedConversationId'
+        '_v${version}_$stableHash';
   }
 
   @override
@@ -246,7 +445,7 @@ class MockChatRepository implements ChatRepository {
     String? before,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return ChatMockData.messagesFor(
+    return _messagesFor(
       conversationId,
     ).map(ChatMessageDto.fromMap).toList(growable: false);
   }
@@ -261,13 +460,13 @@ class MockChatRepository implements ChatRepository {
       return const <MessageSearchItemView>[];
     }
     final results = <MessageSearchItemView>[];
-    for (final conversation in ChatMockData.conversations) {
+    for (final conversation in _conversationCache) {
       final conversationId =
           (conversation['_id'] ?? conversation['conversationId'] ?? '')
               .toString();
       final conversationTitle = conversation['title']?.toString();
       final conversationAvatarUrl = conversation['avatarUrl']?.toString();
-      final messages = ChatMockData.messagesFor(conversationId);
+      final messages = _messagesFor(conversationId);
       for (final message in messages) {
         final content = (message['content'] ?? '').toString();
         final senderName =
@@ -340,7 +539,7 @@ class MockChatRepository implements ChatRepository {
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
   }) async {
-    final msgs = ChatMockData.messagesFor(conversationId);
+    final msgs = _messagesFor(conversationId);
     return SyncResponse.fromMap(<String, dynamic>{
       'messages': msgs,
       'hasMore': false,
@@ -453,7 +652,8 @@ class MockChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return AppContentPrototypeBundle.instance.chatMockContacts
+    return _contactRows
+        .map(ChatContactRowDto.fromMap)
         .take(limit)
         .toList(growable: false);
   }
@@ -462,6 +662,23 @@ class MockChatRepository implements ChatRepository {
   Future<List<ChatContactTabCircleRowDto>> listContactTabCircles({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
+    final circleSeed = ContractFixtureRuntimeLoader.circleSeedSet();
+    final circles = _listOfMap(circleSeed?['circles']);
+    if (circles != null && _contactCircleIds.isNotEmpty) {
+      final ids = _contactCircleIds.toSet();
+      return circles
+          .where((circle) => ids.contains(circle['id']?.toString()))
+          .take(limit)
+          .map(
+            (circle) => ChatContactTabCircleRowDto.fromMap(<String, dynamic>{
+              'circleId': circle['id'],
+              'displayName': circle['name'],
+              'avatarUrl': circle['avatarUrl'] ?? circle['coverUrl'],
+              'subtitle': circle['description'] ?? '',
+            }),
+          )
+          .toList(growable: false);
+    }
     return ChatMockData.contactTabCircles
         .take(limit)
         .map((e) => ChatContactTabCircleRowDto.fromMap(e))
@@ -472,6 +689,30 @@ class MockChatRepository implements ChatRepository {
   Future<List<ChatContactTabFunGroupRowDto>> listContactTabFunGroups({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
+    if (_contactGroupConversationIds.isNotEmpty) {
+      final ids = _contactGroupConversationIds.toSet();
+      return _conversationCache
+          .where((conversation) {
+            final id =
+                conversation['conversationId']?.toString() ??
+                conversation['id']?.toString() ??
+                '';
+            return ids.contains(id);
+          })
+          .take(limit)
+          .map(
+            (conversation) =>
+                ChatContactTabFunGroupRowDto.fromMap(<String, dynamic>{
+                  'conversationId':
+                      conversation['conversationId'] ?? conversation['id'],
+                  'displayName': conversation['title'],
+                  'avatarUrl':
+                      conversation['avatarUrl'] ?? conversation['avatar'],
+                  'subtitle': conversation['lastMessagePreview'] ?? '',
+                }),
+          )
+          .toList(growable: false);
+    }
     return ChatMockData.contactTabFunGroups
         .take(limit)
         .map((e) => ChatContactTabFunGroupRowDto.fromMap(e))
@@ -480,7 +721,7 @@ class MockChatRepository implements ChatRepository {
 
   @override
   Future<List<String>> listMemberUserIds(String conversationId) async {
-    return ChatMockData.membersFor(conversationId)
+    return _ensureMembersCache(conversationId)
         .map((m) => m['userId']?.toString() ?? '')
         .where((id) => id.isNotEmpty)
         .toList(growable: false);
@@ -492,7 +733,8 @@ class MockChatRepository implements ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final normalizedQuery = query.trim().toLowerCase();
-    return AppContentPrototypeBundle.instance.chatMockContacts
+    return _contactRows
+        .map(ChatContactRowDto.fromMap)
         .where((c) => c.displayName.toLowerCase().contains(normalizedQuery))
         .take(limit)
         .map((contact) {

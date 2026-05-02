@@ -155,7 +155,7 @@ level_acceptance:
     tests: []
   A14:
     criteria: 端云消息一致性：(a) 视频/文件/图片消息通过 SendMessage API 发送后，SyncMessages 可正确同步到其他客户端；(b)
-      同步到的消息 type 和 media 字段与发送方一致；(c) 旧版客户端（仅支持 text/image）收到 video/file 消息时通过 mediaUrl
+      同步到的消息 type 和 media 字段与发送方一致；(c) 过往版本客户端（仅支持 text/image）收到 video/file 消息时通过 mediaUrl
       fallback 展示占位文案
     status: pending
     linked_tasks: []

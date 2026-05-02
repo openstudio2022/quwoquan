@@ -44,12 +44,12 @@ List<String> _validateContracts(Directory contractDir) {
       continue;
     }
     final text = file.readAsStringSync();
-    final legacyRetryFact =
+    final currentRetryFact =
         'retry'
         'able:';
-    final legacyDetailsFact = 'details:';
-    if (text.contains(legacyRetryFact) || text.contains(legacyDetailsFact)) {
-      failures.add('$fileName contains legacy recovery/details field');
+    final currentDetailsFact = 'details:';
+    if (text.contains(currentRetryFact) || text.contains(currentDetailsFact)) {
+      failures.add('$fileName contains current recovery/details field');
     }
     if (text.contains('Map<String') || text.contains('map[string]')) {
       failures.add('$fileName contains weak map type');

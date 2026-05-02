@@ -41,13 +41,14 @@ void main() {
       repoRoot,
       relativePath: 'contracts/runtime/errors',
       pattern: RegExp(r'\b(retryable|details)\b'),
-      message: 'runtime contract contains legacy retryable/details',
+      message: 'runtime contract contains current retryable/details',
     ),
     ..._reject(
       repoRoot,
       relativePath: 'quwoquan_service/contracts',
       pattern: RegExp(r'\bretryable\b'),
-      message: 'service contract documentation uses legacy retryable semantics',
+      message:
+          'service contract documentation uses current retryable semantics',
     ),
     ..._reject(
       repoRoot,
@@ -55,7 +56,7 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class)\b',
       ),
-      message: 'spec uses legacy runtime error semantics',
+      message: 'spec uses current runtime error semantics',
     ),
     ..._reject(
       repoRoot,
@@ -63,7 +64,7 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
       ),
-      message: 'doc uses legacy runtime error semantics',
+      message: 'doc uses current runtime error semantics',
     ),
     ..._reject(
       repoRoot,
@@ -71,7 +72,7 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
       ),
-      message: 'agent rule uses legacy runtime error semantics',
+      message: 'agent rule uses current runtime error semantics',
     ),
     ..._reject(
       repoRoot,
@@ -79,7 +80,7 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
       ),
-      message: 'change record uses legacy runtime error semantics',
+      message: 'change record uses current runtime error semantics',
     ),
     ..._reject(
       repoRoot,
@@ -87,7 +88,7 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
       ),
-      message: 'openspec change record uses legacy runtime error semantics',
+      message: 'openspec change record uses current runtime error semantics',
     ),
     ..._reject(
       repoRoot,
@@ -95,7 +96,7 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
       ),
-      message: 'service change record uses legacy runtime error semantics',
+      message: 'service change record uses current runtime error semantics',
     ),
     ..._reject(
       repoRoot,
@@ -103,7 +104,7 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class)\b',
       ),
-      message: 'agent command uses legacy runtime error semantics',
+      message: 'agent command uses current runtime error semantics',
     ),
     ..._reject(
       repoRoot,
@@ -111,13 +112,13 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|errorClass|error_class|Recoverable)\b|Details\s+map\[string\]any',
       ),
-      message: 'assistant doc uses legacy runtime error semantics',
+      message: 'assistant doc uses current runtime error semantics',
     ),
     ..._reject(
       repoRoot,
       relativePath: 'quwoquan_service/contracts/metadata/_shared',
       pattern: RegExp(r'\b(retryable|details)\s*:'),
-      message: 'OpenAPI common error schema exposes legacy retryable/details',
+      message: 'OpenAPI common error schema exposes current retryable/details',
     ),
     ..._reject(
       repoRoot,
@@ -125,7 +126,7 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|retry_after_seconds|expected_retryable|expected_retry_after|isRetryable)\b',
       ),
-      message: 'metadata error policy uses legacy retryable naming',
+      message: 'metadata error policy uses current retryable naming',
     ),
     ..._reject(
       repoRoot,
@@ -139,13 +140,13 @@ void main() {
       pattern: RegExp(
         r'\b(retryable|isRetryable|retry_after_seconds|retryAfterSeconds|Recoverable)\b',
       ),
-      message: 'assistant code uses legacy retryable naming',
+      message: 'assistant code uses current retryable naming',
     ),
     ..._reject(
       repoRoot,
       relativePath: 'quwoquan_app/assets/assistant',
       pattern: RegExp(r'\b(retryable|isRetryable|retry_after_seconds)\b'),
-      message: 'assistant assets use legacy retryable naming',
+      message: 'assistant assets use current retryable naming',
     ),
     ..._reject(
       repoRoot,
@@ -154,7 +155,7 @@ void main() {
         r'\b(failureReason|retryProvider|retryToolName|stable_degraded_answer)\b',
       ),
       message:
-          'assistant prompt exposes legacy error/degraded/retry contract field',
+          'assistant prompt exposes current error/degraded/retry contract field',
     ),
     ..._reject(
       repoRoot,
@@ -199,7 +200,7 @@ void main() {
       pattern: RegExp(
         r'\bretryable\b|Retryable|retryable_|Recoverable|recoverable_',
       ),
-      message: 'chat service uses legacy retryable naming',
+      message: 'chat service uses current retryable naming',
     ),
     ..._reject(
       repoRoot,
@@ -318,9 +319,9 @@ void main() {
       repoRoot,
       relativePath: 'quwoquan_app/lib/assistant',
       pattern: RegExp(
-        r'legacy_response|legacyErrorCode|legacy_response_adapter|_legacyRuntimeFailureCode',
+        r'current_response|currentErrorCode|current_response_adapter|_currentRuntimeFailureCode',
       ),
-      message: 'assistant run response keeps legacy runtime failure adapter',
+      message: 'assistant run response keeps current runtime failure adapter',
     ),
   ];
   if (failures.isNotEmpty) {

@@ -42,7 +42,7 @@ child: Material(
 **Why?**
 *   Prevent `Material` background color from leaking.
 *   Provide necessary `Material` ancestor for widgets that require it.
-*   Explicitly mark the code as "legacy/exception".
+*   Explicitly mark the code as "current/exception".
 
 ## 3. Automated Enforcement
 

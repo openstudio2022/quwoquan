@@ -26,28 +26,28 @@
 
 ### In Scope
 
-- **群头像主链路**：`chat-service` 返回 `groupAvatarUrl / groupAvatarVersion`，客户端以此为唯一主渲染输入。
+- **统一会话头像主链路**：`chat-service` 返回非空、可访问的 `avatarUrl`；单聊为对方用户头像，群聊先返回稳定默认头像，再由服务端异步预合成群头像并通过 sync patch 覆盖。
 - **服务端预合成规则**：仅取前 9 成员、按加入顺序、生成群头像派生资源。
 - **重算触发**：
   - `ConversationCreated`
   - `MemberJoined`
   - `MemberLeft`
   - 前 9 成员之一收到 `UserAvatarUpdated`
-- **sourceHash**：以 `top9UserIdsInOrder + top9AvatarVersions + layoutVersion` 计算 `groupAvatarSourceHash`，未变化则跳过重算。
+- **sourceHash**：以 `top9UserIdsInOrder + top9AvatarAssetIds + top9AvatarVersions + top9AvatarUrls + layoutVersion` 计算 `groupAvatarSourceHash`，未变化则跳过重算。
 - **对象标识合同**：群头像、用户头像与聊天/内容媒体统一使用 `AssetRef / MediaAsset`，数据库主存 `assetId + version`。
-- **URL 合同**：统一对外 `https://{cdnDomain}/{objectKey}?v={version}`。
+- **URL 合同**：统一对外 `{cdnBaseUrl}/{objectKey}?v={version}`，`cdnBaseUrl` 必须显式包含 `http/https` scheme。
 - **同步合同**：
   - patch 类型至少支持 `user.avatar.updated`、`conversation.avatar.updated`
   - realtime 只发 hint
   - 客户端按 `cursor/syncSeq` 拉增量
-- **失败策略**：预合成失败时客户端显示默认群图标，不回退到端侧拼图。
+- **失败策略**：预合成失败时保留上一版 `avatarUrl`；新群没有上一版时建群失败或服务端重试至可用，不向 App 下发空 `avatarUrl`。
 
 ### Out of Scope
 
 - 用户手动上传群头像
 - 群头像审核、模板市场、多样式切换
 - 头像裁剪与智能排版算法优化
-- 历史数据批量回填与全量迁移执行细节
+- 记录数据批量回填与全量迁移执行细节
 
 ## 约束
 
@@ -55,7 +55,7 @@
 - 群头像主数据只归 `chat-service`
 - runtime 只负责公共能力，不承载“前 9 成员”这类业务规则本身
 - metadata 是新增字段、事件、patch 类型和接口的唯一真相源
-- 客户端不允许使用 `avatarCompositeUrls` 作为群头像主逻辑输入
+- 客户端不允许使用旧群头像 URL 字段或 `avatarCompositeUrls` 作为群头像主逻辑输入；旧群头像 URL 字段不再填充。
 
 ## 对标输入与吸收结论
 
@@ -88,9 +88,9 @@
 
 ## 数据生命周期合同
 
-- 用户头像：长期保留当前版本，旧版本延迟清理
-- 群头像：由服务端预合成生成，可重算、可替换；旧版本按策略清理
-- 默认群图标：客户端静态资源，永久可用
+- 用户头像：长期保留当前版本，过往版本本延迟清理
+- 群头像：由服务端预合成生成，可重算、可替换；过往版本本按策略清理
+- 群头像 URL：由服务端保证 active 会话非空可访问；客户端仅保留异常诊断与通用图片加载错误态。
 
 ## 权限 / 分享 / 可见性边界
 
@@ -101,13 +101,13 @@
 ## 非功能目标
 
 - 列表首屏群头像展示主链路为单图加载
-- 群头像重算异步执行，不阻塞会话列表和消息收发
+- 建群第一版群头像必须在会话对 App 可见前生成；成员变更后的重算可异步执行并保留上一版头像。
 - 在线 hint 到客户端发起拉取的目标时延 P95 < 500ms
 - sync patch 允许重复投递，但客户端必须幂等消费
 
 ## 验收重点
 
-1. `groupAvatarAssetId/groupAvatarVersion/groupAvatarSourceHash` 及 patch 类型在合同层冻结
-2. top9 + sourceHash + 默认图标降级路径冻结
+1. 对外统一 `avatarUrl` 与内部 `groupAvatarAssetId/groupAvatarVersion/groupAvatarSourceHash`、patch 类型在合同层冻结
+2. top9 + sourceHash + 服务端非空保证路径冻结
 3. runtime/media 与 runtime/sync 的边界不混淆
 4. 复用 roster revision、消息 sync 既有合同，不创建第二套版本体系

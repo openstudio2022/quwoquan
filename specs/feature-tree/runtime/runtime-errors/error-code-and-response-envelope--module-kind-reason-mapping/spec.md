@@ -9,7 +9,7 @@
 ## 验收标准
 - A1/A6/A7 主验收。
 
-## Folded legacy node `user-debug-separation-and-redaction`
+## Folded current node `user-debug-separation-and-redaction`
 
 # L5 特性：user-debug-separation-and-redaction
 

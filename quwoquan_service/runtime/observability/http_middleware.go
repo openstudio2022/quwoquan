@@ -1,8 +1,10 @@
 package runtimeobservability
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -24,6 +26,7 @@ type responseRecorder struct {
 	status int
 	size   int64
 	wrote  bool
+	body   []byte
 }
 
 func (r *responseRecorder) WriteHeader(statusCode int) {
@@ -42,6 +45,13 @@ func (r *responseRecorder) Write(data []byte) (int, error) {
 	}
 	n, err := r.ResponseWriter.Write(data)
 	r.size += int64(n)
+	if len(r.body) < 64*1024 {
+		remaining := 64*1024 - len(r.body)
+		if len(data) < remaining {
+			remaining = len(data)
+		}
+		r.body = append(r.body, data[:remaining]...)
+	}
 	return n, err
 }
 
@@ -116,6 +126,19 @@ func HTTPServerMiddleware(
 							rterr.HTTPWriteOptionsFromRequest(r),
 						)
 					}
+					details := exceptionDetails{
+						code:           "UNKNOWN.SYSTEM.internal_error",
+						module:         "UNKNOWN",
+						kind:           "SYSTEM",
+						reason:         "internal_error",
+						runtimeOrigin:  "system",
+						runtimeNature:  "bug",
+						userMessage:    "系统开小差了，请稍后重试",
+						debugMessage:   "panic recovered",
+						failurePoint:   endpoint,
+						businessObject: "cloud_request",
+						functionModule: "runtime_panic",
+					}
 					_ = exceptionLogger.Write(ExceptionLog{
 						SchemaVersion:     defaultSchemaVersion,
 						Service:           cfg.Service,
@@ -135,13 +158,17 @@ func HTTPServerMiddleware(
 						AppVersion:        meta.AppVersion,
 						ServiceName:       cfg.ServiceName,
 						ServiceInstanceID: cfg.ServiceInstanceID,
-						ErrorCode:         "UNKNOWN.SYSTEM.internal_error",
-						ErrorModule:       "UNKNOWN",
-						ErrorKind:         "SYSTEM",
-						ErrorReason:       "internal_error",
-						UserMessage:       "系统开小差了，请稍后重试",
-						DebugMessage:      "panic recovered",
-						FailurePoint:      endpoint,
+						ErrorCode:         details.code,
+						ErrorModule:       details.module,
+						ErrorKind:         details.kind,
+						ErrorReason:       details.reason,
+						RuntimeOrigin:     details.runtimeOrigin,
+						RuntimeNature:     details.runtimeNature,
+						UserMessage:       details.userMessage,
+						DebugMessage:      details.debugMessage,
+						FailurePoint:      details.failurePoint,
+						BusinessObject:    details.businessObject,
+						FunctionModule:    details.functionModule,
 					}, "", "", nil, nil)
 					_ = ioLogger.Write(IOAccessLog{
 						SchemaVersion:     defaultSchemaVersion,
@@ -175,7 +202,8 @@ func HTTPServerMiddleware(
 			errorCode := ""
 			if rec.status >= 500 {
 				status = "failed"
-				errorCode = "UNKNOWN.SYSTEM.internal_error"
+				details := exceptionDetailsFromResponse(rec, endpoint)
+				errorCode = details.code
 				_ = exceptionLogger.Write(ExceptionLog{
 					SchemaVersion:     defaultSchemaVersion,
 					Service:           cfg.Service,
@@ -195,13 +223,17 @@ func HTTPServerMiddleware(
 					AppVersion:        meta.AppVersion,
 					ServiceName:       cfg.ServiceName,
 					ServiceInstanceID: cfg.ServiceInstanceID,
-					ErrorCode:         errorCode,
-					ErrorModule:       "UNKNOWN",
-					ErrorKind:         "SYSTEM",
-					ErrorReason:       "internal_error",
-					UserMessage:       "服务异常，请稍后重试",
-					DebugMessage:      "http status >= 500",
-					FailurePoint:      endpoint,
+					ErrorCode:         details.code,
+					ErrorModule:       details.module,
+					ErrorKind:         details.kind,
+					ErrorReason:       details.reason,
+					RuntimeOrigin:     details.runtimeOrigin,
+					RuntimeNature:     details.runtimeNature,
+					UserMessage:       details.userMessage,
+					DebugMessage:      details.debugMessage,
+					FailurePoint:      details.failurePoint,
+					BusinessObject:    details.businessObject,
+					FunctionModule:    details.functionModule,
 				}, "", "", nil, nil)
 			}
 
@@ -256,4 +288,77 @@ func HTTPServerMiddleware(
 			})
 		})
 	}
+}
+
+type exceptionDetails struct {
+	code           string
+	module         string
+	kind           string
+	reason         string
+	runtimeOrigin  string
+	runtimeNature  string
+	userMessage    string
+	debugMessage   string
+	failurePoint   string
+	businessObject string
+	functionModule string
+}
+
+func exceptionDetailsFromResponse(rec *responseRecorder, endpoint string) exceptionDetails {
+	details := defaultHTTPExceptionDetails(endpoint)
+	var resp rterr.ErrorResponse
+	if len(rec.body) == 0 || json.Unmarshal(rec.body, &resp) != nil || resp.Code == "" {
+		return details
+	}
+	module, kind, reason := splitRuntimeErrorCode(resp.Code)
+	details.code = resp.Code
+	details.module = firstNonEmpty(module, resp.Module, details.module)
+	details.kind = firstNonEmpty(kind, resp.Kind, details.kind)
+	details.reason = firstNonEmpty(reason, resp.Reason, details.reason)
+	details.runtimeOrigin = firstNonEmpty(resp.Origin, details.runtimeOrigin)
+	details.runtimeNature = firstNonEmpty(resp.Nature, details.runtimeNature)
+	details.userMessage = firstNonEmpty(resp.UserMessage, details.userMessage)
+	if resp.DebugMessage != "" && resp.DebugMessage != rterr.RedactedDebugMessage {
+		details.debugMessage = resp.DebugMessage
+	}
+	if resp.Location.BusinessObject != "" {
+		details.businessObject = resp.Location.BusinessObject
+	}
+	if resp.Location.FunctionModule != "" {
+		details.functionModule = resp.Location.FunctionModule
+	}
+	return details
+}
+
+func defaultHTTPExceptionDetails(endpoint string) exceptionDetails {
+	return exceptionDetails{
+		code:           "UNKNOWN.SYSTEM.internal_error",
+		module:         "UNKNOWN",
+		kind:           "SYSTEM",
+		reason:         "internal_error",
+		runtimeOrigin:  "system",
+		runtimeNature:  "bug",
+		userMessage:    "服务异常，请稍后重试",
+		debugMessage:   "http status >= 500",
+		failurePoint:   endpoint,
+		businessObject: "cloud_request",
+		functionModule: "http_middleware",
+	}
+}
+
+func splitRuntimeErrorCode(code string) (string, string, string) {
+	parts := strings.SplitN(code, ".", 3)
+	if len(parts) != 3 {
+		return "", "", ""
+	}
+	return parts[0], parts[1], parts[2]
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

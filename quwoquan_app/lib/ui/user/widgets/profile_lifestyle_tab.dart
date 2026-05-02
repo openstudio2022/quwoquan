@@ -121,11 +121,11 @@ class ProfileLifestyleTab extends ConsumerWidget {
                   ),
                 )
               : GridView.builder(
-                  padding: EdgeInsets.all(AppSpacing.containerSm),
+                  padding: EdgeInsets.all(AppSpacing.postPreviewSectionPadding),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: AppSpacing.sm,
-                    crossAxisSpacing: AppSpacing.sm,
+                    crossAxisCount: AppSpacing.responsiveGridColumns(context),
+                    mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                    crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                   ),
                   itemCount: filteredItems.length,
                   itemBuilder: (context, index) {

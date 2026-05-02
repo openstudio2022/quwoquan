@@ -22,8 +22,8 @@ slices:
       - T1_schema
     done_when:
       - `_shared`、统一 `Search` 接口与四个业务域 provider 的搜索 contract 拓扑明确
-      - 搜索历史与问小趣 handoff 的 contract 归属清晰
-      - 历史 chat 搜索节点不再作为治理入口
+      - 搜索记录与问小趣 handoff 的 contract 归属清晰
+      - 记录 chat 搜索节点不再作为治理入口
     status: completed
 
   - id: P2

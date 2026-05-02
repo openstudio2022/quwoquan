@@ -287,10 +287,8 @@ class SearchObjectSelection {
   }
 
   @override
-  int get hashCode => Object.hash(
-        _enumIndexSetHash(targets),
-        _enumIndexSetHash(contentTypes),
-      );
+  int get hashCode =>
+      Object.hash(_enumIndexSetHash(targets), _enumIndexSetHash(contentTypes));
 }
 
 class SearchLaunchContext {
@@ -351,14 +349,14 @@ class SearchLaunchContext {
 
   @override
   int get hashCode => Object.hash(
-        entrySurfaceId,
-        initialScope,
-        searchObjectSelection,
-        prefilledQuery,
-        restoreState,
-        initialFacet,
-        initialNetworkTabId,
-      );
+    entrySurfaceId,
+    initialScope,
+    searchObjectSelection,
+    prefilledQuery,
+    restoreState,
+    initialFacet,
+    initialNetworkTabId,
+  );
 }
 
 class SearchConversationAnchorContext {
@@ -436,13 +434,12 @@ class SocialRelationSearchItemView {
     final displayName = w.displayName.isNotEmpty
         ? w.displayName
         : profileSubjectId;
-    final username =
-        w.username.isNotEmpty ? w.username : profileSubjectId;
+    final username = w.username.isNotEmpty ? w.username : profileSubjectId;
     final nested = w.relationshipCapability;
     final Map<String, dynamic> effectiveCap =
         (nested != null && nested.isNotEmpty)
-            ? Map<String, dynamic>.from(nested)
-            : row;
+        ? Map<String, dynamic>.from(nested)
+        : row;
     final cap = SocialRelationshipCapabilityWireDto.fromMap(effectiveCap);
     final canOpen = cap.canOpenConversation || w.chatAvailable;
     final capView = SocialRelationshipCapabilityView(
@@ -478,7 +475,6 @@ class ConversationSearchItemView {
     required this.type,
     required this.title,
     this.avatarUrl,
-    this.avatarCompositeUrls = const <String>[],
     this.lastMessagePreview,
     this.lastMessageTime,
     required this.memberCount,
@@ -492,7 +488,6 @@ class ConversationSearchItemView {
   final String type;
   final String title;
   final String? avatarUrl;
-  final List<String> avatarCompositeUrls;
   final String? lastMessagePreview;
   final DateTime? lastMessageTime;
   final int memberCount;
@@ -508,12 +503,7 @@ class ConversationSearchItemView {
           .trim(),
       type: (map['type'] ?? 'direct').toString().trim(),
       title: (map['title'] ?? map['conversationTitle'] ?? '').toString().trim(),
-      avatarUrl: map['avatarUrl']?.toString(),
-      avatarCompositeUrls:
-          _parseStringList(
-            map['avatarCompositeUrls'] ?? map['memberAvatars'],
-          ) ??
-          const <String>[],
+      avatarUrl: _optionalString(map['avatarUrl']),
       lastMessagePreview: (map['lastMessagePreview'] ?? map['highlightText'])
           ?.toString(),
       lastMessageTime: _parseDateTime(map['lastMessageTime']),
@@ -626,11 +616,7 @@ class RecentSearchEntryView {
     return RecentSearchEntryView(
       entryId: w.entryId.trim().isNotEmpty
           ? w.entryId.trim()
-          : buildEntryId(
-              query: query,
-              scope: scope,
-              facet: facetTrim,
-            ),
+          : buildEntryId(query: query, scope: scope, facet: facetTrim),
       query: query,
       scope: scope,
       facet: facetTrim?.isEmpty == true ? null : facetTrim,
@@ -698,7 +684,6 @@ class MostUsedSearchItem {
     required this.title,
     required this.subtitle,
     this.avatarUrl,
-    this.avatarCompositeUrls = const <String>[],
     this.conversationId,
     this.conversationType,
     this.circleId,
@@ -713,7 +698,6 @@ class MostUsedSearchItem {
   final String title;
   final String subtitle;
   final String? avatarUrl;
-  final List<String> avatarCompositeUrls;
   final String? conversationId;
   final String? conversationType;
   final String? circleId;
@@ -747,7 +731,6 @@ class ChatRecordSearchSuggestion {
     required this.matchedPreview,
     required this.matchCount,
     this.avatarUrl,
-    this.avatarCompositeUrls = const <String>[],
     this.messageAnchorId,
     this.timestamp,
   });
@@ -758,7 +741,6 @@ class ChatRecordSearchSuggestion {
   final String matchedPreview;
   final int matchCount;
   final String? avatarUrl;
-  final List<String> avatarCompositeUrls;
   final String? messageAnchorId;
   final DateTime? timestamp;
 }
@@ -929,19 +911,17 @@ class SearchSessionState {
   }
 }
 
+String? _optionalString(Object? value) {
+  final s = value?.toString().trim() ?? '';
+  return s.isEmpty ? null : s;
+}
+
 DateTime? _parseDateTime(Object? value) {
   if (value is DateTime) {
     return value;
   }
   if (value is String && value.trim().isNotEmpty) {
     return DateTime.tryParse(value);
-  }
-  return null;
-}
-
-List<String>? _parseStringList(Object? value) {
-  if (value is List) {
-    return value.map((item) => item.toString()).toList(growable: false);
   }
   return null;
 }

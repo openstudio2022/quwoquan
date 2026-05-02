@@ -94,7 +94,7 @@ v*-rc* tag
   → 04. Pre-Release Gate (pre-release-gate.yml)
       1. make gate-full
       2. Deploy to integration（CLOUD_PROVIDER 可选）
-      3. L3 test-api-contract（STAGING_BASE_URL=integration）
+      3. L3 test-api-contract（API_CONTRACT_ENV=gamma，GAMMA_BASE_URL/GAMMA_PRODUCT_OPS_BASE_URL）
       4. L4 Patrol/FTL
       5. 全部通过 → 允许灰度到 prod
 ```

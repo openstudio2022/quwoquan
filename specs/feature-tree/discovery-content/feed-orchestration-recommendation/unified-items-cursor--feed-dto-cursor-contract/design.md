@@ -13,7 +13,7 @@ Design decisions and trade-offs will be documented here as they are resolved.
 - Metadata YAML is the single source of truth
 - All codegen artifacts are DO NOT EDIT
 
-## Folded legacy node `cursor-compatibility-guard`
+## Folded current node `cursor-compatibility-guard`
 
 # Design: cursor-compatibility-guard
 

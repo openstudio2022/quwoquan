@@ -31,7 +31,7 @@ scenario_acceptance:
     done_when:
       - 网络结果页存在明确的小趣搜 tab
       - 用户切换后可看到 assistant 摘要与引用结果
-      - 小趣搜不单独新增 AI query 历史记录
+      - 小趣搜不单独新增 AI query 记录记录
     edge_cases:
       - 当前 query 已输入但无 assistant 结果
       - assistant 会话页已有上下文

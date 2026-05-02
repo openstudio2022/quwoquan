@@ -12,7 +12,8 @@
 | **main** | 发布主干 | **仅由定时 merge 更新**（merge-dev1.0-to-main workflow） |
 
 - **日常 PR**：目标分支为 **dev1.0**，禁止直接合并到 main
-- **main 更新**：每日定时（如 6:00 Asia/Shanghai）由 `07. Merge dev1.0 To Main` workflow 自动 merge dev1.0 → main
+- **main 更新**：每日定时（如 6:00 Asia/Shanghai）由 `07. Merge dev1.0 To Main` workflow 自动 merge dev1.0 → main；**merge  job 仅在** `dev1.0` 当前 HEAD 对应的 **Delivery Gate**（`delivery-gate.yml`）已成功时执行（见 `scripts/ci_assert_delivery_gate_green_for_branch.py`）
+- **本地 push 后等待变绿**：`bash scripts/gh_wait_delivery_gate_green.sh dev1.0 3600`（与 `/.cursor/commands/commit.md` 一致）
 
 ---
 

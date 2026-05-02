@@ -27,13 +27,13 @@ class ConversationRetrievalProvider implements AssistantRetrievalProvider {
     if (summary.isEmpty) {
       return const AssistantRetrievalResult(
         success: false,
-        message: '当前会话暂无可检索历史。',
+        message: '当前会话暂无可检索记录。',
         providersUsed: <String>['conversation'],
       );
     }
     return AssistantRetrievalResult(
       success: true,
-      message: '已读取当前会话历史。',
+      message: '已读取当前会话记录。',
       items: <AssistantRetrievalItem>[
         AssistantRetrievalItem(
           content: summary,

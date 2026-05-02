@@ -11,7 +11,7 @@
 
 补充冻结：
 
-- user 域关于 `ProfileSubjectView / ProfileSubjectMutation / 分身可见性 / 历史归因` 的真相源归 `persona-follow-graph/persona-profile-subject-and-visibility`。
+- user 域关于 `ProfileSubjectView / ProfileSubjectMutation / 分身可见性 / 记录归因` 的真相源归 `persona-follow-graph/persona-profile-subject-and-visibility`。
 - 本场景消费这些 user 域契约来构建主页与资料编辑体验，不再拥有分身生命周期与公开身份模型的主定义权。
 
 ## 目标用户
@@ -106,7 +106,7 @@
 
 - 以 `spec-first + metadata-first` 为前置，不允许先改 UI 再倒推契约。
 - 保留现有 `/user/{username}` 路由形态，避免外部分享链接漂移。
-- 允许兼容现有 `Persona` 历史命名，但新设计语义统一以 `SubAccount` 解释；兼容路径必须写明退出条件。
+- 允许兼容现有 `Persona` 记录命名，但新设计语义统一以 `SubAccount` 解释；兼容路径必须写明退出条件。
 - 互动流的领域归属以内容域为主，用户域负责主页主体与关系能力，不在本 Story 内把所有互动读模型强行搬到 user-service。
 - 滚动与吸顶交互必须建立在单一主滚动坐标系之上，不允许通过多个相互独立的 scroll view / offset 叠加去“拼”出头部动效。
 

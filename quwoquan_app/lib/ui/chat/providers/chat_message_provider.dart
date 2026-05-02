@@ -63,7 +63,8 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final loaded = await _repo.listMessages(conversationId: conversationId);
-      final merged = _mergeMessages(state.messages, loaded);
+      final hydrated = await _hydrateSenderSnapshots(loaded);
+      final merged = _mergeMessages(state.messages, hydrated);
       state = state.copyWith(messages: _sorted(merged), isLoading: false);
       if (maxSeq != null && maxSeq > 0) {
         await _detectAndFillGap(maxSeq);
@@ -241,7 +242,8 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         lastSeq: lastSeq,
       );
       if (syncResp.messages.isNotEmpty) {
-        final merged = _mergeMessages(state.messages, syncResp.messages);
+        final hydrated = await _hydrateSenderSnapshots(syncResp.messages);
+        final merged = _mergeMessages(state.messages, hydrated);
         state = state.copyWith(messages: _sorted(merged));
       }
     } catch (e) {
@@ -268,6 +270,52 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
           : m;
     }).toList();
     state = state.copyWith(messages: _sorted(updated));
+  }
+
+  Future<List<MessageDto>> _hydrateSenderSnapshots(
+    List<MessageDto> messages,
+  ) async {
+    final needsHydration = messages.any(
+      (message) =>
+          (message.senderName == null || message.senderName!.trim().isEmpty) ||
+          (message.senderAvatar == null ||
+              message.senderAvatar!.trim().isEmpty),
+    );
+    if (!needsHydration) {
+      return messages;
+    }
+    try {
+      final members = await _repo.listMembers(
+        conversationId: conversationId,
+        limit: 200,
+        sort: 'joined_asc',
+      );
+      final memberByUserId = {
+        for (final member in members)
+          if (member.userId.isNotEmpty) member.userId: member,
+      };
+      return messages
+          .map((message) {
+            final member = memberByUserId[message.senderId];
+            if (member == null) {
+              return message;
+            }
+            final senderName = message.senderName?.trim() ?? '';
+            final senderAvatar = message.senderAvatar?.trim() ?? '';
+            if (senderName.isNotEmpty && senderAvatar.isNotEmpty) {
+              return message;
+            }
+            return message.copyWith(
+              senderName: senderName.isEmpty ? member.displayName : senderName,
+              senderAvatar: senderAvatar.isEmpty
+                  ? member.avatarUrl
+                  : senderAvatar,
+            );
+          })
+          .toList(growable: false);
+    } catch (_) {
+      return messages;
+    }
   }
 
   // ── 排序：seq > 0 升序，seq == 0（未确认）排最后按 timestamp ──────────

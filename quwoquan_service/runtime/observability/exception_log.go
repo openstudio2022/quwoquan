@@ -33,10 +33,14 @@ type ExceptionLog struct {
 	ErrorModule       string      `json:"errorModule"`
 	ErrorKind         string      `json:"errorKind"`
 	ErrorReason       string      `json:"errorReason"`
+	RuntimeOrigin     string      `json:"runtimeOrigin,omitempty"`
+	RuntimeNature     string      `json:"runtimeNature,omitempty"`
 	UserMessage       string      `json:"userMessage"`
 	DebugMessage      string      `json:"debugMessage,omitempty"`
 	StackHash         string      `json:"stackHash,omitempty"`
 	FailurePoint      string      `json:"failurePoint,omitempty"`
+	BusinessObject    string      `json:"businessObject,omitempty"`
+	FunctionModule    string      `json:"functionModule,omitempty"`
 	IO                ExceptionIO `json:"io,omitempty"`
 }
 
@@ -71,4 +75,3 @@ func (l ExceptionLog) Validate() error {
 	}
 	return nil
 }
-

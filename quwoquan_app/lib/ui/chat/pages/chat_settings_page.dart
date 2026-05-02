@@ -137,8 +137,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     );
     final members = membersState.members;
     final isAdminOrOwner = membersState.isAdminOrOwner;
-    final privacyShield =
-        membersState.groupSettings.privacyShieldAdminOnly;
+    final privacyShield = membersState.groupSettings.privacyShieldAdminOnly;
 
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final borderColor = AppColorsFunctional.getColor(
@@ -155,8 +154,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final chevronColor =
-        SettingsSemanticConstants.selectionChevronColor(isDark);
+    final chevronColor = SettingsSemanticConstants.selectionChevronColor(
+      isDark,
+    );
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
       title: '${UITextConstants.chatInfoTitle}($memberCount)',
@@ -188,14 +188,31 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final totalCells = visibleMemberCount + 1;
+                      final gridGap = AppSpacing.sm;
+                      final availableWidth = constraints.maxWidth.isFinite
+                          ? constraints.maxWidth
+                          : MediaQuery.sizeOf(context).width -
+                                SettingsSemanticConstants
+                                        .insetFormListHorizontalPadding *
+                                    2;
+                      final memberCellWidth =
+                          (availableWidth - gridGap * (_memberColumns - 1)) /
+                          _memberColumns;
+                      final memberLabelHeight =
+                          AppTypography.xs * AppTypography.lineHeightCompact;
+                      final memberCellHeight =
+                          AppSpacing.avatarUserLg +
+                          AppSpacing.xs +
+                          memberLabelHeight +
+                          AppSpacing.xs;
                       return GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: _memberColumns,
-                          childAspectRatio: 0.85,
-                          crossAxisSpacing: AppSpacing.sm,
-                          mainAxisSpacing: AppSpacing.sm,
+                          childAspectRatio: memberCellWidth / memberCellHeight,
+                          crossAxisSpacing: gridGap,
+                          mainAxisSpacing: gridGap,
                         ),
                         itemCount: totalCells,
                         itemBuilder: (context, index) {
@@ -214,8 +231,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                             );
                           }
                           final m = members[index];
-                          final username =
-                              m.userId.isNotEmpty ? m.userId : 'user_$index';
+                          final username = m.userId.isNotEmpty
+                              ? m.userId
+                              : 'user_$index';
                           return _MemberAvatar(
                             name: m.displayName,
                             avatarUrl: m.avatarUrl,
@@ -603,6 +621,7 @@ class _AddMemberPlaceholder extends StatelessWidget {
   });
 
   final Color borderColor;
+
   /// 与 [_MemberAvatar] 中 [RoundedSquareAvatar] 边长一致。
   final double size;
   final VoidCallback onTap;
@@ -629,4 +648,3 @@ class _AddMemberPlaceholder extends StatelessWidget {
     );
   }
 }
-

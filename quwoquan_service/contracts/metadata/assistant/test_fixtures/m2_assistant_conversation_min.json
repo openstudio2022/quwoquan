@@ -1,0 +1,10 @@
+{
+  "conversationId": "acv_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
+  "userId": "user_001",
+  "state": "active",
+  "activeTurnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+  "lastTurnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+  "summary": "M2 minimal conversation fixture",
+  "createdAt": "2026-04-29T02:00:00Z",
+  "updatedAt": "2026-04-29T02:00:01Z"
+}

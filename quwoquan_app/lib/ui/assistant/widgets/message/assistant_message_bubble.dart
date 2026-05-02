@@ -12,7 +12,7 @@ import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/assistant/models/assistant_legacy_bubble_envelope.dart';
+import 'package:quwoquan_app/ui/assistant/models/assistant_transcript_bubble_envelope.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_content.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_answer_toolbar.dart';
@@ -176,9 +176,9 @@ class AssistantMessageBubble extends StatelessWidget {
         r.senderId == AppConceptConstants.assistantSenderId,
       _ => false,
     };
-    final legacyEnvelope =
+    final transcriptEnvelope =
         (type == 'task_card' || type == 'image' || type == 'audio')
-        ? AssistantLegacyBubbleEnvelope.fromCodecMap(
+        ? AssistantTranscriptBubbleEnvelope.fromCodecMap(
             PersistedTimelineTurnCodec.encode(row),
           )
         : null;
@@ -272,7 +272,7 @@ class AssistantMessageBubble extends StatelessWidget {
 
     Widget contentWidget;
     if (type == 'task_card') {
-      final envelope = legacyEnvelope!;
+      final envelope = transcriptEnvelope!;
       final tasks = envelope.taskItems;
       contentWidget = Container(
         constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
@@ -327,7 +327,7 @@ class AssistantMessageBubble extends StatelessWidget {
         ),
       );
     } else if (type == 'image') {
-      final envelope = legacyEnvelope!;
+      final envelope = transcriptEnvelope!;
       final imageUrl = envelope.imageUrl;
       contentWidget = ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
@@ -345,7 +345,7 @@ class AssistantMessageBubble extends StatelessWidget {
         ),
       );
     } else if (type == 'audio') {
-      final envelope = legacyEnvelope!;
+      final envelope = transcriptEnvelope!;
       contentWidget = VoiceMessageBubble(
         messageId: envelope.audioMessageId,
         mediaUrl: envelope.audioMediaUrl,

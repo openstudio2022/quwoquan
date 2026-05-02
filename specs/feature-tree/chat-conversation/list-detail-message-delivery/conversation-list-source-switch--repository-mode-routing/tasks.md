@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `mode-switch-compatibility-guard`
+## Folded current node `mode-switch-compatibility-guard`
 
 # 开发任务：mode-switch-compatibility-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `mode-switch-compatibility-guard` (from `chat-conversation/list-detail-message-delivery/conversation-list-source-switch/repository-mode-routing/mode-switch-compatibility-guard`)
+- [ ] Migrated current node: `mode-switch-compatibility-guard` (from `chat-conversation/list-detail-message-delivery/conversation-list-source-switch/repository-mode-routing/mode-switch-compatibility-guard`)

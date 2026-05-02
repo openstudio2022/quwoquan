@@ -12,7 +12,7 @@
 - [ ] 测试：field_security 契约测试
 - [ ] gate：集成到 make gate
 
-## Folded legacy node `event-hook-metric-emit-integration`
+## Folded current node `event-hook-metric-emit-integration`
 
 # 开发任务：event-hook-metric-emit-integration
 
@@ -26,4 +26,4 @@
 - [ ] gate：集成到 make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `event-hook-metric-emit-integration` (from `runtime/runtime-interceptor/read-write-middleware-chain/field-filter-desensitize-validate/event-hook-metric-emit-integration`)
+- [ ] Migrated current node: `event-hook-metric-emit-integration` (from `runtime/runtime-interceptor/read-write-middleware-chain/field-filter-desensitize-validate/event-hook-metric-emit-integration`)

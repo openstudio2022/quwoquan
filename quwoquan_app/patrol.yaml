@@ -3,12 +3,12 @@
 app_name: quwoquan
 
 android:
-  app_id: com.quwoquan.app
+  app_id: com.quwoquan.quwoquan_app
   # 等待 app 启动（冷启动较慢，给足时间）
   wait_for_app_launch_timeout: 30
 
 ios:
-  bundle_id: com.quwoquan.app
+  bundle_id: com.example.quwoquanApp
   wait_for_app_launch_timeout: 30
 
 # 单个 patrolTest 超时（秒）

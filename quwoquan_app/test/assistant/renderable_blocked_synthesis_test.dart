@@ -116,11 +116,15 @@ class _TemplateResponseProvider implements AssistantLlmProvider {
 }
 
 class _StructuredStreamFailureProvider extends SwitchableAssistantLlmProvider {
-  _StructuredStreamFailureProvider({required this.structuredDeltas})
-    : super(fallbackProvider: const ModelOnlyFailureLlmProvider());
+  _StructuredStreamFailureProvider({
+    required this.structuredDeltas,
+    this.nonStreamSynthesisText = '',
+  }) : super(fallbackProvider: const ModelOnlyFailureLlmProvider());
 
   final Map<String, List<String>> structuredDeltas;
+  final String nonStreamSynthesisText;
   int streamCallCount = 0;
+  int reasonCallCount = 0;
 
   @override
   Future<String> reasonStream({
@@ -167,6 +171,11 @@ class _StructuredStreamFailureProvider extends SwitchableAssistantLlmProvider {
     LlmCallOptions? callOptions,
     void Function(String delta)? onDelta,
   }) async {
+    reasonCallCount += 1;
+    if (templateId == 'synthesizer.final_answer' &&
+        nonStreamSynthesisText.trim().isNotEmpty) {
+      return AssistantModelOutput(text: nonStreamSynthesisText);
+    }
     return const AssistantModelOutput(text: '');
   }
 }
@@ -1457,6 +1466,114 @@ void main() {
           .first
           .headline,
       contains('薄外套就够'),
+    );
+  });
+
+  test('检索完成后 synthesis stream 失败时，会回退到非流式成答', () async {
+    final provider = _StructuredStreamFailureProvider(
+      structuredDeltas: const <String, List<String>>{
+        'retrievalProcessing.processingSummary': <String>[
+          '已经完成 A股、工业富联、立讯精密的资料检索和筛选。',
+        ],
+        'answerProcessing.readinessSummary': <String>['证据已够，进入最终答案组织。'],
+      },
+      nonStreamSynthesisText:
+          '{"contractId":"assistant_turn","messageKind":"answer","phaseId":"answering","actionCode":"compose_answer","reasonCode":"evidence_ready","decision":{"nextAction":"answer"},"userMarkdown":"今天 A股 整体承压，工业富联和立讯精密的大跌主要需要从大盘风险偏好、个股消息面和资金交易结构三条线一起看。先把它当成交易日复盘信息，不构成投资建议。","result":{"text":"今天 A股 整体承压，工业富联和立讯精密的大跌主要需要从大盘风险偏好、个股消息面和资金交易结构三条线一起看。先把它当成交易日复盘信息，不构成投资建议。","summary":"A股承压叠加个股因素导致波动放大。","interpretation":"用户要确认 A股 走势以及两只股票大跌原因。"},"selfCheck":{"goalSatisfied":true,"constraintSatisfied":true,"safetyBoundarySatisfied":true,"failedItems":[]},"diagnostics":{"emergedTags":[],"failedChecks":[],"parseStatus":"","notes":[]}}',
+    );
+    final owner = LocalPhaseExecutionOwner(
+      ReactRuntime(
+        llmProvider: provider,
+        toolRegistry: AssistantToolRegistry(),
+      ),
+      sessionManager: AssistantSessionManager(
+        storagePath: '${tempDir.path}/sessions.json',
+      ),
+      memoryRepository: AssistantMemoryRepository(_InMemoryVectorStore()),
+    );
+    final request = const AssistantRunRequest(
+      sessionId: 'stock_stream_failure_non_stream_fallback',
+      messages: <AssistantRunMessage>[
+        AssistantRunMessage(
+          role: 'user',
+          content: '今天A股走势如何，为啥工业富联和立讯精密大跌，还有投资价值吗',
+        ),
+      ],
+    );
+
+    final response = await owner.synthesizeBridge(
+      request,
+      executionSnapshot: _buildExecutionSnapshot(<String, dynamic>{
+        'runId': 'run_stock_stream_failure_non_stream_fallback',
+        'traceId': 'trace_stock_stream_failure_non_stream_fallback',
+        'sessionId': 'stock_stream_failure_non_stream_fallback',
+        'latestUserQuery': '今天A股走势如何，为啥工业富联和立讯精密大跌，还有投资价值吗',
+        'domainId': 'finance',
+        'contextAssembly': const ContextAssemblyResult(),
+        'planView': const AssistantPlanView(
+          userGoal: '分析今天A股走势以及工业富联、立讯精密大跌原因',
+          problemShape: ProblemShape.singleSkill,
+          primarySkill: 'finance',
+          problemClass: ProblemClass.realtimeInfo,
+          requiresExternalEvidence: true,
+          searchPlans: <SearchPlanItem>[
+            SearchPlanItem(
+              id: 'a_share_trend',
+              query: '2026-04-29 A股 走势 原因 分析',
+              dimension: SearchPlanDimension.currentState,
+            ),
+            SearchPlanItem(
+              id: 'foxconn_luxshare_drop',
+              query: '2026-04-29 工业富联 立讯精密 大跌 原因',
+              dimension: SearchPlanDimension.latestSignal,
+            ),
+          ],
+        ),
+        'dialogueRoundScript': const DialogueRoundScript(domainId: 'finance'),
+        'domainCatalog': const <String>['finance'],
+        'domainCatalogVersion': 'test',
+        'executionShell': const SkillExecutionShell(),
+        'previousSlotState': const SlotStateSnapshot(domainId: 'finance'),
+        'retrievalPolicy': const <String, dynamic>{},
+        'answerBoundaryPolicy': const AnswerBoundaryPolicy(
+          evidenceRequired: false,
+          allowBoundedAnswer: true,
+        ).toJson(),
+        'templateVariables': const <String, dynamic>{},
+        'messages': const <Map<String, dynamic>>[
+          <String, dynamic>{
+            'role': 'user',
+            'content': '今天A股走势如何，为啥工业富联和立讯精密大跌，还有投资价值吗',
+          },
+        ],
+        'synthTemplateVersion': 'test',
+        'phaseOneResult': const ReactRuntimeResult(
+          finalText: _phaseOneProgressOnlyEnvelope,
+          traces: <AssistantTraceEvent>[],
+        ),
+        'synthesisReadiness': const SynthesisReadinessResult(
+          ready: true,
+          reason: 'ok',
+        ),
+        'supplementalTraces': const <AssistantTraceEvent>[],
+        'understandingSnapshot': const <String, dynamic>{
+          'userFacingSummary': '你想确认今天 A股 走势以及两只股票大跌原因。',
+        },
+        'retrievalProcessing': const <String, dynamic>{
+          'processingSummary': '已完成 A股 和两只股票的大跌原因检索。',
+          'acceptedDocumentCount': 16,
+        },
+      }),
+    );
+
+    expect(provider.streamCallCount, equals(2));
+    expect(provider.reasonCallCount, greaterThanOrEqualTo(1));
+    expect(response.answerGateDecision.renderable, isTrue);
+    expect(response.displayMarkdown, contains('工业富联'));
+    expect(response.displayMarkdown, contains('立讯精密'));
+    expect(response.displayMarkdown, isNot(contains('最终答案没有组织成功')));
+    expect(
+      response.structuredResponse['blockedProcessStepId'],
+      isNot(equals(ProcessStepId.answerOrganization.wireName)),
     );
   });
 }

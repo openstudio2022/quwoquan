@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `settings-sync-consistency-guard`
+## Folded current node `settings-sync-consistency-guard`
 
 # 开发任务：settings-sync-consistency-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `settings-sync-consistency-guard` (from `chat-conversation/group-creation-member-management/group-settings/mute-pin-read-settings-contract/settings-sync-consistency-guard`)
+- [ ] Migrated current node: `settings-sync-consistency-guard` (from `chat-conversation/group-creation-member-management/group-settings/mute-pin-read-settings-contract/settings-sync-consistency-guard`)

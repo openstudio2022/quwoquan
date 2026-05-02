@@ -26,7 +26,7 @@ slices:
       - governance_sync_review
     done_when:
       - `spec.md / design.md / acceptance.yaml / plan.yaml / CR` 被明确为正式治理口径
-      - `tasks.md` 被显式标注为历史参考，不再作为 `/dev` 检查清单
+      - `tasks.md` 被显式标注为记录参考，不再作为 `/dev` 检查清单
       - 后续开发与验收任务均使用 `D0-D12` 语言
     status: planned
 

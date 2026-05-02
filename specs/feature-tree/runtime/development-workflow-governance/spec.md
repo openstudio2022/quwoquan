@@ -20,7 +20,7 @@
 并且要求：
 
 - **不再保留 `L4/L5`**
-- **不再保留历史兼容映射**
+- **不再保留记录兼容映射**
 - **不再允许树层和测试层共用 `L*` 语义**
 
 ## 目标用户
@@ -40,7 +40,7 @@
   - `L2_feature`：Feature / 稳定业务特性容器
   - `L3_story`：Story / 最小独立交付单元
 - R1.2：目录树保留到 `L3_story`；`Task` 不再作为目录节点存在，而是通过 `tasks.md` 或后续 `tasks.yaml` 表达。
-- R1.3：所有历史 `L3_component / L3_subfeature / L4_detail / L4_story / L4_object_task / L5_*` 必须退出正式治理模型。
+- R1.3：所有记录 `L3_component / L3_subfeature / L4_detail / L4_story / L4_object_task / L5_*` 必须退出正式治理模型。
 - R1.4：任何新增 `L2_feature` 若还能继续拆出稳定子容器，说明建模过大；任何 `L3_story` 若还能拆出多个独立 Story，必须继续拆分。
 
 ### R2：重构命令语义，使其围绕三层模型运行
@@ -67,7 +67,7 @@
 ### R4：重构规则、主流程和测试口径
 
 - R4.1：`specs/00_MASTER_DEVELOPMENT_FLOW.md` 必须从四层治理改为三层治理，并把“L3/L4 测试”改写为 `T3/T4` 测试。
-- R4.2：`specs/feature-tree/00_FEATURE_TREE_STANDARD.md` 必须改写为三层标准，不再出现 Legacy L5 或兼容迁移描述。
+- R4.2：`specs/feature-tree/00_FEATURE_TREE_STANDARD.md` 必须改写为三层标准，不再出现 Current L5 或兼容迁移描述。
 - R4.3：`specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md` 必须改写为三层唯一权威定义。
 - R4.4：`.cursor/rules/03-testing.mdc` 必须与三层树解耦，只保留 `T1~T4` 作为测试治理语言。
 - R4.5：`.cursor/commands/*.md` 必须统一引用三层术语，不再出现“L4 默认叶子”“L5 兼容”等表述。
@@ -82,7 +82,7 @@
 ### R6：重构存量特性树
 
 - R6.1：所有现有 L1 节点保留为新 `L1_capability`。
-- R6.2：旧扁平 Story 与历史深层节点需要按“Feature 容器”与“独立 Story”重新归并到 `L2_feature / L3_story`。
+- R6.2：旧扁平 Story 与记录深层节点需要按“Feature 容器”与“独立 Story”重新归并到 `L2_feature / L3_story`。
 - R6.3：旧 `L5` 一律消失，不再保留为目录层或兼容字段。
 - R6.4：旧中间分组信息若仍有价值，应迁移为 tag、journey、module_group、business_object 等元数据，而不是继续保留目录层。
 

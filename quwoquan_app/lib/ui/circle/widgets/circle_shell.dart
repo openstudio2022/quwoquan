@@ -79,16 +79,19 @@ class _CircleShellState extends ConsumerState<CircleShell> {
 
   List<_TabSpec> _resolveTabs(CircleState? state) {
     final sectionConfig = state?.circleData?.sectionConfig ?? const [];
-    final visible = sectionConfig
-        .where((section) => section.visible)
-        .toList(growable: false)
-      ..sort((a, b) => a.order.compareTo(b.order));
+    final visible =
+        sectionConfig
+            .where((section) => section.visible)
+            .toList(growable: false)
+          ..sort((a, b) => a.order.compareTo(b.order));
     final available = visible.isNotEmpty
         ? visible.map((section) => section.sectionType).toSet()
         : <String>{'works', 'interaction', 'chat', 'storage'};
     final tabs = <_TabSpec>[];
     if (available.contains('works')) {
-      tabs.add(_TabSpec(type: 'content', label: UITextConstants.circleWorksTab));
+      tabs.add(
+        _TabSpec(type: 'content', label: UITextConstants.circleWorksTab),
+      );
     }
     if (available.contains('interaction')) {
       tabs.add(
@@ -99,7 +102,9 @@ class _CircleShellState extends ConsumerState<CircleShell> {
       );
     }
     if (available.contains('chat') || available.contains('storage')) {
-      tabs.add(_TabSpec(type: 'assets', label: UITextConstants.circleAssetsTab));
+      tabs.add(
+        _TabSpec(type: 'assets', label: UITextConstants.circleAssetsTab),
+      );
     }
     if (tabs.isNotEmpty) return tabs;
     return _defaultSections
@@ -204,7 +209,10 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }
 
   double _pinTransitionDistance() {
-    return max(AppSpacing.buttonHeight, CircleHeader.avatarOuterDiameter * 0.55);
+    return max(
+      AppSpacing.buttonHeight,
+      CircleHeader.avatarOuterDiameter * 0.55,
+    );
   }
 
   double _summaryTopAtRest(BuildContext context) {
@@ -260,9 +268,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final members = _formatCount(
       cs.members != 0 ? cs.members : circle?.memberCount,
     );
-    final posts = _formatCount(
-      cs.posts != 0 ? cs.posts : circle?.postCount,
-    );
+    final posts = _formatCount(cs.posts != 0 ? cs.posts : circle?.postCount);
     return <String>[
       '$members ${UITextConstants.circleMembers}',
       '$posts ${UITextConstants.circlePosts}',
@@ -544,7 +550,10 @@ class _CircleShellState extends ConsumerState<CircleShell> {
               backgroundOpacity: toolbarOpacity,
             ),
             Positioned(
-              top: _backgroundSpacerHeight(context) - _scrollOffset + _rawPullOffset,
+              top:
+                  _backgroundSpacerHeight(context) -
+                  _scrollOffset +
+                  _rawPullOffset,
               left: 0,
               right: 0,
               child: IgnorePointer(
@@ -585,12 +594,19 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }
 
   Widget _buildConstrainedContent(Widget child) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: AppSpacing.feedMaxContentWidth),
-        child: child,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = AppSpacing.adaptiveFeedMaxContentWidth(
+          constraints.maxWidth,
+        );
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -683,7 +699,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                 initialTab: CircleEditSettingsTab.settings,
               ),
               onFollow: notifier.toggleFollow,
-              onJoinCircle: _isMemberLike(state) || state.joinStatus == 'pending'
+              onJoinCircle:
+                  _isMemberLike(state) || state.joinStatus == 'pending'
                   ? null
                   : notifier.joinCircle,
               onOpenChat: hasConversation
@@ -699,7 +716,9 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                 ),
                 decoration: BoxDecoration(
                   color: AppColors.error.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                  borderRadius: BorderRadius.circular(
+                    AppSpacing.largeBorderRadius,
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -728,10 +747,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     );
   }
 
-  Widget _buildBackgroundLayer({
-    required Color bg,
-    required String? coverUrl,
-  }) {
+  Widget _buildBackgroundLayer({required Color bg, required String? coverUrl}) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -813,88 +829,99 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                 )
               : null,
         ),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: AppSpacing.feedMaxContentWidth),
-            child: SizedBox(
-              height: kToolbarHeight,
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: slotWidth,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _CircleToolbarButton(
-                        icon: CupertinoIcons.back,
-                        onPressed:
-                            widget.onBack ??
-                            () {
-                              Navigator.of(context).maybePop();
-                            },
-                        backgroundColor: tintFill,
-                        foregroundColor: compactForeground,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Opacity(
-                      opacity: identityOpacity,
-                      child: Row(
-                        key: const ValueKey<String>('circle-shell-compact-identity'),
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircleAvatar(
-                            radius: AppSpacing.avatarUserSm / 2,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = AppSpacing.adaptiveFeedMaxContentWidth(
+              constraints.maxWidth,
+            );
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: SizedBox(
+                  height: kToolbarHeight,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: slotWidth,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _CircleToolbarButton(
+                            icon: CupertinoIcons.back,
+                            onPressed:
+                                widget.onBack ??
+                                () {
+                                  Navigator.of(context).maybePop();
+                                },
                             backgroundColor: tintFill,
-                            backgroundImage:
-                                avatarUrl != null && avatarUrl.isNotEmpty
-                                ? NetworkImage(avatarUrl)
-                                : null,
-                            child: avatarUrl == null || avatarUrl.isEmpty
-                                ? Icon(
-                                    CupertinoIcons.person_3_fill,
-                                    size: AppSpacing.iconMedium,
-                                    color: compactForeground,
-                                  )
-                                : null,
+                            foregroundColor: compactForeground,
                           ),
-                          SizedBox(width: AppSpacing.containerSm),
-                          Flexible(
-                            child: Text(
-                              circleName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: AppTypography.iosNavTitle,
-                                fontWeight: AppTypography.medium,
-                                color: compactForeground,
-                                letterSpacing: -0.24,
-                              ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Opacity(
+                          opacity: identityOpacity,
+                          child: Row(
+                            key: const ValueKey<String>(
+                              'circle-shell-compact-identity',
                             ),
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircleAvatar(
+                                radius: AppSpacing.avatarUserSm / 2,
+                                backgroundColor: tintFill,
+                                backgroundImage:
+                                    avatarUrl != null && avatarUrl.isNotEmpty
+                                    ? NetworkImage(avatarUrl)
+                                    : null,
+                                child: avatarUrl == null || avatarUrl.isEmpty
+                                    ? Icon(
+                                        CupertinoIcons.person_3_fill,
+                                        size: AppSpacing.iconMedium,
+                                        color: compactForeground,
+                                      )
+                                    : null,
+                              ),
+                              SizedBox(width: AppSpacing.containerSm),
+                              Flexible(
+                                child: Text(
+                                  circleName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: AppTypography.iosNavTitle,
+                                    fontWeight: AppTypography.medium,
+                                    color: compactForeground,
+                                    letterSpacing: -0.24,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: slotWidth,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _CircleToolbarButton(
-                        icon: CupertinoIcons.ellipsis,
-                        onPressed: () =>
-                            _showMoreOptions(context, circleName: circleName),
-                        backgroundColor: tintFill,
-                        foregroundColor: compactForeground,
+                      SizedBox(
+                        width: slotWidth,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: _CircleToolbarButton(
+                            icon: CupertinoIcons.ellipsis,
+                            onPressed: () => _showMoreOptions(
+                              context,
+                              circleName: circleName,
+                            ),
+                            backgroundColor: tintFill,
+                            foregroundColor: compactForeground,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -1014,80 +1041,84 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final memberLocked = !_canAccessMemberSpaces(state);
 
     final child = switch (_activeTabId) {
-      'content' => contentLocked
-          ? _buildGateCard(
-              context,
-              title: UITextConstants.visibilityPrivate,
-              description: UITextConstants.circleVisibilityMembersDescription,
-              keySuffix: 'content',
-            )
-          : SectionCreations(
-              circleId: widget.circleId,
-              isDark: isDark,
-              role: state.role,
-              inlineScroll: true,
-            ),
-      'discussion' => contentLocked
-          ? _buildGateCard(
-              context,
-              title: UITextConstants.visibilityPrivate,
-              description: UITextConstants.circleVisibilityMembersDescription,
-              keySuffix: 'discussion',
-            )
-          : Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
-                AppSpacing.containerSm,
-                AppSpacing.containerMd,
-                0,
-              ),
-              child: _SectionSurface(
+      'content' =>
+        contentLocked
+            ? _buildGateCard(
+                context,
+                title: UITextConstants.visibilityPrivate,
+                description: UITextConstants.circleVisibilityMembersDescription,
+                keySuffix: 'content',
+              )
+            : SectionCreations(
+                circleId: widget.circleId,
                 isDark: isDark,
-                child: SectionInteraction(
-                  circleId: widget.circleId,
+                role: state.role,
+                inlineScroll: true,
+              ),
+      'discussion' =>
+        contentLocked
+            ? _buildGateCard(
+                context,
+                title: UITextConstants.visibilityPrivate,
+                description: UITextConstants.circleVisibilityMembersDescription,
+                keySuffix: 'discussion',
+              )
+            : Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.containerMd,
+                  AppSpacing.containerSm,
+                  AppSpacing.containerMd,
+                  0,
+                ),
+                child: _SectionSurface(
                   isDark: isDark,
+                  child: SectionInteraction(
+                    circleId: widget.circleId,
+                    isDark: isDark,
+                  ),
                 ),
               ),
-            ),
-      'assets' => memberLocked
-          ? _buildGateCard(
-              context,
-              title: UITextConstants.visibilityMembers,
-              description: circle?.joinPolicy == 'approval'
-                  ? UITextConstants.circleJoinApprovalDescription
-                  : UITextConstants.circleJoinOpenDescription,
-              keySuffix: 'assets',
-            )
-          : Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
-                AppSpacing.containerSm,
-                AppSpacing.containerMd,
-                0,
-              ),
-              child: Column(
-                children: [
-                  _SectionSurface(
-                    isDark: isDark,
-                    child: SectionChat(
-                      circleId: widget.circleId,
-                      conversationId: circle?.conversationId,
+      'assets' =>
+        memberLocked
+            ? _buildGateCard(
+                context,
+                title: UITextConstants.visibilityMembers,
+                description: circle?.joinPolicy == 'approval'
+                    ? UITextConstants.circleJoinApprovalDescription
+                    : UITextConstants.circleJoinOpenDescription,
+                keySuffix: 'assets',
+              )
+            : Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.containerMd,
+                  AppSpacing.containerSm,
+                  AppSpacing.containerMd,
+                  0,
+                ),
+                child: Column(
+                  children: [
+                    _SectionSurface(
                       isDark: isDark,
+                      child: SectionChat(
+                        circleId: widget.circleId,
+                        conversationId: circle?.conversationId,
+                        isDark: isDark,
+                      ),
                     ),
-                  ),
-                  SizedBox(height: AppSpacing.md),
-                  _SectionSurface(
-                    isDark: isDark,
-                    child: SectionStorage(
-                      circleId: widget.circleId,
+                    SizedBox(height: AppSpacing.md),
+                    _SectionSurface(
                       isDark: isDark,
-                      storageUsedBytes: circle?.storageUsedBytes ?? 0,
-                      storageQuotaBytes: circle?.storageQuotaBytes ?? 1073741824,
+                      child: SectionStorage(
+                        circleId: widget.circleId,
+                        isDark: isDark,
+                        storageUsedBytes: circle?.storageUsedBytes ?? 0,
+                        storageQuotaBytes:
+                            circle?.storageQuotaBytes ?? 1073741824,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
       _ => const SizedBox.shrink(),
     };
 

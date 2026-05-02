@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `create-idempotency-and-rollback`
+## Folded current node `create-idempotency-and-rollback`
 
 # 开发任务：create-idempotency-and-rollback
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `create-idempotency-and-rollback` (from `chat-conversation/group-creation-member-management/group-create-flow/group-creation-contract/create-idempotency-and-rollback`)
+- [ ] Migrated current node: `create-idempotency-and-rollback` (from `chat-conversation/group-creation-member-management/group-create-flow/group-creation-contract/create-idempotency-and-rollback`)

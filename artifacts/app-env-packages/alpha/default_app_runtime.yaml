@@ -1,0 +1,24 @@
+schemaVersion: app-runtime-config.v1
+runtime:
+  appRuntimeEnv: alpha
+  appDataSource: mock
+  gatewayBaseUrl: http://127.0.0.1:18080
+  realtimeBaseUrl: ""
+  mediaAvatarCdnBaseUrl: http://127.0.0.1:18088
+  mediaImageCdnBaseUrl: http://127.0.0.1:18088
+  mediaVideoCdnBaseUrl: http://127.0.0.1:18088
+  mediaUploadBaseUrl: http://127.0.0.1:18088
+  currentUserId: ""
+seed:
+  enabled: false
+  manifest: ""
+gray:
+  strategyEndpoint: ""
+  contextKeys:
+    - appVersion
+    - buildNumber
+    - deviceModel
+    - osVersion
+    - province
+    - city
+    - channel

@@ -292,14 +292,14 @@ class ToolExecutionGuard {
 
 ### 5.1 设计原因
 
-v3 需要 LLM 主动决定调用 `memory_search` 才能使用历史记忆，导致遗忘率高。
+v3 需要 LLM 主动决定调用 `memory_search` 才能使用记录记忆，导致遗忘率高。
 v4 在 `AssistantAgentLoop` 进入 ReAct 之前自动执行召回，LLM 无需感知接口。
 
 ### 5.2 执行时机
 
 ```
 AssistantAgentLoop.run(request)
-  ├─ _assembleContext()                      ← 会话历史摘要
+  ├─ _assembleContext()                      ← 会话记录摘要
   ├─ recallByText(query, limit=3)            ← [AUTO-RECALL] ReAct 前自动执行
   │   └─ 结果注入 <memory_recall> 块到 messages
   └─ _runtime.run(messages, ...)             ← 进入 ReAct 循环
@@ -405,7 +405,7 @@ final results = await Future.wait(
 | 能力 | v3 | v4 |
 |---|---|---|
 | 意图路由 | `intentKeywords` 关键词子串匹配 | LLM 读 skillCatalog 自主选择 |
-| 循环检测 | `consecutiveEmptyIterations >= 2` | ToolLoopDetector（20步历史 + 结果哈希）|
+| 循环检测 | `consecutiveEmptyIterations >= 2` | ToolLoopDetector（20步记录 + 结果哈希）|
 | 工具结果大小 | 无限制 | ToolResultTruncator（30% context上限）|
 | 工具权限 | 无 | ToolExecutionGuard + tool_permissions.json |
 | 记忆召回 | LLM 主动调 memory_search | ReAct 前自动 auto-recall |

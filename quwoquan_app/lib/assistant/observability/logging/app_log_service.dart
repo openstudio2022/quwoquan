@@ -9,16 +9,10 @@ import 'package:quwoquan_app/assistant/observability/logging/app_log_writer.dart
 class AppLogContext {
   const AppLogContext({
     this.sessionId = '',
-    this.journeyId = '',
     this.pageVisitId = '',
     this.runId = '',
     this.traceId = '',
-    this.spanId = '',
-    this.parentSpanId = '',
     this.requestId = '',
-    this.cloudRequestId = '',
-    this.pythonJobId = '',
-    this.correlationId = '',
     this.turnId = '',
     this.sourceDomain = 'assistant',
     this.sourceService = 'quwoquan_app',
@@ -28,16 +22,10 @@ class AppLogContext {
   });
 
   final String sessionId;
-  final String journeyId;
   final String pageVisitId;
   final String runId;
   final String traceId;
-  final String spanId;
-  final String parentSpanId;
   final String requestId;
-  final String cloudRequestId;
-  final String pythonJobId;
-  final String correlationId;
   final String turnId;
   final String sourceDomain;
   final String sourceService;
@@ -112,23 +100,19 @@ class AppLogService {
       logType: logType,
       level: level,
       sessionId: context.sessionId,
-      journeyId: context.journeyId,
       pageVisitId: context.pageVisitId,
       runId: context.runId,
       traceId: context.traceId,
-      spanId: context.spanId,
-      parentSpanId: context.parentSpanId,
       requestId: context.requestId,
-      cloudRequestId: context.cloudRequestId,
-      pythonJobId: context.pythonJobId,
-      correlationId: context.correlationId,
       turnId: context.turnId,
       sourceDomain: context.sourceDomain,
       sourceService: context.sourceService,
       component: context.component.isNotEmpty
           ? context.component
           : _defaultComponentFor(logType),
-      target: context.target.isNotEmpty ? context.target : _defaultTargetFor(logType),
+      target: context.target.isNotEmpty
+          ? context.target
+          : _defaultTargetFor(logType),
       action: context.action,
       payload: redactedPayload,
     );

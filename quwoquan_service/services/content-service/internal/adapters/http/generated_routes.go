@@ -16,7 +16,15 @@ func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		op, ok := resolveGeneratedOperation(r.Method, r.URL.Path)
 		if !ok {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "接口不存在", "route not found"))
+			rterr.WriteHTTPError(
+				w,
+				rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "route_not_found"),
+					"接口不存在",
+					"generated content route not found",
+				),
+				rterr.HTTPWriteOptionsFromRequest(r),
+			)
 			return
 		}
 		dispatchGeneratedOperation(h, op, w, r)
@@ -177,19 +185,30 @@ func generatedPathMatch(templatePath, requestPath string) bool {
 		return false
 	}
 	for i := range tParts {
-		tp := tParts[i]
-		rp := rParts[i]
-		if strings.HasPrefix(tp, "{") && strings.HasSuffix(tp, "}") {
-			if rp == "" {
-				return false
-			}
-			continue
-		}
-		if tp != rp {
+		if !generatedSegmentMatch(tParts[i], rParts[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func generatedSegmentMatch(templateSegment, requestSegment string) bool {
+	paramStart := strings.Index(templateSegment, "{")
+	if paramStart < 0 {
+		return templateSegment == requestSegment
+	}
+	paramEndOffset := strings.Index(templateSegment[paramStart:], "}")
+	if paramEndOffset < 0 {
+		return false
+	}
+	paramEnd := paramStart + paramEndOffset
+	prefix := templateSegment[:paramStart]
+	suffix := templateSegment[paramEnd+1:]
+	if !strings.HasPrefix(requestSegment, prefix) || !strings.HasSuffix(requestSegment, suffix) {
+		return false
+	}
+	value := strings.TrimSuffix(strings.TrimPrefix(requestSegment, prefix), suffix)
+	return value != ""
 }
 
 func generatedSplitPath(raw string) []string {

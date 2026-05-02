@@ -23,7 +23,7 @@
 
 - [x] A1：重组 `lib/cloud/runtime/generated/` 目录为 `content/` 子目录（`post_runtime_metadata.g.dart` 已删除）
 - [x] A2：新建 `lib/cloud/services/content/mock/content_mock_data.dart`，迁移 `discoveryPhotoData`、`discoveryVideoData`、`discoveryArticleData`、`discoveryMomentData` 的内容，统一使用规范字段名（与 `FeedItemDto` schema 一致）
-- [x] A3：`app_providers.dart` 的 `_LegacyContentDataService.getDataList` 改为：调用 Repository 返回 `List<FeedItemDto>` 后执行 `dto.toMap()` 转换，维持 DataService 接口向下兼容
+- [x] A3：`app_providers.dart` 的 `_CurrentContentDataService.getDataList` 改为：调用 Repository 返回 `List<FeedItemDto>` 后执行 `dto.toMap()` 转换，维持 DataService 接口向下兼容
 - [x] A4：`MockContentRepository.listDiscoveryFeedPage` 改为：`ContentMockData.xxx.map(FeedItemDto.fromMap).toList()`（不再返回 `Map<String, dynamic>`）
 - [x] A5：`RemoteContentRepository.listDiscoveryFeedPage` 解析响应后通过 `FeedItemDto.fromMap(item)` 输出（统一出口）
 - [x] A6：`DiscoveryFeedProvider` 类型改为 `Map<String, AsyncValue<DiscoveryFeedState>>`，`DiscoveryFeedState.items` 改为 `List<FeedItemDto>`
@@ -67,7 +67,7 @@
 
 - [x] A8：`ContentMockData` photo 条目补充 `width` / `height` 字段（10 条全部补齐）
 - [x] A9：`ContentMockData` video 条目补充 `width` / `height` 字段（3 条全部补齐；竖屏 1080×1920，横屏 1920×1080）
-- [x] A10：`ContentRepository` 统一返回 `CursorPage<PostBaseDto>`；`postBaseDtoFromMap` 按 `contentType` 分发到具体子类；保留 `listDiscoveryFeedPageLegacy` 兼容层（FeedItemDto over PostBaseDto.toMap）
+- [x] A10：`ContentRepository` 统一返回 `CursorPage<PostBaseDto>`；`postBaseDtoFromMap` 按 `contentType` 分发到具体子类；保留 `listDiscoveryFeedPageCurrent` 兼容层（FeedItemDto over PostBaseDto.toMap）
 - [x] A11：`DiscoveryFeedProvider.DiscoveryFeedState.items` 类型改为 `List<PostBaseDto>`；`_buildFeedDisplayItem` 按子类型 (`is PhotoPostDto`/`is VideoPostDto`/等) 分支构建展示 Map，直接使用 `width`/`height` 计算 aspectRatio
 
 ### 测试（T）

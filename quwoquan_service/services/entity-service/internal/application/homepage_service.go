@@ -374,7 +374,7 @@ func (s *HomepageService) CreateHomepageClaimRequest(
 		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
 	}
 	if homepage.Status == "offline" {
-		return nil, newAppError(410, codeHomepageOffline, "主页已下线，仅保留历史信息", "homepage offline")
+		return nil, newAppError(410, codeHomepageOffline, "主页已下线，仅保留记录信息", "homepage offline")
 	}
 	if strings.TrimSpace(input.ClaimTier) == "" || strings.TrimSpace(input.ContactPhone) == "" {
 		return nil, newAppError(400, codeClaimMaterialMissing, "认领材料不完整，请补充后重试", "claim tier or contact phone missing")

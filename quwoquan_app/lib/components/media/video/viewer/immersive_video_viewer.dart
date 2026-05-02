@@ -18,6 +18,7 @@ import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_assistant_panel.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
@@ -754,84 +755,86 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       child: ColoredBox(
         color: AppColors.black,
         child: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            itemCount: widget.posts.length,
-            onPageChanged: _handlePageChanged,
-            itemBuilder: (context, index) {
-              final post = widget.posts[index];
-              final mediaItem = widget.mediaItems.isNotEmpty
-                  ? widget.mediaItems[index % widget.mediaItems.length]
-                  : MediaItem(
-                      type: ContentTypeConstants.image,
-                      url: (post.images?.isNotEmpty == true)
-                          ? post.images!.first
-                          : (post.thumbnailUrl ?? post.coverUrl ?? ''),
-                    );
-              return _buildMediaPage(
-                context,
-                post,
-                mediaItem,
-                isDark,
-                index == _currentPostIndex,
-                !_isPureMode,
-              );
-            },
-          ),
-          // 控制栏始终构建以便淡出动画生效，用 IgnorePointer 在纯模式屏蔽点击
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _controlsController,
-              builder: (context, child) {
-                return IgnorePointer(
-                  ignoring: _isPureMode,
-                  child: Opacity(
-                    opacity: _controlsController.value,
-                    child: child,
-                  ),
+          children: [
+            PageView.builder(
+              controller: _pageController,
+              itemCount: widget.posts.length,
+              onPageChanged: _handlePageChanged,
+              itemBuilder: (context, index) {
+                final post = widget.posts[index];
+                final mediaItem = widget.mediaItems.isNotEmpty
+                    ? widget.mediaItems[index % widget.mediaItems.length]
+                    : MediaItem(
+                        type: ContentTypeConstants.image,
+                        url: (post.images?.isNotEmpty == true)
+                            ? post.images!.first
+                            : (post.thumbnailUrl ?? post.coverUrl ?? ''),
+                      );
+                return _buildMediaPage(
+                  context,
+                  post,
+                  mediaItem,
+                  isDark,
+                  index == _currentPostIndex,
+                  !_isPureMode,
                 );
               },
-              child: Column(
-                children: [
-                  MediaViewerTopBar(
-                    onBack: widget.onClose,
-                    positionText:
-                        '${_currentPostIndex + 1}/${widget.posts.length}',
-                    authorName: _getAuthorName(currentPost),
-                    authorAvatarUrl: _getAuthorAvatar(currentPost),
-                    isFollowing: _isFollowing,
-                    onFollow: _handleFollowClick,
-                    onAuthorTap: _handleAuthorTap,
-                    onMore: _handleMoreClick,
-                    showPosition: widget.posts.length > 1,
-                    toolbarMode: widget.toolbarMode,
-                  ),
-                  const Spacer(),
-                  ImmersiveEngagementBar(
-                    avatarUrl: _getAuthorAvatar(currentPost) ?? '',
-                    displayName: _getAuthorName(currentPost),
-                    circleName: UITextConstants.discoveryRailMoment,
-                    likeCount: _likesCount,
-                    shareCount: _sharesCount,
-                    commentCount: _commentsCount,
-                    isLiked: _isLiked,
-                    isFollowing: _isFollowing,
-                    onUserTap: _handleAuthorTap,
-                    onCircleTap: () {},
-                    onFollowTap: _handleFollowClick,
-                    onLikeTap: _handleLikeClick,
-                    onCommentTap: _handleCommentsClick,
-                    onShareTap: _handleShareClick,
-                    showFollowButton: _showFollowButton,
-                  ),
-                ],
+            ),
+            // 控制栏始终构建以便淡出动画生效，用 IgnorePointer 在纯模式屏蔽点击
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _controlsController,
+                builder: (context, child) {
+                  return IgnorePointer(
+                    ignoring: _isPureMode,
+                    child: Opacity(
+                      opacity: _controlsController.value,
+                      child: child,
+                    ),
+                  );
+                },
+                child: Column(
+                  children: [
+                    MediaViewerTopBar(
+                      onBack: widget.onClose,
+                      positionText:
+                          '${_currentPostIndex + 1}/${widget.posts.length}',
+                      authorName: _getAuthorName(currentPost),
+                      authorAvatarUrl: _getAuthorAvatar(currentPost),
+                      isFollowing: _isFollowing,
+                      onFollow: _handleFollowClick,
+                      onAuthorTap: _handleAuthorTap,
+                      onMore: _handleMoreClick,
+                      showPosition: widget.posts.length > 1,
+                      toolbarMode: widget.toolbarMode,
+                      layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+                    ),
+                    const Spacer(),
+                    ImmersiveEngagementBar(
+                      layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+                      avatarUrl: _getAuthorAvatar(currentPost) ?? '',
+                      displayName: _getAuthorName(currentPost),
+                      circleName: UITextConstants.discoveryRailMoment,
+                      likeCount: _likesCount,
+                      shareCount: _sharesCount,
+                      commentCount: _commentsCount,
+                      isLiked: _isLiked,
+                      isFollowing: _isFollowing,
+                      onUserTap: _handleAuthorTap,
+                      onCircleTap: () {},
+                      onFollowTap: _handleFollowClick,
+                      onLikeTap: _handleLikeClick,
+                      onCommentTap: _handleCommentsClick,
+                      onShareTap: _handleShareClick,
+                      showFollowButton: _showFollowButton,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 }

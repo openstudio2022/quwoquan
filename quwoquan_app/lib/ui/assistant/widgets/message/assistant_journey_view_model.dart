@@ -589,6 +589,12 @@ AssistantJourneyBlockViewModel? _buildJourneyBlockFromDisplayStateBlock({
   }
   if (headline.isEmpty &&
       detail.isEmpty &&
+      stepId == ProcessStepId.retrievalProcessing &&
+      references.isNotEmpty) {
+    return null;
+  }
+  if (headline.isEmpty &&
+      detail.isEmpty &&
       items.isEmpty &&
       references.isEmpty) {
     return null;
@@ -971,9 +977,7 @@ String _stripRetrievalProcessingSummaryFromCopy(String text, String summary) {
 bool _isLowSignalRetrievalProcessSummary(String text) {
   final normalized = text.trim();
   if (normalized.isEmpty) return false;
-  return normalized == '已完成资料筛选并进入成答' ||
-      normalized == '已完成资料筛选' ||
-      normalized == '资料筛选完成' ||
-      normalized == '进入成答' ||
-      normalized == '已完成处理';
+  return normalized == '已完成处理' ||
+      normalized == '处理完成' ||
+      normalized == '已完成资料筛选并进入成答';
 }

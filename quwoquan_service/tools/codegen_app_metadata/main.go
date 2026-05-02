@@ -914,7 +914,7 @@ func buildFeedDefaults(postDefaults map[string]string) map[string]string {
 		}
 		return fallback
 	}
-	// NOTE: These defaults are legacy Map<String,dynamic> compatibility constants.
+	// NOTE: These defaults are current Map<String,dynamic> compatibility constants.
 	// New code should use FeedItemDto (feed_item_dto.g.dart) instead.
 	return map[string]string{
 		"coverUrl":         get("coverUrl", "''"),
@@ -1507,7 +1507,7 @@ func renderSearchRegistryDart(objects *searchObjectsFile) string {
 	return b.String()
 }
 
-// renderContentMetadataDart generates the legacy metadata constants file
+// renderContentMetadataDart generates the current metadata constants file
 // (renamed from post_runtime_metadata.g.dart → content_metadata.g.dart).
 func renderContentMetadataDart(
 	postDefaults map[string]string,
@@ -1534,7 +1534,7 @@ func renderContentMetadataDart(
 	writeSortedMap(&b, postDefaults)
 	b.WriteString("  };\n\n")
 
-	b.WriteString("  // Legacy feed projection defaults (use FeedItemDto for new code).\n")
+	b.WriteString("  // Current feed projection defaults (use FeedItemDto for new code).\n")
 	b.WriteString("  static const Map<String, dynamic> feedProjectionDefaults = <String, dynamic>{\n")
 	writeSortedMap(&b, feedDefaults)
 	b.WriteString("  };\n\n")

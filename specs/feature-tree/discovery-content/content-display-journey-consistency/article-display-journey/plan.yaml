@@ -58,7 +58,7 @@ slices:
       - T2_app_mock
     done_when:
       - 至少 10 条 canonical article template 样本进入 content mock data
-      - 至少 4 条 legacy fallback 样本进入 projection / reader fixture
+      - 至少 4 条 current fallback 样本进入 projection / reader fixture
       - discovery、circle、reader/editor 三类 surface 都可直接评测全部模板和存在形态
     status: planned
 

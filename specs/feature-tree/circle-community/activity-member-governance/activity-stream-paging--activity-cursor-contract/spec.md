@@ -11,7 +11,7 @@
 - A7：契约一致性校验通过。
 - A8：对应自动化测试映射完整。
 
-## Folded legacy node `stream-degrade-fallback`
+## Folded current node `stream-degrade-fallback`
 
 # L5 特性：stream-degrade-fallback
 

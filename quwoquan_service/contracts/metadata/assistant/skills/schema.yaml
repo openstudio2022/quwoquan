@@ -1,0 +1,10 @@
+dart_class: AssistantSkillManifestRegistry
+library_path: assistant/generated/contracts/assistant_skill_manifest_registry.g.dart
+output_path: assistant/generated/contracts/assistant_skill_manifest_registry.g.dart
+contract: assistant_skills
+version: assistant_skills.registry.v1
+kind: shared_manifest_registry
+description: Assistant skill manifest directory registry. Individual skill manifests live as JSON fixtures under this directory.
+fields:
+  - { name: skillId, type: string, required: true }
+  - { name: manifestPath, type: string, required: true }

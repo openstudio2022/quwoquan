@@ -124,7 +124,7 @@
 
 - 普通读接口只能读取经过 `ProfileSubject` 和可见性过滤后的列表项。
 - 内部可以基于 owner 审计映射做治理，但对外列表不得暴露 owner 关联。
-- 分身停用后，其历史 follow 图谱如何继续公开展示，必须服从 `persona-profile-subject-and-visibility` 的公开可见性合同。
+- 分身停用后，其记录 follow 图谱如何继续公开展示，必须服从 `persona-profile-subject-and-visibility` 的公开可见性合同。
 
 ## 不做什么（Out of Scope）
 

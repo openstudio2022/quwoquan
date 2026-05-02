@@ -54,14 +54,14 @@ slices:
     status: implemented
 
   - id: M4
-    title: App 切换到 groupAvatarUrl 主链路
-    goal: 客户端消费新群头像字段，并以默认群图标作为唯一失败兜底
+    title: App 切换到统一 avatarUrl 主链路
+    goal: 客户端只消费会话级 avatarUrl，群头像由服务端预合成并保证 active 会话非空
     depends_on: [M2, M3]
     acceptance_refs: [J2, J3]
     planned_evidence: [T2, T3, T4]
     done_when:
       - 群头像主渲染路径不再依赖成员头像列表实时拼装
-      - 失败时统一显示默认群图标
+      - 失败时保持上一版 avatarUrl 或暴露契约诊断
     status: implemented
 
   - id: M5

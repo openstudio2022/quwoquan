@@ -259,19 +259,37 @@ func main() {
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
 	serviceName = getenvOrDefault("SERVICE_NAME", "content-service")
-	appEnv = getenvOrDefault("APP_ENV", "local")
+	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
 	configVersion = os.Getenv("CONFIG_VERSION")
 	imageVersion = os.Getenv("IMAGE_VERSION")
 
-	if appEnv != "local" && appEnv != "integration" && appEnv != "prod" {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of local|integration|prod, got %q", appEnv)
+	if !isValidAppEnv(appEnv) {
+		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod-gray|prod, got %q", appEnv)
 	}
 	// Enforce explicit config version in prod so rollout always binds image+config.
-	if appEnv == "prod" && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=prod")
+	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
+		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
 	}
 	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
+}
+
+func isValidAppEnv(env string) bool {
+	switch env {
+	case "alpha", "beta", "gamma", "prod-gray", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func requiresConfigVersion(env string) bool {
+	switch env {
+	case "gamma", "prod-gray", "prod":
+		return true
+	default:
+		return false
+	}
 }
 
 func getenvOrDefault(key, fallback string) string {
@@ -352,7 +370,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 		return cfg, nil
 	}
 
-	// Legacy fallback mode.
+	// Current fallback mode.
 	return loadConfig(filepath.Join("configs", "config.yaml")), nil
 }
 
@@ -433,7 +451,7 @@ func compareSemver(a, b string) int {
 //
 //	CONTENT_REDIS_GENERAL_MODE, _ADDR, _ADDRS, _PASSWORD, _TLS  (same pattern)
 //
-// Backward-compatible legacy vars (mapped to rec scene):
+// Backward-compatible current vars (mapped to rec scene):
 //
 //	CONTENT_REDIS_ADDR, CONTENT_REDIS_PASSWORD, CONTENT_REDIS_DB
 //
@@ -444,7 +462,7 @@ func applyEnvOverrides(cfg *config) {
 	applyRedisSceneEnv("CONTENT_REDIS_REC", &cfg.Redis.Rec)
 	applyRedisSceneEnv("CONTENT_REDIS_GENERAL", &cfg.Redis.General)
 
-	// Legacy single-Redis env vars → rec scene (backward compat)
+	// Current single-Redis env vars → rec scene (backward compat)
 	if v := os.Getenv("CONTENT_REDIS_ADDR"); v != "" && cfg.Redis.Rec.Addr == "" {
 		cfg.Redis.Rec.Addr = v
 	}
@@ -604,8 +622,9 @@ func parseBoolEnv(key string, fallback bool) bool {
 func buildRedisRouter(cfg config) *rtredis.Router {
 	routerCfg := rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"rec":     toSceneConfig(cfg.Redis.Rec),
-			"general": toSceneConfig(cfg.Redis.General),
+			"rec":      toSceneConfig(cfg.Redis.Rec),
+			"general":  toSceneConfig(cfg.Redis.General),
+			"realtime": {Mode: "memory"},
 		},
 		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
 		DefaultScene: "general",

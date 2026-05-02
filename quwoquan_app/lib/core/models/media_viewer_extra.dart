@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart'
 
 /// 媒体浏览器按帖子 id 携带的发现区/沉浸扩展数据。
 ///
-/// 强类型主视图为 [feedItem]；全量 wire 见 [toDynamicMap]（遗留沉浸路径逐步淘汰）。
+/// 强类型主视图为 [feedItem]；全量 wire 见 [toDynamicMap]（存量沉浸路径逐步淘汰）。
 class MediaViewerPostWireRow {
   MediaViewerPostWireRow._(this._wire);
 
@@ -28,7 +28,9 @@ class MediaViewerPostWireRow {
     return MediaViewerPostWireRow._(Map<String, dynamic>.from(map));
   }
 
-  factory MediaViewerPostWireRow.fromObjectEntries(Map<String, Object?> entries) {
+  factory MediaViewerPostWireRow.fromObjectEntries(
+    Map<String, Object?> entries,
+  ) {
     return MediaViewerPostWireRow._(
       entries.map((k, v) => MapEntry(k, v as dynamic)),
     );

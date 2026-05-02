@@ -35,8 +35,9 @@ class ResonanceBuddyViewData {
     );
   }
 
-  /// 与历史 ResonanceDashboard 一致的演示数据（Remote 未接交集 API 前）。
-  static const List<ResonanceBuddyViewData> prototype = <ResonanceBuddyViewData>[
+  /// 与记录 ResonanceDashboard 一致的演示数据（Remote 未接交集 API 前）。
+  static const List<ResonanceBuddyViewData>
+  prototype = <ResonanceBuddyViewData>[
     ResonanceBuddyViewData(
       profileSubjectId: 'res_u1',
       displayName: '陈摄影师',

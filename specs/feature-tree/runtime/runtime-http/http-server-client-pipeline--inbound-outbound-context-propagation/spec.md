@@ -9,7 +9,7 @@
 ## 验收标准
 - A1/A6/A7 主验收。
 
-## Folded legacy node `endpoint-normalization-and-policy-hooks`
+## Folded current node `endpoint-normalization-and-policy-hooks`
 
 # L5 特性：endpoint-normalization-and-policy-hooks
 

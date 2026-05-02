@@ -106,7 +106,7 @@ test:
 	go test ./... -count=1
 EOF
 
-# Keep a legacy single-file config for backward compatibility during migration.
+# Keep a current single-file config for backward compatibility during migration.
 cat >"$svc_root/configs/config.yaml" <<EOF
 service:
   name: ${SERVICE_NAME}

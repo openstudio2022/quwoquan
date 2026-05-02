@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `security-alert-link`
+## Folded current node `security-alert-link`
 
 # L5 特性：security-alert-link
 

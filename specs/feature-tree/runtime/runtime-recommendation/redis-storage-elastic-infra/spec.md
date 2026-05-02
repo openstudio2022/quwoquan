@@ -6,7 +6,7 @@
 > 多场景配置 + env override → `runtime-redis/config-and-keyspace-contract/multi-scene-config-schema`
 > 已有实现保留不动，后续迭代在 `runtime-redis` 下进行。
 
-## 功能定位（历史）
+## 功能定位（记录）
 
 为 quwoquan 所有服务提供 **Redis 弹性基础设施公共能力**，解决用户规模增长时 Redis 容量不足的问题，同时支持阿里云 Tair / 火山引擎 VeCache 两大云厂商，代码零差异，仅配置差异。
 

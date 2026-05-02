@@ -2,11 +2,22 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"quwoquan_service/services/product-ops-service/internal/application"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
 )
+
+type failingMirror struct {
+	called chan struct{}
+}
+
+func (m failingMirror) MirrorEvents(context.Context, []application.EventDrilldownItem) error {
+	close(m.called)
+	return errors.New("es unavailable")
+}
 
 func TestTelemetryStore_RecordVisitAndStats(t *testing.T) {
 	store := telemetrypersistence.NewMemoryTelemetryStore()
@@ -75,5 +86,47 @@ func TestTelemetryStore_ReportEventBatchIdempotent(t *testing.T) {
 	}
 	if drilldown.TotalCount != 1 || len(drilldown.Items) != 1 || drilldown.Items[0].EventID != "evt-1" {
 		t.Fatalf("expected single idempotent event record, got %+v", drilldown)
+	}
+}
+
+func TestTelemetryService_ExceptionMirrorFailureDoesNotBlockAck(t *testing.T) {
+	store := telemetrypersistence.NewMemoryTelemetryStore()
+	mirror := failingMirror{called: make(chan struct{})}
+	service := application.NewTelemetryServiceWithMirror(store, nil, mirror)
+
+	ack, err := service.ReportEventBatch(context.Background(), []application.EventRecordInput{
+		{
+			EventID:        "evt-exception-1",
+			EventType:      "exception",
+			EventName:      "runtime_exception",
+			Producer:       "app.exception",
+			SessionID:      "sess-1",
+			PageVisitID:    "visit-1",
+			RequestID:      "req-1",
+			TraceID:        "trace-1",
+			PageName:       "global.app.runtime",
+			ErrorCode:      "APP.RUNTIME.uncaught_exception",
+			ErrorModule:    "APP",
+			ErrorKind:      "RUNTIME",
+			ErrorReason:    "uncaught_exception",
+			Nature:         "bug",
+			BusinessObject: "app_runtime",
+			FunctionModule: "global_error_handler",
+			AppRuntimeEnv:  "alpha",
+			AppVersion:     "test",
+			Platform:       "ios",
+			OccurredAt:     "2026-04-01T00:00:00Z",
+		},
+	})
+	if err != nil {
+		t.Fatalf("report event batch should not fail on mirror error: %v", err)
+	}
+	if ack.AcceptedCount != 1 {
+		t.Fatalf("expected accepted count 1, got %+v", ack)
+	}
+	select {
+	case <-mirror.called:
+	case <-time.After(time.Second):
+		t.Fatalf("mirror was not called")
 	}
 }

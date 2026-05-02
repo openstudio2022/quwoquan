@@ -13,7 +13,7 @@ void main() {
     expect(m, <String, dynamic>{'1': 'x'});
   });
 
-  test('displayForSlotMerge matches legacy toString trim', () {
+  test('displayForSlotMerge matches current toString trim', () {
     expect(SlotValueCodec.displayForSlotMerge(null), '');
     expect(SlotValueCodec.displayForSlotMerge('  x '), 'x');
     expect(SlotValueCodec.displayForSlotMerge(42), '42');

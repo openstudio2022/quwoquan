@@ -29,6 +29,38 @@ api_routes:
     request_fields: [userQuery, triggerType, skillId, profileSubjectId, subAccountId, personaContextVersion, sourceSurfaceId, sourceQuery, fromGlobalSearch]
 
   - method: POST
+    path: /v1/assistant/conversations
+    operation: CreateAssistantConversation
+    description: M4 云端 Assistant Service Shell 创建连续对话
+    request_fields: [summary]
+    response_entity: AssistantConversation
+
+  - method: GET
+    path: /v1/assistant/conversations/{conversationId}
+    operation: GetAssistantConversation
+    description: M4 云端 Assistant Service Shell 读取连续对话
+    response_entity: AssistantConversation
+
+  - method: POST
+    path: /v1/assistant/conversations/{conversationId}/turns
+    operation: CreateAssistantTurn
+    description: M4 云端 Assistant Service Shell 创建对话轮次
+    request_fields: [turnType, skillId, domainId, input, trigger]
+    response_entity: AssistantTurnEnvelope
+
+  - method: GET
+    path: /v1/assistant/turns/{turnId}
+    operation: GetAssistantTurn
+    description: M4 云端 Assistant Service Shell 读取对话轮次
+    response_entity: AssistantTurnEnvelope
+
+  - method: POST
+    path: /v1/assistant/turns/{turnId}/stream
+    operation: StreamAssistantTurn
+    description: M4 云端 Assistant Service Shell typed fake stream
+    request_fields: []
+
+  - method: POST
     path: /v1/assistant/page-context
     operation: ReportPageContext
     description: 页面上下文上报
@@ -66,6 +98,40 @@ api_routes:
     description: 可用 Skill 列表（技能目录）
     query_params: [limit]
     response_entity: AssistantSkillCatalogListView
+
+  - method: GET
+    path: /v1/assistant/skill-subscriptions
+    operation: ListSkillSubscriptions
+    description: M8 主动式 Skill 订阅列表
+    query_params: [limit, status]
+    response_entity: SkillSubscriptionListView
+
+  - method: POST
+    path: /v1/assistant/skill-subscriptions
+    operation: CreateSkillSubscription
+    description: M8 创建主动式 Skill 订阅
+    request_fields: [skillId, domainId, tagRefs, searchQueryPlan, trigger, destination]
+    response_entity: SkillSubscription
+
+  - method: GET
+    path: /v1/assistant/skill-subscriptions/{subscriptionId}
+    operation: GetSkillSubscription
+    description: M8 读取主动式 Skill 订阅详情
+    response_entity: SkillSubscription
+
+  - method: PATCH
+    path: /v1/assistant/skill-subscriptions/{subscriptionId}/status
+    operation: UpdateSkillSubscriptionStatus
+    description: M8 暂停、恢复或归档主动式 Skill 订阅
+    request_fields: [status]
+    response_entity: SkillSubscription
+
+  - method: POST
+    path: /v1/assistant/skill-subscriptions/cron/tick
+    operation: TickSkillSubscriptionCron
+    description: M8 本地测试或内部调度触发 cron 扫描
+    request_fields: [now]
+    response_entity: SkillSubscriptionCronTickResult
 
   - method: GET
     path: /v1/assistant/tasks

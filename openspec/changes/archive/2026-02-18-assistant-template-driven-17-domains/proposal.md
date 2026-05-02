@@ -1,6 +1,6 @@
 ## Why
 
-当前私人助理仍存在三类限制：提示词与上下文策略部分固化在代码中、垂类能力覆盖不足、以及历史规格分叉导致能力边界不统一。为了提升用户增长与留存，需要将助手升级为“2 个总控模板 + 19 个垂类模板（18 主垂类 + 1 大搜兜底垂类）”的可灰度、可替换、可回放架构，并统一到单一 `personal-assistant` 规格。
+当前私人助理仍存在三类限制：提示词与上下文策略部分固化在代码中、垂类能力覆盖不足、以及记录规格分叉导致能力边界不统一。为了提升用户增长与留存，需要将助手升级为“2 个总控模板 + 19 个垂类模板（18 主垂类 + 1 大搜兜底垂类）”的可灰度、可替换、可回放架构，并统一到单一 `personal-assistant` 规格。
 
 ## What Changes
 
@@ -8,7 +8,7 @@
 - 引入模板注册与灰度选择能力，禁止将核心上下文策略与提示词写死在业务代码中。
 - 扩展 run 结构化响应：暴露 `contextAssembly/domainPrecheck/domainResults/synthesisReadiness/fillTasks`，便于前端直接渲染补齐任务。
 - 完成 19 垂类输入输出契约与门禁定义，覆盖通用问答、旅行规划、情感陪伴、闲聊陪伴、婚配、卜卦、星座等增长场景。
-- 清理历史规格分叉：将 `personal-assistant-commercial-v1` 与 `personal-assistant-domain-orchestration-v1` 合并归档，统一由 `personal-assistant` 维护。
+- 清理记录规格分叉：将 `personal-assistant-commercial-v1` 与 `personal-assistant-domain-orchestration-v1` 合并归档，统一由 `personal-assistant` 维护。
 - **BREAKING**：run 响应协议新增结构化字段；下游依赖如严格校验旧响应结构，需要同步兼容。
 
 ## Capabilities
@@ -31,7 +31,7 @@
   - `assets/personal_assistant/prompts/**`
 - Affected specs:
   - `openspec/specs/personal-assistant/spec.md`（主规格升级）
-  - 历史规格归档与迁移说明更新
+  - 记录规格归档与迁移说明更新
 - APIs:
   - `/v1/assistent/runs` 与 `/v1/assistent/runs/stream` 响应结构扩展
 - Risk:

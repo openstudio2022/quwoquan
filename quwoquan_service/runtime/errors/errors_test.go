@@ -70,7 +70,7 @@ func TestRouteNotFoundMapsToHTTPNotFound(t *testing.T) {
 	}
 }
 
-func TestRuntimeOriginFromLegacyKindUsesCanonicalMapping(t *testing.T) {
+func TestRuntimeOriginFromCurrentKindUsesCanonicalMapping(t *testing.T) {
 	cases := []struct {
 		name   string
 		err    *AppError

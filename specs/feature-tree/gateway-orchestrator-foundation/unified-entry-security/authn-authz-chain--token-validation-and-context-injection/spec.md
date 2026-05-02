@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `auth-failure-safety-guard`
+## Folded current node `auth-failure-safety-guard`
 
 # L5 特性：auth-failure-safety-guard
 

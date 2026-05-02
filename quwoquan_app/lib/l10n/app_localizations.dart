@@ -2285,7 +2285,7 @@ abstract class AppLocalizations {
   /// No description provided for @imageEditorHistory.
   ///
   /// In zh, this message translates to:
-  /// **'历史'**
+  /// **'记录'**
   String get imageEditorHistory;
 
   /// No description provided for @imageEditorRemoveStep.

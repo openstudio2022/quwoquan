@@ -31,7 +31,7 @@ class SynthesisPhase implements Phase {
            ),
        _outcomeResolver = outcomeResolver;
 
-  /// Legacy constructor for backward compatibility with tests.
+  /// Current constructor for backward compatibility with tests.
   @Deprecated('Use the named-parameter pipeline constructor')
   SynthesisPhase.fromOwner(
     phase_owner.LocalPhaseExecutionOwner owner, {

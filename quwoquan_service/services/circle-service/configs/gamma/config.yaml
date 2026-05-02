@@ -1,0 +1,7 @@
+# gamma overrides (cloud integration env)
+service:
+  http:
+    addr: ":18082"
+
+mongo:
+  database: "quwoquan_circle"

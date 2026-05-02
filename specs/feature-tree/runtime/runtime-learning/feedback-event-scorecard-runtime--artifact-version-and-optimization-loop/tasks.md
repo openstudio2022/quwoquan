@@ -4,7 +4,7 @@
 - [ ] 安全与契约校验
 - [ ] 自动化测试
 
-## Folded legacy node `learning-closure-sli-binding`
+## Folded current node `learning-closure-sli-binding`
 
 # 开发任务：learning-closure-sli-binding
 
@@ -13,4 +13,4 @@
 - [ ] 自动化验收
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `learning-closure-sli-binding` (from `runtime/runtime-learning/feedback-event-scorecard-runtime/artifact-version-and-optimization-loop/learning-closure-sli-binding`)
+- [ ] Migrated current node: `learning-closure-sli-binding` (from `runtime/runtime-learning/feedback-event-scorecard-runtime/artifact-version-and-optimization-loop/learning-closure-sli-binding`)

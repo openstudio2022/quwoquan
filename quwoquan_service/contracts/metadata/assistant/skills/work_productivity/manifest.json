@@ -1,0 +1,15 @@
+{
+  "skillId": "work_productivity",
+  "displayName": "工作效率助手",
+  "description": "工作效率提升、项目管理、求职面试、职业规划、复盘汇报。",
+  "domainId": "work_productivity",
+  "executionTarget": "hybrid",
+  "routingHints": ["效率", "任务拆解", "项目推进", "里程碑", "复盘", "面试", "简历", "职业"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["app_search", "scheduler", "web_search"],
+    "preferredTools": ["app_search", "web_search"],
+    "maxToolCalls": 3,
+    "allowDeviceActionProposal": true
+  }
+}

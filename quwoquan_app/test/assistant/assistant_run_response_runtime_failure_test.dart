@@ -42,7 +42,7 @@ void main() {
     );
   });
 
-  test('legacy degraded response derives runtime failure facts', () {
+  test('current degraded response derives runtime failure facts', () {
     const response = AssistantRunResponse(
       finalText: '',
       traces: [],

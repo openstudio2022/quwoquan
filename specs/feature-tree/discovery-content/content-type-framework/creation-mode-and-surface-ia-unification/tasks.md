@@ -10,7 +10,7 @@
 > - `plan.yaml`
 > - `specs/changelog/CR-20260319-001-create-entry-and-editor-baseline-reset.yaml`
 >
-> 本文件保留仅用于查看旧方案的历史拆解，不再作为 `/dev`、验收、测试或发布检查清单使用。
+> 本文件保留仅用于查看旧方案的记录拆解，不再作为 `/dev`、验收、测试或发布检查清单使用。
 
 ## 当前交付任务
 
@@ -48,9 +48,9 @@
 - [ ] **P19**: [观测] 建立 launch blocker 指标与事件 schema：入口耗时、身份建议接受率、草稿恢复率、publish/promote 成功率、assistant revoke latency、share 完成率
 - [ ] **P20**: [测试-T3/T4] 建立 create-to-publish SLA probe、弱网 profile、草稿恢复、crash-free 关键路径验证
 - [ ] **P21**: [发布治理] 把 `A9` 的商用品质指标写入 dashboard / alert / canary gate checklist，并定义扩大灰度的阈值
-- [ ] **P22**: [业务逻辑-文档/配置] 清理 legacy visible terminology：旧常量、旧 UI config consumer、旧 surface 文案、旧设计说明引用，确保 precedence matrix 生效
-- [ ] **P23**: [测试-T1/T2] 补 precedence audit 与 legacy label regression test，确保 discovery/profile/circle 不再暴露第二套 IA 词表
-- [ ] **P24**: [迁移] 实现 `contentIdentity` / `assistantUsePolicy` 双读解析器与历史数据 backfill job，保持旧内容、旧草稿、旧投影可读
+- [ ] **P22**: [业务逻辑-文档/配置] 清理 current visible terminology：旧常量、旧 UI config consumer、旧 surface 文案、旧设计说明引用，确保 precedence matrix 生效
+- [ ] **P23**: [测试-T1/T2] 补 precedence audit 与 current label regression test，确保 discovery/profile/circle 不再暴露第二套 IA 词表
+- [ ] **P24**: [迁移] 实现 `contentIdentity` / `assistantUsePolicy` 双读解析器与记录数据 backfill job，保持旧内容、旧草稿、旧投影可读
 - [ ] **P25**: [迁移-T3] 触发 discovery feed、user posts、circle feed、assistant index 的重建与 dry-run 审计，验证回填一致性与重算时延
 - [ ] **P26**: [业务逻辑-云侧] 实现 visibility / circle membership / assistant policy 的二次校验与撤销补偿链路，保证 delete / 转私密 / 退圈 / revoke 后资格及时失效
 - [ ] **P27**: [测试-T1/T3] 补权限边界、撤销时效、引用标注 integration test，覆盖 `private / circle-visible / public`
@@ -80,6 +80,6 @@
 ## 未来演进任务
 
 - [ ] **E1**: 把 `guide/checklist` 从 derived tier 升级为真正的 content governance contract
-- [ ] **E2**: 为小趣引用增加片段级来源面板与用户可见撤销历史
+- [ ] **E2**: 为小趣引用增加片段级来源面板与用户可见撤销记录
 - [ ] **E3**: 为 `PromotePostToWork` 增加更丰富的包装模板（攻略、清单、合集）
 - [ ] **E4**: 把 share template 的实验与归因接入统一增长实验体系

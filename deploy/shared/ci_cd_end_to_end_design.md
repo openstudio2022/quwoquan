@@ -4,7 +4,7 @@
 
 **当前部署目标**：CI/CD 仅考虑**阿里云 ACK** 部署。pre-release-gate、service_pipeline 使用 `CLOUD_PROVIDER=aliyun` 和 `deploy/kustomization/aliyun-integration`、`deploy/kustomization/aliyun-prod`。
 
-**五环境总览**（本地 / CI / integration / 生产灰度 / 生产全量、波次关系、`STAGING_*` 与 integration 的对应）：见 **[environment_matrix.md](environment_matrix.md)**。
+**五环境总览**（alpha / beta / gamma / prod-gray / prod、波次关系）：见 **[environment_matrix.md](environment_matrix.md)**。
 
 ---
 
@@ -29,7 +29,7 @@ v*-rc* tag
   → gate: make gate（L1+L2）+ kustomize build（G3）
   → deploy-integration: kubectl apply（G5a，需 INTEGRATION_KUBECONFIG）
   → l3-api-contract: make test-api-contract（G5b，部署完成后）
-  → l4-android / l4-ios: Firebase Test Lab（G5b，部署完成后）
+  → l4-android / l4-ios: GitHub hosted Android Emulator / iOS Simulator（G5b，部署完成后）
 ```
 
 **已落实**：gate 仅 L1+L2；L3/L4 必须等待 deploy-integration 完成后执行，验证真实部署环境。
@@ -50,8 +50,8 @@ pre-release-gate
     ├─ Job1: gate（L1+L2）
     ├─ Job2: deploy-integration（kubectl apply）  ✓ 已实现
     ├─ Job3: l3-api-contract（需 Job2 完成）      ✓ 已实现
-    ├─ Job4: l4-android（需 Job2 完成）           ✓ 已实现
-    └─ Job5: l4-ios（需 Job2 完成）               ✓ 已实现
+    ├─ Job4: l4-android（GitHub hosted emulator，需 Job2 完成） ✓ 已实现
+    └─ Job5: l4-ios（GitHub hosted simulator，需 Job2 完成）    ✓ 已实现
     ↓
 全部通过 → 允许灰度到 prod（人工或下游 workflow）
     ↓
@@ -97,7 +97,7 @@ deploy-integration:
       run: kubectl rollout status deployment/seed-box -n seed-box-integration --timeout=5m
     - name: Health check
       run: |
-        # 可选：curl $STAGING_BASE_URL/health
+        # 可选：curl $GAMMA_BASE_URL/healthz
         kubectl get pods -n seed-box-integration
 ```
 
@@ -130,13 +130,10 @@ deploy-integration:
 
 | Secret | 用途 |
 |--------|------|
-| `STAGING_BASE_URL` | integration API 基址，L3/L4 使用（语义同 `INTEGRATION_BASE_URL`，见 `environment_matrix.md`） |
-| `STAGING_PRODUCT_OPS_BASE_URL` | integration 上 Ops/产品面 API 基址，`make test-api-contract` 必需 |
-| `STAGING_TEST_AUTH_TOKEN` | L3/L4 鉴权（对应 env `TEST_AUTH_TOKEN`） |
-| `INTEGRATION_KUBECONFIG` | integration 集群 kubeconfig（或 OIDC 等效） |
-| `GCP_SERVICE_ACCOUNT_KEY` | FTL 用 |
-| `FTL_RESULTS_BUCKET` | FTL 结果存储 |
-| `MATCH_PASSWORD` | iOS 签名（如需要） |
+| `GAMMA_BASE_URL` | gamma API 基址，L3/L4 使用 |
+| `GAMMA_PRODUCT_OPS_BASE_URL` | gamma 上 Ops/产品面 API 基址，`make test-api-contract` 必需 |
+| `GAMMA_TEST_AUTH_TOKEN` | L3/L4 鉴权 |
+| `GAMMA_KUBECONFIG` | gamma 集群 kubeconfig（或 OIDC 等效） |
 
 ### 4.2 基础设施
 

@@ -68,7 +68,7 @@ test('requests onboarding domains from platform control plane', async () => {
         deployment: {
           plane_binding_domain: 'content',
           plane_binding_source: 'deploy/shared/process_domain_plane_mapping.yaml',
-          legacy_binding_source: 'deploy/shared/process_domain_mapping.yaml',
+          current_binding_source: 'deploy/shared/process_domain_mapping.yaml',
         },
         replication: { source_template: 'content', next_copy_targets: ['chat'], copy_notes: ['seed'] },
         blocking_gaps: [],

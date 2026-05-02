@@ -88,7 +88,7 @@ L2_journey: profile-homepage-redesign
 - `P2`：冻结 Scenario 拆分拓扑
 - `P3`：迁移 Journey acceptance schema
 - `P4`：回填新增 Scenario 节点
-- `P5`：退出 legacy `tasks.md` 主导
+- `P5`：退出 current `tasks.md` 主导
 
 ## CR 建议
 

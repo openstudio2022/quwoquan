@@ -25,3 +25,15 @@ scenarios:
       - analytics_event_visible
       - learning_event_visible
       - experiment_bucket_dimension_visible
+
+  - name: app_exception_event_visible_in_es_and_drilldown
+    steps:
+      - app captures an uncaught runtime exception and stores it in the latest-100 local queue
+      - app flushes the exception through /v1/ops/events
+      - product ops stores the primary event and mirrors it to the exception ES index
+      - operator or Cursor skill queries by requestId / traceId / errorCode / pageName
+    assertions:
+      - exception_event_created
+      - exception_queue_cleared_after_success
+      - exception_error_code_dimension_visible
+      - es_exception_query_returns_same_event_id

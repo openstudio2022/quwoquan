@@ -1,0 +1,31 @@
+{
+  "subscriptionId": "sub_01J8M8PAUSED0000000000001",
+  "owner": {
+    "ownerType": "user",
+    "ownerId": "user_001"
+  },
+  "createdByUserId": "user_001",
+  "skillId": "daily_assistant",
+  "domainId": "assistant",
+  "tagRefs": [
+    "daily"
+  ],
+  "status": "paused",
+  "searchQueryPlan": {
+    "rawText": "每天晚上 9 点提醒我复盘今天的待办",
+    "queries": [
+      "今日待办",
+      "晚间复盘"
+    ]
+  },
+  "trigger": {
+    "type": "cron",
+    "cron": "0 21 * * *"
+  },
+  "destination": {
+    "destinationType": "user",
+    "destinationId": "user_001"
+  },
+  "createdAt": "2026-04-29T00:00:00Z",
+  "updatedAt": "2026-04-29T00:05:00Z"
+}

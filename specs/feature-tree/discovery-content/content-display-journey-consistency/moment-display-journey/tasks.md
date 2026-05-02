@@ -1,6 +1,6 @@
 # 开发任务：moment-display-journey
 
-## 已完成任务（历史）
+## 已完成任务（记录）
 
 顺序：metadata → codegen → 业务逻辑 → 测试（本特性为 UI 逻辑，无 metadata 变更）。
 

@@ -70,7 +70,7 @@ Known residue categories:
   - retrieval selection now uses one deterministic runtime policy:
     app object/content plans route to `app_search`, mixed app+web plans route
     to `search`, and pure external realtime plans route to `web_search`.
-- `local_context` runtime deletion: completed for the new mainline; remaining cleanup is deferred to M5 legacy path deletion.
+- `local_context` runtime deletion: completed for the new mainline; remaining cleanup is deferred to M5 current path deletion.
 
 ## Validation Evidence
 - `flutter test test/assistant/app_search_contract_test.dart`

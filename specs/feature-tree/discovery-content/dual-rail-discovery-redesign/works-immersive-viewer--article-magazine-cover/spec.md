@@ -1,6 +1,6 @@
 # L4 契约/任务：article-magazine-cover
 
-> 2026-03-22 更新：该探索节点只保留“封面仪式感”与“杂志化阅读气质”的历史参考价值；其“纯封面第一页 / 服务端预切水平翻卡”前提已被 `content-display-journey-consistency/article-display-journey/spec.md` 的新 PRD 取代，不再作为当前文章展示真相源。
+> 2026-03-22 更新：该探索节点只保留“封面仪式感”与“杂志化阅读气质”的记录参考价值；其“纯封面第一页 / 服务端预切水平翻卡”前提已被 `content-display-journey-consistency/article-display-journey/spec.md` 的新 PRD 取代，不再作为当前文章展示真相源。
 
 ## 功能说明
 文章作品的杂志感沉浸阅读：第一屏强制封面模式（高清背景图 + 衬线大标题 + 作者徽标），水平翻卡进入正文；正文使用思源宋体，行高 2.0，字间距 0.8，块渲染支持 half/third/full 宽度图片行内布局。

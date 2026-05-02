@@ -38,7 +38,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 稳定公开主体 ID；优先于 legacy personaId / authorId 作为作者身份主键
+        description: 稳定公开主体 ID；优先于 current personaId / authorId 作为作者身份主键
 
       - name: authorDisplayNameSnapshot
         type: string
@@ -47,7 +47,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 作者显示名快照，避免分身退役或改名后历史渲染漂移
+        description: 作者显示名快照，避免分身退役或改名后记录渲染漂移
 
       - name: authorAvatarUrlSnapshot
         type: string
@@ -85,7 +85,7 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 内容身份层。moment=点滴，work=作品；历史数据允许为空，读路径按 contentType 推导
+        description: 内容身份层。moment=点滴，work=作品；记录数据允许为空，读路径按 contentType 推导
 
       - name: title
         type: string
@@ -257,7 +257,7 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         recommend_feature: true
-        description: 兼容字段（历史单圈子）。新写入请使用 circleIds + groupId/nodeId 与分发表
+        description: 兼容字段（记录单圈子）。新写入请使用 circleIds + groupId/nodeId 与分发表
 
       - name: circleIds
         type: "[]string"
@@ -303,7 +303,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: original/repost/quote（历史数据可为空，读取时按 original 处理）
+        description: original/repost/quote（记录数据可为空，读取时按 original 处理）
 
       - name: summary
         type: string
@@ -499,7 +499,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 稳定公开主体 ID；优先于 legacy personaId 作为评论作者主键
+        description: 稳定公开主体 ID；优先于 current personaId 作为评论作者主键
 
       - name: authorDisplayNameSnapshot
         type: string

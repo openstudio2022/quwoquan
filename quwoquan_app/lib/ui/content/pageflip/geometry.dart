@@ -205,15 +205,6 @@ class StPageFlipCalculation {
   }
 
   List<Offset> getFlippingClipArea() {
-    if (direction == StPageFlipDirection.back) {
-      final seamX = _backwardSeamX;
-      return <Offset>[
-        Offset.zero,
-        Offset(seamX, 0),
-        Offset(seamX, pageHeight),
-        Offset(0, pageHeight),
-      ];
-    }
     final result = <Offset>[_rect.topLeft];
     if (_topIntersectPoint != null) {
       result.add(_topIntersectPoint!);
@@ -240,15 +231,6 @@ class StPageFlipCalculation {
   }
 
   List<Offset> getBottomClipArea() {
-    if (direction == StPageFlipDirection.back) {
-      final seamX = _backwardSeamX;
-      return <Offset>[
-        Offset(seamX, 0),
-        Offset(pageWidth, 0),
-        Offset(pageWidth, pageHeight),
-        Offset(seamX, pageHeight),
-      ];
-    }
     final result = <Offset>[];
     if (_topIntersectPoint != null) {
       result.add(_topIntersectPoint!);
@@ -292,6 +274,13 @@ class StPageFlipCalculation {
 
   Offset getPosition() => _position;
 
+  (Offset, Offset)? getBackwardMovingEdgeLine() {
+    if (direction != StPageFlipDirection.back) {
+      return null;
+    }
+    return (_rect.topRight, _rect.bottomRight);
+  }
+
   StPageFlipFoldGeometry? getForwardFoldGeometry() {
     if (direction != StPageFlipDirection.forward) {
       return null;
@@ -318,9 +307,7 @@ class StPageFlipCalculation {
     if (direction == StPageFlipDirection.forward) {
       return _rect.topLeft;
     }
-    return corner == StPageFlipCorner.bottom
-        ? Offset(0, pageHeight)
-        : Offset.zero;
+    return _rect.topRight;
   }
 
   Offset getBackwardSpineTop() => Offset.zero;
@@ -336,7 +323,7 @@ class StPageFlipCalculation {
 
   Offset getBottomPagePosition() {
     if (direction == StPageFlipDirection.back) {
-      return Offset.zero;
+      return Offset(pageWidth, 0);
     }
     return Offset.zero;
   }

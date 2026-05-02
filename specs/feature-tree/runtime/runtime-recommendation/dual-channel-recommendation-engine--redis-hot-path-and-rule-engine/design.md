@@ -13,7 +13,7 @@ Design decisions and trade-offs will be documented here as they are resolved.
 - Metadata YAML is the single source of truth
 - All codegen artifacts are DO NOT EDIT
 
-## Folded legacy node `ml-model-integration-and-ab-test`
+## Folded current node `ml-model-integration-and-ab-test`
 
 # Design: ml-model-integration-and-ab-test
 

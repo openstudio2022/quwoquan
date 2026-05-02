@@ -45,7 +45,7 @@
 
 - [x] D18 设计 all-in-one Sidecar 生产增强基线（Deployment + Service + HPA + PDB）
 - [x] D19 落地 `deploy/service/seed-box/kustomize/base` 基础清单
-- [x] D20 落地统一 overlays：`dev/integration/prod`
+- [x] D20 落地统一 overlays：`alpha/beta/gamma/prod-gray/prod`
 - [x] D21 通过 replacements 参数化 `CONFIG_VERSION/IMAGE_VERSION/replicas/HPA` 阈值
 - [x] D22 补充“后续拆分独立 Pod”的迁移说明（保持 API 与门禁兼容）
 

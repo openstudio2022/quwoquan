@@ -44,13 +44,13 @@ func TestFailureResponseCodec(t *testing.T) {
 	}
 }
 
-func TestLegacyAppErrorMapping(t *testing.T) {
-	legacy := runtimeerrors.NewUnavailable(
+func TestCurrentAppErrorMapping(t *testing.T) {
+	current := runtimeerrors.NewUnavailable(
 		runtimeerrors.ModuleAssistant,
 		"",
 		"llm timeout",
 	)
-	failure := FromLegacyAppError(legacy)
+	failure := FromCurrentAppError(current)
 
 	if failure.Origin != OriginRemoteDependency {
 		t.Fatalf("unexpected origin: %s", failure.Origin)

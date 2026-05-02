@@ -483,7 +483,7 @@ def run_case(
         answer_prompt = build_answer_prompt(domain_id, [], blueprint)
         answer_user_payload = (
             f"用户问题: {turn}\n"
-            f"历史: {' | '.join(history[-6:])}\n"
+            f"记录: {' | '.join(history[-6:])}\n"
             f"规划摘要: {plan_out}\n"
             f"检索证据: {web if web else '无可用外部证据'}"
         )

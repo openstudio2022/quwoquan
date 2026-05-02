@@ -10,7 +10,7 @@
 |---|---|
 | `global-search-experience/spec.md` | 已把统一接口、对象执行策略与云侧存储弹性纳入 L1 |
 | `cross-domain-search-journey/*` | Journey 已明确只消费 canonical `search(request)` |
-| 历史实现现状 | 仍存在分域搜索方法名、对象边界不一致与远端直扫主集合倾向 |
+| 记录实现现状 | 仍存在分域搜索方法名、对象边界不一致与远端直扫主集合倾向 |
 
 ## 方案对比
 

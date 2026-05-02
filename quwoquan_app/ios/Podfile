@@ -1,4 +1,4 @@
-# flutter_webrtc / WebRTC-SDK 144.x 需要更高的 iOS 部署版本（与 Podfile.lock 旧版 137.x 不兼容时需 pod 全量重解）
+# flutter_webrtc / WebRTC-SDK 144.x 需要更高的 iOS 部署版本（与 Podfile.lock 过往版本 137.x 不兼容时需 pod 全量重解）
 platform :ios, '16.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
@@ -33,6 +33,9 @@ target 'Runner' do
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
     inherit! :search_paths
+  end
+  target 'RunnerUITests' do
+    inherit! :complete
   end
 end
 

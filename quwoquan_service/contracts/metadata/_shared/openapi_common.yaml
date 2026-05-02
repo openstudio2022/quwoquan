@@ -158,7 +158,7 @@ components:
             - UNKNOWN
         kind:
           type: string
-          description: 运行时失败类型；wire 层使用 runtime kind，不再暴露 legacy USER/SYSTEM/NETWORK/MIDDLEWARE 作为业务判定字段
+          description: 运行时失败类型；wire 层使用 runtime kind，不再暴露 current USER/SYSTEM/NETWORK/MIDDLEWARE 作为业务判定字段
           enum:
             - validation
             - auth
@@ -175,7 +175,7 @@ components:
           pattern: '^[a-z0-9_]+$'
         message:
           type: string
-          description: 兼容字段（历史），建议等同 debugMessage
+          description: 兼容字段（记录），建议等同 debugMessage
         requestId:
           type: string
         traceId:

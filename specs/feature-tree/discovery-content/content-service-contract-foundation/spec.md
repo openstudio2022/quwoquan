@@ -47,7 +47,7 @@
   - 所有横切 YAML 文件须通过 `make verify-metadata` 校验
   - codegen 产物标记 `DO NOT EDIT`，由 make gate 通过 hash 比对守护
   - 端侧 UI 禁止直接 import 横切常量之外的任何 metadata 文件
-  - 0 到 1，不考虑历史兼容性；旧 _projections/ 路径在工具更新后废弃
+  - 0 到 1，不考虑记录兼容性；旧 _projections/ 路径在工具更新后废弃
 
 ## 子节点（L3）
 

@@ -1,0 +1,17 @@
+{
+  "deviceContextId": "dcx_01HWZX2D7Z9G6S7Y6B3C4D5E6F",
+  "userId": "user_001",
+  "deviceId": "ios_device_001",
+  "updatedAt": "2026-04-29T02:00:05Z",
+  "capabilities": [
+    "coarse_location",
+    "surface"
+  ],
+  "facts": {
+    "coarseLocation": {
+      "cityCode": "310000",
+      "cityName": "上海"
+    },
+    "surface": "find_personal_assistant"
+  }
+}

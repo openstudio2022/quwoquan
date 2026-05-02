@@ -14,7 +14,7 @@
 
 1. Follow 行为与 `UserProfile` 统计、`BlockEdge` 门禁、通知/推荐事件彼此关联，但边界没有冻结。
 2. 关注动作的真正主体应是分身 `profileSubjectId / subAccountId`，而不是 owner 或匿名的 `userId`。
-3. 旧节点 `follow-unfollow-contract` 仍是 legacy 占位，没有形成可直接进入 `/design` 的 Scenario。
+3. 旧节点 `follow-unfollow-contract` 仍是 current 占位，没有形成可直接进入 `/design` 的 Scenario。
 
 ## 业务对象划分
 
@@ -102,7 +102,7 @@
 ## 权限边界与数据生命周期
 
 - 只有当前登录 owner 持有的 active persona 才能发起 follow / unfollow。
-- `FollowEdge` 删除不等于历史通知或推荐信号被立即抹除；推荐与通知系统自行消费事件进行修正。
+- `FollowEdge` 删除不等于记录通知或推荐信号被立即抹除；推荐与通知系统自行消费事件进行修正。
 - follow 关系删除后，`UserProfile` 统计必须最终一致修正。
 
 ## 不做什么（Out of Scope）

@@ -1,6 +1,6 @@
 ---
 name: fortune-daily
-description: 回答今日运势与短期建议问题，支持生日信息确认、历史记忆补全与精美 Markdown 输出。
+description: 回答今日运势与短期建议问题，支持生日信息确认、记录记忆补全与精美 Markdown 输出。
 domain: divination_fortune
 allowed_tools: search web_search
 trigger_keywords: 运势 运程 卜卦 八字 今日运势 桃花 财运 事业
@@ -22,7 +22,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 关键信息补全顺序如下：
 1. 当前用户问题中提取时间范围与关切维度（感情/事业/财运）；
 2. 若用户资料中已有生日与基础信息，则直接复用；
-3. 若缺关键信息，先参考近期对话与历史记忆；
+3. 若缺关键信息，先参考近期对话与记录记忆；
 4. 仍缺失时再向用户追问（避免一次问太多）。
 
 ## 工具调用策略

@@ -1,0 +1,385 @@
+version: 1
+description: >
+  Deployment package to runtime module mapping. process_domain_mapping.yaml
+  remains the source of truth for domain ownership; this file only declares
+  which modules each deployment package starts.
+
+module_naming:
+  pattern: "{domain}.{capability}"
+  examples:
+    - chat.task_outbox_dispatcher
+    - notification.fanout_worker
+
+environments:
+  alpha:
+    content-service:
+      package: content-service
+      domains: [content]
+      modules: [content.api, content.task_outbox_dispatcher, content.search_index_worker, content.feed_projection_worker]
+    entity-service:
+      package: entity-service
+      domains: [entity]
+      modules: [entity.api, entity.task_outbox_dispatcher, entity.readmodel_projection_worker]
+    product-ops-service:
+      package: product-ops-service
+      domains: [ops]
+      modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    circle-service:
+      package: circle-service
+      domains: [circle]
+      modules: [circle.api, circle.task_outbox_dispatcher, circle.member_projection_worker]
+    assistant-service:
+      package: assistant-service
+      domains: [assistant]
+      modules: [assistant.api, assistant.task_outbox_dispatcher, assistant.run_projection_worker]
+    notification-service:
+      package: notification-service
+      domains: [notification]
+      modules: [notification.notification_outbox_dispatcher, notification.fanout_worker, notification.delivery_retry_worker]
+    integration-service:
+      package: integration-service
+      domains: [integration]
+      modules: [integration.api, integration.task_outbox_dispatcher, integration.external_retry_worker]
+    recommendation-service:
+      package: recommendation-service
+      domains: [recommendation]
+      modules: [recommendation.api]
+    chat-service:
+      package: chat-service
+      domains: [chat]
+      modules: [chat.api, chat.task_outbox_dispatcher, chat.group_avatar_worker, chat.roster_projection_worker, chat.inbox_projection_worker, chat.notification_outbox_dispatcher]
+    user-service:
+      package: user-service
+      domains: [user]
+      modules: [user.api, user.task_outbox_dispatcher, user.avatar_propagation_worker, user.notification_outbox_dispatcher]
+    realtime-gateway:
+      package: realtime-gateway
+      domains: [realtime]
+      modules: [realtime.gateway]
+    rtc-service:
+      package: rtc-service
+      domains: [rtc]
+      modules: [rtc.api, rtc.signaling_worker]
+    livekit-sfu:
+      package: livekit-sfu
+      domains: [media]
+      modules: [media.sfu]
+    coturn:
+      package: coturn
+      domains: [turn]
+      modules: [turn.relay]
+
+  integration:
+    entity-service:
+      package: entity-service
+      domains: [entity]
+      modules: [entity.api, entity.task_outbox_dispatcher, entity.readmodel_projection_worker]
+    product-ops-service:
+      package: product-ops-service
+      domains: [ops]
+      modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    recommendation-service:
+      package: recommendation-service
+      domains: [recommendation]
+      modules: [recommendation.api]
+    realtime-gateway:
+      package: realtime-gateway
+      domains: [realtime]
+      modules: [realtime.gateway]
+    rtc-service:
+      package: rtc-service
+      domains: [rtc]
+      modules: [rtc.api, rtc.signaling_worker]
+    livekit-sfu:
+      package: livekit-sfu
+      domains: [media]
+      modules: [media.sfu]
+    coturn:
+      package: coturn
+      domains: [turn]
+      modules: [turn.relay]
+    assistant-service:
+      package: assistant-service
+      domains: [assistant]
+      modules: [assistant.api, assistant.task_outbox_dispatcher, assistant.run_projection_worker]
+    seed-box:
+      package: seed-box
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      modules:
+        - content.api
+        - content.task_outbox_dispatcher
+        - content.search_index_worker
+        - content.feed_projection_worker
+        - integration.api
+        - integration.task_outbox_dispatcher
+        - integration.external_retry_worker
+        - chat.api
+        - chat.task_outbox_dispatcher
+        - chat.group_avatar_worker
+        - chat.roster_projection_worker
+        - chat.inbox_projection_worker
+        - chat.notification_outbox_dispatcher
+        - user.api
+        - user.task_outbox_dispatcher
+        - user.avatar_propagation_worker
+        - user.notification_outbox_dispatcher
+        - circle.api
+        - circle.task_outbox_dispatcher
+        - circle.member_projection_worker
+        - notification.notification_outbox_dispatcher
+        - notification.fanout_worker
+        - notification.delivery_retry_worker
+        - gateway.api
+        - orchestrator.workflow_worker
+
+  beta:
+    entity-service:
+      package: entity-service
+      domains: [entity]
+      modules: [entity.api, entity.task_outbox_dispatcher, entity.readmodel_projection_worker]
+    product-ops-service:
+      package: product-ops-service
+      domains: [ops]
+      modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    recommendation-service:
+      package: recommendation-service
+      domains: [recommendation]
+      modules: [recommendation.api]
+    realtime-gateway:
+      package: realtime-gateway
+      domains: [realtime]
+      modules: [realtime.gateway]
+    rtc-service:
+      package: rtc-service
+      domains: [rtc]
+      modules: [rtc.api, rtc.signaling_worker]
+    livekit-sfu:
+      package: livekit-sfu
+      domains: [media]
+      modules: [media.sfu]
+    coturn:
+      package: coturn
+      domains: [turn]
+      modules: [turn.relay]
+    assistant-service:
+      package: assistant-service
+      domains: [assistant]
+      modules: [assistant.api, assistant.task_outbox_dispatcher, assistant.run_projection_worker]
+    seed-box:
+      package: seed-box
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      modules:
+        - content.api
+        - content.task_outbox_dispatcher
+        - content.search_index_worker
+        - content.feed_projection_worker
+        - integration.api
+        - integration.task_outbox_dispatcher
+        - integration.external_retry_worker
+        - chat.api
+        - chat.task_outbox_dispatcher
+        - chat.group_avatar_worker
+        - chat.roster_projection_worker
+        - chat.inbox_projection_worker
+        - chat.notification_outbox_dispatcher
+        - user.api
+        - user.task_outbox_dispatcher
+        - user.avatar_propagation_worker
+        - user.notification_outbox_dispatcher
+        - circle.api
+        - circle.task_outbox_dispatcher
+        - circle.member_projection_worker
+        - notification.notification_outbox_dispatcher
+        - notification.fanout_worker
+        - notification.delivery_retry_worker
+        - gateway.api
+        - orchestrator.workflow_worker
+
+  gamma:
+    entity-service:
+      package: entity-service
+      domains: [entity]
+      modules: [entity.api, entity.task_outbox_dispatcher, entity.readmodel_projection_worker]
+    product-ops-service:
+      package: product-ops-service
+      domains: [ops]
+      modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    recommendation-service:
+      package: recommendation-service
+      domains: [recommendation]
+      modules: [recommendation.api]
+    realtime-gateway:
+      package: realtime-gateway
+      domains: [realtime]
+      modules: [realtime.gateway]
+    rtc-service:
+      package: rtc-service
+      domains: [rtc]
+      modules: [rtc.api, rtc.signaling_worker]
+    livekit-sfu:
+      package: livekit-sfu
+      domains: [media]
+      modules: [media.sfu]
+    coturn:
+      package: coturn
+      domains: [turn]
+      modules: [turn.relay]
+    assistant-service:
+      package: assistant-service
+      domains: [assistant]
+      modules: [assistant.api, assistant.task_outbox_dispatcher, assistant.run_projection_worker]
+    seed-box:
+      package: seed-box
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      modules:
+        - content.api
+        - content.task_outbox_dispatcher
+        - content.search_index_worker
+        - content.feed_projection_worker
+        - integration.api
+        - integration.task_outbox_dispatcher
+        - integration.external_retry_worker
+        - chat.api
+        - chat.task_outbox_dispatcher
+        - chat.group_avatar_worker
+        - chat.roster_projection_worker
+        - chat.inbox_projection_worker
+        - chat.notification_outbox_dispatcher
+        - user.api
+        - user.task_outbox_dispatcher
+        - user.avatar_propagation_worker
+        - user.notification_outbox_dispatcher
+        - circle.api
+        - circle.task_outbox_dispatcher
+        - circle.member_projection_worker
+        - notification.notification_outbox_dispatcher
+        - notification.fanout_worker
+        - notification.delivery_retry_worker
+        - gateway.api
+        - orchestrator.workflow_worker
+
+  prod-gray:
+    entity-service:
+      package: entity-service
+      domains: [entity]
+      modules: [entity.api, entity.task_outbox_dispatcher, entity.readmodel_projection_worker]
+    product-ops-service:
+      package: product-ops-service
+      domains: [ops]
+      modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    recommendation-service:
+      package: recommendation-service
+      domains: [recommendation]
+      modules: [recommendation.api]
+    realtime-gateway:
+      package: realtime-gateway
+      domains: [realtime]
+      modules: [realtime.gateway]
+    rtc-service:
+      package: rtc-service
+      domains: [rtc]
+      modules: [rtc.api, rtc.signaling_worker]
+    livekit-sfu:
+      package: livekit-sfu
+      domains: [media]
+      modules: [media.sfu]
+    coturn:
+      package: coturn
+      domains: [turn]
+      modules: [turn.relay]
+    assistant-service:
+      package: assistant-service
+      domains: [assistant]
+      modules: [assistant.api, assistant.task_outbox_dispatcher, assistant.run_projection_worker]
+    seed-box:
+      package: seed-box
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      modules:
+        - content.api
+        - content.task_outbox_dispatcher
+        - content.search_index_worker
+        - content.feed_projection_worker
+        - integration.api
+        - integration.task_outbox_dispatcher
+        - integration.external_retry_worker
+        - chat.api
+        - chat.task_outbox_dispatcher
+        - chat.group_avatar_worker
+        - chat.roster_projection_worker
+        - chat.inbox_projection_worker
+        - chat.notification_outbox_dispatcher
+        - user.api
+        - user.task_outbox_dispatcher
+        - user.avatar_propagation_worker
+        - user.notification_outbox_dispatcher
+        - circle.api
+        - circle.task_outbox_dispatcher
+        - circle.member_projection_worker
+        - notification.notification_outbox_dispatcher
+        - notification.fanout_worker
+        - notification.delivery_retry_worker
+        - gateway.api
+        - orchestrator.workflow_worker
+
+  prod:
+    entity-service:
+      package: entity-service
+      domains: [entity]
+      modules: [entity.api, entity.task_outbox_dispatcher, entity.readmodel_projection_worker]
+    product-ops-service:
+      package: product-ops-service
+      domains: [ops]
+      modules: [ops.api, ops.task_outbox_dispatcher, ops.audit_projection_worker]
+    recommendation-service:
+      package: recommendation-service
+      domains: [recommendation]
+      modules: [recommendation.api]
+    realtime-gateway:
+      package: realtime-gateway
+      domains: [realtime]
+      modules: [realtime.gateway]
+    rtc-service:
+      package: rtc-service
+      domains: [rtc]
+      modules: [rtc.api, rtc.signaling_worker]
+    livekit-sfu:
+      package: livekit-sfu
+      domains: [media]
+      modules: [media.sfu]
+    coturn:
+      package: coturn
+      domains: [turn]
+      modules: [turn.relay]
+    assistant-service:
+      package: assistant-service
+      domains: [assistant]
+      modules: [assistant.api, assistant.task_outbox_dispatcher, assistant.run_projection_worker]
+    seed-box:
+      package: seed-box
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      modules:
+        - content.api
+        - content.task_outbox_dispatcher
+        - content.search_index_worker
+        - content.feed_projection_worker
+        - integration.api
+        - integration.task_outbox_dispatcher
+        - integration.external_retry_worker
+        - chat.api
+        - chat.task_outbox_dispatcher
+        - chat.group_avatar_worker
+        - chat.roster_projection_worker
+        - chat.inbox_projection_worker
+        - chat.notification_outbox_dispatcher
+        - user.api
+        - user.task_outbox_dispatcher
+        - user.avatar_propagation_worker
+        - user.notification_outbox_dispatcher
+        - circle.api
+        - circle.task_outbox_dispatcher
+        - circle.member_projection_worker
+        - notification.notification_outbox_dispatcher
+        - notification.fanout_worker
+        - notification.delivery_retry_worker
+        - gateway.api
+        - orchestrator.workflow_worker

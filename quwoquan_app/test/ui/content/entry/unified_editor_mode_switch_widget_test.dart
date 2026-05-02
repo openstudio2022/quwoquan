@@ -63,7 +63,7 @@ void main() {
     expect(state.articleDocument.body, '今天的旅行记录');
   });
 
-  testWidgets('legacy photo tab key 进入单主按钮媒体编辑器骨架', (tester) async {
+  testWidgets('current photo tab key 进入单主按钮媒体编辑器骨架', (tester) async {
     await tester.pumpWidget(_buildCreatePageApp(initialTabKey: 'photo'));
     await tester.pumpAndSettle();
 
@@ -104,7 +104,10 @@ void main() {
 
     expect(find.text('编辑'), findsNothing);
     expect(find.text('排版'), findsNothing);
-    expect(find.text(UITextConstants.createArticleSurfaceLongEdit), findsOneWidget);
+    expect(
+      find.text(UITextConstants.createArticleSurfaceLongEdit),
+      findsOneWidget,
+    );
     expect(find.byKey(TestKeys.createPublishButton), findsOneWidget);
     expect(find.text('输入文章标题（可选）'), findsOneWidget);
     expect(find.text('继续写内容，支持 emoji、图片、序号和模板'), findsOneWidget);
@@ -142,7 +145,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final pageWidth = tester.getSize(find.byType(CreatePage)).width;
-    final addWidth = tester.getSize(find.byKey(TestKeys.createMediaAddButton)).width;
+    final addWidth = tester
+        .getSize(find.byKey(TestKeys.createMediaAddButton))
+        .width;
     expect(addWidth, lessThan(pageWidth - 80));
 
     final container = ProviderScope.containerOf(
@@ -155,9 +160,13 @@ void main() {
     ], editorKind: CreateEditorKind.media);
     await tester.pumpAndSettle();
 
-    final firstTile = find.byWidgetPredicate((widget) => widget is LongPressDraggable<String>);
+    final firstTile = find.byWidgetPredicate(
+      (widget) => widget is LongPressDraggable<String>,
+    );
     final firstTileTop = tester.getTopLeft(firstTile.first).dy;
-    final addButtonTop = tester.getTopLeft(find.byKey(TestKeys.createMediaAddButton)).dy;
+    final addButtonTop = tester
+        .getTopLeft(find.byKey(TestKeys.createMediaAddButton))
+        .dy;
     expect(addButtonTop, closeTo(firstTileTop, 1));
   });
 

@@ -33,12 +33,39 @@ Map<String, dynamic> _mockCircleDetailWireFromDto(CircleDto d) {
 // ---------------------------------------------------------------------------
 
 class MockCircleRepository implements CircleRepository {
-  MockCircleRepository()
-    : _circles = CircleMockData.buildRepositorySeedCircleDtos();
+  MockCircleRepository({List<CircleDto>? seedCircles})
+    : _circles = seedCircles ?? _repositorySeedCircles();
 
   final List<CircleDto> _circles;
   final Map<String, List<CircleGroupDto>> _groupCache = {};
   final Map<String, List<CircleGroupMemberDto>> _groupMembersCache = {};
+
+  static List<CircleDto>? _contractSeedCircles() {
+    final seed = ContractFixtureRuntimeLoader.circleSeedSet();
+    final circles = seed?['circles'];
+    if (circles is! List) {
+      return null;
+    }
+    return circles
+        .whereType<Map>()
+        .map((item) => CircleDto.fromMap(item.cast<String, dynamic>()))
+        .toList(growable: true);
+  }
+
+  static List<CircleDto> _repositorySeedCircles() {
+    final byId = <String, CircleDto>{};
+    void put(CircleDto circle) {
+      byId[circle.id] = circle;
+    }
+
+    for (final circle in _contractSeedCircles() ?? const <CircleDto>[]) {
+      put(circle);
+    }
+    for (final circle in CircleMockData.buildRepositorySeedCircleDtos()) {
+      put(circle);
+    }
+    return byId.values.toList(growable: true);
+  }
 
   List<CircleDto> _copyCircleDtos() {
     return List<CircleDto>.from(_circles, growable: false);

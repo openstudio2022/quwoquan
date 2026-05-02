@@ -1,0 +1,14 @@
+{
+  "status": "packaged",
+  "env": "prod",
+  "runtimeEnv": "prod",
+  "dataSource": "remote",
+  "gatewayBaseUrl": "https://api.quwoquan.com",
+  "realtimeBaseUrl": "wss://api.quwoquan.com",
+  "avatarCdnBaseUrl": "https://avatar-cdn.quwoquan.com",
+  "imageCdnBaseUrl": "https://image-cdn.quwoquan.com",
+  "videoCdnBaseUrl": "https://video-cdn.quwoquan.com",
+  "uploadBaseUrl": "https://upload.quwoquan.com",
+  "currentUserId": "",
+  "seedManifest": ""
+}

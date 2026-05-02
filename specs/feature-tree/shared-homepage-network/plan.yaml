@@ -67,7 +67,7 @@ slices:
   - id: P4
     title: validate ios baseline and release guardrails
     goal: >
-      固化 iOS 原生体验基线、KPI/SLO、下线历史保留与整版回滚口径，
+      固化 iOS 原生体验基线、KPI/SLO、下线记录保留与整版回滚口径，
       确保共享主页主线可以安全进入后续 `/prd` 深化与 `/design`。
     depends_on:
       - P3
@@ -80,5 +80,5 @@ slices:
     done_when:
       - 主页详情与主页选择器的 iOS 体验要求明确
       - KPI/SLO、灰度与回滚口径明确
-      - 已下线主页历史保留原则不可逆回退
+      - 已下线主页记录保留原则不可逆回退
     status: planned

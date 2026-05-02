@@ -102,7 +102,7 @@
 2. 端侧逐步替换 Mock/Stub：DataService → Content API，SyncAdapter → Assistant/Chat API
 3. 分阶段上线：User/Auth → Content/Circle → Chat → Assistant → product-ops 埋点
 
-## 反馈与闭环（历史澄清对齐）
+## 反馈与闭环（记录澄清对齐）
 
 - **用户反馈→推荐优化**：Content/Circle 行为上报（显式：点赞/收藏/不感兴趣/举报；隐式：曝光/点击/停留）落库 → product-ops 统一采集 → Content/Circle 推荐按需消费 → 特征/策略更新 → 推荐结果优化
 - **助手反馈→学习**：端侧 recordInteraction/recordExplicitFeedback → Sync 上报 interactionEvents/scorecards → Assistant 云落库 → 下次 Run 注入 historicalRetrievalFeedback → 推理与策略调整

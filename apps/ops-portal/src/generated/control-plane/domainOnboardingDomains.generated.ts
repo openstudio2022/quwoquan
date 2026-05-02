@@ -27,7 +27,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "assistant",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -103,7 +103,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "chat",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -177,7 +177,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "circle",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -254,7 +254,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "content",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -339,7 +339,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "entity",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -415,7 +415,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "integration",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -487,7 +487,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "notification",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -564,7 +564,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "ops",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -641,7 +641,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "realtime",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -715,7 +715,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "recommendation",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -788,7 +788,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "rtc",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },
@@ -862,7 +862,7 @@ export const domainOnboardingDomains = {
       }
     },
     "deployment": {
-      "legacy_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
       "plane_binding_domain": "user",
       "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
     },

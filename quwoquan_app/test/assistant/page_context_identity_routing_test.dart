@@ -65,10 +65,7 @@ class _PageContextTestContentRepo extends MockContentRepository {
       'video': <Map<String, dynamic>>[],
     };
     final raw = byCategory[category] ?? const <Map<String, dynamic>>[];
-    return raw
-        .take(limit)
-        .map(postBaseDtoFromMap)
-        .toList(growable: false);
+    return raw.take(limit).map(postBaseDtoFromMap).toList(growable: false);
   }
 }
 
@@ -139,7 +136,7 @@ void main() {
       expect(result.items, isEmpty);
     });
 
-    test('identity index 关闭时回退到 legacy_context', () async {
+    test('identity index 关闭时回退到 page_context', () async {
       final provider = _buildProvider();
       final result = await provider.retrieve(
         const AssistantRetrievalRequest(
@@ -154,8 +151,8 @@ void main() {
 
       expect(result.success, isTrue);
       final first = result.items.first;
-      expect(first.sourceType, 'page.discovery.legacy_context');
-      expect(first.metadata['assistantRoute'], 'legacy_context');
+      expect(first.sourceType, 'page.discovery.page_context');
+      expect(first.metadata['assistantRoute'], 'page_context');
       expect(first.metadata['identityIndexEnabled'], isFalse);
       expect(first.metadata.containsKey('contentIdentity'), isFalse);
     });

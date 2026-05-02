@@ -3,7 +3,7 @@ import 'package:quwoquan_app/assistant/protocol/display_text_classifier.dart';
 /// 集中管理 assistant 内容过滤逻辑的唯一真相。
 ///
 /// **设计目标**：
-/// - 展示与历史写入不再通过自然语言词表判断业务状态。
+/// - 展示与记录写入不再通过自然语言词表判断业务状态。
 /// - 仅保留结构化 envelope 识别，业务分流必须使用 typed state / wire 字段。
 abstract final class AssistantContentFilters {
   static final DisplayTextClassifier _classifier =
@@ -29,6 +29,6 @@ abstract final class AssistantContentFilters {
     return isJsonEnvelope(t);
   }
 
-  /// 旧自然语言 session 过滤已禁用；是否写入历史由结构化状态决定。
+  /// 旧自然语言 session 过滤已禁用；是否写入记录由结构化状态决定。
   static bool shouldSkipSessionWrite(String text) => false;
 }

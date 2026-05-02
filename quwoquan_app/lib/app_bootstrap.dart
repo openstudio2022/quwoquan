@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:isolate';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -9,10 +11,13 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+RawReceivePort? _rootIsolateErrorPort;
 
 /// 共享启动：默认入口 [main] 与 [main_prod] 均经此函数，后者可注入 [providerScopeOverrides]。
 Future<void> runQuwoquanApp({
@@ -61,6 +66,7 @@ Future<void> runQuwoquanApp({
     }
     return false;
   };
+  _installRootIsolateErrorListener();
 
   SystemChrome.setSystemUIOverlayStyle(
     AppTheme.systemUiOverlayStyleFor(Brightness.light),
@@ -75,20 +81,62 @@ Future<void> runQuwoquanApp({
 
   await Hive.initFlutter();
   await Hive.openBox<String>(kVisitRecordsBoxName);
+  unawaited(AppExceptionTelemetryService.instance.flushPending());
 
   await preInitializeQuwoquanAnalytics();
 
-  runApp(
-    ScreenUtilInit(
-      designSize: const Size(375, 812),
-      minTextAdapt: true,
-      splitScreenMode: true,
-      child: ProviderScope(
-        overrides: providerScopeOverrides,
-        child: const QuWoQuanAppRoot(),
-      ),
-    ),
+  WidgetsBinding.instance.addObserver(_AppExceptionLifecycleObserver());
+  runZonedGuarded(
+    () {
+      runApp(
+        ScreenUtilInit(
+          designSize: const Size(375, 812),
+          minTextAdapt: true,
+          splitScreenMode: true,
+          child: ProviderScope(
+            overrides: providerScopeOverrides,
+            child: const QuWoQuanAppRoot(),
+          ),
+        ),
+      );
+    },
+    (Object error, StackTrace stack) {
+      logQuwoquanAppException(
+        source: 'zone_guarded',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    },
   );
+}
+
+void _installRootIsolateErrorListener() {
+  if (_rootIsolateErrorPort != null) {
+    return;
+  }
+  final port = RawReceivePort((Object? message) {
+    if (message is List<Object?> && message.isNotEmpty) {
+      final error = message.first;
+      final Object? stack = message.length > 1 ? message[1] : '';
+      logQuwoquanAppException(
+        source: 'root_isolate',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    }
+  });
+  _rootIsolateErrorPort = port;
+  Isolate.current.addErrorListener(port.sendPort);
+}
+
+class _AppExceptionLifecycleObserver extends WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.resumed) {
+      unawaited(AppExceptionTelemetryService.instance.flushPending());
+    }
+  }
 }
 
 /// 预先初始化 Analytics（与 Hive 后、首帧前执行）。

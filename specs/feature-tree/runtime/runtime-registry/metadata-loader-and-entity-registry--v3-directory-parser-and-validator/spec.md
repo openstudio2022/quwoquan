@@ -17,7 +17,7 @@
 - A7：Parser 输出与 contracts/metadata/ YAML 完全一致；Validator 覆盖全部引用类型。
 - A8：Parser + Validator 单元测试，metadata 一致性 contract 测试。
 
-## Folded legacy node `runtime-query-api-and-hot-reload`
+## Folded current node `runtime-query-api-and-hot-reload`
 
 # L5 横切：runtime-query-api-and-hot-reload
 
@@ -29,7 +29,7 @@
 ## 实现要点
 - **Query API 设计**：接口返回只读视图，避免调用方修改内部状态。
 - **并发安全**：读路径无锁或读锁，写路径（Hot-reload）使用写锁或原子指针替换。
-- **Hot-reload 机制**：文件变更检测（fsnotify 或轮询）、重新 Load、校验通过后原子替换、失败时保留旧版本。
+- **Hot-reload 机制**：文件变更检测（fsnotify 或轮询）、重新 Load、校验通过后原子替换、失败时保留过往版本本。
 
 ## 约束
 - 未注册实体查询必须返回明确错误，不返回空值静默。

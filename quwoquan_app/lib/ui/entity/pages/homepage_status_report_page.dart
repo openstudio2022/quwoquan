@@ -89,7 +89,7 @@ class _HomepageStatusReportPageState
                   SizedBox(height: AppSpacing.intraGroupXs),
                   Text(
                     (_detail?.status ?? '') == 'offline'
-                        ? '该主页已经下线，历史内容会继续保留供浏览。'
+                        ? '该主页已经下线，记录内容会继续保留供浏览。'
                         : '如果主页信息失效、重复或长期停用，可以发起状态上报。',
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,

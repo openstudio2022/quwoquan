@@ -18,15 +18,26 @@ import (
 
 const groupAvatarLayoutVersion = "v1"
 
-var configuredGroupAvatarCDNDomain atomic.Value
+var configuredGroupAvatarCDNBase atomic.Value
+var configuredDefaultGroupAvatarURL atomic.Value
 
-func ConfigureGroupAvatarCDNDomain(cdnDomain string) {
-	configuredGroupAvatarCDNDomain.Store(strings.TrimSpace(cdnDomain))
+// ConfigureGroupAvatarCDNBase 设置群头像对外 URL 的 CDN base（须含 scheme）。
+func ConfigureGroupAvatarCDNBase(baseURL string) {
+	normalized := runtimemedia.NormalizeMediaCDNBase(strings.TrimSpace(baseURL))
+	configuredGroupAvatarCDNBase.Store(normalized)
+	configuredDefaultGroupAvatarURL.Store(runtimemedia.BuildDefaultGroupAvatarURL(normalized))
 }
 
-func groupAvatarCDNDomain() string {
-	if value, ok := configuredGroupAvatarCDNDomain.Load().(string); ok {
+func groupAvatarCDNBase() string {
+	if value, ok := configuredGroupAvatarCDNBase.Load().(string); ok {
 		return value
+	}
+	return ""
+}
+
+func DefaultGroupAvatarURL() string {
+	if value, ok := configuredDefaultGroupAvatarURL.Load().(string); ok {
+		return strings.TrimSpace(value)
 	}
 	return ""
 }
@@ -40,14 +51,24 @@ func ResolveGroupAvatarURL(conv model.Conversation) string {
 		conv.GroupAvatarAssetId,
 		conv.GroupAvatarVersion,
 		conv.GroupAvatarSourceHash,
-		groupAvatarCDNDomain(),
+		groupAvatarCDNBase(),
 	)
 	return ref.URL
 }
 
 func ResolveConversationAvatarURL(conv model.Conversation) string {
-	if url := ResolveGroupAvatarURL(conv); url != "" {
-		return url
+	t := strings.TrimSpace(conv.Type)
+	if t == "direct" {
+		return strings.TrimSpace(conv.AvatarUrl)
+	}
+	if t == "group" || t == "circle" {
+		if u := strings.TrimSpace(conv.AvatarUrl); u != "" {
+			return u
+		}
+		if u := ResolveGroupAvatarURL(conv); u != "" {
+			return u
+		}
+		return DefaultGroupAvatarURL()
 	}
 	return strings.TrimSpace(conv.AvatarUrl)
 }
@@ -93,16 +114,21 @@ func RecomputeGroupAvatar(
 	if sourceHash == strings.TrimSpace(conv.GroupAvatarSourceHash) &&
 		conv.GroupAvatarVersion > 0 &&
 		strings.TrimSpace(conv.GroupAvatarAssetId) != "" {
-		return nil
+		return ensureConversationAvatarNotification(ctx, repo, publisher, syncPublisher, scheduler, conv, actorID)
 	}
 	if media == nil {
 		return nil
 	}
+	memberAvatarURLs := make([]string, 0, len(top9))
+	for _, m := range top9 {
+		memberAvatarURLs = append(memberAvatarURLs, strings.TrimSpace(m.AvatarUrl))
+	}
 	asset, err := media.Register(ctx, runtimemedia.RegisterGroupAvatarRequest{
-		ConversationID: conversationID,
-		SourceHash:     sourceHash,
-		LayoutVersion:  groupAvatarLayoutVersion,
-		Contributors:   buildAvatarSources(top9),
+		ConversationID:   conversationID,
+		SourceHash:       sourceHash,
+		LayoutVersion:    groupAvatarLayoutVersion,
+		Contributors:     buildAvatarSources(top9),
+		MemberAvatarURLs: memberAvatarURLs,
 	})
 	if err != nil {
 		return err
@@ -114,22 +140,43 @@ func RecomputeGroupAvatar(
 	conv.AvatarUrl = asset.Ref.URL
 	conv.UpdatedAt = time.Now()
 
-	if err := repo.UpdateConversation(ctx, conv.ID, conv); err != nil {
+	avatarPatchEnabled := runtimegovernance.FeatureEnabled("runtime.avatar_patch_enabled", true)
+	payload := map[string]any{
+		"conversationId":        conv.ID,
+		"avatarUrl":             asset.Ref.URL,
+		"groupAvatarAssetId":    conv.GroupAvatarAssetId,
+		"groupAvatarVersion":    conv.GroupAvatarVersion,
+		"groupAvatarSourceHash": conv.GroupAvatarSourceHash,
+		"updatedAt":             conv.UpdatedAt,
+	}
+	recipients, recipientUserIDs, err := resolveConversationAvatarRecipients(ctx, repo, conv)
+	if err != nil {
 		return err
 	}
-	if !runtimegovernance.FeatureEnabled("runtime.avatar_patch_enabled", true) {
+
+	if err := repo.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := repo.UpdateConversation(txCtx, conv.ID, conv); err != nil {
+			return err
+		}
+		if !avatarPatchEnabled || scheduler == nil || len(recipientUserIDs) == 0 {
+			return nil
+		}
+		return scheduler.EnqueueConversationAvatarPatch(txCtx, ConversationAvatarPatchTask{
+			ConversationID:   conv.ID,
+			ActorID:          actorID,
+			Trigger:          "conversation.avatar.updated",
+			Payload:          payload,
+			RecipientUserIDs: recipientUserIDs,
+		})
+	}); err != nil {
+		return err
+	}
+
+	if !avatarPatchEnabled {
 		return nil
 	}
 	if publisher == nil {
 		publisher = NoopEventPublisher()
-	}
-	payload := map[string]any{
-		"conversationId":        conv.ID,
-		"groupAvatarAssetId":    conv.GroupAvatarAssetId,
-		"groupAvatarVersion":    conv.GroupAvatarVersion,
-		"groupAvatarSourceHash": conv.GroupAvatarSourceHash,
-		"groupAvatarUrl":        asset.Ref.URL,
-		"updatedAt":             conv.UpdatedAt,
 	}
 	if err := publisher.PublishDomainEvent(ctx, event.ConversationAvatarUpdated, conv.ID, actorID, payload); err != nil {
 		return err
@@ -137,42 +184,8 @@ func RecomputeGroupAvatar(
 	if syncPublisher == nil {
 		return nil
 	}
-	memberLimit := conv.MemberCount
-	if memberLimit <= 0 {
-		memberLimit, _ = repo.CountMembers(ctx, conversationID)
-	}
-	if memberLimit <= 0 {
-		memberLimit = 200
-	}
-	recipients, err := repo.ListMembers(
-		ctx,
-		conversationID,
-		memberLimit,
-		"",
-		"",
-		persistence.SortMembersJoinedAsc,
-	)
-	if err != nil {
-		return err
-	}
-	recipientUserIDs := make([]string, 0, len(recipients))
-	for _, member := range recipients {
-		if strings.TrimSpace(member.UserId) == "" {
-			continue
-		}
-		recipientUserIDs = append(recipientUserIDs, strings.TrimSpace(member.UserId))
-	}
-	if len(recipientUserIDs) == 0 {
-		return nil
-	}
 	if scheduler != nil {
-		return scheduler.EnqueueConversationAvatarPatch(ctx, ConversationAvatarPatchTask{
-			ConversationID:   conv.ID,
-			ActorID:          actorID,
-			Trigger:          "conversation.avatar.updated",
-			Payload:          payload,
-			RecipientUserIDs: recipientUserIDs,
-		})
+		return nil
 	}
 	for _, member := range recipients {
 		if strings.TrimSpace(member.UserId) == "" {
@@ -185,6 +198,99 @@ func RecomputeGroupAvatar(
 	return nil
 }
 
+func ensureConversationAvatarNotification(
+	ctx context.Context,
+	repo persistence.ChatRepository,
+	publisher EventPublisher,
+	syncPublisher UserSyncPublisher,
+	scheduler GroupAvatarTaskScheduler,
+	conv *model.Conversation,
+	actorID string,
+) error {
+	if !runtimegovernance.FeatureEnabled("runtime.avatar_patch_enabled", true) {
+		return nil
+	}
+	payload := map[string]any{
+		"conversationId":        conv.ID,
+		"avatarUrl":             strings.TrimSpace(conv.AvatarUrl),
+		"groupAvatarAssetId":    conv.GroupAvatarAssetId,
+		"groupAvatarVersion":    conv.GroupAvatarVersion,
+		"groupAvatarSourceHash": conv.GroupAvatarSourceHash,
+		"updatedAt":             conv.UpdatedAt,
+	}
+	recipients, recipientUserIDs, err := resolveConversationAvatarRecipients(ctx, repo, conv)
+	if err != nil {
+		return err
+	}
+	if scheduler != nil && len(recipientUserIDs) > 0 {
+		if err := repo.RunInTransaction(ctx, func(txCtx context.Context) error {
+			return scheduler.EnqueueConversationAvatarPatch(txCtx, ConversationAvatarPatchTask{
+				ConversationID:   conv.ID,
+				ActorID:          actorID,
+				Trigger:          "conversation.avatar.updated",
+				Payload:          payload,
+				RecipientUserIDs: recipientUserIDs,
+			})
+		}); err != nil {
+			return err
+		}
+	}
+	if publisher == nil {
+		publisher = NoopEventPublisher()
+	}
+	if err := publisher.PublishDomainEvent(ctx, event.ConversationAvatarUpdated, conv.ID, actorID, payload); err != nil {
+		return err
+	}
+	if syncPublisher == nil || scheduler != nil {
+		return nil
+	}
+	for _, member := range recipients {
+		if strings.TrimSpace(member.UserId) == "" {
+			continue
+		}
+		if _, err := syncPublisher.AppendPatch(ctx, member.UserId, "conversation.avatar.updated", payload); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func resolveConversationAvatarRecipients(
+	ctx context.Context,
+	repo persistence.ChatRepository,
+	conv *model.Conversation,
+) ([]model.ConversationMember, []string, error) {
+	memberLimit := conv.MemberCount
+	if memberLimit <= 0 {
+		memberLimit, _ = repo.CountMembers(ctx, conv.ID)
+	}
+	if memberLimit <= 0 {
+		memberLimit = 200
+	}
+	recipients, err := repo.ListMembers(
+		ctx,
+		conv.ID,
+		memberLimit,
+		"",
+		"",
+		persistence.SortMembersJoinedAsc,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	recipientUserIDs := make([]string, 0, len(recipients))
+	for _, member := range recipients {
+		if strings.TrimSpace(member.UserId) == "" {
+			continue
+		}
+		recipientUserIDs = append(recipientUserIDs, strings.TrimSpace(member.UserId))
+	}
+	if len(recipientUserIDs) == 0 {
+		return recipients, nil, nil
+	}
+	return recipients, recipientUserIDs, nil
+}
+
 func BuildGroupAvatarSourceHash(members []model.ConversationMember) string {
 	hash := sha256.New()
 	for _, member := range members {
@@ -193,6 +299,8 @@ func BuildGroupAvatarSourceHash(members []model.ConversationMember) string {
 		hash.Write([]byte(strings.TrimSpace(member.AvatarAssetId)))
 		hash.Write([]byte("|"))
 		hash.Write([]byte(int64String(member.AvatarVersion)))
+		hash.Write([]byte("|"))
+		hash.Write([]byte(strings.TrimSpace(member.AvatarUrl)))
 		hash.Write([]byte("|"))
 		hash.Write([]byte(groupAvatarLayoutVersion))
 		hash.Write([]byte("|"))

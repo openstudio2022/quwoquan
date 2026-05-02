@@ -11,7 +11,7 @@ generatorOptions:
 configMapGenerator:
   - name: deploy-params
     literals:
-      - APP_ENV=integration
+      - APP_ENV=gamma
       - CONFIG_VERSION=v2026.03.07.0
       - IMAGE_VERSION=v2026.03.07.0
       - REPLICAS=2

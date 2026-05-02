@@ -197,7 +197,7 @@ export function PlatformDomainOnboardingPage() {
               <div>
                 <p className="item-title">部署真相源</p>
                 <p className="item-subtitle">
-                  legacy={domainOnboardingSchema.minimum_package.required_deploy_sources.legacy}
+                  current={domainOnboardingSchema.minimum_package.required_deploy_sources.current}
                 </p>
                 <p className="item-subtitle">
                   plane-aware={domainOnboardingSchema.minimum_package.required_deploy_sources.plane_aware}

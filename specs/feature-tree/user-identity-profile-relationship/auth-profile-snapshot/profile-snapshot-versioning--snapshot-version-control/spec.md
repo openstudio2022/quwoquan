@@ -11,7 +11,7 @@
 - A7：契约一致性校验通过。
 - A8：对应自动化测试映射完整。
 
-## Folded legacy node `version-conflict-repair`
+## Folded current node `version-conflict-repair`
 
 # L5 特性：version-conflict-repair
 

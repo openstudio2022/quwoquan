@@ -9,7 +9,7 @@
 ## 验收标准
 - A7：IO 字段兼容性与映射一致性测试通过。
 
-## Folded legacy node `run-error-mapping-governance`
+## Folded current node `run-error-mapping-governance`
 
 # L5 特性：run-error-mapping-governance
 

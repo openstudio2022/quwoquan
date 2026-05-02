@@ -173,7 +173,7 @@
 - 本次 PRD 不直接实现 `domain_onboarding_schema.yaml` 的字段级校验器、codegen 逻辑与脚本
 - 本次 PRD 不直接改写所有命令、规则、gate 脚本与 deploy 脚本
 - 本次 PRD 不直接让所有领域在本会话中完成接入
-- 本次 PRD 不一次性迁移全部历史部署 mapping 文件
+- 本次 PRD 不一次性迁移全部记录部署 mapping 文件
 - 本次 PRD 不展开各领域自身业务对象字段级设计和工作流实现细节
 
 ## 对标输入与吸收结论

@@ -86,7 +86,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           final convId = widget.conversationId ?? '';
           _groupInboxRows = inbox
               .where(
-                (row) => row.type == 'group' && row.id.isNotEmpty && row.id != convId,
+                (row) =>
+                    row.type == 'group' &&
+                    row.id.isNotEmpty &&
+                    row.id != convId,
               )
               .toList(growable: false);
           _contacts = contacts;
@@ -100,9 +103,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           _existingMemberIds
             ..clear()
             ..addAll(
-              existingMembers
-                  .map((m) => m.userId)
-                  .where((id) => id.isNotEmpty),
+              existingMembers.map((m) => m.userId).where((id) => id.isNotEmpty),
             );
         });
       }
@@ -189,16 +190,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     try {
       final repo = ref.read(chatRepositoryProvider);
       if (widget.isCreateMode) {
-        final ChatConversationCreatedDto created = await repo.createConversation(
-          type: 'group',
-          title: _selectedMembers.values
-              .map((member) => member.displayName)
-              .where((name) => name.isNotEmpty)
-              .take(3)
-              .join('、'),
-          maxGroupSize: 500,
-          initialMemberIds: selectedIds,
-        );
+        final ChatConversationCreatedDto created = await repo
+            .createConversation(
+              type: 'group',
+              title: _selectedMembers.values
+                  .map((member) => member.displayName)
+                  .where((name) => name.isNotEmpty)
+                  .take(3)
+                  .join('、'),
+              maxGroupSize: 500,
+              initialMemberIds: selectedIds,
+            );
         final conversationId = created.conversationId;
         if (!context.mounted) {
           return;
@@ -241,10 +243,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           Navigator.of(context).pop();
           final members = await ref
               .read(chatRepositoryProvider)
-              .listMembers(
-                conversationId: group.id,
-                limit: 500,
-              );
+              .listMembers(conversationId: group.id, limit: 500);
           final selectableMembers = selectableFromChatMembers(
             members,
             existingMemberIds: _existingMemberIds,
@@ -323,10 +322,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   /// 按首字母分组：A-Z, #，返回有序 keys 与 map
-  static ({
-    List<String> keys,
-    Map<String, List<StartGroupFriendLetterRow>> map,
-  })
+  static ({List<String> keys, Map<String, List<StartGroupFriendLetterRow>> map})
   _groupByLetter(List<StartGroupFriendLetterRow> list) {
     final map = <String, List<StartGroupFriendLetterRow>>{};
     for (final m in list) {
@@ -340,9 +336,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       map.putIfAbsent(key, () => []).add(m);
     }
     for (final key in map.keys) {
-      map[key]!.sort(
-        (a, b) => a.displayName.compareTo(b.displayName),
-      );
+      map[key]!.sort((a, b) => a.displayName.compareTo(b.displayName));
     }
     final keys = map.keys.toList()..sort();
     if (keys.contains('#')) {
@@ -383,19 +377,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           return displayName.toLowerCase().contains(normalizedQuery) ||
               userId.toLowerCase().contains(normalizedQuery);
         })
-        .map(
-          (c) {
-            final displayName = c.displayName;
-            return StartGroupFriendLetterRow(
-              displayName: displayName,
-              userId: c.userId,
-              avatarUrl: c.avatarUrl,
-              letter: displayName.isNotEmpty
-                  ? displayName.substring(0, 1).toUpperCase()
-                  : '#',
-            );
-          },
-        )
+        .map((c) {
+          final displayName = c.displayName;
+          return StartGroupFriendLetterRow(
+            displayName: displayName,
+            userId: c.userId,
+            avatarUrl: c.avatarUrl,
+            letter: displayName.isNotEmpty
+                ? displayName.substring(0, 1).toUpperCase()
+                : '#',
+          );
+        })
         .toList();
     final grouped = _groupByLetter(friendsWithLetter);
     final indexLetters = ['↑', '☆', ...grouped.keys];
@@ -476,7 +468,9 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                             AppRoutePaths.userProfile(username: username),
                             extra: UserProfileRouteExtra(
                               profileSubjectId: username,
-                              avatar: m.avatarUrl.isNotEmpty ? m.avatarUrl : null,
+                              avatar: m.avatarUrl.isNotEmpty
+                                  ? m.avatarUrl
+                                  : null,
                               displayName: m.displayName.isNotEmpty
                                   ? m.displayName
                                   : null,
@@ -1071,20 +1065,11 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
   }
 
   Widget _buildLeading(ChatInboxDto group, bool isDark) {
-    final groupAvatarUrl = group.groupAvatarUrl.trim();
-    if (groupAvatarUrl.isNotEmpty) {
+    final url = group.avatarUrl.trim();
+    if (url.isNotEmpty) {
       return RoundedSquareAvatar(
         size: AppSpacing.avatarSize,
-        imageUrl: groupAvatarUrl,
-        name: group.title,
-        backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
-      );
-    }
-    final avatarUrl = group.avatarUrl;
-    if (avatarUrl.isNotEmpty) {
-      return RoundedSquareAvatar(
-        size: AppSpacing.avatarSize,
-        imageUrl: avatarUrl,
+        imageUrl: url,
         name: group.title,
         backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
       );

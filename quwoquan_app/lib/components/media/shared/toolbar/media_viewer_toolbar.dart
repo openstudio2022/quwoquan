@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -18,8 +20,12 @@ class MediaViewerTopBar extends StatelessWidget {
   final VoidCallback? onAuthorTap;
   final VoidCallback onMore;
   final bool showPosition;
+
   /// 'full'（默认）| 'backOnly'：backOnly 时仅显示返回、更多
   final String toolbarMode;
+
+  /// 与底部互动栏、内容区共用 rail；图片/视频沉浸页使用 [ImmersiveViewerStageLayoutSpec.mediaStage]。
+  final ImmersiveViewerStageLayoutSpec layoutSpec;
 
   const MediaViewerTopBar({
     super.key,
@@ -33,6 +39,7 @@ class MediaViewerTopBar extends StatelessWidget {
     this.onAuthorTap,
     this.showPosition = true,
     this.toolbarMode = 'full',
+    this.layoutSpec = ImmersiveViewerStageLayoutSpec.feedRail,
   });
 
   bool get _isBackOnly => toolbarMode == 'backOnly';
@@ -53,14 +60,12 @@ class MediaViewerTopBar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            AppColors.overlayStrong,
-            AppColors.transparent,
-          ],
+          colors: [AppColors.overlayStrong, AppColors.transparent],
         ),
       ),
       child: ImmersiveViewerLayout.alignToRail(
         context: context,
+        layoutSpec: layoutSpec,
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -92,21 +97,18 @@ class MediaViewerTopBar extends StatelessWidget {
   }
 
   Widget _buildBackButton(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.square(AppSpacing.buttonSize),
+    return ImmersiveToolbarIconButton(
+      icon: CupertinoIcons.back,
       onPressed: onBack,
-      child: Icon(
-        CupertinoIcons.back,
-        color: AppColors.white,
-        size: AppSpacing.iconMedium,
-      ),
     );
   }
 
   Widget _buildPositionIndicator(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: AppColors.black.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
@@ -148,7 +150,9 @@ class MediaViewerTopBar extends StatelessWidget {
       fontWeight: AppTypography.semiBold,
     );
     const sample = '一二三四五六七八九十';
-    final text = sample.length >= charCount ? sample.substring(0, charCount) : sample;
+    final text = sample.length >= charCount
+        ? sample.substring(0, charCount)
+        : sample;
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
@@ -212,10 +216,7 @@ class MediaViewerTopBar extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
-                    colors: [
-                      AppColors.transparent,
-                      AppColors.black,
-                    ],
+                    colors: [AppColors.transparent, AppColors.black],
                   ),
                 ),
               ),
@@ -249,11 +250,10 @@ class MediaViewerTopBar extends StatelessWidget {
     );
   }
 
-  Widget _buildFollowButton(
-    BuildContext context, {
-    required double height,
-  }) {
-    final buttonText = isFollowing ? UITextConstants.following : UITextConstants.follow;
+  Widget _buildFollowButton(BuildContext context, {required double height}) {
+    final buttonText = isFollowing
+        ? UITextConstants.following
+        : UITextConstants.follow;
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: Size.zero,
@@ -269,7 +269,9 @@ class MediaViewerTopBar extends StatelessWidget {
         height: height,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isFollowing ? AppColors.followingButtonOnDark : AppColors.primaryColor,
+          color: isFollowing
+              ? AppColors.followingButtonOnDark
+              : AppColors.primaryColor,
           borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         ),
         child: Text(
@@ -285,14 +287,59 @@ class MediaViewerTopBar extends StatelessWidget {
   }
 
   Widget _buildMoreButton(BuildContext context) {
+    return ImmersiveToolbarIconButton(
+      icon: CupertinoIcons.ellipsis,
+      onPressed: onMore,
+    );
+  }
+}
+
+class ImmersiveToolbarIconButton extends StatelessWidget {
+  const ImmersiveToolbarIconButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.foregroundColor = AppColors.white,
+    this.backgroundColor,
+    this.borderColor,
+    this.size = AppSpacing.minInteractiveSize,
+    this.iconSize = AppSpacing.iconMedium,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final Color foregroundColor;
+  final Color? backgroundColor;
+  final Color? borderColor;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = backgroundColor ?? AppColors.black.withValues(alpha: 0.24);
+    final outline = borderColor ?? AppColors.white.withValues(alpha: 0.14);
+
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      minimumSize: Size.square(AppSpacing.buttonSize),
-      onPressed: onMore,
-      child: Icon(
-        CupertinoIcons.ellipsis,
-        color: AppColors.white,
-        size: AppSpacing.iconMedium,
+      minimumSize: Size.square(size),
+      onPressed: onPressed,
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: AppSpacing.sm,
+            sigmaY: AppSpacing.sm,
+          ),
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              color: fill,
+              shape: BoxShape.circle,
+              border: Border.all(color: outline, width: AppSpacing.hairline),
+            ),
+            child: Icon(icon, color: foregroundColor, size: iconSize),
+          ),
+        ),
       ),
     );
   }
@@ -334,10 +381,7 @@ class MediaViewerBottomBar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [
-            AppColors.overlayStrong,
-            AppColors.transparent,
-          ],
+          colors: [AppColors.overlayStrong, AppColors.transparent],
         ),
       ),
       child: ImmersiveViewerLayout.alignToRail(
@@ -399,7 +443,6 @@ class MediaViewerBottomBar extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class MediaViewerActionButton extends StatelessWidget {
@@ -442,5 +485,4 @@ class MediaViewerActionButton extends StatelessWidget {
       ),
     );
   }
-
 }

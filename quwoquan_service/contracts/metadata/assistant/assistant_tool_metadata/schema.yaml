@@ -1,0 +1,30 @@
+dart_class: AssistantToolMetadataWire
+library_path: assistant/generated/contracts/assistant_tool_metadata.g.dart
+output_path: assistant/generated/contracts/assistant_tool_metadata.g.dart
+contract: assistant_tool_metadata
+version: assistant_tool_metadata.m5
+kind: shared_wire_contract
+fields:
+  - { name: toolName, type: string, required: true }
+  - { name: displayName, type: string, default: '' }
+  - { name: description, type: string, default: '' }
+  - { name: placement, type: string, default: cloud }
+  - { name: inputSchema, type: map, default: {} }
+  - { name: outputSchema, type: map, default: {} }
+  - { name: requiresConfirmation, type: bool, default: false }
+  - { name: resilience, type: object, ref: resilience_policy, default: {} }
+  - { name: recovery, type: object, ref: recovery_policy, default: {} }
+subcontracts:
+  resilience_policy:
+    class_name: AssistantToolResiliencePolicyWire
+    fields:
+      - { name: timeoutMs, type: int, default: 5000 }
+      - { name: maxAttempts, type: int, default: 1 }
+      - { name: retryBackoffMs, type: int, default: 0 }
+      - { name: loopDetectionWindow, type: int, default: 3 }
+  recovery_policy:
+    class_name: AssistantToolRecoveryPolicyWire
+    fields:
+      - { name: action, type: string, default: fail_turn }
+      - { name: disruptionLevel, type: string, default: partial }
+      - { name: userVisibleSummary, type: string, default: '' }

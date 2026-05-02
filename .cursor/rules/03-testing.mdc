@@ -114,6 +114,27 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go
 
 ---
 
+## 4.1 环境数据驱动测试
+
+新增或修改业务对象页面、Repository、Remote API、MockRepository 时，必须遵守：
+
+- alpha/beta/gamma 的测试数据来自 `quwoquan_service/contracts/metadata/**/test_fixtures`。
+- 端侧 alpha 使用 contract-seeded MockRepository，不访问云服务。
+- 端侧 beta/gamma 使用 RemoteRepository，经 gateway/API 读取云侧 seed 数据，禁止读取 Dart mock 列表。
+- 云侧 alpha/beta/gamma 必须通过 seed manifest 声明 `seedRefs`、`resetScope`、`targetStore` 与 `verifiedEndpoints`。
+- 人工 beta 预置数据必须进入 `app_beta_seed_manifest.json`，不得在脚本、数据库或 UI 中临时造数。
+- 生产 App 只有一个包；不存在 `app-prod-gray`，灰度由应用市场分发、端侧上下文与云侧策略决定。
+
+对应命令：
+
+```bash
+make verify-app-seed-manifest
+make test-app-alpha-seed
+make test-app-beta-seed
+```
+
+---
+
 ## 5. 测试内容要求
 
 ### `T1`

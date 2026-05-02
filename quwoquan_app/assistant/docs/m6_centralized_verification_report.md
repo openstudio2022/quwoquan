@@ -7,7 +7,7 @@ Hard requirements under verification:
 - no `local_context` tool exposure
 - typed contracts survive finalize, persistence, reload, and UI projection
 - simulator weather and stock replay are executed and honestly classified
-- legacy/weak/text-heuristic residues are not hidden
+- current/weak/text-heuristic residues are not hidden
 
 ## Local Contract And UI Matrix
 Status: pass.
@@ -38,7 +38,7 @@ Result:
 - all tests passed
 - `UnderstandPhase` now carries previous typed `UnderstandingResult` / `TaskGraph` into continuity
 - `BootstrapPhase` now seeds `SystemContextEnvelope` into owner state and precomputed bootstrap payloads
-- architecture guard still blocks reintroduction of deleted legacy decision bridges
+- architecture guard still blocks reintroduction of deleted current decision bridges
 
 M6 interpretation:
 - the current typed mainline regression matrix is green locally
@@ -55,8 +55,8 @@ Devices:
 Command:
 
 ```sh
-flutter test integration_test/assistant_manual_replay_test.dart -d 22945797-42C9-4CF5-BEA1-B1C873B64904 --plain-name "Assistant M0 replay baseline" --dart-define=ASSISTANT_REPLAY_CASE_FILTER=tomorrow_weather --dart-define=ASSISTANT_REPLAY_REPEAT_COUNT=1
-flutter test integration_test/assistant_manual_replay_test.dart -d EAF3A223-E742-433D-B116-A152DCC7FF84 --plain-name "Assistant M0 replay baseline" --dart-define=ASSISTANT_REPLAY_CASE_FILTER=yesterday_stock_reason,tomorrow_weather --dart-define=ASSISTANT_REPLAY_REPEAT_COUNT=1
+flutter test test/common/assistant/assistant_environment_smoke_test.dart -d 22945797-42C9-4CF5-BEA1-B1C873B64904 --dart-define=APP_RUNTIME_ENV=alpha --dart-define=APP_DATA_SOURCE=mock
+flutter test test/common/assistant/assistant_environment_smoke_test.dart -d EAF3A223-E742-433D-B116-A152DCC7FF84 --dart-define=APP_RUNTIME_ENV=alpha --dart-define=APP_DATA_SOURCE=mock
 ```
 
 Result:
@@ -72,14 +72,14 @@ Observed:
 - final mode was `bounded_answer`, but the replay outcome was `answer_ready` because the typed answer gate was ready
 
 Classification:
-- earlier failure was partly a system-context injection bug and partly legacy replay validation that still required removed geography fields
+- earlier failure was partly a system-context injection bug and partly current replay validation that still required removed geography fields
 - current simulator gate is correct for the typed mainline
 
 ### Stock
 Command:
 
 ```sh
-flutter test integration_test/assistant_manual_replay_test.dart -d EAF3A223-E742-433D-B116-A152DCC7FF84 --plain-name "Assistant M0 replay baseline" --dart-define=ASSISTANT_REPLAY_CASE_FILTER=yesterday_stock_reason,tomorrow_weather --dart-define=ASSISTANT_REPLAY_REPEAT_COUNT=1
+flutter test test/common/assistant/assistant_environment_smoke_test.dart -d EAF3A223-E742-433D-B116-A152DCC7FF84 --dart-define=APP_RUNTIME_ENV=alpha --dart-define=APP_DATA_SOURCE=mock
 ```
 
 Result:

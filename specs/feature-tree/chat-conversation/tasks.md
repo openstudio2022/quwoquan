@@ -93,7 +93,7 @@
 - [x] T7-8: [T3-L2] `conversation_error_contract_test.go` — 错误路径（已有）→ A13(error)
 - [x] T7-9: [T3-L2] `conversation_compat_contract_test.go` — 兼容性（已有）→ A13(compat)
 - [x] T7-10: [T3-L2] `benchmark_test.go` — 6 个 benchmark（SendMessage 并行/1000 并发/SyncMessages/ListMessages/AddMembers 50/CreateConversation）→ A21
-- [x] T7-11: [T3-L3] `test/cloud/chat/api_contract_runner.dart` — 5 组 staging API 契约（会话列表/发送幂等撤回/404 映射/sync 增量/成员操作）→ A20
+- [x] T7-11: [T3-L3] `test/cloud/chat/api_contract_runner.dart` — 5 组 gamma API 契约（会话列表/发送幂等撤回/404 映射/sync 增量/成员操作）→ A20
 
 ### Phase 8：T4 端到端旅程层测试
 
@@ -138,4 +138,4 @@
 - [ ] assistant 类型会话与 PA 系统深度集成（触发：assistant 域 V2 规划启动）
 - [ ] 消息压缩 protobuf 替代 JSON（触发：消息量 > 10K/s）
 - [ ] 消息反应/表情回复（触发：产品需求）
-- [ ] 历史数据迁移脚本 members 嵌入 → ConversationMember（触发：首次实现无需迁移，仅预留）
+- [ ] 记录数据迁移脚本 members 嵌入 → ConversationMember（触发：首次实现无需迁移，仅预留）

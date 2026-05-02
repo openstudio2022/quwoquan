@@ -8,7 +8,7 @@
 本次变更需要跨 `engine/protocol/observability/specs/assets` 多模块改造，并引入“模板注册 + 19 垂类目录（18 主 + 1 兜底） + 结构化 run 响应”统一架构。核心约束：
 - 2 个总控模板（总规划/最终汇总）与 19 垂类模板必须可动态替换；
 - 模板版本必须支持灰度；
-- 历史规格目录需清理为统一入口；
+- 记录规格目录需清理为统一入口；
 - 对外 run 响应新增结构化字段需兼容旧消费者。
 
 ## Goals / Non-Goals
@@ -17,7 +17,7 @@
 - 实现 2 个总控模板 + 19 垂类模板（18 主 + 1 兜底）的模板驱动运行时，不在业务代码中写死提示词。
 - 建立 19 垂类统一输入输出契约与前后置条件（Precondition/Postcondition）。
 - 在 run 响应中输出结构化对象（context/domain/synthesis/fill tasks），支持前端直接渲染补齐任务卡片。
-- 将规格统一到 `openspec/specs/personal-assistant/spec.md`，历史两个目录仅保留迁移说明。
+- 将规格统一到 `openspec/specs/personal-assistant/spec.md`，记录两个目录仅保留迁移说明。
 - 模板版本支持灰度选择与回滚。
 
 **Non-Goals:**
@@ -47,8 +47,8 @@
 - **Why**: 满足“上下文不足先补齐、汇总不足回流补齐”的可审计闭环。
 - **Alternative considered**: 仅依赖模型隐式判断；被拒绝，难以验证与定位问题。
 
-### Decision 5: 规格统一，历史规格目录最小化
-- **Choice**: `personal-assistant` 作为唯一主规格；两个历史目录仅保留迁移说明文件。
+### Decision 5: 规格统一，记录规格目录最小化
+- **Choice**: `personal-assistant` 作为唯一主规格；两个记录目录仅保留迁移说明文件。
 - **Why**: 消除规范分叉，降低长期维护成本。
 - **Alternative considered**: 双规格长期并行；被拒绝，冲突与重复维护风险高。
 
@@ -67,7 +67,7 @@
 3. 在 `AgentLoop` 接入模板驱动上下文组装、双门禁检查、gap fill 回流。  
 4. 逐域接入 19 垂类契约与模板，先以 fallback 模板跑通，再替换域专用模板。  
 5. 更新 observability：记录 templateId/version、结构化阶段字段。  
-6. 规格迁移：统一写入 `personal-assistant/spec.md`，历史两规格改为合并说明。  
+6. 规格迁移：统一写入 `personal-assistant/spec.md`，记录两规格改为合并说明。  
 7. 灰度发布：先内部，再小流量，监控准确率/覆盖率/冲突率/P95/成本，异常则回滚模板版本。  
 
 Rollback:

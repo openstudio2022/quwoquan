@@ -38,7 +38,7 @@ slices:
     done_when:
       - "`verify-metadata / codegen / codegen-app` 通过"
       - `activePersonaContextProvider`、cloud client 与 assistant session adapter 对齐同一 contract
-      - legacy persona adapter 只保留为兼容层
+      - current persona adapter 只保留为兼容层
     status: implemented
 
   - id: P3

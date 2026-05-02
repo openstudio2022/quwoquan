@@ -1,0 +1,15 @@
+{
+  "skillId": "travel_transport",
+  "displayName": "交通出行助手",
+  "description": "交通路线规划、地铁公交查询、打车叫车、导航。",
+  "domainId": "travel_transport",
+  "executionTarget": "hybrid",
+  "routingHints": ["地铁", "公交", "打车", "高铁", "火车", "路线", "导航", "路况"],
+  "iconHint": "airplane",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "app_search", "deep_link"],
+    "preferredTools": ["web_search", "app_search"],
+    "maxToolCalls": 3,
+    "allowDeviceActionProposal": true
+  }
+}

@@ -23,12 +23,14 @@ abstract class PostBaseDto {
   String get identity;
   String get displayFormat;
   String get authorId;
+
   /// Canonical author profile subject key.
   /// Must be sourced from `authorProfileSubjectId` / `profileSubjectId`,
-  /// and must not silently fall back to legacy `authorId`.
+  /// and must not silently fall back to current `authorId`.
   String get authorProfileSubjectId;
   String get displayName;
   String get avatarUrl;
+
   /// 作者主页背景图 URL；null 表示未配置，UI 显示默认渐变背景。
   String? get authorBackgroundUrl;
   String get assistantUsePolicy;

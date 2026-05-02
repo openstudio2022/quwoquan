@@ -1,0 +1,221 @@
+{
+  "schemaVersion": "user.scenario-fixtures.v1",
+  "description": "用户域 alpha/beta/gamma 共享测试场景，覆盖我的主页、作者主页、persona 与关系能力。",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "user_profile_core": {
+      "description": "当前用户、作者用户、头像、昵称与统计。",
+      "profiles": [
+        {
+          "userId": "fixture_user_current",
+          "displayName": "契约当前用户",
+          "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+          "backgroundUrl": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1400",
+          "bio": "用于 alpha/beta/gamma 的当前用户主页。",
+          "stats": {
+            "followingCount": 12,
+            "followerCount": 34,
+            "postCount": 4,
+            "circleCount": 3,
+            "likeCount": 128
+          }
+        },
+        {
+          "userId": "fixture_user_photo",
+          "displayName": "契约摄影师",
+          "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
+          "backgroundUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1400",
+          "bio": "作者主页契约数据。",
+          "stats": {
+            "followingCount": 21,
+            "followerCount": 128,
+            "postCount": 16,
+            "circleCount": 2,
+            "likeCount": 512
+          }
+        },
+        {
+          "userId": "fixture_user_travel",
+          "displayName": "契约旅行家",
+          "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
+          "backgroundUrl": "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1400",
+          "bio": "旅行、天气和行程记录作者。",
+          "stats": {
+            "followingCount": 31,
+            "followerCount": 86,
+            "postCount": 9,
+            "circleCount": 2,
+            "likeCount": 266
+          }
+        },
+        {
+          "userId": "fixture_user_video",
+          "displayName": "契约剪辑师",
+          "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
+          "backgroundUrl": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1400",
+          "bio": "视频剪辑与城市影像作者。",
+          "stats": {
+            "followingCount": 18,
+            "followerCount": 73,
+            "postCount": 6,
+            "circleCount": 1,
+            "likeCount": 178
+          }
+        },
+        {
+          "userId": "fixture_user_article",
+          "displayName": "契约撰稿人",
+          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+          "backgroundUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1400",
+          "bio": "文章、攻略与长图文作者。",
+          "stats": {
+            "followingCount": 24,
+            "followerCount": 96,
+            "postCount": 8,
+            "circleCount": 2,
+            "likeCount": 320
+          }
+        },
+        {
+          "userId": "fixture_user_friend",
+          "displayName": "契约好友",
+          "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+          "backgroundUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1400",
+          "bio": "与当前用户互关的同好。",
+          "stats": {
+            "followingCount": 18,
+            "followerCount": 44,
+            "postCount": 3,
+            "circleCount": 2,
+            "likeCount": 88
+          }
+        },
+        {
+          "userId": "fixture_user_weekend_1",
+          "displayName": "契约同伴一",
+          "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
+          "backgroundUrl": "https://images.unsplash.com/photo-1562774053-701939374585?w=1400",
+          "bio": "周末群成员，也是联系人同好。",
+          "stats": {
+            "followingCount": 9,
+            "followerCount": 27,
+            "postCount": 2,
+            "circleCount": 1,
+            "likeCount": 54
+          }
+        },
+        {
+          "userId": "fixture_user_weekend_2",
+          "displayName": "契约同伴二",
+          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+          "backgroundUrl": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1400",
+          "bio": "周末群成员，提供路线建议。",
+          "stats": {
+            "followingCount": 7,
+            "followerCount": 22,
+            "postCount": 1,
+            "circleCount": 1,
+            "likeCount": 37
+          }
+        }
+      ]
+    },
+    "persona_core": {
+      "description": "当前 persona、候选 persona 与 active context。",
+      "activePersonaId": "fixture_persona_daily",
+      "personas": [
+        {
+          "personaId": "fixture_persona_daily",
+          "name": "日常我",
+          "description": "默认日常 persona"
+        },
+        {
+          "personaId": "fixture_persona_work",
+          "name": "工作我",
+          "description": "工作场景 persona"
+        }
+      ]
+    },
+    "profile_feed_core": {
+      "description": "我的作品、作者作品、生活记录与评论。",
+      "myPostIds": ["fixture_moment_001", "fixture_photo_001", "fixture_article_001", "fixture_video_001"],
+      "authorPostIds": ["fixture_photo_001", "fixture_photo_002", "fixture_article_001", "fixture_video_001"],
+      "commentIds": ["fixture_comment_photo_001"]
+    },
+    "relationship_core": {
+      "description": "关注、互关、拉黑、可聊天、可通话能力矩阵。",
+      "relationships": [
+        {
+          "sourceUserId": "fixture_user_current",
+          "targetUserId": "fixture_user_photo",
+          "following": true,
+          "mutualFollow": true,
+          "blocked": false,
+          "canChat": true,
+          "canCall": true
+        },
+        {
+          "sourceUserId": "fixture_user_current",
+          "targetUserId": "fixture_user_friend",
+          "following": true,
+          "mutualFollow": true,
+          "blocked": false,
+          "canChat": true,
+          "canCall": true
+        },
+        {
+          "sourceUserId": "fixture_user_current",
+          "targetUserId": "fixture_user_weekend_1",
+          "following": true,
+          "mutualFollow": true,
+          "blocked": false,
+          "canChat": true,
+          "canCall": true
+        }
+      ]
+    },
+    "settings_core": {
+      "description": "外观、通话设置与开发者诊断最小数据。",
+      "appearance": {
+        "themeMode": "system",
+        "fontScale": 1.0
+      },
+      "callSettings": {
+        "allowVoiceCall": true,
+        "allowVideoCall": true
+      },
+      "diagnostics": [
+        {
+          "id": "fixture_ops_event_settings",
+          "message": "契约设置诊断事件"
+        }
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "user_profile_basic",
+      "title": "用户主页与关系能力契约种子",
+      "type": "user_profile",
+      "domainId": "user",
+      "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"],
+      "uiExpectations": {
+        "userIds": ["fixture_user_current", "fixture_user_photo"],
+        "textFragments": ["契约当前用户", "契约摄影师", "日常我"]
+      },
+      "remoteExpectations": {
+        "profileUserIds": ["fixture_user_current", "fixture_user_photo"],
+        "personaIds": ["fixture_persona_daily", "fixture_persona_work"]
+      },
+      "environments": {
+        "alpha": { "enabled": true, "repository": "mock" },
+        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
+        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+      }
+    }
+  ]
+}

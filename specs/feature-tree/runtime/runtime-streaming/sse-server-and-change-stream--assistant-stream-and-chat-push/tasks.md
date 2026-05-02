@@ -9,7 +9,7 @@
 - [ ] 测试：聊天消息推送端到端测试
 - [ ] gate：集成到 make gate
 
-## Folded legacy node `backpressure-and-reconnection`
+## Folded current node `backpressure-and-reconnection`
 
 # 开发任务：backpressure-and-reconnection
 
@@ -23,4 +23,4 @@
 - [ ] gate：集成到 make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `backpressure-and-reconnection` (from `runtime/runtime-streaming/sse-server-and-change-stream/assistant-stream-and-chat-push/backpressure-and-reconnection`)
+- [ ] Migrated current node: `backpressure-and-reconnection` (from `runtime/runtime-streaming/sse-server-and-change-stream/assistant-stream-and-chat-push/backpressure-and-reconnection`)

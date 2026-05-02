@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Ensure contracts/metadata/**/service.yaml request_entity / response_entity names
-are defined in the sibling fields.yaml (entities.* or legacy top-level entity + fields).
+are defined in the sibling fields.yaml (entities.* or current top-level entity + fields).
 """
 from __future__ import annotations
 

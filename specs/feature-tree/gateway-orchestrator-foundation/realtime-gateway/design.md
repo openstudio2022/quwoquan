@@ -213,7 +213,7 @@ V1 实现 `FeishuAdapter`，其余 adapter 按需注册。
 - **多区域就近接入**：触发海外用户 > 10% DAU
 - **config-push V2**：运营配置推送完整实现（feature flag / UI 配置 / 策略热更新）
 
-## 遗留带规划任务
+## 存量带规划任务
 
 - config-push V2 实现（与 tasks.md 搁置任务对应）
 - 消息压缩从 JSON 升级到 protobuf（与性能优化迭代对应）

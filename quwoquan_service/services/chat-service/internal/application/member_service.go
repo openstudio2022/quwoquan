@@ -147,10 +147,11 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 	}
 
 	now := time.Now()
-	added := 0
+	membersToCreate := make([]*model.ConversationMember, 0, len(newUserIDs))
+	statesToCreate := make([]*model.ConversationUserState, 0, len(newUserIDs))
 	for _, userId := range newUserIDs {
 		dn, av, assetID, avatarVersion := lookup(userId)
-		member := &model.ConversationMember{
+		membersToCreate = append(membersToCreate, &model.ConversationMember{
 			ID:             generateID(),
 			ConversationId: req.ConversationId,
 			UserId:         userId,
@@ -161,39 +162,44 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 			MemberType:     "user",
 			Role:           "member",
 			InvitedBy:      req.InvitedBy,
-			JoinedAt:       now.Add(time.Duration(added) * time.Millisecond),
-		}
-		if err := s.repo.CreateMember(ctx, member); err != nil {
-			return err
-		}
-		added++
-
-		initState := &model.ConversationUserState{
+			JoinedAt:       now.Add(time.Duration(len(membersToCreate)) * time.Millisecond),
+		})
+		statesToCreate = append(statesToCreate, &model.ConversationUserState{
 			ID:             generateID(),
 			UserId:         userId,
 			ConversationId: req.ConversationId,
 			UpdatedAt:      now,
-		}
-		_ = s.repo.UpsertUserState(ctx, initState)
+		})
 	}
 
-	if added == 0 {
+	if len(membersToCreate) == 0 {
 		return nil
 	}
 
-	newCount, err := s.repo.CountMembers(ctx, req.ConversationId)
-	if err != nil {
-		return err
-	}
-	if err := s.repo.BumpMembersRosterRevision(ctx, req.ConversationId, &newCount); err != nil {
+	newCount := currentCount + len(membersToCreate)
+	if err := s.repo.RunInTransaction(ctx, func(txCtx context.Context) error {
+		for _, member := range membersToCreate {
+			if err := s.repo.CreateMember(txCtx, member); err != nil {
+				return err
+			}
+		}
+		for _, state := range statesToCreate {
+			if err := s.repo.UpsertUserState(txCtx, state); err != nil {
+				return err
+			}
+		}
+		if err := s.repo.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+			return err
+		}
+		return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
+			ConversationID: req.ConversationId,
+			ActorID:        req.InvitedBy,
+			Trigger:        "members.added",
+		})
+	}); err != nil {
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
-	_ = s.scheduler.EnqueueRecompute(ctx, GroupAvatarRecomputeTask{
-		ConversationID: req.ConversationId,
-		ActorID:        req.InvitedBy,
-		Trigger:        "members.added",
-	})
 
 	s.scheduleRosterUpdatedPublish(req.ConversationId)
 
@@ -291,24 +297,29 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 }
 
 func (s *MemberService) RemoveMember(ctx context.Context, conversationId, userId string) error {
-	if err := s.repo.DeleteMember(ctx, conversationId, userId); err != nil {
-		return err
-	}
-
-	newCount, cntErr := s.repo.CountMembers(ctx, conversationId)
-	if cntErr != nil {
-		return cntErr
-	}
-	if err := s.repo.BumpMembersRosterRevision(ctx, conversationId, &newCount); err != nil {
+	var newCount int
+	if err := s.repo.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.repo.DeleteMember(txCtx, conversationId, userId); err != nil {
+			return err
+		}
+		count, err := s.repo.CountMembers(txCtx, conversationId)
+		if err != nil {
+			return err
+		}
+		newCount = count
+		if err := s.repo.BumpMembersRosterRevision(txCtx, conversationId, &newCount); err != nil {
+			return err
+		}
+		return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
+			ConversationID: conversationId,
+			ActorID:        userId,
+			Trigger:        "member.removed",
+		})
+	}); err != nil {
 		return err
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, conversationId)
-	_ = s.scheduler.EnqueueRecompute(ctx, GroupAvatarRecomputeTask{
-		ConversationID: conversationId,
-		ActorID:        userId,
-		Trigger:        "member.removed",
-	})
 
 	go func() {
 		if err := s.publisher.PublishDomainEvent(context.Background(), event.MemberLeft, conversationId, userId, map[string]any{

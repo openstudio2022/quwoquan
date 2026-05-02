@@ -6,8 +6,8 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/runtime/repository"
 	rtrec "quwoquan_service/runtime/recommendation"
+	"quwoquan_service/runtime/repository"
 	"quwoquan_service/services/content-service/internal/domain/post/event"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
@@ -16,7 +16,6 @@ var supportedBehaviorActions = map[string]struct{}{
 	"impression": {},
 	"click":      {},
 	"dwell":      {},
-	"like":       {},
 	"favorite":   {},
 	"share":      {},
 	"dislike":    {},
@@ -24,12 +23,16 @@ var supportedBehaviorActions = map[string]struct{}{
 }
 
 type BehaviorEventInput struct {
-	UserID    string   `json:"userId"`
-	SessionID string   `json:"sessionId"`
-	ContentID string   `json:"contentId"`
-	Action    string   `json:"action"`
-	Tags      []string `json:"tags"`
-	Duration  float64  `json:"duration"`
+	UserID       string   `json:"userId"`
+	SessionID    string   `json:"sessionId"`
+	ContentID    string   `json:"contentId"`
+	PostID       string   `json:"postId"`
+	Action       string   `json:"action"`
+	Type         string   `json:"type"`
+	Tags         []string `json:"tags"`
+	Duration     float64  `json:"duration"`
+	DwellMs      float64  `json:"dwellMs"`
+	FeedPosition int      `json:"feedPosition"`
 }
 
 type BehaviorService struct {
@@ -77,17 +80,21 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 	batchUserID := ""
 	batchSessionID := ""
 	for _, eventInput := range events {
-		action := strings.TrimSpace(strings.ToLower(eventInput.Action))
+		action := normalizeBehaviorAction(eventInput)
 		if _, ok := supportedBehaviorActions[action]; !ok {
-			return rterr.NewInvalidArgument(rterr.ModuleContent, "action 不支持", "unsupported action: "+eventInput.Action)
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "action 不支持", "unsupported action: "+firstNonEmptyLocal(eventInput.Action, eventInput.Type))
 		}
 		userID := strings.TrimSpace(eventInput.UserID)
 		if userID == "" {
 			userID = "guest"
 		}
-		contentID := strings.TrimSpace(eventInput.ContentID)
+		contentID := strings.TrimSpace(firstNonEmptyLocal(eventInput.ContentID, eventInput.PostID))
 		if contentID == "" {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "contentId 必填", "missing contentId")
+		}
+		duration := eventInput.Duration
+		if duration == 0 && eventInput.DwellMs > 0 {
+			duration = eventInput.DwellMs / 1000
 		}
 		tags := eventInput.Tags
 		if len(tags) == 0 {
@@ -101,7 +108,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			ContentID: contentID,
 			Action:    action,
 			Tags:      tags,
-			Duration:  eventInput.Duration,
+			Duration:  duration,
 			Timestamp: occurredAt,
 		}
 		signals = append(signals, signal)
@@ -111,7 +118,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			"contentId": contentID,
 			"action":    action,
 			"tags":      append([]string(nil), tags...),
-			"duration":  eventInput.Duration,
+			"duration":  duration,
 			"timestamp": occurredAt.Format(time.RFC3339),
 		})
 		if batchUserID == "" {
@@ -160,6 +167,10 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		}
 	}
 	return nil
+}
+
+func normalizeBehaviorAction(input BehaviorEventInput) string {
+	return strings.TrimSpace(strings.ToLower(firstNonEmptyLocal(input.Action, input.Type)))
 }
 
 func behaviorTagsFromAny(v any) []string {

@@ -174,18 +174,18 @@ func main() {
 	writeTSModule(filepath.Join(outDir, "portalMenu.generated.ts"), "portalMenu", menu)
 
 	indexExports := []string{
-		"export * from './portalShell.generated';",
-		"export * from './portalMenu.generated';",
+		"export * from './portalShell.generated.js';",
+		"export * from './portalMenu.generated.js';",
 	}
 	if fileExists(filepath.Join(controlPlaneRoot, "domain_onboarding_schema.yaml")) {
 		schema := readYAML[map[string]any](filepath.Join(controlPlaneRoot, "domain_onboarding_schema.yaml"))
 		writeTSModule(filepath.Join(outDir, "domainOnboardingSchema.generated.ts"), "domainOnboardingSchema", schema)
-		indexExports = append(indexExports, "export * from './domainOnboardingSchema.generated';")
+		indexExports = append(indexExports, "export * from './domainOnboardingSchema.generated.js';")
 	}
 	if fileExists(filepath.Join(controlPlaneRoot, "domains")) {
 		domains := readOnboardingDomains(filepath.Join(controlPlaneRoot, "domains"))
 		writeTSModule(filepath.Join(outDir, "domainOnboardingDomains.generated.ts"), "domainOnboardingDomains", domains)
-		indexExports = append(indexExports, "export * from './domainOnboardingDomains.generated';")
+		indexExports = append(indexExports, "export * from './domainOnboardingDomains.generated.js';")
 	}
 
 	for _, domain := range []string{"product", "platform"} {
@@ -197,25 +197,25 @@ func main() {
 		if fileExists(filepath.Join(baseDir, "control_plane.yaml")) {
 			data := readYAML[controlPlaneFile](filepath.Join(baseDir, "control_plane.yaml"))
 			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sControlPlane.generated.ts", domain)), domain+"ControlPlane", data)
-			indexExports = append(indexExports, fmt.Sprintf("export * from './%sControlPlane.generated';", domain))
+			indexExports = append(indexExports, fmt.Sprintf("export * from './%sControlPlane.generated.js';", domain))
 		}
 
 		if fileExists(filepath.Join(baseDir, "workflow.yaml")) {
 			data := readYAML[workflowFile](filepath.Join(baseDir, "workflow.yaml"))
 			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sWorkflow.generated.ts", domain)), domain+"Workflow", data)
-			indexExports = append(indexExports, fmt.Sprintf("export * from './%sWorkflow.generated';", domain))
+			indexExports = append(indexExports, fmt.Sprintf("export * from './%sWorkflow.generated.js';", domain))
 		}
 
 		if fileExists(filepath.Join(baseDir, "audit_schema.yaml")) {
 			data := readYAML[auditSchemaFile](filepath.Join(baseDir, "audit_schema.yaml"))
 			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sAudit.generated.ts", domain)), domain+"AuditSchema", data)
-			indexExports = append(indexExports, fmt.Sprintf("export * from './%sAudit.generated';", domain))
+			indexExports = append(indexExports, fmt.Sprintf("export * from './%sAudit.generated.js';", domain))
 		}
 
 		if fileExists(filepath.Join(baseDir, "config_schema.yaml")) {
 			data := readYAML[configSchemaFile](filepath.Join(baseDir, "config_schema.yaml"))
 			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sConfig.generated.ts", domain)), domain+"ConfigSchema", data)
-			indexExports = append(indexExports, fmt.Sprintf("export * from './%sConfig.generated';", domain))
+			indexExports = append(indexExports, fmt.Sprintf("export * from './%sConfig.generated.js';", domain))
 		}
 	}
 

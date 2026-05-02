@@ -51,7 +51,7 @@
 
 - 发帖与评论默认使用 active persona。
 - 若页面允许显式选择分身，提交时必须以显式选择优先，并落库到 `personaId / profileSubjectId`。
-- 内容对象需保留不可变作者快照，避免停用后历史显示异常。
+- 内容对象需保留不可变作者快照，避免停用后记录显示异常。
 
 ### F3. chat / circle / invite 域透传
 
@@ -98,8 +98,8 @@
 | 域 | 负责 | 禁止 |
 |---|---|---|
 | `user` | 提供 active persona 真相源、切换与上下文基线 | 在 UI 外把 owner 暴露给动作链路 |
-| `content` | 消费当前 persona 做创作/评论归属与历史快照 | 自建分身主实体 |
-| `chat` | 消费当前 persona 做 sender 归属与历史快照 | 以 owner 作为默认发送主体 |
+| `content` | 消费当前 persona 做创作/评论归属与记录快照 | 自建分身主实体 |
+| `chat` | 消费当前 persona 做 sender 归属与记录快照 | 以 owner 作为默认发送主体 |
 | `circle` | 消费当前 persona 做加入/创建/圈内展示归属 | 把圈子成员关系挂到 owner |
 | `assistant` | 读取当前 persona 作为上下文 | 把提示词 persona 当成用户分身实体 |
 | `notification` | 保证打开通知时恢复正确 persona 上下文 | 忽略 persona 上下文直接进入默认用户态 |
@@ -107,7 +107,7 @@
 ## 权限边界与数据生命周期
 
 - 只有 owner 能切换 active persona；下游域只消费切换结果。
-- 下游写入对象必须保存足够的作者快照，避免 persona 停用后历史渲染丢失。
+- 下游写入对象必须保存足够的作者快照，避免 persona 停用后记录渲染丢失。
 - 下游域可以持久化 `personaId / subAccountId / profileSubjectId`，但不得反查或暴露 owner 映射。
 - 助手会话与通知回放至少要带上 active persona 上下文，不得默认落回 owner。
 

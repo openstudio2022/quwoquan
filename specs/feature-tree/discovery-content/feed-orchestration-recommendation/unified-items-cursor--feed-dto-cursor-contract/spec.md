@@ -11,7 +11,7 @@
 - A7：契约一致性校验通过。
 - A8：对应自动化测试映射完整。
 
-## Folded legacy node `cursor-compatibility-guard`
+## Folded current node `cursor-compatibility-guard`
 
 # L5 特性：cursor-compatibility-guard
 

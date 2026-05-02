@@ -1,0 +1,38 @@
+# alpha overrides (developer single-instance validation)
+service:
+  http:
+    addr: ":18081"
+
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "quwoquan_chat_local"
+
+redis:
+  realtime:
+    mode: "standalone"
+    addr: "localhost:6379"
+  general:
+    mode: "standalone"
+    addr: "localhost:6379"
+  reliable_task:
+    mode: "standalone"
+    addr: "localhost:6379"
+
+runtime:
+  media:
+    group_avatar_cdn_base_url: "http://127.0.0.1:18088"
+    group_avatar_local_media_root: "./var/chat-media"
+  sync:
+    patch_ttl_hours: 720
+  reliable_task:
+    ready_index:
+      enabled: true
+      stream: "reliabletask:chat:avatar:ready:alpha"
+      group: "chat.group_avatar_worker.alpha"
+      queue: "reliabletask.chat.avatar"
+  observability:
+    runtime_media:
+      group_avatar_recompute_duration_ms_p95: 500
+      group_avatar_fallback_ratio: 0.05
+      hint_to_pull_delay_ms_p95: 500
+      patch_fanout_failure_ratio: 0.01

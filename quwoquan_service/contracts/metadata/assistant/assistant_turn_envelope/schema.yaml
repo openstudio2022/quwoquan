@@ -1,0 +1,29 @@
+dart_class: AssistantTurnEnvelopeWire
+library_path: assistant/generated/contracts/assistant_turn_envelope.g.dart
+output_path: assistant/generated/contracts/assistant_turn_envelope.g.dart
+contract: assistant_turn_envelope
+version: assistant_turn_envelope.m2
+kind: entity_wire_contract
+imports:
+  - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart
+fields:
+  - { name: turnId, type: string, required: true }
+  - { name: conversationId, type: string, required: true }
+  - { name: turnType, type: string, default: user }
+  - { name: status, type: string, default: created }
+  - { name: skillId, type: string, default: '' }
+  - { name: domainId, type: string, default: '' }
+  - { name: input, type: map, default: {} }
+  - { name: trigger, type: map, default: {} }
+  - { name: streamState, type: object, ref: stream_state, default: {} }
+  - { name: failure, type: object, ref: RuntimeFailureWire }
+  - { name: traceId, type: string, default: '' }
+  - { name: createdAt, type: string, required: true }
+  - { name: completedAt, type: string, default: '' }
+subcontracts:
+  stream_state:
+    class_name: AssistantTurnStreamStateWire
+    fields:
+      - { name: lastSeq, type: int, default: 0 }
+      - { name: completed, type: bool, default: false }
+      - { name: resumeToken, type: string, default: '' }

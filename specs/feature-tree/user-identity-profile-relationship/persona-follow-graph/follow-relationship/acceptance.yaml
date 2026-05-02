@@ -134,5 +134,5 @@ story_readiness:
         - audit metric verification
       recorded:
         - "T1/T3: `go test ./runtime/governance ./services/user-service/tests -run 'Test(FeatureEnabled|Persona|Follow_)'`"
-        - "代码已统一使用 `ops.user.persona_graph_v1` / `ops.user.persona_context_v1`，并对 `follow_command_latency_ms / follow_duplicate_request_count / follow_block_rejection_count / follow_counter_mismatch_count / follow_legacy_edge_read_count` 增加最小触发断言；flag-off 关系读取回归已证明不会破坏既有 persona follow edge"
+        - "代码已统一使用 `ops.user.persona_graph_v1` / `ops.user.persona_context_v1`，并对 `follow_command_latency_ms / follow_duplicate_request_count / follow_block_rejection_count / follow_counter_mismatch_count / follow_current_edge_read_count` 增加最小触发断言；flag-off 关系读取回归已证明不会破坏既有 persona follow edge"
     status: implemented

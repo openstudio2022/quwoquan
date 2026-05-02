@@ -9,7 +9,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 
-const _env = String.fromEnvironment('ENV', defaultValue: 'staging');
+const _apiContractEnv = String.fromEnvironment(
+  'API_CONTRACT_ENV',
+  defaultValue: 'gamma',
+);
 
 void main() {
   patrolTest(
@@ -18,7 +21,10 @@ void main() {
     skip: !kRunPatrolT4,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 15)),
     ($) async {
-      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
+      assert(
+        _apiContractEnv == 'gamma',
+        'T4 tests must run with API_CONTRACT_ENV=gamma',
+      );
 
       // 导航到聊天页
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
@@ -51,7 +57,10 @@ void main() {
     skip: !kRunPatrolT4,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 15)),
     ($) async {
-      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
+      assert(
+        _apiContractEnv == 'gamma',
+        'T4 tests must run with API_CONTRACT_ENV=gamma',
+      );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 
@@ -74,7 +83,7 @@ void main() {
   );
 }
 
-/// Patrol 测试占位 App（实际运行时由 `integration_test/patrol_test_main.dart` 启动）
+/// Patrol 测试占位 App（实际运行时由 `test/patrol/patrol_test_main.dart` 启动）
 class _PatrolAppPlaceholder extends StatelessWidget {
   const _PatrolAppPlaceholder();
 

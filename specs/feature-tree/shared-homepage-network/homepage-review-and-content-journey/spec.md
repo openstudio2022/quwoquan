@@ -99,7 +99,7 @@
 
 ## 既有 Story 覆盖矩阵
 
-| 当前实现 / 历史能力 | 处理方式 | Journey 内新归属 |
+| 当前实现 / 记录能力 | 处理方式 | Journey 内新归属 |
 |---|---|---|
 | 内容详情页中的零散对象信息卡 | 收敛为主页总览与摘要模块 | `homepage-overview-and-module-shell` |
 | 现有内容域聚合流 | 保留内容域为来源，主页只做聚合消费 | `homepage-content-and-question-aggregation` |

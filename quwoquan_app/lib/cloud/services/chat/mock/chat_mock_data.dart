@@ -74,10 +74,6 @@ class ChatMockData {
       'status': 'active',
       'createdAt': '2026-02-01T10:00:00Z',
       'updatedAt': '2026-03-07T09:15:00Z',
-      'memberAvatars': [
-        for (int i = 2; i <= 10; i++)
-          avatarFor('user_${i.toString().padLeft(3, '0')}'),
-      ],
     },
     ..._groupAvatarTestConversations(),
     {
@@ -211,10 +207,6 @@ class ChatMockData {
       'status': 'active',
       'createdAt': '2026-01-20T10:00:00Z',
       'updatedAt': '2026-03-12T20:18:00Z',
-      'memberAvatars': [
-        for (int i = 11; i <= 18; i++)
-          avatarFor('user_${i.toString().padLeft(3, '0')}'),
-      ],
     },
     {
       '_id': 'conv_004',
@@ -242,11 +234,7 @@ class ChatMockData {
       'id': 'conv_006',
       'type': 'group',
       'title': '产品共创群',
-      'avatarUrl': '',
-      'avatarCompositeUrls': [
-        for (int i = 11; i <= 18; i++)
-          avatarFor('user_${i.toString().padLeft(3, '0')}'),
-      ],
+      'avatarUrl': avatarFor('user_011'),
       'lastMessagePreview': '今晚 8 点前把评审意见同步到文档里',
       'lastMessageType': 'text',
       'lastMessageTime': _relativeIso(daysAgo: 0, hour: 20, minute: 18),
@@ -261,7 +249,6 @@ class ChatMockData {
       'type': 'direct',
       'title': '李明',
       'avatarUrl': avatarFor('user_002'),
-      'avatarCompositeUrls': const <String>[],
       'lastMessagePreview': '好的，明天见',
       'lastMessageType': 'text',
       'lastMessageTime': _relativeIso(daysAgo: 0, hour: 8, minute: 32),
@@ -275,11 +262,7 @@ class ChatMockData {
       'id': 'conv_002',
       'type': 'group',
       'title': '周末登山群',
-      'avatarUrl': '',
-      'avatarCompositeUrls': [
-        for (int i = 2; i <= 6; i++)
-          avatarFor('user_${i.toString().padLeft(3, '0')}'),
-      ],
+      'avatarUrl': avatarFor('user_002'),
       'lastMessagePreview': '路线图已经发到群文件了',
       'lastMessageType': 'image',
       'lastMessageTime': _relativeIso(daysAgo: 1, hour: 21, minute: 10),
@@ -295,7 +278,6 @@ class ChatMockData {
       'title': '摄影爱好者圈子',
       'circleId': 'circle_001',
       'avatarUrl': avatarFor('photo'),
-      'avatarCompositeUrls': const <String>[],
       'lastMessagePreview': '分享一组新疆风景照',
       'lastMessageType': 'image',
       'lastMessageTime': _relativeIso(daysAgo: 1, hour: 11, minute: 6),
@@ -310,7 +292,6 @@ class ChatMockData {
       'type': 'direct',
       'title': '陈倩',
       'avatarUrl': avatarFor('user_005'),
-      'avatarCompositeUrls': const <String>[],
       'lastMessagePreview': '我把演示视频压缩后重新发你了',
       'lastMessageType': 'video',
       'lastMessageTime': _relativeIso(daysAgo: 2, hour: 18, minute: 40),
@@ -342,9 +323,7 @@ class ChatMockData {
         'status': 'active',
         'createdAt': '2026-03-01T10:00:00Z',
         'updatedAt': '2026-03-07T0${n < 10 ? n : 9}:00:00Z',
-        'memberAvatars': [
-          for (int i = 1; i <= n; i++) avatarFor('grid_${n}_member_$i'),
-        ],
+        'avatarUrl': avatarFor('grid_${n}_member_1'),
       });
     }
     return result;
@@ -1079,7 +1058,7 @@ class ChatMockData {
     },
   ];
 
-  /// 联系人 Tab「圈子」占位（与历史 UI prototypeCircles 对齐）。
+  /// 联系人 Tab「圈子」占位（与记录 UI prototypeCircles 对齐）。
   static List<Map<String, dynamic>> get contactTabCircles => [
     {
       'circleId': 'circle_1',
@@ -1099,7 +1078,7 @@ class ChatMockData {
     },
   ];
 
-  /// 联系人 Tab「趣群」占位（与历史 UI prototypeGroups 对齐）。
+  /// 联系人 Tab「趣群」占位（与记录 UI prototypeGroups 对齐）。
   static List<Map<String, dynamic>> get contactTabFunGroups => [
     {
       'conversationId': 'conv_group_photo',

@@ -47,7 +47,7 @@ level_acceptance:
       - profile action bar widget matrix test
       - user-service relationship capability contract test
   A4:
-    criteria: '互动流契约已统一为赞、评论、转发三类活动；我的主页支持收到/发出方向过滤，他人主页仅展示公开收到互动。互动列表的字段、类型枚举、方向枚举和空态语义可由 metadata/codegen 驱动，端侧不再硬编码 comment/favorite 等历史类型。'
+    criteria: '互动流契约已统一为赞、评论、转发三类活动；我的主页支持收到/发出方向过滤，他人主页仅展示公开收到互动。互动列表的字段、类型枚举、方向枚举和空态语义可由 metadata/codegen 驱动，端侧不再硬编码 comment/favorite 等记录类型。'
     status: pending
     linked_tasks: [T06, T07a, T15, T16, T19, T20]
     test_layers:

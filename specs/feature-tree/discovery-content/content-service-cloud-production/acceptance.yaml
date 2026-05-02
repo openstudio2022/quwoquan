@@ -24,7 +24,7 @@ focus_groups:
 level_acceptance:
   A1:
     criteria: 'content-service main.go 默认使用 MongoPostStore 持久存储； 服务重启后 Post/Comment/Reaction
-      数据不丢失； APP_ENV=local 时自动降级到 InMemory PostStore。
+      数据不丢失； APP_ENV=alpha 时自动降级到 InMemory PostStore。
 
       '
     status: implemented
@@ -152,7 +152,7 @@ level_acceptance:
     - file: quwoquan_app/lib/cloud/services/content/content_repository.dart
       note: 15 methods added to abstract + Mock + Remote implementations
   A7:
-    criteria: 'FeedItemDto 兼容层已清理；listDiscoveryFeedPageLegacy 方法已移除；所有发现页数据加载使用 PostBaseDto
+    criteria: 'FeedItemDto 兼容层已清理；listDiscoveryFeedPageCurrent 方法已移除；所有发现页数据加载使用 PostBaseDto
       子类。
 
       '
@@ -166,7 +166,7 @@ level_acceptance:
       T4: optional
     tests:
     - file: quwoquan_app/lib/cloud/services/content/content_repository.dart
-      note: listDiscoveryFeedPageLegacy removed; FeedItemDto import removed
+      note: listDiscoveryFeedPageCurrent removed; FeedItemDto import removed
   A8:
     criteria: 'content-service 具备完整 Kustomize 配置： base/（deployment + service + hpa
       + pdb）、 overlays/dev（1 副本）、overlays/integration（2 副本）、 overlays/prod（3+ 副本 +

@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `fallback-quality-guard`
+## Folded current node `fallback-quality-guard`
 
 # L5 特性：fallback-quality-guard
 

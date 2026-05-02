@@ -117,7 +117,7 @@ void main() {
       const serverRaw = <String, dynamic>{
         'postId': 'v_subject',
         'contentType': 'video',
-        'authorId': 'legacy_author',
+        'authorId': 'current_author',
         'profileSubjectId': 'persona_author',
         'authorNickname': 'Server Author',
         'authorAvatarUrl': 'https://example.com/avatar.jpg',
@@ -125,7 +125,7 @@ void main() {
         'publishedAt': '2025-06-01T00:00:00Z',
       };
       final dto = FeedItemDto.fromMap(serverRaw);
-      expect(dto.authorId, equals('legacy_author'));
+      expect(dto.authorId, equals('current_author'));
       expect(dto.authorProfileSubjectId, equals('persona_author'));
     });
   });

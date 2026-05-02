@@ -31,7 +31,18 @@ jobs:
       - name: 安装 Python 依赖 (rec-model-service)
         run: pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -42,14 +53,88 @@ jobs:
       - name: Deploy kustomization build (G5a 构建验证)
         run: make deploy-integration CLOUD_PROVIDER=${{ env.CLOUD_PROVIDER }} | tail -5
 
+  # main / v*-rc* tag：助手端 runtime 环境冒烟（alpha=mock，gamma=remote+网关；与业务 alpha/gamma 命名对齐）
+  app-assistant-runtime-alpha:
+    name: Pre-release — Assistant runtime smoke (alpha)
+    needs: [gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'))
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: cd quwoquan_app && flutter pub get
+      - name: Assistant alpha smoke (contract-seeded mock)
+        working-directory: quwoquan_app
+        run: |
+          flutter test test/common/assistant/assistant_environment_smoke_test.dart \
+            --dart-define=APP_RUNTIME_ENV=alpha \
+            --dart-define=APP_DATA_SOURCE=mock
+
+  app-assistant-runtime-gamma:
+    name: Pre-release — Assistant runtime smoke (gamma)
+    needs: [gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'))
+    env:
+      GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: cd quwoquan_app && flutter pub get
+      - name: Assistant gamma smoke (remote；网关同集成环境)
+        working-directory: quwoquan_app
+        run: |
+          if [ -z "${GAMMA_BASE_URL:-}" ]; then
+            echo "::error::缺少 repository secret GAMMA_BASE_URL，无法执行 gamma 端云冒烟（需配置 gamma 网关基址）"
+            exit 1
+          fi
+          flutter test test/common/assistant/assistant_environment_smoke_test.dart \
+            --dart-define=APP_RUNTIME_ENV=gamma \
+            --dart-define=APP_DATA_SOURCE=remote \
+            --dart-define=CLOUD_GATEWAY_BASE_URL="${GAMMA_BASE_URL}"
+
   deploy-integration:
     name: G5a Deploy to integration
     needs: [gate]
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'))
     env:
-      INTEGRATION_KUBECONFIG: ${{ secrets.INTEGRATION_KUBECONFIG }}
+      GAMMA_KUBECONFIG: ${{ secrets.GAMMA_KUBECONFIG }}
     steps:
       - uses: actions/checkout@v4
       - uses: syntaqx/setup-kustomize@v1
@@ -59,12 +144,12 @@ jobs:
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
       - name: Deploy to integration (kubectl apply)
         run: |
-          if [ -z "$INTEGRATION_KUBECONFIG" ]; then
-            echo "::warning::INTEGRATION_KUBECONFIG not set — skipping apply (configure secret for end-to-end)"
+          if [ -z "$GAMMA_KUBECONFIG" ]; then
+            echo "::warning::GAMMA_KUBECONFIG not set — skipping apply (configure secret for end-to-end)"
             exit 0
           fi
           mkdir -p ~/.kube
-          echo "$INTEGRATION_KUBECONFIG" | base64 -d > ~/.kube/config
+          echo "$GAMMA_KUBECONFIG" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
           kustomize build deploy/kustomization/${{ env.CLOUD_PROVIDER }}-integration | kubectl apply -f - --server-side
           touch .deploy-applied
@@ -81,15 +166,27 @@ jobs:
     needs: [gate, deploy-integration]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'))
     env:
-      STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
-      STAGING_PRODUCT_OPS_BASE_URL: ${{ secrets.STAGING_PRODUCT_OPS_BASE_URL }}
-      TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
+      API_CONTRACT_ENV: gamma
+      GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
+      GAMMA_PRODUCT_OPS_BASE_URL: ${{ secrets.GAMMA_PRODUCT_OPS_BASE_URL }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -99,83 +196,156 @@ jobs:
         run: make test-api-contract
 
   l4-android:
-    name: Pre-release Gate — L4 Android (FTL)
+    name: Pre-release Gate — L4 Android (GitHub hosted emulator)
     needs: [gate, deploy-integration]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    if: ${{ github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
+    timeout-minutes: 45
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')) }}
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
       - run: cd quwoquan_app && flutter pub get
-      - run: dart pub global activate patrol_cli
-      - name: Build Android
-        working-directory: quwoquan_app
+      - name: Install Patrol CLI
+        run: |
+          dart pub global activate patrol_cli
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+      - name: Enable Android emulator KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android gamma Patrol on GitHub hosted emulator
+        uses: reactivecircus/android-emulator-runner@v2
         env:
-          STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
-          TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
-        run: |
-          patrol build android \
-            --dart-define=ENV=staging \
-            --dart-define=STAGING_BASE_URL="$STAGING_BASE_URL" \
-            --dart-define=TEST_AUTH_TOKEN="$TEST_AUTH_TOKEN"
-      - uses: google-github-actions/auth@v2
+          API_CONTRACT_ENV: gamma
+          GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
+          GAMMA_PRODUCT_OPS_BASE_URL: ${{ secrets.GAMMA_PRODUCT_OPS_BASE_URL }}
+          GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
         with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - name: Firebase Test Lab (Android)
-        run: |
-          gcloud firebase test android run \
-            --type instrumentation \
-            --app quwoquan_app/build/app/outputs/flutter-apk/app-debug.apk \
-            --test quwoquan_app/build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
-            --device model=oriole,version=33,locale=zh_CN,orientation=portrait \
-            --timeout 10m \
-            --results-bucket=gs://${{ secrets.FTL_RESULTS_BUCKET }} \
-            --results-dir=patrol-android-${{ github.run_id }} \
-            --no-record-video
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          script: |
+            if [ -z "${GAMMA_BASE_URL:-}" ] || [ -z "${GAMMA_PRODUCT_OPS_BASE_URL:-}" ] || [ -z "${GAMMA_TEST_AUTH_TOKEN:-}" ]; then
+              echo "::error::缺少 GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN，无法执行 Android gamma Patrol"
+              exit 1
+            fi
+            cd quwoquan_app
+            patrol test -t test/patrol/discovery/feed_load_test.dart \
+              -d emulator-5554 \
+              --dart-define=RUN_T4_PATROL=true \
+              --dart-define=APP_RUNTIME_ENV=gamma \
+              --dart-define=APP_DATA_SOURCE=remote \
+              --dart-define=API_CONTRACT_ENV="$API_CONTRACT_ENV" \
+              --dart-define=CLOUD_GATEWAY_BASE_URL="$GAMMA_BASE_URL" \
+              --dart-define=API_CONTRACT_BASE_URL="$GAMMA_BASE_URL" \
+              --dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL="$GAMMA_PRODUCT_OPS_BASE_URL" \
+              --dart-define=TEST_AUTH_TOKEN="$GAMMA_TEST_AUTH_TOKEN"
 
   l4-ios:
-    name: Pre-release Gate — L4 iOS (FTL)
+    name: Pre-release Gate — L4 iOS (GitHub hosted simulator)
     needs: [gate, deploy-integration]
     runs-on: macos-latest
     timeout-minutes: 45
-    if: ${{ github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')) }}
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
-        run: cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
       - run: cd quwoquan_app && flutter pub get
-      - run: dart pub global activate patrol_cli
-      - name: Build iOS
+      - name: Install Patrol CLI
+        run: |
+          dart pub global activate patrol_cli
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+      - name: Boot iOS simulator
+        run: |
+          xcodebuild -version
+          xcrun simctl list > /dev/null
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/ios-devices.json"
+          IOS_DEVICE_ID="$(python3 - "$RUNNER_TEMP/ios-devices.json" <<'PY'
+          import json
+          import re
+          import sys
+
+          data = json.load(open(sys.argv[1], encoding="utf-8")).get("devices", {})
+          devices = []
+          for runtime, runtime_devices in data.items():
+              match = re.search(r"iOS-(\d+(?:-\d+)*)$", runtime)
+              if not match:
+                  continue
+              version = tuple(int(part) for part in match.group(1).split("-"))
+              for index, device in enumerate(runtime_devices):
+                  if not device.get("isAvailable") or not device.get("udid"):
+                      continue
+                  name = device.get("name", "")
+                  prefer_phone = 1 if name.startswith("iPhone") else 0
+                  prefer_current = 1 if name in {"iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"} else 0
+                  devices.append((version, prefer_current, prefer_phone, -index, device["udid"]))
+          if not devices:
+              raise SystemExit("no available iOS simulator")
+          devices.sort(reverse=True)
+          print(devices[0][-1])
+          PY
+          )"
+          xcrun simctl boot "$IOS_DEVICE_ID" || true
+          xcrun simctl bootstatus "$IOS_DEVICE_ID" -b
+          echo "IOS_DEVICE_ID=$IOS_DEVICE_ID" >> "$GITHUB_ENV"
+          flutter devices
+      - name: iOS gamma Patrol on GitHub hosted simulator
         working-directory: quwoquan_app
         env:
-          STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
-          TEST_AUTH_TOKEN: ${{ secrets.STAGING_TEST_AUTH_TOKEN }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          API_CONTRACT_ENV: gamma
+          GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
+          GAMMA_PRODUCT_OPS_BASE_URL: ${{ secrets.GAMMA_PRODUCT_OPS_BASE_URL }}
+          GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
         run: |
-          patrol build ios \
-            --dart-define=ENV=staging \
-            --dart-define=STAGING_BASE_URL="$STAGING_BASE_URL" \
-            --dart-define=TEST_AUTH_TOKEN="$TEST_AUTH_TOKEN"
-      - uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - name: Firebase Test Lab (iOS)
-        run: |
-          gcloud firebase test ios run \
-            --test quwoquan_app/build/ios_integ/Runner_iphoneos.app \
-            --device model=iphone15,version=17,locale=zh_CN,orientation=portrait \
-            --timeout 10m \
-            --results-bucket=gs://${{ secrets.FTL_RESULTS_BUCKET }} \
-            --results-dir=patrol-ios-${{ github.run_id }}
+          if [ -z "${GAMMA_BASE_URL:-}" ] || [ -z "${GAMMA_PRODUCT_OPS_BASE_URL:-}" ] || [ -z "${GAMMA_TEST_AUTH_TOKEN:-}" ]; then
+            echo "::error::缺少 GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN，无法执行 iOS gamma Patrol"
+            exit 1
+          fi
+          patrol test -t test/patrol/discovery/feed_load_test.dart \
+            -d "$IOS_DEVICE_ID" \
+            --dart-define=RUN_T4_PATROL=true \
+            --dart-define=APP_RUNTIME_ENV=gamma \
+            --dart-define=APP_DATA_SOURCE=remote \
+            --dart-define=API_CONTRACT_ENV="$API_CONTRACT_ENV" \
+            --dart-define=CLOUD_GATEWAY_BASE_URL="$GAMMA_BASE_URL" \
+            --dart-define=API_CONTRACT_BASE_URL="$GAMMA_BASE_URL" \
+            --dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL="$GAMMA_PRODUCT_OPS_BASE_URL" \
+            --dart-define=TEST_AUTH_TOKEN="$GAMMA_TEST_AUTH_TOKEN"

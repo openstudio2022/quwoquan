@@ -45,14 +45,12 @@ class SlotValueCodec {
   /// Map 或 JSON 对象；否则 `null`。
   static Map<String, dynamic>? asStringKeyedMap(Object? value) {
     if (value is Map) {
-      return value.map(
-        (k, v) => MapEntry(k.toString(), v),
-      );
+      return value.map((k, v) => MapEntry(k.toString(), v));
     }
     return null;
   }
 
-  /// 槽位合并/可用性判断用的单一字符串视图（与 [ConversationStateKernel] 历史行为一致）。
+  /// 槽位合并/可用性判断用的单一字符串视图（与 [ConversationStateKernel] 记录行为一致）。
   static String displayForSlotMerge(Object? value) =>
       asTrimmedString(value) ?? (value?.toString().trim() ?? '');
 }

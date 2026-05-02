@@ -14,7 +14,7 @@
 | 默认选中 | 全量默认选中 | 排除 `car/humanity/sports` | 满足产品默认策略 |
 | 排序能力 | 仅增删 | 增删 + 拖拽重排 | 对齐微博频道管理心智 |
 | 状态存储 | 仅内存 | `SharedPreferences` 本地持久化 | 重启后保持用户偏好 |
-| 主题色 | 跟随历史动作色 | 蓝色主色（`AppColors.primaryColor`） | 明确避免橘色偏差 |
+| 主题色 | 跟随记录动作色 | 蓝色主色（`AppColors.primaryColor`） | 明确避免橘色偏差 |
 
 ## 状态模型
 
@@ -35,7 +35,7 @@
 - 存储键：`circles.selected_channels.v1`
 - 存储内容：`StringList(selectedChannelIds)`
 - 恢复时做纠偏：
-  - 过滤不存在于当前 `allChannelIds` 的历史 id
+  - 过滤不存在于当前 `allChannelIds` 的记录 id
   - 将新增频道追加到末尾
   - 若为空则回落到默认策略（排除 `car/humanity/sports`）
 

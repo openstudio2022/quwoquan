@@ -8,7 +8,7 @@ This audit freezes the first migration target for the Runtime Failure framework.
 
 | Area | Current entrypoint | Current issue | Migration target |
 | --- | --- | --- | --- |
-| Assistant run response | `quwoquan_app/lib/assistant/protocol/run_response.dart` | `degraded` and `errorCode` are top-level legacy control fields. | Keep only as transitional view; primary state moves to `AssistantBoundaryOutcome`. |
+| Assistant run response | `quwoquan_app/lib/assistant/protocol/run_response.dart` | `degraded` and `errorCode` are top-level current control fields. | Keep only as transitional view; primary state moves to `AssistantBoundaryOutcome`. |
 | Assistant pipeline | `quwoquan_app/lib/assistant/orchestration/pipelines/assistant_pipeline_engine.dart` | Pipeline catches failures and emits scattered degraded/trace state. | Map boundary exits to `RuntimeFailureBase` and aggregate with `AssistantBoundaryOutcome`. |
 | Assistant stream/UI | `quwoquan_app/lib/ui/assistant/providers/assistant_conversation_controller.dart` | Stream failure paths collapse to empty assistant messages without a typed failure state. | Surface `AssistantBoundaryOutcome` to projection/UI. |
 | Assistant tool schema | `quwoquan_app/lib/assistant/tool/schema/tool_schema.dart` | Tool errors are local and can carry fallback copy semantics. | Tool boundary returns task status plus `RuntimeFailureBase`. |
@@ -18,9 +18,9 @@ This audit freezes the first migration target for the Runtime Failure framework.
 | Cloud IO logs | `quwoquan_service/runtime/observability/io_access_log.go` | Logs `errorCode` but not runtime failure `location/context`. | Add runtime failure fields in a later cloud migration. |
 | Ops portal | `apps/ops-portal` | No shared runtime error model yet. | Consume generated TypeScript runtime error types. |
 
-## Legacy Fields
+## Current Fields
 
-The following fields are legacy for control-flow purposes:
+The following fields are current for control-flow purposes:
 
 - `recovery policy`: recovery policy output, not a public error fact.
 - `details`: replaced by string-only `context.attributes`.

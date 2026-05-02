@@ -20,7 +20,7 @@ tabs:
     desc: 发现同款生活方式，开启座驾新旅程
   - id: humanity
     label: 人文
-    subCategories: [艺术, 影像, 文学, 历史, 设计]
+    subCategories: [艺术, 影像, 文学, 记录, 设计]
     desc: 探讨人类文明的极致美学
   - id: life
     label: 生活

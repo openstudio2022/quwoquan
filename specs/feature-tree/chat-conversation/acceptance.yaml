@@ -321,7 +321,7 @@ level_acceptance:
     tests:
     - services/chat-service/tests/conversation_settings_contract_test.go
   A20:
-    criteria: '端侧 staging HTTP 契约 — 17 个 API 端点在 staging 环境下： 协议层（HTTP status + Content-Type）正确
+    criteria: '端侧 gamma HTTP 契约 — 17 个 API 端点在 gamma 环境下： 协议层（HTTP status + Content-Type）正确
       + 结构层（响应 JSON 全字段可解析为 DTO）+ 语义层（错误码枚举映射 + recoveryAction + cursor 分页无重叠）。 SLO：会话列表
       p95 <800ms、消息列表 p95 <500ms。
 
@@ -431,11 +431,11 @@ execution:
     cd quwoquan_service && go test ./services/chat-service/... -v -count=1
 
     '
-  full_gate: '# local_gate + T3-L3 (staging HTTP)
+  full_gate: '# local_gate + T3-L3 (gamma HTTP)
 
     make gate-full
 
-    # STAGING_BASE_URL + TEST_AUTH_TOKEN required for L3
+    # GAMMA_BASE_URL + GAMMA_TEST_AUTH_TOKEN required for L3
 
     '
   patrol: '# T4 (pre-release only)

@@ -10,7 +10,7 @@
 
 - 旧 `owner/user container` 统一映射到 `User`。
 - 旧 `persona/subAccount/profileSubject` 统一映射到 `Persona`。
-- 历史 `content / message / follow` 主体字段统一收敛到 `personaId`。
+- 记录 `content / message / follow` 主体字段统一收敛到 `personaId`。
 - 公开可见标识统一收敛到 `userHandle`，来源优先级为 `username -> nickname -> personaId`。
 - `phone / email` 下沉到分身级；若目标分身为空，则默认继承主分身值。
 - `userHandle` 冲突策略：

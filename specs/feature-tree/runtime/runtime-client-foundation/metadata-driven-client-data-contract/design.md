@@ -18,9 +18,9 @@
 - **status**：  
   - `compliant`：该域列表/核心页已以 codegen DTO 为主链路。  
   - `partial`：Repository 已类型化，UI 仍部分 Map。  
-  - `legacy_map`：UI 或 Mock 仍以 Map 为主。  
+  - `current_map`：UI 或 Mock 仍以 Map 为主。  
 - **target_dto**：指向 `generated` 中已有或待补的 codegen 类名（或 `TBD`）。  
-- 清单 **允许收缩**：迁移完成后项改为 `compliant` 或可删除；**新增**遗留须登记并附原因/切片号。
+- 清单 **允许收缩**：迁移完成后项改为 `compliant` 或可删除；**新增**存量须登记并附原因/切片号。
 
 ## 4. 后续门禁（plan 中实现，非本 baseline 必交付）
 
@@ -35,7 +35,7 @@
 ## 6. 风险
 
 - 大范围改状态类型会引发 **大范围 diff**；必须按域切片、每切片 `flutter analyze` + 契约测试。  
-- 部分页面仍依赖 `DataService` 遗留 Map：须在清单中单列 **deprecate_path**，避免与 Repository 双源。
+- 部分页面仍依赖 `DataService` 存量 Map：须在清单中单列 **deprecate_path**，避免与 Repository 双源。
 
 ## 7. P2 全量收敛：`target_dto: TBD` 与 DDD 边界附录
 

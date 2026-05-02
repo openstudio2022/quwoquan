@@ -9,11 +9,14 @@ import (
 // ChatRepository defines the storage operations used by the application layer.
 // Both MongoChatStore and in-memory test doubles implement this interface.
 type ChatRepository interface {
+	RunInTransaction(ctx context.Context, fn func(context.Context) error) error
+
 	// Conversation CRUD
 	CreateConversation(ctx context.Context, conv *model.Conversation) error
 	FindConversationByID(ctx context.Context, id string) (*model.Conversation, error)
 	UpdateConversation(ctx context.Context, id string, conv *model.Conversation) error
 	ListConversationsByUser(ctx context.Context, userId string, limit int, cursor string) ([]model.Conversation, error)
+	ListGroupConversationsNeedingAvatar(ctx context.Context, limit int) ([]model.Conversation, error)
 
 	// Message CRUD
 	CreateMessage(ctx context.Context, msg *model.Message) error

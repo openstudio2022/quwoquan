@@ -184,6 +184,7 @@ class RemoteXxxRepository implements XxxRepository {
 
 **禁止行为**：
 - Mock 实现禁止发 HTTP 请求
+- alpha Mock 数据必须来自 `contracts/metadata/**/test_fixtures` 与 `_shared/test_fixtures/app_alpha_seed_manifest.json`；禁止在 UI、Provider、脚本新增第二套业务列表
 - Remote 实现必须使用 `CloudRuntimeConfig.gatewayBaseUrl`，禁止硬编码 URL
 - Remote 实现必须使用 metadata/codegen 生成的 path builder、operation 常量、surface 常量；禁止硬编码 path、`pageId`、`surfaceId`、`operationId`
 - Remote 请求头必须来自统一 header builder（过渡期可兼容 `forPage(pageId)`，但 `pageId` 也必须是 codegen 常量，禁止字符串字面量）
@@ -289,13 +290,14 @@ lib/ui/content/entry/               # 创作入口，归属 content 域
 ☐ Remote 实现 URL 路径与 service.yaml routes 一致
 ☐ Remote 实现使用 CloudRuntimeConfig + CloudRequestHeaders
 ☐ Mock 实现使用本地数据，不发 HTTP
+☐ Mock 初始数据来自 contract fixture seed，beta/gamma Remote 不读取 Dart mock
 ☐ lib/core/providers/app_providers.dart 已注册 Provider
 ☐ Provider 使用 appDataSourceModeProvider 切换
 ```
 
 ### 2.6 现有代码适配路径
 
-当前已存在代码的迁移策略（历史存留，逐步重构）。**完整规划**见 `specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN.md`。
+当前已存在代码的迁移策略（记录存留，逐步重构）。**完整规划**见 `specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN.md`。
 
 | 现有文件/目录 | 目标位置 | 处理方式 |
 |-------------|---------|---------|
@@ -309,7 +311,7 @@ lib/ui/content/entry/               # 创作入口，归属 content 域
 | `cloud/runtime/generated/feed_item_dto.g.dart` | `cloud/runtime/generated/content/photo_post_dto.g.dart` 等 | 拆分为类型化 DTO，逐步替换 |
 | `cloud/services/content/content_repository.dart` | 保留，返回类型由 `FeedItemDto` 改为 `PostBaseDto` 子类 | 分类型返回，逐类迁移 |
 | `core/providers/app_providers.dart` | 保留，新增 Repository 追加注册 | 持续演进 |
-| `core/services/app_content_repository.dart` | 保留 AppDataSourceMode，逐步迁移遗留 DataService | 持续演进 |
+| `core/services/app_content_repository.dart` | 保留 AppDataSourceMode，逐步迁移存量 DataService | 持续演进 |
 
 ---
 

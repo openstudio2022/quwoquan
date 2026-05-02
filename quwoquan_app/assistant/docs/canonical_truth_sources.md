@@ -53,12 +53,12 @@
 
 ---
 
-## 五、Legacy 与兼容层（仅作兼容，不再新增依赖）
+## 五、Current 与兼容层（仅作兼容，不再新增依赖）
 
 | 资产 | 状态 | 说明 |
 |------|------|------|
-| `assistant_turn_v2/v3` | 已淘汰 | 仅允许在启动加载阶段做一次历史转换；运行时统一只处理 `assistant_turn` canonical message |
-| `trigger_keywords` | 兼容层 | runtime 已停止消费，该字段仅留给历史资产读取 |
+| `assistant_turn_v2/v3` | 已淘汰 | 仅允许在启动加载阶段做一次记录转换；运行时统一只处理 `assistant_turn` canonical message |
+| `trigger_keywords` | 兼容层 | runtime 已停止消费，该字段仅留给记录资产读取 |
 | 旧 prompt stack（非 v4 规划链） | 兼容层 | 不用于新功能 |
 | 基于 RegExp/contains 的语义分类 | 待移除 | 只保留单点兼容兜底，其余移除 |
 | `lib/personal_assistant/app/*` | 兼容层 | 仅保留桥接到 `lib/assistant/{application,runtime}/` 的 shim，不再作为新 UI / provider / gateway 入口 |

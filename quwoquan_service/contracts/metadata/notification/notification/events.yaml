@@ -7,7 +7,14 @@ events:
     producer: notification-service
     consumers: []
     channel: internal
-    payload_fields: [_id, userId, type, title, targetType, targetId]
+    payload_fields: [_id, userId, type, source, sourceId, title, targetType, targetId]
+
+  - name: AppMessageAcked
+    description: 统一应用消息已被端侧确认收到，不等价于已读
+    producer: notification-service
+    consumers: []
+    channel: internal
+    payload_fields: [_id, userId, ackedAt]
 
   - name: NotificationRead
     description: 通知已读

@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "app-seed-manifest.v1",
+  "environment": "alpha",
+  "description": "端侧 alpha 随包 fixture allowlist 与云侧单服务 alpha seed refs。",
+  "seedRefs": [
+    {
+      "domain": "assistant",
+      "fixturePath": "assistant/test_fixtures/scenarios/assistant_scenarios.json",
+      "refs": ["assistant_p0_core", "skill_management_core"],
+      "resetScope": "fixture_assistant_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/assistant/conversations", "/v1/assistant/skill-subscriptions"]
+    },
+    {
+      "domain": "content",
+      "fixturePath": "content/test_fixtures/scenarios/content_scenarios.json",
+      "refs": ["content_discovery_core", "home_feed_core", "content_detail_core", "search_core", "publish_core"],
+      "resetScope": "fixture_content_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/content/feed"]
+    },
+    {
+      "domain": "circle",
+      "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.json",
+      "refs": ["circle_core", "circle_home_feed_core", "circle_profile_core", "circle_group_chat_link_core"],
+      "resetScope": "fixture_circle_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/circles"]
+    },
+    {
+      "domain": "chat",
+      "fixturePath": "messages/chat/test_fixtures/scenarios/chat_scenarios.json",
+      "refs": ["chat_core", "chat_settings_core", "chat_contacts_core", "chat_group_flow_core"],
+      "resetScope": "fixture_chat_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/chat/inbox"]
+    },
+    {
+      "domain": "user",
+      "fixturePath": "user/test_fixtures/scenarios/user_scenarios.json",
+      "refs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"],
+      "resetScope": "fixture_user_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/user/profile"]
+    },
+    {
+      "domain": "entity",
+      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.json",
+      "refs": ["entity_homepage_core", "entity_claim_core", "entity_picker_core"],
+      "resetScope": "fixture_entity_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/entity/homepages"]
+    },
+    {
+      "domain": "integration",
+      "fixturePath": "integration/test_fixtures/scenarios/integration_scenarios.json",
+      "refs": ["location_poi_core"],
+      "resetScope": "fixture_integration_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/integration/locations/pois"]
+    },
+    {
+      "domain": "notification",
+      "fixturePath": "notification/test_fixtures/scenarios/notification_scenarios.json",
+      "refs": ["notification_core"],
+      "resetScope": "fixture_notification_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/app-messages"]
+    },
+    {
+      "domain": "rtc",
+      "fixturePath": "rtc/test_fixtures/scenarios/rtc_scenarios.json",
+      "refs": ["rtc_core"],
+      "resetScope": "fixture_rtc_*",
+      "targetStore": "app_asset_or_service_test_store",
+      "verifiedEndpoints": ["/v1/rtc/calls"]
+    }
+  ],
+  "appAssets": {
+    "alphaOnlyFixtureAllowlist": [
+      "content/test_fixtures/scenarios/content_scenarios.json",
+      "social/circle/test_fixtures/scenarios/circle_scenarios.json",
+      "messages/chat/test_fixtures/scenarios/chat_scenarios.json",
+      "user/test_fixtures/scenarios/user_scenarios.json",
+      "entity/test_fixtures/scenarios/entity_scenarios.json",
+      "integration/test_fixtures/scenarios/integration_scenarios.json",
+      "notification/test_fixtures/scenarios/notification_scenarios.json",
+      "rtc/test_fixtures/scenarios/rtc_scenarios.json",
+      "assistant/test_fixtures/scenarios/assistant_scenarios.json"
+    ]
+  },
+  "gateway": {
+    "routes": []
+  }
+}

@@ -14,7 +14,7 @@
 
 实施时在本文档中补充演进方向与目标态；若当前即为目标态则注明「暂无演进项」。
 
-## Folded legacy node `propagation-completeness-check`
+## Folded current node `propagation-completeness-check`
 
 # propagation-completeness-check 设计方案
 

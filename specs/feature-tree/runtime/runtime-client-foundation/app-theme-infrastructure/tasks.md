@@ -12,7 +12,7 @@
   - 交付：shell / navigation / tab / list / sheet / dialog / button / input / chat input
   - 验收：A1 / A4 / A7
 - [ ] T4: 清理 `ScreenUtil`、百分比 `MediaQuery` 与页面级手写深浅色分支
-  - 交付：统一断点与布局语义，消除主路径上的历史适配方式
+  - 交付：统一断点与布局语义，消除主路径上的记录适配方式
   - 验收：A4 / A6
 - [ ] T5: 分域推进全量页面视觉迁移
   - 交付：discovery / content / chat / user / circle / assistant / settings / welcome / rtc
@@ -25,7 +25,7 @@
 
 | 任务 | 搁置原因 | 计划重启条件 |
 |---|---|---|
-| 全量 `ScreenUtil` 彻底移除 | 历史页面多、回归面大 | 主路径完成断点迁移后分域清理 |
+| 全量 `ScreenUtil` 彻底移除 | 记录页面多、回归面大 | 主路径完成断点迁移后分域清理 |
 | 每个业务域单独定义品牌 accent | 容易破坏全局苹果风格一致性 | 全局基线稳定后，再评估极少量域级差异 |
 | 全量 CupertinoApp 宿主切换 | 当前路由与插件兼容收益不高 | 若后续壳层重构收益显著，再单独立项 |
 

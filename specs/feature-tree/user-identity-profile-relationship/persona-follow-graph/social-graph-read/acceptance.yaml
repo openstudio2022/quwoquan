@@ -135,5 +135,5 @@ story_readiness:
         - capability telemetry verification
       recorded:
         - "T1/T3: `go test ./runtime/governance ./services/user-service/tests -run 'Test(FeatureEnabled|Persona|ListFollowing_|SearchSocialRelations_)'`"
-        - "代码已落地 `graph_list_latency_ms / graph_page_drift_count / graph_filter_mismatch_count / relationship_capability_mismatch_count / graph_legacy_edge_read_count` 与 `ops.user.persona_graph_v1`，并补齐 capability mismatch 与 graph rollback 的最小触发回归"
+        - "代码已落地 `graph_list_latency_ms / graph_page_drift_count / graph_filter_mismatch_count / relationship_capability_mismatch_count / graph_current_edge_read_count` 与 `ops.user.persona_graph_v1`，并补齐 capability mismatch 与 graph rollback 的最小触发回归"
     status: implemented

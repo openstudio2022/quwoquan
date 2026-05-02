@@ -392,8 +392,14 @@ String _homepageTypeLabel(String type) {
       return '车型';
     case 'sight':
       return '景点';
+    case 'poi':
+      return '地点';
+    case 'author':
+      return '作者';
+    case 'circle':
+      return '圈子';
     default:
-      return '主页';
+      return '共享主页';
   }
 }
 
@@ -406,7 +412,7 @@ String _homepageStatusLabel(String? status) {
     case 'published':
       return '已发布';
     default:
-      return '主页';
+      return '状态待确认';
   }
 }
 

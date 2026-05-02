@@ -257,7 +257,7 @@ Phase 4: prod 全量 100%
 6. **多图消息**：复用 `media.items[]` 字段，Gallery 气泡
 7. **视频消息**：复用 media 字段 + MediaUploadManager，视频气泡 + 播放器
 
-## 遗留带规划任务
+## 存量带规划任务
 
 - 语音消息转发：需设计转发链路和权限（重启条件：社交功能迭代时）
 - 群聊语音消息推送优化：大群 fanout 性能（重启条件：realtime-gateway 就绪后）

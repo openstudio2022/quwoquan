@@ -219,7 +219,7 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 		))
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&sort=recommend&limit=4", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=4", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 	if rec1.Code != http.StatusOK {
@@ -250,7 +250,7 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?type=photo&sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		"/v1/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	rec2 := httptest.NewRecorder()
@@ -286,7 +286,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 		))
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&sort=recommend&limit=4", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?sort=recommend&limit=4", nil)
 	req1.Header.Set("X-Client-User-Id", "user_fw_01")
 	req1.Header.Set("X-Client-Session-Id", "session_fw_01")
 	rec1 := httptest.NewRecorder()
@@ -307,7 +307,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?type=photo&sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		"/v1/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	req2.Header.Set("X-Client-User-Id", "user_fw_01")
@@ -341,13 +341,13 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 	behaviorReq.Header.Set("X-Client-Session-Id", "session_fw_01")
 	behaviorRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(behaviorRec, behaviorReq)
-	if behaviorRec.Code != http.StatusOK {
-		t.Fatalf("behavior expected 200, got %d: %s", behaviorRec.Code, behaviorRec.Body.String())
+	if behaviorRec.Code != http.StatusNoContent {
+		t.Fatalf("behavior expected 204, got %d: %s", behaviorRec.Code, behaviorRec.Body.String())
 	}
 
 	req2After := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?type=photo&sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
+		"/v1/content/feed?sort=recommend&limit=4&cursor="+url.QueryEscape(page1.NextCursor),
 		nil,
 	)
 	req2After.Header.Set("X-Client-User-Id", "user_fw_01")

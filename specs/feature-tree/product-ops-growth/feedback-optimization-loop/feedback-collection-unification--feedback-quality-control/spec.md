@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `noisy-feedback-filter`
+## Folded current node `noisy-feedback-filter`
 
 # L5 特性：noisy-feedback-filter
 

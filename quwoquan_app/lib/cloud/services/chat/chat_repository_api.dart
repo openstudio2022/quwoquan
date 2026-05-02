@@ -54,7 +54,7 @@ abstract class ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   });
 
-  /// 历史 wire 形态会话列表；新实现应优先 [listInbox]。
+  /// 记录 wire 形态会话列表；新实现应优先 [listInbox]。
   Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,

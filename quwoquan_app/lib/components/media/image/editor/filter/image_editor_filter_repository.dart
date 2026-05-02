@@ -11,7 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ImageEditorFilterRepository {
   static const String _assetPath = 'assets/filters/filter_presets.json';
   static const String _cacheFileName = 'filter_presets_cache.json';
-  static const String _recentPresetIdsKey = 'image_editor_recent_filter_preset_ids';
+  static const String _recentPresetIdsKey =
+      'image_editor_recent_filter_preset_ids';
   static const String _usageCountMapKey = 'image_editor_filter_usage_count_map';
   static const int recentPresetMaxCount = 8;
   static const int _presetTargetCount = 220;
@@ -40,11 +41,15 @@ class ImageEditorFilterRepository {
     required int targetCount,
   }) {
     if (config.presets.length >= targetCount) return config;
-    final source = config.presets.where((entry) => entry.enabled).toList(growable: false);
+    final source = config.presets
+        .where((entry) => entry.enabled)
+        .toList(growable: false);
     if (source.isEmpty) return config;
     final byCategory = <String, List<ImageEditorFilterPreset>>{};
     for (final preset in source) {
-      byCategory.putIfAbsent(preset.categoryId, () => <ImageEditorFilterPreset>[]).add(preset);
+      byCategory
+          .putIfAbsent(preset.categoryId, () => <ImageEditorFilterPreset>[])
+          .add(preset);
     }
     for (final list in byCategory.values) {
       list.sort((a, b) => a.sort.compareTo(b.sort));
@@ -119,7 +124,8 @@ class ImageEditorFilterRepository {
     var variantCursor = 0;
     var sourceCursor = 0;
 
-    while (source.length + generated.length < targetCount && categoryIds.isNotEmpty) {
+    while (source.length + generated.length < targetCount &&
+        categoryIds.isNotEmpty) {
       final categoryId = categoryIds[categoryCursor % categoryIds.length];
       final categoryPresets = byCategory[categoryId]!;
       if (categoryPresets.isEmpty) {
@@ -137,7 +143,9 @@ class ImageEditorFilterRepository {
           name: '${base.name}${variant.suffix}',
           sort: nextSort,
           enabled: true,
-          defaultStrength: (base.defaultStrength + variant.strengthDelta).clamp(40, 100).toDouble(),
+          defaultStrength: (base.defaultStrength + variant.strengthDelta)
+              .clamp(40, 100)
+              .toDouble(),
           params: _applyVariant(base.params, variant.scales),
         ),
       );
@@ -167,13 +175,18 @@ class ImageEditorFilterRepository {
     final result = <String, double>{};
     for (final entry in source.entries) {
       final factor = scales[entry.key] ?? 1.0;
-      result[entry.key] = (entry.value * factor).clamp(-100.0, 100.0).toDouble();
+      result[entry.key] = (entry.value * factor)
+          .clamp(-100.0, 100.0)
+          .toDouble();
     }
     // 若某些关键参数不存在，按变体风格轻量补齐。
     for (final entry in scales.entries) {
       result.putIfAbsent(
         entry.key,
-        () => (math.max(-100.0, math.min(100.0, (entry.value - 1.0) * 26))).toDouble(),
+        () => (math.max(
+          -100.0,
+          math.min(100.0, (entry.value - 1.0) * 26),
+        )).toDouble(),
       );
     }
     return result;
@@ -187,7 +200,9 @@ class ImageEditorFilterRepository {
   Future<List<String>> loadRecentPresetIds() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getStringList(_recentPresetIdsKey) ?? const <String>[];
-    return raw.where((entry) => entry.trim().isNotEmpty).toList(growable: false);
+    return raw
+        .where((entry) => entry.trim().isNotEmpty)
+        .toList(growable: false);
   }
 
   Future<void> saveRecentPresetUse(String presetId) async {
@@ -228,7 +243,7 @@ class ImageEditorFilterRepository {
     await incrementUsageCount(presetId);
   }
 
-  /// 遗留位点：预留后续云端更新检查入口（本次不实现网络请求）。
+  /// 存量位点：预留后续云端更新检查入口（本次不实现网络请求）。
   Future<void> scheduleUpdateCheckPlaceholder() async {
     // Intentionally no-op for current milestone.
   }

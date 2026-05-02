@@ -24,8 +24,8 @@ global_acceptance:
   - 治理策略可配置
   A4_observability:
   - 日志统一包含 logType/level/sourceDomain/sourceService/component/target/action
-  - 关键链路包含 correlationId/traceId/spanId/requestId，可跨端云Python串联
-  - 保留 legacyLogType 兼容历史查询
+  - 关键链路包含 sessionId/pageVisitId/traceId/requestId，可跨端云串联
+  - 查询层兼容记录 currentLogType，新写入链路不再写入 currentLogType
   A5_product_ops:
   - 可输出运营归因字段
   A6_security_privacy:

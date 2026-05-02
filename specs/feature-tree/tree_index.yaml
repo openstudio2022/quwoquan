@@ -1743,6 +1743,15 @@ features:
               domain: ""
               status: completed
               tags: []
+            - id: local-gamma-mirror
+              name: local-gamma-mirror
+              level: L3_story
+              path: runtime/deliver-deploy-prod-pipeline/local-gamma-mirror
+              domain: ""
+              status: completed
+              tags:
+                - deploy
+                - local-gamma
             - id: multi-environment-wave-deployment
               name: multi-environment-wave-deployment
               level: L3_story
@@ -2264,6 +2273,13 @@ features:
               path: runtime/runtime-messaging/envelope-schema-idempotency--producer-consumer-retry-dlq
               domain: ""
               status: specified
+              tags: []
+            - id: reliable-async-task-channel
+              name: reliable-async-task-channel
+              level: L3_story
+              path: runtime/runtime-messaging/reliable-async-task-channel
+              domain: ""
+              status: in_progress
               tags: []
         - id: runtime-observability
           name: runtime-observability

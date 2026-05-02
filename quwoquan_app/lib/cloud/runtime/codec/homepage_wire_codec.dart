@@ -4,7 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 abstract final class HomepageWireCodec {
   HomepageWireCodec._();
 
-  /// 非 Map 或 null 时返回空 Map（与历史 `_homepageWireMap` 一致）。
+  /// 非 Map 或 null 时返回空 Map（与记录 `_homepageWireMap` 一致）。
   static CloudJsonMap stringKeyMapOrEmpty(Object? value) {
     if (value is! Map) {
       return const <String, dynamic>{};
@@ -13,10 +13,7 @@ abstract final class HomepageWireCodec {
   }
 
   /// 非 List 或 null 时返回不可变空列表；元素非 Map 则跳过。
-  static List<T> mapList<T>(
-    Object? raw,
-    T Function(CloudJsonMap m) build,
-  ) {
+  static List<T> mapList<T>(Object? raw, T Function(CloudJsonMap m) build) {
     if (raw is! List) {
       return List<T>.empty(growable: false);
     }

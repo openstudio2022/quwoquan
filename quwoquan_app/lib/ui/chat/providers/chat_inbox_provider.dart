@@ -40,7 +40,7 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
   @override
   ChatInboxListState build() {
     ref.watch(chatRepositoryProvider);
-    ref.listen(activePersonaContextProvider, (_, __) {
+    ref.listen(activePersonaContextProvider, (_, _) {
       _loaded = false;
       Future<void>.microtask(() {
         if (ref.mounted) {

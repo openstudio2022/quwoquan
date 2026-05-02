@@ -72,4 +72,4 @@
 | `specs/feature-tree/tree_index.yaml` | 特性树结构索引唯一真相源 |
 | `specs/feature-tree/<l1>/<l2>/` | Journey / Scenario 节点四件套（`spec/design/plan/acceptance`） |
 | `specs/changelog/CR-*.yaml` | 增量变更台账与 revision 真相源 |
-| `changes/README.md` | 历史变更体系，迁移期仅供参考 |
+| `changes/README.md` | 记录变更体系，迁移期仅供参考 |

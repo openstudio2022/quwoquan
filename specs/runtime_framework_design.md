@@ -698,7 +698,7 @@ PageContext(circle, Circle + Posts + Members)
 PageContext(search, SearchQuery + Results)
         │
         └─→ 上下文增强搜索
-             ├─ 从当前 PageContext 历史中提取最近浏览内容
+             ├─ 从当前 PageContext 记录中提取最近浏览内容
              ├─ 搜索词 + 最近内容上下文 → 搜索意图推断
              ├─ 推荐搜索补全（如 浏览游记 + 搜「酒店」→「[目的地]酒店推荐」）
              └─ 自然语言搜索转换（「帮我找类似内容」→ 向量相似搜索）
@@ -734,7 +734,7 @@ type AssistantContext struct {
     // 第三层：长期画像
     HolisticProfile  *UserHolisticProfile     // 五维全息画像
     // RAG 检索
-    RelevantMemories []RetrievedChunk         // 向量检索命中的历史记忆
+    RelevantMemories []RetrievedChunk         // 向量检索命中的记录记忆
     RelevantContent  []RetrievedChunk         // 向量检索命中的相关内容
 }
 ```
@@ -749,7 +749,7 @@ Prompt 组装策略：
 助手自主改进能力：
 - **实时感知**：PageContext + 推荐热路径，感知用户当前兴趣和操作上下文
 - **短期记忆**：当前 session 的对话 + 页面浏览 + 操作上下文
-- **长期记忆**：历史交互 embedding（向量存储）+ 全息画像
+- **长期记忆**：记录交互 embedding（向量存储）+ 全息画像
 - **交叉洞察**：跨域关联分析（如「最近频繁在美食圈发帖 + 聊天中提到旅行 → 可能在计划美食旅行」）
 - **反馈驱动**：scorecard 评估 → learning 归集 → 策略版本更新 → 下次 run 注入改进
 
@@ -863,7 +863,7 @@ type SkillMatch struct {
 ② 页面匹配：page_type 命中但标签不完全匹配 → 中分
 ③ 意图匹配：NLU 解析用户问询 → 匹配 Skill 描述（语义相似度）→ 按相似度打分
 ④ 权限过滤：Skill.DataClassMax > 用户未授权级别 → 过滤掉
-⑤ 排序：分数 + Skill 评分 + 用户历史使用频次 → 最终排序
+⑤ 排序：分数 + Skill 评分 + 用户记录使用频次 → 最终排序
 ```
 
 #### 3.6.4 Tool Registry 技术方案

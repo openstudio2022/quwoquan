@@ -6,29 +6,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 
-const _stagingBase = String.fromEnvironment('STAGING_PRODUCT_OPS_BASE_URL');
+const _apiContractEnv = String.fromEnvironment(
+  'API_CONTRACT_ENV',
+  defaultValue: 'gamma',
+);
+const _productOpsBase = String.fromEnvironment(
+  'API_CONTRACT_PRODUCT_OPS_BASE_URL',
+);
 
 late http.Client _client;
 
 Map<String, String> _headers(String pageId) => <String, String>{
-      ...CloudRequestHeaders.forPage(pageId),
-      'Content-Type': 'application/json',
-    };
+  ...CloudRequestHeaders.forPage(pageId),
+  'Content-Type': 'application/json',
+};
 
 void main() {
   setUpAll(() async {
-    if (_stagingBase.isEmpty) {
-      throw StateError('L3: STAGING_PRODUCT_OPS_BASE_URL not set');
+    if (_productOpsBase.isEmpty) {
+      throw StateError(
+        'L3: ${_apiContractEnv.toUpperCase()}_PRODUCT_OPS_BASE_URL not set',
+      );
     }
     try {
       final probe = await http
-          .head(Uri.parse(_stagingBase))
+          .get(Uri.parse('$_productOpsBase/healthz'))
           .timeout(const Duration(seconds: 5));
       if (probe.statusCode >= 500) {
-        throw StateError('L3: product-ops staging returned ${probe.statusCode}');
+        throw StateError(
+          'L3: product-ops $_apiContractEnv returned ${probe.statusCode}',
+        );
       }
     } catch (error) {
-      throw StateError('L3: product-ops staging unreachable ($error)');
+      throw StateError('L3: product-ops $_apiContractEnv unreachable ($error)');
     }
     _client = http.Client();
   });
@@ -39,8 +49,7 @@ void main() {
 
   group('ops_event_ingestion_end_to_end', () {
     test('POST /v1/ops/events 后 summary / drilldown 可读', () async {
-      final pageName =
-          'contract_page_${DateTime.now().millisecondsSinceEpoch}';
+      final pageName = 'contract_page_${DateTime.now().millisecondsSinceEpoch}';
       final eventId = 'evt_${DateTime.now().microsecondsSinceEpoch}';
       final body = <String, dynamic>{
         'events': <Map<String, dynamic>>[
@@ -66,7 +75,7 @@ void main() {
 
       final postResp = await _client
           .post(
-            Uri.parse('$_stagingBase/v1/ops/events'),
+            Uri.parse('$_productOpsBase/v1/ops/events'),
             headers: _headers('ops.contract.events.report'),
             body: jsonEncode(body),
           )
@@ -76,7 +85,7 @@ void main() {
       final summaryResp = await _client
           .get(
             Uri.parse(
-              '$_stagingBase/v1/ops/events/summary?source=page_access&pageName=$pageName',
+              '$_productOpsBase/v1/ops/events/summary?source=page_access&pageName=$pageName',
             ),
             headers: _headers('ops.contract.events.summary'),
           )
@@ -86,22 +95,23 @@ void main() {
       expect((summaryBody['totalCount'] as num?)?.toInt() ?? 0, greaterThan(0));
       final dimensions =
           (summaryBody['dimensions'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+          const <String, dynamic>{};
       final pageCounts =
           (dimensions['pageName'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+          const <String, dynamic>{};
       expect((pageCounts[pageName] as num?)?.toInt() ?? 0, greaterThan(0));
 
       final drilldownResp = await _client
           .get(
             Uri.parse(
-              '$_stagingBase/v1/ops/events/drilldown?pageName=$pageName&eventName=page_open&limit=5',
+              '$_productOpsBase/v1/ops/events/drilldown?pageName=$pageName&eventName=page_open&limit=5',
             ),
             headers: _headers('ops.contract.events.drilldown'),
           )
           .timeout(const Duration(seconds: 10));
       expect(drilldownResp.statusCode, 200);
-      final drilldownBody = jsonDecode(drilldownResp.body) as Map<String, dynamic>;
+      final drilldownBody =
+          jsonDecode(drilldownResp.body) as Map<String, dynamic>;
       final items = (drilldownBody['items'] as List?) ?? const <dynamic>[];
       expect(
         items.any(
@@ -126,7 +136,7 @@ void main() {
 
       final postResp = await _client
           .post(
-            Uri.parse('$_stagingBase/v1/ops/visits'),
+            Uri.parse('$_productOpsBase/v1/ops/visits'),
             headers: _headers('ops.contract.visit.record'),
             body: jsonEncode(payload),
           )
@@ -136,7 +146,7 @@ void main() {
       final statsResp = await _client
           .get(
             Uri.parse(
-              '$_stagingBase/v1/ops/visits/stats?targetType=page&targetKey=$targetKey',
+              '$_productOpsBase/v1/ops/visits/stats?targetType=page&targetKey=$targetKey',
             ),
             headers: _headers('ops.contract.visit.stats'),
           )

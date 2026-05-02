@@ -11,7 +11,7 @@ execution:
 
 scope:
   summary: >
-    冻结分身公开身份 `ProfileSubject`、owner 基线与分身覆写、可见性与停用后的历史归因规则。
+    冻结分身公开身份 `ProfileSubject`、owner 基线与分身覆写、可见性与停用后的记录归因规则。
   journey_bindings:
     - J1
     - J3
@@ -19,7 +19,7 @@ scope:
     - "`ProfileSubjectView / ProfileSubjectMutation`"
     - owner 基线、分身覆写与同步范围
     - strict isolation 与公开读取规则
-    - 停用分身后的历史归因与作者快照合同
+    - 停用分身后的记录归因与作者快照合同
   out_of_scope:
     - 主页壳层视觉与滚动
     - 分身管理台入口与列表
@@ -94,14 +94,14 @@ scenario_acceptance:
       - "`backgroundUrl / bio` 继续作为 owner 基线公开读字段返回，`profileVisibility` 继续由 `isolationLevel` 派生，不再伪装成 persona 可写字段。"
     status: implemented
   A3:
-    title: 可见性与停用后的历史归因稳定
-    scenario: 分身进入 strict isolation 或停用后，公开读取与历史对象作者渲染仍符合预期
+    title: 可见性与停用后的记录归因稳定
+    scenario: 分身进入 strict isolation 或停用后，公开读取与记录对象作者渲染仍符合预期
     journey_step: read retired or hidden persona
     done_when:
       - strict isolation 的公开读取返回不可见语义
       - 停用分身不再作为新动作主体
-      - 历史内容、评论、聊天消息与通知继续使用不可变作者快照
-      - 历史归因不被重绑到 owner 或其它分身
+      - 记录内容、评论、聊天消息与通知继续使用不可变作者快照
+      - 记录归因不被重绑到 owner 或其它分身
     edge_cases:
       - 停用分身仍有公开内容
       - 分身停用后再次激活
@@ -122,8 +122,8 @@ scenario_acceptance:
         - "T3: `go test ./services/user-service/...`"
         - "T2: `flutter test test/ui/content/post_read_projection_facade_test.dart test/cloud/chat/chat_message_snapshot_contract_test.dart`"
     notes:
-      - "`HasAttributedHistory` 已扩展为 `invite/greeting + posts/comments/messages/notifications` 四类历史来源联合判断。"
-      - "retired persona 公开页关闭，但内容/评论/聊天的历史快照读取已被契约测试覆盖。"
+      - "`HasAttributedHistory` 已扩展为 `invite/greeting + posts/comments/messages/notifications` 四类记录来源联合判断。"
+      - "retired persona 公开页关闭，但内容/评论/聊天的记录快照读取已被契约测试覆盖。"
     status: implemented
 
 story_readiness:
@@ -151,7 +151,7 @@ story_readiness:
         - "T3: `go test ./services/content-service/tests -run 'TestDiscoveryProjectionPersistsProfileSubjectID'`"
     notes:
       - "主页、内容、聊天消费入口已统一切到 `ProfileSubject` / snapshot contract，旧 `authorId` fallback 已退出主链路。"
-      - "`ops.user.profile_subject_v1` 已在 user-service 落地；flag-off 时公开读取退回 `personaId` 兼容路径，但不回退 `profileSubjectId / userHandle / 历史快照` 真相源。"
+      - "`ops.user.profile_subject_v1` 已在 user-service 落地；flag-off 时公开读取退回 `personaId` 兼容路径，但不回退 `profileSubjectId / userHandle / 记录快照` 真相源。"
       - "`profile_subject_public_read_latency_ms / profile_subject_visibility_not_found_count / retired_subject_attribution_fallback_count / profile_subject_sync_scope_submit_count` 已有运行时埋点与 T3 断言。"
       - "discovery read model 已显式投影 `profileSubjectId`，`FeedItemDto` 不再假设 `authorId == authorProfileSubjectId`。"
     status: implemented

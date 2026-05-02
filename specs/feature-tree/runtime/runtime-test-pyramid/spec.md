@@ -15,7 +15,7 @@
             真实 iOS/Android 设备 + staging
             场景 ≤10，advisory，pre-release 阻塞发布
         ────────────────────────────────────────
-        L3  API Contract (staging HTTP)
+        L3  API Contract (gamma HTTP)
             无 UI driver，Dart HTTP client 打 staging
             场景来自 e2e.yaml[test_type: api_contract]
             advisory，daily + pre-release
@@ -68,7 +68,7 @@
 - 驱动文件：`contract.yaml` 中每个 `go_func` 对应一个实际 Go 测试函数
 - 必须覆盖：每个 `service.yaml` API endpoint ≥1 个 Go test、每个 `events.yaml` 事件 ≥1 个发布验证
 
-### L3 — API Contract / staging HTTP（需新建 runner）
+### L3 — API Contract / gamma HTTP（需新建 runner）
 - 守护：端云数据合约不漂移（cursor 分页、错误码格式、字段可见性）
 - 驱动文件：`e2e.yaml[test_type: api_contract]` 场景
 - 执行方式：Dart HTTP client 发请求打 staging，用 Repository `fromJson` 解析断言

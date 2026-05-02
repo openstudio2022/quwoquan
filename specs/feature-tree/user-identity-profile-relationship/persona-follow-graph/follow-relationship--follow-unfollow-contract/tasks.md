@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `relationship-idempotency-guard`
+## Folded current node `relationship-idempotency-guard`
 
 # 开发任务：relationship-idempotency-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `relationship-idempotency-guard` (from `user-identity-profile-relationship/persona-follow-graph/follow-relationship/follow-unfollow-contract/relationship-idempotency-guard`)
+- [ ] Migrated current node: `relationship-idempotency-guard` (from `user-identity-profile-relationship/persona-follow-graph/follow-relationship/follow-unfollow-contract/relationship-idempotency-guard`)

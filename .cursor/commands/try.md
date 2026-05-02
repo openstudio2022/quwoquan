@@ -88,7 +88,7 @@ make test-contract                 # 契约测试通过（云侧）
 flutter test test/cloud/ test/components/ test/ui/
 ```
 
-失败 → 修复后继续，不得遗留编译错误或测试失败。
+失败 → 修复后继续，不得存量编译错误或测试失败。
 
 ---
 

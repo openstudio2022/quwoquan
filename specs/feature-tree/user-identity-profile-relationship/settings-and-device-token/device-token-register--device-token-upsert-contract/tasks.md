@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `duplicate-token-cleanup-guard`
+## Folded current node `duplicate-token-cleanup-guard`
 
 # 开发任务：duplicate-token-cleanup-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `duplicate-token-cleanup-guard` (from `user-identity-profile-relationship/settings-and-device-token/device-token-register/device-token-upsert-contract/duplicate-token-cleanup-guard`)
+- [ ] Migrated current node: `duplicate-token-cleanup-guard` (from `user-identity-profile-relationship/settings-and-device-token/device-token-register/device-token-upsert-contract/duplicate-token-cleanup-guard`)

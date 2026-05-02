@@ -32,7 +32,7 @@ level_acceptance:
       T1: required
       T3: required
   A4:
-    criteria: 子账号修改时“同步所有账号”默认勾选；勾选后写入 owner 默认值，并让全部子账号收敛到新的统一默认值（清空或覆盖历史 override）
+    criteria: 子账号修改时“同步所有账号”默认勾选；勾选后写入 owner 默认值，并让全部子账号收敛到新的统一默认值（清空或覆盖记录 override）
     status: pending
     test_layers:
       T2: required

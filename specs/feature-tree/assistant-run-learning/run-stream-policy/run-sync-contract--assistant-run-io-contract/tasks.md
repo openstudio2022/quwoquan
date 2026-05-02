@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `run-error-mapping-governance`
+## Folded current node `run-error-mapping-governance`
 
 # 开发任务：run-error-mapping-governance
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `run-error-mapping-governance` (from `assistant-run-learning/run-stream-policy/run-sync-contract/assistant-run-io-contract/run-error-mapping-governance`)
+- [ ] Migrated current node: `run-error-mapping-governance` (from `assistant-run-learning/run-stream-policy/run-sync-contract/assistant-run-io-contract/run-error-mapping-governance`)

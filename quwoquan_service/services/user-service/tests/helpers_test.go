@@ -136,7 +136,7 @@ func seedPersonaPostHistory(t *testing.T, profileSubjectID string) {
 	}
 	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), bson.M{
 		"_id":                       "post_" + profileSubjectID,
-		"authorId":                  "legacy_" + profileSubjectID,
+		"authorId":                  "current_" + profileSubjectID,
 		"profileSubjectId":          profileSubjectID,
 		"authorDisplayNameSnapshot": "Post Persona",
 		"authorAvatarUrlSnapshot":   "https://example.com/post.jpg",
@@ -156,11 +156,11 @@ func seedPersonaCommentHistory(t *testing.T, profileSubjectID string) {
 	_, err := mongoDB.Collection("comments").InsertOne(context.Background(), bson.M{
 		"_id":                       "comment_" + profileSubjectID,
 		"postId":                    "post_for_" + profileSubjectID,
-		"authorId":                  "legacy_" + profileSubjectID,
+		"authorId":                  "current_" + profileSubjectID,
 		"profileSubjectId":          profileSubjectID,
 		"authorDisplayNameSnapshot": "Comment Persona",
 		"authorAvatarUrlSnapshot":   "https://example.com/comment.jpg",
-		"content":                   "历史评论",
+		"content":                   "记录评论",
 		"createdAt":                 time.Now().UTC(),
 	})
 	if err != nil {
@@ -177,11 +177,11 @@ func seedPersonaChatHistory(t *testing.T, profileSubjectID string) {
 		"_id":                       "message_" + profileSubjectID,
 		"conversationId":            "conv_" + profileSubjectID,
 		"seq":                       1,
-		"senderId":                  "legacy_" + profileSubjectID,
+		"senderId":                  "current_" + profileSubjectID,
 		"senderProfileSubjectId":    profileSubjectID,
 		"senderDisplayNameSnapshot": "Chat Persona",
 		"senderAvatarUrlSnapshot":   "https://example.com/chat.jpg",
-		"content":                   "历史聊天",
+		"content":                   "记录聊天",
 		"timestamp":                 time.Now().UTC(),
 	})
 	if err != nil {
@@ -198,7 +198,7 @@ func seedPersonaNotificationHistory(t *testing.T, profileSubjectID string) {
 		"_id":          "notification_" + profileSubjectID,
 		"userId":       "viewer_" + profileSubjectID,
 		"type":         "social",
-		"title":        "历史通知",
+		"title":        "记录通知",
 		"body":         "由分身触发的通知",
 		"senderUserId": profileSubjectID,
 		"targetType":   "post",

@@ -177,7 +177,7 @@ type httpScaffoldData struct {
 }
 
 func aggregateDirPath(metadataDir string, dirName string) string {
-	// Support domain-centric layout: content/post/ alongside legacy post/.
+	// Support domain-centric layout: content/post/ alongside current post/.
 	direct := filepath.Join(metadataDir, dirName)
 	if _, err := os.Stat(direct); err == nil {
 		return direct
@@ -385,19 +385,30 @@ func generatedPathMatch(templatePath, requestPath string) bool {
 		return false
 	}
 	for i := range tParts {
-		tp := tParts[i]
-		rp := rParts[i]
-		if strings.HasPrefix(tp, "{") && strings.HasSuffix(tp, "}") {
-			if rp == "" {
-				return false
-			}
-			continue
-		}
-		if tp != rp {
+		if !generatedSegmentMatch(tParts[i], rParts[i]) {
 			return false
 		}
 	}
 	return true
+}
+
+func generatedSegmentMatch(templateSegment, requestSegment string) bool {
+	paramStart := strings.Index(templateSegment, "{")
+	if paramStart < 0 {
+		return templateSegment == requestSegment
+	}
+	paramEndOffset := strings.Index(templateSegment[paramStart:], "}")
+	if paramEndOffset < 0 {
+		return false
+	}
+	paramEnd := paramStart + paramEndOffset
+	prefix := templateSegment[:paramStart]
+	suffix := templateSegment[paramEnd+1:]
+	if !strings.HasPrefix(requestSegment, prefix) || !strings.HasSuffix(requestSegment, suffix) {
+		return false
+	}
+	value := strings.TrimSuffix(strings.TrimPrefix(requestSegment, prefix), suffix)
+	return value != ""
 }
 
 func generatedSplitPath(raw string) []string {
@@ -534,7 +545,7 @@ type errorsYAML struct {
 }
 
 func generateErrorConstants(metadataDir, aggregate, outputDir string) error {
-	// Support both legacy (post/) and domain-centric (content/post/) locations.
+	// Support both current (post/) and domain-centric (content/post/) locations.
 	aggLower := strings.ToLower(aggregate)
 	errsPath := filepath.Join(metadataDir, aggLower, "errors.yaml")
 	if _, err := os.Stat(errsPath); os.IsNotExist(err) {

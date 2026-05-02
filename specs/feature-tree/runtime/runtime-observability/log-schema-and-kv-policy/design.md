@@ -18,9 +18,9 @@
    - `sourceDomain`（assistant/content/discovery/chat/create）
    - `sourceService`（quwoquan_app/quwoquan_service/python_worker）
 3. **关联键标准化**
-   - `correlationId + traceId + spanId + requestId`
+   - `sessionId + pageVisitId + traceId + requestId`
 4. **兼容策略**
-   - 新增 `legacyLogType`，避免历史看板立即失效
+   - 查询脚本兼容记录 `currentLogType`，新日志信封不再写入该字段
 
 ## 方案对比
 
@@ -30,7 +30,7 @@
 ## 风险与缓解
 
 - 风险：日志查询脚本依赖旧 `logType`
-  - 缓解：保留 `legacyLogType`，迁移期双读
+  - 缓解：查询层双读记录 `currentLogType` 与新 `logType`，写入层只保留新字段
 - 风险：Release 采样导致成功链路不完整
   - 缓解：Boost run/session + 错误全量保留
 

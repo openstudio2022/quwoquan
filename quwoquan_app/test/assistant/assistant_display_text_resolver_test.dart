@@ -67,7 +67,7 @@ void main() {
       expect(normalized, isNot(contains('上证指数：\n\n3288.')));
     });
 
-    test('completed markdown 会修复历史中已被误拆的小数和表格分隔行', () {
+    test('completed markdown 会修复记录中已被误拆的小数和表格分隔行', () {
       const raw =
           '| 维度 | 华为云 | 阿里云 | 腾讯云 |\n'
           '| :\n'

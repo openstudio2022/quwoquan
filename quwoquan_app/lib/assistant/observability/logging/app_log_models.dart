@@ -24,26 +24,6 @@ extension AppLogTypeName on AppLogType {
         return 'exception';
     }
   }
-
-  /// Legacy log type retained for backward-compatible dashboards.
-  String get legacyValue {
-    switch (this) {
-      case AppLogType.pageAccess:
-        return 'page_access';
-      case AppLogType.agentRun:
-        return 'agent_run';
-      case AppLogType.llm:
-        return 'llm';
-      case AppLogType.search:
-        return 'search';
-      case AppLogType.cloudApi:
-        return 'cloud_api';
-      case AppLogType.perf:
-        return 'perf';
-      case AppLogType.error:
-        return 'error';
-    }
-  }
 }
 
 extension AppLogLevelName on AppLogLevel {
@@ -71,16 +51,10 @@ class AppLogEnvelope {
     this.appVersion = '',
     this.platform = '',
     this.sessionId = '',
-    this.journeyId = '',
     this.pageVisitId = '',
     this.runId = '',
     this.traceId = '',
-    this.spanId = '',
-    this.parentSpanId = '',
     this.requestId = '',
-    this.cloudRequestId = '',
-    this.pythonJobId = '',
-    this.correlationId = '',
     this.turnId = '',
     this.sourceDomain = '',
     this.sourceService = '',
@@ -96,16 +70,10 @@ class AppLogEnvelope {
   final String appVersion;
   final String platform;
   final String sessionId;
-  final String journeyId;
   final String pageVisitId;
   final String runId;
   final String traceId;
-  final String spanId;
-  final String parentSpanId;
   final String requestId;
-  final String cloudRequestId;
-  final String pythonJobId;
-  final String correlationId;
   final String turnId;
   final String sourceDomain;
   final String sourceService;
@@ -121,7 +89,6 @@ class AppLogEnvelope {
       'appVersion': appVersion,
       'platform': platform,
       'logType': logType.value,
-      'legacyLogType': logType.legacyValue,
       'level': level.value,
       'sourceDomain': sourceDomain,
       'sourceService': sourceService,
@@ -129,16 +96,10 @@ class AppLogEnvelope {
       'target': target,
       'action': action,
       'sessionId': sessionId,
-      'journeyId': journeyId,
       'pageVisitId': pageVisitId,
       'runId': runId,
       'traceId': traceId,
-      'spanId': spanId,
-      'parentSpanId': parentSpanId,
       'requestId': requestId,
-      'cloudRequestId': cloudRequestId,
-      'pythonJobId': pythonJobId,
-      'correlationId': correlationId,
       'turnId': turnId,
       'payload': payload,
     };

@@ -133,7 +133,7 @@ class _CapturingSearchRepository implements SearchRepository {
               snippet: '我们去那家餐厅吧',
               resolvedFrom: SearchResolvedFrom.local,
               matchedField: 'body',
-              payload: SearchHitPayloadLegacy(<String, dynamic>{
+              payload: SearchHitPayloadWireMap(<String, dynamic>{
                 'messageId': 'msg_1',
                 'contentPreview': '我们去那家餐厅吧',
                 'senderDisplayName': '张三',
@@ -145,7 +145,7 @@ class _CapturingSearchRepository implements SearchRepository {
               title: '旧行程',
               snippet: '行程安排 A',
               resolvedFrom: SearchResolvedFrom.remote,
-              payload: SearchHitPayloadLegacy(<String, dynamic>{
+              payload: SearchHitPayloadWireMap(<String, dynamic>{
                 'body': '行程安排 A',
                 'authorUserId': 'user_me',
                 'isMine': true,
@@ -158,7 +158,7 @@ class _CapturingSearchRepository implements SearchRepository {
               title: '新行程',
               snippet: '行程安排 B',
               resolvedFrom: SearchResolvedFrom.remote,
-              payload: SearchHitPayloadLegacy(<String, dynamic>{
+              payload: SearchHitPayloadWireMap(<String, dynamic>{
                 'body': '行程安排 B',
                 'authorUserId': 'user_me',
                 'isMine': true,
@@ -171,7 +171,7 @@ class _CapturingSearchRepository implements SearchRepository {
               title: '别人的行程',
               snippet: '行程安排 C',
               resolvedFrom: SearchResolvedFrom.remote,
-              payload: SearchHitPayloadLegacy(<String, dynamic>{
+              payload: SearchHitPayloadWireMap(<String, dynamic>{
                 'body': '行程安排 C',
                 'authorUserId': 'user_other',
                 'isMine': false,

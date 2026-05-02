@@ -1,6 +1,50 @@
 part of 'content_repository.dart';
 
 class MockContentRepository implements ContentRepository {
+  MockContentRepository({List<PostBaseDto>? seedPosts})
+    : _seedPosts = seedPosts ?? _contractSeedPosts();
+
+  final List<PostBaseDto>? _seedPosts;
+
+  static List<PostBaseDto>? _contractSeedPosts() {
+    final seed = ContractFixtureRuntimeLoader.contentSeedSet();
+    final posts = seed?['posts'];
+    final contractPosts = <PostBaseDto>[];
+    if (posts is! List) {
+      return null;
+    }
+    contractPosts.addAll(
+      posts
+          .whereType<Map>()
+          .map((item) => postBaseDtoFromMap(item.cast<String, dynamic>()))
+          .toList(growable: false),
+    );
+    return _mergePostSeeds(_discoverySeedPosts(), contractPosts);
+  }
+
+  static List<PostBaseDto> _discoverySeedPosts() {
+    return aggregateDiscoveryWireSlices(
+      photo: ContentMockData.discoveryPhotoData,
+      video: ContentMockData.discoveryVideoData,
+      moment: ContentMockData.discoveryMomentData,
+      article: ContentMockData.discoveryArticleData,
+    ).map(postBaseDtoFromMap).toList(growable: false);
+  }
+
+  static List<PostBaseDto> _mergePostSeeds(
+    List<PostBaseDto> primary,
+    List<PostBaseDto> fallback,
+  ) {
+    final byId = <String, PostBaseDto>{};
+    for (final post in primary) {
+      byId[post.id] = post;
+    }
+    for (final post in fallback) {
+      byId.putIfAbsent(post.id, () => post);
+    }
+    return byId.values.toList(growable: false);
+  }
+
   Exception? throwOnLike;
   Exception? throwOnCreateComment;
   Exception? throwOnFavorite;
@@ -19,7 +63,9 @@ class MockContentRepository implements ContentRepository {
     String postId, {
     required Map<String, dynamic> payloadMerge,
   }) {
-    return postBaseDtoFromMap(_mockPostWire(postId, payloadMerge: payloadMerge));
+    return postBaseDtoFromMap(
+      _mockPostWire(postId, payloadMerge: payloadMerge),
+    );
   }
 
   Map<String, dynamic> _mockPostWire(
@@ -44,8 +90,8 @@ class MockContentRepository implements ContentRepository {
       'assistantUsePolicy': 'inherit',
       ...payloadMerge,
     };
-    final rawType =
-        (merged['contentType'] ?? merged['type'] ?? 'micro').toString();
+    final rawType = (merged['contentType'] ?? merged['type'] ?? 'micro')
+        .toString();
     final normalizedType = rawType == 'moment' ? 'micro' : rawType;
     merged['contentType'] = normalizedType;
     if (normalizedType == 'micro') {
@@ -115,12 +161,7 @@ class MockContentRepository implements ContentRepository {
     final expectedType = (type ?? '').trim().toLowerCase();
     final expectedCategoryId = (categoryId ?? '').trim().toLowerCase();
     final expectedSubCategory = (subCategory ?? '').trim().toLowerCase();
-    final allRaw = aggregateDiscoveryWireSlices(
-      photo: ContentMockData.discoveryPhotoData,
-      video: ContentMockData.discoveryVideoData,
-      moment: ContentMockData.discoveryMomentData,
-      article: ContentMockData.discoveryArticleData,
-    );
+    final allRaw = _allDiscoveryPosts().map((e) => e.toMap()).toList();
     final results = <PostSearchItemView>[];
     for (final item in allRaw) {
       final circleIds = <String>{
@@ -149,6 +190,7 @@ class MockContentRepository implements ContentRepository {
       final matchedCircle = matchedCategory.isNotEmpty
           ? matchedCategory.first
           : (associatedCircles.isEmpty ? null : associatedCircles.first);
+      final fallbackCategoryId = _mockCategoryForCircleIds(circleIds);
       final itemIdentity =
           (item['contentIdentity'] ??
                   (item['contentType'] == 'micro' ? 'moment' : 'work'))
@@ -158,7 +200,7 @@ class MockContentRepository implements ContentRepository {
           .toString()
           .toLowerCase();
       final itemCategoryId =
-          (item['categoryId'] ?? matchedCircle?.category ?? '')
+          (item['categoryId'] ?? matchedCircle?.category ?? fallbackCategoryId)
               .toString()
               .toLowerCase();
       final itemSubCategory =
@@ -181,10 +223,10 @@ class MockContentRepository implements ContentRepository {
       }
       final searchable = <String>[
         item['title']?.toString() ?? '',
+        item['displayName']?.toString() ?? '',
         item['body']?.toString() ?? '',
         item['summary']?.toString() ?? '',
         item['locationName']?.toString() ?? '',
-        item['displayName']?.toString() ?? '',
       ];
       final matched = searchable.firstWhere(
         (value) => value.toLowerCase().contains(normalizedQuery),
@@ -212,11 +254,17 @@ class MockContentRepository implements ContentRepository {
               item['authorAvatarUrl'] ?? item['authorAvatarUrlSnapshot'] ?? '',
         }),
       );
-      if (results.length >= limit) {
-        break;
-      }
     }
-    return results;
+    results.sort((a, b) {
+      final aAuthorMatch = a.matchedField == 'author' ? 0 : 1;
+      final bAuthorMatch = b.matchedField == 'author' ? 0 : 1;
+      final byAuthor = aAuthorMatch.compareTo(bAuthorMatch);
+      if (byAuthor != 0) {
+        return byAuthor;
+      }
+      return a.postId.compareTo(b.postId);
+    });
+    return results.take(limit).toList(growable: false);
   }
 
   @override
@@ -229,9 +277,7 @@ class MockContentRepository implements ContentRepository {
   }
 
   @override
-  Future<PostBaseDto> createPost({
-    required CreatePostRequestWire body,
-  }) async {
+  Future<PostBaseDto> createPost({required CreatePostRequestWire body}) async {
     final postId = 'local_${DateTime.now().millisecondsSinceEpoch}';
     return _mockPostDto(postId, payloadMerge: body.toWire());
   }
@@ -274,7 +320,10 @@ class MockContentRepository implements ContentRepository {
     String sort = 'latest',
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return CommentPage(items: List<CommentDto>.from(commentsStub), nextCursor: null);
+    return CommentPage(
+      items: List<CommentDto>.from(commentsStub),
+      nextCursor: null,
+    );
   }
 
   @override
@@ -413,11 +462,7 @@ class MockContentRepository implements ContentRepository {
     final wire = body ?? PublishPostRequestWire();
     return _mockPostDto(
       postId,
-      payloadMerge: {
-        ...wire.toWire(),
-        'postId': postId,
-        'status': 'published',
-      },
+      payloadMerge: {...wire.toWire(), 'postId': postId, 'status': 'published'},
     );
   }
 
@@ -469,10 +514,7 @@ class MockContentRepository implements ContentRepository {
     final newId = 'local_repost_${DateTime.now().millisecondsSinceEpoch}';
     return _mockPostDto(
       newId,
-      payloadMerge: {
-        'circleId': circleId,
-        'sourcePostId': postId,
-      },
+      payloadMerge: {'circleId': circleId, 'sourcePostId': postId},
     );
   }
 
@@ -522,7 +564,9 @@ class MockContentRepository implements ContentRepository {
   Future<void> abortMediaUpload({required String sessionId}) async {}
 
   @override
-  Future<ContentMediaAssetWireDto> getMediaAsset({required String mediaId}) async {
+  Future<ContentMediaAssetWireDto> getMediaAsset({
+    required String mediaId,
+  }) async {
     return ContentMediaAssetWireDto(
       id: mediaId,
       status: 'ready',
@@ -559,9 +603,7 @@ class MockContentRepository implements ContentRepository {
     required String body,
   }) async {
     final preview = body.length > 100 ? body.substring(0, 100) : body;
-    return ContentArticleSummaryGenerateResponseDto(
-      summary: '$title：$preview',
-    );
+    return ContentArticleSummaryGenerateResponseDto(summary: '$title：$preview');
   }
 
   @override
@@ -569,9 +611,7 @@ class MockContentRepository implements ContentRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return ContentRecommendationResponseDto(
-      items: <Map<String, dynamic>>[],
-    );
+    return ContentRecommendationResponseDto(items: <Map<String, dynamic>>[]);
   }
 
   @override
@@ -585,23 +625,18 @@ class MockContentRepository implements ContentRepository {
     final filtered = _allDiscoveryPosts()
         .where((p) => p.authorId == userId)
         .where(
-          (p) => _matchesIdentityAndTypePost(
-            p,
-            identity: identity,
-            type: type,
-          ),
+          (p) => _matchesIdentityAndTypePost(p, identity: identity, type: type),
         )
         .toList();
     return CursorPage<PostBaseDto>(items: filtered, nextCursor: null);
   }
 
   List<PostBaseDto> _allDiscoveryPosts() {
-    return aggregateDiscoveryWireSlices(
-      photo: ContentMockData.discoveryPhotoData,
-      video: ContentMockData.discoveryVideoData,
-      moment: ContentMockData.discoveryMomentData,
-      article: ContentMockData.discoveryArticleData,
-    ).map(postBaseDtoFromMap).toList(growable: false);
+    final seeded = _seedPosts;
+    if (seeded != null) {
+      return List<PostBaseDto>.from(seeded, growable: false);
+    }
+    return _discoverySeedPosts();
   }
 
   List<PostBaseDto> _resolveDiscoveryPosts({
@@ -706,6 +741,28 @@ class MockContentRepository implements ContentRepository {
       return itemType == expectedType;
     }
     return true;
+  }
+
+  String _mockCategoryForCircleIds(Iterable<String> circleIds) {
+    for (final circleId in circleIds) {
+      switch (circleId) {
+        case 'circle_photo_01':
+        case 'c1':
+        case 'c-human-1':
+        case 'c-photo-owner':
+          return 'humanity';
+        case 'c2':
+          return 'travel';
+        case 'c-tech-admin':
+          return 'tech';
+        case 'c-meet-1':
+        case 'c-meet-2':
+          return 'meet';
+        case 'c-car-2':
+          return 'car';
+      }
+    }
+    return '';
   }
 
   @override

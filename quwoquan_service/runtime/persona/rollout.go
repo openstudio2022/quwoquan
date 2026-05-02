@@ -21,12 +21,12 @@ const (
 var nonHandleChars = regexp.MustCompile(`[^a-z0-9._]+`)
 
 type Input struct {
-	Personas        []LegacyPersona `json:"personas"`
-	ReservedHandles []string        `json:"reservedHandles,omitempty"`
-	PublicSamples   []PublicSample  `json:"publicSamples,omitempty"`
+	Personas        []CurrentPersona `json:"personas"`
+	ReservedHandles []string         `json:"reservedHandles,omitempty"`
+	PublicSamples   []PublicSample   `json:"publicSamples,omitempty"`
 }
 
-type LegacyPersona struct {
+type CurrentPersona struct {
 	UserID            string   `json:"userId"`
 	PersonaID         string   `json:"personaId"`
 	Username          string   `json:"username,omitempty"`
@@ -200,7 +200,7 @@ func ValidatePlan(plan Plan, input Input) ValidationReport {
 			findings = append(findings, ValidationFinding{
 				Code:      "history_mapping_gap",
 				PersonaID: persona.PersonaID,
-				Message:   "存在空白历史主体映射，需人工补齐",
+				Message:   "存在空白记录主体映射，需人工补齐",
 			})
 		}
 	}
@@ -259,7 +259,7 @@ type contactInfo struct {
 	Email string
 }
 
-func buildPrimaryContacts(personas []LegacyPersona) map[string]contactInfo {
+func buildPrimaryContacts(personas []CurrentPersona) map[string]contactInfo {
 	contacts := make(map[string]contactInfo)
 	for _, persona := range personas {
 		if !persona.IsPrimary {
@@ -273,7 +273,7 @@ func buildPrimaryContacts(personas []LegacyPersona) map[string]contactInfo {
 	return contacts
 }
 
-func requestedHandle(persona LegacyPersona) string {
+func requestedHandle(persona CurrentPersona) string {
 	for _, candidate := range []string{persona.Username, persona.Nickname, persona.PersonaID} {
 		if normalized := normalizeHandle(candidate); normalized != "" {
 			return normalized

@@ -20,7 +20,7 @@
 - A1：5 个 Projector 事件消费 → ReadModel 验证正确。
 - A8：每个 Projector 有契约测试。
 
-## Folded legacy node `catchup-idempotency-and-lag-monitoring`
+## Folded current node `catchup-idempotency-and-lag-monitoring`
 
 # L5 横切：catchup-idempotency-and-lag-monitoring
 

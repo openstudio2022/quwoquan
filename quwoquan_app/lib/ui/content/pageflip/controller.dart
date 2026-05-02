@@ -705,6 +705,7 @@ class StPageFlipController {
         flippingAnchor: calculation.getActiveCorner(),
         bottomAnchor: calculation.getBottomPagePosition(),
         angle: calculation.getAngle(),
+        movingEdgeLine: calculation.getBackwardMovingEdgeLine(),
         shadow: _buildShadowData(
           calculation.getShadowStartPoint(),
           calculation.getShadowAngle(),

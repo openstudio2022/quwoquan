@@ -170,9 +170,9 @@
 
 ### 迁移 / 回填
 
-- 历史 `Circle.conversationId` 迁为默认公共群的 `conversationId`
+- 记录 `Circle.conversationId` 迁为默认公共群的 `conversationId`
 - 原有群文件与群公告能力若落在圈级，迁移到默认公共群
-- 无法准确归属的历史资料可先保留在圈级并逐步清理
+- 无法准确归属的记录资料可先保留在圈级并逐步清理
 
 ### 双读 / 双写
 

@@ -1,0 +1,32 @@
+dart_class: AssistantRunResponseWire
+library_path: assistant/generated/contracts/assistant_run_response.g.dart
+output_path: assistant/generated/contracts/assistant_run_response.g.dart
+contract: assistant_run_response
+version: assistant_run_response.m5
+kind: shared_wire_contract
+imports:
+  - package:quwoquan_app/assistant/generated/contracts/assistant_journey.g.dart
+  - package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart
+  - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart
+fields:
+  - { name: conversationId, type: string, required: true }
+  - { name: turnId, type: string, required: true }
+  - { name: status, type: string, default: completed }
+  - { name: finalText, type: string, default: '' }
+  - { name: summary, type: string, default: '' }
+  - { name: journey, type: object, ref: AssistantJourney, default: {} }
+  - { name: runArtifacts, type: object, ref: RunArtifacts, default: {} }
+  - { name: observability, type: object, ref: observability_payload, default: {} }
+  - { name: runtimeFailure, type: object, ref: RuntimeFailureWire }
+  - { name: completedAt, type: string, default: '' }
+subcontracts:
+  observability_payload:
+    class_name: AssistantRunObservabilityPayload
+    fields:
+      - { name: traceId, type: string, default: '' }
+      - { name: modelProvider, type: string, default: '' }
+      - { name: skillId, type: string, default: '' }
+      - { name: domainId, type: string, default: '' }
+      - { name: phaseDurationsMs, type: map, default: {} }
+      - { name: tokenUsage, type: map, default: {} }
+      - { name: qualitySignals, type: map, default: {} }

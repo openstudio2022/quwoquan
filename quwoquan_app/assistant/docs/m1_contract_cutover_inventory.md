@@ -19,13 +19,13 @@ The following review conclusions supersede earlier M1 assumptions:
 
 ## Purpose
 This document is the Milestone 1 evidence artifact for:
-- legacy mainline deletion targets
+- current mainline deletion targets
 - weak-type inventory
 - typed replacement mapping
 
 It exists so Milestone 1 can be validated without ambiguity.
 
-## Legacy Mainline Deletion Targets
+## Current Mainline Deletion Targets
 ### Contracts and state objects
 - `lib/assistant/contracts/understanding_result_contract.dart`
   - Status: active main orchestration path

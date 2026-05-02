@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "description": "测试侧直接引用端侧 mock data 类的迁移基线。只允许减少，不允许新增。",
+  "scope": "quwoquan_app/test/**/*.dart",
+  "tokens": {
+    "ContentMockData": {
+      "maxOccurrences": 36,
+      "maxFiles": 5
+    },
+    "ChatMockData": {
+      "maxOccurrences": 4,
+      "maxFiles": 4
+    },
+    "CircleMockData": {
+      "maxOccurrences": 14,
+      "maxFiles": 4
+    },
+    "PrototypeMockData": {
+      "maxOccurrences": 0,
+      "maxFiles": 0
+    }
+  }
+}

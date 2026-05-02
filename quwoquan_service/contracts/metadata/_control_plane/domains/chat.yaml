@@ -34,7 +34,7 @@ minimum_package:
 deployment:
   plane_binding_domain: chat
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []

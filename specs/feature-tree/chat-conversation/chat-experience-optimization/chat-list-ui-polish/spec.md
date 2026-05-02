@@ -178,7 +178,7 @@
   - `pinned`
 - 为满足本期 `@我` 和组合头像目标，`/design` 阶段需要明确 inbox contract 是否补齐：
   - `mentionUnreadCount`
-  - `avatarCompositeUrls`（或等价字段）
+  - `avatarUrl`（群聊为服务端预合成图；端侧不再消费 `avatarCompositeUrls`）
 - 路由跳转必须继续使用 codegen 的 `AppRoutePaths.chatDetail(...)`，不能在 UI 层硬编码路径。
 
 ### 7.3 生命周期

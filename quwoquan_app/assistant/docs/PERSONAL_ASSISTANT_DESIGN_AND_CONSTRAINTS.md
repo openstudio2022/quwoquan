@@ -14,7 +14,7 @@
 凡是涉及以下任一目录或模块，进入探索、设计、开发、测试与验收前都必须先读本文：
 
 - `quwoquan_app/lib/assistant/`
-- `quwoquan_app/lib/personal_assistant/`（仅当触达兼容实现或 legacy bridge 时）
+- `quwoquan_app/lib/personal_assistant/`（仅当触达兼容实现或 current bridge 时）
 - `quwoquan_app/assets/assistant/`
 - `quwoquan_app/test/personal_assistant/`
 - `quwoquan_app/lib/ui/chat/` 中与助理链路直接耦合的页面或渲染逻辑
@@ -34,7 +34,7 @@
 - 禁止用用户可见字符串、中文文案、label 文本做行为路由
 - 禁止在 engine、react、tool 中新增 `contains()` / `RegExp` 语义分类
 - 协议与值域应优先使用 typed contract、enum、schema
-- `assistant_turn_v2`、`assistant_turn_v3` 视为已淘汰协议；历史不兼容仅允许在启动加载阶段完成一次转换，运行时统一只处理 `assistant_turn`
+- `assistant_turn_v2`、`assistant_turn_v3` 视为已淘汰协议；记录不兼容仅允许在启动加载阶段完成一次转换，运行时统一只处理 `assistant_turn`
 
 ### 2.3 提示词与文案约束
 

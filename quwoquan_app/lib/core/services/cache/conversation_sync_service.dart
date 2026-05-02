@@ -187,7 +187,7 @@ class ConversationSyncService {
       case 'conversation.avatar.updated':
         final conversationId =
             patch.payload['conversationId']?.toString() ?? '';
-        final avatarUrl = patch.payload['groupAvatarUrl']?.toString() ?? '';
+        final avatarUrl = patch.payload['avatarUrl']?.toString().trim() ?? '';
         final groupAvatarVersion = (patch.payload['groupAvatarVersion'] as num?)
             ?.toInt();
         final groupAvatarSourceHash = patch.payload['groupAvatarSourceHash']

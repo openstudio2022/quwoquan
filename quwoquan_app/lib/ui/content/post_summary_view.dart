@@ -5,7 +5,7 @@ import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 /// 典型入口为 `post_view_projection.dart` 中的 `projectPostMap`（避免与本文件循环 import，故不作 dartdoc 链接）。
 ///
 /// **与 [PostReadPresentation] 分工**：本类内嵌 [readPresentation]（metadata 对齐的标题/正文等）；
-/// 同时保留 **viewer 侧历史命名**（如 [likesCount]）。新业务优先直接用 [readPresentation] 或 DTO，
+/// 同时保留 **viewer 侧记录命名**（如 [likesCount]）。新业务优先直接用 [readPresentation] 或 DTO，
 /// 避免第三套并行只读模型。
 ///
 /// 取代所有 `post['likesCount']`、`post['author']['name']` 等散落字符串访问。
@@ -112,14 +112,12 @@ class PostSummaryView {
     }
 
     var thumbnail = dto.primaryVisualUrl.isEmpty ? null : dto.primaryVisualUrl;
-    var thumbnailUrl =
-        dto.mediaThumbnailUrl.isEmpty
-            ? (dto.primaryVisualUrl.isEmpty ? null : dto.primaryVisualUrl)
-            : dto.mediaThumbnailUrl;
-    final coverUrl =
-        dto.mediaCoverUrl.isEmpty
-            ? (dto.primaryImageUrl.isEmpty ? null : dto.primaryImageUrl)
-            : dto.mediaCoverUrl;
+    var thumbnailUrl = dto.mediaThumbnailUrl.isEmpty
+        ? (dto.primaryVisualUrl.isEmpty ? null : dto.primaryVisualUrl)
+        : dto.mediaThumbnailUrl;
+    final coverUrl = dto.mediaCoverUrl.isEmpty
+        ? (dto.primaryImageUrl.isEmpty ? null : dto.primaryImageUrl)
+        : dto.mediaCoverUrl;
 
     // 图片作品：外显缩略图优先封面，与多图 gallery（images）解耦
     if (dto.displayFormat == 'image' && dto.mediaCoverUrl.isNotEmpty) {

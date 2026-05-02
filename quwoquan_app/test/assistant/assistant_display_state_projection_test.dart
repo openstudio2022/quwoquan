@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('AssistantDisplayStateProjection', () {
-    test('renderAnswerBlocksToMarkdown 会修复历史 displayState 中的坏表格和小数', () {
+    test('renderAnswerBlocksToMarkdown 会修复记录 displayState 中的坏表格和小数', () {
       final markdown =
           renderAnswerBlocksToMarkdown(const <AssistantAnswerDisplayBlock>[
             AssistantAnswerDisplayBlock(

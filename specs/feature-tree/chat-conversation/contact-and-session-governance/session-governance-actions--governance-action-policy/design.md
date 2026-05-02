@@ -38,7 +38,7 @@
 1. 管理员治理矩阵
 2. 风险评分驱动的自动动作建议
 
-## Folded legacy node `action-audit-observability`
+## Folded current node `action-audit-observability`
 
 # 设计说明（规划阶段占位）
 

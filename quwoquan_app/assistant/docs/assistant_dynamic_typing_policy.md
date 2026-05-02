@@ -24,7 +24,7 @@
 ## 注释约定（复制即用）
 
 ```dart
-// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — RunArtifacts `*Partitioned.extensions` 或遗留 ReadView。
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — RunArtifacts `*Partitioned.extensions` 或存量 ReadView。
 // ASSISTANT_WEAK_TYPE: LLM_RAW — 尚未契约化的模型输出片段。
 // ASSISTANT_WEAK_TYPE: VENDOR_JSON — 供应商原始 JSON，边界归一化后进入工具结果。
 ```
@@ -54,7 +54,7 @@
 ## 元数据或 `RunArtifacts` 形状大改后的验收
 
 - 跑 `flutter test test/assistant/assistant_wire_fixture_roundtrip_test.dart`（与 `wire_min_run_artifacts.json` / Go `wirepoc` 对齐）。
-- 有设备时补跑 `integration_test/assistant_manual_replay_test.dart`，必要时更新 `integration_test/support/assistant_replay_baseline.dart` 说明。
+- 有设备时补跑 `test/common/assistant/assistant_environment_smoke_test.dart`，测试数据以 `contracts/metadata/assistant/test_fixtures/scenarios/assistant_scenarios.json` 为准。
 
 ## 共享 fixture 路径（测试）
 

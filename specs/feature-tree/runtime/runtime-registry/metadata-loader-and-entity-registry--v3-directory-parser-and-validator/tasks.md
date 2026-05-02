@@ -11,7 +11,7 @@
 - [ ] 测试：metadata 一致性 contract 测试
 - [ ] gate：集成到 make verify + make gate
 
-## Folded legacy node `runtime-query-api-and-hot-reload`
+## Folded current node `runtime-query-api-and-hot-reload`
 
 # 开发任务：runtime-query-api-and-hot-reload
 
@@ -28,4 +28,4 @@
 - [ ] gate：集成到 make verify + make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `runtime-query-api-and-hot-reload` (from `runtime/runtime-registry/metadata-loader-and-entity-registry/v3-directory-parser-and-validator/runtime-query-api-and-hot-reload`)
+- [ ] Migrated current node: `runtime-query-api-and-hot-reload` (from `runtime/runtime-registry/metadata-loader-and-entity-registry/v3-directory-parser-and-validator/runtime-query-api-and-hot-reload`)

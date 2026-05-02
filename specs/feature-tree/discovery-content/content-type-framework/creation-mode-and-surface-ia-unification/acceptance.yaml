@@ -97,7 +97,7 @@ level_acceptance:
     tests:
       - create publish payload mapping test
       - content repository contract regression test
-      - legacy taxonomy label audit
+      - current taxonomy label audit
   A8:
     criteria: '灰度、回滚与商用品质 guardrails 已齐备：`simple_create_action_sheet`、`create_editor_v2`、`progressive_title_prompt` 可独立开关；入口耗时、编辑器可交互、草稿恢复、发布成功率和 crash-free 指标可观测，任一能力异常都可单独回退。'
     status: pending

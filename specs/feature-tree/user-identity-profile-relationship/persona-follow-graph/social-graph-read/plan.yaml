@@ -43,7 +43,7 @@ slices:
 
   - id: P3
     title: implement filtered pagination and capability projection
-    goal: 落地 overfetch+fill、visibility/block 过滤、capability 消费与 legacy graph 双读
+    goal: 落地 overfetch+fill、visibility/block 过滤、capability 消费与 current graph 双读
     depends_on:
       - P2
     acceptance_refs:
@@ -55,7 +55,7 @@ slices:
     done_when:
       - follower/following 分页在过滤场景下不重复、不漏页、不串页
       - `RelationshipCapabilityView` 覆盖主页按钮矩阵与聊天/RTC 门禁
-      - legacy owner edge 双读与主分身映射稳定
+      - current owner edge 双读与主分身映射稳定
     status: partial
 
   - id: P4
@@ -71,6 +71,6 @@ slices:
       - T4_release_rehearsal
     done_when:
       - graph 读开关关闭后可退回旧只读路径
-      - page drift、capability mismatch、legacy edge read 指标可观测
+      - page drift、capability mismatch、current edge read 指标可观测
       - rollback rehearsal 与 graph read regression 清单完成
     status: implemented

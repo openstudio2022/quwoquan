@@ -44,6 +44,7 @@ try → land → commit → deploy
 - `spec-first`：先有规格，再有设计，再有实现。
 - `acceptance-first`：先定义 `L2_journey` 与 `L3_scenario` 的验收，再进入实现。
 - `metadata-first`：契约、字段、错误码、route、surface、operation 一律先改 metadata，再 codegen，再改业务逻辑。
+- `env-seed-first`：涉及页面数据、Repository、人工 beta 或端云测试时，必须先补 `contracts/metadata/**/test_fixtures` 与 `_shared/test_fixtures/app_{alpha,beta,gamma}_seed_manifest.json`，再实现业务逻辑。
 - `test-first`：进入 `/dev`、`/deliver`、`/try` 后默认执行 `Red → Green → Refactor`。
 - `benchmark-driven`：对标必须落到“借鉴 / 不借鉴 / 适用边界 / 当前差距 / 收敛计划”。
 - `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须通过 `/prd` + `/design` 或 `/baseline` 冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚方案。
@@ -141,6 +142,7 @@ make codegen-app
 - metadata/codegen 方案、字段演进与数据迁移方案
 - feature flag、观测、SLO 验证与回滚方案
 - `T1~T4` 证据矩阵与 plan slices
+- 环境包配置、seed manifest、人工 beta 数据预置与生产禁 seed 边界
 
 ### 3.4 `/baseline`（G0 + G1）
 
@@ -247,7 +249,7 @@ make gate
 - 必须完成 `T3/T4`、SLO 卡点、观测确认与回滚演练
 - 发布对象是 release batch / CR 范围，不再只看单个 Scenario
 - 未达到 SLO 或回滚条件不清时不得放量
-- **多环境统一口径**（本地 / CI / integration / 生产灰度与全量、波次推进、`STAGING_*` 与 integration 的对应）：[`deploy/shared/environment_matrix.md`](../deploy/shared/environment_matrix.md)
+- **多环境统一口径**（alpha / beta / gamma / prod-gray / prod、波次推进）：[`deploy/shared/environment_matrix.md`](../deploy/shared/environment_matrix.md)
 
 ### 3.9 `/try`
 

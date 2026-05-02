@@ -165,7 +165,7 @@ codegen 预期影响：
 
 ### 双读 / 双写
 
-- 双读：canonical key 优先，legacy key fallback
+- 双读：canonical key 优先，current key fallback
 - 双写：不做长期双写；只保留局部镜像到完全迁移完成为止
 
 ## feature flag、观测、SLO 验证与回滚
@@ -193,7 +193,7 @@ codegen 预期影响：
 
 1. 关闭 `viewer_profile_state_sync_v1`
 2. 关闭 `client_state_sync_outbox_v1`
-3. 保留 `RelationshipCapabilityView` 读路径与 legacy key fallback
+3. 保留 `RelationshipCapabilityView` 读路径与 current key fallback
 
 ## TDD / ATDD 策略
 

@@ -1,0 +1,16 @@
+schemaVersion: app-runtime-config.v1
+runtime:
+  appRuntimeEnv: prod-gray
+  appDataSource: remote
+  gatewayBaseUrl: https://gray-api.quwoquan.com
+  realtimeBaseUrl: wss://gray-api.quwoquan.com
+  mediaAvatarCdnBaseUrl: https://gray-avatar-cdn.quwoquan.com
+  mediaImageCdnBaseUrl: https://gray-image-cdn.quwoquan.com
+  mediaVideoCdnBaseUrl: https://gray-video-cdn.quwoquan.com
+  mediaUploadBaseUrl: https://gray-upload.quwoquan.com
+  currentUserId: ""
+seed:
+  enabled: false
+  manifest: ""
+gray:
+  strategyEndpoint: https://gray-api.quwoquan.com/v1/runtime/gray-strategy

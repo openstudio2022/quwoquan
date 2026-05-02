@@ -17,7 +17,7 @@ global_acceptance:
   A1_functional:
     scenarios:
     - given: 存在 default + integration 两套配置
-      when: APP_ENV=integration 启动服务
+      when: APP_ENV=gamma 启动服务
       then: 最终运行配置=default 被 integration 覆盖后的结果
     - given: 容器设置 CONFIG_ROOT=/etc/qwq-config 且 CONFIG_VERSION=v2026.02.28.0
       when: 服务启动
@@ -31,7 +31,7 @@ global_acceptance:
   - 部署进程拓扑映射在 integration/prod 保持一致
   A7_contract_metadata_consistency:
   - 配置结构与运行时加载器字段一致
-  - 每个服务均具备 default/local/integration/prod 目录结构
+  - 每个服务均具备 default/alpha/beta/gamma/prod-gray/prod 目录结构
   A8_test_automation:
   - 配置加载顺序与覆盖规则有单测
   - local/integration/prod 三环境加载行为有集成测试

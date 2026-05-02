@@ -1,6 +1,6 @@
 # 端侧目录结构规划：按领域服务统一 lib/ui 与 lib/cloud
 
-> **原则**：新建领域服务及页面不再放在 `lib/features/` 下；统一按 metadata 领域划分 `lib/ui/`；模型与端云交付元数据驱动放 `lib/cloud/`。`lib/features/` 为历史遗留，逐步迁移至 `lib/ui/`。
+> **原则**：新建领域服务及页面不再放在 `lib/features/` 下；统一按 metadata 领域划分 `lib/ui/`；模型与端云交付元数据驱动放 `lib/cloud/`。`lib/features/` 为记录存量，逐步迁移至 `lib/ui/`。
 
 ---
 
@@ -14,7 +14,7 @@ lib/
 ├── components/       # 可复用 UI 组件（跨领域）
 ├── ui/               # 按领域划分的 UI 模块（pages/providers/widgets）
 ├── l10n/             # 国际化
-└── features/         # [废弃] 历史遗留，逐步迁移至 lib/ui/
+└── features/         # [废弃] 记录存量，逐步迁移至 lib/ui/
 ```
 
 ---

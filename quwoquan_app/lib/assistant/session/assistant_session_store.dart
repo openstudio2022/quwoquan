@@ -179,6 +179,9 @@ class AssistantSessionStore {
     if ((message['role'] ?? '').toString().trim() != 'assistant') {
       return null;
     }
+    if (message[assistantDisplayStateField] is Map) {
+      return null;
+    }
     final sourceQuery = _recoverAssistantSourceQuery(message);
     if (sourceQuery.isEmpty) return null;
     if (normalized.isNotEmpty) {
@@ -285,7 +288,7 @@ class AssistantSessionStore {
         .trim();
   }
 
-  /// 判断一条消息是否是降级/错误/JSON原文内容，加载时需过滤，避免污染后续 LLM 历史。
+  /// 判断一条消息是否是降级/错误/JSON原文内容，加载时需过滤，避免污染后续 LLM 记录。
   bool _isDegradedAssistantMessage(Map<String, dynamic> m) {
     final role = m['role']?.toString() ?? '';
     if (role != 'assistant') return false;

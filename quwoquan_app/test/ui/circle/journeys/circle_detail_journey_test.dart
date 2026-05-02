@@ -56,7 +56,7 @@ Widget _scopedApp({CircleRepository? mock}) {
 }
 
 /// CircleShell 的分页切换在测试环境中偶发触发渲染报错。
-/// 此辅助函数在 pump 过程中忽略已知的历史渲染错误。
+/// 此辅助函数在 pump 过程中忽略已知的记录渲染错误。
 Future<void> _pumpIgnoringTabPaintErrors(
   WidgetTester tester, {
   int frames = 3,
@@ -76,7 +76,7 @@ Future<void> _pumpIgnoringTabPaintErrors(
   FlutterError.onError = original;
 }
 
-/// 安全版 pumpAndSettle：忽略历史渲染错误。
+/// 安全版 pumpAndSettle：忽略记录渲染错误。
 Future<void> _settleIgnoringTabPaintErrors(WidgetTester tester) async {
   final original = FlutterError.onError;
   FlutterError.onError = (details) {

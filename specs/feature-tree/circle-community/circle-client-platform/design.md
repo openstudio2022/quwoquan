@@ -139,7 +139,7 @@ abstract class CircleRepository {
 - Repository 返回类型从 Map 升级为 codegen 生成的 DTO 类（在 codegen-app 就绪后执行）。
 - 状态管理从 ConsumerStatefulWidget 迁移到 Notifier（圈子功能复杂度增加后执行）。
 
-## 遗留带规划任务
+## 存量带规划任务
 
 - circle_stats_page.dart 的硬编码清理（体量较小，可在本次一并处理）。
 - 更新 `circles-channel-management-panel` 特性的 acceptance.yaml 路径。

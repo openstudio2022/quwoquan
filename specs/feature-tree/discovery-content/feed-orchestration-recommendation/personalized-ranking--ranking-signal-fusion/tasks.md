@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `ranking-fallback-guard`
+## Folded current node `ranking-fallback-guard`
 
 # 开发任务：ranking-fallback-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `ranking-fallback-guard` (from `discovery-content/feed-orchestration-recommendation/personalized-ranking/ranking-signal-fusion/ranking-fallback-guard`)
+- [ ] Migrated current node: `ranking-fallback-guard` (from `discovery-content/feed-orchestration-recommendation/personalized-ranking/ranking-signal-fusion/ranking-fallback-guard`)

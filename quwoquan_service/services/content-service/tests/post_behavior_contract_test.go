@@ -2,9 +2,10 @@
 //
 // 守护：点赞、收藏、行为上报接口的路由注册和基本语义。
 // contract.yaml go_func 覆盖：
-//   TestBehaviorBatchReport — behavior_batch_report
-//   TestBehaviorBatchEmpty  — behavior_batch_empty
-//   TestLikePost, TestFavoritePost, TestReportPost — 其他行为场景
+//
+//	TestBehaviorBatchReport — behavior_batch_report
+//	TestBehaviorBatchEmpty  — behavior_batch_empty
+//	TestLikePost, TestFavoritePost, TestReportPost — 其他行为场景
 package tests
 
 import (
@@ -76,7 +77,7 @@ func TestFavoritePost(t *testing.T) {
 }
 
 // TestBehaviorBatchReport verifies POST /v1/content/behaviors accepts a mixed batch
-// of impression + dwell + click events and returns 200 with accepted count.
+// of impression + dwell + click events and returns 204.
 // contract.yaml: behavior_batch_report
 func TestBehaviorBatchReport(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
@@ -101,19 +102,11 @@ func TestBehaviorBatchReport(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var result map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if result["status"] != "ok" {
-		t.Errorf("expected status=ok, got %v", result["status"])
-	}
-	accepted, _ := result["accepted"].(float64)
-	if accepted != 3 {
-		t.Errorf("expected accepted=3, got %v", result["accepted"])
+	if body := strings.TrimSpace(rec.Body.String()); body != "" {
+		t.Fatalf("expected empty 204 body, got %q", body)
 	}
 }
 
@@ -140,18 +133,18 @@ func TestBehaviorBatchEmpty(t *testing.T) {
 	}
 }
 
-// TestReportPost verifies POST /v1/content/behaviors accepts a report action.
-// contract.yaml: behavior_batch_report / go_func: TestBehaviorBatchReport
-func TestReportPost(t *testing.T) {
+// TestBehaviorBatchWireAliases verifies the app-facing wire aliases used by
+// local gamma T3: postId/type/dwellMs.
+func TestBehaviorBatchWireAliases(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPost(t, `{"contentType":"image","title":"Report target","mediaUrls":["https://example.com/img.jpg"]}`)
+	created := createPost(t, `{"contentType":"image","title":"Wire alias target","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")
 	}
 
 	payload := fmt.Sprintf(
-		`{"userId":"user_reporter_001","events":[{"contentId":%q,"action":"report","userId":"user_reporter_001"}]}`,
+		`{"userId":"user_reporter_001","events":[{"postId":%q,"type":"dwell","dwellMs":12000,"userId":"user_reporter_001"}]}`,
 		postID,
 	)
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
@@ -159,18 +152,35 @@ func TestReportPost(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var result map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode response: %v", err)
+}
+
+// TestBehaviorBatchRejectsDedicatedLike verifies like remains on its dedicated
+// reaction route instead of the generic behavior batch.
+func TestBehaviorBatchRejectsDedicatedLike(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	created := createPost(t, `{"contentType":"image","title":"Like batch target","mediaUrls":["https://example.com/img.jpg"]}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("no _id in created post")
 	}
-	if result["status"] != "ok" {
-		t.Errorf("expected status=ok, got %v", result["status"])
+
+	payload := fmt.Sprintf(`{"events":[{"postId":%q,"type":"like"}]}`, postID)
+	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
-	accepted, _ := result["accepted"].(float64)
-	if accepted != 1 {
-		t.Errorf("expected accepted=1, got %v", result["accepted"])
+	var errResp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if errResp["code"] == nil {
+		t.Error("expected structured error response with code field")
 	}
 }

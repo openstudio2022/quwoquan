@@ -70,28 +70,28 @@ class CircleSearchItemView {
     );
   }
 
-  /// 全局搜索 [SearchHit.payload]（与历史手写字段表一致，避免与视图字段漂移）。
+  /// 全局搜索 [SearchHit.payload]（与记录手写字段表一致，避免与视图字段漂移）。
   Map<String, dynamic> toSearchHitPayload() => <String, dynamic>{
-        'id': circleId,
-        'circleId': circleId,
-        'name': name,
-        'description': description,
-        'coverUrl': coverUrl,
-        'categoryId': categoryId,
-        'subCategory': subCategory,
-        'domainId': domainId,
-        'kind': kind,
-        'displaySubjectType': displaySubjectType,
-        'memberCount': memberCount,
-        'postCount': postCount,
-        'highlightText': highlightText,
-        'matchedField': matchedField,
-        if (circleName != null && circleName!.trim().isNotEmpty)
-          'circleName': circleName,
-        if (linkedHomepageId != null) 'linkedHomepageId': linkedHomepageId,
-        if (linkedHomepageType != null) 'linkedHomepageType': linkedHomepageType,
-        if (linkedHomepageTitle != null) 'linkedHomepageTitle': linkedHomepageTitle,
-      };
+    'id': circleId,
+    'circleId': circleId,
+    'name': name,
+    'description': description,
+    'coverUrl': coverUrl,
+    'categoryId': categoryId,
+    'subCategory': subCategory,
+    'domainId': domainId,
+    'kind': kind,
+    'displaySubjectType': displaySubjectType,
+    'memberCount': memberCount,
+    'postCount': postCount,
+    'highlightText': highlightText,
+    'matchedField': matchedField,
+    if (circleName != null && circleName!.trim().isNotEmpty)
+      'circleName': circleName,
+    if (linkedHomepageId != null) 'linkedHomepageId': linkedHomepageId,
+    if (linkedHomepageType != null) 'linkedHomepageType': linkedHomepageType,
+    if (linkedHomepageTitle != null) 'linkedHomepageTitle': linkedHomepageTitle,
+  };
 }
 
 class CircleFacetBucketView {

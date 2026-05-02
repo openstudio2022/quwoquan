@@ -29,7 +29,7 @@
 4. **门禁策略**
    - 校验同一环境内 domain 唯一归属
    - 校验 process 名称规范（`*-service` 或 `seed-box`）
-   - 校验 `integration == prod` 映射
+   - 校验 `beta == gamma == prod-gray == prod` 映射
    - 接入 `make verify` 与 `scripts/gate_repo.sh`
    - `make gate-full` 必须包含并通过 `recommendation-service` Python 测试
    - recommendation-service 启动前执行配置分层与版本兼容校验；失败即 fail-fast
@@ -48,6 +48,23 @@
    - 当前以 all-in-one Sidecar 为主，确保 API 契约稳定与低延迟协作
    - 当某个领域服务需独立扩缩容时，沿用同一参数模型拆分为独立 Deployment
    - 拆分仅改变进程编排，不改变领域路由契约与 process-domain 门禁约束
+
+7. **模块化部署扩展**
+   - `process_domain_mapping.yaml` 继续作为 domain 唯一归属真相源
+   - 新增 `module_package_mapping.yaml` 表达 `deploymentPackage -> modules`
+   - 新增 `reliable_task_module_catalog.yaml` 表达 `taskType -> ownerDomain -> dispatcherModule -> workerModule -> queue -> partitionKey`
+   - 新增 `reliable_task_retention_policy.yaml` 表达 Outbox/Task/Notification/DLQ 的 TTL、归档和人工恢复策略
+   - package 中 module 的 domain 必须属于该 process/package 的 domains
+   - module 命名采用 `{domain}.{capability}`，例如 `chat.task_outbox_dispatcher`
+   - onebox 是 deployment package 组合，不是业务代码目录；禁止新增 `all-in-one` 业务目录
+   - `rec-model-service` 仍为 Python 独立进程，catalog 可引用但不得并入 Go `seed-box`
+
+8. **onebox 与拆分包等价策略**
+   - beta/gamma/prod-gray/prod 默认使用 `seed-box` onebox package
+   - 热点模块可拆为独立 package，例如 `chat-avatar-worker-package`
+   - onebox 与拆分 package 同时运行时，必须通过 `env + domain + module + shardId` lease scope 协调
+   - 拆分不改变 domain API、Outbox 事实源、task routing 或 notification fanout 语义
+   - prod-gray 可声明灰度 override，但必须有回滚条件与门禁校验
 
 ## 配置示例
 
@@ -70,6 +87,25 @@ environments:
       domains: [content, chat, integration, user, circle, assistant, gateway, orchestrator]
 ```
 
+模块包示例：
+
+```yaml
+environments:
+  beta:
+    seed-box:
+      package: seed-box
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      modules:
+        - chat.api
+        - chat.task_outbox_dispatcher
+        - chat.group_avatar_worker
+        - user.api
+        - user.avatar_propagation_worker
+        - content.api
+        - content.search_index_worker
+        - notification.fanout_worker
+```
+
 ## 适用场景与约束
 
 适用：
@@ -80,3 +116,6 @@ environments:
 - 不允许 integration/prod 拓扑漂移
 - 不允许通过部署拓扑改写领域路由契约
 - 不允许绕过 overlays 直接在 base 中固化环境特定版本与扩缩容阈值
+- 不允许 package 中 module 引用未归属 domain
+- 不允许 task catalog 引用不存在的 dispatcher/worker module
+- 不允许未声明权限的 module 访问其它 domain store/queue

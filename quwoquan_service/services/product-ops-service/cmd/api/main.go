@@ -147,7 +147,12 @@ func main() {
 	} else {
 		log.Printf("product-ops-service telemetry storage=inmemory (no mongodb.uri configured)")
 	}
-	service := newProductService(store, application.NewTelemetryService(telemetryStore, publisher))
+	var eventMirror application.EventMirror
+	if esURL := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ES_URL")); esURL != "" {
+		eventMirror = telemetrypersistence.NewElasticsearchEventMirror(esURL)
+		log.Printf("product-ops-service exception ES mirror enabled url=%s", esURL)
+	}
+	service := newProductService(store, application.NewTelemetryServiceWithMirror(telemetryStore, publisher, eventMirror))
 	if err := service.seed(); err != nil {
 		log.Fatalf("seed product ops service: %v", err)
 	}

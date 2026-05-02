@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `incident-detection-escalation`
+## Folded current node `incident-detection-escalation`
 
 # L5 特性：incident-detection-escalation
 

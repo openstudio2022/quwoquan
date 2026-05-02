@@ -12,7 +12,7 @@
 |------|------|----------|
 | **L1** | 无（Mock） | delivery-gate 阶段 |
 | **L2** | MongoDB、Redis（testcontainers） | delivery-gate 阶段 |
-| **L3** | 已部署 staging HTTP | pre-release-gate 的 deploy 完成后 |
+| **L3** | 已部署 gamma HTTP | pre-release-gate 的 deploy 完成后 |
 | **L4** | 已部署 staging + 真机/FTL | pre-release-gate 的 deploy 完成后 |
 
 L3、L4 必须等打包并部署到 integration 后才能跑，否则无法验证真实环境。

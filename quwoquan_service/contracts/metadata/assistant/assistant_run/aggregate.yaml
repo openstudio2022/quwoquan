@@ -5,7 +5,7 @@ aggregate_root: AssistantRun
 description: |
   助手执行聚合。记录每次小趣助手的执行上下文、输入输出和交互事件。
   MongoDB 存储，支撑高频写入和灵活 schema（LLM 输出多变）。
-  contextEmbedding 支持 RAG 语义检索历史 run。
+  contextEmbedding 支持 RAG 语义检索记录 run。
 
 storage_backend: mongodb
 cache_layer: redis

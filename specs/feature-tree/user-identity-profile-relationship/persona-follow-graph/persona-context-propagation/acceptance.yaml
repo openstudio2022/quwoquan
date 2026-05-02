@@ -58,7 +58,7 @@ scenario_acceptance:
         - "flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/ui/content/entry/contract/publish_payload_contract_test.dart test/cloud/chat/contract/chat_repository_contract_test.dart test/ui/chat/journeys/chat_message_send_journey_test.dart test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart"
     status: implemented
   A2:
-    title: 下游域正确落库 persona 身份与历史快照
+    title: 下游域正确落库 persona 身份与记录快照
     scenario: content/chat/circle/invite/notification 消费 persona 标识与作者快照
     journey_step: persist action attribution
     done_when:
@@ -67,7 +67,7 @@ scenario_acceptance:
       - circle 与 invite 的归属不落到 owner
       - notification 打开时可恢复正确 persona 上下文
     edge_cases:
-      - persona 停用后查看历史内容或消息
+      - persona 停用后查看记录内容或消息
       - 通知延迟到达时当前 active persona 已切换
     linked_plan_items:
       - P2

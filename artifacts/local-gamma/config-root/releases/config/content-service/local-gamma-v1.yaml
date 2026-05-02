@@ -1,0 +1,24 @@
+config:
+  version: "local-gamma-v1"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+service:
+  http:
+    addr: ":18080"
+mongo:
+  uri: "mongodb://mongodb:27017"
+  database: "quwoquan_content"
+  collection: "posts"
+redis:
+  rec:
+    mode: standalone
+    addr: "redis:6379"
+    db: 0
+  general:
+    mode: standalone
+    addr: "redis:6379"
+    db: 1
+rec_model_service:
+  enabled: true
+  url: "http://rec-model-service:8000"
+  timeout_ms: 100

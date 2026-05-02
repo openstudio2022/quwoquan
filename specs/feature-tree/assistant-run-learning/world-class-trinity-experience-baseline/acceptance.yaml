@@ -92,7 +92,7 @@ level_acceptance:
       functions: []
   A6:
     criteria: 过程区统一为 1 行摘要 + 1 个可展开来源计数；默认可解释但折叠，且过程文案围绕用户任务进展而不是内部 trace 阶段名。过程展示只消费
-      UserEvent 与 uiProcessTimelineV2，并在流式、完成态、历史重载态一致
+      UserEvent 与 uiProcessTimelineV2，并在流式、完成态、记录重载态一致
     status: pending
     linked_tasks:
     - T17

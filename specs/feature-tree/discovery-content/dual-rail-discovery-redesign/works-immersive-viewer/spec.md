@@ -26,6 +26,9 @@
   - 垂直 PageView 与水平子 PageView 之间手势竞争须通过 `GestureDetector.behavior` + `HorizontalDragGestureRecognizer` 精细控制
   - 边缘 15px 保护区不得响应水平拖拽（iOS 系统返回手势保护）
   - Drawer 以 `Overlay` 定位，不影响底部 SafeArea / Home Indicator
+  - 底部工具栏必须共享媒体 rail：作者组左锚 rail 左缘，赞/转/评动作组右锚 rail 右缘，iPad 不得把媒体内容、顶栏或底栏收窄居中。
+  - 作者名最多展示 12 个 Unicode 字符；作者名槽按屏幕断点固定为 compact 4 字、regular 5 字、expanded/iPad 6 字，短名不得让关注按钮贴近文本。
+  - 关注按钮固定接在作者名槽之后，显隐动画不得改变作者名槽、动作组右锚或 rail 对齐；作者名单行放不下时改用两行紧凑展示。
 
 ## 子节点
 
@@ -45,3 +48,4 @@
 - A3：边缘 15px 无水平拖拽响应（iOS 系统返回手势不受干扰）
 - A4：进入作品轨 → `worksForceDarkProvider` 激活，退出 → 恢复系统主题
 - A5：全部 L4 子节点集成后，Mock 模式下三类媒体均可正确渲染
+- A6：iPad 下 3 字作者名仍占 6 字槽，关注按钮位于 6 字槽后；5 字作者名应在 6 字槽内完整单行展示。

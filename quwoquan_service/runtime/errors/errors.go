@@ -57,6 +57,8 @@ type AppError struct {
 	Code         ErrorCode
 	UserMessage  string
 	DebugMessage string
+	Location     RuntimeErrorLocation
+	Context      RuntimeErrorContext
 }
 
 type ErrorResponse struct {
@@ -193,7 +195,50 @@ func NewAppError(code ErrorCode, userMessage string, debugMessage string) *AppEr
 		Code:         code,
 		UserMessage:  userMessage,
 		DebugMessage: debugMessage,
+		Location: RuntimeErrorLocation{
+			BusinessObject: "cloud_request",
+			FunctionModule: "runtime_errors",
+		},
+		Context: RuntimeErrorContext{
+			Attributes: []RuntimeErrorContextAttribute{
+				{Key: "module", Value: string(code.Module)},
+				{Key: "reason", Value: code.Reason},
+			},
+		},
 	}
+}
+
+func (e *AppError) WithLocation(location RuntimeErrorLocation) *AppError {
+	if e == nil {
+		return e
+	}
+	if strings.TrimSpace(location.BusinessObject) != "" {
+		e.Location.BusinessObject = strings.TrimSpace(location.BusinessObject)
+	}
+	if strings.TrimSpace(location.FunctionModule) != "" {
+		e.Location.FunctionModule = strings.TrimSpace(location.FunctionModule)
+	}
+	e.Location.SourceFilePath = strings.TrimSpace(location.SourceFilePath)
+	e.Location.SourceLineNumber = location.SourceLineNumber
+	e.Location.SourceLineText = strings.TrimSpace(location.SourceLineText)
+	return e
+}
+
+func (e *AppError) WithContextAttributes(attributes ...RuntimeErrorContextAttribute) *AppError {
+	if e == nil {
+		return e
+	}
+	for _, attribute := range attributes {
+		key := strings.TrimSpace(attribute.Key)
+		if key == "" {
+			continue
+		}
+		e.Context.Attributes = append(e.Context.Attributes, RuntimeErrorContextAttribute{
+			Key:   key,
+			Value: strings.TrimSpace(attribute.Value),
+		})
+	}
+	return e
 }
 
 func (e *AppError) Error() string {
@@ -217,27 +262,56 @@ func ToResponseWithOptions(err *AppError, opts ResponseOptions) ErrorResponse {
 	}
 	return ErrorResponse{
 		Code:         err.Code.String(),
-		Origin:       runtimeOriginFromLegacyKind(err.Code.Kind),
-		Nature:       runtimeNatureFromLegacyKind(err.Code.Kind, err.Code.Reason),
+		Origin:       runtimeOriginFromCurrentKind(err.Code.Kind),
+		Nature:       runtimeNatureFromCurrentKind(err.Code.Kind, err.Code.Reason),
 		UserMessage:  err.UserMessage,
 		DebugMessage: debugMessage,
 		Module:       string(err.Code.Module),
-		Kind:         runtimeKindFromLegacy(err.Code.Kind, err.Code.Reason),
+		Kind:         runtimeKindFromCurrent(err.Code.Kind, err.Code.Reason),
 		Reason:       err.Code.Reason,
 		Message:      debugMessage,
 		RequestID:    opts.RequestID,
 		TraceID:      opts.TraceID,
-		Location: RuntimeErrorLocation{
-			BusinessObject: "cloud_request",
-			FunctionModule: "runtime_errors",
-		},
-		Context: RuntimeErrorContext{
-			Attributes: []RuntimeErrorContextAttribute{
-				{Key: "module", Value: string(err.Code.Module)},
-				{Key: "reason", Value: err.Code.Reason},
-			},
-		},
+		Location:     normalizeRuntimeErrorLocation(err.Location),
+		Context:      normalizeRuntimeErrorContext(err.Context, err.Code),
 	}
+}
+
+func normalizeRuntimeErrorLocation(location RuntimeErrorLocation) RuntimeErrorLocation {
+	location.BusinessObject = strings.TrimSpace(location.BusinessObject)
+	location.FunctionModule = strings.TrimSpace(location.FunctionModule)
+	location.SourceFilePath = strings.TrimSpace(location.SourceFilePath)
+	location.SourceLineText = strings.TrimSpace(location.SourceLineText)
+	if location.BusinessObject == "" {
+		location.BusinessObject = "cloud_request"
+	}
+	if location.FunctionModule == "" {
+		location.FunctionModule = "runtime_errors"
+	}
+	return location
+}
+
+func normalizeRuntimeErrorContext(context RuntimeErrorContext, code ErrorCode) RuntimeErrorContext {
+	out := RuntimeErrorContext{Attributes: make([]RuntimeErrorContextAttribute, 0, len(context.Attributes)+2)}
+	seen := map[string]struct{}{}
+	for _, attribute := range context.Attributes {
+		key := strings.TrimSpace(attribute.Key)
+		if key == "" {
+			continue
+		}
+		seen[key] = struct{}{}
+		out.Attributes = append(out.Attributes, RuntimeErrorContextAttribute{
+			Key:   key,
+			Value: strings.TrimSpace(attribute.Value),
+		})
+	}
+	if _, ok := seen["module"]; !ok {
+		out.Attributes = append(out.Attributes, RuntimeErrorContextAttribute{Key: "module", Value: string(code.Module)})
+	}
+	if _, ok := seen["reason"]; !ok {
+		out.Attributes = append(out.Attributes, RuntimeErrorContextAttribute{Key: "reason", Value: code.Reason})
+	}
+	return out
 }
 
 func NormalizeError(err error) *AppError {
@@ -256,7 +330,7 @@ func NormalizeError(err error) *AppError {
 	return NewAppError(NewCode(ModuleUnknown, KindSystem, DefaultInternalReason), DefaultUserMessage, err.Error())
 }
 
-func runtimeOriginFromLegacyKind(kind Kind) string {
+func runtimeOriginFromCurrentKind(kind Kind) string {
 	if kind == KindUser {
 		return "user"
 	}
@@ -269,7 +343,7 @@ func runtimeOriginFromLegacyKind(kind Kind) string {
 	return "system"
 }
 
-func runtimeKindFromLegacy(kind Kind, reason string) string {
+func runtimeKindFromCurrent(kind Kind, reason string) string {
 	if kind == KindUser {
 		switch reason {
 		case "unauthorized":
@@ -281,6 +355,9 @@ func runtimeKindFromLegacy(kind Kind, reason string) string {
 		case "rate_limited":
 			return "rateLimited"
 		default:
+			if strings.HasSuffix(reason, "_not_found") {
+				return "notFound"
+			}
 			return "validation"
 		}
 	}
@@ -299,7 +376,7 @@ func runtimeKindFromLegacy(kind Kind, reason string) string {
 	return "internal"
 }
 
-func runtimeNatureFromLegacyKind(kind Kind, reason string) string {
+func runtimeNatureFromCurrentKind(kind Kind, reason string) string {
 	if kind == KindNetwork || kind == KindMiddleware {
 		return "transient"
 	}
@@ -336,6 +413,8 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusForbidden
 		case "not_found", "route_not_found":
 			return http.StatusNotFound
+		case "media_not_ready":
+			return http.StatusUnprocessableEntity
 		case "conflict":
 			return http.StatusConflict
 		case "rate_limited":
@@ -344,6 +423,9 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusBadRequest
 		case "permission_denied", "location_permission_required":
 			return http.StatusForbidden
+		}
+		if strings.HasSuffix(reason, "_not_found") {
+			return http.StatusNotFound
 		}
 	}
 	if kind == KindNetwork && reason == "timeout" {

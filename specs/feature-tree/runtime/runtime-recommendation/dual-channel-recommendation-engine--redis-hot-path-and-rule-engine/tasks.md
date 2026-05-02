@@ -29,7 +29,7 @@
 - [ ] 优化：Bloom Filter 处理超大 exposed_set（见 `redis-cluster-protocol` 未来演进任务）
 - [ ] 优化：sync.Pool 复用 candidate 切片
 
-## Folded legacy node `ml-model-integration-and-ab-test`
+## Folded current node `ml-model-integration-and-ab-test`
 
 # 开发任务：ml-model-integration-and-ab-test
 
@@ -67,4 +67,4 @@
 - [ ] 实现：在线学习闭环（FeedbackRecorder → 训练数据 → 模型更新）
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `ml-model-integration-and-ab-test` (from `runtime/runtime-recommendation/dual-channel-recommendation-engine/redis-hot-path-and-rule-engine/ml-model-integration-and-ab-test`)
+- [ ] Migrated current node: `ml-model-integration-and-ab-test` (from `runtime/runtime-recommendation/dual-channel-recommendation-engine/redis-hot-path-and-rule-engine/ml-model-integration-and-ab-test`)

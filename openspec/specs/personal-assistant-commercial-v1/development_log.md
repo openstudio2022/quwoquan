@@ -5,7 +5,7 @@
 - 本轮实现范围限定于趣我圈 App 端。
 - 云端接口与存储仅预留扩展位，默认走本地 mock。
 
-## 已完成事项（对齐历史澄清）
+## 已完成事项（对齐记录澄清）
 
 1. 能力目录与逐步披露检索
    - `AssistantRunRequest` 增加 `capabilityCatalog/contextScopeHint/privacyProfile/privacyPolicy`
@@ -68,7 +68,7 @@
 
 ## 验收建议（当前可执行）
 
-- 场景回归：天气、创作优化、圈子相关、历史对话追问
+- 场景回归：天气、创作优化、圈子相关、记录对话追问
 - 隐私策略：allow/limited/deny 三档切换验证
 - 检索策略：仅本地能力、混合能力、web 限轮能力验证
 - 学习闭环：检查 learning_store 是否落盘、分项评分是否生成、mock sync 是否收到事件

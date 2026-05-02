@@ -10,7 +10,7 @@
 
 - `chat-service` 增加群头像字段
 - 生成服务端预合成群头像
-- 客户端改为消费 `groupAvatarUrl`
+- 客户端改为只消费统一 `avatarUrl`
 
 ## Phase 3：接入用户头像版本化
 

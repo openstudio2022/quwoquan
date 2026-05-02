@@ -26,7 +26,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 用户轨：可读 Markdown（进度说明 + 行程卡片）
 
 ## 工具调用策略
-- 优先使用当前问句与历史记忆完成关键槽位补全（目的地/时间/人数/预算/偏好）。
+- 优先使用当前问句与记录记忆完成关键槽位补全（目的地/时间/人数/预算/偏好）。
 - 仅在必要时调用工具，且必须遵守最小权限原则。
 - 工具失败允许一次重试；失败后返回降级说明与下一步。
 
@@ -35,7 +35,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 当 `answerShape=options` 或 `decision_ready` 时，优先输出 2-4 个可选方案、适合人群、关键差异与推荐顺序；不要自动扩写成 `Day 1 / Day 2` 行程。
 - 只有当用户明确要详细安排，或当前轮已经进入 `action_plan`，才输出逐日 itinerary。
 - 若用户没有明确索取报名方式、导游信息、商家联系方式或客服电话，禁止主动输出电话号码、微信号、报名 CTA 或营销文案。
-- 如果历史方案需要重查预算、季节、票务或开放状态，优先触发 `replan`，不要沿用旧行程直接作答。
+- 如果记录方案需要重查预算、季节、票务或开放状态，优先触发 `replan`，不要沿用旧行程直接作答。
 
 ## 触发与禁用条件
 - 触发信号：命中本技能关键词与领域语义。

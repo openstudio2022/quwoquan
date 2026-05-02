@@ -3,7 +3,7 @@ version: 1
 # Deployment process -> domain ownership mapping by environment.
 # Rules:
 # 1) Within one environment, a domain can only belong to one process.
-# 2) integration and prod mapping must be identical.
+# 2) beta, gamma, prod-gray 与 prod 映射须一致；integration 与 prod 的拓扑映射须一致（门禁）。
 # 3) External API routes remain domain-based and cannot be changed by deployment topology.
 #
 # Redis Scene 独立部署说明（详见 redis_keyspace.yaml scene_routing）：
@@ -11,8 +11,9 @@ version: 1
 #   scene 归属由服务自身 config.yaml redis.scenes 声明，不在此文件管理。
 #   典型部署：
 #     dev       → 三个 scene 共用 1 个 standalone（或 in-memory）
-#     integration → rec cluster + general standalone + realtime cluster
-#     prod      → 三个 scene 各自 cluster，独立扩缩容
+#     alpha/beta → 本地 standalone（或 in-memory）
+#     gamma      → rec cluster + general standalone + realtime cluster
+#     prod-gray/prod → 三个 scene 各自 cluster，独立扩缩容
 environments:
   dev:
     content-service:
@@ -45,6 +46,96 @@ environments:
       domains: [turn]
 
   integration:
+    entity-service:
+      domains: [entity]
+    product-ops-service:
+      domains: [ops]
+    recommendation-service:
+      domains: [recommendation]
+    realtime-gateway:
+      domains: [realtime]
+    rtc-service:
+      domains: [rtc]
+    livekit-sfu:
+      domains: [media]
+    coturn:
+      domains: [turn]
+    assistant-service:
+      domains: [assistant]
+    seed-box:
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+
+  alpha:
+    content-service:
+      domains: [content]
+    entity-service:
+      domains: [entity]
+    product-ops-service:
+      domains: [ops]
+    circle-service:
+      domains: [circle]
+    assistant-service:
+      domains: [assistant]
+    notification-service:
+      domains: [notification]
+    integration-service:
+      domains: [integration]
+    recommendation-service:
+      domains: [recommendation]
+    chat-service:
+      domains: [chat]
+    user-service:
+      domains: [user]
+    realtime-gateway:
+      domains: [realtime]
+    rtc-service:
+      domains: [rtc]
+    livekit-sfu:
+      domains: [media]
+    coturn:
+      domains: [turn]
+
+  beta:
+    entity-service:
+      domains: [entity]
+    product-ops-service:
+      domains: [ops]
+    recommendation-service:
+      domains: [recommendation]
+    realtime-gateway:
+      domains: [realtime]
+    rtc-service:
+      domains: [rtc]
+    livekit-sfu:
+      domains: [media]
+    coturn:
+      domains: [turn]
+    assistant-service:
+      domains: [assistant]
+    seed-box:
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+
+  gamma:
+    entity-service:
+      domains: [entity]
+    product-ops-service:
+      domains: [ops]
+    recommendation-service:
+      domains: [recommendation]
+    realtime-gateway:
+      domains: [realtime]
+    rtc-service:
+      domains: [rtc]
+    livekit-sfu:
+      domains: [media]
+    coturn:
+      domains: [turn]
+    assistant-service:
+      domains: [assistant]
+    seed-box:
+      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+
+  prod-gray:
     entity-service:
       domains: [entity]
     product-ops-service:

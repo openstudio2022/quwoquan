@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
@@ -217,6 +219,82 @@ func (s *goRedisSub) Channel() <-chan Message {
 
 func (s *goRedisSub) Close() error {
 	return s.ps.Close()
+}
+
+func (c *goRedisClient) XGroupCreateMkStream(ctx context.Context, stream string, group string, start string) error {
+	err := c.rdb.XGroupCreateMkStream(ctx, stream, group, start).Err()
+	if err != nil && strings.Contains(err.Error(), "BUSYGROUP") {
+		return nil
+	}
+	return err
+}
+
+func (c *goRedisClient) XAdd(ctx context.Context, stream string, values map[string]string) (string, error) {
+	args := make(map[string]interface{}, len(values))
+	for key, value := range values {
+		args[key] = value
+	}
+	return c.rdb.XAdd(ctx, &goredis.XAddArgs{
+		Stream: stream,
+		Values: args,
+	}).Result()
+}
+
+func (c *goRedisClient) XReadGroup(
+	ctx context.Context,
+	group string,
+	consumer string,
+	streams map[string]string,
+	count int64,
+	block time.Duration,
+) ([]StreamMessage, error) {
+	streamArgs := make([]string, 0, len(streams)*2)
+	names := make([]string, 0, len(streams))
+	for stream := range streams {
+		names = append(names, stream)
+	}
+	sort.Strings(names)
+	for _, stream := range names {
+		streamArgs = append(streamArgs, stream)
+	}
+	for _, stream := range names {
+		streamArgs = append(streamArgs, streams[stream])
+	}
+	result, err := c.rdb.XReadGroup(ctx, &goredis.XReadGroupArgs{
+		Group:    group,
+		Consumer: consumer,
+		Streams:  streamArgs,
+		Count:    count,
+		Block:    block,
+	}).Result()
+	if errors.Is(err, goredis.Nil) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := make([]StreamMessage, 0)
+	for _, stream := range result {
+		for _, message := range stream.Messages {
+			values := make(map[string]string, len(message.Values))
+			for key, value := range message.Values {
+				values[key] = fmt.Sprint(value)
+			}
+			out = append(out, StreamMessage{
+				Stream: stream.Stream,
+				ID:     message.ID,
+				Values: values,
+			})
+		}
+	}
+	return out, nil
+}
+
+func (c *goRedisClient) XAck(ctx context.Context, stream string, group string, ids ...string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return c.rdb.XAck(ctx, stream, group, ids...).Err()
 }
 
 // ── Pipeline ────────────────────────────────────────────

@@ -70,6 +70,7 @@ func TestMain(m *testing.M) {
 	circleStore := persistence.NewMongoCircleStore(mongoDB.Collection("circles"))
 	memberStore := persistence.NewMongoMemberStore(mongoDB.Collection("circle_members"))
 	fileStore := persistence.NewMongoFileStore(mongoDB.Collection("circle_files"))
+	groupStore := persistence.NewMongoGroupStore(mongoDB.Collection("circle_groups"))
 
 	// Wrap with Redis cache
 	rdb := cache.NewMiniredisClient(mr.Addr())
@@ -81,6 +82,7 @@ func TestMain(m *testing.M) {
 		cachedCircleStore, memberStore, fileStore,
 		application.WithEventPublisher(eventSpy),
 		application.WithFeedStore(feedStore),
+		application.WithGroupStore(groupStore),
 	)
 	fileService := application.NewFileService(fileStore, cachedCircleStore)
 
@@ -111,7 +113,7 @@ func cleanCollections(t *testing.T) {
 	if mongoDB == nil {
 		return
 	}
-	for _, coll := range []string{"circles", "circle_members", "circle_files", "posts"} {
+	for _, coll := range []string{"circles", "circle_members", "circle_files", "circle_groups", "posts"} {
 		mongoDB.Collection(coll).DeleteMany(context.Background(), bson.M{})
 	}
 	mr.FlushAll()

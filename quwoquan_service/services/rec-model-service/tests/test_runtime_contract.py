@@ -33,7 +33,7 @@ runtime:
 """.strip(),
     )
     _write_yaml(
-        tmp_path / "configs" / service / "integration" / "config.yaml",
+        tmp_path / "configs" / service / "gamma" / "config.yaml",
         """
 runtime:
   model_profile: "integration"
@@ -49,7 +49,7 @@ runtime:
 """.strip(),
     )
 
-    monkeypatch.setenv("APP_ENV", "integration")
+    monkeypatch.setenv("APP_ENV", "gamma")
     monkeypatch.setenv("SERVICE_NAME", service)
     monkeypatch.setenv("CONFIG_ROOT", str(tmp_path))
     monkeypatch.setenv("CONFIG_VERSION", version)
@@ -75,11 +75,11 @@ def test_bootstrap_fail_fast_when_version_file_missing(
         "config:\n  version: v0.0.1\n",
     )
     _write_yaml(
-        tmp_path / "configs" / service / "integration" / "config.yaml",
+        tmp_path / "configs" / service / "gamma" / "config.yaml",
         "service:\n  http:\n    addr: ':18080'\n",
     )
 
-    monkeypatch.setenv("APP_ENV", "integration")
+    monkeypatch.setenv("APP_ENV", "gamma")
     monkeypatch.setenv("SERVICE_NAME", service)
     monkeypatch.setenv("CONFIG_ROOT", str(tmp_path))
     monkeypatch.setenv("CONFIG_VERSION", "v-missing")
@@ -92,8 +92,8 @@ def test_bootstrap_fail_fast_when_version_file_missing(
 @pytest.mark.parametrize(
     ("app_env", "env_dir", "expected_profile"),
     [
-        ("dev", "local", "dev-local"),
-        ("integration", "integration", "integration"),
+        ("alpha", "alpha", "alpha-local"),
+        ("gamma", "gamma", "integration"),
         ("prod", "prod", "prod"),
     ],
 )

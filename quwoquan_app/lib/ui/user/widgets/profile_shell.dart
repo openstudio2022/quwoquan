@@ -118,7 +118,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
 
   void _handleTabSwipe(TabSwipeDirection direction) {
     final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
-    if (_trySwitchVisibleSecondaryTab(direction, notifier)) {
+    final state = ref.read(profileNotifierProvider(widget.userId));
+    if (_trySwitchVisibleSecondaryTab(direction, notifier, state)) {
       return;
     }
     final tabIds = UserProfileUIConfig.profileTabs
@@ -138,8 +139,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   bool _trySwitchVisibleSecondaryTab(
     TabSwipeDirection direction,
     ProfileNotifier notifier,
+    ProfileState state,
   ) {
-    final state = notifier.state;
     if (_activeTabId == 'circles') {
       return false;
     }
@@ -297,10 +298,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   Widget _buildConstrainedContent(Widget child) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth > AppSpacing.feedMaxContentWidth;
-        final maxWidth = isWide
-            ? constraints.maxWidth - AppSpacing.containerLg * 2
-            : AppSpacing.feedMaxContentWidth;
+        final maxWidth = AppSpacing.adaptiveFeedMaxContentWidth(
+          constraints.maxWidth,
+        );
         return Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -454,6 +454,16 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return _curveTransform(raw, UserProfileUIConfig.scrollMotion.collapseCurve);
   }
 
+  String? _firstNonEmptyString(Iterable<String?> values) {
+    for (final value in values) {
+      final trimmed = value?.trim();
+      if (trimmed != null && trimmed.isNotEmpty) {
+        return trimmed;
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     _scheduleSectionMeasurement();
@@ -483,12 +493,12 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final bio = (profile?.bio.isNotEmpty ?? false)
         ? profile?.bio
         : userData?.bio;
-    final backgroundUrl =
-        widget.initialBackgroundUrl ??
-        (isMine ? userData?.backgroundImage : null) ??
-        ((profile?.backgroundUrl.isNotEmpty ?? false)
-            ? profile?.backgroundUrl
-            : null);
+    final backgroundUrl = _firstNonEmptyString([
+      widget.initialBackgroundUrl,
+      if (isMine) userData?.backgroundImage,
+      profile?.backgroundUrl,
+      ...state.creations.map((post) => post.authorBackgroundUrl),
+    ]);
     final identityPinnedProgress = _identityPinnedProgress(context);
     final primaryPinnedProgress = _primaryTabPinnedProgress(context);
     final toolbarBackgroundOpacity = max(
@@ -817,111 +827,118 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
               ? Border(bottom: _profileSeparatorSide(border))
               : null,
         ),
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppSpacing.feedMaxContentWidth,
-            ),
-            child: SizedBox(
-              height: _compactToolbarHeight(context),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: sideSlotWidth,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: widget.mode == ProfileMode.other
-                          ? ProfileIosIconButton(
-                              icon: CupertinoIcons.back,
-                              onPressed: widget.onBack ?? () => context.pop(),
-                              backgroundColor: tintFill,
-                              foregroundColor: compactForeground,
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                  ),
-                  Expanded(
-                    child: Opacity(
-                      opacity: opacity,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Center(
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: constraints.maxWidth,
-                              ),
-                              child: Row(
-                                key: const ValueKey<String>(
-                                  'profile-shell-compact-identity',
-                                ),
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircleAvatar(
-                                    radius: AppSpacing.avatarUserSm / 2,
-                                    backgroundColor: tintFill,
-                                    backgroundImage:
-                                        avatarUrl != null &&
-                                            avatarUrl.isNotEmpty
-                                        ? NetworkImage(avatarUrl)
-                                        : null,
-                                    child:
-                                        avatarUrl == null || avatarUrl.isEmpty
-                                        ? Icon(
-                                            CupertinoIcons
-                                                .person_crop_circle_fill,
-                                            size: AppSpacing.iconMedium,
-                                            color: compactForeground,
-                                          )
-                                        : null,
-                                  ),
-                                  SizedBox(width: AppSpacing.containerSm),
-                                  Flexible(
-                                    child: Text(
-                                      displayName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: AppTypography.iosNavTitle,
-                                        fontWeight: AppTypography.medium,
-                                        color: compactForeground,
-                                        letterSpacing: -0.24,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final maxWidth = AppSpacing.adaptiveFeedMaxContentWidth(
+              constraints.maxWidth,
+            );
+            return Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxWidth),
+                child: SizedBox(
+                  height: _compactToolbarHeight(context),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: sideSlotWidth,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: widget.mode == ProfileMode.other
+                              ? ProfileIosIconButton(
+                                  icon: CupertinoIcons.back,
+                                  onPressed:
+                                      widget.onBack ?? () => context.pop(),
+                                  backgroundColor: tintFill,
+                                  foregroundColor: compactForeground,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                       ),
-                    ),
+                      Expanded(
+                        child: Opacity(
+                          opacity: opacity,
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return Center(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: constraints.maxWidth,
+                                  ),
+                                  child: Row(
+                                    key: const ValueKey<String>(
+                                      'profile-shell-compact-identity',
+                                    ),
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: AppSpacing.avatarUserSm / 2,
+                                        backgroundColor: tintFill,
+                                        backgroundImage:
+                                            avatarUrl != null &&
+                                                avatarUrl.isNotEmpty
+                                            ? NetworkImage(avatarUrl)
+                                            : null,
+                                        child:
+                                            avatarUrl == null ||
+                                                avatarUrl.isEmpty
+                                            ? Icon(
+                                                CupertinoIcons
+                                                    .person_crop_circle_fill,
+                                                size: AppSpacing.iconMedium,
+                                                color: compactForeground,
+                                              )
+                                            : null,
+                                      ),
+                                      SizedBox(width: AppSpacing.containerSm),
+                                      Flexible(
+                                        child: Text(
+                                          displayName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: AppTypography.iosNavTitle,
+                                            fontWeight: AppTypography.medium,
+                                            color: compactForeground,
+                                            letterSpacing: -0.24,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: sideSlotWidth,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: widget.mode == ProfileMode.mine
+                              ? ProfileIosIconButton(
+                                  icon: CupertinoIcons.settings,
+                                  onPressed: () =>
+                                      context.push(AppRoutePaths.settings),
+                                  backgroundColor: tintFill,
+                                  foregroundColor: compactForeground,
+                                )
+                              : ProfileIosIconButton(
+                                  icon: CupertinoIcons.ellipsis,
+                                  onPressed: () => _showMoreOptions(context),
+                                  backgroundColor: tintFill,
+                                  foregroundColor: compactForeground,
+                                ),
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(
-                    width: sideSlotWidth,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: widget.mode == ProfileMode.mine
-                          ? ProfileIosIconButton(
-                              icon: CupertinoIcons.settings,
-                              onPressed: () =>
-                                  context.push(AppRoutePaths.settings),
-                              backgroundColor: tintFill,
-                              foregroundColor: compactForeground,
-                            )
-                          : ProfileIosIconButton(
-                              icon: CupertinoIcons.ellipsis,
-                              onPressed: () => _showMoreOptions(context),
-                              backgroundColor: tintFill,
-                              foregroundColor: compactForeground,
-                            ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

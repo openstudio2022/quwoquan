@@ -150,7 +150,7 @@ void main() {
       final processText = journey.entries
           .map((item) => '${item.headline} ${item.detail}'.trim())
           .join(' ');
-      expect(processText, isNot(contains('压缩以上对话历史为简洁摘要')));
+      expect(processText, isNot(contains('压缩以上对话记录为简洁摘要')));
       expect(processText, isNot(contains('summarize_session')));
       expect(processText, isNot(contains('typed_plan_resolved')));
       expect(processText, isNot(contains('repair invalid synthesis output')));

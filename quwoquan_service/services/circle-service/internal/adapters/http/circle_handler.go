@@ -138,6 +138,8 @@ func (h *CircleHandler) handleCircleSubRoutes(w http.ResponseWriter, r *http.Req
 		h.handleLeaveCircle(w, r, circleID)
 	case "members":
 		h.handleMembers(w, r, circleID, parts[2:])
+	case "groups":
+		h.handleGroups(w, r, circleID, parts[2:])
 	case "feed":
 		h.handleFeed(w, r, circleID, parts[2:])
 	case "stats":
@@ -341,6 +343,32 @@ func (h *CircleHandler) handleUpdateSections(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *CircleHandler) handleGroups(w http.ResponseWriter, r *http.Request, circleID string, rest []string) {
+	if len(rest) != 0 || r.Method != http.MethodGet {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only GET"))
+		return
+	}
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	if limit <= 0 {
+		limit = 20
+	}
+	resp, err := h.circleService.ListGroups(r.Context(), application.ListCircleGroupsRequest{
+		CircleID:      circleID,
+		GroupType:     q.Get("groupType"),
+		Visibility:    q.Get("visibility"),
+		ParentGroupID: q.Get("parentGroupId"),
+		NodeType:      q.Get("nodeType"),
+		Cursor:        q.Get("cursor"),
+		Limit:         limit,
+	})
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // --- Files ---

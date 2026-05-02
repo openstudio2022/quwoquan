@@ -16,7 +16,7 @@
 
 - [x] **C3** 实现 `applyEnvOverrides()` + `applyRedisSceneEnv(prefix, cfg)`
   - 覆盖 `CONTENT_REDIS_REC_*` 和 `CONTENT_REDIS_GENERAL_*`
-  - 向后兼容旧版 `CONTENT_REDIS_ADDR / PASSWORD / DB`
+  - 向后兼容过往版本 `CONTENT_REDIS_ADDR / PASSWORD / DB`
   - 文件：`cmd/api/main.go`
 
 - [x] **C4** 重构 `buildRedisClient` → `buildRecRedisClient`

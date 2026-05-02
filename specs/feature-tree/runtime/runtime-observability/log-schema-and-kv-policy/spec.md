@@ -5,7 +5,7 @@
 建立端云一体可观测日志统一契约，覆盖：
 
 - 统一信封：`logType + level + sourceDomain + sourceService + component + target + action`
-- 统一关联：`correlationId + traceId + spanId + requestId`
+- 统一关联：`sessionId + pageVisitId + traceId + requestId`
 - 统一失败码：`failureCode` 枚举化，禁止仅靠 message 文本归因
 - 小趣助手增强：感知/回写/流式/UI 联动字段标准化
 
@@ -24,12 +24,12 @@
 ## 约束
 
 - 与 runtime 上层契约一致，禁止服务内重复定义日志语义
-- 兼容历史查询：保留 `legacyLogType`
+- 兼容记录查询：查询脚本可读取记录 `currentLogType`，新写入链路不得继续写入该字段
 - Release 模式遵循采样策略，错误日志必须全量
 
 ## 验收标准
 
 - A1：端侧日志事件包含统一信封必填字段
-- A3：工具回合与 LLM 回合可通过 `correlationId` 串联
+- A3：工具回合与 LLM 回合可通过 `runId + traceId + requestId` 串联
 - A4：端云Python联合定位条件文档化并可执行
 - A7：日志文档、诊断模板、测试门禁三处一致

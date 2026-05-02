@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/recent_search_read_presentation.dart';
-import 'package:quwoquan_app/components/avatar/group_avatar_grid.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/search/providers/search_coordinator.dart';
@@ -55,9 +54,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(
-      searchCoordinatorProvider(widget.launchContext),
-    );
+    final state = ref.watch(searchCoordinatorProvider(widget.launchContext));
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final backgroundColor = SettingsSemanticConstants.pageBackground(isDark);
     final fgPrimary = AppColorsFunctional.getColor(
@@ -637,7 +634,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         return _BasicSuggestionTile(
           leading: _buildConversationLeading(
             avatarUrl: mostUsed.avatarUrl,
-            avatarCompositeUrls: mostUsed.avatarCompositeUrls,
             isDark: isDark,
             fallbackIcon: switch (mostUsed.targetKind) {
               MostUsedTargetKind.contact => CupertinoIcons.person_fill,
@@ -682,7 +678,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         return _BasicSuggestionTile(
           leading: _buildConversationLeading(
             avatarUrl: contact.avatarUrl,
-            avatarCompositeUrls: const <String>[],
             isDark: isDark,
             fallbackIcon: CupertinoIcons.person_fill,
           ),
@@ -720,7 +715,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
         return _BasicSuggestionTile(
           leading: _buildConversationLeading(
             avatarUrl: circle.coverUrl,
-            avatarCompositeUrls: const <String>[],
             isDark: isDark,
             fallbackIcon: CupertinoIcons.person_3_fill,
           ),
@@ -1423,7 +1417,6 @@ class _ChatRecordTile extends StatelessWidget {
         children: [
           _buildConversationLeading(
             avatarUrl: suggestion.avatarUrl,
-            avatarCompositeUrls: suggestion.avatarCompositeUrls,
             isDark: isDark,
             fallbackIcon: suggestion.conversationType == 'group'
                 ? CupertinoIcons.person_2_fill
@@ -1591,7 +1584,6 @@ Widget _highlightedText(
 
 Widget _buildConversationLeading({
   required String? avatarUrl,
-  required List<String> avatarCompositeUrls,
   required bool isDark,
   required IconData fallbackIcon,
 }) {
@@ -1620,16 +1612,6 @@ Widget _buildConversationLeading({
             );
           },
         ),
-      ),
-    );
-  }
-  if (avatarCompositeUrls.isNotEmpty) {
-    return SizedBox(
-      width: AppSpacing.avatarUserMd,
-      height: AppSpacing.avatarUserMd,
-      child: GroupAvatarGrid(
-        size: AppSpacing.avatarUserMd,
-        avatarUrls: avatarCompositeUrls,
       ),
     );
   }

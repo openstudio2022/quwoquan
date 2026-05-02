@@ -22,7 +22,7 @@
 - A2：页面切换时旧 PageContext 自动过期。
 - A8：PageContext 单元测试 + ContextAssembler 端到端测试。
 
-## Folded legacy node `holistic-profile-and-embedding`
+## Folded current node `holistic-profile-and-embedding`
 
 # L5 横切：holistic-profile-and-embedding
 

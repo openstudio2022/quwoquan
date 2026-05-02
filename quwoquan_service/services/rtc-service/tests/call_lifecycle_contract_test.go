@@ -66,8 +66,9 @@ func TestContract_AnswerCall(t *testing.T) {
 	callID := extractSessionID(t, resp)
 
 	answerResp := doPost(t, "/v1/rtc/calls/"+callID+"/answer", `{}`, "user_invitee_001", http.StatusOK)
-	if answerResp["status"] != "connecting" {
-		t.Errorf("expected status=connecting, got %v", answerResp["status"])
+	session := extractSession(t, answerResp)
+	if session["status"] != "connecting" {
+		t.Errorf("expected status=connecting, got %v", session["status"])
 	}
 }
 

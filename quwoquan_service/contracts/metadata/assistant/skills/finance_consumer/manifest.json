@@ -1,0 +1,14 @@
+{
+  "skillId": "finance_consumer",
+  "displayName": "理财与投资助手",
+  "description": "理财分析、基金/股票/保险对比、投资建议、贷款/预算规划、行业趋势。",
+  "domainId": "finance_consumer",
+  "executionTarget": "cloud",
+  "routingHints": ["理财", "基金", "保险", "信用卡", "贷款", "预算", "股票", "投资", "供应商", "供应链", "行业", "估值", "涨跌", "利率", "A股", "a股", "比亚迪", "重大消息", "买入", "卖出"],
+  "iconHint": "chart",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "search", "web_fetch"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 3
+  }
+}

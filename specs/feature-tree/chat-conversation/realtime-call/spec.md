@@ -181,7 +181,7 @@ LiveKit 是 Apache 2.0 开源的 Go 语言 SFU 引擎（基于 Pion WebRTC），
 | ⑤ 通话中分享链接 | Voice/VideoCallPage 邀请二级面板 | 复制/分享呼叫链接，对方点击入会 | P2 |
 | ⑥ 圈子详情 | CircleDetailPage 操作栏 | 发起圈子通话，选择成员 | P2 |
 | ⑦ 来电推送（被叫） | 系统级 | iOS CallKit / Android FullScreen Intent；群邀请统一为响铃邀请 | P1 |
-| ⑧ 通话记录 | ChatPage Tab 或历史 | 查看通话记录，点击回拨 | P3 |
+| ⑧ 通话记录 | ChatPage Tab 或记录 | 查看通话记录，点击回拨 | P3 |
 
 ### 5.1 入口门禁规则
 

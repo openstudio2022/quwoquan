@@ -110,7 +110,7 @@ void main() {
           )
           .map((item) => '${item['role']}:${item['content']}')
           .toList(growable: false);
-      // 新话题/未知延续时 planner 消息会压到「仅当前用户句」，避免历史轮次污染规划；
+      // 新话题/未知延续时 planner 消息会压到「仅当前用户句」，避免记录轮次污染规划；
       // 近期轮次仍通过 `recentDialogueRounds` 变量注入（见下方断言）。
       expect(conversationMessages, equals(const <String>['user:第四问']));
 

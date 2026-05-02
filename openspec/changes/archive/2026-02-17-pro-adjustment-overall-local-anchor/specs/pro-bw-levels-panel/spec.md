@@ -40,4 +40,4 @@
 #### Scenario: 会话提交
 
 - **WHEN** 用户点击 `✓`
-- **THEN** 黑白色阶作为 `proTools` 的独立步骤提交到历史（`bwLevelsAdjustments`）
+- **THEN** 黑白色阶作为 `proTools` 的独立步骤提交到记录（`bwLevelsAdjustments`）

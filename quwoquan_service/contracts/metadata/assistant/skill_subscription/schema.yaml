@@ -1,0 +1,40 @@
+dart_class: SkillSubscriptionWire
+library_path: assistant/generated/contracts/skill_subscription.g.dart
+output_path: assistant/generated/contracts/skill_subscription.g.dart
+contract: skill_subscription
+version: skill_subscription.m2
+kind: entity_wire_contract
+fields:
+  - { name: subscriptionId, type: string, required: true }
+  - { name: owner, type: object, ref: subscription_owner, default: {} }
+  - { name: createdByUserId, type: string, required: true }
+  - { name: skillId, type: string, required: true }
+  - { name: domainId, type: string, default: '' }
+  - { name: tagRefs, type: list<string>, default: [] }
+  - { name: status, type: string, default: active }
+  - { name: searchQueryPlan, type: object, ref: search_query_plan, default: {} }
+  - { name: trigger, type: object, ref: subscription_trigger, default: {} }
+  - { name: destination, type: object, ref: subscription_destination, default: {} }
+  - { name: createdAt, type: string, required: true }
+  - { name: updatedAt, type: string, required: true }
+subcontracts:
+  subscription_owner:
+    class_name: SkillSubscriptionOwnerWire
+    fields:
+      - { name: ownerType, type: string, default: user }
+      - { name: ownerId, type: string, default: '' }
+  search_query_plan:
+    class_name: SkillSubscriptionSearchQueryPlanWire
+    fields:
+      - { name: rawText, type: string, default: '' }
+      - { name: queries, type: list<string>, default: [] }
+  subscription_trigger:
+    class_name: SkillSubscriptionTriggerWire
+    fields:
+      - { name: type, type: string, default: cron }
+      - { name: cron, type: string, default: '' }
+  subscription_destination:
+    class_name: SkillSubscriptionDestinationWire
+    fields:
+      - { name: destinationType, type: string, default: user }
+      - { name: destinationId, type: string, default: '' }

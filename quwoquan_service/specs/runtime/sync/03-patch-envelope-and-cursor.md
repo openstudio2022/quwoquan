@@ -40,7 +40,7 @@
 ```json
 {
   "conversationId": "c_100",
-  "groupAvatarUrl": "https://cdn.example.com/...",
+  "avatarUrl": "https://avatar-cdn.example.com/...",
   "groupAvatarVersion": 18
 }
 ```

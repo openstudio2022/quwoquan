@@ -49,7 +49,9 @@ class SearchToolArgumentsContract {
     }
     return SearchToolArgumentsContract(
       query: arguments.stringField(SearchToolFieldNames.query) ?? '',
-      mode: _searchModeFromWire(arguments.stringField(SearchToolFieldNames.mode)),
+      mode: _searchModeFromWire(
+        arguments.stringField(SearchToolFieldNames.mode),
+      ),
       objectTypes: arguments
           .stringListField(SearchToolFieldNames.objectTypes)
           .map(SearchObjectType.fromWire)
@@ -66,11 +68,15 @@ class SearchToolArgumentsContract {
           .map(SearchContentTypeFilter.fromWire)
           .whereType<SearchContentTypeFilter>()
           .toSet(),
-      categoryId: _nonEmpty(arguments.stringField(SearchToolFieldNames.categoryId)),
+      categoryId: _nonEmpty(
+        arguments.stringField(SearchToolFieldNames.categoryId),
+      ),
       subCategory: _nonEmpty(
         arguments.stringField(SearchToolFieldNames.subCategory),
       ),
-      queryVariants: arguments.stringListField(SearchToolFieldNames.queryVariants),
+      queryVariants: arguments.stringListField(
+        SearchToolFieldNames.queryVariants,
+      ),
       searchPlans: RetrievalSearchPlan.listFromJson(
         arguments[SearchToolFieldNames.searchPlans],
       ),
@@ -125,19 +131,17 @@ class SearchToolArgumentsContract {
     List<RetrievalSearchPlan> searchPlans = const <RetrievalSearchPlan>[],
     List<String> queryVariants = const <String>[],
   }) {
-    return AssistantToolArguments(
-      <String, Object?>{
-        ...bridgePayload,
-        'query': query,
-        'count': count,
-        if (searchPlans.isNotEmpty)
-          'taskGraphSearchPlan': searchPlans
-              .map((item) => item.toJson())
-              .toList(growable: false),
-        if (queryVariants.isNotEmpty)
-          'queryVariants': queryVariants.toList(growable: false),
-      },
-    );
+    return AssistantToolArguments(<String, Object?>{
+      ...bridgePayload,
+      'query': query,
+      'count': count,
+      if (searchPlans.isNotEmpty)
+        'taskGraphSearchPlan': searchPlans
+            .map((item) => item.toJson())
+            .toList(growable: false),
+      if (queryVariants.isNotEmpty)
+        'queryVariants': queryVariants.toList(growable: false),
+    });
   }
 }
 
@@ -226,8 +230,7 @@ class SearchToolReference {
     return raw
         .map(SearchToolReference.fromJson)
         .where(
-          (item) =>
-              item.url.trim().isNotEmpty || item.title.trim().isNotEmpty,
+          (item) => item.url.trim().isNotEmpty || item.title.trim().isNotEmpty,
         )
         .toList(growable: false);
   }
@@ -249,7 +252,7 @@ class SearchToolReference {
       snippet: effectiveSnippet.isNotEmpty ? effectiveSnippet : null,
       resolvedFrom: SearchResolvedFrom.remote,
       matchedField: 'query',
-      payload: SearchHitPayloadLegacy(toJson()),
+      payload: SearchHitPayloadWireMap(toJson()),
     );
   }
 
@@ -289,7 +292,9 @@ class SearchToolWebSearchPayload {
   final String summary;
   final List<SearchToolReference> references;
 
-  factory SearchToolWebSearchPayload.fromToolResult(AssistantToolResult result) {
+  factory SearchToolWebSearchPayload.fromToolResult(
+    AssistantToolResult result,
+  ) {
     final data = result.data;
     if (data == null || data.isEmptyPayload) {
       return const SearchToolWebSearchPayload();
@@ -346,39 +351,37 @@ class SearchToolResultPayload {
   final SearchResponse? internalResponse;
 
   AssistantToolResultData toAssistantToolResultData() {
-    return AssistantToolResultData(
-      <String, Object?>{
-        SearchToolFieldNames.query: query,
-        SearchToolFieldNames.mode: mode.wireValue,
-        SearchToolFieldNames.objectTypes: objectTypes
-            .map((item) => item.wireValue)
-            .toList(growable: false),
-        'sections': sections.map((item) => item.toMap()).toList(growable: false),
-        'hits': hits.map((item) => item.toMap()).toList(growable: false),
-        'references': references
+    return AssistantToolResultData(<String, Object?>{
+      SearchToolFieldNames.query: query,
+      SearchToolFieldNames.mode: mode.wireValue,
+      SearchToolFieldNames.objectTypes: objectTypes
+          .map((item) => item.wireValue)
+          .toList(growable: false),
+      'sections': sections.map((item) => item.toMap()).toList(growable: false),
+      'hits': hits.map((item) => item.toMap()).toList(growable: false),
+      'references': references
+          .map((item) => item.toJson())
+          .toList(growable: false),
+      'degradeSignals': degradeSignals
+          .map((item) => item.toMap())
+          .toList(growable: false),
+      'summary': summary,
+      'qualityScore': qualityScore,
+      'queryCount': queryCount,
+      'queryLabels': queryLabels.toList(growable: false),
+      'coveredDimensions': coveredDimensions.toList(growable: false),
+      'missingDimensions': missingDimensions.toList(growable: false),
+      'referenceCount': referenceCount,
+      'totalReferences': totalReferences,
+      'queriesUsed': queriesUsed.toList(growable: false),
+      if (provider.trim().isNotEmpty) 'provider': provider.trim(),
+      if (searchPlans.isNotEmpty)
+        SearchToolFieldNames.searchPlans: searchPlans
             .map((item) => item.toJson())
             .toList(growable: false),
-        'degradeSignals': degradeSignals
-            .map((item) => item.toMap())
-            .toList(growable: false),
-        'summary': summary,
-        'qualityScore': qualityScore,
-        'queryCount': queryCount,
-        'queryLabels': queryLabels.toList(growable: false),
-        'coveredDimensions': coveredDimensions.toList(growable: false),
-        'missingDimensions': missingDimensions.toList(growable: false),
-        'referenceCount': referenceCount,
-        'totalReferences': totalReferences,
-        'queriesUsed': queriesUsed.toList(growable: false),
-        if (provider.trim().isNotEmpty) 'provider': provider.trim(),
-        if (searchPlans.isNotEmpty)
-          SearchToolFieldNames.searchPlans: searchPlans
-              .map((item) => item.toJson())
-              .toList(growable: false),
-        if (internalResponse != null) 'internal': internalResponse!.toMap(),
-        'contractVersion': searchToolContractVersion,
-      },
-    );
+      if (internalResponse != null) 'internal': internalResponse!.toMap(),
+      'contractVersion': searchToolContractVersion,
+    });
   }
 }
 

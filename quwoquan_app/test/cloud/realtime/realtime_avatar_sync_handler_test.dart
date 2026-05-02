@@ -33,7 +33,7 @@ class _FakeUserSyncRepository implements UserSyncRepository {
           userId: 'user_001',
           payload: <String, dynamic>{
             'conversationId': 'conv_001',
-            'groupAvatarUrl': 'https://cdn.example.com/group.png?v=2',
+            'avatarUrl': 'https://cdn.example.com/group.png?v=2',
             'groupAvatarVersion': 2,
           },
         ),
@@ -98,7 +98,6 @@ class _ResyncChatRepository extends MockChatRepository {
         'type': 'group',
         'title': '群聊',
         'avatarUrl': 'https://cdn.example.com/full-sync.png?v=3',
-        'groupAvatarUrl': 'https://cdn.example.com/full-sync.png?v=3',
         'groupAvatarVersion': 3,
         'creatorId': 'user_001',
         'maxSeq': 0,
@@ -162,14 +161,14 @@ class _FakeLocalChatSearchStore extends LocalChatSearchStore {
     if (existing == null) {
       return;
     }
-    _conversations[conversationId] = <String, dynamic>{
-      ...existing,
-      'avatarUrl': avatarUrl,
-      'groupAvatarUrl': avatarUrl,
-      if (groupAvatarVersion != null) 'groupAvatarVersion': groupAvatarVersion,
-      if (groupAvatarSourceHash != null)
-        'groupAvatarSourceHash': groupAvatarSourceHash,
-    };
+    final updated = <String, dynamic>{...existing, 'avatarUrl': avatarUrl};
+    if (groupAvatarVersion != null) {
+      updated['groupAvatarVersion'] = groupAvatarVersion;
+    }
+    if (groupAvatarSourceHash != null) {
+      updated['groupAvatarSourceHash'] = groupAvatarSourceHash;
+    }
+    _conversations[conversationId] = updated;
   }
 
   @override
@@ -205,7 +204,6 @@ void main() {
       '_id': 'conv_001',
       'title': '群聊',
       'type': 'group',
-      'groupAvatarUrl': 'https://cdn.example.com/old.png?v=1',
       'groupAvatarVersion': 1,
       'avatarUrl': 'https://cdn.example.com/old.png?v=1',
       'updatedAt': DateTime.now().toIso8601String(),
@@ -238,7 +236,6 @@ void main() {
                     'conversationId': 'conv_001',
                     'type': 'group',
                     'title': '群聊',
-                    'groupAvatarUrl': 'https://cdn.example.com/old.png?v=1',
                     'groupAvatarVersion': 1,
                     'avatarUrl': 'https://cdn.example.com/old.png?v=1',
                   });
@@ -261,16 +258,13 @@ void main() {
     );
     final cache = container.read(conversationCacheProvider);
     expect(
-      cache.get('conv_001')?['groupAvatarUrl'],
+      cache.get('conv_001')?['avatarUrl'],
       'https://cdn.example.com/group.png?v=2',
     );
     expect(cache.get('conv_001')?['groupAvatarVersion'], 2);
 
     final stored = await store.listConversationPayloads(namespace: namespace);
-    expect(
-      stored.single['groupAvatarUrl'],
-      'https://cdn.example.com/group.png?v=2',
-    );
+    expect(stored.single['avatarUrl'], 'https://cdn.example.com/group.png?v=2');
     expect(stored.single['groupAvatarVersion'], 2);
   });
 
@@ -290,7 +284,6 @@ void main() {
       '_id': 'conv_001',
       'title': '群聊',
       'type': 'group',
-      'groupAvatarUrl': 'https://cdn.example.com/old.png?v=1',
       'groupAvatarVersion': 1,
       'avatarUrl': 'https://cdn.example.com/old.png?v=1',
       'updatedAt': '2026-04-23T09:00:00.000Z',
@@ -324,7 +317,6 @@ void main() {
                     'conversationId': 'conv_001',
                     'type': 'group',
                     'title': '群聊',
-                    'groupAvatarUrl': 'https://cdn.example.com/old.png?v=1',
                     'groupAvatarVersion': 1,
                     'avatarUrl': 'https://cdn.example.com/old.png?v=1',
                     'updatedAt': '2026-04-23T09:00:00.000Z',
@@ -348,7 +340,7 @@ void main() {
     );
     final cache = container.read(conversationCacheProvider);
     expect(
-      cache.get('conv_001')?['groupAvatarUrl'],
+      cache.get('conv_001')?['avatarUrl'],
       'https://cdn.example.com/full-sync.png?v=3',
     );
     expect(cache.get('conv_001')?['groupAvatarVersion'], 3);

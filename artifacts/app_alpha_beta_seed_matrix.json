@@ -1,0 +1,30 @@
+{
+  "status": "passed",
+  "alpha": {
+    "dataSource": "mock",
+    "test": "test/cloud/services/contract_seeded_mock_repository_test.dart",
+    "outputTail": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/services/contract_seeded_mock_repository_test.dart\n00:00 +0: alpha 环境契约要求端侧使用 mock repository\n00:00 +1: content mock repository 可由 contracts fixture 初始化\n00:00 +2: content mock repository 默认优先读取 contract fixture\n00:00 +3: circle mock repository 可由 contracts fixture 初始化\n00:00 +4: circle mock repository 默认优先读取 contract fixture\n00:00 +5: chat mock repository 可由 contracts fixture 初始化\n00:00 +6: chat mock repository 默认优先读取 contract fixture\n00:00 +7: homepage mock repository 默认优先读取 contract fixture\n00:00 +8: app content mock repository 默认优先读取 contract fixture\n00:00 +9: user profile mock repository 默认优先读取 contract fixture\n00:00 +10: app alpha/beta/gamma seed manifests 引用的 fixture seedRefs 均存在\n00:00 +11: All tests passed!\n"
+  },
+  "beta": {
+    "dataSource": "remote",
+    "gatewayBaseUrl": "http://127.0.0.1:18090",
+    "checkedRoutes": [
+      "/healthz",
+      "/v1/content/feed",
+      "/v1/content/profile-subjects/fixture_user_current/posts",
+      "/v1/chat/inbox",
+      "/v1/chat/contacts",
+      "/v1/chat/conversations",
+      "/v1/circles",
+      "/v1/circles/fixture_circle_photo/feed",
+      "/v1/user/profile",
+      "/v1/me",
+      "/v1/users/fixture_user_current/works",
+      "/v1/users/fixture_user_current/circles",
+      "/v1/entity/homepages",
+      "/v1/integration/locations/pois",
+      "/v1/app-messages",
+      "/v1/rtc/calls"
+    ]
+  }
+}

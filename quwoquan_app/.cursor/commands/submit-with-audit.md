@@ -2,12 +2,12 @@
 name: /submit-with-audit
 id: submit-with-audit
 category: Workflow
-description: 兼容提交流程（根流程以 /commit 为准；本命令仅保留端侧历史兼容）
+description: 兼容提交流程（根流程以 /commit 为准；本命令仅保留端侧记录兼容）
 ---
 
 完成代码提交的完整流程：**先执行 semantic-audit 检查 → 不通过则生成修改规划并等待批准后自动修复 → 通过则提交并推送到当前分支、再合入主干**。默认使用**当前分支**进行提交与推送。
 
-> 语义统一说明：仓库根流程以 `/commit` 作为唯一 submit 语义命令；本命令仅用于兼容历史端侧工作流。若与根目录 `/.cursor/commands/commit.md`、`/.cursor/rules/00-fullstack-development-flow.mdc`、`/.cursor/rules/03-testing.mdc` 冲突，以根流程规则为准，并同样受 `T1~T4`、TDD、非功能验收与灰度发布要求约束。
+> 语义统一说明：仓库根流程以 `/commit` 作为唯一 submit 语义命令；本命令仅用于兼容记录端侧工作流。若与根目录 `/.cursor/commands/commit.md`、`/.cursor/rules/00-fullstack-development-flow.mdc`、`/.cursor/rules/03-testing.mdc` 冲突，以根流程规则为准，并同样受 `T1~T4`、TDD、非功能验收与灰度发布要求约束。
 
 ## 前置条件
 

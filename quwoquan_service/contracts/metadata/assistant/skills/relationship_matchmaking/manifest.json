@@ -1,0 +1,14 @@
+{
+  "skillId": "relationship_matchmaking",
+  "displayName": "关系沟通助手",
+  "description": "恋爱关系、相处策略、沟通技巧、婚配与情感建议。",
+  "domainId": "relationship_matchmaking",
+  "executionTarget": "cloud",
+  "routingHints": ["恋爱", "相处", "关系", "婚配", "分手", "沟通", "表白", "挽回"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "memory_search"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 2
+  }
+}

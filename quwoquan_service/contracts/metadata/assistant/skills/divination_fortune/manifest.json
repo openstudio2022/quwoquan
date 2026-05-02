@@ -1,0 +1,14 @@
+{
+  "skillId": "divination_fortune",
+  "displayName": "今日运势助手",
+  "description": "今日运势、短期运程、卜卦八字、桃花财运事业等趣味建议。",
+  "domainId": "divination_fortune",
+  "executionTarget": "cloud",
+  "routingHints": ["运势", "运程", "卜卦", "八字", "今日运势", "桃花", "财运", "事业"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 2
+  }
+}

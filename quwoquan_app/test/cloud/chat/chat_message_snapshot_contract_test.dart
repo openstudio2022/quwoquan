@@ -2,15 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 
 void main() {
-  test('ChatMessageDto 优先消费历史快照字段', () {
+  test('ChatMessageDto 优先消费记录快照字段', () {
     final dto = ChatMessageDto.fromMap(<String, dynamic>{
       '_id': 'm1',
       'conversationId': 'c1',
       'seq': 1,
-      'senderId': 'legacy_sender',
+      'senderId': 'current_sender',
       'senderProfileSubjectId': 'persona_sender',
       'senderName': '旧名字',
-      'senderDisplayNameSnapshot': '历史分身名',
+      'senderDisplayNameSnapshot': '记录分身名',
       'senderAvatar': 'https://example.com/old.jpg',
       'senderAvatarUrlSnapshot': 'https://example.com/snapshot.jpg',
       'type': 'text',
@@ -19,7 +19,7 @@ void main() {
     });
 
     expect(dto.senderId, 'persona_sender');
-    expect(dto.senderName, '历史分身名');
+    expect(dto.senderName, '记录分身名');
     expect(dto.senderAvatar, 'https://example.com/snapshot.jpg');
   });
 }

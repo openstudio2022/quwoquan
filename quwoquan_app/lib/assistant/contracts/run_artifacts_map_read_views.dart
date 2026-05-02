@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart';
 
-// ASSISTANT_WEAK_TYPE: READ_VIEW — `partitioned_map` 已提供 `core`/`extensions`；ReadView 仍基于合并后的 wire Map，供遗留路径使用。
+// ASSISTANT_WEAK_TYPE: READ_VIEW — `partitioned_map` 已提供 `core`/`extensions`；ReadView 仍基于合并后的 wire Map，供存量路径使用。
 
 /// 只读：`RunArtifacts.answerDecision` 中编排层常用键（与 `assistant_pipeline_engine` spread 对齐，非穷尽）。
 class RunArtifactsAnswerDecisionReadView {
@@ -77,7 +77,9 @@ extension RunArtifactsDiagnosticsPartitionedMergeLookup
   Map<String, dynamic>? evidenceEvaluationForOutcomeMerge() {
     if (extensions.containsKey('evidenceEvaluation')) {
       final v = extensions['evidenceEvaluation'];
-      return v is Map ? Map<String, dynamic>.from(v.cast<String, dynamic>()) : null;
+      return v is Map
+          ? Map<String, dynamic>.from(v.cast<String, dynamic>())
+          : null;
     }
     final c = core.evidenceEvaluation;
     return c.isNotEmpty ? c : null;
@@ -86,7 +88,9 @@ extension RunArtifactsDiagnosticsPartitionedMergeLookup
   Map<String, dynamic>? answerBoundaryPolicyForOutcomeMerge() {
     if (extensions.containsKey('answerBoundaryPolicy')) {
       final v = extensions['answerBoundaryPolicy'];
-      return v is Map ? Map<String, dynamic>.from(v.cast<String, dynamic>()) : null;
+      return v is Map
+          ? Map<String, dynamic>.from(v.cast<String, dynamic>())
+          : null;
     }
     final c = core.answerBoundaryPolicy;
     return c.isNotEmpty ? c : null;

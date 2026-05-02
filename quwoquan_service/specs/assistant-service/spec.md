@@ -38,7 +38,7 @@
 
 ### Requirement: historicalRetrievalFeedback 供给
 
-系统 MUST 在 Run 时消费历史反馈，将 historicalRetrievalFeedback 注入上下文。
+系统 MUST 在 Run 时消费记录反馈，将 historicalRetrievalFeedback 注入上下文。
 
 #### Scenario: 反馈注入 Run
 

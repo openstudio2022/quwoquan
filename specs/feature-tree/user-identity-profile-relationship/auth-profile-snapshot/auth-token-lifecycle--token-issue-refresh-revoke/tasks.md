@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `session-security-guard`
+## Folded current node `session-security-guard`
 
 # 开发任务：session-security-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `session-security-guard` (from `user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/token-issue-refresh-revoke/session-security-guard`)
+- [ ] Migrated current node: `session-security-guard` (from `user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/token-issue-refresh-revoke/session-security-guard`)

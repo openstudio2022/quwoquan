@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -53,13 +54,20 @@ type ProjectorEvent struct {
 }
 
 type AssistantService struct {
-	events    EventStore
-	profiles  LearningProfileStore
-	consents  ConsentStore
-	cache     rtredis.Client
-	publisher repository.EventPublisher
-	projector Projector
-	now       func() time.Time
+	events        EventStore
+	profiles      LearningProfileStore
+	consents      ConsentStore
+	cache         rtredis.Client
+	publisher     repository.EventPublisher
+	projector     Projector
+	appMessages   AppMessageStore
+	subscriptions SkillSubscriptionStore
+	agentLoop     *AgentLoop
+	mu            sync.RWMutex
+	conversations map[string]assistant.AssistantConversation
+	turns         map[string]assistant.AssistantTurn
+	cronClaims    map[string]bool
+	now           func() time.Time
 }
 
 type AssistantServiceOption func(*AssistantService)
@@ -76,17 +84,31 @@ func WithLearningProfileStore(store LearningProfileStore) AssistantServiceOption
 	return func(s *AssistantService) { s.profiles = store }
 }
 
+func WithAgentLoop(loop *AgentLoop) AssistantServiceOption {
+	return func(s *AssistantService) { s.agentLoop = loop }
+}
+
+func WithSkillSubscriptionStore(store SkillSubscriptionStore) AssistantServiceOption {
+	return func(s *AssistantService) { s.subscriptions = store }
+}
+
 func NewAssistantService(events EventStore, consents ConsentStore, cache rtredis.Client, opts ...AssistantServiceOption) *AssistantService {
 	svc := &AssistantService{
-		events:   events,
-		consents: consents,
-		cache:    cache,
+		events:        events,
+		consents:      consents,
+		cache:         cache,
+		conversations: map[string]assistant.AssistantConversation{},
+		turns:         map[string]assistant.AssistantTurn{},
+		cronClaims:    map[string]bool{},
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
 	}
 	for _, opt := range opts {
 		opt(svc)
+	}
+	if svc.agentLoop == nil {
+		svc.agentLoop = NewAgentLoop(nil, ReactRuntime{}, svc.now)
 	}
 	return svc
 }
@@ -868,12 +890,20 @@ func (s *AssistantService) GetLearningOpsSummary(ctx context.Context, userID str
 }
 
 func (s *AssistantService) ListSkills(ctx context.Context, userID string, limit int) (assistant.AssistantSkillCatalogListView, error) {
-	_ = ctx
-	items := []assistant.AssistantSkillCatalogItemView{
+	items, err := assistantDomainSkillCatalogViews()
+	if err != nil {
+		return assistant.AssistantSkillCatalogListView{}, err
+	}
+	items = append([]assistant.AssistantSkillCatalogItemView{}, items...)
+	items = append(items, []assistant.AssistantSkillCatalogItemView{
+		{SkillID: SkillDailyAssistant, DisplayName: "每日助手", Description: "管理待办、日历、会议、作息和学习计划。", Category: "life", RequiresConsent: false, IconHint: "checkmark"},
+		{SkillID: SkillNewsBriefing, DisplayName: "新闻简报", Description: "按关注话题定时生成新闻摘要。", Category: "content", RequiresConsent: false, IconHint: "news"},
+		{SkillID: SkillStockSentinel, DisplayName: "股票哨兵", Description: "跟踪关注股票的重大消息面和行情变化。", Category: "finance", RequiresConsent: false, IconHint: "chart"},
+		{SkillID: SkillTravelJourneyManager, DisplayName: "出行旅程管家", Description: "结合天气、路况和景点拥堵提醒行程风险。", Category: "travel", RequiresConsent: false, IconHint: "airplane"},
 		{SkillID: "personal_content_access", DisplayName: "个人内容访问", Description: "允许助手在授权后读取用户个人内容用于回答与建议。", Category: "permission", RequiresConsent: true, IconHint: "lock_open"},
 		{SkillID: "assistant_learning", DisplayName: "学习反馈闭环", Description: "基于交互事件与评分卡形成在线学习与运营回看。", Category: "analytics", RequiresConsent: false, IconHint: "school"},
 		{SkillID: "assistant_navigation", DisplayName: "页面建议动作", Description: "根据当前 page context 返回可执行的建议动作。", Category: "navigation", RequiresConsent: false, IconHint: "bolt"},
-	}
+	}...)
 	if strings.TrimSpace(userID) != "" && s.consents != nil {
 		consents, err := s.consents.ListActiveConsents(ctx, userID)
 		if err == nil {

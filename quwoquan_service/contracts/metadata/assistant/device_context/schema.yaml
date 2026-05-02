@@ -1,0 +1,19 @@
+dart_class: DeviceContextWire
+library_path: assistant/generated/contracts/device_context.g.dart
+output_path: assistant/generated/contracts/device_context.g.dart
+contract: device_context
+version: device_context.m2
+kind: shared_wire_contract
+fields:
+  - { name: deviceContextId, type: string, required: true }
+  - { name: userId, type: string, required: true }
+  - { name: deviceId, type: string, required: true }
+  - { name: updatedAt, type: string, required: true }
+  - { name: capabilities, type: list<string>, default: [] }
+  - { name: facts, type: object, ref: device_context_facts, default: {} }
+subcontracts:
+  device_context_facts:
+    class_name: DeviceContextFactsWire
+    fields:
+      - { name: coarseLocation, type: map, default: {} }
+      - { name: surface, type: string, default: '' }

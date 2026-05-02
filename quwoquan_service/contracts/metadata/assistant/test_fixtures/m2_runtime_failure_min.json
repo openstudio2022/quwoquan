@@ -1,0 +1,13 @@
+{
+  "code": "ASSISTANT.SYSTEM.model_unavailable",
+  "origin": "remoteDependency",
+  "kind": "model",
+  "nature": "transient",
+  "messageKey": "assistant.error.model_unavailable",
+  "recoveryAction": "retry_later",
+  "disruptionLevel": "turn_failed",
+  "traceId": "trace_m2_failure_min",
+  "context": {
+    "provider": "fake_model"
+  }
+}

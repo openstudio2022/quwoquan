@@ -1,0 +1,20 @@
+{
+  "messageId": "msg_01J8M8PROACTIVE0000000001",
+  "userId": "user_001",
+  "messageType": "assistant",
+  "source": "assistant_turn",
+  "sourceId": "atn_01J8M8TURN00000000000001",
+  "destination": {
+    "type": "user",
+    "id": "user_001"
+  },
+  "title": "小趣主动提醒",
+  "summary": "你订阅的 news_briefing 已生成新的摘要。",
+  "target": {
+    "targetType": "assistant_turn",
+    "targetId": "atn_01J8M8TURN00000000000001"
+  },
+  "read": false,
+  "createdAt": "2026-04-29T08:00:00Z",
+  "deliveredAt": "2026-04-29T08:00:01Z"
+}

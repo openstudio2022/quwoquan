@@ -21,9 +21,9 @@ entries:
     summary: >
       新建独立 L1 `global-search-experience`，冻结全屏搜索首页、跨域综合搜索、
       社交关系搜索、圈子 facet、最近搜索、语音转词与问小趣 handoff 的 PRD baseline，
-      并统一清理 chat 历史搜索节点。
+      并统一清理 chat 记录搜索节点。
     reason: >
-      现有搜索能力同时存在归属错误、壳层原型化、对象边界漂移与历史节点失真四个问题：
+      现有搜索能力同时存在归属错误、壳层原型化、对象边界漂移与记录节点失真四个问题：
       全局搜索不能继续挂在 discovery-content，也不能再沿用 chat-only 的 contact-search-index
       作为治理入口。进入 design 前必须先冻结新的一级能力、Journey/Scenario 拆分、业务对象、
       metadata 真相源边界、生命周期与发布口径。
@@ -134,7 +134,7 @@ entries:
       breaking_contract: false
     notes:
       - 本次为 `/prd` 基线冻结，不进入 `design.md / plan.yaml`。
-      - 历史节点 `contact-search-index` 与 `contact-search-index--search-query-contract` 已从特性树治理中移除，不再保留。
+      - 记录节点 `contact-search-index` 与 `contact-search-index--search-query-contract` 已从特性树治理中移除，不再保留。
       - L1 owner 正式冻结为 `global-search-experience`，不再挂在 `discovery-content`。
   - timestamp: "2026-03-22T12:45:00+08:00"
     summary: >

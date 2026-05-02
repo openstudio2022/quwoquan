@@ -146,13 +146,7 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		return err
 	}
 
-	conversationStateDecisionSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "conversation_state_decision", "schema.yaml"))
-	if err == nil {
-		writeFile(
-			filepath.Join(appDir, "lib", conversationStateDecisionSchema.OutputPath),
-			renderAssistantSchemaDrivenContract(conversationStateDecisionSchema, contractIndex, "assistant/conversation_state_decision/schema.yaml"),
-		)
-	} else if !os.IsNotExist(err) {
+	if err := os.Remove(filepath.Join(appDir, "lib", "assistant", "generated", "contracts", "conversation_state_decision.g.dart")); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
@@ -297,6 +291,48 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		writeFile(
 			filepath.Join(appDir, "lib", synthesisReadinessResultSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(synthesisReadinessResultSchema, contractIndex, "assistant/synthesis_readiness_result/schema.yaml"),
+		)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	assistantSharedWireSchemas := []string{
+		"runtime_failure",
+		"assistant_conversation",
+		"assistant_turn_envelope",
+		"skill_subscription",
+		"device_context",
+		"tool_use",
+		"assistant_stream_event",
+		"assistant_trace_event",
+		"assistant_run_response",
+		"assistant_process_timeline",
+		"assistant_skill_manifest",
+		"assistant_tool_metadata",
+		"assistant_replay_case",
+	}
+	for _, schemaName := range assistantSharedWireSchemas {
+		schemaPath := filepath.Join(baseDir, schemaName, "schema.yaml")
+		schema, err := readAssistantContractSchema(schemaPath)
+		if err == nil {
+			source := filepath.Join("assistant", schemaName, "schema.yaml")
+			writeFile(
+				filepath.Join(appDir, "lib", schema.OutputPath),
+				renderAssistantSchemaDrivenContract(schema, contractIndex, source),
+			)
+			continue
+		}
+		if !os.IsNotExist(err) {
+			return err
+		}
+	}
+
+	appMessageSchemaPath := filepath.Join(metadataDir, "notification", "app_message", "schema.yaml")
+	appMessageSchema, err := readAssistantContractSchema(appMessageSchemaPath)
+	if err == nil {
+		writeFile(
+			filepath.Join(appDir, "lib", appMessageSchema.OutputPath),
+			renderAssistantSchemaDrivenContract(appMessageSchema, contractIndex, "notification/app_message/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
 		return err

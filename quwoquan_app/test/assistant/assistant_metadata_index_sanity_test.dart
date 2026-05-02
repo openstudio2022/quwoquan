@@ -17,7 +17,21 @@ void main() {
         .where((f) => f.existsSync())
         .toList(growable: false);
 
-    expect(schemas.length, 21);
+    expect(schemas.length, greaterThanOrEqualTo(21));
+    final schemaNames = schemas
+        .map((file) => file.parent.path.split('/').last)
+        .toSet();
+    for (final requiredName in <String>{
+      'assistant_turn',
+      'assistant_stream_event',
+      'assistant_trace_event',
+      'assistant_run_response',
+      'assistant_replay_case',
+      'run_artifacts',
+      'tool_use',
+    }) {
+      expect(schemaNames.contains(requiredName), isTrue, reason: requiredName);
+    }
 
     for (final file in schemas) {
       final doc = loadYaml(file.readAsStringSync());
@@ -29,10 +43,13 @@ void main() {
       expect(m['fields'], isNotNull, reason: file.path);
     }
 
-    final turn = loadYaml(
-          File('${base.path}/assistant_turn/schema.yaml').readAsStringSync(),
-        )
-        as YamlMap;
+    final turn =
+        loadYaml(
+              File(
+                '${base.path}/assistant_turn/schema.yaml',
+              ).readAsStringSync(),
+            )
+            as YamlMap;
     expect(turn['subcontracts'], isNotNull);
     final sub = turn['subcontracts'] as YamlMap;
     expect(sub.containsKey('decision'), isTrue);
@@ -49,24 +66,29 @@ void main() {
     expect(names.contains('understandingResult'), isTrue);
     expect(names.contains('taskGraph'), isTrue);
 
-    final turnRaw =
-        File('${base.path}/assistant_turn/schema.yaml').readAsStringSync();
+    final turnRaw = File(
+      '${base.path}/assistant_turn/schema.yaml',
+    ).readAsStringSync();
     expect(turnRaw, isNot(contains('uiProcessTimeline')));
     expect(turnRaw, isNot(contains('processSummary')));
 
-    final journeyYaml = loadYaml(
-          File('${base.path}/assistant_journey/schema.yaml').readAsStringSync(),
-        )
-        as YamlMap;
+    final journeyYaml =
+        loadYaml(
+              File(
+                '${base.path}/assistant_journey/schema.yaml',
+              ).readAsStringSync(),
+            )
+            as YamlMap;
     final jStr = journeyYaml.toString();
     expect(jStr, contains('AssistantJourney'));
     expect(jStr, contains('JourneyStageId'));
     expect(jStr, contains('referenceSummary'));
 
-    final runYaml = loadYaml(
-          File('${base.path}/run_artifacts/schema.yaml').readAsStringSync(),
-        )
-        as YamlMap;
+    final runYaml =
+        loadYaml(
+              File('${base.path}/run_artifacts/schema.yaml').readAsStringSync(),
+            )
+            as YamlMap;
     final subs = runYaml['subcontracts'] as YamlMap?;
     expect(subs, isNotNull);
     expect(subs!.containsKey('slot_value'), isTrue);

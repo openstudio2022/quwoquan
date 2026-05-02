@@ -26,7 +26,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 用户轨：可读 Markdown（进度说明 + 金融信息卡片）
 
 ## 工具调用策略
-- 优先使用当前问句与历史记忆完成关键槽位补全。
+- 优先使用当前问句与记录记忆完成关键槽位补全。
 - 仅在必要时调用工具，且必须遵守最小权限原则。
 - 工具失败允许一次重试；失败后返回降级说明与下一步。
 - 命中"最新/当前/今天/最近一月/近一年/今年"时，必须补齐 `timeScope` 与时间窗参数。

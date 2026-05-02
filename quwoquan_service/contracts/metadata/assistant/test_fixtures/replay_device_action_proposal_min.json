@@ -1,0 +1,123 @@
+{
+  "replayCaseId": "replay_device_action_proposal_min",
+  "title": "Device action proposal requires user confirmation",
+  "request": {
+    "conversationId": "acv_replay_action",
+    "turnId": "atn_replay_action",
+    "userId": "u_replay",
+    "inputText": "Open the personal assistant page.",
+    "clientContext": {
+      "surfaceId": "assistant.personal"
+    }
+  },
+  "fakeModelScript": [
+    {
+      "stage": "reasoning",
+      "text": "Need a device action proposal before opening the page.",
+      "structuredDelta": {
+        "nextAction": "call_tool",
+        "toolName": "app_action",
+        "toolInput": {
+          "actionType": "navigate_to_page",
+          "args": {
+            "routeId": "assistant.personal"
+          }
+        }
+      },
+      "finishReason": "tool_use"
+    },
+    {
+      "stage": "final",
+      "text": "I prepared an action proposal. Please confirm before the app opens the page.",
+      "finishReason": "stop"
+    }
+  ],
+  "fakeToolScript": [
+    {
+      "toolName": "app_action",
+      "input": {
+        "actionType": "navigate_to_page",
+        "args": {
+          "routeId": "assistant.personal"
+        }
+      },
+      "result": {
+        "proposal": {
+          "toolName": "app_action",
+          "placement": "device_action",
+          "requiresConfirmation": true
+        }
+      }
+    }
+  ],
+  "fakeDeviceContext": {},
+  "expectedStreamEvents": [
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_action_001",
+      "conversationId": "acv_replay_action",
+      "turnId": "atn_replay_action",
+      "seq": 1,
+      "eventType": "turn_started",
+      "traceId": "trace_replay_action",
+      "payload": {
+        "status": "running"
+      },
+      "createdAt": "2026-04-29T00:03:00Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_action_002",
+      "conversationId": "acv_replay_action",
+      "turnId": "atn_replay_action",
+      "seq": 2,
+      "eventType": "tool_use_requested",
+      "traceId": "trace_replay_action",
+      "payload": {
+        "toolName": "app_action"
+      },
+      "createdAt": "2026-04-29T00:03:01Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_action_003",
+      "conversationId": "acv_replay_action",
+      "turnId": "atn_replay_action",
+      "seq": 3,
+      "eventType": "user_confirmation_requested",
+      "traceId": "trace_replay_action",
+      "payload": {
+        "toolName": "app_action"
+      },
+      "createdAt": "2026-04-29T00:03:02Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_action_004",
+      "conversationId": "acv_replay_action",
+      "turnId": "atn_replay_action",
+      "seq": 4,
+      "eventType": "final_answer",
+      "traceId": "trace_replay_action",
+      "payload": {
+        "text": "I prepared an action proposal. Please confirm before the app opens the page."
+      },
+      "createdAt": "2026-04-29T00:03:03Z"
+    }
+  ],
+  "expectedTraceEvents": [],
+  "expectedRunResponse": {
+    "conversationId": "acv_replay_action",
+    "turnId": "atn_replay_action",
+    "status": "completed",
+    "finalText": "I prepared an action proposal. Please confirm before the app opens the page.",
+    "summary": "Device action proposal created.",
+    "observability": {
+      "traceId": "trace_replay_action",
+      "modelProvider": "fake",
+      "skillId": "daily_assistant",
+      "domainId": "assistant"
+    },
+    "completedAt": "2026-04-29T00:03:03Z"
+  }
+}

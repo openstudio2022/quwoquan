@@ -60,7 +60,7 @@ func TestCreatePostAllTypes(t *testing.T) {
 		{"image", `"mediaUrls":["https://example.com/img.jpg"]`},
 		{"video", `"videoUrl":"https://example.com/vid.mp4"`},
 		{"micro", `"body":"quick thought"`},
-		{"article", `"title":"Deep work tips","body":"Focus is a skill"`},
+		{"article", `"title":"Deep work tips","body":"Focus is a skill","articleDocument":{"title":"Deep work tips","body":"Focus is a skill"}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.contentType, func(t *testing.T) {
@@ -139,16 +139,16 @@ func TestDeletePostContract(t *testing.T) {
 	req.Header.Set("X-Client-User-Id", "delete_author")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	getReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
 	getReq.Header.Set("X-Client-User-Id", "delete_author")
 	getRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 after delete, got %d: %s", getRec.Code, getRec.Body.String())
+	if getRec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 after delete, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 }
 

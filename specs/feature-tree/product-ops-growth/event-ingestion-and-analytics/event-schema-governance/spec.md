@@ -19,8 +19,9 @@
 
 ### context 必须支持的公共字段
 - `sessionId`
-- `journeyId`
 - `pageVisitId`
+- `traceId`
+- `requestId`
 - `surfaceId`
 - `routeId`
 - `operationId`

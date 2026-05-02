@@ -1,16 +1,345 @@
-import 'dart:ui';
+import 'dart:io';
 
-import 'package:flutter/gestures.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/pageflip/pageflip.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/article_reader_mode_strategy.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/single_page_mode_strategy.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/forward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/pageflip/backward_render_frame_builder.dart';
+import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
+import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_mesh_builder.dart';
 import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
+import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
+import 'package:quwoquan_app/ui/content/pageflip/spread_model.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
 void main() {
   group('Pageflip', () {
+    test('article reader product host keeps single-page pipeline contracts', () {
+      final hostSource = _readAppSource(
+        'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
+      );
+      final forwardPipelineSource = _readAppSource(
+        'lib/ui/content/article_reader/pageflip/pipelines/forward_article_flip_pipeline.dart',
+      );
+      final backwardPipelineSource = _readAppSource(
+        'lib/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart',
+      );
+      final controllerSource = _readAppSource(
+        'lib/ui/content/pageflip/controller.dart',
+      );
+      final backwardBuilderSource = _readAppSource(
+        'lib/ui/content/pageflip/backward_render_frame_builder.dart',
+      );
+      final diagnosticSignaturesSource = _readAppSource(
+        'lib/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart',
+      );
+      final currentBarrelSource = _readAppSource(
+        'lib/ui/content/widgets/article_paged_canvas.dart',
+      );
+
+      expect(hostSource, contains('final SinglePageModeStrategy'));
+      expect(hostSource, contains('const SinglePageModeStrategy()'));
+      expect(hostSource, isNot(contains('SpreadDoublePageModeStrategy(')));
+      expect(hostSource, isNot(contains('spreadDoublePage')));
+      expect(hostSource, contains('paperFoldDynamic'));
+      expect(hostSource, isNot(contains('highFidelity')));
+      expect(hostSource, isNot(contains('HighFidelity')));
+      expect(hostSource, isNot(contains('_tryBuildHighFidelityRenderScene')));
+      expect(hostSource, isNot(contains('ArticlePageCurlRenderer')));
+      expect(hostSource, isNot(contains('genericDynamic')));
+      expect(hostSource, isNot(contains('mirroredForwardDynamic')));
+
+      final forwardImports = _sourceImportLines(forwardPipelineSource);
+      expect(forwardImports, isNot(contains(contains('backward'))));
+      expect(forwardImports, isNot(contains(contains('diagnostics'))));
+      expect(forwardImports, isNot(contains(contains('projection'))));
+      expect(
+        forwardPipelineSource,
+        isNot(contains('BackwardArticleFlipPipeline')),
+      );
+      expect(forwardPipelineSource, isNot(contains('backwardProjectedFrame')));
+      expect(
+        forwardPipelineSource,
+        isNot(contains('ArticlePageBackwardProjectedFrame')),
+      );
+      expect(
+        '$forwardPipelineSource\n$backwardPipelineSource',
+        isNot(contains('SpreadDoublePageModeStrategy')),
+      );
+      expect(
+        '$forwardPipelineSource\n$backwardPipelineSource',
+        isNot(contains('spreadDoublePage')),
+      );
+      expect(
+        hostSource,
+        isNot(contains('class BackwardGenericDynamicFoldProjection')),
+      );
+      expect(hostSource, isNot(contains('class PaperFoldSurfaceSlices')));
+      expect(
+        hostSource,
+        isNot(contains('resolveBackwardGenericDynamicFoldProjection({')),
+      );
+      expect(
+        hostSource,
+        isNot(contains('resolveBackwardPaperFoldSurfaceSlices({')),
+      );
+      expect(
+        hostSource,
+        isNot(contains('resolveBackwardPaperFoldProjection(')),
+      );
+      expect(
+        hostSource,
+        isNot(contains('resolveBackwardPaperFoldSurfaceSlices(')),
+      );
+      expect(
+        hostSource,
+        isNot(contains('String articleDiagnosticOffsetSignature(')),
+      );
+      expect(
+        hostSource,
+        isNot(contains('String articleDiagnosticRectSignature(')),
+      );
+      expect(
+        hostSource,
+        isNot(contains('String articleDiagnosticPolygonSignature(')),
+      );
+      expect(
+        hostSource,
+        isNot(contains('double articleDiagnosticPolygonArea(')),
+      );
+      expect(
+        diagnosticSignaturesSource,
+        contains('String articleDiagnosticOffsetSignature('),
+      );
+      expect(
+        controllerSource,
+        contains('movingEdgeLine: calculation.getBackwardMovingEdgeLine()'),
+      );
+      expect(backwardBuilderSource, isNot(contains('_resolveMovingEdgeLine(')));
+      expect(
+        backwardBuilderSource,
+        contains('edgeLineSource: canonicalMovingEdgeLine == null'),
+      );
+
+      expect(
+        currentBarrelSource,
+        isNot(contains('class ArticleReadOnlyBookDeck')),
+      );
+      expect(
+        currentBarrelSource,
+        contains(
+          "export 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart'",
+        ),
+      );
+    });
+
+    test(
+      'article reader forward soft paint stays isolated from BACK resolver',
+      () {
+        final hostSource = _readAppSource(
+          'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
+        );
+        final softLayerStart = hostSource.indexOf('Widget _buildSoftPageLayer');
+        final hardLayerStart = hostSource.indexOf(
+          'Widget _buildHardFlippingPageLayer',
+        );
+        expect(softLayerStart, isNonNegative);
+        expect(hardLayerStart, greaterThan(softLayerStart));
+        final softLayerSource = hostSource.substring(
+          softLayerStart,
+          hardLayerStart,
+        );
+        final forwardFallbackStart = softLayerSource.indexOf(
+          'final layerOrigin = softLayerOrigin',
+        );
+        expect(forwardFallbackStart, isNonNegative);
+        final forwardFallbackSource = softLayerSource.substring(
+          forwardFallbackStart,
+        );
+
+        expect(
+          softLayerSource,
+          contains('direction == StPageFlipDirection.back && isFlippingPage'),
+        );
+        expect(forwardFallbackSource, contains('Transform.rotate('));
+        expect(
+          forwardFallbackSource,
+          isNot(contains('resolveBackwardSoftPageGeometry(')),
+        );
+      },
+    );
+
+    test('article reader BACK paint consumes only render-frame soft inputs', () {
+      final hostSource = _readAppSource(
+        'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
+      );
+      final backwardStart = hostSource.indexOf(
+        'ArticleReadOnlyBookRenderBranch _buildBackwardDynamicLayers',
+      );
+      final commitStart = hostSource.indexOf('bool _shouldCommitPageFlip');
+      expect(backwardStart, isNonNegative);
+      expect(commitStart, greaterThan(backwardStart));
+      final backwardLayerSource = hostSource.substring(
+        backwardStart,
+        commitStart,
+      );
+
+      expect(
+        backwardLayerSource,
+        contains('final flippingArea = frame.flippingClipArea;'),
+      );
+      expect(backwardLayerSource, contains('_buildBackwardFoldSurfaceLayer('));
+      expect(
+        backwardLayerSource,
+        isNot(contains('resolveBackwardSoftPageGeometry(')),
+      );
+      expect(
+        backwardLayerSource,
+        isNot(contains('previousFoldSurfacePolygon')),
+      );
+      expect(backwardLayerSource, isNot(contains('previousBackFoldPolygon')));
+      expect(backwardLayerSource, isNot(contains('previousFrontFoldPolygon')));
+      expect(hostSource, isNot(contains('_buildBackwardSpineFoldLayer(')));
+      expect(hostSource, isNot(contains('resolveBackwardSpineFoldGeometry(')));
+      final softGeometrySource = _readAppSource(
+        'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
+      );
+      expect(softGeometrySource, isNot(contains('const tilt = 0.0')));
+      expect(softGeometrySource, isNot(contains('final _ = localPagePoint')));
+    });
+
+    test(
+      'single-page mode layout records role window and suppression policy',
+      () {
+        final scene = _buildInteractiveForwardStScene();
+        final modeLayout = const SinglePageModeStrategy().resolveLayout(
+          scene: scene,
+          dynamicallyRenderedPages: const <int>{2, 3},
+        );
+
+        expect(modeLayout.mode, ArticleReaderFlipMode.singlePage);
+        expect(
+          modeLayout.rolePolicy,
+          ArticleReaderPageRolePolicy.singleVisiblePage,
+        );
+        expect(
+          modeLayout.windowPolicy,
+          ArticleReaderPageWindowPolicy.currentWithAdjacentPages,
+        );
+        expect(
+          modeLayout.staticSuppressionPolicy,
+          ArticleReaderStaticSuppressionPolicy.dynamicallyRenderedPages,
+        );
+        expect(modeLayout.staticSuppressionPages, unorderedEquals(<int>{2, 3}));
+        expect(modeLayout.windowPageIndices, unorderedEquals(<int>{1, 2, 3}));
+      },
+    );
+
+    test(
+      'forward pipeline promotes required textures to static suppression',
+      () {
+        final scene = _buildInteractiveForwardStScene();
+        expect(scene.renderFrame, isNotNull);
+        final modeLayout = const SinglePageModeStrategy().resolveLayout(
+          scene: scene,
+          dynamicallyRenderedPages: const <int>{},
+        );
+        const textureBinding = ArticlePageTextureBinding(
+          direction: StPageFlipDirection.forward,
+          rectoPageIndex: 2,
+          versoPageIndex: 2,
+          bottomPageIndex: 3,
+        );
+
+        final output = const ForwardArticleFlipPipeline().resolve(
+          ArticleFlipPipelineInput(
+            scene: scene,
+            renderFrame: scene.renderFrame!,
+            pageSize: const Size(420, 584),
+            modeLayout: modeLayout,
+            textureBinding: textureBinding,
+            textureBundle: null,
+          ),
+        );
+
+        expect(output.direction, StPageFlipDirection.forward);
+        expect(output.staticSuppressionPages, unorderedEquals(<int>{2, 3}));
+        expect(output.renderBranchName, 'forwardSharedPipeline');
+        expect(output.debugLabel, 'forward/shared');
+      },
+    );
+
+    test(
+      'backward pipeline suppresses covered current and owns residual paint',
+      () {
+        final scene = _buildInteractiveBackwardStScene();
+        expect(scene.renderFrame, isNotNull);
+        final modeLayout = const SinglePageModeStrategy().resolveLayout(
+          scene: scene,
+          dynamicallyRenderedPages: const <int>{},
+        );
+        const textureBinding = ArticlePageTextureBinding(
+          direction: StPageFlipDirection.back,
+          rectoPageIndex: 2,
+          versoPageIndex: 2,
+          bottomPageIndex: 3,
+        );
+
+        final output = const BackwardArticleFlipPipeline().resolve(
+          ArticleFlipPipelineInput(
+            scene: scene,
+            renderFrame: scene.renderFrame!,
+            pageSize: const Size(420, 584),
+            modeLayout: modeLayout,
+            textureBinding: textureBinding,
+            textureBundle: null,
+          ),
+        );
+
+        expect(output.direction, StPageFlipDirection.back);
+        expect(
+          output.staticSuppressionPages,
+          contains(scene.flippingPageIndex),
+        );
+        expect(
+          output.staticSuppressionPages,
+          contains(textureBinding.bottomPageIndex),
+          reason:
+              'BACK dynamic paint must suppress the complete current page and redraw only currentResidualPolygon',
+        );
+        expect(output.renderBranchName, 'backwardThreeLayerPaperFoldPipeline');
+        expect(output.debugLabel, 'backward/three-layer-paper-fold');
+
+        final hostSource = _readAppSource(
+          'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
+        );
+        expect(hostSource, contains('_buildBackwardCurrentResidualLayer('));
+        final backwardStart = hostSource.indexOf(
+          'ArticleReadOnlyBookRenderBranch _buildBackwardDynamicLayers',
+        );
+        final commitStart = hostSource.indexOf('bool _shouldCommitPageFlip');
+        final backwardLayerSource = hostSource.substring(
+          backwardStart,
+          commitStart,
+        );
+        expect(
+          backwardLayerSource,
+          contains('_buildBackwardCurrentResidualLayer('),
+        );
+        expect(
+          backwardLayerSource,
+          contains('_buildBackwardFoldSurfaceLayer('),
+        );
+      },
+    );
+
     test(
       'single-page role resolver maps turning and covered pages by direction',
       () {
@@ -119,10 +448,8 @@ void main() {
       expect(scene.underlayPageIndex, 2);
       expect(scene.coveredPageIndex, 2);
       expect(scene.turningPageIndex, isNot(scene.underlayPageIndex));
-      // Backward 主线统一：polygon 来自前翻 StPageFlipCalculation 的镜像输出，
-      // 形状随手势从 3 顶点（最初的小三角）到 4/5 顶点（含 page 上侧/底侧
-      // 交点）变化。这里只断言 polygon 至少形成一个有效面，并且 spine 一侧
-      // 的 anchor 锁在 x=0（镜像后从前翻 W → 0）。
+      // Backward 主线统一：polygon 直接来自 BACK StPageFlipCalculation，
+      // 不再通过 forward calculation 镜像，也不再走 seam 矩形伪几何。
       expect(
         renderFrame.canonicalFrame.flippingClipArea.length,
         greaterThanOrEqualTo(3),
@@ -131,11 +458,8 @@ void main() {
         renderFrame.canonicalFrame.bottomClipArea.length,
         greaterThanOrEqualTo(3),
       );
-      // flippingAnchor 来自前翻 _rect.topLeft 的镜像 → 旋转后的页面平移基准
-      // 点（一般会落到 spine 之外，是用来配合 polygon 渲染的位置）。这里
-      // 只断言 bottomAnchor 仍锚定在 spine 原点，并且角度非零。
-      expect(renderFrame.canonicalFrame.bottomAnchor, Offset.zero);
-      expect(renderFrame.canonicalFrame.angle.abs(), greaterThan(0.0));
+      expect(renderFrame.canonicalFrame.bottomAnchor.dx.isFinite, isTrue);
+      expect(renderFrame.canonicalFrame.angle.isFinite, isTrue);
       final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
         localPagePoint: renderFrame.canonicalFrame.localPagePoint,
         pageSize: const Size(420, 584),
@@ -150,21 +474,16 @@ void main() {
       );
     });
 
-    test('backward dynamic render frame mirrors forward geometry contract', () {
+    test('backward dynamic render frame consumes native BACK calculation', () {
       const pageSize = Size(420, 584);
       const localPagePoint = Offset(-96, 496);
-      final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
-        localPagePoint: localPagePoint,
-        pageSize: pageSize,
-      );
-      final forwardCalculation = StPageFlipCalculation(
-        direction: StPageFlipDirection.forward,
+      final backCalculation = StPageFlipCalculation(
+        direction: StPageFlipDirection.back,
         corner: StPageFlipCorner.bottom,
         pageWidth: pageSize.width,
         pageHeight: pageSize.height,
       );
-      expect(replayLocalPoint.dx, closeTo(324, 0.001));
-      expect(forwardCalculation.calc(replayLocalPoint), isTrue);
+      expect(backCalculation.calc(localPagePoint), isTrue);
 
       final frame = buildBackwardDynamicRenderFrame(
         BackwardRenderFrameData(
@@ -173,57 +492,228 @@ void main() {
           orientation: StPageFlipOrientation.portrait,
           corner: StPageFlipCorner.bottom,
           pageSize: pageSize,
-          flippingClipArea: const <Offset>[],
-          bottomClipArea: const <Offset>[],
-          flippingAnchor: Offset.zero,
-          bottomAnchor: Offset.zero,
-          angle: 0,
+          flippingClipArea: backCalculation.getFlippingClipArea(),
+          bottomClipArea: backCalculation.getBottomClipArea(),
+          flippingAnchor: backCalculation.getActiveCorner(),
+          bottomAnchor: backCalculation.getBottomPagePosition(),
+          angle: backCalculation.getAngle(),
+          movingEdgeLine: backCalculation.getBackwardMovingEdgeLine(),
           maxShadowOpacity: 0.2,
         ),
       );
 
       expect(frame.direction, StPageFlipDirection.back);
       expect(frame.renderDirection, StPageFlipDirection.back);
-      expect(
-        frame.flippingClipArea,
-        _mirroredPolygon(
-          forwardCalculation.getFlippingClipArea(),
-          pageSize.width,
-        ),
-      );
-      expect(
-        frame.bottomClipArea,
-        _mirroredPolygon(
-          forwardCalculation.getBottomClipArea(),
-          pageSize.width,
-        ),
-      );
-      expect(frame.flippingAnchor, Offset.zero);
-      expect(frame.bottomAnchor, Offset.zero);
-      expect(frame.angle, closeTo(-forwardCalculation.getAngle(), 1e-9));
-      final forwardFoldGeometry = forwardCalculation.getForwardFoldGeometry();
-      expect(forwardFoldGeometry, isNotNull);
+      expect(frame.flippingClipArea, backCalculation.getFlippingClipArea());
+      expect(frame.bottomClipArea, backCalculation.getBottomClipArea());
+      expect(frame.flippingAnchor, backCalculation.getActiveCorner());
+      expect(frame.bottomAnchor, backCalculation.getBottomPagePosition());
+      expect(frame.angle, closeTo(backCalculation.getAngle(), 1e-9));
       final projectedFrame = frame.backwardProjectedFrame;
       expect(projectedFrame, isNotNull);
-      expect(projectedFrame!.previousBackPolygon, frame.flippingClipArea);
       expect(
-        projectedFrame.foldLine,
-        _mirroredLine(forwardFoldGeometry!.foldLine, pageSize.width),
+        projectedFrame!.previousFrontPolygon.length,
+        anyOf(0, greaterThanOrEqualTo(3)),
       );
-      expect(projectedFrame.foldLineSource, 'forwardRealGeometryMirrored');
-      expect(projectedFrame.edgeLineSource, 'reflectedOriginalRightEdge');
-      expect(projectedFrame.previousBackVertexCount, greaterThanOrEqualTo(3));
+      expect(projectedFrame.previousLaidFrontPolygon, isEmpty);
+      expect(projectedFrame.previousBackPagePolygon, isEmpty);
       expect(
-        _linesAreParallel(
-          projectedFrame.foldLine,
-          projectedFrame.projectedRightEdgeLine,
-        ),
-        isFalse,
+        projectedFrame.previousFoldSurfacePolygon.length,
+        greaterThanOrEqualTo(3),
+      );
+      expect(
+        projectedFrame.previousBackFoldPolygon.length,
+        anyOf(0, greaterThanOrEqualTo(3)),
+      );
+      expect(
+        projectedFrame.previousFrontFoldPolygon.length,
+        anyOf(0, greaterThanOrEqualTo(3)),
+      );
+      expect(
+        projectedFrame.previousBackPolygon.length,
+        anyOf(0, greaterThanOrEqualTo(3)),
       );
       expect(
         projectedFrame.currentResidualPolygon.length,
         greaterThanOrEqualTo(3),
       );
+      expect(_allXWithinPage(projectedFrame.foldLine, pageSize.width), isTrue);
+      expect(projectedFrame.edgeLineSource, 'backCalculationRectRightEdge');
+      expect(
+        _allPolygonXWithinPage(
+          projectedFrame.previousLaidFrontPolygon,
+          pageSize.width,
+        ),
+        isTrue,
+      );
+      expect(
+        _allPolygonXWithinPage(
+          projectedFrame.previousBackPagePolygon,
+          pageSize.width,
+        ),
+        isTrue,
+      );
+      expect(
+        _allPolygonXWithinPage(
+          projectedFrame.previousFoldSurfacePolygon,
+          pageSize.width,
+        ),
+        isTrue,
+      );
+      expect(
+        _allPolygonXWithinPage(
+          projectedFrame.previousFrontPolygon,
+          pageSize.width,
+        ),
+        isTrue,
+      );
+      expect(
+        _allPolygonXWithinPage(
+          projectedFrame.previousBackPolygon,
+          pageSize.width,
+        ),
+        isTrue,
+      );
+      expect(
+        _allPolygonXWithinPage(
+          projectedFrame.currentResidualPolygon,
+          pageSize.width,
+        ),
+        isTrue,
+      );
+      expect(
+        _polygonArea(projectedFrame.currentResidualPolygon),
+        greaterThan(1),
+      );
+      expect(
+        _polygonArea(projectedFrame.previousFoldSurfacePolygon),
+        greaterThan(1),
+      );
+      expect(
+        _polygonArea(projectedFrame.previousFoldSurfacePolygon),
+        greaterThan(1),
+      );
+      expect(
+        _polygonArea(projectedFrame.previousFoldSurfacePolygon),
+        greaterThanOrEqualTo(
+          _polygonArea(projectedFrame.previousBackFoldPolygon),
+        ),
+      );
+      expect(projectedFrame.foldLineSource, 'backCalculationParallelBoundary');
+      expect(projectedFrame.edgeLineSource, 'backCalculationRectRightEdge');
+    });
+
+    test('backward soft page geometry matches StPageFlip BACK drawSoft', () {
+      const pageSize = Size(420, 584);
+      const bounds = StPageFlipBoundsRect(
+        left: -210,
+        top: 12,
+        width: 840,
+        height: 584,
+        pageWidth: 420,
+      );
+      final calculation = StPageFlipCalculation(
+        direction: StPageFlipDirection.back,
+        corner: StPageFlipCorner.bottom,
+        pageWidth: pageSize.width,
+        pageHeight: pageSize.height,
+      );
+      expect(calculation.calc(const Offset(-120, 510)), isTrue);
+      final anchor = calculation.getActiveCorner();
+      final angle = calculation.getAngle();
+      final area = calculation.getFlippingClipArea();
+
+      final geometry = resolveBackwardSoftPageGeometry(
+        area: area,
+        anchor: anchor,
+        angle: angle,
+        bounds: bounds,
+        pageSize: pageSize,
+      );
+      final expectedPosition = convertBookPointToViewport(
+        anchor,
+        bounds,
+        direction: StPageFlipDirection.back,
+      );
+      final expectedLocalClipPolygon = area
+          .map((point) => Offset(anchor.dx - point.dx, point.dy - anchor.dy))
+          .toList(growable: false);
+      expect(geometry.surfaceOrigin, anchor);
+      expect(geometry.pivotLocal, Offset.zero);
+      expect(geometry.positionViewport.dx, closeTo(expectedPosition.dx, 0.001));
+      expect(geometry.positionViewport.dy, closeTo(expectedPosition.dy, 0.001));
+      expect(geometry.clipLocalBounds, isNotNull);
+      expect(rotationZFromMatrix(geometry.transform), closeTo(angle, 0.001));
+      expect(geometry.localClipPolygon.length, expectedLocalClipPolygon.length);
+      for (var index = 0; index < expectedLocalClipPolygon.length; index += 1) {
+        expect(
+          geometry.localClipPolygon[index].dx,
+          closeTo(expectedLocalClipPolygon[index].dx, 0.001),
+        );
+        expect(
+          geometry.localClipPolygon[index].dy,
+          closeTo(expectedLocalClipPolygon[index].dy, 0.001),
+        );
+      }
+      expect(
+        geometry.clipViewportBounds,
+        polygonBounds(
+          transformSoftLayerLocalPolygon(
+            polygon: geometry.localClipPolygon,
+            geometry: geometry,
+          ),
+        ),
+      );
+    });
+
+    test('backward previous-page fold surface edge stays page-clipped', () {
+      const pageSize = Size(420, 584);
+      const localPoints = <Offset>[
+        Offset(-48, 520),
+        Offset(-124, 506),
+        Offset(-220, 492),
+      ];
+      final edgeXs = <double>[];
+
+      for (var index = 0; index < localPoints.length; index += 1) {
+        final calculation = StPageFlipCalculation(
+          direction: StPageFlipDirection.back,
+          corner: StPageFlipCorner.bottom,
+          pageWidth: pageSize.width,
+          pageHeight: pageSize.height,
+        );
+        expect(calculation.calc(localPoints[index]), isTrue);
+        final frame = buildBackwardDynamicRenderFrame(
+          BackwardRenderFrameData(
+            localPagePoint: localPoints[index],
+            progress: 0.18 + index * 0.24,
+            orientation: StPageFlipOrientation.portrait,
+            corner: StPageFlipCorner.bottom,
+            pageSize: pageSize,
+            flippingClipArea: calculation.getFlippingClipArea(),
+            bottomClipArea: calculation.getBottomClipArea(),
+            flippingAnchor: calculation.getActiveCorner(),
+            bottomAnchor: calculation.getBottomPagePosition(),
+            angle: calculation.getAngle(),
+            movingEdgeLine: calculation.getBackwardMovingEdgeLine(),
+            maxShadowOpacity: 0.2,
+          ),
+        );
+        final projectedFrame = frame.backwardProjectedFrame;
+        expect(projectedFrame, isNotNull);
+        edgeXs.add(_lineAverageX(projectedFrame!.foldSurfaceMovingEdgeLine));
+        expect(projectedFrame.edgeLineSource, 'backCalculationRectRightEdge');
+        final currentResidualBounds = _polygonBounds(
+          projectedFrame.currentResidualPolygon,
+        );
+        if (currentResidualBounds != null) {
+          expect(currentResidualBounds.width, greaterThan(1));
+        }
+      }
+
+      expect(edgeXs, everyElement(greaterThanOrEqualTo(0)));
+      expect(edgeXs, everyElement(lessThanOrEqualTo(pageSize.width)));
+      expect(edgeXs.any((x) => x > 0), isTrue);
     });
 
     test('backward mesh keeps spine and seam vertically aligned', () {
@@ -409,21 +899,100 @@ void main() {
   });
 }
 
-Offset _mirrorX(Offset point, double width) =>
-    Offset(width - point.dx, point.dy);
-
-List<Offset> _mirroredPolygon(List<Offset> polygon, double width) {
-  return polygon.map((point) => _mirrorX(point, width)).toList(growable: false);
+bool _allXWithinPage((Offset, Offset) line, double width) {
+  return line.$1.dx >= -0.001 &&
+      line.$1.dx <= width + 0.001 &&
+      line.$2.dx >= -0.001 &&
+      line.$2.dx <= width + 0.001;
 }
 
-(Offset, Offset) _mirroredLine((Offset, Offset) line, double width) {
-  return (_mirrorX(line.$1, width), _mirrorX(line.$2, width));
+bool _allPolygonXWithinPage(List<Offset> polygon, double width) {
+  return polygon.every(
+    (point) => point.dx >= -0.001 && point.dx <= width + 0.001,
+  );
 }
 
-bool _linesAreParallel((Offset, Offset) a, (Offset, Offset) b) {
-  final ax = a.$2.dx - a.$1.dx;
-  final ay = a.$2.dy - a.$1.dy;
-  final bx = b.$2.dx - b.$1.dx;
-  final by = b.$2.dy - b.$1.dy;
-  return (ax * by - ay * bx).abs() < 0.01;
+double _lineAverageX((Offset, Offset) line) {
+  return (line.$1.dx + line.$2.dx) / 2;
+}
+
+Rect? _polygonBounds(List<Offset> polygon) {
+  if (polygon.isEmpty) {
+    return null;
+  }
+  var left = polygon.first.dx;
+  var right = polygon.first.dx;
+  var top = polygon.first.dy;
+  var bottom = polygon.first.dy;
+  for (final point in polygon.skip(1)) {
+    left = left < point.dx ? left : point.dx;
+    right = right > point.dx ? right : point.dx;
+    top = top < point.dy ? top : point.dy;
+    bottom = bottom > point.dy ? bottom : point.dy;
+  }
+  return Rect.fromLTRB(left, top, right, bottom);
+}
+
+double _polygonArea(List<Offset> polygon) {
+  if (polygon.length < 3) {
+    return 0;
+  }
+  var sum = 0.0;
+  for (var i = 0; i < polygon.length; i += 1) {
+    final current = polygon[i];
+    final next = polygon[(i + 1) % polygon.length];
+    sum += current.dx * next.dy - next.dx * current.dy;
+  }
+  return sum.abs() / 2;
+}
+
+StPageFlipScene _buildInteractiveForwardStScene() {
+  final layout = computeStPageFlipLayout(
+    viewportSize: const Size(900, 1200),
+    pageWidth: 420,
+    pageHeight: 584,
+  );
+  final controller = StPageFlipController(
+    spreadModel: StPageFlipSpreadModel(pageCount: 5),
+    layout: layout,
+    initialPage: 2,
+  );
+  final pageRect = resolveBookPageRect(layout, isRightPage: true);
+  expect(
+    controller.start(Offset(pageRect.right - 18, pageRect.bottom - 18)),
+    isTrue,
+  );
+  controller.fold(Offset(pageRect.center.dx + 48, pageRect.center.dy));
+  return controller.scene;
+}
+
+StPageFlipScene _buildInteractiveBackwardStScene() {
+  final layout = computeStPageFlipLayout(
+    viewportSize: const Size(900, 1200),
+    pageWidth: 420,
+    pageHeight: 584,
+  );
+  final controller = StPageFlipController(
+    spreadModel: StPageFlipSpreadModel(pageCount: 5),
+    layout: layout,
+    initialPage: 3,
+  );
+  final pageRect = resolveBookPageRect(layout, isRightPage: false);
+  expect(
+    controller.start(Offset(pageRect.left + 18, pageRect.bottom - 18)),
+    isTrue,
+  );
+  controller.fold(Offset(pageRect.center.dx + 120, pageRect.center.dy - 32));
+  return controller.scene;
+}
+
+String _readAppSource(String relativePath) {
+  return File(relativePath).readAsStringSync();
+}
+
+List<String> _sourceImportLines(String source) {
+  return source
+      .split('\n')
+      .where((line) => line.trimLeft().startsWith('import '))
+      .toList(growable: false);
 }

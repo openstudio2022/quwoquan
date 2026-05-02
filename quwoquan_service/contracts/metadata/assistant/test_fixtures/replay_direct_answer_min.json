@@ -1,0 +1,109 @@
+{
+  "replayCaseId": "replay_direct_answer_min",
+  "title": "Direct answer without tool",
+  "request": {
+    "conversationId": "acv_replay_direct",
+    "turnId": "atn_replay_direct",
+    "userId": "u_replay",
+    "inputText": "What can XiaoQu do for daily planning?",
+    "clientContext": {
+      "surfaceId": "assistant.personal"
+    }
+  },
+  "fakeModelScript": [
+    {
+      "stage": "understand",
+      "text": "The user asks for a capability explanation.",
+      "structuredDelta": {
+        "intent": "capability_explanation"
+      },
+      "finishReason": "stop"
+    },
+    {
+      "stage": "final",
+      "text": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals.",
+      "finishReason": "stop"
+    }
+  ],
+  "fakeToolScript": [],
+  "fakeDeviceContext": {},
+  "expectedStreamEvents": [
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_direct_001",
+      "conversationId": "acv_replay_direct",
+      "turnId": "atn_replay_direct",
+      "seq": 1,
+      "eventType": "turn_started",
+      "traceId": "trace_replay_direct",
+      "payload": {
+        "status": "running"
+      },
+      "createdAt": "2026-04-29T00:00:00Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_direct_002",
+      "conversationId": "acv_replay_direct",
+      "turnId": "atn_replay_direct",
+      "seq": 2,
+      "eventType": "partial_answer",
+      "traceId": "trace_replay_direct",
+      "payload": {
+        "text": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals."
+      },
+      "createdAt": "2026-04-29T00:00:01Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_direct_003",
+      "conversationId": "acv_replay_direct",
+      "turnId": "atn_replay_direct",
+      "seq": 3,
+      "eventType": "turn_completed",
+      "traceId": "trace_replay_direct",
+      "payload": {
+        "status": "completed"
+      },
+      "createdAt": "2026-04-29T00:00:02Z"
+    }
+  ],
+  "expectedTraceEvents": [
+    {
+      "traceEventId": "trc_direct_001",
+      "conversationId": "acv_replay_direct",
+      "turnId": "atn_replay_direct",
+      "traceId": "trace_replay_direct",
+      "phaseId": "synthesis",
+      "eventType": "phase_completed",
+      "seq": 1,
+      "status": "completed",
+      "summary": "Direct final answer produced.",
+      "payload": {},
+      "createdAt": "2026-04-29T00:00:02Z"
+    }
+  ],
+  "expectedRunResponse": {
+    "conversationId": "acv_replay_direct",
+    "turnId": "atn_replay_direct",
+    "status": "completed",
+    "finalText": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals.",
+    "summary": "Daily planning capability explanation.",
+    "journey": {
+      "stages": [],
+      "entries": [],
+      "summary": "Answered directly."
+    },
+    "runArtifacts": {
+      "displayMarkdown": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals.",
+      "displayPlainText": "XiaoQu can help plan tasks, calendar, meetings, routines, and study goals."
+    },
+    "observability": {
+      "traceId": "trace_replay_direct",
+      "modelProvider": "fake",
+      "skillId": "general_qa",
+      "domainId": "assistant"
+    },
+    "completedAt": "2026-04-29T00:00:02Z"
+  }
+}

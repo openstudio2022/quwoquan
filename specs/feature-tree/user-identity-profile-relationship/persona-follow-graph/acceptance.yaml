@@ -11,7 +11,7 @@ execution:
 scope:
   summary: >
     冻结“一个用户 + 多个分身”的完整旅程：主分身管理、公开分身资料建立、
-    跨域动作主体透传与分身级关系隔离，统一替换历史账号/主账号/子账号语义。
+    跨域动作主体透传与分身级关系隔离，统一替换记录账号/主账号/子账号语义。
   composed_scenarios:
     - persona-management
     - persona-profile-subject-and-visibility
@@ -98,7 +98,7 @@ journey_acceptance:
       - 审计与风控链路可追踪 userId 与分身映射，但不泄露到业务读接口
     blockers:
       - 主页、评论、共同联系人、圈子参与或邀请记录可反推出跨分身关联
-      - 停用后历史归因丢失或被重绑到 userId
+      - 停用后记录归因丢失或被重绑到 userId
     evidence:
       primary:
         - T1_schema
@@ -117,7 +117,7 @@ journey_acceptance:
         - "T3: `go test ./services/user-service/tests -run 'Test(ProfileSubjectView_|RelationshipCapabilityView_|Follow_|Block_|ListFollowing_|ListFollowers_|SearchSocialRelations_)'`"
         - "T3: `go test ./services/content-service/tests -run 'TestDiscoveryProjectionPersistsProfileSubjectID'`"
     notes:
-      - "`persona-profile-subject-and-visibility` 已把公开 `ProfileSubject`、strict/retired 不可见、历史快照与 discovery canonical subject 收口完成。"
+      - "`persona-profile-subject-and-visibility` 已把公开 `ProfileSubject`、strict/retired 不可见、记录快照与 discovery canonical subject 收口完成。"
       - "M4 补全后，follow/capability/list/search 主链路已切到 `ProfileSubject` 单轨，并把公开 graph 列表与搜索结果统一压平为不暴露 `ownerUserId` 的读投影。"
       - "但跨内容/共同联系人/审计映射的全面泄漏验证仍未完成，因此 J3 继续保持 partial。"
     status: partial
@@ -127,7 +127,7 @@ release_guardrails:
     title: 用户及分身统一升级可灰度可回滚
     done_when:
       - 分身管理、公开分身资料、上下文透传三类能力可独立开关
-      - 串号、公开映射泄露或历史归因丢失时可单独回退对应能力
+      - 串号、公开映射泄露或记录归因丢失时可单独回退对应能力
       - 关键指标具备观测：switch latency、attribution mismatch、public leakage、persona migration failure
     evidence:
       primary:

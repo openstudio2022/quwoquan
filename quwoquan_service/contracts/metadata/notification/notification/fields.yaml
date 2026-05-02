@@ -17,6 +17,7 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
+    description: M3 AppMessage user destination 的接收用户。后续 destination 扩展前继续作为主索引。
 
   - name: type
     type: enum
@@ -26,6 +27,43 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
+    description: M3 AppMessage messageType，覆盖 assistant/chat/circle/content/system 等业务消息类型。
+
+  - name: source
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: M3 AppMessage 来源对象类型，如 assistant_turn、chat_message、system。
+
+  - name: sourceId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: M3 AppMessage 来源对象 ID。
+
+  - name: destinationType
+    type: string
+    constraints: [NOT_NULL, DEFAULT_USER]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: M3 仅支持 user，conversation/circle 后续扩展。
+
+  - name: destinationId
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: M3 默认等于 userId，用于端侧统一读取 destination。
 
   - name: title
     type: string
@@ -42,6 +80,7 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
+    description: M3 AppMessage summary，端侧不从 transport payload 读取完整内容。
 
   - name: senderUserId
     type: string
@@ -74,7 +113,7 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
-    description: deep link（超前）
+    description: current deep link。M3 后业务打开语义优先使用 targetType/targetId。
 
   - name: read
     type: bool
@@ -116,3 +155,21 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
+
+  - name: ackedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: 端侧已收到消息，不等价于 read。
+
+  - name: deliveredAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+    description: transport 投递成功时间，M3 fake transport 可写入。

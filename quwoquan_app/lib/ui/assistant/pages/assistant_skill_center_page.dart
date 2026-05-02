@@ -3,20 +3,58 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
-import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
+import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_action_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_package_toggle_payload.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_restore_default_payload.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_simple_mode_payload.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_single_skill_payload.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_gateway_ui_views.dart';
 
 // settings-canonical-exception: Skill Center 原型仪表板布局 CR-20260329-003
+
+class AssistantSkillCenterItem {
+  const AssistantSkillCenterItem({required this.catalog, this.subscription});
+
+  final AssistantSkillCatalogItemView catalog;
+  final SkillSubscriptionWire? subscription;
+
+  String get skillId => catalog.skillId;
+  bool get enabled => subscription != null && subscription!.status == 'active';
+  bool get paused => subscription != null && subscription!.status == 'paused';
+  String get statusLabel {
+    final status = subscription?.status ?? '';
+    if (status == 'active') return '已订阅';
+    if (status == 'paused') return '已暂停';
+    return catalog.requiresConsent ? '需授权' : '可订阅';
+  }
+}
+
+final assistantSkillCenterProvider =
+    FutureProvider<List<AssistantSkillCenterItem>>((ref) async {
+      final repo = ref.watch(assistantRepositoryProvider);
+      final catalog = await repo.listSkillCatalog(limit: 64);
+      final subscriptions = await repo.listSkillSubscriptions(limit: 64);
+      final activeSubscriptions = <String, SkillSubscriptionWire>{
+        for (final item in subscriptions)
+          if (item.status != 'archived') item.skillId: item,
+      };
+      return catalog
+          .map(
+            (item) => AssistantSkillCenterItem(
+              catalog: item,
+              subscription: activeSubscriptions[item.skillId],
+            ),
+          )
+          .toList(growable: false);
+    });
 
 /// Skill Center 仪表板（能力入口与统计）
 ///
@@ -65,15 +103,23 @@ class _AssistantSkillCenterPageState
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final isDark = ref.watch(isDarkProvider);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final pageBg =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final blockBg =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
-    final skillsAsync = ref.watch(assistantSkillMarketProvider);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final pageBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final blockBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
+    final skillsAsync = ref.watch(assistantSkillCenterProvider);
 
     final content = Stack(
       children: [
@@ -82,7 +128,7 @@ class _AssistantSkillCenterPageState
             slivers: [
               CupertinoSliverRefreshControl(
                 onRefresh: () async {
-                  ref.invalidate(assistantSkillMarketProvider);
+                  ref.invalidate(assistantSkillCenterProvider);
                   await _loadRecentSessions();
                 },
               ),
@@ -188,10 +234,7 @@ class _AssistantSkillCenterPageState
     );
 
     if (widget.embedded) {
-      return Container(
-        color: pageBg,
-        child: content,
-      );
+      return Container(color: pageBg, child: content);
     }
 
     return AppScaffold(
@@ -276,7 +319,8 @@ class _AssistantSkillCenterPageState
               ),
               CupertinoSwitch(
                 value: _simpleMode,
-                activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
+                activeTrackColor:
+                    SettingsSemanticConstants.switchActiveTrackColor,
                 onChanged: (value) {
                   setState(() => _simpleMode = value);
                   unawaited(_logSkillCenterSimpleMode(value));
@@ -291,12 +335,12 @@ class _AssistantSkillCenterPageState
 
   Widget _buildPackageSection({
     required AppLocalizations l10n,
-    required List<PersonalAssistantSkillInfo> skills,
+    required List<AssistantSkillCenterItem> skills,
     required Color fgPrimary,
     required Color fgSecondary,
     required Color blockBg,
   }) {
-    final packages = <String, List<PersonalAssistantSkillInfo>>{
+    final packages = <String, List<AssistantSkillCenterItem>>{
       l10n.assistantSkillCenterPackageLife: skills
           .where((s) => _packageOf(s) == 'life')
           .toList(growable: false),
@@ -448,7 +492,8 @@ class _AssistantSkillCenterPageState
             label: l10n.assistantSkillCenterSceneDiscovery,
             desc: l10n.assistantSkillCenterSceneDiscoveryDesc,
             value: _sceneGates['discovery'] ?? false,
-            onChanged: (value) => setState(() => _sceneGates['discovery'] = value),
+            onChanged: (value) =>
+                setState(() => _sceneGates['discovery'] = value),
             fgPrimary: fgPrimary,
             fgSecondary: fgSecondary,
           ),
@@ -513,10 +558,7 @@ class _AssistantSkillCenterPageState
           else if (_recentSessions.isEmpty)
             Text(
               l10n.assistantSkillCenterNoRecentSessions,
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: fgSecondary,
-              ),
+              style: TextStyle(fontSize: AppTypography.sm, color: fgSecondary),
             )
           else
             ..._recentSessions.map((item) {
@@ -575,7 +617,7 @@ class _AssistantSkillCenterPageState
   }
 
   Widget _buildSkillRow({
-    required PersonalAssistantSkillInfo skill,
+    required AssistantSkillCenterItem skill,
     required Color fgPrimary,
     required Color fgSecondary,
     required Color blockBg,
@@ -601,14 +643,14 @@ class _AssistantSkillCenterPageState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    skill.manifest.name,
+                    skill.catalog.displayName,
                     style: TextStyle(
                       fontSize: AppTypography.base,
                       color: fgPrimary,
                     ),
                   ),
                   Text(
-                    '${skill.category} · ${skill.tier.toUpperCase()} · ${skill.manifest.id}',
+                    '${skill.catalog.category ?? 'assistant'} · ${skill.statusLabel} · ${skill.skillId}',
                     style: TextStyle(
                       fontSize: AppTypography.xs,
                       color: fgSecondary,
@@ -619,11 +661,13 @@ class _AssistantSkillCenterPageState
             ),
             CupertinoSwitch(
               value: skill.enabled,
-              activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-              inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(ref.watch(isDarkProvider)),
-              onChanged: skill.isDefaultFree
-                  ? null
-                  : (v) => _toggleSkill(skill.manifest.id, v),
+              activeTrackColor:
+                  SettingsSemanticConstants.switchActiveTrackColor,
+              inactiveTrackColor:
+                  SettingsSemanticConstants.switchInactiveTrackColor(
+                    ref.watch(isDarkProvider),
+                  ),
+              onChanged: (v) => _toggleSkill(skill, v),
             ),
           ],
         ),
@@ -668,7 +712,10 @@ class _AssistantSkillCenterPageState
           CupertinoSwitch(
             value: value,
             activeTrackColor: SettingsSemanticConstants.switchActiveTrackColor,
-            inactiveTrackColor: SettingsSemanticConstants.switchInactiveTrackColor(ref.watch(isDarkProvider)),
+            inactiveTrackColor:
+                SettingsSemanticConstants.switchInactiveTrackColor(
+                  ref.watch(isDarkProvider),
+                ),
             onChanged: onChanged,
           ),
         ],
@@ -676,29 +723,94 @@ class _AssistantSkillCenterPageState
     );
   }
 
-  String _packageOf(PersonalAssistantSkillInfo skill) {
-    final id = skill.manifest.id;
-    final category = skill.category;
-    if (id == 'photo.organize' || category == 'media') return 'life';
-    if (id == 'reminder.intent' || category == 'productivity') return 'work';
-    if (id == 'knowledge_qa' ||
-        id == 'web.quick_search' ||
-        category == 'knowledge') {
+  String _packageOf(AssistantSkillCenterItem skill) {
+    final id = skill.skillId;
+    final category = skill.catalog.category ?? '';
+    if (id == 'daily_assistant' || category == 'life') return 'life';
+    if (id == 'assistant_navigation' || category == 'productivity')
+      return 'work';
+    if (id == 'news_briefing' ||
+        id == 'stock_sentinel' ||
+        id == 'knowledge_qa' ||
+        category == 'knowledge' ||
+        category == 'content' ||
+        category == 'finance') {
       return 'knowledge';
     }
     return 'companion';
   }
 
+  List<String> _tagRefsForSkill(AssistantSkillCenterItem skill) {
+    final category = skill.catalog.category?.trim();
+    return <String>[
+      if (category != null && category.isNotEmpty) category,
+      skill.skillId,
+    ];
+  }
+
+  List<String> _queriesForSkill(AssistantSkillCenterItem skill) {
+    switch (skill.skillId) {
+      case 'stock_sentinel':
+        return const <String>['比亚迪 重大消息', '新能源车 行情'];
+      case 'travel_journey_manager':
+        return const <String>['杭州 西湖 天气', '杭州 景区拥堵', '高铁出行提醒'];
+      case 'news_briefing':
+        return const <String>['人工智能新闻', '半导体产业'];
+      case 'daily_assistant':
+        return const <String>['今日待办', '会议安排', '学习计划'];
+      default:
+        return <String>[skill.catalog.displayName];
+    }
+  }
+
+  String _rawTextForSkill(AssistantSkillCenterItem skill) {
+    switch (skill.skillId) {
+      case 'stock_sentinel':
+        return '每天开盘前提醒我关注的股票重大消息';
+      case 'travel_journey_manager':
+        return '每天出发前提醒我行程天气、路况和景点拥堵';
+      case 'news_briefing':
+        return '每天早上给我人工智能和半导体新闻摘要';
+      case 'daily_assistant':
+        return '每天早上提醒我今天的生活、工作和学习计划';
+      default:
+        final description = skill.catalog.description?.trim();
+        return description == null || description.isEmpty
+            ? '订阅 ${skill.catalog.displayName}'
+            : description;
+    }
+  }
+
+  String _cronForSkill(AssistantSkillCenterItem skill) {
+    switch (skill.skillId) {
+      case 'stock_sentinel':
+        return '0 9 * * *';
+      case 'travel_journey_manager':
+        return '0 7 * * *';
+      default:
+        return '0 8 * * *';
+    }
+  }
+
   Future<void> _enableAllSkills() async {
-    final skills = await ref.read(assistantGatewayProvider).listSkills();
+    final cached = ref
+        .read(assistantSkillCenterProvider)
+        .maybeWhen<List<AssistantSkillCenterItem>?>(
+          data: (items) => items,
+          orElse: () => null,
+        );
+    var skills = cached ?? const <AssistantSkillCenterItem>[];
+    if (cached == null) {
+      skills = await ref.refresh(assistantSkillCenterProvider.future);
+    }
     await _setUpdating(true);
     try {
       for (final skill in skills) {
-        await ref
-            .read(assistantGatewayProvider)
-            .setSkillEnabled(skill.manifest.id, true);
+        if (!skill.enabled) {
+          await _setSkillEnabled(skill, true);
+        }
       }
-      ref.invalidate(assistantSkillMarketProvider);
+      ref.invalidate(assistantSkillCenterProvider);
       await _logSkillCenterRestoreDefault(skills.length);
     } finally {
       await _setUpdating(false);
@@ -706,17 +818,15 @@ class _AssistantSkillCenterPageState
   }
 
   Future<void> _togglePackage(
-    List<PersonalAssistantSkillInfo> skills,
+    List<AssistantSkillCenterItem> skills,
     bool enabled,
   ) async {
     await _setUpdating(true);
     try {
       for (final skill in skills) {
-        await ref
-            .read(assistantGatewayProvider)
-            .setSkillEnabled(skill.manifest.id, enabled);
+        await _setSkillEnabled(skill, enabled);
       }
-      ref.invalidate(assistantSkillMarketProvider);
+      ref.invalidate(assistantSkillCenterProvider);
       await _logSkillCenterPackageToggle(
         enabled: enabled,
         skillCount: skills.length,
@@ -726,17 +836,52 @@ class _AssistantSkillCenterPageState
     }
   }
 
-  Future<void> _toggleSkill(String skillId, bool enabled) async {
+  Future<void> _toggleSkill(
+    AssistantSkillCenterItem skill,
+    bool enabled,
+  ) async {
     await _setUpdating(true);
     try {
-      await ref.read(assistantGatewayProvider).setSkillEnabled(skillId, enabled);
-      ref.invalidate(assistantSkillMarketProvider);
+      await _setSkillEnabled(skill, enabled);
+      ref.invalidate(assistantSkillCenterProvider);
       await _logSkillCenterSingleSkillToggle(
-        skillId: skillId,
+        skillId: skill.skillId,
         enabled: enabled,
       );
     } finally {
       await _setUpdating(false);
+    }
+  }
+
+  Future<void> _setSkillEnabled(
+    AssistantSkillCenterItem skill,
+    bool enabled,
+  ) async {
+    final repo = ref.read(assistantRepositoryProvider);
+    final subscription = skill.subscription;
+    if (enabled) {
+      if (subscription == null) {
+        await repo.createSkillSubscription(
+          skillId: skill.skillId,
+          domainId: skill.catalog.category ?? 'assistant',
+          tagRefs: _tagRefsForSkill(skill),
+          rawText: _rawTextForSkill(skill),
+          queries: _queriesForSkill(skill),
+          cron: _cronForSkill(skill),
+        );
+        return;
+      }
+      await repo.updateSkillSubscriptionStatus(
+        subscriptionId: subscription.subscriptionId,
+        status: 'active',
+      );
+      return;
+    }
+    if (subscription != null) {
+      await repo.updateSkillSubscriptionStatus(
+        subscriptionId: subscription.subscriptionId,
+        status: 'paused',
+      );
     }
   }
 
@@ -774,7 +919,6 @@ class _AssistantSkillCenterPageState
       level: AppLogLevel.info,
       context: AppLogContext(
         sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
         pageVisitId: trace.newPageVisitId(),
       ),
       payload: AppLogSkillCenterSimpleModePayload(
@@ -796,7 +940,6 @@ class _AssistantSkillCenterPageState
       level: AppLogLevel.info,
       context: AppLogContext(
         sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
         pageVisitId: trace.newPageVisitId(),
       ),
       payload: AppLogSkillCenterRestoreDefaultPayload(
@@ -821,7 +964,6 @@ class _AssistantSkillCenterPageState
       level: AppLogLevel.info,
       context: AppLogContext(
         sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
         pageVisitId: trace.newPageVisitId(),
       ),
       payload: AppLogSkillCenterPackageTogglePayload(
@@ -847,7 +989,6 @@ class _AssistantSkillCenterPageState
       level: AppLogLevel.info,
       context: AppLogContext(
         sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
         pageVisitId: trace.newPageVisitId(),
       ),
       payload: AppLogSkillCenterSingleSkillPayload(

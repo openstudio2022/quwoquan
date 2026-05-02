@@ -151,18 +151,36 @@ func main() {
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
 	serviceName = getenvOrDefault("SERVICE_NAME", "rtc-service")
-	appEnv = getenvOrDefault("APP_ENV", "local")
+	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
 	configVersion = os.Getenv("CONFIG_VERSION")
 	imageVersion = os.Getenv("IMAGE_VERSION")
 
-	if appEnv != "local" && appEnv != "integration" && appEnv != "prod" {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of local|integration|prod, got %q", appEnv)
+	if !isValidAppEnv(appEnv) {
+		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod-gray|prod, got %q", appEnv)
 	}
-	if appEnv == "prod" && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=prod")
+	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
+		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
 	}
 	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
+}
+
+func isValidAppEnv(env string) bool {
+	switch env {
+	case "alpha", "beta", "gamma", "prod-gray", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func requiresConfigVersion(env string) bool {
+	switch env {
+	case "gamma", "prod-gray", "prod":
+		return true
+	default:
+		return false
+	}
 }
 
 func getenvOrDefault(key, fallback string) string {
@@ -233,10 +251,10 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 		return cfg, nil
 	}
 
-	legacyPath := filepath.Join("configs", "config.yaml")
-	if _, err := os.Stat(legacyPath); err == nil {
-		if err := mergeConfigFile(&cfg, legacyPath); err != nil {
-			return config{}, fmt.Errorf("read legacy config: %w", err)
+	currentPath := filepath.Join("configs", "config.yaml")
+	if _, err := os.Stat(currentPath); err == nil {
+		if err := mergeConfigFile(&cfg, currentPath); err != nil {
+			return config{}, fmt.Errorf("read current config: %w", err)
 		}
 	}
 	return cfg, nil

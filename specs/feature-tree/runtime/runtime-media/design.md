@@ -15,7 +15,7 @@
 |------|------|
 | `runtime/runtime-media/spec.md` | 已冻结对象模型、归属边界、群头像主链路、同步主模型、灰度回滚要求 |
 | `runtime/runtime-media/acceptance.yaml` | Journey 级验收 J1~J3 与 R1 已可直接映射到稳定切片 |
-| `runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/spec.md` | 已冻结前 9 规则、sourceHash、默认群图标降级、统一 patch 类型 |
+| `runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/spec.md` | 已冻结前 9 规则、sourceHash、统一 `avatarUrl` 与 sync patch 类型 |
 | `chat-detail-avatar-display` | 页面头像展示行为已存在，需复用，不重做页面规则 |
 | `group-member-roster-version-sync` | roster revision / 合并推送 / 定点拉取是群头像更新的上游合同 |
 | `specs/runtime/media/*`、`specs/runtime/sync/*` | 作为横切基线设计文档，可直接成为本次设计的真相源输入 |
@@ -212,13 +212,13 @@ https://{cdnDomain}/{objectKey}?v={version}
 
 realtime 只推 hint，客户端再按 cursor 拉增量。
 
-### KD-7：群头像失败只降级默认群图标
+### KD-7：群头像失败保留上一版 `avatarUrl`
 
 本次不做端侧拼图兜底。  
 失败策略：
 
-- 服务端重算失败：保留旧群头像；没有旧值时显示默认群图标
-- 客户端拉取失败：显示默认群图标
+- 服务端重算失败：保留旧群头像；没有旧值时建群失败或重试至可用
+- 客户端拉取失败：保持本地旧 `avatarUrl`，并记录诊断
 
 ### KD-8：复用既有 roster revision 与消息 sync 主模型
 
@@ -241,8 +241,8 @@ realtime 只推 hint，客户端再按 cursor 拉增量。
   - 增 `groupAvatarSourceHash`
   - 可选增 `groupAvatarStatus`
 - `contracts/metadata/messages/conversation/projections/chat_inbox.yaml`
-  - 主头像字段切向 `groupAvatarUrl`
-  - `avatarCompositeUrls` 退为兼容字段或迁移期字段
+  - 主头像字段切向统一 `avatarUrl`
+  - 旧群头像 URL / `avatarCompositeUrls` 字段从主链路移除
 - `contracts/metadata/messages/conversation/events.yaml`
   - 增 `ConversationAvatarUpdated`
 - `contracts/metadata/realtime/*` 或对应 sync 契约
@@ -268,15 +268,14 @@ make codegen-app
 ### 阶段 1：加字段，不切主链路
 
 - 增加群头像新字段
-- 保留旧 `avatarCompositeUrls`
+- 移除旧群头像 URL 填充链路，并保留 `avatarCompositeUrls` 降级评估记录
 - 生产端先写新字段
 
 ### 阶段 2：双读
 
 客户端优先：
 
-1. `groupAvatarUrl`
-2. 默认群图标
+1. `avatarUrl`
 
 迁移期若需要观察兼容性，可短期保留旧字段，但不再作为主逻辑输入。
 
@@ -287,13 +286,13 @@ make codegen-app
 
 ### 阶段 4：清理
 
-- 评估移除或降级 `avatarCompositeUrls`
+- 评估移除或降级旧群头像 URL / `avatarCompositeUrls`
 
 ## 阶段 2 高标准准出补充
 
 当前实现把阶段 2 准出拆成两层：
 
-- **功能准出**：`groupAvatarUrl` 已成为客户端主读取路径，默认群图标是唯一失败兜底。
+- **功能准出**：`avatarUrl` 已成为客户端唯一会话头像读取路径，群聊头像由服务端预合成并保证 active 会话非空。
 - **高标准准出**：在功能准出之上，要求服务端群头像任务具备 Redis-backed 的可恢复/可重试/可去重能力；`runtime/sync` 对 patch 缺洞返回显式 `requiresResync`；客户端在 patch 应用时同步写入 `groupAvatarVersion` 并转入全量修复路径。
 
 这意味着阶段 2 已不再允许仅以“非阻塞 goroutine + 最终靠运气补齐”作为准出说明。
@@ -319,7 +318,7 @@ make codegen-app
 
 1. 关闭 `runtime.avatar_patch_enabled`
 2. 关闭 `chat.group_avatar_precompose_enabled`
-3. 客户端仅显示默认群图标
+3. 客户端保持旧 `avatarUrl` 或展示通用图片加载错误态
 
 回滚要求：
 
@@ -359,7 +358,7 @@ make codegen-app
    - 旧图是否保留而非闪成非法状态；
    - 收到 hint 后是否进入 cursor 拉取；
    - 遇到 gap 时是否转入 `requiresResync` 的全量修复。
-4. 恢复正常网络后确认两端 `groupAvatarUrl/groupAvatarVersion` 一致。
+4. 恢复正常网络后确认两端 `avatarUrl/groupAvatarVersion` 一致。
 
 若该固定预发演练未执行，阶段 2 只能宣称达到“功能准出”，不能宣称“高标准准出全部完成”。
 

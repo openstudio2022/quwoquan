@@ -20,12 +20,7 @@ class AssistantModelRuntimeConfig {
   final String apiKey;
 }
 
-enum ModelReasoningMode {
-  none,
-  nativeField,
-  thinkTag,
-  jsonThinkingText,
-}
+enum ModelReasoningMode { none, nativeField, thinkTag, jsonThinkingText }
 
 enum ModelToolCallMode { nativeFunction, xmlTagged, jsonEnvelope }
 
@@ -58,8 +53,7 @@ class ModelCapabilityProfile {
   final int defaultMaxTokens;
   final double defaultTemperature;
 
-  static const ModelCapabilityProfile openAiDefault =
-      ModelCapabilityProfile();
+  static const ModelCapabilityProfile openAiDefault = ModelCapabilityProfile();
 
   static const ModelCapabilityProfile mimo = ModelCapabilityProfile(
     supportsNativeFunctionCalling: false,
@@ -128,9 +122,7 @@ class AssistantModelConfigLoader {
 
   Future<List<AssistantModelRuntimeConfig>> loadFromBundledAsset() async {
     try {
-      final configText = await rootBundle.loadString(
-        'assistant/config.json',
-      );
+      final configText = await rootBundle.loadString('assistant/config.json');
       final decoded = jsonDecode(configText);
       if (decoded is! Map<String, dynamic>) {
         return const <AssistantModelRuntimeConfig>[];
@@ -257,15 +249,6 @@ class AssistantModelConfigLoader {
           assistantHomeConfig,
           '$basePath/.assistant/.env',
           defaultProviderId: 'assistant_home',
-        );
-        if (configs.isNotEmpty) return configs;
-      }
-      final legacyHomeConfig = File('$basePath/.personal_assistant/config.json');
-      if (await legacyHomeConfig.exists()) {
-        final configs = await _loadFromFile(
-          legacyHomeConfig,
-          '$basePath/.personal_assistant/.env',
-          defaultProviderId: 'assistant_home_legacy',
         );
         if (configs.isNotEmpty) return configs;
       }

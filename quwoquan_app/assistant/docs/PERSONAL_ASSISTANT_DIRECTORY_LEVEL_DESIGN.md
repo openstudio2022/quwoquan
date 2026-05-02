@@ -306,13 +306,13 @@ lib/assistant/conversation/session/
 - `session_summary_builder.dart`：负责近期轮次摘要与会话摘要
 - `recent_dialogue_rounds.dart`：负责最近 N 轮结构化提取
 - `assistant_session_wire.dart`：负责会话列表/详情的 wire 结构
-- `session_transcript_service.dart`：负责把会话历史转成可注入的 transcript / summary 材料
+- `session_transcript_service.dart`：负责把会话记录转成可注入的 transcript / summary 材料
 
 与现有代码的对应关系：
 - `assistant/session/assistant_session_manager.dart` 当前主要承担会话集合、topic 语义和偏好事实读出职责
-- `assistant/session/assistant_session_store.dart` 负责会话持久化、读写、历史归一化与降级清洗
+- `assistant/session/assistant_session_store.dart` 负责会话持久化、读写、记录归一化与降级清洗
 - `assistant/session/session_summary_builder.dart` 负责近期轮次摘要与会话摘要
-- `session/session_transcript_service.dart` 负责把会话历史转成可注入的 transcript / summary 材料
+- `session/session_transcript_service.dart` 负责把会话记录转成可注入的 transcript / summary 材料
 - `protocol/recent_dialogue_rounds.dart` 可作为最近轮次的纯函数实现
 - `protocol/assistant_session_wire.dart` 已是会话 wire 协议边界
 
@@ -350,7 +350,7 @@ lib/assistant/memory/
 - `memory/long_term/vector_store.dart` 是长期向量存储接口
 - `memory/long_term/storage/objectbox_vector_store.dart` 是具体存储实现
 - `FinalizeRunner` 负责把答案、学习标签等写入长期记忆
-- `AssistantSessionManager` 负责短期会话语义；持久化与历史归一化已下放到 `assistant_session_store.dart`
+- `AssistantSessionManager` 负责短期会话语义；持久化与记录归一化已下放到 `assistant_session_store.dart`
 - `RecallCoordinator` 是 skill shortlist recall，不属于长期记忆模块，必须与 `memory_recall_service.dart` 分开命名
 
 #### 3.3.4 理解 / 会话 / 记忆的协同关系
@@ -386,7 +386,7 @@ flowchart TD
 
 1. `RecallCoordinator` 是 skill 召回，不是长期记忆召回。
 2. `AssistantSessionManager` 是会话存储与摘要，不是长期记忆库。
-3. `ContextContinuityPolicy` 是连续性政策，不是历史本体。
+3. `ContextContinuityPolicy` 是连续性政策，不是记录本体。
 4. `ConversationStateKernel` 是轮末状态决策，不是 session store。
 5. `FinalizeRunner` 负责写记忆，不负责理解和路由。
 

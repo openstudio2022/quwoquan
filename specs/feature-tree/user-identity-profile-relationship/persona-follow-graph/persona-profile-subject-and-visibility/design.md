@@ -8,13 +8,13 @@
 
 1. 公开身份到底是 `Persona` 本体、额外 `PublicProfile` 实体，还是 user 域合成读模型。
 2. 用户基线、分身覆写、同步范围如何表达，避免 UI 私藏规则。
-3. strict isolation 与 retired attribution 如何做到“公开最小暴露，但历史可稳定渲染”。
+3. strict isolation 与 retired attribution 如何做到“公开最小暴露，但记录可稳定渲染”。
 
 ## 上游输入评审
 
 | 输入 | 当前结论 |
 |------|----------|
-| `persona-profile-subject-and-visibility/spec.md` | 公开身份、继承/覆写、同步范围、可见性与历史归因边界清晰 |
+| `persona-profile-subject-and-visibility/spec.md` | 公开身份、继承/覆写、同步范围、可见性与记录归因边界清晰 |
 | `persona-profile-subject-and-visibility/acceptance.yaml` | `A1/A2/A3/S1` 可直接映射到 `P1~P4` |
 | Journey `persona-follow-graph/design.md` | 已冻结 `ProfileSubjectView` 与 `ActivePersonaContextView` 双轨 contract |
 | `owner-subaccount-homepage-unification/design.md` | 主页是本场景 contract 的消费方，不再主定义 persona 公开身份 |
@@ -75,7 +75,7 @@
 
 - 与 DDD 和 PRD 完全一致。
 - 不需要长期双写 public profile 副本。
-- 对停用、strict isolation、历史归因的治理更清晰。
+- 对停用、strict isolation、记录归因的治理更清晰。
 
 缺点：
 
@@ -202,8 +202,8 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 - `IsolationLevel` 是公开访问边界真相源，决定能否发现、能否按公开路径读取。
 - `ProfileVisibility` 是对旧消费方保留的展示层兼容枚举，固定映射为 `open -> public`、`semi -> friends`、`strict -> private`。
 - `strict` 仅影响公开读取，不影响 owner 管理和审计。
-- retired persona 默认不再作为新动作主体，但历史对象继续使用不可变作者快照。
-- “公开主页是否还能访问”与“历史对象是否还能渲染”是两条独立规则。
+- retired persona 默认不再作为新动作主体，但记录对象继续使用不可变作者快照。
+- “公开主页是否还能访问”与“记录对象是否还能渲染”是两条独立规则。
 
 ### KD5：路由使用 `userHandle`，公开 key 使用 `profileSubjectId`，内部 canonical key 使用 `personaId`
 
@@ -267,7 +267,7 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
 
 - 为现有分身补齐 `profileSubjectId`
 - 对现有 persona 计算 override 字段与 owner 基线差异
-- 为历史对象补齐可读取的作者快照映射，不重写历史主体
+- 为记录对象补齐可读取的作者快照映射，不重写记录主体
 
 ### 兼容退出条件
 
@@ -289,8 +289,8 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
 
 回滚原则：
 
-- 关闭开关后，可退回旧公开读取实现，但不回退 `profileSubjectId`、`userHandle` 与历史快照真相源
-- 已生成的 `profileSubjectId` 和历史快照不删除
+- 关闭开关后，可退回旧公开读取实现，但不回退 `profileSubjectId`、`userHandle` 与记录快照真相源
+- 已生成的 `profileSubjectId` 和记录快照不删除
 - retired attribution 不允许回滚到 owner 重绑
 
 ## TDD / ATDD 策略
@@ -302,9 +302,9 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
   - 主页、资料编辑、同步范围提示、consumer adapter
 - `T3_cross_service_integration`
   - profile/content/chat 统一读取 `ProfileSubject`
-  - retired persona 历史渲染回归
+  - retired persona 记录渲染回归
 - `T4_user_journey`
-  - 编辑 owner 基线、编辑 persona override、strict isolation 公开读取、retired persona 历史浏览
+  - 编辑 owner 基线、编辑 persona override、strict isolation 公开读取、retired persona 记录浏览
 
 ## plan slice 与 T1~T4 证据矩阵映射
 

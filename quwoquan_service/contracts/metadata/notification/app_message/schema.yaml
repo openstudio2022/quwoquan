@@ -1,0 +1,32 @@
+dart_class: AppMessageWire
+library_path: cloud/runtime/generated/notification/app_message_dto.g.dart
+output_path: cloud/runtime/generated/notification/app_message_dto.g.dart
+contract: app_message
+version: app_message.m2
+kind: entity_wire_contract
+fields:
+  - { name: messageId, type: string, required: true }
+  - { name: userId, type: string, required: true }
+  - { name: messageType, type: string, default: assistant }
+  - { name: source, type: string, required: true }
+  - { name: sourceId, type: string, required: true }
+  - { name: destination, type: object, ref: app_message_destination, default: {} }
+  - { name: title, type: string, default: '' }
+  - { name: summary, type: string, default: '' }
+  - { name: target, type: object, ref: app_message_target, default: {} }
+  - { name: read, type: bool, default: false }
+  - { name: createdAt, type: string, required: true }
+  - { name: deliveredAt, type: string, default: '' }
+  - { name: ackedAt, type: string, default: '' }
+  - { name: readAt, type: string, default: '' }
+subcontracts:
+  app_message_destination:
+    class_name: AppMessageDestinationWire
+    fields:
+      - { name: type, type: string, default: user }
+      - { name: id, type: string, default: '' }
+  app_message_target:
+    class_name: AppMessageTargetWire
+    fields:
+      - { name: targetType, type: string, default: assistant_turn }
+      - { name: targetId, type: string, default: '' }

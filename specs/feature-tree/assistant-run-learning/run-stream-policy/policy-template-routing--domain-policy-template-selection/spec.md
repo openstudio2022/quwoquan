@@ -9,7 +9,7 @@
 ## 验收标准
 - A3：策略切换与回滚后输出稳定。
 
-## Folded legacy node `policy-version-gray-release`
+## Folded current node `policy-version-gray-release`
 
 # L5 特性：policy-version-gray-release
 

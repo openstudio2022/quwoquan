@@ -2,7 +2,7 @@ version: 1
 read_model: ContentPostDetailCardWire
 
 description: |
-  GET post 响应中 cards[] 元素（文章详情 legacy 卡片行）。
+  GET post 响应中 cards[] 元素（文章详情 current 卡片行）。
 
 source_entities:
   - Post

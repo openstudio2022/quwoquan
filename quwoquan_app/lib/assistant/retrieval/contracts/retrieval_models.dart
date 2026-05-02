@@ -21,10 +21,13 @@ class AssistantRetrievalRequest {
   final String? providerHint;
   final int round;
   final int maxItems;
+
   /// Layer 1 LLM 生成的多路查询变体，供 retrieval_service 并发执行
   final List<String> queryVariants;
-  /// 历史轮次结果，供 Layer 3 反思重写时追溯失败原因
+
+  /// 记录轮次结果，供 Layer 3 反思重写时追溯失败原因
   final List<Map<String, dynamic>> previousRoundTraces;
+
   /// Layer 1 诊断的输入问题类型（pinyin_input/no_location 等）
   final List<String> inputIssues;
 }
@@ -80,14 +83,19 @@ class AssistantRetrievalResult {
   final Map<String, dynamic> queryPlan;
   final Map<String, dynamic> policyDecision;
   final List<Map<String, dynamic>> roundTraces;
+
   /// Layer 3 综合质量评分（权威0.4 + 时效0.35 + 覆盖0.25）
   final double qualityScore;
+
   /// 权威性得分
   final double authorityScore;
+
   /// 命中权威域的结果数量
   final int authoritativeCount;
+
   /// 本次搜索总资料数（含非权威）
   final int totalReferencesSearched;
+
   /// 全量参考资料列表（含 cited 标记），供 Layer 5 展示
   final List<Map<String, dynamic>> allReferences;
 
@@ -114,4 +122,3 @@ class AssistantRetrievalRouteDecision {
   final int maxRounds;
   final Map<String, dynamic> decisionReasons;
 }
-

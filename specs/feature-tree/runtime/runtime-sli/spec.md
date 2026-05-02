@@ -6,7 +6,7 @@
 - DataPoint 采集：持久化到 MongoDB，支持单条和批量。
 - Report 生成：按时间窗口聚合（count/sum/mean/p50/p95/p99/min/max）+ SLO 达标判定。
 - Agent 知识回流：Report → KnowledgeEntry → MongoDB agent_knowledge 集合。
-- 知识查询：按 feature 关键词搜索历史效果数据。
+- 知识查询：按 feature 关键词搜索记录效果数据。
 
 ## 约束
 - Report 生成依赖 MongoDB 查询，大时间窗口需索引支撑。

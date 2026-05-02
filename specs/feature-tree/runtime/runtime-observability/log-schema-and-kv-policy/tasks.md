@@ -9,13 +9,13 @@
 
 ## 实施任务（apply）
 
-- [x] 端侧日志模型：`AppLogEnvelope` 增加 canonical 字段与 legacy 兼容字段
+- [x] 端侧日志模型：`AppLogEnvelope` 增加 canonical 字段与 current 兼容字段
 - [x] 端侧日志上下文：`AppLogContext` 增加 source/correlation/span 相关字段
 - [x] 默认组件映射：`AppLogService` 按 `AppLogType` 自动补全 `component/target`
-- [x] LLM/搜索关键埋点：补齐 `sourceDomain/sourceService/component/target/action/correlationId`
+- [x] LLM/搜索关键埋点：补齐 `sourceDomain/sourceService/component/target/action/runId/traceId`
 - [ ] 端侧其余埋点补齐（cloudApi/pageAccess/error 路径）
 - [ ] 云侧日志字段映射落地（`sourceDomain/sourceService/component/target`）
-- [ ] Python worker 字段映射落地（`correlationId/traceId/spanId`）
+- [ ] Python worker 字段映射落地（`traceId/requestId`）
 
 ## 测试与门禁
 

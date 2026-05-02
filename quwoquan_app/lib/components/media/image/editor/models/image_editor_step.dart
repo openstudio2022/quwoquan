@@ -1,6 +1,6 @@
 /// 图片编辑器单步操作数据模型（步骤栈用）
 ///
-/// 每步包含类型、参数与可选缩略图引用；用于 Snapseed 式历史记录与重算。
+/// 每步包含类型、参数与可选缩略图引用；用于 Snapseed 式记录记录与重算。
 class ImageEditorStep {
   const ImageEditorStep({
     required this.type,

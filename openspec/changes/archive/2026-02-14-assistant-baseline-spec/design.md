@@ -48,7 +48,7 @@
   → Mitigation：半弹窗内提供输入框与「进入完整对话」明显入口，且可拖拽展开，降低认知负担；后续可根据数据决定是否保留或简化半弹窗。
 
 - [Risk] VisitRecord 随实体型 target 增长，本地存储与同步量会增大。  
-  → Mitigation：基线仅本地；云端同步实现时可做 TTL 或按 lastSeenAt 裁剪，规格中不强制保留无限期历史。
+  → Mitigation：基线仅本地；云端同步实现时可做 TTL 或按 lastSeenAt 裁剪，规格中不强制保留无限期记录。
 
 - [Risk] 各页 recordVisit 调用遗漏或重复，导致 experienceLevel 不准。  
   → Mitigation：在 spec 与 tasks 中明确列出需挂载的页面与解析规则；实现后通过「首次进入 / 再次进入」人工走查验收。

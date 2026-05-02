@@ -38,7 +38,7 @@
 - 端侧 `data_service`、`app_content_repository`、`sync_adapter` 等将依据云规格对接真实 API
 - 影响端侧 Assistant 的 `CloudStubSyncAdapter`、`userProfileSnapshot` 注入、`contextScopeHint` 中的 `historicalRetrievalFeedback`
 
-## 历史澄清对齐（已纳入规格）
+## 记录澄清对齐（已纳入规格）
 
 - 内容/圈子推荐与反馈闭环：Content/Circle 行为上报、显式/隐式反馈枚举、推荐输入含画像与 Visit、反馈驱动推荐优化
 - 帮读卡「反馈偏好」：帮读摘要支持反馈偏好动作并纳入推荐

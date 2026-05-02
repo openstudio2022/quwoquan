@@ -1,0 +1,122 @@
+{
+  "replayCaseId": "replay_tool_failure_min",
+  "title": "Tool failure maps to runtime failure",
+  "request": {
+    "conversationId": "acv_replay_failure",
+    "turnId": "atn_replay_failure",
+    "userId": "u_replay",
+    "inputText": "Search current market news.",
+    "clientContext": {
+      "surfaceId": "assistant.personal"
+    }
+  },
+  "fakeModelScript": [
+    {
+      "stage": "reasoning",
+      "text": "Need market search evidence.",
+      "structuredDelta": {
+        "nextAction": "call_tool",
+        "toolName": "mock_search"
+      },
+      "finishReason": "tool_use"
+    }
+  ],
+  "fakeToolScript": [
+    {
+      "toolName": "mock_search",
+      "input": {
+        "query": "current market news"
+      },
+      "failure": {
+        "code": "ASSISTANT.MIDDLEWARE.tool_failed",
+        "origin": "remoteDependency",
+        "kind": "tool",
+        "nature": "transient",
+        "messageKey": "assistant.error.tool_failed",
+        "recoveryAction": "retry_later",
+        "disruptionLevel": "turn_failed",
+        "traceId": "trace_replay_failure",
+        "context": {
+          "toolName": "mock_search"
+        }
+      }
+    }
+  ],
+  "fakeDeviceContext": {},
+  "expectedStreamEvents": [
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_failure_001",
+      "conversationId": "acv_replay_failure",
+      "turnId": "atn_replay_failure",
+      "seq": 1,
+      "eventType": "turn_started",
+      "traceId": "trace_replay_failure",
+      "payload": {
+        "status": "running"
+      },
+      "createdAt": "2026-04-29T00:02:00Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_failure_002",
+      "conversationId": "acv_replay_failure",
+      "turnId": "atn_replay_failure",
+      "seq": 2,
+      "eventType": "tool_use_requested",
+      "traceId": "trace_replay_failure",
+      "payload": {
+        "toolName": "mock_search"
+      },
+      "createdAt": "2026-04-29T00:02:01Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_failure_003",
+      "conversationId": "acv_replay_failure",
+      "turnId": "atn_replay_failure",
+      "seq": 3,
+      "eventType": "turn_failed",
+      "traceId": "trace_replay_failure",
+      "payload": {
+        "status": "failed"
+      },
+      "runtimeFailure": {
+        "code": "ASSISTANT.MIDDLEWARE.tool_failed",
+        "origin": "remoteDependency",
+        "kind": "tool",
+        "nature": "transient",
+        "messageKey": "assistant.error.tool_failed",
+        "recoveryAction": "retry_later",
+        "disruptionLevel": "turn_failed",
+        "traceId": "trace_replay_failure",
+        "context": {
+          "toolName": "mock_search"
+        }
+      },
+      "createdAt": "2026-04-29T00:02:02Z"
+    }
+  ],
+  "expectedTraceEvents": [],
+  "expectedRunResponse": {
+    "conversationId": "acv_replay_failure",
+    "turnId": "atn_replay_failure",
+    "status": "failed",
+    "finalText": "",
+    "summary": "Tool failure stopped the turn.",
+    "runtimeFailure": {
+      "code": "ASSISTANT.MIDDLEWARE.tool_failed",
+      "origin": "remoteDependency",
+      "kind": "tool",
+      "nature": "transient",
+      "messageKey": "assistant.error.tool_failed",
+      "recoveryAction": "retry_later",
+      "disruptionLevel": "turn_failed",
+      "traceId": "trace_replay_failure",
+      "context": {
+        "toolName": "mock_search"
+      }
+    },
+    "completedAt": "2026-04-29T00:02:02Z"
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "replayCaseId": "replay_tool_search_min",
+  "title": "Search tool observation before final answer",
+  "request": {
+    "conversationId": "acv_replay_tool",
+    "turnId": "atn_replay_tool",
+    "userId": "u_replay",
+    "inputText": "Summarize the latest AI chip news.",
+    "clientContext": {
+      "surfaceId": "assistant.personal"
+    }
+  },
+  "fakeModelScript": [
+    {
+      "stage": "reasoning",
+      "text": "Need fresh search evidence before answering.",
+      "structuredDelta": {
+        "nextAction": "call_tool",
+        "toolName": "mock_search"
+      },
+      "finishReason": "tool_use"
+    },
+    {
+      "stage": "final",
+      "text": "Recent AI chip news focuses on accelerator supply, export rules, and inference cost.",
+      "finishReason": "stop"
+    }
+  ],
+  "fakeToolScript": [
+    {
+      "toolName": "mock_search",
+      "input": {
+        "query": "latest AI chip news"
+      },
+      "result": {
+        "kind": "tool_result",
+        "summary": "Found accelerator supply, export rules, and inference cost updates."
+      }
+    }
+  ],
+  "fakeDeviceContext": {},
+  "expectedStreamEvents": [
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_tool_001",
+      "conversationId": "acv_replay_tool",
+      "turnId": "atn_replay_tool",
+      "seq": 1,
+      "eventType": "turn_started",
+      "traceId": "trace_replay_tool",
+      "payload": {
+        "status": "running"
+      },
+      "createdAt": "2026-04-29T00:01:00Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_tool_002",
+      "conversationId": "acv_replay_tool",
+      "turnId": "atn_replay_tool",
+      "seq": 2,
+      "eventType": "tool_use_requested",
+      "traceId": "trace_replay_tool",
+      "payload": {
+        "toolName": "mock_search"
+      },
+      "createdAt": "2026-04-29T00:01:01Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_tool_003",
+      "conversationId": "acv_replay_tool",
+      "turnId": "atn_replay_tool",
+      "seq": 3,
+      "eventType": "tool_result_received",
+      "traceId": "trace_replay_tool",
+      "payload": {
+        "toolName": "mock_search",
+        "summary": "Found accelerator supply, export rules, and inference cost updates."
+      },
+      "createdAt": "2026-04-29T00:01:02Z"
+    },
+    {
+      "schemaVersion": "assistant_stream_event.m5",
+      "eventId": "evt_tool_004",
+      "conversationId": "acv_replay_tool",
+      "turnId": "atn_replay_tool",
+      "seq": 4,
+      "eventType": "final_answer",
+      "traceId": "trace_replay_tool",
+      "payload": {
+        "text": "Recent AI chip news focuses on accelerator supply, export rules, and inference cost."
+      },
+      "createdAt": "2026-04-29T00:01:03Z"
+    }
+  ],
+  "expectedTraceEvents": [],
+  "expectedRunResponse": {
+    "conversationId": "acv_replay_tool",
+    "turnId": "atn_replay_tool",
+    "status": "completed",
+    "finalText": "Recent AI chip news focuses on accelerator supply, export rules, and inference cost.",
+    "summary": "Answered with search evidence.",
+    "observability": {
+      "traceId": "trace_replay_tool",
+      "modelProvider": "fake",
+      "skillId": "news_briefing",
+      "domainId": "news"
+    },
+    "completedAt": "2026-04-29T00:01:03Z"
+  }
+}

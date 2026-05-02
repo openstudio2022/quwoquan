@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/_shared/test_fixtures/seed_manifest.schema.json",
+  "title": "Quwoquan Environment Seed Manifest",
+  "type": "object",
+  "required": ["schemaVersion", "environment", "seedRefs", "gateway"],
+  "properties": {
+    "schemaVersion": {
+      "const": "app-seed-manifest.v1"
+    },
+    "environment": {
+      "enum": ["alpha", "beta", "gamma"]
+    },
+    "description": {
+      "type": "string"
+    },
+    "seedRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/domainSeedRefs"
+      }
+    },
+    "appAssets": {
+      "type": "object",
+      "properties": {
+        "alphaOnlyFixtureAllowlist": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "gateway": {
+      "type": "object",
+      "required": ["routes"],
+      "properties": {
+        "routes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/gatewayRoute"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "domainSeedRefs": {
+      "type": "object",
+      "required": ["domain", "fixturePath", "refs", "resetScope", "targetStore", "verifiedEndpoints"],
+      "properties": {
+        "domain": { "type": "string" },
+        "fixturePath": { "type": "string" },
+        "refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "resetScope": { "type": "string" },
+        "targetStore": { "type": "string" },
+        "verifiedEndpoints": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "gatewayRoute": {
+      "type": "object",
+      "required": ["prefix", "service", "port"],
+      "properties": {
+        "prefix": { "type": "string" },
+        "service": { "type": "string" },
+        "port": { "type": "integer" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

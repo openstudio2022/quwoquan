@@ -80,32 +80,32 @@ func TestApplyRedisSceneEnv_NoEnvSet_NoChange(t *testing.T) {
 // applyEnvOverrides — backward compat (CONTENT_REDIS_ADDR → rec.addr)
 // ---------------------------------------------------------------------------
 
-func TestApplyEnvOverrides_LegacyAddr(t *testing.T) {
-	t.Setenv("CONTENT_REDIS_ADDR", "legacy-host:6379")
+func TestApplyEnvOverrides_CurrentAddr(t *testing.T) {
+	t.Setenv("CONTENT_REDIS_ADDR", "current-host:6379")
 	cfg := config{}
 	applyEnvOverrides(&cfg)
-	if cfg.Redis.Rec.Addr != "legacy-host:6379" {
-		t.Errorf("legacy CONTENT_REDIS_ADDR should map to Redis.Rec.Addr, got %q", cfg.Redis.Rec.Addr)
+	if cfg.Redis.Rec.Addr != "current-host:6379" {
+		t.Errorf("current CONTENT_REDIS_ADDR should map to Redis.Rec.Addr, got %q", cfg.Redis.Rec.Addr)
 	}
 }
 
-func TestApplyEnvOverrides_LegacyAddrNotOverrideExisting(t *testing.T) {
-	t.Setenv("CONTENT_REDIS_ADDR", "legacy-host:6379")
+func TestApplyEnvOverrides_CurrentAddrNotOverrideExisting(t *testing.T) {
+	t.Setenv("CONTENT_REDIS_ADDR", "current-host:6379")
 	cfg := config{}
 	cfg.Redis.Rec.Addr = "already-set:6379"
 	applyEnvOverrides(&cfg)
-	// Legacy env must NOT overwrite a value already set from new env/config
+	// Current env must NOT overwrite a value already set from new env/config
 	if cfg.Redis.Rec.Addr != "already-set:6379" {
-		t.Errorf("legacy addr should not overwrite existing cfg.Redis.Rec.Addr")
+		t.Errorf("current addr should not overwrite existing cfg.Redis.Rec.Addr")
 	}
 }
 
-func TestApplyEnvOverrides_LegacyPassword(t *testing.T) {
-	t.Setenv("CONTENT_REDIS_PASSWORD", "legacy-pass")
+func TestApplyEnvOverrides_CurrentPassword(t *testing.T) {
+	t.Setenv("CONTENT_REDIS_PASSWORD", "current-pass")
 	cfg := config{}
 	applyEnvOverrides(&cfg)
-	if cfg.Redis.Rec.Password != "legacy-pass" {
-		t.Errorf("legacy CONTENT_REDIS_PASSWORD should map to Redis.Rec.Password")
+	if cfg.Redis.Rec.Password != "current-pass" {
+		t.Errorf("current CONTENT_REDIS_PASSWORD should map to Redis.Rec.Password")
 	}
 }
 

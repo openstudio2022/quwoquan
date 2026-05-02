@@ -91,7 +91,7 @@ void main() {
           (path) => path.startsWith('assets/assistant/prompts/domains/'),
         ),
         isFalse,
-        reason: 'manifest should not keep legacy domain prompt templates',
+        reason: 'manifest should not keep current domain prompt templates',
       );
     });
 
@@ -129,9 +129,9 @@ void main() {
       }
     });
 
-    test('legacy prompt domain directory is removed', () {
-      final legacyDomains = Directory('assets/assistant/prompts/domains');
-      expect(legacyDomains.existsSync(), isFalse);
+    test('current prompt domain directory is removed', () {
+      final currentDomains = Directory('assets/assistant/prompts/domains');
+      expect(currentDomains.existsSync(), isFalse);
     });
   });
 }

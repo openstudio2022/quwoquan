@@ -16,10 +16,12 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gopkg.in/yaml.v3"
 
+	rterr "quwoquan_service/runtime/errors"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemedia "quwoquan_service/runtime/media"
 	robs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
 	httpadapter "quwoquan_service/services/chat-service/internal/adapters/http"
 	"quwoquan_service/services/chat-service/internal/adapters/mq"
@@ -56,17 +58,27 @@ type config struct {
 	} `yaml:"mongodb"`
 
 	Redis struct {
-		Realtime redisSceneCfg `yaml:"realtime"`
-		General  redisSceneCfg `yaml:"general"`
+		Realtime     redisSceneCfg `yaml:"realtime"`
+		General      redisSceneCfg `yaml:"general"`
+		ReliableTask redisSceneCfg `yaml:"reliable_task"`
 	} `yaml:"redis"`
 
 	Runtime struct {
 		Media struct {
-			GroupAvatarCDNDomain string `yaml:"group_avatar_cdn_domain"`
+			GroupAvatarCDNBaseURL     string `yaml:"group_avatar_cdn_base_url"`
+			GroupAvatarLocalMediaRoot string `yaml:"group_avatar_local_media_root"`
 		} `yaml:"media"`
 		Sync struct {
 			PatchTTLHours int `yaml:"patch_ttl_hours"`
 		} `yaml:"sync"`
+		ReliableTask struct {
+			ReadyIndex struct {
+				Enabled bool   `yaml:"enabled"`
+				Stream  string `yaml:"stream"`
+				Group   string `yaml:"group"`
+				Queue   string `yaml:"queue"`
+			} `yaml:"ready_index"`
+		} `yaml:"reliable_task"`
 		Observability struct {
 			RuntimeMedia struct {
 				GroupAvatarRecomputeDurationMsP95 float64 `yaml:"group_avatar_recompute_duration_ms_p95"`
@@ -126,10 +138,18 @@ func main() {
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(router.Scene("general"))
 	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"))
-	application.ConfigureGroupAvatarCDNDomain(cfg.Runtime.Media.GroupAvatarCDNDomain)
+	localMediaRoot := strings.TrimSpace(cfg.Runtime.Media.GroupAvatarLocalMediaRoot)
+	if localMediaRoot == "" {
+		localMediaRoot = "./var/chat-media"
+	}
+	application.ConfigureGroupAvatarCDNBase(cfg.Runtime.Media.GroupAvatarCDNBaseURL)
+	if err := runtimemedia.EnsureDefaultGroupAvatarFile(localMediaRoot); err != nil {
+		log.Fatalf("chat-service default group avatar init failed: %v", err)
+	}
 	groupAvatarMedia := runtimemedia.NewGroupAvatarService(
 		router.Scene("general"),
-		cfg.Runtime.Media.GroupAvatarCDNDomain,
+		cfg.Runtime.Media.GroupAvatarCDNBaseURL,
+		localMediaRoot,
 	)
 	syncOptions := []runtimesync.Option{}
 	if cfg.Runtime.Sync.PatchTTLHours > 0 {
@@ -143,17 +163,58 @@ func main() {
 		router.Scene("realtime"),
 		syncOptions...,
 	)
-	groupAvatarScheduler := application.NewRedisGroupAvatarTaskScheduler(
-		router.Scene("general"),
+	reliableTaskCatalog, err := loadReliableTaskCatalog(configRoot)
+	if err != nil {
+		log.Fatalf("chat-service reliable task catalog load failed: %v", err)
+	}
+	reliableTaskStore := reliabletask.NewMongoStore(mongoDB)
+	if err := reliableTaskStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service reliable task index init failed: %v", err)
+	}
+	var reliableTaskReadyIndex reliabletask.ReadyIndex
+	if cfg.Runtime.ReliableTask.ReadyIndex.Enabled {
+		index, err := reliabletask.NewRedisReadyIndex(reliabletask.RedisReadyIndexConfig{
+			Client: router.Scene("reliabletask"),
+			Stream: cfg.Runtime.ReliableTask.ReadyIndex.Stream,
+			Group:  cfg.Runtime.ReliableTask.ReadyIndex.Group,
+			Queue:  cfg.Runtime.ReliableTask.ReadyIndex.Queue,
+		})
+		if err != nil {
+			log.Fatalf("chat-service reliable task redis ready index init failed: %v", err)
+		}
+		if err := index.Ensure(ctx); err != nil {
+			log.Fatalf("chat-service reliable task redis ready index ensure failed: %v", err)
+		}
+		reliableTaskReadyIndex = index
+	}
+	groupAvatarScheduler := application.NewReliableGroupAvatarTaskScheduler(
+		reliableTaskStore,
+		reliableTaskCatalog,
 		chatStore,
 		eventPublisher,
 		groupAvatarMedia,
 		userSyncService,
 		logger,
+		application.WithReliableGroupAvatarRuntimeIdentity(appEnv, instanceID),
+		application.WithReliableGroupAvatarEnabledModules(resolveReliableTaskModules()),
+		application.WithReliableGroupAvatarReadyIndex(reliableTaskReadyIndex),
 	)
 	if err := groupAvatarScheduler.Start(ctx); err != nil {
-		log.Fatalf("chat-service group avatar scheduler start failed: %v", err)
+		log.Fatalf("chat-service reliable group avatar scheduler start failed: %v", err)
 	}
+	go func() {
+		if err := application.BackfillMissingGroupAvatars(
+			context.Background(),
+			chatStore,
+			eventPublisher,
+			groupAvatarMedia,
+			userSyncService,
+			groupAvatarScheduler,
+			200,
+		); err != nil {
+			logger.Error("chat-service group avatar backfill failed", "err", err)
+		}
+	}()
 	profileResolver := httpadapter.NewUserProfileResolver(userServiceBaseURL, nil)
 
 	conversationSvc := application.NewConversationService(
@@ -194,6 +255,7 @@ func main() {
 
 	baseHandler := httpadapter.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()
 	rootMux := http.NewServeMux()
+	rootMux.Handle("/media/", newDerivedMediaFileServer(localMediaRoot))
 	rootMux.Handle("/metrics/runtime-media", application.NewRuntimeMediaMetricsHandler(
 		groupAvatarScheduler,
 		userSyncService,
@@ -231,18 +293,36 @@ func main() {
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
 	serviceName = getenvOrDefault("SERVICE_NAME", "chat-service")
-	appEnv = getenvOrDefault("APP_ENV", "local")
+	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
 	configVersion = os.Getenv("CONFIG_VERSION")
 	imageVersion = os.Getenv("IMAGE_VERSION")
 
-	if appEnv != "local" && appEnv != "integration" && appEnv != "prod" {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of local|integration|prod, got %q", appEnv)
+	if !isValidAppEnv(appEnv) {
+		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod-gray|prod, got %q", appEnv)
 	}
-	if appEnv == "prod" && strings.TrimSpace(configVersion) == "" {
-		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=prod")
+	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
+		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
 	}
 	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
+}
+
+func isValidAppEnv(env string) bool {
+	switch env {
+	case "alpha", "beta", "gamma", "prod-gray", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func requiresConfigVersion(env string) bool {
+	switch env {
+	case "gamma", "prod-gray", "prod":
+		return true
+	default:
+		return false
+	}
 }
 
 func getenvOrDefault(key, fallback string) string {
@@ -313,13 +393,88 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 		return cfg, nil
 	}
 
-	legacyPath := filepath.Join("configs", "config.yaml")
-	if _, err := os.Stat(legacyPath); err == nil {
-		if err := mergeConfigFile(&cfg, legacyPath); err != nil {
-			return config{}, fmt.Errorf("read legacy config: %w", err)
+	currentPath := filepath.Join("configs", "config.yaml")
+	if _, err := os.Stat(currentPath); err == nil {
+		if err := mergeConfigFile(&cfg, currentPath); err != nil {
+			return config{}, fmt.Errorf("read current config: %w", err)
 		}
 	}
 	return cfg, nil
+}
+
+func loadReliableTaskCatalog(configRoot string) (reliabletask.Catalog, error) {
+	type pair struct {
+		catalog string
+		policy  string
+	}
+	pairs := []pair{}
+	if path := strings.TrimSpace(os.Getenv("RELIABLE_TASK_CATALOG_PATH")); path != "" {
+		policyPath := strings.TrimSpace(os.Getenv("RELIABLE_TASK_RETENTION_POLICY_PATH"))
+		pairs = append(pairs, pair{catalog: path, policy: policyPath})
+	}
+	if strings.TrimSpace(configRoot) != "" {
+		pairs = append(pairs, pair{
+			catalog: filepath.Join(configRoot, "deploy", "shared", "reliable_task_module_catalog.yaml"),
+			policy:  filepath.Join(configRoot, "deploy", "shared", "reliable_task_retention_policy.yaml"),
+		})
+	}
+	pairs = append(pairs,
+		pair{catalog: "deploy/shared/reliable_task_module_catalog.yaml", policy: "deploy/shared/reliable_task_retention_policy.yaml"},
+		pair{catalog: "../deploy/shared/reliable_task_module_catalog.yaml", policy: "../deploy/shared/reliable_task_retention_policy.yaml"},
+	)
+	var lastErr error
+	for _, candidate := range pairs {
+		var catalog reliabletask.Catalog
+		var err error
+		if candidate.policy != "" {
+			catalog, err = reliabletask.LoadCatalogWithPolicies(candidate.catalog, candidate.policy)
+		} else {
+			catalog, err = reliabletask.LoadCatalog(candidate.catalog)
+		}
+		if err == nil {
+			return catalog, nil
+		}
+		lastErr = err
+	}
+	return reliabletask.Catalog{}, lastErr
+}
+
+func resolveReliableTaskModules() []string {
+	if raw := strings.TrimSpace(os.Getenv("RELIABLE_TASK_MODULES")); raw != "" {
+		return splitCSV(raw)
+	}
+	switch strings.TrimSpace(os.Getenv("MODULE_PACKAGE")) {
+	case "chat-avatar-worker-package":
+		return []string{"chat.group_avatar_worker"}
+	case "chat-background-package":
+		return []string{"chat.task_outbox_dispatcher", "chat.notification_outbox_dispatcher", "notification.fanout_worker"}
+	case "seed-box", "chat-service", "quwoquan_service", "":
+		return []string{
+			"chat.task_outbox_dispatcher",
+			"chat.group_avatar_worker",
+			"chat.notification_outbox_dispatcher",
+			"notification.fanout_worker",
+		}
+	default:
+		return []string{
+			"chat.task_outbox_dispatcher",
+			"chat.group_avatar_worker",
+			"chat.notification_outbox_dispatcher",
+			"notification.fanout_worker",
+		}
+	}
+}
+
+func splitCSV(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
@@ -361,6 +516,57 @@ func compareSemver(a, b string) int {
 	return 0
 }
 
+func newDerivedMediaFileServer(localRoot string) http.Handler {
+	root := filepath.Clean(strings.TrimSpace(localRoot))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			writeDerivedMediaError(w, r, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		rel := strings.TrimPrefix(r.URL.Path, "/media/")
+		rel = strings.Trim(rel, "/")
+		if rel == "" || strings.Contains(rel, "..") {
+			writeDerivedMediaError(w, r, http.StatusBadRequest, "bad path")
+			return
+		}
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		cleanRoot := root
+		cleanFull := filepath.Clean(full)
+		sep := string(filepath.Separator)
+		if cleanFull != cleanRoot && !strings.HasPrefix(cleanFull, cleanRoot+sep) {
+			writeDerivedMediaError(w, r, http.StatusBadRequest, "bad path")
+			return
+		}
+		fi, err := os.Stat(cleanFull)
+		if err != nil || fi.IsDir() {
+			writeDerivedMediaError(w, r, http.StatusNotFound, "media not found")
+			return
+		}
+		http.ServeFile(w, r, cleanFull)
+	})
+}
+
+func writeDerivedMediaError(w http.ResponseWriter, r *http.Request, status int, debugMessage string) {
+	kind := rterr.KindUser
+	reason := "invalid_argument"
+	userMessage := "媒体资源不可用"
+	if status == http.StatusNotFound {
+		reason = "not_found"
+	}
+	rterr.WriteHTTPError(
+		w,
+		rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleChat, kind, reason),
+			userMessage,
+			debugMessage,
+		).WithLocation(rterr.RuntimeErrorLocation{
+			BusinessObject: "chat_media",
+			FunctionModule: "derived_media_file_server",
+		}),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
+}
+
 func applyEnvOverrides(cfg *config) {
 	if v := os.Getenv("MONGO_URI"); v != "" {
 		cfg.MongoDB.URI = v
@@ -371,6 +577,7 @@ func applyEnvOverrides(cfg *config) {
 
 	applyRedisSceneEnv("CHAT_REDIS_REALTIME", &cfg.Redis.Realtime)
 	applyRedisSceneEnv("CHAT_REDIS_GENERAL", &cfg.Redis.General)
+	applyRedisSceneEnv("CHAT_REDIS_RELIABLE_TASK", &cfg.Redis.ReliableTask)
 
 	if v := os.Getenv("REDIS_ADDR"); v != "" {
 		if cfg.Redis.General.Addr == "" {
@@ -379,9 +586,27 @@ func applyEnvOverrides(cfg *config) {
 		if cfg.Redis.Realtime.Addr == "" {
 			cfg.Redis.Realtime.Addr = v
 		}
+		if cfg.Redis.ReliableTask.Addr == "" {
+			cfg.Redis.ReliableTask.Addr = v
+		}
 	}
-	if v := os.Getenv("CHAT_GROUP_AVATAR_CDN_DOMAIN"); v != "" {
-		cfg.Runtime.Media.GroupAvatarCDNDomain = v
+	if v := os.Getenv("RELIABLE_TASK_READY_INDEX_ENABLED"); v == "true" || v == "1" {
+		cfg.Runtime.ReliableTask.ReadyIndex.Enabled = true
+	}
+	if v := os.Getenv("RELIABLE_TASK_READY_INDEX_STREAM"); v != "" {
+		cfg.Runtime.ReliableTask.ReadyIndex.Stream = v
+	}
+	if v := os.Getenv("RELIABLE_TASK_READY_INDEX_GROUP"); v != "" {
+		cfg.Runtime.ReliableTask.ReadyIndex.Group = v
+	}
+	if v := os.Getenv("RELIABLE_TASK_READY_INDEX_QUEUE"); v != "" {
+		cfg.Runtime.ReliableTask.ReadyIndex.Queue = v
+	}
+	if v := os.Getenv("CHAT_GROUP_AVATAR_CDN_BASE_URL"); v != "" {
+		cfg.Runtime.Media.GroupAvatarCDNBaseURL = v
+	}
+	if v := os.Getenv("CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT"); v != "" {
+		cfg.Runtime.Media.GroupAvatarLocalMediaRoot = v
 	}
 	if v := os.Getenv("RUNTIME_SYNC_PATCH_TTL_HOURS"); v != "" {
 		if hours, err := strconv.Atoi(v); err == nil {
@@ -411,13 +636,24 @@ func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
 func buildRedisRouter(cfg config) *rtredis.Router {
 	routerCfg := rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"realtime": toSceneConfig(cfg.Redis.Realtime),
-			"general":  toSceneConfig(cfg.Redis.General),
+			"realtime":     toSceneConfig(cfg.Redis.Realtime),
+			"general":      toSceneConfig(cfg.Redis.General),
+			"reliabletask": toSceneConfig(resolveReliableTaskRedisScene(cfg)),
 		},
 		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
 		DefaultScene: "general",
 	}
 	return rtredis.MustNewRouter(routerCfg)
+}
+
+func resolveReliableTaskRedisScene(cfg config) redisSceneCfg {
+	scene := cfg.Redis.ReliableTask
+	if strings.TrimSpace(scene.Mode) == "" &&
+		strings.TrimSpace(scene.Addr) == "" &&
+		len(scene.Addrs) == 0 {
+		return cfg.Redis.General
+	}
+	return scene
 }
 
 func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {

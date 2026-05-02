@@ -273,7 +273,8 @@ ArticleSpacingSemantic articleSpacingSemanticForBlock(
 ) {
   return switch (block.type) {
     ArticleDocumentBlockType.heading2 ||
-    ArticleDocumentBlockType.sectionTitle => ArticleSpacingSemantic.headingMajor,
+    ArticleDocumentBlockType.sectionTitle =>
+      ArticleSpacingSemantic.headingMajor,
     ArticleDocumentBlockType.heading3 => ArticleSpacingSemantic.headingMinor,
     ArticleDocumentBlockType.image => ArticleSpacingSemantic.figure,
     _ => ArticleSpacingSemantic.paragraph,
@@ -285,9 +286,10 @@ ArticleSpacingSemantic articleSpacingSemanticForFragment(
 ) {
   return switch (fragment.kind) {
     ArticleLayoutFragmentKind.title => ArticleSpacingSemantic.documentTitle,
-    ArticleLayoutFragmentKind.semanticBlock => fragment.block == null
-        ? ArticleSpacingSemantic.paragraph
-        : articleSpacingSemanticForBlock(fragment.block!),
+    ArticleLayoutFragmentKind.semanticBlock =>
+      fragment.block == null
+          ? ArticleSpacingSemantic.paragraph
+          : articleSpacingSemanticForBlock(fragment.block!),
     ArticleLayoutFragmentKind.fullWidthImage ||
     ArticleLayoutFragmentKind.wrapContent => ArticleSpacingSemantic.figure,
     ArticleLayoutFragmentKind.body => ArticleSpacingSemantic.paragraph,
@@ -316,9 +318,13 @@ class ArticleWrapLayoutInput {
         AppSpacing.containerMd,
       ),
       headerReservedHeight:
-          AppSpacing.containerSm + AppSpacing.hairline + AppSpacing.intraGroupXs,
+          AppSpacing.containerSm +
+          AppSpacing.hairline +
+          AppSpacing.intraGroupXs,
       footerReservedHeight:
-          AppSpacing.containerSm + AppSpacing.hairline + AppSpacing.intraGroupXs,
+          AppSpacing.containerSm +
+          AppSpacing.hairline +
+          AppSpacing.intraGroupXs,
       wrapImageGap: AppSpacing.containerMd,
       wrapImageMaxWidth: 156,
       fullWidthImageAspectRatio: 4 / 3,
@@ -390,9 +396,7 @@ double measureArticleTextHeight(String text, TextStyle style, double maxWidth) {
   return painter.height;
 }
 
-ArticleWrapLayoutResult resolveArticleWrapLayout(
-  ArticleWrapLayoutInput input,
-) {
+ArticleWrapLayoutResult resolveArticleWrapLayout(ArticleWrapLayoutInput input) {
   final fullBody = input.body;
   final hasExplicitSegments =
       input.leadingText != null || input.trailingText != null;
@@ -400,17 +404,16 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
   var explicitTrailing = input.trailingText ?? '';
   final rowContentWidth = input.rowContentWidth;
   final gap = input.metrics.wrapImageGap;
-  final imageWidth =
-      input.metrics.wrapImageWidthForContent(rowContentWidth);
-  final baseImageHeight =
-      imageWidth / input.metrics.fullWidthImageAspectRatio;
+  final imageWidth = input.metrics.wrapImageWidthForContent(rowContentWidth);
+  final baseImageHeight = imageWidth / input.metrics.fullWidthImageAspectRatio;
   const wrapBesideMinPreferred = 120.0;
   final rawBesideWidth = rowContentWidth - imageWidth - gap;
   // `clamp(lower, upper)` 要求 lower≤upper；窄版心（如排版缩略图 ~100pt）时不得用 min=120 且 max<120。
-  final besideWidth = (rowContentWidth < wrapBesideMinPreferred
-          ? rawBesideWidth.clamp(0.0, rowContentWidth)
-          : rawBesideWidth.clamp(wrapBesideMinPreferred, rowContentWidth))
-      .toDouble();
+  final besideWidth =
+      (rowContentWidth < wrapBesideMinPreferred
+              ? rawBesideWidth.clamp(0.0, rowContentWidth)
+              : rawBesideWidth.clamp(wrapBesideMinPreferred, rowContentWidth))
+          .toDouble();
   final lineHeight =
       (input.bodyStyle.fontSize ?? AppTypography.base) *
       (input.bodyStyle.height ?? 1.0);
@@ -440,14 +443,17 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
   var besideHeight =
       baseImageHeight + effectiveCaptionSpacing + effectiveCaptionHeight;
   var maxLines = (besideHeight / lineHeight).ceil().clamp(2, 24);
-  var split = hasExplicitSegments ? explicitLeading.length : resolveWrappedSplitIndex(
-    text: fullBody,
-    sideWidth: besideWidth,
-    style: input.bodyStyle,
-    maxLines: maxLines,
-  );
-  var leading =
-      hasExplicitSegments ? explicitLeading : fullBody.substring(0, split);
+  var split = hasExplicitSegments
+      ? explicitLeading.length
+      : resolveWrappedSplitIndex(
+          text: fullBody,
+          sideWidth: besideWidth,
+          style: input.bodyStyle,
+          maxLines: maxLines,
+        );
+  var leading = hasExplicitSegments
+      ? explicitLeading
+      : fullBody.substring(0, split);
   var leadingHeight = measureArticleTextHeight(
     leading,
     input.bodyStyle,
@@ -468,25 +474,35 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
   // 这个总高度应该 = besideHeight - halfLeading（最后一行底部 leading 不需要图片覆盖）
   // 所以 displayImageHeight = besideHeight - 2*halfLeading - captionSpacing - captionHeight
   var displayImageHeight =
-      besideHeight - 2 * textHalfLeading - effectiveCaptionSpacing - effectiveCaptionHeight;
+      besideHeight -
+      2 * textHalfLeading -
+      effectiveCaptionSpacing -
+      effectiveCaptionHeight;
   displayImageHeight = displayImageHeight.clamp(
     baseImageHeight * 0.88,
     baseImageHeight * 2.35,
   );
   // 回算 besideHeight，确保 = halfLeading + displayImageHeight + caption + halfLeading
   besideHeight = math.max(
-    displayImageHeight + 2 * textHalfLeading + effectiveCaptionSpacing + effectiveCaptionHeight,
+    displayImageHeight +
+        2 * textHalfLeading +
+        effectiveCaptionSpacing +
+        effectiveCaptionHeight,
     math.max(leadingHeight, minLineAlignedBesideHeight),
   );
 
   maxLines = (besideHeight / lineHeight).ceil().clamp(2, 24);
-  split = hasExplicitSegments ? explicitLeading.length : resolveWrappedSplitIndex(
-    text: fullBody,
-    sideWidth: besideWidth,
-    style: input.bodyStyle,
-    maxLines: maxLines,
-  );
-  leading = hasExplicitSegments ? explicitLeading : fullBody.substring(0, split);
+  split = hasExplicitSegments
+      ? explicitLeading.length
+      : resolveWrappedSplitIndex(
+          text: fullBody,
+          sideWidth: besideWidth,
+          style: input.bodyStyle,
+          maxLines: maxLines,
+        );
+  leading = hasExplicitSegments
+      ? explicitLeading
+      : fullBody.substring(0, split);
   leadingHeight = measureArticleTextHeight(
     leading,
     input.bodyStyle,
@@ -496,16 +512,22 @@ ArticleWrapLayoutResult resolveArticleWrapLayout(
     besideHeight,
     math.max(leadingHeight, maxLines * lineHeight),
   );
-  displayImageHeight = (besideHeight - 2 * textHalfLeading - effectiveCaptionSpacing - effectiveCaptionHeight).clamp(
-    baseImageHeight * 0.88,
-    baseImageHeight * 2.35,
-  );
+  displayImageHeight =
+      (besideHeight -
+              2 * textHalfLeading -
+              effectiveCaptionSpacing -
+              effectiveCaptionHeight)
+          .clamp(baseImageHeight * 0.88, baseImageHeight * 2.35);
   besideHeight = math.max(
-    displayImageHeight + 2 * textHalfLeading + effectiveCaptionSpacing + effectiveCaptionHeight,
+    displayImageHeight +
+        2 * textHalfLeading +
+        effectiveCaptionSpacing +
+        effectiveCaptionHeight,
     math.max(leadingHeight, maxLines * lineHeight),
   );
-  final trailing =
-      hasExplicitSegments ? explicitTrailing : fullBody.substring(split);
+  final trailing = hasExplicitSegments
+      ? explicitTrailing
+      : fullBody.substring(split);
 
   return ArticleWrapLayoutResult(
     layout: ArticleWrapLayoutData(
@@ -670,7 +692,7 @@ class ArticlePageData {
 
 enum ArticleCanvasVariant { editor, preview, detail, immersive, thumbnail }
 
-/// [book]：旧版卡片式纸面，仅保留给缩略卡和兼容场景。
+/// [book]：过往版本卡片式纸面，仅保留给缩略卡和兼容场景。
 /// [plainEdit]：编辑纸页（连续白纸页，仅保留页眉页脚，不显示卡片相框）。
 /// [readerSheet]：阅读纸页（真正沉浸效果由舞台层承担，单页本体不再自带相框）。
 enum ArticlePageShellVariant { book, plainEdit, readerSheet }
@@ -723,7 +745,6 @@ const ArticlePaperSpec _kUnifiedArticlePaperSpec = ArticlePaperSpec(
   footerReservedHeight:
       AppSpacing.containerSm + AppSpacing.hairline + AppSpacing.intraGroupXs,
 );
-
 
 const ArticleReaderStageSpec _kUnifiedArticleReaderStageSpec =
     ArticleReaderStageSpec(
@@ -804,10 +825,9 @@ class ArticleCanvasMetrics {
 
   ArticlePaperFrameSpec frameSpecForStageWidth(double stageWidth) {
     final safeStageWidth = math.max(stageWidth, 1).toDouble();
-    final availableWidth = math.max(
-      0.0,
-      safeStageWidth - outerPadding.horizontal,
-    ).toDouble();
+    final availableWidth = math
+        .max(0.0, safeStageWidth - outerPadding.horizontal)
+        .toDouble();
     if (availableWidth <= 0) {
       return ArticlePaperFrameSpec(
         viewportSize: Size(safeStageWidth, 0),
@@ -843,7 +863,7 @@ class ArticleCanvasMetrics {
 
   /// 文内环绕图默认宽度：目标为内容区约 50%。
   ///
-  /// [wrapImageMaxWidth] 仅在大屏上当「收紧上限」（不小于半栏宽）使用；历史上
+  /// [wrapImageMaxWidth] 仅在大屏上当「收紧上限」（不小于半栏宽）使用；记录上
   /// `min(0.5*w, 112~168)` 会把竖屏半栏压成约 1/3 栏宽，与版式约定冲突。
   double wrapImageWidthForContent(double contentWidth) {
     final w = contentWidth.clamp(0.0, double.infinity);
@@ -886,10 +906,12 @@ double resolveArticlePaperStageWidth(
   if (!viewportHeight.isFinite) {
     return availableWidth;
   }
-  if (!allowLandscapeSpread || availableWidth < _kArticleLandscapeSpreadMinWidth) {
+  if (!allowLandscapeSpread ||
+      availableWidth < _kArticleLandscapeSpreadMinWidth) {
     return availableWidth;
   }
-  return ((availableWidth - resolveArticleReaderStageSpec().spineShadowWidth) / 2)
+  return ((availableWidth - resolveArticleReaderStageSpec().spineShadowWidth) /
+          2)
       .clamp(1.0, availableWidth)
       .toDouble();
 }
@@ -923,7 +945,9 @@ ArticleCanvasMetrics resolveArticleCanvasMetrics(
     contentPadding: paperSpec.contentPadding,
     headerReservedHeight: paperSpec.headerReservedHeight,
     footerReservedHeight: paperSpec.footerReservedHeight,
-    wrapImageGap: width >= 430 ? AppSpacing.containerMd : AppSpacing.containerSm,
+    wrapImageGap: width >= 430
+        ? AppSpacing.containerMd
+        : AppSpacing.containerSm,
     wrapImageMaxWidth: width >= 430 ? 156 : 144,
     fullWidthImageAspectRatio: 4 / 3,
     journalImageAspectRatio: 1,

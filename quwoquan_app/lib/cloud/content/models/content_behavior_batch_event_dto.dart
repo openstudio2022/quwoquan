@@ -2,7 +2,7 @@
 ///
 /// OpenAPI 规范见 `quwoquan_service/contracts/metadata/content/openapi.yaml`
 /// → `BehaviorEvent`（`contentId` / `eventType` / `timestamp` 等）。
-/// 端上另有历史字段（如 `action`、`postId`、`surface`）经 [fromMap] 原样保留。
+/// 端上另有记录字段（如 `action`、`postId`、`surface`）经 [fromMap] 原样保留。
 class ContentBehaviorBatchEventDto {
   ContentBehaviorBatchEventDto._(this._payload);
 
@@ -30,6 +30,5 @@ class ContentBehaviorBatchEventDto {
     });
   }
 
-  Map<String, dynamic> toRequestMap() =>
-      Map<String, dynamic>.from(_payload);
+  Map<String, dynamic> toRequestMap() => Map<String, dynamic>.from(_payload);
 }

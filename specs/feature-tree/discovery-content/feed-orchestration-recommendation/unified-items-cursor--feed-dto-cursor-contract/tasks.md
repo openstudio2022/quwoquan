@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `cursor-compatibility-guard`
+## Folded current node `cursor-compatibility-guard`
 
 # 开发任务：cursor-compatibility-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `cursor-compatibility-guard` (from `discovery-content/feed-orchestration-recommendation/unified-items-cursor/feed-dto-cursor-contract/cursor-compatibility-guard`)
+- [ ] Migrated current node: `cursor-compatibility-guard` (from `discovery-content/feed-orchestration-recommendation/unified-items-cursor/feed-dto-cursor-contract/cursor-compatibility-guard`)

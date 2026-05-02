@@ -100,7 +100,7 @@ class SearchDegradeSignal {
 /// 统一检索命中项。枚举与默认值对齐 `_shared/search_contract.yaml`（`search_contract.g.dart`）；
 /// 分区元数据见 `search_registry.g.dart`。
 ///
-/// `payload` 为 [SearchHitPayload]（sealed）；帖子/圈子等已收口为具名 codegen 视图，其余为 [SearchHitPayloadLegacy]。
+/// `payload` 为 [SearchHitPayload]（sealed）；帖子/圈子等已收口为具名 codegen 视图，其余为 [SearchHitPayloadWireMap]。
 class SearchHit {
   const SearchHit({
     required this.objectType,
@@ -110,7 +110,7 @@ class SearchHit {
     this.snippet,
     required this.resolvedFrom,
     this.matchedField,
-    this.payload = const SearchHitPayloadLegacy(),
+    this.payload = const SearchHitPayloadWireMap(),
   });
 
   final SearchObjectType objectType;
@@ -470,7 +470,7 @@ class AppSearchRepository implements SearchRepository {
               subtitle: payload['subtitle']?.toString() ?? '联系人',
               resolvedFrom: SearchResolvedFrom.local,
               matchedField: payload['matchedField']?.toString(),
-              payload: SearchHitPayloadLegacy(payload),
+              payload: SearchHitPayloadWireMap(payload),
             );
           })
           .where((item) => item.objectId.isNotEmpty && item.title.isNotEmpty)
@@ -559,7 +559,7 @@ class AppSearchRepository implements SearchRepository {
               snippet: conversation.lastMessagePreview,
               resolvedFrom: SearchResolvedFrom.local,
               matchedField: conversation.matchedField,
-              payload: SearchHitPayloadLegacy(
+              payload: SearchHitPayloadWireMap(
                 _conversationSearchItemToMap(conversation),
               ),
             ),
@@ -586,7 +586,9 @@ class AppSearchRepository implements SearchRepository {
               snippet: message.contentPreview,
               resolvedFrom: SearchResolvedFrom.local,
               matchedField: message.matchedField,
-              payload: SearchHitPayloadLegacy(_messageSearchItemToMap(message)),
+              payload: SearchHitPayloadWireMap(
+                _messageSearchItemToMap(message),
+              ),
             ),
           ),
         );
@@ -882,7 +884,7 @@ class AppSearchRepository implements SearchRepository {
               snippet: item.address,
               resolvedFrom: SearchResolvedFrom.remote,
               matchedField: 'title',
-              payload: SearchHitPayloadLegacy(item.toMap()),
+              payload: SearchHitPayloadWireMap(item.toMap()),
             ),
           )
           .where((item) => item.objectId.isNotEmpty && item.title.isNotEmpty)
@@ -1038,14 +1040,11 @@ class AppSearchRepository implements SearchRepository {
         continue;
       }
       for (final g in groups) {
-        final payload = normalizeCircleGroupWireMap(
-          <String, dynamic>{
-            ...g.toMap(),
-            'circleId': circleId,
-            if (circleName.isNotEmpty) 'circleName': circleName,
-          },
-          shape: CircleGroupWireShape.searchHit,
-        );
+        final payload = normalizeCircleGroupWireMap(<String, dynamic>{
+          ...g.toMap(),
+          'circleId': circleId,
+          if (circleName.isNotEmpty) 'circleName': circleName,
+        }, shape: CircleGroupWireShape.searchHit);
         final groupId = _firstNonEmpty(<Object?>[
           payload['groupId'],
           payload['circleGroupId'],
@@ -1103,7 +1102,7 @@ class AppSearchRepository implements SearchRepository {
         query: query,
         payload: normalizedPayload,
       ),
-      payload: SearchHitPayloadLegacy(normalizedPayload),
+      payload: SearchHitPayloadWireMap(normalizedPayload),
     );
   }
 
@@ -1138,7 +1137,7 @@ class AppSearchRepository implements SearchRepository {
       matchedField: _matchesText(query, <Object?>[item.address])
           ? 'address'
           : 'name',
-      payload: SearchHitPayloadLegacy(item.toMap()),
+      payload: SearchHitPayloadWireMap(item.toMap()),
     );
   }
 
@@ -1199,7 +1198,6 @@ class AppSearchRepository implements SearchRepository {
       'type': conversation.type,
       'title': conversation.title,
       'avatarUrl': conversation.avatarUrl,
-      'avatarCompositeUrls': conversation.avatarCompositeUrls,
       'lastMessagePreview': conversation.lastMessagePreview,
       'lastMessageTime': conversation.lastMessageTime?.toIso8601String(),
       'memberCount': conversation.memberCount,

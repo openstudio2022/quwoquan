@@ -29,7 +29,7 @@ level_acceptance:
       - TestApplyRedisSceneEnv_Mode
       - TestApplyEnvOverrides_NewRecOverrides
   A3:
-    criteria: 旧版 env 变量向后兼容
+    criteria: 过往版本 env 变量向后兼容
     status: implemented
     linked_tasks:
     - C3
@@ -37,9 +37,9 @@ level_acceptance:
     tests:
     - file: quwoquan_service/services/content-service/cmd/api/main_test.go
       functions:
-      - TestApplyEnvOverrides_LegacyAddr
-      - TestApplyEnvOverrides_LegacyAddrNotOverrideExisting
-      - TestApplyEnvOverrides_LegacyPassword
+      - TestApplyEnvOverrides_CurrentAddr
+      - TestApplyEnvOverrides_CurrentAddrNotOverrideExisting
+      - TestApplyEnvOverrides_CurrentPassword
   A4:
     criteria: pool.size=0 时使用 CPU 基准默认值
     status: implemented
@@ -72,7 +72,7 @@ global_acceptance:
     - given: CONTENT_REDIS_REC_MODE=cluster 环境变量
       when: applyEnvOverrides(&cfg)
       then: cfg.Redis.Rec.Mode = "cluster"，覆盖 yaml 中 standalone
-    - given: 旧版 CONTENT_REDIS_ADDR=localhost:6379
+    - given: 过往版本 CONTENT_REDIS_ADDR=localhost:6379
       when: applyEnvOverrides(&cfg)，且 cfg.Redis.Rec.Addr 为空
       then: cfg.Redis.Rec.Addr = "localhost:6379"（向后兼容）
     - given: config pool.size=0, mode=cluster

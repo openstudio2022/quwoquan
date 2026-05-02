@@ -5,7 +5,7 @@
 ## Chat
 
 - **`listInbox` → `List<ChatInboxDto>`** 已为强类型入口；新功能应优先使用。
-- **`listConversations` → `List<Map<String, dynamic>>`** 仍为 legacy wire，迁移时需对照 `service.yaml` 与 `ChatInboxDto` 字段对齐后淘汰或改为分页 DTO。
+- **`listConversations` → `List<Map<String, dynamic>>`** 仍为 current wire，迁移时需对照 `service.yaml` 与 `ChatInboxDto` 字段对齐后淘汰或改为分页 DTO。
 
 ## User / User profile
 

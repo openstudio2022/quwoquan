@@ -47,7 +47,8 @@ Map<String, dynamic> _intentEnvelope({
       'intents': <Map<String, dynamic>>[
         <String, dynamic>{
           'intentId': 'intent_primary',
-          'intentType': '$primarySkill.${problemClass.isNotEmpty ? problemClass : 'general'}',
+          'intentType':
+              '$primarySkill.${problemClass.isNotEmpty ? problemClass : 'general'}',
           'goal': inferredMotive,
           'requiresEvidence': normalizedQuery.isNotEmpty,
         },
@@ -264,7 +265,7 @@ bool _containsInternalLeak(String text) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('AssistantAgentLoop 与 legacy loop 对齐，并且用户展示层无 internal leak', () async {
+  test('AssistantAgentLoop 与 current loop 对齐，并且用户展示层无 internal leak', () async {
     final tempDir = await Directory.systemTemp.createTemp(
       'assistant_agent_loop_parity_',
     );
@@ -278,18 +279,18 @@ void main() {
       return AssistantToolRegistry()..register(_FakeWeatherSearchTool());
     }
 
-    phase_owner.LocalPhaseExecutionOwner buildLegacyLoop(String suffix) {
+    phase_owner.LocalPhaseExecutionOwner buildCurrentLoop(String suffix) {
       return phase_owner.LocalPhaseExecutionOwner(
         ReactRuntime(
           llmProvider: _DeterministicWeatherLlm(),
           toolRegistry: buildRegistry(),
         ),
         sessionManager: AssistantSessionManager(
-          storagePath: '${tempDir.path}/legacy_${suffix}_sessions.json',
+          storagePath: '${tempDir.path}/current_${suffix}_sessions.json',
         ),
         memoryRepository: AssistantMemoryRepository(
           ObjectBoxVectorStore(
-            storagePath: '${tempDir.path}/legacy_${suffix}_memory.json',
+            storagePath: '${tempDir.path}/current_${suffix}_memory.json',
           ),
         ),
       );
@@ -323,14 +324,14 @@ void main() {
       },
     );
 
-    final legacyResponse = await buildLegacyLoop('a').run(request);
+    final currentResponse = await buildCurrentLoop('a').run(request);
     final phasedLoop = buildNewLoop('a');
     final phasedResponse = await phasedLoop.run(request);
 
-    expect(legacyResponse.degraded, isFalse);
+    expect(currentResponse.degraded, isFalse);
     expect(phasedResponse.degraded, isFalse);
-    expect(phasedResponse.displayMarkdown, legacyResponse.displayMarkdown);
-    expect(phasedResponse.displayPlainText, legacyResponse.displayPlainText);
+    expect(phasedResponse.displayMarkdown, currentResponse.displayMarkdown);
+    expect(phasedResponse.displayPlainText, currentResponse.displayPlainText);
 
     final phasedStructured = phasedResponse.structuredResponse;
     expect(phasedStructured.containsKey('qualityMetrics'), isTrue);
@@ -347,7 +348,10 @@ void main() {
           phasedResponse.runArtifacts!.journey.summary.trim().isNotEmpty,
       isTrue,
     );
-    expect(phasedResponse.runArtifacts!.displayMarkdown.trim().isNotEmpty, isTrue);
+    expect(
+      phasedResponse.runArtifacts!.displayMarkdown.trim().isNotEmpty,
+      isTrue,
+    );
     expect(phasedLoop.executionState.synthesisDraft, isNotNull);
     expect(phasedLoop.executionState.previousRunArtifacts, isNotNull);
     expect(phasedLoop.executionState.evidenceLedger, isNotEmpty);
@@ -355,7 +359,11 @@ void main() {
     expect(phasedLoop.executionState.evidenceEvaluation?.entries, isNotEmpty);
     expect(phasedLoop.executionState.synthesisReadiness?.ready, isTrue);
     expect(
-      phasedLoop.executionState.previousRunArtifacts?.answerDecision.core
+      phasedLoop
+          .executionState
+          .previousRunArtifacts
+          ?.answerDecision
+          .core
           .finalAnswerReady,
       isTrue,
     );

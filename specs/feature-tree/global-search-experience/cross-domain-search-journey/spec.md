@@ -5,7 +5,7 @@
 - `L1_capability`: `global-search-experience`
 - `L2_journey`: `cross-domain-search-journey`
 
-该 Journey 冻结从任一一级页面进入两段式全屏搜索，到完成初始历史浏览、实时联想、独立网络结果浏览、最近搜索管理、语音转词与 `小趣搜` assistant 结果查看的完整链路。
+该 Journey 冻结从任一一级页面进入两段式全屏搜索，到完成初始记录浏览、实时联想、独立网络结果浏览、最近搜索管理、语音转词与 `小趣搜` assistant 结果查看的完整链路。
 
 ## 背景与动机
 
@@ -28,7 +28,7 @@
 ## 核心旅程
 
 1. 用户从首页、聊天页、群组页或助手页点击搜索入口。
-2. App 打开统一的全屏搜索首页初始态，显示搜索框与 `最近在搜` 双列卡片，并允许进入历史管理态。
+2. App 打开统一的全屏搜索首页初始态，显示搜索框与 `最近在搜` 双列卡片，并允许进入记录管理态。
 3. 用户输入关键词后，当前页切换到实时联想态，严格按 `最常使用 / 联系人 / 聊天记录 / 搜索网络结果` 四段展示。
 4. 用户点击联系人或聊天记录项时直接进入对应单聊/群聊；点击“更多联系人/更多聊天记录”只在当前页内联展开列表，不跳到新的中间页。
 5. 用户点击“搜索网络结果”后进入独立网络结果页，顶部保留搜索框，并以 `小趣搜 + 群组分类 facet` 作为顶层 tab。
@@ -40,11 +40,11 @@
 
 | L3 Scenario | 负责的问题 | 归属域 |
 |---|---|---|
-| `full-screen-search-shell-and-entry` | 初始历史页、实时联想页、统一入口、默认上下文、返回路径 | `global-search-experience` |
+| `full-screen-search-shell-and-entry` | 初始记录页、实时联想页、统一入口、默认上下文、返回路径 | `global-search-experience` |
 | `multi-domain-result-composition` | 联想分段与独立网络结果页编排 | `global-search-experience` |
 | `local-chat-search-contract` | 本地联系人 / 会话 / 消息搜索对象边界、账号隔离与会话直达契约 | `messages` 主导，`global-search-experience` 消费 |
 | `circle-facet-search-and-filter` | 网络结果页群组分类 facet 与内容过滤 | `circle` 主导，`global-search-experience` 消费 |
-| `recent-search-sync-and-voice-asr` | 最近搜索、本地+云同步、历史管理态、语音转词 | `global-search-experience` |
+| `recent-search-sync-and-voice-asr` | 最近搜索、本地+云同步、记录管理态、语音转词 | `global-search-experience` |
 | `xiaoqu-entry-handoff` | `小趣搜` assistant 结果 tab 与后续 assistant continuation | `assistant` 主导，`global-search-experience` 消费 |
 
 ## 功能范围
@@ -90,7 +90,7 @@
 
 | 角色 | 职责 |
 |---|---|
-| `global-search-experience` | Journey 壳层、联想编排、网络结果页、历史、语音 |
+| `global-search-experience` | Journey 壳层、联想编排、网络结果页、记录、语音 |
 | `content` | 内容对象与内容详情跳转契约 |
 | `messages` | 本地联系人/会话/消息搜索对象与会话直达契约 |
 | `user` | 当前不作为搜索 Journey 中“人”的主搜索对象，仅保留身份补充与后续扩展真相源 |
@@ -100,18 +100,18 @@
 
 ## 既有 Story 覆盖矩阵
 
-| 历史节点 / 原型 | 当前状态 | Journey 内新归属 |
+| 记录节点 / 原型 | 当前状态 | Journey 内新归属 |
 |---|---|---|
-| `contact-search-index` | 删除历史节点 | `local-chat-search-contract` |
-| `search-query-contract` | 删除历史节点 | `local-chat-search-contract` |
+| `contact-search-index` | 删除记录节点 | `local-chat-search-contract` |
+| `search-query-contract` | 删除记录节点 | `local-chat-search-contract` |
 | `GlobalSearchSheet` 原型 | 作为旧实现待替换 | `full-screen-search-shell-and-entry` |
 
 ## 数据生命周期合同
 
 - 普通搜索 query：记录到最近搜索，并本地+云同步。
 - 最近搜索字段至少包含：`query`、`launch_context`、`category_context`、`timestamp`。
-- `小趣搜` 复用当前 query 拉取 assistant 结果，不额外新增一套 AI 历史模型；若后续进入 assistant 对话，则仅由 assistant 保存该会话。
-- 语音输入：只生成文本 query，不把原始音频纳入搜索历史主模型。
+- `小趣搜` 复用当前 query 拉取 assistant 结果，不额外新增一套 AI 记录模型；若后续进入 assistant 对话，则仅由 assistant 保存该会话。
+- 语音输入：只生成文本 query，不把原始音频纳入搜索记录主模型。
 
 ## 小趣 / 权限 / 分享边界
 
@@ -132,7 +132,7 @@
 
 - 搜索主路径完成率 > 95%。
 - 结果点击进入详情成功率 > 99%。
-- 历史搜索读写成功率 > 99%。
+- 记录搜索读写成功率 > 99%。
 
 ### 弱网与恢复
 
@@ -148,12 +148,12 @@
 
 ## 迁移、灰度与回滚要求
 
-- 本期不保留历史搜索节点，不做并行治理。
+- 本期不保留记录搜索节点，不做并行治理。
 - 不做双轨兼容；整体验收通过后统一上线。
 - 若出现不可用、时延持续超标或重大稳定性问题，整体回退到旧搜索实现或整版发布回滚。
 
 ## 验收重点
 
-1. 搜索首页初始态、实时联想、独立网络结果页、历史管理态与 `小趣搜` 结果形成完整 Journey，而不是分散功能点。
+1. 搜索首页初始态、实时联想、独立网络结果页、记录管理态与 `小趣搜` 结果形成完整 Journey，而不是分散功能点。
 2. “联系人直达会话”与“群组分类 facet tab” 的边界明确，不再复用旧 chat 搜索节点。
 3. metadata 真相源边界清晰，可直接进入 `/design`。

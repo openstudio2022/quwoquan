@@ -6,8 +6,8 @@
 
 - [ ] T01: [骨架] 执行 `make new-service SERVICE=user-service PORT=18081`，生成标准 DDD 目录
 - [ ] T02: [配置] 填充 `configs/default/config.yaml`：service/http/postgres/mongodb/redis 配置节
-- [ ] T03: [配置] 填充 `configs/local/config.yaml`：本地 PG/Mongo/Redis 地址
-- [ ] T04: [配置] 填充 `configs/integration/config.yaml`：集成环境（DSN 由 Secret 注入）
+- [ ] T03: [配置] 填充 `configs/alpha/config.yaml` / `configs/beta/config.yaml`：本地 PG/Mongo/Redis 地址
+- [ ] T04: [配置] 填充 `configs/gamma/config.yaml`：集成环境（DSN 由 Secret 注入）
 - [ ] T05: [配置] 填充 `configs/prod/config.yaml`：生产环境（Redis cluster + TLS）
 - [ ] T06: [拓扑] 更新 `deploy/shared/process_domain_mapping.yaml` dev 环境增加 `user-service: domains: [user]`
 - [ ] T07: [验证] `make gate` 通过 verify_deployment_domain_mapping

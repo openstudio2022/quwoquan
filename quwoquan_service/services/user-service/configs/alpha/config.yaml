@@ -1,0 +1,16 @@
+# alpha overrides (developer single-instance validation)
+service:
+  http:
+    addr: ":18081"
+
+postgres:
+  dsn: "postgres://quwoquan:quwoquan@127.0.0.1:5432/quwoquan?sslmode=disable"
+
+mongodb:
+  uri: "mongodb://127.0.0.1:27017"
+
+redis:
+  general:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 2

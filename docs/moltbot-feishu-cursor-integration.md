@@ -297,7 +297,7 @@ Copilot 的 coding agent 与 **Slack、Teams** 直接集成：[Integrate with Sl
    - 执行开发（编辑、运行测试等）；  
    - 更新状态：Gateway `chat.send` 或 任务 API 写入“进行中/已完成/失败+摘要”。
 3. **人在飞书**：「查一下 Cursor 任务状态」  
-   → Moltbot Agent 通过会话历史或 MCP/任务 API 汇总 → 回复「当前任务：XX，状态：进行中/已完成，……」。
+   → Moltbot Agent 通过会话记录或 MCP/任务 API 汇总 → 回复「当前任务：XX，状态：进行中/已完成，……」。
 
 ### 4.5 小结：监控 + 飞书查看 + 下发指令
 
@@ -313,7 +313,7 @@ Copilot 的 coding agent 与 **Slack、Teams** 直接集成：[Integrate with Sl
 - **监控状态**：Cursor 在 agent 结束或报错时向 webhook 发送 `statusChange`（含 agent id、status、PR URL、变更摘要）。**接收端在 moltbot 侧**（或与 Moltbot 对接的服务）验证签名、落库，并可选通过 Moltbot 推一条消息到飞书（如「Cursor 任务已结束：成功/失败，PR：…」）。
 - **运行中追加指令**：若需在 agent 运行中加需求，由 **moltbot 侧** 调用 Cursor 的 **Add follow-up** API（传入 agent id 与新 prompt），无需 Cursor 主动轮询 Moltbot。
 
-这样，**监控与指令下发都走 Cursor 官方通道**，实现全部在 **moltbot + 飞书扩展** 侧；飞书 + Moltbot 负责人机界面与任务列表/历史展示。**不涉及对 quwoquan 仓库的修改**。
+这样，**监控与指令下发都走 Cursor 官方通道**，实现全部在 **moltbot + 飞书扩展** 侧；飞书 + Moltbot 负责人机界面与任务列表/记录展示。**不涉及对 quwoquan 仓库的修改**。
 
 ---
 

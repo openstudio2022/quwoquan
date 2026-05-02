@@ -11,24 +11,29 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 
-const _env = String.fromEnvironment('ENV', defaultValue: 'staging');
+const _apiContractEnv = String.fromEnvironment(
+  'API_CONTRACT_ENV',
+  defaultValue: 'gamma',
+);
 
 void main() {
   patrolTest(
     '横竖屏切换聊天页稳定',
     tags: ['t4', 'chat', 'orientation'],
-    skip: true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
-    config: PatrolTesterConfig(
-      visibleTimeout: const Duration(seconds: 15),
-    ),
+    skip:
+        true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 15)),
     ($) async {
-      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
+      assert(
+        _apiContractEnv == 'gamma',
+        'T4 tests must run with API_CONTRACT_ENV=gamma',
+      );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 
-      await $(find.byType(Scaffold)).waitUntilVisible(
-        timeout: const Duration(seconds: 10),
-      );
+      await $(
+        find.byType(Scaffold),
+      ).waitUntilVisible(timeout: const Duration(seconds: 10));
 
       expect(find.byType(Scaffold), findsWidgets);
     },
@@ -37,19 +42,21 @@ void main() {
   patrolTest(
     '横屏下输入文字后切回竖屏内容保持',
     tags: ['t4', 'chat', 'orientation'],
-    skip: true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
-    config: PatrolTesterConfig(
-      visibleTimeout: const Duration(seconds: 15),
-    ),
+    skip:
+        true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 15)),
     ($) async {
-      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
+      assert(
+        _apiContractEnv == 'gamma',
+        'T4 tests must run with API_CONTRACT_ENV=gamma',
+      );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 
       final inputField = find.byType(TextField);
-      await $(inputField).waitUntilVisible(
-        timeout: const Duration(seconds: 10),
-      );
+      await $(
+        inputField,
+      ).waitUntilVisible(timeout: const Duration(seconds: 10));
 
       expect(find.byType(TextField), findsWidgets);
     },
@@ -58,18 +65,20 @@ void main() {
   patrolTest(
     '快速多次旋转不崩溃',
     tags: ['t4', 'chat', 'orientation'],
-    skip: true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
-    config: PatrolTesterConfig(
-      visibleTimeout: const Duration(seconds: 20),
-    ),
+    skip:
+        true, // Patrol NativeAutomator setOrientationLandscape/Portrait removed; migrate to PlatformAutomator
+    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 20)),
     ($) async {
-      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
+      assert(
+        _apiContractEnv == 'gamma',
+        'T4 tests must run with API_CONTRACT_ENV=gamma',
+      );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 
-      await $(find.byType(Scaffold)).waitUntilVisible(
-        timeout: const Duration(seconds: 10),
-      );
+      await $(
+        find.byType(Scaffold),
+      ).waitUntilVisible(timeout: const Duration(seconds: 10));
 
       expect(find.byType(Scaffold), findsWidgets);
     },

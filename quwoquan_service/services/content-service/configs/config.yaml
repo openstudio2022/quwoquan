@@ -31,7 +31,7 @@ service:
 #   CONTENT_REDIS_GENERAL_PASSWORD 密码
 #   CONTENT_REDIS_GENERAL_TLS      true | false
 #
-# 向后兼容：旧版 CONTENT_REDIS_ADDR / CONTENT_REDIS_PASSWORD 仍有效，
+# 向后兼容：过往版本 CONTENT_REDIS_ADDR / CONTENT_REDIS_PASSWORD 仍有效，
 # 会自动映射到 rec 场景的 standalone 配置。
 redis:
   rec:

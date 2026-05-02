@@ -4,17 +4,17 @@ import 'package:test/test.dart';
 
 void main() {
   group('Assistant typed mainline architecture guard', () {
-    test('execution pipeline does not expose legacy map bridge', () {
+    test('execution pipeline does not expose current map bridge', () {
       final files = _dartFilesUnder('lib/assistant/orchestration');
       const bannedFragments = <String>[
         'executionBridgeSnapshot',
-        'toLegacyMap(',
-        'buildTypedOrchestratorStateFromLegacyDecision',
-        'buildTypedTurnSynthesisStateFromLegacyDecision',
+        'toCurrentMap(',
+        'buildTypedOrchestratorStateFromCurrentDecision',
+        'buildTypedTurnSynthesisStateFromCurrentDecision',
         'ConversationStateDecision',
         'conversation_state_decision',
         'typed_mainline_decision_adapter',
-        'deriveLegacyConversationStateDecisionFromTypedState',
+        'deriveCurrentConversationStateDecisionFromTypedState',
         "structured['conversationStateDecision']",
         'structured["conversationStateDecision"]',
       ];
@@ -26,13 +26,13 @@ void main() {
             content.contains(fragment),
             isFalse,
             reason:
-                '${file.path} must not reintroduce legacy bridge: $fragment',
+                '${file.path} must not reintroduce current bridge: $fragment',
           );
         }
       }
     });
 
-    test('legacy conversation decision files are removed', () {
+    test('current conversation decision files are removed', () {
       const removedPaths = <String>[
         'lib/assistant/contracts/conversation_state_decision.dart',
         'lib/assistant/generated/contracts/conversation_state_decision.g.dart',
@@ -299,8 +299,10 @@ void main() {
       }
     });
 
-    test('weather and stock replay do not use text answer matchers', () {
-      final file = File('integration_test/assistant_manual_replay_test.dart');
+    test('weather and stock scenarios do not use text answer matchers', () {
+      final file = File(
+        '../quwoquan_service/contracts/metadata/assistant/test_fixtures/scenarios/assistant_scenarios.json',
+      );
       final content = file.readAsStringSync();
       const bannedFragments = <String>[
         'bool _matchesWeatherAnswer',

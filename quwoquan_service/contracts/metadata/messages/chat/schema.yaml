@@ -1,0 +1,5 @@
+# 本目录仅承载 chat 域 JSON fixture（test_fixtures），无 aggregate/entity。
+# 为满足 contracts/metadata v3 布局校验（scripts/verify_contract_metadata.sh、tools/verify_metadata），
+# 声明为 schema-only 占位；不参与 Dart/Go 契约 codegen 产物路径。
+dart_class: ChatContractFixtureContainer
+output_path: cloud/runtime/generated/_fixture_only/messages_chat_placeholder.g.dart

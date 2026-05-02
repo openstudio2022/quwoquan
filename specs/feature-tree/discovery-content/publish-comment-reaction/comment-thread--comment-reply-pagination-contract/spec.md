@@ -17,7 +17,7 @@
 - A7：OpenAPI schema、metadata、端侧 Repository 与 service.yaml 对齐。
 - A8：contract_test 中 comment_thread 场景覆盖游标与回复契约。
 
-## Folded legacy node `moderation-delete-audit-guard`
+## Folded current node `moderation-delete-audit-guard`
 
 # L5 特性：moderation-delete-audit-guard
 

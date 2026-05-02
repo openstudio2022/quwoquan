@@ -41,7 +41,7 @@ export function PlatformRunbookPage() {
       actions={<button className="button button--primary">创建演练计划</button>}
       footer={
         <>
-          <button className="button">查看历史演练</button>
+          <button className="button">查看记录演练</button>
           <button className="button button--primary">执行演练</button>
         </>
       }

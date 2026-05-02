@@ -2,7 +2,7 @@ version: 1
 read_model: HomepageReviewDimensionScore
 
 description: |
-  主页壳层评价维度分 wire；与 homepage_models 历史 fromMap 对齐。
+  主页壳层评价维度分 wire；与 homepage_models 记录 fromMap 对齐。
 
 source_entities:
   - Homepage

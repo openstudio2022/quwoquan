@@ -21,7 +21,7 @@ class GeneratedPostRuntimeMetadata {
     'visibility': 'public',
   };
 
-  // Legacy feed projection defaults (use FeedItemDto for new code).
+  // Current feed projection defaults (use FeedItemDto for new code).
   static const Map<String, dynamic> feedProjectionDefaults = <String, dynamic>{
     'coverUrl': '',
     'isLocalGenerated': true,

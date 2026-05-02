@@ -1,0 +1,467 @@
+{
+  "schemaVersion": "chat.scenario-fixtures.v1",
+  "description": "聊天域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.conversations/messages/members 初始化 MockChatRepository。",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "chat_core": {
+      "description": "聊天 inbox、详情、成员与消息最小种子。",
+      "currentUserId": "fixture_user_current",
+      "conversations": [
+        {
+          "_id": "fixture_conv_direct",
+          "id": "fixture_conv_direct",
+          "conversationId": "fixture_conv_direct",
+          "type": "direct",
+          "title": "契约好友",
+          "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+          "creatorId": "fixture_user_current",
+          "maxSeq": 2,
+          "memberCount": 2,
+          "maxGroupSize": 2,
+          "receiptEnabled": true,
+          "lastMessagePreview": "契约消息已送达",
+          "lastMessageTime": "2026-04-29T08:00:00Z",
+          "messageCount": 2,
+          "status": "active",
+          "createdAt": "2026-04-29T08:00:00Z",
+          "updatedAt": "2026-04-29T08:00:00Z"
+        },
+        {
+          "_id": "fixture_conv_group",
+          "id": "fixture_conv_group",
+          "conversationId": "fixture_conv_group",
+          "type": "group",
+          "title": "契约周末群",
+          "avatarUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=160",
+          "creatorId": "fixture_user_current",
+          "maxSeq": 5,
+          "memberCount": 3,
+          "maxGroupSize": 500,
+          "receiptEnabled": true,
+          "lastMessagePreview": "周末集合时间已确认",
+          "lastMessageTime": "2026-04-29T09:00:00Z",
+          "messageCount": 5,
+          "status": "active",
+          "createdAt": "2026-04-29T09:00:00Z",
+          "updatedAt": "2026-04-29T09:00:00Z"
+        },
+        {
+          "_id": "fixture_conv_photo_group",
+          "id": "fixture_conv_photo_group",
+          "conversationId": "fixture_conv_photo_group",
+          "type": "group",
+          "title": "契约摄影交流群",
+          "avatarUrl": "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=160",
+          "creatorId": "fixture_user_photo",
+          "maxSeq": 8,
+          "memberCount": 5,
+          "maxGroupSize": 500,
+          "receiptEnabled": true,
+          "lastMessagePreview": "今晚整理照片墙和路线。",
+          "lastMessageTime": "2026-04-29T09:30:00Z",
+          "messageCount": 8,
+          "status": "active",
+          "createdAt": "2026-04-29T09:20:00Z",
+          "updatedAt": "2026-04-29T09:30:00Z",
+          "circleId": "fixture_circle_photo"
+        },
+        {
+          "_id": "fixture_conv_travel_group",
+          "id": "fixture_conv_travel_group",
+          "conversationId": "fixture_conv_travel_group",
+          "type": "group",
+          "title": "契约旅行搭子群",
+          "avatarUrl": "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=160",
+          "creatorId": "fixture_user_travel",
+          "maxSeq": 6,
+          "memberCount": 4,
+          "maxGroupSize": 500,
+          "receiptEnabled": true,
+          "lastMessagePreview": "路线、天气和集合点都同步了。",
+          "lastMessageTime": "2026-04-29T09:45:00Z",
+          "messageCount": 6,
+          "status": "active",
+          "createdAt": "2026-04-29T09:35:00Z",
+          "updatedAt": "2026-04-29T09:45:00Z",
+          "circleId": "fixture_circle_travel"
+        },
+        {
+          "_id": "fixture_conv_article_direct",
+          "id": "fixture_conv_article_direct",
+          "conversationId": "fixture_conv_article_direct",
+          "type": "direct",
+          "title": "契约撰稿人",
+          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+          "creatorId": "fixture_user_current",
+          "maxSeq": 3,
+          "memberCount": 2,
+          "maxGroupSize": 2,
+          "receiptEnabled": true,
+          "lastMessagePreview": "文章配图已经补齐。",
+          "lastMessageTime": "2026-04-29T09:50:00Z",
+          "messageCount": 3,
+          "status": "active",
+          "createdAt": "2026-04-29T09:40:00Z",
+          "updatedAt": "2026-04-29T09:50:00Z"
+        }
+      ],
+      "messages": {
+        "fixture_conv_direct": [
+          {
+            "messageId": "fixture_msg_direct_1",
+            "_id": "fixture_msg_direct_1",
+            "conversationId": "fixture_conv_direct",
+            "senderId": "fixture_user_friend",
+            "content": "这是一条契约聊天消息。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 1,
+            "createdAt": "2026-04-29T08:00:00Z"
+          },
+          {
+            "messageId": "fixture_msg_direct_2",
+            "_id": "fixture_msg_direct_2",
+            "conversationId": "fixture_conv_direct",
+            "senderId": "fixture_user_current",
+            "content": "契约消息已送达",
+            "type": "text",
+            "messageType": "text",
+            "seq": 2,
+            "createdAt": "2026-04-29T08:01:00Z"
+          }
+        ],
+        "fixture_conv_group": [
+          {
+            "messageId": "fixture_msg_group_1",
+            "_id": "fixture_msg_group_1",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_current",
+            "content": "周末集合时间已确认",
+            "type": "text",
+            "messageType": "text",
+            "seq": 5,
+            "createdAt": "2026-04-29T09:00:00Z"
+          },
+          {
+            "messageId": "fixture_msg_group_2",
+            "_id": "fixture_msg_group_2",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_weekend_1",
+            "content": "我会带相机和三脚架。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 6,
+            "createdAt": "2026-04-29T09:05:00Z"
+          },
+          {
+            "messageId": "fixture_msg_group_3",
+            "_id": "fixture_msg_group_3",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_weekend_2",
+            "content": "路线和天气我再确认一次。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 7,
+            "createdAt": "2026-04-29T09:10:00Z"
+          }
+        ],
+        "fixture_conv_photo_group": [
+          {
+            "messageId": "fixture_msg_photo_group_1",
+            "_id": "fixture_msg_photo_group_1",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_photo",
+            "content": "今晚整理照片墙和路线。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 8,
+            "createdAt": "2026-04-29T09:30:00Z"
+          },
+          {
+            "messageId": "fixture_msg_photo_group_2",
+            "_id": "fixture_msg_photo_group_2",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_friend",
+            "content": "我把西湖晨光那组图发到圈子里。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 9,
+            "createdAt": "2026-04-29T09:35:00Z"
+          }
+        ],
+        "fixture_conv_travel_group": [
+          {
+            "messageId": "fixture_msg_travel_group_1",
+            "_id": "fixture_msg_travel_group_1",
+            "conversationId": "fixture_conv_travel_group",
+            "senderId": "fixture_user_travel",
+            "content": "路线、天气和集合点都同步了。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 6,
+            "createdAt": "2026-04-29T09:45:00Z"
+          }
+        ],
+        "fixture_conv_article_direct": [
+          {
+            "messageId": "fixture_msg_article_direct_1",
+            "_id": "fixture_msg_article_direct_1",
+            "conversationId": "fixture_conv_article_direct",
+            "senderId": "fixture_user_article",
+            "content": "文章配图已经补齐。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 3,
+            "createdAt": "2026-04-29T09:50:00Z"
+          }
+        ]
+      },
+      "members": {
+        "fixture_conv_direct": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "我",
+            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "role": "owner",
+            "status": "joined",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_friend",
+            "displayName": "契约好友",
+            "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": false
+          }
+        ],
+        "fixture_conv_group": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "我",
+            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "role": "owner",
+            "status": "joined",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_weekend_1",
+            "displayName": "契约同伴一",
+            "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": false
+          },
+          {
+            "userId": "fixture_user_weekend_2",
+            "displayName": "契约同伴二",
+            "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": false
+          }
+        ],
+        "fixture_conv_photo_group": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "我",
+            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_photo",
+            "displayName": "契约摄影师",
+            "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
+            "role": "owner",
+            "status": "joined",
+            "isCurrentUser": false
+          },
+          {
+            "userId": "fixture_user_friend",
+            "displayName": "契约好友",
+            "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": false
+          }
+        ],
+        "fixture_conv_travel_group": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "我",
+            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_travel",
+            "displayName": "契约旅行家",
+            "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
+            "role": "owner",
+            "status": "joined",
+            "isCurrentUser": false
+          },
+          {
+            "userId": "fixture_user_weekend_1",
+            "displayName": "契约同伴一",
+            "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": false
+          },
+          {
+            "userId": "fixture_user_weekend_2",
+            "displayName": "契约同伴二",
+            "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": false
+          }
+        ],
+        "fixture_conv_article_direct": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "我",
+            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "role": "owner",
+            "status": "joined",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_article",
+            "displayName": "契约撰稿人",
+            "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+            "role": "member",
+            "status": "joined",
+            "isCurrentUser": false
+          }
+        ]
+      },
+      "userStates": [
+        {
+          "_id": "fixture_state_direct_current",
+          "userId": "fixture_user_current",
+          "conversationId": "fixture_conv_direct",
+          "readSeq": 1,
+          "unreadCount": 1,
+          "muted": false,
+          "pinned": true,
+          "updatedAt": "2026-04-29T08:01:00Z"
+        },
+        {
+          "_id": "fixture_state_group_current",
+          "userId": "fixture_user_current",
+          "conversationId": "fixture_conv_group",
+          "readSeq": 4,
+          "unreadCount": 1,
+          "muted": false,
+          "pinned": false,
+          "updatedAt": "2026-04-29T09:00:00Z"
+        }
+      ]
+    },
+    "chat_settings_core": {
+      "description": "会话设置、免打扰、置顶、公告、管理员与转让候选人。",
+      "settings": [
+        {
+          "conversationId": "fixture_conv_group",
+          "muted": false,
+          "pinned": false,
+          "announcement": "契约群公告：周末集合时间已确认",
+          "adminUserIds": ["fixture_user_current"],
+          "transferCandidateUserIds": ["fixture_user_weekend_1", "fixture_user_weekend_2"]
+        }
+      ]
+    },
+    "chat_contacts_core": {
+      "description": "联系人 tab、圈子联系人与趣群联系人。",
+      "contacts": [
+        {
+          "userId": "fixture_user_friend",
+          "displayName": "契约好友",
+          "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "与当前用户互关的同好"
+        },
+        {
+          "userId": "fixture_user_weekend_1",
+          "displayName": "契约同伴一",
+          "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
+          "relationship": "circle_member",
+          "isFriend": true,
+          "bio": "周末群成员"
+        },
+        {
+          "userId": "fixture_user_weekend_2",
+          "displayName": "契约同伴二",
+          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+          "relationship": "circle_member",
+          "isFriend": true,
+          "bio": "周末群成员"
+        },
+        {
+          "userId": "fixture_user_photo",
+          "displayName": "契约摄影师",
+          "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "摄影社圈主"
+        },
+        {
+          "userId": "fixture_user_travel",
+          "displayName": "契约旅行家",
+          "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "旅行搭子"
+        },
+        {
+          "userId": "fixture_user_article",
+          "displayName": "契约撰稿人",
+          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "文章作者"
+        }
+      ],
+      "circleIds": ["fixture_circle_photo", "fixture_circle_travel", "fixture_circle_city", "fixture_circle_life"],
+      "groupConversationIds": ["fixture_conv_group", "fixture_conv_photo_group", "fixture_conv_travel_group"]
+    },
+    "chat_group_flow_core": {
+      "description": "建群、加人、管理页所需成员候选。",
+      "candidateUserIds": ["fixture_user_friend", "fixture_user_weekend_1", "fixture_user_weekend_2"],
+      "defaultGroupTitle": "契约新建群"
+    }
+  },
+  "scenarios": [
+    {
+      "id": "chat_inbox_detail_basic",
+      "title": "聊天 inbox 与详情契约种子",
+      "type": "chat_inbox_detail",
+      "domainId": "chat",
+      "seedRefs": ["chat_core", "chat_settings_core", "chat_contacts_core", "chat_group_flow_core"],
+      "uiExpectations": {
+        "conversationIds": ["fixture_conv_direct", "fixture_conv_group"],
+        "textFragments": ["契约好友", "契约周末群", "契约消息已送达"]
+      },
+      "remoteExpectations": {
+        "conversationIds": ["fixture_conv_direct", "fixture_conv_group"],
+        "messageIds": ["fixture_msg_direct_1", "fixture_msg_group_1"],
+        "memberUserIds": ["fixture_user_current", "fixture_user_friend"]
+      },
+      "environments": {
+        "alpha": { "enabled": true, "repository": "mock" },
+        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
+        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+      }
+    }
+  ]
+}

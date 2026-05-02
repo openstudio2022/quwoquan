@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/streaming"
 	"quwoquan_service/services/assistant-service/internal/application"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
@@ -36,8 +38,25 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/assistant/memories", h.handleListMemories)
 	mux.HandleFunc("GET /v1/assistant/ops/learning-summary", h.handleGetLearningOpsSummary)
 	mux.HandleFunc("GET /v1/assistant/skills", h.handleListSkills)
+	mux.HandleFunc("GET /v1/assistant/skill-subscriptions", h.handleListSkillSubscriptions)
+	mux.HandleFunc("POST /v1/assistant/skill-subscriptions", h.handleCreateSkillSubscription)
+	mux.HandleFunc("POST /v1/assistant/skill-subscriptions/cron/tick", h.handleTickSkillSubscriptionCron)
+	mux.HandleFunc("GET /v1/assistant/skill-subscriptions/{subscriptionId}", h.handleGetSkillSubscription)
+	mux.HandleFunc("PATCH /v1/assistant/skill-subscriptions/{subscriptionId}/status", h.handleUpdateSkillSubscriptionStatus)
 	mux.HandleFunc("GET /v1/assistant/consents", h.handleListConsents)
 	mux.HandleFunc("/v1/assistant/skills/", h.handleSkillConsentRoutes)
+	mux.HandleFunc("POST /v1/assistant/conversations", h.handleCreateConversation)
+	mux.HandleFunc("GET /v1/assistant/conversations/{conversationId}", h.handleGetConversation)
+	mux.HandleFunc("POST /v1/assistant/conversations/{conversationId}/turns", h.handleCreateTurn)
+	mux.HandleFunc("GET /v1/assistant/turns/{turnId}", h.handleGetTurn)
+	mux.HandleFunc("POST /v1/assistant/turns/{turnId}/stream", h.handleStreamTurn)
+	mux.HandleFunc("POST /v1/app-messages", h.handleCreateAppMessage)
+	mux.HandleFunc("GET /v1/app-messages", h.handleListAppMessages)
+	mux.HandleFunc("GET /v1/app-messages/unread-count", h.handleGetAppMessageUnreadCount)
+	mux.HandleFunc("GET /v1/app-messages/stream", h.handleStreamAppMessages)
+	mux.HandleFunc("GET /v1/app-messages/{messageId}", h.handleGetAppMessage)
+	mux.HandleFunc("POST /v1/app-messages/{messageId}/ack", h.handleAckAppMessage)
+	mux.HandleFunc("POST /v1/app-messages/{messageId}/read", h.handleReadAppMessage)
 	mux.HandleFunc("POST /v1/assistant/runs", h.handleCreateRun)
 	mux.HandleFunc("POST /v1/assistant/runs/stream", h.handleCreateRunStream)
 	return mux
@@ -176,6 +195,71 @@ func (h *Handler) handleListSkills(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, view)
 }
 
+func (h *Handler) handleListSkillSubscriptions(w http.ResponseWriter, r *http.Request) {
+	view, err := h.service.ListSkillSubscriptions(
+		r.Context(),
+		resolveUserID(r),
+		strings.TrimSpace(r.URL.Query().Get("status")),
+		parseLimit(r, 20),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *Handler) handleCreateSkillSubscription(w http.ResponseWriter, r *http.Request) {
+	var input assistant.CreateSkillSubscriptionInput
+	if err := readJSON(r, &input); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	subscription, err := h.service.CreateSkillSubscription(r.Context(), resolveUserID(r), input)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, subscription)
+}
+
+func (h *Handler) handleGetSkillSubscription(w http.ResponseWriter, r *http.Request) {
+	subscription, err := h.service.GetSkillSubscription(r.Context(), resolveUserID(r), r.PathValue("subscriptionId"))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, subscription)
+}
+
+func (h *Handler) handleUpdateSkillSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
+	var input assistant.UpdateSkillSubscriptionStatusInput
+	if err := readJSON(r, &input); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	subscription, err := h.service.UpdateSkillSubscriptionStatus(r.Context(), resolveUserID(r), r.PathValue("subscriptionId"), input)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, subscription)
+}
+
+func (h *Handler) handleTickSkillSubscriptionCron(w http.ResponseWriter, r *http.Request) {
+	var input assistant.SkillSubscriptionCronTickInput
+	if err := readJSON(r, &input); err != nil && err != io.EOF {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	result, err := h.service.TickSkillSubscriptionCron(r.Context(), input)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *Handler) handleListConsents(w http.ResponseWriter, r *http.Request) {
 	items, err := h.service.ListConsents(r.Context(), resolveUserID(r))
 	if err != nil {
@@ -217,6 +301,161 @@ func (h *Handler) handleSkillConsentRoutes(w http.ResponseWriter, r *http.Reques
 	default:
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "方法不支持", "only POST/DELETE"))
 	}
+}
+
+func (h *Handler) handleCreateAppMessage(w http.ResponseWriter, r *http.Request) {
+	var input assistant.CreateAppMessageInput
+	if err := readJSON(r, &input); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	if strings.TrimSpace(input.UserID) == "" {
+		input.UserID = resolveUserID(r)
+	}
+	message, err := h.service.CreateAppMessage(r.Context(), input)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, message)
+}
+
+func (h *Handler) handleListAppMessages(w http.ResponseWriter, r *http.Request) {
+	view, err := h.service.ListAppMessages(r.Context(), resolveUserID(r), parseLimit(r, 20), strings.TrimSpace(r.URL.Query().Get("cursor")))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *Handler) handleGetAppMessage(w http.ResponseWriter, r *http.Request) {
+	message, err := h.service.GetAppMessage(r.Context(), resolveUserID(r), r.PathValue("messageId"))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, message)
+}
+
+func (h *Handler) handleAckAppMessage(w http.ResponseWriter, r *http.Request) {
+	message, err := h.service.AckAppMessage(r.Context(), resolveUserID(r), r.PathValue("messageId"))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, message)
+}
+
+func (h *Handler) handleReadAppMessage(w http.ResponseWriter, r *http.Request) {
+	message, err := h.service.ReadAppMessage(r.Context(), resolveUserID(r), r.PathValue("messageId"))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, message)
+}
+
+func (h *Handler) handleGetAppMessageUnreadCount(w http.ResponseWriter, r *http.Request) {
+	view, err := h.service.GetAppMessageUnreadCount(r.Context(), resolveUserID(r))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *Handler) handleStreamAppMessages(w http.ResponseWriter, r *http.Request) {
+	view, err := h.service.ListAppMessages(r.Context(), resolveUserID(r), parseLimit(r, 20), "")
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	envelopes := make([]streaming.Envelope, 0, len(view.Items)+1)
+	envelopes = append(envelopes, mustStreamingEnvelope("app_message.stream.ready", 1, map[string]any{
+		"status": "ready",
+		"count":  len(view.Items),
+	}))
+	for i, message := range view.Items {
+		envelope := mustStreamingEnvelope("app_message.created", uint64(i+2), message)
+		envelope.StreamID = "app_messages:" + resolveUserID(r)
+		envelope.Topic = "app_message"
+		envelopes = append(envelopes, envelope.Normalized())
+	}
+	writeStreamingSSE(w, r, envelopes)
+}
+
+func (h *Handler) handleCreateConversation(w http.ResponseWriter, r *http.Request) {
+	var input assistant.CreateConversationInput
+	if err := readJSON(r, &input); err != nil && err != io.EOF {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	conversation, err := h.service.CreateConversation(r.Context(), resolveUserID(r), input)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, conversation)
+}
+
+func (h *Handler) handleGetConversation(w http.ResponseWriter, r *http.Request) {
+	conversation, err := h.service.GetConversation(r.Context(), resolveUserID(r), r.PathValue("conversationId"))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, conversation)
+}
+
+func (h *Handler) handleCreateTurn(w http.ResponseWriter, r *http.Request) {
+	var input assistant.CreateTurnInput
+	if err := readJSON(r, &input); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	turn, err := h.service.CreateTurn(r.Context(), resolveUserID(r), r.PathValue("conversationId"), input)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	log.Printf("assistant http create_turn conversationId=%s turnId=%s traceId=%s", turn.ConversationID, turn.TurnID, turn.TraceID)
+	writeJSON(w, http.StatusCreated, turn)
+}
+
+func (h *Handler) handleGetTurn(w http.ResponseWriter, r *http.Request) {
+	turn, err := h.service.GetTurn(r.Context(), resolveUserID(r), r.PathValue("turnId"))
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, turn)
+}
+
+func (h *Handler) handleStreamTurn(w http.ResponseWriter, r *http.Request) {
+	turnID := r.PathValue("turnId")
+	if err := readJSON(r, &map[string]any{}); err != nil && err != io.EOF {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
+		return
+	}
+	log.Printf("assistant http stream_turn_requested turnId=%s requestId=%s traceId=%s", turnID, resolveRequestID(r), resolveTraceID(r))
+	flusher, _ := w.(http.Flusher)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	emitted := 0
+	err := h.service.StreamTurn(r.Context(), resolveUserID(r), turnID, func(envelope streaming.Envelope) error {
+		emitted++
+		writeStreamingSSEEnvelope(w, envelope, flusher)
+		return nil
+	})
+	if err != nil {
+		log.Printf("assistant http stream_turn_failed turnId=%s emitted=%d err=%v", turnID, emitted, err)
+		return
+	}
+	log.Printf("assistant http stream_turn_ready turnId=%s events=%d", turnID, emitted)
 }
 
 func (h *Handler) handleCreateRun(w http.ResponseWriter, r *http.Request) {
@@ -275,6 +514,42 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
 	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
+}
+
+func writeStreamingSSE(w http.ResponseWriter, r *http.Request, envelopes []streaming.Envelope) {
+	flusher, _ := w.(http.Flusher)
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	for _, envelope := range envelopes {
+		writeStreamingSSEEnvelope(w, envelope, flusher)
+	}
+}
+
+func writeStreamingSSEEnvelope(w http.ResponseWriter, envelope streaming.Envelope, flusher http.Flusher) {
+	event := envelope.SSEEvent()
+	log.Printf("assistant http sse_emit streamId=%s eventType=%s seq=%d traceId=%s", envelope.StreamID, envelope.EventType, envelope.Seq, envelope.TraceID)
+	if event.ID != "" {
+		_, _ = fmt.Fprintf(w, "id: %s\n", event.ID)
+	}
+	if event.Event != "" {
+		_, _ = fmt.Fprintf(w, "event: %s\n", event.Event)
+	}
+	payload, _ := json.Marshal(event.Data)
+	_, _ = fmt.Fprintf(w, "data: %s\n\n", payload)
+	if flusher != nil {
+		flusher.Flush()
+	}
+}
+
+func mustStreamingEnvelope(event string, seq uint64, data any) streaming.Envelope {
+	envelope, err := streaming.NewEnvelope(event, seq, data)
+	if err != nil {
+		panic(err)
+	}
+	return envelope.Normalized()
 }
 
 func readJSON(r *http.Request, v any) error {

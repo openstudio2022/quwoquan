@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `compliance-audit-export`
+## Folded current node `compliance-audit-export`
 
 # 开发任务：compliance-audit-export
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `compliance-audit-export` (from `user-identity-profile-relationship/settings-and-device-token/settings-audit/settings-change-trace-link/compliance-audit-export`)
+- [ ] Migrated current node: `compliance-audit-export` (from `user-identity-profile-relationship/settings-and-device-token/settings-audit/settings-change-trace-link/compliance-audit-export`)

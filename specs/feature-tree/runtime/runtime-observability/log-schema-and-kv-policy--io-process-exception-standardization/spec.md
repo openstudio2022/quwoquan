@@ -9,7 +9,7 @@
 ## 验收标准
 - A1/A6/A7 主验收。
 
-## Folded legacy node `contract-sync-and-sli-binding`
+## Folded current node `contract-sync-and-sli-binding`
 
 # L5 特性：contract-sync-and-sli-binding
 

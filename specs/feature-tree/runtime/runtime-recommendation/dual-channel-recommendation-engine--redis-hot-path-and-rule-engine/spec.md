@@ -41,7 +41,7 @@ score = w_popularity × 热度 + w_freshness × 新鲜度 + w_realtime × 实时
 - A2：SessionCache 命中 124ns/op（vs 直连 8931ns/op）。
 - A8：热路径契约测试 + 规则引擎单元测试 + 基准测试。
 
-## Folded legacy node `ml-model-integration-and-ab-test`
+## Folded current node `ml-model-integration-and-ab-test`
 
 # L5 横切：ml-model-integration-and-ab-test
 

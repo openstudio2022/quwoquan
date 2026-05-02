@@ -70,7 +70,10 @@ func (s *CallSessionService) SetRinging(session *model.CallSession) {
 }
 
 func (s *CallSessionService) AnswerCall(session *model.CallSession, userID string) error {
-	if session.Status != model.StatusRinging && session.Status != model.StatusInitiated {
+	if session.Status != model.StatusRinging &&
+		session.Status != model.StatusInitiated &&
+		session.Status != model.StatusConnecting &&
+		session.Status != model.StatusInCall {
 		return errors.New("can only answer a ringing call")
 	}
 	p := findParticipant(session, userID)
@@ -155,12 +158,12 @@ func (s *CallSessionService) JoinCall(session *model.CallSession, userID string)
 	if session.Status == model.StatusEnded {
 		return errors.New("cannot join an ended call")
 	}
-	if countActiveParticipants(session) >= session.MaxParticipants {
-		return errors.New("call is full")
-	}
 
 	now := time.Now()
 	p := findParticipant(session, userID)
+	if p == nil && countActiveParticipants(session) >= session.MaxParticipants {
+		return errors.New("call is full")
+	}
 	if p != nil {
 		p.Status = model.ParticipantConnected
 		p.JoinedAt = &now

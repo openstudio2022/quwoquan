@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `auto-alert-and-action-runbook`
+## Folded current node `auto-alert-and-action-runbook`
 
 # L5 特性：auto-alert-and-action-runbook
 

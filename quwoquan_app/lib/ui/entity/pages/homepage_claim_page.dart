@@ -101,7 +101,7 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
                   SizedBox(height: AppSpacing.intraGroupXs),
                   Text(
                     (_detail?.status ?? '') == 'offline'
-                        ? '该主页已下线，仅保留历史内容，当前不可继续认领。'
+                        ? '该主页已下线，仅保留记录内容，当前不可继续认领。'
                         : (_detail?.claimStatus ?? '') == 'claimed'
                         ? '该主页已被认领，如信息有误可通过状态上报反馈。'
                         : '提交后会进入审核，审核通过后即可维护主页基本信息。',

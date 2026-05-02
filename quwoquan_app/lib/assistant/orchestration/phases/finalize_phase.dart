@@ -11,7 +11,7 @@ class FinalizePhase implements Phase {
   /// Preferred pipeline-based constructor.
   const FinalizePhase({required FinalizeRunner runner}) : _runner = runner;
 
-  /// Legacy constructor for backward compatibility with tests.
+  /// Current constructor for backward compatibility with tests.
   @Deprecated('Use the named-parameter pipeline constructor')
   FinalizePhase.fromOwner(
     phase_owner.LocalPhaseExecutionOwner owner, {
@@ -39,9 +39,6 @@ class FinalizePhase implements Phase {
       executionSnapshot: snapshot,
       response: pendingResponse,
     );
-    return PhaseOutput(
-      state: input.state,
-      response: finalizedResponse,
-    );
+    return PhaseOutput(state: input.state, response: finalizedResponse);
   }
 }

@@ -94,13 +94,16 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
-
-	if err := s.repo.CreateConversation(ctx, conv); err != nil {
-		return nil, err
-	}
-
-	if err := s.cache.InitSeq(ctx, conv.ID, 0); err != nil {
-		return nil, err
+	if conv.Type == "group" || conv.Type == "circle" {
+		defaultAvatarURL := DefaultGroupAvatarURL()
+		if strings.TrimSpace(defaultAvatarURL) == "" {
+			return nil, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleChat, rterr.KindSystem, "avatar_default_unavailable"),
+				"群头像暂不可用，请稍后重试",
+				"group default avatar url is not configured",
+			)
+		}
+		conv.AvatarUrl = defaultAvatarURL
 	}
 
 	profileIDs := append([]string{req.CreatorId}, initialMemberIds...)
@@ -113,6 +116,9 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	}
 
 	creatorDN, creatorAV, creatorAssetID, creatorAvatarVersion := lookup(req.CreatorId)
+	if (conv.Type == "group" || conv.Type == "circle") && strings.TrimSpace(creatorAV) != "" {
+		conv.AvatarUrl = strings.TrimSpace(creatorAV)
+	}
 	creator := &model.ConversationMember{
 		ID:             generateID(),
 		ConversationId: conv.ID,
@@ -125,13 +131,10 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		Role:           "owner",
 		JoinedAt:       now,
 	}
-	if err := s.repo.CreateMember(ctx, creator); err != nil {
-		return nil, err
-	}
-
+	initialMembers := make([]*model.ConversationMember, 0, len(initialMemberIds))
 	for i, userID := range initialMemberIds {
 		dn, av, assetID, avatarVersion := lookup(userID)
-		member := &model.ConversationMember{
+		initialMembers = append(initialMembers, &model.ConversationMember{
 			ID:             generateID(),
 			ConversationId: conv.ID,
 			UserId:         userID,
@@ -143,11 +146,18 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 			Role:           "member",
 			InvitedBy:      req.CreatorId,
 			JoinedAt:       now.Add(time.Duration(i+1) * time.Millisecond),
-		}
-		if err := s.repo.CreateMember(ctx, member); err != nil {
-			return nil, err
-		}
-		_ = s.repo.UpsertUserState(ctx, &model.ConversationUserState{
+		})
+	}
+
+	creatorState := &model.ConversationUserState{
+		ID:             generateID(),
+		UserId:         req.CreatorId,
+		ConversationId: conv.ID,
+		UpdatedAt:      now,
+	}
+	initialStates := make([]*model.ConversationUserState, 0, len(initialMemberIds))
+	for _, userID := range initialMemberIds {
+		initialStates = append(initialStates, &model.ConversationUserState{
 			ID:             generateID(),
 			UserId:         userID,
 			ConversationId: conv.ID,
@@ -158,22 +168,44 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	conv.MemberCount = len(initialMemberIds) + 1
 	conv.MembersRosterRevision = 1
 	conv.UpdatedAt = time.Now()
-	if err := s.repo.UpdateConversation(ctx, conv.ID, conv); err != nil {
+	if err := s.repo.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.repo.CreateConversation(txCtx, conv); err != nil {
+			return err
+		}
+		if err := s.repo.CreateMember(txCtx, creator); err != nil {
+			return err
+		}
+		for _, member := range initialMembers {
+			if err := s.repo.CreateMember(txCtx, member); err != nil {
+				return err
+			}
+		}
+		if err := s.repo.UpdateConversation(txCtx, conv.ID, conv); err != nil {
+			return err
+		}
+		if err := s.repo.UpsertUserState(txCtx, creatorState); err != nil {
+			return err
+		}
+		for _, state := range initialStates {
+			if err := s.repo.UpsertUserState(txCtx, state); err != nil {
+				return err
+			}
+		}
+		if conv.Type == "group" || conv.Type == "circle" {
+			return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
+				ConversationID: conv.ID,
+				ActorID:        req.CreatorId,
+				Trigger:        "conversation.created",
+			})
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	_ = s.scheduler.EnqueueRecompute(ctx, GroupAvatarRecomputeTask{
-		ConversationID: conv.ID,
-		ActorID:        req.CreatorId,
-		Trigger:        "conversation.created",
-	})
 
-	initState := &model.ConversationUserState{
-		ID:             generateID(),
-		UserId:         req.CreatorId,
-		ConversationId: conv.ID,
-		UpdatedAt:      now,
+	if err := s.cache.InitSeq(ctx, conv.ID, 0); err != nil {
+		return nil, err
 	}
-	_ = s.repo.UpsertUserState(ctx, initState)
 
 	go func() {
 		if err := s.publisher.PublishDomainEvent(context.Background(), event.ConversationCreated, conv.ID, req.CreatorId, map[string]any{

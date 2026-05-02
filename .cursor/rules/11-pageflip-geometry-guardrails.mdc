@@ -1,0 +1,34 @@
+---
+description: Pageflip 前后翻几何军规，防止死分支、诊断分叉与视觉证据缺失
+alwaysApply: true
+---
+
+# Pageflip Geometry Guardrails
+
+当任务触及 `quwoquan_app/lib/ui/content/pageflip/**`、`quwoquan_app/lib/ui/content/article_reader/pageflip/**`、`quwoquan_app/test/**/pageflip/**` 时，必须遵守本规则。
+
+## 必须遵循
+
+- 先证明真实 paint 路径，再修改代码；必须写清 `scene/calculation -> render frame -> deck layers -> Widget paint`。
+- 一帧只能有一个 geometry 真相源；绘制、diagnostics、surface slices、测试必须消费同一 resolver。
+- BACK 必须同时说明 StPageFlip 语义与 Flutter layout/paint 差异；不得把 StPageFlip 负坐标 `position` 简单等价为 `Positioned(left: negative)`。
+- 层级正确必须由 framebuffer 像素或 viewport overlap 断言证明；`Stack` 顺序和 debug 标签只能作辅助。
+- 左下/书脊固定必须验证 screen-space 不变量；不得用 `surfaceOrigin == anchor` 或 `pivotLocal == Offset.zero` 代替视觉固定点。
+- visual test 不得关闭关键像素证据；若 `toImage()` 慢，只能缩小画布、减少采样点、拆单帧测试或缩小采样 rect。
+- page face 语义必须与变量、diagnostic label、测试探针色一致；BACK 中 previous leaf、current static page、front/back face 不得混名。
+
+## 禁止
+
+- 禁止优先修改未证明进入 runtime paint 的死分支、备用分支或 test-only helper。
+- 禁止用 `zOrder=`、`currentLayer=`、`backwardReplaySlices` 作为视觉正确的唯一证据。
+- 禁止新增只服务 diagnostics 或测试通过的第二坐标链。
+- 禁止用标签、阈值、fallback 或视觉稳定化掩盖 pageflip 主几何问题。
+- 禁止因测试超时把关键后翻 visual 阶段降级为 `capturePixels: false`。
+
+## 技术路线
+
+1. 先只读审视真实绘制链路，标出每个 geometry/helper/projection/slices/diagnostics 分支的用途：`paint`、`diagnostics-only`、`test-only` 或 `dead branch`。
+2. 对照 StPageFlip 的 `flippingPage`、`bottomPage`、`static current`、`position + angle + area`，明确本地 Flutter 的布局、变换、裁剪空间。
+3. 先补能失败的红测或日志证据，再实现；层级和书脊问题必须有像素或 viewport 证据。
+4. 优先收敛并删除/封死分叉；无法删除的分支必须薄包装同一 resolver，并补 contract 防回退。
+5. 验证通过后，说明真实 paint、diagnostics、测试是否仍共用同一 geometry 输出。

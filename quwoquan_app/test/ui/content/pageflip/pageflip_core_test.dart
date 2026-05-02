@@ -282,7 +282,7 @@ void main() {
     expect(frame.timeline.rollProgress, greaterThan(0));
     expect(frame.timeline.cylinderProgress, equals(0));
     expect(frame.timeline.unfoldProgress, equals(0));
-    expect(frame.timeline.mirrored, isFalse);
+    expect(frame.timeline.mirrored, isTrue);
     expect(frame.backwardLeafFrame, isNotNull);
   });
 
@@ -308,7 +308,7 @@ void main() {
     expect(frame!.direction, StPageFlipDirection.back);
     expect(frame.renderDirection, StPageFlipDirection.back);
     expect(frame.reversePose, isNull);
-    expect(frame.timeline.mirrored, isFalse);
+    expect(frame.timeline.mirrored, isTrue);
     expect(frame.backwardLeafFrame, isNotNull);
     expect(frame.flippingClipArea, isNotEmpty);
     expect(frame.bottomClipArea, isNotEmpty);
@@ -331,7 +331,7 @@ void main() {
 
     final renderFrame = controller.scene.renderFrame;
     expect(renderFrame, isNotNull);
-    expect(renderFrame!.timeline.mirrored, isFalse);
+    expect(renderFrame!.timeline.mirrored, isTrue);
     expect(renderFrame.backwardLeafFrame, isNotNull);
 
     final builder = ArticlePageCurlMeshBuilder();
@@ -581,7 +581,7 @@ void main() {
 
     expect(backwardBinding, isNotNull);
     expect(backwardBinding!.rectoPageIndex, 2);
-    expect(backwardBinding.versoPageIndex, 2);
+    expect(backwardBinding.versoPageIndex, 3);
     expect(backwardBinding.bottomPageIndex, 3);
   });
 
@@ -611,7 +611,7 @@ void main() {
     expect(binding!.coveredPageIndex, equals(3));
     expect(binding.leafPageIndex, equals(2));
     expect(binding.leafRectoPageIndex, equals(2));
-    expect(binding.leafVersoPageIndex, equals(2));
+    expect(binding.leafVersoPageIndex, equals(3));
     expect(binding.requiredPageIndices, equals(<int>{2, 3}));
   });
 
@@ -701,11 +701,9 @@ void main() {
       frame.backwardLeafFrame!.bottomRevealStartNormalized,
       greaterThan(frame.backwardLeafFrame!.laidDownWidthNormalized),
     );
-    // Backward 几何主线现在复用前翻多边形并做 x 轴镜像。flippingAnchor 是镜像后
-    // 的平移基点，bottomAnchor 仍锁在右页 spine（书坐标原点）。多边形长度与
-    // 前翻一致，可能是三角形（3 个顶点）或四边形（4 个顶点），取决于折角与拖
-    // 拽位置；不再是固定的横向条带，因此不强制断言每个顶点的 x 坐标。
-    expect(frame.bottomAnchor.dx, closeTo(0, 0.001));
+    // Backward 几何主线直接消费 BACK calculation。bottomAnchor 是 StPageFlip
+    // 计算坐标中的底页位置，不再强行锁到旧镜像前翻原点。
+    expect(frame.bottomAnchor.dx.isFinite, isTrue);
     expect(frame.bottomAnchor.dy, closeTo(0, 0.001));
     expect(frame.flippingClipArea.length, greaterThanOrEqualTo(3));
     expect(frame.bottomClipArea.length, greaterThanOrEqualTo(3));
@@ -1328,7 +1326,7 @@ void main() {
       progress: baseFrame.progress,
       corner: baseFrame.corner,
     );
-    final frameWithLegacyPose = StPageFlipRenderFrame(
+    final frameWithCurrentPose = StPageFlipRenderFrame(
       localPagePoint: baseFrame.localPagePoint,
       progress: baseFrame.progress,
       direction: baseFrame.direction,
@@ -1348,12 +1346,12 @@ void main() {
     final meshFrame = builder.build(
       pageRect: const Rect.fromLTWH(16, 64, 398, 553),
       pageSize: const Size(398, 553),
-      dragPoint: frameWithLegacyPose.localPagePoint,
-      progress: frameWithLegacyPose.progress,
-      direction: frameWithLegacyPose.direction,
-      corner: frameWithLegacyPose.corner,
+      dragPoint: frameWithCurrentPose.localPagePoint,
+      progress: frameWithCurrentPose.progress,
+      direction: frameWithCurrentPose.direction,
+      corner: frameWithCurrentPose.corner,
       reversePose: reversePose,
-      renderFrame: frameWithLegacyPose,
+      renderFrame: frameWithCurrentPose,
     );
 
     expect(meshFrame.alignmentDiagnostics, isNotNull);

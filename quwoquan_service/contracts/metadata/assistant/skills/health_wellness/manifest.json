@@ -1,0 +1,14 @@
+{
+  "skillId": "health_wellness",
+  "displayName": "健康生活助手",
+  "description": "健康咨询、养生建议、运动指导、饮食营养、睡眠改善。",
+  "domainId": "health_wellness",
+  "executionTarget": "cloud",
+  "routingHints": ["健康", "症状", "饮食", "睡眠", "运动", "减肥"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "search"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 3
+  }
+}

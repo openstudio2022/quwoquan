@@ -71,7 +71,7 @@ slices:
     status: planned
 
   - id: P5
-    title: retire legacy task framing
+    title: retire current task framing
     goal: 将样板 Journey 从 `tasks.md` 主导迁移到 `plan.yaml` 主导
     depends_on:
       - P3

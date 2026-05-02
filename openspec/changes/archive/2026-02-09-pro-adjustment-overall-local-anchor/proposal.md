@@ -35,7 +35,7 @@
   - 计划新增 `lib/components/media/image/editor/panels/hsl/*`（HSL 面板）
 - 受影响状态：
   - 专业修图状态扩展为“整体 + 局部 + HSL + 曲线”并行会话模型
-  - 新增局部锚点集合、选中锚点、参数快照、会话内历史栈
+  - 新增局部锚点集合、选中锚点、参数快照、会话内记录栈
 - 受影响文档：
   - 变更 `openspec/specs/image-editor/spec.md`
   - 新增 `pro-local-adjustment-panel` / `pro-hsl-adjustment-panel` / `editor-session-ops-strip` 三个能力规格

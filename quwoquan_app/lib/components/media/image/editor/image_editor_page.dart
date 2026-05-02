@@ -551,7 +551,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   /// 是否在图片下方展示曲线调节蒙皮（专业修图-曲线子工具选中时）
   bool get _showCurveOverlayBelowImage => false;
 
-  /// 编辑步骤栈（Snapseed 式历史）
+  /// 编辑步骤栈（Snapseed 式记录）
   final List<ImageEditorStep> _steps = [];
 
   void _pushStep(ImageEditorStep step) {
@@ -3963,8 +3963,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
 
   void _showHistorySheet() {
     const isDark = true;
-    final bg =
-        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
+    final bg = SettingsSemanticConstants.conversationSheetPanelBackground(
+      isDark,
+    );
     final fg = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -4025,7 +4026,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                         children: [
                           CupertinoButton(
                             padding: EdgeInsets.zero,
-                            minimumSize: Size.square(AppSpacing.minInteractiveSize),
+                            minimumSize: Size.square(
+                              AppSpacing.minInteractiveSize,
+                            ),
                             onPressed: () {
                               Navigator.of(context).pop();
                               _redoStepAt(index);
@@ -4038,7 +4041,9 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                           ),
                           CupertinoButton(
                             padding: EdgeInsets.zero,
-                            minimumSize: Size.square(AppSpacing.minInteractiveSize),
+                            minimumSize: Size.square(
+                              AppSpacing.minInteractiveSize,
+                            ),
                             onPressed: () {
                               _removeStepAt(index);
                               Navigator.of(context).pop();

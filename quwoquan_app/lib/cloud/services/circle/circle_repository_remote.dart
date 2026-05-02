@@ -666,7 +666,15 @@ class RemoteCircleRepository implements CircleRepository {
   Future<List<PostBaseDto>> listHomeCircleDiscoveryFeed({
     int limit = kHomeCircleDiscoveryFeedDefaultLimit,
   }) async {
-    return const [];
+    final circles = await listCircles(limit: limit);
+    final out = <PostBaseDto>[];
+    for (final circle in circles) {
+      if (out.length >= limit) break;
+      final remaining = limit - out.length;
+      final feed = await getCircleFeed(circle.id, limit: remaining);
+      out.addAll(feed);
+    }
+    return out.take(limit).toList(growable: false);
   }
 
   @override

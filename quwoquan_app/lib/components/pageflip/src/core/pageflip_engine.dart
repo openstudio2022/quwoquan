@@ -314,6 +314,7 @@ class PageflipEngine {
         flippingAnchor: calc.getActiveCorner(),
         bottomAnchor: calc.getBottomPagePosition(),
         angle: calc.getAngle(),
+        movingEdgeLine: null,
         shadow: null,
         maxShadowOpacity: 1.0,
       ),

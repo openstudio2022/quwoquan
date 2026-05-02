@@ -135,7 +135,7 @@
 
 - [ ] 12.1 配置分层规范落地（见 `contracts/configuration.md`，运营配置 vs 运维/系统配置）
 - [ ] 12.2 各服务统一 `ConfigProvider` 抽象与注入规范（file/env/nacos/secrets）
-- [ ] 12.3 本地配置目录与示例补齐（`configs/local/*.yaml`，用于集成测试）
+- [ ] 12.3 本地配置目录与示例补齐（`configs/alpha/*.yaml / configs/beta/*.yaml`，用于集成测试）
 - [ ] 12.4 运维高风险配置灰度/回滚流程模板（超时/重试/限流/降级/采样）
 
 ## 13. 云端公共库（runtime/，强制复用）

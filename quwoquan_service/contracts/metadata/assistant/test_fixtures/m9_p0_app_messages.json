@@ -1,0 +1,84 @@
+{
+  "items": [
+    {
+      "messageId": "msg_01J8M9DAILY000000000001",
+      "userId": "user_m9",
+      "messageType": "assistant",
+      "source": "assistant_turn",
+      "sourceId": "atn_01J8M9DAILY000000000001",
+      "destination": {
+        "type": "user",
+        "id": "user_m9"
+      },
+      "title": "每日助手：早间计划",
+      "summary": "为什么提醒你：你订阅了每日助手。今日重点：会议准备、学习计划、作息提醒。建议先处理高优先级事项。",
+      "target": {
+        "targetType": "assistant_turn",
+        "targetId": "atn_01J8M9DAILY000000000001"
+      },
+      "read": false,
+      "createdAt": "2026-04-29T08:00:00Z",
+      "deliveredAt": "2026-04-29T08:00:01Z"
+    },
+    {
+      "messageId": "msg_01J8M9NEWS000000000001",
+      "userId": "user_m9",
+      "messageType": "assistant",
+      "source": "assistant_turn",
+      "sourceId": "atn_01J8M9NEWS000000000001",
+      "destination": {
+        "type": "user",
+        "id": "user_m9"
+      },
+      "title": "新闻简报：人工智能新闻",
+      "summary": "为什么提醒你：你订阅了新闻简报。公开来源显示人工智能芯片、模型更新和产业政策有新摘要。",
+      "target": {
+        "targetType": "assistant_turn",
+        "targetId": "atn_01J8M9NEWS000000000001"
+      },
+      "read": false,
+      "createdAt": "2026-04-29T08:00:00Z",
+      "deliveredAt": "2026-04-29T08:00:01Z"
+    },
+    {
+      "messageId": "msg_01J8M9STOCK0000000001",
+      "userId": "user_m9",
+      "messageType": "assistant",
+      "source": "assistant_turn",
+      "sourceId": "atn_01J8M9STOCK0000000001",
+      "destination": {
+        "type": "user",
+        "id": "user_m9"
+      },
+      "title": "股票哨兵：重大消息摘要",
+      "summary": "为什么提醒你：你订阅了股票哨兵。模拟消息显示关注公司出现重大信息变化；本提醒仅作信息摘要，非投资建议。",
+      "target": {
+        "targetType": "assistant_turn",
+        "targetId": "atn_01J8M9STOCK0000000001"
+      },
+      "read": false,
+      "createdAt": "2026-04-29T09:00:00Z",
+      "deliveredAt": "2026-04-29T09:00:01Z"
+    },
+    {
+      "messageId": "msg_01J8M9TRAVEL000000001",
+      "userId": "user_m9",
+      "messageType": "assistant",
+      "source": "assistant_turn",
+      "sourceId": "atn_01J8M9TRAVEL000000001",
+      "destination": {
+        "type": "user",
+        "id": "user_m9"
+      },
+      "title": "出行管家：今日行程提醒",
+      "summary": "为什么提醒你：你订阅了出行旅程管家。模拟天气、路况和景点拥堵显示出发前需要调整时间。",
+      "target": {
+        "targetType": "assistant_turn",
+        "targetId": "atn_01J8M9TRAVEL000000001"
+      },
+      "read": false,
+      "createdAt": "2026-04-29T07:00:00Z",
+      "deliveredAt": "2026-04-29T07:00:01Z"
+    }
+  ]
+}

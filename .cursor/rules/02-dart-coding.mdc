@@ -220,7 +220,7 @@ final slotState = turn?.slotState ?? const {};
 ### 5.3 版本管理：最多两个活跃版本
 
 - **当前版本**：`assistant_turn_v4`（prompt 模板输出，代码内标准格式）
-- **兼容遗留版本**：`assistant_turn_v3`（加载旧历史数据时识别，读后立即升级）
+- **兼容存量版本**：`assistant_turn_v3`（加载旧记录数据时识别，读后立即升级）
 - **禁止**：同时存在三个及以上版本的识别路径（如 v2 || v3 || v4）
 - **迁移要求**：`AssistantSessionManager.load()` 必须在读取完成后调用 `_migrateSessionsToCurrentVersion()`，将 content 中的 v2/v3 格式升级为 v4
 
@@ -228,7 +228,7 @@ final slotState = turn?.slotState ?? const {};
 // ❌ 禁止：三路版本判断
 if (version == 'assistant_turn_v2' || version == 'assistant_turn_v3' || version == 'assistant_turn_v4')
 
-// ✅ 必须：最多两版本（当前 + 一个遗留）
+// ✅ 必须：最多两版本（当前 + 一个存量）
 if (version == 'assistant_turn_v4' || version == 'assistant_turn_v3')
 // 旧包裹格式兼容
 final wrapped = parsed['assistant_turn_v2'];
@@ -246,7 +246,7 @@ final wrapped = parsed['assistant_turn_v2'];
 
 **禁止**：修改 prompt 模板字段后不同步更新 `AssistantTurnOutput`，或直接在引擎逻辑中加字符串 key 访问新字段。
 
-### 5.5 遗留字段清理规范
+### 5.5 存量字段清理规范
 
 - `userFacingMarkdown`：旧字段名，禁止在新代码中使用；已有引用须替换为 `userMarkdown`
 - `assistant_turn_v2` 作为 `contractVersion` 值：禁止在新写入的 session 数据中使用；仅作为旧包裹格式解包的 key 保留

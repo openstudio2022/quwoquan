@@ -79,14 +79,20 @@ AssistantPlanView? assistantPlanViewFromTypedMainline({
     problemShape: understandingResult.intents.length > 1
         ? ProblemShape.multiSkill
         : ProblemShape.singleSkill,
-    problemClass: ProblemClass.general,
+    problemClass: requiresEvidence
+        ? ProblemClass.realtimeInfo
+        : ProblemClass.general,
     requiresExternalEvidence: requiresEvidence,
     mustVerifyClaims: requiresEvidence,
     clarificationNeeded:
         understandingResult.dialogueTransitionDecision.needsClarification,
     entityRefs: _entityRefLabels(primaryIntent),
     constraints: primaryIntent.constraints
-        .map((item) => item.value.trim().isNotEmpty ? item.value.trim() : item.key.trim())
+        .map(
+          (item) => item.value.trim().isNotEmpty
+              ? item.value.trim()
+              : item.key.trim(),
+        )
         .where((item) => item.isNotEmpty)
         .toList(growable: false),
     searchPlans: searchPlans,

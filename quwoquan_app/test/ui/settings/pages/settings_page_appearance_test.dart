@@ -105,6 +105,9 @@ class _AssistantRepo implements AssistantRepository {
   Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
     int limit = 64,
   }) async => const <AssistantSkillCatalogItemView>[];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 void main() {

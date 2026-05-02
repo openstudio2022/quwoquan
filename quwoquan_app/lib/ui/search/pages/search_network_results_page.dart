@@ -186,7 +186,9 @@ class _SearchNetworkResultsPageState
 
   Future<void> _appendCategoryTabsFromRepo() async {
     try {
-      final cfg = await ref.read(circleRepositoryProvider).getCircleCategoryConfig();
+      final cfg = await ref
+          .read(circleRepositoryProvider)
+          .getCircleCategoryConfig();
       if (!mounted) {
         return;
       }

@@ -8,7 +8,7 @@
 
 ## 背景与动机
 
-该 Scenario 虽然沿用历史节点名 `xiaoqu-entry-handoff`，但最新两段式搜索 UX 已经明确把它冻结为“独立网络结果页最左侧的小趣搜 tab”。阶段 B 也已确认这里必须返回真实 assistant 搜索结果，而不是只做 handoff 占位。
+该 Scenario 虽然沿用记录节点名 `xiaoqu-entry-handoff`，但最新两段式搜索 UX 已经明确把它冻结为“独立网络结果页最左侧的小趣搜 tab”。阶段 B 也已确认这里必须返回真实 assistant 搜索结果，而不是只做 handoff 占位。
 
 ## 目标用户
 
@@ -24,13 +24,13 @@
 
 - 助手 runtime、skill、tool、prompt 改造本身。
 - assistant 结果混入联想页四段。
-- 单独再维护一套 AI 搜索 query 历史模型。
+- 单独再维护一套 AI 搜索 query 记录模型。
 
 ## 约束
 
 - `小趣搜` 只存在于独立网络结果页左侧 tab，不进入联想页混排。
 - `小趣搜` 必须通过 assistant 的 typed contract / metadata 路径返回真实结果，不能在 runtime 做字符串语义分流。
-- `小趣搜` 复用当前全局搜索 query，不额外新增一套 AI query 历史模型。
+- `小趣搜` 复用当前全局搜索 query，不额外新增一套 AI query 记录模型。
 
 ## 对标输入与吸收结论
 
@@ -50,7 +50,7 @@
 
 ## 数据生命周期合同
 
-- `小趣搜` 不单独写一条 AI query 历史；它复用当前全局搜索 query。
+- `小趣搜` 不单独写一条 AI query 记录；它复用当前全局搜索 query。
 - 若用户从 `小趣搜` 继续进入 assistant 对话，则后续上下文保存在 assistant 对话链路中。
 
 ## 小趣 / 权限 / 分享边界

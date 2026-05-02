@@ -12,7 +12,7 @@ tests:
 execution:
   local_gate: make gate
   full_gate: make gate-full
-legacy_merged_acceptance:
+current_merged_acceptance:
 - source_path: gateway-orchestrator-foundation/orchestration-degradation-rollback/downstream-timeout-fallback/timeout-circuit-degrade-policy/fallback-quality-guard
   task_bucket: fallback-quality-guard
   migrated_as: L3_task

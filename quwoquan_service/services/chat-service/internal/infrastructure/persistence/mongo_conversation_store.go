@@ -14,6 +14,7 @@ import (
 
 // MongoChatStore implements ChatRepository backed by MongoDB.
 type MongoChatStore struct {
+	db            *mongo.Database
 	conversations *mongo.Collection
 	messages      *mongo.Collection
 	members       *mongo.Collection
@@ -23,12 +24,28 @@ type MongoChatStore struct {
 
 func NewMongoChatStore(db *mongo.Database) *MongoChatStore {
 	return &MongoChatStore{
+		db:            db,
 		conversations: db.Collection("conversations"),
 		messages:      db.Collection("messages"),
 		members:       db.Collection("conversation_members"),
 		userStates:    db.Collection("conversation_user_states"),
 		receipts:      db.Collection("message_receipts"),
 	}
+}
+
+func (s *MongoChatStore) RunInTransaction(ctx context.Context, fn func(context.Context) error) error {
+	if mongo.SessionFromContext(ctx) != nil {
+		return fn(ctx)
+	}
+	session, err := s.db.Client().StartSession()
+	if err != nil {
+		return err
+	}
+	defer session.EndSession(ctx)
+	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		return nil, fn(txCtx)
+	})
+	return err
 }
 
 // ── Conversation ─────────────────────────────────────────────────────────────
@@ -97,6 +114,32 @@ func (s *MongoChatStore) ListConversationsByUser(ctx context.Context, userId str
 		}
 	}
 	return result, nil
+}
+
+func (s *MongoChatStore) ListGroupConversationsNeedingAvatar(ctx context.Context, limit int) ([]model.Conversation, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	filter := bson.M{
+		"status": bson.M{"$in": bson.A{"", "active"}},
+		"type":   bson.M{"$in": bson.A{"group", "circle"}},
+		"$or": bson.A{
+			bson.M{"avatarUrl": bson.M{"$exists": false}},
+			bson.M{"avatarUrl": ""},
+			bson.M{"groupAvatarAssetId": ""},
+			bson.M{"groupAvatarVersion": bson.M{"$lte": 0}},
+		},
+	}
+	cur, err := s.conversations.Find(ctx, filter, options.Find().SetLimit(int64(limit)))
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var convs []model.Conversation
+	if err := cur.All(ctx, &convs); err != nil {
+		return nil, err
+	}
+	return convs, nil
 }
 
 // ── Message ──────────────────────────────────────────────────────────────────

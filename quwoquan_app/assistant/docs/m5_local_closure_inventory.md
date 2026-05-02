@@ -35,7 +35,7 @@ It does not claim live provider success. That remains a separate M5 live-closure
   - retrieval routing is centralized in a deterministic policy shared by
     taskGraph projection, retrieval design, and runtime auto-injection
 - Residue:
-  - legacy `search` tool still exists outside the typed mainline and remains an M5 residue item
+  - current `search` tool still exists outside the typed mainline and remains an M5 residue item
 
 ### M3
 - Status: accepted
@@ -45,7 +45,7 @@ It does not claim live provider success. That remains a separate M5 live-closure
   - `UnderstandPhase` emits typed `UnderstandingResult` / `TaskGraph`
   - `BootstrapPhase` now seeds `SystemContextEnvelope` and previous typed state for continuity
   - `AgentExecutionState` no longer stores `searchPlans`; retrieval plans are
-    carried by `taskGraph` and projected to legacy search arguments only at
+    carried by `taskGraph` and projected to current search arguments only at
     tool/runtime boundaries.
 - Residue:
   - `searchPlans` is still projected for replay/diagnostics compatibility outside the typed execution path
@@ -90,7 +90,7 @@ It does not claim live provider success. That remains a separate M5 live-closure
   That proof covers the previously failing final `understandingSnapshot`
   projection path for weather.
 
-## Required Legacy Residue List
+## Required Current Residue List
 The following residue is still real and should not be hidden:
 - `lib/assistant/orchestration/phases/understand_phase.dart`
   - typed state is the active execution path

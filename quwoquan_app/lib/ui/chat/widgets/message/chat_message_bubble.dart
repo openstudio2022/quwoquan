@@ -71,7 +71,13 @@ class ChatMessageBubble extends StatelessWidget {
     final type = message['type'] as String? ?? 'text';
     final content = message['content'] as String? ?? '';
     final senderName = message['senderName'] as String? ?? '';
-    final avatar = message['senderAvatar'] as String?;
+    final avatar = (message['senderAvatar'] as String?)?.trim();
+    assert(() {
+      if (!hideAvatarAndName && (avatar == null || avatar.isEmpty)) {
+        debugPrint('消息头像契约：senderAvatar 为空 senderName=$senderName');
+      }
+      return true;
+    }());
     final isRead = message['isRead'] == true;
     final renderPlainSelfText =
         renderSelfTextWithoutBubble && isRight && type == 'text';
@@ -223,10 +229,7 @@ class ChatMessageBubble extends StatelessWidget {
           ),
           child: SelectableText(
             content,
-            style: TextStyle(
-              fontSize: AppTypography.lg,
-              color: textColor,
-            ),
+            style: TextStyle(fontSize: AppTypography.lg, color: textColor),
           ),
         ),
       );
@@ -271,9 +274,7 @@ class ChatMessageBubble extends StatelessWidget {
           children: [
             if (isSelectionMode)
               Padding(
-                padding: EdgeInsets.only(
-                  right: AppSpacing.intraGroupSm,
-                ),
+                padding: EdgeInsets.only(right: AppSpacing.intraGroupSm),
                 child: Icon(
                   isSelected
                       ? Icons.check_circle

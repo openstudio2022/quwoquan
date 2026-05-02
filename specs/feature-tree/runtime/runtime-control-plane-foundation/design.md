@@ -238,7 +238,7 @@ dashboard_views:
 - `overview-dashboard`
   - 发布状态、待办审批、风险告警、重点实验、重点 case、异常趋势
 - `platform-dashboard`
-  - 服务健康、SLO、错误预算、依赖健康、灰度进度、回滚历史
+  - 服务健康、SLO、错误预算、依赖健康、灰度进度、回滚记录
 - `product-dashboard`
   - 核心指标、事件漏斗、实验归因、推荐效果、治理效率、恢复成功率
 - `audit-dashboard`

@@ -19,13 +19,13 @@
 
 | 维度 | 含义 |
 |------|------|
-| **A** | 版本分叉与代际命名：`draftVersion`、`_fromV2*` / `_fromLegacy*`、`version=='vN'`、`RewriteV2`、`uiProcessTimelineV2`、注释「V2 原型」「发现页 V1」等（与脚本内 `A_PATTERNS` 一致）。 |
-| **B** | 业务 Legacy 标识：`Legacy*` 类名、`legacyPageId`、`fromLegacy*`、`onOpenLegacy*` 等（与脚本内 `B_BAD_PATTERNS` 一致）。 |
+| **A** | 版本分叉与代际命名：`draftVersion`、`_fromV2*` / `_fromCurrent*`、`version=='vN'`、`RewriteV2`、`uiProcessTimelineV2`、注释「V2 原型」「发现页 V1」等（与脚本内 `A_PATTERNS` 一致）。 |
+| **B** | 业务 Current 标识：`Current*` 类名、`currentPageId`、`fromCurrent*`、`onOpenCurrent*` 等（与脚本内 `B_BAD_PATTERNS` 一致）。 |
 | **C** | 文件内 `dynamic` 关键字与 `Map<String, dynamic>` 出现；`enforce-c` 要求二者合计为 **0**（除非白名单豁免）。 |
 
 **会话 C 数据驱动收口**：browse/open/return 等 page_access 载荷须使用 [ops/event_record/projections/](../../../quwoquan_service/contracts/metadata/ops/event_record/projections/) 中 `app_log_*.yaml` 经 `make codegen-app` 生成的 DTO（`.toMap()` 仅在生成体内），详见 [session_c_page_typing.md](session_c_page_typing.md)。
 
-**Riverpod 官方子库**：`import 'package:flutter_riverpod/legacy.dart'` **不计入** B 违规，仅作信息行 `B~`；**不**触发 `--enforce-b`。
+**Riverpod 官方子库**：`import 'package:flutter_riverpod/current.dart'` **不计入** B 违规，仅作信息行 `B~`；**不**触发 `--enforce-b`。
 
 ## 3. 门禁分级与退出码
 
@@ -112,15 +112,15 @@ bash scripts/gate_repo.sh --scope app
 
 ## 8. A — 版本分叉与代际命名（目标说明）
 
-**目标**：业务与持久化不再保留 `v1`/`v2`/`draftVersion` 多路读写；方法名不出现 `_fromV2Map`、`_fromLegacyMap` 等。
+**目标**：业务与持久化不再保留 `v1`/`v2`/`draftVersion` 多路读写；方法名不出现 `_fromV2Map`、`_fromCurrentMap` 等。
 
 **说明**：不在 64 页面文件内的存储模型（如 `create_editor_models.dart`）由 **会话 A** 清理；页面文件内命中由本脚本 **A** 维度报告。
 
-## 9. B — Legacy 业务语义（目标说明）
+## 9. B — Current 业务语义（目标说明）
 
-**目标**：自研代码中类名/方法名/字段名不出现 `Legacy` 承载的兼容分支语义；`legacyPageId` 等应迁移为与 metadata 一致的命名（并走 codegen）。
+**目标**：自研代码中类名/方法名/字段名不出现 `Current` 承载的兼容分支语义；`currentPageId` 等应迁移为与 metadata 一致的命名（并走 codegen）。
 
-**仍算违规（页面内，摘要）**：`onOpenLegacyTab`、`_LegacyFallbackSheet`、`fromLegacyScope` 等（以脚本正则为准）。
+**仍算违规（页面内，摘要）**：`onOpenCurrentTab`、`_CurrentFallbackSheet`、`fromCurrentScope` 等（以脚本正则为准）。
 
 ## 10. C — dynamic 与 Map&lt;String, dynamic&gt;（目标说明）
 
@@ -139,6 +139,6 @@ bash scripts/gate_repo.sh --scope app
 | 会话 | 职责 |
 |------|------|
 | **A** | 清版本分叉与代际命名（含非页面模型、助手协议键若需改 metadata） |
-| **B** | 清业务 Legacy 标识与兼容路径（Repository / Widget / 常量；`legacyPageId` 与 codegen 对齐） |
+| **B** | 清业务 Current 标识与兼容路径（Repository / Widget / 常量；`currentPageId` 与 codegen 对齐） |
 | **C** | metadata/codegen 强类型化 + 页面/Provider 去 `dynamic` |
 | **D（本规范）** | 维护本文档、`page_abc_governance_allowlist.yaml`、`verify_page_abc_governance.py`、`page_disk_scan_paths.py`、gate/Make 串联 |

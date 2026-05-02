@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `id-collision-guard`
+## Folded current node `id-collision-guard`
 
 # L5 特性：id-collision-guard
 

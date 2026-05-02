@@ -1,0 +1,14 @@
+{
+  "status": "packaged",
+  "env": "prod-gray",
+  "runtimeEnv": "prod-gray",
+  "dataSource": "remote",
+  "gatewayBaseUrl": "https://gray-api.quwoquan.com",
+  "realtimeBaseUrl": "wss://gray-api.quwoquan.com",
+  "avatarCdnBaseUrl": "https://gray-avatar-cdn.quwoquan.com",
+  "imageCdnBaseUrl": "https://gray-image-cdn.quwoquan.com",
+  "videoCdnBaseUrl": "https://gray-video-cdn.quwoquan.com",
+  "uploadBaseUrl": "https://gray-upload.quwoquan.com",
+  "currentUserId": "",
+  "seedManifest": ""
+}

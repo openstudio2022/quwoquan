@@ -3,7 +3,7 @@
   "buckets": {
     "assistant_handwritten": {
       "map_string_dynamic": 1515,
-      "dynamic_keyword": 2979
+      "dynamic_keyword": 2981
     },
     "core_search_repository": {
       "map_string_dynamic": 14,

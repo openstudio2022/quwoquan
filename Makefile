@@ -1,4 +1,5 @@
 .PHONY: gate
+.PHONY: gate-local-gamma
 .PHONY: gate-runtime-media
 .PHONY: gate-runtime-media-full
 .PHONY: verify-app-mock-isolation
@@ -10,9 +11,24 @@
 .PHONY: verify-app-page-abc-governance-enforce-c
 .PHONY: verify-app-page-abc-governance-enforce-all
 .PHONY: verify-app-ui-map-literal-budget
-.PHONY: verify-app-session-b-legacy
+.PHONY: verify-app-session-b-current
 .PHONY: verify-app-assistant-search-weak-typing-ratchet
+.PHONY: verify-retired-terms-zero
 .PHONY: verify-app-ui-app-data-source-mode-ratchet
+.PHONY: verify-app-seed-manifest
+.PHONY: verify-business-env-data-inventory
+.PHONY: verify-app-env-package
+.PHONY: verify-service-env-package
+.PHONY: observability-es-up
+.PHONY: observability-es-down
+.PHONY: observability-es-health
+.PHONY: observability-es-bootstrap
+.PHONY: observability-es-smoke
+.PHONY: verify-reliable-task-topology
+.PHONY: build-app-env
+.PHONY: build-service-env
+.PHONY: test-app-alpha-seed
+.PHONY: test-app-beta-seed
 .PHONY: verify
 .PHONY: codegen
 .PHONY: codegen-app
@@ -40,6 +56,72 @@ verify-app-lib-no-test-import:
 verify-app-ui-app-data-source-mode-ratchet:
 	@python3 scripts/verify_ui_app_data_source_mode_ratchet.py
 
+verify-app-seed-manifest:
+	@python3 scripts/verify_app_seed_manifests.py
+
+verify-business-env-data-inventory:
+	@python3 scripts/verify_business_env_data_inventory.py
+
+verify-app-env-package:
+	@bash scripts/build_app_env_package.sh --env alpha
+	@bash scripts/build_app_env_package.sh --env beta
+	@bash scripts/build_app_env_package.sh --env gamma
+	@bash scripts/build_app_env_package.sh --env prod-gray
+	@bash scripts/build_app_env_package.sh --env prod
+
+verify-service-env-package:
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "FAIL: SERVICE is required. Example: make verify-service-env-package SERVICE=content-service"; \
+		exit 2; \
+	fi
+	@bash scripts/build_service_env_package.sh --service "$(SERVICE)" --env alpha
+	@bash scripts/build_service_env_package.sh --service "$(SERVICE)" --env beta
+	@bash scripts/build_service_env_package.sh --service "$(SERVICE)" --env gamma
+	@bash scripts/build_service_env_package.sh --service "$(SERVICE)" --env prod-gray
+	@bash scripts/build_service_env_package.sh --service "$(SERVICE)" --env prod
+
+observability-es-up:
+	@python3 scripts/observability/es_cli.py up
+
+observability-es-down:
+	@python3 scripts/observability/es_cli.py down
+
+observability-es-health:
+	@python3 scripts/observability/es_cli.py health
+
+observability-es-bootstrap:
+	@python3 scripts/observability/es_cli.py bootstrap
+
+observability-es-smoke:
+	@python3 scripts/observability/es_cli.py smoke
+
+verify-reliable-task-topology:
+	@python3 scripts/verify_module_package_mapping.py
+	@python3 scripts/verify_reliable_task_catalog.py
+	@python3 scripts/verify_reliable_task_retention_policy.py
+	@python3 scripts/verify_module_permission_scope.py
+	@python3 scripts/verify_reliable_task_migration.py
+
+build-app-env:
+	@if [ -z "$(ENV)" ]; then \
+		echo "FAIL: ENV is required. Example: make build-app-env ENV=beta"; \
+		exit 2; \
+	fi
+	@bash scripts/build_app_env_package.sh --env "$(ENV)"
+
+build-service-env:
+	@if [ -z "$(SERVICE)" ] || [ -z "$(ENV)" ]; then \
+		echo "FAIL: SERVICE and ENV are required. Example: make build-service-env SERVICE=content-service ENV=beta"; \
+		exit 2; \
+	fi
+	@bash scripts/build_service_env_package.sh --service "$(SERVICE)" --env "$(ENV)"
+
+test-app-alpha-seed:
+	@cd quwoquan_app && flutter test test/cloud/services/contract_seeded_mock_repository_test.dart
+
+test-app-beta-seed:
+	@python3 scripts/run_app_alpha_beta_seed_matrix.py
+
 # 页面横向质量：矩阵列合法 + 磁盘路径与矩阵一致 + P2 清单 ⊆（与 gate app 段同向子集）
 verify-app-page-horizontal-quality:
 	@python3 scripts/verify_page_horizontal_quality_matrix.py
@@ -65,8 +147,11 @@ verify-app-page-abc-governance-enforce-all:
 verify-app-ui-map-literal-budget:
 	@python3 scripts/verify_ui_map_literal_budget.py
 
-verify-app-session-b-legacy:
-	@python3 scripts/verify_session_b_legacy_governance.py
+verify-app-session-b-current:
+	@python3 scripts/verify_session_b_current_governance.py
+
+verify-retired-terms-zero:
+	@python3 scripts/verify_retired_terms_zero.py
 
 # 助手手写（排除 generated）+ search_repository：Map/dynamic 计数棘轮（见 specs/gates/assistant_search_weak_typing_governance.md）
 verify-app-assistant-search-weak-typing-ratchet:
@@ -75,8 +160,22 @@ verify-app-assistant-search-weak-typing-ratchet:
 gate:
 	@bash scripts/verify_deployment_domain_mapping.sh
 	@bash scripts/verify_topology_contract_regression.sh
+	@$(MAKE) verify-reliable-task-topology
 	@bash scripts/report_deployment_mapping_impact.sh
 	@bash scripts/gate_repo.sh
+
+gate-local-gamma:
+	@if [ "$${LOCAL_GAMMA_DRY_RUN:-0}" = "1" ]; then \
+		python3 scripts/verify_local_gamma_mirror.py --dry-run; \
+	else \
+		if [ "$${LOCAL_GAMMA_SKIP_GATE:-0}" != "1" ]; then $(MAKE) gate; fi; \
+		$(MAKE) verify-app-env-package; \
+		$(MAKE) verify-app-seed-manifest; \
+		bash scripts/start_local_gamma_mirror.sh; \
+		python3 scripts/run_local_gamma_t3.py; \
+		bash scripts/run_local_gamma_t4.sh; \
+		python3 scripts/verify_local_gamma_mirror.py; \
+	fi
 
 gate-runtime-media:
 	@bash scripts/gate_runtime_media.sh
@@ -95,6 +194,7 @@ verify:
 	@bash scripts/verify_runtime_packaging.sh
 	@bash scripts/verify_ff_config_contract.sh
 	@bash scripts/verify_deployment_domain_mapping.sh
+	@$(MAKE) verify-reliable-task-topology
 	@bash scripts/report_deployment_mapping_impact.sh
 	@bash scripts/verify_recommendation_service_contract.sh
 	@bash scripts/verify_topology_contract_regression.sh
@@ -165,33 +265,66 @@ config-slo-gate:
 	fi
 	@bash scripts/config_release_slo_gate.sh --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
-.PHONY: l2-content gate-full test-api-contract
+.PHONY: l2-content gate-full test-api-contract test-api-contract-chat
 
 # 本地 L2 契约测试（content-service，需 MongoDB 在 localhost:27017）
 # 提交前运行以避免 CI 失败。详见 .cursor/rules/03-testing.mdc §2.1
 l2-content:
 	@bash scripts/run_l2_content_tests.sh
 
-# L3：对 integration 的 HTTP 基址（历史变量名 STAGING_*；语义见 deploy/shared/environment_matrix.md）。
-# 需 content + ops 两基址（STAGING_* 或 INTEGRATION_*）与 TEST_AUTH_TOKEN；缺则失败。
+# L3：按统一环境名解析 HTTP 基址。API_CONTRACT_ENV 默认为 gamma。
+# 变量格式：{ALPHA|BETA|GAMMA|PROD_GRAY|PROD}_BASE_URL 与 *_PRODUCT_OPS_BASE_URL。
 test-api-contract:
-	@STAGING_BU="$${STAGING_BASE_URL:-$${INTEGRATION_BASE_URL}}"; \
-	STAGING_OPS="$${STAGING_PRODUCT_OPS_BASE_URL:-$${INTEGRATION_PRODUCT_OPS_BASE_URL}}"; \
-	if [ -z "$$STAGING_BU" ] || [ -z "$$STAGING_OPS" ]; then \
-		echo "[L3] FAIL: set STAGING_BASE_URL+STAGING_PRODUCT_OPS_BASE_URL or INTEGRATION_BASE_URL+INTEGRATION_PRODUCT_OPS_BASE_URL"; \
+	@ENV_NAME="$${API_CONTRACT_ENV:-gamma}"; \
+	case "$$ENV_NAME" in \
+		alpha) BASE_URL="$${ALPHA_BASE_URL:-}"; OPS_BASE_URL="$${ALPHA_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${ALPHA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		beta) BASE_URL="$${BETA_BASE_URL:-}"; OPS_BASE_URL="$${BETA_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${BETA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		gamma) BASE_URL="$${GAMMA_BASE_URL:-}"; OPS_BASE_URL="$${GAMMA_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		prod-gray) BASE_URL="$${PROD_GRAY_BASE_URL:-}"; OPS_BASE_URL="$${PROD_GRAY_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${PROD_GRAY_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		prod) BASE_URL="$${PROD_BASE_URL:-}"; OPS_BASE_URL="$${PROD_PRODUCT_OPS_BASE_URL:-}"; AUTH_TOKEN="$${PROD_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		*) echo "[L3] FAIL: API_CONTRACT_ENV must be one of alpha|beta|gamma|prod-gray|prod, got $$ENV_NAME"; exit 2 ;; \
+	esac; \
+	if [ -z "$$BASE_URL" ] || [ -z "$$OPS_BASE_URL" ]; then \
+		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL and $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_PRODUCT_OPS_BASE_URL"; \
 		exit 2; \
 	fi; \
 	cd quwoquan_app && flutter test test/cloud/content/api_contract_runner.dart \
-		--dart-define=STAGING_BASE_URL=$$STAGING_BU \
-		--dart-define=TEST_AUTH_TOKEN=$(TEST_AUTH_TOKEN) && \
+		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
+		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
+		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
 	cd quwoquan_app && flutter test test/cloud/ops/api_contract_runner.dart \
-		--dart-define=STAGING_PRODUCT_OPS_BASE_URL=$$STAGING_OPS
+		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
+		--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=$$OPS_BASE_URL
+
+test-api-contract-chat:
+	@ENV_NAME="$${API_CONTRACT_ENV:-gamma}"; \
+	case "$$ENV_NAME" in \
+		alpha) BASE_URL="$${ALPHA_BASE_URL:-}"; AUTH_TOKEN="$${ALPHA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		beta) BASE_URL="$${BETA_BASE_URL:-}"; AUTH_TOKEN="$${BETA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		gamma) BASE_URL="$${GAMMA_BASE_URL:-}"; AUTH_TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		prod-gray) BASE_URL="$${PROD_GRAY_BASE_URL:-}"; AUTH_TOKEN="$${PROD_GRAY_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		prod) BASE_URL="$${PROD_BASE_URL:-}"; AUTH_TOKEN="$${PROD_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}" ;; \
+		*) echo "[L3] FAIL: API_CONTRACT_ENV must be one of alpha|beta|gamma|prod-gray|prod, got $$ENV_NAME"; exit 2 ;; \
+	esac; \
+	if [ -z "$$BASE_URL" ]; then \
+		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL"; \
+		exit 2; \
+	fi; \
+	cd quwoquan_app && flutter test test/cloud/chat/api_contract_runner.dart \
+		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
+		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
+		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN
 
 # gate-full: L1+L2+L3（daily CI / pre-release）
 # PR 日常开发用 make gate；pre-release 用 make gate-full。
 gate-full:
 	@bash scripts/gate_repo.sh
-	@$(MAKE) test-api-contract
+	@if [ -n "$${GAMMA_BASE_URL:-}" ] && [ -n "$${GAMMA_PRODUCT_OPS_BASE_URL:-}" ]; then \
+		$(MAKE) test-api-contract; \
+	else \
+		echo "[gate-full] GAMMA_* not set; running local gamma T3/T4 mirror gate"; \
+		$(MAKE) gate-local-gamma LOCAL_GAMMA_SKIP_GATE=1; \
+	fi
 
 # Deploy to integration. CLOUD_PROVIDER=aliyun|volcengine|huaweicloud (default: aliyun).
 # Usage: make deploy-integration [CLOUD_PROVIDER=volcengine]

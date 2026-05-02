@@ -2,16 +2,16 @@
 
 ## 设计动因
 
-该 Scenario 保留了历史名字 `xiaoqu-entry-handoff`，但最新 UX 已经把它冻结为独立网络结果页里的 `小趣搜` assistant 结果 tab。设计阶段必须把这次改动严格限制在 `metadata + UI + application + cloud client` 的 typed result 路径上，否则很容易再次退回为 runtime 字符串分流或纯 handoff 占位。
+该 Scenario 保留了记录名字 `xiaoqu-entry-handoff`，但最新 UX 已经把它冻结为独立网络结果页里的 `小趣搜` assistant 结果 tab。设计阶段必须把这次改动严格限制在 `metadata + UI + application + cloud client` 的 typed result 路径上，否则很容易再次退回为 runtime 字符串分流或纯 handoff 占位。
 
 ## 最新实现基线（2026-03-22）
 
-以下口径覆盖下文所有历史“问小趣入口”表述：
+以下口径覆盖下文所有记录“问小趣入口”表述：
 
 - `小趣搜` 位于独立网络结果页最左侧 tab，而不是搜索首页快捷入口。
 - `小趣搜` 必须返回真实 assistant 摘要、引用与结果强度，不是空跳转。
 - 用户可从 `小趣搜` 结果继续打开引用对象，必要时再 continuation 到 assistant 会话。
-- `小趣搜` 不单独新增 AI query 历史模型。
+- `小趣搜` 不单独新增 AI query 记录模型。
 
 ## 上游输入评审
 
