@@ -10,7 +10,7 @@
 /// - 语义分类、路由、文案必须由 planner 输出、asset、tool metadata 提供。
 /// - 助理协议 metadata 真相源统一位于 `quwoquan_service/contracts/metadata/assistant/`。
 /// - `lib/assistant/generated/` 仅允许 codegen 写入，禁止手写。
-/// - `assistant_turn` 是唯一允许的助理输出契约版本，禁止新增任何旧版本读取兼容。
+/// - `assistant_turn` 是唯一允许的助理输出契约版本，禁止新增任何过往版本本读取兼容。
 /// - 当前实施阶段仅生成端侧 Dart 协议产物并只做端侧校验，但 schema 设计必须保持端云一体化。
 library;
 

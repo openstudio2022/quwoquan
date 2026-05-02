@@ -34,7 +34,7 @@
 |----------|--------|----------|
 | 微信 | 切换身份后消息与关系主体必须稳定 | 不照搬账号切换与通讯录语义 |
 | 小红书 | 评论、内容创作都要感知当前作者身份 | 不照搬内容入口 IA |
-| 微博 | 公开互动和运营主体的一致性 | 不照搬历史 owner 暴露路径 |
+| 微博 | 公开互动和运营主体的一致性 | 不照搬记录 owner 暴露路径 |
 
 ### 内部对标
 
@@ -78,7 +78,7 @@
 
 缺点：
 
-- 历史对象与回放场景无法稳定恢复。
+- 记录对象与回放场景无法稳定恢复。
 - 通知和助手会话不能精确判断 drift。
 - 缺乏对弱网与重试的恢复能力。
 
@@ -94,13 +94,13 @@
 优点：
 
 - 与 PRD、Journey 设计、助手约束完全一致。
-- 同时兼顾在线动作和历史回放。
+- 同时兼顾在线动作和记录回放。
 - 最适合做 fail closed 与 telemetry。
 
 缺点：
 
 - 需要同时改 metadata、provider、cloud client 与部分下游对象。
-- 第一版要处理 legacy 字段兼容。
+- 第一版要处理 current 字段兼容。
 
 ## 选型决策
 
@@ -165,7 +165,7 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 - `avatarUrl`
 - `snapshotVersion`
 
-这保证 retired persona 或 username 变更后，历史对象仍可稳定渲染。
+这保证 retired persona 或 username 变更后，记录对象仍可稳定渲染。
 
 ### KD4：显式 override 是受控行为，不是隐式 fallback
 
@@ -220,7 +220,7 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 
 ### 兼容逻辑与退出条件
 
-- 允许短期保留“legacy session personaId -> profileSubjectId”的 adapter
+- 允许短期保留“current session personaId -> profileSubjectId”的 adapter
 - 退出条件：所有 assistant 入口、回放与工具请求都直接携带 typed persona context
 
 ## metadata / codegen 方案
@@ -254,19 +254,19 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 
 - 新写链路对内统一优先写 `personaId`
 - `profileSubjectId` 保留为公开读取与兼容投影字段
-- `subAccountId / senderPersonaId` 只作为 legacy alias 保留，但必须能映射回当前 `personaId`
+- `subAccountId / senderPersonaId` 只作为 current alias 保留，但必须能映射回当前 `personaId`
 - 新对象增加 `contextVersion` 与 `personaSnapshotVersion`
 
 ### 迁移 / 回填
 
-- 旧内容/评论/消息历史对象不重写主体，只补充读取优先级与 snapshot adapter
-- assistant 旧会话若只有 legacy persona 字段，读取时先映射成 `personaId`，再生成兼容 `profileSubjectId`
+- 旧内容/评论/消息记录对象不重写主体，只补充读取优先级与 snapshot adapter
+- assistant 旧会话若只有 current persona 字段，读取时先映射成 `personaId`，再生成兼容 `profileSubjectId`
 - circle 若当前仍是 app/local 状态，先统一消费 provider 中的 typed context，等正式服务化后迁到 metadata contract
 
 ### 退出条件
 
 - 关键动作、通知回放、assistant 会话全部直接依赖 typed context
-- legacy owner fallback 路径完全下线
+- current owner fallback 路径完全下线
 
 ## feature flag、观测、SLO 验证与回滚方案
 
@@ -285,7 +285,7 @@ user 域统一提供 `ActivePersonaContextView`，至少包含：
 回滚原则：
 
 - 关闭开关后退回单 active persona 安全基线
-- 已持久化的 `profileSubjectId` 与历史快照不回滚
+- 已持久化的 `profileSubjectId` 与记录快照不回滚
 - 助手只关闭 persona-aware session context，不得回滚成 runtime 文本判断
 
 ## TDD / ATDD 策略

@@ -46,7 +46,7 @@
 
 ---
 
-## 3. 分阶段规划（与历史清理对齐）
+## 3. 分阶段规划（与记录清理对齐）
 
 | 阶段 | 内容 | 退出标准 |
 |------|------|----------|
@@ -67,7 +67,7 @@
 |------|----------------------|
 | `lib/cloud/services/{domain}/mock/*.dart` | `lib/ui/**` import `.../mock/` |
 | `Mock*Repository` 内使用 `*MockData` | `lib/core/**`（除 allowlist 过渡期）import `.../mock/` |
-| `test/**`、`integration_test/**` 使用 fakes | `lib/ui/**/models/**` 内 **域名** `static const` 列表（头像 URL、业务 id） |
+| `test/**` 使用 fakes | `lib/ui/**/models/**` 内 **域名** `static const` 列表（头像 URL、业务 id） |
 | `core/mock/prototype_mock_data.dart` **仅**被 Mock 层与过渡期 allowlist 引用 | 正式发布 **依赖** `prototype_mock_data` 的 Remote 路径 |
 
 ---
@@ -100,7 +100,7 @@
 |----|------|----------|
 | **R1** | **默认数据源为云侧**：进程启动后有效模式为 **Remote**（未显式覆盖时）；与 `APP_DATA_SOURCE`、Release 默认策略一致。 | 集成/手测 + 代码审阅 `AppDataSourceModeNotifier` |
 | **R2** | **无「切 Mock」用户入口**：任意面向用户的界面（含「开发者」类设置）**不得**在 Release 下提供 Mock/Remote 切换或等价开关。 | 代码审阅 `kReleaseMode` / flavor；UI 测试可选 |
-| **R3** | **无测试目录进包**：`test/`、`integration_test/` **不**作为应用入口依赖；发布产物不单独打包测试源码（Flutter 默认即如此）。 | 构建产物检查 |
+| **R3** | **无测试目录进包**：`test/` **不**作为应用入口依赖；发布产物不单独打包测试源码（Flutter 默认即如此）。 | 构建产物检查 |
 | **R4** | **业务壳层不直连 mock 目录**：`lib/ui`、`lib/app`、`lib/core` **不得** `import .../cloud/services/*/mock/`；不得内嵌门禁规则所禁的域名 `prototype*` 行。 | `python3 scripts/verify_ui_mock_isolation.py` |
 | **R5** | **正式构建显式 remote**：CI 上生成上架/交付用二进制时 **必须** 传入 `--dart-define=APP_DATA_SOURCE=remote`（或与策略等价的 flavor/入口约定）。 | CI 配置审阅 |
 | **R6** | **伪 Remote 不得充当线上路径**：`Remote*Repository` 不得将生产路径 **整表委托** Mock 内存数据（P2 退出标准）。 | 代码审阅 + 契约测试 |
@@ -115,12 +115,13 @@
 | **D2** | **切换入口仅非 Release**：数据源开关仅在 **非 `kReleaseMode`** 下展示（或 dev flavor）；与 §5 上文「开发者窗口」约定一致。 | 代码审阅 |
 | **D3** | **可选编译期默认**：`--dart-define=APP_DATA_SOURCE=mock` 可用于本地/CI 默认 Mock，**不得**作为商店流水线默认值。 | CI 与本地脚本分离 |
 | **D4** | **Mock 数据唯一真相**：域名假数据仅在 `Mock*Repository`、`cloud/services/*/mock/`、`test/**`（及 `core/mock/prototype_mock_data.dart` 过渡期规则）；UI 只经 Repository。 | `verify_ui_mock_isolation` + PR 自检 |
+| **D5** | **端云契约驱动测试数据**：新增 alpha/beta/gamma 用例先写 `contracts/metadata/**/test_fixtures/scenarios/*.json`，alpha MockRepository 从 seed 初始化，beta/gamma 云侧 reset+seed 后走 Remote。 | `verify_contract_mock_data_inventory.py` + 目标 integration |
 
 #### C. 「测试代码」与「业务代码」用语边界（避免误伤）
 
 | 类别 | 是否视为「不得进发布的测试代码」 | 说明 |
 |------|-----------------------------------|------|
-| `test/`、`integration_test/` | **是**（不进业务包） | 标准 Flutter 布局 |
+| `test/` | **是**（不进业务包） | 端侧测试统一位于 `test/common|alpha|beta|gamma|patrol` |
 | `TestKeys`、语义化 `Key` | **否**（允许） | 自动化 / 可及性用，**非**单元测试源码 |
 | `debugPrint`、断言 | **否**（允许，但应克制） | 不替代正式日志管线；大量调试输出应门控 |
 | `Mock*Repository`、`*MockData` | **实现上在 lib 内** | **运行时** Release 默认不走；**字节级剔除** 依赖 P4 |
@@ -228,9 +229,10 @@ quwoquan_app/test/support/
 - **规则**：`test/support/**` 内 **不得** `import flutter_test` 以外的 app 代码仅通过 **公开 API**；若需测 `lib` 私有实现，应通过 **同测目录** 下的 `*_test.dart` 或 **export 测试专用 API**（避免回到 §4.1 禁止的同文件混写）。  
 - **contract 测试**：继续放在 `test/cloud/{domain}/contract/`，数据源用 **`Mock*Repository` 或 `test/support/fakes`**，**不**从 `lib/.../mock/` 再拷一份 Map。
 
-### 9.3 与 `integration_test/` 的关系
+### 9.3 与环境测试目录的关系
 
-- E2E / Patrol 等留在 **`quwoquan_app/integration_test/`**（或仓库约定路径）；**夹具** 仍可复用 `test/support/fixtures`，通过 **相对路径或 package 资源** 引用。
+- E2E / Patrol 等统一放在 **`quwoquan_app/test/`** 下：环境无关放 `test/common`，本地端侧 mock 放 `test/alpha`，本地端云集成放 `test/beta`，云侧集成放 `test/gamma`，真机系统能力放 `test/patrol`。
+- 是否跑设备/模拟器由 runner 的 `-d <device>` 参数决定，不再通过目录名表达。
 
 ### 9.4 移植清单（混入代码落点速查）
 

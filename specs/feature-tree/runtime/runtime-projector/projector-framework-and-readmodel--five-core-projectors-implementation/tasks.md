@@ -13,7 +13,7 @@
 - [ ] 测试：RecommendFeatureProjector 契约测试
 - [ ] gate：集成到 make gate
 
-## Folded legacy node `catchup-idempotency-and-lag-monitoring`
+## Folded current node `catchup-idempotency-and-lag-monitoring`
 
 # 开发任务：catchup-idempotency-and-lag-monitoring
 
@@ -28,4 +28,4 @@
 - [ ] gate：集成到 make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `catchup-idempotency-and-lag-monitoring` (from `runtime/runtime-projector/projector-framework-and-readmodel/five-core-projectors-implementation/catchup-idempotency-and-lag-monitoring`)
+- [ ] Migrated current node: `catchup-idempotency-and-lag-monitoring` (from `runtime/runtime-projector/projector-framework-and-readmodel/five-core-projectors-implementation/catchup-idempotency-and-lag-monitoring`)

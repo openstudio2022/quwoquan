@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_cloud_contracts/circle_repository.dart'
@@ -39,7 +40,7 @@ List<PostBaseDto> _decodeCircleFeedMaps(Iterable<Map<String, dynamic>> items) {
     try {
       out.add(postBaseDtoFromMap(Map<String, dynamic>.from(m)));
     } catch (_) {
-      // 跳过无法映射为 PostBaseDto 的 wire 行（与旧版尽力解析一致）
+      // 跳过无法映射为 PostBaseDto 的 wire 行（与过往版本尽力解析一致）
     }
   }
   return out;

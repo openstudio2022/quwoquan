@@ -9,7 +9,7 @@
 ## 验收标准
 - A1/A6/A7 主验收。
 
-## Folded legacy node `dynamic-refresh-gray-rollback-audit`
+## Folded current node `dynamic-refresh-gray-rollback-audit`
 
 # L5 特性：dynamic-refresh-gray-rollback-audit
 

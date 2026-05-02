@@ -15,7 +15,7 @@
 - [ ] 测试：event_spy 自测（捕获/断言）
 - [ ] gate：集成到 make gate
 
-## Folded legacy node `codegen-test-and-ci-integration`
+## Folded current node `codegen-test-and-ci-integration`
 
 # 开发任务：codegen-test-and-ci-integration
 
@@ -28,4 +28,4 @@
 - [ ] gate：make test-contract 集成到 make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `codegen-test-and-ci-integration` (from `runtime/runtime-testinfra/test-engine-and-fixture-framework/embedded-pg-testcontainers-miniredis/codegen-test-and-ci-integration`)
+- [ ] Migrated current node: `codegen-test-and-ci-integration` (from `runtime/runtime-testinfra/test-engine-and-fixture-framework/embedded-pg-testcontainers-miniredis/codegen-test-and-ci-integration`)

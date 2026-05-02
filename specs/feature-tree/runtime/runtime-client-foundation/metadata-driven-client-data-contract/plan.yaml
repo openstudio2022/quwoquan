@@ -62,7 +62,7 @@ slices:
     dev_note: 本切片完成「全页面路径 ⊆ 清单」登记；各页 DTO 化仍分域迭代
 
   - id: slice-5-optional-static-gate
-    title: verify_metadata_driven_ui_gate.py — 清单路径存在性 + 可选 STRICT legacy_map
+    title: verify_metadata_driven_ui_gate.py — 清单路径存在性 + 可选 STRICT current_map
     outputs:
       - scripts/verify_metadata_driven_ui_gate.py
       - scripts/gate_repo.sh

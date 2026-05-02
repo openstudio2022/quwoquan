@@ -74,6 +74,6 @@ level_acceptance:
     - T1.1
     - T2
     - L1
-    deferred_reason: 现阶段频道管理功能先行交付，一级 Tab 锚定状态机恢复复杂度较高，短期作为遗留问题单独处理
+    deferred_reason: 现阶段频道管理功能先行交付，一级 Tab 锚定状态机恢复复杂度较高，短期作为存量问题单独处理
     tests:
     - quwoquan_app/lib/ui/circle/pages/circles_page.dart

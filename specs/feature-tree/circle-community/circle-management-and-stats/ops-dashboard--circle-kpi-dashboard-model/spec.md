@@ -11,7 +11,7 @@
 - A7：契约一致性校验通过。
 - A8：对应自动化测试映射完整。
 
-## Folded legacy node `dashboard-data-quality-guard`
+## Folded current node `dashboard-data-quality-guard`
 
 # L5 特性：dashboard-data-quality-guard
 

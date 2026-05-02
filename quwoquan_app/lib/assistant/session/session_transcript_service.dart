@@ -7,7 +7,7 @@ import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_t
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 
-/// 从 [AssistantSessionWireDetail] 构建时间轴行（分页与 Controller 历史加载一致）。
+/// 从 [AssistantSessionWireDetail] 构建时间轴行（分页与 Controller 记录加载一致）。
 class AssistantSessionHistoryLoadResult {
   const AssistantSessionHistoryLoadResult({
     required this.visibleRows,
@@ -24,7 +24,7 @@ Future<AssistantSessionHistoryLoadResult> loadTranscriptRowsFromSessionDetail({
   required int pageSize,
   required String profileSubjectId,
   required String Function(Map<String, dynamic> wire)
-      normalizeAssistantContentForModel,
+  normalizeAssistantContentForModel,
 }) async {
   final sessionId = detail.sessionId;
   final messages = detail.messages;
@@ -41,9 +41,7 @@ Future<AssistantSessionHistoryLoadResult> loadTranscriptRowsFromSessionDetail({
             !isUser &&
             (!resolvePersistedAssistantTimeline(item).isEmpty ||
                 isCanonicalPersistedAssistantTurnMessage(item));
-        if (!isUser &&
-            normalizedContent.trim().isEmpty &&
-            !hasPersistedTurn) {
+        if (!isUser && normalizedContent.trim().isEmpty && !hasPersistedTurn) {
           return null;
         }
         serial += 1;

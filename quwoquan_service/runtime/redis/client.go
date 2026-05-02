@@ -1,6 +1,6 @@
 // Package redis provides a unified Redis client abstraction with scene-based
 // routing, transparent standalone/cluster/memory mode switching, and adapter
-// bridges for legacy interfaces (repository.CacheAdapter, recommendation.RedisClient).
+// bridges for current interfaces (repository.CacheAdapter, recommendation.RedisClient).
 //
 // Key design: upper layers access Redis through Router.Scene(name) or
 // Router.ForKey(key) — the topology (standalone vs cluster, which instance)
@@ -47,6 +47,12 @@ type Client interface {
 	Publish(ctx context.Context, channel string, message string) error
 	Subscribe(ctx context.Context, channels ...string) (Subscription, error)
 
+	// ── Streams ─────────────────────────────────────────────
+	XGroupCreateMkStream(ctx context.Context, stream string, group string, start string) error
+	XAdd(ctx context.Context, stream string, values map[string]string) (string, error)
+	XReadGroup(ctx context.Context, group string, consumer string, streams map[string]string, count int64, block time.Duration) ([]StreamMessage, error)
+	XAck(ctx context.Context, stream string, group string, ids ...string) error
+
 	// ── Pipeline ────────────────────────────────────────────
 	Pipeline(ctx context.Context) Pipeliner
 
@@ -65,6 +71,12 @@ type Subscription interface {
 type Message struct {
 	Channel string
 	Payload string
+}
+
+type StreamMessage struct {
+	Stream string
+	ID     string
+	Values map[string]string
 }
 
 // Pipeliner batches multiple commands into a single round trip.

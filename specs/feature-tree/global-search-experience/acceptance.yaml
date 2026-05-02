@@ -24,10 +24,10 @@ scope:
 
 level_acceptance:
   C1:
-    title: 全局搜索能力归属与历史节点清理完成冻结
+    title: 全局搜索能力归属与记录节点清理完成冻结
     done_when:
       - 全局搜索拥有独立 L1 能力路径，不再挂靠 discovery-content
-      - chat 历史搜索节点从特性树中移除，不再保留平行治理路径
+      - chat 记录搜索节点从特性树中移除，不再保留平行治理路径
       - "content、messages、circle、user、assistant 的职责边界在新 L1 中明确，且首页/搜索统一入口词冻结为 `群组`"
     evidence:
       primary:

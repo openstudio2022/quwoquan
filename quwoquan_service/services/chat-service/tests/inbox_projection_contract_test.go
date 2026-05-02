@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	runtimemedia "quwoquan_service/runtime/media"
+	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
 	"quwoquan_service/services/chat-service/internal/application"
 	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
@@ -23,15 +25,43 @@ func newInboxTestEnv(t *testing.T) (
 	t.Helper()
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
-	groupAvatarMedia := runtimemedia.NewGroupAvatarService(redisRouter.Scene("general"), "")
-	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
-	groupAvatarScheduler := application.NewRedisGroupAvatarTaskScheduler(
+	groupAvatarMedia := runtimemedia.NewGroupAvatarService(
 		redisRouter.Scene("general"),
+		"http://127.0.0.1:18081",
+		testChatMediaRoot,
+	)
+	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
+	catalog, err := reliabletask.LoadCatalog("../../../../deploy/shared/reliable_task_module_catalog.yaml")
+	if err != nil {
+		t.Fatalf("load reliable task catalog: %v", err)
+	}
+	reliableTaskStore := reliabletask.NewMongoStore(mongoDB)
+	if err := reliableTaskStore.EnsureIndexes(context.Background()); err != nil {
+		t.Fatalf("ensure reliable task indexes: %v", err)
+	}
+	readyIndex, err := reliabletask.NewRedisReadyIndex(reliabletask.RedisReadyIndexConfig{
+		Client: redisRouter.Scene("reliabletask"),
+		Stream: "reliabletask:chat:avatar:ready:inbox",
+		Group:  "chat.group_avatar_worker.inbox",
+		Queue:  "reliabletask.chat.avatar",
+	})
+	if err != nil {
+		t.Fatalf("new redis ready index: %v", err)
+	}
+	if err := readyIndex.Ensure(context.Background()); err != nil {
+		t.Fatalf("ensure redis ready index: %v", err)
+	}
+	groupAvatarScheduler := application.NewReliableGroupAvatarTaskScheduler(
+		reliableTaskStore,
+		catalog,
 		chatStore,
 		nil,
 		groupAvatarMedia,
 		userSyncService,
 		nil,
+		application.WithReliableGroupAvatarDelay(80*time.Millisecond),
+		application.WithReliableGroupAvatarTick(40*time.Millisecond),
+		application.WithReliableGroupAvatarReadyIndex(readyIndex),
 	)
 	_ = groupAvatarScheduler.Start(context.Background())
 

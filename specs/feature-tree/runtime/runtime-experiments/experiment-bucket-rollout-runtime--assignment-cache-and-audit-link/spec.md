@@ -9,7 +9,7 @@
 ## 验收标准
 - A1/A6/A7 主验收。
 
-## Folded legacy node `fallback-and-rollback-strategy`
+## Folded current node `fallback-and-rollback-strategy`
 
 # L5 特性：fallback-and-rollback-strategy
 

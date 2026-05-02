@@ -365,7 +365,7 @@ class BootstrapPhase implements Phase {
         <String, dynamic>{'role': 'user', 'content': transcript},
       ],
       maxIterations: 1,
-      goal: '压缩以上对话历史为简洁摘要',
+      goal: '压缩以上对话记录为简洁摘要',
       templateId: 'summarize_session',
       templateVersion: '',
       templateContext: const <String, dynamic>{},
@@ -538,7 +538,9 @@ class BootstrapPhase implements Phase {
         timezone: timezone,
         locale: locale,
         granularity:
-            referenceNowIso.isNotEmpty || timezone.isNotEmpty || locale.isNotEmpty
+            referenceNowIso.isNotEmpty ||
+                timezone.isNotEmpty ||
+                locale.isNotEmpty
             ? ContextGranularity.coarse
             : fallbackTime.granularity,
       ),
@@ -551,7 +553,8 @@ class BootstrapPhase implements Phase {
             : fallback.device.model,
         appVersion: fallback.device.appVersion,
         granularity:
-            request.deviceOs.trim().isNotEmpty || request.deviceModel.trim().isNotEmpty
+            request.deviceOs.trim().isNotEmpty ||
+                request.deviceModel.trim().isNotEmpty
             ? ContextGranularity.coarse
             : fallback.device.granularity,
       ),
@@ -685,7 +688,9 @@ class BootstrapPhase implements Phase {
       tasks: plans
           .map(
             (plan) => TaskNode(
-              taskId: plan.id.trim().isNotEmpty ? plan.id.trim() : 'task_previous',
+              taskId: plan.id.trim().isNotEmpty
+                  ? plan.id.trim()
+                  : 'task_previous',
               intentId: primaryIntentId,
               toolName: 'web_search',
               toolArgs: TaskToolArgs(<String, Object?>{

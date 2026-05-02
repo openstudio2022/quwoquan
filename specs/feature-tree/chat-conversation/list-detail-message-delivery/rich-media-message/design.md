@@ -516,7 +516,7 @@ class MediaOfflineItem {
 | 视频/文件转发 | 消息转发特性启动 | S3 |
 | 自定义表情包/贴纸 | 社交互动增强迭代 | E4 |
 
-## 遗留带规划任务
+## 存量带规划任务
 
 - `UploadPolicy.chatVideo.maxDurationMs` 需从 300000 → 600000（本次交付内变更）
 - 文件类型图标颜色需注册到 `AppColors` 设计系统（本次先用临时方案，后续规范化）

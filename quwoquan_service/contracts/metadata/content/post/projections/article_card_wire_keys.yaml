@@ -1,8 +1,8 @@
-# legacy `cards[]` 内嵌对象的 JSON 键（文章详情投影）。
+# current `cards[]` 内嵌对象的 JSON 键（文章详情投影）。
 # 生成 ArticleCardWireKeys；与 article_detail_wire_keys.cards 数组元素形状对齐。
 version: 1
 dart_class: ArticleCardWireKeys
-description: "文章详情 legacy cards[] 子 map 键名 SSOT"
+description: "文章详情 current cards[] 子 map 键名 SSOT"
 keys:
   - const_name: title
     json_key: title

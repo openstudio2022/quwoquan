@@ -2,10 +2,10 @@
 
 ## Completed Scope
 
-- R17: Removed legacy recovery naming from service governance docs, React policy config/code, assistant assets, and web search error classification.
+- R17: Removed current recovery naming from service governance docs, React policy config/code, assistant assets, and web search error classification.
 - R18: Assistant tool implementation failures now carry explicit `RuntimeFailure` via `assistantToolRuntimeFailure`; `effectiveRuntimeFailure` remains only as a defensive boundary fallback.
 - R19: Ops domain pages use NodeNext-explicit runtime/API imports, and `npm test` compiles all Ops pages that participate in the runtime error surface.
-- R20: Cutover guard now blocks legacy retry naming, text-based assistant session filtering, assistant tool failures without `RuntimeFailure`, Ops extensionless runtime/API imports, Ops `.test-dist`, and existing runtime contract regressions.
+- R20: Cutover guard now blocks current retry naming, text-based assistant session filtering, assistant tool failures without `RuntimeFailure`, Ops extensionless runtime/API imports, Ops `.test-dist`, and existing runtime contract regressions.
 
 ## Validation Commands
 

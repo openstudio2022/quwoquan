@@ -9,7 +9,7 @@
 ## 验收标准
 - A5：聚合结果可支持策略评估与对比分析。
 
-## Folded legacy node `aggregation-quality-guard`
+## Folded current node `aggregation-quality-guard`
 
 # L5 特性：aggregation-quality-guard
 

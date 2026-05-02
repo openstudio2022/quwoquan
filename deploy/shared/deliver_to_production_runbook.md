@@ -1,13 +1,13 @@
 # Deliver → Prod 端到端运行手册
 
-**五环境、波次与 `STAGING_*` 含义**见 [environment_matrix.md](environment_matrix.md)（与本文阶段编号一致：integration → L3/L4 → prod 灰度/全量）。
+**五环境与波次**见 [environment_matrix.md](environment_matrix.md)（与本文阶段编号一致：local-gamma mirror → 云侧 gamma → T3/T4 → prod 灰度/全量）。
 
 ## 1. 目标
 
 从特性到入库（L1/L2 自测通过），再到集成验证（L3/L4），再到生产端到端打通，含灰度/滚动发布。
 
 ```
-特性 → dev 完成自验证并自动归档 → commit 入库(L1/L2) → deploy 到 integration → L3/L4 验证 → 灰度到 prod
+特性 → dev 完成本地 T1/T2/T3/T4 左移验证并自动归档 → commit 入库 → deploy 到 gamma → 云侧 T3/T4 验证 → 灰度到 prod
 ```
 
 ---
@@ -16,7 +16,7 @@
 
 | 阶段 | 命令/动作 | 门禁 | 输出 |
 |------|-----------|------|------|
-| 1. 开发+入库 | `/dev` → `/commit`（或 `/deliver`） | G2 → G3 → G4 | `/dev` 完成四层自验证、gray-release ready 与自动归档；`/commit` 完成入库 |
+| 1. 开发+入库 | `/dev` → `/commit`（或 `/deliver`） | G2 → G3 → G4 | `/dev` 完成四层自验证、gray-release ready 与自动归档；`/commit` 前本地 `gate-local-gamma` 通过并完成入库 |
 | 2. 部署 integration | CI/CD 或手动 | G5a | integration 环境运行目标版本 |
 | 3. 集成验证 | L3 + L4 测试 | G5b | L3/L4 通过 |
 | 4. 灰度到 prod | `config-gray-rollout` | G5c | prod 灰度完成，SLO 通过 |
@@ -28,12 +28,30 @@
 ### 3.1 Deliver 阶段完成
 
 - 代码已合入 dev1.0（日常）或 main（定时 merge 后）；分支策略见 `deploy/shared/branch_strategy.md`
-- `make gate` 通过（L1a+b+c + L2）。**AI 编程助手提交前必须自动执行 L1+L2 门禁**，不得跳过；见 `/.cursor/commands/commit.md`
+- `make gate-local-gamma` 通过并生成 `artifacts/local-gamma/report.json`。该命令必须覆盖本地 `T1 -> T4`，不得只用 `make gate` 替代；见 `/.cursor/commands/commit.md`
 - `deploy/shared/process_domain_mapping.yaml` 合法，`verify_deployment_domain_mapping.sh` 通过
+
+### 3.1.1 local-gamma mirror（提交前左移）
+
+提交前必须先在本机运行 local-gamma mirror：
+
+```bash
+make gate-local-gamma
+```
+
+通过判据：
+
+- `T1`：metadata、拓扑、环境包、seed manifest、错误码、静态语义与生成物校验通过。
+- `T2`：Flutter/Go/Ops 模块、Widget、Provider/Journey 测试通过。
+- `T3`：本地 gamma 镜像栈真实 API、真实存储副作用、错误响应与 RemoteRepository smoke 通过。
+- `T4`：至少一台模拟器或真机 Patrol 核心旅程通过。
+- 报告：`artifacts/local-gamma/report.json` 状态为 `passed`。
+
+缺少本地 DNS/TLS、设备、服务依赖或 seed/reset 能力时，状态必须为 `GATE_BLOCK`，不得继续提交。
 
 ### 3.2 部署环境
 
-- **integration**：staging API 可访问，`STAGING_BASE_URL`、`TEST_AUTH_TOKEN` 已配置
+- **gamma**：gamma API 可访问，`GAMMA_BASE_URL`、`GAMMA_PRODUCT_OPS_BASE_URL`、`GAMMA_TEST_AUTH_TOKEN` 已配置
 - **prod**：K8s 集群就绪（阿里云 ACK / 火山引擎 VKE / 华为云 CCE），`CONFIG_VERSION`、`IMAGE_VERSION` 已确定
 - **多云切换**：通过 `CLOUD_PROVIDER=aliyun|volcengine|huaweicloud` 选择 overlay，见 `deploy/cloud-providers/`
 
@@ -79,27 +97,32 @@ make deploy-integration [CLOUD_PROVIDER=volcengine]
 3) 验证 integration 可达：
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}" $STAGING_BASE_URL/health
+curl -s -o /dev/null -w "%{http_code}" $GAMMA_BASE_URL/healthz
 ```
 
 ---
 
-## 5. G5b：L3/L4 集成验证
+## 5. G5b：T3/T4 集成验证
 
-### 5.1 L3 API Contract
+### 5.1 T3 API Contract
 
 ```bash
-STAGING_BASE_URL=<integration-api-url> TEST_AUTH_TOKEN=<token> make test-api-contract
+API_CONTRACT_ENV=gamma \
+GAMMA_BASE_URL=<gamma-api-url> \
+GAMMA_PRODUCT_OPS_BASE_URL=<gamma-product-ops-url> \
+GAMMA_TEST_AUTH_TOKEN=<token> \
+make test-api-contract
 ```
 
 失败 → 不得进入 G5c。
 
-### 5.2 L4 Patrol（真机/模拟器）
+### 5.2 T4 Patrol（真机/模拟器）
 
 ```bash
 cd quwoquan_app && patrol test test/patrol/ \
-  --dart-define=ENV=staging \
-  --dart-define=STAGING_BASE_URL=<integration-api-url> \
+  --dart-define=APP_RUNTIME_ENV=gamma \
+  --dart-define=API_CONTRACT_ENV=gamma \
+  --dart-define=API_CONTRACT_BASE_URL=<gamma-api-url> \
   --dart-define=TEST_AUTH_TOKEN=<token>
 ```
 
@@ -156,11 +179,11 @@ make config-rollback SERVICE=seed-box TO_CONFIG=<rollback-version>
 
 ```
 ☐ deliver 完成，代码已入库 dev1.0 或 main（分支策略见 branch_strategy.md）
-☐ make gate 通过（L1+L2）
+☐ make gate-local-gamma 通过（本地 T1/T2/T3/T4）并生成 artifacts/local-gamma/report.json
 ☐ verify_deployment_domain_mapping.sh 通过
 ☐ integration 已部署目标版本
-☐ L3 test-api-contract 通过
-☐ L4 patrol 通过（或 FTL 通过）
+☐ T3 test-api-contract 通过
+☐ T4 patrol 通过（或 FTL 通过）
 ☐ 灰度：初始灰度（1 pod，全自动）→ Carry-on 100%（审批后执行）
 ☐ 每步 SLO 卡点通过
 ☐ prod 100% 后监控稳定

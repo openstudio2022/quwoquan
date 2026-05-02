@@ -15,8 +15,20 @@ type memoryClient struct {
 	hashes  map[string]map[string]string
 	sets    map[string]map[string]struct{}
 	zsets   map[string]map[string]float64
+	streams map[string]*memStream
 	subs    map[string][]chan Message
 	subsMu  sync.RWMutex
+}
+
+type memStream struct {
+	next    int64
+	groups  map[string]*memStreamGroup
+	entries []StreamMessage
+}
+
+type memStreamGroup struct {
+	lastDelivered int
+	pending       map[string]StreamMessage
 }
 
 type memEntry struct {
@@ -36,6 +48,7 @@ func NewMemoryClient() Client {
 		hashes:  make(map[string]map[string]string),
 		sets:    make(map[string]map[string]struct{}),
 		zsets:   make(map[string]map[string]float64),
+		streams: make(map[string]*memStream),
 		subs:    make(map[string][]chan Message),
 	}
 }
@@ -442,6 +455,125 @@ func (s *memSub) Close() error {
 	}
 	close(s.ch)
 	return nil
+}
+
+func (m *memoryClient) XGroupCreateMkStream(_ context.Context, stream string, group string, start string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ms := m.ensureStream(stream)
+	if _, ok := ms.groups[group]; !ok {
+		lastDelivered := 0
+		if start == "$" {
+			lastDelivered = len(ms.entries)
+		}
+		ms.groups[group] = &memStreamGroup{
+			lastDelivered: lastDelivered,
+			pending:       map[string]StreamMessage{},
+		}
+	}
+	return nil
+}
+
+func (m *memoryClient) XAdd(_ context.Context, stream string, values map[string]string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ms := m.ensureStream(stream)
+	ms.next++
+	id := intToStr(ms.next) + "-0"
+	copied := make(map[string]string, len(values))
+	for key, value := range values {
+		copied[key] = value
+	}
+	ms.entries = append(ms.entries, StreamMessage{Stream: stream, ID: id, Values: copied})
+	return id, nil
+}
+
+func (m *memoryClient) XReadGroup(
+	_ context.Context,
+	group string,
+	consumer string,
+	streams map[string]string,
+	count int64,
+	block time.Duration,
+) ([]StreamMessage, error) {
+	deadline := time.Now().Add(block)
+	for {
+		m.mu.Lock()
+		out := make([]StreamMessage, 0)
+		streamNames := make([]string, 0, len(streams))
+		for stream := range streams {
+			streamNames = append(streamNames, stream)
+		}
+		sort.Strings(streamNames)
+		for _, stream := range streamNames {
+			ms := m.ensureStream(stream)
+			g := ms.groups[group]
+			if g == nil {
+				g = &memStreamGroup{pending: map[string]StreamMessage{}}
+				ms.groups[group] = g
+			}
+			start := streams[stream]
+			if start != ">" {
+				for _, msg := range g.pending {
+					out = append(out, msg)
+					if count > 0 && int64(len(out)) >= count {
+						break
+					}
+				}
+			} else {
+				for g.lastDelivered < len(ms.entries) {
+					msg := ms.entries[g.lastDelivered]
+					g.lastDelivered++
+					msg.Values = cloneStreamValues(msg.Values)
+					msg.Values["consumer"] = consumer
+					g.pending[msg.ID] = msg
+					out = append(out, msg)
+					if count > 0 && int64(len(out)) >= count {
+						break
+					}
+				}
+			}
+			if count > 0 && int64(len(out)) >= count {
+				break
+			}
+		}
+		m.mu.Unlock()
+		if len(out) > 0 || block <= 0 || time.Now().After(deadline) {
+			return out, nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (m *memoryClient) XAck(_ context.Context, stream string, group string, ids ...string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ms := m.ensureStream(stream)
+	g := ms.groups[group]
+	if g == nil {
+		return nil
+	}
+	for _, id := range ids {
+		delete(g.pending, id)
+	}
+	return nil
+}
+
+func (m *memoryClient) ensureStream(stream string) *memStream {
+	ms := m.streams[stream]
+	if ms == nil {
+		ms = &memStream{groups: map[string]*memStreamGroup{}}
+		m.streams[stream] = ms
+	}
+	return ms
+}
+
+func cloneStreamValues(values map[string]string) map[string]string {
+	out := make(map[string]string, len(values))
+	for key, value := range values {
+		out[key] = value
+	}
+	return out
 }
 
 // ── Pipeline ────────────────────────────────────────────

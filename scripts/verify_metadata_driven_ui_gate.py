@@ -2,7 +2,7 @@
 """Validate specs/gates/metadata_driven_ui_gap_inventory.yaml and registered UI paths.
 
 - Every ui_pages.path must exist under the repo root.
-- Optional: QWQ_METADATA_UI_GATE_STRICT=1 fails if any row has status legacy_map.
+- Optional: QWQ_METADATA_UI_GATE_STRICT=1 fails if any row has status current_map.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def main() -> int:
         return 1
 
     missing: list[str] = []
-    legacy = 0
+    current = 0
     for dom in data.get("domains", []):
         if not isinstance(dom, dict):
             continue
@@ -41,8 +41,8 @@ def main() -> int:
             rel = page.get("path")
             if not rel or not isinstance(rel, str):
                 continue
-            if page.get("status") == "legacy_map":
-                legacy += 1
+            if page.get("status") == "current_map":
+                current += 1
             p = ROOT / rel
             if not p.is_file():
                 missing.append(rel)
@@ -52,14 +52,14 @@ def main() -> int:
         return 1
 
     strict = os.environ.get("QWQ_METADATA_UI_GATE_STRICT") == "1"
-    if strict and legacy:
+    if strict and current:
         print(
-            f"metadata_driven_ui_gate: STRICT mode: {legacy} legacy_map row(s) remain",
+            f"metadata_driven_ui_gate: STRICT mode: {current} current_map row(s) remain",
             file=sys.stderr,
         )
         return 1
 
-    print(f"metadata_driven_ui_gate: ok (legacy_map rows: {legacy})")
+    print(f"metadata_driven_ui_gate: ok (current_map rows: {current})")
     return 0
 
 

@@ -23,7 +23,7 @@
 
 ## 与现有代码的映射
 
-- `AppLogContext` 已提供 `sessionId / journeyId / pageVisitId / requestId` 等字段，可映射到统一 context。
+- `AppLogContext` 已提供 `sessionId / pageVisitId / traceId / requestId` 等字段，可映射到统一 context。
 - `CloudRequestHeaders` 已提供 `surfaceId / operationId / routeId` 等网关上下文，可映射到统一 context。
 - `BehaviorEvent` 需扩展 `eventId / experimentBucket / entity / shareTarget` 等字段。
 - `AssistantInteractionEvent` 与 Scorecard 需映射为 `learning` 域 payload。

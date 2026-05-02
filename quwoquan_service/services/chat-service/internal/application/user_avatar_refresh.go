@@ -108,6 +108,25 @@ func refreshUserAvatarInConversation(
 		return nil
 	}
 
+	if scheduler != nil {
+		return repo.RunInTransaction(ctx, func(txCtx context.Context) error {
+			if err := repo.UpdateMemberAvatarSnapshot(
+				txCtx,
+				conversationID,
+				payload.UserID,
+				strings.TrimSpace(payload.AvatarURL),
+				strings.TrimSpace(payload.AvatarAssetID),
+				payload.AvatarVersion,
+			); err != nil {
+				return err
+			}
+			return scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
+				ConversationID: conversationID,
+				ActorID:        payload.UserID,
+				Trigger:        "user.avatar.updated",
+			})
+		})
+	}
 	if err := repo.UpdateMemberAvatarSnapshot(
 		ctx,
 		conversationID,
@@ -117,14 +136,6 @@ func refreshUserAvatarInConversation(
 		payload.AvatarVersion,
 	); err != nil {
 		return err
-	}
-
-	if scheduler != nil {
-		return scheduler.EnqueueRecompute(ctx, GroupAvatarRecomputeTask{
-			ConversationID: conversationID,
-			ActorID:        payload.UserID,
-			Trigger:        "user.avatar.updated",
-		})
 	}
 	return RecomputeGroupAvatar(ctx, repo, publisher, media, syncPublisher, nil, conversationID, payload.UserID)
 }

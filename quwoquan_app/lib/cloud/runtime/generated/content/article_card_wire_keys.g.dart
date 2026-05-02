@@ -2,7 +2,7 @@
 // Source: contracts/metadata/content/post/projections/article_card_wire_keys.yaml
 // Regenerate: make codegen-app
 
-/// 文章详情 legacy cards[] 子 map 键名 SSOT
+/// 文章详情 current cards[] 子 map 键名 SSOT
 abstract final class ArticleCardWireKeys {
   const ArticleCardWireKeys._();
 

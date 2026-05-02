@@ -13,7 +13,7 @@
 - [ ] 测试：Redis 缓存中间件契约测试（miniredis）
 - [ ] gate：集成到 make test-contract + make gate
 
-## Folded legacy node `storage-routing-and-interceptor-chain`
+## Folded current node `storage-routing-and-interceptor-chain`
 
 # 开发任务：storage-routing-and-interceptor-chain
 
@@ -27,4 +27,4 @@
 - [ ] gate：集成到 make test-contract + make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `storage-routing-and-interceptor-chain` (from `runtime/runtime-repository/repository-interface-layering/mongo-pg-vector-cache-adapters/storage-routing-and-interceptor-chain`)
+- [ ] Migrated current node: `storage-routing-and-interceptor-chain` (from `runtime/runtime-repository/repository-interface-layering/mongo-pg-vector-cache-adapters/storage-routing-and-interceptor-chain`)

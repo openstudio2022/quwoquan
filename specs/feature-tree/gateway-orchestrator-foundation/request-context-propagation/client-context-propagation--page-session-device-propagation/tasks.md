@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `propagation-completeness-check`
+## Folded current node `propagation-completeness-check`
 
 # propagation-completeness-check 任务列表
 
@@ -19,4 +19,4 @@
 ## 未来演进任务
 
 - [ ] 在全域迁移完成后移除旧 `pageId` 兼容读取
-- [ ] Migrated legacy node: `propagation-completeness-check` (from `gateway-orchestrator-foundation/request-context-propagation/client-context-propagation/page-session-device-propagation/propagation-completeness-check`)
+- [ ] Migrated current node: `propagation-completeness-check` (from `gateway-orchestrator-foundation/request-context-propagation/client-context-propagation/page-session-device-propagation/propagation-completeness-check`)

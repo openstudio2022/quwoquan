@@ -31,7 +31,7 @@ spec:
               containerPort: 18082
           env:
             - name: APP_ENV
-              value: integration
+              value: gamma
             - name: SERVICE_NAME
               value: chat-service
             - name: USER_SERVICE_BASE_URL

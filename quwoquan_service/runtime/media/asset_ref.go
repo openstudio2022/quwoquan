@@ -24,18 +24,43 @@ type AssetRef struct {
 	URL       string    `json:"url"`
 }
 
-const defaultCDNDomain = "mock-cdn.example.com"
+// NormalizeMediaCDNBase 将配置中的 CDN 入口规范为带 scheme 的 base URL（不含尾部 /）。
+// 新配置必须显式携带 scheme，避免 App 收到不可访问的裸域名。
+func NormalizeMediaCDNBase(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return ""
+	}
+	return strings.TrimRight(s, "/")
+}
 
+// BuildPublicMediaURL 基于「带 scheme 的 CDN base」与 objectKey 拼接可访问 URL。
+func BuildPublicMediaURL(cdnBaseURL, objectKey string, version int64) string {
+	base := NormalizeMediaCDNBase(cdnBaseURL)
+	key := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
+	if base == "" || key == "" {
+		return ""
+	}
+	if !strings.Contains(base, "://") {
+		return ""
+	}
+	u := fmt.Sprintf("%s/%s", strings.TrimRight(base, "/"), key)
+	if version > 0 {
+		u = fmt.Sprintf("%s?v=%d", u, version)
+	}
+	return u
+}
+
+// BuildAssetURL 已废弃：请使用 BuildPublicMediaURL；cdnDomain 若为裸域名将按 NormalizeMediaCDNBase 规则补全。
 func BuildAssetURL(cdnDomain, objectKey string, version int64) string {
-	normalizedDomain := strings.TrimSpace(cdnDomain)
-	if normalizedDomain == "" {
-		normalizedDomain = defaultCDNDomain
+	raw := strings.TrimSpace(cdnDomain)
+	if raw == "" {
+		return ""
 	}
-	normalizedKey := strings.TrimPrefix(strings.TrimSpace(objectKey), "/")
-	if version <= 0 {
-		return fmt.Sprintf("https://%s/%s", normalizedDomain, normalizedKey)
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
 	}
-	return fmt.Sprintf("https://%s/%s?v=%d", normalizedDomain, normalizedKey, version)
+	return BuildPublicMediaURL(raw, objectKey, version)
 }
 
 func BuildAvatarObjectKey(ownerType, ownerID string, version int64, sourceHash string) string {
@@ -68,7 +93,7 @@ func BuildAvatarGroupAssetRef(
 	assetID string,
 	version int64,
 	sourceHash string,
-	cdnDomain string,
+	cdnBaseURL string,
 ) AssetRef {
 	objectKey := BuildAvatarObjectKey("conversation", conversationID, version, sourceHash)
 	return AssetRef{
@@ -78,6 +103,6 @@ func BuildAvatarGroupAssetRef(
 		OwnerID:   conversationID,
 		Version:   version,
 		ObjectKey: objectKey,
-		URL:       BuildAssetURL(cdnDomain, objectKey, version),
+		URL:       BuildPublicMediaURL(cdnBaseURL, objectKey, version),
 	}
 }

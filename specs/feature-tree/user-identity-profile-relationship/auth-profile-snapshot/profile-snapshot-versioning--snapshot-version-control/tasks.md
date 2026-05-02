@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `version-conflict-repair`
+## Folded current node `version-conflict-repair`
 
 # 开发任务：version-conflict-repair
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `version-conflict-repair` (from `user-identity-profile-relationship/auth-profile-snapshot/profile-snapshot-versioning/snapshot-version-control/version-conflict-repair`)
+- [ ] Migrated current node: `version-conflict-repair` (from `user-identity-profile-relationship/auth-profile-snapshot/profile-snapshot-versioning/snapshot-version-control/version-conflict-repair`)

@@ -83,11 +83,11 @@ domains:
 
   - id: culture_arts
     label: { zh: "人文", en: "Culture & Arts" }
-    description: 艺术、影像、文学、历史、设计
+    description: 艺术、影像、文学、记录、设计
     mode: content
     circle_channel_enabled: true
     circle_channel_priority: 80
-    sub_categories: ["艺术", "影像", "文学", "历史", "设计", "哲学"]
+    sub_categories: ["艺术", "影像", "文学", "记录", "设计", "哲学"]
     assistant_domain_ids: [knowledge_general]
     recommendation_scenario: circle_discovery
     user_tag_ref: interest_art

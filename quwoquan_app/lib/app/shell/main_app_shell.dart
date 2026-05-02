@@ -50,8 +50,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   void _cachePageAccessDependencies() {
     _pageAccessOpsRepository = ref.read(opsEventRepositoryProvider);
     _pageAccessCurrentUserId = ref.read(currentUserIdProvider);
-    _pageAccessExperimentBucket =
-        ref.read(contentRuntimeConfigProvider).experimentBucket;
+    _pageAccessExperimentBucket = ref
+        .read(contentRuntimeConfigProvider)
+        .experimentBucket;
   }
 
   @override
@@ -131,7 +132,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
     final assistantImmersive =
         widget.currentLocation == AppRoutePaths.assistant &&
-        assistantInternalTab == 'dialog';
+        (assistantInternalTab == 'dialog' ||
+            assistantInternalTab == 'personal');
     final bottomNavHidden =
         ref.watch(bottomNavHiddenProvider).hidden ||
         assistantImmersive ||
@@ -212,7 +214,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         // 助理入口根据当前内部 tab 决定是否走沉浸式，避免把日程/技能误判为全屏。
         ref
             .read(bottomNavHiddenProvider.notifier)
-            .setHidden(ref.read(assistantInternalTabProvider) == 'dialog');
+            .setHidden(
+              ref.read(assistantInternalTabProvider) == 'dialog' ||
+                  ref.read(assistantInternalTabProvider) == 'personal',
+            );
         context.go(nextTab.routePath);
         break;
       case MainTabDestination.chat:
@@ -250,7 +255,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       level: AppLogLevel.debug,
       context: AppLogContext(
         sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
         pageVisitId: _currentPageVisitId,
       ),
       payload: AppLogPageBrowsePayload(

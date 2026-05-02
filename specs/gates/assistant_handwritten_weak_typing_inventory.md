@@ -12,7 +12,7 @@
 |------|-----|
 | 含弱类型命中文件数 | 185 |
 | `Map<String, dynamic>` 字面量（合计） | 1352 |
-| `dynamic` 关键字（合计） | 2931 → **2779**（历史 Wave：**关键字层面**调整，**非**等价于 DTO 化；见上） |
+| `dynamic` 关键字（合计） | 2931 → **2779**（记录 Wave：**关键字层面**调整，**非**等价于 DTO 化；见上） |
 
 **棘轮基线文件**：[`assistant_search_weak_typing_baseline.json`](assistant_search_weak_typing_baseline.json)。
 

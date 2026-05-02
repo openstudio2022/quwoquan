@@ -15,11 +15,11 @@
 - **THEN** 系统返回 `missing_template_variables` 并生成 `ContextFillTask`
 
 ### Requirement: 学习上下文变量注入
-系统 MUST 支持将历史学习结果作为模板变量注入，至少包含 `userProfileSnapshot`、`historicalRetrievalFeedback`、`domainLearningSignals`。
+系统 MUST 支持将记录学习结果作为模板变量注入，至少包含 `userProfileSnapshot`、`historicalRetrievalFeedback`、`domainLearningSignals`。
 
-#### Scenario: 历史学习变量可用于模板渲染
+#### Scenario: 记录学习变量可用于模板渲染
 - **WHEN** 执行 19 垂类任一模板
-- **THEN** 模板可读取用户画像标签与历史满意度摘要，驱动 query 生成与答案组织
+- **THEN** 模板可读取用户画像标签与记录满意度摘要，驱动 query 生成与答案组织
 
 #### Scenario: 基础信息变量来源受控
 - **WHEN** 模板读取 `basicIdentity/ipResidenceProfile`
@@ -36,9 +36,9 @@
 - **WHEN** 新模板版本在小流量验证中出现质量下降
 - **THEN** 系统可回滚到上一稳定版本并保留回滚审计记录
 
-#### Scenario: 基于历史满意度的策略模板选择
+#### Scenario: 基于记录满意度的策略模板选择
 - **WHEN** 同一垂类存在多个模板策略版本
-- **THEN** 系统可结合历史满意度与样本量进行策略优选，并保留可回放选择依据
+- **THEN** 系统可结合记录满意度与样本量进行策略优选，并保留可回放选择依据
 
 ### Requirement: 模板文件格式与数据指令分离
 系统 MUST 采用“模板内容（Markdown）+ 模板元数据（JSON）”双文件格式。  

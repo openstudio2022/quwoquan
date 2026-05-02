@@ -81,7 +81,7 @@
 | `chat-conversation` | 负责实时沟通与消息同步 | Conversation、Message、Inbox、ConversationMember、ConversationUserState | 趣聊、会话、消息、聊天记录 |
 | `user-identity-profile-relationship` | 负责主体身份、关系与个人主页世界观 | OwnerAccount、SubAccount、Profile、ContactDiscovery、Invite Attribution | 身份、个人主页、联系人、切换身份 |
 | `assistant-run-learning` | 负责助手运行、反馈与学习闭环 | Run、Stream、策略模板、学习事件、画像提案 | 小趣、助手回复、反馈 |
-| `global-search-experience` | 负责跨域搜索壳层与结果编排 | 全屏搜索、历史、联想、网络结果页、小趣搜、群组结果 | 搜索、最近在搜、群组结果、联系人结果、小趣搜 |
+| `global-search-experience` | 负责跨域搜索壳层与结果编排 | 全屏搜索、记录、联想、网络结果页、小趣搜、群组结果 | 搜索、最近在搜、群组结果、联系人结果、小趣搜 |
 | `shared-homepage-network` | 负责具体事物主页、口碑、认领与下线 | EntityProfile、ReviewTemplate、ClaimRequest、SourceEvidence、StatusReport | 车型主页、酒店主页、景点主页、餐厅主页、口碑 |
 | `product-ops-growth` | 负责增长、运营与效果闭环 | 运营事件、增长策略、实验与观测 | 一般不直接作为前台对象出现 |
 | `platform-ops-governance / gateway / runtime` | 负责基础设施与治理 | 配置、可观测、流量治理、运行时能力 | 不直接作为前台对象出现 |

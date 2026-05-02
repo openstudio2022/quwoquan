@@ -39,6 +39,8 @@ type assistantContractField struct {
 
 type assistantContractIndex struct {
 	libraryByClass map[string]string
+	// fieldsByClass maps Dart wire class name → fields (root fields + all subcontracts) for const default literals.
+	fieldsByClass map[string][]assistantContractField
 }
 
 type assistantSchemaHeader struct {
@@ -63,6 +65,7 @@ func loadAssistantContractIndex(metadataDir string) (*assistantContractIndex, er
 	}
 	index := &assistantContractIndex{
 		libraryByClass: map[string]string{},
+		fieldsByClass:  map[string][]assistantContractField{},
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
@@ -83,7 +86,21 @@ func loadAssistantContractIndex(metadataDir string) (*assistantContractIndex, er
 		if strings.TrimSpace(header.DartClass) == "" || strings.TrimSpace(header.LibraryPath) == "" {
 			continue
 		}
-		index.libraryByClass[strings.TrimSpace(header.DartClass)] = strings.TrimSpace(header.LibraryPath)
+		dc := strings.TrimSpace(header.DartClass)
+		index.libraryByClass[dc] = strings.TrimSpace(header.LibraryPath)
+
+		var full assistantContractSchema
+		if err := yaml.Unmarshal(data, &full); err == nil {
+			if len(full.Fields) > 0 {
+				index.fieldsByClass[dc] = full.Fields
+			}
+			for _, sub := range full.Subcontracts {
+				cn := strings.TrimSpace(sub.ClassName)
+				if cn != "" && len(sub.Fields) > 0 {
+					index.fieldsByClass[cn] = sub.Fields
+				}
+			}
+		}
 	}
 	return index, nil
 }
@@ -325,6 +342,70 @@ func assistantResolveRefClassName(ref string, schema *assistantContractSchema, i
 	return strings.TrimSpace(ref)
 }
 
+// assistantFindSubcontract resolves subcontract by YAML key or by exported class_name.
+func assistantFindSubcontract(schema *assistantContractSchema, ref string) (*assistantSubcontractSchema, string, bool) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || schema.Subcontracts == nil {
+		return nil, "", false
+	}
+	if sub, ok := schema.Subcontracts[ref]; ok && strings.TrimSpace(sub.ClassName) != "" {
+		return &sub, strings.TrimSpace(sub.ClassName), true
+	}
+	for _, sub := range schema.Subcontracts {
+		if strings.TrimSpace(sub.ClassName) == ref {
+			return &sub, strings.TrimSpace(sub.ClassName), true
+		}
+	}
+	return nil, "", false
+}
+
+func assistantRenderConstRequiredWireLiteral(className string, fields []assistantContractField, schema *assistantContractSchema, index *assistantContractIndex) string {
+	var parts []string
+	for _, f := range fields {
+		if !f.Required || f.Default != nil {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s: %s", f.Name, assistantRenderConstRequiredFieldSeed(f, schema, index)))
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("const %s()", className)
+	}
+	return fmt.Sprintf("const %s(%s)", className, strings.Join(parts, ", "))
+}
+
+func assistantRenderConstRequiredFieldSeed(field assistantContractField, schema *assistantContractSchema, index *assistantContractIndex) string {
+	switch field.Type {
+	case "string":
+		return `""`
+	case "int":
+		return "0"
+	case "double":
+		return "0.0"
+	case "bool":
+		return "false"
+	case "object":
+		if field.Ref == "" {
+			return "const <String, dynamic>{}"
+		}
+		nestedClass := assistantResolveRefClassName(field.Ref, schema, index)
+		if index != nil && index.fieldsByClass != nil {
+			if nf, ok := index.fieldsByClass[nestedClass]; ok {
+				return assistantRenderConstRequiredWireLiteral(nestedClass, nf, schema, index)
+			}
+		}
+		if sub, _, ok := assistantFindSubcontract(schema, field.Ref); ok {
+			return assistantRenderConstRequiredWireLiteral(nestedClass, sub.Fields, schema, index)
+		}
+		return fmt.Sprintf("const %s()", nestedClass)
+	case "enum":
+		return assistantRenderEnumDefaultValue(field)
+	case "list<string>", "list<map>", "list<object>", "map", "map<object>", "partitioned_map", "datetime", "any":
+		return assistantRenderDefaultValue(field, schema, index)
+	default:
+		return assistantRenderDefaultValue(field, schema, index)
+	}
+}
+
 func assistantRenderDefaultValue(field assistantContractField, schema *assistantContractSchema, index *assistantContractIndex) string {
 	switch field.Type {
 	case "string":
@@ -350,7 +431,16 @@ func assistantRenderDefaultValue(field assistantContractField, schema *assistant
 		return assistantRenderEnumDefaultValue(field)
 	case "object":
 		if field.Ref != "" {
-			return fmt.Sprintf("const %s()", assistantResolveRefClassName(field.Ref, schema, index))
+			className := assistantResolveRefClassName(field.Ref, schema, index)
+			if index != nil && index.fieldsByClass != nil {
+				if extFields, ok := index.fieldsByClass[className]; ok {
+					return assistantRenderConstRequiredWireLiteral(className, extFields, schema, index)
+				}
+			}
+			if sub, _, ok := assistantFindSubcontract(schema, field.Ref); ok {
+				return assistantRenderConstRequiredWireLiteral(className, sub.Fields, schema, index)
+			}
+			return fmt.Sprintf("const %s()", className)
 		}
 		return "const <String, dynamic>{}"
 	case "list<object>":
@@ -431,7 +521,8 @@ func assistantRenderFromJsonValue(field assistantContractField, schema *assistan
 		if field.Ref != "" {
 			className := assistantResolveRefClassName(field.Ref, schema, index)
 			if field.Default != nil {
-				return fmt.Sprintf("%s is Map ? %s.fromJson((%s as Map).cast<String, dynamic>()) : const %s()", jsonAccessor, className, jsonAccessor, className)
+				fallback := assistantRenderDefaultValue(field, schema, index)
+				return fmt.Sprintf("%s is Map ? %s.fromJson((%s as Map).cast<String, dynamic>()) : %s", jsonAccessor, className, jsonAccessor, fallback)
 			}
 			return fmt.Sprintf("%s is Map ? %s.fromJson((%s as Map).cast<String, dynamic>()) : null", jsonAccessor, className, jsonAccessor)
 		}

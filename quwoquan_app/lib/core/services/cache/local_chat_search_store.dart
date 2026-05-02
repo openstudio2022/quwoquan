@@ -141,13 +141,7 @@ class LocalChatSearchStore {
         conversation['conversationTitle'],
         conversationId,
       ]);
-      final avatarUrl = _firstNonEmpty(<Object?>[
-        conversation['groupAvatarUrl'],
-        conversation['avatarUrl'],
-      ]);
-      final avatarCompositeUrls = _stringList(
-        conversation['avatarCompositeUrls'] ?? conversation['memberAvatars'],
-      );
+      final avatarUrl = _string(conversation['avatarUrl']);
       final lastMessagePreview = _firstNonEmpty(<Object?>[
         conversation['lastMessagePreview'],
         conversation['highlightText'],
@@ -171,7 +165,6 @@ class LocalChatSearchStore {
         'title': title,
         'type': type,
         'avatarUrl': avatarUrl,
-        'avatarCompositeUrls': avatarCompositeUrls,
         'lastMessagePreview': lastMessagePreview,
         'lastMessageAt': lastMessageAt,
         'lastMessageTime': lastMessageAt,
@@ -191,7 +184,7 @@ class LocalChatSearchStore {
         'type': type,
         'title': title,
         'avatar_url': avatarUrl,
-        'avatar_composite_urls_json': jsonEncode(avatarCompositeUrls),
+        'avatar_composite_urls_json': jsonEncode(const <String>[]),
         'last_message_preview': lastMessagePreview,
         'last_message_at': lastMessageAt,
         'member_count': (conversation['memberCount'] as num?)?.toInt() ?? 0,
@@ -240,10 +233,7 @@ class LocalChatSearchStore {
       conversation?['title'],
       conversation?['conversationTitle'],
     ]);
-    final fallbackConversationAvatar = _firstNonEmpty(<Object?>[
-      conversation?['groupAvatarUrl'],
-      conversation?['avatarUrl'],
-    ]);
+    final fallbackConversationAvatar = _string(conversation?['avatarUrl']);
     var maxSeq = 0;
     for (final message in messages) {
       final messageId = _string(
@@ -628,7 +618,6 @@ class LocalChatSearchStore {
     if (rows.isNotEmpty) {
       final payload = _decodePayload(rows.first['payload_json']);
       payload['avatarUrl'] = avatarUrl;
-      payload['groupAvatarUrl'] = avatarUrl;
       payload['conversationAvatarUrl'] = avatarUrl;
       if (groupAvatarVersion != null) {
         payload['groupAvatarVersion'] = groupAvatarVersion;
@@ -1201,16 +1190,6 @@ class LocalChatSearchStore {
         .map((item) => _normalize(item?.toString()) ?? '')
         .where((item) => item.isNotEmpty)
         .join(' ');
-  }
-
-  List<String> _stringList(Object? raw) {
-    if (raw is List) {
-      return raw
-          .map((item) => item.toString().trim())
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false);
-    }
-    return const <String>[];
   }
 
   String _contactId(Map<String, Object?>? contact) {

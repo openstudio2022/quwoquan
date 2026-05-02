@@ -9,18 +9,18 @@
 - [ ] 测试：RocketMQ 发布契约测试（EventSpy）
 - [ ] gate：集成到 make gate
 
-## Folded legacy node `event-replay-and-schema-evolution`
+## Folded current node `event-replay-and-schema-evolution`
 
 # 开发任务：event-replay-and-schema-evolution
 
 - [ ] 实现：EventStore.Replay(aggregate_id, from_version) 接口
 - [ ] 实现：Replay 分页（offset/limit 或 cursor）
 - [ ] 实现：events.yaml schema_version 声明
-- [ ] 实现：upcaster 逻辑（旧版本 → 新版本）
+- [ ] 实现：upcaster 逻辑（过往版本本 → 新版本）
 - [ ] 实现：Projector 重建流程（Replay 全量 → 顺序 Handle）
 - [ ] 测试：Replay 契约测试
 - [ ] 测试：Schema 版本演进单元测试
 - [ ] gate：集成到 make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `event-replay-and-schema-evolution` (from `runtime/runtime-eventstore/event-persist-and-publish/mongo-event-collection-and-mq-integration/event-replay-and-schema-evolution`)
+- [ ] Migrated current node: `event-replay-and-schema-evolution` (from `runtime/runtime-eventstore/event-persist-and-publish/mongo-event-collection-and-mq-integration/event-replay-and-schema-evolution`)

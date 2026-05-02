@@ -10,7 +10,7 @@
 - [ ] 测试：ContextAssembler 端到端测试
 - [ ] gate：集成到 make gate
 
-## Folded legacy node `holistic-profile-and-embedding`
+## Folded current node `holistic-profile-and-embedding`
 
 # 开发任务：holistic-profile-and-embedding
 
@@ -24,4 +24,4 @@
 - [ ] gate：集成到 make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `holistic-profile-and-embedding` (from `runtime/runtime-context/three-layer-context-model/page-session-longterm-assembly/holistic-profile-and-embedding`)
+- [ ] Migrated current node: `holistic-profile-and-embedding` (from `runtime/runtime-context/three-layer-context-model/page-session-longterm-assembly/holistic-profile-and-embedding`)

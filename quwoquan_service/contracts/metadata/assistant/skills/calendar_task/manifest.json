@@ -1,0 +1,15 @@
+{
+  "skillId": "calendar_task",
+  "displayName": "日程待办助手",
+  "description": "日程管理、提醒设置、待办跟踪、会议安排。",
+  "domainId": "calendar_task",
+  "executionTarget": "hybrid",
+  "routingHints": ["日程", "待办", "提醒", "会议", "安排"],
+  "iconHint": "calendar",
+  "toolPolicy": {
+    "allowedTools": ["app_search", "scheduler", "intent_bridge", "app_action"],
+    "preferredTools": ["app_search"],
+    "maxToolCalls": 2,
+    "allowDeviceActionProposal": true
+  }
+}

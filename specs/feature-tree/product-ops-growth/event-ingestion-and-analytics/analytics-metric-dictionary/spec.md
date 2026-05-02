@@ -37,8 +37,9 @@
 
 ### 公共维度
 - `sessionId`
-- `journeyId`
 - `pageVisitId`
+- `traceId`
+- `requestId`
 - `surfaceId`
 - `routeId`
 - `operationId`

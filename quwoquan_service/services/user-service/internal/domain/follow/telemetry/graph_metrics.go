@@ -10,12 +10,12 @@ const (
 	MetricFollowDuplicateRequestCount    = "follow_duplicate_request_count"
 	MetricFollowBlockRejectionCount      = "follow_block_rejection_count"
 	MetricFollowCounterMismatchCount     = "follow_counter_mismatch_count"
-	MetricFollowLegacyEdgeReadCount      = "follow_legacy_edge_read_count"
+	MetricFollowCurrentEdgeReadCount     = "follow_current_edge_read_count"
 	MetricGraphListLatencyMs             = "graph_list_latency_ms"
 	MetricGraphPageDriftCount            = "graph_page_drift_count"
 	MetricGraphFilterMismatchCount       = "graph_filter_mismatch_count"
 	MetricRelationshipCapabilityMismatch = "relationship_capability_mismatch_count"
-	MetricGraphLegacyEdgeReadCount       = "graph_legacy_edge_read_count"
+	MetricGraphCurrentEdgeReadCount      = "graph_current_edge_read_count"
 )
 
 type GraphMetrics struct {
@@ -24,12 +24,12 @@ type GraphMetrics struct {
 	followDuplicateRequestCount         float64
 	followBlockRejectionCount           float64
 	followCounterMismatchCount          float64
-	followLegacyEdgeReadCount           float64
+	followCurrentEdgeReadCount          float64
 	graphListLatencyMs                  float64
 	graphPageDriftCount                 float64
 	graphFilterMismatchCount            float64
 	relationshipCapabilityMismatchCount float64
-	graphLegacyEdgeReadCount            float64
+	graphCurrentEdgeReadCount           float64
 }
 
 var defaultGraphMetrics = &GraphMetrics{}
@@ -52,12 +52,12 @@ func (m *GraphMetrics) Reset() {
 	m.followDuplicateRequestCount = 0
 	m.followBlockRejectionCount = 0
 	m.followCounterMismatchCount = 0
-	m.followLegacyEdgeReadCount = 0
+	m.followCurrentEdgeReadCount = 0
 	m.graphListLatencyMs = 0
 	m.graphPageDriftCount = 0
 	m.graphFilterMismatchCount = 0
 	m.relationshipCapabilityMismatchCount = 0
-	m.graphLegacyEdgeReadCount = 0
+	m.graphCurrentEdgeReadCount = 0
 }
 
 func (m *GraphMetrics) RecordFollowCommandLatency(duration time.Duration) {
@@ -85,8 +85,8 @@ func (m *GraphMetrics) RecordCounterMismatch() {
 	m.increment(&m.followCounterMismatchCount)
 }
 
-func (m *GraphMetrics) RecordLegacyFollowRead() {
-	m.increment(&m.followLegacyEdgeReadCount)
+func (m *GraphMetrics) RecordCurrentFollowRead() {
+	m.increment(&m.followCurrentEdgeReadCount)
 }
 
 func (m *GraphMetrics) RecordGraphListLatency(duration time.Duration) {
@@ -114,8 +114,8 @@ func (m *GraphMetrics) RecordRelationshipCapabilityMismatch() {
 	m.increment(&m.relationshipCapabilityMismatchCount)
 }
 
-func (m *GraphMetrics) RecordLegacyGraphRead() {
-	m.increment(&m.graphLegacyEdgeReadCount)
+func (m *GraphMetrics) RecordCurrentGraphRead() {
+	m.increment(&m.graphCurrentEdgeReadCount)
 }
 
 func (m *GraphMetrics) Snapshot() map[string]float64 {
@@ -129,12 +129,12 @@ func (m *GraphMetrics) Snapshot() map[string]float64 {
 		MetricFollowDuplicateRequestCount:    m.followDuplicateRequestCount,
 		MetricFollowBlockRejectionCount:      m.followBlockRejectionCount,
 		MetricFollowCounterMismatchCount:     m.followCounterMismatchCount,
-		MetricFollowLegacyEdgeReadCount:      m.followLegacyEdgeReadCount,
+		MetricFollowCurrentEdgeReadCount:     m.followCurrentEdgeReadCount,
 		MetricGraphListLatencyMs:             m.graphListLatencyMs,
 		MetricGraphPageDriftCount:            m.graphPageDriftCount,
 		MetricGraphFilterMismatchCount:       m.graphFilterMismatchCount,
 		MetricRelationshipCapabilityMismatch: m.relationshipCapabilityMismatchCount,
-		MetricGraphLegacyEdgeReadCount:       m.graphLegacyEdgeReadCount,
+		MetricGraphCurrentEdgeReadCount:      m.graphCurrentEdgeReadCount,
 	}
 }
 

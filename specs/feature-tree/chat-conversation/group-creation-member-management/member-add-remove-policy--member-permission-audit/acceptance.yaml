@@ -12,7 +12,7 @@ tests:
 execution:
   local_gate: make gate
   full_gate: make gate-full
-legacy_merged_acceptance:
+current_merged_acceptance:
 - source_path: chat-conversation/group-creation-member-management/member-add-remove-policy/member-permission-audit/operation-risk-guard
   task_bucket: operation-risk-guard
   migrated_as: L3_task

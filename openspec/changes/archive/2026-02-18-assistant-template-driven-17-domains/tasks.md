@@ -51,12 +51,12 @@
 - [x] 5.9 增加提案生命周期日志（`proposalStatus/statusChangedAt/changedBy/idempotencyKey`）
 - [x] 5.10 增加敏感字段脱敏与保留策略日志（生日/IP常驻地脱敏、删除标记）
 
-## 6. 规格统一与历史目录清理
+## 6. 规格统一与记录目录清理
 
 - [x] 6.1 将主能力升级统一写入 `openspec/specs/personal-assistant/spec.md`
 - [x] 6.2 将 `personal-assistant-commercial-v1` 改为“已合并”迁移说明
 - [x] 6.3 将 `personal-assistant-domain-orchestration-v1` 改为“已合并”迁移说明
-- [x] 6.4 清理历史规格中与统一规格重复且会产生歧义的条款
+- [x] 6.4 清理记录规格中与统一规格重复且会产生歧义的条款
 
 ## 7. 测试与灰度发布
 

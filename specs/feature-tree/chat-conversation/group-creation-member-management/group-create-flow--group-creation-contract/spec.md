@@ -11,7 +11,7 @@
 - A7：契约一致性校验通过。
 - A8：对应自动化测试映射完整。
 
-## Folded legacy node `create-idempotency-and-rollback`
+## Folded current node `create-idempotency-and-rollback`
 
 # L5 特性：create-idempotency-and-rollback
 

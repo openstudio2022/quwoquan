@@ -1,4 +1,4 @@
-/// `AppRoutePaths.rtcPickParticipants` 的强类型 `extra`（兼容历史 `Map`）。
+/// `AppRoutePaths.rtcPickParticipants` 的强类型 `extra`（兼容记录 `Map`）。
 class CallParticipantPickerRouteExtra {
   const CallParticipantPickerRouteExtra({
     this.callId,

@@ -105,7 +105,6 @@ class _CustomMockChatRepository extends MockChatRepository {
         type: 'direct',
         title: '自定义会话',
         avatarUrl: '',
-        avatarCompositeUrls: <String>[],
         lastMessagePreview: '来自自定义仓库',
         lastMessageType: 'text',
         lastMessageTime: null,

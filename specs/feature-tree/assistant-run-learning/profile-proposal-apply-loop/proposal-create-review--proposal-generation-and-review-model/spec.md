@@ -9,7 +9,7 @@
 ## 验收标准
 - A1：提案生成与审核展示一致可用。
 
-## Folded legacy node `review-audit-trace-link`
+## Folded current node `review-audit-trace-link`
 
 # L5 特性：review-audit-trace-link
 

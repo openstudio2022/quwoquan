@@ -248,20 +248,17 @@ class PageContextRetrievalProvider implements AssistantRetrievalProvider {
     if (_assistantUsePolicyForPost(post) == 'exclude') {
       return null;
     }
-    final text = _firstNonEmpty(
-      post.normalizedBody,
-      post.normalizedTitle,
-    );
+    final text = _firstNonEmpty(post.normalizedBody, post.normalizedTitle);
     if (text.isEmpty) return null;
     final identity = _contentIdentityForPost(post);
     final route = !identityIndexEnabled
-        ? 'legacy_context'
+        ? 'page_context'
         : (identity == 'moment' ? 'context_memory' : 'knowledge_index');
     final tier = _derivedContentTierFromPost(post);
     return AssistantRetrievalItem(
       content: text,
       sourceType: !identityIndexEnabled
-          ? 'page.discovery.legacy_context'
+          ? 'page.discovery.page_context'
           : (identity == 'moment'
                 ? 'page.discovery.moment_context'
                 : 'page.discovery.work_knowledge'),

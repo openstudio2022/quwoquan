@@ -14,13 +14,72 @@ import 'package:quwoquan_app/ui/content/entry/widgets/article_editor.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _transparentPng = <int>[
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00,
-  0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01,
-  0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F,
-  0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-  0x54, 0x78, 0x9C, 0x62, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01,
-  0xE5, 0x27, 0xDE, 0xFC, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45,
-  0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0A,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x62,
+  0x00,
+  0x00,
+  0x00,
+  0x02,
+  0x00,
+  0x01,
+  0xE5,
+  0x27,
+  0xDE,
+  0xFC,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
 ];
 
 late String _testImagePath;
@@ -123,7 +182,8 @@ class _EditorHarnessState extends State<_EditorHarness> {
       articlePages: pages,
       articleBlocks: blocks,
       activeArticlePageId: pages.isNotEmpty ? pages.first.id : null,
-      activeArticleBlockId: activeBlockId ?? (blocks.isNotEmpty ? blocks.first.id : null),
+      activeArticleBlockId:
+          activeBlockId ?? (blocks.isNotEmpty ? blocks.first.id : null),
     );
   }
 
@@ -136,7 +196,9 @@ class _EditorHarnessState extends State<_EditorHarness> {
     final insertIndex = afterNodeId == kArticleEditorStartAnchorId
         ? 0
         : (() {
-            final index = nextNodes.indexWhere((node) => node.id == afterNodeId);
+            final index = nextNodes.indexWhere(
+              (node) => node.id == afterNodeId,
+            );
             return index < 0 ? nextNodes.length : index + 1;
           })();
     final newNodeId = 'test_inserted_${nextNodes.length}';
@@ -180,7 +242,8 @@ class _EditorHarnessState extends State<_EditorHarness> {
         nextNodes[figureIndex + 1].type == ArticleDocumentNodeType.paragraph) {
       narrowParagraph = nextNodes[figureIndex + 1];
       if (figureIndex + 2 < nextNodes.length &&
-          nextNodes[figureIndex + 2].type == ArticleDocumentNodeType.paragraph) {
+          nextNodes[figureIndex + 2].type ==
+              ArticleDocumentNodeType.paragraph) {
         belowParagraph = nextNodes[figureIndex + 2];
       }
     }
@@ -237,15 +300,17 @@ class _EditorHarnessState extends State<_EditorHarness> {
     if (ensured?.narrowParagraph == null || ensured?.belowParagraph == null) {
       return;
     }
-    final nextNodes = state.articleDocument.nodes.map((node) {
-      if (node.id == ensured!.narrowParagraph!.id) {
-        return node.copyWith(text: narrowText);
-      }
-      if (node.id == ensured.belowParagraph!.id) {
-        return node.copyWith(text: belowText);
-      }
-      return node;
-    }).toList(growable: false);
+    final nextNodes = state.articleDocument.nodes
+        .map((node) {
+          if (node.id == ensured!.narrowParagraph!.id) {
+            return node.copyWith(text: narrowText);
+          }
+          if (node.id == ensured.belowParagraph!.id) {
+            return node.copyWith(text: belowText);
+          }
+          return node;
+        })
+        .toList(growable: false);
     setState(() {
       _applyDocument(
         _buildDocumentWithNodes(
@@ -358,9 +423,8 @@ class _EditorHarnessState extends State<_EditorHarness> {
         onUpdateNodeCaption: (nodeId, caption) {
           final nextNodes = state.articleDocument.nodes
               .map(
-                (node) => node.id == nodeId
-                    ? node.copyWith(caption: caption)
-                    : node,
+                (node) =>
+                    node.id == nodeId ? node.copyWith(caption: caption) : node,
               )
               .toList(growable: false);
           setState(() {
@@ -396,10 +460,7 @@ class _EditorHarnessState extends State<_EditorHarness> {
               );
         },
         onEnsureWrapNodeGroup: (figureNodeId, {int? splitOffset}) {
-          return _ensureWrapNodeGroup(
-            figureNodeId,
-            splitOffset: splitOffset,
-          );
+          return _ensureWrapNodeGroup(figureNodeId, splitOffset: splitOffset);
         },
         immersive: true,
         onUndo: () {},
@@ -410,17 +471,19 @@ class _EditorHarnessState extends State<_EditorHarness> {
           // 默认行为：更新节点类型
           final doc = state.articleDocument;
           final newId = 'typed_${doc.nodes.length}';
-          final nextNodes = doc.nodes.map((n) {
-            if (n.id != nodeId) return n;
-            return ArticleDocumentNode(
-              id: newId,
-              type: type,
-              text: n.text,
-              textAlign: n.textAlign,
-              listDepth: n.listDepth,
-              spans: n.spans,
-            );
-          }).toList(growable: false);
+          final nextNodes = doc.nodes
+              .map((n) {
+                if (n.id != nodeId) return n;
+                return ArticleDocumentNode(
+                  id: newId,
+                  type: type,
+                  text: n.text,
+                  textAlign: n.textAlign,
+                  listDepth: n.listDepth,
+                  spans: n.spans,
+                );
+              })
+              .toList(growable: false);
           setState(() {
             _applyDocument(
               _buildDocumentWithNodes(
@@ -432,7 +495,8 @@ class _EditorHarnessState extends State<_EditorHarness> {
             );
           });
         },
-        onToggleInlineStyle: (_, _, _, {bold, italic, underline, strikethrough}) {},
+        onToggleInlineStyle:
+            (_, _, _, {bold, italic, underline, strikethrough}) {},
         onCommitTextEdit: () {},
       ),
     );
@@ -969,9 +1033,7 @@ void main() {
         imageLayout: 'fullWidth',
       ),
     ]);
-    await tester.pumpWidget(
-      _EditorHarness(seedDocument: doc),
-    );
+    await tester.pumpWidget(_EditorHarness(seedDocument: doc));
     await tester.pumpAndSettle();
 
     // 第一次点击：选中，展示工具栏
@@ -1526,8 +1588,12 @@ void main() {
         focusedLabels1.add(w.focusNode.debugLabel ?? 'unknown');
       }
     }
-    expect(focusedNodes1.length, equals(1),
-        reason: '双 wrapGroup 场景：点击窄文A后应只有1个焦点，实际有${focusedNodes1.length}个: $focusedLabels1');
+    expect(
+      focusedNodes1.length,
+      equals(1),
+      reason:
+          '双 wrapGroup 场景：点击窄文A后应只有1个焦点，实际有${focusedNodes1.length}个: $focusedLabels1',
+    );
   });
 
   testWidgets('wrapLeft图+fullWidth图：点击窄文后fullWidth段落不应有焦点', (tester) async {
@@ -1587,8 +1653,12 @@ void main() {
         focusedLabels2.add(w.focusNode.debugLabel ?? 'unknown');
       }
     }
-    expect(focusedNodes2.length, equals(1),
-        reason: 'wrap+fullWidth场景：点击窄文后应只有1个焦点，实际有${focusedNodes2.length}个: $focusedLabels2');
+    expect(
+      focusedNodes2.length,
+      equals(1),
+      reason:
+          'wrap+fullWidth场景：点击窄文后应只有1个焦点，实际有${focusedNodes2.length}个: $focusedLabels2',
+    );
   });
 
   testWidgets('wrapLeft图无段落+fullWidth图有段落：点击sideChild后段落不应有焦点', (tester) async {
@@ -1629,7 +1699,9 @@ void main() {
     await _pumpWrapFrames(tester);
 
     // 再点击窄文区域的 placeholder
-    final narrowFinder = find.byKey(const ValueKey<String>('wrap_narrow_fig_a'));
+    final narrowFinder = find.byKey(
+      const ValueKey<String>('wrap_narrow_fig_a'),
+    );
     if (tester.any(narrowFinder)) {
       await tester.ensureVisible(narrowFinder.first);
       await _pumpWrapFrames(tester);
@@ -1644,12 +1716,18 @@ void main() {
     for (final element in find.byType(EditableText).evaluate()) {
       final w = element.widget as EditableText;
       if (w.focusNode.hasFocus && focusedNodes.add(w.focusNode)) {
-        focusedLabels.add('ET:${w.focusNode.debugLabel ?? w.controller.text.substring(0, w.controller.text.length.clamp(0, 20))}');
+        focusedLabels.add(
+          'ET:${w.focusNode.debugLabel ?? w.controller.text.substring(0, w.controller.text.length.clamp(0, 20))}',
+        );
       }
     }
     final focusedCount = focusedNodes.length;
-    expect(focusedCount, lessThanOrEqualTo(1),
-        reason: '无段落wrap+fullWidth场景：点击placeholder后应最多1个焦点，实际有$focusedCount个: $focusedLabels');
+    expect(
+      focusedCount,
+      lessThanOrEqualTo(1),
+      reason:
+          '无段落wrap+fullWidth场景：点击placeholder后应最多1个焦点，实际有$focusedCount个: $focusedLabels',
+    );
   });
 
   testWidgets('双段 wrap：点击空下文并输入首字后仍留在下文', (tester) async {
@@ -1698,7 +1776,9 @@ void main() {
     expect(find.text('窄文初始'), findsOneWidget);
   });
 
-  testWidgets('legacy 单 paragraph wrap 会在首帧补成 narrow+below 双节点', (tester) async {
+  testWidgets('current 单 paragraph wrap 会在首帧补成 narrow+below 双节点', (
+    tester,
+  ) async {
     final doc = _buildDocumentWithNodes(<ArticleDocumentNode>[
       const ArticleDocumentNode(
         id: 'title_0',
@@ -1712,9 +1792,9 @@ void main() {
         imageLayout: 'wrapLeft',
       ),
       const ArticleDocumentNode(
-        id: 'legacy_para',
+        id: 'current_para',
         type: ArticleDocumentNodeType.paragraph,
-        text: '这是一段足够长的 legacy wrap 正文，用来验证会在首帧自动拆成窄文和下文。',
+        text: '这是一段足够长的 current wrap 正文，用来验证会在首帧自动拆成窄文和下文。',
       ),
     ]);
     await tester.pumpWidget(_EditorHarness(seedDocument: doc));
@@ -1732,6 +1812,9 @@ void main() {
     expect(nodes[1].type, ArticleDocumentNodeType.paragraph);
     expect(nodes[2].type, ArticleDocumentNodeType.paragraph);
     expect(nodes[1].text, isNotEmpty);
-    expect(find.byKey(const ValueKey<String>('wrap_below_fig_a')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('wrap_below_fig_a')),
+      findsOneWidget,
+    );
   });
 }

@@ -61,7 +61,7 @@ entries:
       - "FollowService 已新增 `UserFollowed / UserUnfollowed` 事件断言、owner profile follower/following 自动对账修正，以及 flag-off 下既有 persona edge 可读性的回退回归。"
       - "user-service graph 读侧已改为 overfetch+fill，列表过滤不会因 strict/block/drift 直接缩页；搜索结果与公开 graph 列表不再暴露 `ownerUserId`。"
       - "App 主页关系能力已收紧为“服务端 capability 真相 + 显式 optimistic follow overlay”，不再直接把本地 `fromFollowFlags()` 结果当成最终投影。"
-      - "graph/follow 关键指标现已具备最小触发断言：`follow_command_latency_ms`、`follow_duplicate_request_count`、`follow_block_rejection_count`、`follow_counter_mismatch_count`、`graph_list_latency_ms`、`graph_filter_mismatch_count`、`relationship_capability_mismatch_count`、`graph_legacy_edge_read_count`。"
+      - "graph/follow 关键指标现已具备最小触发断言：`follow_command_latency_ms`、`follow_duplicate_request_count`、`follow_block_rejection_count`、`follow_counter_mismatch_count`、`graph_list_latency_ms`、`graph_filter_mismatch_count`、`relationship_capability_mismatch_count`、`graph_current_edge_read_count`。"
       - "本轮实测命令：`go test ./runtime/governance ./services/user-service/tests -run 'Test(FeatureEnabled|Persona|Follow_|GetRelationship_Mutual|ListFollowing_|ListFollowers_|ProfileSubjectView_|SearchSocialRelations_|RelationshipCapabilityView_)'`、`flutter test test/ui/user/providers/profile_state_provider_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart`。"
   - timestamp: "2026-04-24T10:40:00+08:00"
     summary: >
@@ -234,18 +234,18 @@ entries:
       breaking_contract: true
     notes:
       - "A2 首批可写/可同步字段现已冻结为 `displayName / userHandle / phone / email / avatarUrl`；`backgroundUrl / bio` 保持 owner 基线只读，`profileVisibility` 继续由 `isolationLevel` 派生。"
-      - "user-service 已落地 `ops.user.profile_subject_v1`，flag-off 时公开读取退回 personaId fallback，但不回退 `profileSubjectId / userHandle / 历史快照` 真相源。"
+      - "user-service 已落地 `ops.user.profile_subject_v1`，flag-off 时公开读取退回 personaId fallback，但不回退 `profileSubjectId / userHandle / 记录快照` 真相源。"
       - "`profile_subject_public_read_latency_ms / profile_subject_visibility_not_found_count / retired_subject_attribution_fallback_count / profile_subject_sync_scope_submit_count` 已具备运行时埋点与 T3 断言。"
       - "discovery projector 已显式写入 `profileSubjectId`，App `FeedItemDto` 新增 `authorProfileSubjectId`，发现流不再假设 `authorId == canonical subject`。"
       - "Journey 层现已诚实同步为：`J1=implemented`、`J3=partial`、`R1=partial`；M2 应表述为“主链路完成，阶段收尾完成，但 Journey 总体未完成”。"
   - timestamp: "2026-04-23T23:55:00+08:00"
     summary: >
       完成 persona-profile-subject-and-visibility 的 M2 主链路：公开 `ProfileSubject`
-      统一到 `userHandle` + `profileSubjectId`，strict/retired 公开不可见，历史归因覆盖扩到
+      统一到 `userHandle` + `profileSubjectId`，strict/retired 公开不可见，记录归因覆盖扩到
       content/comment/chat/notification，并回写 A1/A2/A3/S1 证据。
     reason: >
       M1 已完成分身管理主链路，但 M2 复核发现公开身份仍混用 `username / subAccountId / ownerUserId`，
-      `ProfileVisibility / IsolationLevel` 语义冲突，内容作者仍可回退旧 `authorId`，且历史归因只覆盖
+      `ProfileVisibility / IsolationLevel` 语义冲突，内容作者仍可回退旧 `authorId`，且记录归因只覆盖
       user 域局部来源。若不在本轮一次性收口，后续主页、内容、聊天会继续分叉解释“作者是谁”。
     change_type:
       - refine
@@ -288,11 +288,11 @@ entries:
       - "metadata 已统一：`ProfileSubjectType=user|persona`，公开 `ProfileSubjectView` 新增 `userHandle / isolationLevel`，公开 response 不再暴露 `ownerUserId`。"
       - "user-service 公开读改为按 `userHandle` 优先解析，strict/retired persona 返回 404；`profileVisibility` 由 `isolationLevel` 派生。"
       - "App 公开消费入口已切到 canonical `profileSubjectId` 与 snapshot 字段，`PostBaseDto.authorProfileSubjectId` 不再回退 `authorId`。"
-      - "`HasAttributedHistory` 已扩展到 `invite/greeting + posts/comments/messages/notifications`，retired persona 生命周期 guard 与历史快照证据已补齐。"
+      - "`HasAttributedHistory` 已扩展到 `invite/greeting + posts/comments/messages/notifications`，retired persona 生命周期 guard 与记录快照证据已补齐。"
       - "`ops.user.profile_subject_v1` 与 `profile_subject_public_read_latency_ms / profile_subject_visibility_not_found_count / retired_subject_attribution_fallback_count / profile_subject_sync_scope_submit_count` 已在设计中冻结为 rollout 与回滚基线，但运行时 telemetry 埋点尚未接入，因此 S1 维持 partial。"
   - timestamp: "2026-04-23T22:35:00+08:00"
     summary: >
-      收口 persona-management 的退役真实语义、历史归因 guard 与 delete-empty 语义一致性，
+      收口 persona-management 的退役真实语义、记录归因 guard 与 delete-empty 语义一致性，
       并把 A3/S1/J1 从 partial 回写为 implemented。
     reason: >
       第二轮复核确认 M1 的主要残缺不在入口或测试数量，而在领域语义本身：`retire` 仅返回 guard 视图、
@@ -338,7 +338,7 @@ entries:
       当前分身能力在管理入口、公开身份、跨域透传和特性树拆分上均存在断裂：主入口连到 mock 页，
       真实管理页未接路由，公开身份与 `ProfileSubject` 真相源漂移，下游 content/chat/circle/assistant
       仅完成字段预埋但没有形成闭环。进入 `/prd` 前必须冻结领域边界、Journey/Scenario 拆分、
-      生命周期、历史归因与灰度回滚基线。
+      生命周期、记录归因与灰度回滚基线。
     change_type:
       - refine
       - expand
@@ -763,7 +763,7 @@ entries:
     reason: >
       上一轮 `/dev` 虽已把分身管理主链路推到真实页面和 `/v1/user/personas` 契约上，但正式验收仍缺
       文档真相源回写、feature flag 一致性、缺失的路径/黑盒证据，以及 `S1` 所需的成功 telemetry
-      和降级验证。本轮先按复核计划收齐这些缺口，再诚实标注当前仍未完成的 A3 历史归因退役语义。
+      和降级验证。本轮先按复核计划收齐这些缺口，再诚实标注当前仍未完成的 A3 记录归因退役语义。
     change_type:
       - implement
       - validate
@@ -824,7 +824,7 @@ entries:
       - "`go test ./services/user-service/tests -run 'Test(CreatePersona|ActivatePersona|DeletePersona|GetPersonaManagementSummary|UpdatePersona|ApplyPersonaProfileSync|GetPersonaLifecycleGuard|RetirePersona|SubAccount_)'` 已通过。"
       - "`flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/content/post/contract/content_runtime_config_provider_test.dart test/ui/user/providers/persona_management_provider_test.dart test/cloud/integration/remote_api_path_contract_test.dart` 已通过。"
       - "本轮将 `A1 / A2` 回写为 implemented，`A3 / S1 / J1 / R1` 维持 partial。"
-      - "`retire` 的历史归因持久化语义仍未落地到 user 域实体；当前退役主要是 guard/分流合同，而非完整的持久化状态机。"
+      - "`retire` 的记录归因持久化语义仍未落地到 user 域实体；当前退役主要是 guard/分流合同，而非完整的持久化状态机。"
   - timestamp: "2026-04-24T19:15:00+08:00"
     summary: >
       执行 M5 rollout 基线：补齐 persona migration dry-run/validate 工具、flag 映射、

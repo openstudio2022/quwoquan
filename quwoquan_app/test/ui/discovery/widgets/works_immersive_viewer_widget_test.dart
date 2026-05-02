@@ -23,10 +23,9 @@ import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
 Map<String, MediaViewerPostWireRow> _viewerRawByPostId(
   Map<String, Map<String, dynamic>> raw,
-) =>
-    raw.map(
-      (id, row) => MapEntry(id, MediaViewerPostWireRow.fromDynamicMap(row)),
-    );
+) => raw.map(
+  (id, row) => MapEntry(id, MediaViewerPostWireRow.fromDynamicMap(row)),
+);
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -264,7 +263,9 @@ class _ConfigurableContentRepository extends MockContentRepository {
     getPostCallCount += 1;
     final detail = detailById[postId];
     if (detail != null) {
-      return ContentPostDetailPayload.fromWire(Map<String, dynamic>.from(detail));
+      return ContentPostDetailPayload.fromWire(
+        Map<String, dynamic>.from(detail),
+      );
     }
     return super.getPost(postId: postId);
   }
@@ -447,9 +448,7 @@ void main() {
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
   });
 
-  testWidgets('photo post 在 iPad 宽屏下顶部说明底部对齐到同一 media rail', (
-    tester,
-  ) async {
+  testWidgets('photo post 在 iPad 宽屏下顶部说明底部对齐到同一 media rail', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(1024, 1366);
     addTearDown(() {
@@ -501,6 +500,7 @@ void main() {
       find.byKey(const ValueKey('immersive-engagement-rail')),
     );
 
+    // photo 使用 mediaStage：全宽 rail，与图片/视频左右对齐。
     expect((topRailRect.left - AppSpacing.containerMd).abs(), lessThan(1));
     expect(
       (viewerRect.right - topRailRect.right - AppSpacing.containerMd).abs(),
@@ -545,9 +545,7 @@ void main() {
     expect(find.textContaining('今天风有点大'), findsOneWidget);
   });
 
-  testWidgets('text-only moment 在 iPad 宽屏下顶部内容底部共享 text rail', (
-    tester,
-  ) async {
+  testWidgets('text-only moment 在 iPad 宽屏下顶部内容底部共享 text rail', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(1024, 1366);
     addTearDown(() {

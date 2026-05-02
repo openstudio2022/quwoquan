@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tabs_loader.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
@@ -37,7 +38,8 @@ Map<String, CircleCategoryTabConfigDto> _searchNetworkCategoryTabsFixture() {
 
 class _SearchNetworkCategoryFixtureRepo extends MockCircleRepository {
   @override
-  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig() async {
+  Future<Map<String, CircleCategoryTabConfigDto>>
+  getCircleCategoryConfig() async {
     return _searchNetworkCategoryTabsFixture();
   }
 }
@@ -91,7 +93,16 @@ void main() {
   });
 
   testWidgets('切换频道后展示对应分类结果', (tester) async {
-    await tester.pumpWidget(_buildApp());
+    await tester.pumpWidget(
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '影',
+          initialNetworkTabId: 'xiaoqu',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
     await tester.pump();
     await tester.pumpAndSettle();
 
@@ -186,6 +197,46 @@ class _FakeNetworkSearchRepository implements SearchRepository {
   @override
   Future<SearchResponse> search(SearchRequest request) async {
     final normalized = request.normalized();
+    if (normalized.objectTypes.contains(SearchObjectType.contentPost)) {
+      final item = PostSearchItemView.fromMap(<String, dynamic>{
+        'postId': 'fake_street_photo',
+        'contentType': 'image',
+        'contentIdentity': 'work',
+        'title': '街头摄影',
+        'summary': '人文影像频道结果',
+        'coverUrl':
+            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+        'authorDisplayName': '街头摄影',
+        'circleName': '人文影像',
+        'categoryId': normalized.categoryId ?? 'humanity',
+        'subCategory': '影像',
+        'likeCount': 32,
+        'matchedField': 'author',
+      });
+      return SearchResponse(
+        request: normalized,
+        sections: <SearchSection>[
+          SearchSection(
+            id: 'content',
+            title: '内容',
+            objectTypes: const <SearchObjectType>[SearchObjectType.contentPost],
+            hits: <SearchHit>[
+              SearchHit(
+                objectType: SearchObjectType.contentPost,
+                objectId: item.postId,
+                title: item.title ?? item.postId,
+                subtitle: item.circleName,
+                snippet: item.summary,
+                resolvedFrom: SearchResolvedFrom.remote,
+                matchedField: item.matchedField,
+                payload: SearchHitPayloadContentPost(item),
+              ),
+            ],
+            resolvedFrom: SearchResolvedFrom.remote,
+          ),
+        ],
+      );
+    }
     if (normalized.objectTypes.contains(SearchObjectType.circleGroup) ||
         normalized.objectTypes.contains(SearchObjectType.circleCircle)) {
       return SearchResponse(
@@ -205,7 +256,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 title: '光影摄影社主群',
                 subtitle: '圈子主群',
                 resolvedFrom: SearchResolvedFrom.remote,
-                payload: const SearchHitPayloadLegacy(<String, dynamic>{
+                payload: const SearchHitPayloadWireMap(<String, dynamic>{
                   'circleId': 'circle_photo_01',
                   'groupId': 'group_light_photo',
                   'name': '光影摄影社主群',
@@ -238,7 +289,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 title: '西湖风景名胜区',
                 subtitle: '杭州市西湖区龙井路1号',
                 resolvedFrom: SearchResolvedFrom.remote,
-                payload: const SearchHitPayloadLegacy(<String, dynamic>{
+                payload: const SearchHitPayloadWireMap(<String, dynamic>{
                   'id': 'poi_west_lake',
                   'name': '西湖风景名胜区',
                   'latitude': 30.2431,

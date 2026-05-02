@@ -36,7 +36,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 - 用户轨：可读 Markdown（进度说明 + 结果卡片）
 
 ## 工具调用策略
-- 优先使用当前问句与历史记忆完成关键槽位补全。
+- 优先使用当前问句与记录记忆完成关键槽位补全。
 - 仅在必要时调用工具，且必须遵守最小权限原则。
 - 统一检索优先调用 `search`；仅当外部网页召回单独失败时，才回退到 `web_search`。
 - 工具失败允许一次重试；失败后返回降级说明与下一步。

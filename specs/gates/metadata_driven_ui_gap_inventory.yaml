@@ -1,5 +1,5 @@
 # 元数据驱动 UI 缺口清单（客户端）
-# 说明：status = compliant | partial | legacy_map | exempt
+# 说明：status = compliant | partial | current_map | exempt
 #   partial：含已用 DTO 但尚未满足 policy.post_projection_spec 中「完成定义」的页面（矩阵 P2 记 ○）
 # 扫描基线对齐：specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
 #   （ui/**/pages/*_page.dart、welcome_screen、components/**/*_page.dart、app/shell）
@@ -54,7 +54,7 @@ policy:
   non_assistant_weak_typing_p1_tranche_note: |
     里程碑「ContentRepository / UserProfileRepository 对外全 DTO 化」已完成：ContentPostDetailWireDto 嵌套子 projection（cards、circleSummaries、articleDocument、articleBlocks、articlePages）、
     ContentPostDetailPayload.mergedArticleWireMap、ContentAppConfigWire.wireRoot；Mock/Remote 仓库以 wire DTO / PostBaseDto / CommentDto 为会话态，profile ViewData.fromMap 已标 Deprecated。
-    遗留弱类型边界见各 Repository 类注释与 HTTP decode 窄区间（session_c §1.1）。
+    存量弱类型边界见各 Repository 类注释与 HTTP decode 窄区间（session_c §1.1）。
   non_assistant_weak_typing_p3_tranche_note: |
     local_chat_search_store 引入 LocalChatSearchContactWire（Map<String,Object?>）及 upsertContacts 强类型；同步侧用 Map<String,Object?>.from(dto.toMap())。
   contract_test_fixture_policy_ref: specs/gates/session_c_page_typing.md（§6 契约测试与 Map 断言）
@@ -153,7 +153,7 @@ domains:
     repository_notes:
       status: compliant
       note: |
-        reportBehaviors 事件项为 ContentBehaviorBatchEventDto（OpenAPI BehaviorEvent 对齐 + fromMap 兼容历史字段）；
+        reportBehaviors 事件项为 ContentBehaviorBatchEventDto（OpenAPI BehaviorEvent 对齐 + fromMap 兼容记录字段）；
         create/update/publish 等写体为 CreatePostRequestWire / PublishPostRequestWire 等 codegen 产物。
         媒体 init/complete/getAsset、视频封面、文章摘要、推荐响应为 post/projections/content_*_*.yaml 生成的 DTO（ContentRepository 强类型返回）。
         帖子只读 UI 经 PostBaseDto + PostReadPresentation + PostReadSurfaceId；圈子流等 raw 首过已在挂靠面收敛为 DTO+wire（见 post_projection_spec）。
@@ -281,7 +281,7 @@ domains:
         listProfileCircles 委托 listUserCircles，返回 CircleDto。
         资料页作品/微趣列表已接 PostSummaryView（PostReadSurfaceId.profileWorks / profileMoments）+ readPresentation。
         profile_homepage_models.dart 中 ProfileSocialRelationRowViewData、ProfileInteractionActivityViewData、ProfileUserLikeRowViewData、RecentSearchEntryView、SocialRelationSearchItemView 等仍为手写 fromMap 读模型（可逐路由补 projection）。
-        RecentSearchEntryView 已在 global_search_page 历史 chips 侧试点 RecentSearchReadPresentation（app 内读模型，待 metadata 投影/codegen 对齐）。
+        RecentSearchEntryView 已在 global_search_page 记录 chips 侧试点 RecentSearchReadPresentation（app 内读模型，待 metadata 投影/codegen 对齐）。
     ui_pages:
       - path: quwoquan_app/lib/ui/user/pages/other_profile_page.dart
         status: compliant
@@ -375,7 +375,7 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
         status: compliant
-        note: 本页无直接帖子卡；网络帖子命中在 search_network_results（PostSummaryView searchCard）；历史 chips RecentSearchReadPresentation
+        note: 本页无直接帖子卡；网络帖子命中在 search_network_results（PostSummaryView searchCard）；记录 chips RecentSearchReadPresentation
         target_dto: SearchHit
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
@@ -450,6 +450,10 @@ domains:
         status: compliant
         note: 时间轴 `AssistantTranscriptTimelineRow` + C4 `PersistedAssistantTimelinePayload`（`PersistedTimelineTurnCodec`）；云 API 仍须 assistant metadata + Repository
         target_dto: AssistantTranscriptTimelineRow
+      - path: quwoquan_app/lib/ui/assistant/pages/personal_assistant_conversation_page.dart
+        status: compliant
+        note: “找私助”并行入口；通过 AssistantRepository 消费 AssistantConversationWire / AssistantTurnEnvelopeWire / AssistantStreamEventWire / SkillSubscriptionWire，并经 AppMessageRepository 展示 P0 主动 Skill 消息摘要与反馈入口
+        target_dto: AssistantStreamEventWire + SkillSubscriptionWire + AppMessageWire
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_tab_page.dart
         status: compliant
         note: Tab 壳；无页内云行 Map
@@ -470,7 +474,7 @@ domains:
         target_dto: AssistantLocalSessionSummaryView
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_chat_settings_page.dart
         status: compliant
-        note: 历史与会话偏好经 AssistantLocalSessionSummaryView / AssistantSessionDetailView
+        note: 记录与会话偏好经 AssistantLocalSessionSummaryView / AssistantSessionDetailView
         target_dto: AssistantSessionDetailView
 
   - id: welcome

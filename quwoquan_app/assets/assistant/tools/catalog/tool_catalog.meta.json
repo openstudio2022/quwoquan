@@ -100,7 +100,7 @@
       "displayName": "应用信息检索",
       "purpose": "统一检索应用内个人、他人及全站内容信息",
       "whenToUse": [
-        "需要检索聊天消息、帖子、浏览历史、用户或圈子",
+        "需要检索聊天消息、帖子、浏览记录、用户或圈子",
         "需要从应用内内容补充事实依据",
         "需要限制站内对象类型并返回结构化命中结果"
       ],
@@ -194,7 +194,7 @@
       "routing": {
         "toolKind": "retrieval",
         "supportsTaskGraphArgs": true,
-        "internalOnlyParameters": ["queryVariants"]
+        "internalOnlyParameters": ["queryVariants", "searchPlans"]
       },
       "uiContribution": {
         "references": true,
@@ -443,11 +443,11 @@
     {
       "toolName": "memory_search",
       "displayName": "记忆检索",
-      "purpose": "搜索用户的长期记忆，包括偏好、历史对话要点、重要日期等",
+      "purpose": "搜索用户的长期记忆，包括偏好、记录对话要点、重要日期等",
       "whenToUse": [
         "用户提到过去的对话或偏好",
         "需要用户个人上下文来个性化回答",
-        "涉及用户习惯、喜好或历史记录"
+        "涉及用户习惯、喜好或记录记录"
       ],
       "routing": {
         "toolKind": "retrieval",
@@ -485,7 +485,7 @@
       "requiredOutputPaths": ["query", "resultCount"],
       "openAiFunction": {
         "name": "memory_search",
-        "description": "搜索用户的长期记忆，包括偏好、历史对话要点、重要日期等。用于个性化回答。",
+        "description": "搜索用户的长期记忆，包括偏好、记录对话要点、重要日期等。用于个性化回答。",
         "parameters": {
           "type": "object",
           "properties": {

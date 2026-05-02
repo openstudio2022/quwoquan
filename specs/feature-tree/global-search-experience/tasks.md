@@ -5,7 +5,7 @@
 
 ## 当前交付任务
 
-- [x] T1: 新建独立 `global-search-experience` L1，并完成历史 chat 搜索节点治理退出与索引对齐 → C1
+- [x] T1: 新建独立 `global-search-experience` L1，并完成记录 chat 搜索节点治理退出与索引对齐 → C1
 - [x] T2: 冻结 `_shared`、`content`、`user`、`messages`、`circle`、`assistant` 的搜索 metadata 拓扑与职责边界 → C1 C2
 - [x] T3: 冻结全局搜索的商用基线、生命周期、弱网降级、一把上线与整版回滚口径 → C2 C3
 - [x] T4: 补齐 `README.md`、`tasks.md`、`acceptance.yaml` 交付状态与证据，保证能力节点可通过仓库级 gate → C1 C2 C3

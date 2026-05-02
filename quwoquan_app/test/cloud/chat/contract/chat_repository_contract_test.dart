@@ -28,14 +28,14 @@ void main() {
       expect(inbox.first.id, isNotEmpty);
     });
 
-    test('listInbox 包含 unread / mention / 头像拼图字段', () async {
+    test('listInbox 包含 unread / mention / 会话头像字段', () async {
       final inbox = await repo.listInbox();
       expect(inbox, isNotEmpty);
       final first = inbox.first;
       expect(first.title, isNotEmpty);
       expect(first.unreadCount, greaterThanOrEqualTo(0));
       expect(first.mentionUnreadCount, greaterThanOrEqualTo(0));
-      expect(first.avatarCompositeUrls, isA<List<String>>());
+      expect(first.avatarUrl, isA<String>());
     });
 
     test('listConversations 与 listInbox 同为 ChatInboxDto', () async {
@@ -134,8 +134,7 @@ void main() {
         sort: 'display_name_asc',
       );
       final names = members
-          .map((m) =>
-              m.displayName.isNotEmpty ? m.displayName : m.userId)
+          .map((m) => m.displayName.isNotEmpty ? m.displayName : m.userId)
           .toList();
       final sorted = [...names]..sort();
       expect(names, orderedEquals(sorted));

@@ -1,0 +1,19 @@
+# prod-gray overrides (production gray release)
+# Recommend injecting APP_ENV=prod, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
+service:
+  http:
+    addr: ":18086"
+
+mongodb:
+  uri: "${MONGO_URI}"
+  database: "quwoquan_product_ops"
+
+redis:
+  rec:
+    mode: cluster
+    addrs: []
+    tls: true
+  general:
+    mode: cluster
+    addrs: []
+    tls: true

@@ -67,9 +67,10 @@
 
 | Secret | 用途 |
 |--------|------|
-| **STAGING_BASE_URL** | integration API 地址（L3/L4 使用） |
-| **STAGING_TEST_AUTH_TOKEN** | L3/L4 鉴权 Token |
-| **INTEGRATION_KUBECONFIG** | integration 集群 kubeconfig，**base64 编码** |
+| **GAMMA_BASE_URL** | gamma API 地址（L3/L4 使用） |
+| **GAMMA_PRODUCT_OPS_BASE_URL** | gamma Product Ops API 地址（L3 使用） |
+| **GAMMA_TEST_AUTH_TOKEN** | L3/L4 鉴权 Token |
+| **GAMMA_KUBECONFIG** | gamma 集群 kubeconfig，**base64 编码** |
 | **GCP_SERVICE_ACCOUNT_KEY** | Firebase Test Lab 凭证 |
 | **FTL_RESULTS_BUCKET** | FTL 结果存储桶（如 `gs://my-bucket`） |
 
@@ -81,8 +82,8 @@
 
 ### 说明
 
-- `INTEGRATION_KUBECONFIG` 未配置时，deploy-integration 仅 skip，不 fail。
-- L3/L4 依赖 deploy-integration 完成，需 integration 已部署且 `STAGING_BASE_URL` 可访问。
+- `GAMMA_KUBECONFIG` 未配置时，deploy-integration 仅 skip，不 fail。
+- L3/L4 依赖 deploy-integration 完成，需 gamma 已部署且 `GAMMA_BASE_URL` 可访问。
 
 ---
 

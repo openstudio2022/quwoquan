@@ -48,7 +48,7 @@ tests:
 execution:
   local_gate: make gate
   full_gate: make gate-full
-legacy_merged_acceptance:
+current_merged_acceptance:
 - source_path: runtime/runtime-eventstore/event-persist-and-publish/mongo-event-collection-and-mq-integration/event-replay-and-schema-evolution
   task_bucket: event-replay-and-schema-evolution
   migrated_as: L3_task

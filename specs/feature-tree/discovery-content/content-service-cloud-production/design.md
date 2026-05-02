@@ -209,11 +209,11 @@ Projector 通过 Redis Pub/Sub 订阅 PostCreated 事件，异步写入投影。
 
 ---
 
-## 遗留带规划任务
+## 存量带规划任务
 
-| 遗留项 | 规划 | 承接节点 |
+| 存量项 | 规划 | 承接节点 |
 |--------|------|----------|
 | runtime Factory 全量迁移 | 新聚合根引入时启动 | content-type-framework |
 | 创作页目录迁移 (features/create → ui/content/entry) | 下次 UI 重构时 | dual-rail-discovery-redesign |
 | Report 举报体系 | 独立 L3 特性 | publish-comment-reaction |
-| `_LegacyContentDataService` 移除 | FeedItemDto 清理后 | 本特性 client-api-alignment |
+| `_CurrentContentDataService` 移除 | FeedItemDto 清理后 | 本特性 client-api-alignment |

@@ -166,26 +166,26 @@ void main() {
     }
   });
 
-  test('Rule-1: load() 会清空旧版历史存储', () async {
+  test('Rule-1: load() 会清空过往版本记录存储', () async {
     final sm = await _loadFrom(tempDir, {
       'version': 'v2',
       'activeSessionId': 'assistant',
       'sessions': {
         'assistant': [
           {'role': 'user', 'content': '深圳天气'},
-          {'role': 'assistant', 'content': '老历史回答'},
+          {'role': 'assistant', 'content': '老记录回答'},
         ],
       },
       'metadata': {},
     });
 
-    expect(sm.sessions, isEmpty, reason: '旧版历史不再兼容，应在 load() 时被清空');
+    expect(sm.sessions, isEmpty, reason: '过往版本记录不再兼容，应在 load() 时被清空');
     final stored = await _readStoredPayload(tempDir);
     expect(stored['version'], equals(assistantHistoryStorageVersion));
     expect(stored['sessions'], isEmpty);
   });
 
-  test('Rule-2: load() 保留 canonical assistant 历史并以 timeline 恢复', () async {
+  test('Rule-2: load() 保留 canonical assistant 记录并以 timeline 恢复', () async {
     final sm = await _loadFrom(tempDir, {
       'version': assistantHistoryStorageVersion,
       'activeSessionId': 'assistant',
@@ -280,7 +280,7 @@ void main() {
     expect(messages.last['role'], equals('assistant'));
   });
 
-  test('Rule-3: 当前 v1 assistant 历史不满足 canonical schema 时整段清理', () async {
+  test('Rule-3: 当前 v1 assistant 记录不满足 canonical schema 时整段清理', () async {
     final sm = await _loadFrom(tempDir, {
       'version': assistantHistoryStorageVersion,
       'activeSessionId': 'assistant',
@@ -299,7 +299,7 @@ void main() {
     expect(
       sm.getOrCreateSession('assistant'),
       isEmpty,
-      reason: '新版存储下不再兼容缺失 journey/uiProcessTimeline 的 assistant 历史',
+      reason: '新版存储下不再兼容缺失 journey/uiProcessTimeline 的 assistant 记录',
     );
   });
 
@@ -530,7 +530,7 @@ void main() {
     expect(historyState.lastAcceptedEvidenceSummary, contains('weather'));
   });
 
-  test('Rule-6: root-level 旧历史格式不再兼容，load() 后直接清空', () async {
+  test('Rule-6: root-level 旧记录格式不再兼容，load() 后直接清空', () async {
     final sm = await _loadFrom(tempDir, {
       'assistant': [
         {'role': 'user', 'content': '问题'},

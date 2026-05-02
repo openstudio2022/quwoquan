@@ -1,0 +1,26 @@
+dart_class: AssistantSkillManifestWire
+library_path: assistant/generated/contracts/assistant_skill_manifest.g.dart
+output_path: assistant/generated/contracts/assistant_skill_manifest.g.dart
+contract: assistant_skill_manifest
+version: assistant_skill_manifest.m5
+kind: shared_wire_contract
+fields:
+  - { name: skillId, type: string, required: true }
+  - { name: displayName, type: string, required: true }
+  - { name: description, type: string, default: '' }
+  - { name: domainId, type: string, required: true }
+  - { name: tagRefs, type: list<string>, default: [] }
+  - { name: executionTarget, type: string, default: cloud }
+  - { name: routingHints, type: list<string>, default: [] }
+  - { name: promptAssets, type: list<string>, default: [] }
+  - { name: toolPolicy, type: object, ref: tool_policy, default: {} }
+  - { name: examples, type: list<string>, default: [] }
+subcontracts:
+  tool_policy:
+    class_name: AssistantSkillToolPolicyWire
+    fields:
+      - { name: allowedTools, type: list<string>, default: [] }
+      - { name: preferredTools, type: list<string>, default: [] }
+      - { name: maxToolCalls, type: int, default: 4 }
+      - { name: allowDeviceContext, type: bool, default: false }
+      - { name: allowDeviceActionProposal, type: bool, default: false }

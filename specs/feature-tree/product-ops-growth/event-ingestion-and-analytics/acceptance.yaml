@@ -135,7 +135,7 @@ evidence_matrix:
     - type: test
       artifact: quwoquan_service/services/product-ops-service/tests/visit_event_contract_test.go
     - type: note
-      artifact: staging 环境必须配置 STAGING_BASE_URL / TEST_AUTH_TOKEN，并验证 page access、analytics、visit、behavior、assistant learning 的端到云与 dashboard/查询一致性
+      artifact: gamma 环境必须配置 GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN，并验证 page access、analytics、visit、behavior、assistant learning 的端到云与 dashboard/查询一致性
   T4:
     - type: test
       artifact: quwoquan_app/test/patrol/ops/event_ingestion_journey_test.dart

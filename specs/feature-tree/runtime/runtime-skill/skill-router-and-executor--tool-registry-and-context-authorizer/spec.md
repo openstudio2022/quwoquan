@@ -14,7 +14,7 @@
 - A6：DataClassMax 权限拒绝 + 授权流程正确。
 - A8：权限和授权全路径单元测试。
 
-## Folded legacy node `skill-store-and-ecosystem`
+## Folded current node `skill-store-and-ecosystem`
 
 # L5 横切能力：skill-store-and-ecosystem
 

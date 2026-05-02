@@ -1,6 +1,6 @@
 package codegen
 
-// generatorConfig holds optional generation behavior (defaults match legacy output).
+// generatorConfig holds optional generation behavior (defaults match current output).
 type generatorConfig struct {
 	typedEnums         bool
 	resolveSliceEntity bool

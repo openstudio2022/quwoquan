@@ -1,0 +1,14 @@
+{
+  "status": "packaged",
+  "env": "alpha",
+  "runtimeEnv": "alpha",
+  "dataSource": "mock",
+  "gatewayBaseUrl": "http://127.0.0.1:18080",
+  "realtimeBaseUrl": "",
+  "avatarCdnBaseUrl": "http://127.0.0.1:18088",
+  "imageCdnBaseUrl": "http://127.0.0.1:18088",
+  "videoCdnBaseUrl": "http://127.0.0.1:18088",
+  "uploadBaseUrl": "http://127.0.0.1:18088",
+  "currentUserId": "fixture_user_current",
+  "seedManifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json"
+}

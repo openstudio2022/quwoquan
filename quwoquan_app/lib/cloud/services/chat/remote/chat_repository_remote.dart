@@ -13,6 +13,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dt
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
@@ -647,14 +648,57 @@ class RemoteChatRepository implements ChatRepository {
   Future<List<ChatContactTabCircleRowDto>> listContactTabCircles({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return const [];
+    final uri = _uri(
+      CircleApiMetadata.listCirclesPath,
+      queryParameters: <String, String>{'limit': '$limit'},
+    );
+    final decoded = await _httpClient.getJson(
+      uri,
+      headers: _headersForSurface(
+        AppUiSurfaces.chatList,
+        operationId: ChatApiMetadata.listContactsOperation,
+        clientPageId: ChatRequestPageIds.listContacts,
+      ),
+    );
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ChatRequestPageIds.listContacts,
+    );
+    final items = obj['items'];
+    if (items is! List) {
+      return const <ChatContactTabCircleRowDto>[];
+    }
+    return items
+        .whereType<Map<String, dynamic>>()
+        .take(limit)
+        .map(
+          (m) => ChatContactTabCircleRowDto.fromMap(<String, dynamic>{
+            'circleId': m['circleId'] ?? m['id'],
+            'displayName': m['displayName'] ?? m['name'],
+            'avatarUrl': m['avatarUrl'] ?? m['coverUrl'],
+            'subtitle': m['description'] ?? '',
+          }),
+        )
+        .toList(growable: false);
   }
 
   @override
   Future<List<ChatContactTabFunGroupRowDto>> listContactTabFunGroups({
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return const [];
+    final conversations = await listConversations(limit: limit);
+    return conversations
+        .where((item) => item.type == 'group')
+        .take(limit)
+        .map(
+          (item) => ChatContactTabFunGroupRowDto(
+            conversationId: item.id,
+            displayName: item.title,
+            avatarUrl: item.avatarUrl,
+            subtitle: item.lastMessagePreview,
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override

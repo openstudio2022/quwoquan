@@ -10,7 +10,7 @@ alwaysApply: true
 - **`lib/ui/**`、`lib/app/**`、`lib/core/**`** 禁止 **`import .../cloud/services/*/mock/`**。域名假数据只存在于 **`Mock*Repository` 实现** 或 **`test/`**。
 - **禁止**在 `lib/ui/**/models/**` 使用 **`prototypeCircles` / `prototypeGroups`** 等 **域名 const 列表**（外链图、业务 id）；一律迁到 **`MockChatRepository`（或对应 Mock）**。
 - **新增页面 / Provider**：只通过 **`xxxRepositoryProvider` + `appDataSourceModeProvider`** 取数；不得为走捷径再拷一份 Mock 列表进 UI。
-- **禁止**向 [`specs/gates/ui_mock_isolation_allowlist.yaml`](specs/gates/ui_mock_isolation_allowlist.yaml) **新增** 豁免行掩盖新债；清理历史时 **删除** 对应行。
+- **禁止**向 [`specs/gates/ui_mock_isolation_allowlist.yaml`](specs/gates/ui_mock_isolation_allowlist.yaml) **新增** 豁免行掩盖新债；清理记录时 **删除** 对应行。
 - **Remote*Repository** 不得长期 **整类委托** `Mock*Repository` 充当线上数据（见 `RemoteAppContentRepository` 类技术债）。
 
 ## 正式发行（与策略 §5.1 对齐）
@@ -25,12 +25,16 @@ alwaysApply: true
 
 - **一键切换**：全应用只经 **`appDataSourceModeProvider` / `AppDataSourceMode`** 在 Mock ↔ Remote 间切换；不得为单页另起并行开关。
 - **本地默认**：Debug 可默认 mock、`--dart-define=APP_DATA_SOURCE=mock` 仅用于开发/CI，**不得**用于商店构建。
+- **Contract Seed**：新增 alpha mock 数据必须先进入 `quwoquan_service/contracts/metadata/**/test_fixtures` 与 `_shared/test_fixtures/app_alpha_seed_manifest.json`；禁止在 UI、Provider、脚本中新增第二套业务列表。
+- **Beta/Gamma Remote**：`APP_RUNTIME_ENV=beta|gamma` 时必须使用 RemoteRepository 或 gateway/API seed 数据，禁止读取 Dart mock 数据源；人工 beta 数据必须来自 `_shared/test_fixtures/app_beta_seed_manifest.json`。
+- **生产包**：App 只有一个 `prod` 包，不存在 `app-prod-gray`；生产配置禁止 `test_fixtures`、`seedRefs`、`requiresSeedReset` 与 mock 数据源。
 
 ## 门禁
 
 - `python3 scripts/verify_ui_mock_isolation.py`（已串联 `make gate` → `scripts/gate_repo.sh --scope app`）。
 - `python3 scripts/verify_lib_no_test_only_symbols.py`（`lib/**` 内 `createForTest` / `createTestAssistantRuntime` 仅 allowlist 豁免）；本地：`make verify-app-lib-test-only-symbols`。
 - 本地：`make verify-app-mock-isolation`。
+- 本地：`make verify-app-seed-manifest`。
 
 ## 与横向矩阵
 

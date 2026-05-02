@@ -1,7 +1,7 @@
 # 运营与部署手册
 
 > **版本**：v1.2 · **日期**：2026-03-15
-> **合并自**：旧版发布 Runbook · 旧版验收清单 · 旧版灰度模板 · deployment.md · model_integration.md
+> **合并自**：过往版本发布 Runbook · 过往版本验收清单 · 过往版本灰度模板 · deployment.md · model_integration.md
 
 ---
 

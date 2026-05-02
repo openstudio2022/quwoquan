@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 GATEWAY_FILE = ROOT / "quwoquan_app/lib/assistant/application/capability_gateway.dart"
-AGENT_LOOP_FILE = ROOT / "quwoquan_app/lib/assistant/internal_legacy/engine/agent_loop.dart"
+AGENT_LOOP_FILE = ROOT / "quwoquan_app/lib/assistant/internal_current/engine/agent_loop.dart"
 
 
 def error(msg: str) -> None:

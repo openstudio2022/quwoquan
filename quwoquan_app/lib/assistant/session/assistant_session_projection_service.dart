@@ -9,8 +9,8 @@ class AssistantSessionProjectionService {
     PreferenceFactService preferenceFactService = const PreferenceFactService(),
     AssistantSessionSummaryBuilder summaryBuilder =
         const AssistantSessionSummaryBuilder(),
-  })  : _preferenceFactService = preferenceFactService,
-        _summaryBuilder = summaryBuilder;
+  }) : _preferenceFactService = preferenceFactService,
+       _summaryBuilder = summaryBuilder;
 
   final PreferenceFactService _preferenceFactService;
   final AssistantSessionSummaryBuilder _summaryBuilder;
@@ -64,9 +64,7 @@ class AssistantSessionProjectionService {
     Map<String, Map<String, dynamic>> sessionMeta,
     String sessionId,
   ) {
-    final raw = (sessionMeta[sessionId]?['topicTitle'] ?? '')
-        .toString()
-        .trim();
+    final raw = (sessionMeta[sessionId]?['topicTitle'] ?? '').toString().trim();
     if (raw.isNotEmpty) return raw;
     return _defaultTopicTitle;
   }
@@ -151,5 +149,5 @@ class AssistantSessionProjectionService {
     );
   }
 
-  static const String _defaultTopicTitle = '全部历史';
+  static const String _defaultTopicTitle = '全部记录';
 }

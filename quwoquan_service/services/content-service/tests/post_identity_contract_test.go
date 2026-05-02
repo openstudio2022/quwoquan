@@ -388,12 +388,12 @@ func TestCircleVisiblePostAllowsCircleMemberViewer(t *testing.T) {
 	}
 }
 
-func TestProjectionRebuildDryRunBackfillsLegacyFields(t *testing.T) {
+func TestProjectionRebuildDryRunBackfillsCurrentFields(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := createPostWithAuthor(t, "rebuild_author", `{
 		"contentType":"article",
-		"title":"历史作品",
+		"title":"记录作品",
 		"body":"等待补投影"
 	}`)
 	postID, _ := created["_id"].(string)
@@ -411,7 +411,7 @@ func TestProjectionRebuildDryRunBackfillsLegacyFields(t *testing.T) {
 			},
 		},
 	); err != nil {
-		t.Fatalf("unset legacy fields: %v", err)
+		t.Fatalf("unset current fields: %v", err)
 	}
 	if _, err := mongoDB.Collection("rm_discovery_feed").DeleteMany(
 		context.Background(),

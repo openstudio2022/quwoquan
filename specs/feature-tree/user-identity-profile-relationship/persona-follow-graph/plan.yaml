@@ -22,7 +22,7 @@ slices:
     done_when:
       - "`user_profile / follow_edge / block_edge / content/post / messages/conversation / assistant/*` 的字段、request_context、errors 与路由边界冻结"
       - "`PersonaProfileView`、`ActivePersonaContextView`、`RelationshipCapabilityView` 与 graph list item 可由 metadata 表达"
-      - 历史 `OwnerAccount / SubAccount / ProfileSubject / username` 主链路命名退出 metadata
+      - 记录 `OwnerAccount / SubAccount / ProfileSubject / username` 主链路命名退出 metadata
       - feature flag 与 telemetry schema 有正式落点
     status: partial
     notes:
@@ -129,7 +129,7 @@ slices:
       - T4_user_journey
       - T4_release_rehearsal
     done_when:
-      - 历史 `user / persona / relation / content / message` 数据到新 `personaId / userHandle` 的重整路径明确并完成演练
+      - 记录 `user / persona / relation / content / message` 数据到新 `personaId / userHandle` 的重整路径明确并完成演练
       - 三类开关、关键指标和回滚动作可执行
       - Journey 级主路径回归清单、灰度门槛与失败处置手册明确
     status: partial

@@ -13,7 +13,7 @@ quwoquan/
 ├── openspec/              # OpenSpec 能力规格与变更（从根目录运行，不依赖子模块）
 ├── quwoquan_app/          # Flutter 端侧（子模块）
 │   ├── .cursor/           #   端侧 AI 规则/命令/skills
-│   └── legacy/            #   归档文档（仅参考）
+│   └── current/            #   归档文档（仅参考）
 ├── quwoquan_service/      # Go 云侧
 │   ├── contracts/         #   端云契约（metadata + OpenAPI + 领域契约）
 │   ├── runtime/           #   公共运行时（横切能力统一实现）

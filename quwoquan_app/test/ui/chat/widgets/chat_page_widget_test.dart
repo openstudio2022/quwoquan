@@ -37,6 +37,18 @@ Widget _scopedApp({ChatRepository? mock}) {
   );
 }
 
+void _suppressImageErrors() {
+  final original = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    final message = details.exceptionAsString();
+    if (message.contains('HTTP request failed') ||
+        message.contains('NetworkImageLoadException')) {
+      return;
+    }
+    original?.call(details);
+  };
+}
+
 void main() {
   group('ChatPage — 渲染契约', () {
     testWidgets('正常渲染聊天列表页', (tester) async {
@@ -59,7 +71,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('产品共创群').first);
+      await tester.tap(find.text('契约旅行搭子群').first);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('chat-detail-page')), findsOneWidget);
     });
@@ -123,14 +135,38 @@ void main() {
       expect(find.text(UITextConstants.noConversations), findsOneWidget);
     });
 
-    testWidgets('群头像 URL 缺失时回退到默认群图标', (tester) async {
+    testWidgets('群头像 URL 缺失时使用姓名首字母占位（不再显示默认群图标）', (tester) async {
       await tester.pumpWidget(
         _scopedApp(mock: _GroupAvatarFallbackChatRepository()),
       );
       await tester.pumpAndSettle();
 
       expect(find.text('默认群头像兜底'), findsOneWidget);
-      expect(find.byIcon(Icons.group), findsWidgets);
+      expect(find.byIcon(Icons.group), findsNothing);
+      expect(find.text('默'), findsWidgets);
+    });
+
+    testWidgets('群会话使用 avatarUrl 作为预渲染群头像', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        _scopedApp(mock: _RenderedGroupAvatarChatRepository()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('预渲染群头像'), findsOneWidget);
+      expect(find.byType(Image), findsWidgets);
+      expect(find.byIcon(Icons.group), findsNothing);
+    });
+
+    testWidgets('群会话缺失 avatarUrl 时不再渲染九宫格拼图', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        _scopedApp(mock: _GroupAvatarCompositeChatRepository()),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('组合群头像兜底'), findsOneWidget);
+      expect(find.text('组'), findsWidgets);
     });
   });
 }
@@ -159,7 +195,50 @@ class _GroupAvatarFallbackChatRepository extends MockChatRepository {
         type: 'group',
         title: '默认群头像兜底',
         avatarUrl: '',
-        groupAvatarUrl: '',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<ChatInboxDto>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return listInbox(cursor: cursor, limit: limit);
+  }
+}
+
+class _RenderedGroupAvatarChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return <ChatInboxDto>[
+      ChatInboxDto(
+        id: 'conv_rendered_group',
+        type: 'group',
+        title: '预渲染群头像',
+        avatarUrl: 'https://example.com/group-rendered.jpg',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<ChatInboxDto>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return listInbox(cursor: cursor, limit: limit);
+  }
+}
+
+class _GroupAvatarCompositeChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return <ChatInboxDto>[
+      ChatInboxDto(
+        id: 'conv_composite_group',
+        type: 'group',
+        title: '组合群头像兜底',
+        avatarUrl: '',
       ),
     ];
   }

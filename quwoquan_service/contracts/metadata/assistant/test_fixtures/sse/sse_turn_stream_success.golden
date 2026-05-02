@@ -1,0 +1,12 @@
+event: assistant.turn
+data: {"schemaVersion":"assistant_stream_event.m5","eventId":"evt_tool_001","conversationId":"acv_replay_tool","turnId":"atn_replay_tool","seq":1,"eventType":"turn_started","traceId":"trace_replay_tool","payload":{"status":"running"},"createdAt":"2026-04-29T00:01:00Z"}
+
+event: assistant.turn
+data: {"schemaVersion":"assistant_stream_event.m5","eventId":"evt_tool_002","conversationId":"acv_replay_tool","turnId":"atn_replay_tool","seq":2,"eventType":"tool_use_requested","traceId":"trace_replay_tool","payload":{"toolName":"mock_search"},"createdAt":"2026-04-29T00:01:01Z"}
+
+event: assistant.turn
+data: {"schemaVersion":"assistant_stream_event.m5","eventId":"evt_tool_003","conversationId":"acv_replay_tool","turnId":"atn_replay_tool","seq":3,"eventType":"tool_result_received","traceId":"trace_replay_tool","payload":{"toolName":"mock_search","summary":"Found accelerator supply, export rules, and inference cost updates."},"createdAt":"2026-04-29T00:01:02Z"}
+
+event: assistant.turn
+data: {"schemaVersion":"assistant_stream_event.m5","eventId":"evt_tool_004","conversationId":"acv_replay_tool","turnId":"atn_replay_tool","seq":4,"eventType":"final_answer","traceId":"trace_replay_tool","payload":{"text":"Recent AI chip news focuses on accelerator supply, export rules, and inference cost."},"createdAt":"2026-04-29T00:01:03Z"}
+

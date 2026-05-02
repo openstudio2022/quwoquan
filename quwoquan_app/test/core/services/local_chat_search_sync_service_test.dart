@@ -87,11 +87,11 @@ void main() {
 
       final ownerContacts = await store.searchContacts(
         namespace: ownerNamespace,
-        query: '李',
+        query: 'fixture_user_friend',
       );
       final subContacts = await store.searchContacts(
         namespace: subNamespace,
-        query: '李',
+        query: 'fixture_user_friend',
       );
 
       expect(ownerContacts, isNotEmpty);
@@ -116,7 +116,7 @@ void main() {
       );
       final contacts = await store.searchContacts(
         namespace: namespace,
-        query: '李',
+        query: 'fixture_user_friend',
       );
       expect(contacts, isNotEmpty);
     });

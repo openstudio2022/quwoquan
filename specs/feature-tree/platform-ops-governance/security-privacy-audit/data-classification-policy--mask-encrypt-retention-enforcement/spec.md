@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `privacy-audit-sampling`
+## Folded current node `privacy-audit-sampling`
 
 # L5 特性：privacy-audit-sampling
 

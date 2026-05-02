@@ -1,0 +1,32 @@
+{
+  "cases": [
+    {
+      "caseId": "m9_daily_assistant_morning",
+      "skillId": "daily_assistant",
+      "inputText": "每天早上提醒我今天的生活、工作和学习计划",
+      "expectedTitle": "每日助手：早间计划",
+      "expectedSummaryContains": ["为什么提醒你", "今日重点", "学习计划"]
+    },
+    {
+      "caseId": "m9_news_briefing_morning",
+      "skillId": "news_briefing",
+      "inputText": "每天早上给我人工智能和半导体新闻摘要",
+      "expectedTitle": "新闻简报：人工智能新闻",
+      "expectedSummaryContains": ["为什么提醒你", "公开来源", "产业政策"]
+    },
+    {
+      "caseId": "m9_stock_sentinel_open",
+      "skillId": "stock_sentinel",
+      "inputText": "每天开盘前提醒我关注的股票重大消息",
+      "expectedTitle": "股票哨兵：重大消息摘要",
+      "expectedSummaryContains": ["为什么提醒你", "重大信息", "非投资建议"]
+    },
+    {
+      "caseId": "m9_travel_journey_manager_departure",
+      "skillId": "travel_journey_manager",
+      "inputText": "每天出发前提醒我行程天气、路况和景点拥堵",
+      "expectedTitle": "出行管家：今日行程提醒",
+      "expectedSummaryContains": ["为什么提醒你", "天气", "拥堵"]
+    }
+  ]
+}

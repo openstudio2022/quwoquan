@@ -148,7 +148,7 @@ class _FakeSearchRepository implements SearchRepository {
               title: '摄影入门',
               subtitle: '站内内容',
               resolvedFrom: SearchResolvedFrom.remote,
-              payload: SearchHitPayloadLegacy(<String, dynamic>{
+              payload: SearchHitPayloadWireMap(<String, dynamic>{
                 'postId': 'post_1',
                 'contentType': 'article',
                 'title': '摄影入门',

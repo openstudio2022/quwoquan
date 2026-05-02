@@ -45,7 +45,7 @@
 ## Mock 与端云隔离（强制）
 
 > 策略全文：[`mock_data_cloud_integration_policy.md`](./mock_data_cloud_integration_policy.md)  
-> **禁止**为本 PR **新增** `specs/gates/ui_mock_isolation_allowlist.yaml` 条目；仅允许在清历史债时 **删除** 已有条目。
+> **禁止**为本 PR **新增** `specs/gates/ui_mock_isolation_allowlist.yaml` 条目；仅允许在清记录债时 **删除** 已有条目。
 
 - [x] `lib/ui/**`、`lib/app/**`、`lib/core/**` **未新增** `import 'package:quwoquan_app/.../mock/...'`。
 - [x] **未新增** UI 模型中的域名占位（如 `prototypeCircles`、`unsplash` 业务头像链等）；假数据只放在 **`Mock*Repository` 或 `test/`**。

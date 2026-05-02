@@ -9,7 +9,7 @@
 > - `PERSONAL_ASSISTANT_SKILL_AND_TOOL_EXTENSIBILITY.md`
 > - `PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md`
 >
-> 本文档保留为历史详细参考，不再作为第一入口。
+> 本文档保留为记录详细参考，不再作为第一入口。
 >
 > **迁移说明**：当前端侧助理的公开入口已收口到 `lib/assistant/{application,domain,orchestration,capabilities,infrastructure,generated}`。`lib/personal_assistant/` 仍承载内部实现与兼容 wrapper，但不再作为新增 UI / provider / gateway 的首选依赖。
 
@@ -34,7 +34,7 @@
 flowchart TB
     subgraph input [输入层]
         UserQuery[用户消息]
-        History[会话历史 + 长期记忆]
+        History[会话记录 + 长期记忆]
         Profile[用户画像快照]
         Context[设备上下文 GPS等]
     end
@@ -53,7 +53,7 @@ flowchart TB
     subgraph react [ReAct 执行层]
         AutoRecall[Memory Auto-recall]
         Guard[ToolExecutionGuard\n循环检测 + 权限检查]
-        LoopDetector[ToolLoopDetector\n20步历史]
+        LoopDetector[ToolLoopDetector\n20步记录]
         Truncator[ToolResultTruncator\n30% context上限]
         Assessor[ToolResultAssessor\n收敛判定]
     end
@@ -174,7 +174,7 @@ L5  phase.output_contract.*.md  ← 分阶段输出契约
 - `{{skillCatalog}}`：所有 15 个 skill 的 `domainId: description [mode=xxx]` 列表
 - `{{contextEnvelope}}`：GPS、时间、会话摘要、槽位 hints
 - `{{userProfileSnapshot}}`：用户画像标签快照
-- `{{domainLearningSignals}}`：当前域历史反馈信号
+- `{{domainLearningSignals}}`：当前域记录反馈信号
 
 ---
 
@@ -218,7 +218,7 @@ L5  phase.output_contract.*.md  ← 分阶段输出契约
 | 工具元数据 | `assets/assistant/tools/catalog/tool_catalog.meta.json` |
 | 工具权限 | `assets/assistant/tools/catalog/tool_permissions.json` |
 
-更深层 legacy implementation 仍位于 `lib/personal_assistant/`，但仅作为兼容实现参考，不再作为新增依赖入口。
+更深层 current implementation 仍位于 `lib/personal_assistant/`，但仅作为兼容实现参考，不再作为新增依赖入口。
 
 ---
 
@@ -227,7 +227,7 @@ L5  phase.output_contract.*.md  ← 分阶段输出契约
 - [小趣私人助理：框架、流程与原理](PERSONAL_ASSISTANT_ARCHITECTURE_AND_FLOW.md) — 当前架构主入口
 - [小趣私人助理：Skill 与 Tool 可扩展机制](PERSONAL_ASSISTANT_SKILL_AND_TOOL_EXTENSIBILITY.md) — 当前扩展入口
 - [小趣私人助理：设计与开发约束](PERSONAL_ASSISTANT_DESIGN_AND_CONSTRAINTS.md) — 当前必读约束入口
-- [**真相源冻结声明**](canonical_truth_sources.md) — 唯一真相源 SSOT、Legacy 兼容层、执行约束（开发必读）
+- [**真相源冻结声明**](canonical_truth_sources.md) — 唯一真相源 SSOT、Current 兼容层、执行约束（开发必读）
 - [Runtime 残留审计基线](runtime_audit_baseline.md) — 当前字符串治理后的热点清单与迁移基线
 - [ReAct + 工具生命周期规格 v4](react-agent-tool-lifecycle-spec-v4.md) — ReAct 循环详细规格、工具 Hook 链
 - [API 与集成指南](api_and_integration.md) — 外部 API 端点、Adapter SPI、OpenClaw/Feishu 接入

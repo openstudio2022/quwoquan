@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `compliance-gate-blocker`
+## Folded current node `compliance-gate-blocker`
 
 # L5 特性：compliance-gate-blocker
 

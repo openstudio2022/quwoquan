@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `action-audit-observability`
+## Folded current node `action-audit-observability`
 
 # 开发任务：action-audit-observability
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `action-audit-observability` (from `chat-conversation/contact-and-session-governance/session-governance-actions/governance-action-policy/action-audit-observability`)
+- [ ] Migrated current node: `action-audit-observability` (from `chat-conversation/contact-and-session-governance/session-governance-actions/governance-action-policy/action-audit-observability`)

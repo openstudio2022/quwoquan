@@ -12,7 +12,7 @@
 | 清单 `status` | 矩阵 P2 列 | 含义 |
 |---------------|------------|------|
 | `compliant` | **✓** | 该页在云契约消费面已达登记目标态 |
-| `partial` / `legacy_map` | **○** | 仍有 Map/旁路或未收敛 DTO，须随域切片继续改码 |
+| `partial` / `current_map` | **○** | 仍有 Map/旁路或未收敛 DTO，须随域切片继续改码 |
 | `exempt` | **—** | 无产品云行模型或开发者/壳/本地工具等豁免（须与清单 `note` 一致） |
 
 **权威顺序**（与九会话规划一致）：`specs/gates/metadata_driven_ui_gap_inventory.yaml` 的 `status` → 推导矩阵 P2；二者冲突时 **先改清单再改矩阵**。

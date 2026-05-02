@@ -5,11 +5,11 @@ category: Workflow
 description: 兼容归档入口（/dev 验证通过后默认自动归档；本命令仅用于手动补归档或修复）
 ---
 
-> 标准流：`/dev` 在验证通过后自动完成 archive 等价回写，随后等待 `/commit`。本命令仅用于兼容历史流程、手动补归档或修复回写。
+> 标准流：`/dev` 在验证通过后自动完成 archive 等价回写，随后等待 `/commit`。本命令仅用于兼容记录流程、手动补归档或修复回写。
 
 ## 使用场景
 
-- `/dev` 已完成，但因中断或历史流程导致归档未回写
+- `/dev` 已完成，但因中断或记录流程导致归档未回写
 - 需要单独修复 `acceptance.yaml.archived` 或 `tree_index.status`
 - `/land` 需要复用归档等价逻辑
 

@@ -77,7 +77,7 @@
 
 - 会话列表切到 `GET /v1/chat/inbox`
 - 仓库仍返回 `List<Map<String, dynamic>>`
-- UI 用 typed view-model 适配 `title / preview / unread / mention / avatarCompositeUrls`
+- UI 用 typed view-model 适配 `title / preview / unread / mention / avatarUrl`
 
 优点：
 
@@ -155,7 +155,7 @@
 为满足 PRD，本期在 `ChatInbox` 读模型中新增或冻结以下字段：
 
 - `mentionUnreadCount: int`
-- `avatarCompositeUrls: []string`
+- `avatarUrl: string`
 - `title: string` 作为列表展示标题，允许 projector 在群名为空时回退为成员名称摘要
 - `lastMessagePreview: string` 作为唯一摘要字段
 - `lastMessageTime: timestamp`
@@ -166,7 +166,7 @@
 约束：
 
 - `title` 在列表语义上是“display title”，不是必须等于原始会话 title
-- `avatarCompositeUrls` 仅用于群聊；单聊仍读 `avatarUrl`
+- 群聊与单聊都只读 `avatarUrl`；群聊头像由服务端预合成
 
 ### KD-4：组合头像完全由 inbox row 驱动，不在列表中额外请求成员
 
@@ -206,7 +206,7 @@
 设计要点：
 
 1. 在 `chat_inbox.yaml` 中新增 `client_projection`
-2. 在 projection fields 中补 `mentionUnreadCount`、`avatarCompositeUrls`
+2. 在 projection fields 中补 `mentionUnreadCount` 并确认 `avatarUrl` 是唯一头像字段
 3. `service.yaml` 的 `ListInbox` 描述与 response contract 与 projection 语义对齐
 4. `openapi.yaml` 补 `/v1/chat/inbox` 与 `ChatInboxPage` / `ChatInboxItem` schema
 
@@ -245,7 +245,7 @@ Mock 实现：
 ### 字段演进
 
 - `mentionUnreadCount`：新增，服务端 projector 维护
-- `avatarCompositeUrls`：新增，服务端 projector 输出前 9 个成员头像 URL
+- `avatarUrl`：群聊为服务端预合成 URL；端侧不再接收前 9 个成员头像 URL 做主渲染
 - `title`：在 inbox 中定义为 display title，可由 projector 做群名为空时的成员名回退
 
 ### 数据迁移 / 回填
@@ -253,7 +253,7 @@ Mock 实现：
 - 不对 `Conversation`、`Message`、`ConversationUserState` 做破坏性 schema 迁移
 - 采用 **read model 重建 / 回填**：
   - 从现有 Conversation / Message / ConversationMember / ConversationUserState 重投影 `rm_chat_inbox`
-  - 为历史会话补齐 `mentionUnreadCount` 和 `avatarCompositeUrls`
+  - 为记录会话补齐 `mentionUnreadCount` 和服务端预合成 `avatarUrl`
 
 ### 双读双写
 
@@ -337,7 +337,7 @@ Mock 实现：
 - contract / metadata 测试：
   - `ListInbox` response contract
   - `ChatInboxDto` codegen 对 projection 对齐
-  - `mentionUnreadCount` / `avatarCompositeUrls` 字段存在
+  - `mentionUnreadCount` / `avatarUrl` 字段存在
   - `MarkAsRead` 后 unread / mention 递减语义一致
 
 ### T4
@@ -360,7 +360,7 @@ Mock 实现：
 | B2 | 列表切到 inbox-first + feature flag | A8 A10 A11 | T2 T3 |
 | B3 | `ChatListItemViewModel` 统一 title/preview/time/badge | A1 A4 A8 A9 | T1 T2 |
 | B4 | `_ConversationTile` 微信式行结构 | A1 A3 A4 | T2 T4 |
-| B5 | `GroupAvatarGrid` 接入 inbox composite avatars | A2 A5 | T2 T4 |
+| B5 | inbox 头像只消费服务端 `avatarUrl` | A2 A5 | T2 T4 |
 | B6 | 空状态与胶囊显隐修复 | A6 A7 | T2 T4 |
 | B7 | 已读同步后列表与胶囊减数刷新 | A8 A9 | T1 T2 T3 |
 

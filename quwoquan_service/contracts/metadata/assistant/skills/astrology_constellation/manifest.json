@@ -1,0 +1,14 @@
+{
+  "skillId": "astrology_constellation",
+  "displayName": "占星星盘助手",
+  "description": "星座、星盘、上升星座、水逆、行星相位与占星运势解读。",
+  "domainId": "astrology_constellation",
+  "executionTarget": "cloud",
+  "routingHints": ["上升星座", "太阳星座", "星盘", "上升", "占星", "太阳月亮", "行星", "合相"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 2
+  }
+}

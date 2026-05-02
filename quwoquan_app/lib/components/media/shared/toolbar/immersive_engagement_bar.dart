@@ -12,22 +12,15 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
 /// 侵入式浏览器底部工具栏。
 ///
-/// 布局规格（五段式，同档位内完全固定）：
-///   [Avatar] [intraSm] [NameSlot(档位固定字符数)] [intraXs] [Follow(始终占位)]
-///   [clusterGap(档位常量)] [RightSpacer] [ActionGroup(固定宽)]
+/// 布局：`[Avatar][intraSm][作者名区][关注槽位]` + `clusterGap` + `弹性区` + `[赞转评]`。
 ///
-/// **首要硬约束**：作者组左缘锚定 rail 左缘，动作组右缘锚定 rail 右缘，
-/// 与顶部工具栏、内容区、文字区共享同一 content rail。iPad 等宽屏下，
-/// 多余空间落到组间距右侧的 RightSpacer（= Expanded SizedBox）上，
-/// 绝不会被 clusterGap 或动作组吞掉。
+/// **rail**：作者组左锚、动作组右锚；`mediaStage` 与图片/视频全宽对齐；
+/// `textStage`/`feedRail` 可走 `feedMaxContentWidth`。
 ///
-/// 防"组间距过大"的隔离：
-///   1. clusterGap 是档位常量，不参与任何弹性分配；
-///   2. 动作组不是 Expanded，固定宽度 + 右锚定；
-///   3. RightSpacer 是唯一吸纳剩余空间的位置，它是"布局余量"不是"组间距"。
+/// **作者名**：最多 12 个 Unicode 字符展示；槽位按断点固定为 4/5/6 个中文字符宽度。
+/// 单行优先（`sm`），超出则两行紧凑（`xs` + 紧凑行高），必要时末尾省略。
 ///
-/// 同设备内的可变项只有作者名槽位宽度（按屏幕档位决定字符数），
-/// 其它所有元素（头像/关注/赞/转/评）位置固定。
+/// **关注**：固定接在作者名槽位之后；显隐用透明度与滑入动画，不移动右侧动作组。
 class ImmersiveEngagementBar extends StatelessWidget {
   const ImmersiveEngagementBar({
     super.key,
@@ -82,7 +75,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         ctx,
         compact: AppSpacing.iconButtonMinSizeSm,
         regular: AppSpacing.buttonHeightLg,
-        expanded: AppSpacing.buttonHeightLg + AppSpacing.intraGroupXs,
+        expanded: AppSpacing.buttonHeightLg,
       );
 
   static double _avatarRadius(BuildContext ctx) => AppSpacing.responsiveValue(
@@ -98,7 +91,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         ctx,
         compact: AppSpacing.interGroupSm,
         regular: AppSpacing.interGroupMd,
-        expanded: AppSpacing.interGroupLg,
+        expanded: AppSpacing.interGroupMd,
       );
 
   /// 动作组内间距：档位常量。
@@ -107,7 +100,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         ctx,
         compact: AppSpacing.intraGroupSm,
         regular: AppSpacing.intraGroupMd,
-        expanded: AppSpacing.intraGroupLg,
+        expanded: AppSpacing.intraGroupMd,
       );
 
   /// 组间距降级下限：当自然宽度超过 track 宽度时，允许把组间距压到这个值。
@@ -116,7 +109,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
         ctx,
         compact: AppSpacing.interGroupSm,
         regular: AppSpacing.interGroupSm,
-        expanded: AppSpacing.interGroupMd,
+        expanded: AppSpacing.interGroupSm,
       );
 
   static double _actionClusterWidth({
@@ -126,60 +119,127 @@ class ImmersiveEngagementBar extends StatelessWidget {
     return (actionCellWidth * 3) + (actionGroupGap * 2);
   }
 
-  /// 作者名在当前屏幕档位下的可见字符数（同设备固定）。
-  static int _authorNameVisibleCharsForViewport(double viewportWidth) {
-    if (viewportWidth < 360) return 4;
-    if (viewportWidth < 430) return 5;
+  static const int _kAuthorDisplayMaxChars = 12;
+
+  static int _authorNameSlotCharsForViewport(double viewportWidth) {
+    if (viewportWidth < AppSpacing.compactBreakpoint) return 4;
+    if (viewportWidth < AppSpacing.expandedBreakpoint) return 5;
     return 6;
   }
 
-  static double _nameVisibleWidth(
-    int charCount,
-    TextStyle style, {
-    bool includeEllipsis = false,
+  static double _nameSlotWidthForChars({
+    required int charCount,
+    required TextStyle style,
   }) {
     const sample = '一二三四五六七八九十';
-    final text = sample.length >= charCount
-        ? sample.substring(0, charCount)
-        : sample;
-    final painter = TextPainter(
-      text: TextSpan(
-        text: '$text${includeEllipsis ? '...' : ''}',
-        style: style,
-      ),
+    final text = sample.substring(0, charCount);
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
       textDirection: TextDirection.ltr,
     )..layout();
-    return painter.width;
+    return tp.width;
   }
 
-  static double _nameSlotForChars(
-    int charCount,
-    TextStyle primary,
-    TextStyle secondary,
-  ) {
-    final p = _nameVisibleWidth(charCount, primary, includeEllipsis: true);
-    final s = _nameVisibleWidth(charCount, secondary, includeEllipsis: true);
-    return math.max(p, s);
+  /// 作者展示文案：空 -> unknownUser；非空最多 12 个 Unicode 字符。
+  static String _normalizeAuthorDisplay(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return UITextConstants.unknownUser;
+    final runes = t.runes.toList();
+    if (runes.length <= _kAuthorDisplayMaxChars) {
+      return String.fromCharCodes(runes);
+    }
+    return String.fromCharCodes(runes.take(_kAuthorDisplayMaxChars));
+  }
+
+  static bool _textFitsSingleLine({
+    required String text,
+    required double maxWidth,
+    required TextStyle style,
+  }) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxWidth);
+    return !tp.didExceedMaxLines;
   }
 
   Widget _buildAuthorCluster({
-    required String displayName,
-    required bool isRevealState,
+    required String displayText,
     required bool showFollowLane,
     required bool isFollowing,
     required ImageProvider? avatarImage,
     required double avatarRadius,
-    required double currentNameSlotWidth,
+    required double nameSlotWidth,
     required double followLaneWidth,
-    required TextStyle restDisplayStyle,
-    required TextStyle compressedDisplayStyle,
+    required bool useTwoLines,
+    required bool shaderTrailingFade,
+    required TextStyle singleLineStyle,
+    required TextStyle twoLineStyle,
     required TextStyle secondaryStyle,
     required VoidCallback onUserTap,
     required VoidCallback onFollowTap,
   }) {
-    final textDisplayName = displayName.isEmpty
-        ? UITextConstants.unknownUser
-        : displayName;
+    final overflow = useTwoLines ? TextOverflow.ellipsis : TextOverflow.fade;
+    final nameStyle = useTwoLines
+        ? twoLineStyle.copyWith(height: AppSpacing.textLineHeightDense)
+        : singleLineStyle;
+
+    Widget nameWidget = Text(
+      displayText,
+      maxLines: useTwoLines ? 2 : 1,
+      overflow: overflow,
+      softWrap: true,
+      style: nameStyle,
+    );
+
+    if (shaderTrailingFade && !useTwoLines) {
+      nameWidget = ShaderMask(
+        shaderCallback: (bounds) {
+          const fadeWidth = 14.0;
+          final start = bounds.width <= fadeWidth
+              ? 0.0
+              : ((bounds.width - fadeWidth) / bounds.width).clamp(0.0, 1.0);
+          return LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            stops: [start, 1.0],
+            colors: const [AppColors.white, AppColors.transparent],
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: nameWidget,
+      );
+    }
+
+    final nameColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          key: const ValueKey('immersive-author-name-slot'),
+          width: nameSlotWidth,
+          child: nameWidget,
+        ),
+        if (circleName.isNotEmpty) ...[
+          SizedBox(height: AppSpacing.intraGroupXs / 2),
+          GestureDetector(
+            onTap: onCircleTap,
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              width: nameSlotWidth,
+              child: Text(
+                circleName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: secondaryStyle,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
 
     return Row(
       key: const ValueKey('immersive-author-group'),
@@ -196,103 +256,70 @@ class ImmersiveEngagementBar extends StatelessWidget {
                 ? null
                 : (_, stackTrace) {},
             backgroundColor: AppColors.worksCaption,
+            child: avatarImage == null
+                ? Icon(Icons.person, color: AppColors.white, size: avatarRadius)
+                : null,
           ),
         ),
         SizedBox(width: AppSpacing.intraGroupSm),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedContainer(
-              key: const ValueKey('immersive-author-name-slot'),
-              duration: _kTransitionDuration,
-              curve: Curves.easeOutCubic,
-              width: currentNameSlotWidth,
-              child: isRevealState
-                  ? ShaderMask(
-                      shaderCallback: (bounds) {
-                        const fadeWidth = 14.0;
-                        final start = bounds.width <= fadeWidth
-                            ? 0.0
-                            : ((bounds.width - fadeWidth) / bounds.width)
-                                .clamp(0.0, 1.0);
-                        return LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          stops: [start, 1.0],
-                          colors: const [
-                            AppColors.white,
-                            AppColors.transparent,
-                          ],
-                        ).createShader(bounds);
-                      },
-                      blendMode: BlendMode.dstIn,
-                      child: _nameColumn(
-                        displayName: textDisplayName,
-                        displayStyle: compressedDisplayStyle,
-                        secondaryStyle: secondaryStyle,
-                        primaryMaxWidth: currentNameSlotWidth,
-                        secondaryMaxWidth: currentNameSlotWidth,
-                        clip: true,
-                      ),
-                    )
-                  : _nameColumn(
-                      displayName: textDisplayName,
-                      displayStyle: restDisplayStyle,
-                      secondaryStyle: secondaryStyle,
-                      primaryMaxWidth: currentNameSlotWidth,
-                      secondaryMaxWidth: currentNameSlotWidth,
-                      clip: false,
-                    ),
-            ),
+            SizedBox(width: nameSlotWidth, child: nameColumn),
             SizedBox(
               key: const ValueKey('immersive-follow-lane'),
               width: followLaneWidth,
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Padding(
-                  padding: const EdgeInsets.only(
-                    left: AppSpacing.intraGroupXs,
-                  ),
+                  padding: const EdgeInsets.only(left: AppSpacing.intraGroupXs),
                   child: SizedBox(
                     width: _kFollowBtnWidth,
                     height: AppSpacing.buttonHeightXs,
                     child: IgnorePointer(
                       ignoring: !showFollowLane,
-                      child: AnimatedOpacity(
+                      child: AnimatedSlide(
                         duration: _kTransitionDuration,
                         curve: Curves.easeOutCubic,
-                        opacity: showFollowLane ? 1 : 0,
-                        child: GestureDetector(
-                          onTap: onFollowTap,
-                          behavior: HitTestBehavior.opaque,
-                          child: Container(
-                            key: const ValueKey('immersive-follow-button'),
-                            width: _kFollowBtnWidth,
-                            height: AppSpacing.buttonHeightXs,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: isFollowing
-                                  ? AppColors.followingButtonOnDark
-                                  : AppColors.worksAccent,
-                              borderRadius: BorderRadius.circular(
-                                AppSpacing.circularBorderRadius,
-                              ),
-                            ),
-                            child: Text(
-                              isFollowing
-                                  ? UITextConstants.following
-                                  : UITextConstants.follow,
-                              maxLines: 1,
-                              overflow: TextOverflow.fade,
-                              softWrap: false,
-                              style: TextStyle(
+                        offset: showFollowLane
+                            ? Offset.zero
+                            : const Offset(0.45, 0),
+                        child: AnimatedOpacity(
+                          duration: _kTransitionDuration,
+                          curve: Curves.easeOutCubic,
+                          opacity: showFollowLane ? 1 : 0,
+                          child: GestureDetector(
+                            onTap: onFollowTap,
+                            behavior: HitTestBehavior.opaque,
+                            child: Container(
+                              key: const ValueKey('immersive-follow-button'),
+                              width: _kFollowBtnWidth,
+                              height: AppSpacing.buttonHeightXs,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
                                 color: isFollowing
-                                    ? AppColors.worksBodyText.withValues(
-                                        alpha: 0.72,
-                                      )
-                                    : AppColors.white,
-                                fontSize: AppTypography.xs,
-                                fontWeight: AppTypography.semiBold,
+                                    ? AppColors.followingButtonOnDark
+                                    : AppColors.worksAccent,
+                                borderRadius: BorderRadius.circular(
+                                  AppSpacing.circularBorderRadius,
+                                ),
+                              ),
+                              child: Text(
+                                isFollowing
+                                    ? UITextConstants.following
+                                    : UITextConstants.follow,
+                                maxLines: 1,
+                                overflow: TextOverflow.fade,
+                                softWrap: false,
+                                style: TextStyle(
+                                  color: isFollowing
+                                      ? AppColors.worksBodyText.withValues(
+                                          alpha: 0.72,
+                                        )
+                                      : AppColors.white,
+                                  fontSize: AppTypography.xs,
+                                  fontWeight: AppTypography.semiBold,
+                                ),
                               ),
                             ),
                           ),
@@ -372,13 +399,16 @@ class ImmersiveEngagementBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final isRevealState = showFollowButton;
-    final restDisplayStyle = TextStyle(
+    final singleLineStyle = TextStyle(
       color: AppColors.worksTitle,
       fontSize: AppTypography.sm,
       fontWeight: AppTypography.medium,
     );
-    final compressedDisplayStyle = restDisplayStyle;
+    final twoLineStyle = TextStyle(
+      color: AppColors.worksTitle,
+      fontSize: AppTypography.xs,
+      fontWeight: AppTypography.medium,
+    );
     final secondaryStyle = TextStyle(
       color: AppColors.worksBodyText.withValues(alpha: 0.72),
       fontSize: AppTypography.xxs,
@@ -388,6 +418,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
     final avatarRadius = _avatarRadius(context);
     final avatarImage = avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null;
     final showFollowLane = showFollowButton;
+    final normalizedAuthor = _normalizeAuthorDisplay(displayName);
     final topPadding = isSelfPost ? AppSpacing.xs : AppSpacing.intraGroupSm;
     final bottomPadding = isSelfPost
         ? bottomInset + AppSpacing.xs
@@ -401,17 +432,11 @@ class ImmersiveEngagementBar extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
-            padding: EdgeInsets.only(
-              top: topPadding,
-              bottom: bottomPadding,
-            ),
+            padding: EdgeInsets.only(top: topPadding, bottom: bottomPadding),
             color: AppColors.worksBackground.withValues(alpha: 0.88),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final viewportWidth = MediaQuery.sizeOf(context).width;
-
-                // Track 宽度 = rail。作者左锚 rail 左缘、动作右锚 rail 右缘，
-                // 与顶部工具栏/内容/文字区共享同一 content rail。
+                // Track 宽度 = rail。作者左锚 rail 左缘、动作右锚 rail 右缘。
                 final rail = ImmersiveViewerLayout.railWidthForViewport(
                   context,
                   constraints.maxWidth,
@@ -419,25 +444,12 @@ class ImmersiveEngagementBar extends StatelessWidget {
                 );
                 final trackWidth = rail;
 
-                final visibleChars = _authorNameVisibleCharsForViewport(
-                  viewportWidth,
-                );
-                final naturalNameSlot = _nameSlotForChars(
-                  visibleChars,
-                  restDisplayStyle,
-                  secondaryStyle,
-                );
-
-                // 关注槽位：始终保留，隐藏只改 opacity / pointer events。
+                // 作者名槽位按断点固定，短名也保留槽位，关注按钮不跟随文本长度移动。
                 final followLaneWidth =
                     AppSpacing.intraGroupXs + _kFollowBtnWidth;
                 final avatarWidth = avatarRadius * 2;
-                final fixedLeftFrameWidth =
-                    avatarWidth +
-                    AppSpacing.intraGroupSm +
-                    followLaneWidth;
-                double authorWidthFor(double nameSlot) =>
-                    fixedLeftFrameWidth + nameSlot;
+                final fixedAuthorBeforeName =
+                    avatarWidth + AppSpacing.intraGroupSm;
 
                 final clusterGapNatural = _clusterGapForTier(context);
                 final actionInnerGap = _actionInnerGapForTier(context);
@@ -446,17 +458,35 @@ class ImmersiveEngagementBar extends StatelessWidget {
                   actionGroupGap: actionInnerGap,
                 );
 
+                final visibleFollowLaneWidth = showFollowLane
+                    ? followLaneWidth
+                    : 0.0;
+                final slotChars = _authorNameSlotCharsForViewport(
+                  MediaQuery.sizeOf(context).width,
+                );
+                final naturalNameSlot = _nameSlotWidthForChars(
+                  charCount: slotChars,
+                  style: singleLineStyle,
+                );
+                final maxNameSlot = math.max(
+                  0.0,
+                  trackWidth -
+                      clusterGapNatural -
+                      actionClusterWidth -
+                      fixedAuthorBeforeName -
+                      visibleFollowLaneWidth,
+                );
+
+                double effectiveGap = clusterGapNatural;
+                double effectiveName = math.min(naturalNameSlot, maxNameSlot);
                 final naturalTotalWidth =
-                    authorWidthFor(naturalNameSlot) +
+                    fixedAuthorBeforeName +
+                    effectiveName +
+                    visibleFollowLaneWidth +
                     clusterGapNatural +
                     actionClusterWidth;
 
-                // 空间不足时的降级链（仅在窄屏上生效）：
-                //   1. 先把 clusterGap 压到档位下限（interGroupSm）；
-                //   2. 再把作者名槽位收窄（极窄屏可降到 0，名字通过 clip 自然截断），
-                //      避免 Row 溢出。
-                double effectiveGap = clusterGapNatural;
-                double effectiveName = naturalNameSlot;
+                // 空间不足：先压组间距，再收窄作者名区。
                 if (naturalTotalWidth > trackWidth) {
                   var overflow = naturalTotalWidth - trackWidth;
                   final gapFloor = _clusterGapFloorForTier(context);
@@ -468,9 +498,19 @@ class ImmersiveEngagementBar extends StatelessWidget {
                   effectiveGap = clusterGapNatural - useGap;
                   overflow -= useGap;
                   if (overflow > 0) {
-                    effectiveName = math.max(0.0, naturalNameSlot - overflow);
+                    effectiveName = math.max(0.0, effectiveName - overflow);
                   }
                 }
+
+                final fitsSingle =
+                    effectiveName > 0 &&
+                    ImmersiveEngagementBar._textFitsSingleLine(
+                      text: normalizedAuthor,
+                      maxWidth: effectiveName,
+                      style: singleLineStyle,
+                    );
+                final useTwoLines = !fitsSingle;
+                final shaderFade = showFollowButton && !useTwoLines;
 
                 final content = isSelfPost
                     ? SizedBox(
@@ -481,18 +521,22 @@ class ImmersiveEngagementBar extends StatelessWidget {
                     : Row(
                         children: [
                           SizedBox(
-                            width: authorWidthFor(effectiveName),
+                            width:
+                                fixedAuthorBeforeName +
+                                effectiveName +
+                                visibleFollowLaneWidth,
                             child: _buildAuthorCluster(
-                              displayName: displayName,
-                              isRevealState: isRevealState,
+                              displayText: normalizedAuthor,
                               showFollowLane: showFollowLane,
                               isFollowing: isFollowing,
                               avatarImage: avatarImage,
                               avatarRadius: avatarRadius,
-                              currentNameSlotWidth: effectiveName,
-                              followLaneWidth: followLaneWidth,
-                              restDisplayStyle: restDisplayStyle,
-                              compressedDisplayStyle: compressedDisplayStyle,
+                              nameSlotWidth: effectiveName,
+                              followLaneWidth: visibleFollowLaneWidth,
+                              useTwoLines: useTwoLines,
+                              shaderTrailingFade: shaderFade,
+                              singleLineStyle: singleLineStyle,
+                              twoLineStyle: twoLineStyle,
                               secondaryStyle: secondaryStyle,
                               onUserTap: onUserTap,
                               onFollowTap: onFollowTap,
@@ -537,48 +581,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _nameColumn({
-    required String displayName,
-    required TextStyle displayStyle,
-    required TextStyle secondaryStyle,
-    required double primaryMaxWidth,
-    required double secondaryMaxWidth,
-    required bool clip,
-  }) {
-    final overflow = clip ? TextOverflow.clip : TextOverflow.ellipsis;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          style: displayStyle,
-          child: SizedBox(
-            width: primaryMaxWidth,
-            child: Text(displayName, maxLines: 1, overflow: overflow),
-          ),
-        ),
-        if (circleName.isNotEmpty) ...[
-          SizedBox(height: AppSpacing.intraGroupXs / 2),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            style: secondaryStyle,
-            child: GestureDetector(
-              onTap: onCircleTap,
-              behavior: HitTestBehavior.opaque,
-              child: SizedBox(
-                width: secondaryMaxWidth,
-                child: Text(circleName, maxLines: 1, overflow: overflow),
-              ),
-            ),
-          ),
-        ],
-      ],
     );
   }
 

@@ -51,6 +51,6 @@
 
 ## 验收重点
 
-- A1（L1）：目录迁移完成，无遗留 features/circles/ 引用。
+- A1（L1）：目录迁移完成，无存量 features/circles/ 引用。
 - A2（L1）：CircleRepository 三层模式创建完成并注册。
 - A7（L1）：硬编码清零，语义化审计通过。

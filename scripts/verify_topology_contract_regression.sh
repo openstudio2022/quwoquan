@@ -17,28 +17,35 @@ ruby -ryaml -e '
 
   mapping = YAML.load_file(mapping_file) || {}
   envs = mapping["environments"] || {}
-  dev = envs["dev"] || {}
-  integration = envs["integration"] || {}
+  alpha = envs["alpha"] || {}
+  beta = envs["beta"] || {}
+  gamma = envs["gamma"] || {}
+  prod_gray = envs["prod-gray"] || {}
   prod = envs["prod"] || {}
 
-  fail("dev mapping must not be empty") if dev.empty?
-  fail("integration mapping must not be empty") if integration.empty?
+  fail("alpha mapping must not be empty") if alpha.empty?
+  fail("beta mapping must not be empty") if beta.empty?
+  fail("gamma mapping must not be empty") if gamma.empty?
+  fail("prod-gray mapping must not be empty") if prod_gray.empty?
   fail("prod mapping must not be empty") if prod.empty?
 
-  dev.each do |proc_name, proc_cfg|
+  alpha.each do |proc_name, proc_cfg|
     domains = (proc_cfg || {})["domains"] || []
     if domains.size != 1
-      fail("dev split-topology violated: #{proc_name} should own exactly one domain, got #{domains.inspect}")
+      fail("alpha split-topology violated: #{proc_name} should own exactly one domain, got #{domains.inspect}")
     end
   end
 
-  rec_int = (integration["recommendation-service"] || {})["domains"] || []
+  rec_beta = (beta["recommendation-service"] || {})["domains"] || []
+  rec_gamma = (gamma["recommendation-service"] || {})["domains"] || []
+  rec_prod_gray = (prod_gray["recommendation-service"] || {})["domains"] || []
   rec_prod = (prod["recommendation-service"] || {})["domains"] || []
-  fail("integration recommendation-service must map to [recommendation]") unless rec_int == ["recommendation"]
+  fail("beta recommendation-service must map to [recommendation]") unless rec_beta == ["recommendation"]
+  fail("gamma recommendation-service must map to [recommendation]") unless rec_gamma == ["recommendation"]
+  fail("prod-gray recommendation-service must map to [recommendation]") unless rec_prod_gray == ["recommendation"]
   fail("prod recommendation-service must map to [recommendation]") unless rec_prod == ["recommendation"]
 
-  %w[integration prod].each do |env|
-    process_map = env == "integration" ? integration : prod
+  {"beta" => beta, "gamma" => gamma, "prod-gray" => prod_gray, "prod" => prod}.each do |env, process_map|
     seed_box_domains = (process_map["seed-box"] || {})["domains"] || []
     fail("#{env}.seed-box missing") if seed_box_domains.empty?
     if seed_box_domains.include?("recommendation")
@@ -46,6 +53,10 @@ ruby -ryaml -e '
     end
   end
 '
+
+python3 scripts/verify_module_package_mapping.py
+python3 scripts/verify_reliable_task_catalog.py
+python3 scripts/verify_reliable_task_retention_policy.py
 
 SERVICE_YAML="$ROOT/quwoquan_service/contracts/metadata/recommendation/rec_model/service.yaml"
 GO_CLIENT="$ROOT/quwoquan_service/services/content-service/internal/infrastructure/recommendation/http_model_client.go"

@@ -239,7 +239,7 @@
 
 - UI 必须把过程状态落到消息级 `uiProcessTimelineV2`。
 - live streaming 只负责演绎动画，不作为唯一数据源。
-- 完成态与历史重载态必须使用同一份时间线结构恢复。
+- 完成态与记录重载态必须使用同一份时间线结构恢复。
 
 ## 元数据唯一源分层
 
@@ -364,7 +364,7 @@
 
 - 天气等高频场景不增加专属 UI 卡片组件。
 - UI 不参与领域格式决策，只负责渲染统一结果结构。
-- 完成态、历史重载态、流式态统一依赖 `uiProcessTimelineV2` 恢复过程抽屉。
+- 完成态、记录重载态、流式态统一依赖 `uiProcessTimelineV2` 恢复过程抽屉。
 
 ### 包 3.1：流式过程演绎协议
 
@@ -385,7 +385,7 @@
 - UI 采用 reducer 处理事件，禁止 `trace / userPhase / chunk / completed` 多处直接改同一份状态。
 - `answer_delta` 是最终答案正文的唯一流式来源；`process_*` 是过程抽屉的唯一流式来源；`completed` 是唯一终态封口来源。
 - terminal payload 缺失时，只允许在 answer 通道已确认闭合后合成 completed；禁止使用 `thinkingProgress`、repair thinking 或 raw reasoning 封箱。
-- 完成态摘要必须统一由 canonical `AssistantJourney` + 来源计数 + 整数秒耗时生成，历史重载与实时完成态使用同一口径。
+- 完成态摘要必须统一由 canonical `AssistantJourney` + 来源计数 + 整数秒耗时生成，记录重载与实时完成态使用同一口径。
 
 ### 包 4：Session + Long-term Preference Facts
 
@@ -587,7 +587,7 @@
 - 演进 3：长期偏好在事实积累足够后，升级为可学习标签系统和策略优化器。
 - 演进 4：引入更强的商用质量与成本看板。
 
-## 遗留带规划任务
+## 存量带规划任务
 
 - 当前不做第三方 Skill 市场化，但要保留 Skill DSL 与权限模型的兼容扩展点。
 - 当前不做全端统一 UI，但 Markdown-first 渲染规则要尽量平台中立。

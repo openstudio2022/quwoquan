@@ -69,7 +69,7 @@ for dir in "$BASE"/*; do
     continue
   fi
 
-  # Entity at top level (legacy/flat layout)
+  # Entity at top level (current/flat layout)
   _verify_entity_dir "$dir" "$name"
 done
 

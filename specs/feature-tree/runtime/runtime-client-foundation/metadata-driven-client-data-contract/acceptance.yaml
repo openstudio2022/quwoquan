@@ -48,7 +48,7 @@ level_acceptance:
 execution:
   local_gate: "python3 scripts/verify_metadata_driven_ui_gate.py"
   full_gate: make gate
-  note: 清单路径存在性 + YAML；QWQ_METADATA_UI_GATE_STRICT=1 时禁止 legacy_map 行
+  note: 清单路径存在性 + YAML；QWQ_METADATA_UI_GATE_STRICT=1 时禁止 current_map 行
 
 journey_acceptance:
   - id: A1
@@ -63,7 +63,7 @@ journey_acceptance:
 
 scenario_acceptance:
   - id: S1
-    statement: 评审可通过缺口清单定位下一批 legacy_map 页面
+    statement: 评审可通过缺口清单定位下一批 current_map 页面
     t_layers: [T2]
   - id: S2
     statement: 独立 /dev 会话按 plan 将某域标为 compliant 后更新清单

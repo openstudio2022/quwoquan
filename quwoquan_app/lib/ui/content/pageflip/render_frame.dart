@@ -112,6 +112,13 @@ class ArticlePageBackwardProjectedFrame {
   const ArticlePageBackwardProjectedFrame({
     required this.foldLine,
     required this.projectedRightEdgeLine,
+    required this.foldSurfaceMovingEdgeLine,
+    required this.replayLocalPoint,
+    required this.previousBackPagePolygon,
+    required this.previousLaidFrontPolygon,
+    required this.previousFoldSurfacePolygon,
+    required this.previousBackFoldPolygon,
+    required this.previousFrontFoldPolygon,
     required this.previousBackPolygon,
     required this.previousFrontPolygon,
     required this.currentResidualPolygon,
@@ -122,6 +129,13 @@ class ArticlePageBackwardProjectedFrame {
 
   final (ui.Offset, ui.Offset) foldLine;
   final (ui.Offset, ui.Offset) projectedRightEdgeLine;
+  final (ui.Offset, ui.Offset) foldSurfaceMovingEdgeLine;
+  final ui.Offset replayLocalPoint;
+  final List<ui.Offset> previousBackPagePolygon;
+  final List<ui.Offset> previousLaidFrontPolygon;
+  final List<ui.Offset> previousFoldSurfacePolygon;
+  final List<ui.Offset> previousBackFoldPolygon;
+  final List<ui.Offset> previousFrontFoldPolygon;
   final List<ui.Offset> previousBackPolygon;
   final List<ui.Offset> previousFrontPolygon;
   final List<ui.Offset> currentResidualPolygon;
@@ -255,8 +269,15 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
   final rectoCoverageByFold = coveredWidth > 0.5
       ? (2.0 - 1.0 / coveredWidth).clamp(0.0, 1.0).toDouble()
       : 0.0;
+  final rectoCoverageByCurl =
+      (Curves.easeOutCubic.transform(
+                ((settledProgress - 0.24) / 0.38).clamp(0.0, 1.0),
+              ) *
+              0.72)
+          .clamp(0.0, 1.0)
+          .toDouble();
   final rectoCoverage = math
-      .max(rectoCoverageByFold, settleProgress)
+      .max(math.max(rectoCoverageByFold, rectoCoverageByCurl), settleProgress)
       .clamp(0.0, 1.0)
       .toDouble();
   final versoOverlayStart = (coveredWidth * rectoCoverage)
@@ -481,14 +502,11 @@ StPageFlipTimeline _resolveBackwardReplayTimeline({
     pageSize: pageSize,
     angleBand: angleBand,
   );
-  final replayDiagonalExtent = (replayTimeline.diagonalExtent * 0.28)
-      .clamp(pageSize.width * 0.004, pageSize.width * 0.032)
-      .toDouble();
   return StPageFlipTimeline(
-    mirrored: false,
+    mirrored: true,
     curlAngleBand: replayTimeline.curlAngleBand,
     basePivot: replayTimeline.basePivot,
-    diagonalExtent: replayDiagonalExtent,
+    diagonalExtent: replayTimeline.diagonalExtent,
     leadingRadius: replayTimeline.leadingRadius,
     trailingRadius: replayTimeline.trailingRadius,
     sheetShift: replayTimeline.sheetShift,

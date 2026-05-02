@@ -11,6 +11,7 @@ alwaysApply: true
 
 - `spec-first`：先 `spec.md + acceptance.yaml`，再 `design.md`，最后实现。
 - `metadata-first`：契约、字段、错误码、`path / operation / surface / route / decoder context` 先改 metadata，再 codegen，再改业务逻辑。
+- `env-seed-first`：页面数据、Repository、人工 beta、alpha/beta/gamma 自动化测试必须先改 `contracts/metadata/**/test_fixtures` 与 `_shared/test_fixtures/app_{alpha,beta,gamma}_seed_manifest.json`。
 - `commercial-ready-before-dev`：凡是用户可见、可灰度、可分享、可被小趣消费的能力，必须先通过 `/prd` + `/design` 或 `/baseline` 冻结 `SLO/KPI`、权限边界、数据生命周期、迁移灰度与回滚。
 - `benchmark-driven`：对标必须写明借鉴、不借鉴、适用边界、当前差距、收敛计划。
 - `single-source`：`tree_index.yaml`、`spec.md`、`design.md`、`acceptance.yaml`、`plan.yaml`、`specs/changelog/CR-*.yaml`、metadata 各自是唯一真相源。
@@ -100,6 +101,7 @@ make codegen-app
 - `/dev` 先进入任务级 plan mode，通读 `spec.md`、`design.md`、`plan.yaml`、`acceptance.yaml` 与对应 CR，审视前后端、metadata/codegen、权限、生命周期、灰度/回滚、观测与 `T1~T4` 缺口。
 - 若规格、设计、切片、验收、四层测试或商用条件存在缺口，`/dev` 必须先自动修复相关问题，再继续开发。
 - `/dev` 必须覆盖目标 scenario 所需的前端、后端、metadata/codegen、配置、文档与测试闭环，不得只完成局部工作。
+- `/dev` 涉及端云数据时必须覆盖环境包配置、seed manifest、alpha mock、beta/gamma remote、人工 beta 预置数据边界与生产禁 seed 门禁。
 - 每完成一组 slice 运行：
 
 ```bash

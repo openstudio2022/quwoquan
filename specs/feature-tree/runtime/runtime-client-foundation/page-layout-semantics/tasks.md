@@ -17,7 +17,7 @@
 - [x] 门禁增强：`verify_dart_semantic.py` 新增 iOS 语义风格检查并由 `gate_repo.sh` 持续执行
 - [ ] 圈子频道管理面板：完成微博式布局、蓝色主题动作与拖拽排序（见 `circles-channel-management-panel/tasks.md`）
 
-## 遗留事项（后续补充）
+## 存量事项（后续补充）
 
 - 用户主页、作者主页、圈子主页：后续单独规范「主页设计」
 - CreateMediaPickerPage 自定义顶栏：当前保留，若后续统一为 AppBar 需同步更新规范

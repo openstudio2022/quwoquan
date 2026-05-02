@@ -1,75 +1,84 @@
 # 部署环境矩阵（五环境 · 一套代码）
 
-> **总览**：本地开发、CI 验证、集成测试、生产灰度、生产全量共用同一套业务与契约代码；差异仅来自 **Kustomize overlay、Secret/环境变量、构建时 `dart-define`**。  
-> **拓扑唯一源**：[`process_domain_mapping.yaml`](process_domain_mapping.yaml)（`integration` 与 `prod` 的 domain→进程映射必须一致）。  
+> **总览**：正式环境语义统一为 **alpha → beta → gamma → prod-gray → prod**。`alpha` 与 `beta` 都是开发期本地验证；`gamma` 是云侧类生产集成验证；`prod-gray` 是准生产灰度；`prod` 是全量生产。
+> **拓扑唯一源**：[`process_domain_mapping.yaml`](process_domain_mapping.yaml)。`beta`、`gamma`、`prod-gray`、`prod` 的 domain→进程映射必须一致，避免本地集成验证与云侧发布拓扑漂移。
 > **Pipeline 细节**：[ci_cd_end_to_end_design.md](ci_cd_end_to_end_design.md)、[deliver_to_production_runbook.md](deliver_to_production_runbook.md)。
 
 ---
 
-## 1. 命名说明：STAGING_* = integration 对外 URL
+## 1. 环境定义
 
-Makefile 与部分测试使用 **`STAGING_BASE_URL`**、**`STAGING_PRODUCT_OPS_BASE_URL`** 作为 L3 契约测试的 HTTP 基址变量名。其**语义**为 **integration 集群已部署服务对外的 base URL**，并非独立「staging 集群」概念。  
-若更易读，可同时设置 **`INTEGRATION_BASE_URL`** / **`INTEGRATION_PRODUCT_OPS_BASE_URL`**（见根目录 `Makefile` 的 `test-api-contract`：`STAGING_*` 优先，缺省则回退到 `INTEGRATION_*`）。
+| 环境 | 阶段语义 | 运行位置 | `APP_ENV` | 拓扑 | 端侧典型注入 |
+|------|----------|----------|-----------|------|--------------|
+| `alpha` | 单实例独立验证：端侧 App、云侧 service 各自独立跑通 | 开发机 / 模拟器 / 本机依赖 | `alpha` | 每个 domain 独立进程 | `APP_RUNTIME_ENV=alpha`；可用 `APP_DATA_SOURCE=mock` 或指向单服务网关 |
+| `beta` | 本地端云集成验证：本机网关 + 多服务协同 | 开发机 / 局域网 / 模拟器 | `beta` | 与 `gamma/prod` 一致 | `APP_RUNTIME_ENV=beta`、`APP_DATA_SOURCE=remote`、`CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:18080`（iOS）或宿主机地址 |
+| `gamma` | 云侧类生产集成验证：CI / 混生产前验证 | 云侧集群 | `gamma` | 与 `beta/prod` 一致 | `APP_RUNTIME_ENV=gamma`、远端测试网关、测试 token |
+| `prod-gray` | 准生产灰度：有限用户 / 有审批 / 可回滚 | 生产集群灰度阶段 | `prod-gray` | 与 `prod` 一致 | `APP_RUNTIME_ENV=prod-gray`、`APP_DATA_SOURCE=remote` |
+| `prod` | 全量生产 | 生产集群 | `prod` | 全量生产拓扑 | `APP_RUNTIME_ENV=prod`、`APP_DATA_SOURCE=remote` |
 
----
-
-## 2. 五环境对照表
-
-| 代号 | 环境 | `process_domain_mapping` | 部署 / 验证手段 | 端侧典型注入 |
-|------|------|--------------------------|-----------------|--------------|
-| **A** | 本地开发 | `dev` | 本机进程 / Docker Compose；无强制 K8s | `CLOUD_GATEWAY_BASE_URL` 默认 `http://127.0.0.1:18080`；Debug 下 `APP_DATA_SOURCE=mock` 经 Provider（见工程规范） |
-| **B** | CI/CD 验证 | —（不占用映射行） | `delivery-gate` / `make gate`（L1+L2）；`service_pipeline` 构建 + kustomize 校验 | 不依赖真实公网网关 |
-| **C** | 集成测试 | `integration` | `kustomize build deploy/kustomization/{cloud}-integration`；CI：`deploy-integration` job；`make deploy-integration` 仅做构建校验 | L3：`STAGING_BASE_URL`、`STAGING_PRODUCT_OPS_BASE_URL`、`TEST_AUTH_TOKEN` |
-| **D** | 生产灰度 | `prod`（同拓扑） | [gray_rollout_stages.yaml](gray_rollout_stages.yaml) 中未满副本/需审批阶段；[deploy-prod-gray.yml](../../.github/workflows/deploy-prod-gray.yml) | 生产网关；Release：`APP_DATA_SOURCE=remote` 等 |
-| **E** | 生产全量/发布 | `prod` | `full` 阶段 100% 副本、发版元数据/CR；runbook 收尾 | 同 D |
-
-**多云**：`{cloud}` 为 `aliyun` | `volcengine` | `huaweicloud`（与 `deploy/kustomization/` 下目录一致）。逻辑环境（A~E）与**云厂商**正交。
+**配置约束**：服务公开 `APP_ENV` 只允许 `alpha|beta|gamma|prod-gray|prod`，并且运行时只读取同名配置目录，例如 `APP_ENV=beta` 读取 `configs/beta/config.yaml`。禁止通过 `local` / `integration` 目录做兼容映射。
 
 ---
 
-## 3. 波次（Wave）关系
-
-1. **大波段**（环境间）：**B 通过** → **C 部署并 L3/L4 通过** → 才进入 **D/E**（与 `ci_cd_end_to_end_design.md` 中 pre-release 链一致）。  
-2. **小 wave**（prod 内，类 CodeDeploy）：由 `gray_rollout_stages.yaml` 的 `replicas` + `auto` 驱动；**D** 为中间阶段，**E** 为全量。详见 [deploy_prod_design.md](deploy_prod_design.md)。
+## 2. 波次关系
 
 ```text
-A(本地) ─┐
-         ├→ B(CI gate) → C(integration + L3) → D(灰度 prod) → E(全量 prod)
+alpha(本地单实例) → beta(本地端云集成) → gamma(云侧类生产集成)
+                                           → prod-gray(生产灰度) → prod(生产全量)
 ```
+
+1. **alpha**：验证单个 App 页面、单个 Go/Python service、单个 Repository 或 fixture，不要求完整端云链路。
+2. **beta**：开发完成前的本地端云闭环，必须能证明 App 通过本地网关访问云侧服务。
+3. **gamma**：CI 或云侧集成集群验证，配置版本、镜像版本、Secret、观测与回滚条件必须齐备。
+4. **prod-gray/prod**：由 `gray_rollout_stages.yaml` 和生产 runbook 控制；灰度未完成前不得视为全量生产。
+
+### 2.1 local-gamma mirror（提交前本地预测试）
+
+`local-gamma mirror` 是提交前本地预测试拓扑，不是第六个环境：
+
+- 服务仍使用 `APP_ENV=gamma`，端侧仍使用 `APP_RUNTIME_ENV=gamma` 与 `APP_DATA_SOURCE=remote`。
+- 本机通过 Docker 镜像栈、DNS/TLS 反代与 `gamma-*.quwoquan-env.test` 域名映射承载 App 流量。
+- 测试数据只来自 `app_gamma_seed_manifest.json` 与 metadata fixtures，不新增 `app_local_gamma_seed_manifest.json`。
+- 提交前必须完成本地 `T1 -> T4` 左移覆盖，并输出 `artifacts/local-gamma/report.json`。
+- 本地通过不替代云侧 gamma、prod-gray、prod；云侧仍负责 K8s、Ingress/LB、Secret、云观测、灰度 SLO 与回滚真实性验证。
 
 ---
 
-## 4. GitHub Actions Secrets（L3 相关）
+## 3. GitHub Actions Secrets（gamma 相关）
 
 | 变量 / Secret | 用途 |
 |---------------|------|
-| `STAGING_BASE_URL` 或 `INTEGRATION_BASE_URL` | integration 上对外 API 基址（L3 content 等） |
-| `STAGING_PRODUCT_OPS_BASE_URL` 或 `INTEGRATION_PRODUCT_OPS_BASE_URL` | integration 上 Ops/产品面 API 基址（L3 ops runner） |
-| `STAGING_TEST_AUTH_TOKEN`（`TEST_AUTH_TOKEN`） | L3 鉴权 |
-| `INTEGRATION_KUBECONFIG` | `deploy-integration` 的 kubectl apply（缺省则跳过 apply，见 workflow） |
+| `GAMMA_BASE_URL` | gamma 对外 API 基址 |
+| `GAMMA_PRODUCT_OPS_BASE_URL` | gamma 上 Ops/产品面 API 基址 |
+| `GAMMA_TEST_AUTH_TOKEN` | gamma L3/L4 鉴权 |
+| `GAMMA_KUBECONFIG` | gamma 部署流水线 kubectl apply |
 
-不在仓库中存放明文；本地导出同名环境变量后执行 `make test-api-contract`。
+新增流水线、脚本与测试只使用 `GAMMA_*`。记录期 staging / integration 命名不再作为配置入口。
 
 ---
 
-## 5. 各环境推荐验证命令（维护者自检）
+## 4. 推荐验证命令
 
 | 环境 | 命令 / 条件 | 通过判据 |
 |------|-------------|----------|
-| A | 本地启动 `content-service` 等 + `flutter test` 相关模块 | 本机用例绿 |
-| B | 仓库根 `make gate` | 退出码 0 |
-| C | `make deploy-integration`；若配置完整则 `STAGING_*` + `make test-api-contract` | kustomize 输出成功；L3 需 URL/token |
-| D/E | 生产变更仅限持权流水线；`kustomize build deploy/kustomization/aliyun-prod` | 清单可构建；真部署依 runbook |
+| `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
+| `beta` | 本地启动网关与服务，App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 模拟器完成端云交互 |
+| `gamma` | `make gate` + gamma 部署构建；有 URL/token 时运行 L3/L4 | 云侧 contract/e2e 通过 |
+| `prod-gray` | 生产灰度流水线与 runbook 审批 | 灰度指标与回滚条件达标 |
+| `prod` | 全量发布流水线 | 生产观测稳定 |
 
-**说明**：无 integration 公网与 token 时，**不**将 L3 本地失败视为 B 类门禁失败；B 的门槛是 `make gate`（不含 L3，见 `gate-full` 定义）。
+提交前本地左移新增推荐：
+
+| 范围 | 命令 / 条件 | 通过判据 |
+|------|-------------|----------|
+| `local-gamma mirror` | `make gate-local-gamma` | `T1/T2` 本地门禁、`T3` 本地真实 API/存储、`T4` 本地模拟器/真机 Patrol 通过并生成 `artifacts/local-gamma/report.json` |
 
 ---
 
-## 6. 相关文件索引
+## 5. 相关文件索引
 
 - [process_domain_mapping.yaml](process_domain_mapping.yaml)
+- [process_domain_plane_mapping.yaml](process_domain_plane_mapping.yaml)
 - [ci_cd_end_to_end_design.md](ci_cd_end_to_end_design.md)
 - [branch_strategy.md](branch_strategy.md)
 - [deliver_to_production_runbook.md](deliver_to_production_runbook.md)
-- [`specs/.../daily-merge-release-strategy/spec.md`](../../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md)（release 与多环境交叉引用）
-- [`specs/.../multi-environment-wave-deployment/spec.md`](../../specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-wave-deployment/spec.md)（特性树 L3）

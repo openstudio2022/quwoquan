@@ -343,7 +343,7 @@ class AnswerOutcomeResolver {
         runArtifacts?.journey.readiness.finalAnswerReady == true;
     final finalAnswerReady =
         typedTurnDecision?.finalAnswerReady == true ||
-        aggregationState?.finalAnswerReady == true ||
+        (candidate != null && aggregationState?.finalAnswerReady == true) ||
         journeyFinalAnswerReady ||
         (runArtifacts?.displayMarkdown.trim().isNotEmpty ?? false) ||
         (runArtifacts?.displayPlainText.trim().isNotEmpty ?? false);

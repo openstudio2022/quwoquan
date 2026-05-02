@@ -12,8 +12,8 @@
 - `runId`
 - `traceId`
 - `sessionId`
-- `journeyId`
 - `pageVisitId`
+- `requestId`
 - `surfaceId`
 - `routeId`
 - `experimentBucket`
@@ -79,7 +79,7 @@
 - `PII_RESTRICTED` 字段默认不可训练；
 - `privacy_comfort`、`safety_compliance` 等负向 scorecard 可进入策略回滚与 guardrail，不必直接进入生成模型训练。
 
-## Folded legacy node `ingestion-dedup-and-idempotency`
+## Folded current node `ingestion-dedup-and-idempotency`
 
 ### 功能说明
 - InteractionEvent 与 Scorecard 必须具备稳定幂等键、去重窗口与补数兼容策略。

@@ -10,7 +10,7 @@ void main() {
         'postId': 'p_canonical',
         'type': 'moment',
         'contentType': 'micro',
-        'authorId': 'legacy_author',
+        'authorId': 'current_author',
         'profileSubjectId': 'persona_author',
         'displayName': 'User',
         'authorAvatarUrl': '',
@@ -21,7 +21,7 @@ void main() {
         'favoriteCount': 0,
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
-      expect(dto.authorId, 'legacy_author');
+      expect(dto.authorId, 'current_author');
       expect(dto.authorProfileSubjectId, 'persona_author');
     });
 

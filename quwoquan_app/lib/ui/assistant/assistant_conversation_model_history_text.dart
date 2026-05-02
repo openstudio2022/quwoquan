@@ -3,7 +3,7 @@ import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 
-/// 从 persisted / Map 形态的多候选字段中，取出首段可送入多轮拼历史的助手正文（与流式/协议过滤一致）。
+/// 从 persisted / Map 形态的多候选字段中，取出首段可送入多轮拼记录的助手正文（与流式/协议过滤一致）。
 String firstSanitizedAssistantHistoryTextForModel(
   Iterable<String> rawCandidates,
 ) {

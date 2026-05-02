@@ -303,12 +303,12 @@ func normalizeEvent(raw application.EventRecordInput) application.EventDrilldown
 		Source:           strings.TrimSpace(raw.Source),
 		UserIDHash:       strings.TrimSpace(raw.UserIDHash),
 		SessionID:        strings.TrimSpace(raw.SessionID),
-		JourneyID:        strings.TrimSpace(raw.JourneyID),
 		PageVisitID:      strings.TrimSpace(raw.PageVisitID),
 		SurfaceID:        strings.TrimSpace(raw.SurfaceID),
 		RouteID:          strings.TrimSpace(raw.RouteID),
 		OperationID:      strings.TrimSpace(raw.OperationID),
 		RequestID:        strings.TrimSpace(raw.RequestID),
+		TraceID:          strings.TrimSpace(raw.TraceID),
 		PageName:         strings.TrimSpace(raw.PageName),
 		TargetType:       strings.TrimSpace(raw.TargetType),
 		TargetKey:        strings.TrimSpace(raw.TargetKey),
@@ -318,6 +318,20 @@ func normalizeEvent(raw application.EventRecordInput) application.EventDrilldown
 		OccurredAt:       occurredAt,
 		ClientSentAt:     clientSentAt,
 		IngestedAt:       now,
+		ErrorCode:        strings.TrimSpace(raw.ErrorCode),
+		ErrorModule:      strings.TrimSpace(raw.ErrorModule),
+		ErrorKind:        strings.TrimSpace(raw.ErrorKind),
+		ErrorReason:      strings.TrimSpace(raw.ErrorReason),
+		Origin:           strings.TrimSpace(raw.Origin),
+		Nature:           strings.TrimSpace(raw.Nature),
+		FailurePoint:     strings.TrimSpace(raw.FailurePoint),
+		StackHash:        strings.TrimSpace(raw.StackHash),
+		BusinessObject:   strings.TrimSpace(raw.BusinessObject),
+		FunctionModule:   strings.TrimSpace(raw.FunctionModule),
+		AppRuntimeEnv:    strings.TrimSpace(raw.AppRuntimeEnv),
+		AppVersion:       strings.TrimSpace(raw.AppVersion),
+		Platform:         strings.TrimSpace(raw.Platform),
+		NetworkClass:     strings.TrimSpace(raw.NetworkClass),
 		Payload:          cloneMap(raw.Payload),
 		Metrics:          cloneMap(raw.Metrics),
 	}
@@ -340,6 +354,9 @@ func summarizeEvents(items []application.EventDrilldownItem, eventType, eventNam
 		addDimension(out.DimensionCounters, "experimentBucket", item.ExperimentBucket)
 		addDimension(out.DimensionCounters, "targetKey", item.TargetKey)
 		addDimension(out.DimensionCounters, "entityId", item.EntityID)
+		addDimension(out.DimensionCounters, "errorCode", item.ErrorCode)
+		addDimension(out.DimensionCounters, "nature", item.Nature)
+		addDimension(out.DimensionCounters, "appRuntimeEnv", item.AppRuntimeEnv)
 		addDimension(out.DimensionCounters, "source", item.Source)
 		addDimension(out.DimensionCounters, "eventName", item.EventName)
 	}

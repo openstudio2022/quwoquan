@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `reliability-drill-automation`
+## Folded current node `reliability-drill-automation`
 
 # L5 特性：reliability-drill-automation
 

@@ -20,7 +20,7 @@ scope:
     - 状态与官方说明维护
   out_of_scope:
     - 用户口碑管理
-    - 历史内容删改
+    - 记录内容删改
 
 scenario_acceptance:
   A1:
@@ -29,7 +29,7 @@ scenario_acceptance:
     journey_step: claim approved -> maintain homepage basics
     done_when:
       - 认领方可更新基础信息、封面、状态和官方说明
-      - 用户口碑和历史内容不可被直接修改
+      - 用户口碑和记录内容不可被直接修改
       - 更新结果可在主页展示
     edge_cases:
       - 非认领方不可进入维护

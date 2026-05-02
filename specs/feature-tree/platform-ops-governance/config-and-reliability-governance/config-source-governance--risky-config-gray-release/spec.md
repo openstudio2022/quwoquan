@@ -42,7 +42,7 @@
 - A3：灰度策略可配置且可审计
 - A4：发布过程可观测
 
-## Folded legacy node `one-click-config-rollback`
+## Folded current node `one-click-config-rollback`
 
 # L5 叶子：one-click-config-rollback
 
@@ -55,7 +55,7 @@
 
 ## 约束
 
-- 回滚目标版本必须存在且通过历史验证
+- 回滚目标版本必须存在且通过记录验证
 - 回滚操作需幂等（重复触发不造成状态错乱）
 
 ## 验收标准

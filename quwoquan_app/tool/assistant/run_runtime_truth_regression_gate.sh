@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT_DIR}"
 
-echo "[gate] Step 1/3: legacy marker scan"
+echo "[gate] Step 1/3: current marker scan"
 python3 - <<'PY'
 from pathlib import Path
 import re
@@ -45,12 +45,12 @@ for target in targets:
                 matches.append(f"{path}:{idx}:{line.strip()}")
 
 if matches:
-    print("[gate][fatal] legacy assistant markers are still present:")
+    print("[gate][fatal] current assistant markers are still present:")
     for item in matches:
         print(item)
     sys.exit(11)
 
-print("[gate] no legacy markers detected")
+print("[gate] no current markers detected")
 PY
 
 echo "[gate] Step 2/3: flutter analyze"

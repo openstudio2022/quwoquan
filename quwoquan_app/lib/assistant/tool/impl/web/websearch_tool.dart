@@ -1482,7 +1482,6 @@ class WebSearchTool implements AssistantTool {
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
-        correlationId: runId,
         sourceDomain: 'assistant',
         sourceService: 'quwoquan_app',
         component: 'search_tool',

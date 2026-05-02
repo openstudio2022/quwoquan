@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `schema-drift-blocker`
+## Folded current node `schema-drift-blocker`
 
 # L5 特性：schema-drift-blocker
 

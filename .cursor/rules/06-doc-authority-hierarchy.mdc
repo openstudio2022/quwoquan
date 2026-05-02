@@ -20,6 +20,6 @@ alwaysApply: true
 3. **云侧服务规格**：`quwoquan_service/specs/` → 权威（各服务 API 与领域边界）
 4. **App 编码规范**：`quwoquan_app/.cursor/rules/` → 权威（端侧编码/设计/测试）
 5. **App 能力规格**：`quwoquan_app/openspec/specs/` → 权威（personal-assistant 等）
-6. **归档文档**：`quwoquan_app/legacy/` → 仅参考，**不作为实现依据**
+6. **归档文档**：`quwoquan_app/current/` → 仅参考，**不作为实现依据**
 
 导航入口：`specs/README.md`

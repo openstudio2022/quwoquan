@@ -317,6 +317,7 @@ components:
           conversationId,
           type,
           title,
+          avatarUrl,
           lastSeq,
           unreadCount,
           mentionUnreadCount,
@@ -327,12 +328,8 @@ components:
         conversationId: { type: string }
         type: { type: string, enum: [direct, group, circle, encrypted] }
         title: { type: string }
-        avatarUrl: { type: string, nullable: true }
-        groupAvatarUrl: { type: string, nullable: true }
+        avatarUrl: { type: string }
         groupAvatarVersion: { type: integer, format: int64 }
-        avatarCompositeUrls:
-          type: array
-          items: { type: string }
         lastMessagePreview: { type: string }
         lastMessageType: { type: string }
         lastMessageTime: { type: string, format: date-time }
@@ -353,13 +350,12 @@ components:
           nullable: true
     Conversation:
       type: object
-      required: [id, type, maxSeq, memberCount]
+      required: [id, type, avatarUrl, maxSeq, memberCount]
       properties:
         id: { type: string }
         type: { type: string, enum: [direct, group, circle, encrypted] }
         title: { type: string }
         avatarUrl: { type: string }
-        groupAvatarUrl: { type: string, nullable: true }
         groupAvatarVersion: { type: integer, format: int64 }
         maxSeq: { type: integer, format: int64 }
         memberCount: { type: integer }

@@ -34,10 +34,10 @@ ruby -e '
     content = File.read(file)
     bad_patterns.each do |pattern|
       if content.match?(pattern)
-        abort("[verify] FAIL: legacy level found in #{file}: #{pattern.inspect}")
+        abort("[verify] FAIL: current level found in #{file}: #{pattern.inspect}")
       end
     end
   end
 
-  puts "[verify] OK: no legacy feature-tree levels found"
+  puts "[verify] OK: no current feature-tree levels found"
 '

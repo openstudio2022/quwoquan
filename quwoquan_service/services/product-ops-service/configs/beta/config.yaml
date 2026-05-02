@@ -1,0 +1,18 @@
+# beta overrides (developer local cloud-client integration)
+service:
+  http:
+    addr: ":18086"
+
+mongodb:
+  uri: "${MONGO_URI}"
+  database: "quwoquan_product_ops"
+
+redis:
+  rec:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 0
+  general:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 1

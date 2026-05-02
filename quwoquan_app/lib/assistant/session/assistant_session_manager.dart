@@ -1,4 +1,4 @@
-// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 会话存储加载/合并历史 Map；入口 assistantJsonAsStringKeyedMap。
+// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — 会话存储加载/合并记录 Map；入口 assistantJsonAsStringKeyedMap。
 
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
 import 'package:quwoquan_app/assistant/contracts/assistant_session_history_state.dart';

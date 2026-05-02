@@ -39,13 +39,12 @@
 
 客户端应消费：
 
-- `groupAvatarUrl`
-- `groupAvatarVersion`
+- `avatarUrl`
 
-不再依赖成员头像列表进行拼图。
+`groupAvatarVersion`、`groupAvatarAssetId`、`groupAvatarSourceHash` 是服务端内部资产与幂等字段；客户端不得把旧群头像 URL 字段或成员头像列表作为群头像主渲染输入。
 
 ## 6. 失败策略
 
-- 读取失败：显示默认图标
-- 派生未完成：显示占位
+- 读取失败：展示通用图片加载错误态并记录诊断
+- 派生未完成：服务端保留上一版；新群无上一版时不得下发空 `avatarUrl`
 - 上传失败：允许重试

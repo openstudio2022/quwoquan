@@ -24,12 +24,12 @@ class OpsEventRecordInput {
     this.source = '',
     this.userIdHash = '',
     this.sessionId = '',
-    this.journeyId = '',
     this.pageVisitId = '',
     this.surfaceId = '',
     this.routeId = '',
     this.operationId = '',
     this.requestId = '',
+    this.traceId = '',
     this.pageName = '',
     this.targetType = '',
     this.targetKey = '',
@@ -37,6 +37,20 @@ class OpsEventRecordInput {
     this.entityId = '',
     this.experimentBucket = '',
     this.clientSentAt = '',
+    this.errorCode = '',
+    this.errorModule = '',
+    this.errorKind = '',
+    this.errorReason = '',
+    this.origin = '',
+    this.nature = '',
+    this.failurePoint = '',
+    this.stackHash = '',
+    this.businessObject = '',
+    this.functionModule = '',
+    this.appRuntimeEnv = '',
+    this.appVersion = '',
+    this.platform = '',
+    this.networkClass = '',
     this.payload = const <String, dynamic>{},
     this.metrics = const <String, dynamic>{},
   });
@@ -50,12 +64,12 @@ class OpsEventRecordInput {
   final String source;
   final String userIdHash;
   final String sessionId;
-  final String journeyId;
   final String pageVisitId;
   final String surfaceId;
   final String routeId;
   final String operationId;
   final String requestId;
+  final String traceId;
   final String pageName;
   final String targetType;
   final String targetKey;
@@ -64,6 +78,20 @@ class OpsEventRecordInput {
   final String experimentBucket;
   final String occurredAt;
   final String clientSentAt;
+  final String errorCode;
+  final String errorModule;
+  final String errorKind;
+  final String errorReason;
+  final String origin;
+  final String nature;
+  final String failurePoint;
+  final String stackHash;
+  final String businessObject;
+  final String functionModule;
+  final String appRuntimeEnv;
+  final String appVersion;
+  final String platform;
+  final String networkClass;
   final Map<String, dynamic> payload;
   final Map<String, dynamic> metrics;
 
@@ -78,12 +106,12 @@ class OpsEventRecordInput {
       if (source.isNotEmpty) 'source': source,
       if (userIdHash.isNotEmpty) 'userIdHash': userIdHash,
       if (sessionId.isNotEmpty) 'sessionId': sessionId,
-      if (journeyId.isNotEmpty) 'journeyId': journeyId,
       if (pageVisitId.isNotEmpty) 'pageVisitId': pageVisitId,
       if (surfaceId.isNotEmpty) 'surfaceId': surfaceId,
       if (routeId.isNotEmpty) 'routeId': routeId,
       if (operationId.isNotEmpty) 'operationId': operationId,
       if (requestId.isNotEmpty) 'requestId': requestId,
+      if (traceId.isNotEmpty) 'traceId': traceId,
       if (pageName.isNotEmpty) 'pageName': pageName,
       if (targetType.isNotEmpty) 'targetType': targetType,
       if (targetKey.isNotEmpty) 'targetKey': targetKey,
@@ -92,6 +120,20 @@ class OpsEventRecordInput {
       if (experimentBucket.isNotEmpty) 'experimentBucket': experimentBucket,
       'occurredAt': occurredAt,
       if (clientSentAt.isNotEmpty) 'clientSentAt': clientSentAt,
+      if (errorCode.isNotEmpty) 'errorCode': errorCode,
+      if (errorModule.isNotEmpty) 'errorModule': errorModule,
+      if (errorKind.isNotEmpty) 'errorKind': errorKind,
+      if (errorReason.isNotEmpty) 'errorReason': errorReason,
+      if (origin.isNotEmpty) 'origin': origin,
+      if (nature.isNotEmpty) 'nature': nature,
+      if (failurePoint.isNotEmpty) 'failurePoint': failurePoint,
+      if (stackHash.isNotEmpty) 'stackHash': stackHash,
+      if (businessObject.isNotEmpty) 'businessObject': businessObject,
+      if (functionModule.isNotEmpty) 'functionModule': functionModule,
+      if (appRuntimeEnv.isNotEmpty) 'appRuntimeEnv': appRuntimeEnv,
+      if (appVersion.isNotEmpty) 'appVersion': appVersion,
+      if (platform.isNotEmpty) 'platform': platform,
+      if (networkClass.isNotEmpty) 'networkClass': networkClass,
       if (payload.isNotEmpty) 'payload': payload,
       if (metrics.isNotEmpty) 'metrics': metrics,
     };
@@ -109,12 +151,12 @@ class OpsEventRecordInput {
       source: (json['source'] ?? '').toString(),
       userIdHash: (json['userIdHash'] ?? '').toString(),
       sessionId: (json['sessionId'] ?? '').toString(),
-      journeyId: (json['journeyId'] ?? '').toString(),
       pageVisitId: (json['pageVisitId'] ?? '').toString(),
       surfaceId: (json['surfaceId'] ?? '').toString(),
       routeId: (json['routeId'] ?? '').toString(),
       operationId: (json['operationId'] ?? '').toString(),
       requestId: (json['requestId'] ?? '').toString(),
+      traceId: (json['traceId'] ?? '').toString(),
       pageName: (json['pageName'] ?? '').toString(),
       targetType: (json['targetType'] ?? '').toString(),
       targetKey: (json['targetKey'] ?? '').toString(),
@@ -122,9 +164,27 @@ class OpsEventRecordInput {
       entityId: (json['entityId'] ?? '').toString(),
       experimentBucket: (json['experimentBucket'] ?? '').toString(),
       clientSentAt: (json['clientSentAt'] ?? '').toString(),
+      errorCode: (json['errorCode'] ?? '').toString(),
+      errorModule: (json['errorModule'] ?? '').toString(),
+      errorKind: (json['errorKind'] ?? '').toString(),
+      errorReason: (json['errorReason'] ?? '').toString(),
+      origin: (json['origin'] ?? '').toString(),
+      nature: (json['nature'] ?? '').toString(),
+      failurePoint: (json['failurePoint'] ?? '').toString(),
+      stackHash: (json['stackHash'] ?? '').toString(),
+      businessObject: (json['businessObject'] ?? '').toString(),
+      functionModule: (json['functionModule'] ?? '').toString(),
+      appRuntimeEnv: (json['appRuntimeEnv'] ?? '').toString(),
+      appVersion: (json['appVersion'] ?? '').toString(),
+      platform: (json['platform'] ?? '').toString(),
+      networkClass: (json['networkClass'] ?? '').toString(),
       payload: _asObject(json['payload']),
       metrics: _asObject(json['metrics']),
     );
+  }
+
+  factory OpsEventRecordInput.fromJsonObject(Map<String, Object?> json) {
+    return OpsEventRecordInput.fromJson(Map<String, dynamic>.from(json));
   }
 }
 

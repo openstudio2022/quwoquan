@@ -62,7 +62,7 @@ export interface OnboardingDomainItem {
   deployment: {
     plane_binding_domain: string;
     plane_binding_source: string;
-    legacy_binding_source: string;
+    current_binding_source: string;
   };
   replication: {
     source_template: string;

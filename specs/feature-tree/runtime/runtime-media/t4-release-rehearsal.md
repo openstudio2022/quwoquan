@@ -23,7 +23,7 @@
    - 退群
    - 前 9 成员之一更换头像
 3. 设备 B 在正常网络下确认：
-   - 列表优先展示 `groupAvatarUrl`
+   - 列表只展示统一 `avatarUrl`
    - 未出现端侧成员头像拼图主链路
 4. 设备 B 切到弱网后重复第 2 步中的头像变更，确认：
    - 旧图保留，不闪成非法状态
@@ -32,7 +32,7 @@
    - 客户端收到 `requiresResync = true`
    - 自动转入全量修复
 6. 恢复正常网络后确认：
-   - 两端 `groupAvatarUrl/groupAvatarVersion` 一致
+   - 两端 `avatarUrl/groupAvatarVersion` 一致
    - 无需手工下拉刷新即可最终一致
 
 ## 观测点
@@ -50,7 +50,7 @@
 - 建群、加人、退群、头像变更均不阻塞主流程
 - 弱网下旧图可保留，恢复后最终一致
 - gap 明确走 `requiresResync`，不出现静默丢头像更新
-- 双端最终 `groupAvatarUrl/groupAvatarVersion` 一致
+- 双端最终 `avatarUrl/groupAvatarVersion` 一致
 
 ## 失败判定
 - 会话列表退回到成员头像拼图主路径

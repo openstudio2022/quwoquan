@@ -1,0 +1,27 @@
+# gamma overrides (cloud integration env)
+service:
+  http:
+    addr: ":18081"
+
+mongodb:
+  uri: "mongodb://mongo:27017"
+  database: "quwoquan_chat"
+
+redis:
+  realtime:
+    addr: "redis:6379"
+  general:
+    addr: "redis:6379"
+
+runtime:
+  media:
+    group_avatar_cdn_base_url: "https://gamma-avatar.quwoquan-env.test"
+    group_avatar_local_media_root: "/var/lib/quwoquan/chat-media"
+  sync:
+    patch_ttl_hours: 720
+  observability:
+    runtime_media:
+      group_avatar_recompute_duration_ms_p95: 500
+      group_avatar_fallback_ratio: 0.05
+      hint_to_pull_delay_ms_p95: 500
+      patch_fanout_failure_ratio: 0.01

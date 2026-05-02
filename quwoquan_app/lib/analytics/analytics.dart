@@ -42,7 +42,8 @@ class AnalyticsService {
     OpsEventRepository? eventRepository,
     AppLogService? appLogService,
   }) : _mode = mode,
-       _eventRepository = eventRepository ??
+       _eventRepository =
+           eventRepository ??
            (mode == AppDataSourceMode.remote
                ? RemoteOpsEventRepository()
                : MockOpsEventRepository()),
@@ -68,7 +69,6 @@ class AnalyticsService {
       level: AppLogLevel.info,
       context: AppLogContext(
         sessionId: trace.sessionId,
-        journeyId: trace.journeyId,
         pageVisitId: trace.newPageVisitId(),
         requestId: trace.newRequestId(),
         target: 'analytics_facade',
@@ -103,7 +103,6 @@ class AnalyticsService {
             source: 'analytics_facade',
             userIdHash: _hashUserId(_resolveUserId(event.properties)),
             sessionId: trace.sessionId,
-            journeyId: trace.journeyId,
             pageVisitId: trace.newPageVisitId(),
             requestId: trace.newRequestId(),
             pageName: (event.properties['pageName'] ?? '').toString(),

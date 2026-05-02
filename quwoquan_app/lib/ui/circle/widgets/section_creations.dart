@@ -749,11 +749,14 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final columns = AppSpacing.responsiveGridColumns(
+          context,
+          availableWidth: constraints.maxWidth,
+        );
+        final horizontalPadding = AppSpacing.postPreviewGridSpacing * 2;
+        final columnGaps = AppSpacing.postPreviewGridSpacing * (columns - 1);
         final itemWidth =
-            (constraints.maxWidth -
-                (AppSpacing.postPreviewGridSpacing * 2) -
-                AppSpacing.postPreviewGridSpacing) /
-            2;
+            (constraints.maxWidth - horizontalPadding - columnGaps) / columns;
         return GridView.builder(
           physics: widget.inlineScroll
               ? const NeverScrollableScrollPhysics()
@@ -766,7 +769,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             AppSpacing.postPreviewSectionPadding,
           ),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+            crossAxisCount: columns,
             mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
             crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
             mainAxisExtent: _gridItemMainAxisExtent(context, itemWidth),

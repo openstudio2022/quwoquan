@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
-/// 从 trace 列表提取 C6 回放用 payload（与 [AssistantConversationController] 历史逻辑一致）。
+/// 从 trace 列表提取 C6 回放用 payload（与 [AssistantConversationController] 记录逻辑一致）。
 class AssistantReplayTracePayload {
   const AssistantReplayTracePayload({
     required this.queryPlan,
@@ -15,11 +15,11 @@ class AssistantReplayTracePayload {
   final Map<String, dynamic> webSearchDiagnostics;
 
   Map<String, dynamic> toPayloadMap() => <String, dynamic>{
-        'queryPlan': queryPlan,
-        'policyDecision': policyDecision,
-        'roundTraces': roundTraces,
-        'webSearchDiagnostics': webSearchDiagnostics,
-      };
+    'queryPlan': queryPlan,
+    'policyDecision': policyDecision,
+    'roundTraces': roundTraces,
+    'webSearchDiagnostics': webSearchDiagnostics,
+  };
 
   static AssistantReplayTracePayload fromTraces(
     List<AssistantTraceEvent> traces,
@@ -34,7 +34,7 @@ class AssistantReplayTracePayload {
       final data = trace.data ?? const <String, dynamic>{};
       final diagnostics =
           (data['diagnostics'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{};
+          const <String, dynamic>{};
       if (diagnostics.isNotEmpty) {
         webSearchDiagnostics = diagnostics;
         break;

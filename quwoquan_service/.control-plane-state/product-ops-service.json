@@ -1,0 +1,151 @@
+{
+  "documents": {
+    "appeal_cases": {
+      "appeal_case_301": {
+        "evidenceRefs": [
+          "appeal_form",
+          "chat_snapshot"
+        ],
+        "id": "appeal_case_301",
+        "status": "under_review",
+        "targetId": "user_1827",
+        "targetType": "account",
+        "updatedAt": "2026-05-02T02:10:42Z"
+      }
+    },
+    "experiments": {
+      "discovery_feed_v3": {
+        "assignments": {},
+        "bucketStats": {},
+        "buckets": [
+          {
+            "name": "control",
+            "weightPct": 50
+          },
+          {
+            "name": "variant_a",
+            "weightPct": 25
+          },
+          {
+            "name": "variant_b",
+            "weightPct": 25
+          }
+        ],
+        "enabled": true,
+        "id": "discovery_feed_v3",
+        "name": "发现流排序权重调优",
+        "policyVersion": "ops-2026.03.08"
+      },
+      "new_user_recall_mix": {
+        "assignments": {},
+        "bucketStats": {},
+        "buckets": [
+          {
+            "name": "control",
+            "weightPct": 70
+          },
+          {
+            "name": "boosted_recall",
+            "weightPct": 30
+          }
+        ],
+        "enabled": true,
+        "id": "new_user_recall_mix",
+        "name": "新用户召回混排实验",
+        "policyVersion": "ops-2026.03.08"
+      }
+    },
+    "moderation_cases": {
+      "case_post_901": {
+        "assignedQueue": "content-moderation",
+        "evidenceRefs": [
+          "evidence_img_1"
+        ],
+        "id": "case_post_901",
+        "reason": "spam",
+        "status": "reported",
+        "targetId": "post_901",
+        "targetType": "post",
+        "updatedAt": "2026-05-02T02:10:42Z"
+      }
+    },
+    "recommendation_policies": {
+      "policy_discovery_rank_v12": {
+        "guardrailSnapshot": {
+          "complaints": 0.29,
+          "ctr": 8.9,
+          "diversity": 69
+        },
+        "id": "policy_discovery_rank_v12",
+        "name": "发现流重排策略 v12",
+        "policyVersion": "policy-2026.03.08",
+        "status": "simulated",
+        "updatedAt": "2026-05-02T02:10:42Z"
+      }
+    },
+    "recovery_cases": {
+      "recovery_user_1827": {
+        "evidenceRefs": [
+          "device_proof",
+          "payment_receipt"
+        ],
+        "id": "recovery_user_1827",
+        "status": "evidence_verified",
+        "updatedAt": "2026-05-02T02:10:42Z",
+        "userId": "user_1827"
+      }
+    }
+  },
+  "workflows": {
+    "appeal_case:appeal_case_301": {
+      "objectType": "appeal_case",
+      "objectId": "appeal_case_301",
+      "workflowId": "appeal_case_v1",
+      "state": "under_review",
+      "history": [],
+      "updatedAt": "2026-05-02T02:10:42Z"
+    },
+    "experiment:discovery_feed_v3": {
+      "objectType": "experiment",
+      "objectId": "discovery_feed_v3",
+      "workflowId": "experiment_rollout_v1",
+      "state": "running",
+      "history": [],
+      "updatedAt": "2026-05-02T02:10:42Z"
+    },
+    "experiment:new_user_recall_mix": {
+      "objectType": "experiment",
+      "objectId": "new_user_recall_mix",
+      "workflowId": "experiment_rollout_v1",
+      "state": "running",
+      "history": [],
+      "updatedAt": "2026-05-02T02:10:42Z"
+    },
+    "moderation_case:case_post_901": {
+      "objectType": "moderation_case",
+      "objectId": "case_post_901",
+      "workflowId": "moderation_case_v1",
+      "state": "reported",
+      "history": [],
+      "updatedAt": "2026-05-02T02:10:42Z"
+    },
+    "recommendation_policy:policy_discovery_rank_v12": {
+      "objectType": "recommendation_policy",
+      "objectId": "policy_discovery_rank_v12",
+      "workflowId": "recommendation_policy_v1",
+      "state": "simulated",
+      "history": [],
+      "updatedAt": "2026-05-02T02:10:42Z"
+    },
+    "recovery_case:recovery_user_1827": {
+      "objectType": "recovery_case",
+      "objectId": "recovery_user_1827",
+      "workflowId": "recovery_case_v1",
+      "state": "evidence_verified",
+      "history": [],
+      "updatedAt": "2026-05-02T02:10:42Z"
+    }
+  },
+  "approvals": {},
+  "audits": []
+}

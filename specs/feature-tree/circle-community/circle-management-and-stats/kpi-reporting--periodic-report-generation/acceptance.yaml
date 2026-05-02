@@ -12,7 +12,7 @@ tests:
 execution:
   local_gate: make gate
   full_gate: make gate-full
-legacy_merged_acceptance:
+current_merged_acceptance:
 - source_path: circle-community/circle-management-and-stats/kpi-reporting/periodic-report-generation/report-consistency-check
   task_bucket: report-consistency-check
   migrated_as: L3_task

@@ -37,7 +37,7 @@ func TestGroupAvatar_RecomputePublishesConversationAvatarPatch(t *testing.T) {
 	if last.Payload["conversationId"] != convID {
 		t.Fatalf("expected conversationId=%s got %v", convID, last.Payload["conversationId"])
 	}
-	if last.Payload["groupAvatarUrl"] == "" {
-		t.Fatal("expected groupAvatarUrl in patch payload")
+	if last.Payload["avatarUrl"] == "" {
+		t.Fatal("expected avatarUrl in patch payload")
 	}
 }

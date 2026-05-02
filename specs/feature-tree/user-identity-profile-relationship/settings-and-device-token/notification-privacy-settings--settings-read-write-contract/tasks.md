@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `settings-audit-guard`
+## Folded current node `settings-audit-guard`
 
 # 开发任务：settings-audit-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `settings-audit-guard` (from `user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings/settings-read-write-contract/settings-audit-guard`)
+- [ ] Migrated current node: `settings-audit-guard` (from `user-identity-profile-relationship/settings-and-device-token/notification-privacy-settings/settings-read-write-contract/settings-audit-guard`)

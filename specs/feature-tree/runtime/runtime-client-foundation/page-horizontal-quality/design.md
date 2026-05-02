@@ -9,7 +9,7 @@
 
 ## S2 冻结边界（P2 元数据契约 · 登记基线）
 
-**S2** 在设计与验收上 **仅等于**：[`page-horizontal-quality-matrix.md`](../page-horizontal-quality-matrix.md) 的 **P2 列**与 `specs/gates/metadata_driven_ui_gap_inventory.yaml` 中各页 `status` **按规则一致**（`compliant`→✓，`partial`/`legacy_map`→○，`exempt`→—）；**全页逐行对照、统计与「规格基线锁定」声明** 以 [`s2-metadata-driven-contract-baseline-20260330.md`](./s2-metadata-driven-contract-baseline-20260330.md) 为证据。**S2 不承诺** 将全量 `partial` 改为 `compliant` 或消灭 UI 层 Map（属后续域级 `/dev` 与 S9）。权威顺序与兄弟 L3 见 [`metadata-driven-client-data-contract/spec.md`](../metadata-driven-client-data-contract/spec.md) 覆盖矩阵。
+**S2** 在设计与验收上 **仅等于**：[`page-horizontal-quality-matrix.md`](../page-horizontal-quality-matrix.md) 的 **P2 列**与 `specs/gates/metadata_driven_ui_gap_inventory.yaml` 中各页 `status` **按规则一致**（`compliant`→✓，`partial`/`current_map`→○，`exempt`→—）；**全页逐行对照、统计与「规格基线锁定」声明** 以 [`s2-metadata-driven-contract-baseline-20260330.md`](./s2-metadata-driven-contract-baseline-20260330.md) 为证据。**S2 不承诺** 将全量 `partial` 改为 `compliant` 或消灭 UI 层 Map（属后续域级 `/dev` 与 S9）。权威顺序与兄弟 L3 见 [`metadata-driven-client-data-contract/spec.md`](../metadata-driven-client-data-contract/spec.md) 覆盖矩阵。
 
 ## S1 冻结边界（勿与 S6/S7/S8 混谈）
 

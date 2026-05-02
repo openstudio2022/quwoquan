@@ -88,7 +88,7 @@ void main() {
     await const MockUserProfileRepository().clearRecentSearches();
   });
 
-  testWidgets('无历史记录时隐藏最近搜索区块', (tester) async {
+  testWidgets('无记录记录时隐藏最近搜索区块', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
 
@@ -441,7 +441,7 @@ class _FakeSearchRepository implements SearchRepository {
           title: '西湖景区',
           subtitle: '杭州',
           resolvedFrom: SearchResolvedFrom.remote,
-          payload: const SearchHitPayloadLegacy(<String, dynamic>{
+          payload: const SearchHitPayloadWireMap(<String, dynamic>{
             'homepageId': 'homepage_west_lake',
             'homepageType': 'place',
             'title': '西湖景区',
@@ -469,7 +469,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_ming',
             title: '李明',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadLegacy(<String, dynamic>{
+            payload: const SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_ming',
               'displayName': '李明',
               'conversationId': 'conv_001',
@@ -480,7 +480,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_xiang',
             title: '李想',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadLegacy(<String, dynamic>{
+            payload: const SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_xiang',
               'displayName': '李想',
               'conversationId': 'conv_007',
@@ -491,7 +491,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_qing',
             title: '李青',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadLegacy(<String, dynamic>{
+            payload: const SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_qing',
               'displayName': '李青',
               'conversationId': 'conv_008',
@@ -502,7 +502,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_yue',
             title: '李悦',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadLegacy(<String, dynamic>{
+            payload: const SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_yue',
               'displayName': '李悦',
               'conversationId': 'conv_009',
@@ -513,7 +513,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_ze',
             title: '李泽',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadLegacy(<String, dynamic>{
+            payload: const SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_ze',
               'displayName': '李泽',
               'conversationId': 'conv_010',
@@ -527,7 +527,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_wang_fang',
             title: '王芳',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadLegacy(<String, dynamic>{
+            payload: const SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_wang_fang',
               'displayName': '王芳',
               'conversationId': 'conv_002',
@@ -549,7 +549,7 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_002',
         title: '周末登山群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: const SearchHitPayloadLegacy(<String, dynamic>{
+        payload: const SearchHitPayloadWireMap(<String, dynamic>{
           'conversationId': 'conv_002',
           'type': 'group',
           'title': '周末登山群',
@@ -562,7 +562,7 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_grid_3',
         title: '3人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: const SearchHitPayloadLegacy(<String, dynamic>{
+        payload: const SearchHitPayloadWireMap(<String, dynamic>{
           'conversationId': 'conv_grid_3',
           'type': 'group',
           'title': '3人测试群',
@@ -575,7 +575,7 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_grid_4',
         title: '4人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: const SearchHitPayloadLegacy(<String, dynamic>{
+        payload: const SearchHitPayloadWireMap(<String, dynamic>{
           'conversationId': 'conv_grid_4',
           'type': 'group',
           'title': '4人测试群',
@@ -588,7 +588,7 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_grid_5',
         title: '5人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: const SearchHitPayloadLegacy(<String, dynamic>{
+        payload: const SearchHitPayloadWireMap(<String, dynamic>{
           'conversationId': 'conv_grid_5',
           'type': 'group',
           'title': '5人测试群',
@@ -716,20 +716,20 @@ class _FakeAssistantRepository implements AssistantRepository {
   Future<List<AssistantUserTaskView>> listAssistantTasks({
     int limit = 32,
     String? status,
-  }) async =>
-      const <AssistantUserTaskView>[];
+  }) async => const <AssistantUserTaskView>[];
 
   @override
   Future<List<AssistantUserMemoryView>> listAssistantMemories({
     int limit = 32,
-  }) async =>
-      const <AssistantUserMemoryView>[];
+  }) async => const <AssistantUserMemoryView>[];
 
   @override
   Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
     int limit = 64,
-  }) async =>
-      const <AssistantSkillCatalogItemView>[];
+  }) async => const <AssistantSkillCatalogItemView>[];
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 Map<String, dynamic> _historyEntry(String query) {

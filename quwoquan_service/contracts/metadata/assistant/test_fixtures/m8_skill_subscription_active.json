@@ -1,0 +1,31 @@
+{
+  "subscriptionId": "sub_01J8M8ACTIVE00000000000001",
+  "owner": {
+    "ownerType": "user",
+    "ownerId": "user_001"
+  },
+  "createdByUserId": "user_001",
+  "skillId": "news_briefing",
+  "domainId": "content",
+  "tagRefs": [
+    "technology"
+  ],
+  "status": "active",
+  "searchQueryPlan": {
+    "rawText": "每天早上 8 点给我科技新闻摘要",
+    "queries": [
+      "科技新闻",
+      "人工智能"
+    ]
+  },
+  "trigger": {
+    "type": "cron",
+    "cron": "0 8 * * *"
+  },
+  "destination": {
+    "destinationType": "user",
+    "destinationId": "user_001"
+  },
+  "createdAt": "2026-04-29T00:00:00Z",
+  "updatedAt": "2026-04-29T00:00:00Z"
+}

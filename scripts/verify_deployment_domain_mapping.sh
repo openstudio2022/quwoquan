@@ -15,7 +15,8 @@ ruby -ryaml -e '
   envs = data["environments"]
   abort("[verify] FAIL: environments must be a map") unless envs.is_a?(Hash) && !envs.empty?
 
-  %w[dev integration prod].each do |env|
+  expected_envs = %w[alpha beta gamma prod-gray prod]
+  expected_envs.each do |env|
     abort("[verify] FAIL: missing environments.#{env}") unless envs[env].is_a?(Hash) && !envs[env].empty?
   end
 
@@ -57,12 +58,14 @@ ruby -ryaml -e '
     end
   end
 
-  # integration/prod must keep identical topology mapping
-  if normalized["integration"] != normalized["prod"]
-    abort("[verify] FAIL: integration and prod process-domain mapping must be identical")
+  # beta/gamma/prod-gray/prod must keep identical topology mapping.
+  %w[gamma prod-gray prod].each do |env|
+    if normalized["beta"] != normalized[env]
+      abort("[verify] FAIL: beta, gamma, prod-gray and prod process-domain mapping must be identical")
+    end
   end
 
-  %w[dev integration prod].each do |env|
+  expected_envs.each do |env|
     rec = normalized[env]["recommendation-service"]
     abort("[verify] FAIL: missing recommendation-service in #{env}") if rec.nil?
     unless rec == ["recommendation"]
@@ -94,7 +97,8 @@ ruby -ryaml -e '
     abort("[verify] FAIL: process_domain_plane_mapping missing plane #{plane}") unless planes.include?(plane)
   end
 
-  %w[dev integration prod].each do |env|
+  expected_envs = %w[alpha beta gamma prod-gray prod]
+  expected_envs.each do |env|
     abort("[verify] FAIL: process_domain_plane_mapping missing environments.#{env}") unless envs[env].is_a?(Hash) && !envs[env].empty?
   end
 
@@ -127,8 +131,10 @@ ruby -ryaml -e '
     end
   end
 
-  if normalized["integration"] != normalized["prod"]
-    abort("[verify] FAIL: integration and prod process-domain-plane mapping must be identical")
+  %w[gamma prod-gray prod].each do |env|
+    if normalized["beta"] != normalized[env]
+      abort("[verify] FAIL: beta, gamma, prod-gray and prod process-domain-plane mapping must be identical")
+    end
   end
 
   puts "[verify] OK: plane-aware deployment mapping validated"

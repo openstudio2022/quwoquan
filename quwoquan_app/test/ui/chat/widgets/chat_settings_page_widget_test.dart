@@ -12,9 +12,9 @@ import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 
 List<Override> _chatTestOverrides(ChatRepository repo) => [
-      chatRepositoryProvider.overrideWithValue(repo),
-      currentUserIdProvider.overrideWithValue(ChatMockData.currentUserProfileId),
-    ];
+  chatRepositoryProvider.overrideWithValue(repo),
+  currentUserIdProvider.overrideWithValue(ChatMockData.currentUserProfileId),
+];
 
 Widget _scopedApp({ChatRepository? mock}) {
   final repo = mock ?? MockChatRepository();
@@ -33,8 +33,14 @@ Widget _scopedApp({ChatRepository? mock}) {
             ),
           ),
           GoRoute(path: '/chat/:id', builder: (_, _) => const SizedBox()),
-          GoRoute(path: '/chat/:id/manage', builder: (_, _) => const SizedBox()),
-          GoRoute(path: '/chat/:id/add-members', builder: (_, _) => const SizedBox()),
+          GoRoute(
+            path: '/chat/:id/manage',
+            builder: (_, _) => const SizedBox(),
+          ),
+          GoRoute(
+            path: '/chat/:id/add-members',
+            builder: (_, _) => const SizedBox(),
+          ),
           GoRoute(
             path: '/user/:id',
             builder: (_, state) =>
@@ -87,13 +93,13 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final notifier =
-          container.read(conversationMembersProvider('conv_002').notifier);
+      final notifier = container.read(
+        conversationMembersProvider('conv_002').notifier,
+      );
       await notifier.load();
 
       final state = container.read(conversationMembersProvider('conv_002'));
-      expect(state.isOwner, isTrue,
-          reason: 'conv_002 当前用户（user_001）应为群主');
+      expect(state.isOwner, isTrue, reason: 'conv_002 当前用户（user_001）应为群主');
       expect(state.isAdminOrOwner, isTrue);
       expect(state.members.any((m) => m.isCurrentUser), isTrue);
     });
@@ -116,6 +122,36 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
 
       expect(find.byType(ChatSettingsPage), findsOneWidget);
+    });
+
+    testWidgets('紧凑宽度下成员头像网格不发生纵向溢出', (tester) async {
+      final original = FlutterError.onError;
+      final overflowErrors = <FlutterErrorDetails>[];
+      FlutterError.onError = (FlutterErrorDetails details) {
+        final message = details.exceptionAsString();
+        if (message.contains('RenderFlex') && message.contains('overflow')) {
+          overflowErrors.add(details);
+          return;
+        }
+        if (message.contains('HTTP request failed') ||
+            message.contains('NetworkImageLoadException')) {
+          return;
+        }
+        original?.call(details);
+      };
+      addTearDown(() {
+        FlutterError.onError = original;
+      });
+
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(_scopedApp());
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.byType(ChatSettingsPage), findsOneWidget);
+      expect(overflowErrors, isEmpty);
     });
 
     testWidgets('tap 设置项不崩溃', (tester) async {

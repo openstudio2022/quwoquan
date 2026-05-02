@@ -1600,7 +1600,7 @@ extension AssistantPipelineStructuredResponseAssemblyCore
   }
 
   SkillRun Function(AssistantSubagentRunRecord)
-  get _skillRunFromLegacySubagentRun {
+  get _skillRunFromCurrentSubagentRun {
     return (record) => SkillRun(
       runId: record.subagentId,
       domainId: record.domainId,

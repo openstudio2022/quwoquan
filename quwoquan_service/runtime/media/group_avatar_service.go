@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -26,21 +27,26 @@ type AvatarSource struct {
 }
 
 type RegisterGroupAvatarRequest struct {
-	ConversationID string
-	SourceHash     string
-	LayoutVersion  string
-	Contributors   []AvatarSource
+	ConversationID   string
+	SourceHash       string
+	LayoutVersion    string
+	Contributors     []AvatarSource
+	MemberAvatarURLs []string
 }
 
 type GroupAvatarService struct {
-	client    rtredis.Client
-	cdnDomain string
+	client         rtredis.Client
+	cdnBaseURL     string
+	localMediaRoot string
+	httpClient     *http.Client
 }
 
-func NewGroupAvatarService(client rtredis.Client, cdnDomain string) *GroupAvatarService {
+func NewGroupAvatarService(client rtredis.Client, cdnBaseURL, localMediaRoot string) *GroupAvatarService {
 	return &GroupAvatarService{
-		client:    client,
-		cdnDomain: strings.TrimSpace(cdnDomain),
+		client:         client,
+		cdnBaseURL:     NormalizeMediaCDNBase(cdnBaseURL),
+		localMediaRoot: strings.TrimSpace(localMediaRoot),
+		httpClient:     DefaultGroupAvatarHTTPClient(),
 	}
 }
 
@@ -59,6 +65,19 @@ func (s *GroupAvatarService) Register(
 	if sourceHash == "" {
 		return DerivedAvatarAsset{}, fmt.Errorf("sourceHash is required")
 	}
+	if len(req.Contributors) == 0 {
+		return DerivedAvatarAsset{}, fmt.Errorf("contributors are required")
+	}
+	if strings.TrimSpace(s.cdnBaseURL) == "" {
+		return DerivedAvatarAsset{}, fmt.Errorf("group avatar CDN base URL is not configured")
+	}
+	if !strings.Contains(s.cdnBaseURL, "://") {
+		return DerivedAvatarAsset{}, fmt.Errorf("group avatar CDN base URL must include scheme")
+	}
+	if strings.TrimSpace(s.localMediaRoot) == "" {
+		return DerivedAvatarAsset{}, fmt.Errorf("group avatar local media root is not configured")
+	}
+
 	lockKey := fmt.Sprintf("runtime:media:group-avatar:lock:%s", conversationID)
 	acquired := false
 	for i := 0; i < 20; i++ {
@@ -78,6 +97,7 @@ func (s *GroupAvatarService) Register(
 	defer func() {
 		_ = s.client.Del(ctx, lockKey)
 	}()
+
 	stateKey := fmt.Sprintf("runtime:media:group-avatar:%s", conversationID)
 	state, _ := s.client.HGetAll(ctx, stateKey)
 	if strings.TrimSpace(state["sourceHash"]) == sourceHash {
@@ -86,6 +106,7 @@ func (s *GroupAvatarService) Register(
 			return s.readAsset(ctx, conversationID, state["assetId"])
 		}
 	}
+
 	nextVersion := parseInt64(state["version"]) + 1
 	if nextVersion <= 0 {
 		nextVersion = 1
@@ -96,8 +117,21 @@ func (s *GroupAvatarService) Register(
 		assetID,
 		nextVersion,
 		sourceHash,
-		s.cdnDomain,
+		s.cdnBaseURL,
 	)
+	if strings.TrimSpace(ref.URL) == "" {
+		return DerivedAvatarAsset{}, fmt.Errorf("derived group avatar public URL is empty")
+	}
+
+	urls := alignMemberAvatarURLs(req.MemberAvatarURLs, len(req.Contributors))
+	pngBytes, err := RenderGroupAvatarPNG(ctx, s.httpClient, urls, groupAvatarCanvasSize)
+	if err != nil {
+		return DerivedAvatarAsset{}, fmt.Errorf("render group avatar: %w", err)
+	}
+	if err := WriteDerivedMediaFile(s.localMediaRoot, ref.ObjectKey, pngBytes); err != nil {
+		return DerivedAvatarAsset{}, fmt.Errorf("persist group avatar png: %w", err)
+	}
+
 	now := time.Now().UTC()
 	asset := DerivedAvatarAsset{
 		Ref:           ref,
@@ -131,6 +165,18 @@ func (s *GroupAvatarService) Register(
 		return DerivedAvatarAsset{}, err
 	}
 	return asset, nil
+}
+
+func alignMemberAvatarURLs(urls []string, n int) []string {
+	out := make([]string, 0, n)
+	for i := 0; i < n; i++ {
+		if i < len(urls) {
+			out = append(out, urls[i])
+		} else {
+			out = append(out, "")
+		}
+	}
+	return out
 }
 
 func (s *GroupAvatarService) readAsset(

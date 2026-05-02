@@ -72,6 +72,67 @@ func TestReportInteractionEvents_DerivesFeedbackAndDedups(t *testing.T) {
 	}
 }
 
+func TestListSkillsIncludesP0CloudManagedSkills(t *testing.T) {
+	service := NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+	)
+
+	view, err := service.ListSkills(context.Background(), "user_1", 64)
+	if err != nil {
+		t.Fatalf("ListSkills error: %v", err)
+	}
+	seen := map[string]bool{}
+	for _, item := range view.Items {
+		seen[item.SkillID] = true
+	}
+	for _, skillID := range []string{
+		"weather",
+		"finance_consumer",
+		"travel_planning",
+		SkillDailyAssistant,
+		SkillNewsBriefing,
+		SkillStockSentinel,
+		SkillTravelJourneyManager,
+	} {
+		if !seen[skillID] {
+			t.Fatalf("missing P0 skill %q in catalog: %#v", skillID, view.Items)
+		}
+	}
+}
+
+func TestDefaultSkillRuntimeRoutesDomainSkills(t *testing.T) {
+	cases := []struct {
+		name  string
+		text  string
+		skill string
+	}{
+		{name: "weather", text: "深圳明天天气怎么样，穿什么衣服？", skill: "weather"},
+		{name: "finance", text: "今天 A 股和比亚迪有哪些重大消息？", skill: "finance_consumer"},
+		{name: "travel", text: "明天杭州一日游，结合天气路况和景点拥堵规划一下", skill: "travel_planning"},
+		{name: "fortune", text: "帮我看看金牛座这周事业和感情运势，轻松娱乐就好。", skill: "fortune_astrology"},
+		{name: "astrology", text: "帮我解释上升星座和太阳星座有什么区别。", skill: "astrology_constellation"},
+		{name: "fallback", text: "帮我搜索并总结最近有哪些值得关注的 AI 产品发布。", skill: "fallback_general_search"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			selection, err := DefaultSkillRuntime{}.SelectSkill(context.Background(), assistant.AssistantTurn{
+				Input: assistant.AssistantTurnInput{Text: tc.text},
+			})
+			if err != nil {
+				t.Fatalf("SelectSkill error: %v", err)
+			}
+			if selection.SkillID != tc.skill {
+				t.Fatalf("skillID=%q, want %q", selection.SkillID, tc.skill)
+			}
+			if len(selection.ToolPolicy) == 0 {
+				t.Fatalf("empty tool policy: %#v", selection)
+			}
+		})
+	}
+}
+
 func TestReportScorecards_DedupsAndWritesAggregateHotPath(t *testing.T) {
 	store := persistence.NewMemoryEventStore()
 	cache := rtredis.NewMemoryClient()
@@ -145,18 +206,18 @@ func TestGetLearningOpsSummary_UsesProjectedProfile(t *testing.T) {
 	)
 	now := time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC)
 	_, err := service.ReportInteractionEvents(context.Background(), []assistant.InteractionEvent{{
-		EventID:         "evt_ops_1",
-		RunID:           "run_ops_1",
-		UserID:          "user_ops_1",
-		SessionID:       "session_ops_1",
-		PageType:        "assistant_dialog",
-		DomainID:        "assistant",
-		ExplicitThumb:   "down",
-		CorrectionText:  "需要更准确",
-		CreatedAt:       now,
-		FeedbackType:    "thumbs_down",
-		FeedbackScore:   -1,
-		EventType:       "feedback",
+		EventID:             "evt_ops_1",
+		RunID:               "run_ops_1",
+		UserID:              "user_ops_1",
+		SessionID:           "session_ops_1",
+		PageType:            "assistant_dialog",
+		DomainID:            "assistant",
+		ExplicitThumb:       "down",
+		CorrectionText:      "需要更准确",
+		CreatedAt:           now,
+		FeedbackType:        "thumbs_down",
+		FeedbackScore:       -1,
+		EventType:           "feedback",
 		ExplicitReasonCodes: []string{"unsafe", "privacy"},
 	}})
 	if err != nil {

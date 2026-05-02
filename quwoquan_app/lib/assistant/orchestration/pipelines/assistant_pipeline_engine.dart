@@ -2011,6 +2011,84 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
         }
         if (streamedSynthesisResult != null) {
           synthesisResult = streamedSynthesisResult;
+        } else if (!directAnswerDecision.shouldSkipSynthesis &&
+            (synthesisResult.degraded ||
+                synthesisResult.failureCode.trim().isNotEmpty)) {
+          final fallbackTrace = AssistantTraceEvent(
+            type: AssistantTraceEventType.lifecycleStart,
+            message: 'answer stream failed, fallback to non-stream synthesis',
+            timestamp: DateTime.now(),
+            runId: runId,
+            traceId: traceId,
+            visibility: TraceVisibility.system,
+            data: <String, dynamic>{
+              'stage': 'synthesis_non_stream_fallback',
+              'previousFailureCode': synthesisResult.failureCode,
+            },
+          );
+          onTraceEvent?.call(fallbackTrace);
+          try {
+            final nonStreamSynthesisResult = await _runtime.run(
+              messages: synthesisInput,
+              maxIterations: answerStageBudget,
+              goal: latestUserQuery,
+              availableToolNamesOverride: answerStageToolNames,
+              templateId: 'synthesizer.final_answer',
+              templateVersion: synthTemplateVersion,
+              templateContext: templateContext,
+              templateVariables: synthesisTemplateVars,
+              sessionId: sessionId,
+              runId: runId,
+              traceId: traceId,
+              onTraceEvent: synthesisTraceForwarder,
+              callOptions: const LlmCallOptions.synthesis(),
+              onDelta: _buildThinkingDeltaForwarder(
+                onTraceEvent,
+                runId,
+                traceId,
+              ),
+            );
+            if (nonStreamSynthesisResult.finalText.trim().isNotEmpty) {
+              synthesisResult = ReactRuntimeResult(
+                finalText: nonStreamSynthesisResult.finalText,
+                traces: <AssistantTraceEvent>[
+                  ...synthesisResult.traces,
+                  fallbackTrace,
+                  ...nonStreamSynthesisResult.traces,
+                ],
+                degraded: nonStreamSynthesisResult.degraded,
+                failureCode: nonStreamSynthesisResult.failureCode,
+                runtimeFailure:
+                    nonStreamSynthesisResult.effectiveRuntimeFailure,
+              );
+            }
+          } catch (error) {
+            final fallbackFailureTrace = AssistantTraceEvent(
+              type: AssistantTraceEventType.lifecycleEnd,
+              message: 'non-stream synthesis fallback failed',
+              timestamp: DateTime.now(),
+              runId: runId,
+              traceId: traceId,
+              visibility: TraceVisibility.system,
+              data: <String, dynamic>{
+                'stage': 'synthesis_non_stream_fallback',
+                'failureCode': AssistantFailureCode.answerStreamFailed,
+                'reason': error.toString(),
+              },
+            );
+            onTraceEvent?.call(fallbackFailureTrace);
+            synthesisResult = ReactRuntimeResult(
+              finalText: synthesisResult.finalText,
+              traces: <AssistantTraceEvent>[
+                ...synthesisResult.traces,
+                fallbackTrace,
+                fallbackFailureTrace,
+              ],
+              degraded: synthesisResult.degraded,
+              failureCode: synthesisResult.failureCode,
+              runtimeFailure: synthesisResult.effectiveRuntimeFailure,
+            );
+          }
         }
       } else {
         synthesisResult = await _runtime.run(
@@ -2232,7 +2310,7 @@ class LocalPhaseExecutionOwner with AssistantPipelineResponseCodecMixin {
     );
     final skillRuns = <SkillRun>[
       primarySkillRun,
-      ...subagentRuns.map(_skillRunFromLegacySubagentRun),
+      ...subagentRuns.map(_skillRunFromCurrentSubagentRun),
     ];
     final aggregationState = _buildAggregationState(
       planView: planView,

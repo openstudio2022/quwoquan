@@ -26,7 +26,7 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 
 ### 云侧（content-service）
 
-1. **存储层启用**：`main.go` 切换默认存储为 `MongoPostStore`，通过 `EntityRegistry` 驱动 Repository 初始化，保留 InMemory 作为 `APP_ENV=local` 的 fallback。
+1. **存储层启用**：`main.go` 切换默认存储为 `MongoPostStore`，通过 `EntityRegistry` 驱动 Repository 初始化，保留 InMemory 作为 `APP_ENV=alpha` 的 fallback。
 2. **实体缓存接入**：Post 读取走 `CacheableRepository` 装饰器（Redis `cache:post:{id}`，TTL 300s），写时失效（Update/Delete → InvalidateCache）。Reaction 缓存 `reaction:{uid}:{pid}` TTL 300s。
 3. **事件总线启用**：接入 Redis Pub/Sub 作为 `EventPublisher` 实现。发布 `PostCreated`、`PostUpdated`、`PostDeleted`、`CommentCreated`、`ReactionChanged` 事件。`DiscoveryFeedProjector` 消费事件维护 `rm_discovery_feed` 读模型。
 4. **缺失 API 实现**：
@@ -48,7 +48,7 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
    - 文章摘要：`generateArticleSummary`
    - 推荐：`getRecommendation`
    - 用户创作列表：`listUserPosts`
-8. **FeedItemDto 兼容层清理**：移除 `listDiscoveryFeedPageLegacy`，所有调用方迁移到 `PostBaseDto` 子类。
+8. **FeedItemDto 兼容层清理**：移除 `listDiscoveryFeedPageCurrent`，所有调用方迁移到 `PostBaseDto` 子类。
 
 ### 部署与 CI
 

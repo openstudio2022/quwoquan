@@ -8,30 +8,82 @@ class NotificationApiMetadata {
 
   static const String domain = 'notification';
   static const List<String> apiPrefixes = <String>[
+    '/v1/app-messages',
     '/v1/notifications',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'AckAppMessage': '/v1/app-messages/{messageId}/ack',
+    'CreateAppMessage': '/v1/app-messages',
+    'GetAppMessage': '/v1/app-messages/{messageId}',
+    'GetAppMessageUnreadCount': '/v1/app-messages/unread-count',
     'GetUnreadCount': '/v1/notifications/unread-count',
+    'ListAppMessages': '/v1/app-messages',
     'ListNotifications': '/v1/notifications',
     'MarkAllAsRead': '/v1/notifications/read-all',
     'MarkAsRead': '/v1/notifications/read',
+    'ReadAppMessage': '/v1/app-messages/{messageId}/read',
+    'StreamAppMessages': '/v1/app-messages/stream',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'AckAppMessage': 'POST',
+    'CreateAppMessage': 'POST',
+    'GetAppMessage': 'GET',
+    'GetAppMessageUnreadCount': 'GET',
     'GetUnreadCount': 'GET',
+    'ListAppMessages': 'GET',
     'ListNotifications': 'GET',
     'MarkAllAsRead': 'POST',
     'MarkAsRead': 'POST',
+    'ReadAppMessage': 'POST',
+    'StreamAppMessages': 'GET',
   };
 
+  static const String ackAppMessageOperation = 'AckAppMessage';
+  static const String createAppMessageOperation = 'CreateAppMessage';
+  static const String getAppMessageOperation = 'GetAppMessage';
+  static const String getAppMessageUnreadCountOperation = 'GetAppMessageUnreadCount';
   static const String getUnreadCountOperation = 'GetUnreadCount';
+  static const String listAppMessagesOperation = 'ListAppMessages';
   static const String listNotificationsOperation = 'ListNotifications';
   static const String markAllAsReadOperation = 'MarkAllAsRead';
   static const String markAsReadOperation = 'MarkAsRead';
+  static const String readAppMessageOperation = 'ReadAppMessage';
+  static const String streamAppMessagesOperation = 'StreamAppMessages';
 
+  static const String ackAppMessagePathTemplate = '/v1/app-messages/{messageId}/ack';
+  static String ackAppMessagePath({required String messageId}) {
+    return _fillPath(ackAppMessagePathTemplate, <String, String>{
+      'messageId': messageId,
+    });
+  }
+  static const String createAppMessagePath = '/v1/app-messages';
+  static const String getAppMessagePathTemplate = '/v1/app-messages/{messageId}';
+  static String getAppMessagePath({required String messageId}) {
+    return _fillPath(getAppMessagePathTemplate, <String, String>{
+      'messageId': messageId,
+    });
+  }
+  static const String getAppMessageUnreadCountPath = '/v1/app-messages/unread-count';
   static const String getUnreadCountPath = '/v1/notifications/unread-count';
+  static const String listAppMessagesPath = '/v1/app-messages';
   static const String listNotificationsPath = '/v1/notifications';
   static const String markAllAsReadPath = '/v1/notifications/read-all';
   static const String markAsReadPath = '/v1/notifications/read';
+  static const String readAppMessagePathTemplate = '/v1/app-messages/{messageId}/read';
+  static String readAppMessagePath({required String messageId}) {
+    return _fillPath(readAppMessagePathTemplate, <String, String>{
+      'messageId': messageId,
+    });
+  }
+  static const String streamAppMessagesPath = '/v1/app-messages/stream';
+
+  static String _fillPath(String template, Map<String, String> params) {
+    var path = template;
+    params.forEach((key, value) {
+      path = path.replaceAll('{$key}', Uri.encodeComponent(value));
+    });
+    return path;
+  }
 }

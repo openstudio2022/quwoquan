@@ -9,7 +9,7 @@
 ## 验收标准
 - A1/A6/A7 主验收。
 
-## Folded legacy node `learning-closure-sli-binding`
+## Folded current node `learning-closure-sli-binding`
 
 # L5 特性：learning-closure-sli-binding
 

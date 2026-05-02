@@ -147,5 +147,5 @@
 | M-A6 | 消息按 seq 排序展示，乱序到达仍正确 | 端侧排序 | L3 |
 | M-A7 | 已读回执 10 人群显示，100 人群不显示 | 阈值控制 | L2+L3 |
 | M-A8 | 端云 metadata 字段一致 | codegen | L1 |
-| M-A9 | ListMessages 支持 afterSeq/beforeSeq 分页 | 历史消息 | L2 |
+| M-A9 | ListMessages 支持 afterSeq/beforeSeq 分页 | 记录消息 | L2 |
 | M-A10 | ConversationUserState 正确维护 unreadCount | 未读计数 | L2 |

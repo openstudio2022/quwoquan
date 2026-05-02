@@ -45,6 +45,10 @@ func (s *PostRepositorySource) GetByID(ctx context.Context, id string) (*postmod
 	return s.store.FindByID(ctx, id)
 }
 
+func (s *PostRepositorySource) ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post {
+	return s.store.ListPublished(ctx, limit, cursor)
+}
+
 func candidateTagsFromAny(v any) []string {
 	switch vv := v.(type) {
 	case []string:

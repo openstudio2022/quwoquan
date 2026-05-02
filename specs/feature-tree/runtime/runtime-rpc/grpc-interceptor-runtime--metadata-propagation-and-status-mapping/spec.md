@@ -9,7 +9,7 @@
 ## 验收标准
 - A1/A6/A7 主验收。
 
-## Folded legacy node `rpc-observability-governance-binding`
+## Folded current node `rpc-observability-governance-binding`
 
 # L5 特性：rpc-observability-governance-binding
 

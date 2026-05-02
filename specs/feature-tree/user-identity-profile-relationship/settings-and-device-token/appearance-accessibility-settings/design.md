@@ -249,5 +249,5 @@ subAccountOverride ?? ownerDefault ?? systemDefault
 
 - 把 appearance 之外的 accessibility 偏好（高对比、粗体、减弱动效）按同样 owner/sub scope 纳入正式同步
 - 从“appearance settings”演进到更通用的“scoped settings platform”
-- 为用户提供设置变更历史与一键回退能力
+- 为用户提供设置变更记录与一键回退能力
 - 为 ops / portal 提供受控只读审计视图，而非直接改写用户设置

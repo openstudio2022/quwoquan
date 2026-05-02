@@ -587,7 +587,7 @@ class ReactRuntime {
           ),
         );
 
-      // OpenAI 协议要求：先把 assistant message（含 tool_calls）加入历史，
+      // OpenAI 协议要求：先把 assistant message（含 tool_calls）加入记录，
       // 然后每个 tool result message 必须有对应的 tool_call_id。
       // 当模型用 native function calling 时，保存原始 assistant message；
       // 否则（JSON 解析路径）合成一个兼容格式的 assistant message。

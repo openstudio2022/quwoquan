@@ -5,7 +5,7 @@ template: A1-A20
 focus_groups: []
 level_acceptance:
   A1:
-    criteria: '评论列表端云闭环：打开评论弹窗时调用 listComments(postId, cursor, limit) 加载历史评论并分页展示；游标分页响应
+    criteria: '评论列表端云闭环：打开评论弹窗时调用 listComments(postId, cursor, limit) 加载记录评论并分页展示；游标分页响应
       CommentPage(items + nextCursor)； 滚动到底自动加载下一页；首屏加载 P95 < 800ms。
 
       '

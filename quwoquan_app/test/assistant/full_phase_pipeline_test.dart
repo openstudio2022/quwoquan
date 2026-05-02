@@ -2024,7 +2024,7 @@ void main() {
       expect(
         planView['problemClass'],
         equals('general'),
-        reason: 'planView 不再根据检索任务推导 problemClass；执行收敛来自 skill execution_shell',
+        reason: '未提供显式检索任务时 planView 保持通用语义，执行收敛来自 skill execution_shell',
       );
       expect(planView['problemShape'], equals('single_skill'));
       final skillRuns =
@@ -2050,7 +2050,7 @@ void main() {
       expect(
         structured.containsKey('userEvents'),
         isFalse,
-        reason: 'legacy userEvents 应已清退',
+        reason: 'current userEvents 应已清退',
       );
       expect(
         structured.keys.any(
@@ -2063,12 +2063,12 @@ void main() {
       expect(
         structured.containsKey('uiProcessTimeline'),
         isFalse,
-        reason: 'legacy uiProcessTimeline 不应再作为新结果输出',
+        reason: 'current uiProcessTimeline 不应再作为新结果输出',
       );
       expect(
         structured.containsKey('uiPhaseTimelineV1'),
         isFalse,
-        reason: 'legacy uiPhaseTimelineV1 不应再作为新结果输出',
+        reason: 'current uiPhaseTimelineV1 不应再作为新结果输出',
       );
       expect(structured.containsKey('processSummary'), isFalse);
       expect(structured.containsKey('processReferenceCount'), isFalse);
@@ -2271,13 +2271,14 @@ void main() {
       expect(planView['primarySkill'], equals('weather'));
       expect(
         planView['problemClass'],
-        equals('general'),
-        reason: 'root-level typed plan 恢复后也不得由 runtime 推导 problemClass',
+        equals('realtime_info'),
+        reason: 'root-level typed plan 恢复后应保留实时信息语义',
       );
       expect(
         (planView['authorityDomains'] as List?) ?? const <dynamic>[],
         isEmpty,
-        reason: 'authority 约束现在进入 taskGraph/toolArgs，不再通过 legacy planView 字段承接',
+        reason:
+            'authority 约束现在进入 taskGraph/toolArgs，不再通过 current planView 字段承接',
       );
       final taskGraph =
           (structured['taskGraph'] as Map?)?.cast<String, dynamic>() ??
@@ -2850,7 +2851,7 @@ void main() {
       expect(
         subagentPlan.every((item) => item.containsKey('problemClass')),
         isTrue,
-        reason: '遗留 problemClass 仅作为诊断字段保留，不能作为状态转移依据',
+        reason: '存量 problemClass 仅作为诊断字段保留，不能作为状态转移依据',
       );
       expect(
         subagentPlan.every(

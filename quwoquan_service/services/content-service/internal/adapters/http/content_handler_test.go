@@ -119,11 +119,11 @@ func TestReportBehaviorsEndpoint(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
 		"/v1/content/behaviors",
-		bytes.NewBufferString(`{"userId":"u1","events":[{"contentId":"post_photo_001","action":"like"}]}`),
+		bytes.NewBufferString(`{"userId":"u1","events":[{"contentId":"post_photo_001","action":"click"}]}`),
 	)
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusNoContent {
 		t.Fatalf("unexpected behaviors status: %d", rec.Code)
 	}
 }
@@ -191,7 +191,7 @@ func TestBehaviorsWithSessionIdFromHeader(t *testing.T) {
 	req.Header.Set("X-Client-User-Id", "user_123")
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusNoContent {
 		t.Fatalf("unexpected behaviors status with header auth: %d", rec.Code)
 	}
 }

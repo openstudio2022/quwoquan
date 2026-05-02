@@ -60,7 +60,7 @@
 
 - [ ] T1: [T3 集成] 编写端云联调测试：SendMessage(type=video/file/image) + SyncMessages 正确同步
 - [ ] T2: [T1 静态] 编写端云消息一致性测试：type + media 字段发送方与接收方一致
-- [ ] T3: [T1 静态] 编写旧版客户端 fallback 测试：mediaUrl 占位展示
+- [ ] T3: [T1 静态] 编写过往版本客户端 fallback 测试：mediaUrl 占位展示
 - [ ] T4: [T2 模块] 编写 MediaSendProvider 单元测试（上传成功/失败/重试/离线队列）
 - [ ] T5: [T2 模块] 编写 MediaOfflineQueue 测试（持久化/FIFO/网络恢复/重试上限）
 - [ ] T6: [综合] 全量运行 `flutter test test/cloud/chat/ test/ui/chat/`，确保无回归

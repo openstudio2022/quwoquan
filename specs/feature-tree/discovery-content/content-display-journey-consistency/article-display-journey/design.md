@@ -33,7 +33,7 @@
   - `ArticlePostDto` 仅含 `title/body/coverUrl`
   - `content/post/projections/article_post.yaml` 未声明 `articleDocument` / `articleTemplate` / `articleFontPreset`
   - `content/post/ui_config.yaml` 只定义 article tab 为 `list_with_cover`，未定义关注流卡、圈子双列卡和书本阅读器 profile
-  - mock article 数据只有少量模板，且未系统覆盖“有封面 / 无封面 / legacy fallback / 三种 surface”
+  - mock article 数据只有少量模板，且未系统覆盖“有封面 / 无封面 / current fallback / 三种 surface”
 
 ### G1 基线结果
 
@@ -268,8 +268,8 @@ make codegen-app
   - hydrated reader payload
 - 额外补 4 类兼容样例：
   - `articleDocument` 完整新模型
-  - `articleBlocks` legacy 回退
-  - `cards` legacy 回退
+  - `articleBlocks` current 回退
+  - `cards` current 回退
   - `body only` 极简旧数据
 
 总计不少于 `14` 条 article mock fixtures。
@@ -358,7 +358,7 @@ make codegen-app
 
 兼容派生：
 
-- `body` 继续写入摘要或正文开头，用于旧 projection / 搜索 / legacy UI
+- `body` 继续写入摘要或正文开头，用于旧 projection / 搜索 / current UI
 - 不再新写 `cards` / `articlePages` 作为 canonical；仅允许在 app payload 中作为兼容过渡字段保留一轮
 
 #### 2.2 读路径
@@ -390,7 +390,7 @@ presentation 读取优先级：
 
 #### 2.4 双读双写退出条件
 
-退出 legacy fallback 的前提：
+退出 current fallback 的前提：
 
 - T3 / T4 验证完成
 - 线上 `articleDocument coverage >= 95%`
@@ -434,7 +434,7 @@ mock 规则：
   - 有封面/无封面
   - 长文/短文
   - 图文混排/纯文字
-  - legacy fallback
+  - current fallback
 
 评测视图要求：
 

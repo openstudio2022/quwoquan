@@ -20,7 +20,6 @@ class _PickerChatRepository extends MockChatRepository {
     type: 'group',
     title: '当前群聊',
     avatarUrl: '',
-    avatarCompositeUrls: [],
     lastMessagePreview: '',
     lastMessageType: 'text',
     lastSeq: 0,
@@ -35,7 +34,6 @@ class _PickerChatRepository extends MockChatRepository {
     type: 'group',
     title: '摄影同好群',
     avatarUrl: '',
-    avatarCompositeUrls: [],
     lastMessagePreview: '',
     lastMessageType: 'text',
     lastSeq: 0,
@@ -47,10 +45,7 @@ class _PickerChatRepository extends MockChatRepository {
   );
 
   @override
-  Future<List<ChatInboxDto>> listInbox({
-    String? cursor,
-    int limit = 20,
-  }) async {
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
     return <ChatInboxDto>[_inbox002, _inbox003];
   }
 

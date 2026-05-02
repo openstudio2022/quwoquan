@@ -16,8 +16,8 @@ DOC_FILES = ("spec.md", "design.md", "tasks.md", "acceptance.yaml")
 @dataclass(frozen=True)
 class NodeMapping:
     l1_capability: str
-    legacy_path: str
-    legacy_level: str
+    current_path: str
+    current_level: str
     target_l2_story_slug: str
     action: str
     task_bucket: str
@@ -75,7 +75,7 @@ def build_mappings(feature_tree_root: Path) -> list[NodeMapping]:
                 continue
 
             depth = len(rel.parts)
-            legacy_level = derive_level(feature_dir)
+            current_level = derive_level(feature_dir)
 
             if depth <= 3:
                 action = "keep_as_story"
@@ -89,8 +89,8 @@ def build_mappings(feature_tree_root: Path) -> list[NodeMapping]:
             mappings.append(
                 NodeMapping(
                     l1_capability=l1_name,
-                    legacy_path=str(feature_dir.relative_to(feature_tree_root)),
-                    legacy_level=legacy_level or "unknown",
+                    current_path=str(feature_dir.relative_to(feature_tree_root)),
+                    current_level=current_level or "unknown",
                     target_l2_story_slug=target_slug,
                     action=action,
                     task_bucket=task_bucket,
@@ -105,8 +105,8 @@ def write_mapping_file(mappings: Iterable[NodeMapping], output_path: Path) -> No
     payload = [
         {
             "l1_capability": item.l1_capability,
-            "legacy_path": item.legacy_path,
-            "legacy_level": item.legacy_level,
+            "current_path": item.current_path,
+            "current_level": item.current_level,
             "target_l2_story_slug": item.target_l2_story_slug,
             "action": item.action,
             "task_bucket": item.task_bucket,
@@ -174,7 +174,7 @@ def rewrite_acceptance_level(path: Path, level: str) -> None:
     if isinstance(tree_context, dict):
         tree_context["feature_level"] = level
         data["tree_context"] = tree_context
-    for key in ("legacy_level", "legacy_path", "acceptance_inherits_from"):
+    for key in ("current_level", "current_path", "acceptance_inherits_from"):
         data.pop(key, None)
     path.write_text(
         yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
@@ -182,12 +182,12 @@ def rewrite_acceptance_level(path: Path, level: str) -> None:
     )
 
 
-def merge_legacy_acceptance(target_file: Path, source_file: Path, source_path: str, task_bucket: str) -> None:
+def merge_current_acceptance(target_file: Path, source_file: Path, source_path: str, task_bucket: str) -> None:
     if not source_file.exists():
         return
     target_data = read_yaml(target_file)
     source_data = read_yaml(source_file)
-    entries = target_data.get("legacy_merged_acceptance") or []
+    entries = target_data.get("current_merged_acceptance") or []
     if not isinstance(entries, list):
         entries = []
     entries.append(
@@ -197,16 +197,16 @@ def merge_legacy_acceptance(target_file: Path, source_file: Path, source_path: s
             "migrated_as": "L3_task",
         }
     )
-    target_data["legacy_merged_acceptance"] = entries
+    target_data["current_merged_acceptance"] = entries
     target_file.write_text(
         yaml.safe_dump(target_data, allow_unicode=True, sort_keys=False),
         encoding="utf-8",
     )
 
 
-def append_legacy_task(target_tasks: Path, mapping: NodeMapping) -> None:
-    source_heading = f"Migrated legacy node: `{mapping.task_bucket}`"
-    line = f"- [ ] {source_heading} (from `{mapping.legacy_path}`)\n"
+def append_current_task(target_tasks: Path, mapping: NodeMapping) -> None:
+    source_heading = f"Migrated current node: `{mapping.task_bucket}`"
+    line = f"- [ ] {source_heading} (from `{mapping.current_path}`)\n"
     content = target_tasks.read_text(encoding="utf-8") if target_tasks.exists() else "# 任务列表\n"
     if line in content:
         return
@@ -260,10 +260,10 @@ def apply_migration(feature_tree_root: Path, mappings: list[NodeMapping]) -> Non
             key=lambda item: item.depth,
         )
         for item in keep_items:
-            source_dir = feature_tree_root / item.legacy_path
+            source_dir = feature_tree_root / item.current_path
             target_dir = ensure_story_dir(l1_dir, item.target_l2_story_slug)
             if source_dir.resolve() != target_dir.resolve():
-                move_story(source_dir, target_dir, item.legacy_path)
+                move_story(source_dir, target_dir, item.current_path)
             else:
                 acceptance = target_dir / "acceptance.yaml"
                 if acceptance.exists():
@@ -274,23 +274,23 @@ def apply_migration(feature_tree_root: Path, mappings: list[NodeMapping]) -> Non
             key=lambda item: item.depth,
         )
         for item in fold_items:
-            source_dir = feature_tree_root / item.legacy_path
+            source_dir = feature_tree_root / item.current_path
             target_dir = ensure_story_dir(l1_dir, item.target_l2_story_slug)
             initialize_story_docs(target_dir, item.target_l2_story_slug)
-            merge_markdown(target_dir / "spec.md", source_dir / "spec.md", f"Folded legacy node `{item.task_bucket}`")
-            merge_markdown(target_dir / "design.md", source_dir / "design.md", f"Folded legacy node `{item.task_bucket}`")
-            merge_markdown(target_dir / "tasks.md", source_dir / "tasks.md", f"Folded legacy node `{item.task_bucket}`")
-            append_legacy_task(target_dir / "tasks.md", item)
-            merge_legacy_acceptance(
+            merge_markdown(target_dir / "spec.md", source_dir / "spec.md", f"Folded current node `{item.task_bucket}`")
+            merge_markdown(target_dir / "design.md", source_dir / "design.md", f"Folded current node `{item.task_bucket}`")
+            merge_markdown(target_dir / "tasks.md", source_dir / "tasks.md", f"Folded current node `{item.task_bucket}`")
+            append_current_task(target_dir / "tasks.md", item)
+            merge_current_acceptance(
                 target_dir / "acceptance.yaml",
                 source_dir / "acceptance.yaml",
-                item.legacy_path,
+                item.current_path,
                 item.task_bucket,
             )
 
         # Remove all old nested feature directories, then recreate target stories in-place.
         for item in sorted(items, key=lambda item: item.depth, reverse=True):
-            source_dir = feature_tree_root / item.legacy_path
+            source_dir = feature_tree_root / item.current_path
             if source_dir.exists() and source_dir.parent != l1_dir:
                 shutil.rmtree(source_dir)
 

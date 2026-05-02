@@ -19,7 +19,7 @@ global_acceptance:
   A1_functional:
     scenarios:
     - given: 存在 deploy/shared/process_domain_mapping.yaml
-      when: 声明 dev/integration/prod 三个环境
+      when: 声明 alpha/beta/gamma/prod-gray/prod 三个环境
       then: 每个环境均可解析出 deploy process -> domains 映射
     - given: 运行环境通过 APP_ENV=dev|integration|prod 选择拓扑
       when: 服务启动读取环境映射
@@ -27,7 +27,7 @@ global_acceptance:
     - given: 同一环境下同一 domain 被两个进程声明
       when: 执行 verify_deployment_domain_mapping.sh
       then: 门禁失败并输出冲突进程
-    - given: integration 与 prod 映射不一致
+    - given: beta/gamma/prod-gray/prod 映射不一致
       when: 执行 verify_deployment_domain_mapping.sh
       then: 门禁失败并阻断提交
     - given: integration/prod 拓扑需要绑定配置发布版本
@@ -42,7 +42,7 @@ global_acceptance:
     - given: all-in-one Sidecar 部署
       when: 使用 deploy/service/seed-box/kustomize/overlays/{env} 渲染
       then: 可得到 Go+Python 双容器同 Pod 的可部署清单
-    - given: 同一套 overlays 在 dev/integration/prod 复用
+    - given: 同一套 overlays 在 alpha/beta/gamma/prod-gray/prod 复用
       when: 按环境注入参数
       then: CONFIG_VERSION/IMAGE_VERSION/replicas/HPA 阈值均可被参数化替换
   A2_experience:

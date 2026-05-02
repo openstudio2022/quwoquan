@@ -1,0 +1,32 @@
+# prod-gray overrides (production gray release)
+service:
+  http:
+    addr: ":18087"
+
+postgres:
+  dsn: ""
+
+mongodb:
+  uri: ""
+  database: quwoquan_assistant
+
+redis:
+  rec:
+    mode: cluster
+    addrs: []
+    tls: true
+  general:
+    mode: cluster
+    addrs: []
+    tls: true
+
+model_provider:
+  provider: openai_compatible
+  base_url: "https://api.xiaomimimo.com/v1"
+  model: "mimo-v2-flash"
+  api_key_env: "PERSONAL_ASSISTANT_MIMO_API_KEY"
+  timeout_ms: 60000
+
+search_provider:
+  provider: duckduckgo_html
+  timeout_ms: 30000

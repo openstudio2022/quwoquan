@@ -2,7 +2,7 @@ version: 1
 read_model: HomepageRelatedGroupSummary
 
 description: |
-  主页壳层关联圈子摘要 wire（circleId 与历史 id 键兼容）。
+  主页壳层关联圈子摘要 wire（circleId 与记录 id 键兼容）。
 
 source_entities:
   - Homepage

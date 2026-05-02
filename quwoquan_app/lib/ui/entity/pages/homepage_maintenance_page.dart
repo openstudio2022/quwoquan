@@ -102,7 +102,7 @@ class _HomepageMaintenancePageState
                   SizedBox(height: AppSpacing.intraGroupXs),
                   Text(
                     (_detail?.claimStatus ?? '') == 'claimed'
-                        ? '已认领主页可维护标题、简介、位置与标签，历史内容会继续聚合保留。'
+                        ? '已认领主页可维护标题、简介、位置与标签，记录内容会继续聚合保留。'
                         : '当前主页尚未完成认领，暂不可维护。',
                     style: TextStyle(
                       fontSize: AppTypography.iosFootnote,

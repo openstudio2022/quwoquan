@@ -19,11 +19,20 @@ overlays 通过 `configMapGenerator + replacements` 注入：
 - `APP_ENV`
 - `CONFIG_VERSION`
 - `IMAGE_VERSION`
+- `MODULE_PACKAGE`
+- `MODULE_CATALOG_VERSION`
 - `REPLICAS`
 - `HPA_MIN_REPLICAS`
 - `HPA_MAX_REPLICAS`
 - `HPA_CPU_AVG`
 - `HPA_MEM_AVG`
+
+模块化约束：
+
+- `MODULE_PACKAGE=seed-box` 对应 `deploy/shared/module_package_mapping.yaml` 中的 `seed-box` package。
+- package 中启用的 module 必须属于 `process_domain_mapping.yaml` 中 `seed-box.domains`。
+- 热点模块可拆分为独立 package，但拆分只改变 module 运行位置，不改变领域 API、Outbox 事实源或 task routing。
+- `rec-model-service` 保持 Python sidecar/独立进程，不并入 Go `seed-box`。
 
 ## 渲染
 

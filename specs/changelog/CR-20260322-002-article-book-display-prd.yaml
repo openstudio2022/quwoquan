@@ -48,10 +48,10 @@ entries:
           - 4.4 创作编辑页 / 编辑器
       - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/design.md
         sections:
-          - 旧版设计失效说明
+          - 过往版本设计失效说明
       - path: specs/feature-tree/discovery-content/content-display-journey-consistency/article-display-journey/tasks.md
         sections:
-          - 旧版任务失效说明
+          - 过往版本任务失效说明
       - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--article-magazine-cover/spec.md
         sections:
           - 旧探索节点失效说明

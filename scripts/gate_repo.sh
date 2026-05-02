@@ -20,6 +20,11 @@ run_service() {
   bash scripts/verify_opsx_ff_8services_consistency.sh
   bash scripts/verify_runtime_packaging.sh
   bash scripts/verify_ff_config_contract.sh
+  python3 scripts/verify_module_package_mapping.py
+  python3 scripts/verify_reliable_task_catalog.py
+  python3 scripts/verify_reliable_task_retention_policy.py
+  python3 scripts/verify_module_permission_scope.py
+  python3 scripts/verify_reliable_task_migration.py
   # topology 由 delivery-gate topology job / make gate 负责，避免重复
   bash scripts/verify_deploy_kustomization.sh
   bash scripts/verify_recommendation_service_contract.sh
@@ -48,6 +53,7 @@ run_app() {
   (cd quwoquan_app && flutter analyze --no-fatal-warnings --no-fatal-infos)
   # Dart 语义门禁：视觉 token + iOS 语义风格（chevron / Cupertino 组件边界）
   if command -v python3 >/dev/null 2>&1; then
+    python3 scripts/verify_retired_terms_zero.py || exit 1
     python3 scripts/verify_dart_semantic.py || exit 1
     python3 scripts/verify_settings_canonical.py || exit 1
     python3 scripts/verify_conversation_sheet_canonical.py || exit 1
@@ -105,11 +111,15 @@ run_app() {
     python3 scripts/verify_metadata_routes_vs_codegen_app.py || exit 1
     python3 scripts/verify_metadata_service_entities_vs_fields.py || exit 1
     python3 scripts/verify_ui_mock_isolation.py || exit 1
+    python3 scripts/verify_contract_mock_data_inventory.py || exit 1
+    python3 scripts/verify_app_no_integration_test_dir.py || exit 1
     python3 scripts/verify_lib_no_import_test_tree.py || exit 1
     python3 scripts/verify_ui_app_data_source_mode_ratchet.py || exit 1
     python3 scripts/verify_lib_no_test_only_symbols.py || exit 1
+    python3 scripts/verify_app_seed_manifests.py || exit 1
+    python3 scripts/verify_business_env_data_inventory.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_app_seed_manifests, verify_business_env_data_inventory"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
@@ -155,7 +165,7 @@ run_app() {
   fi
   rm -f "$flutter_log"
   # PA Core（桶 A 协议契约 + 桶 B 引擎集成 + 桶 C UI 契约）默认全部阻断。
-  # 桶 A 覆盖降级响应根因/消息历史协议/可观测字段，失败即退。
+  # 桶 A 覆盖降级响应根因/消息记录协议/可观测字段，失败即退。
   bash scripts/run_pa_core_tests.sh
   # Skip in CI: test/patrol/ (needs real device/Patrol, run via FTL).
 
@@ -186,7 +196,7 @@ run_patrol_local() {
     return 0
   fi
   echo "[gate] L4 Patrol (local device)"
-  (cd quwoquan_app && patrol test test/patrol/ --dart-define=ENV=staging)
+  (cd quwoquan_app && patrol test test/patrol/ --dart-define=APP_RUNTIME_ENV=gamma --dart-define=API_CONTRACT_ENV=gamma)
 }
 
 case "$scope" in

@@ -4,7 +4,7 @@ import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 /// 应用间距常量
 /// 根据设计规则文档 (03_DESIGN_RULES.md) 定义
 class AppSpacing {
-  // ==================== 扩展语义尺寸（用于历史页面去字面量） ====================
+  // ==================== 扩展语义尺寸（用于记录页面去字面量） ====================
   /// 占位/未测量维度（如媒体元数据占位）
   static const double zero = 0.0;
   static const double one = 1.0;
@@ -346,7 +346,7 @@ class AppSpacing {
     context: context,
   );
 
-  /// 关注流/作者主页等主内容区的共享最大宽度语义。
+  /// 关注流/作者主页等主内容区的手机/窄屏基准最大宽度语义。
   static const double feedMaxContentWidth = 720.0;
 
   /// Post 预览卡片统一外边距/列表区边距语义。
@@ -707,27 +707,40 @@ class AppSpacing {
 
   // ==================== 响应式内容网格 ====================
 
-  /// 瀑布流/宫格的最佳列宽（理想单列内容宽度），用于计算列数。
-  static const double _gridIdealColumnWidth = 180.0;
+  /// 宽屏主页/圈子页主内容最大宽度：窄屏沿用基准宽，宽屏与背景层同宽铺满。
+  static double adaptiveFeedMaxContentWidth(double availableWidth) {
+    if (availableWidth <= feedMaxContentWidth) {
+      return feedMaxContentWidth;
+    }
+    return availableWidth;
+  }
 
-  /// 瀑布流/宫格的最小列数。
+  /// Post 预览网格的最佳列宽（理想单列内容宽度），用于计算列数。
+  static const double _gridIdealColumnWidth = 220.0;
+
+  /// Post 预览网格的最小列数。
   static const int gridMinColumns = 2;
 
-  /// 根据可用宽度计算瀑布流/宫格列数（Pinterest 风格自适应）。
-  /// 保证至少 [gridMinColumns] 列，每列不窄于 [_gridIdealColumnWidth]。
-  static int responsiveGridColumns(BuildContext context, {double? availableWidth}) {
+  /// Post 预览网格的最大列数，避免 iPad/桌面出现 5-6 列的过密卡片。
+  static const int gridMaxColumns = 4;
+
+  /// 根据可用宽度计算 Post 预览瀑布流/宫格列数。
+  /// 保证至少 [gridMinColumns] 列，并限制不超过 [gridMaxColumns]。
+  static int responsiveGridColumns(
+    BuildContext context, {
+    double? availableWidth,
+  }) {
     final width = availableWidth ?? MediaQuery.sizeOf(context).width;
     final usable = width - feedContentHorizontal(context) * 2;
     final cols = (usable / _gridIdealColumnWidth).floor();
-    return cols < gridMinColumns ? gridMinColumns : cols;
+    return cols.clamp(gridMinColumns, gridMaxColumns).toInt();
   }
 
   /// 关注流在宽屏下的列数（单列微博风格 → 多列卡片流过渡）。
-  /// 手机始终单列；平板 2 列；大屏 3 列。
+  /// 手机始终单列；平板及以上复用 Post 预览网格列数，并继承最大列数上限。
   static int feedResponsiveColumns(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     if (width < expandedBreakpoint) return 1;
-    if (width < 900) return 2;
-    return 3;
+    return responsiveGridColumns(context, availableWidth: width);
   }
 }

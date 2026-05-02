@@ -206,9 +206,9 @@ void main() {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 测试 1：失败文案不得污染下一轮模型输入历史
+  // 测试 1：失败文案不得污染下一轮模型输入记录
   // ══════════════════════════════════════════════════════════════════════════
-  group('G1 — 失败/降级文案不得污染下一轮模型输入历史', () {
+  group('G1 — 失败/降级文案不得污染下一轮模型输入记录', () {
     test('HTTP 400 错误文案不得进入第二轮 messages', () async {
       // 第一轮 LLM 返回降级文本（模拟 HTTP 400），第二轮正常
       late _CapturingSequenceProvider provider;
@@ -319,10 +319,10 @@ void main() {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // 测试 2：sessions.json 加载时自动清洗历史降级消息
+  // 测试 2：sessions.json 加载时自动清洗记录降级消息
   // ══════════════════════════════════════════════════════════════════════════
   group('G2 — SessionManager 加载时自动清洗降级消息', () {
-    test('旧版 sessions.json 含污染 assistant 历史时，load() 后应直接清空', () async {
+    test('过往版本 sessions.json 含污染 assistant 记录时，load() 后应直接清空', () async {
       final sessionsPath = '${tempDir.path}/sessions.json';
       final pollutedData = {
         'version': 'v2',
@@ -346,7 +346,7 @@ void main() {
       final history = manager.getOrCreateSession('assistant');
       final assistantContents = _assistantContents(history);
 
-      expect(assistantContents, isEmpty, reason: '旧版历史不再兼容，应在 load() 时整体清空');
+      expect(assistantContents, isEmpty, reason: '过往版本记录不再兼容，应在 load() 时整体清空');
     });
 
     test('canonical assistant 消息会被保留', () async {
@@ -511,7 +511,7 @@ void main() {
     );
   });
 
-  group('G5 — fresh topic 不再把原始历史直接喂给 planner', () {
+  group('G5 — fresh topic 不再把原始记录直接喂给 planner', () {
     test('重复天气问句时 planner 只看当前轮用户消息与结构化上下文', () async {
       final provider = _TemplateAwareCaptureProvider();
       final runtime = ReactRuntime(

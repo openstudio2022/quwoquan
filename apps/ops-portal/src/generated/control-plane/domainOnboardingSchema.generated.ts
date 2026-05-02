@@ -8,7 +8,7 @@ export const domainOnboardingSchema = {
       "user"
     ],
     "required_deploy_sources": {
-      "legacy": "deploy/shared/process_domain_mapping.yaml",
+      "current": "deploy/shared/process_domain_mapping.yaml",
       "plane_aware": "deploy/shared/process_domain_plane_mapping.yaml"
     },
     "template_domain": "content"

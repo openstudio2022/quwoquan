@@ -11,11 +11,10 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-final searchCoordinatorProvider =
-    NotifierProvider.autoDispose
-        .family<SearchCoordinator, SearchSessionState, SearchLaunchContext>(
-          SearchCoordinator.new,
-        );
+final searchCoordinatorProvider = NotifierProvider.autoDispose
+    .family<SearchCoordinator, SearchSessionState, SearchLaunchContext>(
+      SearchCoordinator.new,
+    );
 
 class SearchCoordinator extends Notifier<SearchSessionState> {
   SearchCoordinator(this._launchContext);
@@ -273,9 +272,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
     );
     await _localStore.save(nextEntries);
     try {
-      await ref
-          .read(userProfileRepositoryProvider)
-          .deleteRecentSearch(entryId);
+      await ref.read(userProfileRepositoryProvider).deleteRecentSearch(entryId);
     } catch (_) {
       // Keep local-first delete even when remote cleanup fails.
     }
@@ -351,15 +348,12 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
 
     final contacts = response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatContact)
-        .map(
-          (hit) => ChatContactSearchItemDto.fromMap(hit.payload.toWireMap()),
-        )
+        .map((hit) => ChatContactSearchItemDto.fromMap(hit.payload.toWireMap()))
         .toList(growable: false);
     final conversationHits = response.hits
         .where((hit) => hit.objectType == SearchObjectType.chatConversation)
         .map(
-          (hit) =>
-              ConversationSearchItemView.fromMap(hit.payload.toWireMap()),
+          (hit) => ConversationSearchItemView.fromMap(hit.payload.toWireMap()),
         )
         .toList(growable: false);
     final messageHits = response.hits
@@ -727,7 +721,6 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
           title: record.conversationTitle,
           subtitle: record.matchedPreview,
           avatarUrl: record.avatarUrl,
-          avatarCompositeUrls: record.avatarCompositeUrls,
           conversationId: record.conversationId,
           conversationType: record.conversationType,
           messageAnchorId: record.messageAnchorId,
@@ -917,9 +910,7 @@ class SearchRecentHistoryStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _storageKey,
-      jsonEncode(
-        entries.map((entry) => entry.toMap()).toList(growable: false),
-      ),
+      jsonEncode(entries.map((entry) => entry.toMap()).toList(growable: false)),
     );
   }
 
@@ -935,7 +926,6 @@ class _ChatRecordAccumulator {
     required this.conversationTitle,
     required this.conversationType,
     required this.avatarUrl,
-    required this.avatarCompositeUrls,
     required this.matchedPreview,
     required this.matchCount,
     this.messageAnchorId,
@@ -950,7 +940,6 @@ class _ChatRecordAccumulator {
       conversationTitle: conversation.title,
       conversationType: conversation.type,
       avatarUrl: conversation.avatarUrl,
-      avatarCompositeUrls: conversation.avatarCompositeUrls,
       matchedPreview:
           conversation.highlightText ??
           conversation.lastMessagePreview ??
@@ -973,8 +962,6 @@ class _ChatRecordAccumulator {
           message.conversationAvatarUrl ??
           seedConversation?.avatarUrl ??
           message.senderAvatarUrl,
-      avatarCompositeUrls:
-          seedConversation?.avatarCompositeUrls ?? const <String>[],
       matchedPreview: message.highlightText ?? message.contentPreview,
       matchCount: 1,
       messageAnchorId: message.messageId,
@@ -986,7 +973,6 @@ class _ChatRecordAccumulator {
   String conversationTitle;
   String conversationType;
   String? avatarUrl;
-  List<String> avatarCompositeUrls;
   String matchedPreview;
   int matchCount;
   String? messageAnchorId;
@@ -996,9 +982,6 @@ class _ChatRecordAccumulator {
     conversationTitle = conversation.title;
     conversationType = conversation.type;
     avatarUrl = avatarUrl ?? conversation.avatarUrl;
-    if (avatarCompositeUrls.isEmpty) {
-      avatarCompositeUrls = conversation.avatarCompositeUrls;
-    }
     matchedPreview =
         conversation.highlightText ??
         conversation.lastMessagePreview ??
@@ -1023,7 +1006,6 @@ class _ChatRecordAccumulator {
       matchedPreview: matchedPreview,
       matchCount: matchCount,
       avatarUrl: avatarUrl,
-      avatarCompositeUrls: avatarCompositeUrls,
       messageAnchorId: messageAnchorId,
       timestamp: timestamp,
     );

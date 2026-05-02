@@ -271,14 +271,16 @@ class CircleMockData {
   static List<CircleDto>? _catalogCircleDtosCache;
   static List<CircleDto> get catalogCircleDtos {
     return _catalogCircleDtosCache ??= [
-      for (final w in _catalogCircleWires) CircleDto.fromMap(_wireForCircleDto(w)),
+      for (final w in _catalogCircleWires)
+        CircleDto.fromMap(_wireForCircleDto(w)),
     ];
   }
 
   static CircleDto? _primaryCircleDtoCache;
   static CircleDto get primaryCircleDto {
-    return _primaryCircleDtoCache ??=
-        CircleDto.fromMap(_wireForCircleDto(_primaryDetailWire));
+    return _primaryCircleDtoCache ??= CircleDto.fromMap(
+      _wireForCircleDto(_primaryDetailWire),
+    );
   }
 
   /// 与 [MockCircleRepository] 初始列表一致（同 id 后写覆盖，顺序为插入序）。
@@ -423,7 +425,7 @@ class CircleMockData {
     ];
   }
 
-  /// 与历史 Mock 一致：不含 `circleId`（由仓库在 [CircleFileDto.fromMap] 时注入）。
+  /// 与记录 Mock 一致：不含 `circleId`（由仓库在 [CircleFileDto.fromMap] 时注入）。
   static List<Map<String, dynamic>> get files => catalogCircleFileDtos
       .map((d) {
         final m = Map<String, dynamic>.from(d.toMap());

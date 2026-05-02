@@ -6,7 +6,7 @@
 
 ## 背景与动机
 
-`specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md` §2.5 **Symmetric Dark Mode** 要求：每一套浅色材质须有深色对应，深色模式不是简单反色。历史上部分页面仍使用 **固定亮度色值、仅按浅色设计、或未接 `isDark`/`CupertinoDynamicColor`**，导致深色模式下对比不足、漏光或与壳层材质冲突。
+`specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md` §2.5 **Symmetric Dark Mode** 要求：每一套浅色材质须有深色对应，深色模式不是简单反色。记录上部分页面仍使用 **固定亮度色值、仅按浅色设计、或未接 `isDark`/`CupertinoDynamicColor`**，导致深色模式下对比不足、漏光或与壳层材质冲突。
 
 `app-theme-infrastructure` 已定义 **全局主题运行时**（含 `system/light/dark`）；本 L3 将 **落地范围收紧为「可枚举的页面 / 全屏表面」**，要求 **逐页可验收**，并 **补齐不支持双色的页面**。
 

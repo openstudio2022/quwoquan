@@ -1,0 +1,21 @@
+# gamma overrides (cloud integration env)
+service:
+  http:
+    addr: ":18083"
+
+mongodb:
+  uri: ""
+  database: "quwoquan_rtc"
+
+redis:
+  general:
+    mode: standalone
+    addr: ""
+  realtime:
+    mode: standalone
+    addr: ""
+
+livekit:
+  url: ""
+  api_key: ""
+  api_secret: ""

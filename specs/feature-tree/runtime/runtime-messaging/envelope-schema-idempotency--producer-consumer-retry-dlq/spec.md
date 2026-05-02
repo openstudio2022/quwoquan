@@ -9,7 +9,7 @@
 ## 验收标准
 - A1/A6/A7 主验收。
 
-## Folded legacy node `outbox-inbox-consistency-pattern`
+## Folded current node `outbox-inbox-consistency-pattern`
 
 # L5 特性：outbox-inbox-consistency-pattern
 

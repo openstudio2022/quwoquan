@@ -309,8 +309,8 @@ Journey 内正式 contract：
 
 ### 迁移 / 回填
 
-- 历史内容若已有稳定对象 id，可回填到 `primaryEntityId`
-- 无稳定对象 id 的历史文本，不在本 Journey 自动升级为主页绑定
+- 记录内容若已有稳定对象 id，可回填到 `primaryEntityId`
+- 无稳定对象 id 的记录文本，不在本 Journey 自动升级为主页绑定
 - 新的主页 attach 入口上线后，不再允许新内容继续写自由文本主页
 
 ### 双读 / 双写

@@ -68,9 +68,15 @@ func main() {
 func loadRuntimeConfig() (config, error) {
 	cfg := config{}
 	serviceName := getenvOrDefault("SERVICE_NAME", "entity-service")
-	appEnv := getenvOrDefault("APP_ENV", "local")
+	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
 	configVersion := strings.TrimSpace(os.Getenv("CONFIG_VERSION"))
+	if !isValidAppEnv(appEnv) {
+		return config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod-gray|prod, got %q", appEnv)
+	}
+	if requiresConfigVersion(appEnv) && configVersion == "" {
+		return config{}, fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
+	}
 
 	if configRoot != "" {
 		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
@@ -98,11 +104,29 @@ func loadRuntimeConfig() (config, error) {
 		return cfg, nil
 	}
 
-	legacy := filepath.Join("configs", "config.yaml")
-	if err := mergeConfigFile(&cfg, legacy); err != nil {
+	current := filepath.Join("configs", "config.yaml")
+	if err := mergeConfigFile(&cfg, current); err != nil {
 		return config{}, fmt.Errorf("read config failed: %w", err)
 	}
 	return cfg, nil
+}
+
+func isValidAppEnv(env string) bool {
+	switch env {
+	case "alpha", "beta", "gamma", "prod-gray", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func requiresConfigVersion(env string) bool {
+	switch env {
+	case "gamma", "prod-gray", "prod":
+		return true
+	default:
+		return false
+	}
 }
 
 func mergeConfigFile(cfg *config, path string) error {

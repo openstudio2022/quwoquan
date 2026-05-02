@@ -1,0 +1,14 @@
+{
+  "skillId": "emotion_companion",
+  "displayName": "情感陪伴助手",
+  "description": "情感陪伴、恋爱家庭咨询、心理疏导、亲子教育、闲聊解闷。",
+  "domainId": "emotion_companion",
+  "executionTarget": "cloud",
+  "routingHints": ["难过", "焦虑", "压力", "崩溃", "陪我聊聊", "恋爱", "婚姻", "分手"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "memory_search"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 2
+  }
+}

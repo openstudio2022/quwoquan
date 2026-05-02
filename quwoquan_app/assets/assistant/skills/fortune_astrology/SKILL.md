@@ -28,7 +28,7 @@ dialogue_state_docs: dialogue/state_machine.md dialogue/state_transition_contrac
 ## 用户信息补全策略
 1. 从当前问题提取时间范围与关切维度（感情/事业/财运）
 2. 复用用户资料中的生日与星座信息
-3. 缺失时参考历史对话与记忆
+3. 缺失时参考记录对话与记忆
 4. 仍缺失时再追问（避免一次问太多）
 
 ## 工具调用策略

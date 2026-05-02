@@ -12,7 +12,7 @@
 
 ## 背景与目标
 
-- **P4（横向质量）**：页面级 **open / return /（可选）停留** 进入 **`AppLogService`** 统一管道，与 `AppTraceContextStore` 的 `sessionId` / `journeyId` / `pageVisitId` 对齐。
+- **P4（横向质量）**：页面级 **open / return /（可选）停留** 进入 **`AppLogService`** 统一管道，与 `AppTraceContextStore` 的 `sessionId` / `pageVisitId` 对齐。
 - **问题**：欢迎流使用 **独立 `MaterialApp(home: WelcomeScreen)`**，不在 **`GoRouter` 根 `NavigatorObserver`** 上，只能靠页面 **手写** `writeAppPageAccessOpen/Return`；全站 **`pageName`** 对非 Tab 路径多为 **`route_unknown`**，分析不可读。
 - **目标**：**方案 A** — 欢迎页走 **真实路由 `/welcome`**，与 **全屏栈同一套 Observer**；在 **尽量不改动各业务 `*_page.dart`** 的前提下，**覆盖所有应计一次的「页面表面」**。
 

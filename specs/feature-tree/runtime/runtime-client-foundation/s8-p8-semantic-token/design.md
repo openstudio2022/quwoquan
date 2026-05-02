@@ -55,4 +55,4 @@
 
 ## 回滚
 
-revert 波次 PR；必要时恢复 `baseline.txt` 历史版本以恢复 gate 绿。
+revert 波次 PR；必要时恢复 `baseline.txt` 记录版本以恢复 gate 绿。

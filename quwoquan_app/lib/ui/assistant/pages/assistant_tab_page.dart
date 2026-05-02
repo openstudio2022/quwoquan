@@ -15,6 +15,7 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/assistant/models/assistant_schedule_row.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 
 class AssistantTabPage extends ConsumerStatefulWidget {
   const AssistantTabPage({super.key});
@@ -25,12 +26,19 @@ class AssistantTabPage extends ConsumerStatefulWidget {
 
 class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
     with AutomaticKeepAliveClientMixin {
+  static const String _initialTabFromEnv = String.fromEnvironment(
+    'ASSISTANT_INITIAL_TAB',
+    defaultValue: 'dialog',
+  );
   static const List<String> _tabOrder = <String>[
     'schedule',
     'dialog',
+    'personal',
     'skills',
   ];
-  String _activeTab = 'dialog';
+  String _activeTab = _tabOrder.contains(_initialTabFromEnv)
+      ? _initialTabFromEnv
+      : 'dialog';
   String? _lastInternalTab;
 
   @override
@@ -40,9 +48,11 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _activeTab != 'dialog') return;
+      if (!mounted) return;
       ref.read(assistantInternalTabProvider.notifier).set(_activeTab);
-      ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
+      ref
+          .read(bottomNavHiddenProvider.notifier)
+          .setHidden(_activeTab == 'dialog' || _activeTab == 'personal');
     });
   }
 
@@ -58,13 +68,15 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
       }
       setState(() => _activeTab = id);
       ref.read(assistantInternalTabProvider.notifier).set(id);
-      // 仅「找小趣」走沉浸式体验，其余 tab 保持系统底部导航可见。
-      ref.read(bottomNavHiddenProvider.notifier).setHidden(id == 'dialog');
+      // 「找小趣」与并行验证中的「找私助」均走沉浸式对话体验。
+      ref
+          .read(bottomNavHiddenProvider.notifier)
+          .setHidden(id == 'dialog' || id == 'personal');
     }
   }
 
   void _handleExit() {
-    // 如果有内部历史且不是 dialog，返回内部历史
+    // 如果有内部记录且不是 dialog，返回内部记录
     if (_lastInternalTab != null && _lastInternalTab != 'dialog') {
       _handleTabChange(_lastInternalTab!);
       return;
@@ -181,14 +193,19 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
             embedded: true,
           ),
         );
+      case 'personal':
+        return KeyedSubtree(
+          key: const ValueKey<String>('personal_assistant_dialog_page'),
+          child: PersonalAssistantConversationPage(
+            onBack: _handleExit,
+            embedded: true,
+          ),
+        );
       case 'dialog':
       default:
         return KeyedSubtree(
           key: TestKeys.assistantDialogPage,
-          child: AssistantConversationPage(
-            onBack: _handleExit,
-            embedded: true,
-          ),
+          child: AssistantConversationPage(onBack: _handleExit, embedded: true),
         );
     }
   }
@@ -217,6 +234,10 @@ class _AssistantTabPageState extends ConsumerState<AssistantTabPage>
         id: 'dialog',
         label: UITextConstants.assistantEntryFind,
         key: TestKeys.assistantDialogTab,
+      ),
+      TabItem(
+        id: 'personal',
+        label: UITextConstants.assistantEntryFindPersonal,
       ),
       TabItem(
         id: 'skills',
@@ -279,9 +300,8 @@ class _AssistantScheduleView extends ConsumerWidget {
     );
     final tasksAsync = ref.watch(assistantScheduleTasksProvider);
     final taskItems = tasksAsync.maybeWhen(
-      data: (tasks) => tasks
-          .map(AssistantScheduleRow.fromTask)
-          .toList(growable: false),
+      data: (tasks) =>
+          tasks.map(AssistantScheduleRow.fromTask).toList(growable: false),
       orElse: () => const <AssistantScheduleRow>[],
     );
     final tasksLoading = tasksAsync.isLoading;
@@ -372,7 +392,9 @@ class _AssistantScheduleView extends ConsumerWidget {
     return Container(
       padding: EdgeInsets.all(AppSpacing.containerMd),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.white.withValues(alpha: 0.05) : AppColors.white,
+        color: isDark
+            ? AppColors.white.withValues(alpha: 0.05)
+            : AppColors.white,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         border: Border.all(
           color: isDark
@@ -446,7 +468,9 @@ class _AssistantScheduleView extends ConsumerWidget {
                 height: AppSpacing.smallButtonSize,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isToday ? AppColors.primaryColor : AppColors.transparent,
+                  color: isToday
+                      ? AppColors.primaryColor
+                      : AppColors.transparent,
                   shape: BoxShape.circle,
                 ),
                 child: Text(
@@ -477,7 +501,9 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(AppSpacing.containerMd),
       decoration: BoxDecoration(
-        color: isDark ? AppColors.white.withValues(alpha: 0.05) : AppColors.white,
+        color: isDark
+            ? AppColors.white.withValues(alpha: 0.05)
+            : AppColors.white,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         border: Border.all(
           color: isDark

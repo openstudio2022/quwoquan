@@ -8,7 +8,7 @@ void main() {
         'conversationId': 'conv_006',
         'type': 'group',
         'title': '产品共创群',
-        'avatarCompositeUrls': <String>['a.png', 'b.png', 'c.png'],
+        'avatarUrl': 'https://cdn.example.com/group.png',
         'lastMessagePreview': '今晚 8 点前把评审意见同步到文档里',
         'lastMessageType': 'text',
         'lastMessageTime': '2026-03-18T12:18:00Z',
@@ -22,7 +22,7 @@ void main() {
       expect(dto.id, equals('conv_006'));
       expect(dto.type, equals('group'));
       expect(dto.title, equals('产品共创群'));
-      expect(dto.avatarCompositeUrls.length, equals(3));
+      expect(dto.avatarUrl, equals('https://cdn.example.com/group.png'));
       expect(dto.lastMessageType, equals('text'));
       expect(dto.lastSeq, equals(512));
       expect(dto.unreadCount, equals(4));
@@ -34,28 +34,31 @@ void main() {
   });
 
   group('ChatInboxDto — 兼容性契约', () {
-    test('legacy aliases still parse correctly', () {
-      final dto = ChatInboxDto.fromMap(const <String, dynamic>{
-        '_id': 'legacy_conv',
-        'type': 'group',
-        'title': '老字段群聊',
-        'memberAvatars': <String>['1.png', '2.png'],
-        'lastMessage': '路线图已经发到群文件了',
-        'messageType': 'image',
-        'lastMessageAt': '2026-03-17T13:00:00Z',
-        'maxSeq': 256,
-        'unreadCount': 6,
-        'mentionCount': 1,
-      });
+    test(
+      'current memberAvatars no longer fills avatarUrl（统一头像只看 avatarUrl）',
+      () {
+        final dto = ChatInboxDto.fromMap(const <String, dynamic>{
+          '_id': 'current_conv',
+          'type': 'group',
+          'title': '老字段群聊',
+          'memberAvatars': <String>['1.png', '2.png'],
+          'lastMessage': '路线图已经发到群文件了',
+          'messageType': 'image',
+          'lastMessageAt': '2026-03-17T13:00:00Z',
+          'maxSeq': 256,
+          'unreadCount': 6,
+          'mentionCount': 1,
+        });
 
-      expect(dto.id, equals('legacy_conv'));
-      expect(dto.avatarCompositeUrls, equals(<String>['1.png', '2.png']));
-      expect(dto.lastMessagePreview, equals('路线图已经发到群文件了'));
-      expect(dto.lastMessageType, equals('image'));
-      expect(dto.lastSeq, equals(256));
-      expect(dto.mentionUnreadCount, equals(1));
-      expect(dto.hasMention, isTrue);
-    });
+        expect(dto.id, equals('current_conv'));
+        expect(dto.avatarUrl, isEmpty);
+        expect(dto.lastMessagePreview, equals('路线图已经发到群文件了'));
+        expect(dto.lastMessageType, equals('image'));
+        expect(dto.lastSeq, equals(256));
+        expect(dto.mentionUnreadCount, equals(1));
+        expect(dto.hasMention, isTrue);
+      },
+    );
 
     test('toMap round-trip preserves core fields', () {
       final original = ChatInboxDto.fromMap(const <String, dynamic>{
@@ -89,7 +92,7 @@ void main() {
       final dto = ChatInboxDto.fromMap(const {});
       expect(dto.id, isEmpty);
       expect(dto.title, isEmpty);
-      expect(dto.avatarCompositeUrls, isEmpty);
+      expect(dto.avatarUrl, isEmpty);
       expect(dto.unreadCount, equals(0));
       expect(dto.mentionUnreadCount, equals(0));
       expect(dto.hasUnread, isFalse);

@@ -11,7 +11,7 @@
 1. **环境变量**：启动参数、紧急开关（可快速回滚）
 2. **Secrets**：凭据与密钥（数据库密码、MQ 访问密钥等）
 3. **配置中心**：Nacos/云托管配置中心（可动态下发、可灰度）
-4. **配置文件**：本地开发与集成测试（`configs/local/*.yaml`）
+4. **配置文件**：alpha/beta 本地开发验证与 gamma 集成测试（`configs/alpha/*.yaml / configs/beta/*.yaml`）
 5. **代码默认值**：安全默认（最小权限、保守超时/重试）
 
 > 统一要求：所有服务的配置读取应通过同一套 `ConfigProvider` 抽象，保证 local/test 与 cloud 路径一致。

@@ -187,7 +187,8 @@ List<ArticleWrapNodeGroup> resolveArticleWrapNodeGroups(
     }
     ArticleDocumentNode? narrowParagraph;
     ArticleDocumentNode? belowParagraph;
-    if (index + 1 < nodes.length && _isWrapParagraphCandidate(nodes[index + 1])) {
+    if (index + 1 < nodes.length &&
+        _isWrapParagraphCandidate(nodes[index + 1])) {
       narrowParagraph = nodes[index + 1];
       if (index + 2 < nodes.length &&
           _isWrapParagraphCandidate(nodes[index + 2])) {
@@ -226,7 +227,8 @@ Map<String, ArticleWrapNodeGroup> buildArticleWrapNodeGroupsByAssetId(
   List<ArticleDocumentNode> nodes,
 ) {
   return <String, ArticleWrapNodeGroup>{
-    for (final group in resolveArticleWrapNodeGroups(nodes)) group.assetId: group,
+    for (final group in resolveArticleWrapNodeGroups(nodes))
+      group.assetId: group,
   };
 }
 
@@ -468,14 +470,14 @@ class ArticleDocumentData {
     List<ArticleDocumentAsset> assets = const <ArticleDocumentAsset>[],
     List<ArticleDocumentBlock> blocks = const <ArticleDocumentBlock>[],
   }) : nodes = nodes.isNotEmpty
-            ? _normalizeDocumentNodes(nodes)
-            : _buildDocumentNodesFromLegacy(
-                title: title,
-                body: body,
-                assets: assets,
-                blocks: blocks,
-                useFullBlockSequence: false,
-              );
+           ? _normalizeDocumentNodes(nodes)
+           : _buildDocumentNodesFromCurrent(
+               title: title,
+               body: body,
+               assets: assets,
+               blocks: blocks,
+               useFullBlockSequence: false,
+             );
 
   /// 从 wire JSON 构造，支持新格式（blocks 含 image/paragraph 完整序列）。
   factory ArticleDocumentData.fromMap(Map<String, dynamic> map) {
@@ -510,9 +512,7 @@ class ArticleDocumentData {
         )
         .where((block) => block.id.trim().isNotEmpty)
         .toList(growable: false);
-    final title = _normalizeArticleText(
-      (map['title'] ?? '').toString(),
-    ).trim();
+    final title = _normalizeArticleText((map['title'] ?? '').toString()).trim();
     final body = _normalizeArticleText((map['body'] ?? '').toString());
     final template = (map['template'] ?? 'gentle').toString();
     final fontPreset = (map['fontPreset'] ?? 'clean').toString();
@@ -554,14 +554,14 @@ class ArticleDocumentData {
     List<ArticleDocumentBlock> blocks = const <ArticleDocumentBlock>[],
     bool useFullBlockSequence = false,
   }) : nodes = nodes.isNotEmpty
-            ? _normalizeDocumentNodes(nodes)
-            : _buildDocumentNodesFromLegacy(
-                title: title,
-                body: body,
-                assets: assets,
-                blocks: blocks,
-                useFullBlockSequence: useFullBlockSequence,
-              );
+           ? _normalizeDocumentNodes(nodes)
+           : _buildDocumentNodesFromCurrent(
+               title: title,
+               body: body,
+               assets: assets,
+               blocks: blocks,
+               useFullBlockSequence: useFullBlockSequence,
+             );
 
   final List<ArticleDocumentNode> nodes;
   final String template;
@@ -576,12 +576,16 @@ class ArticleDocumentData {
 
   /// 只读投影：文档标题（从 nodes 中 documentTitle 节点派生）。
   String get title => _projection.title;
+
   /// 只读投影：正文纯文本（从 nodes 中正文类节点按行拼接，不含图片语义）。
   String get body => _projection.body;
+
   /// 只读投影：图片资产列表（从 nodes 中 figure 节点派生）。
   List<ArticleDocumentAsset> get assets => _projection.assets;
+
   /// 只读投影：仅含 heading/sectionTitle/image 类型（供外部结构查询）。
   List<ArticleDocumentBlock> get blocks => _projection.blocks;
+
   /// 含所有类型（包括 paragraph），供内容块投射使用。
   List<ArticleDocumentBlock> get contentBlocks => _projection.allBlocks;
   ArticleDocumentNode? get titleNode => _projection.titleNode;
@@ -617,13 +621,13 @@ class ArticleDocumentData {
         nodes ??
         ((title != null || body != null || assets != null || blocks != null)
             ? (body != null || assets != null || blocks != null
-                ? _buildDocumentNodesFromLegacy(
-                    title: title ?? this.title,
-                    body: body ?? this.body,
-                    assets: assets ?? this.assets,
-                    blocks: blocks ?? this.blocks,
-                  )
-                : _replaceDocumentTitleNode(this.nodes, title ?? this.title))
+                  ? _buildDocumentNodesFromCurrent(
+                      title: title ?? this.title,
+                      body: body ?? this.body,
+                      assets: assets ?? this.assets,
+                      blocks: blocks ?? this.blocks,
+                    )
+                  : _replaceDocumentTitleNode(this.nodes, title ?? this.title))
             : this.nodes);
     return ArticleDocumentData(
       nodes: nextNodes,
@@ -717,7 +721,7 @@ List<ArticleDocumentNode> _normalizeDocumentNodes(
       .toList(growable: false);
 }
 
-List<ArticleDocumentNode> _buildDocumentNodesFromLegacy({
+List<ArticleDocumentNode> _buildDocumentNodesFromCurrent({
   required String title,
   required String body,
   required List<ArticleDocumentAsset> assets,
@@ -1018,8 +1022,10 @@ class _ArticleDocumentProjection {
   final ArticleDocumentNode? titleNode;
   final String body;
   final List<ArticleDocumentAsset> assets;
+
   /// 仅含 heading/sectionTitle/image 类型，供外部 `document.blocks` 使用。
   final List<ArticleDocumentBlock> blocks;
+
   /// 含所有类型（包括 paragraph），供内容块投射使用。
   final List<ArticleDocumentBlock> allBlocks;
 }
@@ -1039,10 +1045,9 @@ _ArticleDocumentProjection _projectArticleDocument(
   final blocks = <ArticleDocumentBlock>[];
   final allBlocks = <ArticleDocumentBlock>[];
   var orderedIndex = 0;
-  final joinedWrapBelowParagraphIds = resolveArticleWrapNodeGroups(nodes)
-      .map((group) => group.belowParagraph?.id)
-      .whereType<String>()
-      .toSet();
+  final joinedWrapBelowParagraphIds = resolveArticleWrapNodeGroups(
+    nodes,
+  ).map((group) => group.belowParagraph?.id).whereType<String>().toSet();
 
   void appendBodyText(String line, {bool separateLine = true}) {
     final normalized = line.trim();
@@ -1119,9 +1124,7 @@ _ArticleDocumentProjection _projectArticleDocument(
         break;
       case ArticleDocumentNodeType.bulletItem:
         orderedIndex = 0;
-        appendBodyText(
-          node.text.trim().isEmpty ? '' : '• ${node.text.trim()}',
-        );
+        appendBodyText(node.text.trim().isEmpty ? '' : '• ${node.text.trim()}');
         break;
       case ArticleDocumentNodeType.figure:
         orderedIndex = 0;

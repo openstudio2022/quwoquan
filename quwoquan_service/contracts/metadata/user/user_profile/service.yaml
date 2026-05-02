@@ -126,14 +126,14 @@ api_routes:
   - method: POST
     path: /v1/user/personas/{personaId}/retire
     operation: RetirePersona
-    description: 退役已有历史归因的分身，保留历史对象作者归因
+    description: 退役已有记录归因的分身，保留记录对象作者归因
     response_entity: PersonaLifecycleGuardView
     response_fields: [profileSubjectId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
 
   - method: DELETE
     path: /v1/user/personas/{personaId}/delete-empty
     operation: DeleteEmptyPersona
-    description: 删除无历史归因的空白分身
+    description: 删除无记录归因的空白分身
 
   - method: POST
     path: /v1/user/personas/{personaId}/activate
@@ -170,7 +170,7 @@ api_routes:
   - method: GET
     path: /v1/user/search/recent
     operation: ListRecentSearches
-    description: 获取当前账号最近搜索历史
+    description: 获取当前账号最近搜索记录
     response_entity: RecentSearchEntryView
     auth: required
 

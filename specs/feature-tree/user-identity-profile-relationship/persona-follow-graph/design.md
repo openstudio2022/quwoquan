@@ -2,7 +2,7 @@
 
 ## 设计动因
 
-当前用户域的历史设计同时存在 `OwnerAccount / SubAccount / Persona / ProfileSubject / username / subAccountId` 等多套语义。即使业务能力已经初步可用，也仍有三个根问题：
+当前用户域的记录设计同时存在 `OwnerAccount / SubAccount / Persona / ProfileSubject / username / subAccountId` 等多套语义。即使业务能力已经初步可用，也仍有三个根问题：
 
 1. 产品、规格、接口、DTO 和页面文案对“谁是真实主体”没有唯一答案。
 2. `用户ID`、`分身ID`、`公开句柄` 之间没有稳定分层，导致公开读取和内部归属边界反复漂移。
@@ -43,7 +43,7 @@
 |----------|--------|----------|
 | 微信 | 公开句柄稳定、登录身份与业务身份可解耦、用户号心智清晰 | 不照搬强实名与单身份世界观 |
 | 小红书 | 昵称/主页/作者主体统一、对外消费的是单一公开主体 | 不照搬单主体创作者模型 |
-| 微博 | 公开关系网络、公开主体一致、内部治理不外露 | 不照搬历史账号层级和运营号结构 |
+| 微博 | 公开关系网络、公开主体一致、内部治理不外露 | 不照搬记录账号层级和运营号结构 |
 
 ### 内部对标
 
@@ -60,7 +60,7 @@
 
 核心思路：
 
-- 保留 `OwnerAccount / SubAccount / Persona / ProfileSubject` 历史命名。
+- 保留 `OwnerAccount / SubAccount / Persona / ProfileSubject` 记录命名。
 - 新增 `用户 / 分身` 只作为新文档别名。
 - 读接口双读旧字段，写接口双写新旧字段。
 
@@ -81,7 +81,7 @@
 
 - 直接以 `用户 / 分身 / 用户ID / 分身ID / 用户号` 重写主规格。
 - metadata、codegen、DTO、接口、页面文案一次性替换。
-- 历史数据只做一次性重整，不保留旧桥接读写层。
+- 记录数据只做一次性重整，不保留旧桥接读写层。
 
 优点：
 
@@ -100,7 +100,7 @@
 
 决策理由：
 
-1. 用户已经明确要求“统一升级实现时无需考虑兼容，历史代码不用保留”。
+1. 用户已经明确要求“统一升级实现时无需考虑兼容，记录代码不用保留”。
 2. 只有方案 B 能真正消除旧 `账号 / 主账号 / 子账号 / owner / subAccount` 心智残留。
 3. 方案 B 更适合 metadata-first：先冻结新模型，再统一 codegen 和业务改造，不制造临时桥接层。
 
@@ -241,7 +241,7 @@
 4. 旧 `phone` 下沉到主分身，并按“默认继承”规则复制到其它分身
 5. 旧 `email` 若存在，同步下沉到分身
 6. 旧 `username / nickname / subAccountId` 统一收敛生成 `userHandle`
-7. 历史内容、评论、消息、关系中的旧主体字段统一改写为 `personaId`
+7. 记录内容、评论、消息、关系中的旧主体字段统一改写为 `personaId`
 
 `userHandle` 一次性生成策略：
 
@@ -310,7 +310,7 @@
 
 - 把旧用户层资料拆分为 `User` 与主分身资料
 - 对每个既有分身补齐 `personaId / userHandle / phone / email / inheritanceState`
-- 历史 follow edge、内容作者、消息发送者统一回填 `personaId`
+- 记录 follow edge、内容作者、消息发送者统一回填 `personaId`
 
 ### 替换策略
 
@@ -367,6 +367,6 @@ SLO 验证：
 
 ## 未来演进
 
-- 在本轮统一升级完成后，再评估是否重命名 feature-tree 路径，清理 `persona-follow-graph` 历史目录名。
+- 在本轮统一升级完成后，再评估是否重命名 feature-tree 路径，清理 `persona-follow-graph` 记录目录名。
 - 若后续引入更复杂的多分身记忆、业务权限或企业身份，也必须继续围绕 `userId + personaId + userHandle` 三层模型扩展。
 - `circle` 服务化时，直接消费新的分身 envelope，不再重走旧 `subAccount` 语义。

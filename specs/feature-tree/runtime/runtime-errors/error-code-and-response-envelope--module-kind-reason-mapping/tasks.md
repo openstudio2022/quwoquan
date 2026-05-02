@@ -4,7 +4,7 @@
 - [ ] 安全与契约校验
 - [ ] 自动化测试
 
-## Folded legacy node `user-debug-separation-and-redaction`
+## Folded current node `user-debug-separation-and-redaction`
 
 # 开发任务：user-debug-separation-and-redaction
 
@@ -13,4 +13,4 @@
 - [ ] 自动化验收
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `user-debug-separation-and-redaction` (from `runtime/runtime-errors/error-code-and-response-envelope/module-kind-reason-mapping/user-debug-separation-and-redaction`)
+- [ ] Migrated current node: `user-debug-separation-and-redaction` (from `runtime/runtime-errors/error-code-and-response-envelope/module-kind-reason-mapping/user-debug-separation-and-redaction`)

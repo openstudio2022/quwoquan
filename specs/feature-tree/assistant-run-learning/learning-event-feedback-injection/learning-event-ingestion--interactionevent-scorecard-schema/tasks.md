@@ -18,4 +18,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `ingestion-dedup-and-idempotency` (from `assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/interactionevent-scorecard-schema/ingestion-dedup-and-idempotency`)
+- [ ] Migrated current node: `ingestion-dedup-and-idempotency` (from `assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion/interactionevent-scorecard-schema/ingestion-dedup-and-idempotency`)

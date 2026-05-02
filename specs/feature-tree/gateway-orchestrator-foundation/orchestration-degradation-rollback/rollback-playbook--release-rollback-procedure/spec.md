@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `rollback-audit-trace`
+## Folded current node `rollback-audit-trace`
 
 # L5 特性：rollback-audit-trace
 

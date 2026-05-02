@@ -64,7 +64,7 @@ scenario_acceptance:
     edge_cases:
       - 子账号切换后旧结果残留
       - 消息撤回后索引项未删
-      - 用户主动清理后仍能命中历史项
+      - 用户主动清理后仍能命中记录项
     linked_plan_items:
       - P2
       - P3
@@ -87,7 +87,7 @@ story_readiness:
     title: 旧社交关系挂载不再作为搜索旅程主路径
     done_when:
       - 旧社交关系挂载不再被特性树作为本 Journey 主节点引用
-      - "历史 chat 搜索节点被 `local-chat-search-contract` 替代"
+      - "记录 chat 搜索节点被 `local-chat-search-contract` 替代"
     evidence:
       primary:
         - T1_schema

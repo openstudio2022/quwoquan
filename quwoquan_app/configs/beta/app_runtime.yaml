@@ -1,0 +1,14 @@
+schemaVersion: app-runtime-config.v1
+runtime:
+  appRuntimeEnv: beta
+  appDataSource: remote
+  gatewayBaseUrl: http://127.0.0.1:18080
+  realtimeBaseUrl: ""
+  mediaAvatarCdnBaseUrl: http://127.0.0.1:18088
+  mediaImageCdnBaseUrl: http://127.0.0.1:18088
+  mediaVideoCdnBaseUrl: http://127.0.0.1:18088
+  mediaUploadBaseUrl: http://127.0.0.1:18088
+  currentUserId: fixture_user_current
+seed:
+  enabled: false
+  manifest: quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json

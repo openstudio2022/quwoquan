@@ -48,7 +48,7 @@
 
 **缺点**：
 - 数据模型变更大（新增 3 个 collection + 修改 2 个），migration 工作量高
-- 历史数据迁移需要脚本（members 嵌入 → ConversationMember + memberIds 废弃）
+- 记录数据迁移需要脚本（members 嵌入 → ConversationMember + memberIds 废弃）
 - seq 依赖 Redis INCR，Redis 故障影响消息发送
 
 **适用条件**：群成员 > 100，消息量 > 1K/天/群
@@ -67,7 +67,7 @@
 
 **选定方案 A**：全面外置 + seq 有序。
 
-理由：这是首次实现 chat-service，没有历史债务压力，直接按正确架构构建。
+理由：这是首次实现 chat-service，没有记录债务压力，直接按正确架构构建。
 嵌入方案在 1,000 人群场景下存在硬限制，不值得为"改动小"而留债。
 
 ## 关键设计决策
@@ -326,7 +326,7 @@ chat-service 需完整纳入 `make gate` 流水线：
 | chat-service build | `go build ./services/chat-service/...` | 编译检查 |
 | chat-service L2 | `go test ./services/chat-service/... -count=1` | 云侧契约测试 |
 | chat L1 | `flutter test test/cloud/chat/ test/ui/chat/` | 端侧 T1+T2+T4(L1c) |
-| chat L3 | `make test-api-contract-chat` | staging HTTP 契约 |
+| chat L3 | `make test-api-contract-chat` | gamma HTTP 契约 |
 | chat L4 | `patrol test test/patrol/chat/` | Patrol 真实设备 |
 
 **需新增**：
@@ -363,7 +363,7 @@ chat-service 需完整纳入 `make gate` 流水线：
 | S9 | 域事件发布（10 事件） | | | ● | | A17 |
 | S10 | ChatInbox 投影 + 未读计数 | | | ● | | A18 |
 | S11 | 已读回执云侧 + 设置 | | | ● | | A19 |
-| S12 | 端侧 staging HTTP 契约 | | | ● | | A20 |
+| S12 | 端侧 gamma HTTP 契约 | | | ● | | A20 |
 | S13 | 基准性能测试 | | | ● | | A21 |
 | S14 | L1c Journey（会话列表/发消息/群管理） | | | | ● | A22~A24 |
 | S15 | L4 Patrol（真实设备 + 灰度性能） | | | | ● | A25 |
@@ -377,7 +377,7 @@ chat-service 需完整纳入 `make gate` 流水线：
 - **消息全文搜索优化**：触发搜索请求量 > 1K/天
 - **群公告 / 群文件 / 群应用**：触发产品需求
 
-## 遗留带规划任务
+## 存量带规划任务
 
-- 历史数据迁移脚本（members 嵌入 → ConversationMember）— 当前无历史数据，首次实现无需迁移
+- 记录数据迁移脚本（members 嵌入 → ConversationMember）— 当前无记录数据，首次实现无需迁移
 - assistant 类型会话与 PA 系统的深度集成

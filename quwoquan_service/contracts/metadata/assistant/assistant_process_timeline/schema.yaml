@@ -1,0 +1,22 @@
+dart_class: AssistantProcessTimelineWire
+library_path: assistant/generated/contracts/assistant_process_timeline.g.dart
+output_path: assistant/generated/contracts/assistant_process_timeline.g.dart
+contract: assistant_process_timeline
+version: assistant_process_timeline.m5
+kind: shared_wire_contract
+fields:
+  - { name: frames, type: list<object>, ref: frame, default: [] }
+  - { name: activeFrameId, type: string, default: '' }
+  - { name: summary, type: string, default: '' }
+subcontracts:
+  frame:
+    class_name: AssistantProcessTimelineFrameWire
+    fields:
+      - { name: frameId, type: string, required: true }
+      - { name: stepId, type: string, default: '' }
+      - { name: status, type: string, default: pending }
+      - { name: order, type: int, default: 0 }
+      - { name: headline, type: string, default: '' }
+      - { name: detail, type: string, default: '' }
+      - { name: references, type: list<map>, default: [] }
+      - { name: payload, type: map, default: {} }

@@ -966,8 +966,7 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
       _sectionKeys.putIfAbsent(letter, () => GlobalKey());
     }
 
-    final listIsDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final listIsDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final onIndexLetterActiveFg = AppColorsFunctional.getColor(
       listIsDark,
       ColorType.badgeForeground,
@@ -1226,32 +1225,26 @@ class _ConversationTile extends StatelessWidget {
   }
 
   Widget _buildConversationAvatar(BuildContext context) {
-    final type = conversation.type;
-    final isGroup = type == 'group';
-
-    if (isGroup) {
-      final groupAvatarUrl = conversation.groupAvatarUrl.trim();
-      if (groupAvatarUrl.isNotEmpty) {
-        return RoundedSquareAvatar(
-          size: _avatarSize,
-          imageUrl: groupAvatarUrl,
-          name: conversation.title,
+    final url = conversation.avatarUrl.trim();
+    assert(() {
+      final t = conversation.type.trim().toLowerCase();
+      if ((t == 'group' || t == 'circle') && url.isEmpty) {
+        debugPrint(
+          '会话头像契约：群/圈子会话 avatarUrl 为空 conversationId=${conversation.id}',
         );
       }
-      return _buildDefaultGroupAvatar(context);
-    }
-
+      return true;
+    }());
     return RoundedSquareAvatar(
       size: _avatarSize,
-      imageUrl: conversation.avatarUrl,
+      imageUrl: url,
       name: conversation.title,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final tileIsDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final tileIsDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final onAccentFg = AppColorsFunctional.getColor(
       tileIsDark,
       ColorType.badgeForeground,
@@ -1425,22 +1418,6 @@ class _ConversationTile extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildDefaultGroupAvatar(BuildContext context) {
-    return Container(
-      width: _avatarSize,
-      height: _avatarSize,
-      decoration: BoxDecoration(
-        color: AppColors.iosGroupedSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.contentPreviewCornerRadius),
-      ),
-      child: Icon(
-        Icons.group,
-        size: AppSpacing.iconLarge,
-        color: fgSecondary,
-      ),
-    );
-  }
 }
 
 class _InboxConversationTile extends StatelessWidget {
@@ -1459,20 +1436,16 @@ class _InboxConversationTile extends StatelessWidget {
   static const double _avatarSize = 52.0;
 
   Widget _buildAvatar(BuildContext context) {
-    if (item.isGroup) {
-      final groupAvatarUrl = item.groupAvatarUrl.trim();
-      if (groupAvatarUrl.isNotEmpty) {
-        return RoundedSquareAvatar(
-          size: _avatarSize,
-          imageUrl: groupAvatarUrl,
-          name: item.title,
-        );
+    final url = item.avatarUrl.trim();
+    assert(() {
+      if (item.isGroup && url.isEmpty) {
+        debugPrint('会话头像契约：群会话列表项 avatarUrl 为空 conversationId=${item.id}');
       }
-      return _buildDefaultGroupAvatar(context);
-    }
+      return true;
+    }());
     return RoundedSquareAvatar(
       size: _avatarSize,
-      imageUrl: item.avatarUrl,
+      imageUrl: url,
       name: item.title,
     );
   }
@@ -1632,22 +1605,6 @@ class _InboxConversationTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildDefaultGroupAvatar(BuildContext context) {
-    return Container(
-      width: _avatarSize,
-      height: _avatarSize,
-      decoration: BoxDecoration(
-        color: AppColors.iosGroupedSurface(context),
-        borderRadius: BorderRadius.circular(AppSpacing.contentPreviewCornerRadius),
-      ),
-      child: Icon(
-        Icons.group,
-        size: AppSpacing.iconLarge,
-        color: fgSecondary,
       ),
     );
   }

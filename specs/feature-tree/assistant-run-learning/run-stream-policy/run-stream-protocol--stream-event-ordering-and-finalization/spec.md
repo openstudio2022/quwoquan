@@ -9,14 +9,14 @@
 - `answer_delta` 只承载最终成答正文增量
 - `completed` 只承载终态结果、终态 `AssistantJourney` 与最终渲染所需 artifacts
 
-目标不是单纯“能流式显示”，而是保证**过程、答案、终态三轨严格分层**，并且在本地执行、远端 SSE、历史重载三个场景下保持同一语义。
+目标不是单纯“能流式显示”，而是保证**过程、答案、终态三轨严格分层**，并且在本地执行、远端 SSE、记录重载三个场景下保持同一语义。
 
 ## 当前问题
 
 1. 过程区仍大量依赖 `trace -> thinkingProgress -> journey headline` 的回退链，模型原始思维片段、查询词、机械占位文案容易泄漏到用户界面。
 2. 远端已提供 `process_*` 事件，但端侧未把它们纳入正式 reducer，导致 UI 继续依赖启发式推断。
 3. 终态收口不够严格，terminal payload 缺失时可能拿 partial stream 直接合成 completed，造成答案提前结束或过程文本污染成答。
-4. 完成态与流式态的过程摘要、来源计数、耗时口径不统一，历史重载后容易和实时过程出现分叉。
+4. 完成态与流式态的过程摘要、来源计数、耗时口径不统一，记录重载后容易和实时过程出现分叉。
 
 ## 用户价值
 
@@ -107,12 +107,12 @@
 - 只来自 `answer_delta` 与 terminal `assistant_turn/runArtifacts`。
 - 进入终态时必须以 terminal payload 为准做一次 reconcile，但不得接受内部协议碎片或过程文本作为 completed answer。
 
-## 历史恢复约束
+## 记录恢复约束
 
-- 流式态、完成态、历史重载态必须使用同一份 `AssistantJourney` / `uiProcessTimelineV2` 恢复过程抽屉。
-- 历史消息中若不存在真实过程数据，UI 不得回退展示“假四阶段”过程壳。
+- 流式态、完成态、记录重载态必须使用同一份 `AssistantJourney` / `uiProcessTimelineV2` 恢复过程抽屉。
+- 记录消息中若不存在真实过程数据，UI 不得回退展示“假四阶段”过程壳。
 
-## Legacy 清理要求
+## Current 清理要求
 
 - 移除旧 `assets/personal_assistant/...` 过程配置路径。
 - 移除 UI 中基于中文 `contains()` 的动效或状态判断。
@@ -125,6 +125,6 @@
 - A3：当 terminal payload 缺失但流中已有完整 `answer_delta` 时，可安全合成 completed；若只有过程文本或不完整答案，则不得提前封口。
 - A4：repair / fallback 路径不得把 `thinkingProgress`、`assistantDelta` 等过程文本恢复为最终答案。
 - A5：过程抽屉完成态首行使用统一摘要模板，来源计数、耗时、完成语义与终态 `AssistantJourney` 一致，耗时为整数秒。
-- A6：无真实 `journey` 内容的消息不渲染过程抽屉；历史重载时与流式完成态恢复结果一致。
+- A6：无真实 `journey` 内容的消息不渲染过程抽屉；记录重载时与流式完成态恢复结果一致。
 - A7：UI 动效和答案 gate 仅依赖 typed stage / readiness / answer 通道，不再依赖中文 label `contains()`。
-- A8：存在 T1/T2/T4 回归测试，覆盖过程泄漏、终态截断、摘要口径、历史恢复和 legacy 路径清理。
+- A8：存在 T1/T2/T4 回归测试，覆盖过程泄漏、终态截断、摘要口径、记录恢复和 current 路径清理。

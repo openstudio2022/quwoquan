@@ -17,7 +17,7 @@ non_functional_acceptance:
     enabled: true
     goals:
     - 命令、规则、主流程、特性树、索引与门禁使用同一套三层术语
-    - 仓库内不再保留 L4/L5 或历史兼容映射
+    - 仓库内不再保留 L4/L5 或记录兼容映射
   migration_safety:
     enabled: true
     scenarios:
@@ -87,7 +87,7 @@ level_acceptance:
       T4: optional
     tests: []
   A6:
-    criteria: 现有 `specs/feature-tree/` 与其 `acceptance.yaml` 被纳入一次性迁移范围：L1 保留，扁平 Story 与历史深层节点重新归并为新的
+    criteria: 现有 `specs/feature-tree/` 与其 `acceptance.yaml` 被纳入一次性迁移范围：L1 保留，扁平 Story 与记录深层节点重新归并为新的
       `L2_feature / L3_story`，最深层守护项一律折叠为任务项。
     status: pending
     linked_tasks: []

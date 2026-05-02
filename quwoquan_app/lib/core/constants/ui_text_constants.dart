@@ -91,6 +91,7 @@ class UITextConstants {
   static const String assistantTabSchedule = '日程';
   static const String assistantTabSkills = '技能';
   static const String assistantEntryFind = '找小趣';
+  static const String assistantEntryFindPersonal = '找私助';
   static const String assistantEntryAsk = '问小趣';
 
   /// 半弹窗：进入完整对话按钮
@@ -601,18 +602,18 @@ class UITextConstants {
   static const String assistantSettingsBackend = '会话引擎';
   static const String assistantSettingsBackendHint =
       '创建新会话时只绑定一个 backend，不做 fallback 或混跑。';
-  static const String assistantSettingsRemoteHistoryDisabled = '远端链路不读取本地历史';
+  static const String assistantSettingsRemoteHistoryDisabled = '远端链路不读取本地记录';
   static const String assistantSettingsTraceSession = '跟踪会话';
-  static const String assistantSettingsConversationHistory = '对话历史';
+  static const String assistantSettingsConversationHistory = '对话记录';
   static const String assistantBackendLocal = '本地 phase 引擎';
   static const String assistantBackendRemote = '远端 API 引擎';
-  static const String assistantViewHistory = '查看历史';
+  static const String assistantViewHistory = '查看记录';
   static const String assistantWelcomeHeadline = 'Hi，今天从哪儿开始？';
-  static const String assistantHistoryAll = '全部历史';
+  static const String assistantHistoryAll = '全部记录';
   static const String assistantHistoryAllSubtitle = '共 %s 个独立会话';
   static const String assistantHistoryMessageCount = '%s 条消息';
   static const String assistantHistoryUntitled = '未命名会话';
-  static const String assistantHistoryEmpty = '暂无对话历史';
+  static const String assistantHistoryEmpty = '暂无对话记录';
 
   /// 身份/分身（1:1 对应 PersonaSwitcher.tsx）
   static const String personaManage = '管理分身';
@@ -881,8 +882,8 @@ class UITextConstants {
   static const String imageEditorText = '文字';
   static const String imageEditorMosaic = '马赛克';
 
-  /// 图片编辑器历史与操作面板
-  static const String imageEditorHistory = '历史';
+  /// 图片编辑器记录与操作面板
+  static const String imageEditorHistory = '记录';
   static const String imageEditorRemoveStep = '删除步骤';
   static const String imageEditorRedoStep = '重做';
 

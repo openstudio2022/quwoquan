@@ -48,6 +48,21 @@ type FileStore interface {
 	ListByCircle(ctx context.Context, circleID string, opts ListFilesOpts) ([]model.CircleFile, string)
 }
 
+// GroupStore defines storage operations for circle groups.
+type GroupStore interface {
+	ListByCircle(ctx context.Context, circleID string, opts ListGroupsOpts) ([]model.CircleGroup, string)
+}
+
+// ListGroupsOpts controls group listing queries.
+type ListGroupsOpts struct {
+	GroupType     string
+	Visibility    string
+	ParentGroupID string
+	NodeType      string
+	Cursor        string
+	Limit         int
+}
+
 // ListFilesOpts controls file listing queries.
 type ListFilesOpts struct {
 	ParentID string

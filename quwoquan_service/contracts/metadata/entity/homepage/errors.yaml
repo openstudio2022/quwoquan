@@ -58,7 +58,7 @@ errors:
     dart_const: homepageOffline
     go_const: ErrHomepageOffline
     user_message:
-      zh: "主页已下线，仅保留历史信息"
+      zh: "主页已下线，仅保留记录信息"
       en: "Homepage is offline and kept for history only"
 
   - code: ENTITY.USER.invalid_homepage_type

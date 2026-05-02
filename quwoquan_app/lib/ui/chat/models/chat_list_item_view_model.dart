@@ -10,8 +10,6 @@ class ChatListItemViewModel {
     required this.subtitle,
     required this.timeLabel,
     required this.avatarUrl,
-    required this.groupAvatarUrl,
-    required this.avatarCompositeUrls,
     required this.previewIcon,
     required this.unreadCount,
     required this.mentionUnreadCount,
@@ -24,9 +22,9 @@ class ChatListItemViewModel {
   final String title;
   final String subtitle;
   final String timeLabel;
+
+  /// 会话级主头像：单聊对方头像；群聊服务端预合成 URL（契约须非空）。
   final String avatarUrl;
-  final String groupAvatarUrl;
-  final List<String> avatarCompositeUrls;
   final IconData? previewIcon;
   final int unreadCount;
   final int mentionUnreadCount;
@@ -51,9 +49,7 @@ class ChatListItemViewModel {
       timeLabel: dto.lastMessageTime == null
           ? ''
           : ChatTimeFormatter.formatForConversationList(dto.lastMessageTime!),
-      avatarUrl: dto.avatarUrl,
-      groupAvatarUrl: dto.groupAvatarUrl,
-      avatarCompositeUrls: dto.avatarCompositeUrls,
+      avatarUrl: dto.avatarUrl.trim(),
       previewIcon: preview.icon,
       unreadCount: dto.unreadCount,
       mentionUnreadCount: dto.mentionUnreadCount,

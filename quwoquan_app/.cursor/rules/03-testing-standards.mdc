@@ -234,16 +234,12 @@ testWidgets('should handle user interactions', (tester) async {
 });
 ```
 
-## 🔗 集成测试规范
+## 🔗 环境测试规范
 
 ### 端到端测试
 
 ```dart
-import 'package:integration_test/integration_test.dart';
-
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  
   group('User Journey Tests', () {
     testWidgets('should complete post creation flow', (tester) async {
       // Arrange
@@ -407,8 +403,10 @@ flutter test test/unit
 # 运行Widget测试
 flutter test test/widget
 
-# 运行集成测试
-flutter test integration_test
+# 运行环境测试
+flutter test test/common
+flutter test test/alpha --dart-define=APP_RUNTIME_ENV=alpha
+flutter test test/beta --dart-define=APP_RUNTIME_ENV=beta
 
 # 生成覆盖率报告
 flutter test --coverage

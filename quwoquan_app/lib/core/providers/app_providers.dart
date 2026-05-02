@@ -17,6 +17,7 @@ import 'package:quwoquan_app/cloud/services/content/content_interaction_reposito
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
+import 'package:quwoquan_app/cloud/services/notification/app_message_repository.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_visit_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/report_repository.dart';
@@ -165,7 +166,7 @@ class LastMainTabBeforeAssistantNotifier extends Notifier<MainTabDestination?> {
   void set(MainTabDestination? value) => state = value;
 }
 
-/// 助理页内部当前一级 tab（`schedule` / `dialog` / `skills`）。
+/// 助理页内部当前一级 tab（`schedule` / `dialog` / `personal` / `skills`）。
 /// 由主壳读取，用于决定助理路由下底部导航是否应当隐藏。
 final assistantInternalTabProvider =
     NotifierProvider<AssistantInternalTabNotifier, String>(
@@ -222,13 +223,13 @@ final userDataProvider = NotifierProvider<UserDataNotifier, User?>(() {
   return UserDataNotifier();
 });
 
-/// 当前用户 ID — 以 User 快照为准；未登录为空串（勿再回退 mock）。
+/// 当前用户 ID — 以 User 快照为准；环境包可显式注入测试/预置用户。
 final currentUserIdProvider = Provider<String>((ref) {
   final profileUserId = ref.watch(userDataProvider)?.id;
   if (profileUserId != null && profileUserId.isNotEmpty) {
     return profileUserId;
   }
-  return '';
+  return const String.fromEnvironment('APP_CURRENT_USER_ID');
 });
 
 /// 响应式Provider
@@ -914,6 +915,15 @@ final assistantRepositoryProvider = Provider<AssistantRepository>((ref) {
     mode,
     remote: RemoteAssistantRepository.new,
     mock: MockAssistantRepository.new,
+  );
+});
+
+final appMessageRepositoryProvider = Provider<AppMessageRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  return cloudRepositoryImplForMode(
+    mode,
+    remote: RemoteAppMessageRepository.new,
+    mock: MockAppMessageRepository.new,
   );
 });
 

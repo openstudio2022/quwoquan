@@ -12,5 +12,5 @@ alwaysApply: true
 - Assistant tool failures must include explicit `runtimeFailure`; `effectiveRuntimeFailure` is only a defensive boundary fallback.
 - UI/provider error states must consume structured runtime failures or `runtimeErrorDisplayMessage`, not raw exception strings.
 - Ops runtime errors must use `RuntimeError`/`RuntimeErrorResponse`; NodeNext imports in Ops pages must include explicit `.js` or `/index.js`.
-- Any new metadata/docs/spec examples must describe `recovery.action` / `disruptionLevel`, not legacy per-code retry flags.
+- Any new metadata/docs/spec examples must describe `recovery.action` / `disruptionLevel`, not current per-code retry flags.
 - Run `dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart` after changing error contracts, assistant tools, cloud/runtime code, Ops pages, or service HTTP boundaries.

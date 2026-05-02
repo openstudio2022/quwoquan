@@ -30,7 +30,7 @@
 | 文件 | 备注 |
 |------|------|
 | `lib/ui/assistant/pages/assistant_conversation_page.dart` | 设置 / 引用 Web / Dev replay |
-| `lib/ui/assistant/pages/assistant_chat_settings_page.dart` | 会话历史子栈 |
+| `lib/ui/assistant/pages/assistant_chat_settings_page.dart` | 会话记录子栈 |
 | `lib/ui/content/entry/pages/create_page.dart` | 创作链多模态路由 |
 | `lib/ui/content/entry/pages/publish_location_selector_page.dart` | 选址内嵌搜索子页 |
 | `lib/components/media/picker/create_media_picker_page.dart` | 相机 / 一键成片预览 |

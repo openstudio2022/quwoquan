@@ -16,7 +16,7 @@ global_acceptance:
   A1_functional:
     scenarios:
     - given: 存在 default 与 local 配置
-      when: APP_ENV=local 启动
+      when: APP_ENV=alpha 启动
       then: 默认配置被 local 覆盖，得到可预测结果
     - given: CONFIG_ROOT=/etc/qwq-config 且 CONFIG_VERSION=v2026.02.28.0
       when: 容器启动

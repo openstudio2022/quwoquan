@@ -11,7 +11,7 @@
 - A7：契约一致性校验通过。
 - A8：对应自动化测试映射完整。
 
-## Folded legacy node `compliance-audit-export`
+## Folded current node `compliance-audit-export`
 
 # L5 特性：compliance-audit-export
 

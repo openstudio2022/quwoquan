@@ -43,7 +43,7 @@ class SkillMarkdownParser {
         return _yamlMapToDartMap(yaml);
       }
     } catch (_) {
-      // Fall through to the permissive legacy parser.
+      // Fall through to the permissive current parser.
     }
     final out = <String, dynamic>{};
     final lines = raw.split('\n');

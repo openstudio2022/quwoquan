@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "app-seed-manifest.v1",
+  "environment": "beta",
+  "description": "本地端云 beta 联调 seed manifest，供自动化与人工 beta 共用。",
+  "seedRefs": [
+    {
+      "domain": "assistant",
+      "fixturePath": "assistant/test_fixtures/scenarios/assistant_scenarios.json",
+      "refs": ["assistant_p0_core", "skill_management_core"],
+      "resetScope": "fixture_assistant_*",
+      "targetStore": "assistant-service:memory",
+      "verifiedEndpoints": ["/v1/assistant/conversations", "/v1/assistant/skill-subscriptions"]
+    },
+    {
+      "domain": "content",
+      "fixturePath": "content/test_fixtures/scenarios/content_scenarios.json",
+      "refs": ["content_discovery_core", "home_feed_core", "content_detail_core", "search_core", "publish_core"],
+      "resetScope": "fixture_content_*",
+      "targetStore": "content-service:test_store",
+      "verifiedEndpoints": ["/v1/content/feed", "/v1/content/posts/fixture_photo_001"]
+    },
+    {
+      "domain": "circle",
+      "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.json",
+      "refs": ["circle_core", "circle_home_feed_core", "circle_profile_core", "circle_group_chat_link_core"],
+      "resetScope": "fixture_circle_*",
+      "targetStore": "circle-service:test_store",
+      "verifiedEndpoints": ["/v1/circles", "/v1/circles/fixture_circle_photo"]
+    },
+    {
+      "domain": "chat",
+      "fixturePath": "messages/chat/test_fixtures/scenarios/chat_scenarios.json",
+      "refs": ["chat_core", "chat_settings_core", "chat_contacts_core", "chat_group_flow_core"],
+      "resetScope": "fixture_chat_*",
+      "targetStore": "chat-service:test_store",
+      "verifiedEndpoints": ["/v1/chat/inbox", "/v1/chat/conversations/fixture_conv_direct/messages"]
+    },
+    {
+      "domain": "user",
+      "fixturePath": "user/test_fixtures/scenarios/user_scenarios.json",
+      "refs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"],
+      "resetScope": "fixture_user_*",
+      "targetStore": "user-service:test_store",
+      "verifiedEndpoints": ["/v1/user/profile"]
+    },
+    {
+      "domain": "entity",
+      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.json",
+      "refs": ["entity_homepage_core", "entity_claim_core", "entity_picker_core"],
+      "resetScope": "fixture_entity_*",
+      "targetStore": "entity-service:test_store",
+      "verifiedEndpoints": ["/v1/entity/homepages"]
+    },
+    {
+      "domain": "integration",
+      "fixturePath": "integration/test_fixtures/scenarios/integration_scenarios.json",
+      "refs": ["location_poi_core"],
+      "resetScope": "fixture_integration_*",
+      "targetStore": "integration-service:test_store",
+      "verifiedEndpoints": ["/v1/integration/locations/pois"]
+    },
+    {
+      "domain": "notification",
+      "fixturePath": "notification/test_fixtures/scenarios/notification_scenarios.json",
+      "refs": ["notification_core"],
+      "resetScope": "fixture_notification_*",
+      "targetStore": "notification-service:test_store",
+      "verifiedEndpoints": ["/v1/app-messages"]
+    },
+    {
+      "domain": "rtc",
+      "fixturePath": "rtc/test_fixtures/scenarios/rtc_scenarios.json",
+      "refs": ["rtc_core"],
+      "resetScope": "fixture_rtc_*",
+      "targetStore": "rtc-service:test_store",
+      "verifiedEndpoints": ["/v1/rtc/calls"]
+    }
+  ],
+  "appAssets": {
+    "alphaOnlyFixtureAllowlist": []
+  },
+  "gateway": {
+    "routes": [
+      { "prefix": "/v1/assistant", "service": "assistant-service", "port": 18087 },
+      { "prefix": "/v1/content", "service": "content-service", "port": 18101 },
+      { "prefix": "/v1/circles", "service": "circle-service", "port": 18102 },
+      { "prefix": "/v1/chat", "service": "chat-service", "port": 18103 },
+      { "prefix": "/v1/user", "service": "user-service", "port": 18104 },
+      { "prefix": "/v1/entity", "service": "entity-service", "port": 18105 },
+      { "prefix": "/v1/integration", "service": "integration-service", "port": 18106 },
+      { "prefix": "/v1/app-messages", "service": "notification-service", "port": 18107 },
+      { "prefix": "/v1/rtc", "service": "rtc-service", "port": 18108 }
+    ]
+  }
+}

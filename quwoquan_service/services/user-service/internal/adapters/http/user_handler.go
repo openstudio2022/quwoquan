@@ -626,7 +626,7 @@ func (h *UserHandler) resolveActorProfileSubjectID(
 		return "", generated.AppErrorFromInvalidArgument("X-Client-User-Id header required")
 	}
 	actorID := strings.TrimSpace(explicitActorID)
-	legacyFallback := !runtimegovernance.PersonaContextEnabled() || !runtimegovernance.PersonaGraphEnabled()
+	currentFallback := !runtimegovernance.PersonaContextEnabled() || !runtimegovernance.PersonaGraphEnabled()
 	if actorID == "" {
 		actorID = profileSubjectIDFromHeader(r)
 	}
@@ -634,15 +634,15 @@ func (h *UserHandler) resolveActorProfileSubjectID(
 		actorID = personaIDFromHeader(r)
 	}
 	if actorID != "" {
-		if legacyFallback {
-			followtelemetry.Collector().RecordLegacyGraphRead()
+		if currentFallback {
+			followtelemetry.Collector().RecordCurrentGraphRead()
 		}
 		return actorID, nil
 	}
 	activeContext, err := h.subAccount.GetActivePersonaContextView(ctx, userID)
 	if err != nil {
-		if legacyFallback {
-			followtelemetry.Collector().RecordLegacyGraphRead()
+		if currentFallback {
+			followtelemetry.Collector().RecordCurrentGraphRead()
 			return userID, nil
 		}
 		return "", err
@@ -653,11 +653,11 @@ func (h *UserHandler) resolveActorProfileSubjectID(
 	}
 	if actorID == "" {
 		actorID = userID
-		followtelemetry.Collector().RecordLegacyFollowRead()
+		followtelemetry.Collector().RecordCurrentFollowRead()
 		return actorID, nil
 	}
-	if legacyFallback {
-		followtelemetry.Collector().RecordLegacyGraphRead()
+	if currentFallback {
+		followtelemetry.Collector().RecordCurrentGraphRead()
 	}
 	return actorID, nil
 }
@@ -965,7 +965,7 @@ func (h *UserHandler) handleDeletePersona(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if strings.Contains(err.Error(), "must be retired") {
-			writeConflict(w, r, "该分身已有历史归因，请使用退役而不是删除", err.Error())
+			writeConflict(w, r, "该分身已有记录归因，请使用退役而不是删除", err.Error())
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {
@@ -1030,7 +1030,7 @@ func (h *UserHandler) handleDeleteEmptyPersona(w http.ResponseWriter, r *http.Re
 			return
 		}
 		if strings.Contains(err.Error(), "must be retired") {
-			writeConflict(w, r, "该分身已有历史归因，请使用退役而不是删除", err.Error())
+			writeConflict(w, r, "该分身已有记录归因，请使用退役而不是删除", err.Error())
 			return
 		}
 		if strings.Contains(err.Error(), "not found") {

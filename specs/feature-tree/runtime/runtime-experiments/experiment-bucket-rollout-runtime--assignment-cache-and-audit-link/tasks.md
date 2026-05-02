@@ -4,7 +4,7 @@
 - [ ] 安全与契约校验
 - [ ] 自动化测试
 
-## Folded legacy node `fallback-and-rollback-strategy`
+## Folded current node `fallback-and-rollback-strategy`
 
 # 开发任务：fallback-and-rollback-strategy
 
@@ -13,4 +13,4 @@
 - [ ] 自动化验收
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `fallback-and-rollback-strategy` (from `runtime/runtime-experiments/experiment-bucket-rollout-runtime/assignment-cache-and-audit-link/fallback-and-rollback-strategy`)
+- [ ] Migrated current node: `fallback-and-rollback-strategy` (from `runtime/runtime-experiments/experiment-bucket-rollout-runtime/assignment-cache-and-audit-link/fallback-and-rollback-strategy`)

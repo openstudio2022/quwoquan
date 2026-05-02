@@ -5,7 +5,6 @@ class ConversationDto {
   final String type;
   final String? title;
   final String? avatarUrl;
-  final String? groupAvatarUrl;
   final int groupAvatarVersion;
   final String creatorId;
   final String? circleId;
@@ -20,6 +19,7 @@ class ConversationDto {
   final String status;
   final DateTime createdAt;
   final DateTime updatedAt;
+
   /// 群成员名册版本（Mock/部分 wire 扩展字段）。
   final int? membersRosterRevision;
 
@@ -28,7 +28,6 @@ class ConversationDto {
     required this.type,
     this.title,
     this.avatarUrl,
-    this.groupAvatarUrl,
     this.groupAvatarVersion = 0,
     required this.creatorId,
     this.circleId,
@@ -51,8 +50,7 @@ class ConversationDto {
       id: (map['_id'] ?? map['id'] ?? '') as String,
       type: (map['type'] ?? 'direct') as String,
       title: map['title'] as String?,
-      avatarUrl: map['avatarUrl'] as String?,
-      groupAvatarUrl: map['groupAvatarUrl'] as String?,
+      avatarUrl: _optionalString(map['avatarUrl']),
       groupAvatarVersion: (map['groupAvatarVersion'] as num?)?.toInt() ?? 0,
       creatorId: (map['creatorId'] ?? '') as String,
       circleId: map['circleId'] as String?,
@@ -67,40 +65,45 @@ class ConversationDto {
           : null,
       messageCount: (map['messageCount'] as num?)?.toInt() ?? 0,
       status: (map['status'] ?? 'active') as String,
-      createdAt: DateTime.tryParse((map['createdAt'] ?? '') as String) ??
+      createdAt:
+          DateTime.tryParse((map['createdAt'] ?? '') as String) ??
           DateTime.now(),
-      updatedAt: DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
+      updatedAt:
+          DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
           DateTime.now(),
       membersRosterRevision: (map['membersRosterRevision'] as num?)?.toInt(),
     );
   }
 
   Map<String, dynamic> toMap() => {
-        '_id': id,
-        'id': id,
-        'type': type,
-        if (title != null) 'title': title,
-        if (avatarUrl != null) 'avatarUrl': avatarUrl,
-        if (groupAvatarUrl != null) 'groupAvatarUrl': groupAvatarUrl,
-        'groupAvatarVersion': groupAvatarVersion,
-        'creatorId': creatorId,
-        if (circleId != null) 'circleId': circleId,
-        'maxSeq': maxSeq,
-        'memberCount': memberCount,
-        'maxGroupSize': maxGroupSize,
-        'receiptEnabled': receiptEnabled,
-        if (lastMessageId != null) 'lastMessageId': lastMessageId,
-        if (lastMessagePreview != null)
-          'lastMessagePreview': lastMessagePreview,
-        if (lastMessageTime != null) ...{
-          'lastMessageTime': lastMessageTime!.toIso8601String(),
-          'lastMessageAt': lastMessageTime!.toIso8601String(),
-        },
-        'messageCount': messageCount,
-        'status': status,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-        if (membersRosterRevision != null)
-          'membersRosterRevision': membersRosterRevision,
-      };
+    '_id': id,
+    'id': id,
+    'type': type,
+    if (title != null) 'title': title,
+    if (avatarUrl != null) 'avatarUrl': avatarUrl,
+    'groupAvatarVersion': groupAvatarVersion,
+    'creatorId': creatorId,
+    if (circleId != null) 'circleId': circleId,
+    'maxSeq': maxSeq,
+    'memberCount': memberCount,
+    'maxGroupSize': maxGroupSize,
+    'receiptEnabled': receiptEnabled,
+    if (lastMessageId != null) 'lastMessageId': lastMessageId,
+    if (lastMessagePreview != null) 'lastMessagePreview': lastMessagePreview,
+    if (lastMessageTime != null) ...{
+      'lastMessageTime': lastMessageTime!.toIso8601String(),
+      'lastMessageAt': lastMessageTime!.toIso8601String(),
+    },
+    'messageCount': messageCount,
+    'status': status,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    if (membersRosterRevision != null)
+      'membersRosterRevision': membersRosterRevision,
+  };
+}
+
+String? _optionalString(Object? value) {
+  final s = value?.toString().trim() ?? '';
+  return s.isEmpty ? null : s;
 }

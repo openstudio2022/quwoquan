@@ -1,0 +1,78 @@
+version: 1
+feature: reliable-async-task-channel
+level: "L3_story"
+template: A1-A8
+tree_context:
+  feature_path: capability.runtime.feature.runtime-messaging.reliable-async-task-channel
+  parent_path: capability.runtime.feature.runtime-messaging
+  acceptance_inherits_from: capability.runtime.feature.runtime-messaging
+level_acceptance:
+  focus_groups:
+  - A1_functional
+  - A3_service_governance
+  - A4_observability
+  - A6_security_privacy
+  - A7_contract_metadata_consistency
+  - A8_test_automation
+  notes: 以数据库 Outbox 为事实源，Redis/MQ 只作为可重建执行索引；重点验证事务一致性、不丢消息、延迟合并、幂等重试、通知恢复、模块化部署和 catalog 治理。
+global_acceptance:
+  A1_functional:
+    scenarios:
+    - id: A1-transactional-task-request
+      given: 业务服务在同一 repository transaction 中写业务数据并通过 runtime writer 声明可靠任务
+      when: 事务提交成功
+      then: 业务数据与 reliable_task_outbox 同时存在，dispatcher 重启后可恢复投递
+    - id: A1-transaction-rollback
+      given: 业务服务写业务数据并声明可靠任务
+      when: 事务回滚
+      then: 业务数据与 reliable_task_outbox 都不存在
+  A2_experience:
+  - 延迟合并窗口内的高频变更不得造成同步风暴，最终用户只收到最新状态通知。
+  A3_service_governance:
+  - 业务服务只能调用受控 ReliableTaskOutboxWriter，不得直接写 outbox 集合或直接 enqueue。
+  - 每个 taskType 必须登记 payload 白名单、幂等键、合并策略、重试策略、DLQ 策略和通知策略。
+  - 每个 taskType 必须登记 dispatcherModule、workerModule、partitionKey、retentionPolicyRef、rateLimitPolicyRef。
+  - deployment package 启动时必须校验 task/module/package catalog 版本兼容，不兼容 fail-fast。
+  - onebox 与拆分 worker package 必须通过 env/domain/module/shard 租约协调。
+  A4_observability:
+  - outbox pending 滞留、dispatching timeout、ready/processing/retry_wait/dead 数量、retry rate、DLQ rate、notification fanout partial failure 必须可观测。
+  - module/package/catalog version、lease owner、shardId、rate limit drop/defer 必须可观测。
+  A5_product_ops:
+  - DLQ 必须保留 RuntimeFailure、traceId、aggregateId、taskType 和可人工恢复上下文。
+  - retention policy 必须声明 TTL、归档、重放和人工恢复策略。
+  A6_security_privacy:
+  - payload 只能包含白名单版本提示和标识符，禁止写入敏感正文、大对象或易过期详情。
+  - onebox 内 module 必须按 domain/module 作用域访问 store/queue，越权访问必须被门禁阻断。
+  A7_contract_metadata_consistency:
+  - reliable_task_outbox、reliable_async_task、notification_outbox、reliable_task_dlq schema 与设计文档一致。
+  - RuntimeFailure 必须包含 recovery.action、disruptionLevel 和字符串化 context.attributes。
+  - module_package_mapping、reliable_task_module_catalog、reliable_task_retention_policy 必须互相一致。
+  A8_test_automation:
+  - T1 覆盖合并策略、startAt/maxDelayUntil、retry backoff、DLQ 判定和 payload 白名单。
+  - T2 覆盖 schema 契约、task catalog 契约、module/package catalog 契约和业务层禁止直接 enqueue 的架构检查。
+  - T3 覆盖 dispatcher 失败恢复、重复投递幂等、worker ACK 失败重放、notification outbox 恢复 fanout、recipient 级去重账本。
+  - T4 覆盖连续加人风暴、消费者崩溃、Redis/Mongo 短暂不可用、部分 fanout 失败、DLQ 人工恢复、onebox 与拆分 package 并存。
+tests:
+  mock:
+  - quwoquan_service/runtime/reliabletask/tests/reliabletask_memory_store_test.go
+  unit:
+  - quwoquan_service/runtime/reliabletask/tests/merge_policy_unit_test.go
+  - quwoquan_service/runtime/reliabletask/tests/task_state_machine_unit_test.go
+  - quwoquan_service/runtime/reliabletask/tests/retry_dlq_policy_unit_test.go
+  contract:
+  - quwoquan_service/runtime/reliabletask/tests/reliabletask_schema_contract_test.go
+  - quwoquan_service/runtime/reliabletask/tests/task_catalog_contract_test.go
+  - scripts/verify_module_package_mapping.py
+  - scripts/verify_reliable_task_catalog.py
+  - scripts/verify_reliable_task_retention_policy.py
+  integration:
+  - quwoquan_service/runtime/reliabletask/tests/outbox_dispatcher_recovery_integration_test.go
+  - quwoquan_service/runtime/reliabletask/tests/worker_ack_replay_integration_test.go
+  - quwoquan_service/runtime/reliabletask/tests/notification_outbox_recovery_integration_test.go
+  - quwoquan_service/runtime/reliabletask/tests/module_package_lease_integration_test.go
+  - quwoquan_service/runtime/reliabletask/tests/notification_delivery_ledger_integration_test.go
+  uat:
+  - UAT-RUNTIME-RELIABLE-ASYNC-TASK-CHANNEL-001
+execution:
+  local_gate: make verify-reliable-task-topology
+  full_gate: make gate-full

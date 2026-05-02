@@ -1,0 +1,14 @@
+{
+  "skillId": "knowledge_general",
+  "displayName": "通用知识助手",
+  "description": "百科知识、原理解释、科普、概念辨析、翻译。",
+  "domainId": "knowledge_general",
+  "executionTarget": "cloud",
+  "routingHints": ["是什么", "原理", "科普", "百科", "知识", "翻译"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "search", "memory_search"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 3
+  }
+}

@@ -52,6 +52,7 @@ import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_management_page.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/outgoing_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/incoming_call_page.dart';
 import 'package:quwoquan_app/ui/rtc/pages/voice_call_page.dart';
@@ -385,8 +386,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ? state.extra! as HomepageCanonicalReference
               : null;
           final draftIdRaw = state.uri.queryParameters['draftId']?.trim();
-          final initialDraftId =
-              draftIdRaw != null && draftIdRaw.isNotEmpty ? draftIdRaw : null;
+          final initialDraftId = draftIdRaw != null && draftIdRaw.isNotEmpty
+              ? draftIdRaw
+              : null;
           EditorStartAction? action;
           if (typeStr != null) {
             try {
@@ -554,6 +556,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
 
           return VideoDetailPage(initialIndex: index, initialExtra: extra);
+        },
+      ),
+      GoRoute(
+        path: AppRoutePaths.assistantPersonal,
+        builder: (context, state) {
+          return PersonalAssistantConversationPage(
+            onBack: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(AppRoutePaths.assistant);
+              }
+            },
+          );
         },
       ),
       GoRoute(

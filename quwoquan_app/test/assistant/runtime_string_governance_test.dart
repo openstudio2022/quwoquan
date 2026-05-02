@@ -22,7 +22,7 @@ void main() {
       final scannedPaths = <String>[
         'lib/assistant',
         'test/assistant',
-        'integration_test',
+        'test/common/assistant',
         'tool/assistant',
         '../quwoquan_service/contracts/metadata/assistant',
         '../quwoquan_service/contracts/metadata/_shared',
@@ -71,10 +71,10 @@ void main() {
       );
       expect(designDoc, contains('quwoquan_app/lib/assistant/generated/'));
       expect(designDoc, contains('assistant_turn'));
-      expect(designDoc, contains('历史不兼容仅允许在启动加载阶段完成一次转换'));
+      expect(designDoc, contains('记录不兼容仅允许在启动加载阶段完成一次转换'));
 
       expect(ssotDoc, contains('lib/assistant/generated/'));
-      expect(ssotDoc, contains('仅允许在启动加载阶段做一次历史转换'));
+      expect(ssotDoc, contains('仅允许在启动加载阶段做一次记录转换'));
 
       expect(
         governance,

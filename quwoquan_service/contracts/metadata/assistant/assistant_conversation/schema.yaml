@@ -1,0 +1,15 @@
+dart_class: AssistantConversationWire
+library_path: assistant/generated/contracts/assistant_conversation.g.dart
+output_path: assistant/generated/contracts/assistant_conversation.g.dart
+contract: assistant_conversation
+version: assistant_conversation.m2
+kind: entity_wire_contract
+fields:
+  - { name: conversationId, type: string, required: true }
+  - { name: userId, type: string, required: true }
+  - { name: state, type: string, default: active }
+  - { name: activeTurnId, type: string, default: '' }
+  - { name: lastTurnId, type: string, default: '' }
+  - { name: summary, type: string, default: '' }
+  - { name: createdAt, type: string, required: true }
+  - { name: updatedAt, type: string, required: true }

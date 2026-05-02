@@ -77,7 +77,7 @@ cd <repo_root> && make gate
 - [ ] `make gate` 全绿（若 gate 仍依赖旧 metadata 路径，须在本阶段内修正 gate/脚本以支持 v3，再通过 gate）
 
 **说明**：
-- 若 `quwoquan_service/scripts/gate.sh` 仍检查旧版 metadata 扁平文件，P0-fix 须同步更新为 v3 或由根目录 verify 覆盖，使 gate 通过。
+- 若 `quwoquan_service/scripts/gate.sh` 仍检查过往版本 metadata 扁平文件，P0-fix 须同步更新为 v3 或由根目录 verify 覆盖，使 gate 通过。
 - 若 `make verify` 报缺文件（`engineering_directory_manifest.yaml` 所列），须在 P0-fix 内补全内容，直至 `make verify` 全绿。
 
 ---

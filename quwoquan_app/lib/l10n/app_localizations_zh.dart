@@ -1117,7 +1117,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get imageEditorMosaic => '马赛克';
 
   @override
-  String get imageEditorHistory => '历史';
+  String get imageEditorHistory => '记录';
 
   @override
   String get imageEditorRemoveStep => '删除步骤';

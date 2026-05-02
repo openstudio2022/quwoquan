@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `contract-drift-blocker`
+## Folded current node `contract-drift-blocker`
 
 # L5 特性：contract-drift-blocker
 

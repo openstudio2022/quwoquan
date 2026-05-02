@@ -33,9 +33,9 @@ ruby -ryaml -e '
   fail("domain_onboarding_schema acceptance_statuses is empty") if statuses.empty?
   status_rank = {}
   statuses.each_with_index { |s, idx| status_rank[s] = idx }
-  legacy_rel = schema.dig("minimum_package", "required_deploy_sources", "legacy").to_s
-  legacy_file = File.join(repo_root, legacy_rel)
-  fail("missing #{legacy_file}") if legacy_rel.empty? || !File.exist?(legacy_file)
+  current_rel = schema.dig("minimum_package", "required_deploy_sources", "current").to_s
+  current_file = File.join(repo_root, current_rel)
+  fail("missing #{current_file}") if current_rel.empty? || !File.exist?(current_file)
 
   domain_files = Dir[File.join(domains_dir, "*.yaml")].sort
   fail("no domain onboarding files found") if domain_files.empty?
@@ -43,9 +43,9 @@ ruby -ryaml -e '
   plane_doc = YAML.load_file(plane_file) || {}
   envs = plane_doc["environments"] || {}
   fail("plane-aware deployment mapping missing environments") if envs.empty?
-  legacy_doc = YAML.load_file(legacy_file) || {}
-  legacy_envs = legacy_doc["environments"] || {}
-  fail("legacy deployment mapping missing environments") if legacy_envs.empty?
+  current_doc = YAML.load_file(current_file) || {}
+  current_envs = current_doc["environments"] || {}
+  fail("current deployment mapping missing environments") if current_envs.empty?
 
   plane_lookup = Hash.new { |h, k| h[k] = {} }
   process_names = {}
@@ -63,16 +63,16 @@ ruby -ryaml -e '
       end
     end
   end
-  legacy_lookup = Hash.new { |h, k| h[k] = {} }
-  legacy_envs.each do |env, processes|
+  current_lookup = Hash.new { |h, k| h[k] = {} }
+  current_envs.each do |env, processes|
     next unless processes.is_a?(Hash)
     processes.each do |process_name, cfg|
       process_names[process_name] = true
       domains = cfg.is_a?(Hash) ? Array(cfg["domains"]) : []
       domains.each do |domain|
         next if domain.to_s.empty?
-        legacy_lookup[domain.to_s][env] ||= []
-        legacy_lookup[domain.to_s][env] << process_name
+        current_lookup[domain.to_s][env] ||= []
+        current_lookup[domain.to_s][env] << process_name
       end
     end
   end
@@ -131,12 +131,12 @@ ruby -ryaml -e '
 
     %w[dev integration prod].each do |env|
       mapping = plane_lookup[domain][env] || {}
-      legacy_mapping = legacy_lookup[domain][env] || []
+      current_mapping = current_lookup[domain][env] || []
       if mapping.empty?
         fail("#{file}: domain #{domain} missing plane binding in #{env}")
       end
-      if rule["require_plane_binding"] && legacy_mapping.empty?
-        fail("#{file}: #{status} requires legacy deployment binding in #{env}")
+      if rule["require_plane_binding"] && current_mapping.empty?
+        fail("#{file}: #{status} requires current deployment binding in #{env}")
       end
       if full_plane_domains.include?(domain)
         %w[user-plane platform-control-plane product-control-plane].each do |plane|

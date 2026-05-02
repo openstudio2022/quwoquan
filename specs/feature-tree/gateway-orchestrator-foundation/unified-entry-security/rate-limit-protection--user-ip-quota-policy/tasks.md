@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `abuse-detection-guard`
+## Folded current node `abuse-detection-guard`
 
 # 开发任务：abuse-detection-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `abuse-detection-guard` (from `gateway-orchestrator-foundation/unified-entry-security/rate-limit-protection/user-ip-quota-policy/abuse-detection-guard`)
+- [ ] Migrated current node: `abuse-detection-guard` (from `gateway-orchestrator-foundation/unified-entry-security/rate-limit-protection/user-ip-quota-policy/abuse-detection-guard`)

@@ -46,8 +46,8 @@ void main() {
     expect(response.failure.context.attributes, isEmpty);
   });
 
-  test('legacy response normalizes details-free runtime failure', () {
-    final response = RuntimeErrorResponse.fromLegacyJson(<String, dynamic>{
+  test('current response normalizes details-free runtime failure', () {
+    final response = RuntimeErrorResponse.fromCurrentJson(<String, dynamic>{
       'code': 'ASSISTANT.MIDDLEWARE.llm_timeout',
       'kind': 'MIDDLEWARE',
       'module': 'ASSISTANT',

@@ -332,7 +332,7 @@ G1 校验结果：
   - provider key 优先使用 canonical key
   - DTO 解析保留旧字段 fallback
 - cleanup phase：
-  - 所有 viewer / profile / feed 改完后，再清理 `authorId` 作为状态 key 的历史逻辑
+  - 所有 viewer / profile / feed 改完后，再清理 `authorId` 作为状态 key 的记录逻辑
 
 ### 双读 / 双写
 
@@ -404,6 +404,6 @@ G1 校验结果：
 ## 未来演进
 
 - 把 discovery/circle 之外的更多来源接入统一 `ViewerSourceStateAdapter`。
-- 收缩 `DiscoveryState` 这类历史页面态容器，完全迁移到对象级 provider。
+- 收缩 `DiscoveryState` 这类记录页面态容器，完全迁移到对象级 provider。
 - 在 metadata 稳定后移除 `authorId` 作为内部状态 key 的兼容读链路。
 - 若后续需要跨进程更强保证，可把 outbox 从本地轻量持久化升级为更正式的 runtime sync queue。

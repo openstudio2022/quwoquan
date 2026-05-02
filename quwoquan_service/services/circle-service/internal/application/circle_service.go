@@ -27,6 +27,7 @@ type CircleService struct {
 	circles   persistence.CircleStore
 	members   persistence.MemberStore
 	files     persistence.FileStore
+	groups    persistence.GroupStore
 	feedStore persistence.FeedStore
 	events    EventPublisher
 }
@@ -39,6 +40,10 @@ func WithEventPublisher(ep EventPublisher) CircleServiceOption {
 
 func WithFeedStore(fs persistence.FeedStore) CircleServiceOption {
 	return func(s *CircleService) { s.feedStore = fs }
+}
+
+func WithGroupStore(gs persistence.GroupStore) CircleServiceOption {
+	return func(s *CircleService) { s.groups = gs }
 }
 
 func NewCircleService(
@@ -188,6 +193,45 @@ func (s *CircleService) ListCircles(ctx context.Context, req ListCirclesRequest)
 		circles = []model.Circle{}
 	}
 	return ListCirclesResponse{Items: circles, Cursor: cursor}
+}
+
+type ListCircleGroupsRequest struct {
+	CircleID      string
+	GroupType     string
+	Visibility    string
+	ParentGroupID string
+	NodeType      string
+	Cursor        string
+	Limit         int
+}
+
+type ListCircleGroupsResponse struct {
+	Items  []model.CircleGroup `json:"items"`
+	Cursor string              `json:"cursor,omitempty"`
+}
+
+func (s *CircleService) ListGroups(ctx context.Context, req ListCircleGroupsRequest) (ListCircleGroupsResponse, error) {
+	if _, ok := s.circles.FindByID(ctx, req.CircleID); !ok {
+		return ListCircleGroupsResponse{}, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
+			"圈子不存在", "circle not found",
+		)
+	}
+	if s.groups == nil {
+		return ListCircleGroupsResponse{Items: []model.CircleGroup{}}, nil
+	}
+	groups, cursor := s.groups.ListByCircle(ctx, req.CircleID, persistence.ListGroupsOpts{
+		GroupType:     req.GroupType,
+		Visibility:    req.Visibility,
+		ParentGroupID: req.ParentGroupID,
+		NodeType:      req.NodeType,
+		Cursor:        req.Cursor,
+		Limit:         req.Limit,
+	})
+	if groups == nil {
+		groups = []model.CircleGroup{}
+	}
+	return ListCircleGroupsResponse{Items: groups, Cursor: cursor}, nil
 }
 
 type SearchCirclesRequest struct {

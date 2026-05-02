@@ -4,7 +4,7 @@ import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart'
     show ChatMessageDto;
 
-/// 历史别名；wire 模型为 metadata 投影 [ChatMessageDto]（`chat_message_client.yaml`）。
+/// 记录别名；wire 模型为 metadata 投影 [ChatMessageDto]（`chat_message_client.yaml`）。
 typedef MessageDto = ChatMessageDto;
 
 /// 气泡与长按菜单使用的展示向 Map（仅 UI；契约字段仍以 [ChatMessageDto] 为准）。
@@ -49,7 +49,8 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
       if (metadata != null) 'metadata': metadata,
       'isSelf': isSelf,
       'isRead': true,
-      if (metadata != null && metadata!['tasks'] != null) 'tasks': metadata!['tasks'],
+      if (metadata != null && metadata!['tasks'] != null)
+        'tasks': metadata!['tasks'],
     };
   }
 }

@@ -9,7 +9,7 @@
 
 - 原 `DomainPreconditionCheck/SynthesisReadinessCheck` 条款已并入统一规格。
 - 原契约条款（`ContextEnvelope/PreconditionSpec/PostconditionSpec/FillTask`）已并入统一规格。
-- 本文件仅保留历史追溯用途。
+- 本文件仅保留记录追溯用途。
 # personal-assistant-domain-orchestration-v1
 
 ## Purpose

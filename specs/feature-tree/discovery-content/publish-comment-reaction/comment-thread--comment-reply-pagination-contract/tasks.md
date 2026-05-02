@@ -12,7 +12,7 @@
 - [ ] **回复契约**：CreateComment 请求支持 replyToCommentId（可选）；服务端写入 replyToCommentId、replyToUserId；列表返回中回复与主评论通过 replyToCommentId 关联，端侧楼中楼展示依赖此字段。
 - [ ] 上述契约由 comment-thread 的云侧 ListComments/CreateComment 实现与端侧 ContentRepository + CommentViewer 共同满足；本节点验收为契约一致性（OpenAPI/schema 与 metadata、端云字段一致）。
 
-## Folded legacy node `moderation-delete-audit-guard`
+## Folded current node `moderation-delete-audit-guard`
 
 # 开发任务：moderation-delete-audit-guard
 
@@ -23,4 +23,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `moderation-delete-audit-guard` (from `discovery-content/publish-comment-reaction/comment-thread/comment-reply-pagination-contract/moderation-delete-audit-guard`)
+- [ ] Migrated current node: `moderation-delete-audit-guard` (from `discovery-content/publish-comment-reaction/comment-thread/comment-reply-pagination-contract/moderation-delete-audit-guard`)

@@ -93,27 +93,28 @@ Theme(
 ```
 Row:
   [Avatar 40px]  [6px]
-  [Expanded →  Row([Flexible(name_col)]  [AnimatedSize(follow_btn)])]
-  [SizedBox(divider)]
-  [Row(4 actions)]
+  [NameSlot(断点固定字符槽)]  [FollowSlot]
+  [clusterGap] [Expanded spacer]
+  [Row(3 actions)]
 ```
 
 **3 档位参数**（对齐 `AppSpacing.compactBreakpoint=360 / expandedBreakpoint=600`）：
 
-| 档位 | Action 单元宽 | Action 间距 | 跨组分隔 |
-|------|--------------|------------|---------|
-| compact < 360 | 40 px | intraGroupXs(4) | intraGroupSm(6) |
-| regular 360–599 | 44 px | intraGroupSm(6) | intraGroupMd(8) |
-| expanded ≥ 600 | 52 px | intraGroupMd(8) | intraGroupLg(12) |
+| 档位 | 作者名槽 | Action 单元宽 | Action 间距 | 跨组分隔 |
+|------|----------|--------------|------------|---------|
+| compact < 360 | 4 个中文字符宽 | iconButtonMinSizeSm(44) | intraGroupSm(6) | interGroupSm(12) |
+| regular 360–599 | 5 个中文字符宽 | buttonHeightLg(48) | intraGroupMd(8) | interGroupMd(16) |
+| expanded ≥ 600 | 6 个中文字符宽 | buttonHeightLg(48) | intraGroupMd(8) | interGroupMd(16) |
 
-Action 组总宽通过 `_cellWidth(ctx)` 计算后缓存，整个作品轨同一设备保持不变。
+Action 组总宽通过 `_actionCellWidth(ctx)` 计算后固定，整个作品轨同一设备保持不变。作者名槽位不是按文案真实长度伸缩，而是按断点固定字符宽度：3 字作者名在 iPad 仍占 6 字槽，关注按钮固定接在 6 字槽后；5 字作者名在 iPad 应完整单行显示。
 
 **方案对比**：
 
 | 方案 | 描述 | 选用原因 |
 |------|------|---------|
-| **A（选定）固定 action 宽 + Expanded 名字** | Action 固定右锚，名字 Expanded 吸收剩余空间 | Action 不随名字长度抖动 |
-| B Spacer 左侧留白 | Spacer 充满左侧，名字和 Action 两端对齐 | 留白过大，名字呼吸空间太小 |
+| **A（选定）固定 action 宽 + 固定作者名槽 + Expanded spacer** | Action 固定右锚，作者名槽按 4/5/6 字断点固定，剩余空间只进入中间 spacer | Action 不随名字长度抖动，关注按钮不跟随短名贴近 |
+| B 名字按真实宽度自适应 | 短名字后关注按钮紧贴 | iPad 3 字作者名会导致按钮贴字，组内节奏不稳定 |
+| C Spacer 左侧留白 | Spacer 充满左侧，名字和 Action 两端对齐 | 留白过大，名字呼吸空间太小 |
 
 ### 6. 关注按钮延迟与动画策略
 
@@ -122,19 +123,19 @@ Action 组总宽通过 `_cellWidth(ctx)` 计算后缓存，整个作品轨同一
 - 未关注图片：3 秒后显示
 - 未关注视频/文章：5 秒后显示
 
-**入场动画**：`AnimatedSize(alignment: Alignment.centerRight)`
-- `centerRight` 锚定右边缘固定，按钮向左展开
-- 视觉效果：按钮从操作区左侧方向滑出，自然推压名字区域
+**入场动画**：`AnimatedSlide + AnimatedOpacity`
+- 关注按钮固定接在作者名槽之后，隐藏时从右侧轻微偏移并透明，出现时回到槽位。
+- 显隐不得改变作者名槽宽、动作组右锚或 rail 对齐。
 
-**文字压缩策略**（仅未关注状态触发）：
-- `AnimatedDefaultTextStyle(duration: 180ms, curve: Curves.easeOut)`
-- 名字：14 px → 12 px；圈子名：10 px → 9 px（`AppTypography.xxs`）
-- 已关注状态不压缩（状态已稳定，减少视觉干扰）
+**文字换行策略**：
+- 作者名最多取 12 个 Unicode 字符。
+- 先按当前档位固定槽单行显示；单行放不下时使用 `AppTypography.xs` + `textLineHeightDense` 两行紧凑显示。
+- 两行仍放不下时最后一行末尾省略。
 
 **名字截断策略**：
-- 无关注按钮：`TextOverflow.ellipsis` 正常截断
-- 有关注按钮：`ShaderMask` 固定 18 px 淡出（`shaderCallback` 根据 `bounds.width` 计算起始 stop），配合 `TextOverflow.clip`
-- 固定像素淡出优于百分比 stop：保证在窄列（48 px）和宽列（100 px+）上淡出区宽度一致、可预期
+- 作者名槽位始终按断点固定，不因 1 字、3 字、5 字或 12 字作者名而改变。
+- 单行态可使用尾部淡出；两行态使用 `TextOverflow.ellipsis`。
+- 关注按钮右侧不得侵入 Action 组；Action 组右缘始终贴合 rail 右缘。
 
 ### 7. 数字格式化规则（_formatCount）
 

@@ -125,7 +125,7 @@ void main() {
       );
     });
 
-    test('主 prompt 改为显式约束单字段流式抽取并收紧历史噪音', () {
+    test('主 prompt 改为显式约束单字段流式抽取并收紧记录噪音', () {
       const plannerContentPath =
           'assets/assistant/prompts/global/planner.global_plan.md';
       const synthContentPath =
@@ -160,7 +160,7 @@ void main() {
       );
       expect(
         planner,
-        contains('实体纠错与历史误解修正规则'),
+        contains('实体纠错与记录误解修正规则'),
         reason: 'planner.global_plan 应引导模型在理解阶段处理实体纠错',
       );
       expect(
@@ -206,7 +206,7 @@ void main() {
       expect(
         planner,
         isNot(contains('uiProcessTimelineV2')),
-        reason: '主 planner prompt 不应继续携带历史 process timeline 字段名',
+        reason: '主 planner prompt 不应继续携带记录 process timeline 字段名',
       );
       expect(
         synth,

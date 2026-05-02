@@ -62,7 +62,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
       );
 
       await _controller!.initialize();
-      
+
       if (mounted) {
         setState(() {
           _isInitialized = true;
@@ -90,15 +90,7 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
             backgroundColor: AppColors.overlayMedium,
             bufferedColor: AppColors.overlayLight,
           ),
-          placeholder: widget.thumbnailUrl != null
-              ? Image.network(
-                  widget.thumbnailUrl!,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return _buildVideoPlaceholder();
-                  },
-                )
-              : _buildVideoPlaceholder(),
+          placeholder: _buildVideoPlaceholder(),
         );
       }
     } catch (e) {
@@ -170,27 +162,40 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
     );
   }
 
+  double get _resolvedAspectRatio {
+    final widgetRatio = widget.aspectRatio;
+    if (widgetRatio != null && widgetRatio > 0) {
+      return widgetRatio;
+    }
+    final controllerRatio = _controller?.value.aspectRatio ?? 0;
+    if (controllerRatio > 0) {
+      return controllerRatio;
+    }
+    return 16 / 9;
+  }
+
+  Widget _buildCenteredVideoFrame(Widget child) {
+    return ColoredBox(
+      color: AppColors.black,
+      child: Center(
+        child: AspectRatio(aspectRatio: _resolvedAspectRatio, child: child),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_hasError) {
-      return _buildErrorWidget();
+      return _buildCenteredVideoFrame(_buildErrorWidget());
     }
 
     if (!_isInitialized || _chewieController == null) {
-      return _buildVideoPlaceholder();
+      return _buildCenteredVideoFrame(_buildVideoPlaceholder());
     }
 
     return GestureDetector(
       onTap: widget.onTap,
-      child: Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: AppColors.black,
-        child: AspectRatio(
-          aspectRatio: widget.aspectRatio ?? _controller!.value.aspectRatio,
-          child: Chewie(controller: _chewieController!),
-        ),
-      ),
+      child: _buildCenteredVideoFrame(Chewie(controller: _chewieController!)),
     );
   }
 }
@@ -218,7 +223,8 @@ class VideoPlayerManager {
   }
 
   /// 获取或创建Chewie控制器
-  static ChewieController? getChewieController(String videoUrl, {
+  static ChewieController? getChewieController(
+    String videoUrl, {
     bool autoPlay = false,
     bool showControls = true,
   }) {

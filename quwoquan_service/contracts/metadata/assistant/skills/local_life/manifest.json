@@ -1,0 +1,15 @@
+{
+  "skillId": "local_life",
+  "displayName": "本地生活助手",
+  "description": "餐厅美食推荐、本地服务、周边好去处、团购优惠。",
+  "domainId": "local_life",
+  "executionTarget": "hybrid",
+  "routingHints": ["吃饭", "餐厅", "美食", "团购", "附近", "本地"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "app_search", "deep_link"],
+    "preferredTools": ["web_search", "app_search"],
+    "maxToolCalls": 3,
+    "allowDeviceActionProposal": true
+  }
+}

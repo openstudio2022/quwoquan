@@ -638,6 +638,6 @@ double _springDampedOffset(double raw, double maxPull) {
 
 ---
 
-## 遗留带规划任务
+## 存量带规划任务
 
 见 tasks.md 「搁置任务」和「未来演进任务」章节。

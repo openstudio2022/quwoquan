@@ -3,7 +3,7 @@
 ## Scope
 
 - R15 metadata recovery semantics: metadata no longer defines `recovery policy`, `recoveryAction`, or `recovery_after_seconds` as error facts.
-- R16 guard hardening: cutover guard blocks legacy metadata retry fields, generated cloud `recoveryAction`, UI primary error state stringification, assistant `result.runtimeFailure` propagation, unregistered Ops runtime codes, and Ops `.test-dist` artifacts.
+- R16 guard hardening: cutover guard blocks current metadata retry fields, generated cloud `recoveryAction`, UI primary error state stringification, assistant `result.runtimeFailure` propagation, unregistered Ops runtime codes, and Ops `.test-dist` artifacts.
 - R11 assistant runtime: failed `AssistantToolResult`, `AssistantModelOutput`, and `ReactRuntimeResult` expose typed runtime failure for policy decisions.
 - R12 UI/provider errors: key non-assistant providers and error surfaces use structured runtime display mapping rather than raw exception strings.
 - R13 Ops: test script compiles API, runtime barrel, and page runtime error usage under NodeNext.

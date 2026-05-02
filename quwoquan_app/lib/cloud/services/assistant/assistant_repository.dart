@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -8,6 +9,11 @@ import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_request_page_ids.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart';
 import 'package:quwoquan_app/core/models/app_content_prototype_models.dart';
 import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
 
@@ -26,6 +32,20 @@ export 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_a
         AssistantUserTaskView,
         InteractionEvent,
         Scorecard;
+export 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart'
+    show AssistantConversationWire;
+export 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart'
+    show AssistantStreamEventWire;
+export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart'
+    show AssistantTurnEnvelopeWire;
+export 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart'
+    show
+        SkillSubscriptionDestinationWire,
+        SkillSubscriptionSearchQueryPlanWire,
+        SkillSubscriptionTriggerWire,
+        SkillSubscriptionWire;
+export 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart'
+    show ToolUseWire;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String kPersonalContentAccessSkillId = 'personal_content_access';
@@ -35,6 +55,9 @@ const int _kAssistantListPageDefaultLimit = 32;
 
 /// Assistant 技能目录单次拉取条数。
 const int _kAssistantSkillCatalogDefaultLimit = 64;
+
+/// Assistant 技能订阅列表单次拉取条数。
+const int _kAssistantSkillSubscriptionsDefaultLimit = 20;
 
 class AssistantSkillConsent {
   const AssistantSkillConsent({
@@ -138,6 +161,57 @@ abstract class AssistantRepository {
   Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
     int limit = _kAssistantSkillCatalogDefaultLimit,
   });
+
+  Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
+    int limit = _kAssistantSkillSubscriptionsDefaultLimit,
+    String status = '',
+  });
+
+  Future<SkillSubscriptionWire> createSkillSubscription({
+    required String skillId,
+    String domainId = 'assistant',
+    List<String> tagRefs = const <String>[],
+    required String rawText,
+    List<String> queries = const <String>[],
+    String cron = '0 8 * * *',
+  });
+
+  Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
+    required String subscriptionId,
+    required String status,
+  });
+
+  Future<AssistantConversationWire> createAssistantConversation({
+    String summary = '',
+  }) {
+    throw UnimplementedError('createAssistantConversation');
+  }
+
+  Future<AssistantConversationWire> getAssistantConversation({
+    required String conversationId,
+  }) {
+    throw UnimplementedError('getAssistantConversation');
+  }
+
+  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
+    required String conversationId,
+    required String text,
+    String turnType = 'user',
+    String skillId = '',
+    String domainId = '',
+  }) {
+    throw UnimplementedError('createAssistantTurn');
+  }
+
+  Future<AssistantTurnEnvelopeWire> getAssistantTurn({required String turnId}) {
+    throw UnimplementedError('getAssistantTurn');
+  }
+
+  Stream<AssistantStreamEventWire> streamAssistantTurn({
+    required String turnId,
+  }) {
+    throw UnimplementedError('streamAssistantTurn');
+  }
 }
 
 class MockAssistantRepository implements AssistantRepository {
@@ -145,6 +219,7 @@ class MockAssistantRepository implements AssistantRepository {
     : _store = store ?? const AssistantConsentStore();
 
   final AssistantConsentStore _store;
+  final List<SkillSubscriptionWire> _subscriptions = <SkillSubscriptionWire>[];
 
   @override
   Future<AssistantPolicyView> getPolicySnapshot({
@@ -274,7 +349,43 @@ class MockAssistantRepository implements AssistantRepository {
   Future<List<AssistantSkillCatalogItemView>> listSkillCatalog({
     int limit = _kAssistantSkillCatalogDefaultLimit,
   }) async {
-    return AppContentPrototypeBundle.instance.assistantSkillsData
+    final p0Skills = <AssistantSkillCatalogItemView>[
+      const AssistantSkillCatalogItemView(
+        skillId: 'daily_assistant',
+        displayName: '每日助手',
+        description: '管理待办、日历、会议、作息和学习计划。',
+        category: 'life',
+        requiresConsent: false,
+        iconHint: 'checkmark',
+      ),
+      const AssistantSkillCatalogItemView(
+        skillId: 'news_briefing',
+        displayName: '新闻简报',
+        description: '按关注话题定时生成新闻摘要。',
+        category: 'content',
+        requiresConsent: false,
+        iconHint: 'news',
+      ),
+      const AssistantSkillCatalogItemView(
+        skillId: 'stock_sentinel',
+        displayName: '股票哨兵',
+        description: '跟踪关注股票的重大消息面和行情变化。',
+        category: 'finance',
+        requiresConsent: false,
+        iconHint: 'chart',
+      ),
+      const AssistantSkillCatalogItemView(
+        skillId: 'travel_journey_manager',
+        displayName: '出行旅程管家',
+        description: '结合天气、路况和景点拥堵提醒行程风险。',
+        category: 'travel',
+        requiresConsent: false,
+        iconHint: 'airplane',
+      ),
+    ];
+    final prototypeSkills = AppContentPrototypeBundle
+        .instance
+        .assistantSkillsData
         .map(
           (row) => AssistantSkillCatalogItemView(
             skillId: row.skillId,
@@ -282,9 +393,214 @@ class MockAssistantRepository implements AssistantRepository {
             description: row.description,
             requiresConsent: false,
           ),
-        )
-        .take(limit)
+        );
+    return <AssistantSkillCatalogItemView>[
+      ...p0Skills,
+      ...prototypeSkills,
+    ].take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
+    int limit = _kAssistantSkillSubscriptionsDefaultLimit,
+    String status = '',
+  }) async {
+    final filtered = _subscriptions
+        .where((item) {
+          if (status.trim().isEmpty) {
+            return item.status != 'archived';
+          }
+          return item.status == status.trim();
+        })
         .toList(growable: false);
+    return filtered.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<SkillSubscriptionWire> createSkillSubscription({
+    required String skillId,
+    String domainId = 'assistant',
+    List<String> tagRefs = const <String>[],
+    required String rawText,
+    List<String> queries = const <String>[],
+    String cron = '0 8 * * *',
+  }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    final subscription = SkillSubscriptionWire(
+      subscriptionId: 'sub_mock_${_subscriptions.length + 1}',
+      createdByUserId: 'mock-user',
+      skillId: skillId,
+      domainId: domainId,
+      tagRefs: tagRefs,
+      searchQueryPlan: SkillSubscriptionSearchQueryPlanWire(
+        rawText: rawText,
+        queries: queries.isEmpty ? <String>[rawText] : queries,
+      ),
+      trigger: SkillSubscriptionTriggerWire(cron: cron),
+      destination: const SkillSubscriptionDestinationWire(
+        destinationType: 'user',
+        destinationId: 'mock-user',
+      ),
+      createdAt: now,
+      updatedAt: now,
+    );
+    _subscriptions.insert(0, subscription);
+    return subscription;
+  }
+
+  @override
+  Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
+    required String subscriptionId,
+    required String status,
+  }) async {
+    final idx = _subscriptions.indexWhere(
+      (item) => item.subscriptionId == subscriptionId,
+    );
+    if (idx < 0) {
+      throw StateError('skill subscription not found');
+    }
+    final current = _subscriptions[idx];
+    final updated = SkillSubscriptionWire(
+      subscriptionId: current.subscriptionId,
+      owner: current.owner,
+      createdByUserId: current.createdByUserId,
+      skillId: current.skillId,
+      domainId: current.domainId,
+      tagRefs: current.tagRefs,
+      status: status,
+      searchQueryPlan: current.searchQueryPlan,
+      trigger: current.trigger,
+      destination: current.destination,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.now().toUtc().toIso8601String(),
+    );
+    _subscriptions[idx] = updated;
+    return updated;
+  }
+
+  @override
+  Future<AssistantConversationWire> createAssistantConversation({
+    String summary = '',
+  }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    return AssistantConversationWire(
+      conversationId: 'acv_mock_personal_assistant',
+      userId: 'mock-user',
+      summary: summary,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  @override
+  Future<AssistantConversationWire> getAssistantConversation({
+    required String conversationId,
+  }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    return AssistantConversationWire(
+      conversationId: conversationId,
+      userId: 'mock-user',
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  @override
+  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
+    required String conversationId,
+    required String text,
+    String turnType = 'user',
+    String skillId = '',
+    String domainId = '',
+  }) async {
+    return AssistantTurnEnvelopeWire(
+      turnId: 'atn_mock_personal_assistant',
+      conversationId: conversationId,
+      turnType: turnType,
+      skillId: skillId,
+      domainId: domainId,
+      input: <String, dynamic>{'text': text},
+      trigger: const <String, dynamic>{'type': 'user_message'},
+      traceId: 'trace_mock_personal_assistant',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+    );
+  }
+
+  @override
+  Future<AssistantTurnEnvelopeWire> getAssistantTurn({
+    required String turnId,
+  }) async {
+    return AssistantTurnEnvelopeWire(
+      turnId: turnId,
+      conversationId: 'acv_mock_personal_assistant',
+      traceId: 'trace_mock_personal_assistant',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+    );
+  }
+
+  @override
+  Stream<AssistantStreamEventWire> streamAssistantTurn({
+    required String turnId,
+  }) async* {
+    final createdAt = DateTime.now().toUtc().toIso8601String();
+    final toolUse = ToolUseWire(
+      toolUseId: 'tu_mock_personal_assistant',
+      turnId: turnId,
+      toolName: 'web_search',
+      input: const <String, dynamic>{'query': '找私助 mock stream'},
+      status: 'requested',
+      createdAt: createdAt,
+    );
+    final completedToolUse = ToolUseWire(
+      toolUseId: toolUse.toolUseId,
+      turnId: turnId,
+      toolName: toolUse.toolName,
+      input: toolUse.input,
+      status: 'completed',
+      result: const <String, dynamic>{
+        'provider': 'mock',
+        'summary': '找私助 mock stream 已完成工具观察。',
+        'references': <Map<String, dynamic>>[],
+      },
+      createdAt: createdAt,
+      completedAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      eventId: '$turnId:assistant.turn.started',
+      conversationId: 'acv_mock_personal_assistant',
+      turnId: turnId,
+      seq: 1,
+      eventType: 'turn_started',
+      payload: const <String, dynamic>{'status': 'running'},
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      eventId: '$turnId:assistant.tool.requested',
+      conversationId: 'acv_mock_personal_assistant',
+      turnId: turnId,
+      seq: 2,
+      eventType: 'tool_use_requested',
+      payload: <String, dynamic>{'toolUse': toolUse.toJson()},
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      eventId: '$turnId:assistant.tool.completed',
+      conversationId: 'acv_mock_personal_assistant',
+      turnId: turnId,
+      seq: 3,
+      eventType: 'tool_result_received',
+      payload: <String, dynamic>{'toolUse': completedToolUse.toJson()},
+      createdAt: createdAt,
+    );
+    yield AssistantStreamEventWire(
+      eventId: '$turnId:assistant.answer.final',
+      conversationId: 'acv_mock_personal_assistant',
+      turnId: turnId,
+      seq: 4,
+      eventType: 'final_answer',
+      payload: const <String, dynamic>{'text': '找私助 mock stream 已接通。'},
+      createdAt: createdAt,
+    );
   }
 }
 
@@ -785,8 +1101,312 @@ class RemoteAssistantRepository implements AssistantRepository {
     }
   }
 
+  @override
+  Future<List<SkillSubscriptionWire>> listSkillSubscriptions({
+    int limit = _kAssistantSkillSubscriptionsDefaultLimit,
+    String status = '',
+  }) async {
+    try {
+      final uri = _assistantGetUri(
+        AssistantApiMetadata.listSkillSubscriptionsPath,
+        {
+          'limit': '$limit',
+          if (status.trim().isNotEmpty) 'status': status.trim(),
+        },
+      );
+      final response = await _client.get(
+        uri,
+        headers: _headersForAssistantDialog(
+          operationId: AssistantApiMetadata.listSkillSubscriptionsOperation,
+          clientPageId: AssistantRequestPageIds.listSkillSubscriptions,
+        ),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return const <SkillSubscriptionWire>[];
+      }
+      final decoded = response.body.trim().isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(response.body);
+      final rows = _decodeItemsMap(
+        decoded,
+        context: _assistantDialogContext(
+          operationId: AssistantApiMetadata.listSkillSubscriptionsOperation,
+        ),
+      );
+      return rows
+          .map(SkillSubscriptionWire.fromJson)
+          .where((row) => row.subscriptionId.isNotEmpty)
+          .take(limit)
+          .toList(growable: false);
+    } catch (_) {
+      return const <SkillSubscriptionWire>[];
+    }
+  }
+
+  @override
+  Future<SkillSubscriptionWire> createSkillSubscription({
+    required String skillId,
+    String domainId = 'assistant',
+    List<String> tagRefs = const <String>[],
+    required String rawText,
+    List<String> queries = const <String>[],
+    String cron = '0 8 * * *',
+  }) async {
+    final response = await _client.post(
+      _assistantUri(AssistantApiMetadata.createSkillSubscriptionPath),
+      headers: <String, String>{
+        ..._headersForAssistantDialog(
+          operationId: AssistantApiMetadata.createSkillSubscriptionOperation,
+          clientPageId: AssistantRequestPageIds.createSkillSubscription,
+        ),
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'skillId': skillId,
+        'domainId': domainId,
+        'tagRefs': tagRefs,
+        'searchQueryPlan': <String, dynamic>{
+          'rawText': rawText,
+          'queries': queries.isEmpty ? <String>[rawText] : queries,
+        },
+        'trigger': <String, dynamic>{'type': 'cron', 'cron': cron},
+        'destination': const <String, dynamic>{'destinationType': 'user'},
+      }),
+    );
+    return SkillSubscriptionWire.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.createSkillSubscriptionOperation,
+      ),
+    );
+  }
+
+  @override
+  Future<SkillSubscriptionWire> updateSkillSubscriptionStatus({
+    required String subscriptionId,
+    required String status,
+  }) async {
+    final response = await _client.patch(
+      _assistantUri(
+        AssistantApiMetadata.updateSkillSubscriptionStatusPath(
+          subscriptionId: subscriptionId,
+        ),
+      ),
+      headers: <String, String>{
+        ..._headersForAssistantDialog(
+          operationId:
+              AssistantApiMetadata.updateSkillSubscriptionStatusOperation,
+          clientPageId: AssistantRequestPageIds.updateSkillSubscriptionStatus,
+        ),
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(<String, dynamic>{'status': status}),
+    );
+    return SkillSubscriptionWire.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId:
+            AssistantApiMetadata.updateSkillSubscriptionStatusOperation,
+      ),
+    );
+  }
+
+  @override
+  Future<AssistantConversationWire> createAssistantConversation({
+    String summary = '',
+  }) async {
+    final uri = _assistantUri(
+      AssistantApiMetadata.createAssistantConversationPath,
+    );
+    _debugAssistantRepository(
+      'POST $uri operation=${AssistantApiMetadata.createAssistantConversationOperation}',
+    );
+    final response = await _client.post(
+      uri,
+      headers: <String, String>{
+        ..._headersForAssistantDialog(
+          operationId:
+              AssistantApiMetadata.createAssistantConversationOperation,
+          clientPageId: AssistantRequestPageIds.createAssistantConversation,
+        ),
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(<String, dynamic>{'summary': summary}),
+    );
+    _debugAssistantRepository(
+      'response status=${response.statusCode} operation=${AssistantApiMetadata.createAssistantConversationOperation}',
+    );
+    final conversation = AssistantConversationWire.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.createAssistantConversationOperation,
+      ),
+    );
+    _debugAssistantRepository(
+      'conversation decoded id=${conversation.conversationId}',
+    );
+    return conversation;
+  }
+
+  @override
+  Future<AssistantConversationWire> getAssistantConversation({
+    required String conversationId,
+  }) async {
+    final response = await _client.get(
+      _assistantUri(
+        AssistantApiMetadata.getAssistantConversationPath(
+          conversationId: conversationId,
+        ),
+      ),
+      headers: _headersForAssistantDialog(
+        operationId: AssistantApiMetadata.getAssistantConversationOperation,
+        clientPageId: AssistantRequestPageIds.getAssistantConversation,
+      ),
+    );
+    return AssistantConversationWire.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.getAssistantConversationOperation,
+      ),
+    );
+  }
+
+  @override
+  Future<AssistantTurnEnvelopeWire> createAssistantTurn({
+    required String conversationId,
+    required String text,
+    String turnType = 'user',
+    String skillId = '',
+    String domainId = '',
+  }) async {
+    final uri = _assistantUri(
+      AssistantApiMetadata.createAssistantTurnPath(
+        conversationId: conversationId,
+      ),
+    );
+    _debugAssistantRepository(
+      'POST $uri operation=${AssistantApiMetadata.createAssistantTurnOperation} '
+      'conversationId=$conversationId text="${_assistantDebugSnippet(text)}"',
+    );
+    final response = await _client.post(
+      uri,
+      headers: <String, String>{
+        ..._headersForAssistantDialog(
+          operationId: AssistantApiMetadata.createAssistantTurnOperation,
+          clientPageId: AssistantRequestPageIds.createAssistantTurn,
+        ),
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(<String, dynamic>{
+        'turnType': turnType,
+        'skillId': skillId,
+        'domainId': domainId,
+        'input': <String, dynamic>{'text': text},
+        'trigger': const <String, dynamic>{'type': 'user_message'},
+      }),
+    );
+    _debugAssistantRepository(
+      'response status=${response.statusCode} operation=${AssistantApiMetadata.createAssistantTurnOperation}',
+    );
+    final turn = AssistantTurnEnvelopeWire.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.createAssistantTurnOperation,
+      ),
+    );
+    _debugAssistantRepository(
+      'turn decoded conversationId=${turn.conversationId} turnId=${turn.turnId} traceId=${turn.traceId}',
+    );
+    return turn;
+  }
+
+  @override
+  Future<AssistantTurnEnvelopeWire> getAssistantTurn({
+    required String turnId,
+  }) async {
+    final response = await _client.get(
+      _assistantUri(AssistantApiMetadata.getAssistantTurnPath(turnId: turnId)),
+      headers: _headersForAssistantDialog(
+        operationId: AssistantApiMetadata.getAssistantTurnOperation,
+        clientPageId: AssistantRequestPageIds.getAssistantTurn,
+      ),
+    );
+    return AssistantTurnEnvelopeWire.fromJson(
+      _decodeAssistantObject(
+        response,
+        operationId: AssistantApiMetadata.getAssistantTurnOperation,
+      ),
+    );
+  }
+
+  @override
+  Stream<AssistantStreamEventWire> streamAssistantTurn({
+    required String turnId,
+  }) async* {
+    final uri = _assistantUri(
+      AssistantApiMetadata.streamAssistantTurnPath(turnId: turnId),
+    );
+    _debugAssistantRepository(
+      'POST $uri operation=${AssistantApiMetadata.streamAssistantTurnOperation} turnId=$turnId',
+    );
+    final request = http.Request('POST', uri)
+      ..headers.addAll(<String, String>{
+        ..._headersForAssistantDialog(
+          operationId: AssistantApiMetadata.streamAssistantTurnOperation,
+          clientPageId: AssistantRequestPageIds.streamAssistantTurn,
+        ),
+        'Content-Type': 'application/json',
+      })
+      ..body = '{}';
+    final response = await _client.send(request);
+    _debugAssistantRepository(
+      'stream response status=${response.statusCode} turnId=$turnId',
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Assistant stream failed: ${response.statusCode}');
+    }
+    final buffer = StringBuffer();
+    await for (final piece in response.stream.transform(utf8.decoder)) {
+      buffer.write(piece);
+      var current = buffer.toString();
+      var splitIndex = current.indexOf('\n\n');
+      while (splitIndex >= 0) {
+        final frame = current.substring(0, splitIndex);
+        final event = _decodeAssistantStreamFrame(frame);
+        if (event != null) {
+          _debugAssistantRepository(
+            'sse event type=${event.eventType} seq=${event.seq} turnId=$turnId '
+            'skill=${event.payload['skillId'] ?? ''} tool=${_assistantToolNameFromPayload(event.payload)}',
+          );
+          yield event;
+        }
+        current = current.substring(splitIndex + 2);
+        splitIndex = current.indexOf('\n\n');
+      }
+      buffer
+        ..clear()
+        ..write(current);
+    }
+  }
+
   Uri _assistantUri(String path) {
     return Uri.parse('${CloudRuntimeConfig.gatewayBaseUrl}$path');
+  }
+
+  Map<String, dynamic> _decodeAssistantObject(
+    http.Response response, {
+    required String operationId,
+  }) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw StateError('Assistant request failed: ${response.statusCode}');
+    }
+    final decoded = response.body.trim().isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(response.body);
+    return CloudResponseDecoder.asObject(
+      decoded,
+      context: _assistantDialogContext(operationId: operationId),
+    );
   }
 
   AssistantSkillConsent _decodeConsentResponse(
@@ -804,6 +1424,77 @@ class RemoteAssistantRepository implements AssistantRepository {
     final consent = AssistantSkillConsent.fromJson(payload);
     return consent.skillId.isEmpty ? fallback : consent;
   }
+}
+
+AssistantStreamEventWire? _decodeAssistantStreamFrame(String frame) {
+  final lines = const LineSplitter().convert(frame);
+  final dataLines = <String>[];
+  for (final rawLine in lines) {
+    final line = rawLine.trimRight();
+    if (line.startsWith('data:')) {
+      dataLines.add(line.substring(5).trimLeft());
+    }
+  }
+  if (dataLines.isEmpty) {
+    return null;
+  }
+  final decoded = jsonDecode(dataLines.join('\n'));
+  if (decoded is! Map) {
+    return null;
+  }
+  final envelope = decoded.cast<String, dynamic>();
+  final payload =
+      (envelope['payload'] as Map?)?.cast<String, dynamic>() ??
+      (envelope['data'] as Map?)?.cast<String, dynamic>() ??
+      const <String, dynamic>{};
+  final eventType = (envelope['eventType'] ?? envelope['event'] ?? '')
+      .toString()
+      .trim();
+  final turnId = (payload['turnId'] ?? envelope['turnId'] ?? '')
+      .toString()
+      .trim();
+  final conversationId =
+      (payload['conversationId'] ?? envelope['conversationId'] ?? '')
+          .toString()
+          .trim();
+  return AssistantStreamEventWire.fromJson(<String, dynamic>{
+    'schemaVersion':
+        (envelope['schemaVersion'] ?? payload['schemaVersion'] ?? '')
+            .toString(),
+    'eventId': (envelope['eventId'] ?? envelope['id'] ?? '$turnId:$eventType')
+        .toString(),
+    'conversationId': conversationId,
+    'turnId': turnId,
+    'seq': envelope['seq'],
+    'eventType': eventType,
+    'traceId': (envelope['traceId'] ?? payload['traceId'] ?? '').toString(),
+    'payload': payload,
+    'runtimeFailure': envelope['runtimeFailure'],
+    'createdAt': (envelope['createdAt'] ?? '').toString(),
+  });
+}
+
+void _debugAssistantRepository(String message) {
+  if (!kDebugMode && !kProfileMode) {
+    return;
+  }
+  debugPrint('[assistant-repository] $message');
+}
+
+String _assistantDebugSnippet(String value, {int maxLength = 120}) {
+  final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return '${normalized.substring(0, maxLength)}...';
+}
+
+String _assistantToolNameFromPayload(Map<String, dynamic> payload) {
+  final raw = payload['toolUse'];
+  if (raw is Map) {
+    return (raw['toolName'] ?? raw['tool_name'] ?? '').toString().trim();
+  }
+  return '';
 }
 
 class AssistantConsentStore {

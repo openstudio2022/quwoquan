@@ -4,7 +4,7 @@
 - [ ] 安全与契约校验
 - [ ] 自动化测试
 
-## Folded legacy node `endpoint-normalization-and-policy-hooks`
+## Folded current node `endpoint-normalization-and-policy-hooks`
 
 # 开发任务：endpoint-normalization-and-policy-hooks
 
@@ -13,4 +13,4 @@
 - [ ] 自动化验收
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `endpoint-normalization-and-policy-hooks` (from `runtime/runtime-http/http-server-client-pipeline/inbound-outbound-context-propagation/endpoint-normalization-and-policy-hooks`)
+- [ ] Migrated current node: `endpoint-normalization-and-policy-hooks` (from `runtime/runtime-http/http-server-client-pipeline/inbound-outbound-context-propagation/endpoint-normalization-and-policy-hooks`)

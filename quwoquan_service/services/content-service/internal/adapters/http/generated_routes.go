@@ -16,7 +16,15 @@ func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		op, ok := resolveGeneratedOperation(r.Method, r.URL.Path)
 		if !ok {
-			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "接口不存在", "route not found"))
+			rterr.WriteHTTPError(
+				w,
+				rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "route_not_found"),
+					"接口不存在",
+					"generated content route not found",
+				),
+				rterr.HTTPWriteOptionsFromRequest(r),
+			)
 			return
 		}
 		dispatchGeneratedOperation(h, op, w, r)

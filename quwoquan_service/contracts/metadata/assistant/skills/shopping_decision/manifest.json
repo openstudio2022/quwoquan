@@ -1,0 +1,14 @@
+{
+  "skillId": "shopping_decision",
+  "displayName": "购物决策助手",
+  "description": "选购对比、性价比分析、产品测评、买哪个好。",
+  "domainId": "shopping_decision",
+  "executionTarget": "cloud",
+  "routingHints": ["买哪个", "对比", "选购", "参数", "测评"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "search", "web_fetch"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 3
+  }
+}

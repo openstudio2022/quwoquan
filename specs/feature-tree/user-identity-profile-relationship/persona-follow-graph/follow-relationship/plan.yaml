@@ -43,7 +43,7 @@ slices:
 
   - id: P3
     title: implement idempotent edge write and counter sync
-    goal: 落地 `FollowEdge` 幂等写入、block gate、事件发布与计数修正，并完成 legacy edge 迁移
+    goal: 落地 `FollowEdge` 幂等写入、block gate、事件发布与计数修正，并完成 current edge 迁移
     depends_on:
       - P2
     acceptance_refs:
@@ -54,7 +54,7 @@ slices:
     done_when:
       - duplicate follow / unfollow no-op 行为稳定
       - `UserFollowed / UserUnfollowed` 可驱动计数修正
-      - legacy owner-level follow edge 回填到主分身并支持双读兼容
+      - current owner-level follow edge 回填到主分身并支持双读兼容
     status: partial
 
   - id: P4
@@ -69,7 +69,7 @@ slices:
       - T3_cross_service_integration
       - T4_release_rehearsal
     done_when:
-      - duplicate follow、block rejection、counter mismatch、legacy edge read 指标可观测
+      - duplicate follow、block rejection、counter mismatch、current edge read 指标可观测
       - persona-aware graph 开关关闭后可回退旧写路径
       - migration rehearsal 与 rollback rehearsal 完成
     status: partial

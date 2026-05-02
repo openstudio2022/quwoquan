@@ -552,7 +552,7 @@ void main() {
     );
   });
 
-  test('finalize 会修复历史中缺失的最新用户 query', () async {
+  test('finalize 会修复记录中缺失的最新用户 query', () async {
     final storagePath = '${tempDir.path}/sessions_repair_user_query.json';
     final sessionManager = AssistantSessionManager(storagePath: storagePath);
     await sessionManager.load();
@@ -753,7 +753,7 @@ void main() {
     );
   });
 
-  test('finalize 会把 skill 历史态写入 session metadata 并保留挂起状态', () async {
+  test('finalize 会把 skill 记录态写入 session metadata 并保留挂起状态', () async {
     final storagePath = '${tempDir.path}/sessions_history.json';
     final sessionManager = AssistantSessionManager(storagePath: storagePath);
     await sessionManager.load();

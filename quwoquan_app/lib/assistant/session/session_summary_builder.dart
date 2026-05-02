@@ -208,5 +208,5 @@ class AssistantSessionSummaryBuilder {
     return false;
   }
 
-  static const String _defaultTopicTitle = '全部历史';
+  static const String _defaultTopicTitle = '全部记录';
 }

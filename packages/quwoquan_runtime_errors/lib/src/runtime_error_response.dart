@@ -29,12 +29,12 @@ class RuntimeErrorResponse {
     );
   }
 
-  factory RuntimeErrorResponse.fromLegacyJson(Map<String, dynamic> json) {
+  factory RuntimeErrorResponse.fromCurrentJson(Map<String, dynamic> json) {
     final code = (json['code'] as String?) ?? 'CLOUD.SYSTEM.unknown_error';
     return RuntimeErrorResponse(
       failure: RuntimeFailure(
         code: code,
-        origin: _originFromLegacyKind(json['kind']),
+        origin: _originFromCurrentKind(json['kind']),
         kind: _failureKindFromCode(code),
         nature: _natureFromKind(json['kind']),
         location: const RuntimeFailureLocation(
@@ -98,7 +98,7 @@ Object? _camelKind(Object? raw) {
   return raw;
 }
 
-RuntimeFailureOrigin _originFromLegacyKind(Object? raw) {
+RuntimeFailureOrigin _originFromCurrentKind(Object? raw) {
   switch ((raw as String?)?.toUpperCase()) {
     case 'USER':
       return RuntimeFailureOrigin.user;

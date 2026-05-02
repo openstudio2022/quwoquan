@@ -6,9 +6,8 @@ cd "$ROOT"
 
 echo "[verify] service config layout"
 
-# Skeleton guardrail mode:
-# - default (strict=0): warn on legacy layout, fail on obvious broken layout
-# - strict (strict=1): require full env split layout for all services with configs/
+# Env-split guardrail mode:
+# - default strict=1: require full env split layout for all services with configs/
 STRICT="${QWQ_CONFIG_GATE_STRICT:-1}"
 
 failures=0
@@ -41,27 +40,18 @@ for svc_path in "$services_dir"/*; do
   checked=$((checked + 1))
 
   default_file="$cfg_root/default/config.yaml"
-  local_file="$cfg_root/local/config.yaml"
-  integration_file="$cfg_root/integration/config.yaml"
+  alpha_file="$cfg_root/alpha/config.yaml"
+  beta_file="$cfg_root/beta/config.yaml"
+  gamma_file="$cfg_root/gamma/config.yaml"
+  prod_gray_file="$cfg_root/prod-gray/config.yaml"
   prod_file="$cfg_root/prod/config.yaml"
-  legacy_file="$cfg_root/config.yaml"
 
-  if [[ -f "$default_file" && -f "$local_file" && -f "$integration_file" && -f "$prod_file" ]]; then
-    echo "[verify] OK: $svc config layout complete (default/local/integration/prod)"
+  if [[ -f "$default_file" && -f "$alpha_file" && -f "$beta_file" && -f "$gamma_file" && -f "$prod_gray_file" && -f "$prod_file" ]]; then
+    echo "[verify] OK: $svc config layout complete (default/alpha/beta/gamma/prod-gray/prod)"
     continue
   fi
 
-  if [[ -f "$legacy_file" ]]; then
-    echo "[verify] WARN: $svc still using legacy configs/config.yaml"
-    warnings=$((warnings + 1))
-    if [[ "$STRICT" == "1" ]]; then
-      echo "[verify] FAIL: strict mode forbids legacy single-file config for $svc" >&2
-      failures=$((failures + 1))
-    fi
-    continue
-  fi
-
-  echo "[verify] FAIL: $svc missing both env-split config layout and legacy config.yaml" >&2
+  echo "[verify] FAIL: $svc missing env-split config layout (default/alpha/beta/gamma/prod-gray/prod)" >&2
   failures=$((failures + 1))
 done
 

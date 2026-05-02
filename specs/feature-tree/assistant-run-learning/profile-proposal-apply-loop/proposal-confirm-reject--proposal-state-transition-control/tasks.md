@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `transition-idempotency-guard`
+## Folded current node `transition-idempotency-guard`
 
 # 开发任务：transition-idempotency-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `transition-idempotency-guard` (from `assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/proposal-state-transition-control/transition-idempotency-guard`)
+- [ ] Migrated current node: `transition-idempotency-guard` (from `assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/proposal-state-transition-control/transition-idempotency-guard`)

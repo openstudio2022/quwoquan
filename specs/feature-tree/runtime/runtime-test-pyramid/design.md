@@ -85,7 +85,7 @@ L3 不止检查 status code，需覆盖三个维度：
 
 ### 4a.2 测试数据策略：API seeding 而非静态 fixture
 
-**决策**：L3 在 `setUpAll` 中通过 staging API 创建测试数据，`tearDownAll` 删除；不依赖 staging 的固定数据集。
+**决策**：L3 在 `setUpAll` 中通过 gamma API 创建测试数据，`tearDownAll` 删除；不依赖 gamma 的固定数据集。
 
 **动因**：
 - 静态 fixture 会因 staging 数据轮换而失效（"测试通过但数据是旧的"假阳性）
@@ -185,7 +185,7 @@ setUpAll(() async {
 
 ### 5a.2 测试隔离与状态清理
 
-**决策**：每个 Patrol 测试在 `setUp` 中调用 staging API 重置用户互动状态（unlike、uncomment 等），`tearDown` 清理测试数据。依赖 staging 专用 `X-Test-Reset: true` header 或独立测试接口。
+**决策**：每个 Patrol 测试在 `setUp` 中调用 gamma API 重置用户互动状态（unlike、uncomment 等），`tearDown` 清理测试数据。依赖非生产专用 `X-Test-Reset: true` header 或独立测试接口。
 
 ```dart
 setUp(() async {
@@ -281,23 +281,26 @@ make gate           ← 每次 PR（阻塞合入）
 make gate-full      ← daily CI + pre-release（advisory → pre-release 阻塞发布）
   ├── make gate（以上全部）
   └── flutter test test/cloud/content/api_contract_runner.dart \
-        --dart-define=STAGING_BASE_URL=$(STAGING_BASE_URL) \
-        --dart-define=TEST_AUTH_TOKEN=$(TEST_AUTH_TOKEN)   [L3]
+        --dart-define=API_CONTRACT_ENV=gamma \
+        --dart-define=API_CONTRACT_BASE_URL=$(GAMMA_BASE_URL) \
+        --dart-define=TEST_AUTH_TOKEN=$(GAMMA_TEST_AUTH_TOKEN)   [L3]
 
 Firebase Test Lab   ← pre-release tag 触发（阻塞发布）
   └── patrol test test/patrol/ \
-        --dart-define=ENV=staging                          [L4]
+        --dart-define=APP_RUNTIME_ENV=gamma \
+        --dart-define=API_CONTRACT_ENV=gamma                [L4]
 ```
 
 **Makefile targets**（根目录）：
 ```makefile
 test-api-contract:
-    @if [ -z "$(STAGING_BASE_URL)" ]; then \
-        echo "[L3] WARN: STAGING_BASE_URL not set, skipping"; exit 0; \
+    @if [ -z "$(GAMMA_BASE_URL)" ] || [ -z "$(GAMMA_PRODUCT_OPS_BASE_URL)" ]; then \
+        echo "[L3] FAIL: set GAMMA_BASE_URL and GAMMA_PRODUCT_OPS_BASE_URL"; exit 2; \
     fi
     cd quwoquan_app && flutter test test/cloud/content/api_contract_runner.dart \
-        --dart-define=STAGING_BASE_URL=$(STAGING_BASE_URL) \
-        --dart-define=TEST_AUTH_TOKEN=$(TEST_AUTH_TOKEN)
+        --dart-define=API_CONTRACT_ENV=gamma \
+        --dart-define=API_CONTRACT_BASE_URL=$(GAMMA_BASE_URL) \
+        --dart-define=TEST_AUTH_TOKEN=$(GAMMA_TEST_AUTH_TOKEN)
 
 gate-full: gate test-api-contract
 ```

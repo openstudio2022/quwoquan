@@ -1,0 +1,22 @@
+{
+  "messageId": "msg_01HX7F4M9W8Q2Y6N3P0S5R1T2Z",
+  "userId": "user_1001",
+  "messageType": "assistant",
+  "source": "assistant_turn",
+  "sourceId": "atn_01HX7F4M9W8Q2Y6N3P0S5R1T2Z",
+  "destination": {
+    "type": "user",
+    "id": "user_1001"
+  },
+  "title": "小趣提醒",
+  "summary": "你关注的主题有新进展。",
+  "target": {
+    "targetType": "assistant_turn",
+    "targetId": "atn_01HX7F4M9W8Q2Y6N3P0S5R1T2Z"
+  },
+  "read": false,
+  "createdAt": "2026-04-29T02:00:00Z",
+  "deliveredAt": null,
+  "ackedAt": null,
+  "readAt": null
+}

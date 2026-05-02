@@ -275,5 +275,5 @@ errors:
     dart_const: subAccountRetireRequired
     go_const: ErrSubAccountRetireRequired
     user_message:
-      zh: "该分身已有历史数据，请使用退役而不是删除"
+      zh: "该分身已有记录数据，请使用退役而不是删除"
       en: "This persona has history and must be retired instead of deleted"

@@ -1,0 +1,20 @@
+dart_class: ToolUseWire
+library_path: assistant/generated/contracts/tool_use.g.dart
+output_path: assistant/generated/contracts/tool_use.g.dart
+contract: tool_use
+version: tool_use.m2
+kind: shared_wire_contract
+imports:
+  - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart
+fields:
+  - { name: toolUseId, type: string, required: true }
+  - { name: turnId, type: string, required: true }
+  - { name: toolName, type: string, required: true }
+  - { name: placement, type: string, default: cloud }
+  - { name: input, type: map, default: {} }
+  - { name: status, type: string, default: requested }
+  - { name: requiresConfirmation, type: bool, default: false }
+  - { name: result, type: map, default: {} }
+  - { name: failure, type: object, ref: RuntimeFailureWire }
+  - { name: createdAt, type: string, required: true }
+  - { name: completedAt, type: string, default: '' }

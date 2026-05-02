@@ -43,7 +43,7 @@ class AssistantModelOutput {
   final RuntimeFailureBase? runtimeFailure;
 
   /// 当模型走 native function calling 时，保存 assistant message 原文（含 tool_calls 字段），
-  /// 用于下一轮 LLM 请求时正确构建 OpenAI 协议的消息历史。
+  /// 用于下一轮 LLM 请求时正确构建 OpenAI 协议的消息记录。
   final Map<String, dynamic>? rawAssistantToolCallsMessage;
 
   /// Model-provided reasoning / thinking content (from dedicated fields like
@@ -218,7 +218,7 @@ class LlmCallOptions {
         'retrievalProcessing.processingSummary',
       ];
 
-  /// Default planning / ReAct stage defaults (mirrors legacy hard-coded values).
+  /// Default planning / ReAct stage defaults (mirrors current hard-coded values).
   const LlmCallOptions.planning()
     : temperature = 0.3,
       maxTokens = null,
@@ -1521,7 +1521,6 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         sessionId: sessionId,
         runId: runId,
         traceId: traceId,
-        correlationId: runId,
         sourceDomain: 'assistant',
         sourceService: 'quwoquan_app',
         component: 'llm_provider',
@@ -1676,7 +1675,7 @@ class OpenAiCompatibleLlmProvider implements AssistantLlmProvider {
         );
       }
       if (toolCalls.isNotEmpty) {
-        // 保存完整 assistant message（含 tool_calls），供下一轮构建 OpenAI 协议历史使用
+        // 保存完整 assistant message（含 tool_calls），供下一轮构建 OpenAI 协议记录使用
         rawAssistantMsg = <String, dynamic>{
           'role': 'assistant',
           'content': content.isEmpty ? null : content,

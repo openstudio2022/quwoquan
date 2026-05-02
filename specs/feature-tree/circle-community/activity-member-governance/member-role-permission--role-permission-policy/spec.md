@@ -11,7 +11,7 @@
 - A7：契约一致性校验通过。
 - A8：对应自动化测试映射完整。
 
-## Folded legacy node `permission-risk-guard`
+## Folded current node `permission-risk-guard`
 
 # L5 特性：permission-risk-guard
 

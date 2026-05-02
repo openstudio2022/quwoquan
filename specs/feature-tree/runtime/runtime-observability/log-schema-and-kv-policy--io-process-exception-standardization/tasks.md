@@ -4,7 +4,7 @@
 - [ ] 安全与契约校验
 - [ ] 自动化测试
 
-## Folded legacy node `contract-sync-and-sli-binding`
+## Folded current node `contract-sync-and-sli-binding`
 
 # 开发任务：contract-sync-and-sli-binding
 
@@ -13,4 +13,4 @@
 - [ ] 自动化验收
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `contract-sync-and-sli-binding` (from `runtime/runtime-observability/log-schema-and-kv-policy/io-process-exception-standardization/contract-sync-and-sli-binding`)
+- [ ] Migrated current node: `contract-sync-and-sli-binding` (from `runtime/runtime-observability/log-schema-and-kv-policy/io-process-exception-standardization/contract-sync-and-sli-binding`)

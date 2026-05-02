@@ -1,0 +1,14 @@
+{
+  "skillId": "policy_public_service",
+  "displayName": "政策办事助手",
+  "description": "政策解读、办事流程、社保公积金、落户签证、材料清单。",
+  "domainId": "policy_public_service",
+  "executionTarget": "cloud",
+  "routingHints": ["政策", "办理", "政务", "社保", "公积金", "落户"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "search", "web_fetch"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 3
+  }
+}

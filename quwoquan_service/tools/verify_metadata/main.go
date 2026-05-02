@@ -204,7 +204,7 @@ type domainOnboardingSchema struct {
 		TemplateDomain          string   `yaml:"template_domain"`
 		FirstWaveReplicaDomains []string `yaml:"first_wave_replica_domains"`
 		RequiredDeploySources   struct {
-			Legacy     string `yaml:"legacy"`
+			Current    string `yaml:"current"`
 			PlaneAware string `yaml:"plane_aware"`
 		} `yaml:"required_deploy_sources"`
 	} `yaml:"minimum_package"`
@@ -229,9 +229,9 @@ type domainOnboardingFile struct {
 		TestEvidence   map[string][]string `yaml:"test_evidence"`
 	} `yaml:"minimum_package"`
 	Deployment struct {
-		PlaneBindingDomain  string `yaml:"plane_binding_domain"`
-		PlaneBindingSource  string `yaml:"plane_binding_source"`
-		LegacyBindingSource string `yaml:"legacy_binding_source"`
+		PlaneBindingDomain   string `yaml:"plane_binding_domain"`
+		PlaneBindingSource   string `yaml:"plane_binding_source"`
+		CurrentBindingSource string `yaml:"current_binding_source"`
 	} `yaml:"deployment"`
 	Replication struct {
 		SourceTemplate  string   `yaml:"source_template"`
@@ -315,8 +315,8 @@ func (v *validator) validateDomainOnboardingMetadata() {
 	if schema.MinimumPackage.TemplateDomain == "" {
 		v.errorf("_control_plane/domain_onboarding_schema.yaml: minimum_package.template_domain is required")
 	}
-	if schema.MinimumPackage.RequiredDeploySources.Legacy == "" || schema.MinimumPackage.RequiredDeploySources.PlaneAware == "" {
-		v.errorf("_control_plane/domain_onboarding_schema.yaml: minimum_package.required_deploy_sources.{legacy,plane_aware} are required")
+	if schema.MinimumPackage.RequiredDeploySources.Current == "" || schema.MinimumPackage.RequiredDeploySources.PlaneAware == "" {
+		v.errorf("_control_plane/domain_onboarding_schema.yaml: minimum_package.required_deploy_sources.{current,plane_aware} are required")
 	}
 
 	domainsDir := filepath.Join(v.metadataDir, "_control_plane", "domains")
@@ -445,7 +445,7 @@ func (v *validator) validateDomainOnboardingMetadata() {
 				}
 			}
 		}
-		if parsed.Deployment.PlaneBindingDomain == "" || parsed.Deployment.PlaneBindingSource == "" || parsed.Deployment.LegacyBindingSource == "" {
+		if parsed.Deployment.PlaneBindingDomain == "" || parsed.Deployment.PlaneBindingSource == "" || parsed.Deployment.CurrentBindingSource == "" {
 			v.errorf("%s: deployment plane binding fields are required", pathRelative(v.metadataDir, path))
 		}
 		if parsed.Deployment.PlaneBindingDomain != parsed.Domain {
@@ -454,8 +454,8 @@ func (v *validator) validateDomainOnboardingMetadata() {
 		if parsed.Deployment.PlaneBindingSource != schema.MinimumPackage.RequiredDeploySources.PlaneAware {
 			v.errorf("%s: deployment.plane_binding_source must equal %q", pathRelative(v.metadataDir, path), schema.MinimumPackage.RequiredDeploySources.PlaneAware)
 		}
-		if parsed.Deployment.LegacyBindingSource != schema.MinimumPackage.RequiredDeploySources.Legacy {
-			v.errorf("%s: deployment.legacy_binding_source must equal %q", pathRelative(v.metadataDir, path), schema.MinimumPackage.RequiredDeploySources.Legacy)
+		if parsed.Deployment.CurrentBindingSource != schema.MinimumPackage.RequiredDeploySources.Current {
+			v.errorf("%s: deployment.current_binding_source must equal %q", pathRelative(v.metadataDir, path), schema.MinimumPackage.RequiredDeploySources.Current)
 		}
 		if parsed.TemplateRole == "template_seed" && parsed.Replication.SourceTemplate != parsed.Domain {
 			v.errorf("%s: template_seed domain must self-reference replication.source_template", pathRelative(v.metadataDir, path))
@@ -470,7 +470,7 @@ func (v *validator) validateDomainOnboardingMetadata() {
 				v.errorf("%s: %s requires all required codegen targets", pathRelative(v.metadataDir, path), parsed.AcceptanceStatus)
 			}
 			if rule.RequirePlaneBinding {
-				if parsed.Deployment.PlaneBindingDomain == "" || parsed.Deployment.PlaneBindingSource == "" || parsed.Deployment.LegacyBindingSource == "" {
+				if parsed.Deployment.PlaneBindingDomain == "" || parsed.Deployment.PlaneBindingSource == "" || parsed.Deployment.CurrentBindingSource == "" {
 					v.errorf("%s: %s requires deployment plane binding fields", pathRelative(v.metadataDir, path), parsed.AcceptanceStatus)
 				}
 			}

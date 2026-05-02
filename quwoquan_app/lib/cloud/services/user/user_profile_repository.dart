@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
@@ -297,6 +298,10 @@ class MockUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<ProfileSubjectViewData> getUserProfile(String userId) async {
+    final contractWire = _contractProfileWireByUserId[userId];
+    if (contractWire != null) {
+      return ProfileSubjectViewData.fromProfileSubjectWire(contractWire);
+    }
     final wire =
         _mockProfileWireByUserId[userId] ??
         ProfileSubjectWireDto.fromMap(_defaultProfile(userId));
@@ -311,12 +316,22 @@ class MockUserProfileRepository extends UserProfileRepository {
     String userId, {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
+    final contractPosts = _contractPostsForUser(userId);
+    if (contractPosts.isNotEmpty) {
+      return contractPosts.take(limit).toList(growable: false);
+    }
     final posts = UserProfileMockData.userPostsFor(userId);
     return posts.take(limit).toList();
   }
 
   @override
   Future<List<UserWorkItem>> listUserWorks(String userId) async {
+    final contractPosts = _contractPostsForUser(userId);
+    if (contractPosts.isNotEmpty) {
+      return contractPosts
+          .map(_contractWorkItemFromPost)
+          .toList(growable: false);
+    }
     return UserProfileMockData.worksFor(userId);
   }
 
@@ -330,6 +345,12 @@ class MockUserProfileRepository extends UserProfileRepository {
     String userId, {
     int limit = CloudApiDefaults.userCirclesLimit,
   }) async {
+    final contractCircles = _contractProfileWireByUserId.containsKey(userId)
+        ? _contractUserCircles()
+        : const <CircleDto>[];
+    if (contractCircles.isNotEmpty) {
+      return contractCircles.take(limit).toList(growable: false);
+    }
     final t = DateTime.parse('2025-01-01T00:00:00Z');
     final circles = <CircleDto>[
       CircleDto(
@@ -531,6 +552,12 @@ class MockUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<RelationshipViewData> getRelationship(String userId) async {
+    final contractRelationship = _contractRelationshipByTargetUserId[userId];
+    if (contractRelationship != null) {
+      return RelationshipViewData.fromRelationshipNormalizedWire(
+        RelationshipNormalizedWireDto.fromMap(contractRelationship),
+      );
+    }
     final relationState = UserProfileMockData.relationStateValueFor(userId);
     final isFollowing = UserProfileMockData.viewerFollowsTarget(userId);
     final isFollowedBy = UserProfileMockData.targetFollowsViewer(userId);
@@ -645,11 +672,144 @@ class MockUserProfileRepository extends UserProfileRepository {
     };
   }
 
+  static List<Map<String, dynamic>> _contractProfileRows() {
+    final seed = ContractFixtureRuntimeLoader.userSeedSet('user_profile_core');
+    final profiles = seed?['profiles'];
+    if (profiles is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    return profiles
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  static List<Map<String, dynamic>> _contractRelationshipRows() {
+    final seed = ContractFixtureRuntimeLoader.userSeedSet('relationship_core');
+    final relationships = seed?['relationships'];
+    if (relationships is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    return relationships
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
+  static List<PostBaseDto> _contractPostsForUser(String userId) {
+    if (!_contractProfileWireByUserId.containsKey(userId)) {
+      return const <PostBaseDto>[];
+    }
+    final feedSeed = ContractFixtureRuntimeLoader.userSeedSet(
+      'profile_feed_core',
+    );
+    final contentSeed = ContractFixtureRuntimeLoader.contentSeedSet();
+    final posts = contentSeed?['posts'];
+    if (posts is! List) {
+      return const <PostBaseDto>[];
+    }
+    final selectedIds = feedSeed == null
+        ? null
+        : userId == 'fixture_user_current'
+        ? feedSeed['myPostIds']
+        : feedSeed['authorPostIds'];
+    final ids = selectedIds is List
+        ? selectedIds.map((id) => id.toString()).toSet()
+        : const <String>{};
+    if (ids.isEmpty) {
+      return const <PostBaseDto>[];
+    }
+    return posts
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .where((item) => ids.contains(item['id'] ?? item['postId']))
+        .map(postBaseDtoFromMap)
+        .toList(growable: false);
+  }
+
+  static UserWorkItem _contractWorkItemFromPost(PostBaseDto post) {
+    return UserWorkItem(
+      id: post.id,
+      type: post.type,
+      title: post.normalizedTitle.isNotEmpty
+          ? post.normalizedTitle
+          : post.normalizedBody,
+      coverUrl: post.primaryVisualUrl,
+      likeCount: post.likeCount,
+      date: post.createdAt.toIso8601String(),
+      desc: post.normalizedBody,
+    );
+  }
+
+  static List<CircleDto> _contractUserCircles() {
+    final seed = ContractFixtureRuntimeLoader.circleSeedSet();
+    final circles = seed?['circles'];
+    if (circles is! List) {
+      return const <CircleDto>[];
+    }
+    return circles
+        .whereType<Map>()
+        .map((item) => CircleDto.fromMap(item.cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
+  static Map<String, dynamic> _contractProfileWire(Map<String, dynamic> item) {
+    final stats =
+        (item['stats'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final userId = item['userId'].toString();
+    return <String, dynamic>{
+      'profileSubjectId': userId,
+      'ownerUserId': userId,
+      'subjectType': 'user',
+      'subAccountId': '',
+      'userHandle': userId,
+      'username': userId,
+      'displayName': item['displayName']?.toString() ?? userId,
+      'nickname': item['displayName']?.toString() ?? userId,
+      'avatarUrl': item['avatarUrl']?.toString() ?? '',
+      'backgroundUrl': item['backgroundUrl']?.toString() ?? '',
+      'bio': item['bio']?.toString() ?? '',
+      'followerCount': (stats['followerCount'] as num?)?.toInt() ?? 0,
+      'followingCount': (stats['followingCount'] as num?)?.toInt() ?? 0,
+      'postCount': (stats['postCount'] as num?)?.toInt() ?? 0,
+      'circleCount': (stats['circleCount'] as num?)?.toInt() ?? 0,
+      'likeCount': (stats['likeCount'] as num?)?.toInt() ?? 0,
+      'isolationLevel': 'normal',
+      'profileVisibility': 'public',
+      'inheritsFromOwner': false,
+      'overriddenFields': const <String>[],
+    };
+  }
+
   static final Map<String, ProfileSubjectWireDto> _mockProfileWireByUserId = {
     for (final e in _decodeBundledMockUserProfiles(
       _kBundledMockUserProfilesJson,
     ).entries)
       e.key: ProfileSubjectWireDto.fromMap(e.value),
+  };
+
+  static final Map<String, ProfileSubjectWireDto> _contractProfileWireByUserId =
+      {
+        for (final item in _contractProfileRows())
+          item['userId'].toString(): ProfileSubjectWireDto.fromMap(
+            _contractProfileWire(item),
+          ),
+      };
+
+  static final Map<String, Map<String, dynamic>>
+  _contractRelationshipByTargetUserId = {
+    for (final item in _contractRelationshipRows())
+      item['targetUserId'].toString(): <String, dynamic>{
+        'relationState': item['mutualFollow'] == true
+            ? 'mutual'
+            : item['following'] == true
+            ? 'following'
+            : 'none',
+        'isFollowing': item['following'] == true,
+        'isFollowedBy': item['mutualFollow'] == true,
+        'isMutual': item['mutualFollow'] == true,
+      },
   };
 
   static final List<Map<String, dynamic>> _mockRelationUsers =
@@ -725,14 +885,16 @@ class MockUserProfileRepository extends UserProfileRepository {
 // ─── Remote 实现（调用云侧 API）───────────────────────────────────────────────
 
 class RemoteUserProfileRepository extends UserProfileRepository {
-  RemoteUserProfileRepository({http.Client? client})
-    : _client = client ?? http.Client();
+  RemoteUserProfileRepository({http.Client? client, String? baseUrl})
+    : _client = client ?? http.Client(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final http.Client _client;
+  final String _baseUrl;
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
     return Uri.parse(
-      '${CloudRuntimeConfig.gatewayBaseUrl}$path',
+      '$_baseUrl$path',
     ).replace(queryParameters: queryParameters);
   }
 

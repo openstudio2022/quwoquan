@@ -717,10 +717,10 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       sections.add(
         _buildSectionBlock(
           context: context,
-          title: '历史状态',
+          title: '记录状态',
           child: ProfileIosSectionCard(
             child: Text(
-              '该主页已下线，历史口碑、关联内容与群组摘要会继续保留，方便用户回看与迁移判断。',
+              '该主页已下线，记录口碑、关联内容与群组摘要会继续保留，方便用户回看与迁移判断。',
               style: TextStyle(
                 fontSize: AppTypography.iosBody,
                 color: AppColors.iosSecondaryLabel(context),

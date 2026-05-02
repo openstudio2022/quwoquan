@@ -4,7 +4,7 @@ import 'package:quwoquan_app/assistant/protocol/run_request.dart';
 import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
-/// Legacy shim — delegates to [ResponseMaterializer].
+/// Current shim — delegates to [ResponseMaterializer].
 @Deprecated('Use ResponseMaterializer directly')
 class SynthesisMaterializer {
   const SynthesisMaterializer(this._materializer);

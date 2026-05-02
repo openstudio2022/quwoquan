@@ -8,16 +8,11 @@ import 'package:quwoquan_app/assistant/orchestration/phases/phase_types.dart';
 /// Execution: runs through the execution pipeline.
 class ExecutionPhase implements Phase {
   /// Preferred pipeline-based constructor.
-  ExecutionPhase(
-    ExecutionPipeline pipeline, {
-    ExecutionRunner? runner,
-  }) : _runner =
-           runner ??
-           ExecutionRunner(
-             executeBridgeFromState: pipeline.execute,
-           );
+  ExecutionPhase(ExecutionPipeline pipeline, {ExecutionRunner? runner})
+    : _runner =
+          runner ?? ExecutionRunner(executeBridgeFromState: pipeline.execute);
 
-  /// Legacy constructor for backward compatibility with tests.
+  /// Current constructor for backward compatibility with tests.
   @Deprecated('Use the pipeline constructor')
   ExecutionPhase.fromOwner(
     phase_owner.LocalPhaseExecutionOwner owner, {

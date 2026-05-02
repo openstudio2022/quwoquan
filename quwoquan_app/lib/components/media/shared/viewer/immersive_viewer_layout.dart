@@ -15,6 +15,7 @@ class ImmersiveViewerStageLayoutSpec {
         maxContentWidth: AppSpacing.feedMaxContentWidth,
       );
 
+  /// 图片/视频沉浸阶段：与媒体左右边界对齐，不收窄到 feedMaxContentWidth。
   static const ImmersiveViewerStageLayoutSpec mediaStage =
       ImmersiveViewerStageLayoutSpec(horizontalInset: AppSpacing.containerMd);
 

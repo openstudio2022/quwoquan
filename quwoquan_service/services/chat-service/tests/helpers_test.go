@@ -4,9 +4,41 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func testDerivedMediaFileServer(localRoot string) http.Handler {
+	root := filepath.Clean(strings.TrimSpace(localRoot))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		rel := strings.TrimPrefix(r.URL.Path, "/media/")
+		rel = strings.Trim(rel, "/")
+		if rel == "" || strings.Contains(rel, "..") {
+			http.Error(w, "bad path", http.StatusBadRequest)
+			return
+		}
+		full := filepath.Join(root, filepath.FromSlash(rel))
+		cleanRoot := root
+		cleanFull := filepath.Clean(full)
+		sep := string(filepath.Separator)
+		if cleanFull != cleanRoot && !strings.HasPrefix(cleanFull, cleanRoot+sep) {
+			http.Error(w, "bad path", http.StatusBadRequest)
+			return
+		}
+		fi, err := os.Stat(cleanFull)
+		if err != nil || fi.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, cleanFull)
+	})
+}
 
 func createConversation(t *testing.T, payload string) map[string]any {
 	t.Helper()

@@ -1929,7 +1929,7 @@
           "improvementHints": [
             "S0_ENTRY_INTENT_CAPTURE 状态可考虑在顶层字段中显式包含边界声明，以增强合规性",
             "evidence 字段可进一步细化，提供更多具体来源引用",
-            "tracking 字段可包含更详细的对话历史追踪信息"
+            "tracking 字段可包含更详细的对话记录追踪信息"
           ]
         }
       ]

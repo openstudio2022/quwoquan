@@ -1,0 +1,16 @@
+{
+  "toolUseId": "tu_01HWZX2E7Z9G6S7Y6B3C4D5E6F",
+  "turnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+  "toolName": "news.search",
+  "placement": "cloud",
+  "input": {
+    "query": "人工智能 新闻"
+  },
+  "status": "completed",
+  "requiresConfirmation": false,
+  "result": {
+    "items": []
+  },
+  "createdAt": "2026-04-29T02:00:06Z",
+  "completedAt": "2026-04-29T02:00:07Z"
+}

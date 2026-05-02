@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "rtc.scenario-fixtures.v1",
+  "description": "RTC 域 alpha/beta/gamma 共享测试场景，覆盖来电、去电、语音/视频会话与参与人选择。",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "rtc_core": {
+      "description": "来电、去电、语音/视频会话与参与人。",
+      "sessions": [
+        {
+          "sessionId": "fixture_call_voice",
+          "type": "voice",
+          "state": "incoming",
+          "callerUserId": "fixture_user_friend",
+          "participantUserIds": ["fixture_user_current", "fixture_user_friend"]
+        },
+        {
+          "sessionId": "fixture_call_video",
+          "type": "video",
+          "state": "outgoing",
+          "callerUserId": "fixture_user_current",
+          "participantUserIds": ["fixture_user_current", "fixture_user_weekend_1"]
+        }
+      ],
+      "participants": [
+        {
+          "userId": "fixture_user_friend",
+          "displayName": "契约好友",
+          "avatarUrl": "https://example.com/chat/friend.png"
+        },
+        {
+          "userId": "fixture_user_weekend_1",
+          "displayName": "契约同伴一",
+          "avatarUrl": "https://example.com/chat/weekend-1.png"
+        }
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "rtc_call_session_basic",
+      "title": "RTC 通话会话契约种子",
+      "type": "rtc_call_session",
+      "domainId": "rtc",
+      "seedRefs": ["rtc_core"],
+      "uiExpectations": {
+        "sessionIds": ["fixture_call_voice", "fixture_call_video"],
+        "textFragments": ["契约好友", "契约同伴一"]
+      },
+      "remoteExpectations": {
+        "sessionIds": ["fixture_call_voice", "fixture_call_video"],
+        "participantUserIds": ["fixture_user_friend", "fixture_user_weekend_1"]
+      },
+      "environments": {
+        "alpha": { "enabled": true, "repository": "mock" },
+        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
+        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+      }
+    }
+  ]
+}

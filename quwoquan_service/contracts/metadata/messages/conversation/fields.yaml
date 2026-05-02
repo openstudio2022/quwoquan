@@ -289,7 +289,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 稳定公开主体 ID；优先于 legacy senderPersonaId 作为消息发送者主键
+        description: 稳定公开主体 ID；优先于 current senderPersonaId 作为消息发送者主键
 
       - name: senderDisplayNameSnapshot
         type: string
@@ -474,15 +474,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: groupAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 群聊服务端预合成头像 URL；仅主渲染链路使用
-
       - name: groupAvatarVersion
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
@@ -658,14 +649,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: groupAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: groupAvatarVersion
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
@@ -681,7 +664,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 群聊九宫格头像源，按展示顺序输出，最多 9 个
+        description: "DEPRECATED: 旧端侧九宫格拼图源；客户端不得用于会话头像主渲染"
 
       - name: lastMessagePreview
         type: string
@@ -853,14 +836,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: groupAvatarUrl
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: groupAvatarVersion
         type: int64
         constraints: [NOT_NULL, DEFAULT_0]
@@ -876,6 +851,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: "DEPRECATED: 旧端侧九宫格拼图源；搜索 UI 不得消费"
 
       - name: lastMessagePreview
         type: string

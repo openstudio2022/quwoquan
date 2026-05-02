@@ -6,6 +6,44 @@ service:
   domain: notification
 
 api_routes:
+  - method: POST
+    path: /v1/app-messages
+    operation: CreateAppMessage
+    description: 创建统一应用消息。M3 仅开放服务端/内部调用，业务真相源仍落 notification 域。
+    request_fields: [userId, messageType, source, sourceId, destination, title, summary, target]
+
+  - method: GET
+    path: /v1/app-messages
+    operation: ListAppMessages
+    description: 统一应用消息列表，兼容现有通知 inbox。
+    query_params: [type, read, cursor, limit]
+
+  - method: GET
+    path: /v1/app-messages/{messageId}
+    operation: GetAppMessage
+    description: 统一应用消息详情。
+
+  - method: POST
+    path: /v1/app-messages/{messageId}/ack
+    operation: AckAppMessage
+    description: 标记端侧已收到消息，不等价于已读。
+
+  - method: POST
+    path: /v1/app-messages/{messageId}/read
+    operation: ReadAppMessage
+    description: 标记单条统一应用消息已读。
+
+  - method: GET
+    path: /v1/app-messages/unread-count
+    operation: GetAppMessageUnreadCount
+    description: 统一应用消息未读计数。
+
+  - method: GET
+    path: /v1/app-messages/stream
+    operation: StreamAppMessages
+    description: M3 typed stream 入口，可由 realtime gateway 或 fake transport 承接。
+    query_params: [lastSeq]
+
   - method: GET
     path: /v1/notifications
     operation: ListNotifications
@@ -30,9 +68,12 @@ api_routes:
 
 consumers:
   - name: app
-    capabilities: [list, mark_read, mark_all_read, unread_count]
+    capabilities: [list, mark_read, mark_all_read, unread_count, app_message_list, app_message_ack, app_message_stream]
   - name: platform-ops
     capabilities: [send_system_notification]
+  - name: assistant-service
+    capabilities: [create_app_message]
+    description: 只通过 AppMessage adapter 写入 assistant 类型消息，不拥有消息真相源。
 
 contract_test:
   mock_strategy:

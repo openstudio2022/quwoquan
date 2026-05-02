@@ -57,18 +57,18 @@
 
 ---
 
-## P2 — L3 API Contract Runner（staging HTTP）
+## P2 — L3 API Contract Runner（gamma HTTP）
 
 顺序：env/infra → runner 框架 → 场景实现 → gate 绑定 → CI job
 
 ### P2-基础：环境与框架
 
-- [x] T15: `quwoquan_app/pubspec.yaml` — `http` 已在 dependencies；`http_mock_adapter` 暂不需要（error_inject 通过 staging header 触发，不需要 mock adapter）
+- [x] T15: `quwoquan_app/pubspec.yaml` — `http` 已在 dependencies；`http_mock_adapter` 暂不需要（error_inject 通过非生产 header 触发，不需要 mock adapter）
 - [x] T16: 创建 `quwoquan_app/test/cloud/content/api_contract_runner.dart` — runner 框架
-  - `setUpAll`：探测 staging 可达性（HEAD request，5s timeout），不可达则 `markTestSkipped`
-  - 从 `dart-define` 读取 `STAGING_BASE_URL` 和 `TEST_AUTH_TOKEN`
+  - `setUpAll`：探测 gamma 可达性（`GET /healthz`，5s timeout），不可达则 `markTestSkipped`
+  - 从 `dart-define` 读取 `API_CONTRACT_ENV`、`API_CONTRACT_BASE_URL` 和 `TEST_AUTH_TOKEN`
   - 封装 `_buildHeaders()` 复用 `CloudRequestHeaders.forPage()`
-  - 封装 `_seedPhotoPost()` / `_deletePost()` 辅助函数（通过 staging API）
+  - 封装 `_seedPhotoPost()` / `_deletePost()` 辅助函数（通过目标环境 API）
   - `tearDownAll`：清理 seeded 数据
 
 ### P2-场景：4 个 api_contract 场景实现
@@ -88,7 +88,7 @@
 
 - [x] T24: 创建 `.github/workflows/daily-api-contract.yml`（daily cron + pre-release tag 触发）
   - trigger: `schedule: cron('0 2 * * *')` + `workflow_dispatch`
-  - env: `STAGING_BASE_URL` + `TEST_AUTH_TOKEN` 从 GitHub Secrets 注入
+  - env: `GAMMA_BASE_URL` + `GAMMA_PRODUCT_OPS_BASE_URL` + `GAMMA_TEST_AUTH_TOKEN` 从 GitHub Secrets 注入
   - step: `make test-api-contract`
   - on failure: Slack/飞书通知（advisory，不阻塞 PR）
   - pre-release trigger: 在 release.yml 末尾调用此 workflow，失败则阻塞发布
@@ -118,7 +118,7 @@
 ### P3-测试实现：3 个 Patrol 场景
 
 - [x] T33: 创建 `test/patrol/discovery/feed_load_test.dart`（发现页 Feed 加载 + photoFeedGrid 可见）
-- [x] T34: 创建 `test/patrol/content/like_post_test.dart`（乐观更新 + 幂等场景，含 staging API seeding）
+- [x] T34: 创建 `test/patrol/content/like_post_test.dart`（乐观更新 + 幂等场景，含 gamma API seeding）
 - [x] T35: 创建 `test/patrol/content/comment_post_test.dart`（真实 IME 评论 + rate limit toast）
 
 ### P3-CI/FTL：Firebase Test Lab

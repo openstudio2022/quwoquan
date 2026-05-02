@@ -1,0 +1,14 @@
+{
+  "skillId": "huawei_cloud_qa",
+  "displayName": "华为云问答助手",
+  "description": "华为云售前咨询、售中方案、售后支持、故障诊断、产品能力与云服务选型。",
+  "domainId": "huawei_cloud_qa",
+  "executionTarget": "cloud",
+  "routingHints": ["华为云", "云服务", "云服务器", "对象存储", "容器", "大模型", "盘古", "昇腾", "鲲鹏", "高斯数据库"],
+  "iconHint": "sparkles",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "search", "web_fetch"],
+    "preferredTools": ["web_search"],
+    "maxToolCalls": 3
+  }
+}

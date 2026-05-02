@@ -1,0 +1,108 @@
+{
+  "items": [
+    {
+      "subscriptionId": "sub_01J8M9DAILY000000000001",
+      "owner": {
+        "ownerType": "user",
+        "ownerId": "user_m9"
+      },
+      "createdByUserId": "user_m9",
+      "skillId": "daily_assistant",
+      "domainId": "assistant",
+      "tagRefs": ["life", "work", "study"],
+      "status": "active",
+      "searchQueryPlan": {
+        "rawText": "每天早上提醒我今天的生活、工作和学习计划",
+        "queries": ["今日待办", "会议安排", "学习计划"]
+      },
+      "trigger": {
+        "type": "cron",
+        "cron": "0 8 * * *"
+      },
+      "destination": {
+        "destinationType": "user",
+        "destinationId": "user_m9"
+      },
+      "createdAt": "2026-04-29T00:00:00Z",
+      "updatedAt": "2026-04-29T00:00:00Z"
+    },
+    {
+      "subscriptionId": "sub_01J8M9NEWS000000000001",
+      "owner": {
+        "ownerType": "user",
+        "ownerId": "user_m9"
+      },
+      "createdByUserId": "user_m9",
+      "skillId": "news_briefing",
+      "domainId": "content",
+      "tagRefs": ["technology", "news"],
+      "status": "active",
+      "searchQueryPlan": {
+        "rawText": "每天早上给我人工智能和半导体新闻摘要",
+        "queries": ["人工智能新闻", "半导体产业"]
+      },
+      "trigger": {
+        "type": "cron",
+        "cron": "0 8 * * *"
+      },
+      "destination": {
+        "destinationType": "user",
+        "destinationId": "user_m9"
+      },
+      "createdAt": "2026-04-29T00:00:00Z",
+      "updatedAt": "2026-04-29T00:00:00Z"
+    },
+    {
+      "subscriptionId": "sub_01J8M9STOCK0000000001",
+      "owner": {
+        "ownerType": "user",
+        "ownerId": "user_m9"
+      },
+      "createdByUserId": "user_m9",
+      "skillId": "stock_sentinel",
+      "domainId": "finance",
+      "tagRefs": ["investment", "stock"],
+      "status": "active",
+      "searchQueryPlan": {
+        "rawText": "每天开盘前提醒我关注的股票重大消息",
+        "queries": ["比亚迪 重大消息", "新能源车 行情"]
+      },
+      "trigger": {
+        "type": "cron",
+        "cron": "0 9 * * *"
+      },
+      "destination": {
+        "destinationType": "user",
+        "destinationId": "user_m9"
+      },
+      "createdAt": "2026-04-29T00:00:00Z",
+      "updatedAt": "2026-04-29T00:00:00Z"
+    },
+    {
+      "subscriptionId": "sub_01J8M9TRAVEL000000001",
+      "owner": {
+        "ownerType": "user",
+        "ownerId": "user_m9"
+      },
+      "createdByUserId": "user_m9",
+      "skillId": "travel_journey_manager",
+      "domainId": "travel",
+      "tagRefs": ["travel", "weather", "traffic"],
+      "status": "active",
+      "searchQueryPlan": {
+        "rawText": "每天出发前提醒我行程天气、路况和景点拥堵",
+        "queries": ["杭州 西湖 天气", "杭州 景区拥堵", "高铁出行提醒"]
+      },
+      "trigger": {
+        "type": "cron",
+        "cron": "0 7 * * *"
+      },
+      "destination": {
+        "destinationType": "user",
+        "destinationId": "user_m9"
+      },
+      "createdAt": "2026-04-29T00:00:00Z",
+      "updatedAt": "2026-04-29T00:00:00Z"
+    }
+  ]
+}

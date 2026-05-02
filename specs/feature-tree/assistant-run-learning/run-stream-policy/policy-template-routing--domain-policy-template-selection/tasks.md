@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `policy-version-gray-release`
+## Folded current node `policy-version-gray-release`
 
 # 开发任务：policy-version-gray-release
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `policy-version-gray-release` (from `assistant-run-learning/run-stream-policy/policy-template-routing/domain-policy-template-selection/policy-version-gray-release`)
+- [ ] Migrated current node: `policy-version-gray-release` (from `assistant-run-learning/run-stream-policy/policy-template-routing/domain-policy-template-selection/policy-version-gray-release`)

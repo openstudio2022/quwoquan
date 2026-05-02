@@ -9,6 +9,8 @@ collections:
       - { name: idx_notif_user_read, keys: { userId: 1, read: 1, createdAt: -1 } }
       - { name: idx_notif_user_type, keys: { userId: 1, type: 1, createdAt: -1 } }
       - { name: idx_notif_target, keys: { targetType: 1, targetId: 1 } }
+      - { name: idx_app_message_source, keys: { source: 1, sourceId: 1 } }
+      - { name: idx_app_message_delivery, keys: { userId: 1, ackedAt: 1, deliveredAt: 1 } }
     ttl_index:
       field: createdAt
       expire_after_seconds: 7776000

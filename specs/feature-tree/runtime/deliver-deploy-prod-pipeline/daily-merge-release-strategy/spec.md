@@ -27,7 +27,7 @@
 
 ## 多环境与波次（跨节点口径）
 
-**五类逻辑环境**（本地 / CI / integration / 生产灰度 / 生产全量）与 **B→C→(D→E)** 大波段、prod 内 **wave** 与 `STAGING_*`=integration 语义，以 **[environment_matrix.md](../../../../../deploy/shared/environment_matrix.md)** 为总览，与 [ci_cd_end_to_end_design.md](../../../../../deploy/shared/ci_cd_end_to_end_design.md) 一致。
+**五类逻辑环境**（alpha / beta / gamma / prod-gray / prod）与 **B→C→(D→E)** 大波段、prod 内 **wave**，以 **[environment_matrix.md](../../../../../deploy/shared/environment_matrix.md)** 为总览，与 [ci_cd_end_to_end_design.md](../../../../../deploy/shared/ci_cd_end_to_end_design.md) 一致。
 
 ## 验收标准概要
 
@@ -36,4 +36,4 @@
 - A3：merge 成功后触发 pre-release-gate（或等效 deploy integration）
 - A4：pre-release-gate 通过后 deploy-prod-auto Stage 1 自动执行
 - A5：deliver_to_production_runbook、ci_cd_end_to_end_design 与策略一致
-- A6：环境矩阵与上述 release 波次、Secrets（含 `STAGING_PRODUCT_OPS_BASE_URL`）在文档层面对齐
+- A6：环境矩阵与上述 release 波次、Secrets（含 `GAMMA_PRODUCT_OPS_BASE_URL`）在文档层面对齐

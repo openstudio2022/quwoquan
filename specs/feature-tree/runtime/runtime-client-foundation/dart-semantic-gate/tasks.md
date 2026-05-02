@@ -16,7 +16,7 @@
 - [x] 新增 iOS 语义规则：`Icons.chevron_right`、`CupertinoPageScaffold` 混用 Material 交互、selector leading back
 - [x] 白名单：lib/core/design_system/、lib/core/constants/
 - [x] 输出 path:line:snippet，失败 exit 1
-- [x] 能检出 publish_circle_select_page 历史硬编码（回归验证）
+- [x] 能检出 publish_circle_select_page 记录硬编码（回归验证）
 
 ### M2：gate 集成
 

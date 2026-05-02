@@ -5,7 +5,7 @@
 本 L2 的任务按以下顺序推进（基础层先行，旅程层依赖基础层）：
 
 ```
-0. app-dir-restructure      ← 先执行（工程目录迁移，历史存留渐进）
+0. app-dir-restructure      ← 先执行（工程目录迁移，记录存留渐进）
 1. feed-item-dto-contract   ← 次执行（类型化 DTO 拆分，含 width/height）
 2. content-action-intent-contract  ← 再执行（操作意图基础）
 3. photo-display-journey    ← 依赖上面三者
@@ -16,7 +16,7 @@
 
 ## 工程目录迁移（R - Restructure）
 
-> 历史代码**存留不删**，新代码按新目录创建，旧页面逐一迁移。
+> 记录代码**存留不删**，新代码按新目录创建，旧页面逐一迁移。
 
 | 任务 | 说明 | 状态 |
 |------|------|------|

@@ -183,6 +183,22 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface personalAssistantDialog = AppUiSurface(
+    id: 'personalAssistantDialog',
+    owner: 'assistant',
+    routeId: 'assistantPersonal',
+    pathTemplate: '/assistant/personal',
+    description: '找私助云端优先对话入口',
+    operationIds: <String>[
+      'CreateAssistantConversation',
+      'CreateAssistantTurn',
+      'StreamAssistantTurn',
+      'ListSkills',
+      'ListAppMessages',
+      'GetAppMessageUnreadCount',
+    ],
+  );
+
   static const AppUiSurface assistantSettings = AppUiSurface(
     id: 'assistantSettings',
     owner: 'assistant',
@@ -205,7 +221,7 @@ class AppUiSurfaces {
     owner: 'assistant',
     routeId: 'chatDetail',
     pathTemplate: '/chat/{id}',
-    description: '私助历史抽屉与分页',
+    description: '私助记录抽屉与分页',
     operationIds: <String>[
     ],
   );
@@ -227,7 +243,7 @@ class AppUiSurfaces {
     owner: 'search',
     routeId: 'globalSearch',
     pathTemplate: '/search',
-    description: '全局搜索历史页与历史管理态',
+    description: '全局搜索记录页与记录管理态',
     operationIds: <String>[
       'ListRecentSearches',
       'UpsertRecentSearch',
@@ -353,6 +369,7 @@ class AppUiSurfaces {
     chatMemberSearch,
     assistantDialog,
     assistantHalfSheet,
+    personalAssistantDialog,
     assistantSettings,
     assistantHistory,
     assistantFeedback,
@@ -379,6 +396,7 @@ class AppUiSurfaces {
     'chatMemberSearch': chatMemberSearch,
     'assistantDialog': assistantDialog,
     'assistantHalfSheet': assistantHalfSheet,
+    'personalAssistantDialog': personalAssistantDialog,
     'assistantSettings': assistantSettings,
     'assistantHistory': assistantHistory,
     'assistantFeedback': assistantFeedback,

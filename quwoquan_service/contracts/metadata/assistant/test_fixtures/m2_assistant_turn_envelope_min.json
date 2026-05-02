@@ -1,0 +1,22 @@
+{
+  "turnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+  "conversationId": "acv_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
+  "turnType": "user",
+  "status": "streaming",
+  "skillId": "daily_assistant",
+  "domainId": "assistant",
+  "input": {
+    "text": "帮我规划今天上午"
+  },
+  "trigger": {
+    "type": "user_message"
+  },
+  "streamState": {
+    "lastSeq": 2,
+    "completed": false,
+    "resumeToken": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F:2"
+  },
+  "traceId": "trace_m2_turn_min",
+  "createdAt": "2026-04-29T02:00:02Z",
+  "completedAt": ""
+}

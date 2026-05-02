@@ -20,7 +20,7 @@ final class RtcSignalingWireText extends RtcSignalingWireFrame {
   final String utf8Text;
 }
 
-/// 二进制帧按 UTF-8 解码后再当 JSON 解析（与历史行为一致）。
+/// 二进制帧按 UTF-8 解码后再当 JSON 解析（与记录行为一致）。
 final class RtcSignalingWireBytes extends RtcSignalingWireFrame {
   RtcSignalingWireBytes(this.bytes) : super._();
 

@@ -147,7 +147,7 @@ Decide -> 进入下一轮、切换阶段或结束
 - `quwoquan_app/assets/assistant/tools/catalog/tool_catalog.meta.json`
 - `quwoquan_app/assets/assistant/prompts/`
 
-更深层历史实现仍可能位于 `quwoquan_app/lib/personal_assistant/`，但当前开发入口统一以 `quwoquan_app/lib/assistant/` 为准。
+更深层记录实现仍可能位于 `quwoquan_app/lib/personal_assistant/`，但当前开发入口统一以 `quwoquan_app/lib/assistant/` 为准。
 
 **禁止**：不得再引入第二份 owner / gateway 主链；编排统一以 `orchestration/assistant_agent_loop.dart`、`orchestration/local_phase_execution_owner.dart` 与各 phase 为准。
 

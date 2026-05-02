@@ -1,0 +1,6 @@
+{
+  "status": "packaged",
+  "service": "chat-service",
+  "env": "alpha",
+  "configLayout": "default+env"
+}

@@ -109,8 +109,7 @@ class _AssistantChatSettingsPageState
                     SettingsInsetFormSectionDivider(isDark: isDark),
                   ],
                   _SettingsEntryRow(
-                    title:
-                        UITextConstants.assistantSettingsConversationHistory,
+                    title: UITextConstants.assistantSettingsConversationHistory,
                     value: _backend == AssistantBackend.local
                         ? _topicTitle
                         : UITextConstants
@@ -249,8 +248,7 @@ class _AssistantChatSettingsPageState
       setState(() {
         _sessionId = selected;
         final t = d.topicTitle.trim();
-        _topicTitle =
-            t.isNotEmpty ? t : UITextConstants.assistantHistoryAll;
+        _topicTitle = t.isNotEmpty ? t : UITextConstants.assistantHistoryAll;
       });
       break;
     }
@@ -268,7 +266,10 @@ class _PreferenceFactsSection extends ConsumerWidget {
     final fgPrimary = SettingsSemanticConstants.labelColor(isDark);
     final fgSecondary = SettingsSemanticConstants.secondaryColor(isDark);
     return FutureBuilder<AssistantSessionDetailView>(
-      future: ref.read(assistantGatewayProvider).sessionDetail(currentSessionId).then(
+      future: ref
+          .read(assistantGatewayProvider)
+          .sessionDetail(currentSessionId)
+          .then(
             (detail) => detail == null
                 ? const AssistantSessionDetailView(
                     sessionPreferenceFacts: <AssistantPreferenceFactView>[],
@@ -297,7 +298,7 @@ class _PreferenceFactsSection extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '当前会话即时生效，长期事实会随历史积累展示在这里。',
+                '当前会话即时生效，长期事实会随记录积累展示在这里。',
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   color: fgSecondary,
@@ -397,7 +398,10 @@ class _AssistantConversationHistoryPage extends ConsumerWidget {
         ),
         child: SafeArea(
           child: FutureBuilder<List<AssistantLocalSessionSummaryView>>(
-            future: ref.read(assistantGatewayProvider).listSessions().then(
+            future: ref
+                .read(assistantGatewayProvider)
+                .listSessions()
+                .then(
                   (raw) => raw
                       .map(AssistantLocalSessionSummaryView.fromDescriptor)
                       .where(
@@ -436,8 +440,7 @@ class _AssistantConversationHistoryPage extends ConsumerWidget {
                       subtitle: UITextConstants.assistantHistoryAllSubtitle
                           .replaceFirst('%s', sessions.length.toString()),
                       selected: false,
-                      onTap: () =>
-                          Navigator.of(context).pop(currentSessionId),
+                      onTap: () => Navigator.of(context).pop(currentSessionId),
                     );
                   }
                   final item = sessions[index - 1];

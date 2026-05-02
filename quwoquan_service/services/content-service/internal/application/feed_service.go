@@ -13,6 +13,10 @@ type postReader interface {
 	GetByID(ctx context.Context, id string) (*postmodel.Post, bool)
 }
 
+type publishedPostReader interface {
+	ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post
+}
+
 type FeedService struct {
 	engine     *rtrec.Engine
 	postReader postReader
@@ -40,6 +44,8 @@ type ListFeedRequest struct {
 
 type FeedItemView struct {
 	ID           string   `json:"id"`
+	PostID       string   `json:"postId"`
+	WireID       string   `json:"_id"`
 	Type         string   `json:"type"`
 	ContentType  string   `json:"contentType"`
 	AuthorID     string   `json:"authorId"`
@@ -58,6 +64,7 @@ type FeedItemView struct {
 type ListFeedResponse struct {
 	Items      []FeedItemView `json:"items"`
 	NextCursor string         `json:"nextCursor,omitempty"`
+	Cursor     string         `json:"cursor,omitempty"`
 }
 
 func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListFeedResponse, error) {
@@ -68,44 +75,43 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 	if req.UserID == "" {
 		req.UserID = "guest"
 	}
-	recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
-		UserID:    req.UserID,
-		SessionID: req.SessionID,
-		FeedType:  rtrec.FeedDiscovery,
-		Sort:      normalizeFeedSort(req.Sort),
-		Cursor:    req.Cursor,
-		Limit:     limit * 2,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	views := make([]FeedItemView, 0, limit)
 	requestedIdentity := normalizeRequestedIdentity(req.Identity)
 	requestedType := normalizeRequestType(req.Type)
 	blockedUsers := toLowerSet(req.BlockedUserIDs)
 	blockedKeywords := toLowerSet(req.BlockedKeywords)
-	for _, item := range recResp.Items {
-		post, ok := s.postReader.GetByID(ctx, item.ContentID)
-		if !ok {
-			continue
+
+	cursor := req.Cursor
+	nextCursor := ""
+	seenPostIDs := map[string]struct{}{}
+	_, cursorIsPostID := s.postReader.GetByID(ctx, strings.TrimSpace(req.Cursor))
+	useRepositoryPagination := cursorIsPostID || requestedType != "" || requestedIdentity != ""
+	appendPost := func(post *postmodel.Post) bool {
+		if post == nil {
+			return false
+		}
+		if _, seen := seenPostIDs[post.ID]; seen {
+			return false
 		}
 		if _, blocked := blockedUsers[strings.ToLower(strings.TrimSpace(post.AuthorId))]; blocked {
-			continue
+			return false
 		}
 		if containsBlockedKeyword(post, blockedKeywords) {
-			continue
+			return false
 		}
 		postIdentity := resolvedContentIdentity(post.ContentType, post.ContentIdentity)
 		if requestedIdentity != "" && postIdentity != requestedIdentity {
-			continue
+			return false
 		}
 		viewType := mapContentTypeToViewType(post.ContentType)
 		if requestedType != "" && requestedIdentity != "moment" && viewType != requestedType {
-			continue
+			return false
 		}
+		seenPostIDs[post.ID] = struct{}{}
 		views = append(views, FeedItemView{
 			ID:           post.ID,
+			PostID:       post.ID,
+			WireID:       post.ID,
 			Type:         viewType,
 			ContentType:  post.ContentType,
 			AuthorID:     post.AuthorId,
@@ -120,11 +126,59 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 			ShareCount:   post.ShareCount,
 			CreatedAt:    post.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 		})
-		if len(views) >= limit {
+		return true
+	}
+	for attempt := 0; !useRepositoryPagination && attempt < 4 && len(views) < limit; attempt++ {
+		recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
+			UserID:    req.UserID,
+			SessionID: req.SessionID,
+			FeedType:  rtrec.FeedDiscovery,
+			Sort:      normalizeFeedSort(req.Sort),
+			Cursor:    cursor,
+			Limit:     limit,
+		})
+		if err != nil {
+			return nil, err
+		}
+		nextCursor = recResp.NextCursor
+		for _, item := range recResp.Items {
+			post, ok := s.postReader.GetByID(ctx, item.ContentID)
+			if !ok {
+				continue
+			}
+			appendPost(post)
+			if len(views) >= limit {
+				break
+			}
+		}
+		if nextCursor == "" {
 			break
 		}
+		cursor = nextCursor
 	}
-	return &ListFeedResponse{Items: views, NextCursor: recResp.NextCursor}, nil
+	if len(views) < limit {
+		if publishedReader, ok := s.postReader.(publishedPostReader); ok {
+			fallbackCursor := strings.TrimSpace(req.Cursor)
+			for attempt := 0; attempt < 4 && len(views) < limit; attempt++ {
+				posts := publishedReader.ListPublished(ctx, limit*2, fallbackCursor)
+				if len(posts) == 0 {
+					break
+				}
+				for i := range posts {
+					post := posts[i]
+					if appendPost(&post) && len(views) >= limit {
+						nextCursor = post.ID
+						break
+					}
+				}
+				if len(views) >= limit || len(posts) < limit*2 {
+					break
+				}
+				fallbackCursor = posts[len(posts)-1].ID
+			}
+		}
+	}
+	return &ListFeedResponse{Items: views, NextCursor: nextCursor, Cursor: nextCursor}, nil
 }
 
 func (s *FeedService) GetPost(ctx context.Context, id string) (*postmodel.Post, bool) {

@@ -21,6 +21,20 @@ type GroupAvatarTaskScheduler interface {
 	EnqueueConversationAvatarPatch(ctx context.Context, task ConversationAvatarPatchTask) error
 }
 
+type GroupAvatarRecomputeTask struct {
+	ConversationID string
+	ActorID        string
+	Trigger        string
+}
+
+type ConversationAvatarPatchTask struct {
+	ConversationID   string
+	ActorID          string
+	Trigger          string
+	Payload          map[string]any
+	RecipientUserIDs []string
+}
+
 type noopGroupAvatarTaskScheduler struct{}
 
 func (noopGroupAvatarTaskScheduler) EnqueueRecompute(context.Context, GroupAvatarRecomputeTask) error {

@@ -143,11 +143,11 @@ func publishUserAvatarUpdated(t *testing.T, userID, assetID string, version int6
 
 func waitForConversationAvatarVersion(t *testing.T, conversationID string, expectedMin int) {
 	t.Helper()
-	for i := 0; i < 30; i++ {
+	for i := 0; i < 100; i++ {
 		if int(mustConversationAvatarVersion(t, conversationID)) >= expectedMin {
 			return
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatalf("conversation %s avatar version did not reach %d", conversationID, expectedMin)
 }

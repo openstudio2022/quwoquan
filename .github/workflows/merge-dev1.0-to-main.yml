@@ -1,4 +1,5 @@
 # 定时 merge dev1.0 → main；merge 后 push 触发 pre-release-gate
+# 合入前断言：dev1.0 当前 HEAD 对应的「03. Delivery Gate」已成功（见 scripts/ci_assert_delivery_gate_green_for_branch.py）
 # 设计见 deploy/shared/branch_strategy.md
 name: 07. Merge dev1.0 To Main
 
@@ -9,8 +10,28 @@ on:
   workflow_dispatch:
 
 jobs:
+  assert-dev10-delivery-green:
+    name: Assert dev1.0 Delivery Gate green (HEAD match)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: 等待并断言 Delivery Gate 对已推送的 dev1.0 HEAD 成功
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        # 最多等待 60 分钟，避免刚推送后 DG 尚在排队/运行
+        run: |
+          python3 scripts/ci_assert_delivery_gate_green_for_branch.py dev1.0 \
+            --wait-seconds 3600 \
+            --poll-interval 25
+
   merge:
     name: Merge dev1.0 into main
+    needs:
+      - assert-dev10-delivery-green
     runs-on: ubuntu-latest
     permissions:
       contents: write

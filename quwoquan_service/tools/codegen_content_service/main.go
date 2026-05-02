@@ -177,7 +177,7 @@ type httpScaffoldData struct {
 }
 
 func aggregateDirPath(metadataDir string, dirName string) string {
-	// Support domain-centric layout: content/post/ alongside legacy post/.
+	// Support domain-centric layout: content/post/ alongside current post/.
 	direct := filepath.Join(metadataDir, dirName)
 	if _, err := os.Stat(direct); err == nil {
 		return direct
@@ -534,7 +534,7 @@ type errorsYAML struct {
 }
 
 func generateErrorConstants(metadataDir, aggregate, outputDir string) error {
-	// Support both legacy (post/) and domain-centric (content/post/) locations.
+	// Support both current (post/) and domain-centric (content/post/) locations.
 	aggLower := strings.ToLower(aggregate)
 	errsPath := filepath.Join(metadataDir, aggLower, "errors.yaml")
 	if _, err := os.Stat(errsPath); os.IsNotExist(err) {

@@ -38,12 +38,12 @@ void main() {
       }
     });
 
-    test('pre-gate 不再通过历史关键词启发式直接阻断', () async {
+    test('pre-gate 不再通过记录关键词启发式直接阻断', () async {
       final response = await agentLoop.run(
         const AssistantRunRequest(
           sessionId: 'dual-pre',
           messages: <AssistantRunMessage>[
-            AssistantRunMessage(role: 'user', content: '上次我们聊的历史记录是什么'),
+            AssistantRunMessage(role: 'user', content: '上次我们聊的记录记录是什么'),
           ],
         ),
       );
@@ -55,7 +55,8 @@ void main() {
               (e.data?['lifecycleOutcome'] as String?) == 'blocked',
         ),
         isFalse,
-        reason: '预检不应因「历史/聊天」等关键词而 blocked_precondition；'
+        reason:
+            '预检不应因「记录/聊天」等关键词而 blocked_precondition；'
             '成功路径未必含 structuredResponse.domainPrecheck',
       );
     });

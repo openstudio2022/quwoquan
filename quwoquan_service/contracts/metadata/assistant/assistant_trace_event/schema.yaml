@@ -1,0 +1,21 @@
+dart_class: AssistantTraceEventWire
+library_path: assistant/generated/contracts/assistant_trace_event.g.dart
+output_path: assistant/generated/contracts/assistant_trace_event.g.dart
+contract: assistant_trace_event
+version: assistant_trace_event.m5
+kind: shared_wire_contract
+imports:
+  - package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart
+fields:
+  - { name: traceEventId, type: string, required: true }
+  - { name: conversationId, type: string, required: true }
+  - { name: turnId, type: string, required: true }
+  - { name: traceId, type: string, default: '' }
+  - { name: phaseId, type: string, default: '' }
+  - { name: eventType, type: string, required: true }
+  - { name: seq, type: int, required: true }
+  - { name: status, type: string, default: '' }
+  - { name: summary, type: string, default: '' }
+  - { name: payload, type: map, default: {} }
+  - { name: runtimeFailure, type: object, ref: RuntimeFailureWire }
+  - { name: createdAt, type: string, required: true }

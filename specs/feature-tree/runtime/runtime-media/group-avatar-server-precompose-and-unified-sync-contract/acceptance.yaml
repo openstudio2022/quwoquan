@@ -20,11 +20,12 @@ scope:
 
 scenario_acceptance:
   A1:
-    title: 群头像主链路切换为服务端预合成结果
+    title: 会话头像主链路切换为统一 avatarUrl
     done_when:
-      - "`chat-service` 对外返回 `groupAvatarUrl` 与 `groupAvatarVersion`"
+      - "`chat-service` 对外返回非空可访问的 `avatarUrl`；群聊头像由服务端预合成"
+      - "`conversation.avatar.updated` patch 携带 `avatarUrl`"
       - 客户端群头像主渲染路径不再依赖成员头像列表实时拼装
-      - 群头像生成失败时客户端显示默认群图标
+      - 群头像生成失败时服务端保留上一版；新群无上一版时不得向 App 下发空 `avatarUrl`
     edge_cases:
       - 群头像 URL 缺失
       - 群头像 URL 加载失败
@@ -36,7 +37,7 @@ scenario_acceptance:
     tests:
       planned:
         - chat inbox group avatar contract test
-        - group avatar fallback widget journey
+        - avatarUrl-only widget journey
       recorded:
         - "T1/T3: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar'`"
         - "T3: `go test ./quwoquan_service/services/chat-service/tests -run 'TestGroupAvatar_UserAvatarUpdated|TestGroupAvatar_RecomputePublishesConversationAvatarPatch'`"
@@ -46,9 +47,9 @@ scenario_acceptance:
         - "T3: `go test ./quwoquan_service/runtime/sync ./quwoquan_service/services/chat-service/tests`"
         - "Gate: `make gate-runtime-media`"
     notes:
-      - "建群/加人/退群中的群头像重算已改为 score queue 驱动的 Redis-backed 可恢复异步任务；失败时重试并保留旧值或空值，不再阻塞主流程。"
-      - "群头像 CDN 域名已收口到 runtime/config 单一来源，`chat-service` 不再保留 mock 常量解析 URL。"
-      - "客户端默认群图标仍是唯一失败兜底；本轮没有恢复端侧拼图。"
+      - "建群第一版群头像必须同步生成到可见 `avatarUrl`；成员变更后的重算由可恢复异步任务处理，失败时保留旧值。"
+      - "群头像 CDN base URL 已收口到 runtime/config 单一来源，配置必须含 scheme。"
+      - "客户端不再以默认群图标或端侧拼图作为聊天群头像主兜底。"
       - "若未来需要更高等级的跨服务消息保证，当前 Redis 任务模型仍不等同完整企业级 MQ。"
       - "发布前需结合 `t4-release-rehearsal.md` 执行双设备/弱网/gap 演练；未执行时不得宣称高标准准出。"
     test_layers:
@@ -63,7 +64,7 @@ scenario_acceptance:
     done_when:
       - 群头像仅取前 9 成员
       - 排序规则为加入顺序
-      - "`groupAvatarSourceHash = hash(top9UserIdsInOrder + top9AvatarVersions + layoutVersion)`"
+      - "`groupAvatarSourceHash = hash(top9UserIdsInOrder + top9AvatarAssetIds + top9AvatarVersions + top9AvatarUrls + layoutVersion)`"
       - sourceHash 未变化时可跳过重算
     edge_cases:
       - 非前 9 成员变化
@@ -121,7 +122,7 @@ scenario_acceptance:
       - objectKey 规则与 CDN URL 规则冻结
       - "业务数据库优先存 `assetId + version`"
     edge_cases:
-      - CDN 缓存旧版本
+      - CDN 缓存过往版本本
       - 厂商切换导致 URL 变化
     linked_plan_items: []
     evidence:

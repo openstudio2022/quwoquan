@@ -84,7 +84,7 @@
 ### 常见动机
 
 1. **祖先材质**：为子树提供 `Material` 以便 `InkWell` / `TextField` 等要 `Material` 的后代不报错。  
-2. **历史遗留**：复制粘贴的包裹层。  
+2. **记录存量**：复制粘贴的包裹层。  
 3. **AppScaffold 内已有一层透明 `Material`**（见 `lib/core/widgets/app_scaffold.dart`），子页面再包一层常属冗余。
 
 ### 替代矩阵

@@ -11,7 +11,7 @@
 - A7：契约一致性校验通过。
 - A8：对应自动化测试映射完整。
 
-## Folded legacy node `recovery-audit-observability`
+## Folded current node `recovery-audit-observability`
 
 # L5 特性：recovery-audit-observability
 

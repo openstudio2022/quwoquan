@@ -141,15 +141,15 @@
 
 - sourceHash 不变
 
-### KD-5：客户端只消费群头像结果，不消费成员头像拼图主链路
+### KD-5：客户端只消费统一 `avatarUrl`，不消费成员头像拼图主链路
 
 客户端顺序：
 
-1. `groupAvatarUrl`
-2. 默认群图标
+1. `avatarUrl`
 
 不再依赖：
 
+- 旧群头像 URL 字段做主链路 URL
 - `avatarCompositeUrls` 做主链路拼图
 
 ### KD-6：avatar patch 类型进入统一 sync
@@ -170,7 +170,7 @@ realtime 消息体只需要：
 
 ### KD-7：失败与回滚策略
 
-- 生成失败：保留旧图；无旧图时返回默认群图标语义
+- 生成失败：保留旧图；无旧图时不让 active 会话向 App 返回空 `avatarUrl`
 - sync patch 异常：不影响消息主链路
 - feature flag 关闭：群头像链路回退到默认群图标主路径
 
@@ -206,31 +206,30 @@ make codegen-app
 
 ## 字段演进、迁移与双读双写
 
-### 阶段 1：写新字段，不切主消费
+### 阶段 1：服务端写统一头像
 
-- 服务端开始写 `groupAvatar*` 字段
-- 客户端暂不切换
+- 服务端内部继续维护 `groupAvatarAssetId/groupAvatarVersion/groupAvatarSourceHash`
+- 对外只把可展示 URL 写入并下发 `avatarUrl`
 
-### 阶段 2：客户端双读
+### 阶段 2：客户端单读
 
-- 优先读 `groupAvatarUrl`
-- 缺失则显示默认群图标
-- 不再使用成员头像列表做兜底拼图
+- 客户端群聊、单聊、搜索结果统一只读 `avatarUrl`
+- 不再使用旧群头像 URL 字段或成员头像列表做兜底拼图
 
-### 阶段 3：单读
+### 阶段 3：兼容字段降级
 
-- 客户端主链路只读新字段
-- 旧 `avatarCompositeUrls` 退为兼容字段
+- 旧群头像 URL / `avatarCompositeUrls` 字段不再进入链路
+- UI、ViewModel、缓存主链路不得消费旧字段
 
 ### 阶段 4：清理
 
-- 评估删除旧字段或降为历史兼容字段
+- 评估删除旧字段或降为记录兼容字段
 
 本次不要求双写两套群头像结果图；只要求字段兼容窗口。
 
 ## 阶段 2 高标准准出补充
 
-本场景下的阶段 2 双读，除了“客户端优先读 `groupAvatarUrl`，失败回默认群图标”之外，还增加三项高标准要求：
+本场景下的阶段 2 单读，除了“客户端只消费 `avatarUrl`”之外，还增加三项高标准要求：
 
 1. 群头像重算不只是异步，而且要具备可恢复、可去重、可重试的任务语义。
 2. `conversation.avatar.updated` fanout 不能因部分成员 append 失败而长期失配，需要显式补偿。
@@ -288,7 +287,7 @@ make codegen-app
 
 至少保留以下可复演步骤作为阶段 2 的发布前入口检查：
 
-1. 双账号同时加入同一群聊，确认初始 `groupAvatarUrl/groupAvatarVersion` 一致。
+1. 双账号同时加入同一群聊，确认初始 `avatarUrl/groupAvatarVersion` 一致。
 2. 在一端触发成员加入、成员退出、前 9 用户头像更新。
 3. 在另一端模拟弱网或延迟网络，确认：
    - 会话列表仍显示旧图或默认群图标，而不是损坏 URL；

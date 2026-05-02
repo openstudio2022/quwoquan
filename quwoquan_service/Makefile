@@ -1,4 +1,4 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-rec-model-python codegen-storage dev dev-down clean
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-rec-model-python codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -10,14 +10,17 @@ build:
 	go build ./tools/...
 	go build ./services/user-service/...
 	go build ./services/rtc-service/...
+	$(MAKE) -C services/assistant-service build
 
 # ─── Test ────────────────────────────────────────────────────────────
 test: test-unit
 
 test-unit:
+	$(MAKE) -C services/assistant-service test
 	go test ./runtime/... ./generated/assistant/wirepoc/... ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
 
 test-contract:
+	$(MAKE) -C services/assistant-service test
 	go test ./services/content-service/... ./services/chat-service/... ./services/user-service/... ./services/rtc-service/... -v -count=1
 
 # Run L2 contract tests against a locally running MongoDB (no Docker required).
@@ -35,6 +38,11 @@ test-contract-local:
 
 test-integration:
 	go test ./runtime/... -v -count=1 -tags=integration
+
+test-chat-ready-index-alpha-beta:
+	TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-localhost:6379} \
+	TEST_MONGO_URI=$${TEST_MONGO_URI:-mongodb://localhost:27017/?replicaSet=rs0} \
+	  go test ./runtime/reliabletask ./services/chat-service/tests -run 'TestRedisReadyIndexStandaloneStreamsClaimAck|TestGroupAvatar_RedisReadyIndexAlphaBetaLocalLoop' -v -count=1
 
 # ─── Lint ────────────────────────────────────────────────────────────
 lint:
@@ -78,6 +86,17 @@ dev:
 
 dev-down:
 	docker compose down -v
+
+dev-redis:
+	docker compose -f docker-compose.local-redis.yml up -d
+	@docker compose -f docker-compose.local-redis.yml ps
+
+dev-redis-down:
+	docker compose -f docker-compose.local-redis.yml down
+
+dev-reliable-task-local: dev-redis
+
+dev-reliable-task-local-down: dev-redis-down
 
 # ─── Clean ───────────────────────────────────────────────────────────
 clean:

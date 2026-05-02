@@ -107,17 +107,17 @@ scenario_acceptance:
     status: implemented
   A3:
     title: 删除动作遵循停用/删除保护
-    scenario: 用户删除或停用已有分身，系统保证历史归因与主分身约束
+    scenario: 用户删除或停用已有分身，系统保证记录归因与主分身约束
     journey_step: retire or delete persona
     done_when:
       - 主分身与最后一个剩余分身不可删除
       - 空白分身可以直接删除
-      - 有历史归因的分身按停用处理，不再作为新动作主体
-      - 删除或停用失败时，当前 active persona 与历史归因不受损
+      - 有记录归因的分身按停用处理，不再作为新动作主体
+      - 删除或停用失败时，当前 active persona 与记录归因不受损
     edge_cases:
       - 试图删除主分身
       - 试图删除仍处于 active 状态的分身
-      - 有历史内容但无公开资料的分身
+      - 有记录内容但无公开资料的分身
     linked_plan_items:
       - P3
       - P4
@@ -152,7 +152,7 @@ story_readiness:
     done_when:
       - 管理台入口可按功能开关独立控制
       - create/activate/delete failure、quota reached、retired persona count、profile sync suggested/applied 可观测
-      - 回退时可退回单 active persona 基线，不影响历史归因
+      - 回退时可退回单 active persona 基线，不影响记录归因
     evidence:
       primary:
         - T1_schema
@@ -169,7 +169,7 @@ story_readiness:
     notes:
       - "`create_succeeded / activate_succeeded / retire_succeeded / create_failed / activate_failed / delete_blocked / quota_reached / retired_count / profile_sync_suggested / profile_sync_applied / profile_sync_rejected` 已纳入 telemetry。"
       - "分身管理与资料同步入口现支持 runtime config 关闭，并验证了设置页与个人主页在 flag-off 时的一致降级。"
-      - "在 flag-off 回退到单 active persona 管理基线时，退役状态与历史归因仍由 user 域持久化保留，不依赖 UI 临时状态。"
+      - "在 flag-off 回退到单 active persona 管理基线时，退役状态与记录归因仍由 user 域持久化保留，不依赖 UI 临时状态。"
     test_layers:
       T1: optional
       T2: required

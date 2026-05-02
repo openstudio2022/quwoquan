@@ -16,8 +16,10 @@ Examples:
 Behavior:
   - Creates per-service env-split config layout:
       quwoquan_service/services/<service>/configs/default/config.yaml
-      quwoquan_service/services/<service>/configs/local/config.yaml
-      quwoquan_service/services/<service>/configs/integration/config.yaml
+      quwoquan_service/services/<service>/configs/alpha/config.yaml
+      quwoquan_service/services/<service>/configs/beta/config.yaml
+      quwoquan_service/services/<service>/configs/gamma/config.yaml
+      quwoquan_service/services/<service>/configs/prod-gray/config.yaml
       quwoquan_service/services/<service>/configs/prod/config.yaml
   - Creates versioned config release directory:
       releases/config/<service>/
@@ -65,12 +67,14 @@ fi
 
 configs_root="$svc_root/configs"
 default_cfg="$configs_root/default/config.yaml"
-local_cfg="$configs_root/local/config.yaml"
-integration_cfg="$configs_root/integration/config.yaml"
+alpha_cfg="$configs_root/alpha/config.yaml"
+beta_cfg="$configs_root/beta/config.yaml"
+gamma_cfg="$configs_root/gamma/config.yaml"
+prod_gray_cfg="$configs_root/prod-gray/config.yaml"
 prod_cfg="$configs_root/prod/config.yaml"
-legacy_cfg="$configs_root/config.yaml"
+current_cfg="$configs_root/config.yaml"
 
-mkdir -p "$(dirname "$default_cfg")" "$(dirname "$local_cfg")" "$(dirname "$integration_cfg")" "$(dirname "$prod_cfg")"
+mkdir -p "$(dirname "$default_cfg")" "$(dirname "$alpha_cfg")" "$(dirname "$beta_cfg")" "$(dirname "$gamma_cfg")" "$(dirname "$prod_gray_cfg")" "$(dirname "$prod_cfg")"
 
 write_file() {
   local path="$1"
@@ -127,8 +131,8 @@ redis:
 EOF
 )"
 
-LOCAL_CONTENT="$(cat <<'EOF'
-# local overrides (developer laptop)
+ALPHA_CONTENT="$(cat <<'EOF'
+# alpha overrides (developer single-instance validation)
 service:
   http:
     addr: ":18080"
@@ -141,8 +145,22 @@ redis:
 EOF
 )"
 
-INTEGRATION_CONTENT="$(cat <<'EOF'
-# integration overrides (shared test env)
+BETA_CONTENT="$(cat <<'EOF'
+# beta overrides (developer local cloud-client integration)
+service:
+  http:
+    addr: ":18080"
+
+redis:
+  rec:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 0
+EOF
+)"
+
+GAMMA_CONTENT="$(cat <<'EOF'
+# gamma overrides (cloud integration env)
 service:
   http:
     addr: ":18080"
@@ -152,6 +170,21 @@ redis:
     mode: standalone
     addr: ""
     db: 0
+EOF
+)"
+
+PROD_GRAY_CONTENT="$(cat <<'EOF'
+# prod-gray overrides (production gray release)
+# Recommend injecting APP_ENV=prod-gray, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
+service:
+  http:
+    addr: ":18080"
+
+redis:
+  rec:
+    mode: cluster
+    addrs: []
+    tls: true
 EOF
 )"
 
@@ -171,8 +204,10 @@ EOF
 )"
 
 write_file "$default_cfg" "$DEFAULT_CONTENT"
-write_file "$local_cfg" "$LOCAL_CONTENT"
-write_file "$integration_cfg" "$INTEGRATION_CONTENT"
+write_file "$alpha_cfg" "$ALPHA_CONTENT"
+write_file "$beta_cfg" "$BETA_CONTENT"
+write_file "$gamma_cfg" "$GAMMA_CONTENT"
+write_file "$prod_gray_cfg" "$PROD_GRAY_CONTENT"
 write_file "$prod_cfg" "$PROD_CONTENT"
 
 release_dir="$ROOT/releases/config/$SERVICE_NAME"
@@ -193,9 +228,9 @@ EOF
   echo "OK: wrote $release_dir/README.md"
 fi
 
-if [[ -f "$legacy_cfg" ]]; then
-  echo "WARN: legacy file exists: $legacy_cfg"
-  echo "      Consider migrating it into default/local/integration/prod split files."
+if [[ -f "$current_cfg" ]]; then
+  echo "WARN: current file exists: $current_cfg"
+  echo "      Consider migrating it into default/alpha/beta/gamma/prod-gray/prod split files."
 fi
 
 echo "DONE: service config layout bootstrapped for $SERVICE_NAME"

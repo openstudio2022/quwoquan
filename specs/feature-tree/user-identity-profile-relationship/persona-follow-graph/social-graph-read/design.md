@@ -9,7 +9,7 @@
 1. follower / following 分页的稳定游标与过滤策略。
 2. `GetRelationship` 与 `RelationshipCapabilityView` 的读投影边界。
 3. block、strict isolation、retired persona 对公开图谱读取的影响。
-4. legacy owner-level graph 与旧 `RelationTier` 的兼容退出路径。
+4. current owner-level graph 与旧 `RelationTier` 的兼容退出路径。
 
 ## 上游输入评审
 
@@ -18,7 +18,7 @@
 | `social-graph-read/spec.md` | read side、分页、`RelationshipCapabilityView`、过滤边界清晰 |
 | `social-graph-read/acceptance.yaml` | `A1/A2/A3/S1` 可直接映射到 `P1~P4` |
 | Journey `persona-follow-graph/design.md` | 已冻结 graph 写读分离与 `ProfileSubject` 主键 |
-| `follow-relationship/design.md` | command side 负责写边、事件和 legacy edge 回填，不在本场景重复定义 |
+| `follow-relationship/design.md` | command side 负责写边、事件和 current edge 回填，不在本场景重复定义 |
 | `owner-subaccount-homepage-unification/design.md` | 主页按钮矩阵应消费 `RelationshipCapabilityView`，不手写布尔组合 |
 
 结论：
@@ -93,7 +93,7 @@
 优点：
 
 - 与 PRD 和 Journey 设计最一致。
-- 有利于逐步迁移 legacy graph。
+- 有利于逐步迁移 current graph。
 - 适合先做 persona-aware graph 的第一版。
 
 缺点：
@@ -109,7 +109,7 @@
 
 1. 它保证图谱读取和按钮矩阵都围绕同一个 read projection，而不是 UI 私有逻辑。
 2. 它不引入过重的物化表，同时足以支撑 `A1/A2/A3`。
-3. 它最适合承接 legacy graph 双读和 `RelationTier` 兼容退出。
+3. 它最适合承接 current graph 双读和 `RelationTier` 兼容退出。
 
 ## 关键设计决策
 
@@ -181,11 +181,11 @@
 - UI 直接读取 `FollowEdge` 原始对象
 - 页面自己根据 follow + block 布尔拼能力矩阵
 
-### KD6：legacy graph 与旧 `RelationTier` 兼容退出
+### KD6：current graph 与旧 `RelationTier` 兼容退出
 
 兼容期规则：
 
-- legacy owner-level graph 允许读路径双读映射到主分身
+- current owner-level graph 允许读路径双读映射到主分身
 - 旧 `RelationTier` 仅作 UI 兼容层，不再是能力位真相源
 - 新页面和新 provider 统一转向 `RelationshipCapabilityView`
 
@@ -231,14 +231,14 @@
 
 ### 迁移 / 回填
 
-- 读路径短期双读 persona-aware edge 与 legacy owner edge
-- legacy owner edge 统一映射到主分身 `profileSubjectId`
+- 读路径短期双读 persona-aware edge 与 current owner edge
+- current owner edge 统一映射到主分身 `profileSubjectId`
 - `RelationTier` 通过 adapter 从 `RelationshipCapabilityView` 派生，供旧组件过渡
 
 ### 退出条件
 
 - 新旧列表、按钮矩阵、聊天门禁全部切到 capability view
-- legacy owner edge 与 `RelationTier` 适配层不再被命中
+- current owner edge 与 `RelationTier` 适配层不再被命中
 
 ## feature flag、观测、SLO 验证与回滚方案
 
@@ -252,7 +252,7 @@
 - `graph_page_drift_count`
 - `graph_filter_mismatch_count`
 - `relationship_capability_mismatch_count`
-- `graph_legacy_edge_read_count`
+- `graph_current_edge_read_count`
 
 回滚原则：
 
@@ -267,7 +267,7 @@
 - `T2_module_interaction`
   - 主页按钮矩阵、粉丝列表、聊天门禁消费 projection
 - `T3_cross_service_integration`
-  - `FollowEdge + BlockEdge + ProfileSubject` 联调、过滤补页、legacy graph 双读
+  - `FollowEdge + BlockEdge + ProfileSubject` 联调、过滤补页、current graph 双读
 - `T4_user_journey`
   - 查看粉丝/关注、切主页按钮、被 block / strict isolation / retired persona 图谱读取
 - `T4_release_rehearsal`
@@ -279,7 +279,7 @@
 |-------|------|----------|----------|
 | `P1` | 冻结 graph list、cursor、capability projection metadata | `A1/A2` | `T1_schema` |
 | `P2` | 建立 codegen 与 graph provider/consumer 基线 | `A1/A2` | `T1_schema`, `T2_module_interaction` |
-| `P3` | 落地 overfetch+fill、filter、capability 消费与 legacy 双读 | `A2/A3` | `T3_cross_service_integration`, `T4_user_journey` |
+| `P3` | 落地 overfetch+fill、filter、capability 消费与 current 双读 | `A2/A3` | `T3_cross_service_integration`, `T4_user_journey` |
 | `P4` | 验证灰度、回滚、page drift 与 capability telemetry | `A3/S1` | `T3_cross_service_integration`, `T4_release_rehearsal` |
 
 ## 未来演进

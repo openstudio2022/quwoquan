@@ -47,7 +47,7 @@
 
 - `AgentLoop` 单循环调度：消息 -> 模型 -> 工具 -> 观察 -> 下一轮
 - `ToolRegistry` 做 schema 校验、统一执行、统一错误封装
-- `Session + Memory` 做历史持久化与 consolidation
+- `Session + Memory` 做记录持久化与 consolidation
 - `Subagent` 处理复杂任务并回注主会话
 - 渠道层与核心执行层解耦
 
@@ -185,7 +185,7 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
 
 ### 4.3 失败恢复协议：`recovery_decision_v1`
 
-模型依据 `tool_observation` 与历史状态决定：
+模型依据 `tool_observation` 与记录状态决定：
 
 - `retry_tool`
 - `ask_user`（补槽）
@@ -566,7 +566,7 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
 
 ### 4.2 已具备能力
 
-- **会话延续**：历史消息以 `AssistantRunMessage` 形式传入，支持多轮对话。
+- **会话延续**：记录消息以 `AssistantRunMessage` 形式传入，支持多轮对话。
 - **上下文注入**：`_buildAssistantContextScope()` 从 `AssistantOpenContext`、当前页面类型、最近对话状态等组装 `contextScopeHint`，含 `pageType`、`userTags`、`privacyPolicy`、`dialogueState` 等。
 - **领域路由**：先 `classifyDomain(query, contextScope)` 得到 `domainId`，再带入 request；端侧有 `domain_routing_catalog`（约 17 个主垂类 + fallback），与规格中「19 垂类」方向一致。
 - **流式与轨迹**：`runStream` 可下发 trace 事件；`_consumeAssistantTraceEvent` 可驱动「思考中/检索中」等中间态（如 `_assistantSearchingCount`、`_assistantReferenceCount`）。
@@ -617,7 +617,7 @@ Local Engine <-> Remote Engine (OpenClaw/Cloud)
 | 能力 | 当前小趣 | OpenClaw / Google Assistant 级 |
 |------|----------|--------------------------------|
 | 流式输出 | 整段完成后展示 | 逐 token/chunk 流式上屏 |
-| 多轮与上下文 | 有 session + 历史消息 | 长期记忆 + 跨会话偏好 + 实体解析 |
+| 多轮与上下文 | 有 session + 记录消息 | 长期记忆 + 跨会话偏好 + 实体解析 |
 | 多模态 | 文本为主 | 语音 in/out、图像/文档理解、富媒体卡片 |
 | 领域覆盖 | 17 垂类 + fallback | 开放域 + 深度垂类 + 可扩展技能生态 |
 | 错误与降级 | 统一「不可用」 | 分类型提示、重试、降级到本地/缓存 |

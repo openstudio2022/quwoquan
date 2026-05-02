@@ -59,7 +59,7 @@ quwoquan_app/
     └── skill-directory-and-progressive-disclosure-design.md  ← 本文档
 ```
 
-补充：更深层 legacy implementation 仍可能位于 `lib/personal_assistant/`，但不再作为当前推荐入口。
+补充：更深层 current implementation 仍可能位于 `lib/personal_assistant/`，但不再作为当前推荐入口。
 
 ---
 
@@ -123,7 +123,7 @@ skills/{domain}/
           │  [bootstrap]       │ ← 路由后 skill pack（每轮）
           │  [phase-specific]  │ ← 按 nextAction 阶段加载 references/*
           │  [dialogue]        │ ← 当前状态的 state 摘录（每轮渐进）
-          │  [session context] │ ← 历史摘要 + 近期工具观测（按需）
+          │  [session context] │ ← 记录摘要 + 近期工具观测（按需）
           └───────────────────┘
                    +
           ┌───────────────────┐

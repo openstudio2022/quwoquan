@@ -31,7 +31,7 @@ spec:
               containerPort: 18083
           env:
             - name: APP_ENV
-              value: integration
+              value: gamma
             - name: SERVICE_NAME
               value: rtc-service
             - name: CONFIG_ROOT

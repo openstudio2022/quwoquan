@@ -9,10 +9,7 @@ Map<String, dynamic>? _sessionNestedFromMap(Map<String, dynamic> map) {
 
 /// [RtcRepository.initiateCall] 的归一化结果（会话 + 可选 LiveKit token）。
 class RtcInitiateCallResultDto {
-  const RtcInitiateCallResultDto({
-    required this.session,
-    this.token = '',
-  });
+  const RtcInitiateCallResultDto({required this.session, this.token = ''});
 
   final CallSessionDto session;
   final String token;
@@ -28,13 +25,9 @@ class RtcInitiateCallResultDto {
   }
 }
 
-/// [RtcRepository.answerCall]：rtc-service 为 `{ session, token, roomId }`；兼容扁平遗留。
+/// [RtcRepository.answerCall]：rtc-service 为 `{ session, token, roomId }`；兼容扁平存量。
 class RtcAnswerCallResultDto {
-  const RtcAnswerCallResultDto({
-    this.token,
-    this.roomId,
-    this.session,
-  });
+  const RtcAnswerCallResultDto({this.token, this.roomId, this.session});
 
   final String? token;
   final String? roomId;
@@ -77,7 +70,8 @@ class RtcJoinCredentialsDto {
     if (nested != null) {
       final roomId =
           map['roomId'] as String? ?? nested['roomId'] as String? ?? '';
-      final callId = nested['callId'] as String? ??
+      final callId =
+          nested['callId'] as String? ??
           nested['_id'] as String? ??
           nested['id'] as String?;
       return RtcJoinCredentialsDto(

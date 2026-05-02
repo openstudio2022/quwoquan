@@ -3,7 +3,7 @@
 ## 功能说明
 
 在服务内落地配置分层与发布化能力：
-- 配置目录统一：default/local/integration/prod
+- 配置目录统一：default/alpha/beta/gamma/prod-gray/prod
 - 覆盖规则统一：default -> APP_ENV -> env var
 - 生产挂载统一：`CONFIG_ROOT=/etc/qwq-config`
 - 版本快照路径：`${CONFIG_ROOT}/releases/config/<service>/<config_version>.yaml`
@@ -28,7 +28,7 @@
 - 服务部署到本地、办公电脑集成、容器生产三类场景
 
 约束：
-- `APP_ENV` 仅允许 `local|integration|prod`
+- `APP_ENV` 仅允许 `alpha|beta|gamma|prod-gray|prod`
 - 高风险配置变更仅通过滚动灰度发布生效
 - 版本配置文件不可变，发布后禁止覆盖写入
 

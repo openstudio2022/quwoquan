@@ -28,7 +28,7 @@ evidence change.
 - Code evidence must come from `quwoquan_app/lib/assistant/` or tightly-coupled
   UI and integration files
 - Regression evidence must come from committed tests in
-  `quwoquan_app/test/assistant/` or `quwoquan_app/integration_test/`
+  `quwoquan_app/test/assistant/` or `quwoquan_app/test/common|alpha|beta|gamma`
 - Live verification evidence must come from a real provider request or live
   integration run, not from mocked tests
 - A task cannot move from `in_progress` to `completed` if its last remaining
@@ -39,14 +39,14 @@ evidence change.
 | Task | Status | Evidence | Exit Criteria |
 | --- | --- | --- | --- |
 | `intent-owner-rebuild` | `completed` | `AssistantAgentLoop` is the orchestrated entry; owner state is resolved before phase execution; `orchestration_phase_owner_test.dart`, `full_phase_pipeline_test.dart`, `assistant_agent_loop_parity_guard_test.dart` are green | Do not re-introduce owner logic outside phases and phase owner services |
-| `followup-continuity` | `in_progress` | continuity inputs, previous intent carryover, and follow-up answer repair are guarded by `orchestration_phase_owner_test.dart` | Re-run `integration_test/assistant_manual_replay_test.dart` after owner refactors and confirm no replay regression |
+| `followup-continuity` | `in_progress` | continuity inputs, previous intent carryover, and follow-up answer repair are guarded by `orchestration_phase_owner_test.dart` | Re-run `test/common/assistant/assistant_environment_smoke_test.dart` after owner refactors and confirm no environment regression |
 | `multi-dimensional-retrieval` | `completed` | typed `TaskGraph`, projection-only `searchPlans`, centralized retrieval tool selection, and runtime consumption of phase-provided tasks are covered by `retrieval_tool_selection_policy_test.dart`, `app_search_tool_runtime_test.dart`, `orchestration_phase_owner_test.dart`, `full_phase_pipeline_test.dart`, and `react_runtime_tool_observation_contract_test.dart` | Keep `TaskGraph` as the execution truth source and keep `searchPlans` projection-only |
 | `one-pass-answer-optimization` | `completed` | phase-one direct answer shortcut, repair, gap-fill retry, and bounded-answer readiness are covered by owner and full-pipeline tests | Maintain direct-answer path as default convergence path |
-| `m0-replay-baseline` | `in_progress` | `integration_test/assistant_manual_replay_test.dart` now validates weather/stock selected cases through typed `understandingResult`, `taskGraph`, and structured entity refs; `integration_test/support/assistant_replay_baseline.dart` defines the pack schema; `test/assistant/replay_record_factory_test.dart` guards shared replay payload extraction | Close only after the full selected M0 corpus is repeat-stable and each case is eligible for M1 entry without degraded / tool-progress / missing-query-design signatures |
-| `replay-regression-upgrade` | `in_progress` | replay-related cleanup is covered by full-pipeline regression tests and the manual replay test file exists | Re-run manual replay integration on iOS after the current refactor set |
-| `typed-mainline-persistence-closure` | `in_progress` | `FinalizeRunner`, `persisted_assistant_turn.dart`, and `AssistantConversationController` now carry typed mainline fields; regression is tracked in `finalize_runner_test.dart` | Close only after typed contracts are persisted, reloadable, and visible to UI/transcript consumers without relying on legacy-only fields |
+| `m0-replay-baseline` | `in_progress` | retired in favor of `assistant_scenarios.json` plus `test/common/assistant/assistant_environment_smoke_test.dart`; `test/assistant/replay_record_factory_test.dart` still guards shared replay payload extraction | Close after scenario fixture coverage fully replaces current replay artifacts |
+| `replay-regression-upgrade` | `in_progress` | replay-related cleanup is covered by full-pipeline regression tests and environment smoke tests | Re-run assistant environment smoke on iOS after the current refactor set |
+| `typed-mainline-persistence-closure` | `in_progress` | `FinalizeRunner`, `persisted_assistant_turn.dart`, and `AssistantConversationController` now carry typed mainline fields; regression is tracked in `finalize_runner_test.dart` | Close only after typed contracts are persisted, reloadable, and visible to UI/transcript consumers without relying on current-only fields |
 | `live-weather-e2e-milestone` | `completed` | `flutter test test/assistant/minimax_live_weather_fortune_test.dart --dart-define=LIVE_TEST=true` passed in this verification pass | Keep live weather proof separate from local-only closure and reclassify as blocker only when credentials/provider/network fail |
-| `fallback-dependency-burn-down-milestone` | `in_progress` | active owner path no longer depends on legacy `_resolveIntentGraph()` or ad hoc `problemClass` fallback; remaining work is dead-code and legacy-marker cleanup around phase owner/runtime edges | Remove dead helpers and duplicate owner-era resolvers from the remaining phase owner/runtime files |
+| `fallback-dependency-burn-down-milestone` | `in_progress` | active owner path no longer depends on current `_resolveIntentGraph()` or ad hoc `problemClass` fallback; remaining work is dead-code and current-marker cleanup around phase owner/runtime edges | Remove dead helpers and duplicate owner-era resolvers from the remaining phase owner/runtime files |
 | `live-provider-request-success` | `completed` | live weather provider test completed with a non-degraded response in this verification pass | Re-run before release or when provider credentials change |
 | `live-provider-credential-unblock` | `completed` | current credentials/account/network were usable for the live weather verification pass | Keep future credential or account failures classified as external blockers |
 
@@ -66,7 +66,7 @@ Evidence:
 
 - this document exists and is intended to be updated as the canonical board
 
-### M2 Legacy Owner Burn-Down
+### M2 Current Owner Burn-Down
 
 Definition:
 
@@ -81,7 +81,7 @@ Latest evidence:
 - `assistant/docs/m6_centralized_verification_report.md`
 - local contract/UI matrix passed
 - simulator weather and stock replay now pass under typed gates
-- M6 is not fully accepted because legacy mainline regression tests still fail
+- M6 is not fully accepted because current mainline regression tests still fail
   on removed `searchPlans`, `problemClass`, and compatibility expectations
 
 Required exit:
@@ -94,7 +94,7 @@ Required exit:
 Definition:
 
 - `ExecutionPhase`, `SynthesisPhase`, and `FinalizePhase` stop being thin shells
-  over a large legacy monolith
+  over a large current monolith
 
 Status: `in_progress`
 
@@ -146,7 +146,7 @@ Definition:
 
 - typed mainline state is persisted and reloadable
 - UI/transcript consumers can observe typed mainline fields
-- remaining legacy residues are honestly tracked instead of being claimed deleted
+- remaining current residues are honestly tracked instead of being claimed deleted
 
 Status: `completed`
 
@@ -183,7 +183,7 @@ Required exit:
 
 ## Current Blocking Notes
 
-- legacy response keys have been removed from the active path; keep regression
+- current response keys have been removed from the active path; keep regression
   gates enabled so downstream consumers do not re-introduce them
 - live provider closure can regress for external reasons; keep credential,
   remote availability, and account access failures classified separately from
@@ -191,7 +191,7 @@ Required exit:
 
 ## Execution Order
 
-1. Finish legacy owner burn-down inside phase owner/runtime files
+1. Finish current owner burn-down inside phase owner/runtime files
 2. Unify execution-preparation semantics on the shared resolver
 3. Extract execution/synthesis/finalize owner services
 4. Re-run manual replay integration

@@ -51,9 +51,9 @@ ruby -ryaml -e '
   end
 
   # endpoint_catalog.md is superseded by per-domain service.yaml in the new design.
-  # Skip this check when the legacy catalog file does not exist.
+  # Skip this check when the current catalog file does not exist.
   unless File.exist?("contracts/endpoint_catalog.md")
-    puts "[gate] endpoint_catalog.md not present (replaced by service.yaml) — skipping legacy catalog check"
+    puts "[gate] endpoint_catalog.md not present (replaced by service.yaml) — skipping current catalog check"
     exit 0
   end
 
@@ -702,6 +702,13 @@ if [ -d "generated/control_plane" ]; then
   go test ./generated/control_plane/... -count=1 \
     || fail "generated control-plane Go package failed to compile"
 fi
+
+# ── L2: assistant-service contract tests ─────────────────────────────────────
+echo "[gate] running assistant-service contract tests"
+(
+  cd services/assistant-service &&
+    go test ./... -count=1 -timeout=120s
+) || fail "assistant-service go tests failed"
 
 # ── L2: content-service contract tests ───────────────────────────────────────
 echo "[gate] running content-service contract tests"

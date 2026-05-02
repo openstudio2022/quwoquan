@@ -39,15 +39,17 @@ class ArticleDocumentWireDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       if (template != null && template!.isNotEmpty) 'template': template,
-      if (fontPreset != null && fontPreset!.isNotEmpty) 'fontPreset': fontPreset,
+      if (fontPreset != null && fontPreset!.isNotEmpty)
+        'fontPreset': fontPreset,
       if (coverImageUrl != null && coverImageUrl!.isNotEmpty)
         'coverImageUrl': coverImageUrl,
-      if (titleStyle != null && titleStyle!.isNotEmpty) 'titleStyle': titleStyle,
+      if (titleStyle != null && titleStyle!.isNotEmpty)
+        'titleStyle': titleStyle,
       'nodes': nodes,
     };
   }
 
-  /// 进入编辑器/阅读器统一模型（兼容 legacy title/body/blocks 字段由 [ArticleDocumentData.fromMap] 处理）。
+  /// 进入编辑器/阅读器统一模型（兼容 current title/body/blocks 字段由 [ArticleDocumentData.fromMap] 处理）。
   ArticleDocumentData toArticleDocumentData() =>
       ArticleDocumentData.fromMap(toMap());
 }

@@ -39,7 +39,7 @@ void main() {
       );
     });
 
-    test('主 prompt 保留稳定主展示字段并去除历史噪音', () {
+    test('主 prompt 保留稳定主展示字段并去除记录噪音', () {
       const plannerPath =
           'assets/assistant/prompts/global/planner.global_plan.md';
       const synthPath =

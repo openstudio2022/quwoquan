@@ -20,7 +20,7 @@ ruby -ryaml -e '
     abort("[verify] FAIL: missing design.md in #{dir}") unless File.exist?(File.join(dir, "design.md"))
     abort("[verify] FAIL: missing acceptance.yaml in #{dir}") unless File.exist?(File.join(dir, "acceptance.yaml"))
     unless File.exist?(File.join(dir, "plan.yaml")) || File.exist?(File.join(dir, "tasks.md"))
-      abort("[verify] FAIL: missing plan.yaml or legacy tasks.md in #{dir}")
+      abort("[verify] FAIL: missing plan.yaml or current tasks.md in #{dir}")
     end
   end
 

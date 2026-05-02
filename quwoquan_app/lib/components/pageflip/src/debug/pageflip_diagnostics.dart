@@ -229,8 +229,10 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'seam=${_doubleLabel(debugState.backwardSeamX)} '
       'foldX=${_doubleLabel(debugState.backwardFoldX)} '
       'pageEdgeX=${_doubleLabel(debugState.backwardPageEdgeX)} '
+      'foldSurfaceEdgeX=${_doubleLabel(debugState.backwardFoldSurfaceEdgeX)} '
       'foldLine=${_offsetLabel(debugState.backwardFoldLineTop)}>${_offsetLabel(debugState.backwardFoldLineBottom)} '
       'pageEdgeLine=${_offsetLabel(debugState.backwardPageEdgeLineTop)}>${_offsetLabel(debugState.backwardPageEdgeLineBottom)} '
+      'foldSurfaceEdgeLine=${_offsetLabel(debugState.backwardFoldSurfaceEdgeLineTop)}>${_offsetLabel(debugState.backwardFoldSurfaceEdgeLineBottom)} '
       'coveredWidth=${_doubleLabel(debugState.backwardCoveredWidth)} '
       'rectoCoverage=${_doubleLabel(debugState.backwardRectoCoverage)} '
       'versoWidth=${_doubleLabel(debugState.backwardVersoWidth)} '
@@ -246,6 +248,8 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'composite=${debugState.backwardCompositeMode ?? "-"} '
       'paintFront=${_rectLabel(debugState.backwardFrontPaintBounds)} '
       'paintBack=${_rectLabel(debugState.backwardBackPaintBounds)} '
+      'paintLaidFront=${_rectLabel(debugState.backwardLaidFrontPaintBounds)} '
+      'paintFoldSurface=${_rectLabel(debugState.backwardFoldSurfacePaintBounds)} '
       'paintCurrent=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
       'paintVerso=${_doubleLabel(debugState.backwardPaintedVersoWidth)} '
       'backPixels=${debugState.backwardBackPixelSurfaceStrategy ?? "-"} '
@@ -259,6 +263,7 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'spineLocked=${debugState.backwardLeftSpineLocked ?? "-"} '
       'visualPhase=${debugState.backwardSimulatorVisualPhase ?? "-"} '
       'edgeEntered=${debugState.backwardEdgeEnteredPage ?? "-"} '
+      'foldDirection=${debugState.backwardFoldDirection ?? "-"} '
       'overlayClipped=${debugState.backwardOverlayClippedToPaper ?? "-"} '
       'backVertices=${debugState.backwardBackVertexCount ?? "-"} '
       'frontVertices=${debugState.backwardFrontVertexCount ?? "-"} '
@@ -272,6 +277,25 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'snap=[${debugState.availableSnapshotIndices.join(",")}] '
       'pending=[${debugState.pendingCaptureIndices.join(",")}]',
     );
+    if (debugState.renderDirection == StPageFlipDirection.back) {
+      debugPrint(
+        '[pageflip][paint] '
+        'dir=back '
+        'paintFront=${_rectLabel(debugState.backwardFrontPaintBounds)} '
+        'paintBack=${_rectLabel(debugState.backwardBackPaintBounds)} '
+        'paintLaidFront=${_rectLabel(debugState.backwardLaidFrontPaintBounds)} '
+        'paintFoldSurface=${_rectLabel(debugState.backwardFoldSurfacePaintBounds)} '
+        'paintCurrent=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
+        'rectoWidth=${_doubleLabel(debugState.backwardRectoWidth)} '
+        'rectoCoverage=${_doubleLabel(debugState.backwardRectoCoverage)} '
+        'versoWidth=${_doubleLabel(debugState.backwardVersoWidth)} '
+        'pageEdgeX=${_doubleLabel(debugState.backwardPageEdgeX)} '
+        'foldSurfaceEdgeX=${_doubleLabel(debugState.backwardFoldSurfaceEdgeX)} '
+        'foldDirection=${debugState.backwardFoldDirection ?? "-"} '
+        'spineLocked=${debugState.backwardLeftSpineLocked ?? "-"} '
+        'phase=${debugState.backwardPhase ?? "-"}',
+      );
+    }
   }
 }
 

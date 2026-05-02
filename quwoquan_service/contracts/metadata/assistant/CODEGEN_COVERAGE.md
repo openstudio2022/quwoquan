@@ -9,11 +9,16 @@ SSOT：`contracts/metadata/assistant/**/schema.yaml`（及 `assistant_run/fields
 | `aggregation_state/` | （见 schema） | `aggregation_state.g.dart` |
 | `answer_boundary_policy/` | （见 schema） | `answer_boundary_policy.g.dart` |
 | `assistant_journey/` | （见 schema） | `assistant_journey.g.dart` |
+| `assistant_process_timeline/` | （见 schema） | `assistant_process_timeline.g.dart` |
+| `assistant_replay_case/` | （见 schema） | `assistant_replay_case.g.dart` |
+| `assistant_run_response/` | （见 schema） | `assistant_run_response.g.dart` |
+| `assistant_skill_manifest/` | （见 schema） | `assistant_skill_manifest.g.dart` |
+| `assistant_tool_metadata/` | （见 schema） | `assistant_tool_metadata.g.dart` |
+| `assistant_trace_event/` | （见 schema） | `assistant_trace_event.g.dart` |
 | `assistant_turn/` | `AssistantTurnOutput` | `assistant_turn.g.dart` |
 | `context_assembly_result/` | （见 schema） | `context_assembly_result.g.dart` |
 | `context_continuity_policy/` | （见 schema） | `context_continuity_policy.g.dart` |
 | `context_fill_task/` | （见 schema） | `context_fill_task.g.dart` |
-| `conversation_state_decision/` | （见 schema） | `conversation_state_decision.g.dart` |
 | `dialogue_round_script/` | （见 schema） | `dialogue_round_script.g.dart` |
 | `planner_contracts/` | （见 schema） | `planner_contracts.g.dart` |
 | `preference_fact/` | （见 schema） | `preference_fact.g.dart` |
@@ -37,7 +42,7 @@ SSOT：`contracts/metadata/assistant/**/schema.yaml`（及 `assistant_run/fields
 ## 2. 盘点结论（缺口）
 
 - **`answerDecision` / `diagnostics`**：已实现路径 B（`partitioned_map` + Dart wrapper 类）；Go `wirepoc` 仍为整段 `json.RawMessage`（字段级 struct 可选后续增强）。
-- **带 `dart_class` + `library_path` 的 `schema.yaml` 共 20 个**，与 `lib/assistant/generated/contracts/` 下 **20 个** `*.g.dart` **一一对应**，无「有 schema 未注册生成」的缺口。
+- **带 `dart_class` + `library_path` 的 `schema.yaml` 共 26 个**，与 `lib/assistant/generated/contracts/` 下 **26 个** `*.g.dart` **一一对应**，无「有 schema 未注册生成」的缺口。
 - **未使用本路径 `schema.yaml` 的 assistant 元数据**（云聚合 / 技能同意等）：`assistant_run/*`（非单文件 `schema.yaml`）、`skill_consent/*` —— 由 **`assistant_run/fields.yaml` + `service.yaml`** 描述 HTTP 视图与实体；端侧列表/策略等 wire 类型由 **`codegen_app_metadata` → `assistant_cloud_api_wire.g.dart`** 生成（见生成器 `assistant_api_wire_codegen.go`），与 `AssistantRepository` 对齐。
 - **Go 侧**：协议形状 PoC 见 `generated/assistant/wirepoc/`（`run_artifacts` + `assistant_turn` 同构 struct + CI `go test`）；业务服务全面消费需后续接入 assistant-service。
 
@@ -46,7 +51,7 @@ SSOT：`contracts/metadata/assistant/**/schema.yaml`（及 `assistant_run/fields
 - `test_fixtures/wire_min_run_artifacts.json` — 最小 `RunArtifacts` JSON（Dart `RunArtifacts.fromJson` + Go `runartifacts.RunArtifacts` round-trip）。
 - `test_fixtures/wire_min_assistant_turn.json` — 最小 `AssistantTurnOutput` JSON（Dart + Go `assistantturn`）。
 - `test_fixtures/wire_min_run_request.json` — 最小 `AssistantRunRequest` HTTP body（Dart `AssistantRunRequest.fromJson`，见 `test/assistant/assistant_run_request_fixture_test.dart`）。
-- `test_fixtures/wire_session_turn_run_artifacts.json` — 会话历史里助手轮次常见 `runArtifacts` 壳（`journey.readiness` + `understandingSnapshot`，由单测覆写 `userFacingSummary`）。
+- `test_fixtures/wire_session_turn_run_artifacts.json` — 会话记录里助手轮次常见 `runArtifacts` 壳（`journey.readiness` + `understandingSnapshot`，由单测覆写 `userFacingSummary`）。
 
 ## 4. 相关命令
 

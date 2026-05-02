@@ -40,7 +40,6 @@ Future<void> writeAppPageAccessOpen({
     level: AppLogLevel.info,
     context: AppLogContext(
       sessionId: trace.sessionId,
-      journeyId: trace.journeyId,
       pageVisitId: pageVisitId,
     ),
     payload: AppLogPageOpenPayload(
@@ -58,7 +57,6 @@ Future<void> writeAppPageAccessOpen({
     level: AppLogLevel.info,
     context: AppLogContext(
       sessionId: trace.sessionId,
-      journeyId: trace.journeyId,
       pageVisitId: pageVisitId,
     ),
     payload: AppPerfProbe.snapshot(event: 'page_open', route: location),
@@ -80,7 +78,6 @@ Future<void> writeAppPageAccessOpen({
             pageVisitId: pageVisitId,
             occurredAt: now,
             sessionId: trace.sessionId,
-            journeyId: trace.journeyId,
             currentUserId: currentUserId,
             experimentBucket: experimentBucket,
             payload: <String, dynamic>{'event': 'open', 'route': location},
@@ -94,7 +91,6 @@ Future<void> writeAppPageAccessOpen({
             pageVisitId: pageVisitId,
             occurredAt: now,
             sessionId: trace.sessionId,
-            journeyId: trace.journeyId,
             currentUserId: currentUserId,
             experimentBucket: experimentBucket,
             payload: AppPerfProbe.snapshot(event: 'page_open', route: location),
@@ -123,7 +119,6 @@ Future<void> writeAppPageAccessReturn({
     level: AppLogLevel.info,
     context: AppLogContext(
       sessionId: trace.sessionId,
-      journeyId: trace.journeyId,
       pageVisitId: pageVisitId,
     ),
     payload: AppLogPageReturnPayload(
@@ -143,7 +138,6 @@ Future<void> writeAppPageAccessReturn({
     level: AppLogLevel.info,
     context: AppLogContext(
       sessionId: trace.sessionId,
-      journeyId: trace.journeyId,
       pageVisitId: pageVisitId,
     ),
     payload: AppPerfProbe.snapshot(
@@ -170,7 +164,6 @@ Future<void> writeAppPageAccessReturn({
             pageVisitId: pageVisitId,
             occurredAt: now,
             sessionId: trace.sessionId,
-            journeyId: trace.journeyId,
             currentUserId: currentUserId,
             experimentBucket: experimentBucket,
             payload: <String, dynamic>{
@@ -189,7 +182,6 @@ Future<void> writeAppPageAccessReturn({
             pageVisitId: pageVisitId,
             occurredAt: now,
             sessionId: trace.sessionId,
-            journeyId: trace.journeyId,
             currentUserId: currentUserId,
             experimentBucket: experimentBucket,
             payload: AppPerfProbe.snapshot(
@@ -368,7 +360,6 @@ OpsEventRecordInput _pageAccessEvent({
   required String pageVisitId,
   required DateTime occurredAt,
   required String sessionId,
-  required String journeyId,
   required String currentUserId,
   required String experimentBucket,
   required Map<String, dynamic> payload,
@@ -384,7 +375,6 @@ OpsEventRecordInput _pageAccessEvent({
     source: 'page_access',
     userIdHash: _hashUserId(currentUserId),
     sessionId: sessionId,
-    journeyId: journeyId,
     pageVisitId: pageVisitId,
     surfaceId: pageName,
     routeId: pageName,

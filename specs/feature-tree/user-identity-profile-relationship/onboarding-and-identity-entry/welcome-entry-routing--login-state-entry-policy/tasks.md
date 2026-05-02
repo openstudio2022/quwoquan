@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `entry-consistency-guard`
+## Folded current node `entry-consistency-guard`
 
 # 开发任务：entry-consistency-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `entry-consistency-guard` (from `user-identity-profile-relationship/onboarding-and-identity-entry/welcome-entry-routing/login-state-entry-policy/entry-consistency-guard`)
+- [ ] Migrated current node: `entry-consistency-guard` (from `user-identity-profile-relationship/onboarding-and-identity-entry/welcome-entry-routing/login-state-entry-policy/entry-consistency-guard`)

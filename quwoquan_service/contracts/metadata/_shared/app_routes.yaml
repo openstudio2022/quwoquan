@@ -37,6 +37,8 @@ routes:
     path: /video-viewer/{index}
   - id: assistant
     path: /assistant
+  - id: assistantPersonal
+    path: /assistant/personal
   - id: globalSearch
     path: /search
   - id: globalSearchNetworkResults

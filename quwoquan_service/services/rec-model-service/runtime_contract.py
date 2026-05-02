@@ -6,7 +6,7 @@ from typing import Any
 
 import yaml
 
-VALID_APP_ENVS = {"dev", "integration", "prod"}
+VALID_APP_ENVS = {"alpha", "beta", "gamma", "prod-gray", "prod"}
 EXPECTED_SERVICE_NAME = "recommendation-service"
 
 
@@ -53,7 +53,7 @@ def _compare_semver(a: str, b: str) -> int:
 def _runtime_paths(
     app_env: str, service_name: str, config_root: str, config_version: str
 ) -> list[Path]:
-    env_name = "local" if app_env == "dev" else app_env
+    env_name = app_env
     paths: list[Path] = []
 
     if config_root:
@@ -79,6 +79,7 @@ def _runtime_paths(
             repo_root / "releases" / "config" / service_name / f"{config_version}.yaml"
         )
     return paths
+
 
 
 def load_layered_runtime_config_or_die(
@@ -140,11 +141,11 @@ def _validate_runtime_compatibility_or_die(
 def bootstrap_runtime_contract_or_die() -> dict[str, Any]:
     """
     Fail-fast runtime contract:
-    - APP_ENV must be one of dev/integration/prod.
+    - APP_ENV must be one of alpha/beta/gamma/prod-gray/prod.
     - SERVICE_NAME, when provided, must be recommendation-service.
-    - For integration/prod, CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT are required.
+    - For gamma/prod-gray/prod, CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT are required.
     """
-    app_env = _env("APP_ENV") or "dev"
+    app_env = _env("APP_ENV") or "alpha"
     if app_env not in VALID_APP_ENVS:
         raise RuntimeError(
             f"invalid APP_ENV={app_env!r}; expected one of {sorted(VALID_APP_ENVS)}"
@@ -160,7 +161,7 @@ def bootstrap_runtime_contract_or_die() -> dict[str, Any]:
     config_version = _env("CONFIG_VERSION")
     image_version = _env("IMAGE_VERSION")
 
-    if app_env in {"integration", "prod"}:
+    if app_env in {"gamma", "prod-gray", "prod"}:
         required = ["CONFIG_VERSION", "IMAGE_VERSION", "CONFIG_ROOT"]
         missing = [k for k in required if not _env(k)]
         if missing:

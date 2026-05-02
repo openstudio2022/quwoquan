@@ -7,12 +7,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
+import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
@@ -398,8 +400,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       'body': rawBody.isNotEmpty
           ? rawBody
           : (hasStructuredPayload ? '' : post.body),
-      'coverUrl':
-          (raw?[ArticleDetailWireKeys.coverUrl] ?? post.coverUrl).toString(),
+      'coverUrl': (raw?[ArticleDetailWireKeys.coverUrl] ?? post.coverUrl)
+          .toString(),
       'thumbnailUrl': (raw?['thumbnailUrl'] ?? post.thumbnailUrl).toString(),
       'mediaUrls': raw?['mediaUrls'] ?? post.imageUrls,
       'likeCount': raw?['likeCount'] ?? post.likeCount,
@@ -674,8 +676,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
     final circleId =
         raw[ContentPostImmersiveWireKeys.circleId]?.toString() ??
-            widget.defaultCircleId ??
-            '';
+        widget.defaultCircleId ??
+        '';
     final circleName =
         raw[ContentPostImmersiveWireKeys.circleName]?.toString() ?? '';
     if (circleId.isNotEmpty) {
@@ -747,12 +749,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   Widget? _overlayFooterForPost(BuildContext context, PostBaseDto post) {
     final circleFooter = _circleFooterForPost(context, post);
     return circleFooter;
-  }
-
-  bool _isSelfPost(PostBaseDto post) {
-    final currentUserId = ref.read(currentUserIdProvider);
-    if (currentUserId.isEmpty) return false;
-    return post.authorProfileSubjectId == currentUserId;
   }
 
   bool _showsCaptionOverlay(PostBaseDto post) {
@@ -1098,177 +1094,195 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final overlayFooter = currentPost == null
         ? null
         : _overlayFooterForPost(context, currentPost);
-    final isSelfPost = currentPost != null && _isSelfPost(currentPost);
     // 与 welcome_screen 一致：阻断 MaterialApp 默认 TextStyle 合并带来的误装饰（黄下划线等）。
     return DefaultTextStyle.merge(
       style: const TextStyle(
         decoration: TextDecoration.none,
         decorationThickness: 0,
       ),
-      child: GestureDetector(
-        behavior: HitTestBehavior.deferToChild,
-        onTap: () {
-          if (!widget.showWorksToolbar) widget.onHideSystemNav?.call();
-        },
-        child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: PageView.builder(
-              controller: _pageController,
-              scrollDirection: Axis.vertical,
-              physics: const PageScrollPhysics(),
-              itemCount: posts.isEmpty ? 1 : posts.length,
-              onPageChanged: (index) {
-                if (_currentPage != index) {
-                  // Flush dwell time for the previous post
-                  final prevPost = posts[_currentPage.clamp(0, posts.length - 1)];
-                  _flushDwell(prevPost);
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: AppColors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+          systemNavigationBarColor: AppColors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+        ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.deferToChild,
+          onTap: () {
+            if (!widget.showWorksToolbar) widget.onHideSystemNav?.call();
+          },
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  physics: const PageScrollPhysics(),
+                  itemCount: posts.isEmpty ? 1 : posts.length,
+                  onPageChanged: (index) {
+                    if (_currentPage != index) {
+                      // Flush dwell time for the previous post
+                      final prevPost =
+                          posts[_currentPage.clamp(0, posts.length - 1)];
+                      _flushDwell(prevPost);
 
-                  setState(() => _currentPage = index);
-                  // Reset + restart the follow-button timer for the new post.
-                  final newPost = posts[index.clamp(0, posts.length - 1)];
-                  _startFollowButtonTimer(newPost);
-                  _trackImpressionForPost(newPost);
-                  _pageEnterTime = DateTime.now();
-                }
-              },
-              itemBuilder: (context, index) {
-                if (posts.isEmpty) {
-                  return Center(child: CupertinoActivityIndicator());
-                }
-                return _buildPostCanvas(posts[index]);
-              },
-            ),
-          ),
-
-          if (_isFilterExpanded && widget.showTopNavigation)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: _collapseFilterPanel,
-                child: const SizedBox.expand(),
+                      setState(() => _currentPage = index);
+                      // Reset + restart the follow-button timer for the new post.
+                      final newPost = posts[index.clamp(0, posts.length - 1)];
+                      _startFollowButtonTimer(newPost);
+                      _trackImpressionForPost(newPost);
+                      _pageEnterTime = DateTime.now();
+                    }
+                  },
+                  itemBuilder: (context, index) {
+                    if (posts.isEmpty) {
+                      return Center(child: CupertinoActivityIndicator());
+                    }
+                    return _buildPostCanvas(posts[index]);
+                  },
+                ),
               ),
-            ),
 
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _WorksPrimaryTopBar(
-                    layoutSpec: currentLayoutSpec,
-                    isFilterExpanded: _isFilterExpanded,
-                    progressLabel: topProgressLabel,
-                    onTapClose: _dismissViewer,
-                    onTapMore: () => _showWorksMoreSheet(context),
-                    onTapWorksArrow: _toggleFilterPanel,
-                    onTapFollowing:
-                        widget.onSwitchToFollowing ?? widget.onSwitchToMoment,
-                    onTapCircles: widget.onSwitchToCircles,
-                    onHorizontalDragEnd: _handlePrimaryTabSwipeDragEnd,
-                    showNavigationTabs: widget.showTopNavigation,
+              if (_isFilterExpanded && widget.showTopNavigation)
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _collapseFilterPanel,
+                    child: const SizedBox.expand(),
                   ),
-                  if (widget.showTopNavigation)
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 420),
-                      switchInCurve: Curves.elasticOut,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) => SizeTransition(
-                        sizeFactor: animation,
-                        axisAlignment: -1,
-                        child: FadeTransition(opacity: animation, child: child),
+                ),
+
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _WorksPrimaryTopBar(
+                        layoutSpec: currentLayoutSpec,
+                        isFilterExpanded: _isFilterExpanded,
+                        progressLabel: topProgressLabel,
+                        onTapClose: _dismissViewer,
+                        onTapMore: () => _showWorksMoreSheet(context),
+                        onTapWorksArrow: _toggleFilterPanel,
+                        onTapFollowing:
+                            widget.onSwitchToFollowing ??
+                            widget.onSwitchToMoment,
+                        onTapCircles: widget.onSwitchToCircles,
+                        onHorizontalDragEnd: _handlePrimaryTabSwipeDragEnd,
+                        showNavigationTabs: widget.showTopNavigation,
                       ),
-                      child: _isFilterExpanded
-                          ? _WorksSecondaryFilterBar(
-                              key: const ValueKey<String>('works-filter-open'),
-                              activeFilter: _filterType,
-                              onFilterChange: _applyFilter,
-                            )
-                          : const SizedBox.shrink(
-                              key: ValueKey<String>('works-filter-close'),
-                            ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-
-          if (currentPost != null && _showsCaptionOverlay(currentPost))
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: _toolbarReservedHeight + AppSpacing.containerSm,
-              child: MediaCaptionBlock(
-                layoutSpec: currentLayoutSpec,
-                railKey: const ValueKey<String>('works-caption-rail'),
-                header: counterIndicator,
-                title: overlayTitle,
-                caption: overlayBody,
-                isExpanded: _isCaptionExpanded(currentPost.id),
-                onToggle: () => _toggleCaptionExpanded(currentPost.id),
-                footer: overlayFooter,
-              ),
-            ),
-
-          if (currentPost != null && widget.showWorksToolbar)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: ImmersiveEngagementBar(
-                layoutSpec: currentLayoutSpec,
-                avatarUrl: currentPost.avatarUrl,
-                displayName: currentPost.displayName,
-                circleName: '',
-                likeCount:
-                    _postLikesCount[currentPost.id] ?? currentPost.likeCount,
-                shareCount:
-                    _postSharesCount[currentPost.id] ?? currentPost.shareCount,
-                commentCount: currentPost.commentCount,
-                isLiked: _likedPosts.contains(currentPost.id),
-                isFollowing: _followingUsers.contains(
-                  currentPost.authorProfileSubjectId,
-                ),
-                isSelfPost: isSelfPost,
-                showFollowButton: _showFollowButton,
-                onUserTap: () => widget.onUserTap(
-                  currentPost.authorProfileSubjectId,
-                  avatarUrl: currentPost.avatarUrl,
-                  displayName: currentPost.displayName,
-                  backgroundUrl: currentPost.authorBackgroundUrl,
-                ),
-                onCircleTap: () {
-                  final circleId = _primaryCircleIdForPost(currentPost);
-                  if (circleId == null || circleId.isEmpty) return;
-                  context.push(AppRoutePaths.circleDetail(id: circleId));
-                },
-                onFollowTap: () => _onFollow(currentPost),
-                onLikeTap: () => _onLike(currentPost),
-                onCommentTap: () => _openCommentFor(context, currentPost.id),
-                onShareTap: () => _sharePost(
-                  context,
-                  currentPost,
-                  enableIdentityTemplate: ref.read(
-                    contentFeatureFlagProvider(
-                      'enable_identity_share_template',
-                    ),
+                      if (widget.showTopNavigation)
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 420),
+                          switchInCurve: Curves.elasticOut,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) =>
+                              SizeTransition(
+                                sizeFactor: animation,
+                                axisAlignment: -1,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                ),
+                              ),
+                          child: _isFilterExpanded
+                              ? _WorksSecondaryFilterBar(
+                                  key: const ValueKey<String>(
+                                    'works-filter-open',
+                                  ),
+                                  activeFilter: _filterType,
+                                  onFilterChange: _applyFilter,
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey<String>('works-filter-close'),
+                                ),
+                        ),
+                    ],
                   ),
                 ),
-                onRevealSystemNav: widget.onRevealSystemNav,
               ),
-            ),
-        ],
+
+              if (currentPost != null && _showsCaptionOverlay(currentPost))
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: _toolbarReservedHeight + AppSpacing.containerSm,
+                  child: MediaCaptionBlock(
+                    layoutSpec: currentLayoutSpec,
+                    railKey: const ValueKey<String>('works-caption-rail'),
+                    header: counterIndicator,
+                    title: overlayTitle,
+                    caption: overlayBody,
+                    isExpanded: _isCaptionExpanded(currentPost.id),
+                    onToggle: () => _toggleCaptionExpanded(currentPost.id),
+                    footer: overlayFooter,
+                  ),
+                ),
+
+              if (currentPost != null && widget.showWorksToolbar)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: ImmersiveEngagementBar(
+                    layoutSpec: currentLayoutSpec,
+                    avatarUrl: currentPost.avatarUrl,
+                    displayName: currentPost.displayName,
+                    circleName: '',
+                    likeCount:
+                        _postLikesCount[currentPost.id] ??
+                        currentPost.likeCount,
+                    shareCount:
+                        _postSharesCount[currentPost.id] ??
+                        currentPost.shareCount,
+                    commentCount: currentPost.commentCount,
+                    isLiked: _likedPosts.contains(currentPost.id),
+                    isFollowing: _followingUsers.contains(
+                      currentPost.authorProfileSubjectId,
+                    ),
+                    showFollowButton: _showFollowButton,
+                    onUserTap: () => widget.onUserTap(
+                      currentPost.authorProfileSubjectId,
+                      avatarUrl: currentPost.avatarUrl,
+                      displayName: currentPost.displayName,
+                      backgroundUrl: currentPost.authorBackgroundUrl,
+                    ),
+                    onCircleTap: () {
+                      final circleId = _primaryCircleIdForPost(currentPost);
+                      if (circleId == null || circleId.isEmpty) return;
+                      context.push(AppRoutePaths.circleDetail(id: circleId));
+                    },
+                    onFollowTap: () => _onFollow(currentPost),
+                    onLikeTap: () => _onLike(currentPost),
+                    onCommentTap: () =>
+                        _openCommentFor(context, currentPost.id),
+                    onShareTap: () => _sharePost(
+                      context,
+                      currentPost,
+                      enableIdentityTemplate: ref.read(
+                        contentFeatureFlagProvider(
+                          'enable_identity_share_template',
+                        ),
+                      ),
+                    ),
+                    onRevealSystemNav: widget.onRevealSystemNav,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
-    ),
     );
   }
 
@@ -1336,8 +1350,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
           layoutSpec: _layoutSpecForPost(post),
           title: _titleForPost(post),
           body: _bodyForPost(post),
-          imageUrl: _rawPostById(post.id)?[ArticleDetailWireKeys.coverUrl]
-              ?.toString(),
+          imageUrl: _rawPostById(
+            post.id,
+          )?[ArticleDetailWireKeys.coverUrl]?.toString(),
         ),
       );
     }
@@ -1503,19 +1518,14 @@ class _WorksPrimaryTopBar extends StatelessWidget {
               top: 0,
               bottom: 0,
               child: Center(
-                child: SizedBox(
-                  key: const ValueKey<String>('works-top-back'),
-                  width: AppSpacing.iconButtonMinSizeSm,
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                    onPressed: onTapClose,
-                    child: Icon(
-                      CupertinoIcons.back,
-                      color: onTapClose == null
-                          ? AppColors.worksBodyText.withValues(alpha: 0)
-                          : AppColors.worksBodyText,
-                      size: AppSpacing.iconMedium,
+                child: Opacity(
+                  opacity: onTapClose == null ? 0 : 1,
+                  child: KeyedSubtree(
+                    key: const ValueKey<String>('works-top-back'),
+                    child: ImmersiveToolbarIconButton(
+                      icon: CupertinoIcons.back,
+                      onPressed: onTapClose,
+                      foregroundColor: AppColors.white,
                     ),
                   ),
                 ),
@@ -1537,18 +1547,10 @@ class _WorksPrimaryTopBar extends StatelessWidget {
               top: 0,
               bottom: 0,
               child: Center(
-                child: SizedBox(
-                  width: AppSpacing.iconButtonMinSizeSm,
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
-                    onPressed: onTapMore,
-                    child: Icon(
-                      CupertinoIcons.ellipsis,
-                      color: AppColors.worksBodyText,
-                      size: AppSpacing.iconMedium,
-                    ),
-                  ),
+                child: ImmersiveToolbarIconButton(
+                  icon: CupertinoIcons.ellipsis,
+                  onPressed: onTapMore,
+                  foregroundColor: AppColors.white,
                 ),
               ),
             ),
@@ -2025,15 +2027,17 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
           ),
         ),
         Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.black.withValues(alpha: 0.08),
-                  AppColors.black.withValues(alpha: 0.62),
-                ],
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.black.withValues(alpha: 0.08),
+                    AppColors.black.withValues(alpha: 0.62),
+                  ],
+                ),
               ),
             ),
           ),
@@ -2047,7 +2051,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 
   String? _thumbnailFor(PostBaseDto post) {
-    return post.primaryVisualUrl.isEmpty ? null : post.primaryVisualUrl;
+    return post.mediaThumbnailUrl.isEmpty ? null : post.mediaThumbnailUrl;
   }
 }
 
@@ -2081,6 +2085,13 @@ class _WorksArticleCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final topPaperReservedHeight =
+        MediaQuery.paddingOf(context).top +
+        AppSpacing.tabNavigationHeight +
+        AppSpacing.intraGroupSm;
+    final stagePadding = articleReaderStagePagePadding().copyWith(
+      top: topPaperReservedHeight,
+    );
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -2116,10 +2127,7 @@ class _WorksArticleCanvas extends StatelessWidget {
         Positioned(
           left: AppSpacing.intraGroupSm,
           right: AppSpacing.intraGroupSm,
-          top:
-              MediaQuery.of(context).padding.top +
-              AppSpacing.tabNavigationHeight +
-              AppSpacing.intraGroupSm,
+          top: 0,
           bottom:
               _WorksImmersiveViewerState._toolbarReservedHeight +
               AppSpacing.containerMd,
@@ -2152,7 +2160,7 @@ class _WorksArticleCanvas extends StatelessWidget {
                 initialPage: safeInitialPage,
                 enablePageCurl: enablePageCurl,
                 forceDegradedPager: forceDegradedPager,
-                pagePadding: articleReaderStagePagePadding(),
+                pagePadding: stagePadding,
                 onPageChanged: onPageChanged,
                 onOverflowPrevious: onOverflowPrevious,
                 onOverflowNext: onOverflowNext,

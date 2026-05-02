@@ -1,6 +1,6 @@
 # 页面布局语义规范（iOS 设计语言 v1）
 
-> 适用于创作、选择、设置、聊天等页面；**不含用户主页、作者主页、圈子主页**（见 §6 遗留事项）。  
+> 适用于创作、选择、设置、聊天等页面；**不含用户主页、作者主页、圈子主页**（见 §6 存量事项）。  
 > **特性树**：`runtime/runtime-client-foundation/page-layout-semantics`（L3）  
 > 参考：`02-dart-coding.mdc`、`error-and-permission-semantics.md`、`create-entry-location-visibility-circle/design.md`
 
@@ -19,7 +19,7 @@
 | **资料/分身** | PersonaManagementPage, ResonancePage, ProfileStatsPage | 个人数据管理 |
 | **发现/圈子 Tab** | DiscoveryPage, CirclesPage, ChatPage（Tab 容器） | 主 Tab 页 |
 
-### 1.2 排除页面（遗留事项）
+### 1.2 排除页面（存量事项）
 
 | 页面 | 说明 |
 |------|------|
@@ -27,7 +27,7 @@
 | **AuthorProfile**（作者主页） | 后续单独规范「作者主页设计」 |
 | **CircleDetailPage**（圈子主页） | 后续单独规范「圈子主页设计」 |
 
-> **遗留事项**：用户主页、作者主页、圈子主页的顶部/内容/底部语义与布局规范将在后续「主页设计」规范中统一补充，本规范不覆盖。
+> **存量事项**：用户主页、作者主页、圈子主页的顶部/内容/底部语义与布局规范将在后续「主页设计」规范中统一补充，本规范不覆盖。
 
 ---
 
@@ -89,9 +89,9 @@
 | **Picker** | 列表 + 单选/多选（`ListTile` 或 `CheckboxListTile`） | 地点、圈子 |
 | **Editor** | `TabBarView` / 画布 / 工具区 | 创作、图片编辑 |
 
-### 4.2 设置类页面统一结构（历史：块+描边）
+### 4.2 设置类页面统一结构（记录：块+描边）
 
-> **已演进**：全屏「系统设置式」页面必须以 **§4.3 Inset 同源** 为准；本节保留 `blockBackground` / `blockBorder` 仅用于 **非全屏 Inset** 的遗留或局部块（如半屏、WebView 宿主例外页）。
+> **已演进**：全屏「系统设置式」页面必须以 **§4.3 Inset 同源** 为准；本节保留 `blockBackground` / `blockBorder` 仅用于 **非全屏 Inset** 的存量或局部块（如半屏、WebView 宿主例外页）。
 
 设置类页面须使用 `SettingsSemanticConstants` 与 `AppSpacing` / `AppTypography`；全屏列表/表单见下节。
 
@@ -205,7 +205,7 @@
 
 ---
 
-## 8. 遗留事项（后续补充）
+## 8. 存量事项（后续补充）
 
 | 事项 | 计划 |
 |------|------|

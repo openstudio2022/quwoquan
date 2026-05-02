@@ -10,7 +10,7 @@ execution:
 
 scope:
   summary: >
-    冻结共享主页从候选建档、认领审核、认领后基础维护到软下线历史保留的端到端旅程，
+    冻结共享主页从候选建档、认领审核、认领后基础维护到软下线记录保留的端到端旅程，
     建立主页生命周期和治理闭环。
   composed_scenarios:
     - homepage-candidate-intake-and-publish
@@ -59,7 +59,7 @@ journey_acceptance:
     done_when:
       - 认领申请支持分层材料与审核状态
       - 审核通过后主页显示认领标识并开放基础维护能力
-      - 认领方不能直接修改用户口碑或历史用户内容
+      - 认领方不能直接修改用户口碑或记录用户内容
     release_guardrails:
       - 认领材料不足时必须可拒绝或补件
       - 维护边界不能越权到用户评价
@@ -78,17 +78,17 @@ journey_acceptance:
     status: pending
 
   J3:
-    title: 已关闭或失效主页可软下线并保留历史
+    title: 已关闭或失效主页可软下线并保留记录
     journey: report homepage offline -> review reason -> mark as offline -> keep history and degrade exposure
     scenario_refs:
       - homepage-offline-report-and-history-retention
     done_when:
       - 用户或认领方可上报已关闭、已结束、信息错误或长期停更
       - 审核通过后主页进入已下线状态并带原因标签
-      - 主页保留原 URL、历史内容、历史口碑和相关群组关系
+      - 主页保留原 URL、记录内容、记录口碑和相关群组关系
     release_guardrails:
       - 不允许把已下线主页直接物理删除
-      - 搜索和推荐降级不能影响历史访问
+      - 搜索和推荐降级不能影响记录访问
     evidence:
       primary:
         - T3_cross_service_integration
@@ -108,8 +108,8 @@ release_acceptance:
     title: 主页治理旅程可整体验收并整体回滚
     done_when:
       - 候选、认领、维护、下线四段生命周期契约全部冻结
-      - 认领审核、下线处理 SLA 与历史保留合同可验证
-      - 若治理链路出现严重问题，可隐藏治理入口，但不破坏已发布主页与已下线历史页
+      - 认领审核、下线处理 SLA 与记录保留合同可验证
+      - 若治理链路出现严重问题，可隐藏治理入口，但不破坏已发布主页与已下线记录页
     evidence:
       primary:
         - T3_cross_service_integration

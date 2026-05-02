@@ -2,7 +2,7 @@
 
 ## 背景与动机
 
-端侧存在 **UI 直接使用 `Map<String, dynamic>` 承载云契约**、**Mock 与 Remote 返回结构口头对齐** 等历史债，与仓库主线 **metadata-first → verify → codegen → Repository** 不一致，易导致字段漂移、双实现分叉及门禁难以自动化。
+端侧存在 **UI 直接使用 `Map<String, dynamic>` 承载云契约**、**Mock 与 Remote 返回结构口头对齐** 等记录债，与仓库主线 **metadata-first → verify → codegen → Repository** 不一致，易导致字段漂移、双实现分叉及门禁难以自动化。
 
 ## 目标用户与目标
 
@@ -10,7 +10,7 @@
 |------|------|
 | 终端用户 | 与云侧字段、错误码一致的行为与展示，减少「Mock 正常、远端异常」类问题 |
 | 开发者 | 新业务 **必须** 经元数据扩展；页面消费 **codegen 类型** 或经 metadata 注册的 ViewModel；Mock/Remote **同源实体** |
-| 质量 / CI | 可通过 **缺口清单 + 后续门禁** 收敛遗留面；新增违规可阻断 |
+| 质量 / CI | 可通过 **缺口清单 + 后续门禁** 收敛存量面；新增违规可阻断 |
 
 ## 功能范围（In Scope）
 
@@ -23,7 +23,7 @@
    - 过渡期允许在 Repository 内将 wire `Map` **仅作为反序列化输入**，边界外立即转为 codegen 类型再向上返回。
 
 3. **页面消费约束（目标态）**  
-   - `lib/ui/{domain}/pages/**` 中，**领域实体行数据**（会话、帖子、成员、圈子卡片等）应以 **codegen DTO / 基于 metadata 的 ViewModel** 进入 `build`，**禁止**长期以裸 `Map` 作为列表模型类型（见 `specs/gates/metadata_driven_ui_gap_inventory.yaml` 登记遗留）。
+   - `lib/ui/{domain}/pages/**` 中，**领域实体行数据**（会话、帖子、成员、圈子卡片等）应以 **codegen DTO / 基于 metadata 的 ViewModel** 进入 `build`，**禁止**长期以裸 `Map` 作为列表模型类型（见 `specs/gates/metadata_driven_ui_gap_inventory.yaml` 登记存量）。
 
 4. **本 baseline 交付**  
    - 本 L3 的 **spec / design / acceptance / plan**、**缺口清单**、**CR**、**tree_index** 登记。  
@@ -31,7 +31,7 @@
 
 ## Out of Scope
 
-- 不在此一次性替换所有历史 `Map` UI（由缺口清单 + 分域切片消化）。  
+- 不在此一次性替换所有记录 `Map` UI（由缺口清单 + 分域切片消化）。  
 - 不重新定义 Go 侧 EntityRegistry/拦截链（沿用现有 `quwoquan_service` 规则）。  
 - **纯本地、无云契约** 的 UI 状态（如展开/折叠 flag）不要求 metadata。  
 - **个人助理引擎** 内部 LLM 契约以 `lib/personal_assistant/contracts/` 为准，与本 L3「云 metadata」正交；若助理 **调用云 API**，仍须走 codegen Repository。
@@ -63,7 +63,7 @@
 ## 迁移与回滚
 
 - **迁移**：按域将页面列表模型替换为 codegen DTO，同步更新 Mock/Remote；在缺口清单中将对应项标为 `compliant`。  
-- **回滚**：若某域迁移失败，恢复代码并 **保留清单状态为 legacy_map**，不得删除 metadata 已存在字段。
+- **回滚**：若某域迁移失败，恢复代码并 **保留清单状态为 current_map**，不得删除 metadata 已存在字段。
 
 ## 验收重点摘要
 

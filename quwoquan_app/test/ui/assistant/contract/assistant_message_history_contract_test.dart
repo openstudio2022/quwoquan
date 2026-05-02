@@ -228,7 +228,7 @@ void main() {
       );
     });
 
-    // ── 规则 9：多轮对话历史不含任何降级消息（典型使用场景）────────────────
+    // ── 规则 9：多轮对话记录不含任何降级消息（典型使用场景）────────────────
     test(
       'Rule-9: typical multi-turn conversation without any degraded messages',
       () {

@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "reason": "",
+  "gatewayBaseUrl": "http://127.0.0.1:18080",
+  "productOpsBaseUrl": "http://127.0.0.1:18086",
+  "mediaBaseUrl": "http://127.0.0.1:80/media",
+  "deviceId": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB"
+}

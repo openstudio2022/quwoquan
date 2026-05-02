@@ -17,43 +17,19 @@ Widget _wrap(Widget child, {double width = 390}) {
   );
 }
 
-double _expectedNameSlotWidth(int visibleChars) {
-  final displayStyle = TextStyle(
-    fontSize: AppTypography.sm,
-    fontWeight: AppTypography.medium,
-  );
-  final secondaryStyle = TextStyle(
-    fontSize: AppTypography.xxs,
-    fontWeight: AppTypography.medium,
-  );
-  final displayWidth = _measureTextWidth(
-    visibleChars,
-    displayStyle,
-    includeEllipsis: true,
-  );
-  final secondaryWidth = _measureTextWidth(
-    visibleChars,
-    secondaryStyle,
-    includeEllipsis: true,
-  );
-  return displayWidth > secondaryWidth ? displayWidth : secondaryWidth;
-}
-
-double _measureTextWidth(
-  int charCount,
-  TextStyle style, {
-  bool includeEllipsis = false,
-}) {
+double _nameSlotWidthForChars(int charCount) {
   const sample = '一二三四五六七八九十';
-  final text = sample.substring(0, charCount);
-  final painter = TextPainter(
+  final tp = TextPainter(
     text: TextSpan(
-      text: '$text${includeEllipsis ? '...' : ''}',
-      style: style,
+      text: sample.substring(0, charCount),
+      style: const TextStyle(
+        fontSize: AppTypography.sm,
+        fontWeight: AppTypography.medium,
+      ),
     ),
     textDirection: TextDirection.ltr,
   )..layout();
-  return painter.width;
+  return tp.width;
 }
 
 void main() {
@@ -98,7 +74,10 @@ void main() {
     // 动作组右缘完全贴合 track 右缘（固定宽 + 右锚定）
     expect((railRect.right - actionGroupRect.right).abs(), lessThan(1));
     // Track 外侧留白 = 水平 inset
-    expect((rootRect.right - railRect.right - AppSpacing.containerMd).abs(), lessThan(1));
+    expect(
+      (rootRect.right - railRect.right - AppSpacing.containerMd).abs(),
+      lessThan(1),
+    );
   });
 
   testWidgets('我的 post 使用无作者栏的一行三等分工具栏', (tester) async {
@@ -176,10 +155,14 @@ void main() {
       find.byKey(const ValueKey('immersive-actions-group')),
     );
 
-    // mediaStage 无内容宽上限，rail 填满 containerMd inset 之后的全部可用宽度
+    // mediaStage：全宽 rail，仅 containerMd 水平 inset，不收窄到 feedMaxContentWidth。
     expect((railRect.left - AppSpacing.containerMd).abs(), lessThan(1));
     expect(
       (rootRect.right - railRect.right - AppSpacing.containerMd).abs(),
+      lessThan(1),
+    );
+    expect(
+      (railRect.width - (rootRect.width - AppSpacing.containerMd * 2)).abs(),
       lessThan(1),
     );
     // 作者左缘锚 rail 左缘，动作右缘锚 rail 右缘
@@ -187,9 +170,7 @@ void main() {
     expect((railRect.right - actionRect.right).abs(), lessThan(1));
   });
 
-  testWidgets('iPad 宽屏下 clusterGap 等于档位常量 interGroupLg，中间余量落在 RightSpacer', (
-    tester,
-  ) async {
+  testWidgets('iPad 宽屏下 clusterGap 保持组间距语义', (tester) async {
     const width = 1024.0;
     await tester.pumpWidget(
       _wrap(
@@ -223,14 +204,11 @@ void main() {
       find.byKey(const ValueKey('immersive-engagement-rail')),
     );
 
-    // 作者组 -> 关注槽位 -> clusterGap(=interGroupLg 档位常量) -> RightSpacer -> 动作组
-    // 组间距本身就是 interGroupLg，RightSpacer 吸收剩余，不会影响 clusterGap 数值；
+    // 作者组 -> 关注槽位 -> clusterGap(=interGroupMd 档位常量) -> RightSpacer -> 动作组
+    // 组间距本身就是 interGroupMd，RightSpacer 吸收剩余，不会影响 clusterGap 数值；
     // 整段"作者右缘到动作左缘"至少包含 clusterGap。
     final betweenGroups = actionRect.left - authorRect.right;
-    expect(
-      betweenGroups,
-      greaterThanOrEqualTo(AppSpacing.interGroupLg - 1),
-    );
+    expect(betweenGroups, greaterThanOrEqualTo(AppSpacing.interGroupMd - 1));
 
     // 动作右缘严格贴合 rail 右缘，作者左缘严格贴合 rail 左缘
     expect((railRect.right - actionRect.right).abs(), lessThan(1));
@@ -274,18 +252,16 @@ void main() {
       lessThan(1),
       reason: 'follow 显隐不应改变赞按钮位置',
     );
-    expect(
-      (withoutFollow.right - withFollow.right).abs(),
-      lessThan(1),
-    );
+    expect((withoutFollow.right - withFollow.right).abs(), lessThan(1));
   });
 
-  testWidgets('手机窄屏固定显示 4 个作者名宽度', (tester) async {
+  testWidgets('手机窄屏 12 字作者名两行展示且不越过关注槽位左缘', (tester) async {
+    const twelveChars = '一二三四五六七八九十甲乙';
     await tester.pumpWidget(
       _wrap(
         const ImmersiveEngagementBar(
           avatarUrl: '',
-          displayName: '特别长的作者名字用于验证固定宽度',
+          displayName: twelveChars,
           circleName: '',
           likeCount: 12,
           shareCount: 8,
@@ -302,14 +278,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final nameRect = tester.getRect(
+    expect(find.text(twelveChars), findsOneWidget);
+    final textRect = tester.getRect(find.text(twelveChars));
+    expect(textRect.height, greaterThan(18));
+    final nameSlotRect = tester.getRect(
       find.byKey(const ValueKey('immersive-author-name-slot')),
     );
-    // 允许降级链压缩少量像素以防止溢出
-    expect(nameRect.width, lessThanOrEqualTo(_expectedNameSlotWidth(4) + 1));
+    final followLaneRect = tester.getRect(
+      find.byKey(const ValueKey('immersive-follow-lane')),
+    );
+    expect(nameSlotRect.right, lessThanOrEqualTo(followLaneRect.left + 1));
   });
 
-  testWidgets('常规手机固定显示 5 个作者名宽度且 follow 开关不漂移', (tester) async {
+  testWidgets('常规手机 follow 出现时作者名保持 5 字固定槽且动作组不变', (tester) async {
     await tester.pumpWidget(
       _wrap(
         const ImmersiveEngagementBar(
@@ -363,15 +344,14 @@ void main() {
       find.byKey(const ValueKey('immersive-follow-button')),
     );
 
-    // 作者名槽位宽度不因 follow 显隐而改变
+    // regular 档位固定 5 字槽，follow 出现不按文本长度移动槽位。
     expect(
       (hiddenFollowNameRect.width - shownFollowNameRect.width).abs(),
       lessThan(1),
     );
-    // 作者名宽度不超过档位上限
     expect(
       shownFollowNameRect.width,
-      lessThanOrEqualTo(_expectedNameSlotWidth(5) + 1),
+      moreOrLessEquals(_nameSlotWidthForChars(5), epsilon: 1),
     );
     // follow 按钮紧贴作者名右缘 + intraGroupXs
     expect(
@@ -381,12 +361,143 @@ void main() {
     );
   });
 
-  testWidgets('大手机及以上固定显示 6 个作者名宽度', (tester) async {
+  testWidgets('iPad 三字作者名仍占 6 字固定槽位', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+          avatarUrl: '',
+          displayName: '纸上居',
+          circleName: '',
+          likeCount: 117,
+          shareCount: 6,
+          commentCount: 0,
+          isLiked: false,
+          isFollowing: false,
+          onUserTap: _noop,
+          onCircleTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+        width: 1024,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final nameRect = tester.getRect(
+      find.byKey(const ValueKey('immersive-author-name-slot')),
+    );
+    final followRect = tester.getRect(
+      find.byKey(const ValueKey('immersive-follow-button')),
+    );
+
+    expect(
+      nameRect.width,
+      moreOrLessEquals(_nameSlotWidthForChars(6), epsilon: 1),
+    );
+    expect(
+      (followRect.left - nameRect.right - AppSpacing.intraGroupXs).abs(),
+      lessThan(2),
+    );
+  });
+
+  testWidgets('iPad 五字作者名在 6 字槽内单行完整展示', (tester) async {
+    const authorName = '城市观察员';
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+          avatarUrl: '',
+          displayName: authorName,
+          circleName: '',
+          likeCount: 211,
+          shareCount: 18,
+          commentCount: 0,
+          isLiked: false,
+          isFollowing: false,
+          onUserTap: _noop,
+          onCircleTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+        width: 1024,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(authorName), findsOneWidget);
+    final nameRect = tester.getRect(
+      find.byKey(const ValueKey('immersive-author-name-slot')),
+    );
+    final textRect = tester.getRect(find.text(authorName));
+
+    expect(
+      nameRect.width,
+      moreOrLessEquals(_nameSlotWidthForChars(6), epsilon: 1),
+    );
+    expect(textRect.height, lessThan(22));
+  });
+
+  testWidgets('作者名超过 12 字截断为 12 字展示', (tester) async {
     await tester.pumpWidget(
       _wrap(
         const ImmersiveEngagementBar(
           avatarUrl: '',
-          displayName: '特别长的作者名字用于验证固定宽度',
+          displayName: '一二三四五六七八九十甲乙丙丁戊',
+          circleName: '',
+          likeCount: 1,
+          shareCount: 1,
+          commentCount: 1,
+          isLiked: false,
+          isFollowing: false,
+          onUserTap: _noop,
+          onCircleTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+        width: 390,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('一二三四五六七八九十甲乙'), findsOneWidget);
+    expect(find.textContaining('丙'), findsNothing);
+  });
+
+  testWidgets('单字作者名单行展示', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          avatarUrl: '',
+          displayName: '甲',
+          circleName: '',
+          likeCount: 1,
+          shareCount: 1,
+          commentCount: 1,
+          isLiked: false,
+          isFollowing: false,
+          onUserTap: _noop,
+          onCircleTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+        width: 390,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final textRect = tester.getRect(find.text('甲'));
+    expect(textRect.height, lessThan(22));
+  });
+
+  testWidgets('iPad 宽屏 12 字作者名使用 6 字槽并启用两行兜底', (tester) async {
+    const twelveChars = '一二三四五六七八九十甲乙';
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+          avatarUrl: '',
+          displayName: twelveChars,
           circleName: '',
           likeCount: 12,
           shareCount: 8,
@@ -398,18 +509,47 @@ void main() {
           onFollowTap: _noop,
           onLikeTap: _noop,
         ),
-        width: 430,
+        width: 1024,
       ),
     );
     await tester.pumpAndSettle();
 
+    expect(find.text(twelveChars), findsOneWidget);
     final nameRect = tester.getRect(
       find.byKey(const ValueKey('immersive-author-name-slot')),
     );
+    final textWidget = tester.widget<Text>(find.text(twelveChars));
+
     expect(
       nameRect.width,
-      lessThanOrEqualTo(_expectedNameSlotWidth(6) + 1),
+      moreOrLessEquals(_nameSlotWidthForChars(6), epsilon: 1),
     );
+    expect(textWidget.maxLines, 2);
+  });
+
+  testWidgets('无头像时底栏头像仍显示兜底人像图标', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          avatarUrl: '',
+          displayName: '头像用户',
+          circleName: '',
+          likeCount: 12,
+          shareCount: 8,
+          commentCount: 5,
+          isLiked: false,
+          isFollowing: false,
+          onUserTap: _noop,
+          onCircleTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CircleAvatar), findsOneWidget);
+    expect(find.byIcon(Icons.person), findsOneWidget);
   });
 }
 

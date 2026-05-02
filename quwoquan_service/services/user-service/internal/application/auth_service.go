@@ -630,7 +630,7 @@ func (s *SubAccountService) RetirePersona(ctx context.Context, ownerID, personaI
 		"canRetire":            false,
 		"requiredAction":       "",
 		"reasonCode":           "allowed",
-		"message":              "分身已退役，历史归因已保留",
+		"message":              "分身已退役，记录归因已保留",
 	}, nil
 }
 
@@ -901,9 +901,9 @@ func lifecycleGuardMessage(reason string) string {
 	case "blocked_active_persona":
 		return "请先切换到其他分身后再执行该操作"
 	case "blocked_retired_persona":
-		return "该分身已退役，历史归因已保留，不可删除或再次退役"
+		return "该分身已退役，记录归因已保留，不可删除或再次退役"
 	case "retire_instead_of_delete":
-		return "该分身已有历史归因，请使用退役而不是删除"
+		return "该分身已有记录归因，请使用退役而不是删除"
 	default:
 		return ""
 	}

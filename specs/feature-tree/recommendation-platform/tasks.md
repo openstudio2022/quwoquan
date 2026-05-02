@@ -2,7 +2,7 @@
 
 ## 当前交付任务
 
-- [x] 确保 rec-model-training 与 rec-model-service 目录与 tree_index 一致，无遗留 rec-model-engineering-service 引用
+- [x] 确保 rec-model-training 与 rec-model-service 目录与 tree_index 一致，无存量 rec-model-engineering-service 引用
 - [x] rec-model-training：训练管线（样本、数据集、特征、训练、注册）与训练部署（镜像、PAI/火山任务）见其下 L4/L5 tasks；脚本落点 `scripts/ml/`，feature_registry.yaml、sample_joiner、train.py、evaluate.py、model_registry、Dockerfile 已就绪
 - [x] rec-model-service：推理 API、Go 集成、推理部署见其下 L4/L5 tasks；契约与 [readiness.md](rec-model-service/readiness.md) 就绪检查一致；Phase 1–3 已实施（CascadeScorer、FastAPI /v1/score、Dockerfile、docker-compose）
 - [x] 两服务共用 feature_registry、ModelRegistry 契约；训练产出可被推理侧从 Registry/OSS 加载

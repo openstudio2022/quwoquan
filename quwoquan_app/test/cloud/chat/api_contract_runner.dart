@@ -4,17 +4,22 @@
 ///
 /// 执行方式：
 ///   ```
-///   STAGING_BASE_URL=https://staging.api.quwoquan.com \
-///   TEST_AUTH_TOKEN=TOKEN \
+///   API_CONTRACT_ENV=gamma \
+///   GAMMA_BASE_URL=https://gamma-api.quwoquan.com \
+///   GAMMA_TEST_AUTH_TOKEN=TOKEN \
+///   make test-api-contract-chat
+///
+///   # 或直接执行本文件：
 ///   flutter test test/cloud/chat/api_contract_runner.dart \
-///     --dart-define=STAGING_BASE_URL=... \
+///     --dart-define=API_CONTRACT_ENV=gamma \
+///     --dart-define=API_CONTRACT_BASE_URL=... \
 ///     --dart-define=TEST_AUTH_TOKEN=...
 ///   ```
 ///
 /// CI 策略：
-///   - daily（staging 可用时自动触发）
+///   - daily（gamma 可用时自动触发）
 ///   - pre-release 必须通过
-///   - staging 不可用 → markTestSkipped，不 fail
+///   - gamma 不可用 → markTestSkipped，不 fail
 ///
 /// Mock Wall：本文件发真实 HTTP，位于 Mock Wall 右侧，禁止注入 MockRepository。
 library;
@@ -26,22 +31,26 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 
-const _stagingBase = String.fromEnvironment('STAGING_BASE_URL');
+const _apiContractEnv = String.fromEnvironment(
+  'API_CONTRACT_ENV',
+  defaultValue: 'gamma',
+);
+const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 
 // ─── Shared state ───────────────────────────────────────────────────────────
 
-bool _stagingAvailable = false;
+bool _apiAvailable = false;
 late http.Client _client;
 
 Map<String, String> _authHeaders(String pageId) => {
-      ...CloudRequestHeaders.forPage(pageId),
-      if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
-    };
+  ...CloudRequestHeaders.forPage(pageId),
+  if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
+};
 
 /// 创建一个测试会话，返回 conversationId。
 Future<String> _seedConversation() async {
-  final url = Uri.parse('$_stagingBase/v1/chat/conversations');
+  final url = Uri.parse('$_apiBase/v1/chat/conversations');
   final resp = await _client
       .post(
         url,
@@ -58,7 +67,8 @@ Future<String> _seedConversation() async {
       .timeout(const Duration(seconds: 10));
   if (resp.statusCode != 201) {
     throw Exception(
-        '_seedConversation failed: ${resp.statusCode} ${resp.body}');
+      '_seedConversation failed: ${resp.statusCode} ${resp.body}',
+    );
   }
   final id = (jsonDecode(resp.body) as Map<String, dynamic>)['_id'] as String;
   return id;
@@ -66,9 +76,12 @@ Future<String> _seedConversation() async {
 
 /// 发送一条测试消息，返回响应 body。
 Future<Map<String, dynamic>> _sendMessage(
-    String conversationId, String clientMsgId) async {
+  String conversationId,
+  String clientMsgId,
+) async {
   final url = Uri.parse(
-      '$_stagingBase/v1/chat/conversations/$conversationId/messages');
+    '$_apiBase/v1/chat/conversations/$conversationId/messages',
+  );
   final resp = await _client
       .post(
         url,
@@ -93,30 +106,32 @@ Future<Map<String, dynamic>> _sendMessage(
 
 void main() {
   setUpAll(() async {
-    if (_stagingBase.isEmpty) {
+    if (_apiBase.isEmpty) {
       markTestSkipped(
-          'L3: STAGING_BASE_URL not set — all api_contract tests skipped');
+        'L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set — all api_contract tests skipped',
+      );
       return;
     }
     try {
       final probe = await http
-          .head(Uri.parse(_stagingBase))
+          .get(Uri.parse('$_apiBase/healthz'))
           .timeout(const Duration(seconds: 5));
       if (probe.statusCode >= 500) {
         markTestSkipped(
-            'L3: staging returned ${probe.statusCode} — tests skipped');
+          'L3: $_apiContractEnv returned ${probe.statusCode} — tests skipped',
+        );
         return;
       }
     } catch (e) {
-      markTestSkipped('L3: staging unreachable ($e) — tests skipped');
+      markTestSkipped('L3: $_apiContractEnv unreachable ($e) — tests skipped');
       return;
     }
     _client = http.Client();
-    _stagingAvailable = true;
+    _apiAvailable = true;
   });
 
   tearDownAll(() {
-    if (_stagingAvailable) _client.close();
+    if (_apiAvailable) _client.close();
   });
 
   // ── 场景 1：list_conversations_contract ───────────────────────────────────
@@ -124,14 +139,14 @@ void main() {
     late String convId;
 
     setUpAll(() async {
-      if (!_stagingAvailable) return;
+      if (!_apiAvailable) return;
       convId = await _seedConversation();
     });
 
     test('GET /v1/chat/conversations 返回 200 + items 数组', () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
-      final url =
-          Uri.parse('$_stagingBase/v1/chat/conversations?limit=5');
+      if (!_apiAvailable)
+        return markTestSkipped('$_apiContractEnv unavailable');
+      final url = Uri.parse('$_apiBase/v1/chat/conversations?limit=5');
       final sw = Stopwatch()..start();
       final resp = await _client
           .get(url, headers: _authHeaders('chat.conversation.list'))
@@ -140,15 +155,24 @@ void main() {
 
       // 协议层
       expect(resp.statusCode, 200);
-      expect(sw.elapsedMilliseconds, lessThan(800),
-          reason: 'conversations list SLO: <800ms');
+      expect(
+        sw.elapsedMilliseconds,
+        lessThan(800),
+        reason: 'conversations list SLO: <800ms',
+      );
 
       // 结构层
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      expect(body.containsKey('items'), isTrue,
-          reason: 'response must contain items');
-      expect(body.containsKey('cursor'), isTrue,
-          reason: 'response must contain cursor for pagination');
+      expect(
+        body.containsKey('items'),
+        isTrue,
+        reason: 'response must contain items',
+      );
+      expect(
+        body.containsKey('cursor'),
+        isTrue,
+        reason: 'response must contain cursor for pagination',
+      );
 
       final items = body['items'] as List;
       expect(items, isNotEmpty);
@@ -161,10 +185,11 @@ void main() {
     });
 
     test('conversation 字段结构完整', () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      if (!_apiAvailable)
+        return markTestSkipped('$_apiContractEnv unavailable');
       final resp = await _client
           .get(
-            Uri.parse('$_stagingBase/v1/chat/conversations/$convId'),
+            Uri.parse('$_apiBase/v1/chat/conversations/$convId'),
             headers: _authHeaders('chat.conversation.get'),
           )
           .timeout(const Duration(seconds: 10));
@@ -183,18 +208,22 @@ void main() {
     late String convId;
 
     setUpAll(() async {
-      if (!_stagingAvailable) return;
+      if (!_apiAvailable) return;
       convId = await _seedConversation();
     });
 
     test('发送消息返回 201 + seq + messageId', () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      if (!_apiAvailable)
+        return markTestSkipped('$_apiContractEnv unavailable');
       final sw = Stopwatch()..start();
       final result = await _sendMessage(convId, 'l3-send-001');
       sw.stop();
 
-      expect(sw.elapsedMilliseconds, lessThan(500),
-          reason: 'send message SLO: <500ms');
+      expect(
+        sw.elapsedMilliseconds,
+        lessThan(500),
+        reason: 'send message SLO: <500ms',
+      );
       expect(result.containsKey('messageId'), isTrue);
       expect(result.containsKey('seq'), isTrue);
       expect(result.containsKey('timestamp'), isTrue);
@@ -202,25 +231,34 @@ void main() {
     });
 
     test('相同 clientMsgId 幂等（dedup）', () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      if (!_apiAvailable)
+        return markTestSkipped('$_apiContractEnv unavailable');
       final msg1 = await _sendMessage(convId, 'l3-dedup-001');
       final msg2 = await _sendMessage(convId, 'l3-dedup-001');
 
-      expect(msg1['messageId'], msg2['messageId'],
-          reason: 'duplicate clientMsgId should return same messageId');
-      expect(msg1['seq'], msg2['seq'],
-          reason: 'duplicate clientMsgId should return same seq');
+      expect(
+        msg1['messageId'],
+        msg2['messageId'],
+        reason: 'duplicate clientMsgId should return same messageId',
+      );
+      expect(
+        msg1['seq'],
+        msg2['seq'],
+        reason: 'duplicate clientMsgId should return same seq',
+      );
     });
 
     test('撤回消息返回 200 + status=recalled', () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      if (!_apiAvailable)
+        return markTestSkipped('$_apiContractEnv unavailable');
       final msg = await _sendMessage(convId, 'l3-recall-001');
       final msgId = msg['messageId'] as String;
 
       final recallResp = await _client
           .post(
             Uri.parse(
-                '$_stagingBase/v1/chat/conversations/$convId/messages/$msgId/recall'),
+              '$_apiBase/v1/chat/conversations/$convId/messages/$msgId/recall',
+            ),
             headers: {
               ..._authHeaders('chat.message.recall'),
               'Content-Type': 'application/json',
@@ -235,13 +273,15 @@ void main() {
     });
 
     test('消息列表包含已发送消息', () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      if (!_apiAvailable)
+        return markTestSkipped('$_apiContractEnv unavailable');
       await _sendMessage(convId, 'l3-list-001');
 
       final resp = await _client
           .get(
             Uri.parse(
-                '$_stagingBase/v1/chat/conversations/$convId/messages?limit=10'),
+              '$_apiBase/v1/chat/conversations/$convId/messages?limit=10',
+            ),
             headers: _authHeaders('chat.message.list'),
           )
           .timeout(const Duration(seconds: 10));
@@ -262,29 +302,36 @@ void main() {
 
   // ── 场景 3：error_not_found_contract ──────────────────────────────────────
   group('error_not_found_contract', () {
-    test('不存在的 conversationId → 404 + CHAT.USER.conversation_not_found',
-        () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
-      final resp = await _client
-          .get(
-            Uri.parse(
-                '$_stagingBase/v1/chat/conversations/nonexistent_conv_00000'),
-            headers: _authHeaders('chat.conversation.get'),
-          )
-          .timeout(const Duration(seconds: 10));
+    test(
+      '不存在的 conversationId → 404 + CHAT.USER.conversation_not_found',
+      () async {
+        if (!_apiAvailable)
+          return markTestSkipped('$_apiContractEnv unavailable');
+        final resp = await _client
+            .get(
+              Uri.parse(
+                '$_apiBase/v1/chat/conversations/nonexistent_conv_00000',
+              ),
+              headers: _authHeaders('chat.conversation.get'),
+            )
+            .timeout(const Duration(seconds: 10));
 
-      // 协议层
-      expect(resp.statusCode, 404);
+        // 协议层
+        expect(resp.statusCode, 404);
 
-      // 结构层
-      final body = jsonDecode(resp.body) as Map<String, dynamic>;
-      expect(body.containsKey('code'), isTrue,
-          reason: 'error response must have code field');
+        // 结构层
+        final body = jsonDecode(resp.body) as Map<String, dynamic>;
+        expect(
+          body.containsKey('code'),
+          isTrue,
+          reason: 'error response must have code field',
+        );
 
-      // 语义层：端侧 ErrorCode 映射
-      final code = ChatErrorCode.fromCode(body['code'] as String);
-      expect(code, ChatErrorCode.conversationNotFound);
-    });
+        // 语义层：端侧 ErrorCode 映射
+        final code = ChatErrorCode.fromCode(body['code'] as String);
+        expect(code, ChatErrorCode.conversationNotFound);
+      },
+    );
   });
 
   // ── 场景 4：sync_messages_contract ────────────────────────────────────────
@@ -292,7 +339,7 @@ void main() {
     late String convId;
 
     setUpAll(() async {
-      if (!_stagingAvailable) return;
+      if (!_apiAvailable) return;
       convId = await _seedConversation();
       for (int i = 0; i < 5; i++) {
         await _sendMessage(convId, 'l3-sync-seed-$i');
@@ -300,12 +347,12 @@ void main() {
     });
 
     test('POST /sync 返回增量消息', () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      if (!_apiAvailable)
+        return markTestSkipped('$_apiContractEnv unavailable');
       final sw = Stopwatch()..start();
       final resp = await _client
           .post(
-            Uri.parse(
-                '$_stagingBase/v1/chat/conversations/$convId/sync'),
+            Uri.parse('$_apiBase/v1/chat/conversations/$convId/sync'),
             headers: {
               ..._authHeaders('chat.message.sync'),
               'Content-Type': 'application/json',
@@ -316,8 +363,7 @@ void main() {
       sw.stop();
 
       expect(resp.statusCode, 200);
-      expect(sw.elapsedMilliseconds, lessThan(800),
-          reason: 'sync SLO: <800ms');
+      expect(sw.elapsedMilliseconds, lessThan(800), reason: 'sync SLO: <800ms');
 
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       expect(body.containsKey('messages'), isTrue);
@@ -331,16 +377,16 @@ void main() {
     late String convId;
 
     setUpAll(() async {
-      if (!_stagingAvailable) return;
+      if (!_apiAvailable) return;
       convId = await _seedConversation();
     });
 
     test('添加成员 → 成员列表包含新成员', () async {
-      if (!_stagingAvailable) return markTestSkipped('staging unavailable');
+      if (!_apiAvailable)
+        return markTestSkipped('$_apiContractEnv unavailable');
       final addResp = await _client
           .post(
-            Uri.parse(
-                '$_stagingBase/v1/chat/conversations/$convId/members'),
+            Uri.parse('$_apiBase/v1/chat/conversations/$convId/members'),
             headers: {
               ..._authHeaders('chat.member.add'),
               'Content-Type': 'application/json',
@@ -356,7 +402,8 @@ void main() {
       final listResp = await _client
           .get(
             Uri.parse(
-                '$_stagingBase/v1/chat/conversations/$convId/members?limit=50'),
+              '$_apiBase/v1/chat/conversations/$convId/members?limit=50',
+            ),
             headers: _authHeaders('chat.member.list'),
           )
           .timeout(const Duration(seconds: 10));

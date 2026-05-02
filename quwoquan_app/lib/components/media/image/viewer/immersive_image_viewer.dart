@@ -17,6 +17,7 @@ import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
@@ -29,8 +30,15 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   final int initialIndex;
   final List<PostSummaryView> posts;
   final int initialPostIndex;
+
   /// username 必填；avatarUrl、displayName、backgroundUrl 可选，传入后作者页优先展示以与浏览页一致
-  final void Function(String username, {String? avatarUrl, String? displayName, String? backgroundUrl}) onUserClick;
+  final void Function(
+    String username, {
+    String? avatarUrl,
+    String? displayName,
+    String? backgroundUrl,
+  })
+  onUserClick;
   final Function(String, bool)? onFollowClick;
   final Function(PostSummaryView)? onCommentsClick;
   final Function(PostSummaryView)? onMoreClick;
@@ -50,14 +58,19 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   final bool enableHeroAnimation;
   final Map<String, dynamic>? heroAnimationSource;
   final Function(String)? onHeroAnimationComplete;
+
   /// 私人助理入口（中间图标，点击跳转助理主页）
   final VoidCallback? onAssistantClick;
+
   /// 滑动接近末尾时回调（用于加载更多）
   final VoidCallback? onNearEnd;
+
   /// flat：一维横向（作品/美图）；nested：外垂直（微趣）× 内横向（同微趣图）
   final String layoutMode;
+
   /// 同微趣内图片索引（nested 模式使用）
   final int initialImageIndex;
+
   /// 'full'（默认）| 'backOnly'：backOnly 时顶栏仅返回、更多
   final String toolbarMode;
 
@@ -97,22 +110,23 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<ImmersiveImageViewer> createState() => _ImmersiveImageViewerState();
+  ConsumerState<ImmersiveImageViewer> createState() =>
+      _ImmersiveImageViewerState();
 }
 
-class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer> 
+class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     with TickerProviderStateMixin {
   late PageController _pageController;
   PageController? _outerPageController;
   final Map<int, PageController> _innerControllers = {};
   late AnimationController _fadeController;
   late AnimationController _controlsController;
-  
+
   int _currentEntryIndex = 0;
   int _currentPostIndex = 0;
   int _currentImageIndex = 0;
   List<_ViewerImageEntry> _mediaEntries = const <_ViewerImageEntry>[];
-  
+
   // 本地状态
   bool _isLiked = false;
   bool _isSaved = false;
@@ -134,24 +148,30 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     _rebuildMediaEntries();
     final useNested = widget.layoutMode == 'nested';
     if (useNested && widget.posts.isNotEmpty) {
-      _currentPostIndex = widget.initialPostIndex.clamp(0, widget.posts.length - 1);
+      _currentPostIndex = widget.initialPostIndex.clamp(
+        0,
+        widget.posts.length - 1,
+      );
       final urls = _collectPostImageUrls(widget.posts[_currentPostIndex]);
-      _currentImageIndex = widget.initialImageIndex.clamp(0, urls.isEmpty ? 0 : urls.length - 1);
+      _currentImageIndex = widget.initialImageIndex.clamp(
+        0,
+        urls.isEmpty ? 0 : urls.length - 1,
+      );
       _outerPageController = PageController(initialPage: _currentPostIndex);
     }
     _pageController = PageController(initialPage: _currentEntryIndex);
-    
+
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
+
     _controlsController = AnimationController(
       duration: const Duration(milliseconds: 200),
       vsync: this,
     );
     _controlsController.value = 1.0; // 默认显示工具栏
-    
+
     _initializePostState();
     _startAutoHideTimer();
     _applySystemUiMode();
@@ -188,8 +208,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
 
   _ViewerImageEntry? get _currentEntry =>
       (_mediaEntries.isNotEmpty && _currentEntryIndex < _mediaEntries.length)
-          ? _mediaEntries[_currentEntryIndex]
-          : null;
+      ? _mediaEntries[_currentEntryIndex]
+      : null;
 
   int get _effectivePostIndex => widget.layoutMode == 'nested'
       ? _currentPostIndex
@@ -197,8 +217,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
 
   PostSummaryView? get _currentPost =>
       (widget.posts.isNotEmpty && _effectivePostIndex < widget.posts.length)
-          ? widget.posts[_effectivePostIndex]
-          : null;
+      ? widget.posts[_effectivePostIndex]
+      : null;
 
   List<String> _collectPostImageUrls(PostSummaryView post) {
     final images = (post.images ?? const <String>[])
@@ -209,7 +229,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         .where((e) => e.startsWith('http://') || e.startsWith('https://'))
         .toList(growable: false);
     if (valid.isNotEmpty) return valid;
-    final thumb = post.thumbnail?.trim() ??
+    final thumb =
+        post.thumbnail?.trim() ??
         post.thumbnailUrl?.trim() ??
         post.coverUrl?.trim() ??
         '';
@@ -245,15 +266,22 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     }
     if (keepCurrent && oldEntry != null) {
       final preserved = _mediaEntries.indexWhere(
-        (e) => e.postIndex == oldEntry.postIndex && e.imageIndex == oldEntry.imageIndex,
+        (e) =>
+            e.postIndex == oldEntry.postIndex &&
+            e.imageIndex == oldEntry.imageIndex,
       );
       if (preserved >= 0) {
         _currentEntryIndex = preserved;
         return;
       }
     }
-    final initialPost = widget.initialPostIndex.clamp(0, widget.posts.length - 1);
-    final firstOfPost = _mediaEntries.indexWhere((e) => e.postIndex == initialPost);
+    final initialPost = widget.initialPostIndex.clamp(
+      0,
+      widget.posts.length - 1,
+    );
+    final firstOfPost = _mediaEntries.indexWhere(
+      (e) => e.postIndex == initialPost,
+    );
     _currentEntryIndex = firstOfPost >= 0 ? firstOfPost : 0;
   }
 
@@ -308,6 +336,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
           }
         }
       }
+
       _controlsController.addStatusListener(listener);
     }
   }
@@ -373,7 +402,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         _likesCount = (_likesCount - 1).clamp(0, double.infinity).toInt();
       }
     });
-    
+
     final currentPost = _currentPost;
     if (currentPost != null) {
       widget.onLikeClick?.call(currentPost);
@@ -389,7 +418,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         _savesCount = (_savesCount - 1).clamp(0, double.infinity).toInt();
       }
     });
-    
+
     final currentPost = _currentPost;
     if (currentPost != null) {
       widget.onSaveClick?.call(currentPost);
@@ -411,7 +440,6 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   void _handleCommentsClick() {
     final currentPost = _currentPost;
     if (currentPost != null) {
-      
       // 显示评论弹窗
       final commentConfig = CommentConfig();
 
@@ -446,7 +474,6 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   void _handleMoreClick() {
     final currentPost = _currentPost;
     if (currentPost != null) {
-      
       // 显示更多操作弹窗（1:1 PostActionSheet：复制链接、保存、举报等）
       final config = MediaPostMoreActionConfig(
         onReward: () => debugPrint('Reward post: ${currentPost.id}'),
@@ -468,10 +495,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         onReport: () => debugPrint('Report post: ${currentPost.id}'),
       );
 
-      MoreActionPopup.show(
-        context: context,
-        config: config,
-      );
+      MoreActionPopup.show(context: context, config: config);
     }
   }
 
@@ -507,20 +531,23 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
     _resolvingImageAspectRatios.add(imageUrl);
     final stream = NetworkImage(imageUrl).resolve(const ImageConfiguration());
     stream.addListener(
-      ImageStreamListener((info, _) {
-        final ratio = info.image.width / info.image.height;
-        _resolvingImageAspectRatios.remove(imageUrl);
-        if (_imageAspectRatios[imageUrl] == ratio) return;
-        _imageAspectRatios[imageUrl] = ratio;
-        if (!mounted) return;
-        // 避免在 build 过程中触发 setState 导致异常
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+      ImageStreamListener(
+        (info, _) {
+          final ratio = info.image.width / info.image.height;
+          _resolvingImageAspectRatios.remove(imageUrl);
+          if (_imageAspectRatios[imageUrl] == ratio) return;
+          _imageAspectRatios[imageUrl] = ratio;
           if (!mounted) return;
-          setState(() {});
-        });
-      }, onError: (Object _, StackTrace? _) {
-        _resolvingImageAspectRatios.remove(imageUrl);
-      }),
+          // 避免在 build 过程中触发 setState 导致异常
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {});
+          });
+        },
+        onError: (Object _, StackTrace? _) {
+          _resolvingImageAspectRatios.remove(imageUrl);
+        },
+      ),
     );
   }
 
@@ -563,7 +590,9 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final horizontalPadding = context.safeGetContainerSpacing(SpacingSize.md);
+        final horizontalPadding = context.safeGetContainerSpacing(
+          SpacingSize.md,
+        );
         final maxTextWidth = constraints.maxWidth - horizontalPadding * 2;
         final titleStyle = TextStyle(
           color: AppColors.white,
@@ -596,13 +625,17 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
             ? context.safeGetIntraGroupSpacing(SpacingSize.xs)
             : 0.0;
         final textBlockHeight = titleHeight + captionHeight + textSpacing;
-        final captionBottomOffset = MediaQuery.of(context).padding.bottom +
+        final captionBottomOffset =
+            MediaQuery.of(context).padding.bottom +
             AppSpacing.buttonHeight +
             context.safeGetIntraGroupSpacing(SpacingSize.md);
-        final captionReservedHeight = hasTextLayout ? (textBlockHeight + captionBottomOffset) : 0.0;
+        final captionReservedHeight = hasTextLayout
+            ? (textBlockHeight + captionBottomOffset)
+            : 0.0;
 
         final availableHeight = constraints.maxHeight;
-        final imageAspectRatio = _imageAspectRatios[imageUrl] ??
+        final imageAspectRatio =
+            _imageAspectRatios[imageUrl] ??
             mediaItem.aspectRatio ??
             (constraints.maxWidth / constraints.maxHeight);
         final naturalImageHeight = constraints.maxWidth / imageAspectRatio;
@@ -611,9 +644,14 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
         final imageHeight = canPlaceTextBelow
             ? math.min(naturalImageHeight, availableForImage)
             : availableHeight;
-        final remainingHeight = canPlaceTextBelow ? (availableForImage - imageHeight) : 0.0;
-        final topBottomPadding = remainingHeight > 0 ? remainingHeight / 2 : 0.0;
-        final shouldOverlayText = hasTextLayout && (!canPlaceTextBelow || remainingHeight <= 0);
+        final remainingHeight = canPlaceTextBelow
+            ? (availableForImage - imageHeight)
+            : 0.0;
+        final topBottomPadding = remainingHeight > 0
+            ? remainingHeight / 2
+            : 0.0;
+        final shouldOverlayText =
+            hasTextLayout && (!canPlaceTextBelow || remainingHeight <= 0);
 
         return Stack(
           children: [
@@ -728,8 +766,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
           _currentImageIndex = 0;
         });
         _initializePostState();
-        if (widget.onNearEnd != null &&
-            postIdx >= widget.posts.length - 2) {
+        if (widget.onNearEnd != null && postIdx >= widget.posts.length - 2) {
           widget.onNearEnd!();
         }
       },
@@ -761,7 +798,8 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
               url: urls[imgIdx],
               aspectRatio: post.aspectRatio,
             );
-            final isActive = postIdx == _currentPostIndex && imgIdx == _currentImageIndex;
+            final isActive =
+                postIdx == _currentPostIndex && imgIdx == _currentImageIndex;
             return _buildMediaPage(
               context,
               post,
@@ -780,20 +818,20 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   Widget build(BuildContext context) {
     if (!widget.isOpen) return const SizedBox.shrink();
 
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final currentPost = _currentPost;
     final currentEntry = _currentEntry;
-    final currentPostImages =
-        currentPost == null ? const <String>[] : _collectPostImageUrls(currentPost);
+    final currentPostImages = currentPost == null
+        ? const <String>[]
+        : _collectPostImageUrls(currentPost);
     final useNested = widget.layoutMode == 'nested';
     final positionText = useNested
         ? (currentPostImages.isEmpty
-            ? '1/1'
-            : '${_currentImageIndex + 1}/${currentPostImages.length}')
+              ? '1/1'
+              : '${_currentImageIndex + 1}/${currentPostImages.length}')
         : (currentEntry == null || currentPostImages.isEmpty
-            ? '1/1'
-            : '${currentEntry.imageIndex + 1}/${currentPostImages.length}');
+              ? '1/1'
+              : '${currentEntry.imageIndex + 1}/${currentPostImages.length}');
     final showPosition = useNested
         ? (widget.posts.length > 1 || currentPostImages.length > 1)
         : (_mediaEntries.length > 1);
@@ -807,84 +845,86 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
       child: ColoredBox(
         color: AppColors.black,
         child: Stack(
-        children: [
-          if (useNested)
-            _buildNestedPageView(isDark)
-          else
-            PageView.builder(
-              controller: _pageController,
-              itemCount: _mediaEntries.length,
-              onPageChanged: _handlePageChanged,
-              itemBuilder: (context, index) {
-                final entry = _mediaEntries[index];
-                final post = widget.posts[entry.postIndex];
-                final mediaItem = MediaItem(
-                  type: ContentTypeConstants.image,
-                  url: entry.imageUrl,
-                  aspectRatio: post.aspectRatio,
-                );
-                return _buildMediaPage(
-                  context,
-                  post,
-                  mediaItem,
-                  isDark,
-                  index == _currentEntryIndex,
-                  !_isPureMode,
-                );
-              },
-            ),
-          // 控制栏始终构建以便淡出动画生效，用 IgnorePointer 在纯模式屏蔽点击
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _controlsController,
-              builder: (context, child) {
-                return IgnorePointer(
-                  ignoring: _isPureMode,
-                  child: Opacity(
-                    opacity: _controlsController.value,
-                    child: child,
-                  ),
-                );
-              },
-              child: Column(
-                children: [
-                  MediaViewerTopBar(
-                    onBack: widget.onClose,
-                    positionText: positionText,
-                    authorName: _getAuthorName(currentPost),
-                    authorAvatarUrl: _getAuthorAvatar(currentPost),
-                    isFollowing: _isFollowing,
-                    onFollow: _handleFollowClick,
-                    onAuthorTap: _handleAuthorTap,
-                    onMore: _handleMoreClick,
-                    showPosition: showPosition,
-                    toolbarMode: widget.toolbarMode,
-                  ),
-                  const Spacer(),
-                  ImmersiveEngagementBar(
-                    avatarUrl: _getAuthorAvatar(currentPost) ?? '',
-                    displayName: _getAuthorName(currentPost),
-                    circleName: UITextConstants.discoveryRailMoment,
-                    likeCount: _likesCount,
-                    shareCount: _sharesCount,
-                    commentCount: _commentsCount,
-                    isLiked: _isLiked,
-                    isFollowing: _isFollowing,
-                    onUserTap: _handleAuthorTap,
-                    onCircleTap: () {},
-                    onFollowTap: _handleFollowClick,
-                    onLikeTap: _handleLikeClick,
-                    onCommentTap: _handleCommentsClick,
-                    onShareTap: _handleShareClick,
-                    showFollowButton: _showFollowButton,
-                  ),
-                ],
+          children: [
+            if (useNested)
+              _buildNestedPageView(isDark)
+            else
+              PageView.builder(
+                controller: _pageController,
+                itemCount: _mediaEntries.length,
+                onPageChanged: _handlePageChanged,
+                itemBuilder: (context, index) {
+                  final entry = _mediaEntries[index];
+                  final post = widget.posts[entry.postIndex];
+                  final mediaItem = MediaItem(
+                    type: ContentTypeConstants.image,
+                    url: entry.imageUrl,
+                    aspectRatio: post.aspectRatio,
+                  );
+                  return _buildMediaPage(
+                    context,
+                    post,
+                    mediaItem,
+                    isDark,
+                    index == _currentEntryIndex,
+                    !_isPureMode,
+                  );
+                },
+              ),
+            // 控制栏始终构建以便淡出动画生效，用 IgnorePointer 在纯模式屏蔽点击
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _controlsController,
+                builder: (context, child) {
+                  return IgnorePointer(
+                    ignoring: _isPureMode,
+                    child: Opacity(
+                      opacity: _controlsController.value,
+                      child: child,
+                    ),
+                  );
+                },
+                child: Column(
+                  children: [
+                    MediaViewerTopBar(
+                      onBack: widget.onClose,
+                      positionText: positionText,
+                      authorName: _getAuthorName(currentPost),
+                      authorAvatarUrl: _getAuthorAvatar(currentPost),
+                      isFollowing: _isFollowing,
+                      onFollow: _handleFollowClick,
+                      onAuthorTap: _handleAuthorTap,
+                      onMore: _handleMoreClick,
+                      showPosition: showPosition,
+                      toolbarMode: widget.toolbarMode,
+                      layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+                    ),
+                    const Spacer(),
+                    ImmersiveEngagementBar(
+                      layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+                      avatarUrl: _getAuthorAvatar(currentPost) ?? '',
+                      displayName: _getAuthorName(currentPost),
+                      circleName: UITextConstants.discoveryRailMoment,
+                      likeCount: _likesCount,
+                      shareCount: _sharesCount,
+                      commentCount: _commentsCount,
+                      isLiked: _isLiked,
+                      isFollowing: _isFollowing,
+                      onUserTap: _handleAuthorTap,
+                      onCircleTap: () {},
+                      onFollowTap: _handleFollowClick,
+                      onLikeTap: _handleLikeClick,
+                      onCommentTap: _handleCommentsClick,
+                      onShareTap: _handleShareClick,
+                      showFollowButton: _showFollowButton,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
     );
   }
 }

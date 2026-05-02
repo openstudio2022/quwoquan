@@ -538,8 +538,8 @@ func TestFollow_FlagOffPreservesExistingPersonaEdge(t *testing.T) {
 		t.Fatalf("expected existing follow edge to remain readable under flag-off, got %#v", body)
 	}
 	snapshot := followtelemetry.Collector().Snapshot()
-	if snapshot[followtelemetry.MetricGraphLegacyEdgeReadCount] <= 0 {
-		t.Fatalf("expected legacy graph read metric > 0, got %v", snapshot)
+	if snapshot[followtelemetry.MetricGraphCurrentEdgeReadCount] <= 0 {
+		t.Fatalf("expected current graph read metric > 0, got %v", snapshot)
 	}
 }
 

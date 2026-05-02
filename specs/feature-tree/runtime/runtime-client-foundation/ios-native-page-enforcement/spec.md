@@ -2,7 +2,7 @@
 
 ## 背景与动机
 
-`quwoquan_app` 面向 **iOS 原生画质**（`specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`）。历史上部分全屏页仍使用 **Material `Scaffold` 作为根壳**，与「Native First / No Android Leakage」冲突，且难以在 PR 阶段自动拦截新增违规。
+`quwoquan_app` 面向 **iOS 原生画质**（`specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`）。记录上部分全屏页仍使用 **Material `Scaffold` 作为根壳**，与「Native First / No Android Leakage」冲突，且难以在 PR 阶段自动拦截新增违规。
 
 ## 目标用户与目标
 
@@ -20,7 +20,7 @@
 
 ## Out of Scope
 
-- 不在本 L3 一次性改写所有历史页面的视觉细节（圆角、间距等）——由后续切片与 `page-layout-semantics` 子项消化。
+- 不在本 L3 一次性改写所有记录页面的视觉细节（圆角、间距等）——由后续切片与 `page-layout-semantics` 子项消化。
 - 不禁止 `Material(type: transparency)` 作为 **Cupertino 子树** 的防溢出/字体渲染宿主（与现有 `AppScaffold` 模式一致）。
 - 不覆盖 **非 Dart UI**（Web、Android 专属壳）。
 - 不在本 baseline 内实现 **AST 级** 全量组件审计（仅约定 v1 为基于文件的正则门禁，v2 可演进）。

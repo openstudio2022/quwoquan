@@ -1785,7 +1785,7 @@
           "improvementHints": [
             "toolCalls 中的 web_search 查询参数可以更聚焦于社交陪伴场景，而非易经等可能不相关的领域。",
             "fillGuidance 中的提问（如补充出生日期）在对话结束状态下出现略显突兀，可考虑在更早的状态（如 S2_OPTIONAL_SLOT_ENRICHMENT）进行。",
-            "tracking 中的 userInterest 为“未明确”，在对话结束时可尝试基于历史对话进行更具体的总结。"
+            "tracking 中的 userInterest 为“未明确”，在对话结束时可尝试基于记录对话进行更具体的总结。"
           ]
         }
       ]

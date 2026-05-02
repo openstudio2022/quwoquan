@@ -97,15 +97,15 @@ func TestPost_NewFieldBackfill_OldRecordsStillReadable(t *testing.T) {
 	}
 }
 
-func TestPost_LegacyReadBackfillsIdentityAndAssistantUsePolicy(t *testing.T) {
+func TestPost_CurrentReadBackfillsIdentityAndAssistantUsePolicy(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	now := time.Now().UTC()
 	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), bson.M{
-		"_id":         "legacy_post_1",
-		"authorId":    "legacy_author",
+		"_id":         "current_post_1",
+		"authorId":    "current_author",
 		"contentType": "micro",
-		"body":        "旧版点滴",
+		"body":        "过往版本点滴",
 		"status":      "published",
 		"visibility":  "public",
 		"createdAt":   now,
@@ -113,10 +113,10 @@ func TestPost_LegacyReadBackfillsIdentityAndAssistantUsePolicy(t *testing.T) {
 		"publishedAt": now,
 	})
 	if err != nil {
-		t.Fatalf("insert legacy post: %v", err)
+		t.Fatalf("insert current post: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/legacy_post_1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/current_post_1", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 

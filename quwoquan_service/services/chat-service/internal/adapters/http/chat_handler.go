@@ -493,7 +493,6 @@ func (h *ChatHandler) handleSearchConversations(w http.ResponseWriter, r *http.R
 			"type":               conversation.Type,
 			"title":              conversation.Title,
 			"avatarUrl":          application.ResolveConversationAvatarURL(conversation),
-			"groupAvatarUrl":     application.ResolveGroupAvatarURL(conversation),
 			"groupAvatarVersion": conversation.GroupAvatarVersion,
 			"lastMessagePreview": conversation.LastMessagePreview,
 			"lastMessageTime":    conversation.LastMessageTime,
@@ -583,7 +582,6 @@ func inboxItemToWire(item application.InboxItem) map[string]any {
 }
 
 func conversationToWire(conv model.Conversation) map[string]any {
-	groupAvatarURL := application.ResolveGroupAvatarURL(conv)
 	avatarURL := application.ResolveConversationAvatarURL(conv)
 	return map[string]any{
 		"id":                    conv.ID,
@@ -592,7 +590,6 @@ func conversationToWire(conv model.Conversation) map[string]any {
 		"type":                  conv.Type,
 		"title":                 conv.Title,
 		"avatarUrl":             avatarURL,
-		"groupAvatarUrl":        groupAvatarURL,
 		"groupAvatarVersion":    conv.GroupAvatarVersion,
 		"creatorId":             conv.CreatorId,
 		"circleId":              conv.CircleId,

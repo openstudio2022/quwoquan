@@ -1,7 +1,0 @@
-service:
-  http:
-    addr: ":18082"
-
-mongo:
-  uri: "mongodb://localhost:27017"
-  database: "quwoquan_circle_local"

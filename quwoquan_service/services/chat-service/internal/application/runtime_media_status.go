@@ -17,7 +17,7 @@ type runtimeMediaSyncMetrics interface {
 }
 
 func NewRuntimeMediaMetricsHandler(
-	scheduler *RedisGroupAvatarTaskScheduler,
+	scheduler runtimeMediaSyncMetrics,
 	sync runtimeMediaSyncMetrics,
 	thresholds RuntimeMediaAlertThresholds,
 ) http.HandlerFunc {

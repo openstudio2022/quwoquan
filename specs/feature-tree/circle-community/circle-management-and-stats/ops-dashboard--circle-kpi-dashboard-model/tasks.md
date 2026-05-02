@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `dashboard-data-quality-guard`
+## Folded current node `dashboard-data-quality-guard`
 
 # 开发任务：dashboard-data-quality-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `dashboard-data-quality-guard` (from `circle-community/circle-management-and-stats/ops-dashboard/circle-kpi-dashboard-model/dashboard-data-quality-guard`)
+- [ ] Migrated current node: `dashboard-data-quality-guard` (from `circle-community/circle-management-and-stats/ops-dashboard/circle-kpi-dashboard-model/dashboard-data-quality-guard`)

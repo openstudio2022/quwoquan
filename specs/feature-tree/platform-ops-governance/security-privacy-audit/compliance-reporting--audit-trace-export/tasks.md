@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `compliance-gate-blocker`
+## Folded current node `compliance-gate-blocker`
 
 # 开发任务：compliance-gate-blocker
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `compliance-gate-blocker` (from `platform-ops-governance/security-privacy-audit/compliance-reporting/audit-trace-export/compliance-gate-blocker`)
+- [ ] Migrated current node: `compliance-gate-blocker` (from `platform-ops-governance/security-privacy-audit/compliance-reporting/audit-trace-export/compliance-gate-blocker`)

@@ -34,7 +34,7 @@ journey_acceptance:
       - xiaoqu-entry-handoff
     done_when:
       - 首页、聊天页、群组页、助手页进入同一全屏搜索首页
-      - 搜索首页包含搜索框、最近在搜双列卡片、展开与历史管理态
+      - 搜索首页包含搜索框、最近在搜双列卡片、展开与记录管理态
       - 用户取消、返回与重新进入时，上下文行为稳定可预期
     release_guardrails:
       - 全局搜索保持唯一全屏浮层语义
@@ -86,7 +86,7 @@ journey_acceptance:
         - make gate
     status: pending
   J3:
-    title: 用户可在搜索页完成历史复用、语音转词与小趣搜 continuation
+    title: 用户可在搜索页完成记录复用、语音转词与小趣搜 continuation
     journey: open search -> use recent history or voice -> continue search -> optionally switch to xiaoqu tab
     scenario_refs:
       - recent-search-sync-and-voice-asr
@@ -94,10 +94,10 @@ journey_acceptance:
     done_when:
       - 普通搜索 query 会记录到最近搜索并支持本地与云同步
       - 语音入口将 ASR 文本写回搜索框并参与普通搜索
-      - 小趣搜不单独新增 AI query 历史，后续 assistant continuation 保存在 assistant 对话中
+      - 小趣搜不单独新增 AI query 记录，后续 assistant continuation 保存在 assistant 对话中
     release_guardrails:
       - 语音失败可退回手动输入
-      - 历史清除动作可本地与云端一致生效
+      - 记录清除动作可本地与云端一致生效
     evidence:
       primary:
         - T2_module_interaction
@@ -120,7 +120,7 @@ release_acceptance:
     title: 全局搜索可整体验收并整体回滚
     done_when:
       - SLO、弱网、并发与容量假设已冻结并可验证
-      - 本期按整体验收后一把上线，不保留历史节点并行治理
+      - 本期按整体验收后一把上线，不保留记录节点并行治理
       - 发生严重故障时可整体回退到旧搜索实现或整版发布回滚
     evidence:
       primary:

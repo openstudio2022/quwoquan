@@ -1,0 +1,10 @@
+# beta overrides (developer local cloud-client integration)
+service:
+  http:
+    addr: ":18080"
+
+redis:
+  rec:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 0

@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	rterr "quwoquan_service/runtime/errors"
 )
 
 func parseJSONLines(raw string) ([]map[string]any, error) {
@@ -56,8 +58,15 @@ func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
 	}, ioLogger, processLogger, exceptionLogger)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(`{"ok":false}`))
+		rterr.WriteHTTPError(
+			w,
+			rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleChat, rterr.KindSystem, "message_persist_failed"),
+				"消息发送失败，请稍后重试",
+				"mongo write failed",
+			),
+			rterr.HTTPWriteOptionsFromRequest(r),
+		)
 	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/conversations/1/messages", nil)
@@ -98,6 +107,12 @@ func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
 	}
 	if errorLogs[0]["errorCode"] == "" {
 		t.Fatalf("expected errorCode in exception log")
+	}
+	if errorLogs[0]["errorCode"] != "CHAT.SYSTEM.message_persist_failed" {
+		t.Fatalf("expected real error code, got=%v", errorLogs[0]["errorCode"])
+	}
+	if errorLogs[0]["businessObject"] != "cloud_request" || errorLogs[0]["functionModule"] != "runtime_errors" {
+		t.Fatalf("expected runtime location fields, got=%+v", errorLogs[0])
 	}
 }
 

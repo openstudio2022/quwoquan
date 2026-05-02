@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `context-injection-contract-guard`
+## Folded current node `context-injection-contract-guard`
 
 # 开发任务：context-injection-contract-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `context-injection-contract-guard` (from `assistant-run-learning/learning-event-feedback-injection/feedback-context-injection/historical-feedback-context-builder/context-injection-contract-guard`)
+- [ ] Migrated current node: `context-injection-contract-guard` (from `assistant-run-learning/learning-event-feedback-injection/feedback-context-injection/historical-feedback-context-builder/context-injection-contract-guard`)

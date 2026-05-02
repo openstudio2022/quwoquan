@@ -10,7 +10,7 @@
 - [ ] 测试：ContextAuthorizer 授权流程单元测试
 - [ ] gate：集成到 make gate
 
-## Folded legacy node `skill-store-and-ecosystem`
+## Folded current node `skill-store-and-ecosystem`
 
 # 开发任务：skill-store-and-ecosystem
 
@@ -25,4 +25,4 @@
 - [ ] gate：集成到 make gate
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `skill-store-and-ecosystem` (from `runtime/runtime-skill/skill-router-and-executor/tool-registry-and-context-authorizer/skill-store-and-ecosystem`)
+- [ ] Migrated current node: `skill-store-and-ecosystem` (from `runtime/runtime-skill/skill-router-and-executor/tool-registry-and-context-authorizer/skill-store-and-ecosystem`)

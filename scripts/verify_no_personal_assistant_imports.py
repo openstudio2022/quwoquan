@@ -6,7 +6,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-LEGACY_DIR = ROOT / "quwoquan_app" / "lib" / "personal_assistant"
+CURRENT_DIR = ROOT / "quwoquan_app" / "lib" / "personal_assistant"
 SCAN_DIRS = [
     ROOT / "quwoquan_app" / "lib",
     ROOT / "quwoquan_app" / "test",
@@ -21,9 +21,9 @@ BLOCKED_SNIPPETS = (
 def main() -> int:
     violations: list[str] = []
 
-    if LEGACY_DIR.exists():
+    if CURRENT_DIR.exists():
         violations.append(
-            f"[guard] legacy directory still exists: {LEGACY_DIR.relative_to(ROOT)}"
+            f"[guard] current directory still exists: {CURRENT_DIR.relative_to(ROOT)}"
         )
 
     for scan_dir in SCAN_DIRS:
@@ -37,7 +37,7 @@ def main() -> int:
             for line_no, line in enumerate(text.splitlines(), start=1):
                 if any(snippet in line for snippet in BLOCKED_SNIPPETS):
                     violations.append(
-                        f"[guard] blocked legacy path in {path.relative_to(ROOT)}:{line_no}: {line.strip()}"
+                        f"[guard] blocked current path in {path.relative_to(ROOT)}:{line_no}: {line.strip()}"
                     )
 
     if violations:

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
@@ -16,6 +17,7 @@ import (
 
 	runtimemedia "quwoquan_service/runtime/media"
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
 	chathttp "quwoquan_service/services/chat-service/internal/adapters/http"
 	"quwoquan_service/services/chat-service/internal/adapters/mq"
@@ -25,11 +27,12 @@ import (
 )
 
 var (
-	testHandler http.Handler
-	mongoDB     *mongo.Database
-	mongoClient *mongo.Client
-	mr          *miniredis.Miniredis
-	redisRouter *rtredis.Router
+	testHandler       http.Handler
+	testChatMediaRoot string
+	mongoDB           *mongo.Database
+	mongoClient       *mongo.Client
+	mr                *miniredis.Miniredis
+	redisRouter       *rtredis.Router
 )
 
 var collections = []string{
@@ -38,6 +41,10 @@ var collections = []string{
 	"conversation_members",
 	"conversation_user_states",
 	"message_receipts",
+	"reliable_task_outbox",
+	"reliable_async_task",
+	"notification_outbox",
+	"notification_delivery_ledger",
 }
 
 // testProfileResolver returns deterministic display names for contract tests.
@@ -67,9 +74,10 @@ func TestMain(m *testing.M) {
 
 	redisRouter = rtredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"general":  {Mode: "standalone", Addr: mr.Addr()},
-			"realtime": {Mode: "standalone", Addr: mr.Addr()},
-			"rec":      {Mode: "memory"},
+			"general":      {Mode: "standalone", Addr: mr.Addr()},
+			"realtime":     {Mode: "standalone", Addr: mr.Addr()},
+			"reliabletask": {Mode: "standalone", Addr: mr.Addr()},
+			"rec":          {Mode: "memory"},
 		},
 		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
 		DefaultScene: "general",
@@ -107,16 +115,55 @@ func TestMain(m *testing.M) {
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 
+	mediaDir, mediaErr := os.MkdirTemp("", "chat-group-media-*")
+	if mediaErr != nil {
+		panic("failed to create chat media temp dir: " + mediaErr.Error())
+	}
+	testChatMediaRoot = mediaDir
+
 	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
-	groupAvatarMedia := runtimemedia.NewGroupAvatarService(redisRouter.Scene("general"), "")
-	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
-	groupAvatarScheduler := application.NewRedisGroupAvatarTaskScheduler(
+	const testAvatarCDNBase = "http://127.0.0.1:18081"
+	application.ConfigureGroupAvatarCDNBase(testAvatarCDNBase)
+	if err := runtimemedia.EnsureDefaultGroupAvatarFile(testChatMediaRoot); err != nil {
+		panic("failed to create default group avatar: " + err.Error())
+	}
+	groupAvatarMedia := runtimemedia.NewGroupAvatarService(
 		redisRouter.Scene("general"),
+		testAvatarCDNBase,
+		testChatMediaRoot,
+	)
+	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
+	catalog, err := reliabletask.LoadCatalog("../../../../deploy/shared/reliable_task_module_catalog.yaml")
+	if err != nil {
+		panic("failed to load reliable task catalog: " + err.Error())
+	}
+	reliableTaskStore := reliabletask.NewMongoStore(mongoDB)
+	if err := reliableTaskStore.EnsureIndexes(ctx); err != nil {
+		panic("failed to ensure reliable task indexes: " + err.Error())
+	}
+	readyIndex, err := reliabletask.NewRedisReadyIndex(reliabletask.RedisReadyIndexConfig{
+		Client: redisRouter.Scene("reliabletask"),
+		Stream: "reliabletask:chat:avatar:ready:testmain",
+		Group:  "chat.group_avatar_worker.testmain",
+		Queue:  "reliabletask.chat.avatar",
+	})
+	if err != nil {
+		panic("failed to init reliable task ready index: " + err.Error())
+	}
+	if err := readyIndex.Ensure(ctx); err != nil {
+		panic("failed to ensure reliable task ready index: " + err.Error())
+	}
+	groupAvatarScheduler := application.NewReliableGroupAvatarTaskScheduler(
+		reliableTaskStore,
+		catalog,
 		chatStore,
 		eventPublisher,
 		groupAvatarMedia,
 		userSyncService,
 		slog.Default(),
+		application.WithReliableGroupAvatarDelay(80*time.Millisecond),
+		application.WithReliableGroupAvatarTick(40*time.Millisecond),
+		application.WithReliableGroupAvatarReadyIndex(readyIndex),
 	)
 	if err := groupAvatarScheduler.Start(ctx); err != nil {
 		panic("failed to start group avatar scheduler: " + err.Error())
@@ -156,7 +203,11 @@ func TestMain(m *testing.M) {
 		panic("failed to start user avatar consumer: " + err.Error())
 	}
 
-	testHandler = chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()
+	chatRoutes := chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()
+	mux := http.NewServeMux()
+	mux.Handle("/media/", testDerivedMediaFileServer(testChatMediaRoot))
+	mux.Handle("/", chatRoutes)
+	testHandler = mux
 
 	code := m.Run()
 

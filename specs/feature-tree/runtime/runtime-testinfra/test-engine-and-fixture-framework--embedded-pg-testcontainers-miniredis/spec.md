@@ -19,7 +19,7 @@
 - A7：配置与 test_infra.yaml 一致。
 - A8：各引擎自测通过。
 
-## Folded legacy node `codegen-test-and-ci-integration`
+## Folded current node `codegen-test-and-ci-integration`
 
 # L5 横切：codegen-test-and-ci-integration
 

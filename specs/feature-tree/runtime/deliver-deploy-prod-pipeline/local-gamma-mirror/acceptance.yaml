@@ -1,0 +1,134 @@
+version: 1
+feature: local-gamma-mirror
+level: "L3_scenario"
+archived: true
+archived_at: '2026-05-02T00:00:00.000000Z'
+template: A1-A6
+tree_context:
+  feature_path: capability.runtime.feature.deliver-deploy-prod-pipeline.subfeature.local-gamma-mirror
+  parent_path: capability.runtime.feature.deliver-deploy-prod-pipeline
+level_acceptance:
+  focus_groups:
+    - A1_contract_and_governance
+    - A2_local_environment_readiness
+    - A3_t3_t4_left_shift
+  notes: 本地 gamma 镜像预测试只左移提交前验证，不替代云侧 gamma/prod-gray/prod 发布真实性门禁。
+  A1:
+    criteria: spec/design/acceptance/plan 已落地，并明确不新增第六环境、不新增第四份 seed manifest。
+    status: implemented
+    linked_tasks:
+      - LG-1
+    test_layers:
+      T1: required
+      T2: not_applicable
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md
+      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/design.md
+      - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/plan.yaml
+  A2:
+    criteria: 环境矩阵、部署拓扑 runbook 与交付 runbook 明确 local-gamma mirror、DNS/TLS、设备连接与云端边界。
+    status: implemented
+    linked_tasks:
+      - LG-2
+    test_layers:
+      T1: required
+      T2: optional
+      T3: not_applicable
+      T4: not_applicable
+    tests:
+      - file: deploy/shared/environment_matrix.md
+      - file: deploy/shared/process_domain_mapping_runbook.md
+      - file: deploy/shared/deliver_to_production_runbook.md
+      - file: .cursor/commands/commit.md
+  A3:
+    criteria: 本地 Docker mirror 以 gamma 语义启动，覆盖依赖、服务镜像、CONFIG_VERSION、seed/reset、DNS/TLS 反代与 media/realtime 基址。
+    status: implemented
+    linked_tasks:
+      - LG-3
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: not_applicable
+    tests:
+      - file: quwoquan_service/docker-compose.gamma-local.yaml
+      - file: deploy/local-gamma/Caddyfile
+      - file: scripts/start_local_gamma_mirror.sh
+  A4:
+    criteria: 本地 T3 runner 使用 app_gamma_seed_manifest.json 验证真实 API、真实存储副作用、错误码、响应 schema 与 RemoteRepository 边界。
+    status: implemented
+    linked_tasks:
+      - LG-4
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: not_applicable
+    tests:
+      - file: scripts/run_local_gamma_t3.py
+      - command: python3 scripts/run_local_gamma_t3.py --help
+  A5:
+    criteria: 本地 T4 runner 统一 CLOUD_GATEWAY_BASE_URL、API_CONTRACT_BASE_URL、TEST_AUTH_TOKEN 与 MEDIA_*，在模拟器或真机完成 Patrol 核心旅程。
+    status: implemented
+    linked_tasks:
+      - LG-5
+    test_layers:
+      T1: optional
+      T2: optional
+      T3: optional
+      T4: required
+    tests:
+      - file: scripts/run_local_gamma_t4.sh
+      - command: bash scripts/run_local_gamma_t4.sh --help
+  A6:
+    criteria: gate-local-gamma 串联 T1/T2/T3/T4 并输出 artifacts/local-gamma/report.json，成为后续 commit 前强制准入。
+    status: implemented
+    linked_tasks:
+      - LG-6
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests:
+      - file: Makefile
+      - file: scripts/verify_local_gamma_mirror.py
+      - command: make gate-local-gamma LOCAL_GAMMA_DRY_RUN=1
+execution:
+  local_gate: make gate-local-gamma
+  report: artifacts/local-gamma/report.json
+  cloud_gate: 云侧 gamma API contract + 云端/FTL Patrol + prod-gray SLO + prod 观测
+journey_acceptance:
+  - id: A1
+    statement: 本地 gamma mirror 规格冻结五环境语义与云端不可替代边界。
+    t_layers: [T1]
+  - id: A3
+    statement: 本地镜像栈可重复启动并承载 gamma RemoteRepository 流量。
+    t_layers: [T1, T3]
+  - id: A5
+    statement: 模拟器或真机可通过同一 mirror endpoint 执行核心设备旅程。
+    t_layers: [T4]
+scenario_acceptance:
+  - id: S1
+    statement: 提交前运行 gate-local-gamma 能生成包含 T1/T2/T3/T4 的本地报告。
+    t_layers: [T1, T2, T3, T4]
+  - id: S2
+    statement: 本地设备、DNS、TLS 或服务依赖不足时，报告状态为 GATE_BLOCK 而不是伪通过。
+    t_layers: [T3, T4]
+evidence_matrix:
+  T1:
+    - type: static_gate
+      artifact: make gate
+    - type: env_package
+      artifact: artifacts/app-env-packages/gamma/report.json
+  T2:
+    - type: module_tests
+      artifact: scripts/gate_repo.sh
+  T3:
+    - type: local_gamma_report
+      artifact: artifacts/local-gamma/report.json
+  T4:
+    - type: local_gamma_report
+      artifact: artifacts/local-gamma/report.json

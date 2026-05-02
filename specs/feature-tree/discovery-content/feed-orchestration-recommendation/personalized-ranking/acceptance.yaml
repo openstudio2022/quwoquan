@@ -32,7 +32,7 @@ level_acceptance:
       - TestGetFeedRecommendSortWithCursor
       - TestGetFeedCursorPagination
   A3:
-    criteria: 用户回滚已看内容时，端侧历史窗口不抖动
+    criteria: 用户回滚已看内容时，端侧记录窗口不抖动
     status: implemented
     linked_tasks:
     - T6
@@ -41,7 +41,7 @@ level_acceptance:
     - file: quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
       functions: []
   A4:
-    criteria: 强反馈（dislike/report/block）仅影响未来窗口，不回写历史窗口
+    criteria: 强反馈（dislike/report/block）仅影响未来窗口，不回写记录窗口
     status: waived
   A5:
     criteria: 弱反馈（click/like/favorite/dwell）可影响未来排序，不破坏分页连续性

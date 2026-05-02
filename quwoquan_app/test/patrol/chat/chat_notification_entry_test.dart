@@ -10,7 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 
-const _env = String.fromEnvironment('ENV', defaultValue: 'staging');
+const _apiContractEnv = String.fromEnvironment(
+  'API_CONTRACT_ENV',
+  defaultValue: 'gamma',
+);
 
 void main() {
   patrolTest(
@@ -19,7 +22,10 @@ void main() {
     skip: !kRunPatrolT4,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 20)),
     ($) async {
-      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
+      assert(
+        _apiContractEnv == 'gamma',
+        'T4 tests must run with API_CONTRACT_ENV=gamma',
+      );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 
@@ -56,7 +62,10 @@ void main() {
     skip: !kRunPatrolT4,
     config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 20)),
     ($) async {
-      assert(_env == 'staging', 'T4 tests must run with ENV=staging');
+      assert(
+        _apiContractEnv == 'gamma',
+        'T4 tests must run with API_CONTRACT_ENV=gamma',
+      );
 
       await $.pumpWidgetAndSettle(const _PatrolAppPlaceholder());
 

@@ -8,8 +8,8 @@
 
 - [x] **C1** [config] 增加 MongoDB 配置节到 content-service config.yaml
   - `configs/default/config.yaml` 增加 `mongo.uri`（默认空，即 InMemory）
-  - `configs/local/config.yaml` 增加 `mongo.uri: ""`（保持 InMemory）
-  - `configs/integration/config.yaml` 增加 `mongo.uri: "${MONGO_URI}"`
+  - `configs/alpha/config.yaml` / `configs/beta/config.yaml` 增加 `mongo.uri: ""`（保持 InMemory）
+  - `configs/gamma/config.yaml` 增加 `mongo.uri: "${MONGO_URI}"`
   - `configs/prod/config.yaml` 增加 `mongo.uri: "${MONGO_URI}"`
 
 - [x] **C2** [infrastructure] 创建 PostCacheRepository 缓存装饰器
@@ -102,9 +102,9 @@
   - 统一错误处理（`CloudResponseDecoder`）
 
 - [x] **D4** [cloud/services] 清理 FeedItemDto 兼容层
-  - 移除 `listDiscoveryFeedPageLegacy` 方法
+  - 移除 `listDiscoveryFeedPageCurrent` 方法
   - 搜索所有 `FeedItemDto` 引用，迁移到 `PostBaseDto` 子类
-  - 确认 `_LegacyContentDataService` 不再使用 Legacy 方法
+  - 确认 `_CurrentContentDataService` 不再使用 Current 方法
   - `flutter analyze lib/` 无错误
 
 ### Phase 3：部署与 CI（A8 A9）
@@ -178,7 +178,7 @@
 - [ ] **S1** runtime Factory 全量迁移（重启条件：新增 Report 聚合根或需要统一 interceptor 链时）
 - [ ] **S2** Redis Pub/Sub → 专用 MQ（重启条件：事件消费者 >3 或 QPS > 10K）
 - [ ] **S3** 创作页目录迁移 features/create → ui/content/entry（重启条件：下次 UI 重构）
-- [ ] **S4** `_LegacyContentDataService` 彻底移除（重启条件：D4 兼容层清理完成后）
+- [ ] **S4** `_CurrentContentDataService` 彻底移除（重启条件：D4 兼容层清理完成后）
 - [ ] **S5** 端侧契约测试：15 个新方法 Remote 请求结构（重启条件：端侧 Remote 联调开始时）
 - [ ] **S6** 端侧组件测试：创作页 4 类型 Widget test（重启条件：创作页 UI 重构时）
 - [ ] **S7** 端侧组件测试：发现页 Feed 加载 Widget test（重启条件：发现页接入 Remote 时）

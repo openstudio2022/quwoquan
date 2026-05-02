@@ -1,0 +1,14 @@
+{
+  "status": "packaged",
+  "env": "gamma",
+  "runtimeEnv": "gamma",
+  "dataSource": "remote",
+  "gatewayBaseUrl": "https://gamma-api.quwoquan-env.test",
+  "realtimeBaseUrl": "wss://gamma-api.quwoquan-env.test",
+  "avatarCdnBaseUrl": "https://gamma-avatar.quwoquan-env.test",
+  "imageCdnBaseUrl": "https://gamma-image.quwoquan-env.test",
+  "videoCdnBaseUrl": "https://gamma-video.quwoquan-env.test",
+  "uploadBaseUrl": "https://gamma-upload.quwoquan-env.test",
+  "currentUserId": "fixture_user_current",
+  "seedManifest": "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
+}

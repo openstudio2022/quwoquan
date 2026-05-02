@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `noisy-feedback-filter`
+## Folded current node `noisy-feedback-filter`
 
 # 开发任务：noisy-feedback-filter
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `noisy-feedback-filter` (from `product-ops-growth/feedback-optimization-loop/feedback-collection-unification/feedback-quality-control/noisy-feedback-filter`)
+- [ ] Migrated current node: `noisy-feedback-filter` (from `product-ops-growth/feedback-optimization-loop/feedback-collection-unification/feedback-quality-control/noisy-feedback-filter`)

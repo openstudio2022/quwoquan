@@ -2,19 +2,20 @@
 
 ## 功能定位
 
-统一定义服务配置加载与覆盖的分层模型，确保本地、集成、生产三套环境以同一逻辑运行，避免配置漂移与服务内重复实现。
+统一定义服务配置加载与覆盖的分层模型，确保云侧 alpha、beta、gamma、prod-gray、prod 五套环境以同一逻辑运行，避免配置漂移与服务内重复实现。端侧 App 构建环境为 alpha、beta、gamma、prod；生产只有一个 App 包，灰度由应用市场分发策略、端侧上下文与云侧灰度策略共同决定。
 
 本节点作为 `runtime-config` 的核心子组件，承载配置来源优先级、环境识别、版本兼容校验与发布化接入约束。
 
 ## 目标能力
 
-- 统一目录结构：`default/` + `local/` + `integration/` + `prod/`
+- 统一目录结构：`default/` + `alpha/` + `beta/` + `gamma/` + `prod-gray/` + `prod/`
 - 统一覆盖顺序：默认配置 -> 环境配置 -> 环境变量覆盖
-- 显式环境识别：`APP_ENV=local|integration|prod`
+- 显式环境识别：`APP_ENV=alpha|beta|gamma|prod-gray|prod`
 - 配置发布版本：`CONFIG_VERSION` 与 `IMAGE_VERSION` 兼容校验
 - 运行前校验：关键字段合法性与依赖连通性（如 Redis ping）
 - 统一部署映射：`environments -> deploy process -> domains`
-- 拓扑一致性：`integration` 与 `prod` 的进程-领域映射保持一致
+- 拓扑一致性：`beta`、`gamma`、`prod-gray`、`prod` 的进程-领域映射保持一致
+- 端侧生产包唯一：不存在 `app-prod-gray`；prod-gray 仅作为云侧灰度配置/策略语义。
 
 ## 目录与版本示例（实施标准）
 
@@ -25,8 +26,10 @@
   configs/
     content-service/
       default/config.yaml
-      local/config.yaml
-      integration/config.yaml
+      alpha/config.yaml
+      beta/config.yaml
+      gamma/config.yaml
+      prod-gray/config.yaml
       prod/config.yaml
   releases/
     config/
@@ -52,7 +55,7 @@
 
 - `env-file-secret-configcenter-provider`：配置来源抽象（env/file/secret/config center）
 - `env-overlay-config-release`（新增）：环境覆盖与配置发布化落地
-- `environment-process-domain-mapping`（新增）：部署进程与领域归属三态映射与门禁
+- `environment-process-domain-mapping`（新增）：部署进程与领域归属五态映射与门禁
 - `future-evolution-closed-loop`（新增）：C11~C13 未来演进闭环（spec/design/tasks/acceptance + 门禁草案）
 
 ## 适用范围与约束
@@ -64,6 +67,7 @@
 约束：
 - 不允许服务自行实现“私有加载器”
 - `prod` 环境必须显式设置 `APP_ENV=prod`
+- App 只构建 `alpha/beta/gamma/prod`；生产灰度不能通过不同 App 安装包表达。
 - 高风险配置（连接拓扑、鉴权）不支持热更新，仅支持灰度滚动切换
 - 版本快照配置文件不可变（immutable），仅允许新增版本，不允许覆盖已发布版本
 - 密钥字段禁止进入版本快照，必须通过 Secret/env 注入

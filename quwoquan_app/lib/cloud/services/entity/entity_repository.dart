@@ -3,6 +3,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage_mutation_wires.g.dart';
@@ -71,13 +72,53 @@ abstract class HomepageRepository {
 }
 
 class MockHomepageRepository implements HomepageRepository {
-  MockHomepageRepository() : _homepages = HomepageMockData.cloneHomepageSeeds();
+  MockHomepageRepository() : _homepages = _repositorySeedHomepages();
 
   final List<HomepageDetail> _homepages;
   final List<HomepageClaimRequestRecord> _claimRequests =
       <HomepageClaimRequestRecord>[];
   final List<HomepageStatusReportRecord> _statusReports =
       <HomepageStatusReportRecord>[];
+
+  static List<HomepageDetail>? _contractSeedHomepages() {
+    final seed = ContractFixtureRuntimeLoader.entitySeedSet();
+    final homepages = seed?['homepages'];
+    if (homepages is! List) {
+      return null;
+    }
+    return homepages
+        .whereType<Map>()
+        .map((item) {
+          final map = item.cast<String, dynamic>();
+          return HomepageDetail.fromMap(<String, dynamic>{
+            ...map,
+            'id': map['id'] ?? map['homepageId'],
+            'homepageType': map['homepageType'] ?? map['type'],
+            'status': map['status'] ?? 'published',
+            'sourceType': map['sourceType'] ?? 'contract_fixture',
+            'claimStatus': map['claimStatus'] ?? 'unclaimed',
+            'categoryTags': map['categoryTags'] ?? const <String>['契约'],
+            if (map['geo'] is Map) 'location': map['geo'],
+          });
+        })
+        .toList(growable: true);
+  }
+
+  static List<HomepageDetail> _repositorySeedHomepages() {
+    final byId = <String, HomepageDetail>{};
+    void put(HomepageDetail homepage) {
+      byId[homepage.id] = homepage;
+    }
+
+    for (final homepage
+        in _contractSeedHomepages() ?? const <HomepageDetail>[]) {
+      put(homepage);
+    }
+    for (final homepage in HomepageMockData.cloneHomepageSeeds()) {
+      put(homepage);
+    }
+    return byId.values.toList(growable: true);
+  }
 
   void _putHomepage(HomepageDetail next) {
     final i = _homepages.indexWhere((h) => h.id == next.id);
@@ -105,7 +146,8 @@ class MockHomepageRepository implements HomepageRepository {
               _normalize(h.homepageType) != normalizedType) {
             return false;
           }
-          if (normalizedCity.isNotEmpty && _normalize(h.city) != normalizedCity) {
+          if (normalizedCity.isNotEmpty &&
+              _normalize(h.city) != normalizedCity) {
             return false;
           }
           if (normalizedStatus.isNotEmpty) {
@@ -131,9 +173,7 @@ class MockHomepageRepository implements HomepageRepository {
         })
         .take(limit)
         .toList(growable: false);
-    return items
-        .map(HomepageSummary.fromDetail)
-        .toList(growable: false);
+    return items.map(HomepageSummary.fromDetail).toList(growable: false);
   }
 
   @override
@@ -269,7 +309,9 @@ class MockHomepageRepository implements HomepageRepository {
     _putHomepage(
       homepage.copyWith(
         claimStatus: claimStatus,
-        ownerUserId: status == 'approved' ? old.requesterUserId : homepage.ownerUserId,
+        ownerUserId: status == 'approved'
+            ? old.requesterUserId
+            : homepage.ownerUserId,
         updatedAt: now,
       ),
     );
@@ -302,8 +344,9 @@ class MockHomepageRepository implements HomepageRepository {
           : draft.reporterUserId.trim(),
       reason: draft.reason,
       status: 'pending_review',
-      description:
-          draft.description.trim().isEmpty ? null : draft.description.trim(),
+      description: draft.description.trim().isEmpty
+          ? null
+          : draft.description.trim(),
       evidenceUrls: List<String>.from(draft.evidenceUrls),
       createdAt: now,
     );
@@ -342,11 +385,7 @@ class MockHomepageRepository implements HomepageRepository {
     _statusReports[idx] = next;
     if (status == 'confirmed_offline') {
       _putHomepage(
-        homepage.copyWith(
-          status: 'offline',
-          offlineAt: now,
-          updatedAt: now,
-        ),
+        homepage.copyWith(status: 'offline', offlineAt: now, updatedAt: now),
       );
     }
     return next;
@@ -398,7 +437,9 @@ HomepageReviewSummaryData _mockDefaultReviewSummary(HomepageDetail homepage) {
   );
 }
 
-List<HomepageContentPreview> _mockDefaultContentPreview(HomepageDetail homepage) {
+List<HomepageContentPreview> _mockDefaultContentPreview(
+  HomepageDetail homepage,
+) {
   final title = homepage.title;
   return <HomepageContentPreview>[
     HomepageContentPreview(
@@ -411,7 +452,9 @@ List<HomepageContentPreview> _mockDefaultContentPreview(HomepageDetail homepage)
   ];
 }
 
-List<HomepageQuestionPreview> _mockDefaultQuestionPreview(HomepageDetail homepage) {
+List<HomepageQuestionPreview> _mockDefaultQuestionPreview(
+  HomepageDetail homepage,
+) {
   final title = homepage.title;
   return <HomepageQuestionPreview>[
     HomepageQuestionPreview(
@@ -459,9 +502,7 @@ HomepageDetail _mergeBasicDraft(HomepageDetail h, HomepageBasicDraft d) {
     address: d.address != null && d.address!.trim().isNotEmpty
         ? d.address!.trim()
         : h.address,
-    city: d.city != null && d.city!.trim().isNotEmpty
-        ? d.city!.trim()
-        : h.city,
+    city: d.city != null && d.city!.trim().isNotEmpty ? d.city!.trim() : h.city,
     location: d.location ?? h.location,
     ownerUserId: h.ownerUserId,
     averageRating: h.averageRating,

@@ -22,8 +22,8 @@ class ChatConversationTimestampDto {
 
   factory ChatConversationTimestampDto.fromMap(Map<String, dynamic> m) {
     return ChatConversationTimestampDto(
-      conversationId:
-          (m['id'] ?? m['conversationId'] ?? m['_id'] ?? '').toString(),
+      conversationId: (m['id'] ?? m['conversationId'] ?? m['_id'] ?? '')
+          .toString(),
       updatedAt: m['updatedAt']?.toString(),
       settingsUpdatedAt: m['settingsUpdatedAt']?.toString(),
       lastMessageAt: m['lastMessageAt']?.toString(),
@@ -34,15 +34,15 @@ class ChatConversationTimestampDto {
     );
   }
 
-  /// 与历史 Map 消费路径兼容（本地缓存 / 搜索同步）。
+  /// 与记录 Map 消费路径兼容（本地缓存 / 搜索同步）。
   Map<String, dynamic> toMap() => <String, dynamic>{
-        'id': conversationId,
-        if (updatedAt != null) 'updatedAt': updatedAt,
-        if (settingsUpdatedAt != null) 'settingsUpdatedAt': settingsUpdatedAt,
-        if (lastMessageAt != null) 'lastMessageAt': lastMessageAt,
-        if (lastMessageTime != null) 'lastMessageTime': lastMessageTime,
-        if (lastMessagePreview != null) 'lastMessagePreview': lastMessagePreview,
-        if (unreadCount != null) 'unreadCount': unreadCount,
-        if (type != null) 'type': type,
-      };
+    'id': conversationId,
+    if (updatedAt != null) 'updatedAt': updatedAt,
+    if (settingsUpdatedAt != null) 'settingsUpdatedAt': settingsUpdatedAt,
+    if (lastMessageAt != null) 'lastMessageAt': lastMessageAt,
+    if (lastMessageTime != null) 'lastMessageTime': lastMessageTime,
+    if (lastMessagePreview != null) 'lastMessagePreview': lastMessagePreview,
+    if (unreadCount != null) 'unreadCount': unreadCount,
+    if (type != null) 'type': type,
+  };
 }

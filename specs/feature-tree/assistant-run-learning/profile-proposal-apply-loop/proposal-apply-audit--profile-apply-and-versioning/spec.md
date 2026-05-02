@@ -9,7 +9,7 @@
 ## 验收标准
 - A6：审计链路可追溯且符合隐私合规。
 
-## Folded legacy node `apply-rollback-and-audit-guard`
+## Folded current node `apply-rollback-and-audit-guard`
 
 # L5 特性：apply-rollback-and-audit-guard
 

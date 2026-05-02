@@ -33,7 +33,7 @@ global_acceptance:
 execution:
   local_gate: make gate
   full_gate: make gate-full
-legacy_merged_acceptance:
+current_merged_acceptance:
 - source_path: platform-ops-governance/config-and-reliability-governance/config-source-governance/risky-config-gray-release/one-click-config-rollback
   task_bucket: one-click-config-rollback
   migrated_as: L3_task

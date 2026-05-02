@@ -157,4 +157,7 @@ class _FakeAssistantRepository implements AssistantRepository {
       const AssistantSearchResultView(queryEcho: 'q'),
     );
   }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

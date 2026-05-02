@@ -19,7 +19,7 @@
 - A2：推送延迟 < 100ms（本地环境）。
 - A8：助手流式 + 聊天推送端到端测试。
 
-## Folded legacy node `backpressure-and-reconnection`
+## Folded current node `backpressure-and-reconnection`
 
 # L5 横切：backpressure-and-reconnection
 

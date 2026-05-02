@@ -55,11 +55,11 @@ slices:
 
   - id: G4
     title: app 切换群头像主链路
-    goal: 客户端优先消费 `groupAvatarUrl`，失败时统一回退默认群图标
+    goal: 客户端只消费统一 `avatarUrl`，群头像由服务端预合成并保证 active 会话非空可访问
     depends_on: [G2, G3]
     acceptance_refs: [A1]
     planned_evidence: [T2, T3, T4]
     done_when:
       - 会话列表与相关页面不再主依赖成员头像列表实时拼装
-      - 默认群图标成为唯一失败兜底
+      - 端侧不再使用默认群图标或九宫格作为聊天群头像主兜底
     status: implemented

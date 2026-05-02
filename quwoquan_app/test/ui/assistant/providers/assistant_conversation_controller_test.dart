@@ -138,7 +138,7 @@ void main() {
       );
     });
 
-    testWidgets('initialize 会按分页窗口拆分本地历史并支持继续上拉加载', (tester) async {
+    testWidgets('initialize 会按分页窗口拆分本地记录并支持继续上拉加载', (tester) async {
       final sessionId = 'local_assistant_test_history';
       final gateway = _FakeAssistantGateway(
         sessions: <AssistantSessionDescriptor>[

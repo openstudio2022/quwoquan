@@ -20,7 +20,7 @@
 - A1：四种适配器 CRUD/缓存/向量搜索端到端正确。
 - A8：Mongo/PG/Cache 均有真实数据库契约测试。
 
-## Folded legacy node `storage-routing-and-interceptor-chain`
+## Folded current node `storage-routing-and-interceptor-chain`
 
 # L5 横切：storage-routing-and-interceptor-chain
 

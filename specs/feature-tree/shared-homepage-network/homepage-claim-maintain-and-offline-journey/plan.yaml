@@ -95,14 +95,14 @@ slices:
       - T3_cross_service_integration
     done_when:
       - 已认领主页可更新基础信息、状态和官方说明
-      - 用户口碑与历史内容不可被直接修改
+      - 用户口碑与记录内容不可被直接修改
       - 维护操作具备审计记录
     status: planned
 
   - id: P6
     title: land offline report and history retention contract
     goal: >
-      落地下线上报、审核、已下线展示、搜索降级与历史保留合同。
+      落地下线上报、审核、已下线展示、搜索降级与记录保留合同。
     depends_on:
       - P5
     acceptance_refs:
@@ -114,13 +114,13 @@ slices:
     done_when:
       - 用户或认领方可上报下线
       - 审核通过后主页进入 offline 并展示原因标签
-      - 原 URL、历史内容、历史口碑和相关群组关系继续可见
+      - 原 URL、记录内容、记录口碑和相关群组关系继续可见
     status: planned
 
   - id: P7
     title: harden governance observability slo and rollback
     goal: >
-      建立候选发布、认领审核、维护越权、下线历史保留的观测、SLO 与回滚动作。
+      建立候选发布、认领审核、维护越权、下线记录保留的观测、SLO 与回滚动作。
     depends_on:
       - P6
     acceptance_refs:
@@ -131,5 +131,5 @@ slices:
     done_when:
       - claim / offline / candidate publish 都具备观测指标
       - 认领 SLA 与下线 SLA 可验证
-      - 即使回滚治理入口，也不会破坏已发布主页与已下线历史页
+      - 即使回滚治理入口，也不会破坏已发布主页与已下线记录页
     status: planned

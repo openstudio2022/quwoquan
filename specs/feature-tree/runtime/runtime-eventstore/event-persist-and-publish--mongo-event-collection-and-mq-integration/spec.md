@@ -18,18 +18,18 @@
 - A1：MongoDB 持久化 + RocketMQ 发布 + Outbox 重试端到端正确。
 - A8：持久化 + 发布均有契约测试。
 
-## Folded legacy node `event-replay-and-schema-evolution`
+## Folded current node `event-replay-and-schema-evolution`
 
 # L5 横切：event-replay-and-schema-evolution
 
 ## 功能说明
 - **事件重放**：Replay(aggregate_id, from_version) 返回该聚合自 from_version 起的事件流，用于 Projector 重建 ReadModel。
-- **Schema 版本演进**：事件 payload 支持 version 字段；旧版本事件通过 upcaster 或默认值兼容解析。
+- **Schema 版本演进**：事件 payload 支持 version 字段；过往版本本事件通过 upcaster 或默认值兼容解析。
 - **分页**：Replay 支持 offset/limit 分页，避免大结果集 OOM。
 
 ## 实现要点
 - **Replay**：按 aggregate_id + timestamp 查询；支持 from_version 过滤；可配置 batch_size。
-- **Schema 演进**：events.yaml 声明 schema_version；upcaster 映射旧版本 → 新版本。
+- **Schema 演进**：events.yaml 声明 schema_version；upcaster 映射过往版本本 → 新版本。
 - **Projector 重建**：全量 Replay 后顺序调用 Projector.Handle，重建 ReadModel。
 
 ## 约束

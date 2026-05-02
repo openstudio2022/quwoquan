@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `anomaly-alert-guard`
+## Folded current node `anomaly-alert-guard`
 
 # 开发任务：anomaly-alert-guard
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `anomaly-alert-guard` (from `chat-conversation/contact-and-session-governance/session-audit-observability/session-log-metric-schema/anomaly-alert-guard`)
+- [ ] Migrated current node: `anomaly-alert-guard` (from `chat-conversation/contact-and-session-governance/session-audit-observability/session-log-metric-schema/anomaly-alert-guard`)

@@ -23,7 +23,7 @@
 
 1. **spec-first / metadata-first** 口径已在 `spec.md` 写死，且与仓库 `.cursor` 规则一致。  
 2. **全扫描基线路径**已在 `metadata_driven_ui_gap_inventory.yaml` 与 `page-horizontal-quality-matrix.md` 对齐声明（含 `app/shell`、`welcome`、`components` 全屏页）。  
-3. **门禁** `verify_metadata_driven_ui_gate.py` 已接入 `gate_repo.sh`；默认模式不阻断 `partial`，`QWQ_METADATA_UI_GATE_STRICT=1` 才卡 `legacy_map`。  
+3. **门禁** `verify_metadata_driven_ui_gate.py` 已接入 `gate_repo.sh`；默认模式不阻断 `partial`，`QWQ_METADATA_UI_GATE_STRICT=1` 才卡 `current_map`。  
 4. **plan** 已把「全页登记」落在 slice-4，**实现状态与 inventory 现状一致**（登记完成 ≠ DTO 化完成）。
 
 **不可混为一谈**：baseline **不**等于「全应用 P2 全部 ✓」或「全页 UI 已 codegen DTO」。后者属于 **slice-2～4 及后续 /dev**，须在清单中从 `partial` → `compliant` 逐域收敛。
@@ -45,7 +45,7 @@
 
 ### G1：横向矩阵 **P2=✓** 与清单 **status: partial** 大面积不一致（**已处理**）
 
-- **现象（历史）**：矩阵曾将多数业务页标 **P2=✓**，与清单 **`partial`** 矛盾。  
+- **现象（记录）**：矩阵曾将多数业务页标 **P2=✓**，与清单 **`partial`** 矛盾。  
 - **已落地**：`page-horizontal-quality-spec.md` **P2** 已写明以清单 `status` 映射符号；**矩阵 P2 列已按清单批量回写**（`partial`→`○`，`compliant`→`✓`，`exempt`→`—`；T0 `circles_hub` 维持全列 `—`）。  
 - **备选（未采用）**：另增 **P9「UI 契约消费」** 列 — 仅在若需同时展示「API 已 metadata」与「UI 已 DTO」两维时启用。  
 
@@ -53,7 +53,7 @@
 
 - **修改方案**：在 `metadata-driven-client-data-contract/spec.md` 的「验收重点摘要」或「覆盖矩阵」增加一行：**P2 是否达标以 `metadata_driven_ui_gap_inventory.yaml` 的 `status` 为权威，横向矩阵须与之同步或可推导**。
 
-### G3：门禁 **仅校验路径存在性**（及 STRICT 下 legacy_map）
+### G3：门禁 **仅校验路径存在性**（及 STRICT 下 current_map）
 
 - **Gap**：无法发现「矩阵有路径但清单漏登记」或「P2 符号与 status 矛盾」。  
 - **修改方案**：新增可选脚本 `verify_matrix_inventory_p2_alignment.py`（或扩展现有脚本）：读取矩阵表格中带 `lib/` 的行，解析 P2 列，与 inventory 聚合表比对；**默认 warn**，`STRICT` 失败。

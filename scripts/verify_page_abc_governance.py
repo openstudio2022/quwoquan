@@ -36,25 +36,25 @@ LIB = APP / "lib"
 
 A_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"draftVersion", re.I), "draftVersion"),
-    (re.compile(r"\b_fromV\d|fromV\d\b|_fromLegacy|fromLegacyMap\b", re.I), "versioned/Legacy map parser"),
+    (re.compile(r"\b_fromV\d|fromV\d\b|_fromCurrent|fromCurrentMap\b", re.I), "versioned/Current map parser"),
     (re.compile(r"version\s*==\s*['\"]v\d", re.I), "version==vN"),
     (re.compile(r"RewriteV2|uiProcessTimelineV2", re.I), "*V2 API identifier"),
     (re.compile(r"V2\s*原型|发现页\s*V1", re.I), "comment V1/V2 generation"),
 ]
 
-B_RIVERPOD_LEGACY_IMPORT = re.compile(
-    r"^\s*import\s+['\"]package:flutter_riverpod/legacy\.dart['\"]"
+B_RIVERPOD_CURRENT_IMPORT = re.compile(
+    r"^\s*import\s+['\"]package:flutter_riverpod/current\.dart['\"]"
 )
 
 B_BAD_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"\bclass\s+\w*Legacy\w*"),
-    re.compile(r"\bLegacy[A-Z]\w*\b"),
-    re.compile(r"\blegacyPageId\b"),
-    re.compile(r"\bfromLegacy[A-Za-z]*\b"),
-    re.compile(r"\bonOpenLegacy\w*"),
-    re.compile(r"\b_WorksLegacy\w*"),
-    re.compile(r"\btrackLegacy\w*"),
-    re.compile(r"\b_buildLegacy\w*"),
+    re.compile(r"\bclass\s+\w*Current\w*"),
+    re.compile(r"\bCurrent[A-Z]\w*\b"),
+    re.compile(r"\bcurrentPageId\b"),
+    re.compile(r"\bfromCurrent[A-Za-z]*\b"),
+    re.compile(r"\bonOpenCurrent\w*"),
+    re.compile(r"\b_WorksCurrent\w*"),
+    re.compile(r"\btrackCurrent\w*"),
+    re.compile(r"\b_buildCurrent\w*"),
 ]
 
 C_DYNAMIC = re.compile(r"\bdynamic\b")
@@ -154,7 +154,7 @@ def analyze_file(rel: str) -> dict:
     path = APP / rel
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
-    filtered = "\n".join(ln for ln in lines if not B_RIVERPOD_LEGACY_IMPORT.match(ln))
+    filtered = "\n".join(ln for ln in lines if not B_RIVERPOD_CURRENT_IMPORT.match(ln))
 
     a_hits: list[str] = []
     for pat, label in A_PATTERNS:
@@ -162,7 +162,7 @@ def analyze_file(rel: str) -> dict:
             a_hits.append(label)
 
     b_bad = [p.pattern for p in B_BAD_PATTERNS if p.search(filtered)]
-    has_riverpod_legacy = any(B_RIVERPOD_LEGACY_IMPORT.match(ln) for ln in lines)
+    has_riverpod_current = any(B_RIVERPOD_CURRENT_IMPORT.match(ln) for ln in lines)
 
     c_dyn = len(C_DYNAMIC.findall(text))
     c_map = len(C_MAP.findall(text))
@@ -171,7 +171,7 @@ def analyze_file(rel: str) -> dict:
         "rel": rel,
         "a_hits": sorted(set(a_hits)),
         "b_bad": b_bad,
-        "b_riverpod_legacy_only": bool(has_riverpod_legacy and not b_bad),
+        "b_riverpod_current_only": bool(has_riverpod_current and not b_bad),
         "c_dyn": c_dyn,
         "c_map": c_map,
     }
@@ -253,7 +253,7 @@ def main() -> int:
     raw_fail_a = [r for r in rows if r["a_hits"]]
     raw_fail_b = [r for r in rows if r["b_bad"]]
     raw_fail_c = [r for r in rows if r["c_dyn"] + r["c_map"] > 0]
-    riverpod_only = [r for r in rows if r["b_riverpod_legacy_only"]]
+    riverpod_only = [r for r in rows if r["b_riverpod_current_only"]]
 
     summary = {
         "paths": len(paths),
@@ -263,7 +263,7 @@ def main() -> int:
         "fail_A": len(fail_a),
         "fail_B": len(fail_b),
         "fail_C": len(fail_c),
-        "riverpod_legacy_import_only": len(riverpod_only),
+        "riverpod_current_import_only": len(riverpod_only),
     }
 
     if args.json:
@@ -286,7 +286,7 @@ def main() -> int:
                     "C_dynamic": r["c_dyn"],
                     "C_map": r["c_map"],
                     "C_exempt": "C" in ed,
-                    "B_riverpod_legacy_only": r["b_riverpod_legacy_only"],
+                    "B_riverpod_current_only": r["b_riverpod_current_only"],
                 }
             )
         print(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -303,8 +303,8 @@ def main() -> int:
                 a_cell = prefix + "; ".join(r["a_hits"])
             if r["b_bad"]:
                 b_cell = "⚠ exempt" if "B" in ed else "✓ 待清"
-            elif r["b_riverpod_legacy_only"]:
-                b_cell = "△ riverpod/legacy import"
+            elif r["b_riverpod_current_only"]:
+                b_cell = "△ riverpod/current import"
             else:
                 b_cell = "—"
             c_tot = r["c_dyn"] + r["c_map"]
@@ -321,7 +321,7 @@ def main() -> int:
         print(
             f"Summary: paths={summary['paths']} raw_A={summary['raw_A']} raw_B={summary['raw_B']} "
             f"raw_C={summary['raw_C']} fail_A={summary['fail_A']} fail_B={summary['fail_B']} "
-            f"fail_C={summary['fail_C']} riverpod_legacy_only={summary['riverpod_legacy_import_only']}"
+            f"fail_C={summary['fail_C']} riverpod_current_only={summary['riverpod_current_import_only']}"
         )
     elif args.quiet:
         ok = (
@@ -350,12 +350,12 @@ def main() -> int:
                 tag = " (exempt C)" if "C" in ed else ""
                 print(f"C\t{rel}\tdynamic={r['c_dyn']} map={r['c_map']}{tag}")
         for r in riverpod_only:
-            print(f"B~\t{r['rel']}\tflutter_riverpod/legacy.dart import only")
+            print(f"B~\t{r['rel']}\tflutter_riverpod/current.dart import only")
         print(
             f"verify_page_abc_governance: paths={summary['paths']} "
             f"raw_A={summary['raw_A']} raw_B={summary['raw_B']} raw_C={summary['raw_C']} "
             f"fail_A={summary['fail_A']} fail_B={summary['fail_B']} fail_C={summary['fail_C']} "
-            f"B_riverpod_only={summary['riverpod_legacy_import_only']}"
+            f"B_riverpod_only={summary['riverpod_current_import_only']}"
         )
 
     code = 0

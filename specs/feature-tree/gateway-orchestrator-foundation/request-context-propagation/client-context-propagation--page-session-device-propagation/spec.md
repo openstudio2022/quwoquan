@@ -9,7 +9,7 @@
 ## 验收标准
 - 待补充（A1~A8 重点组）
 
-## Folded legacy node `propagation-completeness-check`
+## Folded current node `propagation-completeness-check`
 
 # L5 特性：propagation-completeness-check
 

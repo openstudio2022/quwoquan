@@ -167,7 +167,6 @@ class ConversationCacheService extends ChangeNotifier {
     }
     final updated = Map<String, dynamic>.from(entry.data);
     updated['avatarUrl'] = avatarUrl;
-    updated['groupAvatarUrl'] = avatarUrl;
     if (groupAvatarVersion != null) {
       updated['groupAvatarVersion'] = groupAvatarVersion;
     }

@@ -11,26 +11,26 @@ execution:
 
 scope:
   summary: >
-    冻结主页下线上报、已下线状态与历史保留合同。
+    冻结主页下线上报、已下线状态与记录保留合同。
   journey_bindings:
     - J3
   in_scope:
     - 下线上报
     - 已下线状态
-    - 历史保留
+    - 记录保留
   out_of_scope:
     - 合并迁移
     - 复杂恢复后台
 
 scenario_acceptance:
   A1:
-    title: 主页可软下线并保留历史
+    title: 主页可软下线并保留记录
     scenario: homepage offline report and history retention
     journey_step: report offline -> review -> mark offline -> keep history visible
     done_when:
       - 用户或认领方可上报已关闭、已结束、信息错误或长期停更
       - 审核通过后主页展示已下线状态与原因标签
-      - 原 URL、历史内容、历史口碑和相关群组关系继续保留
+      - 原 URL、记录内容、记录口碑和相关群组关系继续保留
     edge_cases:
       - 搜索和推荐降级但仍可访问
       - 错误下线可支持后续恢复
@@ -53,10 +53,10 @@ scenario_acceptance:
 
 story_readiness:
   S1:
-    title: 已下线合同与历史保留边界已冻结
+    title: 已下线合同与记录保留边界已冻结
     done_when:
       - 已下线状态字段与原因标签明确
-      - 历史保留范围明确
+      - 记录保留范围明确
       - 不存在硬删除回退口径
     evidence:
       primary:

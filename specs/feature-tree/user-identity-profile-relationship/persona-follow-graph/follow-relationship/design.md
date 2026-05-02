@@ -8,7 +8,7 @@
 
 1. 关注边的主对象是谁。
 2. follow / unfollow 如何做到 persona-aware、幂等、可审计。
-3. `BlockEdge`、计数副作用、legacy owner-level follow 如何协同迁移。
+3. `BlockEdge`、计数副作用、current owner-level follow 如何协同迁移。
 
 ## 上游输入评审
 
@@ -162,15 +162,15 @@ follow command 不再接受 owner 级主体，统一使用：
 - `FollowEdge` 成功写入不依赖计数同步即时完成
 - 计数失败可重放修正，但不能影响主边幂等性
 
-### KD5：legacy owner-level follow 迁移到主分身
+### KD5：current owner-level follow 迁移到主分身
 
-历史 follow 若仍以 owner/user 级 key 存在，必须在 persona-aware follow 开关打开前完成迁移：
+记录 follow 若仍以 owner/user 级 key 存在，必须在 persona-aware follow 开关打开前完成迁移：
 
 - 为每个 owner 确认主分身 `profileSubjectId`
-- 将 legacy follow edge 回填到主分身 key
+- 将 current follow edge 回填到主分身 key
 - 回填期读路径允许双读：
   - 优先 persona-aware edge
-  - 兼容 legacy owner edge 映射
+  - 兼容 current owner edge 映射
 
 退出条件：
 
@@ -220,7 +220,7 @@ App 侧 follow 按钮、关系操作菜单、推荐入口只允许调用统一 f
 
 ### 回填
 
-- legacy owner-level follow edge 映射到主分身
+- current owner-level follow edge 映射到主分身
 - 为事件补齐 actor/target `profileSubjectId`
 - 为计数修正建立幂等 replay 机制
 
@@ -241,7 +241,7 @@ App 侧 follow 按钮、关系操作菜单、推荐入口只允许调用统一 f
 - `follow_duplicate_request_count`
 - `follow_block_rejection_count`
 - `follow_counter_mismatch_count`
-- `follow_legacy_edge_read_count`
+- `follow_current_edge_read_count`
 
 回滚原则：
 
@@ -256,7 +256,7 @@ App 侧 follow 按钮、关系操作菜单、推荐入口只允许调用统一 f
 - `T2_module_interaction`
   - follow 按钮、推荐入口、command 状态机
 - `T3_cross_service_integration`
-  - follow/unfollow、block gate、计数事件、legacy edge 回填
+  - follow/unfollow、block gate、计数事件、current edge 回填
 - `T4_release_rehearsal`
   - persona-aware follow rollback、计数对账、迁移演练
 
@@ -267,7 +267,7 @@ App 侧 follow 按钮、关系操作菜单、推荐入口只允许调用统一 f
 | `P1` | 冻结 follow command、event、block gate metadata | `A1/A2` | `T1_schema` |
 | `P2` | 建立 codegen 与 persona-aware follow repository 基线 | `A1/A2` | `T1_schema`, `T2_module_interaction` |
 | `P3` | 落地幂等、block gate、计数同步与迁移逻辑 | `A2/A3` | `T3_cross_service_integration` |
-| `P4` | 验证灰度、回滚、legacy edge 退出与审计指标 | `A3/S1` | `T3_cross_service_integration`, `T4_release_rehearsal` |
+| `P4` | 验证灰度、回滚、current edge 退出与审计指标 | `A3/S1` | `T3_cross_service_integration`, `T4_release_rehearsal` |
 
 ## 未来演进
 

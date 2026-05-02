@@ -116,7 +116,7 @@ minimum_package:
 deployment:
   plane_binding_domain: content
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: [chat]
@@ -164,7 +164,7 @@ minimum_package:
 deployment:
   plane_binding_domain: content
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: [chat]
@@ -201,7 +201,7 @@ minimum_package:
 deployment:
   plane_binding_domain: chat
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -238,7 +238,7 @@ minimum_package:
 deployment:
   plane_binding_domain: circle
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -275,7 +275,7 @@ minimum_package:
 deployment:
   plane_binding_domain: user
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -323,7 +323,7 @@ minimum_package:
 deployment:
   plane_binding_domain: content
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: [chat]
@@ -361,7 +361,7 @@ minimum_package:
 deployment:
   plane_binding_domain: chat
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -398,7 +398,7 @@ minimum_package:
 deployment:
   plane_binding_domain: circle
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -435,7 +435,7 @@ minimum_package:
 deployment:
   plane_binding_domain: user
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -706,7 +706,7 @@ minimum_package:
   template_domain: content
   first_wave_replica_domains: [chat, circle, user]
   required_deploy_sources:
-    legacy: deploy/shared/process_domain_mapping.yaml
+    current: deploy/shared/process_domain_mapping.yaml
     plane_aware: deploy/shared/process_domain_plane_mapping.yaml
 `)+"\n")
 

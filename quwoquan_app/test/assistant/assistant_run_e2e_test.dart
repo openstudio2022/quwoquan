@@ -314,7 +314,7 @@ void main() {
       final combinedNarrative = journey.entries
           .map((item) => '${item.headline} ${item.detail}'.trim())
           .join(' ');
-      expect(combinedNarrative.contains('压缩以上对话历史为简洁摘要'), isFalse);
+      expect(combinedNarrative.contains('压缩以上对话记录为简洁摘要'), isFalse);
       expect(combinedNarrative.contains('summarize_session'), isFalse);
     });
 

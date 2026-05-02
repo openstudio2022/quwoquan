@@ -11,7 +11,7 @@ derived_from:
 slices:
   - id: P1
     title: freeze offline report and retention schema
-    goal: 冻结 status report、offline 原因标签与历史保留边界
+    goal: 冻结 status report、offline 原因标签与记录保留边界
     depends_on: []
     acceptance_refs:
       - A1
@@ -20,7 +20,7 @@ slices:
       - T1_schema
     done_when:
       - offline 状态和原因字段明确
-      - 历史保留范围冻结
+      - 记录保留范围冻结
     status: planned
 
   - id: P2
@@ -39,7 +39,7 @@ slices:
 
   - id: P3
     title: preserve offline homepage history access
-    goal: 确保主页下线后仍能访问原 URL、历史内容、历史口碑和相关群组摘要
+    goal: 确保主页下线后仍能访问原 URL、记录内容、记录口碑和相关群组摘要
     depends_on:
       - P2
     acceptance_refs:
@@ -49,13 +49,13 @@ slices:
       - T3_cross_service_integration
       - T4_user_journey
     done_when:
-      - 搜索与推荐降级但历史页可访问
+      - 搜索与推荐降级但记录页可访问
       - 详情页展示原因标签和 offline 提示
     status: planned
 
   - id: P4
     title: harden offline retention regression tests
-    goal: 为下线上报、状态切换和历史保留补齐测试
+    goal: 为下线上报、状态切换和记录保留补齐测试
     depends_on:
       - P3
     acceptance_refs:
@@ -65,6 +65,6 @@ slices:
       - T3_cross_service_integration
       - T4_user_journey
     done_when:
-      - offline workflow 和历史保留有稳定测试
+      - offline workflow 和记录保留有稳定测试
       - 不存在硬删除回退口径
     status: planned

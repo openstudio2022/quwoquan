@@ -33,7 +33,7 @@ void main() {
     expect(allowed, isFalse);
   });
 
-  test('历史定点 query 会走 timeWindow 命中而不是 now-based freshness', () {
+  test('记录定点 query 会走 timeWindow 命中而不是 now-based freshness', () {
     const outcomeResolver = RetrievalOutcomeResolver();
     const gateResolver = AnswerGateResolver();
     final outcome = outcomeResolver.resolve(
@@ -609,7 +609,7 @@ void main() {
     expect(
       outcome.timeWindowRequired,
       isTrue,
-      reason: '应基于传入 referenceNowIso 把 2099-01-01 判定为历史定点查询',
+      reason: '应基于传入 referenceNowIso 把 2099-01-01 判定为记录定点查询',
     );
     expect(outcome.timeWindowKnown, isFalse);
     expect(outcome.status, equals('need_more_evidence'));

@@ -7,17 +7,10 @@ class AppTraceContextStore {
   final Random _random = Random();
 
   String? _sessionId;
-  String? _journeyId;
 
   String get sessionId => _sessionId ??= _newId('sess');
-  String get journeyId => _journeyId ??= _newId('journey');
-
-  void renewJourney() {
-    _journeyId = _newId('journey');
-  }
 
   String newPageVisitId() => _newId('visit');
-  String newSpanId() => _newId('span');
   String newRequestId() => _newId('req');
 
   String _newId(String prefix) {

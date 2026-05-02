@@ -5,14 +5,28 @@ class NotificationRequestPageIds {
   const NotificationRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
+    'AckAppMessage': 'notification.ack.app.message',
+    'CreateAppMessage': 'notification.create.app.message',
+    'GetAppMessage': 'notification.get.app.message',
+    'GetAppMessageUnreadCount': 'notification.get.app.message.unread.count',
     'GetUnreadCount': 'notification.get.unread.count',
+    'ListAppMessages': 'notification.list.app.messages',
     'ListNotifications': 'notification.list.notifications',
     'MarkAllAsRead': 'notification.mark.all.as.read',
     'MarkAsRead': 'notification.mark.as.read',
+    'ReadAppMessage': 'notification.read.app.message',
+    'StreamAppMessages': 'notification.stream.app.messages',
   };
 
+  static const String ackAppMessage = 'notification.ack.app.message';
+  static const String createAppMessage = 'notification.create.app.message';
+  static const String getAppMessage = 'notification.get.app.message';
+  static const String getAppMessageUnreadCount = 'notification.get.app.message.unread.count';
   static const String getUnreadCount = 'notification.get.unread.count';
+  static const String listAppMessages = 'notification.list.app.messages';
   static const String listNotifications = 'notification.list.notifications';
   static const String markAllAsRead = 'notification.mark.all.as.read';
   static const String markAsRead = 'notification.mark.as.read';
+  static const String readAppMessage = 'notification.read.app.message';
+  static const String streamAppMessages = 'notification.stream.app.messages';
 }

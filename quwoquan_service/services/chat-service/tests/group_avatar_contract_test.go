@@ -13,9 +13,9 @@ func TestGroupAvatar_GetConversationReturnsPrecomposedAvatar(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
-	groupAvatarURL, _ := result["groupAvatarUrl"].(string)
-	if groupAvatarURL == "" {
-		t.Fatal("expected groupAvatarUrl in conversation detail")
+	avatarURL, _ := result["avatarUrl"].(string)
+	if avatarURL == "" {
+		t.Fatal("expected non-empty avatarUrl in conversation detail")
 	}
 	version, ok := result["groupAvatarVersion"].(float64)
 	if !ok || int(version) <= 0 {
@@ -43,9 +43,9 @@ func TestGroupAvatar_InboxReturnsPrecomposedAvatar(t *testing.T) {
 		if row["conversationId"] != convId {
 			continue
 		}
-		groupAvatarURL, _ := row["groupAvatarUrl"].(string)
-		if groupAvatarURL == "" {
-			t.Fatal("expected groupAvatarUrl in inbox row")
+		avatarURL, _ := row["avatarUrl"].(string)
+		if avatarURL == "" {
+			t.Fatal("expected non-empty avatarUrl in inbox row")
 		}
 		return
 	}

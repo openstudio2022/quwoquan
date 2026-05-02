@@ -10,16 +10,16 @@ type Mapper[TInput any] interface {
 	Map(input TInput) FailureBase
 }
 
-func FromLegacyAppError(err *runtimeerrors.AppError) Failure {
+func FromCurrentAppError(err *runtimeerrors.AppError) Failure {
 	if err == nil {
 		return Unknown()
 	}
 	code := err.Code.String()
 	return Failure{
 		Code:   code,
-		Origin: originFromLegacyKind(err.Code.Kind),
+		Origin: originFromCurrentKind(err.Code.Kind),
 		Kind:   kindFromCode(code),
-		Nature: natureFromLegacyKind(err.Code.Kind),
+		Nature: natureFromCurrentKind(err.Code.Kind),
 		Location: Location{
 			BusinessObject: "cloud_request",
 			FunctionModule: "runtime_errors_adapter",
@@ -33,7 +33,7 @@ func FromLegacyAppError(err *runtimeerrors.AppError) Failure {
 	}.Normalized()
 }
 
-func originFromLegacyKind(kind runtimeerrors.Kind) Origin {
+func originFromCurrentKind(kind runtimeerrors.Kind) Origin {
 	switch kind {
 	case runtimeerrors.KindUser:
 		return OriginUser
@@ -48,7 +48,7 @@ func originFromLegacyKind(kind runtimeerrors.Kind) Origin {
 	}
 }
 
-func natureFromLegacyKind(kind runtimeerrors.Kind) Nature {
+func natureFromCurrentKind(kind runtimeerrors.Kind) Nature {
 	switch kind {
 	case runtimeerrors.KindUser:
 		return NatureRequiresUserAction

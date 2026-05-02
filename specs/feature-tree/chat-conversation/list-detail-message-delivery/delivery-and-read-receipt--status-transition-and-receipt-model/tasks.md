@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `receipt-consistency-repair`
+## Folded current node `receipt-consistency-repair`
 
 # 开发任务：receipt-consistency-repair
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `receipt-consistency-repair` (from `chat-conversation/list-detail-message-delivery/delivery-and-read-receipt/status-transition-and-receipt-model/receipt-consistency-repair`)
+- [ ] Migrated current node: `receipt-consistency-repair` (from `chat-conversation/list-detail-message-delivery/delivery-and-read-receipt/status-transition-and-receipt-model/receipt-consistency-repair`)

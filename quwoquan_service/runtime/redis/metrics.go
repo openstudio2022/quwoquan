@@ -249,6 +249,41 @@ func (c *instrumentedClient) Subscribe(ctx context.Context, channels ...string) 
 	return c.inner.Subscribe(ctx, channels...)
 }
 
+func (c *instrumentedClient) XGroupCreateMkStream(ctx context.Context, stream string, group string, start string) error {
+	t := time.Now()
+	err := c.inner.XGroupCreateMkStream(ctx, stream, group, start)
+	c.record(t, err)
+	return err
+}
+
+func (c *instrumentedClient) XAdd(ctx context.Context, stream string, values map[string]string) (string, error) {
+	t := time.Now()
+	v, err := c.inner.XAdd(ctx, stream, values)
+	c.record(t, err)
+	return v, err
+}
+
+func (c *instrumentedClient) XReadGroup(
+	ctx context.Context,
+	group string,
+	consumer string,
+	streams map[string]string,
+	count int64,
+	block time.Duration,
+) ([]StreamMessage, error) {
+	t := time.Now()
+	v, err := c.inner.XReadGroup(ctx, group, consumer, streams, count, block)
+	c.record(t, err)
+	return v, err
+}
+
+func (c *instrumentedClient) XAck(ctx context.Context, stream string, group string, ids ...string) error {
+	t := time.Now()
+	err := c.inner.XAck(ctx, stream, group, ids...)
+	c.record(t, err)
+	return err
+}
+
 func (c *instrumentedClient) Pipeline(ctx context.Context) Pipeliner {
 	return c.inner.Pipeline(ctx)
 }

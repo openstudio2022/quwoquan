@@ -6,7 +6,7 @@
 - [ ] 测试（mock/unit/contract/integration/uat）
 - [ ] gate 验证
 
-## Folded legacy node `report-consistency-check`
+## Folded current node `report-consistency-check`
 
 # 开发任务：report-consistency-check
 
@@ -17,4 +17,4 @@
 - [ ] gate 验证
 
 ## 当前交付任务
-- [ ] Migrated legacy node: `report-consistency-check` (from `product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/metric-dimension-standard/report-consistency-check`)
+- [ ] Migrated current node: `report-consistency-check` (from `product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/metric-dimension-standard/report-consistency-check`)

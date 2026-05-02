@@ -5,36 +5,56 @@ class AssistantRequestPageIds {
   const AssistantRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
+    'CreateAssistantConversation': 'assistant.create.assistant.conversation',
+    'CreateAssistantTurn': 'assistant.create.assistant.turn',
     'CreateRun': 'assistant.run.create',
     'CreateRunStream': 'assistant.run.stream',
+    'CreateSkillSubscription': 'assistant.create.skill.subscription',
+    'GetAssistantConversation': 'assistant.get.assistant.conversation',
+    'GetAssistantTurn': 'assistant.get.assistant.turn',
     'GetLearningOpsSummary': 'assistant.get.learning.ops.summary',
     'GetPolicy': 'assistant.policy.get',
+    'GetSkillSubscription': 'assistant.get.skill.subscription',
     'GetSuggestedActions': 'assistant.suggested_actions.get',
     'GrantSkillConsent': 'assistant.skills.consent.grant',
     'ListAssistantMemories': 'assistant.list.assistant.memories',
     'ListAssistantTasks': 'assistant.list.assistant.tasks',
     'ListConsents': 'assistant.list.consents',
+    'ListSkillSubscriptions': 'assistant.list.skill.subscriptions',
     'ListSkills': 'assistant.skills.list',
     'ReportInteractionEvent': 'assistant.learning.events.report',
     'ReportPageContext': 'assistant.page_context.report',
     'ReportScorecard': 'assistant.learning.scorecards.report',
     'RevokeSkillConsent': 'assistant.skills.consent.revoke',
     'SearchXiaoquResults': 'assistant.search.xiaoqu',
+    'StreamAssistantTurn': 'assistant.stream.assistant.turn',
+    'TickSkillSubscriptionCron': 'assistant.tick.skill.subscription.cron',
+    'UpdateSkillSubscriptionStatus': 'assistant.update.skill.subscription.status',
   };
 
+  static const String createAssistantConversation = 'assistant.create.assistant.conversation';
+  static const String createAssistantTurn = 'assistant.create.assistant.turn';
   static const String createRun = 'assistant.run.create';
   static const String createRunStream = 'assistant.run.stream';
+  static const String createSkillSubscription = 'assistant.create.skill.subscription';
+  static const String getAssistantConversation = 'assistant.get.assistant.conversation';
+  static const String getAssistantTurn = 'assistant.get.assistant.turn';
   static const String getLearningOpsSummary = 'assistant.get.learning.ops.summary';
   static const String getPolicy = 'assistant.policy.get';
+  static const String getSkillSubscription = 'assistant.get.skill.subscription';
   static const String getSuggestedActions = 'assistant.suggested_actions.get';
   static const String grantSkillConsent = 'assistant.skills.consent.grant';
   static const String listAssistantMemories = 'assistant.list.assistant.memories';
   static const String listAssistantTasks = 'assistant.list.assistant.tasks';
   static const String listConsents = 'assistant.list.consents';
+  static const String listSkillSubscriptions = 'assistant.list.skill.subscriptions';
   static const String listSkills = 'assistant.skills.list';
   static const String reportInteractionEvent = 'assistant.learning.events.report';
   static const String reportPageContext = 'assistant.page_context.report';
   static const String reportScorecard = 'assistant.learning.scorecards.report';
   static const String revokeSkillConsent = 'assistant.skills.consent.revoke';
   static const String searchXiaoquResults = 'assistant.search.xiaoqu';
+  static const String streamAssistantTurn = 'assistant.stream.assistant.turn';
+  static const String tickSkillSubscriptionCron = 'assistant.tick.skill.subscription.cron';
+  static const String updateSkillSubscriptionStatus = 'assistant.update.skill.subscription.status';
 }

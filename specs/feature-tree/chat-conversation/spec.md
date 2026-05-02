@@ -232,7 +232,7 @@ test/
 │   │   ├── message_dto_contract_test.dart            # T1: DTO 契约
 │   │   ├── member_dto_contract_test.dart             # T1: DTO 契约
 │   │   └── user_state_dto_contract_test.dart         # T1: DTO 契约
-│   └── api_contract_runner.dart                      # T3: staging HTTP 契约
+│   └── api_contract_runner.dart                      # T3: gamma HTTP 契约
 ├── ui/chat/
 │   ├── widgets/
 │   │   ├── chat_page_widget_test.dart                # T2: ChatPage 渲染

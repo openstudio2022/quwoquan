@@ -9,7 +9,7 @@
 ## 验收标准
 - A3：状态迁移在异常场景下仍保持一致性。
 
-## Folded legacy node `transition-idempotency-guard`
+## Folded current node `transition-idempotency-guard`
 
 # L5 特性：transition-idempotency-guard
 

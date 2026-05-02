@@ -1,5 +1,7 @@
 // ignore_for_file: unnecessary_import, unnecessary_overrides
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -9,6 +11,7 @@ import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/assistant/api/assistant_api_gateway.dart';
 import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
@@ -27,7 +30,6 @@ void logQuwoquanAppException({
   final traceStore = AppTraceContextStore.instance;
   final context = AppLogContext(
     sessionId: traceStore.sessionId,
-    journeyId: traceStore.journeyId,
     pageVisitId: traceStore.newPageVisitId(),
   );
   AppLogService.instance.writeEvent(
@@ -41,6 +43,13 @@ void logQuwoquanAppException({
       stack: stackText,
     ).toMap(),
     hasError: true,
+  );
+  unawaited(
+    AppExceptionTelemetryService.instance.recordGlobalException(
+      source: source,
+      exceptionText: exceptionText,
+      stackText: stackText,
+    ),
   );
   AppLogService.instance.writeEvent(
     logType: AppLogType.pageAccess,
@@ -212,7 +221,9 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref.read(responsiveProvider.notifier).updateFromMediaQueryData(mediaQuery);
+          ref
+              .read(responsiveProvider.notifier)
+              .updateFromMediaQueryData(mediaQuery);
           ref
               .read(accessibilityProvider.notifier)
               .updateFromMediaQueryData(mediaQuery);

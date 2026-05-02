@@ -20,10 +20,7 @@ void main() {
           ProcessStepId.retrievalProcessing,
         ]),
       );
-      expect(
-        visible[1].headline,
-        contains('我会先按天气现状和出门建议两路来核对'),
-      );
+      expect(visible[1].headline, contains('我会先按天气现状和出门建议两路来核对'));
     });
 
     test('持久化消息读取时 UI timeline 恢复 3-step，但 canonical 仍保留 4-step', () {
@@ -66,10 +63,7 @@ void main() {
           ProcessStepId.retrievalProcessing,
         ]),
       );
-      expect(
-        persistedVisible[1].headline,
-        contains('我会先按天气现状和出门建议两路来核对'),
-      );
+      expect(persistedVisible[1].headline, contains('我会先按天气现状和出门建议两路来核对'));
     });
 
     test('当前 v1 消息缺少 processTimeline 时不再回退到 journey', () {
@@ -93,11 +87,11 @@ void main() {
       expect(resolvePersistedAssistantVisibleProcessTimeline(message), isEmpty);
     });
 
-    test('旧版本消息不再兼容 journey 回退恢复时间轴', () {
+    test('过往版本本消息不再兼容 journey 回退恢复时间轴', () {
       final message = <String, dynamic>{
         'role': 'assistant',
         'content': '深圳今天晴，轻装出门更合适。',
-        'assistantTurnSchemaVersion': 'assistant_turn_legacy',
+        'assistantTurnSchemaVersion': 'assistant_turn_current',
         assistantJourneyField: const AssistantJourney(
           entries: <AssistantJourneyEntry>[
             AssistantJourneyEntry(

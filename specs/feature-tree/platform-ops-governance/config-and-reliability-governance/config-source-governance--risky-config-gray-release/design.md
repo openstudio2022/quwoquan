@@ -38,7 +38,7 @@
 - 需接入 SLO 观测节点提供门禁指标
 - 已发布版本配置文件不可变，回滚通过“切换版本指针”而非覆盖文件
 
-## Folded legacy node `one-click-config-rollback`
+## Folded current node `one-click-config-rollback`
 
 # Design: one-click-config-rollback
 
@@ -55,7 +55,7 @@
 
 ## 版本目录回滚方式
 
-不修改历史配置文件内容，仅切换版本指针：
+不修改记录配置文件内容，仅切换版本指针：
 - from: `CONFIG_VERSION=v2026.02.28.0`
 - to: `CONFIG_VERSION=v2026.02.27.1`
 

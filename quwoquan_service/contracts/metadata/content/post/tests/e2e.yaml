@@ -17,7 +17,7 @@ execution:
   ci_strategy: advisory
   trigger: daily + pre-release
   runners:
-    api_contract: staging HTTP client（Go/Dart http）
+    api_contract: gamma HTTP client（Go/Dart http）
     ui_journey:   Patrol on Firebase Test Lab（iOS + Android real devices）
 
 # ── 核心用户旅程 ──────────────────────────────────────────────────────

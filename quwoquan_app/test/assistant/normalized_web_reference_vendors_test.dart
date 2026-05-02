@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('NormalizedWebReference vendor fixtures', () {
-    test('SerpAPI organic uses link as url (matches legacy extraction)', () {
+    test('SerpAPI organic uses link as url (matches current extraction)', () {
       final item = <String, dynamic>{
         'title': ' Example ',
         'link': ' https://a.test/x ',
@@ -34,9 +34,9 @@ void main() {
       const serpFixture = '''
 {"organic_results":[{"title":"T","link":"https://u","snippet":"S"}]}
 ''';
-      final root =
-          jsonDecode(serpFixture) as Map<String, dynamic>;
-      final organic = (root['organic_results'] as List).cast<Map<String, dynamic>>();
+      final root = jsonDecode(serpFixture) as Map<String, dynamic>;
+      final organic = (root['organic_results'] as List)
+          .cast<Map<String, dynamic>>();
       final n = NormalizedWebReference.fromSerpApiOrganic(organic.first);
       expect(n.isUsable, isTrue);
       expect(n.url, 'https://u');
@@ -50,11 +50,13 @@ void main() {
     );
 
     test('Brave minimal web.results fixture', () {
-      final decoded = jsonDecode('''
+      final decoded =
+          jsonDecode('''
 {"web":{"results":[
   {"title":" BT ","url":" https://brave.test/x ","description":" D "}
 ]}}
-''') as Map<String, dynamic>;
+''')
+              as Map<String, dynamic>;
       final refs = tool.extractReferencesForFixtureTest(
         provider: AssistantSearchProvider.brave,
         decoded: decoded,
@@ -67,9 +69,11 @@ void main() {
     });
 
     test('Perplexity citations fixture', () {
-      final decoded = jsonDecode('''
+      final decoded =
+          jsonDecode('''
 {"citations":[" https://p.test/a ",""," https://p.test/b "]}
-''') as Map<String, dynamic>;
+''')
+              as Map<String, dynamic>;
       final refs = tool.extractReferencesForFixtureTest(
         provider: AssistantSearchProvider.perplexity,
         decoded: decoded,
@@ -85,11 +89,13 @@ void main() {
     });
 
     test('Openclaw references fixture', () {
-      final decoded = jsonDecode('''
+      final decoded =
+          jsonDecode('''
 {"references":[
   {"title":" OC ","url":" https://oc.test/z ","snippet":" S "}
 ]}
-''') as Map<String, dynamic>;
+''')
+              as Map<String, dynamic>;
       final refs = tool.extractReferencesForFixtureTest(
         provider: AssistantSearchProvider.openclawProxy,
         decoded: decoded,

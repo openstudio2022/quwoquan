@@ -1,4 +1,4 @@
-# Assistant M0 Replay Baseline
+# Assistant M0 Replay Baseline (Retired)
 
 ## Purpose
 
@@ -8,8 +8,11 @@ outcomes reproducible, comparable, and explainable before M1 continues.
 
 ## Fixed Corpus
 
-The current corpus is defined in
-`integration_test/assistant_manual_replay_test.dart` and includes:
+The former device replay corpus has been retired. Environment tests now live under
+`test/common|alpha|beta|gamma`, and shared assistant scenarios are defined in
+`quwoquan_service/contracts/metadata/assistant/test_fixtures/scenarios/assistant_scenarios.json`.
+
+The retired corpus included:
 
 - `yesterday_stock_reason`
 - `followup_a_stock_reason`
@@ -22,7 +25,7 @@ The runner accepts:
 
 - `ASSISTANT_REPLAY_CASE_FILTER`
 - `ASSISTANT_REPLAY_REPEAT_COUNT`
-- legacy compatibility via `ASSISTANT_ENABLE_LEGACY_REPLAY_CASES`
+- current compatibility via `ASSISTANT_ENABLE_CURRENT_REPLAY_CASES`
 
 ## Baseline Pack Contract
 

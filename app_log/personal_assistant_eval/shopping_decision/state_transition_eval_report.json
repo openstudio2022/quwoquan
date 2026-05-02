@@ -1569,7 +1569,7 @@
             "dialogueExperienceScore 达标，用户界面输出结构完整，但缺少多方案对比。"
           ],
           "improvementHints": [
-            "在用户可见输出（userFacingMarkdown）的“建议”部分，必须提供至少2个候选方案对比。例如，除了“重新开启对话”外，可增加“查看历史记录”或“联系客服”等选项。",
+            "在用户可见输出（userFacingMarkdown）的“建议”部分，必须提供至少2个候选方案对比。例如，除了“重新开启对话”外，可增加“查看记录记录”或“联系客服”等选项。",
             "在“边界声明”中，必须明确包含“不替代专业建议”和“价格有时效性”的表述。",
             "证据（evidence）应优先引用白名单站点（如 consumerreports.org, rtings.com, gsmarena.com）以支持结论，而非仅使用系统状态。",
             "工具调用（toolCalls）中的 web_search 查询内容与购物决策无关，应聚焦于购物品类、价格、评测等信息。"

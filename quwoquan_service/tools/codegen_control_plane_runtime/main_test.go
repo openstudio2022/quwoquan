@@ -95,7 +95,7 @@ minimum_package:
   template_domain: content
   first_wave_replica_domains: [chat]
   required_deploy_sources:
-    legacy: deploy/shared/process_domain_mapping.yaml
+    current: deploy/shared/process_domain_mapping.yaml
     plane_aware: deploy/shared/process_domain_plane_mapping.yaml
 `)
 	writeFixture(t, filepath.Join(metadataDir, "_control_plane", "domains", "content.yaml"), `
@@ -127,7 +127,7 @@ minimum_package:
 deployment:
   plane_binding_domain: content
   plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  legacy_binding_source: deploy/shared/process_domain_mapping.yaml
+  current_binding_source: deploy/shared/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: [chat]

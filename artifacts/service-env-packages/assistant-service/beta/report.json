@@ -1,0 +1,15 @@
+{
+  "status": "packaged",
+  "service": "assistant-service",
+  "env": "beta",
+  "configLayout": "default+env",
+  "modulePackage": "assistant-service",
+  "enabledModules": [
+    "assistant.api",
+    "assistant.task_outbox_dispatcher",
+    "assistant.run_projection_worker"
+  ],
+  "disabledModules": [],
+  "catalogVersion": 1,
+  "retentionPolicyVersion": 1
+}

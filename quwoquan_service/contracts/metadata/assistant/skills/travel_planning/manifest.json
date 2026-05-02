@@ -1,0 +1,14 @@
+{
+  "skillId": "travel_planning",
+  "displayName": "出行管家",
+  "description": "旅行攻略、景点推荐、酒店机票、行程规划。",
+  "domainId": "travel_planning",
+  "executionTarget": "hybrid",
+  "routingHints": ["旅游", "旅行", "行程", "景点", "酒店", "攻略", "拥堵"],
+  "iconHint": "airplane",
+  "toolPolicy": {
+    "allowedTools": ["web_search", "app_search", "web_fetch"],
+    "preferredTools": ["web_search", "app_search"],
+    "maxToolCalls": 3
+  }
+}
