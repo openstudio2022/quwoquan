@@ -70,7 +70,10 @@ func (s *CallSessionService) SetRinging(session *model.CallSession) {
 }
 
 func (s *CallSessionService) AnswerCall(session *model.CallSession, userID string) error {
-	if session.Status != model.StatusRinging && session.Status != model.StatusInitiated {
+	if session.Status != model.StatusRinging &&
+		session.Status != model.StatusInitiated &&
+		session.Status != model.StatusConnecting &&
+		session.Status != model.StatusInCall {
 		return errors.New("can only answer a ringing call")
 	}
 	p := findParticipant(session, userID)
