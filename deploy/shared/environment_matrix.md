@@ -52,6 +52,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(云侧类生产集
 | `GAMMA_PRODUCT_OPS_BASE_URL` | gamma 上 Ops/产品面 API 基址 |
 | `GAMMA_TEST_AUTH_TOKEN` | gamma L3/L4 鉴权 |
 | `GAMMA_KUBECONFIG` | gamma 部署流水线 kubectl apply |
+| `GAMMA_ECS_PASSWORD` | gamma ECS SSH 密码（仅 `deploy-gamma-ecs.yml` 使用） |
 
 新增流水线、脚本与测试只使用 `GAMMA_*`。记录期 staging / integration 命名不再作为配置入口。
 

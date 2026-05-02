@@ -1,0 +1,427 @@
+# Gamma ECS deployment: alpha/beta validation -> ECS deploy -> gamma validation.
+name: 08. Deploy Gamma ECS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy-gamma-ecs.yml'
+      - 'scripts/deploy_gamma_ecs.sh'
+      - 'scripts/run_assistant_device_matrix.py'
+      - 'scripts/run_assistant_device_matrix_ci.py'
+      - 'scripts/start_local_gamma_mirror.sh'
+      - 'scripts/run_local_gamma_t3.py'
+      - 'quwoquan_app/**'
+      - 'quwoquan_service/**'
+      - 'deploy/local-gamma/**'
+
+concurrency:
+  group: gamma-ecs-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GAMMA_ECS_HOST: ${{ vars.GAMMA_ECS_HOST || secrets.GAMMA_ECS_HOST || '118.31.239.122' }}
+  GAMMA_ECS_USER: ${{ vars.GAMMA_ECS_USER || 'root' }}
+  GAMMA_ECS_PORT: ${{ vars.GAMMA_ECS_PORT || '22' }}
+  GAMMA_ECS_REMOTE_DIR: ${{ vars.GAMMA_ECS_REMOTE_DIR || '/opt/quwoquan/gamma' }}
+  ASSISTANT_MODEL_PROVIDER: deterministic
+  ALLOW_DETERMINISTIC_BETA: "1"
+
+jobs:
+  gate:
+    name: Gate — T1/T2 preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: 设置 Dart
+        uses: dart-lang/setup-dart@v1
+      - name: 安装 kustomize
+        uses: syntaqx/setup-kustomize@v1
+      - name: 安装 Python 依赖 (rec-model-service)
+        run: pip install -r quwoquan_service/services/rec-model-service/requirements.txt
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - name: 设置 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Gate
+        run: make gate
+
+  alpha_beta_android:
+    name: ${{ matrix.env }} / Android hosted emulator
+    needs: [gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [alpha, beta]
+    env:
+      API_CONTRACT_ENV: ${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Enable Android emulator KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run ${{ matrix.env }} on Android hosted emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          script: |
+            python3 scripts/run_assistant_device_matrix_ci.py --platform android
+      - name: Upload Android matrix report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-ecs-predeploy-${{ matrix.env }}-android
+          path: |
+            artifacts/device-matrix/${{ matrix.env }}-android.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+          if-no-files-found: ignore
+
+  alpha_beta_ios:
+    name: ${{ matrix.env }} / iOS hosted simulator
+    needs: [gate]
+    runs-on: macos-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [alpha, beta]
+    env:
+      API_CONTRACT_ENV: ${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Boot iOS simulator
+        run: |
+          xcodebuild -version
+          xcrun simctl list > /dev/null
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/ios-devices.json"
+          IOS_DEVICE_ID="$(python3 - "$RUNNER_TEMP/ios-devices.json" <<'PY'
+          import json
+          import re
+          import sys
+
+          data = json.load(open(sys.argv[1], encoding="utf-8")).get("devices", {})
+          devices = []
+          for runtime, runtime_devices in data.items():
+              match = re.search(r"iOS-(\d+(?:-\d+)*)$", runtime)
+              if not match:
+                  continue
+              version = tuple(int(part) for part in match.group(1).split("-"))
+              for index, device in enumerate(runtime_devices):
+                  if not device.get("isAvailable") or not device.get("udid"):
+                      continue
+                  name = device.get("name", "")
+                  prefer_phone = 1 if name.startswith("iPhone") else 0
+                  prefer_current = 1 if name in {"iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"} else 0
+                  devices.append((version, prefer_current, prefer_phone, -index, device["udid"]))
+          if not devices:
+              raise SystemExit("no available iOS simulator")
+          devices.sort(reverse=True)
+          print(devices[0][-1])
+          PY
+          )"
+          xcrun simctl boot "$IOS_DEVICE_ID" || true
+          xcrun simctl bootstatus "$IOS_DEVICE_ID" -b
+          echo "IOS_DEVICE_ID=$IOS_DEVICE_ID" >> "$GITHUB_ENV"
+          flutter devices
+      - name: Run ${{ matrix.env }} on iOS hosted simulator
+        run: |
+          python3 scripts/run_assistant_device_matrix_ci.py --platform ios
+      - name: Upload iOS matrix report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-ecs-predeploy-${{ matrix.env }}-ios
+          path: |
+            artifacts/device-matrix/${{ matrix.env }}-ios.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+          if-no-files-found: ignore
+
+  deploy_gamma_ecs:
+    name: Deploy gamma to Aliyun ECS
+    needs: [alpha_beta_android, alpha_beta_ios]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      base_url: ${{ steps.urls.outputs.base_url }}
+      product_ops_base_url: ${{ steps.urls.outputs.product_ops_base_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve gamma URLs
+        id: urls
+        run: |
+          BASE_URL="${GAMMA_BASE_URL:-http://${GAMMA_ECS_HOST}:18080}"
+          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${GAMMA_ECS_HOST}:18086}"
+          echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"
+        env:
+          GAMMA_BASE_URL: ${{ vars.GAMMA_BASE_URL || secrets.GAMMA_BASE_URL }}
+          GAMMA_PRODUCT_OPS_BASE_URL: ${{ vars.GAMMA_PRODUCT_OPS_BASE_URL || secrets.GAMMA_PRODUCT_OPS_BASE_URL }}
+      - name: Validate ECS secrets
+        run: |
+          if [ -z "${GAMMA_ECS_PASSWORD:-}" ]; then
+            echo "::error::Missing GitHub secret GAMMA_ECS_PASSWORD"
+            exit 2
+          fi
+        env:
+          GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
+      - name: Install sshpass
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+      - name: Deploy to ECS
+        run: bash scripts/deploy_gamma_ecs.sh
+        env:
+          GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
+          GAMMA_BASE_URL: ${{ steps.urls.outputs.base_url }}
+          GAMMA_PRODUCT_OPS_BASE_URL: ${{ steps.urls.outputs.product_ops_base_url }}
+          GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+
+  gamma_api_contract:
+    name: Gamma ECS — T3 API contract
+    needs: [deploy_gamma_ecs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_CONTRACT_ENV: gamma
+      GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs.outputs.base_url }}
+      GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.deploy_gamma_ecs.outputs.product_ops_base_url }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: T3 API Contract
+        run: make test-api-contract
+
+  gamma_android:
+    name: gamma / Android hosted emulator
+    needs: [deploy_gamma_ecs, gamma_api_contract]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      API_CONTRACT_ENV: gamma
+      GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs.outputs.base_url }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Enable Android emulator KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run gamma on Android hosted emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          script: |
+            python3 scripts/run_assistant_device_matrix_ci.py --platform android
+      - name: Upload Android gamma report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-ecs-gamma-android
+          path: |
+            artifacts/device-matrix/gamma-android.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+          if-no-files-found: ignore
+
+  gamma_ios:
+    name: gamma / iOS hosted simulator
+    needs: [deploy_gamma_ecs, gamma_api_contract]
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      API_CONTRACT_ENV: gamma
+      GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs.outputs.base_url }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Boot iOS simulator
+        run: |
+          xcodebuild -version
+          xcrun simctl list > /dev/null
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/ios-devices.json"
+          IOS_DEVICE_ID="$(python3 - "$RUNNER_TEMP/ios-devices.json" <<'PY'
+          import json
+          import re
+          import sys
+
+          data = json.load(open(sys.argv[1], encoding="utf-8")).get("devices", {})
+          devices = []
+          for runtime, runtime_devices in data.items():
+              match = re.search(r"iOS-(\d+(?:-\d+)*)$", runtime)
+              if not match:
+                  continue
+              version = tuple(int(part) for part in match.group(1).split("-"))
+              for index, device in enumerate(runtime_devices):
+                  if not device.get("isAvailable") or not device.get("udid"):
+                      continue
+                  name = device.get("name", "")
+                  prefer_phone = 1 if name.startswith("iPhone") else 0
+                  prefer_current = 1 if name in {"iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"} else 0
+                  devices.append((version, prefer_current, prefer_phone, -index, device["udid"]))
+          if not devices:
+              raise SystemExit("no available iOS simulator")
+          devices.sort(reverse=True)
+          print(devices[0][-1])
+          PY
+          )"
+          xcrun simctl boot "$IOS_DEVICE_ID" || true
+          xcrun simctl bootstatus "$IOS_DEVICE_ID" -b
+          echo "IOS_DEVICE_ID=$IOS_DEVICE_ID" >> "$GITHUB_ENV"
+          flutter devices
+      - name: Run gamma on iOS hosted simulator
+        run: |
+          python3 scripts/run_assistant_device_matrix_ci.py --platform ios
+      - name: Upload iOS gamma report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-ecs-gamma-ios
+          path: |
+            artifacts/device-matrix/gamma-ios.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+          if-no-files-found: ignore

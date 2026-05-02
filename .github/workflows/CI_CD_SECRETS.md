@@ -14,6 +14,7 @@
 | **service_pipeline.yml** | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验 | G2 |
 | **app_pipeline.yml** | quwoquan_app/**；v* tag → macOS 构建 | Flutter analyze、macOS 构建（L1 由 delivery-gate 负责） | G2 / 发布 |
 | **pre-release-gate.yml** | v*-rc* tag、手动 | L1+L2 → deploy → L3 → L4（L3 统一整合） | G3→G5b |
+| **deploy-gamma-ecs.yml** | 手动、push main | alpha/beta 验证 → ECS 部署 → gamma 回测 | G5a→G5b |
 
 ---
 
@@ -98,7 +99,36 @@
 
 ---
 
-## 七、项目结构与路径
+## 七、Gamma ECS Deploy（deploy-gamma-ecs.yml）
+
+### 必须配置
+
+| Secret / Variable | 用途 |
+|--------|------|
+| **GAMMA_ECS_PASSWORD** | ECS SSH 密码；只放在 GitHub Secret，禁止提交到仓库 |
+| **GAMMA_TEST_AUTH_TOKEN** | gamma T3/T4 验证 Token |
+
+### 可选配置
+
+| Secret / Variable | 用途 | 默认值 |
+|--------|------|------|
+| GAMMA_ECS_HOST | ECS 公网地址 | `118.31.239.122` |
+| GAMMA_ECS_USER | SSH 用户名 | `root` |
+| GAMMA_ECS_PORT | SSH 端口 | `22` |
+| GAMMA_ECS_REMOTE_DIR | ECS 部署目录 | `/opt/quwoquan/gamma` |
+| GAMMA_BASE_URL | gamma 内容 API 公网基址 | `http://<GAMMA_ECS_HOST>:18080` |
+| GAMMA_PRODUCT_OPS_BASE_URL | gamma Product Ops API 公网基址 | `http://<GAMMA_ECS_HOST>:18086` |
+
+### 说明
+
+- Workflow 会先跑 `alpha/beta` Android+iOS 端侧矩阵，成功后才通过 SSH 部署 ECS。
+- ECS 部署使用 `scripts/deploy_gamma_ecs.sh`，在远端启动 `quwoquan_service/docker-compose.gamma-local.yaml`，并执行健康检查与 gamma T3 seed/endpoint 验证。
+- 部署完成后，CI 会以 ECS 公网 URL 运行 `make test-api-contract` 与 `gamma` Android+iOS 端侧矩阵。
+- ECS 安全组需放行 SSH 端口、`18080` 与 `18086`；如改用 80/443 反代，需要同步更新 `GAMMA_BASE_URL` 与 `GAMMA_PRODUCT_OPS_BASE_URL`。
+
+---
+
+## 八、项目结构与路径
 
 ```
 ├── quwoquan_service/     # Go monorepo + rec-model-service (Python)
@@ -108,12 +138,13 @@
     ├── delivery-gate.yml
     ├── service_pipeline.yml
     ├── app_pipeline.yml
-    └── pre-release-gate.yml
+    ├── pre-release-gate.yml
+    └── deploy-gamma-ecs.yml
 ```
 
 ---
 
-## 七、配置步骤
+## 九、配置步骤
 
 1. 进入仓库 **Settings → Secrets and variables → Actions**。
 2. 点击 **New repository secret**。
