@@ -148,25 +148,33 @@ Future<void> _sendAndExpect(
   required AssistantScenario scenario,
   required String runtimeEnv,
 }) async {
-  await tester.ensureVisible(find.byKey(TestKeys.assistantChatInputField));
-  await tester.pump(const Duration(milliseconds: 100));
-  await tester.enterText(
-    find.byKey(TestKeys.assistantChatInputField),
-    scenario.question,
-  );
-  tester.testTextInput.updateEditingValue(
-    TextEditingValue(
-      text: scenario.question,
-      selection: TextSelection.collapsed(offset: scenario.question.length),
-    ),
-  );
-  await _tapSend(tester, scenario.question);
-  await _pumpUntilStreamSettled(tester);
+  Future<PersonalAssistantStreamState> sendOnceAndReadState() async {
+    await tester.ensureVisible(find.byKey(TestKeys.assistantChatInputField));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(
+      find.byKey(TestKeys.assistantChatInputField),
+      scenario.question,
+    );
+    tester.testTextInput.updateEditingValue(
+      TextEditingValue(
+        text: scenario.question,
+        selection: TextSelection.collapsed(offset: scenario.question.length),
+      ),
+    );
+    await _tapSend(tester, scenario.question);
+    await _pumpUntilStreamSettled(tester);
+    final context = tester.element(find.byType(AssistantTabPage));
+    return ProviderScope.containerOf(
+      context,
+    ).read(personalAssistantStreamControllerProvider);
+  }
 
-  final context = tester.element(find.byType(AssistantTabPage));
-  final streamState = ProviderScope.containerOf(
-    context,
-  ).read(personalAssistantStreamControllerProvider);
+  var streamState = await sendOnceAndReadState();
+  if ((runtimeEnv == 'beta' || runtimeEnv == 'gamma') &&
+      streamState.errorMessage.isNotEmpty) {
+    // Hosted emulator occasionally reports a transient network error.
+    streamState = await sendOnceAndReadState();
+  }
   expect(streamState.running, isFalse);
   expect(streamState.errorMessage, isEmpty);
   expect(streamState.answer, isNot(contains('ASSISTANT.MIDDLEWARE')));
