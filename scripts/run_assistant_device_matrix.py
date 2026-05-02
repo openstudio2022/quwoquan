@@ -381,6 +381,26 @@ def run_matrix_test(
         cwd=APP_DIR,
         timeout_seconds=args.test_timeout_seconds,
     )
+    if env_name == "beta" and result["exitCode"] != 0:
+        summary = str(result.get("outputSummary", ""))
+        retry_markers = [
+            "Connection timed out",
+            "Connection refused",
+            "找私助暂时不可用",
+            "assistant beta gateway upstream failed",
+        ]
+        if any(marker in summary for marker in retry_markers):
+            wait_for_gateway(args.gateway_health_url.rstrip("/"), 30)
+            time.sleep(2)
+            retry_result = run_command(
+                command,
+                cwd=APP_DIR,
+                timeout_seconds=args.test_timeout_seconds,
+            )
+            retry_result["retryAttempted"] = True
+            retry_result["firstAttemptExitCode"] = result.get("exitCode", 1)
+            retry_result["firstAttemptTimedOut"] = result.get("timedOut", False)
+            result = retry_result
     result.update(
         {
             "env": env_name,
