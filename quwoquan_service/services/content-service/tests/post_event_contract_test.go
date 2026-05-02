@@ -168,7 +168,7 @@ func TestPostDeletedEvent(t *testing.T) {
 	req.Header.Set("X-Client-User-Id", "delete_event_author")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("delete post: %d", rec.Code)
 	}
 

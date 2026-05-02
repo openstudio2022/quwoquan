@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/base64"
 	"sort"
 	"strings"
 
@@ -81,10 +82,12 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 	blockedUsers := toLowerSet(req.BlockedUserIDs)
 	blockedKeywords := toLowerSet(req.BlockedKeywords)
 
-	cursor := req.Cursor
+	requestedCursor := strings.TrimSpace(req.Cursor)
+	repositoryCursor := decodeRepositoryFeedCursor(requestedCursor)
+	cursor := requestedCursor
 	nextCursor := ""
 	seenPostIDs := map[string]struct{}{}
-	_, cursorIsPostID := s.postReader.GetByID(ctx, strings.TrimSpace(req.Cursor))
+	_, cursorIsPostID := s.postReader.GetByID(ctx, repositoryCursor)
 	useRepositoryPagination := cursorIsPostID || requestedType != "" || requestedIdentity != ""
 	appendPost := func(post *postmodel.Post) bool {
 		if post == nil {
@@ -158,7 +161,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 	}
 	if len(views) < limit {
 		if publishedReader, ok := s.postReader.(publishedPostReader); ok {
-			fallbackCursor := strings.TrimSpace(req.Cursor)
+			fallbackCursor := repositoryCursor
 			for attempt := 0; attempt < 4 && len(views) < limit; attempt++ {
 				posts := publishedReader.ListPublished(ctx, limit*2, fallbackCursor)
 				if len(posts) == 0 {
@@ -167,7 +170,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 				for i := range posts {
 					post := posts[i]
 					if appendPost(&post) && len(views) >= limit {
-						nextCursor = post.ID
+						nextCursor = encodeRepositoryFeedCursor(post.ID)
 						break
 					}
 				}
@@ -179,6 +182,26 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 		}
 	}
 	return &ListFeedResponse{Items: views, NextCursor: nextCursor, Cursor: nextCursor}, nil
+}
+
+func encodeRepositoryFeedCursor(postID string) string {
+	trimmed := strings.TrimSpace(postID)
+	if trimmed == "" {
+		return ""
+	}
+	return "repo:" + base64.RawURLEncoding.EncodeToString([]byte(trimmed))
+}
+
+func decodeRepositoryFeedCursor(cursor string) string {
+	trimmed := strings.TrimSpace(cursor)
+	if strings.HasPrefix(trimmed, "repo:") {
+		decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(trimmed, "repo:"))
+		if err == nil {
+			return strings.TrimSpace(string(decoded))
+		}
+		return ""
+	}
+	return trimmed
 }
 
 func (s *FeedService) GetPost(ctx context.Context, id string) (*postmodel.Post, bool) {

@@ -176,7 +176,8 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 		"/v1/content/posts/"+postID+":promoteToWork",
 		strings.NewReader(`{
 			"contentType":"article",
-			"title":"升级后的长文"
+			"title":"升级后的长文",
+			"articleDocument":{"title":"升级后的长文","body":"升级后正文"}
 		}`),
 	)
 	promoteReq.Header.Set("Content-Type", "application/json")

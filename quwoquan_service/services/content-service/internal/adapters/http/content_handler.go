@@ -931,7 +931,7 @@ func postIDFromPath(path string) string {
 	if parts[0] != "v1" || parts[1] != "content" || parts[2] != "posts" {
 		return ""
 	}
-	return strings.TrimSpace(parts[3])
+	return strings.TrimSpace(strings.SplitN(parts[3], ":", 2)[0])
 }
 
 func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Request, operation string) {

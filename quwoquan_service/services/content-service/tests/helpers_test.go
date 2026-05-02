@@ -48,6 +48,7 @@ func createDraftPost(t *testing.T, payload string) map[string]any {
 // (sets X-Client-User-Id) and returns the draft payload.
 func createDraftPostWithAuthor(t *testing.T, authorID string, payload string) map[string]any {
 	t.Helper()
+	payload = normalizeCreatePostPayloadForTest(t, payload)
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
 	if authorID != "" {
@@ -63,6 +64,32 @@ func createDraftPostWithAuthor(t *testing.T, authorID string, payload string) ma
 		t.Fatalf("createPost helper: decode response: %v", err)
 	}
 	return result
+}
+
+func normalizeCreatePostPayloadForTest(t *testing.T, payload string) string {
+	t.Helper()
+	var body map[string]any
+	if err := json.Unmarshal([]byte(payload), &body); err != nil {
+		t.Fatalf("normalize create post payload: %v", err)
+	}
+	if strings.TrimSpace(asTestString(body["contentType"])) == "article" && body["articleDocument"] == nil {
+		body["articleDocument"] = map[string]any{
+			"title": asTestString(body["title"]),
+			"body":  asTestString(body["body"]),
+		}
+	}
+	normalized, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal normalized create post payload: %v", err)
+	}
+	return string(normalized)
+}
+
+func asTestString(value any) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
 }
 
 func publishPostWithAuthor(
