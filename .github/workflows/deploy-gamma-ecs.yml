@@ -230,6 +230,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Create tarball
         run: |
+          BUNDLE_PATH="${RUNNER_TEMP}/gamma-ecs-bundle.tgz"
           tar \
             --exclude='.git' \
             --exclude='.dart_tool' \
@@ -238,7 +239,8 @@ jobs:
             --exclude='quwoquan_app/.dart_tool' \
             --exclude='quwoquan_app/build' \
             --exclude='apps/ops-portal/node_modules' \
-            -czf gamma-ecs-bundle.tgz .
+            -czf "${BUNDLE_PATH}" .
+          cp "${BUNDLE_PATH}" gamma-ecs-bundle.tgz
       - name: Upload bundle
         uses: actions/upload-artifact@v4
         with:
