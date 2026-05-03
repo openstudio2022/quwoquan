@@ -193,10 +193,13 @@ install_docker_if_needed() {
     if command -v apt-get >/dev/null 2>&1; then
       apt-get update
       apt-get install -y ca-certificates curl gnupg lsb-release python3
+      apt-get install -y docker.io docker-compose-plugin || apt-get install -y docker.io docker-compose || true
     elif command -v yum >/dev/null 2>&1; then
       yum install -y ca-certificates curl python3
+      yum install -y docker docker-compose-plugin || yum install -y docker docker-compose || yum install -y docker || true
     elif command -v dnf >/dev/null 2>&1; then
       dnf install -y ca-certificates curl python3
+      dnf install -y docker docker-compose-plugin || dnf install -y docker docker-compose || dnf install -y docker || true
     fi
   elif ! command -v python3 >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
@@ -215,6 +218,16 @@ install_docker_if_needed() {
 
   systemctl enable docker >/dev/null 2>&1 || true
   systemctl start docker >/dev/null 2>&1 || true
+
+  if ! docker compose version >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+      apt-get install -y docker-compose-plugin || true
+    elif command -v yum >/dev/null 2>&1; then
+      yum install -y docker-compose-plugin || yum install -y docker-compose || true
+    elif command -v dnf >/dev/null 2>&1; then
+      dnf install -y docker-compose-plugin || dnf install -y docker-compose || true
+    fi
+  fi
 
   if ! docker compose version >/dev/null 2>&1; then
     mkdir -p /usr/local/lib/docker/cli-plugins
