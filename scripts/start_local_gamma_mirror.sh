@@ -220,7 +220,7 @@ if [[ "$podman_compose" == "1" ]]; then
   }
 
   network_name="quwoquan_service_default"
-  podman rm -f \
+  for container_name in \
     quwoquan_service_gamma-proxy_1 \
     quwoquan_service_content-service_1 \
     quwoquan_service_product-ops-service_1 \
@@ -228,7 +228,9 @@ if [[ "$podman_compose" == "1" ]]; then
     quwoquan_service_rec-model-service_1 \
     quwoquan_service_redis_1 \
     quwoquan_service_mongodb_1 \
-    quwoquan_service_postgres_1 >/dev/null 2>&1 || true
+    quwoquan_service_postgres_1; do
+    podman rm -f "$container_name" >/dev/null 2>&1 || true
+  done
   podman network exists "$network_name" || podman network create "$network_name" >/dev/null
   podman volume inspect quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-postgres >/dev/null
   podman volume inspect quwoquan_service_local-gamma-mongo >/dev/null 2>&1 || podman volume create quwoquan_service_local-gamma-mongo >/dev/null
