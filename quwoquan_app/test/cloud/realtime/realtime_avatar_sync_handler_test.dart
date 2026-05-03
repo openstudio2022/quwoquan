@@ -60,6 +60,32 @@ class _GapUserSyncRepository implements UserSyncRepository {
   }
 }
 
+class _InvalidAvatarPatchRepository implements UserSyncRepository {
+  @override
+  Future<UserSyncPullResult> pull({
+    required int afterSeq,
+    int limit = 200,
+  }) async {
+    return const UserSyncPullResult(
+      patches: <UserSyncPatch>[
+        UserSyncPatch(
+          syncSeq: 4,
+          type: 'conversation.avatar.updated',
+          userId: 'user_001',
+          payload: <String, dynamic>{
+            'conversationId': 'conv_001',
+            'avatarUrl': '',
+            'groupAvatarVersion': 4,
+          },
+        ),
+      ],
+      latestSyncSeq: 4,
+      hasMore: false,
+      requiresResync: false,
+    );
+  }
+}
+
 class _CountingUserSyncRepository implements UserSyncRepository {
   int pullCount = 0;
 
@@ -392,5 +418,83 @@ void main() {
     await tester.pump(const Duration(milliseconds: 220));
 
     expect(syncRepository.pullCount, 1);
+  });
+
+  testWidgets('avatar patch 应用失败时不推进游标并暴露失败状态', (tester) async {
+    final store = _FakeLocalChatSearchStore();
+    final namespace = LocalSearchNamespace.fromActivePersonaContext(
+      ActivePersonaContextViewData.fallback(
+        profileSubjectId: 'user_001',
+        ownerUserId: 'user_001',
+        displayName: '测试用户',
+        avatarUrl: '',
+      ),
+    );
+    store.seedConversation(<String, dynamic>{
+      'conversationId': 'conv_001',
+      'id': 'conv_001',
+      '_id': 'conv_001',
+      'title': '群聊',
+      'type': 'group',
+      'groupAvatarVersion': 1,
+      'avatarUrl': 'https://cdn.example.com/old.png?v=1',
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          userSyncRepositoryProvider.overrideWithValue(
+            _InvalidAvatarPatchRepository(),
+          ),
+          localChatSearchStoreProvider.overrideWithValue(store),
+          activePersonaContextLoaderProvider.overrideWithValue(
+            () async => ActivePersonaContextViewData.fallback(
+              profileSubjectId: 'user_001',
+              ownerUserId: 'user_001',
+              displayName: '测试用户',
+              avatarUrl: '',
+            ),
+          ),
+        ],
+        child: Consumer(
+          builder: (context, ref, _) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              ref
+                  .read(conversationCacheProvider)
+                  .put('conv_001', <String, dynamic>{
+                    'id': 'conv_001',
+                    '_id': 'conv_001',
+                    'conversationId': 'conv_001',
+                    'type': 'group',
+                    'title': '群聊',
+                    'groupAvatarVersion': 1,
+                    'avatarUrl': 'https://cdn.example.com/old.png?v=1',
+                  });
+              RealtimeMessageHandler(ref.read).handle(<String, dynamic>{
+                'type': 'sync_hint',
+                'latestSyncSeq': 4,
+              });
+            });
+            return const MaterialApp(home: SizedBox());
+          },
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 220));
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SizedBox)),
+    );
+    final syncService = container.read(conversationSyncProvider);
+    final cache = container.read(conversationCacheProvider);
+    expect(await store.lastUserSyncSeq(namespace: namespace), 0);
+    expect(syncService.hasAvatarPatchSyncFailure, isTrue);
+    expect(
+      cache.get('conv_001')?['avatarUrl'],
+      'https://cdn.example.com/old.png?v=1',
+    );
   });
 }

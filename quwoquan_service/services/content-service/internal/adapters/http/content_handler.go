@@ -497,6 +497,39 @@ func (h *ContentHandler) handleGetMediaAsset(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, asset)
 }
 
+func (h *ContentHandler) handleRequestOriginalImageAccess(w http.ResponseWriter, r *http.Request) {
+	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "/original:access")
+	if strings.TrimSpace(mediaID) == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "mediaId 不能为空", "missing mediaId"))
+		return
+	}
+	var body struct {
+		Purpose string `json:"purpose"`
+	}
+	if r.Body != nil {
+		defer r.Body.Close()
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+			return
+		}
+	}
+	purpose := strings.TrimSpace(body.Purpose)
+	if purpose == "" {
+		purpose = "view"
+	}
+	resp, err := h.postService.RequestOriginalImageAccess(r.Context(), application.RequestOriginalImageAccessInput{
+		MediaID:   mediaID,
+		Purpose:   purpose,
+		ViewerID:  resolveUserID(r),
+		SessionID: resolveSessionID(r),
+	})
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func (h *ContentHandler) handleSelectAutoVideoCover(w http.ResponseWriter, r *http.Request) {
 	mediaID := pathParamAfter(r.URL.Path, "/v1/content/media/", "/cover:auto")
 	asset, err := h.postService.SelectAutoVideoCover(r.Context(), mediaID)
@@ -991,6 +1024,9 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		return
 	case "GetMediaAsset":
 		h.handleGetMediaAsset(w, r)
+		return
+	case "RequestOriginalImageAccess":
+		h.handleRequestOriginalImageAccess(w, r)
 		return
 	case "SelectAutoVideoCover":
 		h.handleSelectAutoVideoCover(w, r)

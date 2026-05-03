@@ -1087,15 +1087,15 @@ func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, c
 	refs := []map[string]any{
 		{
 			"title":   "Open-Meteo Forecast API - " + placeName,
-			"url":     forecastURL,
+			"url":     "https://open-meteo.com/en/docs",
 			"source":  "open_meteo_forecast",
-			"snippet": summary,
+			"snippet": summary + " 原始 forecast endpoint: " + forecastURL,
 		},
 		{
 			"title":   "Open-Meteo Geocoding API - " + placeName,
-			"url":     geoURL,
+			"url":     "https://open-meteo.com/en/docs/geocoding-api",
 			"source":  "open_meteo_geocoding",
-			"snippet": fmt.Sprintf("地理解析命中：%s，经纬度 %.5f, %.5f，时区 %s。", placeName, place.Latitude, place.Longitude, tz),
+			"snippet": fmt.Sprintf("地理解析命中：%s，经纬度 %.5f, %.5f，时区 %s。原始 geocoding endpoint: %s", placeName, place.Latitude, place.Longitude, tz, geoURL),
 		},
 		{
 			"title":   "Open-Meteo Weather Forecast API 文档",
@@ -1151,15 +1151,16 @@ func assistantClientModelTrace(req application.ModelRequest, userPrompt, respons
 
 func (p openAICompatibleModelProvider) Complete(ctx context.Context, req application.ModelRequest) (application.ModelResponse, error) {
 	prompt := req.Prompt
+	contextPrompt := application.FormatModelContextForPrompt(req.ContextTurns)
 	switch req.Stage {
 	case "final":
 		raw, _ := json.Marshal(req.Observation)
-		prompt = fmt.Sprintf("%s\n用户问题：%s\n工具观察：%s", req.Prompt, req.UserQuestion, string(raw))
+		prompt = fmt.Sprintf("%s%s\n用户问题：%s\n工具观察：%s", req.Prompt, contextPrompt, req.UserQuestion, string(raw))
 	case "evidence_processing":
 		raw, _ := json.Marshal(req.Observation)
-		prompt = fmt.Sprintf("%s\n用户问题：%s\n工具观察JSON：%s", req.Prompt, req.UserQuestion, string(raw))
+		prompt = fmt.Sprintf("%s%s\n用户问题：%s\n工具观察JSON：%s", req.Prompt, contextPrompt, req.UserQuestion, string(raw))
 	default:
-		prompt = fmt.Sprintf("%s\n用户问题：%s", req.Prompt, req.UserQuestion)
+		prompt = fmt.Sprintf("%s%s\n用户问题：%s", req.Prompt, contextPrompt, req.UserQuestion)
 	}
 	body := map[string]any{
 		"model": p.model,

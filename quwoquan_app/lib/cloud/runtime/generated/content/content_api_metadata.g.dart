@@ -45,6 +45,7 @@ class ContentApiMetadata {
     'QuoteToCircle': '/v1/content/posts/{postId}/quote',
     'ReportBehaviors': '/v1/content/behaviors',
     'RepostToCircle': '/v1/content/posts/{postId}/repost',
+    'RequestOriginalImageAccess': '/v1/content/media/{mediaId}/original:access',
     'ResolveReport': '/v1/content/reports/{reportId}',
     'SearchPosts': '/v1/content/posts/search',
     'SelectAutoVideoCover': '/v1/content/media/{mediaId}/cover:auto',
@@ -90,6 +91,7 @@ class ContentApiMetadata {
     'QuoteToCircle': 'POST',
     'ReportBehaviors': 'POST',
     'RepostToCircle': 'POST',
+    'RequestOriginalImageAccess': 'POST',
     'ResolveReport': 'PATCH',
     'SearchPosts': 'GET',
     'SelectAutoVideoCover': 'POST',
@@ -134,6 +136,7 @@ class ContentApiMetadata {
   static const String quoteToCircleOperation = 'QuoteToCircle';
   static const String reportBehaviorsOperation = 'ReportBehaviors';
   static const String repostToCircleOperation = 'RepostToCircle';
+  static const String requestOriginalImageAccessOperation = 'RequestOriginalImageAccess';
   static const String resolveReportOperation = 'ResolveReport';
   static const String searchPostsOperation = 'SearchPosts';
   static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
@@ -286,6 +289,12 @@ class ContentApiMetadata {
   static String repostToCirclePath({required String postId}) {
     return _fillPath(repostToCirclePathTemplate, <String, String>{
       'postId': postId,
+    });
+  }
+  static const String requestOriginalImageAccessPathTemplate = '/v1/content/media/{mediaId}/original:access';
+  static String requestOriginalImageAccessPath({required String mediaId}) {
+    return _fillPath(requestOriginalImageAccessPathTemplate, <String, String>{
+      'mediaId': mediaId,
     });
   }
   static const String resolveReportPathTemplate = '/v1/content/reports/{reportId}';

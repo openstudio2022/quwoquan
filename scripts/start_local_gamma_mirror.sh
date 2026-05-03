@@ -5,9 +5,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$ROOT/quwoquan_service/docker-compose.gamma-local.yaml"
 CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
 IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
-GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test}"
+GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:18080}"
 PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test}"
-MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test}"
+MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}"
 
 skip_build=0
 skip_up=0
@@ -45,6 +45,10 @@ prepare_config_root() {
     "$out/configs/content-service/default" \
     "$out/configs/content-service/gamma" \
     "$out/releases/config/content-service" \
+    "$out/configs/chat-service/default" \
+    "$out/configs/chat-service/gamma" \
+    "$out/releases/config/chat-service" \
+    "$out/deploy/shared" \
     "$out/configs/product-ops-service/default" \
     "$out/configs/product-ops-service/gamma" \
     "$out/releases/config/product-ops-service" \
@@ -53,6 +57,10 @@ prepare_config_root() {
     "$out/releases/config/recommendation-service"
   cp "$ROOT/quwoquan_service/services/content-service/configs/default/config.yaml" "$out/configs/content-service/default/config.yaml"
   cp "$ROOT/quwoquan_service/services/content-service/configs/gamma/config.yaml" "$out/configs/content-service/gamma/config.yaml"
+  cp "$ROOT/quwoquan_service/services/chat-service/configs/default/config.yaml" "$out/configs/chat-service/default/config.yaml"
+  cp "$ROOT/quwoquan_service/services/chat-service/configs/gamma/config.yaml" "$out/configs/chat-service/gamma/config.yaml"
+  cp "$ROOT/deploy/shared/reliable_task_module_catalog.yaml" "$out/deploy/shared/reliable_task_module_catalog.yaml"
+  cp "$ROOT/deploy/shared/reliable_task_retention_policy.yaml" "$out/deploy/shared/reliable_task_retention_policy.yaml"
   cp "$ROOT/quwoquan_service/services/product-ops-service/configs/default/config.yaml" "$out/configs/product-ops-service/default/config.yaml"
   cp "$ROOT/quwoquan_service/services/product-ops-service/configs/gamma/config.yaml" "$out/configs/product-ops-service/gamma/config.yaml"
   cp "$ROOT/quwoquan_service/services/rec-model-service/configs/default/config.yaml" "$out/configs/recommendation-service/default/config.yaml"
@@ -82,6 +90,46 @@ rec_model_service:
   enabled: true
   url: "http://rec-model-service:8000"
   timeout_ms: 100
+YAML
+  cat > "$out/releases/config/chat-service/${CONFIG_VERSION}.yaml" <<YAML
+config:
+  version: "${CONFIG_VERSION}"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+service:
+  http:
+    addr: ":18081"
+mongodb:
+  uri: "mongodb://mongodb:27017"
+  database: "quwoquan_chat"
+redis:
+  realtime:
+    mode: standalone
+    addr: "redis:6379"
+  general:
+    mode: standalone
+    addr: "redis:6379"
+  reliable_task:
+    mode: standalone
+    addr: "redis:6379"
+runtime:
+  media:
+    group_avatar_cdn_base_url: "${MEDIA_BASE_URL}"
+    group_avatar_local_media_root: "/var/lib/quwoquan/chat-media"
+  sync:
+    patch_ttl_hours: 720
+  reliable_task:
+    ready_index:
+      enabled: true
+      stream: "reliabletask:chat:avatar:ready:local-gamma"
+      group: "chat.group_avatar_worker.local-gamma"
+      queue: "reliabletask.chat.avatar"
+  observability:
+    runtime_media:
+      group_avatar_recompute_duration_ms_p95: 500
+      group_avatar_fallback_ratio: 0.05
+      hint_to_pull_delay_ms_p95: 500
+      patch_fanout_failure_ratio: 0.01
 YAML
   cat > "$out/releases/config/product-ops-service/${CONFIG_VERSION}.yaml" <<YAML
 config:
@@ -222,6 +270,7 @@ if [[ "$podman_compose" == "1" ]]; then
   network_name="quwoquan_service_default"
   for container_name in \
     quwoquan_service_gamma-proxy_1 \
+    quwoquan_service_chat-service_1 \
     quwoquan_service_content-service_1 \
     quwoquan_service_product-ops-service_1 \
     quwoquan_service_mongo-init_1 \
@@ -318,11 +367,34 @@ if [[ "$podman_compose" == "1" ]]; then
     -e CONTENT_REDIS_REC_ADDR=redis:6379 -e CONTENT_REDIS_GENERAL_ADDR=redis:6379 \
     -e REC_MODEL_SERVICE_ENABLED=true -e REC_MODEL_SERVICE_URL=http://rec-model-service:8000 \
     -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
-    -p "${LOCAL_GAMMA_CONTENT_PORT:-18080}:18080" \
+    -p "${LOCAL_GAMMA_CONTENT_PORT:-18083}:18080" \
     --healthcheck-command "wget -qO- http://127.0.0.1:18080/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
     quwoquan_service_content-service >/dev/null
   wait_healthy quwoquan_service_content-service_1
+
+  podman run --pull=never --name quwoquan_service_chat-service_1 -d \
+    --net "$network_name" --network-alias chat-service \
+    -e SERVICE_NAME=chat-service -e MODULE_PACKAGE=chat-service -e APP_ENV=gamma \
+    -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
+    -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e CHAT_SERVICE_ADDR=:18081 \
+    -e MONGO_URI=mongodb://mongodb:27017 -e MONGO_DATABASE=quwoquan_chat \
+    -e CHAT_REDIS_REALTIME_ADDR=redis:6379 -e CHAT_REDIS_GENERAL_ADDR=redis:6379 \
+    -e CHAT_REDIS_RELIABLE_TASK_ADDR=redis:6379 \
+    -e RELIABLE_TASK_READY_INDEX_ENABLED=true \
+    -e RELIABLE_TASK_READY_INDEX_STREAM=reliabletask:chat:avatar:ready:local-gamma \
+    -e RELIABLE_TASK_READY_INDEX_GROUP=chat.group_avatar_worker.local-gamma \
+    -e RELIABLE_TASK_READY_INDEX_QUEUE=reliabletask.chat.avatar \
+    -e CHAT_GROUP_AVATAR_CDN_BASE_URL="$MEDIA_BASE_URL" \
+    -e CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT=/var/lib/quwoquan/chat-media \
+    -e RUNTIME_SYNC_PATCH_TTL_HOURS=720 \
+    -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
+    -v "$ROOT/artifacts/local-gamma/media:/var/lib/quwoquan/chat-media" \
+    -p "${LOCAL_GAMMA_CHAT_PORT:-18081}:18081" \
+    --healthcheck-command "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1" \
+    --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
+    quwoquan_service_chat-service >/dev/null
+  wait_healthy quwoquan_service_chat-service_1
 
   podman run --pull=never --name quwoquan_service_gamma-proxy_1 -d \
     --net "$network_name" --network-alias gamma-proxy \
@@ -331,7 +403,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -v "$ROOT/artifacts/local-gamma/media:/srv/media:ro" \
     -v quwoquan_service_local-gamma-caddy-data:/data \
     -v quwoquan_service_local-gamma-caddy-config:/config \
-    -p "${LOCAL_GAMMA_HTTP_PORT:-80}:80" \
+    -p "${LOCAL_GAMMA_HTTP_PORT:-18080}:80" \
     -p "${LOCAL_GAMMA_HTTPS_PORT:-443}:443" \
     -p "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019" \
     --healthcheck-command "wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1" \
@@ -341,6 +413,32 @@ if [[ "$podman_compose" == "1" ]]; then
 else
   "${compose_cmd[@]}" "${compose_up_args[@]}"
 fi
+
+# docker compose 分支不会逐项 wait_healthy；在宣告就绪前用主机侧探测避免 T3/T4 撞到端口未监听。
+wait_local_gamma_host_ready() {
+  local gw="${GATEWAY_BASE_URL%/}"
+  local po_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18086}"
+  local deadline=$(( $(date +%s) + 180 ))
+  echo "[local-gamma] waiting for host probes: ${gw}/healthz + http://127.0.0.1:${po_port}/healthz"
+  while (( $(date +%s) < deadline )); do
+    if python3 - <<PY
+import urllib.request
+for url in ("${gw}/healthz", "http://127.0.0.1:${po_port}/healthz"):
+    try:
+        urllib.request.urlopen(url, timeout=4)
+    except Exception:
+        raise SystemExit(1)
+raise SystemExit(0)
+PY
+    then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "[local-gamma] FAIL: host cannot reach ${gw}/healthz or http://127.0.0.1:${po_port}/healthz within 180s" >&2
+  return 1
+}
+wait_local_gamma_host_ready
 
 echo "[local-gamma] mirror started"
 echo "[local-gamma] gateway: $GATEWAY_BASE_URL"

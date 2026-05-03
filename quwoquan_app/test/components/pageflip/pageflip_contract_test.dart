@@ -195,11 +195,24 @@ void main() {
         backwardLayerSource,
         contains('final flippingArea = frame.flippingClipArea;'),
       );
-      expect(backwardLayerSource, contains('_buildBackwardFoldSurfaceLayer('));
+      expect(
+        backwardLayerSource,
+        contains('_buildBackwardCurrentResidualLayer('),
+      );
+      expect(
+        backwardLayerSource,
+        contains('_buildBackwardPreviousFrontPlaneLayer('),
+      );
+      expect(
+        backwardLayerSource,
+        contains('_buildBackwardPreviousBackSoftLayer('),
+      );
       expect(
         backwardLayerSource,
         isNot(contains('resolveBackwardSoftPageGeometry(')),
       );
+      expect(hostSource, contains('resolveBackwardFoldFrameGeometry('));
+      expect(hostSource, isNot(contains('frame.backwardProjectedFrame')));
       expect(
         backwardLayerSource,
         isNot(contains('previousFoldSurfacePolygon')),
@@ -314,8 +327,8 @@ void main() {
           reason:
               'BACK dynamic paint must suppress the complete current page and redraw only currentResidualPolygon',
         );
-        expect(output.renderBranchName, 'backwardThreeLayerPaperFoldPipeline');
-        expect(output.debugLabel, 'backward/three-layer-paper-fold');
+        expect(output.renderBranchName, 'backwardThreeFacePaperFoldPipeline');
+        expect(output.debugLabel, 'backward/three-face-paper-fold');
 
         final hostSource = _readAppSource(
           'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
@@ -335,7 +348,11 @@ void main() {
         );
         expect(
           backwardLayerSource,
-          contains('_buildBackwardFoldSurfaceLayer('),
+          contains('_buildBackwardPreviousFrontPlaneLayer('),
+        );
+        expect(
+          backwardLayerSource,
+          contains('_buildBackwardPreviousBackSoftLayer('),
         );
       },
     );
@@ -666,6 +683,84 @@ void main() {
       );
     });
 
+    test('backward fold frame derives ordered three-face geometry', () {
+      const pageSize = Size(420, 584);
+      const bounds = StPageFlipBoundsRect(
+        left: -210,
+        top: 12,
+        width: 840,
+        height: 584,
+        pageWidth: 420,
+      );
+      final calculation = StPageFlipCalculation(
+        direction: StPageFlipDirection.back,
+        corner: StPageFlipCorner.bottom,
+        pageWidth: pageSize.width,
+        pageHeight: pageSize.height,
+      );
+      expect(calculation.calc(const Offset(-180, 502)), isTrue);
+      final pageViewportRect = Rect.fromLTWH(
+        bounds.left + bounds.pageWidth,
+        bounds.top,
+        bounds.pageWidth,
+        bounds.height,
+      );
+
+      final geometry = resolveBackwardFoldFrameGeometry(
+        flippingArea: calculation.getFlippingClipArea(),
+        bottomArea: calculation.getBottomClipArea(),
+        anchor: calculation.getActiveCorner(),
+        angle: calculation.getAngle(),
+        bounds: bounds,
+        pageSize: pageSize,
+        pageViewportRect: pageViewportRect,
+      );
+
+      expect(geometry, isNotNull);
+      final resolved = geometry!;
+      expect(
+        resolved.previousFrontViewportPolygon.length,
+        greaterThanOrEqualTo(3),
+      );
+      expect(
+        resolved.previousBackViewportPolygon.length,
+        greaterThanOrEqualTo(3),
+      );
+      expect(
+        resolved.currentResidualViewportPolygon.length,
+        greaterThanOrEqualTo(3),
+      );
+
+      final pageEdgeX = _lineAverageX(resolved.frontBackBoundaryViewport);
+      final foldX = _lineAverageX(resolved.foldLineViewport);
+      final pageEdgeRight = _lineMaxX(resolved.frontBackBoundaryViewport);
+      final foldLeft = _lineMinX(resolved.foldLineViewport);
+      final frontBounds = resolved.previousFrontViewportBounds!;
+      final backBounds = resolved.previousBackViewportBounds!;
+      final currentBounds = resolved.currentResidualViewportBounds!;
+      expect(
+        pageEdgeX,
+        lessThan(foldX),
+        reason:
+            'previous front, previous back and current must stay ordered left-to-right',
+      );
+      expect(frontBounds.left, closeTo(pageViewportRect.left, 1));
+      expect(frontBounds.right, closeTo(pageEdgeRight, 16));
+      expect(backBounds.left, lessThanOrEqualTo(pageEdgeRight + 16));
+      expect(backBounds.right, greaterThanOrEqualTo(foldLeft - 16));
+      expect(currentBounds.left, closeTo(foldLeft, 16));
+      expect(
+        <double>[
+          frontBounds.right,
+          backBounds.right,
+          currentBounds.right,
+        ].reduce((a, b) => a > b ? a : b),
+        greaterThan(pageViewportRect.left + pageViewportRect.width * 0.65),
+        reason:
+            'the three faces must not collapse into the left half of the page',
+      );
+    });
+
     test('backward previous-page fold surface edge stays page-clipped', () {
       const pageSize = Size(420, 584);
       const localPoints = <Offset>[
@@ -914,6 +1009,14 @@ bool _allPolygonXWithinPage(List<Offset> polygon, double width) {
 
 double _lineAverageX((Offset, Offset) line) {
   return (line.$1.dx + line.$2.dx) / 2;
+}
+
+double _lineMinX((Offset, Offset) line) {
+  return line.$1.dx < line.$2.dx ? line.$1.dx : line.$2.dx;
+}
+
+double _lineMaxX((Offset, Offset) line) {
+  return line.$1.dx > line.$2.dx ? line.$1.dx : line.$2.dx;
 }
 
 Rect? _polygonBounds(List<Offset> polygon) {

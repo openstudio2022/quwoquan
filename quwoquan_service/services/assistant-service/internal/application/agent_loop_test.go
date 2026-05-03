@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	react "quwoquan_service/services/assistant-service/internal/application/reasoning"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
 
@@ -192,6 +193,99 @@ func TestAgentLoop_RunTurnStream_ToolFailureReturnsRuntimeFailure(t *testing.T) 
 	if events[len(events)-1].RuntimeFailure == nil {
 		t.Fatalf("turn failed event missing runtimeFailure")
 	}
+}
+
+func TestBuildRetrievalProcessing_SeparatesSearchedAndAcceptedCounts(t *testing.T) {
+	step := ReactStepResult{
+		Observation: structObservation(false),
+		Tool: ToolExecution{Completed: assistant.ToolUse{Result: map[string]any{
+			"reliable": true,
+			"references": []map[string]any{
+				{"title": "forecast", "url": "https://open-meteo.com/en/docs", "source": "open_meteo_forecast"},
+				{"title": "geocoding", "url": "https://open-meteo.com/en/docs/geocoding-api", "source": "open_meteo_geocoding"},
+				{"title": "docs", "url": "https://open-meteo.com/en/docs", "source": "open_meteo_docs"},
+			},
+		}}},
+		EvidenceStructuredDelta: map[string]any{
+			"retrievalProcessing": map[string]any{
+				"processingSummary": "模型只接纳 forecast 作为可展示证据。",
+				"acceptedReferences": []map[string]any{
+					{"title": "forecast", "url": "https://open-meteo.com/en/docs", "source": "open_meteo_forecast"},
+				},
+			},
+		},
+	}
+	result := buildRetrievalProcessingForStep(step)
+	if result["searchedDocumentCount"] != 3 || result["processedDocumentCount"] != 3 || result["acceptedDocumentCount"] != 1 {
+		t.Fatalf("counts=%#v", result)
+	}
+	refs, ok := result["acceptedReferences"].([]map[string]any)
+	if !ok || len(refs) != 1 {
+		t.Fatalf("accepted refs=%#v", result["acceptedReferences"])
+	}
+}
+
+func TestAssistantService_StreamTurnPassesConversationHistory(t *testing.T) {
+	now := time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC)
+	model := &recordingModelProvider{}
+	service := NewAssistantService(nil, nil, nil, WithAgentLoop(NewAgentLoop(
+		staticSkillRuntime{selection: SkillSelection{
+			SkillID:    "weather",
+			DomainID:   "weather",
+			ToolPolicy: []string{"web_search"},
+		}},
+		ReactRuntime{
+			Model: model,
+			Tools: DefaultToolCoordinator{Now: func() time.Time { return now }},
+		},
+		func() time.Time { return now },
+	)))
+	ctx := context.Background()
+	conversation, err := service.CreateConversation(ctx, "user_history", assistant.CreateConversationInput{Summary: "history"})
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	first, err := service.CreateTurn(ctx, "user_history", conversation.ConversationID, assistant.CreateTurnInput{
+		Input: assistant.AssistantTurnInput{Text: "深圳今天天气怎么样"},
+	})
+	if err != nil {
+		t.Fatalf("CreateTurn(first) error = %v", err)
+	}
+	if _, err := service.BuildFakeTurnStream(ctx, "user_history", first.TurnID); err != nil {
+		t.Fatalf("BuildFakeTurnStream(first) error = %v", err)
+	}
+	second, err := service.CreateTurn(ctx, "user_history", conversation.ConversationID, assistant.CreateTurnInput{
+		Input: assistant.AssistantTurnInput{Text: "剩下2天有什么外出推荐"},
+	})
+	if err != nil {
+		t.Fatalf("CreateTurn(second) error = %v", err)
+	}
+	if _, err := service.BuildFakeTurnStream(ctx, "user_history", second.TurnID); err != nil {
+		t.Fatalf("BuildFakeTurnStream(second) error = %v", err)
+	}
+	foundSecondReasoning := false
+	for _, call := range model.calls {
+		if call.TurnID != second.TurnID || call.Stage != "reasoning" {
+			continue
+		}
+		foundSecondReasoning = true
+		if len(call.ContextTurns) < 2 {
+			t.Fatalf("context turns=%#v", call.ContextTurns)
+		}
+		if call.ContextTurns[0].Text != "深圳今天天气怎么样" {
+			t.Fatalf("first context=%#v", call.ContextTurns[0])
+		}
+		if !strings.Contains(call.ContextTurns[1].Text, "最终回答") {
+			t.Fatalf("assistant context missing answer: %#v", call.ContextTurns[1])
+		}
+	}
+	if !foundSecondReasoning {
+		t.Fatalf("missing second reasoning call: %#v", model.calls)
+	}
+}
+
+func structObservation(empty bool) react.Observation {
+	return react.Observation{Empty: empty, Summary: "ok"}
 }
 
 type structuredToolModelProvider struct {

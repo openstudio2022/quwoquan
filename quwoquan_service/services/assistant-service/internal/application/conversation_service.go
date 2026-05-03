@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -122,6 +123,7 @@ func (s *AssistantService) buildTurnStream(ctx context.Context, userID, turnID s
 	if err != nil {
 		return nil, err
 	}
+	turn.ContextTurns = s.conversationContextTurns(userID, turn)
 	now := s.now()
 	loop := s.agentLoop
 	if loop == nil {
@@ -139,6 +141,13 @@ func (s *AssistantService) buildTurnStream(ctx context.Context, userID, turnID s
 		stored.Failure = failure
 	} else {
 		stored.Status = "completed"
+		stored.AnswerText = finalAnswerTextFromEvents(out)
+	}
+	if stored.SkillID == "" {
+		stored.SkillID = skillIDFromEvents(out)
+	}
+	if stored.DomainID == "" {
+		stored.DomainID = domainIDFromEvents(out)
 	}
 	stored.StreamState = assistant.AssistantTurnStreamState{
 		LastSeq:     uint64(len(out)),
@@ -155,4 +164,87 @@ func (s *AssistantService) buildTurnStream(ctx context.Context, userID, turnID s
 	}
 	s.mu.Unlock()
 	return out, nil
+}
+
+func (s *AssistantService) conversationContextTurns(userID string, turn assistant.AssistantTurn) []assistant.AssistantConversationContextTurn {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	candidates := []assistant.AssistantTurn{}
+	for _, item := range s.turns {
+		if item.UserID != userID || item.ConversationID != turn.ConversationID || item.TurnID == turn.TurnID {
+			continue
+		}
+		if item.Status != "completed" {
+			continue
+		}
+		if strings.TrimSpace(item.Input.Text) == "" {
+			continue
+		}
+		candidates = append(candidates, item)
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].CreatedAt.Before(candidates[j].CreatedAt)
+	})
+	if len(candidates) > 6 {
+		candidates = candidates[len(candidates)-6:]
+	}
+	out := []assistant.AssistantConversationContextTurn{}
+	for _, item := range candidates {
+		out = append(out, assistant.AssistantConversationContextTurn{
+			Role:     "user",
+			Text:     item.Input.Text,
+			SkillID:  item.SkillID,
+			DomainID: item.DomainID,
+		})
+		answer := strings.TrimSpace(item.AnswerText)
+		if answer != "" {
+			out = append(out, assistant.AssistantConversationContextTurn{
+				Role:     "assistant",
+				Text:     answer,
+				SkillID:  item.SkillID,
+				DomainID: item.DomainID,
+			})
+		}
+	}
+	return out
+}
+
+func finalAnswerTextFromEvents(events []streaming.Envelope) string {
+	for i := len(events) - 1; i >= 0; i-- {
+		event := events[i]
+		if event.EventType != "final_answer" && event.EventType != "assistant.answer.final" {
+			continue
+		}
+		if text := strings.TrimSpace(stringValue(event.Payload["text"])); text != "" {
+			return text
+		}
+		if text := strings.TrimSpace(stringValue(event.Payload["userMarkdown"])); text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func skillIDFromEvents(events []streaming.Envelope) string {
+	for _, event := range events {
+		if event.EventType != "understanding_updated" && event.EventType != "plan_updated" {
+			continue
+		}
+		if skillID := strings.TrimSpace(stringValue(event.Payload["skillId"])); skillID != "" {
+			return skillID
+		}
+	}
+	return ""
+}
+
+func domainIDFromEvents(events []streaming.Envelope) string {
+	for _, event := range events {
+		if event.EventType != "understanding_updated" {
+			continue
+		}
+		if domainID := strings.TrimSpace(stringValue(event.Payload["domainId"])); domainID != "" {
+			return domainID
+		}
+	}
+	return ""
 }

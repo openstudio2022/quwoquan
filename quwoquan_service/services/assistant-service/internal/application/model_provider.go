@@ -18,6 +18,7 @@ type ModelRequest struct {
 	Stage        string
 	Observation  map[string]any
 	UserQuestion string
+	ContextTurns []assistant.AssistantConversationContextTurn
 	SkillCatalog []skillpkg.Manifest
 }
 
@@ -36,17 +37,17 @@ type ModelProvider interface {
 type DeterministicModelProvider struct{}
 
 func deterministicClientTrace(req ModelRequest, responseText string, delta map[string]any) map[string]any {
-	prompt := fmt.Sprintf("%s\n用户问题：%s", req.Prompt, req.UserQuestion)
+	prompt := fmt.Sprintf("%s%s\n用户问题：%s", req.Prompt, FormatModelContextForPrompt(req.ContextTurns), req.UserQuestion)
 	return map[string]any{
-		"stage":               req.Stage,
-		"skillId":             req.SkillID,
-		"turnId":              req.TurnID,
-		"traceId":             req.TraceID,
-		"requestUserPrompt":   prompt,
-		"responseText":        responseText,
-		"structuredDelta":     delta,
-		"usage":               map[string]any{"deterministic": true},
-		"finishReason":        "stop",
+		"stage":             req.Stage,
+		"skillId":           req.SkillID,
+		"turnId":            req.TurnID,
+		"traceId":           req.TraceID,
+		"requestUserPrompt": prompt,
+		"responseText":      responseText,
+		"structuredDelta":   delta,
+		"usage":             map[string]any{"deterministic": true},
+		"finishReason":      "stop",
 	}
 }
 
@@ -65,6 +66,28 @@ func observationToolSummary(obs map[string]any) string {
 		return ""
 	}
 	return s
+}
+
+func FormatModelContextForPrompt(turns []assistant.AssistantConversationContextTurn) string {
+	if len(turns) == 0 {
+		return ""
+	}
+	lines := []string{"\n同一会话前文（按时间从旧到新，仅用于理解省略表达和延续地点/约束）："}
+	for _, turn := range turns {
+		role := strings.TrimSpace(turn.Role)
+		if role == "" {
+			role = "user"
+		}
+		text := strings.TrimSpace(turn.Text)
+		if text == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- %s: %s", role, truncateDeterministicRunes(text, 240)))
+	}
+	if len(lines) == 1 {
+		return ""
+	}
+	return strings.Join(lines, "\n")
 }
 
 func truncateDeterministicRunes(s string, maxRunes int) string {

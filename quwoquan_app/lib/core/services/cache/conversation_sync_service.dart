@@ -27,9 +27,22 @@ class ConversationSyncService {
 
   bool _syncing = false;
   bool _syncingUserPatches = false;
+  bool _lastFullSyncFailed = false;
   final Map<String, DateTime> _lastSyncTimeByNamespace = <String, DateTime>{};
   static const _minSyncInterval = Duration(seconds: 30);
   String? _activeNamespaceKey;
+  Object? _lastAvatarPatchSyncError;
+  StackTrace? _lastAvatarPatchSyncStackTrace;
+  DateTime? _lastAvatarPatchSyncFailedAt;
+  int? _lastAvatarPatchSyncFailedAfterSeq;
+
+  Object? get lastAvatarPatchSyncError => _lastAvatarPatchSyncError;
+  StackTrace? get lastAvatarPatchSyncStackTrace =>
+      _lastAvatarPatchSyncStackTrace;
+  DateTime? get lastAvatarPatchSyncFailedAt => _lastAvatarPatchSyncFailedAt;
+  int? get lastAvatarPatchSyncFailedAfterSeq =>
+      _lastAvatarPatchSyncFailedAfterSeq;
+  bool get hasAvatarPatchSyncFailure => _lastAvatarPatchSyncError != null;
 
   /// 执行增量同步，返回是否有数据变更
   Future<bool> sync({bool force = false}) async {
@@ -48,6 +61,7 @@ class ConversationSyncService {
 
     _syncing = true;
     _lastSyncTimeByNamespace[namespace.key] = DateTime.now();
+    _lastFullSyncFailed = false;
     try {
       final timestamps = await repo.getConversationTimestamps();
       final cloudIds = <String>{};
@@ -110,6 +124,7 @@ class ConversationSyncService {
 
       return hasChanges;
     } catch (_) {
+      _lastFullSyncFailed = true;
       return false;
     } finally {
       _syncing = false;
@@ -127,9 +142,12 @@ class ConversationSyncService {
     }
     _activateNamespace(namespace);
     _syncingUserPatches = true;
+    int? observedLastSeq;
     try {
       await store.ensureReady();
       var lastSeq = await store.lastUserSyncSeq(namespace: namespace);
+      observedLastSeq = lastSeq;
+      final originalLastSeq = lastSeq;
       if (!force &&
           hintedLatestSyncSeq != null &&
           hintedLatestSyncSeq > 0 &&
@@ -147,10 +165,19 @@ class ConversationSyncService {
         );
         if (result.requiresResync) {
           final changedByFullSync = await sync(force: true);
+          if (_lastFullSyncFailed) {
+            _recordAvatarPatchSyncFailure(
+              StateError('conversation avatar patch requires full resync'),
+              StackTrace.current,
+              originalLastSeq,
+            );
+            return false;
+          }
           if (result.latestSyncSeq > lastSeq) {
             lastSeq = result.latestSyncSeq;
             await store.saveUserSyncSeq(namespace: namespace, syncSeq: lastSeq);
           }
+          _clearAvatarPatchSyncFailure();
           return changed || changedByFullSync;
         }
         if (result.patches.isEmpty) {
@@ -166,13 +193,16 @@ class ConversationSyncService {
           }
           await _applyPatch(namespace, patch);
           lastSeq = patch.syncSeq;
+          observedLastSeq = lastSeq;
           changed = true;
         }
         await store.saveUserSyncSeq(namespace: namespace, syncSeq: lastSeq);
         hasMore = result.hasMore;
       }
+      _clearAvatarPatchSyncFailure();
       return changed;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _recordAvatarPatchSyncFailure(error, stackTrace, observedLastSeq);
       return false;
     } finally {
       _syncingUserPatches = false;
@@ -193,7 +223,10 @@ class ConversationSyncService {
         final groupAvatarSourceHash = patch.payload['groupAvatarSourceHash']
             ?.toString();
         if (conversationId.isEmpty) {
-          return;
+          throw StateError('conversation avatar patch missing conversationId');
+        }
+        if (avatarUrl.isEmpty) {
+          throw StateError('conversation avatar patch missing avatarUrl');
         }
         cache.updateConversationAvatar(
           conversationId,
@@ -213,7 +246,7 @@ class ConversationSyncService {
         final userId = patch.payload['userId']?.toString() ?? '';
         final avatarUrl = patch.payload['avatarUrl']?.toString() ?? '';
         if (userId.isEmpty || avatarUrl.isEmpty) {
-          return;
+          throw StateError('user avatar patch missing userId or avatarUrl');
         }
         await store.updateContactAvatar(
           namespace: namespace,
@@ -246,5 +279,23 @@ class ConversationSyncService {
     }
     _activeNamespaceKey = namespace.key;
     cache.activateNamespace(namespace.key);
+  }
+
+  void _recordAvatarPatchSyncFailure(
+    Object error,
+    StackTrace stackTrace,
+    int? afterSeq,
+  ) {
+    _lastAvatarPatchSyncError = error;
+    _lastAvatarPatchSyncStackTrace = stackTrace;
+    _lastAvatarPatchSyncFailedAt = DateTime.now();
+    _lastAvatarPatchSyncFailedAfterSeq = afterSeq;
+  }
+
+  void _clearAvatarPatchSyncFailure() {
+    _lastAvatarPatchSyncError = null;
+    _lastAvatarPatchSyncStackTrace = null;
+    _lastAvatarPatchSyncFailedAt = null;
+    _lastAvatarPatchSyncFailedAfterSeq = null;
   }
 }

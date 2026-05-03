@@ -707,6 +707,54 @@ entities:
         ops_exposure: read
         description: 转码/缩略图衍生物
 
+      - name: dominantColor
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: lqip
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: contentProfile
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: derivativePolicyVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: accessPolicy
+        type: object
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: read_write
+
+      - name: originalAccess
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
       - name: coverStrategy
         type: enum
         enum_ref: MediaCoverStrategy

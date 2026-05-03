@@ -62,6 +62,8 @@ const (
 	RouteReportBehaviorsPath                            = "/v1/content/behaviors"
 	RouteRepostToCircleMethod                           = "POST"
 	RouteRepostToCirclePath                             = "/v1/content/posts/{postId}/repost"
+	RouteRequestOriginalImageAccessMethod               = "POST"
+	RouteRequestOriginalImageAccessPath                 = "/v1/content/media/{mediaId}/original:access"
 	RouteSearchPostsMethod                              = "GET"
 	RouteSearchPostsPath                                = "/v1/content/posts/search"
 	RouteSelectAutoVideoCoverMethod                     = "POST"

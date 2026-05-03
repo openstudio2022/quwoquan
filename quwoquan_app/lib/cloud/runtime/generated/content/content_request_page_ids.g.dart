@@ -37,6 +37,7 @@ class ContentRequestPageIds {
     'QuoteToCircle': 'content.post.quote',
     'ReportBehaviors': 'content.behaviors.report',
     'RepostToCircle': 'content.post.repost',
+    'RequestOriginalImageAccess': 'content.request.original.image.access',
     'ResolveReport': 'content.resolve.report',
     'SearchPosts': 'content.search',
     'SelectAutoVideoCover': 'content.media.cover.auto',
@@ -81,6 +82,7 @@ class ContentRequestPageIds {
   static const String quoteToCircle = 'content.post.quote';
   static const String reportBehaviors = 'content.behaviors.report';
   static const String repostToCircle = 'content.post.repost';
+  static const String requestOriginalImageAccess = 'content.request.original.image.access';
   static const String resolveReport = 'content.resolve.report';
   static const String searchPosts = 'content.search';
   static const String selectAutoVideoCover = 'content.media.cover.auto';

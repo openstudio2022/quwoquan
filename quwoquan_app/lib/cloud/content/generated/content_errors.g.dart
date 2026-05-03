@@ -10,6 +10,9 @@ enum ContentErrorCode {
   invalidArgument,
   invalidContentType,
   rateLimited,
+  mediaNotFound,
+  originalAccessDenied,
+  originalAccessRateLimited,
   commentTooLong,
   commentRateLimited,
   commentLikeDuplicate,
@@ -44,6 +47,12 @@ enum ContentErrorCode {
         return ContentErrorCode.invalidContentType;
       case 'CONTENT.USER.rate_limited':
         return ContentErrorCode.rateLimited;
+      case 'CONTENT.USER.media_not_found':
+        return ContentErrorCode.mediaNotFound;
+      case 'CONTENT.USER.original_access_denied':
+        return ContentErrorCode.originalAccessDenied;
+      case 'CONTENT.USER.original_access_rate_limited':
+        return ContentErrorCode.originalAccessRateLimited;
       case 'CONTENT.USER.comment_too_long':
         return ContentErrorCode.commentTooLong;
       case 'CONTENT.USER.comment_rate_limited':
@@ -91,6 +100,9 @@ class ContentErrorMessages {
     ContentErrorCode.invalidArgument: '请求参数有误，请检查后重试',
     ContentErrorCode.invalidContentType: '不支持的内容类型',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
+    ContentErrorCode.mediaNotFound: '媒体资源不存在或已过期',
+    ContentErrorCode.originalAccessDenied: '当前内容不支持查看或保存原图',
+    ContentErrorCode.originalAccessRateLimited: '原图访问过于频繁，请稍后再试',
     ContentErrorCode.commentTooLong: '评论超出字数限制',
     ContentErrorCode.commentRateLimited: '评论太频繁，请稍后重试',
     ContentErrorCode.commentLikeDuplicate: '已经点过赞了',
@@ -116,6 +128,9 @@ class ContentErrorMessages {
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
+    ContentErrorCode.mediaNotFound: 'Media asset not found or expired',
+    ContentErrorCode.originalAccessDenied: 'Original media access is not allowed',
+    ContentErrorCode.originalAccessRateLimited: 'Too many original media requests, please retry later',
     ContentErrorCode.commentTooLong: 'Comment exceeds length limit',
     ContentErrorCode.commentRateLimited: 'Too many comments, please retry later',
     ContentErrorCode.commentLikeDuplicate: 'Already liked',

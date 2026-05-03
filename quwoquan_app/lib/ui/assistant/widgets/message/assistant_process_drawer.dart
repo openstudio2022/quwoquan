@@ -355,7 +355,6 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                     reference: block.references[refIndex],
                     index: refIndex,
                     textColor: textColor,
-                    secondaryTextColor: secondaryTextColor,
                   ),
                 );
               }),
@@ -428,7 +427,6 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                   reference: block.references[refIndex],
                   index: refIndex,
                   textColor: textColor,
-                  secondaryTextColor: secondaryTextColor,
                 ),
               );
             }),
@@ -504,7 +502,6 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required AssistantJourneyReferenceViewModel reference,
     required int index,
     required Color textColor,
-    required Color secondaryTextColor,
   }) {
     final title = reference.title.trim().isNotEmpty
         ? reference.title.trim()
@@ -537,7 +534,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
               height: AppTypography.lineHeightRelaxed,
             ),
           ),
-          if (url.isNotEmpty)
+          if (url.isNotEmpty && url != title)
             Padding(
               padding: EdgeInsets.only(top: AppSpacing.one),
               child: Text(
@@ -545,8 +542,8 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                 style: TextStyle(
                   fontSize: AppTypography.sm,
                   fontWeight: FontWeight.w400,
-                  color: secondaryTextColor.withValues(alpha: 0.8),
-                  height: AppTypography.bodyLineHeight,
+                  color: textColor.withValues(alpha: 0.72),
+                  height: AppTypography.lineHeightRelaxed,
                 ),
               ),
             ),

@@ -201,7 +201,7 @@ func TestCatalogLoaderValidatesChatAvatarTask(t *testing.T) {
 	req, err := catalog.DeclareRequestForTask(
 		"chat.group_avatar.recompute",
 		"conv-1",
-		map[string]string{"rosterRevision": "1", "triggers": "members.added"},
+		map[string]string{"rosterRevision": "1", "triggers": "members.added", "actorID": "user-1"},
 		"members.added",
 		time.Now().UTC(),
 	)
@@ -210,6 +210,13 @@ func TestCatalogLoaderValidatesChatAvatarTask(t *testing.T) {
 	}
 	if req.StartAt.Before(time.Now().UTC().Add(55 * time.Second)) {
 		t.Fatalf("startAt did not apply catalog delay: %s", req.StartAt)
+	}
+	policy := catalog.Tasks["chat.group_avatar.recompute"].RetryPolicyConfig()
+	if policy.MaxAttempts != 8 {
+		t.Fatalf("retry max attempts = %d, want 8", policy.MaxAttempts)
+	}
+	if delay, retry := policy.NextDelay(3); !retry || delay <= 0 {
+		t.Fatalf("exponential retry policy did not return delay: delay=%s retry=%v", delay, retry)
 	}
 	_, err = catalog.DeclareRequestForTask(
 		"chat.group_avatar.recompute",

@@ -13,6 +13,14 @@ on:
         description: 可选覆盖 gamma 网关（默认 secrets.GAMMA_BASE_URL）
         required: false
         default: ''
+      media_base_url:
+        description: 可选覆盖媒体 CDN base（chat-avatar 矩阵使用）
+        required: false
+        default: ''
+      matrix_kind:
+        description: assistant 或 chat-avatar
+        required: false
+        default: assistant
   workflow_call:
     inputs:
       env_json:
@@ -24,6 +32,16 @@ on:
         required: false
         type: string
         default: ''
+      media_base_url:
+        description: '可选覆盖媒体 CDN base'
+        required: false
+        type: string
+        default: ''
+      matrix_kind:
+        description: 'assistant or chat-avatar'
+        required: false
+        type: string
+        default: assistant
 
 jobs:
   android:
@@ -37,10 +55,12 @@ jobs:
     env:
       API_CONTRACT_ENV: ${{ matrix.env }}
       GAMMA_BASE_URL: ${{ inputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ inputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
+      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
       ANDROID_DEVICE_ID: ${{ vars.ANDROID_DEVICE_ID }}
     steps:
       - uses: actions/checkout@v4
@@ -72,15 +92,21 @@ jobs:
         working-directory: quwoquan_app
         run: flutter pub get
       - name: Run ${{ matrix.env }} on Android (self-hosted)
-        run: python3 scripts/run_assistant_device_matrix_ci.py --platform android
+        run: |
+          if [ "${{ inputs.matrix_kind }}" = "chat-avatar" ]; then
+            python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android
+          else
+            python3 scripts/run_assistant_device_matrix_ci.py --platform android
+          fi
       - name: Upload Android matrix report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-selfhosted-${{ matrix.env }}-android
+          name: app-env-device-matrix-selfhosted-${{ inputs.matrix_kind }}-${{ matrix.env }}-android
           path: |
             artifacts/device-matrix/${{ matrix.env }}-android.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
 
   ios:
@@ -94,10 +120,12 @@ jobs:
     env:
       API_CONTRACT_ENV: ${{ matrix.env }}
       GAMMA_BASE_URL: ${{ inputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ inputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
+      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
       IOS_DEVICE_ID: ${{ vars.IOS_DEVICE_ID }}
     steps:
       - uses: actions/checkout@v4
@@ -163,13 +191,19 @@ jobs:
           echo "IOS_DEVICE_ID=$IOS_DEVICE_ID" >> "$GITHUB_ENV"
           flutter devices
       - name: Run ${{ matrix.env }} on iOS (self-hosted)
-        run: python3 scripts/run_assistant_device_matrix_ci.py --platform ios
+        run: |
+          if [ "${{ inputs.matrix_kind }}" = "chat-avatar" ]; then
+            python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
+          else
+            python3 scripts/run_assistant_device_matrix_ci.py --platform ios
+          fi
       - name: Upload iOS matrix report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-selfhosted-${{ matrix.env }}-ios
+          name: app-env-device-matrix-selfhosted-${{ inputs.matrix_kind }}-${{ matrix.env }}-ios
           path: |
             artifacts/device-matrix/${{ matrix.env }}-ios.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore

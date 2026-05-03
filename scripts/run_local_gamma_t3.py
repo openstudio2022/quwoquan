@@ -172,6 +172,15 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
             ],
         },
         {
+            "name": "chat_api_contract",
+            "path": "test/cloud/chat/api_contract_runner.dart",
+            "defines": [
+                "--dart-define=API_CONTRACT_ENV=gamma",
+                f"--dart-define=API_CONTRACT_BASE_URL={base_url}",
+                f"--dart-define=TEST_AUTH_TOKEN={token}",
+            ],
+        },
+        {
             "name": "product_ops_api_contract",
             "path": "test/cloud/ops/api_contract_runner.dart",
             "defines": [
@@ -206,7 +215,7 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://127.0.0.1:18080")
     parser.add_argument("--product-ops-base-url", default="http://127.0.0.1:18086")
     parser.add_argument("--report", default="artifacts/local-gamma/t3_report.json")
-    parser.add_argument("--enabled-domain", action="append", default=["content"])
+    parser.add_argument("--enabled-domain", action="append", default=["content", "chat"])
     parser.add_argument("--skip-seed", action="store_true")
     parser.add_argument("--skip-flutter-contracts", action="store_true")
     parser.add_argument("--test-auth-token", default="local-gamma-token")

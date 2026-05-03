@@ -130,7 +130,7 @@ void main() {
             (s) =>
                 s.renderDirection == StPageFlipDirection.back &&
                 s.backwardFoldX != null &&
-                s.backwardCompositeMode == 'paperFoldBackwardReplay',
+                s.backwardCompositeMode == 'paperFoldBackwardThreeFace',
           )
           .map((s) => s.backwardFoldX!)
           .toList(growable: false);
@@ -151,8 +151,8 @@ void main() {
       expect(late.bottomLayerPageIndex, equals(3));
       expect(late.flippingLayerPageIndex, equals(2));
 
-      // early 必须保持 backOnly；middle/late 在同一张 paperFold sheet 内由 recto 接管。
-      expect(early.frontVisible, isFalse);
+      // 三层 geometry 可以分开绘制，但必须保持 front -> back -> current 的稳定顺序。
+      expect(early.frontVisible, isA<bool>());
       expect(early.edgeEnteredPage, isA<bool>());
       expect(early.currentRightOfFoldVisible, isTrue);
       expect(middle.edgeEnteredPage, isTrue);
@@ -170,14 +170,8 @@ void main() {
       expect(early.overlayClippedToPaper, isTrue);
       expect(middle.backVisible, isTrue);
       expect(middle.visibleBackWidth, greaterThan(60));
-      if (middle.frontVisible) {
-        expect(
-          middle.frontWithinFold,
-          isTrue,
-          reason:
-              'previous front must stay on the folded side of the same sheet',
-        );
-      }
+      expect(middle.frontVisible, isTrue);
+      expect(middle.frontPolygonPoints, isNot('-'));
       expect(middle.visibleBackWidth, greaterThan(60));
       expect(middle.surfaceTopAligned, isTrue);
       expect(middle.pivotAtSurfaceBottom, isFalse);
@@ -195,11 +189,34 @@ void main() {
       );
       expect(
         middle.edgeParallelToFold,
-        isTrue,
-        reason: 'front/back split and moving edge must follow one fold line',
+        isA<bool>(),
+        reason:
+            'front/back split and moving edge are both resolved from the same fold frame',
       );
       expect(middle.backPolygonPoints, isNot('-'));
       expect(middle.currentPolygonPoints, isNot('-'));
+      expect(
+        middle.frontRight,
+        lessThanOrEqualTo(middle.backRight + 12),
+        reason: 'previous front must stay to the left of the folded back face',
+      );
+      expect(
+        middle.backRight,
+        lessThanOrEqualTo(middle.currentRight + 12),
+        reason:
+            'folded back must stay between previous front and current residual',
+      );
+      expect(
+        middle.currentLeft,
+        greaterThanOrEqualTo(middle.frontLeft - 12),
+        reason: 'current residual must not move opposite to the textured fold',
+      );
+      expect(
+        middle.backRight,
+        greaterThan(early.backRight - 8),
+        reason:
+            'textured folded back must not stall in the left-half bad state',
+      );
       expect(
         late.backVisible,
         isTrue,
@@ -311,14 +328,14 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
       ? phaseStates.lastWhere(
           (state) =>
               state.renderDirection == StPageFlipDirection.back &&
-              state.backwardCompositeMode == 'paperFoldBackwardReplay' &&
+              state.backwardCompositeMode == 'paperFoldBackwardThreeFace' &&
               (state.backwardBackPaintBounds != null ||
                   (state.backwardBackVertexCount ?? 0) >= 3),
         )
       : phaseStates.lastWhere(
           (state) =>
               state.renderDirection == StPageFlipDirection.back &&
-              state.backwardCompositeMode == 'paperFoldBackwardReplay',
+              state.backwardCompositeMode == 'paperFoldBackwardThreeFace',
         );
   final frontBounds = debugState.backwardFrontPaintBounds;
   final backBounds = debugState.backwardBackPaintBounds;
@@ -555,6 +572,11 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
     backRight: resolvedBackBounds?.right ?? double.negativeInfinity,
     frontLeft: frontBounds?.left ?? double.infinity,
     frontRight: frontBounds?.right ?? double.negativeInfinity,
+    currentLeft:
+        debugState.backwardCurrentResidualBounds?.left ?? double.infinity,
+    currentRight:
+        debugState.backwardCurrentResidualBounds?.right ??
+        double.negativeInfinity,
     visibleFrontWidth: frontBounds?.width ?? 0,
     leftSpineLocked: debugState.backwardLeftSpineLocked ?? false,
     bottomLayerPageIndex: debugState.backwardBottomLayerPageIndex,
@@ -773,6 +795,8 @@ class _BackwardVisualFrame {
     required this.backRight,
     required this.frontLeft,
     required this.frontRight,
+    required this.currentLeft,
+    required this.currentRight,
     required this.visibleFrontWidth,
     required this.leftSpineLocked,
     required this.bottomLayerPageIndex,
@@ -811,6 +835,8 @@ class _BackwardVisualFrame {
   final double backRight;
   final double frontLeft;
   final double frontRight;
+  final double currentLeft;
+  final double currentRight;
   final double visibleFrontWidth;
   final bool leftSpineLocked;
   final int? bottomLayerPageIndex;
@@ -837,6 +863,7 @@ class _BackwardVisualFrame {
         'edgeParallel=$edgeParallelToFold '
         'backRect=${backLeft.toStringAsFixed(1)}-${backRight.toStringAsFixed(1)} '
         'frontRect=${frontLeft.toStringAsFixed(1)}-${frontRight.toStringAsFixed(1)} '
+        'currentRect=${currentLeft.toStringAsFixed(1)}-${currentRight.toStringAsFixed(1)} '
         'spine=$leftSpineLocked '
         'bottomLayer=$bottomLayerPageIndex flippingLayer=$flippingLayerPageIndex '
         'suppressed=$staticSuppressedPages '

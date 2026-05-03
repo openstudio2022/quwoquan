@@ -68,6 +68,15 @@ if [[ "$DRY_RUN" == "1" ]]; then
   exit 0
 fi
 
+_patrol_cache_bin=""
+if command -v dart >/dev/null 2>&1; then
+  _cache_root="$(dart pub cache path 2>/dev/null || true)"
+  if [[ -n "$_cache_root" && -d "$_cache_root/bin" ]]; then
+    PATH="${PATH}:$_cache_root/bin"
+    _patrol_cache_bin="$_cache_root/bin"
+  fi
+fi
+
 if ! command -v patrol >/dev/null 2>&1; then
   write_report "gate_block" "patrol CLI not found"
   echo "[local-gamma:t4] GATE_BLOCK: patrol CLI not found" >&2

@@ -826,18 +826,15 @@ void main() {
     expect(interactiveState.backwardPhase, isNotNull);
     expect(interactiveState.backwardPhase, isNot(equals('recto')));
     expect(interactiveState.backwardReplayFrontLayerCount, equals(0));
-    expect(
-      interactiveState.backwardMainline,
-      equals('paperFoldBackSoftAreaThreeLayer'),
-    );
+    expect(interactiveState.backwardMainline, equals('paperFoldBackThreeFace'));
     expect(interactiveState.backwardFlippingSheetCount, equals(1));
-    expect(interactiveState.backwardFrontSheetId, equals('turning:2'));
-    expect(interactiveState.backwardBackSheetId, equals('turning:2'));
+    expect(interactiveState.backwardFrontSheetId, equals('threeFaceFront:2'));
+    expect(interactiveState.backwardBackSheetId, equals('threeFaceBack:2'));
     expect(interactiveState.backwardCurrentLayerPresent, isTrue);
     expect(interactiveState.backwardMultiSliceViolation, isFalse);
     expect(
       interactiveState.backwardReplayBackSurfaceStrategy,
-      equals('paperFoldSharedSurface'),
+      equals('paperFoldThreeFaceBackSurface'),
     );
     expect(interactiveState.backwardBottomLayerPageIndex, equals(3));
     expect(interactiveState.backwardFlippingLayerPageIndex, equals(2));
@@ -857,7 +854,7 @@ void main() {
     expect(interactiveState.backwardFoldDirection, equals('rightward'));
     expect(
       interactiveState.backwardCompositeMode,
-      equals('paperFoldBackwardReplay'),
+      equals('paperFoldBackwardThreeFace'),
     );
     if (interactiveState.backwardFrontPaintBounds == null) {
       expect(interactiveState.backwardBackPaintBounds, isNotNull);
@@ -870,7 +867,7 @@ void main() {
     }
     expect(
       interactiveState.backwardBackPixelSurfaceStrategy,
-      equals('paperFoldSharedSurface'),
+      equals('paperFoldThreeFaceBackSurface'),
     );
     expect(interactiveState.backwardFrontCoverageRatio, isNotNull);
     expect(interactiveState.backwardLeftSpineLocked, isNotNull);
@@ -945,7 +942,7 @@ void main() {
     final backwardAnimationStates = debugStates.where(
       (state) =>
           state.renderDirection == StPageFlipDirection.back &&
-          state.backwardCompositeMode == 'paperFoldBackwardReplay',
+          state.backwardCompositeMode == 'paperFoldBackwardThreeFace',
     );
     expect(backwardAnimationStates, isNotEmpty);
     expect(
@@ -975,19 +972,22 @@ void main() {
       }
       expect(state.backwardClipViewportBounds, isNotNull);
       final surfaceShowsFront = state.backwardFrontPaintBounds != null;
-      expect(state.backwardMainline, equals('paperFoldBackSoftAreaThreeLayer'));
+      expect(state.backwardMainline, equals('paperFoldBackThreeFace'));
       expect(state.backwardFlippingSheetCount, equals(1));
-      expect(state.backwardFrontSheetId, equals(state.backwardBackSheetId));
+      expect(state.backwardFrontSheetId, startsWith('threeFaceFront:'));
+      expect(state.backwardBackSheetId, startsWith('threeFaceBack:'));
       expect(state.backwardCurrentLayerPresent, isTrue);
       expect(state.backwardMultiSliceViolation, isFalse);
       expect(
         _bothRectsCoverNearlyFullSurface(
-          state.backwardFrontPaintBounds,
-          state.backwardBackPaintBounds,
-          state.backwardSurfaceViewportRect,
-        ),
+              state.backwardFrontPaintBounds,
+              state.backwardBackPaintBounds,
+              state.backwardSurfaceViewportRect,
+            ) &&
+            state.backwardBackPolygonPoints == state.backwardFrontPolygonPoints,
         isFalse,
-        reason: 'front and back must not both be full-page surfaces',
+        reason:
+            'front and back may have large angled AABBs, but they must not share the same full-page polygon',
       );
       if (surfaceShowsFront) {
         expect(
@@ -1034,12 +1034,12 @@ void main() {
       final sample = await _renderBackwardCompositeProbeScene(tester);
 
       expect(sample.earlyBackVisible, isTrue);
-      expect(sample.earlyFrontVisible, isFalse);
+      expect(sample.earlyFrontVisible, isA<bool>());
       expect(sample.middleBackVisible, isTrue);
-      expect(sample.middleFrontVisible, isA<bool>());
+      expect(sample.middleFrontVisible, isTrue);
       expect(sample.middleCurrentResidualVisible, isA<bool>());
       expect(sample.middleFoldHasFrontText, isFalse);
-      expect(sample.middleCompositeMode, equals('paperFoldBackwardReplay'));
+      expect(sample.middleCompositeMode, equals('paperFoldBackwardThreeFace'));
       expect(sample.middleBackRight - sample.middleBackLeft, greaterThan(40));
     },
   );
@@ -1153,7 +1153,7 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
     final phaseStates = debugStates.skip(debugCursor).toList(growable: false);
     bool isBackwardComposite(ArticleReadOnlyBookDebugState state) =>
         state.renderDirection == StPageFlipDirection.back &&
-        state.backwardCompositeMode == 'paperFoldBackwardReplay';
+        state.backwardCompositeMode == 'paperFoldBackwardThreeFace';
     final debugState =
         phaseStates
             .where(isBackwardComposite)

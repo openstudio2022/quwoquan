@@ -105,6 +105,105 @@ class BackwardFoldSurfaceGeometry {
   final Rect? currentResidualViewportBounds;
 }
 
+BackwardFoldSurfaceGeometry? resolveBackwardFoldFrameGeometry({
+  required List<Offset> flippingArea,
+  required List<Offset> bottomArea,
+  required Offset anchor,
+  required double angle,
+  required StPageFlipBoundsRect bounds,
+  required Size pageSize,
+  required Rect pageViewportRect,
+}) {
+  if (flippingArea.length < 3 || bottomArea.length < 3) {
+    return null;
+  }
+  final softGeometry = resolveBackwardSoftPageGeometry(
+    area: flippingArea,
+    anchor: anchor,
+    angle: angle,
+    bounds: bounds,
+    pageSize: pageSize,
+  );
+  final sheetLocalPolygon = softGeometry.localClipPolygon;
+  final sheetViewportPolygon = transformSoftLayerLocalPolygon(
+    polygon: sheetLocalPolygon,
+    geometry: softGeometry,
+  );
+  final foldLineViewport = _resolveBottomAreaBoundaryLine(
+    bottomArea: bottomArea,
+    pageSize: pageSize,
+    pageViewportRect: pageViewportRect,
+  );
+  if (foldLineViewport == null) {
+    return null;
+  }
+
+  final pageEdgeViewport = _resolveBackwardPageEdgeViewport(
+    anchor: anchor,
+    angle: angle,
+    pageSize: pageSize,
+    pageViewportRect: pageViewportRect,
+  );
+  final pageEdgeLocal = _viewportLineToSoftLocal(
+    pageEdgeViewport,
+    softGeometry,
+  );
+  final foldLineLocal = _viewportLineToSoftLocal(
+    foldLineViewport,
+    softGeometry,
+  );
+  final resolvedBackLocalPolygon = <Offset>[
+    pageEdgeLocal.$1,
+    foldLineLocal.$1,
+    foldLineLocal.$2,
+    pageEdgeLocal.$2,
+  ];
+
+  final previousFrontLocalPolygon = _buildLeftPagePlanePolygonFromViewportLine(
+    pageViewportRect: pageViewportRect,
+    boundaryViewportLine: pageEdgeViewport,
+  );
+  final currentResidualPagePolygon = List<Offset>.unmodifiable(bottomArea);
+  final previousFrontViewportPolygon = _pageLocalPolygonToViewport(
+    previousFrontLocalPolygon,
+    pageViewportRect,
+  );
+  final previousBackViewportPolygon = transformSoftLayerLocalPolygon(
+    polygon: resolvedBackLocalPolygon,
+    geometry: softGeometry,
+  );
+  final currentResidualViewportPolygon = _pageLocalPolygonToViewport(
+    currentResidualPagePolygon,
+    pageViewportRect,
+  );
+
+  return BackwardFoldSurfaceGeometry(
+    softGeometry: softGeometry,
+    sheetLocalPolygon: sheetLocalPolygon,
+    previousFrontLocalPolygon: previousFrontLocalPolygon,
+    previousBackLocalPolygon: resolvedBackLocalPolygon,
+    currentResidualPagePolygon: currentResidualPagePolygon,
+    foldLineLocal: foldLineLocal,
+    frontBackBoundaryLocal: pageEdgeLocal,
+    sheetViewportPolygon: sheetViewportPolygon,
+    previousFrontViewportPolygon: previousFrontViewportPolygon,
+    previousBackViewportPolygon: previousBackViewportPolygon,
+    currentResidualViewportPolygon: currentResidualViewportPolygon,
+    foldLineViewport: foldLineViewport,
+    frontBackBoundaryViewport: pageEdgeViewport,
+    sheetLocalBounds: polygonBounds(sheetLocalPolygon),
+    previousFrontLocalBounds: polygonBounds(previousFrontLocalPolygon),
+    previousBackLocalBounds: polygonBounds(resolvedBackLocalPolygon),
+    currentResidualPageBounds: polygonBounds(currentResidualPagePolygon),
+    sheetViewportBounds: polygonBounds(sheetViewportPolygon),
+    previousFrontViewportBounds: polygonBounds(previousFrontViewportPolygon),
+    previousBackViewportBounds: polygonBounds(previousBackViewportPolygon),
+    currentResidualViewportBounds: polygonBounds(
+      currentResidualViewportPolygon,
+    ),
+  );
+}
+
 BackwardFoldSurfaceGeometry resolveBackwardFoldSurfaceGeometry({
   required List<Offset> sheetArea,
   required List<Offset> previousFrontArea,
@@ -254,6 +353,112 @@ SoftPageLayerGeometry resolveBackwardSoftPageGeometry({
 
 List<Offset> _shiftPolygon(List<Offset> polygon, Offset delta) {
   return polygon.map((point) => point + delta).toList(growable: false);
+}
+
+List<Offset> _pageLocalPolygonToViewport(List<Offset> polygon, Rect pageRect) {
+  return polygon
+      .map((point) => pageRect.topLeft + point)
+      .toList(growable: false);
+}
+
+Offset _viewportPointToSoftLocal(Offset point, SoftPageLayerGeometry geometry) {
+  final angle = rotationZFromMatrix(geometry.transform);
+  return rotatePointForCanvasTransform(
+    point - geometry.positionViewport,
+    -angle,
+  );
+}
+
+(Offset, Offset) _viewportLineToSoftLocal(
+  (Offset, Offset) line,
+  SoftPageLayerGeometry geometry,
+) {
+  return (
+    _viewportPointToSoftLocal(line.$1, geometry),
+    _viewportPointToSoftLocal(line.$2, geometry),
+  );
+}
+
+(Offset, Offset) _resolveBackwardPageEdgeViewport({
+  required Offset anchor,
+  required double angle,
+  required Size pageSize,
+  required Rect pageViewportRect,
+}) {
+  Offset toCurrentPageViewport(Offset point) {
+    return Offset(
+      pageViewportRect.left + pageSize.width - point.dx,
+      pageViewportRect.top + point.dy,
+    );
+  }
+
+  final top = toCurrentPageViewport(anchor);
+  final bottomBookPoint =
+      anchor +
+      Offset(
+        pageSize.height * math.sin(angle),
+        pageSize.height * math.cos(angle),
+      );
+  final bottom = toCurrentPageViewport(bottomBookPoint);
+  return orderViewportLineTopToBottom((top, bottom));
+}
+
+(Offset, Offset)? _resolveBottomAreaBoundaryLine({
+  required List<Offset> bottomArea,
+  required Size pageSize,
+  required Rect pageViewportRect,
+}) {
+  if (bottomArea.length < 3) {
+    return null;
+  }
+  final interior = bottomArea
+      .where((point) {
+        final onOuterEdge =
+            point.dx.abs() <= 0.001 ||
+            (point.dx - pageSize.width).abs() <= 0.001;
+        final onHorizontalEdge =
+            point.dy.abs() <= 0.001 ||
+            (point.dy - pageSize.height).abs() <= 0.001;
+        return !(onOuterEdge && onHorizontalEdge);
+      })
+      .toList(growable: false);
+  final candidates = interior.length >= 2 ? interior : bottomArea;
+  if (candidates.length < 2) {
+    return null;
+  }
+  final sorted = [...candidates]
+    ..sort((a, b) {
+      final byY = a.dy.compareTo(b.dy);
+      return byY != 0 ? byY : a.dx.compareTo(b.dx);
+    });
+  return orderViewportLineTopToBottom((
+    pageViewportRect.topLeft + sorted.first,
+    pageViewportRect.topLeft + sorted.last,
+  ));
+}
+
+List<Offset> _buildLeftPagePlanePolygonFromViewportLine({
+  required Rect pageViewportRect,
+  required (Offset, Offset) boundaryViewportLine,
+}) {
+  final boundary = orderViewportLineTopToBottom(boundaryViewportLine);
+  final top = Offset(
+    boundary.$1.dx.clamp(pageViewportRect.left, pageViewportRect.right),
+    boundary.$1.dy.clamp(pageViewportRect.top, pageViewportRect.bottom),
+  );
+  final bottom = Offset(
+    boundary.$2.dx.clamp(pageViewportRect.left, pageViewportRect.right),
+    boundary.$2.dy.clamp(pageViewportRect.top, pageViewportRect.bottom),
+  );
+  final viewportPolygon = <Offset>[
+    pageViewportRect.topLeft,
+    top,
+    bottom,
+    pageViewportRect.bottomLeft,
+  ];
+  return viewportPolygon
+      .map((point) => point - pageViewportRect.topLeft)
+      .toList(growable: false);
 }
 
 Offset rotatePointForCanvasTransform(Offset point, double angle) {

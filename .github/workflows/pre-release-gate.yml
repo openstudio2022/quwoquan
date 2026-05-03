@@ -49,6 +49,8 @@ jobs:
           cache: true
       - name: Gate (L1+L2)
         run: make gate
+      - name: Runtime media image gate (T1-T3)
+        run: make gate-runtime-media
       - uses: syntaqx/setup-kustomize@v1
       - name: Deploy kustomization build (G5a 构建验证)
         run: make deploy-integration CLOUD_PROVIDER=${{ env.CLOUD_PROVIDER }} | tail -5

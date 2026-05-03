@@ -5,6 +5,7 @@
 .PHONY: verify-app-mock-isolation
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
+.PHONY: verify-app-pageflip-back-mainline
 .PHONY: verify-app-page-abc-governance
 .PHONY: verify-app-page-abc-governance-enforce-a
 .PHONY: verify-app-page-abc-governance-enforce-b
@@ -127,6 +128,9 @@ verify-app-page-horizontal-quality:
 	@python3 scripts/verify_page_horizontal_quality_matrix.py
 	@python3 scripts/verify_page_matrix_scan_complete.py
 
+verify-app-pageflip-back-mainline:
+	@cd quwoquan_app && flutter test test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart
+
 # 页面 A/B/C 专项扫描（默认仅报告、exit 0；加 --enforce-* 见 specs/gates/page_abc_governance.md）
 verify-app-page-abc-governance:
 	@python3 scripts/verify_page_abc_governance.py
@@ -168,6 +172,7 @@ gate-local-gamma:
 	@if [ "$${LOCAL_GAMMA_DRY_RUN:-0}" = "1" ]; then \
 		python3 scripts/verify_local_gamma_mirror.py --dry-run; \
 	else \
+		set -e; \
 		if [ "$${LOCAL_GAMMA_SKIP_GATE:-0}" != "1" ]; then $(MAKE) gate; fi; \
 		$(MAKE) verify-app-env-package; \
 		$(MAKE) verify-app-seed-manifest; \
