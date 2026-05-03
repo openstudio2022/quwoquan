@@ -193,13 +193,13 @@ install_docker_if_needed() {
     if command -v apt-get >/dev/null 2>&1; then
       apt-get update
       apt-get install -y ca-certificates curl gnupg lsb-release python3
-      apt-get install -y docker.io docker-compose-plugin || apt-get install -y docker.io docker-compose || true
+      apt-get install -y docker.io docker-compose-plugin || apt-get install -y docker.io docker-compose podman-compose || true
     elif command -v yum >/dev/null 2>&1; then
       yum install -y ca-certificates curl python3
-      yum install -y docker docker-compose-plugin || yum install -y docker docker-compose || yum install -y docker || true
+      yum install -y docker docker-compose-plugin podman-compose || yum install -y docker docker-compose podman-compose || yum install -y docker || true
     elif command -v dnf >/dev/null 2>&1; then
       dnf install -y ca-certificates curl python3
-      dnf install -y docker docker-compose-plugin || dnf install -y docker docker-compose || dnf install -y docker || true
+      dnf install -y docker docker-compose-plugin podman-compose || dnf install -y docker docker-compose podman-compose || dnf install -y docker || true
     fi
   elif ! command -v python3 >/dev/null 2>&1; then
     if command -v apt-get >/dev/null 2>&1; then
@@ -223,9 +223,9 @@ install_docker_if_needed() {
     if command -v apt-get >/dev/null 2>&1; then
       apt-get install -y docker-compose-plugin || true
     elif command -v yum >/dev/null 2>&1; then
-      yum install -y docker-compose-plugin || yum install -y docker-compose || true
+      yum install -y docker-compose-plugin podman-compose || yum install -y docker-compose podman-compose || true
     elif command -v dnf >/dev/null 2>&1; then
-      dnf install -y docker-compose-plugin || dnf install -y docker-compose || true
+      dnf install -y docker-compose-plugin podman-compose || dnf install -y docker-compose podman-compose || true
     fi
   fi
 
@@ -237,9 +237,13 @@ install_docker_if_needed() {
       aarch64|arm64) compose_arch="aarch64" ;;
       *) echo "unsupported architecture for docker compose: $arch" >&2; exit 2 ;;
     esac
-    curl -fsSL "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-linux-${compose_arch}" \
-      -o /usr/local/lib/docker/cli-plugins/docker-compose
-    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+    tmp_compose="/usr/local/lib/docker/cli-plugins/docker-compose.tmp"
+    rm -f "$tmp_compose" /usr/local/lib/docker/cli-plugins/docker-compose
+    curl --connect-timeout 20 --max-time 120 --retry 2 --retry-delay 3 -fsSL \
+      "https://github.com/docker/compose/releases/download/v2.27.1/docker-compose-linux-${compose_arch}" \
+      -o "$tmp_compose"
+    chmod +x "$tmp_compose"
+    mv "$tmp_compose" /usr/local/lib/docker/cli-plugins/docker-compose
   fi
 }
 
