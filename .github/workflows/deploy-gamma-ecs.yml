@@ -265,13 +265,15 @@ jobs:
       - name: Resolve gamma URLs
         id: urls
         run: |
-          BASE_URL="${GAMMA_BASE_URL:-http://${GAMMA_ECS_HOST}:18080}"
-          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${GAMMA_ECS_HOST}:18086}"
+          PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
+          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18080}"
+          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:18086}"
           echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"
         env:
-          GAMMA_BASE_URL: ${{ vars.GAMMA_BASE_URL || secrets.GAMMA_BASE_URL }}
-          GAMMA_PRODUCT_OPS_BASE_URL: ${{ vars.GAMMA_PRODUCT_OPS_BASE_URL || secrets.GAMMA_PRODUCT_OPS_BASE_URL }}
+          GAMMA_ECS_PUBLIC_HOST: ${{ vars.GAMMA_ECS_PUBLIC_HOST || vars.GAMMA_ECS_HOST }}
+          GAMMA_BASE_URL: ${{ vars.GAMMA_BASE_URL }}
+          GAMMA_PRODUCT_OPS_BASE_URL: ${{ vars.GAMMA_PRODUCT_OPS_BASE_URL }}
       - name: Validate ECS credentials
         env:
           GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
@@ -359,13 +361,15 @@ jobs:
       - name: Resolve gamma URLs
         id: urls
         run: |
-          BASE_URL="${GAMMA_BASE_URL:-http://${GAMMA_ECS_HOST}:18080}"
-          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${GAMMA_ECS_HOST}:18086}"
+          PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
+          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18080}"
+          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:18086}"
           echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"
         env:
-          GAMMA_BASE_URL: ${{ vars.GAMMA_BASE_URL || secrets.GAMMA_BASE_URL }}
-          GAMMA_PRODUCT_OPS_BASE_URL: ${{ vars.GAMMA_PRODUCT_OPS_BASE_URL || secrets.GAMMA_PRODUCT_OPS_BASE_URL }}
+          GAMMA_ECS_PUBLIC_HOST: ${{ vars.GAMMA_ECS_PUBLIC_HOST || vars.GAMMA_ECS_HOST }}
+          GAMMA_BASE_URL: ${{ vars.GAMMA_BASE_URL }}
+          GAMMA_PRODUCT_OPS_BASE_URL: ${{ vars.GAMMA_PRODUCT_OPS_BASE_URL }}
       - name: Validate ECS credentials
         env:
           GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
