@@ -27,6 +27,12 @@ SSH_OPTS=(
   -o ServerAliveInterval=15
   -o ServerAliveCountMax=4
 )
+SCP_OPTS=(
+  -P "$ECS_PORT"
+  -o StrictHostKeyChecking=accept-new
+  -o ServerAliveInterval=15
+  -o ServerAliveCountMax=4
+)
 SSH_TARGET="${ECS_USER}@${ECS_HOST}"
 TMP_KEY_FILE=""
 SSHPASS_PID=""
@@ -128,9 +134,9 @@ if [[ "$SKIP_UPLOAD" != "1" ]]; then
     fi
     remote_exec "mkdir -p '$REMOTE_DIR'"
     if [[ -n "${TMP_KEY_FILE:-}" ]]; then
-      scp "${SSH_OPTS[@]}" -i "$TMP_KEY_FILE" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_DIR/.incoming-repo.tgz"
+      scp "${SCP_OPTS[@]}" -i "$TMP_KEY_FILE" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_DIR/.incoming-repo.tgz"
     else
-      sshpass -e scp "${SSH_OPTS[@]}" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_DIR/.incoming-repo.tgz"
+      sshpass -e scp "${SCP_OPTS[@]}" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_DIR/.incoming-repo.tgz"
     fi
     remote_exec "tar -xzf '$REMOTE_DIR/.incoming-repo.tgz' -C '$REMOTE_DIR' && rm -f '$REMOTE_DIR/.incoming-repo.tgz'"
   else
