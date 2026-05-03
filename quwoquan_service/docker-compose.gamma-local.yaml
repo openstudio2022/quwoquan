@@ -124,6 +124,8 @@ services:
     command: ["sh", "-lc", "cd services/product-ops-service/cmd/api && /usr/local/go/bin/go run ."]
     environment:
       PATH: /go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      GOPROXY: "${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}"
+      GOSUMDB: "${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}"
       SERVICE_NAME: product-ops-service
       APP_ENV: gamma
       CONFIG_ROOT: /etc/qwq-config
