@@ -118,7 +118,7 @@ printjson({insertedCount: docs.length});
     result = subprocess.run(
         cmd,
         input=js_path.read_text(encoding="utf-8"),
-        text=True,
+        universal_newlines=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         cwd=ROOT / "quwoquan_service",
@@ -185,7 +185,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
         result = subprocess.run(
             cmd,
             cwd=ROOT / "quwoquan_app",
-            text=True,
+            universal_newlines=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
