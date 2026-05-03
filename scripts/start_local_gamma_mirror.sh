@@ -149,7 +149,7 @@ if [[ "$skip_up" == "1" ]]; then
 fi
 
 if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose >/dev/null 2>&1; then
-  compose_cmd=(podman-compose -f "$COMPOSE_FILE" --podman-build-args "--pull=never" --podman-run-args "--pull=never")
+  compose_cmd=(podman-compose -f "$COMPOSE_FILE" --podman-build-args=--pull=never --podman-run-args=--pull=never)
   compose_up_args=(up -d --no-build)
 else
   compose_cmd=(docker compose -f "$COMPOSE_FILE")
