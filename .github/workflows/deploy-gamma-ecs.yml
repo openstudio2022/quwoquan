@@ -313,6 +313,7 @@ jobs:
     timeout-minutes: 20
     env:
       API_CONTRACT_ENV: gamma
+      LOCAL_GAMMA_T3_SCOPE: content
       GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
       GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.product_ops_base_url }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}

@@ -291,6 +291,7 @@ test-api-contract:
 	cd quwoquan_app && flutter test test/cloud/content/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
+		--dart-define=LOCAL_GAMMA_T3_SCOPE=$${LOCAL_GAMMA_T3_SCOPE:-} \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
 	cd quwoquan_app && flutter test test/cloud/ops/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
