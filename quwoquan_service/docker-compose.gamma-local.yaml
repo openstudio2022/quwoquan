@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   postgres:
-    image: postgres:16-alpine
+    image: docker.io/library/postgres:16-alpine
     environment:
       POSTGRES_USER: quwoquan
       POSTGRES_PASSWORD: quwoquan
@@ -18,7 +18,7 @@ services:
       retries: 10
 
   mongodb:
-    image: mongo:7-jammy
+    image: docker.io/library/mongo:7-jammy
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "${LOCAL_GAMMA_MONGO_PORT:-37017}:27017"
@@ -31,7 +31,7 @@ services:
       retries: 20
 
   mongo-init:
-    image: mongo:7-jammy
+    image: docker.io/library/mongo:7-jammy
     depends_on:
       mongodb:
         condition: service_healthy
@@ -49,7 +49,7 @@ services:
     restart: "no"
 
   redis:
-    image: redis:7.2-alpine
+    image: docker.io/library/redis:7.2-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "${LOCAL_GAMMA_REDIS_PORT:-36379}:6379"
@@ -119,7 +119,7 @@ services:
       retries: 10
 
   product-ops-service:
-    image: golang:1.24-bookworm
+    image: docker.io/library/golang:1.24-bookworm
     working_dir: /workspace
     command: ["sh", "-lc", "cd services/product-ops-service/cmd/api && /usr/local/go/bin/go run ."]
     environment:
@@ -154,7 +154,7 @@ services:
       retries: 10
 
   gamma-proxy:
-    image: caddy:2.8-alpine
+    image: docker.io/library/caddy:2.8-alpine
     depends_on:
       content-service:
         condition: service_healthy

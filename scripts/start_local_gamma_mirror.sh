@@ -148,13 +148,20 @@ if [[ "$skip_up" == "1" ]]; then
   exit 0
 fi
 
-compose_args=(-f "$COMPOSE_FILE")
+if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose >/dev/null 2>&1; then
+  compose_cmd=(podman-compose -f "$COMPOSE_FILE" --podman-build-args "--pull=never" --podman-run-args "--pull=never")
+  compose_up_args=(up -d --no-build)
+else
+  compose_cmd=(docker compose -f "$COMPOSE_FILE")
+  compose_up_args=(up -d)
+fi
+
 if [[ "$skip_build" == "0" ]]; then
-  docker compose "${compose_args[@]}" build
+  "${compose_cmd[@]}" build
 fi
 LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION" \
 LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION" \
-docker compose "${compose_args[@]}" up -d
+"${compose_cmd[@]}" "${compose_up_args[@]}"
 
 echo "[local-gamma] mirror started"
 echo "[local-gamma] gateway: $GATEWAY_BASE_URL"
