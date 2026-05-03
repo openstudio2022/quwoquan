@@ -164,7 +164,7 @@ if remote_exec "test -f '${REMOTE_DIR}/.gamma_deploy_state.json'"; then
   )"
 fi
 
-remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") && bash -s" <<'REMOTE_SCRIPT'
+remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-5400}") && bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 python3 - <<'PY'
 import json
@@ -248,13 +248,18 @@ install_docker_if_needed() {
 }
 
 configure_container_registry_mirror() {
-  local mirror="${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-docker.1ms.run}"
-  if [[ -z "$mirror" ]]; then
-    return
+  local raw="${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}"
+  if [[ -z "$raw" ]]; then
+    echo "[gamma-ecs] Podman: 未配置 docker.io 镜像加速（设置环境变量 GAMMA_ECS_CONTAINER_REGISTRY_MIRROR，例如加速器主机名）"
+    return 0
   fi
+  local mirror="${raw#https://}"
+  mirror="${mirror#http://}"
+  mirror="${mirror%%/*}"
+
   if command -v podman >/dev/null 2>&1; then
     mkdir -p /etc/containers/registries.conf.d
-    cat > /etc/containers/registries.conf.d/001-dockerhub-mirror.conf <<CONF
+    cat >/etc/containers/registries.conf.d/001-dockerhub-mirror.conf <<CONF
 [[registry]]
 prefix = "docker.io"
 location = "docker.io"
@@ -262,11 +267,14 @@ location = "docker.io"
 [[registry.mirror]]
 location = "${mirror}"
 CONF
+    echo "[gamma-ecs] Podman: docker.io mirror -> ${mirror}"
+  else
+    echo "[gamma-ecs] 未检测到 podman，跳过 registries.conf 镜像写入（若为 Docker CE，请在 daemon.json 另行配置加速器）"
   fi
 }
 
 pre_pull_local_gamma_images() {
-  local timeout_seconds="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-300}"
+  local timeout_seconds="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}"
   local images=(
     docker.io/library/postgres:16-alpine
     docker.io/library/mongo:7-jammy
@@ -279,7 +287,8 @@ pre_pull_local_gamma_images() {
   )
   for image in "${images[@]}"; do
     echo "[gamma-ecs] pre-pulling ${image}"
-    timeout "$timeout_seconds" docker pull "$image"
+    timeout "$timeout_seconds" docker pull "$image" || \
+      echo "[gamma-ecs] pre-pull 跳过/失败: ${image}（后续 compose build 会重试拉取）" >&2
   done
 }
 
@@ -301,7 +310,7 @@ export LOCAL_GAMMA_HTTPS_PORT="${LOCAL_GAMMA_HTTPS_PORT:-18443}"
 export LOCAL_GAMMA_ADMIN_PORT="${LOCAL_GAMMA_ADMIN_PORT:-12019}"
 
 set +e
-timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-1800}" bash scripts/start_local_gamma_mirror.sh
+timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-5400}" bash scripts/start_local_gamma_mirror.sh
 rc=$?
 set -e
 if [[ "$rc" -ne 0 ]]; then

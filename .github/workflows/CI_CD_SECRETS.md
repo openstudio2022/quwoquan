@@ -133,6 +133,9 @@
 | GAMMA_ECS_REMOTE_DIR | ECS 部署目录 | `/opt/quwoquan/gamma` |
 | GAMMA_BASE_URL | gamma 内容 API 公网基址 | `http://<GAMMA_ECS_HOST>:18080` |
 | GAMMA_PRODUCT_OPS_BASE_URL | gamma Product Ops API 公网基址 | `http://<GAMMA_ECS_HOST>:18086` |
+| **GAMMA_ECS_CONTAINER_REGISTRY_MIRROR** | ECS 侧 Podman 的 `docker.io` 镜像加速主机名（大路访问 Docker Hub 慢/超时时强烈推荐） | 留空=直连 Docker Hub |
+| GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS | 远端预拉镜像单镜像超时（秒） | 脚本默认 `600` |
+| GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS | 远端 compose build+up 外层超时（秒） | 脚本默认 `5400` |
 
 ### 说明
 
@@ -141,6 +144,8 @@
 - **T3**：`make test-api-contract`（gamma）。
 - **self-hosted**：调用 `app-env-device-matrix-self-hosted.yml`（alpha/beta/gamma）；需仓库注册 **self-hosted runner**。
 - **ECS prod**：同一 ECS **就地升级**（`GAMMA_ECS_STAGE=prod`，`GAMMA_ECS_SKIP_UPLOAD=1`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>-prod`），然后再跑 T3 与 **gamma-only** self-hosted 烟测。
+- ECS 上使用 Podman 兼容层拉取镜像时，`GAMMA_ECS_CONTAINER_REGISTRY_MIRROR` 未配置则可能长时间直连 `docker.io`，在大陆网络下易超时；建议配置可用的镜像加速或使用自有镜像仓库前置基础镜像。
+- **Deploy ECS — pre/prod** 单 Job 超时为 **120** 分钟（含首次镜像 build）；请勿在流水线中途手动 Cancel，否则会向 SSH 子进程发送 SIGTERM（常见于 exit 143）。
 - **回滚**：手动触发 **08b `ecs-onebox-rollback.yml`** 或本地执行 `scripts/rollback_gamma_ecs.sh`（恢复最近一次 `backup-*.tgz`）。
 - 结构化部署报告：`artifacts/ecs-onebox/deploy-report.json`（成功/失败阶段会上传为 artifact）。
 - ECS 安全组需放行 SSH、`18080`、`18086`（或同步修改 health 探测 URL）。
