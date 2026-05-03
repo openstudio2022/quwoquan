@@ -638,6 +638,7 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 		Scenes: map[string]rtredis.SceneConfig{
 			"realtime":     toSceneConfig(cfg.Redis.Realtime),
 			"general":      toSceneConfig(cfg.Redis.General),
+			"rec":          toSceneConfig(cfg.Redis.General),
 			"reliabletask": toSceneConfig(resolveReliableTaskRedisScene(cfg)),
 		},
 		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,

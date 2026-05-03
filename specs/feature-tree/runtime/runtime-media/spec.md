@@ -74,6 +74,7 @@
 
 ### 发布级证据包
 
+- 视频商用端到端环境矩阵与 `GATE_BLOCK` 口径：`specs/feature-tree/runtime/runtime-media/video-end-to-end-commercial-matrix.md`
 - T4 演练步骤与发布声明边界：`specs/feature-tree/runtime/runtime-media/t4-release-rehearsal.md`
 - 指标、阈值、灰度与回滚核查：`specs/feature-tree/runtime/runtime-media/observability-and-rollback.md`
 - 容量假设、边界与非目标：`specs/feature-tree/runtime/runtime-media/capacity-validation.md`

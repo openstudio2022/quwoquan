@@ -30,18 +30,19 @@ type ReliableGroupAvatarTaskScheduler struct {
 	syncPublisher UserSyncPublisher
 	logger        *slog.Logger
 
-	recomputeDelay time.Duration
-	maxDelay       time.Duration
-	leaseTTL       time.Duration
-	tick           time.Duration
-	retryPolicy    reliabletask.RetryPolicy
-	env            string
-	instanceID     string
-	enabledModules map[string]bool
-	dispatcher     *ReliableTaskOutboxDispatcher
-	avatarWorker   *ReliableGroupAvatarWorker
-	fanoutWorker   *ReliableAvatarNotificationFanoutWorker
-	readyIndex     reliabletask.ReadyIndex
+	recomputeDelay     time.Duration
+	maxDelay           time.Duration
+	leaseTTL           time.Duration
+	tick               time.Duration
+	retryPolicy        reliabletask.RetryPolicy
+	env                string
+	instanceID         string
+	enabledModules     map[string]bool
+	dispatcher         *ReliableTaskOutboxDispatcher
+	avatarWorker       *ReliableGroupAvatarWorker
+	fanoutWorker       *ReliableAvatarNotificationFanoutWorker
+	readyIndex         reliabletask.ReadyIndex
+	dispatcherShardIDs []int
 }
 
 type ReliableTaskOutboxDispatcher struct {
@@ -51,7 +52,7 @@ type ReliableTaskOutboxDispatcher struct {
 	domain     string
 	module     string
 	owner      string
-	shardID    int
+	shardIDs   []int
 	leaseTTL   time.Duration
 }
 
@@ -102,6 +103,7 @@ func NewReliableGroupAvatarTaskScheduler(
 			"chat.notification_outbox_dispatcher": true,
 			"notification.fanout_worker":          true,
 		},
+		dispatcherShardIDs: defaultReliableGroupAvatarShardIDs(),
 	}
 	if scheduler.recomputeDelay == 0 {
 		scheduler.recomputeDelay = time.Minute
@@ -121,7 +123,7 @@ func NewReliableGroupAvatarTaskScheduler(
 		domain:     "chat",
 		module:     "chat.task_outbox_dispatcher",
 		owner:      scheduler.instanceID,
-		shardID:    0,
+		shardIDs:   normalizeReliableGroupAvatarShardIDs(scheduler.dispatcherShardIDs),
 		leaseTTL:   scheduler.leaseTTL,
 	}
 	scheduler.avatarWorker = &ReliableGroupAvatarWorker{scheduler: scheduler}
@@ -171,6 +173,18 @@ func WithReliableGroupAvatarRuntimeIdentity(env string, instanceID string) Relia
 		}
 		if strings.TrimSpace(instanceID) != "" {
 			s.instanceID = strings.TrimSpace(instanceID)
+		}
+	}
+}
+
+func WithReliableGroupAvatarShardIDs(shardIDs []int) ReliableGroupAvatarSchedulerOption {
+	return func(s *ReliableGroupAvatarTaskScheduler) {
+		if s == nil {
+			return
+		}
+		s.dispatcherShardIDs = normalizeReliableGroupAvatarShardIDs(shardIDs)
+		if s.dispatcher != nil {
+			s.dispatcher.shardIDs = s.dispatcherShardIDs
 		}
 	}
 }
@@ -241,30 +255,44 @@ func (s *ReliableGroupAvatarTaskScheduler) moduleEnabled(module string) bool {
 }
 
 func (d *ReliableTaskOutboxDispatcher) DispatchDue(ctx context.Context, limit int) error {
+	if d == nil || d.store == nil {
+		return reliabletask.ErrStoreRequired
+	}
+	if limit <= 0 {
+		limit = 100
+	}
 	now := time.Now().UTC()
-	lease, err := d.store.ClaimShardLease(ctx, reliabletask.ClaimShardLeaseRequest{
-		Env:      d.env,
-		Domain:   d.domain,
-		Module:   d.module,
-		Owner:    d.owner,
-		ShardID:  d.shardID,
-		LeaseTTL: d.leaseTTL,
-		Now:      now,
-	})
-	if err != nil {
-		return fmt.Errorf("claim dispatcher shard lease: %w", err)
-	}
-	if lease == nil {
-		return nil
-	}
-	tasks, err := d.store.DispatchDueTasks(ctx, now, limit)
-	if err != nil {
-		return fmt.Errorf("dispatch due reliable task: %w", err)
-	}
-	if d.readyIndex != nil {
-		for _, task := range tasks {
-			if err := d.readyIndex.EnqueueReadyOrMerge(ctx, task); err != nil {
-				return fmt.Errorf("enqueue redis ready index: %w", err)
+	shardIDs := normalizeReliableGroupAvatarShardIDs(d.shardIDs)
+	remaining := limit
+	for _, shardID := range shardIDs {
+		if remaining <= 0 {
+			break
+		}
+		lease, err := d.store.ClaimShardLease(ctx, reliabletask.ClaimShardLeaseRequest{
+			Env:      d.env,
+			Domain:   d.domain,
+			Module:   d.module,
+			Owner:    d.owner,
+			ShardID:  shardID,
+			LeaseTTL: d.leaseTTL,
+			Now:      now,
+		})
+		if err != nil {
+			return fmt.Errorf("claim dispatcher shard lease: %w", err)
+		}
+		if lease == nil {
+			continue
+		}
+		tasks, err := d.store.DispatchDueTasksForShard(ctx, now, remaining, shardID)
+		if err != nil {
+			return fmt.Errorf("dispatch due reliable task: %w", err)
+		}
+		remaining -= len(tasks)
+		if d.readyIndex != nil {
+			for _, task := range tasks {
+				if err := d.readyIndex.EnqueueReadyOrMerge(ctx, task); err != nil {
+					return fmt.Errorf("enqueue redis ready index: %w", err)
+				}
 			}
 		}
 	}
@@ -368,6 +396,9 @@ func (s *ReliableGroupAvatarTaskScheduler) EnqueueRecompute(ctx context.Context,
 	payload := map[string]string{
 		"triggers": strings.TrimSpace(task.Trigger),
 	}
+	if actorID := strings.TrimSpace(task.ActorID); actorID != "" {
+		payload["actorID"] = actorID
+	}
 	if conv, err := s.repo.FindConversationByID(ctx, task.ConversationID); err == nil {
 		payload["rosterRevision"] = strconv.FormatInt(conv.MembersRosterRevision, 10)
 	}
@@ -380,7 +411,7 @@ func (s *ReliableGroupAvatarTaskScheduler) EnqueueRecompute(ctx context.Context,
 		IdempotencyKey:  chatGroupAvatarRecomputeTaskType + ":" + strings.TrimSpace(task.ConversationID),
 		PartitionKey:    strings.TrimSpace(task.ConversationID),
 		Payload:         payload,
-		PayloadAllow:    []string{"rosterRevision", "triggers"},
+		PayloadAllow:    []string{"rosterRevision", "triggers", "actorID"},
 		Trigger:         strings.TrimSpace(task.Trigger),
 		StartAt:         now.Add(s.recomputeDelay),
 		MaxDelayUntil:   now.Add(s.maxDelay),
@@ -419,7 +450,7 @@ func (s *ReliableGroupAvatarTaskScheduler) handleRecomputeTask(ctx context.Conte
 		s.syncPublisher,
 		s,
 		task.AggregateID,
-		"",
+		strings.TrimSpace(task.Payload["actorID"]),
 	)
 	if err != nil {
 		return s.store.FailTask(ctx, task.TaskID, task.LeaseToken, reliabletask.RuntimeFailure{
@@ -516,6 +547,37 @@ func dedupeSortedUserIDs(userIDs []string) []string {
 		out = append(out, normalized)
 	}
 	sort.Strings(out)
+	return out
+}
+
+func defaultReliableGroupAvatarShardIDs() []int {
+	out := make([]int, reliabletask.DefaultShardCount)
+	for i := range out {
+		out[i] = i
+	}
+	return out
+}
+
+func normalizeReliableGroupAvatarShardIDs(shardIDs []int) []int {
+	if len(shardIDs) == 0 {
+		return defaultReliableGroupAvatarShardIDs()
+	}
+	seen := make(map[int]struct{}, len(shardIDs))
+	out := make([]int, 0, len(shardIDs))
+	for _, shardID := range shardIDs {
+		if shardID < 0 {
+			continue
+		}
+		if _, ok := seen[shardID]; ok {
+			continue
+		}
+		seen[shardID] = struct{}{}
+		out = append(out, shardID)
+	}
+	if len(out) == 0 {
+		return defaultReliableGroupAvatarShardIDs()
+	}
+	sort.Ints(out)
 	return out
 }
 

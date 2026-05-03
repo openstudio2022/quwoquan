@@ -93,6 +93,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleReportBehaviors(w, r)
 	case "RepostToCircle":
 		h.handleNotImplemented(w, r, operation)
+	case "RequestOriginalImageAccess":
+		h.handleNotImplemented(w, r, operation)
 	case "SearchPosts":
 		h.handleNotImplemented(w, r, operation)
 	case "SelectAutoVideoCover":
@@ -130,6 +132,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/v1/content/media/{mediaId}", operation: "GetMediaAsset"},
 	{method: "POST", pathTemplate: "/v1/content/media/{mediaId}/cover:auto", operation: "SelectAutoVideoCover"},
 	{method: "POST", pathTemplate: "/v1/content/media/{mediaId}/cover:manual", operation: "SelectManualVideoCover"},
+	{method: "POST", pathTemplate: "/v1/content/media/{mediaId}/original:access", operation: "RequestOriginalImageAccess"},
 	{method: "POST", pathTemplate: "/v1/content/posts", operation: "CreatePost"},
 	{method: "GET", pathTemplate: "/v1/content/posts/search", operation: "SearchPosts"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}", operation: "DeletePost"},

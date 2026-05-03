@@ -20,6 +20,7 @@ import (
 	chathttp "quwoquan_service/services/chat-service/internal/adapters/http"
 	"quwoquan_service/services/chat-service/internal/adapters/mq"
 	"quwoquan_service/services/chat-service/internal/application"
+	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
@@ -101,6 +102,12 @@ type completeTaskFailOnceStore struct {
 	failures int
 }
 
+type completeNotificationFailOnceStore struct {
+	*reliabletask.MongoStore
+	mu       sync.Mutex
+	failures int
+}
+
 func (s *completeTaskFailOnceStore) CompleteTask(ctx context.Context, taskID string, leaseToken string) error {
 	s.mu.Lock()
 	if s.failures > 0 {
@@ -110,6 +117,17 @@ func (s *completeTaskFailOnceStore) CompleteTask(ctx context.Context, taskID str
 	}
 	s.mu.Unlock()
 	return s.MongoStore.CompleteTask(ctx, taskID, leaseToken)
+}
+
+func (s *completeNotificationFailOnceStore) CompleteNotification(ctx context.Context, notificationID string, leaseToken string) error {
+	s.mu.Lock()
+	if s.failures > 0 {
+		s.failures--
+		s.mu.Unlock()
+		return errors.New("injected notification ack failure")
+	}
+	s.mu.Unlock()
+	return s.MongoStore.CompleteNotification(ctx, notificationID, leaseToken)
 }
 
 func (f *flakyUserSyncPublisher) AppendPatch(
@@ -623,6 +641,58 @@ func TestGroupAvatar_TaskAckFailureReplaysAndCompletesIdempotently(t *testing.T)
 	waitForAvatarPatch(t, syncService, "user_test_002", convID)
 }
 
+func TestGroupAvatar_NotificationAckFailureReplaysLedgerWithoutDuplicatePatch(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	store := &completeNotificationFailOnceStore{
+		MongoStore: reliabletask.NewMongoStore(mongoDB),
+		failures:   1,
+	}
+	handler, syncService := newGroupAvatarTestHandlerWithStore(
+		t,
+		runtimemedia.NewGroupAvatarService(
+			redisRouter.Scene("general"),
+			"http://127.0.0.1:18081",
+			testChatMediaRoot,
+		),
+		nil,
+		store,
+		application.WithReliableGroupAvatarLeaseTTL(80*time.Millisecond),
+	)
+	created := doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations",
+		`{"type":"group","title":"notification ack replay","initialMemberIds":["user_test_002"]}`,
+		"user_test_001",
+		http.StatusCreated,
+	)
+	convID := created["_id"].(string)
+	waitForConversationAvatarVersion(t, convID, 1)
+	waitForCollectionCount(t, "notification_outbox", bson.M{
+		"eventType":   "conversation.avatar.updated",
+		"aggregateId": convID,
+		"status":      reliabletask.NotificationStatusSucceeded,
+	}, 1)
+
+	for _, userID := range []string{"user_test_001", "user_test_002"} {
+		resp, err := syncService.Pull(context.Background(), userID, 0, 20)
+		if err != nil {
+			t.Fatalf("Pull %s: %v", userID, err)
+		}
+		patchCount := 0
+		for _, patch := range resp.Patches {
+			if patch.Type == "conversation.avatar.updated" && patch.Payload["conversationId"] == convID {
+				patchCount++
+			}
+		}
+		if patchCount != 1 {
+			t.Fatalf("expected one avatar patch for %s after notification ack replay, got %d", userID, patchCount)
+		}
+	}
+}
+
 func TestGroupAvatar_SourceHashReplayRecreatesMissingNotification(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
@@ -728,6 +798,122 @@ func TestGroupAvatar_AddMembersRollsBackWhenOutboxFails(t *testing.T) {
 		"conversationId": convID,
 		"userId":         "user_test_009",
 	}, 0)
+}
+
+func TestGroupAvatar_RemoveMemberRollsBackWhenOutboxFails(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	created := createConversation(t, `{"type":"group","title":"rollback remove","initialMemberIds":["user_test_002"]}`)
+	convID := created["_id"].(string)
+	waitForConversationAvatarVersion(t, convID, 1)
+	chatStore := persistence.NewMongoChatStore(mongoDB)
+	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
+	memberSvc := application.NewMemberService(
+		chatStore,
+		convCache,
+		nil,
+		testProfileResolver{},
+		nil,
+		nil,
+		failingGroupAvatarScheduler{},
+	)
+	err := memberSvc.RemoveMember(context.Background(), convID, "user_test_002")
+	if err == nil {
+		t.Fatal("expected remove member to fail when outbox write fails")
+	}
+	waitForExactCollectionCount(t, "conversation_members", bson.M{
+		"conversationId": convID,
+		"userId":         "user_test_002",
+	}, 1)
+}
+
+func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	handler, _ := newGroupAvatarTestHandler(
+		t,
+		runtimemedia.NewGroupAvatarService(
+			redisRouter.Scene("general"),
+			"http://127.0.0.1:18081",
+			testChatMediaRoot,
+		),
+		nil,
+	)
+	created := doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations",
+		`{"type":"group","title":"add remove storm","initialMemberIds":["user_test_002","user_test_003","user_test_004","user_test_005","user_test_006","user_test_007","user_test_008","user_test_009","user_test_010"]}`,
+		"user_test_001",
+		http.StatusCreated,
+	)
+	convID := created["_id"].(string)
+	waitForConversationAvatarVersion(t, convID, 1)
+	doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations/"+convID+"/members",
+		`{"userIds":["user_test_011","user_test_012","user_test_013","user_test_014"]}`,
+		"user_test_001",
+		http.StatusOK,
+	)
+	doHandlerJSON(
+		t,
+		handler,
+		http.MethodDelete,
+		"/v1/chat/conversations/"+convID+"/members/user_test_003",
+		"",
+		"user_test_001",
+		http.StatusOK,
+	)
+	doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations/"+convID+"/members",
+		`{"userIds":["user_test_015"]}`,
+		"user_test_001",
+		http.StatusOK,
+	)
+	doHandlerJSON(
+		t,
+		handler,
+		http.MethodDelete,
+		"/v1/chat/conversations/"+convID+"/members/user_test_002",
+		"",
+		"user_test_001",
+		http.StatusOK,
+	)
+
+	chatStore := persistence.NewMongoChatStore(mongoDB)
+	for i := 0; i < 100; i++ {
+		conv, err := chatStore.FindConversationByID(context.Background(), convID)
+		if err != nil {
+			t.Fatalf("find conversation: %v", err)
+		}
+		members, err := chatStore.ListMembers(context.Background(), convID, 200, "", "", persistence.SortMembersJoinedAsc)
+		if err != nil {
+			t.Fatalf("list members: %v", err)
+		}
+		top9 := make([]model.ConversationMember, 0, 9)
+		for _, member := range members {
+			if strings.TrimSpace(member.MemberType) != "user" {
+				continue
+			}
+			top9 = append(top9, member)
+			if len(top9) >= 9 {
+				break
+			}
+		}
+		expectedHash := application.BuildGroupAvatarSourceHash(top9)
+		if expectedHash == conv.GroupAvatarSourceHash && conv.GroupAvatarVersion >= 2 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("expected add/remove storm to converge to latest top9 group avatar source hash")
 }
 
 func TestGroupAvatar_RedisReadyIndexAlphaBetaLocalLoop(t *testing.T) {

@@ -95,6 +95,7 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 			Stage:        "reasoning",
 			Prompt:       reasoning,
 			UserQuestion: turn.Input.Text,
+			ContextTurns: turn.ContextTurns,
 		})
 		if err != nil {
 			return ReactResult{}, err
@@ -209,6 +210,7 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 			Prompt:       "基于工具返回的结构化结果，生成面向用户的证据处理叙事（processingSummary）与要点（selectedKeyPoints）；references 仅摘录你认为可靠且相关的条目。",
 			Observation:  evidenceObservation,
 			UserQuestion: turn.Input.Text,
+			ContextTurns: turn.ContextTurns,
 		})
 		if err != nil {
 			return ReactResult{}, err
@@ -255,6 +257,7 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 		Prompt:       "结合工具观察生成最终回答",
 		Observation:  finalObservation,
 		UserQuestion: turn.Input.Text,
+		ContextTurns: turn.ContextTurns,
 	})
 	if err != nil {
 		return ReactResult{}, err

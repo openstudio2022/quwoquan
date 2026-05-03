@@ -35,7 +35,7 @@ void main() {
     expect(forwardOutput.renderBranchName, equals('forwardSharedPipeline'));
     expect(
       backwardOutput.renderBranchName,
-      equals('backwardThreeLayerPaperFoldPipeline'),
+      equals('backwardThreeFacePaperFoldPipeline'),
     );
     expect(
       backwardOutput.staticSuppressionPages,

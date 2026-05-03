@@ -111,9 +111,9 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	}
 	var streamedFailure *rtfailures.Failure
 	result, err := l.React.RunWithSinks(ctx, turn, skill, func(step ReactStepResult) error {
-		return emitReactReasoning(projector, appendEvent, turn, skill, step)
+		return emitReactReasoning(ctx, projector, appendEvent, turn, skill, step, emit != nil)
 	}, func(step ReactStepResult) error {
-		failure, err := emitReactObservation(projector, appendEvent, turn, skill, step)
+		failure, err := emitReactObservation(ctx, projector, appendEvent, turn, skill, step, emit != nil)
 		if failure != nil {
 			streamedFailure = failure
 		}
@@ -150,12 +150,14 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	})); err != nil {
 		return nil, nil, err
 	}
+	pauseForVisibleStream(ctx, emit)
 	for _, delta := range answerDeltas[1:] {
 		if err := appendEvent(projector.Event("assistant.answer.delta", map[string]any{
 			"text": delta,
 		})); err != nil {
 			return nil, nil, err
 		}
+		pauseForVisibleStream(ctx, emit)
 	}
 	if err := appendEvent(projector.Event("assistant.answer.final", map[string]any{
 		"text":       result.FinalText,
@@ -172,7 +174,66 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	return events, nil, nil
 }
 
-func emitReactReasoning(projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) error {
+func pauseForVisibleStream(ctx context.Context, emit func(streaming.Envelope) error) {
+	if emit == nil {
+		return
+	}
+	timer := time.NewTimer(350 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
+}
+
+func pauseForVisibleProjection(ctx context.Context, enabled bool) {
+	if !enabled {
+		return
+	}
+	timer := time.NewTimer(350 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+	case <-timer.C:
+	}
+}
+
+func progressiveSnapshotFrames(snapshot map[string]any, field string) []map[string]any {
+	text := strings.TrimSpace(stringValue(snapshot[field]))
+	if text == "" {
+		return []map[string]any{snapshot}
+	}
+	runes := []rune(text)
+	if len(runes) <= 90 {
+		return []map[string]any{snapshot}
+	}
+	breakpoints := []int{len(runes) / 3, len(runes) * 2 / 3, len(runes)}
+	frames := []map[string]any{}
+	seen := map[int]bool{}
+	for _, end := range breakpoints {
+		if end <= 0 || seen[end] {
+			continue
+		}
+		seen[end] = true
+		frame := copyStringAnyMap(snapshot)
+		frame[field] = string(runes[:end])
+		frames = append(frames, frame)
+	}
+	if len(frames) == 0 {
+		return []map[string]any{snapshot}
+	}
+	return frames
+}
+
+func copyStringAnyMap(input map[string]any) map[string]any {
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}
+
+func emitReactReasoning(ctx context.Context, projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult, visibleStream bool) error {
 	log.Printf("assistant agent react_reasoning turnId=%s skillId=%s iteration=%d tool=%s", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Requested.ToolName)
 	for _, interaction := range step.ModelInteractions {
 		if len(interaction) == 0 {
@@ -182,14 +243,18 @@ func emitReactReasoning(projector *StreamProjector, appendEvent func(streaming.E
 			return err
 		}
 	}
-	if err := appendEvent(projector.Event("assistant.plan.updated", map[string]any{
-		"iteration":             step.Iteration,
-		"skillId":               skill.SkillID,
-		"plan":                  step.Plan,
-		"understandingSnapshot": buildUnderstandingSnapshotForStep(turn, step),
-		"debugTrace":            map[string]any{"reasoning": step.ReasoningText},
-	})); err != nil {
-		return err
+	snapshot := buildUnderstandingSnapshotForStep(turn, step)
+	for _, frame := range progressiveSnapshotFrames(snapshot, "userFacingSummary") {
+		if err := appendEvent(projector.Event("assistant.plan.updated", map[string]any{
+			"iteration":             step.Iteration,
+			"skillId":               skill.SkillID,
+			"plan":                  step.Plan,
+			"understandingSnapshot": frame,
+			"debugTrace":            map[string]any{"reasoning": step.ReasoningText},
+		})); err != nil {
+			return err
+		}
+		pauseForVisibleProjection(ctx, visibleStream)
 	}
 	if err := appendEvent(projector.Event("assistant.model.delta", map[string]any{
 		"text":      step.ModelDelta,
@@ -218,7 +283,7 @@ func emitReactReasoning(projector *StreamProjector, appendEvent func(streaming.E
 	return nil
 }
 
-func emitReactObservation(projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) (*rtfailures.Failure, error) {
+func emitReactObservation(ctx context.Context, projector *StreamProjector, appendEvent func(streaming.Envelope, error) error, turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult, visibleStream bool) (*rtfailures.Failure, error) {
 	log.Printf("assistant agent react_step turnId=%s skillId=%s iteration=%d tool=%s observationLen=%d replan=%t", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Requested.ToolName, len([]rune(step.Observation.Summary)), step.Replan)
 	evidenceInteractions := []map[string]any{}
 	if len(step.ModelInteractions) > 1 {
@@ -265,19 +330,23 @@ func emitReactObservation(projector *StreamProjector, appendEvent func(streaming
 		return nil, err
 	}
 	log.Printf("assistant agent tool_completed turnId=%s skillId=%s iteration=%d tool=%s status=%s", turn.TurnID, skill.SkillID, step.Iteration, step.Tool.Completed.ToolName, step.Tool.Completed.Status)
-	if err := appendEvent(projector.Event("assistant.observation.assessed", map[string]any{
-		"iteration":           step.Iteration,
-		"skillId":             skill.SkillID,
-		"observation":         step.Observation,
-		"replan":              step.Replan,
-		"replanReason":        step.ReplanReason,
-		"retrievalProcessing": buildRetrievalProcessingForStep(step),
-		"readiness": map[string]any{
-			"finalAnswerReady": !step.Replan,
-			"needReplan":       step.Replan,
-		},
-	})); err != nil {
-		return nil, err
+	retrievalProcessing := buildRetrievalProcessingForStep(step)
+	for _, frame := range progressiveSnapshotFrames(retrievalProcessing, "processingSummary") {
+		if err := appendEvent(projector.Event("assistant.observation.assessed", map[string]any{
+			"iteration":           step.Iteration,
+			"skillId":             skill.SkillID,
+			"observation":         step.Observation,
+			"replan":              step.Replan,
+			"replanReason":        step.ReplanReason,
+			"retrievalProcessing": frame,
+			"readiness": map[string]any{
+				"finalAnswerReady": !step.Replan,
+				"needReplan":       step.Replan,
+			},
+		})); err != nil {
+			return nil, err
+		}
+		pauseForVisibleProjection(ctx, visibleStream)
 	}
 	if step.Replan {
 		log.Printf("assistant agent replan_requested turnId=%s skillId=%s iteration=%d reason=%s", turn.TurnID, skill.SkillID, step.Iteration, step.ReplanReason)
@@ -564,29 +633,32 @@ func buildRetrievalProcessingForStep(step ReactStepResult) map[string]any {
 		}
 	}
 	reliable := toolResultReliable(step)
-	references := []map[string]any{}
+	toolRefs := []map[string]any{}
 	if reliable {
-		references = modelRefs
+		toolRefs = acceptedReferencesForStep(step)
 	}
+	searchedCount := len(toolRefs)
 	if reliable {
-		references = mergeReferences(references, acceptedReferencesForStep(step))
+		referencesCountFallback := searchedCount == 0 && !step.Observation.Empty
+		if referencesCountFallback {
+			searchedCount = 1
+		}
 	}
-	processedCount := len(references)
-	if reliable && processedCount == 0 && !step.Observation.Empty {
-		processedCount = 1
+	acceptedRefs := []map[string]any{}
+	if reliable && len(modelRefs) > 0 {
+		acceptedRefs = mergeReferences(modelRefs, nil)
 	}
-	acceptedCount := len(references)
-	if reliable && acceptedCount == 0 && !step.Observation.Empty {
-		acceptedCount = processedCount
+	if reliable && len(acceptedRefs) == 0 && searchedCount > 0 && len(toolRefs) > 0 {
+		acceptedRefs = []map[string]any{toolRefs[0]}
 	}
 	return map[string]any{
-		"searchedDocumentCount":  processedCount,
-		"processedDocumentCount": processedCount,
-		"acceptedDocumentCount":  acceptedCount,
+		"searchedDocumentCount":  searchedCount,
+		"processedDocumentCount": searchedCount,
+		"acceptedDocumentCount":  len(acceptedRefs),
 		"processingSummary":      summary,
 		"selectedKeyPoints":      keyPoints,
 		"expansionReason":        "",
-		"acceptedReferences":     references,
+		"acceptedReferences":     acceptedRefs,
 	}
 }
 

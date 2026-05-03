@@ -409,7 +409,7 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusBadRequest
 		case "unauthorized":
 			return http.StatusUnauthorized
-		case "forbidden":
+		case "forbidden", "original_access_denied":
 			return http.StatusForbidden
 		case "not_found", "route_not_found":
 			return http.StatusNotFound
@@ -417,7 +417,7 @@ func HTTPStatusFromError(err *AppError) int {
 			return http.StatusUnprocessableEntity
 		case "conflict":
 			return http.StatusConflict
-		case "rate_limited":
+		case "rate_limited", "original_access_rate_limited":
 			return http.StatusTooManyRequests
 		case "location_unavailable":
 			return http.StatusBadRequest

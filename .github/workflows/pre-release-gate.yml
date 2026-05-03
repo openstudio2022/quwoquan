@@ -49,6 +49,8 @@ jobs:
           cache: true
       - name: Gate (L1+L2)
         run: make gate
+      - name: Runtime media image gate (T1-T3)
+        run: make gate-runtime-media
       - uses: syntaqx/setup-kustomize@v1
       - name: Deploy kustomization build (G5a 构建验证)
         run: make deploy-integration CLOUD_PROVIDER=${{ env.CLOUD_PROVIDER }} | tail -5
@@ -349,3 +351,44 @@ jobs:
             --dart-define=API_CONTRACT_BASE_URL="$GAMMA_BASE_URL" \
             --dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL="$GAMMA_PRODUCT_OPS_BASE_URL" \
             --dart-define=TEST_AUTH_TOKEN="$GAMMA_TEST_AUTH_TOKEN"
+
+  # 可选：注册 self-hosted runner 且设置 vars.QWQ_SELF_HOSTED_PRE_RELEASE_MATRIX=true 时执行（发布准入矩阵）
+  l4-self-hosted-assistant-matrix:
+    name: Pre-release — L4 self-hosted assistant matrix（可选）
+    needs: [l3-api-contract]
+    if: ${{ vars.QWQ_SELF_HOSTED_PRE_RELEASE_MATRIX == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'))) }}
+    secrets: inherit
+    uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
+    with:
+      env_json: '["alpha","beta","gamma"]'
+      gamma_base_url: ''
+
+  release-evidence-summary:
+    name: Pre-release — 证据汇总（T3 / hosted-L4 / Assistant）
+    needs:
+      - l3-api-contract
+      - l4-android
+      - l4-ios
+      - app-assistant-runtime-alpha
+      - app-assistant-runtime-gamma
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总并阻断失败项
+        env:
+          L3: ${{ needs.l3-api-contract.result }}
+          L4A: ${{ needs.l4-android.result }}
+          L4I: ${{ needs.l4-ios.result }}
+          AA: ${{ needs.app-assistant-runtime-alpha.result }}
+          AG: ${{ needs.app-assistant-runtime-gamma.result }}
+        run: |
+          echo "l3-api-contract=${L3}"
+          echo "l4-android=${L4A}"
+          echo "l4-ios=${L4I}"
+          echo "assistant-runtime-alpha=${AA}"
+          echo "assistant-runtime-gamma=${AG}"
+          test "${L3}" = "success"
+          test "${L4A}" = "success"
+          test "${L4I}" = "success"
+          test "${AA}" = "success"
+          test "${AG}" = "success"

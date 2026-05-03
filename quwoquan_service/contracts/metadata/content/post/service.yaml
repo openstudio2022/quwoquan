@@ -225,6 +225,12 @@ api_routes:
     response_entity: MediaAsset
 
   - method: POST
+    path: /v1/content/media/{mediaId}/original:access
+    operation: RequestOriginalImageAccess
+    description: 显式申请查看或保存原图/原视频授权
+    auth: required
+
+  - method: POST
     path: /v1/content/media/{mediaId}/cover:auto
     operation: SelectAutoVideoCover
     description: 视频封面默认策略（首帧）

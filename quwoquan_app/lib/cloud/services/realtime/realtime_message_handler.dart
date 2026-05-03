@@ -79,12 +79,27 @@ class RealtimeMessageHandler {
         _refreshConversationCache(conversationId);
         return;
 
-      case 'ConversationAvatarUpdated':
       case 'UserAvatarUpdated':
-        final latestSeq =
+        final userLatestSeq =
             (event['latestSyncSeq'] as num?)?.toInt() ??
             (payload['latestSyncSeq'] as num?)?.toInt();
-        _scheduleAvatarPatchSync(latestSeq);
+        _scheduleAvatarPatchSync(userLatestSeq);
+        if (conversationId.isNotEmpty) {
+          unawaited(
+            _read(conversationMembersProvider(conversationId).notifier).load(),
+          );
+          _refreshConversationCache(conversationId);
+        }
+        return;
+
+      case 'ConversationAvatarUpdated':
+        final conversationLatestSeq =
+            (event['latestSyncSeq'] as num?)?.toInt() ??
+            (payload['latestSyncSeq'] as num?)?.toInt();
+        _scheduleAvatarPatchSync(conversationLatestSeq);
+        if (conversationId.isNotEmpty) {
+          _refreshConversationCache(conversationId);
+        }
         return;
 
       case 'MemberLeft':

@@ -112,3 +112,20 @@
 验收：
 - 任一设计不变量缺少任务、测试或门禁时，不得声明完成。
 - 任一领域服务缺少 catalog/config 处置时，不得声明完成。
+
+## T9：群头像全链路一致性补全
+
+- [x] 服务端链路加固：群头像 dispatcher 默认按 `DefaultShardCount` 遍历 shard 并使用 shard lease，避免单实例扫描全局 outbox 或只处理 shard 0；`actorID` 进入可靠任务 payload；非 active 群不重算；notification recipient 过滤非 user 成员。
+- [x] 服务端回归测试：补齐 notification ACK 失败重放、退群 outbox 失败事务回滚、连续 add/remove 风暴最终收敛到最新 top9 source hash。
+- [x] 端侧最终一致：`syncAvatarPatches()` 记录失败状态，patch/full-sync 应用失败时不推进 `lastUserSyncSeq`；`UserAvatarUpdated` 触发成员列表和会话补偿刷新。
+- [x] Probe 与报告：Python 3.10+ 兼容；相对 `avatarUrl` 使用 `--media-base-url` 归一化；报告补充 `blockingReason`、`recoveryPolicy`（`action` / `disruptionLevel`）、`serviceEndpointEvidence`。
+- [x] local-gamma 拓扑：Docker compose 纳入 `chat-service`、可靠任务 Redis scene、共享 media mount；Caddy 补 `/v1/chat/*`、`/v1/user/sync`、`/media/*`；T3 默认包含 chat API contract。
+- [x] ECS 门禁：`deploy-gamma-ecs.yml` 增加 chat avatar API probe、self-hosted chat-avatar Patrol 矩阵、prod smoke 和 push paths；self-hosted workflow 支持 `matrix_kind=chat-avatar`。
+- [x] 本地可执行验证（2026-05-03）：`python3 -m py_compile scripts/run_chat_avatar*.py scripts/run_local_gamma_avatar_e2e.py scripts/run_local_gamma_t3.py`、`bash -n scripts/start_local_gamma_mirror.sh`、`go test ./runtime/reliabletask`、`go test ./services/chat-service/tests -run TestGroupAvatar`、`flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart` 均通过。
+- [ ] 真实环境矩阵证据：`beta`、`local-gamma`、`cloud-gamma-pre`、`cloud-gamma-prod-smoke` 仍需在可访问网关、ECS 凭据和 self-hosted Android/iOS 设备就绪后运行非 dry-run 报告；未全绿前不得声明商用完成。
+
+验收：
+- 建群首帧头像不得为空或契约占位，群头像异步生成不得阻塞建群。
+- 加人/退人触发可靠任务，最终 `groupAvatarVersion` 递增，并通过 notification ledger 与 sync patch 送达目标成员。
+- message sender avatar 不随 conversation avatar patch 回退。
+- `cloud-gamma-pre` chat avatar API probe 或 self-hosted 模拟器失败时阻断 prod；`cloud-gamma-prod-smoke` 失败时阻断发布完成结论。

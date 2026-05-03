@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FULL_MODE="${1:-}"
 
 required_docs=(
+  "specs/feature-tree/runtime/runtime-media/video-end-to-end-commercial-matrix.md"
   "specs/feature-tree/runtime/runtime-media/t4-release-rehearsal.md"
   "specs/feature-tree/runtime/runtime-media/observability-and-rollback.md"
   "specs/feature-tree/runtime/runtime-media/capacity-validation.md"
@@ -41,6 +42,13 @@ echo "[runtime-media] go test user-service avatar sync contract"
   cd "${ROOT_DIR}/quwoquan_service"
   go test ./services/user-service/tests -run TestUpdateProfile_AvatarVersionAndSyncPatch
 )
+
+
+
+echo "[runtime-media] image delivery policy static gates"
+python3 "${ROOT_DIR}/scripts/verify_app_network_image_surface.py"
+python3 "${ROOT_DIR}/scripts/verify_app_media_url_policy.py"
+python3 "${ROOT_DIR}/scripts/verify_media_variant_registry_metadata.py"
 
 echo "[runtime-media] flutter test realtime/cache coverage"
 (

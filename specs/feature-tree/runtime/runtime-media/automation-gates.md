@@ -33,3 +33,10 @@
 - 自动化门禁通过 + T4 演练记录完整：可宣称高标准准出成立
 - 自动化门禁通过但 T4 未执行：仅可宣称功能准出成立
 - 自动化门禁失败：不得宣称当前主链路稳定
+
+## 视频：商用端到端环境矩阵边界
+
+- **单一真相源**：[`video-end-to-end-commercial-matrix.md`](./video-end-to-end-commercial-matrix.md) 冻结「商用端到端全矩阵」的环境列表与证据口径。
+- **`make gate-runtime-media` / `gate-runtime-media-full`**：覆盖 runtime-media 既定自动化项与（full 模式下）`RUNTIME_MEDIA_T4_EVIDENCE` **不等于**该文件中 **`beta` / `local-gamma` / `cloud-gamma-pre` / `cloud-gamma-prod-smoke` 全矩阵 passed**。
+- **Dry-run**：脚本自检与占位 artifact **禁止**冒充矩阵 passed。
+- **资源缺失**：无 ECS 凭据、无 self-hosted Android/iOS、无法对接真实 gamma/pre/smoke 网关时 → **`GATE_BLOCK`**，不得宣称视频商用端到端全矩阵完成（与群头像 [`avatar-e2e-validation.md`](../runtime-messaging/reliable-async-task-channel/avatar-e2e-validation.md) 末尾口径一致）。

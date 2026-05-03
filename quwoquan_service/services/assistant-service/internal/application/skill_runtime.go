@@ -70,6 +70,7 @@ func (r ModelDrivenSkillRuntime) SelectSkill(ctx context.Context, turn assistant
 			Stage:        "skill_selection",
 			Prompt:       buildSkillSelectionPrompt(catalog),
 			UserQuestion: turn.Input.Text,
+			ContextTurns: turn.ContextTurns,
 			SkillCatalog: catalog,
 		})
 		if err == nil {

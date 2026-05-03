@@ -550,12 +550,8 @@ PersonalAssistantProcessSummary _projectProcessSummary(
     case 'tool_result_received':
     case 'assistant.tool.requested':
     case 'assistant.tool.completed':
-      processedCount += 1;
-      break;
     case 'search_query_generated':
     case 'assistant.search_query.generated':
-      searchCount += _searchPlanCount(event);
-      break;
     case 'search_query_accepted':
     case 'assistant.search_query.accepted':
       break;
@@ -769,15 +765,6 @@ int _firstPositiveInt(List<int> values) {
     }
   }
   return 0;
-}
-
-int _searchPlanCount(AssistantStreamEventWire event) {
-  final plans =
-      event.payload['acceptedSearchPlans'] ?? event.payload['searchPlans'];
-  if (plans is List && plans.isNotEmpty) {
-    return plans.length;
-  }
-  return 1;
 }
 
 String _openedTurnAnswer(AssistantTurnEnvelopeWire turn) {

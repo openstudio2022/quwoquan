@@ -3,6 +3,7 @@ package reliabletask
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -197,6 +198,16 @@ func (t TaskSpec) RetryPolicyConfig() RetryPolicy {
 	policy := DefaultRetryPolicy()
 	if t.RetryPolicy.MaxAttempts > 0 {
 		policy.MaxAttempts = t.RetryPolicy.MaxAttempts
+	}
+	switch strings.TrimSpace(strings.ToLower(t.RetryPolicy.Backoff)) {
+	case "", "default", "exponential":
+		policy.Backoff = DefaultRetryPolicy().Backoff
+	case "none", "immediate":
+		policy.Backoff = []time.Duration{0}
+	default:
+		if duration, err := time.ParseDuration(strings.TrimSpace(t.RetryPolicy.Backoff)); err == nil {
+			policy.Backoff = []time.Duration{duration}
+		}
 	}
 	return policy
 }

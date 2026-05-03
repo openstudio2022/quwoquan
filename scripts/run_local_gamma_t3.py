@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Run local-gamma T3 checks against the Docker mirror."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import ssl
@@ -12,7 +10,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Set, Tuple
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,14 +19,14 @@ CONTENT_FIXTURE = ROOT / "quwoquan_service/contracts/metadata/content/test_fixtu
 COMPOSE_FILE = ROOT / "quwoquan_service/docker-compose.gamma-local.yaml"
 
 
-def http_get(url: str, timeout: int = 5) -> tuple[int, bytes]:
+def http_get(url: str, timeout: int = 5) -> Tuple[int, bytes]:
     ctx = ssl._create_unverified_context()
     req = urllib.request.Request(url, headers={"X-Test-Local-Gamma": "true"})
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
         return resp.status, resp.read()
 
 
-def wait_url(url: str, timeout_seconds: int) -> dict[str, Any]:
+def wait_url(url: str, timeout_seconds: int) -> Dict[str, Any]:
     deadline = time.time() + timeout_seconds
     last_error = ""
     while time.time() < deadline:
@@ -43,7 +41,7 @@ def wait_url(url: str, timeout_seconds: int) -> dict[str, Any]:
     return {"status": "failed", "error": last_error}
 
 
-def fixture_post_to_doc(post: dict[str, Any]) -> dict[str, Any]:
+def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
     post_id = (post.get("postId") or post.get("id") or "").strip()
     created_at = post.get("createdAt") or "2026-01-01T00:00:00Z"
     media_urls = post.get("imageUrls") or post.get("mediaUrls") or []
@@ -83,7 +81,7 @@ def fixture_post_to_doc(post: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def seed_content() -> dict[str, Any]:
+def seed_content() -> Dict[str, Any]:
     fixture = json.loads(CONTENT_FIXTURE.read_text(encoding="utf-8"))
     seed_set = fixture["seedSets"]["content_discovery_core"]
     docs = [fixture_post_to_doc(post) for post in seed_set.get("posts", [])]
@@ -120,7 +118,7 @@ printjson({insertedCount: docs.length});
     result = subprocess.run(
         cmd,
         input=js_path.read_text(encoding="utf-8"),
-        text=True,
+        universal_newlines=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         cwd=ROOT / "quwoquan_service",
@@ -133,13 +131,13 @@ printjson({insertedCount: docs.length});
     }
 
 
-def endpoint_checks(base_url: str, enabled_domains: set[str]) -> list[dict[str, Any]]:
+def endpoint_checks(base_url: str, enabled_domains: Set[str]) -> List[Dict[str, Any]]:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    checks: list[dict[str, Any]] = []
+    checks = []  # type: List[Dict[str, Any]]
     for item in manifest.get("seedRefs", []):
         domain = item.get("domain", "")
         for path in item.get("verifiedEndpoints", []):
-            check: dict[str, Any] = {"domain": domain, "path": path}
+            check = {"domain": domain, "path": path}  # type: Dict[str, Any]
             if domain not in enabled_domains:
                 check["status"] = "not_ready"
                 checks.append(check)
@@ -160,8 +158,8 @@ def endpoint_checks(base_url: str, enabled_domains: set[str]) -> list[dict[str, 
     return checks
 
 
-def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) -> list[dict[str, Any]]:
-    checks: list[dict[str, Any]] = []
+def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) -> List[Dict[str, Any]]:
+    checks = []  # type: List[Dict[str, Any]]
     cases = [
         {
             "name": "content_api_contract",
@@ -170,6 +168,15 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
                 "--dart-define=API_CONTRACT_ENV=gamma",
                 f"--dart-define=API_CONTRACT_BASE_URL={base_url}",
                 "--dart-define=LOCAL_GAMMA_T3_SCOPE=content",
+                f"--dart-define=TEST_AUTH_TOKEN={token}",
+            ],
+        },
+        {
+            "name": "chat_api_contract",
+            "path": "test/cloud/chat/api_contract_runner.dart",
+            "defines": [
+                "--dart-define=API_CONTRACT_ENV=gamma",
+                f"--dart-define=API_CONTRACT_BASE_URL={base_url}",
                 f"--dart-define=TEST_AUTH_TOKEN={token}",
             ],
         },
@@ -187,7 +194,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
         result = subprocess.run(
             cmd,
             cwd=ROOT / "quwoquan_app",
-            text=True,
+            universal_newlines=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             check=False,
@@ -208,7 +215,7 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://127.0.0.1:18080")
     parser.add_argument("--product-ops-base-url", default="http://127.0.0.1:18086")
     parser.add_argument("--report", default="artifacts/local-gamma/t3_report.json")
-    parser.add_argument("--enabled-domain", action="append", default=["content"])
+    parser.add_argument("--enabled-domain", action="append", default=["content", "chat"])
     parser.add_argument("--skip-seed", action="store_true")
     parser.add_argument("--skip-flutter-contracts", action="store_true")
     parser.add_argument("--test-auth-token", default="local-gamma-token")
@@ -217,7 +224,7 @@ def main() -> int:
     args = parser.parse_args()
 
     enabled_domains = set(args.enabled_domain)
-    report: dict[str, Any] = {
+    report = {  # type: Dict[str, Any]
         "status": "running",
         "baseUrl": args.base_url,
         "productOpsBaseUrl": args.product_ops_base_url,

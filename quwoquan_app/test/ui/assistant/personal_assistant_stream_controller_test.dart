@@ -111,45 +111,45 @@ void main() {
       'keeps each personal assistant turn in canonical timeline order',
       () async {
         final container = _containerWith(
-        assistantRepository: _FakeAssistantRepository(
-          events: <AssistantStreamEventWire>[
-            _event(
-              seq: 1,
-              eventType: 'plan_updated',
-              payload: <String, dynamic>{
-                'understandingSnapshot': <String, dynamic>{
-                  'userFacingSummary': '我会查证公开信息后再回答。',
-                  'retrievalDesignNarrative': '围绕实时检索补充证据。',
+          assistantRepository: _FakeAssistantRepository(
+            events: <AssistantStreamEventWire>[
+              _event(
+                seq: 1,
+                eventType: 'plan_updated',
+                payload: <String, dynamic>{
+                  'understandingSnapshot': <String, dynamic>{
+                    'userFacingSummary': '我会查证公开信息后再回答。',
+                    'retrievalDesignNarrative': '围绕实时检索补充证据。',
+                  },
                 },
-              },
-            ),
-            _event(
-              seq: 2,
-              eventType: 'assistant.search_query.accepted',
-              payload: const <String, dynamic>{
-                'userFacingNarrative': '我会查证公开信息后再回答。',
-                'acceptedSearchPlans': <Map<String, dynamic>>[
-                  <String, dynamic>{'query': '天气', 'acceptReason': '需要实时信息'},
-                ],
-              },
-            ),
-            _event(
-              seq: 3,
-              eventType: 'observation_assessed',
-              payload: <String, dynamic>{
-                'retrievalProcessing': <String, dynamic>{
-                  'processingSummary': '已整理检索要点。',
-                  'selectedKeyPoints': <String>['要点'],
+              ),
+              _event(
+                seq: 2,
+                eventType: 'assistant.search_query.accepted',
+                payload: const <String, dynamic>{
+                  'userFacingNarrative': '我会查证公开信息后再回答。',
+                  'acceptedSearchPlans': <Map<String, dynamic>>[
+                    <String, dynamic>{'query': '天气', 'acceptReason': '需要实时信息'},
+                  ],
                 },
-              },
-            ),
-            _event(
-              seq: 4,
-              eventType: 'final_answer',
-              payload: const <String, dynamic>{'text': '第一轮答案'},
-            ),
-          ],
-        ),
+              ),
+              _event(
+                seq: 3,
+                eventType: 'observation_assessed',
+                payload: <String, dynamic>{
+                  'retrievalProcessing': <String, dynamic>{
+                    'processingSummary': '已整理检索要点。',
+                    'selectedKeyPoints': <String>['要点'],
+                  },
+                },
+              ),
+              _event(
+                seq: 4,
+                eventType: 'final_answer',
+                payload: const <String, dynamic>{'text': '第一轮答案'},
+              ),
+            ],
+          ),
         );
         addTearDown(container.dispose);
 
@@ -208,6 +208,73 @@ void main() {
         contains('找私助执行遇到问题'),
       );
     });
+
+    test(
+      'uses retrievalProcessing counts instead of tool event counts',
+      () async {
+        final container = _containerWith(
+          assistantRepository: _FakeAssistantRepository(
+            events: <AssistantStreamEventWire>[
+              _event(seq: 1, eventType: 'turn_started'),
+              _event(
+                seq: 2,
+                eventType: 'tool_use_requested',
+                payload: const <String, dynamic>{
+                  'toolUse': <String, dynamic>{'toolName': 'web_search'},
+                },
+              ),
+              _event(
+                seq: 3,
+                eventType: 'tool_result_received',
+                payload: const <String, dynamic>{
+                  'toolUse': <String, dynamic>{'toolName': 'web_search'},
+                },
+              ),
+              _event(
+                seq: 4,
+                eventType: 'observation_assessed',
+                payload: const <String, dynamic>{
+                  'retrievalProcessing': <String, dynamic>{
+                    'searchedDocumentCount': 3,
+                    'processedDocumentCount': 3,
+                    'acceptedDocumentCount': 1,
+                    'processingSummary': '接纳 1 条核心天气证据。',
+                    'acceptedReferences': <Map<String, dynamic>>[
+                      <String, dynamic>{
+                        'title': 'Open-Meteo Forecast API - 深圳，广东',
+                        'url': 'https://open-meteo.com/en/docs',
+                        'source': 'open_meteo_forecast',
+                      },
+                    ],
+                  },
+                },
+              ),
+              _event(
+                seq: 5,
+                eventType: 'final_answer',
+                payload: const <String, dynamic>{'text': '深圳天气回答'},
+              ),
+            ],
+          ),
+        );
+        addTearDown(container.dispose);
+
+        await container
+            .read(personalAssistantStreamControllerProvider.notifier)
+            .send('深圳天气');
+
+        final summary = container
+            .read(personalAssistantStreamControllerProvider)
+            .processSummary;
+        expect(summary.searchCount, 3);
+        expect(summary.processedCount, 3);
+        expect(summary.acceptedCount, 1);
+        expect(
+          summary.acceptedReferences.single.url,
+          'https://open-meteo.com/en/docs',
+        );
+      },
+    );
 
     test('loads app message unread summary', () async {
       final container = _containerWith(

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -93,11 +94,21 @@ func RecomputeGroupAvatar(
 	if conv.Type != "group" && conv.Type != "circle" {
 		return nil
 	}
+	if strings.TrimSpace(conv.Status) != "active" {
+		return nil
+	}
 
+	memberLimit := conv.MemberCount
+	if memberLimit < 16 {
+		memberLimit = 16
+	}
+	if memberLimit > 200 {
+		memberLimit = 200
+	}
 	members, err := repo.ListMembers(
 		ctx,
 		conversationID,
-		16,
+		memberLimit,
 		"",
 		"",
 		persistence.SortMembersJoinedAsc,
@@ -169,6 +180,13 @@ func RecomputeGroupAvatar(
 			RecipientUserIDs: recipientUserIDs,
 		})
 	}); err != nil {
+		slog.Error(
+			"group avatar asset registered but conversation transaction failed",
+			"err", err,
+			"conversationId", conv.ID,
+			"assetId", asset.Ref.AssetID,
+			"sourceHash", sourceHash,
+		)
 		return err
 	}
 
@@ -280,6 +298,9 @@ func resolveConversationAvatarRecipients(
 	}
 	recipientUserIDs := make([]string, 0, len(recipients))
 	for _, member := range recipients {
+		if strings.TrimSpace(member.MemberType) != "user" {
+			continue
+		}
 		if strings.TrimSpace(member.UserId) == "" {
 			continue
 		}

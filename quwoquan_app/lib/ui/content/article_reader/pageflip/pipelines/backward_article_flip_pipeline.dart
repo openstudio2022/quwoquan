@@ -9,23 +9,24 @@ class BackwardArticleFlipPipeline extends ArticleFlipPipeline {
 
   @override
   ArticleFlipPipelineOutput resolve(ArticleFlipPipelineInput input) {
-    final projectedFrame = input.renderFrame.backwardProjectedFrame;
+    final hasBackwardFoldFrame =
+        input.renderFrame.flippingClipArea.length >= 3 &&
+        input.renderFrame.bottomClipArea.length >= 3;
     final dynamicOwnedPages = <int>{
-      if (projectedFrame != null && input.scene.flippingPageIndex != null)
+      if (hasBackwardFoldFrame && input.scene.flippingPageIndex != null)
         input.scene.flippingPageIndex!,
-      if (projectedFrame != null &&
-          input.textureBinding?.bottomPageIndex != null)
+      if (hasBackwardFoldFrame && input.textureBinding?.bottomPageIndex != null)
         input.textureBinding!.bottomPageIndex!,
-      if (projectedFrame != null && input.scene.bottomPageIndex != null)
+      if (hasBackwardFoldFrame && input.scene.bottomPageIndex != null)
         input.scene.bottomPageIndex!,
     };
     return ArticleFlipPipelineOutput(
       direction: direction,
       staticSuppressionPages: dynamicOwnedPages,
-      renderBranchName: 'backwardThreeLayerPaperFoldPipeline',
-      debugLabel: projectedFrame == null
-          ? 'backward/waiting-projection'
-          : 'backward/three-layer-paper-fold',
+      renderBranchName: 'backwardThreeFacePaperFoldPipeline',
+      debugLabel: hasBackwardFoldFrame
+          ? 'backward/three-face-paper-fold'
+          : 'backward/waiting-fold-frame',
     );
   }
 }

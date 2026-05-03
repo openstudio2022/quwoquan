@@ -100,6 +100,40 @@ errors:
       zh: "操作太频繁，请稍后重试"
       en: "Too many requests, please retry later"
 
+  - code: CONTENT.USER.media_not_found
+    kind: USER
+    reason: media_not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: mediaNotFound
+    go_const: ErrMediaNotFound
+    user_message:
+      zh: "媒体资源不存在或已过期"
+      en: "Media asset not found or expired"
+
+  - code: CONTENT.USER.original_access_denied
+    kind: USER
+    reason: original_access_denied
+    http_status: 403
+    recovery_action: surface
+    dart_const: originalAccessDenied
+    go_const: ErrOriginalAccessDenied
+    user_message:
+      zh: "当前内容不支持查看或保存原图"
+      en: "Original media access is not allowed"
+
+  - code: CONTENT.USER.original_access_rate_limited
+    kind: USER
+    reason: original_access_rate_limited
+    http_status: 429
+    recovery_action: retry
+    recovery_after_seconds: 60
+    dart_const: originalAccessRateLimited
+    go_const: ErrOriginalAccessRateLimited
+    user_message:
+      zh: "原图访问过于频繁，请稍后再试"
+      en: "Too many original media requests, please retry later"
+
   - code: CONTENT.USER.comment_too_long
     kind: USER
     reason: invalid_argument

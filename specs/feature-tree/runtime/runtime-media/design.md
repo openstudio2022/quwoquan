@@ -364,6 +364,7 @@ make codegen-app
 
 发布级收口产物统一冻结为：
 
+- `specs/feature-tree/runtime/runtime-media/video-end-to-end-commercial-matrix.md`（视频商用端到端全矩阵；资源不齐时为 `GATE_BLOCK`）
 - `specs/feature-tree/runtime/runtime-media/t4-release-rehearsal.md`
 - `specs/feature-tree/runtime/runtime-media/observability-and-rollback.md`
 - `specs/feature-tree/runtime/runtime-media/capacity-validation.md`

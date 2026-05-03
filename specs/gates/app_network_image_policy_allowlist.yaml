@@ -1,0 +1,87 @@
+version: 1
+description: Transitional baseline for pre-AppImage direct image APIs. Counts may only decrease.
+allowed:
+  - path: components/avatar/group_avatar_grid.dart
+    maxCount: 2
+  - path: components/avatar/rounded_square_avatar.dart
+    maxCount: 1
+  - path: components/comment_system/comment_viewer_modal.dart
+    maxCount: 1
+  - path: components/content/image_post_card.dart
+    maxCount: 4
+  - path: components/content/media_post_card.dart
+    maxCount: 1
+  - path: components/content/video_post_card.dart
+    maxCount: 1
+  - path: components/media/image/editor/image_editor_page.dart
+    maxCount: 4
+  - path: components/media/image/viewer/image_viewer.dart
+    maxCount: 2
+  - path: components/media/image/viewer/immersive_image_viewer.dart
+    maxCount: 2
+  - path: components/media/shared/toolbar/immersive_engagement_bar.dart
+    maxCount: 1
+  - path: components/media/shared/toolbar/media_viewer_toolbar.dart
+    maxCount: 1
+  - path: components/media/shared/viewer/media_assistant_panel.dart
+    maxCount: 1
+  - path: components/media/video/viewer/immersive_video_viewer.dart
+    maxCount: 2
+  - path: components/media/video/viewer/video_media_viewer.dart
+    maxCount: 1
+  - path: core/widgets/global_surface_actions.dart
+    maxCount: 1
+  - path: ui/assistant/widgets/message/assistant_message_bubble.dart
+    maxCount: 1
+  - path: ui/chat/widgets/message/chat_message_bubble.dart
+    maxCount: 1
+  - path: ui/circle/pages/circle_stats_page.dart
+    maxCount: 2
+  - path: ui/circle/widgets/circle_media_image.dart
+    maxCount: 2
+  - path: ui/circle/widgets/circle_shell.dart
+    maxCount: 2
+  - path: ui/circle/widgets/section_interaction.dart
+    maxCount: 1
+  - path: ui/content/article_image_intrinsic_registry.dart
+    maxCount: 1
+  - path: ui/content/entry/widgets/article_editor.dart
+    maxCount: 1
+  - path: ui/discovery/pages/discovery_page.dart
+    maxCount: 5
+  - path: ui/discovery/widgets/moment_social_feed.dart
+    maxCount: 1
+  - path: ui/discovery/widgets/works_immersive_viewer.dart
+    maxCount: 1
+  - path: ui/rtc/pages/call_participant_picker_page.dart
+    maxCount: 1
+  - path: ui/rtc/widgets/caller_avatar_pulse.dart
+    maxCount: 1
+  - path: ui/rtc/widgets/participant_list_sheet.dart
+    maxCount: 1
+  - path: ui/rtc/widgets/participant_tile.dart
+    maxCount: 1
+  - path: ui/rtc/widgets/pip_call_overlay.dart
+    maxCount: 1
+  - path: ui/search/pages/global_search_page.dart
+    maxCount: 1
+  - path: ui/user/pages/edit_profile_page.dart
+    maxCount: 2
+  - path: ui/user/pages/profile_stats_page.dart
+    maxCount: 2
+  - path: ui/user/pages/resonance_page.dart
+    maxCount: 2
+  - path: ui/user/widgets/circle_card.dart
+    maxCount: 1
+  - path: ui/user/widgets/circle_compact_card.dart
+    maxCount: 1
+  - path: ui/user/widgets/profile_header.dart
+    maxCount: 1
+  - path: ui/user/widgets/profile_interaction_tab.dart
+    maxCount: 1
+  - path: ui/user/widgets/profile_lifestyle_tab.dart
+    maxCount: 1
+  - path: ui/user/widgets/profile_moments_tab.dart
+    maxCount: 1
+  - path: ui/user/widgets/profile_shell.dart
+    maxCount: 2

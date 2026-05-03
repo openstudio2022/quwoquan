@@ -35,21 +35,30 @@ type AssistantTurnStreamState struct {
 	ResumeToken string `json:"resumeToken"`
 }
 
+type AssistantConversationContextTurn struct {
+	Role     string `json:"role"`
+	Text     string `json:"text"`
+	SkillID  string `json:"skillId,omitempty"`
+	DomainID string `json:"domainId,omitempty"`
+}
+
 type AssistantTurn struct {
-	TurnID         string                   `json:"turnId"`
-	ConversationID string                   `json:"conversationId"`
-	UserID         string                   `json:"userId"`
-	TurnType       string                   `json:"turnType"`
-	Status         string                   `json:"status"`
-	SkillID        string                   `json:"skillId,omitempty"`
-	DomainID       string                   `json:"domainId,omitempty"`
-	Input          AssistantTurnInput       `json:"input"`
-	Trigger        AssistantTurnTrigger     `json:"trigger"`
-	StreamState    AssistantTurnStreamState `json:"streamState"`
-	Failure        *rtfailures.Failure      `json:"failure,omitempty"`
-	TraceID        string                   `json:"traceId"`
-	CreatedAt      time.Time                `json:"createdAt"`
-	CompletedAt    *time.Time               `json:"completedAt,omitempty"`
+	TurnID         string                             `json:"turnId"`
+	ConversationID string                             `json:"conversationId"`
+	UserID         string                             `json:"userId"`
+	TurnType       string                             `json:"turnType"`
+	Status         string                             `json:"status"`
+	SkillID        string                             `json:"skillId,omitempty"`
+	DomainID       string                             `json:"domainId,omitempty"`
+	Input          AssistantTurnInput                 `json:"input"`
+	ContextTurns   []AssistantConversationContextTurn `json:"contextTurns,omitempty"`
+	AnswerText     string                             `json:"answerText,omitempty"`
+	Trigger        AssistantTurnTrigger               `json:"trigger"`
+	StreamState    AssistantTurnStreamState           `json:"streamState"`
+	Failure        *rtfailures.Failure                `json:"failure,omitempty"`
+	TraceID        string                             `json:"traceId"`
+	CreatedAt      time.Time                          `json:"createdAt"`
+	CompletedAt    *time.Time                         `json:"completedAt,omitempty"`
 }
 
 type CreateTurnInput struct {

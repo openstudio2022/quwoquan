@@ -113,10 +113,20 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             if key.lower() not in {"host", "content-length", "connection"}
         }
 
-        conn = HTTPConnection(self.upstream_host, self.upstream_port, timeout=30)
+        stream_response = parsed.path.endswith("/stream")
+        conn = HTTPConnection(self.upstream_host, self.upstream_port, timeout=240 if stream_response else 30)
         try:
             conn.request(self.command, self.path, body=body, headers=headers)
             upstream = conn.getresponse()
+            if self._is_streaming_response(upstream, stream_response):
+                self._send_upstream_headers(upstream)
+                while True:
+                    chunk = upstream.readline()
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                return
             payload = upstream.read()
         except Exception as exc:  # noqa: BLE001
             self.send_error(502, f"assistant beta gateway upstream failed: {exc}")
@@ -124,6 +134,14 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
+        self._send_upstream_headers(upstream)
+        self.wfile.write(payload)
+
+    def _is_streaming_response(self, upstream, stream_path: bool) -> bool:
+        content_type = upstream.getheader("Content-Type", "")
+        return stream_path or content_type.lower().startswith("text/event-stream")
+
+    def _send_upstream_headers(self, upstream) -> None:
         self.send_response(upstream.status)
         for key, value in upstream.getheaders():
             if key.lower() in {"connection", "transfer-encoding"}:
@@ -131,7 +149,6 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             self.send_header(key, value)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
-        self.wfile.write(payload)
 
     def _fixture_response(self, path: str, query: str = "") -> object | None:
         if path == "/healthz":
