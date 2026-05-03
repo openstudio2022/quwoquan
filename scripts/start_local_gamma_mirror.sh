@@ -156,7 +156,9 @@ if [[ "$skip_up" == "1" ]]; then
   exit 0
 fi
 
+podman_compose=0
 if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose >/dev/null 2>&1; then
+  podman_compose=1
   compose_cmd=(podman-compose -f "$COMPOSE_FILE" --podman-build-args=--pull=never --podman-run-args=--pull=never)
   compose_up_args=(up -d --no-build)
 else
@@ -167,9 +169,59 @@ fi
 if [[ "$skip_build" == "0" ]]; then
   "${compose_cmd[@]}" build
 fi
-LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION" \
-LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION" \
-"${compose_cmd[@]}" "${compose_up_args[@]}"
+export LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION"
+export LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION"
+if [[ "$podman_compose" == "1" ]]; then
+  wait_healthy() {
+    local name="$1"
+    local status=""
+    for _ in $(seq 1 60); do
+      status="$(podman inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$name" 2>/dev/null || true)"
+      if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+        return 0
+      fi
+      sleep 2
+    done
+    echo "[local-gamma] container did not become healthy: $name status=$status" >&2
+    podman logs --tail 80 "$name" >&2 || true
+    return 1
+  }
+
+  wait_exited_zero() {
+    local name="$1"
+    local status=""
+    local exit_code=""
+    for _ in $(seq 1 60); do
+      status="$(podman inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
+      exit_code="$(podman inspect --format '{{.State.ExitCode}}' "$name" 2>/dev/null || true)"
+      if [[ "$status" == "exited" && "$exit_code" == "0" ]]; then
+        return 0
+      fi
+      sleep 2
+    done
+    echo "[local-gamma] one-shot container failed: $name status=$status exit=$exit_code" >&2
+    podman logs --tail 80 "$name" >&2 || true
+    return 1
+  }
+
+  "${compose_cmd[@]}" down || true
+  "${compose_cmd[@]}" up -d --no-build --no-deps postgres mongodb redis
+  wait_healthy quwoquan_service_postgres_1
+  wait_healthy quwoquan_service_mongodb_1
+  wait_healthy quwoquan_service_redis_1
+  "${compose_cmd[@]}" up -d --no-build --no-deps mongo-init
+  wait_exited_zero quwoquan_service_mongo-init_1
+  "${compose_cmd[@]}" up -d --no-build --no-deps rec-model-service
+  wait_healthy quwoquan_service_rec-model-service_1
+  "${compose_cmd[@]}" up -d --no-build --no-deps product-ops-service
+  wait_healthy quwoquan_service_product-ops-service_1
+  "${compose_cmd[@]}" up -d --no-build --no-deps content-service
+  wait_healthy quwoquan_service_content-service_1
+  "${compose_cmd[@]}" up -d --no-build --no-deps gamma-proxy
+  wait_healthy quwoquan_service_gamma-proxy_1
+else
+  "${compose_cmd[@]}" "${compose_up_args[@]}"
+fi
 
 echo "[local-gamma] mirror started"
 echo "[local-gamma] gateway: $GATEWAY_BASE_URL"
