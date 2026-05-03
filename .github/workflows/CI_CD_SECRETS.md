@@ -14,7 +14,9 @@
 | **service_pipeline.yml** | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验 | G2 |
 | **app_pipeline.yml** | quwoquan_app/**；v* tag → macOS 构建 | Flutter analyze、macOS 构建（L1 由 delivery-gate 负责） | G2 / 发布 |
 | **pre-release-gate.yml** | v*-rc* tag、手动 | L1+L2 → deploy → L3 → L4（L3 统一整合） | G3→G5b |
-| **deploy-gamma-ecs.yml** | 手动、push main | alpha/beta 验证 → ECS 部署 → gamma 回测 | G5a→G5b |
+| **deploy-gamma-ecs.yml** | 手动、push main | hosted 打包 → ECS pre → self-hosted 矩阵 → prod 就地升级 | G5a→G5b |
+| **app-env-device-matrix-self-hosted.yml** | 被调用 / 手动 | alpha/beta/gamma self-hosted 端侧矩阵 | G5b |
+| **ecs-onebox-rollback.yml** | 手动 | ECS onebox 备份回滚 | 运维 |
 
 ---
 
@@ -78,35 +80,48 @@
 - `GAMMA_KUBECONFIG` 未配置时，deploy-integration 仅 skip，不 fail。
 - L3/L4 依赖 deploy-integration 完成，需 gamma 已部署且 `GAMMA_BASE_URL` 可访问。
 - L4 Android 使用 GitHub hosted `ubuntu-latest` + Android Emulator；L4 iOS 使用 GitHub hosted `macos-latest` + iOS Simulator，不再依赖 Firebase Test Lab / GCP 凭证。
+- 若注册 self-hosted runner，可将仓库变量 **`QWQ_SELF_HOSTED_PRE_RELEASE_MATRIX`** 设为 **`true`**，在 L3 通过后额外执行 **alpha/beta/gamma** self-hosted 矩阵（`app-env-device-matrix-self-hosted.yml`）。
 
 ---
 
 ## 六、App Env Device Matrix（app-env-device-matrix.yml）
 
-### 必须配置（gamma 覆盖时）
+### hosted（GitHub Runner）矩阵
 
 | Secret | 用途 |
 |--------|------|
-| **GAMMA_BASE_URL** | gamma 端侧远端网关地址 |
+| **GAMMA_BASE_URL** | 仅在本地跑 hosted **gamma** 时需要；当前 workflow 已收敛为 **仅 alpha/beta**，一般可不配 |
 
 ### 说明
 
-- 覆盖矩阵为 `alpha/beta/gamma × Android/iOS`。
+- **hosted** 矩阵为 `alpha/beta × Android/iOS`（快速回归）；**gamma 发布准入**改走 **05b `app-env-device-matrix-self-hosted.yml`**（需自建 self-hosted runner）。
 - `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
-- `beta` 在 GitHub hosted runner 内启动本地 beta assistant-service + gateway；Android 通过 `10.0.2.2` 访问 runner，iOS 通过 `127.0.0.1` 访问 runner。
-- `gamma` 连接公网可达的 `GAMMA_BASE_URL`，不依赖本地 DNS/TLS。
-- beta CI 默认使用 deterministic provider，避免端侧环境 smoke 被外部模型供应商可用性阻塞；真实模型链路仍以人工/专门 beta 验证为准。
+- `beta` 在 runner 内启动本地 beta assistant-service + gateway；Android 通过 `10.0.2.2` 访问 runner，iOS 通过 `127.0.0.1` 访问 runner。
+- beta CI 默认使用 deterministic provider；真实模型链路仍以人工/专门 beta 验证为准。
+
+### self-hosted（05b）可选 Variables
+
+| Variable | 用途 |
+|----------|------|
+| **ANDROID_DEVICE_ID** | 物理机/adb 设备 id（默认 `emulator-5554`） |
+| **IOS_DEVICE_ID** | 真机或模拟器 UDID；未设置时在 macOS runner 上自动 boot 模拟器 |
 
 ---
 
 ## 七、Gamma ECS Deploy（deploy-gamma-ecs.yml）
 
+### 认证（二选一）
+
+| Secret | 用途 |
+|--------|------|
+| **GAMMA_ECS_SSH_KEY** | ECS SSH 私钥全文（推荐） |
+| **GAMMA_ECS_PASSWORD** | ECS SSH 密码（与 `sshpass`；可与密钥互斥） |
+
 ### 必须配置
 
 | Secret / Variable | 用途 |
 |--------|------|
-| **GAMMA_ECS_PASSWORD** | ECS SSH 密码；只放在 GitHub Secret，禁止提交到仓库 |
-| **GAMMA_TEST_AUTH_TOKEN** | gamma T3/T4 验证 Token |
+| **GAMMA_TEST_AUTH_TOKEN** | gamma T3 / 远端脚本 `run_local_gamma_t3` 验证 Token |
 
 ### 可选配置
 
@@ -121,10 +136,14 @@
 
 ### 说明
 
-- Workflow 会先跑 `alpha/beta` Android+iOS 端侧矩阵，成功后才通过 SSH 部署 ECS。
-- ECS 部署使用 `scripts/deploy_gamma_ecs.sh`，在远端启动 `quwoquan_service/docker-compose.gamma-local.yaml`，并执行健康检查与 gamma T3 seed/endpoint 验证。
-- 部署完成后，CI 会以 ECS 公网 URL 运行 `make test-api-contract` 与 `gamma` Android+iOS 端侧矩阵。
-- ECS 安全组需放行 SSH 端口、`18080` 与 `18086`；如改用 80/443 反代，需要同步更新 `GAMMA_BASE_URL` 与 `GAMMA_PRODUCT_OPS_BASE_URL`。
+- **hosted**：`make gate` → alpha/beta 设备矩阵（GitHub 模拟器）→ **打包 tarball artifact**。
+- **ECS pre**：`scripts/deploy_gamma_ecs.sh`（`GAMMA_ECS_STAGE=pre`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>`），上传 bundle；远端写 `.gamma_deploy_state.json`，并在 `../gamma-backups/` 保留备份 tarball。
+- **T3**：`make test-api-contract`（gamma）。
+- **self-hosted**：调用 `app-env-device-matrix-self-hosted.yml`（alpha/beta/gamma）；需仓库注册 **self-hosted runner**。
+- **ECS prod**：同一 ECS **就地升级**（`GAMMA_ECS_STAGE=prod`，`GAMMA_ECS_SKIP_UPLOAD=1`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>-prod`），然后再跑 T3 与 **gamma-only** self-hosted 烟测。
+- **回滚**：手动触发 **08b `ecs-onebox-rollback.yml`** 或本地执行 `scripts/rollback_gamma_ecs.sh`（恢复最近一次 `backup-*.tgz`）。
+- 结构化部署报告：`artifacts/ecs-onebox/deploy-report.json`（成功/失败阶段会上传为 artifact）。
+- ECS 安全组需放行 SSH、`18080`、`18086`（或同步修改 health 探测 URL）。
 
 ---
 
@@ -139,7 +158,9 @@
     ├── service_pipeline.yml
     ├── app_pipeline.yml
     ├── pre-release-gate.yml
-    └── deploy-gamma-ecs.yml
+    ├── deploy-gamma-ecs.yml
+    ├── app-env-device-matrix-self-hosted.yml
+    └── ecs-onebox-rollback.yml
 ```
 
 ---

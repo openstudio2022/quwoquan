@@ -1,39 +1,47 @@
-# App Environment Device Matrix — alpha / beta 快速验证（hosted）
-# gamma 发布准入改走 05b app-env-device-matrix-self-hosted（ECS onebox 闭环）。
-# Android：GitHub hosted Ubuntu 模拟器；iOS：GitHub hosted macOS 模拟器。
-name: 05. App Env Device Matrix
+# Self-hosted：alpha/beta/gamma 端侧矩阵（发布准入；gamma 依赖稳定网关，建议在 ECS onebox 部署后触发）。
+# 需在仓库注册带 self-hosted 标签的 Runner（macOS 跑 iOS；Linux/mac 均可跑 Android，视本机 adb/flutter devices）。
+name: 05b. App Env Device Matrix (self-hosted)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - dev1.0
-      - main
-    paths:
-      - '.github/workflows/app-env-device-matrix.yml'
-      - '.github/workflows/app-env-device-matrix-self-hosted.yml'
-      - 'quwoquan_app/**'
-      - 'quwoquan_service/services/assistant-service/**'
-      - 'quwoquan_service/contracts/metadata/assistant/**'
-      - 'scripts/run_assistant_device_matrix.py'
-      - 'scripts/run_assistant_device_matrix_ci.py'
-      - 'scripts/dev_assistant_beta_gateway.py'
+    inputs:
+      env_json:
+        description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]'
+        required: true
+        default: '["alpha","beta","gamma"]'
+      gamma_base_url:
+        description: 可选覆盖 gamma 网关（默认 secrets.GAMMA_BASE_URL）
+        required: false
+        default: ''
+  workflow_call:
+    inputs:
+      env_json:
+        description: 'JSON array of environments'
+        required: true
+        type: string
+      gamma_base_url:
+        description: '可选覆盖 gamma 网关（默认走 secrets.GAMMA_BASE_URL）'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   android:
-    name: ${{ matrix.env }} / Android hosted emulator
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    name: ${{ matrix.env }} / Android (self-hosted)
+    runs-on: self-hosted
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        env: [alpha, beta]
+        env: ${{ fromJson(inputs.env_json) }}
     env:
       API_CONTRACT_ENV: ${{ matrix.env }}
-      GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
+      GAMMA_BASE_URL: ${{ inputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
+      ASSISTANT_MATRIX_ALL_DEVICES: "1"
+      ANDROID_DEVICE_ID: ${{ vars.ANDROID_DEVICE_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
@@ -56,51 +64,41 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: quwoquan_service/go.mod
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
+      - name: Install Flutter (PATH)
+        run: |
+          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          flutter --version
       - name: 安装 Flutter 依赖
         working-directory: quwoquan_app
         run: flutter pub get
-      - name: Enable Android emulator KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Run ${{ matrix.env }} on Android hosted emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          profile: pixel_7
-          script: |
-            python3 scripts/run_assistant_device_matrix_ci.py --platform android
+      - name: Run ${{ matrix.env }} on Android (self-hosted)
+        run: python3 scripts/run_assistant_device_matrix_ci.py --platform android
       - name: Upload Android matrix report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ matrix.env }}-android
+          name: app-env-device-matrix-selfhosted-${{ matrix.env }}-android
           path: |
             artifacts/device-matrix/${{ matrix.env }}-android.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
           if-no-files-found: ignore
 
   ios:
-    name: ${{ matrix.env }} / iOS hosted simulator
-    runs-on: macos-latest
-    timeout-minutes: 45
+    name: ${{ matrix.env }} / iOS (self-hosted)
+    runs-on: self-hosted
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        env: [alpha, beta]
+        env: ${{ fromJson(inputs.env_json) }}
     env:
       API_CONTRACT_ENV: ${{ matrix.env }}
-      GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
+      GAMMA_BASE_URL: ${{ inputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
+      ASSISTANT_MATRIX_ALL_DEVICES: "1"
+      IOS_DEVICE_ID: ${{ vars.IOS_DEVICE_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
@@ -119,14 +117,18 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: quwoquan_service/go.mod
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
+      - name: Install Flutter (PATH)
+        run: |
+          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          flutter --version
       - name: 安装 Flutter 依赖
         working-directory: quwoquan_app
         run: flutter pub get
-      - name: Boot iOS simulator
+      - name: 选用已配置的 iOS 设备 / 模拟器 UDID
+        if: runner.os == 'macOS' && vars.IOS_DEVICE_ID != ''
+        run: echo "IOS_DEVICE_ID=${{ vars.IOS_DEVICE_ID }}" >> "$GITHUB_ENV"
+      - name: Boot iOS simulator（未配置 vars.IOS_DEVICE_ID 时）
+        if: runner.os == 'macOS' && vars.IOS_DEVICE_ID == ''
         run: |
           xcodebuild -version
           xcrun simctl list > /dev/null
@@ -160,14 +162,13 @@ jobs:
           xcrun simctl bootstatus "$IOS_DEVICE_ID" -b
           echo "IOS_DEVICE_ID=$IOS_DEVICE_ID" >> "$GITHUB_ENV"
           flutter devices
-      - name: Run ${{ matrix.env }} on iOS hosted simulator
-        run: |
-          python3 scripts/run_assistant_device_matrix_ci.py --platform ios
+      - name: Run ${{ matrix.env }} on iOS (self-hosted)
+        run: python3 scripts/run_assistant_device_matrix_ci.py --platform ios
       - name: Upload iOS matrix report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ matrix.env }}-ios
+          name: app-env-device-matrix-selfhosted-${{ matrix.env }}-ios
           path: |
             artifacts/device-matrix/${{ matrix.env }}-ios.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
