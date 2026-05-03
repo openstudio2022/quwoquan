@@ -187,6 +187,21 @@ if [[ "$podman_compose" == "1" ]]; then
     return 1
   }
 
+  wait_running() {
+    local name="$1"
+    local status=""
+    for _ in $(seq 1 60); do
+      status="$(podman inspect --format '{{.State.Status}}' "$name" 2>/dev/null || true)"
+      if [[ "$status" == "running" ]]; then
+        return 0
+      fi
+      sleep 2
+    done
+    echo "[local-gamma] container did not start: $name status=$status" >&2
+    podman logs --tail 80 "$name" >&2 || true
+    return 1
+  }
+
   wait_exited_zero() {
     local name="$1"
     local status=""
@@ -207,7 +222,8 @@ if [[ "$podman_compose" == "1" ]]; then
   "${compose_cmd[@]}" down || true
   "${compose_cmd[@]}" up -d --no-build --no-deps postgres mongodb redis
   wait_healthy quwoquan_service_postgres_1
-  wait_healthy quwoquan_service_mongodb_1
+  wait_running quwoquan_service_mongodb_1
+  sleep 5
   wait_healthy quwoquan_service_redis_1
   "${compose_cmd[@]}" up -d --no-build --no-deps mongo-init
   wait_exited_zero quwoquan_service_mongo-init_1
