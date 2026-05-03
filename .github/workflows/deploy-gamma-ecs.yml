@@ -289,7 +289,7 @@ jobs:
         run: bash scripts/deploy_gamma_ecs.sh
         env:
           GAMMA_ECS_STAGE: pre
-          GAMMA_DEPLOY_IMAGE_VERSION: ${{ github.sha }}
+          GAMMA_DEPLOY_IMAGE_VERSION: 0.0.${{ github.run_number }}
           GAMMA_ECS_LOCAL_TARBALL: ${{ github.workspace }}/bundle/gamma-ecs-bundle.tgz
           GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
           GAMMA_ECS_SSH_KEY: ${{ secrets.GAMMA_ECS_SSH_KEY }}
@@ -384,7 +384,7 @@ jobs:
         env:
           GAMMA_ECS_STAGE: prod
           GAMMA_ECS_SKIP_UPLOAD: "1"
-          GAMMA_DEPLOY_IMAGE_VERSION: ${{ github.sha }}-prod
+          GAMMA_DEPLOY_IMAGE_VERSION: 0.0.${{ github.run_number }}
           GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
           GAMMA_ECS_SSH_KEY: ${{ secrets.GAMMA_ECS_SSH_KEY }}
           GAMMA_BASE_URL: ${{ steps.urls.outputs.base_url }}

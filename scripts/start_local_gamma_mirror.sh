@@ -124,6 +124,14 @@ prepare_media_root() {
 }
 
 print_defines() {
+  if ! python3 - <<'PY' >/dev/null 2>&1; then
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 7) else 1)
+PY
+    echo "[local-gamma] skip dart defines: python3 >= 3.7 required" >&2
+    return 0
+  fi
+
   python3 "$ROOT/scripts/print_app_env_dart_defines.py" \
     --env gamma \
     --gateway-base-url "$GATEWAY_BASE_URL" \
