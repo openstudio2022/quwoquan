@@ -247,16 +247,68 @@ install_docker_if_needed() {
   fi
 }
 
+configure_container_registry_mirror() {
+  local mirror="${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-docker.1ms.run}"
+  if [[ -z "$mirror" ]]; then
+    return
+  fi
+  if command -v podman >/dev/null 2>&1; then
+    mkdir -p /etc/containers/registries.conf.d
+    cat > /etc/containers/registries.conf.d/001-dockerhub-mirror.conf <<CONF
+[[registry]]
+prefix = "docker.io"
+location = "docker.io"
+
+[[registry.mirror]]
+location = "${mirror}"
+CONF
+  fi
+}
+
+pre_pull_local_gamma_images() {
+  local timeout_seconds="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-300}"
+  local images=(
+    docker.io/library/postgres:16-alpine
+    docker.io/library/mongo:7-jammy
+    docker.io/library/redis:7.2-alpine
+    docker.io/library/golang:1.24-bookworm
+    docker.io/library/golang:1.24.3-alpine
+    docker.io/library/python:3.11-slim
+    docker.io/library/alpine:3.19
+    docker.io/library/caddy:2.8-alpine
+  )
+  for image in "${images[@]}"; do
+    echo "[gamma-ecs] pre-pulling ${image}"
+    timeout "$timeout_seconds" docker pull "$image"
+  done
+}
+
+print_compose_diagnostics() {
+  docker compose -f quwoquan_service/docker-compose.gamma-local.yaml ps || true
+  docker ps -a || true
+  docker images || true
+}
+
 install_docker_if_needed
+configure_container_registry_mirror
 docker --version
 docker compose version
+pre_pull_local_gamma_images
 
 export LOCAL_GAMMA_IMAGE_VERSION="${IMAGE_VERSION}"
 export LOCAL_GAMMA_HTTP_PORT="${LOCAL_GAMMA_HTTP_PORT:-18000}"
 export LOCAL_GAMMA_HTTPS_PORT="${LOCAL_GAMMA_HTTPS_PORT:-18443}"
 export LOCAL_GAMMA_ADMIN_PORT="${LOCAL_GAMMA_ADMIN_PORT:-12019}"
 
-bash scripts/start_local_gamma_mirror.sh
+set +e
+timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-1800}" bash scripts/start_local_gamma_mirror.sh
+rc=$?
+set -e
+if [[ "$rc" -ne 0 ]]; then
+  echo "[gamma-ecs] local gamma mirror failed or timed out (exit=${rc})" >&2
+  print_compose_diagnostics >&2
+  exit "$rc"
+fi
 docker compose -f quwoquan_service/docker-compose.gamma-local.yaml ps
 
 python3 scripts/run_local_gamma_t3.py \
