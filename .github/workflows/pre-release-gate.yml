@@ -133,7 +133,9 @@ jobs:
       - name: Run gamma assistant on Android (self-hosted)
         run: python3 scripts/run_assistant_device_matrix_ci.py --platform android
       - name: Upload gamma assistant Android report
+        id: upload_gamma_assistant_android_report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: gamma-assistant-selfhosted-android
@@ -141,6 +143,18 @@ jobs:
             artifacts/device-matrix/gamma-android.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
           if-no-files-found: ignore
+          compression-level: 0
+      - name: Retry gamma assistant Android report upload
+        if: always() && steps.upload_gamma_assistant_android_report.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-assistant-selfhosted-android
+          path: |
+            artifacts/device-matrix/gamma-android.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: true
 
   gamma_assistant_ios:
     name: Gamma assistant / iOS (self-hosted)
@@ -194,7 +208,9 @@ jobs:
       - name: Run gamma assistant on iOS (self-hosted)
         run: python3 scripts/run_assistant_device_matrix_ci.py --platform ios
       - name: Upload gamma assistant iOS report
+        id: upload_gamma_assistant_ios_report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: gamma-assistant-selfhosted-ios
@@ -202,6 +218,18 @@ jobs:
             artifacts/device-matrix/gamma-ios.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
           if-no-files-found: ignore
+          compression-level: 0
+      - name: Retry gamma assistant iOS report upload
+        if: always() && steps.upload_gamma_assistant_ios_report.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-assistant-selfhosted-ios
+          path: |
+            artifacts/device-matrix/gamma-ios.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: true
 
   gamma_chat_avatar_android:
     name: Gamma chat avatar / Android (self-hosted)
@@ -258,12 +286,24 @@ jobs:
       - name: Run gamma chat avatar on Android (self-hosted)
         run: python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android
       - name: Upload gamma chat avatar Android report
+        id: upload_gamma_chat_avatar_android_report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: gamma-chat-avatar-selfhosted-android
           path: artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
+          compression-level: 0
+      - name: Retry gamma chat avatar Android report upload
+        if: always() && steps.upload_gamma_chat_avatar_android_report.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-chat-avatar-selfhosted-android
+          path: artifacts/device-matrix/chat-avatar/**
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: true
 
   gamma_chat_avatar_ios:
     name: Gamma chat avatar / iOS (self-hosted)
@@ -316,12 +356,24 @@ jobs:
       - name: Run gamma chat avatar on iOS (self-hosted)
         run: python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
       - name: Upload gamma chat avatar iOS report
+        id: upload_gamma_chat_avatar_ios_report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: gamma-chat-avatar-selfhosted-ios
           path: artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
+          compression-level: 0
+      - name: Retry gamma chat avatar iOS report upload
+        if: always() && steps.upload_gamma_chat_avatar_ios_report.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-chat-avatar-selfhosted-ios
+          path: artifacts/device-matrix/chat-avatar/**
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: true
 
   release-evidence-summary:
     name: 04. Pre-Release Gate
