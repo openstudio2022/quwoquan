@@ -96,6 +96,7 @@
 ### 说明
 
 - `app-env-device-matrix.yml` 已改为 **wrapper**：`dev1.0/main` 的每次 push 统一调用 **05b `app-env-device-matrix-self-hosted.yml`**，不再使用 GitHub hosted 模拟器。
+- self-hosted runner 需带自定义标签 **`app-device-android`** / **`app-device-ios`**；单台 macOS 本机若同时具备 Android Emulator 与 iOS Simulator，可同时挂这两个标签。
 - `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
 - `beta` 在 runner 内启动本地 beta assistant-service + gateway；设备通过仓库变量 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID` 指向本机模拟器或真机。
 - beta CI 默认使用 deterministic provider；真实模型链路仍以人工/专门 beta 验证为准。
@@ -140,10 +141,10 @@
 
 ### 说明
 
-- **hosted**：`make gate` → alpha/beta 设备矩阵（GitHub 模拟器）→ **打包 tarball artifact**。
+- **hosted**：`make gate` → **打包 tarball artifact**。
 - **ECS pre**：`scripts/deploy_gamma_ecs.sh`（`GAMMA_ECS_STAGE=pre`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>`），上传 bundle；远端写 `.gamma_deploy_state.json`，并在 `../gamma-backups/` 保留备份 tarball。
 - **T3**：`make test-api-contract`（gamma）。
-- **self-hosted**：调用 `app-env-device-matrix-self-hosted.yml`（alpha/beta/gamma）；需仓库注册 **self-hosted runner**。
+- **self-hosted**：调用 `app-env-device-matrix-self-hosted.yml`（alpha/beta/gamma）；runner 需带 `app-device-android` / `app-device-ios` 标签。
 - **ECS prod**：同一 ECS **就地升级**（`GAMMA_ECS_STAGE=prod`，`GAMMA_ECS_SKIP_UPLOAD=1`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>-prod`），然后再跑 T3 与 **gamma-only** self-hosted 烟测。
 - ECS 上使用 Podman 兼容层拉取镜像时，`GAMMA_ECS_CONTAINER_REGISTRY_MIRROR` 未配置则可能长时间直连 `docker.io`，在大陆网络下易超时；建议配置可用的镜像加速或使用自有镜像仓库前置基础镜像。
 - **Deploy ECS — pre/prod** 单 Job 超时为 **120** 分钟（含首次镜像 build）；请勿在流水线中途手动 Cancel，否则会向 SSH 子进程发送 SIGTERM（常见于 exit 143）。

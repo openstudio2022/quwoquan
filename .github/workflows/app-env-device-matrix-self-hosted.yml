@@ -1,5 +1,6 @@
 # Self-hosted：alpha/beta/gamma 端侧矩阵（发布准入；gamma 依赖稳定网关，建议在 ECS onebox 部署后触发）。
-# 需在仓库注册带 self-hosted 标签的 Runner（macOS 跑 iOS；Linux/mac 均可跑 Android，视本机 adb/flutter devices）。
+# 需在仓库注册带 self-hosted + app-device-android / app-device-ios 自定义标签的 Runner。
+# 单台 macOS 机器若同时具备 Android Emulator 与 iOS Simulator，可同时挂两种自定义标签。
 name: 05b. App Env Device Matrix (self-hosted)
 
 on:
@@ -46,8 +47,8 @@ on:
 jobs:
   android:
     name: ${{ matrix.env }} / Android (self-hosted)
-    # 须由 Linux 自托管机注册（默认带 self-hosted + Linux）；勿与 iOS 共用无 OS 区分的同一标签池，避免落到无 adb 的机器。
-    runs-on: [self-hosted, Linux]
+    # 通过能力标签而不是 OS 标签路由；支持 Linux / macOS，只要 runner 具备 adb / emulator / flutter 能力即可。
+    runs-on: [self-hosted, app-device-android]
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -65,6 +66,12 @@ jobs:
       ANDROID_DEVICE_ID: ${{ vars.ANDROID_DEVICE_ID }}
     steps:
       - uses: actions/checkout@v4
+      - name: 校验 Android runner OS
+        run: |
+          if [ "${{ runner.os }}" != "Linux" ] && [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::app-device-android runner 仅支持 Linux 或 macOS，当前为 ${{ runner.os }}"
+            exit 2
+          fi
       - name: 准备 personal_assistant/.env
         run: |
           mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
@@ -112,8 +119,8 @@ jobs:
 
   ios:
     name: ${{ matrix.env }} / iOS (self-hosted)
-    # 须由 macOS 自托管机注册（默认带 self-hosted + macOS）。
-    runs-on: [self-hosted, macOS]
+    # 必须落到具备 app-device-ios 标签的 macOS runner；可与 Android 标签共存于同一台本机。
+    runs-on: [self-hosted, app-device-ios]
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -131,6 +138,12 @@ jobs:
       IOS_DEVICE_ID: ${{ vars.IOS_DEVICE_ID }}
     steps:
       - uses: actions/checkout@v4
+      - name: 校验 iOS runner OS
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::app-device-ios runner 必须是 macOS，当前为 ${{ runner.os }}"
+            exit 2
+          fi
       - name: 准备 personal_assistant/.env
         run: |
           mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant

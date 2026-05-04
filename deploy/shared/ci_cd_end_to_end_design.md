@@ -146,10 +146,10 @@ deploy-integration:
 
 `app-env-device-matrix-self-hosted.yml` 要求：
 
-- **Android 矩阵**：Runner 同时具备标签 `self-hosted` 与 **`Linux`**（GitHub 为自托管机自动附加 OS 标签；Linux 主机注册后即可被选中）。
-- **iOS 矩阵**：Runner 同时具备 `self-hosted` 与 **`macOS`**。
+- **Android 矩阵**：Runner 同时具备标签 `self-hosted` 与 **`app-device-android`**；runner 可是 Linux 或 macOS，但必须具备 adb / emulator / flutter 能力。
+- **iOS 矩阵**：Runner 同时具备 `self-hosted` 与 **`app-device-ios`**，且必须是 macOS。
 
-若仅有 **macOS** 自托管机，则无法满足「Android job 要求 `Linux`」的调度约束；应 **新增一台 Linux runner**，或由团队约定后 **统一改为自定义 label**（例如两 job 均跑在带 `android`/`ios` 标签的同一组机器上，并同步修改 `runs-on`）。
+若仅有一台 **macOS** 本机，也可以同时挂上 `app-device-android` 与 `app-device-ios` 两个标签，让 Android Emulator 与 iOS Simulator 共用同一台机器；workflow 内会额外校验 runner OS，避免标签误配到不兼容主机。
 
 ### 4.4 合并 main 后手动验证清单（建议每次发版前执行）
 
