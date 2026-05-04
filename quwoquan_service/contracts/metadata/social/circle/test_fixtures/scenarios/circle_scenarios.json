@@ -17,8 +17,8 @@
           "role": "owner",
           "joinStatus": "joined",
           "isFollowed": true,
-          "coverUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900",
-          "avatarUrl": "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400",
+          "coverUrl": "media/image/circle/fixture_circle_photo/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
           "description": "通过 contracts fixture 初始化的摄影圈。",
           "visibility": "public",
           "joinPolicy": "approval",
@@ -32,7 +32,10 @@
           "autoSyncChat": true,
           "defaultPublicGroupId": "fixture_group_photo_public",
           "createdAt": "2026-04-29T08:00:00Z",
-          "updatedAt": "2026-04-29T08:00:00Z"
+          "updatedAt": "2026-04-29T08:00:00Z",
+          "ownerDisplayNameSnapshot": "契约摄影社主理人",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_photo/v1/cover.png"
         },
         {
           "id": "fixture_circle_travel",
@@ -41,8 +44,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
-          "coverUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900",
-          "avatarUrl": "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=400",
+          "coverUrl": "media/image/circle/fixture_circle_travel/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
           "description": "通过 contracts fixture 初始化的旅行圈。",
           "visibility": "public",
           "joinPolicy": "open",
@@ -56,7 +59,10 @@
           "autoSyncChat": true,
           "defaultPublicGroupId": "fixture_group_travel_public",
           "createdAt": "2026-04-29T09:00:00Z",
-          "updatedAt": "2026-04-29T09:00:00Z"
+          "updatedAt": "2026-04-29T09:00:00Z",
+          "ownerDisplayNameSnapshot": "契约旅行圈主",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_travel/v1/cover.png"
         },
         {
           "id": "fixture_circle_city",
@@ -65,8 +71,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
-          "coverUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900",
-          "avatarUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400",
+          "coverUrl": "media/image/circle/fixture_circle_city/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_city/v1/avatar.png",
           "description": "城市影像、扫街和周末看展。",
           "visibility": "public",
           "joinPolicy": "open",
@@ -80,7 +86,10 @@
           "autoSyncChat": true,
           "defaultPublicGroupId": "fixture_group_city_public",
           "createdAt": "2026-04-29T09:10:00Z",
-          "updatedAt": "2026-04-29T09:10:00Z"
+          "updatedAt": "2026-04-29T09:10:00Z",
+          "ownerDisplayNameSnapshot": "契约剪辑师",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_city/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_city/v1/cover.png"
         },
         {
           "id": "fixture_circle_life",
@@ -89,8 +98,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
-          "coverUrl": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=900",
-          "avatarUrl": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400",
+          "coverUrl": "media/image/circle/fixture_circle_life/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
           "description": "咖啡、手账、美食与日常灵感。",
           "visibility": "public",
           "joinPolicy": "open",
@@ -104,7 +113,10 @@
           "autoSyncChat": true,
           "defaultPublicGroupId": "fixture_group_life_public",
           "createdAt": "2026-04-29T09:20:00Z",
-          "updatedAt": "2026-04-29T09:20:00Z"
+          "updatedAt": "2026-04-29T09:20:00Z",
+          "ownerDisplayNameSnapshot": "契约同伴一",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_life/v1/cover.png"
         },
         {
           "id": "fixture_circle_tech",
@@ -113,8 +125,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": false,
-          "coverUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=900",
-          "avatarUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400",
+          "coverUrl": "media/image/circle/fixture_circle_tech/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
           "description": "AI、工具和创作者效率。",
           "visibility": "public",
           "joinPolicy": "open",
@@ -128,7 +140,10 @@
           "autoSyncChat": true,
           "defaultPublicGroupId": "fixture_group_tech_public",
           "createdAt": "2026-04-29T09:30:00Z",
-          "updatedAt": "2026-04-29T09:30:00Z"
+          "updatedAt": "2026-04-29T09:30:00Z",
+          "ownerDisplayNameSnapshot": "契约撰稿人",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_tech/v1/cover.png"
         },
         {
           "id": "fixture_circle_food",
@@ -137,8 +152,8 @@
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": false,
-          "coverUrl": "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=900",
-          "avatarUrl": "https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=400",
+          "coverUrl": "media/image/circle/fixture_circle_food/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_food/v1/avatar.png",
           "description": "记录城市里的咖啡馆和小店。",
           "visibility": "public",
           "joinPolicy": "open",
@@ -152,7 +167,10 @@
           "autoSyncChat": true,
           "defaultPublicGroupId": "fixture_group_food_public",
           "createdAt": "2026-04-29T09:40:00Z",
-          "updatedAt": "2026-04-29T09:40:00Z"
+          "updatedAt": "2026-04-29T09:40:00Z",
+          "ownerDisplayNameSnapshot": "契约同伴二",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_food/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_food/v1/cover.png"
         }
       ],
       "groups": {
@@ -173,7 +191,8 @@
             "isDefaultPublicGroup": true,
             "status": "active",
             "createdAt": "2026-04-29T08:00:00Z",
-            "updatedAt": "2026-04-29T08:00:00Z"
+            "updatedAt": "2026-04-29T08:00:00Z",
+            "ownerDisplayNameSnapshot": "契约摄影社主理人"
           }
         ],
         "fixture_circle_travel": [
@@ -193,7 +212,8 @@
             "isDefaultPublicGroup": true,
             "status": "active",
             "createdAt": "2026-04-29T09:00:00Z",
-            "updatedAt": "2026-04-29T09:00:00Z"
+            "updatedAt": "2026-04-29T09:00:00Z",
+            "ownerDisplayNameSnapshot": "契约旅行圈主"
           }
         ]
       },
@@ -206,7 +226,10 @@
             "role": "owner",
             "joinedAt": "2026-04-29T08:00:00Z",
             "lastActiveAt": "2026-04-29T08:30:00Z",
-            "contribution": 10
+            "contribution": 10,
+            "displayName": "契约摄影社主理人",
+            "avatarObjectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_owner/v1/avatar.png"
           },
           {
             "_id": "fixture_member_photo_viewer",
@@ -215,7 +238,10 @@
             "role": "member",
             "joinedAt": "2026-04-29T08:05:00Z",
             "lastActiveAt": "2026-04-29T08:40:00Z",
-            "contribution": 3
+            "contribution": 3,
+            "displayName": "契约当前用户",
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png"
           }
         ],
         "fixture_circle_travel": [
@@ -226,7 +252,10 @@
             "role": "owner",
             "joinedAt": "2026-04-29T09:00:00Z",
             "lastActiveAt": "2026-04-29T09:30:00Z",
-            "contribution": 7
+            "contribution": 7,
+            "displayName": "契约旅行圈主",
+            "avatarObjectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png"
           }
         ]
       },
@@ -251,12 +280,28 @@
     },
     "circle_home_feed_core": {
       "description": "首页群组 tab 与圈子 hub feed 所需内容映射。",
-      "featuredCircleIds": ["fixture_circle_photo", "fixture_circle_travel", "fixture_circle_city", "fixture_circle_life", "fixture_circle_tech", "fixture_circle_food"],
-      "groupFeedPostIds": ["fixture_photo_001", "fixture_photo_002", "fixture_photo_003", "fixture_article_001", "fixture_article_002", "fixture_video_001"]
+      "featuredCircleIds": [
+        "fixture_circle_photo",
+        "fixture_circle_travel",
+        "fixture_circle_city",
+        "fixture_circle_life",
+        "fixture_circle_tech",
+        "fixture_circle_food"
+      ],
+      "groupFeedPostIds": [
+        "fixture_photo_001",
+        "fixture_photo_002",
+        "fixture_photo_003",
+        "fixture_article_001",
+        "fixture_article_002",
+        "fixture_video_001"
+      ]
     },
     "circle_profile_core": {
       "description": "圈子主页封面、统计、成员与作品。",
-      "circleIds": ["fixture_circle_photo"],
+      "circleIds": [
+        "fixture_circle_photo"
+      ],
       "stats": [
         {
           "circleId": "fixture_circle_photo",
@@ -265,7 +310,12 @@
           "weeklyActiveCount": 18
         }
       ],
-      "postIds": ["fixture_photo_001", "fixture_photo_002", "fixture_article_001", "fixture_video_001"]
+      "postIds": [
+        "fixture_photo_001",
+        "fixture_photo_002",
+        "fixture_article_001",
+        "fixture_video_001"
+      ]
     },
     "circle_group_chat_link_core": {
       "description": "圈子默认公开群与聊天会话的对齐关系。",
@@ -289,21 +339,53 @@
       "title": "圈子列表与详情契约种子",
       "type": "circle_list_detail",
       "domainId": "circle",
-      "seedRefs": ["circle_core", "circle_home_feed_core", "circle_profile_core", "circle_group_chat_link_core"],
+      "seedRefs": [
+        "circle_core",
+        "circle_home_feed_core",
+        "circle_profile_core",
+        "circle_group_chat_link_core"
+      ],
       "uiExpectations": {
-        "circleIds": ["fixture_circle_photo", "fixture_circle_travel"],
-        "textFragments": ["契约摄影社", "契约旅行手账"]
+        "circleIds": [
+          "fixture_circle_photo",
+          "fixture_circle_travel"
+        ],
+        "textFragments": [
+          "契约摄影社",
+          "契约旅行手账"
+        ]
       },
       "remoteExpectations": {
-        "circleIds": ["fixture_circle_photo", "fixture_circle_travel"],
-        "groupIds": ["fixture_group_photo_public"],
-        "memberUserIds": ["fixture_user_owner", "fixture_user_current"],
-        "fileIds": ["fixture_file_photo_guide"]
+        "circleIds": [
+          "fixture_circle_photo",
+          "fixture_circle_travel"
+        ],
+        "groupIds": [
+          "fixture_group_photo_public"
+        ],
+        "memberUserIds": [
+          "fixture_user_owner",
+          "fixture_user_current"
+        ],
+        "fileIds": [
+          "fixture_file_photo_guide"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     }
   ]

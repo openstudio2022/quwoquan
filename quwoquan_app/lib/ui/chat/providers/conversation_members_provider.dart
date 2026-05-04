@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dt
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 
 /// 会话成员及设置的共享状态
 class ConversationMembersState {
@@ -94,8 +95,10 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
       final raw = results[0] as List<ChatConversationMemberDto>;
       final members = raw
           .map(
-            (member) =>
-                member.copyWith(isCurrentUser: member.userId == _currentUserId),
+            (member) => member.copyWith(
+              avatarUrl: resolveAvatarImageUrl(member.avatarUrl),
+              isCurrentUser: member.userId == _currentUserId,
+            ),
           )
           .toList(growable: false);
       state = state.copyWith(

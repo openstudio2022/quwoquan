@@ -14,6 +14,7 @@ import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timel
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 enum PersonalAssistantTranscriptRole { user, assistant, system }
@@ -132,6 +133,8 @@ class PersonalAssistantProcessSummary {
     this.retrievalDesignNarrative = '',
     this.processingSummary = '',
     this.expansionReason = '',
+    this.finalAnswerSummary = '',
+    this.finalAnswerReady = false,
     this.selectedKeyPoints = const <String>[],
     this.acceptedReferences = const <RetrievalProcessingReference>[],
   });
@@ -145,6 +148,8 @@ class PersonalAssistantProcessSummary {
   final String retrievalDesignNarrative;
   final String processingSummary;
   final String expansionReason;
+  final String finalAnswerSummary;
+  final bool finalAnswerReady;
   final List<String> selectedKeyPoints;
   final List<RetrievalProcessingReference> acceptedReferences;
 
@@ -158,6 +163,8 @@ class PersonalAssistantProcessSummary {
     String? retrievalDesignNarrative,
     String? processingSummary,
     String? expansionReason,
+    String? finalAnswerSummary,
+    bool? finalAnswerReady,
     List<String>? selectedKeyPoints,
     List<RetrievalProcessingReference>? acceptedReferences,
   }) {
@@ -172,6 +179,8 @@ class PersonalAssistantProcessSummary {
           retrievalDesignNarrative ?? this.retrievalDesignNarrative,
       processingSummary: processingSummary ?? this.processingSummary,
       expansionReason: expansionReason ?? this.expansionReason,
+      finalAnswerSummary: finalAnswerSummary ?? this.finalAnswerSummary,
+      finalAnswerReady: finalAnswerReady ?? this.finalAnswerReady,
       selectedKeyPoints: selectedKeyPoints ?? this.selectedKeyPoints,
       acceptedReferences: acceptedReferences ?? this.acceptedReferences,
     );
@@ -185,6 +194,7 @@ class PersonalAssistantProcessSummary {
       understandingSummary.trim().isNotEmpty ||
       retrievalDesignNarrative.trim().isNotEmpty ||
       processingSummary.trim().isNotEmpty ||
+      finalAnswerSummary.trim().isNotEmpty ||
       acceptedReferences.isNotEmpty;
 }
 
@@ -493,6 +503,8 @@ PersonalAssistantProcessSummary _projectProcessSummary(
   var retrievalDesignNarrative = current.retrievalDesignNarrative;
   var processingSummary = current.processingSummary;
   var expansionReason = current.expansionReason;
+  var finalAnswerSummary = current.finalAnswerSummary;
+  var finalAnswerReady = current.finalAnswerReady;
   var selectedKeyPoints = current.selectedKeyPoints;
   var acceptedReferences = current.acceptedReferences;
   final lines = <String>[...current.lines];
@@ -545,6 +557,22 @@ PersonalAssistantProcessSummary _projectProcessSummary(
     }
   }
 
+  if (event.eventType == 'search_query_generated' ||
+      event.eventType == 'assistant.search_query.generated') {
+    retrievalDesignNarrative = _firstNonEmpty(<String>[
+      _retrievalDesignFromSearchPlans(event),
+      retrievalDesignNarrative,
+    ]);
+  }
+
+  if (_isAnswerEvent(event)) {
+    finalAnswerSummary = UITextConstants.assistantProcessFinalAnswerNarrative;
+    finalAnswerReady =
+        finalAnswerReady ||
+        event.eventType == 'assistant.answer.final' ||
+        event.eventType == 'final_answer';
+  }
+
   switch (event.eventType) {
     case 'tool_use_requested':
     case 'tool_result_received':
@@ -570,6 +598,8 @@ PersonalAssistantProcessSummary _projectProcessSummary(
     retrievalDesignNarrative: retrievalDesignNarrative,
     processingSummary: processingSummary,
     expansionReason: expansionReason,
+    finalAnswerSummary: finalAnswerSummary,
+    finalAnswerReady: finalAnswerReady,
     selectedKeyPoints: List<String>.unmodifiable(selectedKeyPoints),
     acceptedReferences: List<RetrievalProcessingReference>.unmodifiable(
       acceptedReferences,
@@ -592,6 +622,10 @@ String _processLineForEvent(AssistantStreamEventWire event) {
   );
   if (retrievalDesign.isNotEmpty) {
     return retrievalDesign;
+  }
+  if (event.eventType == 'search_query_generated' ||
+      event.eventType == 'assistant.search_query.generated') {
+    return _retrievalDesignFromSearchPlans(event);
   }
   final processingSummary = payload.nestedString(
     'retrievalProcessing',
@@ -765,6 +799,33 @@ int _firstPositiveInt(List<int> values) {
     }
   }
   return 0;
+}
+
+String _retrievalDesignFromSearchPlans(AssistantStreamEventWire event) {
+  final raw =
+      event.payload['searchPlans'] ?? event.payload['acceptedSearchPlans'];
+  if (raw is! List || raw.isEmpty) {
+    return '';
+  }
+  final lines = <String>[];
+  for (final item in raw) {
+    if (item is! Map) {
+      continue;
+    }
+    final query = _stringValue(item['query']);
+    if (query.isEmpty) {
+      continue;
+    }
+    final label = _firstNonEmpty(<String>[
+      _stringValue(item['label']),
+      _stringValue(item['dimension']),
+    ]);
+    lines.add(label.isEmpty ? query : '$label：$query');
+  }
+  if (lines.isEmpty) {
+    return '';
+  }
+  return lines.join('\n');
 }
 
 String _openedTurnAnswer(AssistantTurnEnvelopeWire turn) {
@@ -1012,7 +1073,13 @@ AssistantJourney _personalAssistantJourney(
       ),
       _journeyStage(
         JourneyStageId.answer,
-        hasRetrieval ? JourneyStageStatus.active : JourneyStageStatus.pending,
+        processSummary.finalAnswerReady
+            ? JourneyStageStatus.completed
+            : (processSummary.finalAnswerSummary.trim().isNotEmpty
+                  ? JourneyStageStatus.active
+                  : (hasRetrieval
+                        ? JourneyStageStatus.active
+                        : JourneyStageStatus.pending)),
         3,
       ),
     ],
@@ -1034,6 +1101,9 @@ AssistantJourney _personalAssistantJourney(
     referenceSummary: AssistantJourneyReferenceSummary(
       count: processSummary.searchCount,
       references: _journeyReferences(processSummary.acceptedReferences),
+    ),
+    readiness: AssistantJourneyReadiness(
+      finalAnswerReady: processSummary.finalAnswerReady,
     ),
   );
 }
@@ -1104,6 +1174,20 @@ List<ProcessTimelineFrame> _personalAssistantProcessTimeline(
         detail: processSummary.expansionReason.trim(),
         references: processSummary.acceptedReferences,
         retrievalProcessing: retrievalProcessing,
+      ),
+    );
+  }
+  if (processSummary.finalAnswerSummary.trim().isNotEmpty) {
+    frames.add(
+      buildProcessTimelineFrame(
+        stepId: ProcessStepId.answerOrganization,
+        status: processSummary.finalAnswerReady
+            ? JourneyStageStatus.completed
+            : JourneyStageStatus.active,
+        headline: processSummary.finalAnswerSummary.trim(),
+        answerProcessing: RunArtifactsAnswerProcessing(
+          readinessSummary: processSummary.finalAnswerSummary.trim(),
+        ),
       ),
     );
   }
@@ -1226,7 +1310,27 @@ bool _isAnswerEvent(AssistantStreamEventWire event) {
 }
 
 String _payloadText(AssistantStreamEventWire event) {
-  return event.payload['text']?.toString().trim() ?? '';
+  final directText = event.payload['text']?.toString().trim() ?? '';
+  if (directText.isNotEmpty) {
+    return directText;
+  }
+  final userMarkdown = event.payload['userMarkdown']?.toString().trim() ?? '';
+  if (userMarkdown.isNotEmpty) {
+    return userMarkdown;
+  }
+  final runArtifacts = event.payload['runArtifacts'];
+  if (runArtifacts is Map) {
+    for (final key in <String>[
+      assistantDisplayMarkdownField,
+      assistantDisplayPlainTextField,
+    ]) {
+      final text = runArtifacts[key]?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+  }
+  return '';
 }
 
 String _failureMessageForEvent(AssistantStreamEventWire event) {

@@ -1,8 +1,12 @@
-# Self-hosted：alpha/beta/gamma 端侧矩阵（发布准入；gamma 依赖稳定网关，建议在 ECS onebox 部署后触发）。
-# 需在仓库注册带 self-hosted 标签的 Runner（macOS 跑 iOS；Linux/mac 均可跑 Android，视本机 adb/flutter devices）。
-name: 05b. App Env Device Matrix (self-hosted)
+# Self-hosted：统一设备矩阵入口（merge queue 阻断 / workflow_call 复用 / 手动调试）。
+# 固定到本机 macOS self-hosted runner，并通过 flutter devices --machine 动态发现当前可见的 Android/iOS 模拟器与真机。
+# 发现到的每台设备都会执行；只要总设备数 >= 1 即可进入矩阵，不再依赖固定 device id。
+name: 05. App Env Device Matrix
 
 on:
+  merge_group:
+    types:
+      - checks_requested
   workflow_dispatch:
     inputs:
       env_json:
@@ -44,26 +48,107 @@ on:
         default: assistant
 
 jobs:
+  discover_devices:
+    name: Discover mobile devices (self-hosted)
+    runs-on: [self-hosted, macOS]
+    outputs:
+      env_json: ${{ steps.discover.outputs.env_json }}
+      matrix_kind: ${{ steps.discover.outputs.matrix_kind }}
+      gamma_base_url: ${{ steps.discover.outputs.gamma_base_url }}
+      media_base_url: ${{ steps.discover.outputs.media_base_url }}
+      has_android: ${{ steps.discover.outputs.has_android }}
+      has_ios: ${{ steps.discover.outputs.has_ios }}
+      android_count: ${{ steps.discover.outputs.android_count }}
+      ios_count: ${{ steps.discover.outputs.ios_count }}
+      device_summary: ${{ steps.discover.outputs.device_summary }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 校验 self-hosted macOS runner
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::05 已统一要求运行在本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            exit 2
+          fi
+      - name: Install Flutter (PATH)
+        run: |
+          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          flutter --version
+      - name: 发现当前 Mac 可见移动设备
+        id: discover
+        run: |
+          python3 scripts/discover_flutter_mobile_devices.py \
+            --output "$RUNNER_TEMP/mobile-devices.json" \
+            --require-mobile
+          python3 - "$RUNNER_TEMP/mobile-devices.json" "$GITHUB_OUTPUT" <<'PY'
+          import json
+          import sys
+
+          path, output_path = sys.argv[1], sys.argv[2]
+          data = json.load(open(path, encoding="utf-8"))
+          android = data.get("android") or []
+          ios = data.get("ios") or []
+          env_json = """${{ github.event_name == 'merge_group' && '["alpha","beta"]' || inputs.env_json }}"""
+          matrix_kind = """${{ github.event_name == 'merge_group' && 'assistant' || inputs.matrix_kind }}"""
+          gamma_base_url = """${{ inputs.gamma_base_url }}"""
+          media_base_url = """${{ inputs.media_base_url }}"""
+
+          def fmt(items):
+              return ", ".join(f'{item["name"]}({item["id"]})' for item in items)
+
+          summary_parts = []
+          if android:
+              summary_parts.append(f'android[{len(android)}]: {fmt(android)}')
+          if ios:
+              summary_parts.append(f'ios[{len(ios)}]: {fmt(ios)}')
+          summary = "；".join(summary_parts) if summary_parts else "未发现 iOS/Android 设备"
+
+          with open(output_path, "a", encoding="utf-8") as fh:
+              print(f'env_json={env_json}', file=fh)
+              print(f'matrix_kind={matrix_kind}', file=fh)
+              print(f'gamma_base_url={gamma_base_url}', file=fh)
+              print(f'media_base_url={media_base_url}', file=fh)
+              print(f'has_android={"true" if android else "false"}', file=fh)
+              print(f'has_ios={"true" if ios else "false"}', file=fh)
+              print(f'android_count={len(android)}', file=fh)
+              print(f'ios_count={len(ios)}', file=fh)
+              print("device_summary<<EOF", file=fh)
+              print(summary, file=fh)
+              print("EOF", file=fh)
+
+          print(f"::notice::self-hosted mobile devices => {summary}")
+          PY
+
   android:
     name: ${{ matrix.env }} / Android (self-hosted)
-    runs-on: self-hosted
+    needs: [discover_devices]
+    if: ${{ needs.discover_devices.outputs.has_android == 'true' }}
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        env: ${{ fromJson(inputs.env_json) }}
+        env: ${{ fromJson(needs.discover_devices.outputs.env_json) }}
     env:
       API_CONTRACT_ENV: ${{ matrix.env }}
-      GAMMA_BASE_URL: ${{ inputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ inputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
+      GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
       CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
-      ANDROID_DEVICE_ID: ${{ vars.ANDROID_DEVICE_ID }}
     steps:
       - uses: actions/checkout@v4
+      - name: 记录发现结果
+        run: |
+          echo "Android devices: ${{ needs.discover_devices.outputs.android_count }}"
+          echo "${{ needs.discover_devices.outputs.device_summary }}"
+      - name: 校验 self-hosted macOS runner
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::Android 端侧矩阵已统一到本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            exit 2
+          fi
       - name: 准备 personal_assistant/.env
         run: |
           mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
@@ -87,13 +172,14 @@ jobs:
       - name: Install Flutter (PATH)
         run: |
           command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          command -v adb >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 adb 并在 PATH 中"; exit 2; }
           flutter --version
       - name: 安装 Flutter 依赖
         working-directory: quwoquan_app
         run: flutter pub get
       - name: Run ${{ matrix.env }} on Android (self-hosted)
         run: |
-          if [ "${{ inputs.matrix_kind }}" = "chat-avatar" ]; then
+          if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
             python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android
           else
             python3 scripts/run_assistant_device_matrix_ci.py --platform android
@@ -102,7 +188,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-selfhosted-${{ inputs.matrix_kind }}-${{ matrix.env }}-android
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
           path: |
             artifacts/device-matrix/${{ matrix.env }}-android.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
@@ -111,24 +197,35 @@ jobs:
 
   ios:
     name: ${{ matrix.env }} / iOS (self-hosted)
-    runs-on: self-hosted
+    needs: [discover_devices]
+    if: ${{ needs.discover_devices.outputs.has_ios == 'true' }}
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        env: ${{ fromJson(inputs.env_json) }}
+        env: ${{ fromJson(needs.discover_devices.outputs.env_json) }}
     env:
       API_CONTRACT_ENV: ${{ matrix.env }}
-      GAMMA_BASE_URL: ${{ inputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ inputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
+      GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
       CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
-      IOS_DEVICE_ID: ${{ vars.IOS_DEVICE_ID }}
     steps:
       - uses: actions/checkout@v4
+      - name: 记录发现结果
+        run: |
+          echo "iOS devices: ${{ needs.discover_devices.outputs.ios_count }}"
+          echo "${{ needs.discover_devices.outputs.device_summary }}"
+      - name: 校验 self-hosted macOS runner
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::iOS 端侧矩阵已统一到本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            exit 2
+          fi
       - name: 准备 personal_assistant/.env
         run: |
           mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
@@ -148,51 +245,14 @@ jobs:
       - name: Install Flutter (PATH)
         run: |
           command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          command -v xcrun >/dev/null 2>&1 || { echo "::error::self-hosted runner 需具备 Xcode / xcrun"; exit 2; }
           flutter --version
       - name: 安装 Flutter 依赖
         working-directory: quwoquan_app
         run: flutter pub get
-      - name: 选用已配置的 iOS 设备 / 模拟器 UDID
-        if: runner.os == 'macOS' && vars.IOS_DEVICE_ID != ''
-        run: echo "IOS_DEVICE_ID=${{ vars.IOS_DEVICE_ID }}" >> "$GITHUB_ENV"
-      - name: Boot iOS simulator（未配置 vars.IOS_DEVICE_ID 时）
-        if: runner.os == 'macOS' && vars.IOS_DEVICE_ID == ''
-        run: |
-          xcodebuild -version
-          xcrun simctl list > /dev/null
-          xcrun simctl list devices available --json > "$RUNNER_TEMP/ios-devices.json"
-          IOS_DEVICE_ID="$(python3 - "$RUNNER_TEMP/ios-devices.json" <<'PY'
-          import json
-          import re
-          import sys
-
-          data = json.load(open(sys.argv[1], encoding="utf-8")).get("devices", {})
-          devices = []
-          for runtime, runtime_devices in data.items():
-              match = re.search(r"iOS-(\d+(?:-\d+)*)$", runtime)
-              if not match:
-                  continue
-              version = tuple(int(part) for part in match.group(1).split("-"))
-              for index, device in enumerate(runtime_devices):
-                  if not device.get("isAvailable") or not device.get("udid"):
-                      continue
-                  name = device.get("name", "")
-                  prefer_phone = 1 if name.startswith("iPhone") else 0
-                  prefer_current = 1 if name in {"iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"} else 0
-                  devices.append((version, prefer_current, prefer_phone, -index, device["udid"]))
-          if not devices:
-              raise SystemExit("no available iOS simulator")
-          devices.sort(reverse=True)
-          print(devices[0][-1])
-          PY
-          )"
-          xcrun simctl boot "$IOS_DEVICE_ID" || true
-          xcrun simctl bootstatus "$IOS_DEVICE_ID" -b
-          echo "IOS_DEVICE_ID=$IOS_DEVICE_ID" >> "$GITHUB_ENV"
-          flutter devices
       - name: Run ${{ matrix.env }} on iOS (self-hosted)
         run: |
-          if [ "${{ inputs.matrix_kind }}" = "chat-avatar" ]; then
+          if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
             python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
           else
             python3 scripts/run_assistant_device_matrix_ci.py --platform ios
@@ -201,7 +261,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-selfhosted-${{ inputs.matrix_kind }}-${{ matrix.env }}-ios
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
           path: |
             artifacts/device-matrix/${{ matrix.env }}-ios.json
             artifacts/device-matrix/assistant_device_matrix_logs/**

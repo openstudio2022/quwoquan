@@ -1,6 +1,6 @@
 # CI/CD 端到端闭环落实方案
 
-> 目标：deliver 入库 → 部署 integration → L3/L4 验证 → 灰度 prod 全链路自动化或半自动化
+> 目标：进入 `main` 前完成 merge queue 阻断验证；进入 `main` 后再执行发布后续动作。
 
 **当前部署目标**：CI/CD 仅考虑**阿里云 ACK** 部署。pre-release-gate、service_pipeline 使用 `CLOUD_PROVIDER=aliyun` 和 `deploy/kustomization/aliyun-integration`、`deploy/kustomization/aliyun-prod`。
 
@@ -16,50 +16,48 @@
 
 | Workflow 名称 | 文件 | 触发 | 职责 | 对应阶段 |
 |---------------|------|------|------|----------|
-| 03. Delivery Gate | `delivery-gate.yml` | PR / push main, dev1.0 | 拓扑校验、L1+L2 质量门（PR/入库阶段） | G0~G3 |
-| 02. Service Pipeline | `service_pipeline.yml` | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验（无 L2） | G2 |
-| 01. App Pipeline | `app_pipeline.yml` | quwoquan_app/** | Flutter analyze；v* tag → macOS 构建（无 L1） | G2 / 发布 |
-| 04. Pre-Release Gate | `pre-release-gate.yml` | v*-rc* tag、push to main（日节奏）、手动 | gate(L1+L2) → deploy → L3 → L4 | G3→G5b |
-| 07. Merge dev1.0 To Main | `merge-dev1.0-to-main.yml` | 定时 6:00、workflow_dispatch | merge dev1.0 → main | 日节奏 |
+| 03. Delivery Gate | `delivery-gate.yml` | `merge_group`、手动 | merge queue 快速主门禁：拓扑校验、L1+L2 | G0~G3 |
+| 05. App Env Device Matrix | `app-env-device-matrix-self-hosted.yml` | `merge_group`、`workflow_call`、手动 | self-hosted 设备矩阵；动态发现当前 Mac 上全部移动设备 | G3/G5b |
+| 04. Pre-Release Gate | `pre-release-gate.yml` | `merge_group`、手动 | deploy integration → L3 → L4 → gamma smoke | G3→G5b |
+| 02. Service Pipeline | `service_pipeline.yml` | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize prod 校验 | G2 / post-main |
+| 07. Deploy To Prod (Auto) | `deploy-prod-auto.yml` | `push main`、手动 | main 后自动推进 prod 占位链路 | G5c |
+| 01. App Pipeline | `app_pipeline.yml` | `v*` tag、手动 | 端侧发布构建（macOS） | 发布 |
+| 06. Deploy To Prod (Gray) | `deploy-prod-gray.yml` | 手动 | 半自动灰度 | G5c |
+| 08. Deploy Gamma ECS | `deploy-gamma-ecs.yml` | 手动 | gamma / onebox 发布与复验 | G5a→G5b |
 
 ### 1.2 当前 pre-release 链路（已实现）
 
-```
-v*-rc* tag
-  → gate: make gate（L1+L2）+ kustomize build（G3）
-  → deploy-integration: kubectl apply（G5a，需 INTEGRATION_KUBECONFIG）
-  → l3-api-contract: make test-api-contract（G5b，部署完成后）
-  → l4-android / l4-ios: GitHub hosted Android Emulator / iOS Simulator（G5b，部署完成后）
+```text
+merge queue(main)
+  → 03 Delivery Gate（L1+L2）
+  → 05 App Env Device Matrix（alpha/beta self-hosted）
+  → 04 Pre-Release Gate（deploy integration → L3 → L4 → gamma smoke）
+  → 全绿后才允许进入 main
 ```
 
-**已落实**：gate 仅 L1+L2；L3/L4 必须等待 deploy-integration 完成后执行，验证真实部署环境。
+**已落实**：`03/04/05` 都不再响应分支 push；merge queue 是唯一主干阻断路径。
 
 ### 1.3 ECS Onebox（gamma 镜像栈，`deploy-gamma-ecs.yml`）
 
-与 ACK integration **并行**的一条闭环：**hosted 仅负责 gate + alpha/beta 快速矩阵 + 源码打包**；**ECS** 在同一机器同端口执行 **pre 全量部署** 与 **prod 就地升级**（`GAMMA_ECS_SKIP_UPLOAD`）；**self-hosted** 承担 **alpha/beta/gamma 发布准入矩阵** 与 prod 后 **gamma 烟测**。部署前后在远端 `../gamma-backups/` 备份 tarball，结构化报告见 `artifacts/ecs-onebox/deploy-report.json`，回滚见 **`ecs-onebox-rollback.yml` / `scripts/rollback_gamma_ecs.sh`**。
+与 ACK integration **并行**的一条闭环：**08** 已改成**纯手动** onebox / gamma 演练链路；merge queue 主路径不再在 `main` 后重复触发这套重验证。部署前后在远端 `../gamma-backups/` 备份 tarball，结构化报告见 `artifacts/ecs-onebox/deploy-report.json`，回滚见 **`ecs-onebox-rollback.yml` / `scripts/rollback_gamma_ecs.sh`**。
 
 ---
 
 ## 2. 端到端闭环目标（已落实）
 
-**分支策略**：日常 PR 合入 dev1.0；main 仅由定时 merge 更新，见 `deploy/shared/branch_strategy.md`。
+**分支策略**：支持 `dev1.0` 分支开发与 trunk development 两种模式，但**进入 `main` 的唯一门禁都是 merge queue**，见 `deploy/shared/branch_strategy.md`。
 
-```
-deliver 入库(dev1.0) → 定时 merge → main
-    ↓
-v*-rc* tag 或 push to main（日节奏 merge 后）
-    ↓
-pre-release-gate
-    │
-    ├─ Job1: gate（L1+L2）
-    ├─ Job2: deploy-integration（kubectl apply）  ✓ 已实现
-    ├─ Job3: l3-api-contract（需 Job2 完成）      ✓ 已实现
-    ├─ Job4: l4-android（GitHub hosted emulator，需 Job2 完成） ✓ 已实现
-    └─ Job5: l4-ios（GitHub hosted simulator，需 Job2 完成）    ✓ 已实现
-    ↓
-全部通过 → 允许灰度到 prod（人工或下游 workflow）
-    ↓
-config-gray-rollout / config-slo-gate / config-rollback
+```text
+feature / dev1.0
+  → 用户显式发起到 main 的 PR
+  → merge queue
+      ├─ 03 Delivery Gate
+      ├─ 05 App Env Device Matrix
+      └─ 04 Pre-Release Gate
+  → 全部通过后进入 main
+  → main post-merge:
+      ├─ 02 Service Pipeline
+      └─ 07 Deploy To Prod (Auto)
 ```
 
 ---
@@ -72,37 +70,31 @@ config-gray-rollout / config-slo-gate / config-rollback
 
 **前置**：
 - integration 集群已创建（阿里云 ACK / 火山引擎 VKE / 华为云 CCE）
-- GitHub Secrets 配置：
-  - `INTEGRATION_KUBECONFIG`：integration 集群 kubeconfig（base64 编码）
-  - 或使用 OIDC：`INTEGRATION_CLUSTER_NAME`、云厂商 OIDC（阿里云 OIDC、GCP Workload Identity 等）
+- GitHub Secrets 配置（与 [`.github/workflows/pre-release-gate.yml`](../../.github/workflows/pre-release-gate.yml) 一致）：
+  - **`GAMMA_KUBECONFIG`**：integration 集群 kubeconfig（**base64 编码**）。未设置时 workflow 跳过 `kubectl apply`，仅打印 warning。
+  - 先前文档中的 `INTEGRATION_KUBECONFIG` 名称已弃用；请以 workflow 实际读取的 **`GAMMA_KUBECONFIG`** 为准。
+  - 或使用 OIDC：可在 job 内改为云厂商 `configure-credentials` + `kubectl`（需自行替换 shell 片段）。
 
-**实现要点**：
+**实现要点**（与当前 `pre-release-gate.yml` 语义对齐）：
 ```yaml
 deploy-integration:
   name: G5a Deploy to integration
-  needs: [gate]
   runs-on: ubuntu-latest
   env:
-    KUBECONFIG: ${{ secrets.INTEGRATION_KUBECONFIG }}
+    GAMMA_KUBECONFIG: ${{ secrets.GAMMA_KUBECONFIG }}
   steps:
     - uses: actions/checkout@v4
     - uses: syntaqx/setup-kustomize@v1
     - run: |
-        # 可选：安装 kubectl
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-      # 若使用 OIDC，此处改为 cloud provider 的 configure-credentials action
     - name: Apply to integration
       run: |
-        CLOUD_PROVIDER=${CLOUD_PROVIDER:-aliyun}
-        kustomize build deploy/kustomization/${CLOUD_PROVIDER}-integration | \
-          kubectl apply -f - --server-side
+        if [ -z "$GAMMA_KUBECONFIG" ]; then echo "skip apply"; exit 0; fi
+        mkdir -p ~/.kube && echo "$GAMMA_KUBECONFIG" | base64 -d > ~/.kube/config
+        kustomize build deploy/kustomization/${CLOUD_PROVIDER}-integration | kubectl apply -f - --server-side
     - name: Wait for rollout
       run: kubectl rollout status deployment/seed-box -n seed-box-integration --timeout=5m
-    - name: Health check
-      run: |
-        # 可选：curl $GAMMA_BASE_URL/healthz
-        kubectl get pods -n seed-box-integration
 ```
 
 **多云**：通过 `CLOUD_PROVIDER` 选择 kustomization 文件；不同云需要不同 KUBECONFIG 或 OIDC 配置。
@@ -111,7 +103,7 @@ deploy-integration:
 
 ### 3.2 L3 / L4 依赖 deploy-integration（已实现）
 
-**现状**：`l3-api-contract`、`l4-android`、`l4-ios` 均已 `needs: [gate, deploy-integration]`，integration 部署完成后再跑 L3/L4。
+**现状**：`l3-api-contract`、`l4-mobile-self-hosted` 与 `app-assistant-runtime-gamma` 均已依赖 `deploy-integration`，integration 部署完成后再跑 L3/L4/gamma smoke。
 
 ---
 
@@ -137,15 +129,36 @@ deploy-integration:
 | `GAMMA_BASE_URL` | gamma API 基址，L3/L4 使用 |
 | `GAMMA_PRODUCT_OPS_BASE_URL` | gamma 上 Ops/产品面 API 基址，`make test-api-contract` 必需 |
 | `GAMMA_TEST_AUTH_TOKEN` | L3/L4 鉴权 |
-| `GAMMA_KUBECONFIG` | gamma 集群 kubeconfig（或 OIDC 等效） |
+| `GAMMA_KUBECONFIG` | **integration** 集群 kubeconfig（base64）；`pre-release-gate.yml` 中 `deploy-integration` 使用；可选，缺省则跳过 apply |
+
+完整矩阵（含 `03/04/05/06/07/08`、Variables、self-hosted）见 **[environment_matrix.md §3](environment_matrix.md)**。
 
 ### 4.2 基础设施
 
-- **integration 集群**：K8s 集群（阿里云/火山/华为云），namespace `seed-box-integration`
+- **integration 集群**：K8s 集群（阿里云/火山/华为云），namespace `seed-box-integration`；`pre-release-gate.yml` 中 `kubectl rollout status deployment/seed-box -n seed-box-integration` 与 [`deploy/service/seed-box/kustomize/overlays/integration`](../../deploy/service/seed-box/kustomize/overlays/integration) 一致（若改名 overlay，须同步改 workflow）。
 - **镜像仓库**：kustomization 中 `images` 指向的 registry 可被集群拉取
 - **ConfigMap/Secret**：CONFIG_VERSION、IMAGE_VERSION 等与 kustomize overlay 一致
 
-### 4.3 版本注入
+### 4.3 Self-hosted Runner（05 / 08 / pre-release L4）
+
+`app-env-device-matrix-self-hosted.yml` 要求：
+
+- **Runner**：统一使用当前开发机注册的 `self-hosted` + `macOS` runner。
+- **设备发现**：通过 `flutter devices --machine` 动态发现当前可见 Android/iOS 模拟器与真机。
+- **执行语义**：发现到的每台设备都会逐台执行；只要总设备数 >= 1 即可进入矩阵，不再依赖自定义 runner label 或固定 device id。
+
+若当前 Mac 上暂时只连着 iPhone、只开了 Android Emulator，或两者同时存在，workflow 都会按实际发现结果展开；某一平台没有设备时会被跳过，但总设备数为 0 时直接 `gate_block`。
+
+### 4.4 merge queue / main 后验证清单
+
+1. **merge queue required checks**：确认 `03`、`04`、`05` 都作为 required checks 配置在 `main` 分支保护 / merge queue 中。
+2. **03 Delivery Gate**：确认 merge queue run 成功。
+3. **04 Pre-Release Gate**：确认 `deploy-integration`、`l3`、`l4`、`assistant-runtime-gamma`、`release-evidence-summary` 全绿。
+4. **05 App Env Device Matrix**：确认当前 Mac 可见设备被正确发现，且至少一台设备执行成功。
+5. **07 Deploy To Prod (Auto)**：确认 main 合入后触发成功；`production` Environment 若启用审批，在 GitHub 上完成 Stage 2 审批。
+6. **08 Deploy Gamma ECS**：仅在需要 onebox / gamma 手动演练时通过 `workflow_dispatch` 触发。
+
+### 4.5 版本注入
 
 当前 integration overlay 使用 `v2026.02.28.0` 等硬编码。pre-release tag 触发时，需要：
 - 从 tag 解析版本（如 `v1.0.0-rc.1` → `v1.0.0.rc1`）
@@ -158,7 +171,7 @@ deploy-integration:
 
 | 步骤 | 动作 | 状态 |
 |------|------|------|
-| 1 | 配置 `INTEGRATION_KUBECONFIG`（或 OIDC） | ✓ 按需 |
+| 1 | 配置 `GAMMA_KUBECONFIG`（integration kubeconfig，base64）或 OIDC | ✓ 按需 |
 | 2 | `deploy-integration` job（kubectl apply） | ✓ 已实现 |
 | 3 | L3/L4 job 依赖 `deploy-integration` | ✓ 已实现 |
 | 4 | `l3-api-contract` job（deploy 后执行） | ✓ 已实现 |
@@ -170,7 +183,7 @@ deploy-integration:
 ## 6. 参考
 
 - `deploy/shared/environment_matrix.md` — 五环境矩阵、STAGING=integration 语义、各环境验证命令
-- `deploy/shared/branch_strategy.md` — 分支策略（dev1.0 日常合入、main 定时 merge）
+- `deploy/shared/branch_strategy.md` — 分支策略（显式 PR + merge queue）
 - `deploy/shared/deliver_to_production_runbook.md` — 端到端运行手册
 - `.github/workflows/pre-release-gate.yml` — 当前 pre-release 流程
 - `scripts/deploy_to_integration.sh` — 构建脚本（需扩展或新建 apply 脚本）

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	react "quwoquan_service/services/assistant-service/internal/application/reasoning"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
@@ -262,6 +263,21 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 	if err != nil {
 		return ReactResult{}, err
 	}
+	if !finalAnswerUsable(finalResp) {
+		finalResp, err = model.Complete(ctx, ModelRequest{
+			TurnID:       turn.TurnID,
+			TraceID:      turn.TraceID,
+			SkillID:      skill.SkillID,
+			Stage:        "final",
+			Prompt:       "上一次 final 输出不可用于展示。请基于同一输入证据重新生成非空 userMarkdown，直接回答用户问题；开头不要提内部证据来源或生成过程。",
+			Observation:  finalObservation,
+			UserQuestion: turn.Input.Text,
+			ContextTurns: turn.ContextTurns,
+		})
+		if err != nil {
+			return ReactResult{}, err
+		}
+	}
 	usage["final"] = finalResp.Usage
 	toolExecution := ToolExecution{}
 	if len(stepsOut) > 0 {
@@ -278,6 +294,44 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 		StopReason:       stopReason,
 		FinalClientTrace: finalResp.ClientModelInteraction,
 	}, nil
+}
+
+func finalAnswerUsable(resp ModelResponse) bool {
+	text := strings.TrimSpace(resp.Text)
+	if text == "" || text == "{}" || strings.EqualFold(text, "null") {
+		return false
+	}
+	if containsInternalAnswerWording(text) {
+		return false
+	}
+	if strings.HasPrefix(text, "{") && strings.HasSuffix(text, "}") {
+		if md := strings.TrimSpace(fmtAny(resp.StructuredDelta["userMarkdown"])); md == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func containsInternalAnswerWording(text string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(text))
+	if normalized == "" {
+		return false
+	}
+	internalMarkers := []string{
+		"工具观察",
+		"工具结果",
+		"工具调用",
+		"根据工具",
+		"可靠标记",
+		"协议字段",
+		"reliable",
+	}
+	for _, marker := range internalMarkers {
+		if strings.Contains(normalized, strings.ToLower(marker)) {
+			return true
+		}
+	}
+	return false
 }
 
 func collectModelInteraction(resp ModelResponse) []map[string]any {

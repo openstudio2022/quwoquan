@@ -1,5 +1,7 @@
 # 群头像同步与显示 E2E 验证规格
 
+**商用全矩阵执行顺序与清单**：[`commercial-e2e-matrix-runbook.md`](./commercial-e2e-matrix-runbook.md)。本地前置自检：`python3 scripts/check_avatar_commercial_matrix_prereqs.py --strict`（`strict_local_prereqs_met` 仅表示 flutter/patrol/双端设备/网关 healthz 等就绪；脚本始终输出 `commercial_declaration_allowed=false`，**不**替代四条环境的非 dry-run JSON）。
+
 ## 目标
 
 本规格用于验证群头像从业务变更、可靠异步任务、通知 fanout、端侧同步到真实模拟器显示的完整链路。它不是头像算法单测，而是环境矩阵验收：每个被声明通过的环境都必须产出可追溯报告，且报告能关联同一个 `conversationId` 的服务端证据与端侧 UI 证据。
@@ -125,17 +127,40 @@
 - `cloud-gamma-pre` 中 API probe 或 self-hosted 模拟器失败，必须阻断 prod 部署。
 - `cloud-gamma-prod-smoke` 失败，必须阻断发布完成结论并保留回滚证据。
 
+## 商用矩阵证据登记模板（E1–E4，非 dry-run）
+
+| 槽位 | manifest 键 | 探针 JSON（或 E2 `aggregate`） | Android 矩阵 JSON | iOS 矩阵 JSON | GitHub Actions（run / artifact） |
+|------|---------------|-------------------------------|-------------------|---------------|----------------------------------|
+| E1 beta | `e1_beta` | | | | |
+| E2 local-gamma | `e2_local_gamma` | `aggregate` 或 `probe` | | | |
+| E3 cloud-gamma-pre | `e3_cloud_gamma_pre` | | | | |
+| E4 prod-smoke | `e4_cloud_gamma_prod_smoke` | | | | |
+
+- **Manifest 路径**（仓库内）：`artifacts/commercial-matrix/chat-avatar/manifest.yaml`（勿提交真实机密；可仅登记相对路径与 CI artifact 链接）。
+- **校验命令**：
+  ```bash
+  make verify-chat-avatar-commercial-matrix COMMERCIAL_MATRIX_MANIFEST=artifacts/commercial-matrix/chat-avatar/manifest.yaml
+  ```
+  退出码 **0**：机器认可四条证据；**2**：`GATE_BLOCK`。
+- **CI 快速校验**：workflow `08b. Verify Chat Avatar Commercial Matrix Evidence`（`workflow_dispatch`，上传 manifest 路径）。
+
 ## 当前执行证据（2026-05-03）
+
+### 工程/脚本形态（dry-run 与不冒充商用矩阵）
 
 本轮已完成本地可执行门禁和脚本形态验证：
 
 - `go test ./runtime/reliabletask`
 - `go test ./services/chat-service/tests -run TestGroupAvatar`
 - `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`
-- `python3 -m py_compile scripts/run_chat_avatar_e2e_probe.py scripts/run_chat_avatar_device_matrix.py scripts/run_chat_avatar_device_matrix_ci.py scripts/run_local_gamma_avatar_e2e.py scripts/run_local_gamma_t3.py`
+- `python3 -m py_compile scripts/run_chat_avatar_e2e_probe.py scripts/run_chat_avatar_device_matrix.py scripts/run_chat_avatar_device_matrix_ci.py scripts/run_local_gamma_avatar_e2e.py scripts/run_local_gamma_t3.py scripts/verify_chat_avatar_commercial_matrix_evidence.py`
 - `bash -n scripts/start_local_gamma_mirror.sh`
+- `bash -n scripts/run_chat_avatar_commercial_matrix_orchestrator.sh`
 - `python3 scripts/run_chat_avatar_e2e_probe.py --dry-run --env beta --report artifacts/avatar-e2e/beta/avatar_e2e_report.json`
 - `python3 scripts/run_local_gamma_avatar_e2e.py --dry-run --skip-device-matrix --report artifacts/local-gamma/avatar_e2e_report.json`
 - `python3 scripts/run_chat_avatar_device_matrix.py --dry-run --env local-gamma --platform ios --device-id dry-run-device --report artifacts/device-matrix/chat-avatar/local-gamma-ios-dry-run.json`
 
-仍未完成真实商用准出：当前会话没有可用的 beta/local-gamma 运行中网关、ECS 凭据与 self-hosted Android/iOS 设备，无法生成非 dry-run 的 `beta`、`local-gamma`、`cloud-gamma-pre`、`cloud-gamma-prod-smoke` 全矩阵 passed 报告。上述环境任一缺失时，结论必须保持 `GATE_BLOCK`，不得宣称群头像端到端显示验证商用完成。
+上述含 `dry-run` 的项**不得**作为商用矩阵 passed 依据；正式准出须填 manifest 并通过 `verify_chat_avatar_commercial_matrix_evidence.py`。
+
+**商用矩阵前提（修订）**：矩阵可在 **阿里云 ECS onebox**（`scripts/deploy_gamma_ecs.sh` / `deploy-gamma-ecs.yml`）+ **本机或已注册 self-hosted Runner**（Flutter/Patrol）上完成。`GAMMA_BASE_URL` 必须指向 **Caddy gamma-proxy** 端口（见 [`environment_matrix.md`](../../../../../deploy/shared/environment_matrix.md)），否则探针会误连 content 直出端口导致 `route_not_found` 或落入 Caddy 占位响应。部署后先跑 `python3 scripts/verify_gamma_public_gateway_routing.py --base-url "$GAMMA_BASE_URL"` 再执行 `run_chat_avatar_e2e_probe.py` / device-matrix。  
+在四项环境均未产出 **非 dry-run、可追溯 JSON** 前，结论仍须保持 `GATE_BLOCK`，不得宣称群头像端到端显示验证商用完成。

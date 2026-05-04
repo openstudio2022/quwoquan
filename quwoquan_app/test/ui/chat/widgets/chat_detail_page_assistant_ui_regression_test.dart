@@ -271,9 +271,9 @@ void main() {
     await tester.tap(find.textContaining('搜索了 1 篇').last);
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('1. 中国气象局 · weather.cma.cn'), findsOneWidget);
+    expect(find.text('1. 中国气象局'), findsOneWidget);
 
-    await tester.tap(find.text('1. 中国气象局 · weather.cma.cn'));
+    await tester.tap(find.text('1. 中国气象局'));
     await tester.pump();
 
     expect(tappedRef, isNotNull);

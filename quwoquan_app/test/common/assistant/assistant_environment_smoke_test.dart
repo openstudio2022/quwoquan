@@ -182,8 +182,26 @@ Future<void> _sendAndExpect(
   if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
     expect(streamState.answer, isNot(scenario.alphaMockStream.finalAnswer));
     expect(streamState.answer, isNot(contains('alpha mock')));
+    expect(streamState.answer, isNot(contains('工具观察')));
+    expect(streamState.answer, isNot(contains('工具结果')));
+    expect(streamState.answer, isNot(contains('根据工具')));
     expect(streamState.answerGateOpen, isTrue);
-    expect(streamState.processSummary.searchCount, greaterThan(0));
+    final hasSearchEvidence =
+        streamState.processSummary.searchCount > 0 ||
+        streamState.events.any(
+          (event) =>
+              event.eventType == 'search_query_generated' ||
+              event.eventType == 'assistant.search_query.generated' ||
+              event.eventType == 'search_query_accepted' ||
+              event.eventType == 'assistant.search_query.accepted' ||
+              event.eventType == 'tool_use_requested' ||
+              event.eventType == 'assistant.tool.requested' ||
+              event.eventType == 'tool_result_received' ||
+              event.eventType == 'assistant.tool.completed',
+        );
+    // 云侧在 geocode miss / 检索无可靠摘要场景会返回 searchedDocumentCount=0，
+    // 但仍应保留真实的检索或工具链事件证据。
+    expect(hasSearchEvidence, isTrue);
     // 云侧在“检索无可靠摘要”场景会返回 acceptedCount=0，属合法路径。
     expect(streamState.processSummary.acceptedCount, greaterThanOrEqualTo(0));
     expect(streamState.processSummary.processingSummary, isNotEmpty);
@@ -236,6 +254,8 @@ void _assertCloudPersonalAssistantNarrativeQuality(
   expect(narrative, isNot(contains('\uFFFD')));
   expect(narrative, isNot(contains('我会先确认你的核心问题')));
   expect(narrative, isNot(contains('我会围绕')));
+  expect(narrative, isNot(contains('用户询问')));
+  expect(narrative, isNot(contains('该用户')));
   expect(narrative, isNot(contains('nextAction')));
   expect(narrative, isNot(contains('reliable=')));
   expect(

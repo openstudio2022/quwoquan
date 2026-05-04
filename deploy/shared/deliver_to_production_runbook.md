@@ -27,7 +27,7 @@
 
 ### 3.1 Deliver 阶段完成
 
-- 代码已合入 dev1.0（日常）或 main（定时 merge 后）；分支策略见 `deploy/shared/branch_strategy.md`
+- 代码已合入 `dev1.0`（分支开发模式）或已准备发起进入 `main` 的 PR；分支策略见 `deploy/shared/branch_strategy.md`
 - `make gate-local-gamma` 通过并生成 `artifacts/local-gamma/report.json`。该命令必须覆盖本地 `T1 -> T4`，不得只用 `make gate` 替代；见 `/.cursor/commands/commit.md`
 - `deploy/shared/process_domain_mapping.yaml` 合法，`verify_deployment_domain_mapping.sh` 通过
 
@@ -71,7 +71,7 @@ make gate-local-gamma
 | 字段 | 含义 | 获取方式 |
 |------|------|----------|
 | **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`.release-state/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则从集群查：`kubectl get deployment seed-box -n seed-box-prod -o jsonpath='{.spec.template.spec.containers[0].image}'` 取 tag |
-| **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **pre-release** 部署到 integration 的版本：tag 触发用该 tag 或解析值；push main 见 `deploy/service/seed-box/kustomize/overlays/integration/kustomization.yaml` 的 `IMAGE_VERSION` 或当日约定（如 `vYYYY.MM.DD.0`） |
+| **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **merge queue 的 pre-release** 部署到 integration 的版本：tag 触发用该 tag 或解析值；必要时参考 `deploy/service/seed-box/kustomize/overlays/integration/kustomization.yaml` 的 `IMAGE_VERSION` |
 | **Current prod config version** | 当前生产正在使用的配置版本 | 从 **`.release-state/seed-box.state`** 的 **`to_config`** 读取；若无则从 deployment 环境变量 `CONFIG_VERSION` 读取 |
 | **Target config version** | 本次要上的配置版本 | 与 target image 对应，来自 pre-release 的 `CONFIG_VERSION`（同上） |
 
@@ -126,7 +126,7 @@ cd quwoquan_app && patrol test test/patrol/ \
   --dart-define=TEST_AUTH_TOKEN=<token>
 ```
 
-CI 使用 `.github/workflows/pre-release-gate.yml` 在 GitHub hosted runner 执行 L4：Android 为 `ubuntu-latest` + Android Emulator，iOS 为 `macos-latest` + iOS Simulator。
+CI 使用 `.github/workflows/pre-release-gate.yml` 在本机 macOS self-hosted runner 执行 L4：通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机，并逐台运行 Patrol。
 
 失败 → 不得进入 G5c。
 
@@ -178,7 +178,7 @@ make config-rollback SERVICE=seed-box TO_CONFIG=<rollback-version>
 ## 7. 端到端检查清单
 
 ```
-☐ deliver 完成，代码已入库 dev1.0 或 main（分支策略见 branch_strategy.md）
+☐ deliver 完成，代码已入库 `dev1.0` 或已准备进入 `main` 的显式 PR（分支策略见 `branch_strategy.md`）
 ☐ make gate-local-gamma 通过（本地 T1/T2/T3/T4）并生成 artifacts/local-gamma/report.json
 ☐ verify_deployment_domain_mapping.sh 通过
 ☐ integration 已部署目标版本
@@ -194,9 +194,9 @@ make config-rollback SERVICE=seed-box TO_CONFIG=<rollback-version>
 ## 8. 参考
 
 - `specs/00_MASTER_DEVELOPMENT_FLOW.md` — 主流程（含 Deploy 阶段 G5）
-- `deploy/shared/branch_strategy.md` — **分支策略**（dev1.0 日常合入、main 定时 merge）
+- `deploy/shared/branch_strategy.md` — **分支策略**（显式 PR + merge queue）
 - `deploy/shared/ci_cd_end_to_end_design.md` — **CI/CD 端到端闭环落实方案**（pre-release workflow、secrets、实施顺序）
-- `deploy/shared/workflow_consolidation_plan.md` — **Workflow 命名规范**（01～07、02/03 去重）
+- `deploy/shared/workflow_consolidation_plan.md` — **Workflow 命名规范**（01～08、merge queue/main-only）
 - `.cursor/commands/deploy.md` — 部署命令
 - `deploy/shared/process_domain_mapping_runbook.md` — 部署拓扑
 - `deploy/service/config-release/runbook.md` — 配置发布与灰度

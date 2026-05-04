@@ -29,6 +29,9 @@ global_acceptance:
     - given: 用户提问「这张图是在哪拍的」
       when: QA Runner 执行
       then: 结合 PageContext 中的图片信息返回位置
+    - given: 用户提问任意城市天气，例如「Hangzhou tian qi」或「Shen zhen tian qi」
+      when: 找私助执行天气检索并完成流式回答
+      then: 过程抽屉保留生成答案阶段叙事，检索来源优先展示国家级与区域级气象权威入口；城市级官方来源只在可解析、可维护或检索命中时补充，端侧列表只显示可点击标题不显示裸 URL
   A3_service_governance:
   - Content Analyzer 缓存 24h（评论 1h），避免重复 LLM 调用
   - QA Runner SSE 流式输出，不阻塞

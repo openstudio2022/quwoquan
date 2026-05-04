@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
@@ -63,7 +64,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final loaded = await _repo.listMessages(conversationId: conversationId);
-      final hydrated = await _hydrateSenderSnapshots(loaded);
+      final hydrated = await _hydrateSenderSnapshots(
+        loaded.map(_normalizeSenderAvatar).toList(growable: false),
+      );
       final merged = _mergeMessages(state.messages, hydrated);
       state = state.copyWith(messages: _sorted(merged), isLoading: false);
       if (maxSeq != null && maxSeq > 0) {
@@ -126,7 +129,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
       clientMsgId: clientMsgId,
       senderId: resolvedSenderId,
       senderName: senderName ?? activeContext.displayName,
-      senderAvatar: senderAvatar ?? activeContext.avatarUrl,
+      senderAvatar: resolveAvatarImageUrl(
+        senderAvatar ?? activeContext.avatarUrl,
+      ),
       senderPersonaId: resolvedSenderPersonaId.isEmpty
           ? null
           : resolvedSenderPersonaId,
@@ -242,7 +247,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         lastSeq: lastSeq,
       );
       if (syncResp.messages.isNotEmpty) {
-        final hydrated = await _hydrateSenderSnapshots(syncResp.messages);
+        final hydrated = await _hydrateSenderSnapshots(
+          syncResp.messages.map(_normalizeSenderAvatar).toList(growable: false),
+        );
         final merged = _mergeMessages(state.messages, hydrated);
         state = state.copyWith(messages: _sorted(merged));
       }
@@ -259,7 +266,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
           (msg.clientMsgId.isNotEmpty && m.clientMsgId == msg.clientMsgId),
     );
     if (existing) return;
-    state = state.copyWith(messages: _sorted([...state.messages, msg]));
+    state = state.copyWith(
+      messages: _sorted([...state.messages, _normalizeSenderAvatar(msg)]),
+    );
   }
 
   /// 实时事件：标记某消息已撤回。
@@ -308,14 +317,22 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
             return message.copyWith(
               senderName: senderName.isEmpty ? member.displayName : senderName,
               senderAvatar: senderAvatar.isEmpty
-                  ? member.avatarUrl
-                  : senderAvatar,
+                  ? resolveAvatarImageUrl(member.avatarUrl)
+                  : resolveAvatarImageUrl(senderAvatar),
             );
           })
           .toList(growable: false);
     } catch (_) {
       return messages;
     }
+  }
+
+  MessageDto _normalizeSenderAvatar(MessageDto message) {
+    final avatar = resolveAvatarImageUrl(message.senderAvatar);
+    if ((message.senderAvatar ?? '') == avatar) {
+      return message;
+    }
+    return message.copyWith(senderAvatar: avatar);
   }
 
   // ── 排序：seq > 0 升序，seq == 0（未确认）排最后按 timestamp ──────────

@@ -2,6 +2,8 @@
 .PHONY: gate-local-gamma
 .PHONY: gate-runtime-media
 .PHONY: gate-runtime-media-full
+.PHONY: verify-chat-avatar-commercial-matrix
+.PHONY: run-chat-avatar-commercial-matrix-local
 .PHONY: verify-app-mock-isolation
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
@@ -17,6 +19,8 @@
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-ui-app-data-source-mode-ratchet
 .PHONY: verify-app-seed-manifest
+.PHONY: verify-avatar-user-pool
+.PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-business-env-data-inventory
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
@@ -59,6 +63,12 @@ verify-app-ui-app-data-source-mode-ratchet:
 
 verify-app-seed-manifest:
 	@python3 scripts/verify_app_seed_manifests.py
+
+verify-avatar-user-pool:
+	@python3 scripts/verify_avatar_user_pool_consistency.py
+
+probe-avatar-user-pool-gateway:
+	@python3 scripts/probe_avatar_user_pool_gateway.py
 
 verify-business-env-data-inventory:
 	@python3 scripts/verify_business_env_data_inventory.py
@@ -165,14 +175,24 @@ gate:
 	@bash scripts/verify_deployment_domain_mapping.sh
 	@bash scripts/verify_topology_contract_regression.sh
 	@$(MAKE) verify-reliable-task-topology
+	@$(MAKE) verify-avatar-user-pool
+	@$(MAKE) probe-avatar-user-pool-gateway
 	@bash scripts/report_deployment_mapping_impact.sh
 	@bash scripts/gate_repo.sh
 
+# 前置说明：Docker Hub 限流、Colima 磁盘、构建上下文见 deploy/shared/environment_matrix.md §2.1.1
 gate-local-gamma:
 	@if [ "$${LOCAL_GAMMA_DRY_RUN:-0}" = "1" ]; then \
 		python3 scripts/verify_local_gamma_mirror.py --dry-run; \
 	else \
 		set -e; \
+		LG_HTTP_PORT="$${LOCAL_GAMMA_HTTP_PORT:-18180}"; \
+		LG_PRODUCT_OPS_PORT="$${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18186}"; \
+		export LOCAL_GAMMA_HTTP_PORT="$$LG_HTTP_PORT"; \
+		export LOCAL_GAMMA_PRODUCT_OPS_PORT="$$LG_PRODUCT_OPS_PORT"; \
+		export LOCAL_GAMMA_GATEWAY_BASE_URL="$${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:$$LG_HTTP_PORT}"; \
+		export LOCAL_GAMMA_PRODUCT_OPS_BASE_URL="$${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-http://127.0.0.1:$$LG_PRODUCT_OPS_PORT}"; \
+		export LOCAL_GAMMA_MEDIA_BASE_URL="$${LOCAL_GAMMA_MEDIA_BASE_URL:-$$LOCAL_GAMMA_GATEWAY_BASE_URL}"; \
 		if [ "$${LOCAL_GAMMA_SKIP_GATE:-0}" != "1" ]; then $(MAKE) gate; fi; \
 		$(MAKE) verify-app-env-package; \
 		$(MAKE) verify-app-seed-manifest; \
@@ -187,6 +207,17 @@ gate-runtime-media:
 
 gate-runtime-media-full:
 	@bash scripts/gate_runtime_media.sh --full
+
+# 群头像商用 E1–E4 证据机器校验（须先有 non-dry-run JSON，见 commercial-e2e-matrix-runbook.md）
+verify-chat-avatar-commercial-matrix:
+	@if [ -z "$(COMMERCIAL_MATRIX_MANIFEST)" ]; then \
+		echo "FAIL: 请设置 COMMERCIAL_MATRIX_MANIFEST=artifacts/commercial-matrix/chat-avatar/manifest.yaml"; \
+		exit 2; \
+	fi
+	@python3 scripts/verify_chat_avatar_commercial_matrix_evidence.py --manifest "$(COMMERCIAL_MATRIX_MANIFEST)"
+
+run-chat-avatar-commercial-matrix-local:
+	@bash scripts/run_chat_avatar_commercial_matrix_orchestrator.sh
 
 verify:
 	@bash scripts/verify_feature_traceability.sh

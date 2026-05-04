@@ -2,23 +2,25 @@
 
 ## 当前交付任务
 
-- [x] T1 创建 deploy/shared/branch_strategy.md（分支策略：日常 PR→dev1.0，main 仅定时 merge）
-- [x] T2 创建 .github/workflows/merge-dev1.0-to-main.yml（scheduled + workflow_dispatch）
-- [x] T3 修改 pre-release-gate.yml 增加 on.push.branches: [main]，并处理 merge 场景版本号
-- [x] T4 更新 deliver_to_production_runbook、ci_cd_end_to_end_design 与 branch_strategy 一致
-- [x] T5 更新 workflow_consolidation_plan 增加 07 merge-dev1.0-to-main 说明
-- [x] T6 落地 `deploy/shared/environment_matrix.md` 五环境 + 与 ci_cd / deploy_prod_design 交叉引用；`non_markdown_apply_queue.md` 记录 Makefile/Workflow/tree 等待合入项
+- T1 更新 `deploy/shared/branch_strategy.md`：取消定时 merge，补充显式 PR + merge queue 与两种开发模式
+- T2 删除 `.github/workflows/merge-dev1.0-to-main.yml`
+- T3 调整 `delivery-gate.yml`、`pre-release-gate.yml`、`app-env-device-matrix-self-hosted.yml` 只在 merge queue / 手动路径承担主干阻断
+- T4 清理 `05` wrapper，保留单一 self-hosted 设备矩阵入口
+- T5 调整 `service_pipeline.yml`、`deploy-prod-auto.yml` 为 post-main 动作
+- T6 更新 runbook / CI 设计 / workflow 说明，移除定时 merge 口径
 
 ### T — 实施
 
-| 任务 | 说明 | 状态 |
-|------|------|------|
-| T1 | branch_strategy.md：dev1.0 日常合入、main 定时 merge、GitHub 分支保护建议 | [x] |
-| T2 | merge-dev1.0-to-main.yml：cron 6:00 Asia/Shanghai，git merge dev1.0→main，push | [x] |
-| T3 | pre-release-gate 增加 push main 触发 | [x] |
-| T4 | runbook、ci_cd_end_to_end_design 引用 branch_strategy | [x] |
-| T5 | workflow_consolidation_plan 增加 07 序号 | [x] |
-| T6 | environment_matrix 与 A6 验收、非 MD 合入清单 | [x] 文档；非 MD 见 queue |
+
+| 任务  | 说明                                                            | 状态  |
+| --- | ------------------------------------------------------------- | --- |
+| T1  | branch_strategy.md：显式 PR + merge queue，覆盖 dev1.0 / trunk 两种模式 | [x] |
+| T2  | 删除 merge-dev1.0-to-main workflow 与配套脚本                        | [x] |
+| T3  | 03/04/05 改为 merge queue 阻断                                    | [x] |
+| T4  | 05 设备矩阵收敛为唯一 self-hosted 入口                                   | [x] |
+| T5  | 02/07 改为 main 后动作；08 保留手动                                     | [x] |
+| T6  | 文档与说明同步收口                                                     | [x] |
+
 
 ## 搁置任务
 
@@ -26,6 +28,5 @@
 
 ## 未来演进任务
 
-- 增加 merge 前「dev1.0 领先 main」检查，避免空 merge
-- merge 冲突时增加通知（Slack/钉钉/issue）
-- 支持多时区 cron 配置
+- 为 `03/04/05` 增加更细粒度的 changed-files 优化，减少 merge queue 等待
+- 将 merge queue required checks 与 branch protection 配置沉淀到 runbook / repo settings checklist

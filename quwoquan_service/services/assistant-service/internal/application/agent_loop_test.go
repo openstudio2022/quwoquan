@@ -40,7 +40,7 @@ func (p *recordingModelProvider) Complete(_ context.Context, req ModelRequest) (
 		}
 		return ModelResponse{Text: "evidence-json", StructuredDelta: delta}, nil
 	case "final":
-		return ModelResponse{Text: "最终回答：已结合工具观察完成云端回答。"}, nil
+		return ModelResponse{Text: "最终回答：已完成云端回答。"}, nil
 	default:
 		return ModelResponse{Text: "模型响应"}, nil
 	}
@@ -222,6 +222,176 @@ func TestBuildRetrievalProcessing_SeparatesSearchedAndAcceptedCounts(t *testing.
 	refs, ok := result["acceptedReferences"].([]map[string]any)
 	if !ok || len(refs) != 1 {
 		t.Fatalf("accepted refs=%#v", result["acceptedReferences"])
+	}
+}
+
+func TestBuildSearchPlansForStep_UsesStructuredSearchQueries(t *testing.T) {
+	plans := buildSearchPlansForStep(assistant.AssistantTurn{
+		Input: assistant.AssistantTurnInput{Text: "深圳亲子出行"},
+	}, SkillSelection{}, ReactStepResult{
+		Tool: ToolExecution{Requested: assistant.ToolUse{
+			ToolName: "web_search",
+			Input: map[string]any{
+				"query": "深圳亲子出行",
+				"searchQueries": []any{
+					map[string]any{"dimension": "天气", "query": "Shenzhen weather forecast"},
+					map[string]any{"dimension": "亲子活动", "query": "深圳 五一 亲子 室内"},
+				},
+			},
+		}},
+	})
+	if len(plans) != 2 {
+		t.Fatalf("plans=%#v", plans)
+	}
+	if plans[0]["label"] != "天气" || plans[0]["query"] != "Shenzhen weather forecast" {
+		t.Fatalf("first plan=%#v", plans[0])
+	}
+	if plans[1]["label"] != "亲子活动" || plans[1]["query"] != "深圳 五一 亲子 室内" {
+		t.Fatalf("second plan=%#v", plans[1])
+	}
+}
+
+type emptyFinalThenAnswerModelProvider struct {
+	finalCalls int
+}
+
+func (p *emptyFinalThenAnswerModelProvider) Complete(_ context.Context, req ModelRequest) (ModelResponse, error) {
+	switch req.Stage {
+	case "reasoning":
+		return ModelResponse{
+			Text: "reasoning",
+			StructuredDelta: map[string]any{
+				"nextAction":     "call_tool",
+				"toolName":       "web_search",
+				"toolInput":      map[string]any{"query": "深圳天气"},
+				"stageNarrative": "你想确认深圳天气，并据此安排后续出行。",
+			},
+		}, nil
+	case "evidence_processing":
+		return ModelResponse{
+			Text: "evidence",
+			StructuredDelta: map[string]any{
+				"retrievalProcessing": map[string]any{
+					"processingSummary": "我已核对你需要的天气事实。",
+				},
+			},
+		}, nil
+	case "final":
+		p.finalCalls++
+		if p.finalCalls == 1 {
+			return ModelResponse{Text: "{}"}, nil
+		}
+		return ModelResponse{Text: "你可以按降雨概率安排室内活动。"}, nil
+	default:
+		return ModelResponse{Text: "ok"}, nil
+	}
+}
+
+func TestReactRuntime_RetriesEmptyFinalAnswer(t *testing.T) {
+	model := &emptyFinalThenAnswerModelProvider{}
+	runtime := ReactRuntime{
+		Model: model,
+		Tools: DefaultToolCoordinator{
+			Now: func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+		},
+	}
+	result, err := runtime.Run(context.Background(), assistant.AssistantTurn{
+		TurnID:         "atn_retry_final",
+		ConversationID: "acv_retry_final",
+		UserID:         "user_retry_final",
+		Input:          assistant.AssistantTurnInput{Text: "深圳天气"},
+		TraceID:        "trace_retry_final",
+	}, SkillSelection{
+		SkillID:    "weather",
+		DomainID:   "weather",
+		ToolPolicy: []string{"web_search"},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if model.finalCalls != 2 {
+		t.Fatalf("finalCalls=%d, want 2", model.finalCalls)
+	}
+	if !strings.Contains(result.FinalText, "室内活动") {
+		t.Fatalf("final text=%q", result.FinalText)
+	}
+}
+
+type internalWordingThenAnswerModelProvider struct {
+	finalCalls int
+}
+
+func (p *internalWordingThenAnswerModelProvider) Complete(_ context.Context, req ModelRequest) (ModelResponse, error) {
+	switch req.Stage {
+	case "reasoning":
+		return ModelResponse{
+			Text: "reasoning",
+			StructuredDelta: map[string]any{
+				"nextAction":     "call_tool",
+				"toolName":       "web_search",
+				"toolInput":      map[string]any{"query": "深圳天气"},
+				"stageNarrative": "你需要了解深圳天气来安排出行。",
+			},
+		}, nil
+	case "evidence_processing":
+		return ModelResponse{
+			Text: "evidence",
+			StructuredDelta: map[string]any{
+				"retrievalProcessing": map[string]any{
+					"processingSummary": "你需要的天气事实已覆盖。",
+				},
+			},
+		}, nil
+	case "final":
+		p.finalCalls++
+		if p.finalCalls == 1 {
+			return ModelResponse{Text: "根据工具观察，深圳当前适合外出。"}, nil
+		}
+		return ModelResponse{Text: "深圳当前适合外出，建议你携带雨具并预留室内备选。"}, nil
+	default:
+		return ModelResponse{Text: "ok"}, nil
+	}
+}
+
+func TestReactRuntime_RetriesInternalFinalWording(t *testing.T) {
+	model := &internalWordingThenAnswerModelProvider{}
+	runtime := ReactRuntime{
+		Model: model,
+		Tools: DefaultToolCoordinator{
+			Now: func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+		},
+	}
+	result, err := runtime.Run(context.Background(), assistant.AssistantTurn{
+		TurnID:         "atn_retry_internal",
+		ConversationID: "acv_retry_internal",
+		UserID:         "user_retry_internal",
+		Input:          assistant.AssistantTurnInput{Text: "深圳天气"},
+		TraceID:        "trace_retry_internal",
+	}, SkillSelection{
+		SkillID:    "weather",
+		DomainID:   "weather",
+		ToolPolicy: []string{"web_search"},
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if model.finalCalls != 2 {
+		t.Fatalf("finalCalls=%d, want 2", model.finalCalls)
+	}
+	if strings.Contains(result.FinalText, "工具观察") {
+		t.Fatalf("final text contains internal wording: %q", result.FinalText)
+	}
+}
+
+func TestSplitAnswerDeltasUsesSmallerReadableChunks(t *testing.T) {
+	chunks := splitAnswerDeltas("第一段说明你需要关注天气、交通、同行人数和备选方案。\n\n- 第一天安排户外活动，保留室内备选，并提前确认开放时间。\n- 第二天提前查看交通与排队情况，给孩子安排休息窗口。")
+	if len(chunks) < 3 {
+		t.Fatalf("chunks=%#v, want at least 3", chunks)
+	}
+	for _, chunk := range chunks {
+		if len([]rune(chunk)) > 52 {
+			t.Fatalf("chunk too long: %q (%d)", chunk, len([]rune(chunk)))
+		}
 	}
 }
 

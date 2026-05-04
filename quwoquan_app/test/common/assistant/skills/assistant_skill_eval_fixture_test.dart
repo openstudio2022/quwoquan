@@ -19,6 +19,13 @@ void main() {
               ).readAsStringSync(),
             )
             as Map<String, dynamic>;
+    final qualityStandards =
+        ((fixture['qualityStandards'] as Map?) ?? const <String, dynamic>{})
+            .cast<String, dynamic>();
+    final industryRubric =
+        ((fixture['industryInspiredScoringRubric'] as Map?) ??
+                const <String, dynamic>{})
+            .cast<String, dynamic>();
 
     final routedDomains =
         ((routing['domains'] as List?) ?? const <dynamic>[])
@@ -37,11 +44,40 @@ void main() {
 
     expect(scenarioDomains, routedDomains);
     expect(scenarioDomains, hasLength(21));
+    expect(qualityStandards.keys.toList()..sort(), routedDomains);
+    expect(industryRubric['scoreScale'], contains('10-point'));
+    expect(
+      ((industryRubric['dimensions'] as List?) ?? const <dynamic>[]),
+      hasLength(greaterThanOrEqualTo(6)),
+    );
 
     for (final scenario in scenarios) {
+      final domainId = (scenario['domainId'] ?? '').toString();
+      final qualityStandardRef = (scenario['qualityStandardRef'] ?? '')
+          .toString();
+      final qualityStandard = (qualityStandards[qualityStandardRef] as Map?)
+          ?.cast<String, dynamic>();
       expect((scenario['id'] ?? '').toString(), isNotEmpty);
-      expect((scenario['skillId'] ?? '').toString(), scenario['domainId']);
+      expect((scenario['skillId'] ?? '').toString(), domainId);
       expect((scenario['question'] ?? '').toString(), isNotEmpty);
+      expect(qualityStandardRef, domainId);
+      expect(qualityStandard, isNotNull);
+      expect(
+        (qualityStandard?['minimumTotalScore'] as num?)?.toDouble() ?? 0,
+        greaterThanOrEqualTo(8),
+      );
+      expect(
+        (qualityStandard?['mustCover'] as List?) ?? const [],
+        hasLength(5),
+      );
+      expect(
+        (qualityStandard?['mustAvoid'] as List?) ?? const [],
+        hasLength(3),
+      );
+      expect(
+        (qualityStandard?['authorityPolicy'] as List?) ?? const [],
+        isNotEmpty,
+      );
       expect(
         (scenario['expectedAnswerFragments'] as List?) ?? const [],
         isNotEmpty,

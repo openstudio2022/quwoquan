@@ -1,5 +1,6 @@
 # rec-model-service: FastAPI + Python 3.11
-FROM python:3.11-slim
+ARG PYTHON_BASE_IMAGE=python:3.11-slim
+FROM ${PYTHON_BASE_IMAGE}
 
 WORKDIR /app
 

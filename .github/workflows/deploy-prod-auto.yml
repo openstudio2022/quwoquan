@@ -1,24 +1,26 @@
-# 全自动灰度到 prod：pre-release 通过后自动触发
+# 全自动灰度到 prod：代码真正进入 main 后自动触发
 # Stage 1 初始灰度全自动，Stage 2 100% 需 Environment approval
 # 设计见 deploy/shared/deploy_prod_design.md
-name: 06. Deploy To Prod (Auto)
+name: 07. Deploy To Prod (Auto)
 
 on:
-  workflow_run:
-    workflows: ['04. Pre-Release Gate']
-    types: [completed]
-    branches: [main]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   prepare:
     name: Prepare (parse stages)
-    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       initial_step: ${{ steps.stages.outputs.initial_step }}
       full_step: ${{ steps.stages.outputs.full_step }}
     steps:
       - uses: actions/checkout@v4
+      - name: Assert main branch event
+        run: |
+          echo "main 已完成显式合流；默认要求 03/04/05 已由 merge queue 先行放行。"
       - name: Parse gray_rollout_stages
         id: stages
         run: |

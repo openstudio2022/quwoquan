@@ -388,6 +388,7 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
     this.onDebugStateChanged,
     this.showFooterPageLabel = true,
     this.paperTexture,
+    this.debugPureBackwardGeometry = false,
     this.debugPageSurfaceBuilder,
     this.debugBackPageSurfaceBuilder,
   });
@@ -413,6 +414,7 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
   final ValueChanged<ArticleReadOnlyBookDebugState>? onDebugStateChanged;
   final bool showFooterPageLabel;
   final ArticlePaperTexture? paperTexture;
+  final bool debugPureBackwardGeometry;
   final Widget Function(BuildContext context, int pageIndex, Size pageSize)?
   debugPageSurfaceBuilder;
   final Widget Function(BuildContext context, int pageIndex, Size pageSize)?

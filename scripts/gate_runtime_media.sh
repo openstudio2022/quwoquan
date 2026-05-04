@@ -6,6 +6,7 @@ FULL_MODE="${1:-}"
 
 required_docs=(
   "specs/feature-tree/runtime/runtime-media/video-end-to-end-commercial-matrix.md"
+  "specs/feature-tree/runtime/runtime-media/image-end-to-end-commercial-matrix.md"
   "specs/feature-tree/runtime/runtime-media/t4-release-rehearsal.md"
   "specs/feature-tree/runtime/runtime-media/observability-and-rollback.md"
   "specs/feature-tree/runtime/runtime-media/capacity-validation.md"

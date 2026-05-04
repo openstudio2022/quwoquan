@@ -1,9 +1,12 @@
 package main
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestAlphaRuntimeIdentityAndConfigLoadsSameNamedOverlay(t *testing.T) {
@@ -52,6 +55,81 @@ func TestCurrentRuntimeEnvIsRejected(t *testing.T) {
 	t.Setenv("APP_ENV", "integration")
 	if _, _, _, _, _, err := resolveRuntimeIdentity(); err == nil {
 		t.Fatal("resolveRuntimeIdentity() should reject APP_ENV=integration")
+	}
+}
+
+func TestAssistantHTTPWriteTimeoutDefaultsForStreaming(t *testing.T) {
+	t.Setenv("ASSISTANT_HTTP_WRITE_TIMEOUT_SECONDS", "")
+	if got := assistantHTTPWriteTimeout(); got != 180*time.Second {
+		t.Fatalf("write timeout=%s, want 180s", got)
+	}
+}
+
+func TestSearchProviderTimeoutKeepsRealtimeBudget(t *testing.T) {
+	if got := searchProviderTimeout(0); got != 8*time.Second {
+		t.Fatalf("default search timeout=%s, want 8s", got)
+	}
+	client := searchHTTPClient(10_000)
+	if client.Timeout != 10*time.Second {
+		t.Fatalf("client timeout=%s, want 10s", client.Timeout)
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type=%T, want *http.Transport", client.Transport)
+	}
+	if transport.TLSHandshakeTimeout != 10*time.Second {
+		t.Fatalf("tls handshake timeout=%s, want 10s", transport.TLSHandshakeTimeout)
+	}
+	if got := searchProviderTimeout(45_000); got != 10*time.Second {
+		t.Fatalf("capped search timeout=%s, want 10s", got)
+	}
+}
+
+func TestShouldTryWeatherLookupUsesModelLocationAndSearchQueries(t *testing.T) {
+	if !shouldTryWeatherLookup("", "outdoor plan", "", "Shenzhen", nil) {
+		t.Fatal("locationSearchName should route to weather lookup")
+	}
+	if !shouldTryWeatherLookup("", "outdoor plan", "", "", map[string]any{
+		"searchQueries": []any{
+			map[string]any{"dimension": "weather", "query": "Shenzhen forecast"},
+		},
+	}) {
+		t.Fatal("weather searchQueries should route to weather lookup")
+	}
+}
+
+func TestWeatherAuthorityReferencesPrioritizeNationalAndRegionalSources(t *testing.T) {
+	summary := withLocalWeatherAuthoritySummary("Hangzhou tian qi", "杭州，浙江", "MET Norway", "MET Norway 实时天气：杭州。")
+	if !strings.Contains(summary, "国家级气象服务入口与可解析的省/自治区/直辖市气象局") {
+		t.Fatalf("summary should foreground national and regional authority sources: %s", summary)
+	}
+	if !strings.Contains(summary, "MET Norway 仅作为") {
+		t.Fatalf("summary should demote structured provider to supplement: %s", summary)
+	}
+	refs := withLocalWeatherAuthorityReferences("Hangzhou tian qi", "杭州，浙江", []map[string]any{
+		{
+			"title":  "Open-Meteo Forecast API - 杭州，浙江",
+			"url":    "https://open-meteo.com/en/docs",
+			"source": "open_meteo_forecast",
+		},
+	})
+	if len(refs) < 5 {
+		t.Fatalf("refs len=%d, want national/regional authority refs plus API ref", len(refs))
+	}
+	want := []string{
+		"weather_com_cn",
+		"national_meteorological_center",
+		"china_meteorological_administration",
+		"zhejiang_meteorological_bureau",
+		"open_meteo_forecast",
+	}
+	for i, source := range want {
+		if refs[i]["source"] != source {
+			t.Fatalf("refs[%d].source=%v, want %s; refs=%#v", i, refs[i]["source"], source, refs)
+		}
+		if refs[i]["rank"] != i+1 {
+			t.Fatalf("refs[%d].rank=%v, want %d", i, refs[i]["rank"], i+1)
+		}
 	}
 }
 

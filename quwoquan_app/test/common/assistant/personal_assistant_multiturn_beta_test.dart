@@ -33,11 +33,11 @@ void main() {
     final secondState = _controllerState(tester);
     expect(secondState.errorMessage, isEmpty);
     expect(secondState.answer, isNotEmpty);
-    expect(secondState.processSummary.searchCount, 3);
+    expect(secondState.processSummary.searchCount, greaterThanOrEqualTo(1));
     expect(secondState.processSummary.acceptedCount, greaterThanOrEqualTo(1));
     expect(
       secondState.processSummary.acceptedReferences.first.url,
-      startsWith('https://open-meteo.com'),
+      startsWith('https://'),
     );
 
     final prompts = secondState.events

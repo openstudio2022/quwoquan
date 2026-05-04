@@ -1,8 +1,9 @@
 {
   "status": "passed",
-  "baseUrl": "http://127.0.0.1:18080",
-  "productOpsBaseUrl": "http://127.0.0.1:18086",
+  "baseUrl": "http://127.0.0.1:18180",
+  "productOpsBaseUrl": "http://127.0.0.1:18186",
   "enabledDomains": [
+    "chat",
     "content"
   ],
   "health": {
@@ -16,7 +17,7 @@
   "seed": {
     "status": "passed",
     "insertedCount": 10,
-    "output": "time=\"2026-05-02T12:51:24+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
+    "output": "time=\"2026-05-04T20:33:59+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
   },
   "endpoints": [
     {
@@ -33,14 +34,14 @@
       "domain": "content",
       "path": "/v1/content/feed",
       "httpStatus": 200,
-      "bytes": 4407,
+      "bytes": 4150,
       "status": "passed"
     },
     {
       "domain": "content",
       "path": "/v1/content/posts/fixture_photo_001",
       "httpStatus": 200,
-      "bytes": 1477,
+      "bytes": 1406,
       "status": "passed"
     },
     {
@@ -56,12 +57,16 @@
     {
       "domain": "chat",
       "path": "/v1/chat/inbox",
-      "status": "not_ready"
+      "httpStatus": 200,
+      "bytes": 14648,
+      "status": "passed"
     },
     {
       "domain": "chat",
       "path": "/v1/chat/conversations/fixture_conv_direct/messages",
-      "status": "not_ready"
+      "httpStatus": 200,
+      "bytes": 25,
+      "status": "passed"
     },
     {
       "domain": "user",
@@ -95,6 +100,12 @@
       "status": "passed",
       "exitCode": 0,
       "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/content/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end 第一页返回 20 条 + cursor 非空\n00:00 +1: feed_cursor_pagination_end_to_end 第二页与第一页无重叠 item\n00:00 +2: feed_cursor_pagination_end_to_end PhotoPostDto fromMap 解析所有字段包含 aspectRatio\n  local gamma content mirror does not yet expose image dimensions\n00:00 +2 ~1: feed_cursor_pagination_end_to_end (tearDownAll)\n00:00 +2 ~1: behavior_batch_report_reaches_service (setUpAll)\n00:00 +2 ~1: behavior_batch_report_reaches_service POST /v1/content/behaviors 返回 204\n00:00 +3 ~1: behavior_batch_report_reaches_service 事件 type 字段与 behaviors.yaml 枚举对齐\n00:00 +4 ~1: behavior_batch_report_reaches_service like type 被 batch 端点拒绝（专属路由）\n00:00 +5 ~1: behavior_batch_report_reaches_service (tearDownAll)\n00:00 +5 ~1: error_state_displayed_correctly 不存在的 postId → 404 + CONTENT.USER.post_not_found\n00:00 +6 ~1: media_not_ready_graceful_error X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry\n00:00 +7 ~1: dedicated_feedback_and_user_block_contract (setUpAll)\n00:00 +7 ~1: dedicated_feedback_and_user_block_contract POST /v1/content/reports 可用\n00:00 +8 ~1: dedicated_feedback_and_user_block_contract POST/DELETE /v1/user/block/{id} 可用\n  local gamma content mirror excludes user routes\n00:00 +8 ~2: dedicated_feedback_and_user_block_contract PATCH /v1/user/settings/privacy 可写 blockedKeywords\n  local gamma content mirror excludes user routes\n00:00 +8 ~3: dedicated_feedback_and_user_block_contract (tearDownAll)\n00:00 +8 ~3: (tearDownAll)\n00:00 +8 ~3: All tests passed!\n"
+    },
+    {
+      "name": "chat_api_contract",
+      "status": "passed",
+      "exitCode": 0,
+      "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/chat/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: list_conversations_contract (setUpAll)\n00:00 +0: list_conversations_contract GET /v1/chat/conversations 返回 200 + items 数组\n00:00 +1: list_conversations_contract conversation 字段结构完整\n00:00 +2: list_conversations_contract (tearDownAll)\n00:00 +2: send_and_recall_message_contract (setUpAll)\n00:00 +2: send_and_recall_message_contract 发送消息返回 201 + seq + messageId\n00:00 +3: send_and_recall_message_contract 相同 clientMsgId 幂等（dedup）\n00:00 +4: send_and_recall_message_contract 撤回消息返回 200 + status=recalled\n00:00 +5: send_and_recall_message_contract 消息列表包含已发送消息\n00:00 +6: send_and_recall_message_contract (tearDownAll)\n00:00 +6: error_not_found_contract 不存在的 conversationId → 404 + CHAT.USER.conversation_not_found\n00:00 +7: sync_messages_contract (setUpAll)\n00:00 +7: sync_messages_contract POST /sync 返回增量消息\n00:00 +8: sync_messages_contract (tearDownAll)\n00:00 +8: member_operations_contract (setUpAll)\n00:00 +8: member_operations_contract 添加成员 → 成员列表包含新成员\n00:00 +9: member_operations_contract (tearDownAll)\n00:00 +9: (tearDownAll)\n00:00 +9: All tests passed!\n"
     },
     {
       "name": "product_ops_api_contract",

@@ -650,8 +650,12 @@ func writeHTTPError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func newNotFound(entity, id string) *rterr.AppError {
+	reason := "not_found"
+	if entity == "会话" {
+		reason = "conversation_not_found"
+	}
 	return rterr.NewAppError(
-		rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "not_found"),
+		rterr.NewCode(rterr.ModuleChat, rterr.KindUser, reason),
 		entity+"不存在",
 		entity+" not found: "+id,
 	)

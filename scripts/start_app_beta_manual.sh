@@ -340,21 +340,16 @@ beta_manual_ensure_port_available "$MEDIA_PORT" "media-static"
 
 echo "[app-beta-manual] logs: $LOG_DIR"
 echo "[app-beta-manual] model: ${ASSISTANT_BETA_MODEL_REF:-unknown} (${ASSISTANT_MODEL_BASE_URL})"
-mkdir -p "$MEDIA_DIR/media/avatar" "$MEDIA_DIR/media/image" "$MEDIA_DIR/media/video"
+python3 scripts/verify_avatar_user_pool_consistency.py >/dev/null
+rm -rf "$MEDIA_DIR/media"
+mkdir -p "$MEDIA_DIR"
+cp -R "$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media/." "$MEDIA_DIR/"
+mkdir -p "$MEDIA_DIR/media/video"
 python3 - "$MEDIA_DIR" <<'PY'
-import base64
 import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-png = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
-)
-for rel in ["media/avatar/beta-avatar.png", "media/image/beta-cover.png"]:
-    path = root / rel
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(png)
-(root / "media/video").mkdir(parents=True, exist_ok=True)
 (root / "media/video/beta-sample.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
 PY
 echo "[app-beta-manual] starting local media static server on :$MEDIA_PORT"
@@ -363,8 +358,10 @@ beta_manual_start_process \
   "$MEDIA_LOG" \
   "$ROOT_DIR" \
   python3 -m http.server "$MEDIA_PORT" --bind 127.0.0.1 --directory "$MEDIA_DIR"
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/beta-avatar.png" "media avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/beta-cover.png" "media image fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "media current user avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_friend/v1/avatar.png" "media friend avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/group/fixture_conv_group/v1/composite.png" "media group avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/post/fixture_photo_001/v1/cover.png" "media post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 if [[ "$DEVICE_KIND" == "android_physical" && -n "$FLUTTER_DEVICE_ID" && "$LOCAL_PUBLIC_HOST" == "127.0.0.1" && -x "$(command -v adb 2>/dev/null || true)" ]]; then
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${GATEWAY_PORT}" "tcp:${GATEWAY_PORT}" >/dev/null 2>&1 || true
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_PORT}" "tcp:${MEDIA_PORT}" >/dev/null 2>&1 || true
@@ -413,7 +410,11 @@ beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/content/feed" "con
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/inbox" "chat fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/contacts" "chat contacts fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/conversations" "chat conversations fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/beta-avatar.png" "host media avatar route" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "host media avatar route" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "gateway current user avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/user/fixture_user_friend/v1/avatar.png" "gateway friend avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/group/fixture_conv_group/v1/composite.png" "gateway group avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/image/post/fixture_photo_001/v1/cover.png" "gateway post cover proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/circles" "circle fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/circles/fixture_circle_photo/feed" "circle feed fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/profile" "user fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
@@ -487,8 +488,14 @@ report = {
         "/v1/rtc/calls",
     ],
     "checkedMediaUrls": [
-        f"{avatar_cdn.rstrip('/')}/media/avatar/beta-avatar.png",
-        f"{image_cdn.rstrip('/')}/media/image/beta-cover.png",
+        f"{avatar_cdn.rstrip('/')}/media/avatar/user/fixture_user_current/v1/avatar.png",
+        f"{avatar_cdn.rstrip('/')}/media/avatar/user/fixture_user_friend/v1/avatar.png",
+        f"{avatar_cdn.rstrip('/')}/media/avatar/group/fixture_conv_group/v1/composite.png",
+        f"{gateway.rstrip('/')}/media/avatar/user/fixture_user_current/v1/avatar.png",
+        f"{gateway.rstrip('/')}/media/avatar/user/fixture_user_friend/v1/avatar.png",
+        f"{gateway.rstrip('/')}/media/avatar/group/fixture_conv_group/v1/composite.png",
+        f"{image_cdn.rstrip('/')}/media/image/post/fixture_photo_001/v1/cover.png",
+        f"{gateway.rstrip('/')}/media/image/post/fixture_photo_001/v1/cover.png",
         f"{video_cdn.rstrip('/')}/media/video/beta-sample.mp4",
     ],
     "seedRefs": {

@@ -11,7 +11,9 @@ ECS_HOST="${GAMMA_ECS_HOST:-118.31.239.122}"
 ECS_USER="${GAMMA_ECS_USER:-root}"
 ECS_PORT="${GAMMA_ECS_PORT:-22}"
 REMOTE_DIR="${GAMMA_ECS_REMOTE_DIR:-/opt/quwoquan/gamma}"
-BASE_URL="${GAMMA_BASE_URL:-http://${ECS_HOST}:18080}"
+# 公网矩阵入口必须是 gamma-proxy（Caddy）端口；远程 start 默认 LOCAL_GAMMA_HTTP_PORT=18000
+LOCAL_GAMMA_HTTP_PORT="${LOCAL_GAMMA_HTTP_PORT:-18000}"
+BASE_URL="${GAMMA_BASE_URL:-http://${ECS_HOST}:${LOCAL_GAMMA_HTTP_PORT}}"
 PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${ECS_HOST}:18086}"
 STAGE="${GAMMA_ECS_STAGE:-pre}"
 SKIP_UPLOAD="${GAMMA_ECS_SKIP_UPLOAD:-0}"
@@ -320,8 +322,9 @@ if [[ "$rc" -ne 0 ]]; then
 fi
 docker compose -f quwoquan_service/docker-compose.gamma-local.yaml ps
 
+GW_LOCAL_PORT="${LOCAL_GAMMA_HTTP_PORT:-18080}"
 python3 scripts/run_local_gamma_t3.py \
-  --base-url http://127.0.0.1:18080 \
+  --base-url "http://127.0.0.1:${GW_LOCAL_PORT}" \
   --product-ops-base-url http://127.0.0.1:18086 \
   --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}" \
   --skip-flutter-contracts
@@ -355,6 +358,8 @@ def wait(url: str) -> None:
 wait(base_url + "/healthz")
 wait(ops_url + "/healthz")
 PY
+
+python3 "${ROOT}/scripts/verify_gamma_public_gateway_routing.py" --base-url "${BASE_URL}"
 
 python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$BASE_URL" "$PRODUCT_OPS_BASE_URL" "$REMOTE_DIR" <<'PY'
 import json

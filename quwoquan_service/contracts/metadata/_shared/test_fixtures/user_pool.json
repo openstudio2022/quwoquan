@@ -1,0 +1,750 @@
+{
+  "schemaVersion": "shared.avatar-user-pool.v1",
+  "description": "alpha/beta/gamma 共享身份与头像媒体真相源。各域 fixture 只引用 userId/objectKey，运行时由 CDN base 或 gateway /media/* 派生可访问 URL。",
+  "mediaContract": {
+    "urlDerivation": "runtime joins MEDIA_*_CDN_BASE_URL or gateway base with objectKey",
+    "allowedMimeTypes": [
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+    ],
+    "groupAvatarRenderer": "RenderGroupAvatarPNG",
+    "groupAvatarMimeType": "image/png"
+  },
+  "users": [
+    {
+      "userId": "fixture_user_current",
+      "displayName": "契约当前用户",
+      "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_current/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 45458,
+        "sourceHash": "sha256:98697a43d32295581560c8c5da1bce191baff7cc48524f85d2951ce97e675cde"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_current/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 134839,
+        "sourceHash": "sha256:680394855ec2aa542043a2ed116d3175b56dae5f911a813844b5ab889a96f029"
+      },
+      "bio": "用于 alpha/beta/gamma 的当前用户主页。",
+      "personaRefs": [
+        "fixture_persona_daily",
+        "fixture_persona_work"
+      ],
+      "tags": [
+        "current",
+        "author",
+        "contact"
+      ]
+    },
+    {
+      "userId": "fixture_user_photo",
+      "displayName": "契约摄影师",
+      "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_photo/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 45645,
+        "sourceHash": "sha256:c96fb53f68ca4287d695e8e679db00956b80dc8f0f5d1bc537f05498d3924399"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_photo/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 87721,
+        "sourceHash": "sha256:d25c53422b1b661ea73961f26c26ac3088b6ccb31e3421aa84960fa80f86effd"
+      },
+      "bio": "作者主页契约数据。",
+      "personaRefs": [],
+      "tags": [
+        "author",
+        "photo",
+        "contact"
+      ]
+    },
+    {
+      "userId": "fixture_user_travel",
+      "displayName": "契约旅行家",
+      "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_travel/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 46440,
+        "sourceHash": "sha256:849b1ab51ab84db69212be1e41640e801b47e381177144412ab726a6598aa75b"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_travel/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 101548,
+        "sourceHash": "sha256:86c2e3b10a31e674f0affea48737ebdece2abe102386b786dc220ebdd75e0bd7"
+      },
+      "bio": "旅行、天气和行程记录作者。",
+      "personaRefs": [],
+      "tags": [
+        "author",
+        "travel",
+        "contact"
+      ]
+    },
+    {
+      "userId": "fixture_user_video",
+      "displayName": "契约剪辑师",
+      "avatarObjectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_video/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 47684,
+        "sourceHash": "sha256:3472d9f447a531f31d20213f08d6cdbe9aa97a96e25be52f74b452d42227c3dc"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_video/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 121216,
+        "sourceHash": "sha256:72a98bb5d59796f46aa9cd3055fae7a06d0cddba466929145fdbb430139adc4d"
+      },
+      "bio": "视频剪辑与城市影像作者。",
+      "personaRefs": [],
+      "tags": [
+        "author",
+        "video"
+      ]
+    },
+    {
+      "userId": "fixture_user_article",
+      "displayName": "契约撰稿人",
+      "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_article/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 53347,
+        "sourceHash": "sha256:56ed83f04fe6e45cf823a161e40039be9d3efacaffbd17e3173a6275ad24a13f"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_article/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 134506,
+        "sourceHash": "sha256:80d3b65c86a50112af363304e05e199d69100fc5b8d0bb744a387da431a96ea4"
+      },
+      "bio": "文章、攻略与长图文作者。",
+      "personaRefs": [],
+      "tags": [
+        "author",
+        "article",
+        "contact"
+      ]
+    },
+    {
+      "userId": "fixture_user_friend",
+      "displayName": "契约好友",
+      "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_friend/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 54949,
+        "sourceHash": "sha256:7a0f571a707963aaf78d445c3e6a78525e6c570a7dc7fd5dfee4188c24ebc41e"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_friend/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 95211,
+        "sourceHash": "sha256:869067a18762f2afc5a8998c01be99845d8d29beedb9578ccaa50dbf266d05ec"
+      },
+      "bio": "与当前用户互关的同好。",
+      "personaRefs": [],
+      "tags": [
+        "contact",
+        "direct-chat"
+      ]
+    },
+    {
+      "userId": "fixture_user_weekend_1",
+      "displayName": "契约同伴一",
+      "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 43291,
+        "sourceHash": "sha256:f90b4e806067a7f2d4eb2bba5e23096a05590cb5404270314aa8d854f38d8e84"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 125632,
+        "sourceHash": "sha256:6e58c00e0b353777926769f7a04d798219837579885c446c5251fbd69771a7c0"
+      },
+      "bio": "周末群成员，也是联系人同好。",
+      "personaRefs": [],
+      "tags": [
+        "contact",
+        "group-member"
+      ]
+    },
+    {
+      "userId": "fixture_user_weekend_2",
+      "displayName": "契约同伴二",
+      "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_weekend_2/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 35109,
+        "sourceHash": "sha256:aa6a2fd13a218a207b0da2a3178443e7b4d50ab9e723a1eebaecb542c6338ebd"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_weekend_2/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 96160,
+        "sourceHash": "sha256:0fc85f6a5bf8152fe0393d3f3667a5addeeae2aab387ecabfeb77c85f3eade23"
+      },
+      "bio": "周末群成员，提供路线建议。",
+      "personaRefs": [],
+      "tags": [
+        "contact",
+        "group-member"
+      ]
+    },
+    {
+      "userId": "fixture_user_owner",
+      "displayName": "契约摄影社主理人",
+      "avatarObjectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_owner/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 51408,
+        "sourceHash": "sha256:33e282d5323aff713c7b0dddf56cb069555d33e76bb1922e789fcce78fb86f88"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_owner/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 124977,
+        "sourceHash": "sha256:bbe1bc1030fc07fd077b3eb99725c0b6e4adb8ed5f027b293e6e5902e178e18d"
+      },
+      "bio": "摄影圈 owner，用于圈子权限和群聊同步验证。",
+      "personaRefs": [],
+      "tags": [
+        "circle-owner"
+      ]
+    },
+    {
+      "userId": "fixture_user_travel_owner",
+      "displayName": "契约旅行圈主",
+      "avatarObjectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_travel_owner/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 38987,
+        "sourceHash": "sha256:46f7c958a359fbc1456ecb19d1cf5beeac7da5e8e122e6bc77ec2f0c779fedcc"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_travel_owner/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 122552,
+        "sourceHash": "sha256:ef4a68db9c72d6861443b39762c30e67025cbc0a235b76a8c0356a93e2c85bd5"
+      },
+      "bio": "旅行圈 owner，用于圈子成员引用完整性验证。",
+      "personaRefs": [],
+      "tags": [
+        "circle-owner",
+        "travel"
+      ]
+    },
+    {
+      "userId": "fixture_user_commenter",
+      "displayName": "契约评论者",
+      "avatarObjectKey": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+      "backgroundObjectKey": "media/background/user/fixture_user_commenter/v1/background.png",
+      "avatarMedia": {
+        "objectKey": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 50862,
+        "sourceHash": "sha256:afa64ec0de5efc732dc1057735d21e964a934078a43555793418feb66bca9515"
+      },
+      "backgroundMedia": {
+        "objectKey": "media/background/user/fixture_user_commenter/v1/background.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 139615,
+        "sourceHash": "sha256:cb1e1e097c7ef969e87f9db1c463c78ff0111e19107c68867029a88304aba9cc"
+      },
+      "bio": "内容详情评论作者，用于作者头像补水验证。",
+      "personaRefs": [],
+      "tags": [
+        "commenter"
+      ]
+    }
+  ],
+  "postMedia": {
+    "fixture_photo_001": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_photo_001/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 102664,
+        "sourceHash": "sha256:f670d8f47da7c06b2c78b51aaaeaa7ca5b74e86263ba8d88f06d71ba0d54327a"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_photo_001/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 102664,
+          "sourceHash": "sha256:f670d8f47da7c06b2c78b51aaaeaa7ca5b74e86263ba8d88f06d71ba0d54327a"
+        },
+        {
+          "objectKey": "media/image/post/fixture_photo_001/v1/image-2.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 128906,
+          "sourceHash": "sha256:928e113eb8c00a81931619dbfdba452e9daec9624f18393dfaec8e2c7e82cf39"
+        }
+      ]
+    },
+    "fixture_photo_002": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_photo_002/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 101217,
+        "sourceHash": "sha256:5a935ed8917cf3fd660c67b455ac88f33cd8dcbb0023aadc182258cd7d2e4206"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_photo_002/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 101217,
+          "sourceHash": "sha256:5a935ed8917cf3fd660c67b455ac88f33cd8dcbb0023aadc182258cd7d2e4206"
+        }
+      ]
+    },
+    "fixture_photo_003": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_photo_003/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 107439,
+        "sourceHash": "sha256:72b681e14dd691c99a47d70b82de2c55b10b969c46675ec695c70611b0af93d2"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_photo_003/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 107439,
+          "sourceHash": "sha256:72b681e14dd691c99a47d70b82de2c55b10b969c46675ec695c70611b0af93d2"
+        }
+      ]
+    },
+    "fixture_video_001": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_video_001/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 134440,
+        "sourceHash": "sha256:d78b28ae1f6d0ad07c35bddd3d35528752a410b6c14785b76e1d521c05b3a49d"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_video_001/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 134440,
+          "sourceHash": "sha256:d78b28ae1f6d0ad07c35bddd3d35528752a410b6c14785b76e1d521c05b3a49d"
+        }
+      ]
+    },
+    "fixture_video_002": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_video_002/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 99973,
+        "sourceHash": "sha256:abdef877ea7d8191f58ecfa90448581a8030a589170826bdb7ea46e9d81244b8"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_video_002/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 99973,
+          "sourceHash": "sha256:abdef877ea7d8191f58ecfa90448581a8030a589170826bdb7ea46e9d81244b8"
+        }
+      ]
+    },
+    "fixture_article_001": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_article_001/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 104182,
+        "sourceHash": "sha256:b00f4d26ed0feeba25f9180b003629fc8a81fecb4dd187040cf79567e02c1214"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_article_001/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 104182,
+          "sourceHash": "sha256:b00f4d26ed0feeba25f9180b003629fc8a81fecb4dd187040cf79567e02c1214"
+        }
+      ]
+    },
+    "fixture_article_002": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_article_002/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 118346,
+        "sourceHash": "sha256:2aa389595aa25a5355ba50c62aff8c96719a9d7763214c0713a7089741415554"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_article_002/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 118346,
+          "sourceHash": "sha256:2aa389595aa25a5355ba50c62aff8c96719a9d7763214c0713a7089741415554"
+        }
+      ]
+    },
+    "fixture_moment_001": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_moment_001/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 107245,
+        "sourceHash": "sha256:16796d65d08b96b78b9af868e624f6b458137fcca66a4e35c7a5dbc84b84abf4"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_moment_001/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 107245,
+          "sourceHash": "sha256:16796d65d08b96b78b9af868e624f6b458137fcca66a4e35c7a5dbc84b84abf4"
+        }
+      ]
+    },
+    "fixture_moment_002": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_moment_002/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 90667,
+        "sourceHash": "sha256:dfb8a799de0eede2ec7de76ab512ec6b814a58e41ca23035a5130f38d8a4eb5f"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_moment_002/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 90667,
+          "sourceHash": "sha256:dfb8a799de0eede2ec7de76ab512ec6b814a58e41ca23035a5130f38d8a4eb5f"
+        }
+      ]
+    },
+    "fixture_moment_003": {
+      "cover": {
+        "objectKey": "media/image/post/fixture_moment_003/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 114886,
+        "sourceHash": "sha256:71d1961b029006d84b0f3cb9303c8f825f4206cdd8ef240438ff69a0b955cc12"
+      },
+      "images": [
+        {
+          "objectKey": "media/image/post/fixture_moment_003/v1/cover.png",
+          "version": 1,
+          "mimeType": "image/png",
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 114886,
+          "sourceHash": "sha256:71d1961b029006d84b0f3cb9303c8f825f4206cdd8ef240438ff69a0b955cc12"
+        }
+      ]
+    }
+  },
+  "circleMedia": {
+    "fixture_circle_photo": {
+      "avatar": {
+        "objectKey": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 49424,
+        "sourceHash": "sha256:b3b4547ed15077ee29fb380892d56fba1a3d5f221b2a87550a397d9c18059347"
+      },
+      "cover": {
+        "objectKey": "media/image/circle/fixture_circle_photo/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 131089,
+        "sourceHash": "sha256:a92c09c74227309126e45377fe12a3795b6311c1616ed6f4d1a029902ea7cfa0"
+      }
+    },
+    "fixture_circle_travel": {
+      "avatar": {
+        "objectKey": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 48897,
+        "sourceHash": "sha256:f3cb34136fffa1a3b140ad9d320ea89edf734cf0b9a4fde17cff0a50a1e47aee"
+      },
+      "cover": {
+        "objectKey": "media/image/circle/fixture_circle_travel/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 89356,
+        "sourceHash": "sha256:82c00ba7566d576553eea177153a767ac8b31e79d55c3f7ffc043cb82c7018ac"
+      }
+    },
+    "fixture_circle_city": {
+      "avatar": {
+        "objectKey": "media/avatar/circle/fixture_circle_city/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 35519,
+        "sourceHash": "sha256:31fa0c37d649f2528c0bb8b324d12cbcd057a3d815acfe1b5723a3bb06b35572"
+      },
+      "cover": {
+        "objectKey": "media/image/circle/fixture_circle_city/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 107330,
+        "sourceHash": "sha256:55fc869c58f92e6fd60f55a0cb3718af191df60bf9ea364691ab9afde92dac1d"
+      }
+    },
+    "fixture_circle_life": {
+      "avatar": {
+        "objectKey": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 46164,
+        "sourceHash": "sha256:b9972ef1f00e55152cf1ef10f8ae2cee76bc072fda66794070936761c17b8b7a"
+      },
+      "cover": {
+        "objectKey": "media/image/circle/fixture_circle_life/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 121953,
+        "sourceHash": "sha256:3278b115b567a56e3e92e48c8483fb1a5c2f2610965935662409832f7f4b9adc"
+      }
+    },
+    "fixture_circle_tech": {
+      "avatar": {
+        "objectKey": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 53706,
+        "sourceHash": "sha256:5e95eb948a393a7290548a023f9220d7f02f39a214a545ab5117efd9f8c4476e"
+      },
+      "cover": {
+        "objectKey": "media/image/circle/fixture_circle_tech/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 114034,
+        "sourceHash": "sha256:5068b057b1e072a37992a458ce2d63f5f804bbbea5ce7961e05756128721b7a3"
+      }
+    },
+    "fixture_circle_food": {
+      "avatar": {
+        "objectKey": "media/avatar/circle/fixture_circle_food/v1/avatar.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 50469,
+        "sourceHash": "sha256:73aece82a7a7ead770c05f8f837e35f2ce6c0b38788b557deb1d3f280a6c7de6"
+      },
+      "cover": {
+        "objectKey": "media/image/circle/fixture_circle_food/v1/cover.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 160356,
+        "sourceHash": "sha256:b56ebf8368111ccaa45977822137e40dd4012433931180622e2e6112d53b306a"
+      }
+    }
+  },
+  "groupAvatarMedia": {
+    "fixture_conv_group": {
+      "composite": {
+        "objectKey": "media/avatar/group/fixture_conv_group/v1/composite.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 44786,
+        "sourceHash": "sha256:4a563d0057c4b8f56f64936538b438091286707e215f3480087f4d5e1b8c2a15"
+      }
+    },
+    "fixture_conv_photo_group": {
+      "composite": {
+        "objectKey": "media/avatar/group/fixture_conv_photo_group/v1/composite.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 36943,
+        "sourceHash": "sha256:bdf4d85cdf43f874e6af189cae145a4c4ca5a433c4e8644c005a0b87cb089fdb"
+      }
+    },
+    "fixture_conv_travel_group": {
+      "composite": {
+        "objectKey": "media/avatar/group/fixture_conv_travel_group/v1/composite.png",
+        "version": 1,
+        "mimeType": "image/png",
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 47571,
+        "sourceHash": "sha256:b55ae73daba9ecd3098d05ac80e20edbdae660480dfdfd158f9026e3073c7414"
+      }
+    }
+  },
+  "derivationRules": {
+    "contentAuthor": "authorId -> users[].avatarObjectKey/backgroundObjectKey/displayName",
+    "chatDirectAvatar": "direct conversation avatar -> other member avatarObjectKey",
+    "chatGroupAvatar": "group conversation avatar -> groupAvatarMedia[conversationId].composite",
+    "chatMember": "member.userId/contact.userId/senderId -> users[]",
+    "circleMember": "ownerId/member.userId -> users[]"
+  },
+  "syncEvents": {
+    "userAvatarUpdated": "UserAvatarUpdated updates user projection and rehydrates contact/member/sender snapshots",
+    "conversationAvatarUpdated": "ConversationAvatarUpdated updates group conversation avatar after member/avatar changes"
+  }
+}

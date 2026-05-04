@@ -188,8 +188,8 @@ _ValidatedRun _buildValidatedRun({
   );
   expect(
     frames,
-    hasLength(3),
-    reason: '${skillCase.domain} should show a 3-step process',
+    hasLength(4),
+    reason: '${skillCase.domain} should show a 4-step process',
   );
   expect(
     frames.map((frame) => frame.stepId).toList(growable: false),
@@ -197,6 +197,7 @@ _ValidatedRun _buildValidatedRun({
       ProcessStepId.understanding,
       ProcessStepId.retrievalDesign,
       ProcessStepId.retrievalProcessing,
+      ProcessStepId.answerOrganization,
     ]),
   );
   for (final frame in frames) {

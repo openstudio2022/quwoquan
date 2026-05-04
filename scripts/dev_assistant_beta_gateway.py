@@ -9,7 +9,7 @@ import json
 import signal
 import threading
 from pathlib import Path
-from http.client import HTTPConnection
+from http.client import HTTPConnection, HTTPSConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -17,6 +17,19 @@ from urllib.parse import parse_qs, urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
 FORWARDED_PREFIXES = ("/v1/assistant",)
+MEDIA_OBJECT_KEY_FIELDS = {
+    "avatarObjectKey",
+    "backgroundObjectKey",
+    "coverObjectKey",
+    "thumbnailObjectKey",
+    "imageObjectKey",
+    "mediaObjectKey",
+    "imageObjectKeys",
+    "mediaObjectKeys",
+    "senderAvatarObjectKeySnapshot",
+    "authorAvatarObjectKey",
+    "authorAvatarObjectKeySnapshot",
+}
 
 
 def load_fixture(relative_path: str) -> dict:
@@ -97,6 +110,11 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
 
     def _forward(self) -> None:
         parsed = urlsplit(self.path)
+        if parsed.path.startswith("/media/"):
+            if self._proxy_media(parsed.path, parsed.query):
+                return
+            self.send_error(404, "media route is not available in local beta gateway")
+            return
         fixture_payload = self._fixture_response(parsed.path, parsed.query)
         if fixture_payload is not None:
             self._send_json(fixture_payload)
@@ -136,6 +154,50 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
 
         self._send_upstream_headers(upstream)
         self.wfile.write(payload)
+
+    def _proxy_media(self, path: str, query: str = "") -> bool:
+        base_url = self._media_base_for_path(path)
+        if not base_url:
+            return False
+        parsed_base = urlsplit(base_url.rstrip("/"))
+        if parsed_base.scheme not in {"http", "https"} or not parsed_base.netloc:
+            return False
+        target_path = path
+        if parsed_base.path:
+            target_path = f"{parsed_base.path.rstrip('/')}/{path.lstrip('/')}"
+        if query:
+            target_path = f"{target_path}?{query}"
+        conn_cls = HTTPSConnection if parsed_base.scheme == "https" else HTTPConnection
+        conn = conn_cls(parsed_base.hostname, parsed_base.port, timeout=30)
+        try:
+            conn.request("GET", target_path)
+            upstream = conn.getresponse()
+            payload = upstream.read()
+        except Exception as exc:  # noqa: BLE001
+            self.send_error(502, f"media proxy failed: {exc}")
+            return True
+        finally:
+            conn.close()
+        self.send_response(upstream.status)
+        for key, value in upstream.getheaders():
+            if key.lower() in {"connection", "transfer-encoding"}:
+                continue
+            self.send_header(key, value)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(payload)
+        return True
+
+    def _media_base_for_path(self, path: str) -> str:
+        if path.startswith("/media/avatar/"):
+            return self.avatar_cdn_base_url
+        if path.startswith("/media/background/"):
+            return self.image_cdn_base_url or self.avatar_cdn_base_url
+        if path.startswith("/media/image/"):
+            return self.image_cdn_base_url
+        if path.startswith("/media/video/"):
+            return self.video_cdn_base_url
+        return self.avatar_cdn_base_url or self.image_cdn_base_url or self.video_cdn_base_url
 
     def _is_streaming_response(self, upstream, stream_path: bool) -> bool:
         content_type = upstream.getheader("Content-Type", "")
@@ -328,25 +390,37 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
 
     @classmethod
     def _rewrite_media_urls(cls, payload: object) -> object:
-        avatar = cls.avatar_cdn_base_url.rstrip("/")
-        image = cls.image_cdn_base_url.rstrip("/")
-        video = cls.video_cdn_base_url.rstrip("/")
-
-        def walk(value: object) -> object:
+        def walk(value: object, field_name: str = "") -> object:
             if isinstance(value, list):
-                return [walk(item) for item in value]
+                return [walk(item, field_name) for item in value]
+            if isinstance(value, str):
+                return cls._media_url_for_ref(value, field_name)
             if not isinstance(value, dict):
                 return value
-            out = {str(k): walk(v) for k, v in value.items()}
-            if avatar and "avatarUrl" in out:
-                out["avatarUrl"] = f"{avatar}/media/avatar/beta-avatar.png"
-            if image and "coverUrl" in out:
-                out["coverUrl"] = f"{image}/media/image/beta-cover.png"
-            if video and str(out.get("type", "")).lower() == "video":
-                out["mediaUrl"] = f"{video}/media/video/beta-sample.mp4"
-            return out
+            return {str(k): walk(v, str(k)) for k, v in value.items()}
 
         return walk(copy.deepcopy(payload))
+
+    @classmethod
+    def _media_url_for_ref(cls, value: str, field_name: str) -> str:
+        if field_name in MEDIA_OBJECT_KEY_FIELDS or field_name.endswith("ObjectKey"):
+            return value
+        normalized = value.strip()
+        if normalized.startswith("/media/"):
+            normalized = normalized[1:]
+        lower = normalized.lower()
+        if lower.startswith("media/avatar/"):
+            return cls._join_media_base(cls.avatar_cdn_base_url, normalized) or value
+        if lower.startswith("media/background/") or lower.startswith("media/image/"):
+            return cls._join_media_base(cls.image_cdn_base_url or cls.avatar_cdn_base_url, normalized) or value
+        if lower.startswith("media/video/"):
+            return cls._join_media_base(cls.video_cdn_base_url, normalized) or value
+        return value
+
+    @staticmethod
+    def _join_media_base(base_url: str, object_key: str) -> str:
+        base = base_url.rstrip("/")
+        return f"{base}/{object_key}" if base else ""
 
 
 def main() -> None:

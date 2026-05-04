@@ -21,19 +21,33 @@
           "authorProfileSubjectId": "fixture_user_photo",
           "profileSubjectId": "fixture_user_photo",
           "displayName": "契约摄影师",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_photo/v1/background.png",
           "summary": "西湖晨光摄影测试详情",
           "locationName": "杭州西湖",
-          "tags": ["fixture", "photo", "travel"],
+          "tags": [
+            "fixture",
+            "photo",
+            "travel"
+          ],
           "body": "西湖晨光下的契约照片。",
-          "coverUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900",
-          "thumbnailUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900",
-          "mediaUrls": ["https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900", "https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=900"],
-          "imageUrls": ["https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=900", "https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=900"],
-          "circleIds": ["fixture_circle_photo"],
-          "circleNames": ["契约摄影社"],
+          "coverUrl": "media/image/post/fixture_photo_001/v1/cover.png",
+          "thumbnailUrl": "media/image/post/fixture_photo_001/v1/cover.png",
+          "mediaUrls": [
+            "media/image/post/fixture_photo_001/v1/cover.png",
+            "media/image/post/fixture_photo_001/v1/image-2.png"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_photo_001/v1/cover.png",
+            "media/image/post/fixture_photo_001/v1/image-2.png"
+          ],
+          "circleIds": [
+            "fixture_circle_photo"
+          ],
+          "circleNames": [
+            "契约摄影社"
+          ],
           "circleId": "fixture_circle_photo",
           "circleName": "契约摄影社",
           "width": 1200,
@@ -42,7 +56,21 @@
           "commentCount": 12,
           "favoriteCount": 34,
           "shareCount": 5,
-          "createdAt": "2026-04-29T08:00:00Z"
+          "createdAt": "2026-04-29T08:00:00Z",
+          "authorDisplayNameSnapshot": "契约摄影师",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_photo/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_photo_001/v1/cover.png",
+          "thumbnailObjectKey": "media/image/post/fixture_photo_001/v1/cover.png",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_photo_001/v1/cover.png",
+            "media/image/post/fixture_photo_001/v1/image-2.png"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_photo_001/v1/cover.png",
+            "media/image/post/fixture_photo_001/v1/image-2.png"
+          ]
         },
         {
           "postId": "fixture_photo_002",
@@ -55,16 +83,24 @@
           "authorProfileSubjectId": "fixture_user_photo",
           "profileSubjectId": "fixture_user_photo",
           "displayName": "契约摄影师",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_photo/v1/background.png",
           "body": "城市傍晚的光影层次。",
-          "coverUrl": "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=900",
-          "thumbnailUrl": "https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=900",
-          "mediaUrls": ["https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=900"],
-          "imageUrls": ["https://images.unsplash.com/photo-1493246507139-91e8fad9978e?w=900"],
-          "circleIds": ["fixture_circle_photo"],
-          "circleNames": ["契约摄影社"],
+          "coverUrl": "media/image/post/fixture_photo_002/v1/cover.png",
+          "thumbnailUrl": "media/image/post/fixture_photo_002/v1/cover.png",
+          "mediaUrls": [
+            "media/image/post/fixture_photo_002/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_photo_002/v1/cover.png"
+          ],
+          "circleIds": [
+            "fixture_circle_photo"
+          ],
+          "circleNames": [
+            "契约摄影社"
+          ],
           "circleId": "fixture_circle_photo",
           "circleName": "契约摄影社",
           "width": 1000,
@@ -73,7 +109,19 @@
           "commentCount": 9,
           "favoriteCount": 22,
           "shareCount": 4,
-          "createdAt": "2026-04-29T08:20:00Z"
+          "createdAt": "2026-04-29T08:20:00Z",
+          "authorDisplayNameSnapshot": "契约摄影师",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_photo/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_photo_002/v1/cover.png",
+          "thumbnailObjectKey": "media/image/post/fixture_photo_002/v1/cover.png",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_photo_002/v1/cover.png"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_photo_002/v1/cover.png"
+          ]
         },
         {
           "postId": "fixture_photo_003",
@@ -86,16 +134,24 @@
           "authorProfileSubjectId": "fixture_user_travel",
           "profileSubjectId": "fixture_user_travel",
           "displayName": "契约旅行家",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_travel/v1/background.png",
           "body": "山路、湖面与露营灯。",
-          "coverUrl": "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900",
-          "thumbnailUrl": "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900",
-          "mediaUrls": ["https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900"],
-          "imageUrls": ["https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=900"],
-          "circleIds": ["fixture_circle_travel"],
-          "circleNames": ["契约旅行手账"],
+          "coverUrl": "media/image/post/fixture_photo_003/v1/cover.png",
+          "thumbnailUrl": "media/image/post/fixture_photo_003/v1/cover.png",
+          "mediaUrls": [
+            "media/image/post/fixture_photo_003/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_photo_003/v1/cover.png"
+          ],
+          "circleIds": [
+            "fixture_circle_travel"
+          ],
+          "circleNames": [
+            "契约旅行手账"
+          ],
           "circleId": "fixture_circle_travel",
           "circleName": "契约旅行手账",
           "width": 1200,
@@ -104,7 +160,19 @@
           "commentCount": 16,
           "favoriteCount": 45,
           "shareCount": 8,
-          "createdAt": "2026-04-29T08:40:00Z"
+          "createdAt": "2026-04-29T08:40:00Z",
+          "authorDisplayNameSnapshot": "契约旅行家",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_travel/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_photo_003/v1/cover.png",
+          "thumbnailObjectKey": "media/image/post/fixture_photo_003/v1/cover.png",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_photo_003/v1/cover.png"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_photo_003/v1/cover.png"
+          ]
         },
         {
           "postId": "fixture_video_001",
@@ -117,15 +185,19 @@
           "authorProfileSubjectId": "fixture_user_travel",
           "profileSubjectId": "fixture_user_travel",
           "displayName": "契约旅行家",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_travel/v1/background.png",
           "body": "杭州一日游契约视频。",
-          "coverUrl": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900",
-          "thumbnailUrl": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900",
+          "coverUrl": "media/image/post/fixture_video_001/v1/cover.png",
+          "thumbnailUrl": "media/image/post/fixture_video_001/v1/cover.png",
           "videoUrl": "https://flutter.github.io/assets-for-api-docs/assets/videos/bee.mp4",
-          "circleIds": ["fixture_circle_travel"],
-          "circleNames": ["契约旅行手账"],
+          "circleIds": [
+            "fixture_circle_travel"
+          ],
+          "circleNames": [
+            "契约旅行手账"
+          ],
           "circleId": "fixture_circle_travel",
           "circleName": "契约旅行手账",
           "width": 1280,
@@ -135,7 +207,13 @@
           "commentCount": 18,
           "favoriteCount": 88,
           "shareCount": 9,
-          "createdAt": "2026-04-29T09:00:00Z"
+          "createdAt": "2026-04-29T09:00:00Z",
+          "authorDisplayNameSnapshot": "契约旅行家",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_travel/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_video_001/v1/cover.png",
+          "thumbnailObjectKey": "media/image/post/fixture_video_001/v1/cover.png"
         },
         {
           "postId": "fixture_video_002",
@@ -148,15 +226,19 @@
           "authorProfileSubjectId": "fixture_user_video",
           "profileSubjectId": "fixture_user_video",
           "displayName": "契约剪辑师",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_video/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_video/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_video/v1/background.png",
           "body": "城市街头慢镜头。",
-          "coverUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900",
-          "thumbnailUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900",
+          "coverUrl": "media/image/post/fixture_video_002/v1/cover.png",
+          "thumbnailUrl": "media/image/post/fixture_video_002/v1/cover.png",
           "videoUrl": "https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4",
-          "circleIds": ["fixture_circle_city"],
-          "circleNames": ["契约城市漫步"],
+          "circleIds": [
+            "fixture_circle_city"
+          ],
+          "circleNames": [
+            "契约城市漫步"
+          ],
           "circleId": "fixture_circle_city",
           "circleName": "契约城市漫步",
           "width": 1280,
@@ -166,7 +248,13 @@
           "commentCount": 15,
           "favoriteCount": 61,
           "shareCount": 7,
-          "createdAt": "2026-04-29T09:20:00Z"
+          "createdAt": "2026-04-29T09:20:00Z",
+          "authorDisplayNameSnapshot": "契约剪辑师",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_video/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_video_002/v1/cover.png",
+          "thumbnailObjectKey": "media/image/post/fixture_video_002/v1/cover.png"
         },
         {
           "postId": "fixture_article_001",
@@ -179,34 +267,61 @@
           "authorProfileSubjectId": "fixture_user_article",
           "profileSubjectId": "fixture_user_article",
           "displayName": "契约撰稿人",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_article/v1/background.png",
           "title": "契约驱动的发现页文章",
           "body": "这是一篇用于 alpha/beta 数据驱动测试的契约文章。",
           "summary": "这是一篇用于 alpha/beta 数据驱动测试的契约文章。",
-          "coverUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=900",
-          "thumbnailUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=900",
+          "coverUrl": "media/image/post/fixture_article_001/v1/cover.png",
+          "thumbnailUrl": "media/image/post/fixture_article_001/v1/cover.png",
           "articleTemplate": "gentle",
           "articleFontPreset": "clean",
           "articleDocument": {
             "title": "契约驱动的发现页文章",
             "body": "用一份共享契约数据，覆盖 alpha、beta、gamma 三套环境。",
             "blocks": [
-              {"id": "fixture_article_001_p0", "type": "paragraph", "text": "用一份共享契约数据，覆盖 alpha、beta、gamma 三套环境。"},
-              {"id": "fixture_article_001_img", "type": "image", "imageUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200", "caption": "契约文章配图"}
+              {
+                "id": "fixture_article_001_p0",
+                "type": "paragraph",
+                "text": "用一份共享契约数据，覆盖 alpha、beta、gamma 三套环境。"
+              },
+              {
+                "id": "fixture_article_001_img",
+                "type": "image",
+                "imageUrl": "media/image/post/fixture_article_001/v1/cover.png",
+                "caption": "契约文章配图",
+                "imageObjectKey": "media/image/post/fixture_article_001/v1/cover.png"
+              }
             ],
-            "assets": [{"id": "fixture_article_001_asset", "imageUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1200", "caption": "契约文章配图"}]
+            "assets": [
+              {
+                "id": "fixture_article_001_asset",
+                "imageUrl": "media/image/post/fixture_article_001/v1/cover.png",
+                "caption": "契约文章配图",
+                "imageObjectKey": "media/image/post/fixture_article_001/v1/cover.png"
+              }
+            ]
           },
-          "circleIds": ["fixture_circle_photo"],
-          "circleNames": ["契约摄影社"],
+          "circleIds": [
+            "fixture_circle_photo"
+          ],
+          "circleNames": [
+            "契约摄影社"
+          ],
           "circleId": "fixture_circle_photo",
           "circleName": "契约摄影社",
           "likeCount": 96,
           "commentCount": 7,
           "favoriteCount": 41,
           "shareCount": 3,
-          "createdAt": "2026-04-29T10:00:00Z"
+          "createdAt": "2026-04-29T10:00:00Z",
+          "authorDisplayNameSnapshot": "契约撰稿人",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_article/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_article_001/v1/cover.png",
+          "thumbnailObjectKey": "media/image/post/fixture_article_001/v1/cover.png"
         },
         {
           "postId": "fixture_article_002",
@@ -219,34 +334,61 @@
           "authorProfileSubjectId": "fixture_user_article",
           "profileSubjectId": "fixture_user_article",
           "displayName": "契约撰稿人",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_article/v1/background.png",
           "title": "周末旅行路线复盘",
           "body": "把天气、路况、景点拥堵和沿途介绍串到同一个行程里。",
           "summary": "把天气、路况、景点拥堵和沿途介绍串到同一个行程里。",
-          "coverUrl": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900",
-          "thumbnailUrl": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=900",
+          "coverUrl": "media/image/post/fixture_article_002/v1/cover.png",
+          "thumbnailUrl": "media/image/post/fixture_article_002/v1/cover.png",
           "articleTemplate": "journal",
           "articleFontPreset": "serif",
           "articleDocument": {
             "title": "周末旅行路线复盘",
             "body": "路线规划需要把人、地点和实时环境放在一起。",
             "blocks": [
-              {"id": "fixture_article_002_p0", "type": "paragraph", "text": "路线规划需要把人、地点和实时环境放在一起。"},
-              {"id": "fixture_article_002_img", "type": "image", "imageUrl": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200", "caption": "行程文章配图"}
+              {
+                "id": "fixture_article_002_p0",
+                "type": "paragraph",
+                "text": "路线规划需要把人、地点和实时环境放在一起。"
+              },
+              {
+                "id": "fixture_article_002_img",
+                "type": "image",
+                "imageUrl": "media/image/post/fixture_article_002/v1/cover.png",
+                "caption": "行程文章配图",
+                "imageObjectKey": "media/image/post/fixture_article_002/v1/cover.png"
+              }
             ],
-            "assets": [{"id": "fixture_article_002_asset", "imageUrl": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200", "caption": "行程文章配图"}]
+            "assets": [
+              {
+                "id": "fixture_article_002_asset",
+                "imageUrl": "media/image/post/fixture_article_002/v1/cover.png",
+                "caption": "行程文章配图",
+                "imageObjectKey": "media/image/post/fixture_article_002/v1/cover.png"
+              }
+            ]
           },
-          "circleIds": ["fixture_circle_travel"],
-          "circleNames": ["契约旅行手账"],
+          "circleIds": [
+            "fixture_circle_travel"
+          ],
+          "circleNames": [
+            "契约旅行手账"
+          ],
           "circleId": "fixture_circle_travel",
           "circleName": "契约旅行手账",
           "likeCount": 112,
           "commentCount": 11,
           "favoriteCount": 52,
           "shareCount": 6,
-          "createdAt": "2026-04-29T10:20:00Z"
+          "createdAt": "2026-04-29T10:20:00Z",
+          "authorDisplayNameSnapshot": "契约撰稿人",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_article/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_article_002/v1/cover.png",
+          "thumbnailObjectKey": "media/image/post/fixture_article_002/v1/cover.png"
         },
         {
           "postId": "fixture_moment_001",
@@ -259,21 +401,39 @@
           "authorProfileSubjectId": "fixture_user_current",
           "profileSubjectId": "fixture_user_current",
           "displayName": "契约当前用户",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_current/v1/background.png",
           "body": "今天用契约 fixture 验证微趣流。",
-          "mediaUrls": ["https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=900"],
-          "imageUrls": ["https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=900"],
-          "circleIds": ["fixture_circle_photo"],
-          "circleNames": ["契约摄影社"],
+          "mediaUrls": [
+            "media/image/post/fixture_moment_001/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_moment_001/v1/cover.png"
+          ],
+          "circleIds": [
+            "fixture_circle_photo"
+          ],
+          "circleNames": [
+            "契约摄影社"
+          ],
           "circleId": "fixture_circle_photo",
           "circleName": "契约摄影社",
           "likeCount": 33,
           "commentCount": 4,
           "favoriteCount": 6,
           "shareCount": 1,
-          "createdAt": "2026-04-29T11:00:00Z"
+          "createdAt": "2026-04-29T11:00:00Z",
+          "authorDisplayNameSnapshot": "契约当前用户",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_current/v1/background.png",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_moment_001/v1/cover.png"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_moment_001/v1/cover.png"
+          ]
         },
         {
           "postId": "fixture_moment_002",
@@ -286,21 +446,39 @@
           "authorProfileSubjectId": "fixture_user_friend",
           "profileSubjectId": "fixture_user_friend",
           "displayName": "契约好友",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_friend/v1/background.png",
           "body": "周末集合时间已确认，记得带相机。",
-          "mediaUrls": ["https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900"],
-          "imageUrls": ["https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=900"],
-          "circleIds": ["fixture_circle_travel"],
-          "circleNames": ["契约旅行手账"],
+          "mediaUrls": [
+            "media/image/post/fixture_moment_002/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_moment_002/v1/cover.png"
+          ],
+          "circleIds": [
+            "fixture_circle_travel"
+          ],
+          "circleNames": [
+            "契约旅行手账"
+          ],
           "circleId": "fixture_circle_travel",
           "circleName": "契约旅行手账",
           "likeCount": 54,
           "commentCount": 8,
           "favoriteCount": 9,
           "shareCount": 2,
-          "createdAt": "2026-04-29T11:20:00Z"
+          "createdAt": "2026-04-29T11:20:00Z",
+          "authorDisplayNameSnapshot": "契约好友",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_friend/v1/background.png",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_moment_002/v1/cover.png"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_moment_002/v1/cover.png"
+          ]
         },
         {
           "postId": "fixture_moment_003",
@@ -313,21 +491,39 @@
           "authorProfileSubjectId": "fixture_user_weekend_1",
           "profileSubjectId": "fixture_user_weekend_1",
           "displayName": "契约同伴一",
-          "authorAvatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
-          "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
-          "authorBackgroundUrl": "https://images.unsplash.com/photo-1562774053-701939374585?w=1400",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_weekend_1/v1/background.png",
           "body": "新发现一家适合拍照的咖啡馆。",
-          "mediaUrls": ["https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=900"],
-          "imageUrls": ["https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=900"],
-          "circleIds": ["fixture_circle_life"],
-          "circleNames": ["契约生活方式"],
+          "mediaUrls": [
+            "media/image/post/fixture_moment_003/v1/cover.png"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_moment_003/v1/cover.png"
+          ],
+          "circleIds": [
+            "fixture_circle_life"
+          ],
+          "circleNames": [
+            "契约生活方式"
+          ],
           "circleId": "fixture_circle_life",
           "circleName": "契约生活方式",
           "likeCount": 41,
           "commentCount": 5,
           "favoriteCount": 8,
           "shareCount": 1,
-          "createdAt": "2026-04-29T11:40:00Z"
+          "createdAt": "2026-04-29T11:40:00Z",
+          "authorDisplayNameSnapshot": "契约同伴一",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_moment_003/v1/cover.png"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_moment_003/v1/cover.png"
+          ]
         }
       ],
       "reactions": [
@@ -352,21 +548,50 @@
           "replyCount": 0,
           "likeCount": 2,
           "status": "active",
-          "createdAt": "2026-04-29T12:10:00Z"
+          "createdAt": "2026-04-29T12:10:00Z",
+          "authorAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+          "authorAvatarUrlSnapshot": "media/avatar/user/fixture_user_commenter/v1/avatar.png"
         }
       ]
     },
     "home_feed_core": {
       "description": "首页关注、精选与群组三个入口的组合内容种子。",
-      "followingFeedPostIds": ["fixture_moment_001", "fixture_moment_002", "fixture_moment_003", "fixture_photo_001"],
-      "featuredFeedPostIds": ["fixture_photo_001", "fixture_photo_002", "fixture_photo_003", "fixture_video_001", "fixture_video_002", "fixture_article_001", "fixture_article_002"],
-      "groupFeedPostIds": ["fixture_photo_001", "fixture_photo_002", "fixture_article_001", "fixture_article_002", "fixture_video_001"]
+      "followingFeedPostIds": [
+        "fixture_moment_001",
+        "fixture_moment_002",
+        "fixture_moment_003",
+        "fixture_photo_001"
+      ],
+      "featuredFeedPostIds": [
+        "fixture_photo_001",
+        "fixture_photo_002",
+        "fixture_photo_003",
+        "fixture_video_001",
+        "fixture_video_002",
+        "fixture_article_001",
+        "fixture_article_002"
+      ],
+      "groupFeedPostIds": [
+        "fixture_photo_001",
+        "fixture_photo_002",
+        "fixture_article_001",
+        "fixture_article_002",
+        "fixture_video_001"
+      ]
     },
     "content_detail_core": {
       "description": "内容详情、评论、reaction 与分享最小种子。",
-      "postIds": ["fixture_photo_001", "fixture_article_001", "fixture_video_001"],
-      "commentIds": ["fixture_comment_photo_001"],
-      "reactionPostIds": ["fixture_photo_001"],
+      "postIds": [
+        "fixture_photo_001",
+        "fixture_article_001",
+        "fixture_video_001"
+      ],
+      "commentIds": [
+        "fixture_comment_photo_001"
+      ],
+      "reactionPostIds": [
+        "fixture_photo_001"
+      ],
       "shareTargets": [
         {
           "id": "fixture_share_chat_group",
@@ -377,8 +602,16 @@
     },
     "search_core": {
       "description": "全局搜索与网络结果页可打开的内容种子。",
-      "history": ["西湖晨光", "契约旅行"],
-      "resultPostIds": ["fixture_photo_001", "fixture_article_001", "fixture_video_001", "fixture_moment_001"],
+      "history": [
+        "西湖晨光",
+        "契约旅行"
+      ],
+      "resultPostIds": [
+        "fixture_photo_001",
+        "fixture_article_001",
+        "fixture_video_001",
+        "fixture_moment_001"
+      ],
       "networkResults": [
         {
           "id": "fixture_search_web_001",
@@ -396,8 +629,14 @@
           "body": "契约草稿内容"
         }
       ],
-      "selectableCircleIds": ["fixture_circle_photo", "fixture_circle_travel"],
-      "selectableHomepageIds": ["fixture_homepage_author", "fixture_homepage_poi"]
+      "selectableCircleIds": [
+        "fixture_circle_photo",
+        "fixture_circle_travel"
+      ],
+      "selectableHomepageIds": [
+        "fixture_homepage_author",
+        "fixture_homepage_poi"
+      ]
     }
   },
   "scenarios": [
@@ -406,7 +645,13 @@
       "title": "发现流契约种子基础加载",
       "type": "content_feed",
       "domainId": "content",
-      "seedRefs": ["content_discovery_core", "home_feed_core", "content_detail_core", "search_core", "publish_core"],
+      "seedRefs": [
+        "content_discovery_core",
+        "home_feed_core",
+        "content_detail_core",
+        "search_core",
+        "publish_core"
+      ],
       "uiExpectations": {
         "postIds": [
           "fixture_photo_001",
@@ -414,7 +659,10 @@
           "fixture_article_001",
           "fixture_moment_001"
         ],
-        "textFragments": ["契约摄影师", "契约驱动的发现页文章"]
+        "textFragments": [
+          "契约摄影师",
+          "契约驱动的发现页文章"
+        ]
       },
       "remoteExpectations": {
         "postIds": [
@@ -424,13 +672,28 @@
           "fixture_moment_001"
         ],
         "detailPostId": "fixture_photo_001",
-        "commentIds": ["fixture_comment_photo_001"],
-        "reactionPostIds": ["fixture_photo_001"]
+        "commentIds": [
+          "fixture_comment_photo_001"
+        ],
+        "reactionPostIds": [
+          "fixture_photo_001"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     }
   ]

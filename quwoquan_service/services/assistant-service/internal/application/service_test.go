@@ -133,6 +133,32 @@ func TestDefaultSkillRuntimeRoutesDomainSkills(t *testing.T) {
 	}
 }
 
+type recordingSkillSelectionModel struct {
+	called bool
+}
+
+func (p *recordingSkillSelectionModel) Complete(context.Context, ModelRequest) (ModelResponse, error) {
+	p.called = true
+	return ModelResponse{Text: `{"skillId":"fallback_general_search"}`}, nil
+}
+
+func TestModelDrivenSkillRuntimeUsesManifestHintBeforeModel(t *testing.T) {
+	model := &recordingSkillSelectionModel{}
+	selection, err := ModelDrivenSkillRuntime{Model: model}.SelectSkill(context.Background(), assistant.AssistantTurn{
+		TurnID: "atn_manifest_hint",
+		Input:  assistant.AssistantTurnInput{Text: "shenzhen tian qi"},
+	})
+	if err != nil {
+		t.Fatalf("SelectSkill error: %v", err)
+	}
+	if selection.SkillID != "weather" {
+		t.Fatalf("skillID=%q, want weather", selection.SkillID)
+	}
+	if model.called {
+		t.Fatal("model skill selection should be skipped when manifest hint is enough")
+	}
+}
+
 func TestReportScorecards_DedupsAndWritesAggregateHotPath(t *testing.T) {
 	store := persistence.NewMemoryEventStore()
 	cache := rtredis.NewMemoryClient()

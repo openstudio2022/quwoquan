@@ -72,7 +72,7 @@ func FormatModelContextForPrompt(turns []assistant.AssistantConversationContextT
 	if len(turns) == 0 {
 		return ""
 	}
-	lines := []string{"\n同一会话前文（按时间从旧到新，仅用于理解省略表达和延续地点/约束）："}
+	lines := []string{"\n同一会话前文（按时间从旧到新，仅用于理解省略表达、延续地点/约束和复用事实；不要复制前文回答的开头、模板口吻或内部过程表述）："}
 	for _, turn := range turns {
 		role := strings.TrimSpace(turn.Role)
 		if role == "" {

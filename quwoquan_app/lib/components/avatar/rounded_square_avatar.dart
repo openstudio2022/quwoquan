@@ -1,5 +1,6 @@
 // ignore_for_file: unnecessary_underscores
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圆角方形头像组件（替代 CircleAvatar）
@@ -26,20 +27,14 @@ class RoundedSquareAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = borderRadius ?? AppSpacing.contentPreviewCornerRadius;
-    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final imageCandidates = resolveAvatarImageUrlCandidates(imageUrl);
+    final hasImage = imageCandidates.isNotEmpty;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
     Widget avatar = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: hasImage
-          ? Image.network(
-              imageUrl!,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, _) => _buildFallback(radius, isDark),
-            )
+          ? _buildNetworkImageWithFallback(imageCandidates, 0, radius, isDark)
           : _buildFallback(radius, isDark),
     );
 
@@ -48,6 +43,32 @@ class RoundedSquareAvatar extends StatelessWidget {
     }
 
     return avatar;
+  }
+
+  Widget _buildNetworkImageWithFallback(
+    List<String> candidates,
+    int index,
+    double radius,
+    bool isDark,
+  ) {
+    return Image.network(
+      candidates[index],
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, _) {
+        final next = index + 1;
+        if (next < candidates.length) {
+          return _buildNetworkImageWithFallback(
+            candidates,
+            next,
+            radius,
+            isDark,
+          );
+        }
+        return _buildFallback(radius, isDark);
+      },
+    );
   }
 
   Widget _buildFallback(double radius, bool isDark) {

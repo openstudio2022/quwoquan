@@ -18,13 +18,12 @@ gamma-api.quwoquan-env.test {
 	handle /startupz {
 		reverse_proxy content-service:18080
 	}
-	handle /v1/content/* {
+	@api_content path /v1/content*
+	handle @api_content {
 		reverse_proxy content-service:18080
 	}
-	handle /v1/chat/* {
-		reverse_proxy chat-service:18081
-	}
-	handle /v1/user/sync {
+	@api_chat path /v1/chat* /v1/user/sync
+	handle @api_chat {
 		reverse_proxy chat-service:18081
 	}
 	handle /v1/ops/* {
@@ -65,13 +64,12 @@ gamma-upload.quwoquan-env.test {
 	handle /healthz {
 		reverse_proxy content-service:18080
 	}
-	handle /v1/content/* {
+	@pub_content path /v1/content*
+	handle @pub_content {
 		reverse_proxy content-service:18080
 	}
-	handle /v1/chat/* {
-		reverse_proxy chat-service:18081
-	}
-	handle /v1/user/sync {
+	@pub_chat path /v1/chat* /v1/user/sync
+	handle @pub_chat {
 		reverse_proxy chat-service:18081
 	}
 	handle /v1/ops/* {
@@ -82,6 +80,6 @@ gamma-upload.quwoquan-env.test {
 		file_server
 	}
 	handle {
-		respond "local-gamma mirror http endpoint is ready" 200
+		respond "local-gamma mirror route is not ready for this path" 404
 	}
 }

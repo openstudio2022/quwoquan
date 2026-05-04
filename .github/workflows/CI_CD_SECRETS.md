@@ -10,12 +10,14 @@
 
 | Workflow | 触发 | 职责 | 对应阶段 |
 |----------|------|------|----------|
-| **delivery-gate.yml** | PR / push main, dev1.0 | 拓扑校验、L1+L2 质量门（PR/入库阶段） | G0~G3 |
-| **service_pipeline.yml** | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验 | G2 |
-| **app_pipeline.yml** | quwoquan_app/**；v* tag → macOS 构建 | Flutter analyze、macOS 构建（L1 由 delivery-gate 负责） | G2 / 发布 |
-| **pre-release-gate.yml** | v*-rc* tag、手动 | L1+L2 → deploy → L3 → L4（L3 统一整合） | G3→G5b |
-| **deploy-gamma-ecs.yml** | 手动、push main | hosted 打包 → ECS pre → self-hosted 矩阵 → prod 就地升级 | G5a→G5b |
-| **app-env-device-matrix-self-hosted.yml** | 被调用 / 手动 | alpha/beta/gamma self-hosted 端侧矩阵 | G5b |
+| **delivery-gate.yml** | `merge_group`、手动 | merge queue 快速主门禁：拓扑校验、L1+L2 | G0~G3 |
+| **service_pipeline.yml** | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize 校验 | G2 |
+| **app_pipeline.yml** | `v*` tag、手动 | macOS 构建（主干门禁已由 03/04/05 负责） | G2 / 发布 |
+| **pre-release-gate.yml** | `merge_group`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
+| **app-env-device-matrix-self-hosted.yml** | `merge_group` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
+| **deploy-prod-gray.yml** | 手动 | 半自动 prod 灰度 | G5c |
+| **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 占位链路 | G5c |
+| **deploy-gamma-ecs.yml** | 手动 | gamma / onebox 手动发布与复验 | G5a→G5b |
 | **ecs-onebox-rollback.yml** | 手动 | ECS onebox 备份回滚 | 运维 |
 
 ---
@@ -78,33 +80,35 @@
 ### 说明
 
 - `GAMMA_KUBECONFIG` 未配置时，deploy-integration 仅 skip，不 fail。
-- L3/L4 依赖 deploy-integration 完成，需 gamma 已部署且 `GAMMA_BASE_URL` 可访问。
-- L4 Android 使用 GitHub hosted `ubuntu-latest` + Android Emulator；L4 iOS 使用 GitHub hosted `macos-latest` + iOS Simulator，不再依赖 Firebase Test Lab / GCP 凭证。
-- 若注册 self-hosted runner，可将仓库变量 **`QWQ_SELF_HOSTED_PRE_RELEASE_MATRIX`** 设为 **`true`**，在 L3 通过后额外执行 **alpha/beta/gamma** self-hosted 矩阵（`app-env-device-matrix-self-hosted.yml`）。
+- L3/L4/gamma smoke 依赖 deploy-integration 完成，需 gamma 已部署且 `GAMMA_BASE_URL` 可访问。
+- L4 Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机，并逐台执行；总设备数至少为 1。
+- merge queue 阻断时，`03` / `04` / `05` 需同时配置为 `main` 的 required checks。
 
 ---
 
-## 六、App Env Device Matrix（app-env-device-matrix.yml）
+## 六、App Env Device Matrix（app-env-device-matrix-self-hosted.yml）
 
-### hosted（GitHub Runner）矩阵
+### self-hosted（merge queue / workflow_call / 手动统一复用）
 
 | Secret | 用途 |
 |--------|------|
-| **GAMMA_BASE_URL** | 仅在本地跑 hosted **gamma** 时需要；当前 workflow 已收敛为 **仅 alpha/beta**，一般可不配 |
+| **GAMMA_BASE_URL** | gamma 场景或手动覆盖时使用；merge queue 的 `05` 当前固定跑 `alpha/beta`，通常不需要 |
+| **GAMMA_TEST_AUTH_TOKEN** | beta/gamma 远端链路鉴权 |
 
 ### 说明
 
-- **hosted** 矩阵为 `alpha/beta × Android/iOS`（快速回归）；**gamma 发布准入**改走 **05b `app-env-device-matrix-self-hosted.yml`**（需自建 self-hosted runner）。
+- `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 merge queue、被其他 workflow 调用以及手动调试。
+- `05` 已统一固定到 **本机 macOS self-hosted runner**；不再依赖自定义 runner label，也不再依赖固定 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID`。
 - `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
-- `beta` 在 runner 内启动本地 beta assistant-service + gateway；Android 通过 `10.0.2.2` 访问 runner，iOS 通过 `127.0.0.1` 访问 runner。
+- `beta` 在 runner 内启动本地 beta assistant-service + gateway；设备列表通过 `flutter devices --machine` 动态发现，当前可见的每台 Android/iOS 模拟器或真机都会执行。
 - beta CI 默认使用 deterministic provider；真实模型链路仍以人工/专门 beta 验证为准。
 
-### self-hosted（05b）可选 Variables
+### self-hosted runner 前提
 
-| Variable | 用途 |
-|----------|------|
-| **ANDROID_DEVICE_ID** | 物理机/adb 设备 id（默认 `emulator-5554`） |
-| **IOS_DEVICE_ID** | 真机或模拟器 UDID；未设置时在 macOS runner 上自动 boot 模拟器 |
+| 条目 | 用途 |
+|------|------|
+| **`self-hosted` + `macOS` runner** | 所有设备类 job 统一调度到当前开发 Mac |
+| **可见移动设备 ≥ 1** | `flutter devices --machine` 至少能看到一台 Android/iOS 模拟器或真机，否则矩阵直接 `gate_block` |
 
 ---
 
@@ -139,14 +143,14 @@
 
 ### 说明
 
-- **hosted**：`make gate` → alpha/beta 设备矩阵（GitHub 模拟器）→ **打包 tarball artifact**。
+- **hosted**：`make gate` → **打包 tarball artifact**。
 - **ECS pre**：`scripts/deploy_gamma_ecs.sh`（`GAMMA_ECS_STAGE=pre`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>`），上传 bundle；远端写 `.gamma_deploy_state.json`，并在 `../gamma-backups/` 保留备份 tarball。
 - **T3**：`make test-api-contract`（gamma）。
-- **self-hosted**：调用 `app-env-device-matrix-self-hosted.yml`（alpha/beta/gamma）；需仓库注册 **self-hosted runner**。
+- **self-hosted**：调用 `app-env-device-matrix-self-hosted.yml`（alpha/beta/gamma）；统一在本机 macOS runner 上动态发现并逐台执行当前可见移动设备。
 - **ECS prod**：同一 ECS **就地升级**（`GAMMA_ECS_STAGE=prod`，`GAMMA_ECS_SKIP_UPLOAD=1`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>-prod`），然后再跑 T3 与 **gamma-only** self-hosted 烟测。
 - ECS 上使用 Podman 兼容层拉取镜像时，`GAMMA_ECS_CONTAINER_REGISTRY_MIRROR` 未配置则可能长时间直连 `docker.io`，在大陆网络下易超时；建议配置可用的镜像加速或使用自有镜像仓库前置基础镜像。
 - **Deploy ECS — pre/prod** 单 Job 超时为 **120** 分钟（含首次镜像 build）；请勿在流水线中途手动 Cancel，否则会向 SSH 子进程发送 SIGTERM（常见于 exit 143）。
-- **回滚**：手动触发 **08b `ecs-onebox-rollback.yml`** 或本地执行 `scripts/rollback_gamma_ecs.sh`（恢复最近一次 `backup-*.tgz`）。
+- **回滚**：手动触发 **08c `ecs-onebox-rollback.yml`** 或本地执行 `scripts/rollback_gamma_ecs.sh`（恢复最近一次 `backup-*.tgz`）。
 - 结构化部署报告：`artifacts/ecs-onebox/deploy-report.json`（成功/失败阶段会上传为 artifact）。
 - ECS 安全组需放行 SSH、`18080`、`18086`（或同步修改 health 探测 URL）。
 

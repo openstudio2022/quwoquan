@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   postgres:
-    image: docker.io/library/postgres:16-alpine
+    image: "${LOCAL_GAMMA_POSTGRES_IMAGE:-docker.io/library/postgres:16-alpine}"
     environment:
       POSTGRES_USER: quwoquan
       POSTGRES_PASSWORD: quwoquan
@@ -18,7 +18,7 @@ services:
       retries: 10
 
   mongodb:
-    image: docker.io/library/mongo:7-jammy
+    image: "${LOCAL_GAMMA_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "${LOCAL_GAMMA_MONGO_PORT:-37017}:27017"
@@ -31,7 +31,7 @@ services:
       retries: 20
 
   mongo-init:
-    image: docker.io/library/mongo:7-jammy
+    image: "${LOCAL_GAMMA_MONGO_IMAGE:-docker.io/library/mongo:7-jammy}"
     depends_on:
       mongodb:
         condition: service_healthy
@@ -49,7 +49,7 @@ services:
     restart: "no"
 
   redis:
-    image: docker.io/library/redis:7.2-alpine
+    image: "${LOCAL_GAMMA_REDIS_IMAGE:-docker.io/library/redis:7.2-alpine}"
     command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "${LOCAL_GAMMA_REDIS_PORT:-36379}:6379"
@@ -65,6 +65,8 @@ services:
     build:
       context: ./services/rec-model-service
       dockerfile: Dockerfile
+      args:
+        PYTHON_BASE_IMAGE: "${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-python:3.11-slim}"
     environment:
       SERVICE_NAME: recommendation-service
       APP_ENV: gamma
@@ -87,6 +89,9 @@ services:
     build:
       context: .
       dockerfile: ../deploy/service/content-service/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24.3-alpine}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
     environment:
       SERVICE_NAME: content-service
       APP_ENV: gamma
@@ -122,6 +127,9 @@ services:
     build:
       context: .
       dockerfile: ../deploy/service/chat-service/Dockerfile
+      args:
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24.3-alpine}"
+        ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
     environment:
       SERVICE_NAME: chat-service
       MODULE_PACKAGE: chat-service
@@ -162,7 +170,7 @@ services:
       retries: 10
 
   product-ops-service:
-    image: docker.io/library/golang:1.24-bookworm
+    image: "${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-docker.io/library/golang:1.24-bookworm}"
     working_dir: /workspace
     command: ["sh", "-lc", "cd services/product-ops-service/cmd/api && /usr/local/go/bin/go run ."]
     environment:
@@ -199,7 +207,7 @@ services:
       retries: 10
 
   gamma-proxy:
-    image: docker.io/library/caddy:2.8-alpine
+    image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8-alpine}"
     depends_on:
       content-service:
         condition: service_healthy

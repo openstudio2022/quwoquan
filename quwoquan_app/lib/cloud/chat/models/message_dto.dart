@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 
 export 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart'
@@ -29,7 +30,8 @@ extension ChatMessageDtoDisplay on ChatMessageDto {
       'senderId': senderId,
       'senderProfileSubjectId': senderId,
       if (senderName != null) 'senderName': senderName,
-      if (senderAvatar != null) 'senderAvatar': senderAvatar,
+      if (senderAvatar != null)
+        'senderAvatar': resolveAvatarImageUrl(senderAvatar),
       if (senderPersonaId != null) 'senderPersonaId': senderPersonaId,
       'type': type,
       'content': content ?? '',

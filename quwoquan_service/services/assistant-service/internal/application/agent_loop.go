@@ -41,6 +41,7 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	if l == nil {
 		l = NewAgentLoop(nil, ReactRuntime{}, nil)
 	}
+	turnStartedAt := time.Now()
 	log.Printf("assistant agent turn_started conversationId=%s turnId=%s traceId=%s", turn.ConversationID, turn.TurnID, turn.TraceID)
 	projector := NewStreamProjector(turn, l.Now)
 	events := []streaming.Envelope{}
@@ -62,14 +63,16 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	})); err != nil {
 		return nil, nil, err
 	}
+	orchestratorStartedAt := time.Now()
 	runState, err := l.orchestrator().Run(ctx, turn)
+	orchestratorDurationMs := time.Since(orchestratorStartedAt).Milliseconds()
 	if err != nil {
-		log.Printf("assistant agent orchestrator_failed turnId=%s err=%v", turn.TurnID, err)
+		log.Printf("assistant agent orchestrator_failed turnId=%s durationMs=%d err=%v", turn.TurnID, orchestratorDurationMs, err)
 		failure := modelFailure("phase_orchestrator", err)
 		events = appendFailureEvents(projector, events, failure)
 		return events, &failure, nil
 	}
-	log.Printf("assistant agent orchestrator_done turnId=%s traceEvents=%d processFrames=%d journeyEntries=%d", turn.TurnID, len(runState.TraceEvents), len(runState.ProcessTimeline), len(runState.Journey.Entries))
+	log.Printf("assistant agent orchestrator_done turnId=%s traceEvents=%d processFrames=%d journeyEntries=%d durationMs=%d", turn.TurnID, len(runState.TraceEvents), len(runState.ProcessTimeline), len(runState.Journey.Entries), orchestratorDurationMs)
 	for _, traceEvent := range runState.TraceEvents {
 		if err := appendEvent(projector.Event("assistant.trace", map[string]any{
 			"traceEvent": traceEvent,
@@ -87,14 +90,16 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	})); err != nil {
 		return nil, nil, err
 	}
+	skillStartedAt := time.Now()
 	skill, err := l.skills().SelectSkill(ctx, turn)
+	skillDurationMs := time.Since(skillStartedAt).Milliseconds()
 	if err != nil {
-		log.Printf("assistant agent skill_select_failed turnId=%s err=%v", turn.TurnID, err)
+		log.Printf("assistant agent skill_select_failed turnId=%s durationMs=%d err=%v", turn.TurnID, skillDurationMs, err)
 		failure := modelFailure("skill_runtime", err)
 		events = appendFailureEvents(projector, events, failure)
 		return events, &failure, nil
 	}
-	log.Printf("assistant agent skill_selected turnId=%s skillId=%s domainId=%s displayName=%s", turn.TurnID, skill.SkillID, skill.DomainID, skill.DisplayName)
+	log.Printf("assistant agent skill_selected turnId=%s skillId=%s domainId=%s displayName=%s durationMs=%d", turn.TurnID, skill.SkillID, skill.DomainID, skill.DisplayName, skillDurationMs)
 	if err := appendEvent(projector.Event("assistant.skill.selected", map[string]any{
 		"skillId":      skill.SkillID,
 		"domainId":     skill.DomainID,
@@ -110,6 +115,7 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 		return nil, nil, err
 	}
 	var streamedFailure *rtfailures.Failure
+	reactStartedAt := time.Now()
 	result, err := l.React.RunWithSinks(ctx, turn, skill, func(step ReactStepResult) error {
 		return emitReactReasoning(ctx, projector, appendEvent, turn, skill, step, emit != nil)
 	}, func(step ReactStepResult) error {
@@ -119,13 +125,14 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 		}
 		return err
 	})
+	reactDurationMs := time.Since(reactStartedAt).Milliseconds()
 	if err != nil {
-		log.Printf("assistant agent react_failed turnId=%s skillId=%s err=%v", turn.TurnID, skill.SkillID, err)
+		log.Printf("assistant agent react_failed turnId=%s skillId=%s durationMs=%d err=%v", turn.TurnID, skill.SkillID, reactDurationMs, err)
 		failure := modelFailure("react_runtime", err)
 		events = appendFailureEvents(projector, events, failure)
 		return events, &failure, nil
 	}
-	log.Printf("assistant agent react_done turnId=%s skillId=%s steps=%d finalLen=%d stopReason=%s", turn.TurnID, skill.SkillID, len(result.Steps), len([]rune(result.FinalText)), result.StopReason)
+	log.Printf("assistant agent react_done turnId=%s skillId=%s steps=%d modelInteractions=%d finalLen=%d stopReason=%s durationMs=%d", turn.TurnID, skill.SkillID, len(result.Steps), resultModelInteractionCount(result), len([]rune(result.FinalText)), result.StopReason, reactDurationMs)
 	if streamedFailure != nil {
 		return events, streamedFailure, nil
 	}
@@ -144,6 +151,7 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 			return nil, nil, err
 		}
 	}
+	answerStreamStartedAt := time.Now()
 	answerDeltas := splitAnswerDeltas(result.FinalText)
 	if err := appendEvent(projector.Event("assistant.answer.delta", map[string]any{
 		"text": answerDeltas[0],
@@ -170,15 +178,32 @@ func (l *AgentLoop) RunTurnWithSink(ctx context.Context, turn assistant.Assistan
 	})); err != nil {
 		return nil, nil, err
 	}
+	answerStreamDurationMs := time.Since(answerStreamStartedAt).Milliseconds()
+	totalDurationMs := time.Since(turnStartedAt).Milliseconds()
+	log.Printf("assistant agent latency_summary turnId=%s orchestratorMs=%d skillMs=%d reactMs=%d answerStreamMs=%d totalMs=%d modelInteractions=%d steps=%d", turn.TurnID, orchestratorDurationMs, skillDurationMs, reactDurationMs, answerStreamDurationMs, totalDurationMs, resultModelInteractionCount(result), len(result.Steps))
 	log.Printf("assistant agent turn_completed conversationId=%s turnId=%s events=%d answerLen=%d", turn.ConversationID, turn.TurnID, len(events), len([]rune(result.FinalText)))
 	return events, nil, nil
+}
+
+func resultModelInteractionCount(result ReactResult) int {
+	count := 0
+	for _, step := range result.Steps {
+		count += len(step.ModelInteractions)
+	}
+	if len(result.Steps) == 0 && len(result.ModelDelta) > 0 {
+		count++
+	}
+	if len(result.FinalClientTrace) > 0 {
+		count++
+	}
+	return count
 }
 
 func pauseForVisibleStream(ctx context.Context, emit func(streaming.Envelope) error) {
 	if emit == nil {
 		return
 	}
-	timer := time.NewTimer(350 * time.Millisecond)
+	timer := time.NewTimer(220 * time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
@@ -515,14 +540,95 @@ func buildSearchPlansForStep(turn assistant.AssistantTurn, skill SkillSelection,
 		if value, ok := step.Tool.Requested.Input["query"].(string); ok && value != "" {
 			query = value
 		}
+		if plans := searchPlansFromToolInput(step.Tool.Requested.Input, step.Tool.Requested.ToolName); len(plans) > 0 {
+			return plans
+		}
 	}
 	return []map[string]any{{
 		"query":          query,
-		"label":          step.Tool.Requested.ToolName,
+		"label":          "综合检索",
 		"purpose":        "",
 		"sourceType":     step.Tool.Requested.ToolName,
 		"freshnessHours": 24,
 	}}
+}
+
+func searchPlansFromToolInput(input map[string]any, toolName string) []map[string]any {
+	for _, key := range []string{"searchQueries", "queries"} {
+		if plans := searchPlansFromRaw(input[key], toolName); len(plans) > 0 {
+			return plans
+		}
+	}
+	return nil
+}
+
+func searchPlansFromRaw(raw any, toolName string) []map[string]any {
+	switch items := raw.(type) {
+	case []any:
+		plans := []map[string]any{}
+		for _, item := range items {
+			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
+				plans = append(plans, plan)
+			}
+		}
+		return plans
+	case []map[string]any:
+		plans := []map[string]any{}
+		for _, item := range items {
+			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
+				plans = append(plans, plan)
+			}
+		}
+		return plans
+	case []string:
+		plans := []map[string]any{}
+		for _, item := range items {
+			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
+				plans = append(plans, plan)
+			}
+		}
+		return plans
+	default:
+		return nil
+	}
+}
+
+func searchPlanFromAny(raw any, toolName string) map[string]any {
+	switch item := raw.(type) {
+	case string:
+		query := strings.TrimSpace(item)
+		if query == "" {
+			return nil
+		}
+		return map[string]any{
+			"query":          query,
+			"label":          "检索",
+			"purpose":        "",
+			"sourceType":     toolName,
+			"freshnessHours": 24,
+		}
+	case map[string]any:
+		query := strings.TrimSpace(stringValue(item["query"]))
+		if query == "" {
+			return nil
+		}
+		label := strings.TrimSpace(stringValue(item["dimension"]))
+		if label == "" {
+			label = strings.TrimSpace(stringValue(item["label"]))
+		}
+		if label == "" {
+			label = "检索"
+		}
+		return map[string]any{
+			"query":          query,
+			"label":          label,
+			"purpose":        strings.TrimSpace(stringValue(item["purpose"])),
+			"sourceType":     toolName,
+			"freshnessHours": 24,
+		}
+	default:
+		return nil
+	}
 }
 
 func buildAcceptedSearchPlansForStep(turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) []map[string]any {
@@ -765,13 +871,46 @@ func splitAnswerDeltas(text string) []string {
 	}
 	runes := []rune(text)
 	chunks := []string{}
-	const chunkSize = 80
-	for start := 0; start < len(runes); start += chunkSize {
-		end := start + chunkSize
-		if end > len(runes) {
-			end = len(runes)
+	const targetChunkSize = 36
+	const maxChunkSize = 52
+	for start := 0; start < len(runes); {
+		end := start + targetChunkSize
+		if end >= len(runes) {
+			chunks = append(chunks, string(runes[start:]))
+			break
+		}
+		limit := start + maxChunkSize
+		if limit > len(runes) {
+			limit = len(runes)
+		}
+		if boundary := answerChunkBoundary(runes, start, end, limit); boundary > start {
+			end = boundary
 		}
 		chunks = append(chunks, string(runes[start:end]))
+		start = end
 	}
 	return chunks
+}
+
+func answerChunkBoundary(runes []rune, start, preferred, limit int) int {
+	for i := preferred; i < limit; i++ {
+		if isAnswerChunkBoundaryRune(runes[i]) {
+			return i + 1
+		}
+	}
+	for i := preferred; i > start; i-- {
+		if isAnswerChunkBoundaryRune(runes[i-1]) {
+			return i
+		}
+	}
+	return preferred
+}
+
+func isAnswerChunkBoundaryRune(r rune) bool {
+	switch r {
+	case '\n', '。', '！', '？', '；', ';', '.', '!', '?':
+		return true
+	default:
+		return false
+	}
 }
