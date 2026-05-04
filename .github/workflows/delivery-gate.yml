@@ -1,13 +1,13 @@
-# Delivery Gate — merge queue 主门禁（L1+L2）
-# 触发：merge_group(main) + workflow_dispatch
+# Delivery Gate — PR 合入主门禁（L1+L2）
+# 触发：pull_request(main) + workflow_dispatch
 # 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 name: 03. Delivery Gate
 
 on:
-  merge_group:
-    types:
-      - checks_requested
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -86,3 +86,38 @@ jobs:
       - name: Gate (ops-portal)
         run: |
           bash scripts/gate_repo.sh --scope portal
+
+  delivery_gate_summary:
+    name: 03. Delivery Gate
+    needs:
+      - topology_regression
+      - quwoquan_service
+      - quwoquan_app
+      - ops_portal
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总并阻断失败项
+        env:
+          TOPOLOGY: ${{ needs.topology_regression.result }}
+          SERVICE: ${{ needs.quwoquan_service.result }}
+          APP: ${{ needs.quwoquan_app.result }}
+          PORTAL: ${{ needs.ops_portal.result }}
+        run: |
+          set -euo pipefail
+          fail=0
+          expect_success() {
+            local name="$1" val="$2" hint="$3"
+            if [ "${val}" != "success" ]; then
+              echo "::error::${name} expected success, got ${val}. ${hint}"
+              fail=1
+            fi
+          }
+          expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
+          expect_success "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
+          expect_success "quwoquan_app" "${APP}" "检查 app scope gate 输出"
+          expect_success "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
+          if [ "${fail}" -ne 0 ]; then
+            echo "::error::Delivery Gate 未全部成功；请按上列分项修复后重跑。"
+            exit 1
+          fi

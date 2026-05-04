@@ -1,12 +1,12 @@
-# Self-hosted：统一设备矩阵入口（merge queue 阻断 / workflow_call 复用 / 手动调试）。
+# Self-hosted：统一设备矩阵入口（PR 主门禁 / workflow_call 复用 / 手动调试）。
 # 固定到本机 macOS self-hosted runner，并通过 flutter devices --machine 动态发现当前可见的 Android/iOS 模拟器与真机。
 # 发现到的每台设备都会执行；只要总设备数 >= 1 即可进入矩阵，不再依赖固定 device id。
 name: 05. App Env Device Matrix
 
 on:
-  merge_group:
-    types:
-      - checks_requested
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       env_json:
@@ -47,6 +47,10 @@ on:
         type: string
         default: assistant
 
+concurrency:
+  group: app-env-device-matrix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   discover_devices:
     name: Discover mobile devices (self-hosted)
@@ -63,6 +67,26 @@ jobs:
       device_summary: ${{ steps.discover.outputs.device_summary }}
     steps:
       - uses: actions/checkout@v4
+      - name: 解析当前触发下的矩阵默认值
+        id: defaults
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_ENV_JSON: ${{ inputs.env_json }}
+          INPUT_MATRIX_KIND: ${{ inputs.matrix_kind }}
+          INPUT_GAMMA_BASE_URL: ${{ inputs.gamma_base_url }}
+          INPUT_MEDIA_BASE_URL: ${{ inputs.media_base_url }}
+        run: |
+          if [ "${EVENT_NAME}" = "pull_request" ]; then
+            echo 'env_json=["alpha","beta"]' >> "$GITHUB_OUTPUT"
+            echo 'matrix_kind=assistant' >> "$GITHUB_OUTPUT"
+            echo 'gamma_base_url=' >> "$GITHUB_OUTPUT"
+            echo 'media_base_url=' >> "$GITHUB_OUTPUT"
+          else
+            echo "env_json=${INPUT_ENV_JSON}" >> "$GITHUB_OUTPUT"
+            echo "matrix_kind=${INPUT_MATRIX_KIND:-assistant}" >> "$GITHUB_OUTPUT"
+            echo "gamma_base_url=${INPUT_GAMMA_BASE_URL}" >> "$GITHUB_OUTPUT"
+            echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
+          fi
       - name: 校验 self-hosted macOS runner
         run: |
           if [ "${{ runner.os }}" != "macOS" ]; then
@@ -87,10 +111,10 @@ jobs:
           data = json.load(open(path, encoding="utf-8"))
           android = data.get("android") or []
           ios = data.get("ios") or []
-          env_json = """${{ github.event_name == 'merge_group' && '["alpha","beta"]' || inputs.env_json }}"""
-          matrix_kind = """${{ github.event_name == 'merge_group' && 'assistant' || inputs.matrix_kind }}"""
-          gamma_base_url = """${{ inputs.gamma_base_url }}"""
-          media_base_url = """${{ inputs.media_base_url }}"""
+          env_json = """${{ steps.defaults.outputs.env_json }}"""
+          matrix_kind = """${{ steps.defaults.outputs.matrix_kind }}"""
+          gamma_base_url = """${{ steps.defaults.outputs.gamma_base_url }}"""
+          media_base_url = """${{ steps.defaults.outputs.media_base_url }}"""
 
           def fmt(items):
               return ", ".join(f'{item["name"]}({item["id"]})' for item in items)
@@ -267,3 +291,47 @@ jobs:
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
+
+  app_env_device_matrix_summary:
+    name: 05. App Env Device Matrix
+    needs:
+      - discover_devices
+      - android
+      - ios
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: 汇总并阻断失败项
+        env:
+          DISCOVER: ${{ needs.discover_devices.result }}
+          ANDROID: ${{ needs.android.result }}
+          IOS: ${{ needs.ios.result }}
+          HAS_ANDROID: ${{ needs.discover_devices.outputs.has_android }}
+          HAS_IOS: ${{ needs.discover_devices.outputs.has_ios }}
+        run: |
+          set -euo pipefail
+          fail=0
+          expect_success() {
+            local name="$1" val="$2" hint="$3"
+            if [ "${val}" != "success" ]; then
+              echo "::error::${name} expected success, got ${val}. ${hint}"
+              fail=1
+            fi
+          }
+          expect_success "discover_devices" "${DISCOVER}" "检查 self-hosted runner、flutter devices --machine 与可见移动设备数量"
+          if [ "${HAS_ANDROID}" = "true" ]; then
+            expect_success "android" "${ANDROID}" "检查 Android 设备矩阵执行与 beta 网关链路"
+          elif [ "${ANDROID}" != "skipped" ]; then
+            echo "::error::android expected skipped without visible Android devices, got ${ANDROID}"
+            fail=1
+          fi
+          if [ "${HAS_IOS}" = "true" ]; then
+            expect_success "ios" "${IOS}" "检查 iOS 设备矩阵执行与 beta 网关链路"
+          elif [ "${IOS}" != "skipped" ]; then
+            echo "::error::ios expected skipped without visible iOS devices, got ${IOS}"
+            fail=1
+          fi
+          if [ "${fail}" -ne 0 ]; then
+            echo "::error::App Env Device Matrix 未全部成功；请按上列分项修复后重跑。"
+            exit 1
+          fi

@@ -39,18 +39,18 @@ make gate-local-gamma
 - `make verify-app-lib-test-only-symbols`（`lib/**` 新增 `createForTest` / 测试工厂时）
 - service gate
 
-## 提交行为（默认先 dev1.0；进入 main 以 merge queue 绿灯为准）
+## 提交行为（默认先 dev1.0；进入 main 以 PR required checks 绿灯为准）
 
 1. 确认当前分支为日常开发分支 **`dev1.0`**（与 `deploy/shared/branch_strategy.md` 一致；禁止绕过策略直推 `main`）。
 2. `git status` → `git add` → `git commit`
 3. `git push origin dev1.0`
 4. 若团队仍使用 `dev1.0` 作为日常集成分支，可按需等待该分支上的远端校验通过，再决定是否发起进入 `main` 的 PR。
-5. **进入 `main` 的成功判据** 不再是分支上的单个 workflow，而是 **merge queue** 对 `03. Delivery Gate`、`04. Pre-Release Gate`、`05. App Env Device Matrix` 的 required checks 全绿。
+5. **进入 `main` 的成功判据** 不再是分支上的单个 workflow，而是 `main` 的 **pull request required checks** 全绿，至少包含 `03. Delivery Gate`、`04. Pre-Release Gate`、`05. App Env Device Matrix`。
 
 ## 合入主干（main）与后续 CI
 
-- **合入 `main`**：由用户显式发起 PR（`dev1.0 -> main` 或 feature branch -> `main`），并进入仓库的 **merge queue**。
-- **merge queue 阻断项**：`03. Delivery Gate`、`04. Pre-Release Gate`、`05. App Env Device Matrix`。
+- **合入 `main`**：由用户显式发起 PR（`dev1.0 -> main` 或 feature branch -> `main`），并受仓库的 **pull request merge rule** 保护。
+- **PR 阻断项**：`03. Delivery Gate`、`04. Pre-Release Gate`、`05. App Env Device Matrix`。
 - **合入 `main` 之后**：`push main` 会触发 **`02. Service Pipeline`** 与 **`07. Deploy To Prod (Auto)`**；手动的发布 / onebox 演练分别使用 **`06`**、**`08`**。
 
 ## 输出
@@ -59,6 +59,6 @@ make gate-local-gamma
 提交并完成远端校验：<feature-path>
 L3_scenario: <scenario>
 CR: <change-request>
-main merge queue checks: PASS（03 / 04 / 05）
+main required checks: PASS（03 / 04 / 05）
 下一步：跟踪 main 上的 02 / 07，必要时执行 06 / 08
 ```

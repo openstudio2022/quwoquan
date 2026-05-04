@@ -10,11 +10,11 @@
 
 | Workflow | 触发 | 职责 | 对应阶段 |
 |----------|------|------|----------|
-| **delivery-gate.yml** | `merge_group`、手动 | merge queue 快速主门禁：拓扑校验、L1+L2 | G0~G3 |
+| **delivery-gate.yml** | `pull_request(main)`、手动 | PR 主门禁：拓扑校验、L1+L2 | G0~G3 |
 | **service_pipeline.yml** | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize 校验 | G2 |
 | **app_pipeline.yml** | `v*` tag、手动 | macOS 构建（主干门禁已由 03/04/05 负责） | G2 / 发布 |
-| **pre-release-gate.yml** | `merge_group`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
-| **app-env-device-matrix-self-hosted.yml** | `merge_group` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
+| **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
+| **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
 | **deploy-prod-gray.yml** | 手动 | 半自动 prod 灰度 | G5c |
 | **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 占位链路 | G5c |
 | **deploy-gamma-ecs.yml** | 手动 | gamma / onebox 手动发布与复验 | G5a→G5b |
@@ -82,22 +82,22 @@
 - `GAMMA_KUBECONFIG` 未配置时，deploy-integration 仅 skip，不 fail。
 - L3/L4/gamma smoke 依赖 deploy-integration 完成，需 gamma 已部署且 `GAMMA_BASE_URL` 可访问。
 - L4 Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机，并逐台执行；总设备数至少为 1。
-- merge queue 阻断时，`03` / `04` / `05` 需同时配置为 `main` 的 required checks。
+- `main` 的 pull request 合入规则中，`03` / `04` / `05` 需同时配置为 required checks。
 
 ---
 
 ## 六、App Env Device Matrix（app-env-device-matrix-self-hosted.yml）
 
-### self-hosted（merge queue / workflow_call / 手动统一复用）
+### self-hosted（pull_request / workflow_call / 手动统一复用）
 
 | Secret | 用途 |
 |--------|------|
-| **GAMMA_BASE_URL** | gamma 场景或手动覆盖时使用；merge queue 的 `05` 当前固定跑 `alpha/beta`，通常不需要 |
+| **GAMMA_BASE_URL** | gamma 场景或手动覆盖时使用；PR 规则下的 `05` 当前固定跑 `alpha/beta`，通常不需要 |
 | **GAMMA_TEST_AUTH_TOKEN** | beta/gamma 远端链路鉴权 |
 
 ### 说明
 
-- `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 merge queue、被其他 workflow 调用以及手动调试。
+- `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 `pull_request(main)`、被其他 workflow 调用以及手动调试。
 - `05` 已统一固定到 **本机 macOS self-hosted runner**；不再依赖自定义 runner label，也不再依赖固定 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID`。
 - `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
 - `beta` 在 runner 内启动本地 beta assistant-service + gateway；设备列表通过 `flutter devices --machine` 动态发现，当前可见的每台 Android/iOS 模拟器或真机都会执行。
