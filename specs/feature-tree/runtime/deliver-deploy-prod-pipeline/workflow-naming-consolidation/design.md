@@ -18,7 +18,7 @@
 | 01  | 01. App Pipeline          | Tag / Manual              |
 | 02  | 02. Service Pipeline      | Post-main                 |
 | 03  | 03. Delivery Gate         | PR Rule                   |
-| 04  | 04. Pre-Release Gate      | PR Rule / Integration     |
+| 04  | 04. Pre-Release Gate      | PR Rule / ECS Gamma       |
 | 05  | 05. App Env Device Matrix | PR Rule / Self-hosted     |
 | 06  | 06. Deploy To Prod (Gray) | Manual                    |
 | 07  | 07. Deploy To Prod (Auto) | Post-main                 |
@@ -30,6 +30,7 @@
 - **05 / 05b**：删除 wrapper，保留 `app-env-device-matrix-self-hosted.yml` 作为唯一 `05`
 - **07 定时 merge**：删除，显式 PR + required checks 取代
 - **08b / 08b**：保留 `08b. Verify Chat Avatar Commercial Matrix Evidence`，将回滚改名为 `08c. ECS Onebox Rollback`
+- **04 / 08 hosted pre 链**：抽出 `gamma-ecs-pre-hosted-core.yml` 复用，避免 ECS gamma 打包/部署/API probe 维护两份
 
 ## 02/03 重复检查
 
@@ -40,4 +41,4 @@
 ## 未来演进
 
 - 若新增 workflow，继续沿用 09、10… 序号
-- 若 `main` required checks 改动，需同步更新 `branch_strategy.md` 与 `ci_cd_end_to_end_design.md`
+- 若 `main` required checks 改动，需同步更新 `branch_strategy.md`、`ci_cd_end_to_end_design.md` 与 `environment_matrix.md`

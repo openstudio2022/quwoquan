@@ -7,13 +7,12 @@ template: A1-A8
 focus_groups: []
 tests:
   contract:
-  - 场景：pre-release-gate workflow 存在且 pull_request(main) 可触发
-  - 场景：L3 对 integration 执行，失败即 fail
-  - 场景：L4 Patrol/FTL 在 pre-release 执行
-  integration:
-  - 场景：CLOUD_PROVIDER=aliyun 时 kustomize build 成功
-  - 场景：CLOUD_PROVIDER=volcengine 时 kustomize build 成功
-  - 场景：CLOUD_PROVIDER=huaweicloud 时 kustomize build 成功
+  - 场景：`04. Pre-Release Gate` workflow 存在且 pull_request(main) 可触发
+  - 场景：`04` 通过 ECS gamma hosted pre 链完成部署与 hosted gamma 验证
+  - 场景：`04/05` 在本地 self-hosted Android/iOS 上执行设备矩阵并校验证据 artifact
+  gamma:
+  - 场景：ECS gamma pre 部署成功并输出结构化 deploy report
+  - 场景：assistant/avatar gamma 基线旅程来自 `deploy/shared/gamma_validation_suites.json`
   uat:
   - 场景：deliver_to_production_runbook 端到端可执行
   - 场景：灰度步进 5→25→50→100 可执行
@@ -23,7 +22,7 @@ execution:
   full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: PR 到 main 时触发 03/04/05，且 pre-release 串联 gate-full + L3 + L4
+    criteria: PR 到 main 时触发 03/04/05，且 04/05 构成 ECS gamma + 本地 Android/iOS 设备主门禁
     status: implemented
     linked_tasks:
     - T5
@@ -39,23 +38,26 @@ level_acceptance:
       functions:
       - pull_request branches main
   A2:
-    criteria: L3 对 integration 执行，失败阻塞发布
+    criteria: "`04` 的 ECS gamma hosted pre 链失败时阻塞发布"
     status: implemented
     linked_tasks:
     - T5
     - V4
     tests:
-    - file: scripts/gate.sh
+    - file: .github/workflows/gamma-ecs-pre-hosted-core.yml
+    - file: .github/workflows/pre-release-gate.yml
   A3:
-    criteria: L4 Patrol/FTL 在 pre-release 执行，失败阻塞发布
+    criteria: "`04/05` 的 self-hosted Android/iOS 设备矩阵在 pre-release 执行，失败阻塞发布"
     status: implemented
     linked_tasks:
     - T5
     - T6
     tests:
-    - file: scripts/gate.sh
+    - file: .github/workflows/pre-release-gate.yml
+    - file: .github/workflows/app-env-device-matrix-self-hosted.yml
+    - file: scripts/verify_device_matrix_evidence.py
   A4:
-    criteria: 支持通过 CLOUD_PROVIDER 切换部署到阿里云、火山引擎、华为云
+    criteria: "gamma 核心旅程通过 `deploy/shared/gamma_validation_suites.json` 统一管理，并预留后续业务对象扩展入口"
     status: implemented
     linked_tasks:
     - T1
@@ -68,19 +70,22 @@ level_acceptance:
     - V3
     - V5
     tests:
-    - file: scripts/gate.sh
+    - file: deploy/shared/gamma_validation_suites.json
+    - file: scripts/run_assistant_device_matrix.py
+    - file: scripts/run_chat_avatar_device_matrix.py
+    - file: scripts/run_gamma_patrol_matrix_ci.py
   A5:
     criteria: 灰度步进 5→25→50→100 可执行
     status: implemented
     linked_tasks: []
     tests:
-    - file: scripts/gate.sh
+    - file: deploy/shared/deliver_to_production_runbook.md
   A6:
     criteria: 每步 SLO 卡点可执行；异常可一键回滚
     status: implemented
     linked_tasks: []
     tests:
-    - file: scripts/gate.sh
+    - file: deploy/shared/deliver_to_production_runbook.md
   A7:
     criteria: deliver_to_production_runbook 完整可执行
     status: implemented
@@ -88,10 +93,10 @@ level_acceptance:
     - T7
     - V4
     tests:
-    - file: scripts/gate.sh
+    - file: deploy/shared/deliver_to_production_runbook.md
   A8:
     criteria: process_domain_mapping 校验在 gate 中
     status: implemented
     linked_tasks: []
     tests:
-    - file: scripts/gate.sh
+    - file: deploy/shared/process_domain_mapping.yaml

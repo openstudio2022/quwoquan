@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""验证公网 gamma-proxy（Caddy）是否将 /v1/chat、/v1/content 正确反代，而非落入默认占位响应。
+"""验证公网 gamma-proxy（Caddy）是否将 /v1/content、/v1/chat、/v1/user、/v1/assistant 正确反代，而非落入默认占位响应。
 
 用于 ECS onebox / local-gamma 镜像公网入口自检。仅依赖 urllib，不读取密钥。
 
@@ -95,6 +95,70 @@ def main() -> int:
             "chat: 命中 content-service 404（公网端口可能直连 content 而非 Caddy）；"
             "请使用 LOCAL_GAMMA_HTTP_PORT 映射的 gamma-proxy 端口作为 GAMMA_BASE_URL",
         )
+
+    user_sync_payload = json.dumps({"afterSeq": 0, "limit": 1}).encode("utf-8")
+    code, user_body = _req(
+        f"{base}/v1/user/sync",
+        method="POST",
+        data=user_sync_payload,
+        headers={
+            "Content-Type": "application/json",
+            "X-Client-User-Id": "gamma_route_smoke",
+            "X-Test-Local-Gamma": "true",
+        },
+    )
+    if "local-gamma mirror http endpoint is ready" in user_body:
+        failures.append("user: still hitting Caddy plain-text catch-all — /v1/user* 未反代到 user-service")
+    if "local-gamma mirror route is not ready" in user_body:
+        failures.append("user: Caddy 404 catch-all — /v1/user* 未反代到 user-service")
+    stripped = user_body.strip()
+    if 200 <= code < 300:
+        if not stripped.startswith("{"):
+            failures.append(f"user: expected JSON body, got http {code}: {stripped[:160]!r}")
+        else:
+            try:
+                user_json = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                failures.append(f"user: invalid JSON body http {code}: {exc}")
+            else:
+                if "patches" not in user_json:
+                    failures.append("user: sync response missing patches field")
+
+    assistant_payload = json.dumps({"summary": "gamma-route-smoke"}).encode("utf-8")
+    code, assistant_body = _req(
+        f"{base}/v1/assistant/conversations",
+        method="POST",
+        data=assistant_payload,
+        headers={
+            "Content-Type": "application/json",
+            "X-Client-User-Id": "gamma_route_smoke",
+            "X-Test-Local-Gamma": "true",
+        },
+    )
+    if "local-gamma mirror http endpoint is ready" in assistant_body:
+        failures.append(
+            "assistant: still hitting Caddy plain-text catch-all — /v1/assistant* 未反代到 assistant-service",
+        )
+    if "local-gamma mirror route is not ready" in assistant_body:
+        failures.append(
+            "assistant: Caddy 404 catch-all — /v1/assistant* 未反代到 assistant-service",
+        )
+    stripped = assistant_body.strip()
+    if 200 <= code < 300:
+        if not stripped.startswith("{"):
+            failures.append(
+                f"assistant: expected JSON body, got http {code}: {stripped[:160]!r}",
+            )
+        else:
+            try:
+                assistant_json = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                failures.append(f"assistant: invalid JSON body http {code}: {exc}")
+            else:
+                if not str(assistant_json.get("conversationId", "")).strip():
+                    failures.append(
+                        "assistant: conversation response missing conversationId",
+                    )
 
     if failures:
         print("[gamma-gateway-routing] FAIL")

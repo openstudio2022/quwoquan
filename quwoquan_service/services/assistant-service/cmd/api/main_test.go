@@ -65,6 +65,16 @@ func TestAssistantHTTPWriteTimeoutDefaultsForStreaming(t *testing.T) {
 	}
 }
 
+func TestGammaAllowsDeterministicModelProviderWhenGateFlagEnabled(t *testing.T) {
+	if _, err := buildModelProvider(providerCfg{Provider: "deterministic"}, "gamma"); err == nil {
+		t.Fatal("gamma deterministic provider should require explicit gate flag")
+	}
+	t.Setenv("ALLOW_DETERMINISTIC_BETA", "1")
+	if _, err := buildModelProvider(providerCfg{Provider: "deterministic"}, "gamma"); err != nil {
+		t.Fatalf("gamma deterministic provider should be allowed by gate flag: %v", err)
+	}
+}
+
 func TestSearchProviderTimeoutKeepsRealtimeBudget(t *testing.T) {
 	if got := searchProviderTimeout(0); got != 8*time.Second {
 		t.Fatalf("default search timeout=%s, want 8s", got)

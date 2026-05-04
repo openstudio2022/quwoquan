@@ -209,7 +209,9 @@ jobs:
             python3 scripts/run_assistant_device_matrix_ci.py --platform android
           fi
       - name: Upload Android matrix report
+        id: upload_android_matrix_report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
@@ -218,6 +220,19 @@ jobs:
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
+          compression-level: 0
+      - name: Retry Android matrix report upload
+        if: always() && steps.upload_android_matrix_report.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
+          path: |
+            artifacts/device-matrix/${{ matrix.env }}-android.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: true
 
   ios:
     name: ${{ matrix.env }} / iOS (self-hosted)
@@ -282,7 +297,9 @@ jobs:
             python3 scripts/run_assistant_device_matrix_ci.py --platform ios
           fi
       - name: Upload iOS matrix report
+        id: upload_ios_matrix_report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
@@ -291,6 +308,19 @@ jobs:
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
+          compression-level: 0
+      - name: Retry iOS matrix report upload
+        if: always() && steps.upload_ios_matrix_report.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
+          path: |
+            artifacts/device-matrix/${{ matrix.env }}-ios.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: true
 
   app_env_device_matrix_summary:
     name: 05. App Env Device Matrix
@@ -301,6 +331,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: 汇总并阻断失败项
         env:
           DISCOVER: ${{ needs.discover_devices.result }}
@@ -319,19 +350,32 @@ jobs:
             fi
           }
           expect_success "discover_devices" "${DISCOVER}" "检查 self-hosted runner、flutter devices --machine 与可见移动设备数量"
-          if [ "${HAS_ANDROID}" = "true" ]; then
-            expect_success "android" "${ANDROID}" "检查 Android 设备矩阵执行与 beta 网关链路"
-          elif [ "${ANDROID}" != "skipped" ]; then
-            echo "::error::android expected skipped without visible Android devices, got ${ANDROID}"
+          if [ "${HAS_ANDROID}" != "true" ]; then
+            echo "::error::android device environment is required before merge, but no Android device was discovered"
             fail=1
+          else
+            expect_success "android" "${ANDROID}" "检查 Android 设备矩阵执行与 beta/gamma 网关链路"
           fi
-          if [ "${HAS_IOS}" = "true" ]; then
-            expect_success "ios" "${IOS}" "检查 iOS 设备矩阵执行与 beta 网关链路"
-          elif [ "${IOS}" != "skipped" ]; then
-            echo "::error::ios expected skipped without visible iOS devices, got ${IOS}"
+          if [ "${HAS_IOS}" != "true" ]; then
+            echo "::error::ios device environment is required before merge, but no iOS device was discovered"
             fail=1
+          else
+            expect_success "ios" "${IOS}" "检查 iOS 设备矩阵执行与 beta/gamma 网关链路"
           fi
           if [ "${fail}" -ne 0 ]; then
             echo "::error::App Env Device Matrix 未全部成功；请按上列分项修复后重跑。"
             exit 1
           fi
+      - name: 下载设备矩阵 artifacts
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          pattern: app-env-device-matrix-*
+          path: ${{ runner.temp }}/app-env-device-matrix-artifacts
+      - name: 校验设备矩阵证据产物
+        if: always()
+        run: |
+          python3 scripts/verify_device_matrix_evidence.py \
+            --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
+            --report-glob "**/*-android.json" \
+            --report-glob "**/*-ios.json"

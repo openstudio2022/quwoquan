@@ -2,11 +2,11 @@
 
 ## 设计动因
 
-当前 deliver 入库后，部署到 integration 与生产依赖人工或分散的 CI；L3/L4 与 pre-release 未串联；部署与单云（如阿里云）强绑定，无法灵活切换到火山引擎或华为云。本设计建立端到端流水线，并支持多云部署切换。
+当前 deliver 入库后，进入 `main` 前的 gamma 阻断验证与生产发布后续动作需要统一收口；同时 prod 侧部署仍不能被单云强绑定。本设计将主干前门禁收口为 ECS gamma + 本地 self-hosted 设备验证，并保留 prod 侧多云部署切换能力。
 
 ## 适用场景与约束
 
-- **适用**：integration/prod 部署；pre-release 流水线；灰度发布；多云或混合云场景
+- **适用**：ECS gamma / prod 部署；pre-release 流水线；灰度发布；多云或混合云场景
 - **约束**：依赖 process_domain_mapping、config-release、Kustomize；须支持 CLOUD_PROVIDER 或等效环境变量切换
 - **局限性**：多云 overlay 初期覆盖阿里云、火山引擎、华为云；其他云（如腾讯云、AWS）可后续扩展
 
@@ -90,13 +90,15 @@ deploy/
 Workflow 命名规范见 `workflow-naming-consolidation` 特性（01～06 序号 + 首字母大写）。
 
 ```
-v*-rc* tag
-  → 04. Pre-Release Gate (pre-release-gate.yml)
-      1. make gate-full
-      2. Deploy to integration（CLOUD_PROVIDER 可选）
-      3. L3 test-api-contract（API_CONTRACT_ENV=gamma，GAMMA_BASE_URL/GAMMA_PRODUCT_OPS_BASE_URL）
-      4. L4 Patrol/FTL
-      5. 全部通过 → 允许灰度到 prod
+pull_request -> main
+  → 03. Delivery Gate
+  → 05. App Env Device Matrix（alpha/beta，本地 Android+iOS）
+  → 04. Pre-Release Gate
+      1. ECS gamma hosted pre core
+      2. assistant gamma smoke / API contract / avatar probe
+      3. gamma assistant Android+iOS matrix
+      4. gamma chat-avatar Android+iOS matrix
+      5. 全部通过 → 允许 main 合入与后续灰度到 prod
 ```
 
 ### 4. 灰度与 SLO
