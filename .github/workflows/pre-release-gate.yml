@@ -21,6 +21,7 @@ jobs:
   app-assistant-runtime-gamma:
     name: Pre-release — Assistant runtime smoke (gamma)
     needs: [deploy-integration]
+    if: ${{ needs.deploy-integration.outputs.deploy_applied == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -61,11 +62,24 @@ jobs:
     name: G5a Deploy to integration
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      deploy_applied: ${{ steps.deploy_mode.outputs.deploy_applied }}
+      skip_reason: ${{ steps.deploy_mode.outputs.skip_reason }}
     env:
       GAMMA_KUBECONFIG: ${{ secrets.GAMMA_KUBECONFIG }}
     steps:
       - uses: actions/checkout@v4
       - uses: syntaqx/setup-kustomize@v1
+      - name: 解析 integration 部署模式
+        id: deploy_mode
+        run: |
+          if [ -z "${GAMMA_KUBECONFIG:-}" ]; then
+            echo "deploy_applied=false" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=missing_gamma_kubeconfig" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_applied=true" >> "$GITHUB_OUTPUT"
+            echo "skip_reason=" >> "$GITHUB_OUTPUT"
+          fi
       - name: Install kubectl
         run: |
           curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -92,6 +106,7 @@ jobs:
   l3-api-contract:
     name: Pre-release Gate — L3 (post-deploy)
     needs: [deploy-integration]
+    if: ${{ needs.deploy-integration.outputs.deploy_applied == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -125,6 +140,7 @@ jobs:
   l4-mobile-self-hosted:
     name: Pre-release Gate — L4 mobile (self-hosted)
     needs: [deploy-integration]
+    if: ${{ needs.deploy-integration.outputs.deploy_applied == 'true' }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 180
     env:
@@ -197,6 +213,8 @@ jobs:
       - name: 汇总并阻断失败项
         env:
           DEPLOY: ${{ needs.deploy-integration.result }}
+          DEPLOY_APPLIED: ${{ needs.deploy-integration.outputs.deploy_applied }}
+          SKIP_REASON: ${{ needs.deploy-integration.outputs.skip_reason }}
           L3: ${{ needs.l3-api-contract.result }}
           L4: ${{ needs.l4-mobile-self-hosted.result }}
           AG: ${{ needs.app-assistant-runtime-gamma.result }}
@@ -216,9 +234,25 @@ jobs:
             fi
           }
           expect_success "deploy-integration" "${DEPLOY}" "检查 integration kustomize / kubectl / GAMMA_KUBECONFIG"
-          expect_success "l3-api-contract" "${L3}" "检查 make test-api-contract、网关路由与 secrets: GAMMA_BASE_URL, GAMMA_PRODUCT_OPS_BASE_URL, GAMMA_TEST_AUTH_TOKEN"
-          expect_success "l4-mobile-self-hosted" "${L4}" "检查本机 self-hosted runner、flutter devices --machine 可见设备、Patrol CLI 与同上 GAMMA_* 配置"
-          expect_success "assistant-runtime-gamma" "${AG}" "检查 gamma remote 与 secrets.GAMMA_BASE_URL（及网关可达性）"
+          if [ "${DEPLOY_APPLIED}" = "true" ]; then
+            expect_success "l3-api-contract" "${L3}" "检查 make test-api-contract、网关路由与 secrets: GAMMA_BASE_URL, GAMMA_PRODUCT_OPS_BASE_URL, GAMMA_TEST_AUTH_TOKEN"
+            expect_success "l4-mobile-self-hosted" "${L4}" "检查本机 self-hosted runner、flutter devices --machine 可见设备、Patrol CLI 与同上 GAMMA_* 配置"
+            expect_success "assistant-runtime-gamma" "${AG}" "检查 gamma remote 与 secrets.GAMMA_BASE_URL（及网关可达性）"
+          else
+            echo "::notice::deploy-integration 未实际 apply（${SKIP_REASON:-unknown}），本次接受 L3/L4/gamma smoke 为 skipped。"
+            for name in l3-api-contract l4-mobile-self-hosted assistant-runtime-gamma; do
+              val=""
+              case "$name" in
+                l3-api-contract) val="${L3}" ;;
+                l4-mobile-self-hosted) val="${L4}" ;;
+                assistant-runtime-gamma) val="${AG}" ;;
+              esac
+              if [ "${val}" != "skipped" ] && [ "${val}" != "success" ]; then
+                echo "::error::${name} expected skipped/success when deploy not applied, got ${val}"
+                fail=1
+              fi
+            done
+          fi
           if [ "${fail}" -ne 0 ]; then
             echo "::error::Pre-release 未全部成功；请按上列分项修复后重跑 workflow。"
             exit 1

@@ -391,13 +391,17 @@ def run_matrix_test(
         "SocketException",
         "Shell subprocess crashed with SIGTERM",
         "PathNotFoundException",
+        "Building native assets failed",
+        "Connection closed while receiving data",
+        "HttpException",
+        "release-assets.githubusercontent.com",
     ]
-    if env_name in {"beta", "gamma"} and result["exitCode"] != 0:
+    if result["exitCode"] != 0:
         retries: list[dict[str, Any]] = []
         max_retries = max(0, args.remote_retry_attempts)
-        while len(retries) < max_retries:
-            summary = str(result.get("outputSummary", ""))
-            matched_markers = [marker for marker in retry_markers if marker in summary]
+        summary = str(result.get("outputSummary", ""))
+        matched_markers = [marker for marker in retry_markers if marker in summary]
+        while len(retries) < max_retries and matched_markers:
             retries.append(
                 {
                     "attempt": len(retries) + 1,
@@ -406,18 +410,21 @@ def run_matrix_test(
                     "matchedRetryMarkers": matched_markers,
                 }
             )
-            health_base = (
-                args.gateway_health_url.rstrip("/")
-                if env_name == "beta"
-                else str(device["gatewayBaseUrl"]).rstrip("/")
-            )
-            wait_for_gateway(health_base, args.retry_wait_timeout_seconds)
+            if env_name in {"beta", "gamma"}:
+                health_base = (
+                    args.gateway_health_url.rstrip("/")
+                    if env_name == "beta"
+                    else str(device["gatewayBaseUrl"]).rstrip("/")
+                )
+                wait_for_gateway(health_base, args.retry_wait_timeout_seconds)
             time.sleep(args.retry_sleep_seconds)
             result = run_command(
                 command,
                 cwd=APP_DIR,
                 timeout_seconds=args.test_timeout_seconds,
             )
+            summary = str(result.get("outputSummary", ""))
+            matched_markers = [marker for marker in retry_markers if marker in summary]
             if result["exitCode"] == 0:
                 break
         if retries:
@@ -567,7 +574,6 @@ def main() -> int:
                 result = run_matrix_test(env_name, device, args)
                 report["runs"].append(result)
                 failed = failed or result["exitCode"] != 0
-
         collect_real_chain_evidence(args, report)
         report["status"] = "failed" if failed else "passed"
         return write_report_and_exit(report, report_path, 1 if failed else 0)
