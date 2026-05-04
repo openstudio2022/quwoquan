@@ -163,7 +163,7 @@ jobs:
         working-directory: quwoquan_app
         run: flutter pub get
       - name: T3 API Contract
-        run: make test-api-contract
+        run: cd "$GITHUB_WORKSPACE" && make test-api-contract
 
   gamma_chat_avatar_api_probe_prod:
     name: Gamma ECS — chat avatar API probe（prod 后）
