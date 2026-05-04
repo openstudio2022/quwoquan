@@ -1,7 +1,7 @@
 # 生产部署设计：半自动与全自动
 
-> 目标：在现有 G5a（deploy-integration）、G5b（L3/L4）基础上，明确 G5c 灰度到 prod 的半自动与全自动方案。
-> 前置：pre-release-gate 已通过（L1+L2 → deploy integration → L3 → L4）。
+> 目标：在现有 G5a（ECS gamma hosted pre）、G5b（self-hosted gamma 旅程）基础上，明确 G5c 灰度到 prod 的半自动与全自动方案。
+> 前置：`03/04/05` required checks 已通过，其中 `04` 已完成 ECS gamma hosted pre + gamma self-hosted 旅程。
 
 ---
 
@@ -66,7 +66,7 @@ stages:
 - **D（生产灰度）**、**E（生产全量）** 在 `process_domain_mapping` 中均为 **prod**；不引入第二套领域拓扑。
 - **D**：对应 `gray_rollout_stages.yaml` 中未达 `total_replicas` 或 `auto: true` 的步进（小流量/自动段）。
 - **E**：对应 `full` 阶段或 `replicas == total_replicas`，通常为放量完成与发版元数据锁定。
-- 与「大波段」关系：**C（integration）+ L3/L4 通过** 后再进入本节的 prod 步进，见 [environment_matrix.md](environment_matrix.md) 与 [ci_cd_end_to_end_design.md](ci_cd_end_to_end_design.md)。
+- 与「大波段」关系：**C（gamma 主门禁）通过** 后再进入本节的 prod 步进，见 [environment_matrix.md](environment_matrix.md) 与 [ci_cd_end_to_end_design.md](ci_cd_end_to_end_design.md)。
 
 ---
 
@@ -141,7 +141,7 @@ stages:
 
 ### 3.1 定位
 
-- pre-release-gate 全部通过（含 L3/L4）后，**自动**执行 **初始灰度**（Stage 1）。
+- `03/04/05` 全部通过后，**自动**执行 **初始灰度**（Stage 1）。
 - **Stage 1 初始灰度**：全自动 deploy → SLO；部署 pod 数可配置（当前 1 个，对应 2 副本下 50%）。
 - **Stage 2 Carry-on**：直接到 100%；需人工审批后 deploy → SLO。
 - **扩展**：随副本增加可配置更多中间阶段（如 1→2→4 pod），每阶段 auto/审批可配。
@@ -150,8 +150,8 @@ stages:
 ### 3.2 流程（当前 2 副本，初始=1 pod）
 
 ```
-v*-rc* tag push
-  → pre-release-gate（L1+L2 → deploy integration → L3 → L4）
+v*-rc* tag push / main merge
+  → required checks（03 → 05 → 04/ECS gamma）
   → 全部通过后触发 deploy-prod-auto workflow
   → Stage 1 初始灰度（全自动，1 pod = STEP 50）：
        deploy-prod-step(50) → wait_rollout → 拉取 SLO → slo-gate

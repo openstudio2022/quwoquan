@@ -28,7 +28,7 @@ level_acceptance:
       - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/design.md
       - file: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/plan.yaml
   A2:
-    criteria: 环境矩阵、部署拓扑 runbook 与交付 runbook 明确 local-gamma mirror、DNS/TLS、设备连接与云端边界。
+    criteria: 环境矩阵、部署拓扑 runbook 与交付 runbook 明确 local-gamma mirror 是提交前左移复用，不是 `main` required check，并说明 DNS/TLS、设备连接与云端边界。
     status: implemented
     linked_tasks:
       - LG-2
@@ -70,7 +70,7 @@ level_acceptance:
       - file: scripts/run_local_gamma_t3.py
       - command: python3 scripts/run_local_gamma_t3.py --help
   A5:
-    criteria: 本地 T4 runner 统一 CLOUD_GATEWAY_BASE_URL、API_CONTRACT_BASE_URL、TEST_AUTH_TOKEN 与 MEDIA_*，在模拟器或真机完成 Patrol 核心旅程。
+    criteria: 本地 T4 runner 统一 CLOUD_GATEWAY_BASE_URL、API_CONTRACT_BASE_URL、TEST_AUTH_TOKEN 与 MEDIA_*，复用共享 gamma 巡检脚本与证据字段，在模拟器或真机完成 Patrol 核心旅程。
     status: implemented
     linked_tasks:
       - LG-5
@@ -83,7 +83,7 @@ level_acceptance:
       - file: scripts/run_local_gamma_t4.sh
       - command: bash scripts/run_local_gamma_t4.sh --help
   A6:
-    criteria: gate-local-gamma 串联 T1/T2/T3/T4 并输出 artifacts/local-gamma/report.json，成为后续 commit 前强制准入。
+    criteria: gate-local-gamma 串联 T1/T2/T3/T4 并输出 artifacts/local-gamma/report.json，作为提交前左移准入，但不再成为 `main` required check。
     status: implemented
     linked_tasks:
       - LG-6
@@ -99,7 +99,7 @@ level_acceptance:
 execution:
   local_gate: make gate-local-gamma
   report: artifacts/local-gamma/report.json
-  cloud_gate: 云侧 gamma API contract + 云端/FTL Patrol + prod-gray SLO + prod 观测
+  cloud_gate: "`04. Pre-Release Gate` + `05. App Env Device Matrix` + prod-gray SLO + prod 观测"
 journey_acceptance:
   - id: A1
     statement: 本地 gamma mirror 规格冻结五环境语义与云端不可替代边界。

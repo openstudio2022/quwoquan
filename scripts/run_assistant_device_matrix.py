@@ -17,6 +17,15 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from device_matrix_evidence import (
+    capture_device_screenshot,
+    repo_relative,
+    sanitize_device_id,
+    write_device_manifest,
+    write_discovered_devices_snapshot,
+    write_json,
+)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = REPO_ROOT / "quwoquan_app"
@@ -48,6 +57,7 @@ def run_command(
     env: dict[str, str] | None = None,
     timeout_seconds: int | None = None,
     include_output: bool = False,
+    log_path: Path | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     process: subprocess.Popen[str] | None = None
@@ -88,6 +98,10 @@ def run_command(
         "timedOut": timed_out,
         "outputSummary": summarize_output(output),
     }
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(output, encoding="utf-8")
+        result["logPath"] = repo_relative(log_path)
     if include_output:
         result["output"] = output
     return result
@@ -318,7 +332,19 @@ def run_matrix_test(
     env_name: str,
     device: dict[str, Any],
     args: argparse.Namespace,
+    *,
+    evidence_root: Path,
 ) -> dict[str, Any]:
+    run_dir = evidence_root / env_name / sanitize_device_id(str(device.get("id", "")))
+    run_dir.mkdir(parents=True, exist_ok=True)
+    device_manifest_path = write_device_manifest(
+        run_dir / "device.json",
+        device,
+        env_name=env_name,
+        suite="assistant-device-matrix",
+        extra={"screenClass": device.get("screenClass", "any")},
+    )
+    before_screenshot = capture_device_screenshot(device, run_dir / "before.png")
     if env_name == "beta" and str(device.get("targetPlatform", "")).lower().startswith(
         "android"
     ):
@@ -333,6 +359,7 @@ def run_matrix_test(
             ],
             cwd=REPO_ROOT,
             timeout_seconds=20,
+            log_path=run_dir / "adb-reverse.log",
         )
         if reverse_result["exitCode"] != 0:
             reverse_result.update(
@@ -344,6 +371,27 @@ def run_matrix_test(
                     "gatewayBaseUrl": device["gatewayBaseUrl"],
                     "status": "failed",
                     "failureReason": "adb reverse gateway mapping failed",
+                    "evidence": {
+                        "runDirectory": repo_relative(run_dir),
+                        "deviceManifestPath": device_manifest_path,
+                        "beforeScreenshot": before_screenshot,
+                        "commandPath": write_json(
+                            run_dir / "command.json",
+                            {
+                                "capturedAt": utc_now(),
+                                "env": env_name,
+                                "command": [
+                                    "adb",
+                                    "-s",
+                                    str(device["id"]),
+                                    "reverse",
+                                    f"tcp:{args.gateway_port}",
+                                    f"tcp:{args.gateway_port}",
+                                ],
+                            },
+                        ),
+                        "rawLogPath": reverse_result.get("logPath", ""),
+                    },
                 }
             )
             return reverse_result
@@ -370,6 +418,16 @@ def run_matrix_test(
         )
     else:
         raise ValueError(f"unsupported env: {env_name}")
+    command_path = write_json(
+        run_dir / "command.json",
+        {
+            "capturedAt": utc_now(),
+            "env": env_name,
+            "deviceId": device["id"],
+            "gatewayBaseUrl": device["gatewayBaseUrl"] if env_name in {"beta", "gamma"} else "",
+            "command": command,
+        },
+    )
 
     print(
         "[assistant-device-matrix] "
@@ -380,7 +438,9 @@ def run_matrix_test(
         command,
         cwd=APP_DIR,
         timeout_seconds=args.test_timeout_seconds,
+        log_path=run_dir / "flutter-test.log",
     )
+    initial_log_path = str(result.get("logPath", ""))
     retry_markers = [
         "Connection timed out",
         "Connection refused",
@@ -408,6 +468,7 @@ def run_matrix_test(
                     "exitCode": result.get("exitCode", 1),
                     "timedOut": result.get("timedOut", False),
                     "matchedRetryMarkers": matched_markers,
+                    "logPath": result.get("logPath", ""),
                 }
             )
             if env_name in {"beta", "gamma"}:
@@ -422,6 +483,7 @@ def run_matrix_test(
                 command,
                 cwd=APP_DIR,
                 timeout_seconds=args.test_timeout_seconds,
+                log_path=run_dir / f"flutter-test.retry-{len(retries) + 1}.log",
             )
             summary = str(result.get("outputSummary", ""))
             matched_markers = [marker for marker in retry_markers if marker in summary]
@@ -430,6 +492,16 @@ def run_matrix_test(
         if retries:
             result["retryAttempted"] = True
             result["retryAttempts"] = retries
+    after_screenshot = (
+        capture_device_screenshot(device, run_dir / "after.png")
+        if result["exitCode"] == 0
+        else {"status": "skipped", "reason": "command failed"}
+    )
+    failure_screenshot = (
+        capture_device_screenshot(device, run_dir / "failure.png")
+        if result["exitCode"] != 0
+        else {"status": "skipped", "reason": "command passed"}
+    )
     result.update(
         {
             "env": env_name,
@@ -438,6 +510,16 @@ def run_matrix_test(
             "screenClass": device["screenClass"],
             "gatewayBaseUrl": device["gatewayBaseUrl"] if env_name in {"beta", "gamma"} else "",
             "status": "passed" if result["exitCode"] == 0 else "failed",
+            "evidence": {
+                "runDirectory": repo_relative(run_dir),
+                "deviceManifestPath": device_manifest_path,
+                "commandPath": command_path,
+                "rawLogPath": result.get("logPath", ""),
+                "initialRawLogPath": initial_log_path,
+                "beforeScreenshot": before_screenshot,
+                "afterScreenshot": after_screenshot,
+                "failureScreenshot": failure_screenshot,
+            },
         }
     )
     return result
@@ -483,12 +565,15 @@ def main() -> int:
     if not report_path.is_absolute():
         report_path = REPO_ROOT / report_path
     report = {
+        "suiteId": "assistant_main_chain",
         "startedAt": utc_now(),
         "endedAt": "",
         "status": "running",
         "requestedEnvironments": requested_envs,
         "devices": [],
         "runs": [],
+        "deviceInventoryPath": "",
+        "evidenceRoot": "",
         "betaServices": {
             "required": "beta" in requested_envs,
             "started": False,
@@ -544,6 +629,15 @@ def main() -> int:
         for device in devices:
             device["gatewayBaseUrl"] = gateway_for_device(device, args)
         report["devices"] = devices
+        evidence_root = report_path.parent / "assistant_device_matrix_logs"
+        report["evidenceRoot"] = repo_relative(evidence_root)
+        report["deviceInventoryPath"] = write_discovered_devices_snapshot(
+            evidence_root / "discovered_devices.json",
+            devices,
+            suite="assistant-device-matrix",
+            requested_environments=requested_envs,
+            extra={"reportPath": repo_relative(report_path)},
+        )
 
         if "beta" in requested_envs and not args.skip_beta_services:
             assistant_process, gateway_process = start_beta_stack(
@@ -571,7 +665,12 @@ def main() -> int:
                                 "beta gateway health check failed before device run"
                             )
                             return write_report_and_exit(report, report_path, 1)
-                result = run_matrix_test(env_name, device, args)
+                result = run_matrix_test(
+                    env_name,
+                    device,
+                    args,
+                    evidence_root=evidence_root,
+                )
                 report["runs"].append(result)
                 failed = failed or result["exitCode"] != 0
         collect_real_chain_evidence(args, report)

@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "baselineRequiredSuites": [
+    "assistant_main_chain",
+    "chat_avatar_sync"
+  ],
+  "futureExpansionRule": "每个业务对象都要补齐至少一个 gamma 核心用户旅程；assistant/avatar 只是第一批基线。",
+  "suites": {
+    "assistant_main_chain": {
+      "status": "required",
+      "domain": "assistant",
+      "description": "Assistant 主链 remote smoke + self-hosted Android/iOS 设备矩阵。",
+      "hostedChecks": [
+        "assistant_runtime_smoke"
+      ],
+      "selfHostedChecks": [
+        "assistant_device_matrix"
+      ]
+    },
+    "chat_avatar_sync": {
+      "status": "required",
+      "domain": "chat",
+      "description": "Chat avatar API probe + self-hosted Android/iOS 设备矩阵。",
+      "hostedChecks": [
+        "chat_avatar_api_probe"
+      ],
+      "selfHostedChecks": [
+        "chat_avatar_device_matrix"
+      ]
+    },
+    "content_feed_patrol": {
+      "status": "planned",
+      "domain": "content",
+      "description": "发现页内容 feed Patrol 核心旅程，供 local-gamma / 后续 cloud gamma 复用。",
+      "hostedChecks": [],
+      "selfHostedChecks": [
+        "gamma_patrol_matrix"
+      ],
+      "target": "test/patrol/discovery/feed_load_test.dart"
+    }
+  }
+}
