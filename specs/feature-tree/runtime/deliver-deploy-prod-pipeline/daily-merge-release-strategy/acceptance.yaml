@@ -24,7 +24,7 @@ level_acceptance:
       functions:
       - content
   A2:
-    criteria: `03` / `04` / `05` 作为 main 的 required checks 阻断合入
+    criteria: 03 / 04 / 05 作为 main 的 required checks 阻断合入
     status: implemented
     linked_tasks:
     - T2
