@@ -480,7 +480,7 @@ test-contract:
 ```
 代码入库 dev1.0 → merge to main → tag v*-rc*
   → 04. Pre-Release Gate (gate + deploy-integration + L3 + L4)
-  → 05. Deploy To Prod (Gray) / 06. Auto
+  → 06. Deploy To Prod (Gray) / 07. Auto
     → Stage 1: 50% (auto) → SLO gate → Stage 2: 100% (审批)
 ```
 

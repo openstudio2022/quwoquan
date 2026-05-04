@@ -1,15 +1,14 @@
-# Delivery Gate — PR/合并入库阶段质量门（L1+L2）
-# 触发：PR、push → dev1.0/main
-# 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract)
+# Delivery Gate — merge queue 主门禁（L1+L2）
+# 触发：merge_group(main) + workflow_dispatch
+# 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 name: 03. Delivery Gate
 
 on:
-  pull_request:
-  push:
-    branches:
-      - dev1.0
-      - main
+  merge_group:
+    types:
+      - checks_requested
+  workflow_dispatch:
 
 jobs:
   topology_regression:

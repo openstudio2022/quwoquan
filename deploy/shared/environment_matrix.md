@@ -55,7 +55,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(云侧类生产集
 
 ### 3.1 各工作流必填对照
 
-| Secret / Variable | 04 Pre-Release | 05 App Env Matrix | 06 Deploy Prod Auto | 08 Deploy Gamma ECS | 说明 |
+| Secret / Variable | 04 Pre-Release | 05 App Env Matrix | 07 Deploy Prod Auto | 08 Deploy Gamma ECS | 说明 |
 |-------------------|:---:|:---:|:---:|:---:|------|
 | `GAMMA_BASE_URL` | 必（gamma 冒烟、L3、L4） | 建议 | — | 可选（vars 可覆盖 URL） | gamma **网关**基址；须指向 **gamma-proxy（Caddy）**，勿用单服务直出端口冒充网关 |
 | `GAMMA_PRODUCT_OPS_BASE_URL` | 必（L3/L4） | 可选 | — | 可选 | Ops/产品面 API |
@@ -66,8 +66,8 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(云侧类生产集
 | `vars.GAMMA_ECS_CONTAINER_REGISTRY_MIRROR` | — | — | — | 建议 | 缓解远端 `docker compose pull` 命中 Hub 限流 |
 | `vars.GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS` 等 | — | — | — | 可选 | 拉镜像 / compose 超时 |
 | `vars.MEDIA_AVATAR_CDN_BASE_URL` | — | — | — | 可选 | chat-avatar 矩阵媒体基址 |
-| `vars.ANDROID_DEVICE_ID` / `vars.IOS_DEVICE_ID` | — | — | — | 可选 | self-hosted 设备矩阵（见 `app-env-device-matrix-self-hosted.yml`） |
-| Self-hosted Runner | — | — | — | **必** | 标签需含 `self-hosted` + `app-device-android` / `app-device-ios`；单台 macOS 机器若同时具备两类模拟器，可同时挂两种标签，见 [ci_cd_end_to_end_design.md](ci_cd_end_to_end_design.md) §4.3、§4.4 |
+| `flutter devices --machine` 可见移动设备 | — | — | — | **必** | self-hosted 设备矩阵以当前 Mac 上可见的 Android/iOS 模拟器或真机为准；至少一台可见才能通过发现阶段 |
+| Self-hosted Runner | — | **必** | — | **必** | 统一使用当前开发 Mac 注册的 `self-hosted` + `macOS` runner；不再依赖自定义设备标签，见 [ci_cd_end_to_end_design.md](ci_cd_end_to_end_design.md) §4.3、§4.4 |
 | GitHub Environment `production` | — | — | **必**（Stage 2） | — | `deploy-prod-auto.yml` 中 `gray-carry-on` 使用；须在仓库 Settings → Environments 创建并配置审批策略，见 [deploy_prod_design.md](deploy_prod_design.md) §1.4 |
 
 ### 3.2 与 gamma 网关相关的 Secrets（沿用表）

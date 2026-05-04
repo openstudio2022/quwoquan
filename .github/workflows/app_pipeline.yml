@@ -1,9 +1,8 @@
 # =============================================================================
 # App Pipeline — quwoquan_app CI/CD
 # =============================================================================
-# 触发条件：quwoquan_app/** 路径变动
-# 常规 Push：Flutter 单元测试 + analyze
-# Tag 发布：v* 标签时，macOS 构建（flutter build macos）
+# 触发条件：v* tag 发布 / 手动
+# 职责：端侧发布构建产物；L1/L2 门禁统一由 03 Delivery Gate 承担
 #
 # 【可选 Secrets】（macOS 签名等）
 #   CODESIGN_IDENTITY   — macOS 签名身份
@@ -14,82 +13,15 @@ name: 01. App Pipeline
 
 on:
   push:
-    branches:
-      - main
-      - master
-    paths:
-      - 'quwoquan_app/**'
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
-      - master
-    paths:
-      - 'quwoquan_app/**'
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Flutter analyze
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/v'))
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
-        run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
-          fi
-
-      - name: 缓存 Flutter 依赖
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            quwoquan_app/.dart_tool
-          key: "flutter-${{ runner.os }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
-          restore-keys: |
-            flutter-${{ runner.os }}-
-
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-
-      - name: 安装依赖
-        working-directory: quwoquan_app
-        run: flutter pub get
-
-      - name: Flutter analyze
-        working-directory: quwoquan_app
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos
-
-      # L1 由 delivery-gate 负责，此处仅 analyze
-
-      - name: 上传失败日志
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-fail-logs
-          path: |
-            quwoquan_app/**/*.log
-            quwoquan_app/build/
-          if-no-files-found: ignore
-
   build-macos:
     name: Flutter Build macOS
     runs-on: macos-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     steps:
       - uses: actions/checkout@v4
 

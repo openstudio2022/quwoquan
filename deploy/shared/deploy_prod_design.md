@@ -14,7 +14,7 @@
 | SLO 决策 | continue(0) / pause(10) / rollback(20)；rollback 时脚本内会调用 `config_release_rollback.sh` |
 | 实际部署 | 当前 runbook 未绑定「谁执行 kubectl apply 到 prod」；设计里假定由 workflow 或下游系统根据 state/版本执行 apply |
 
-### 1.0 GitHub Environment `production`（`06. Deploy To Prod (Auto)`）
+### 1.0 GitHub Environment `production`（`07. Deploy To Prod (Auto)`）
 
 [`deploy-prod-auto.yml`](../../.github/workflows/deploy-prod-auto.yml) 中 **Stage 2 — Carry-on 100%** 使用 `environment: production`。
 

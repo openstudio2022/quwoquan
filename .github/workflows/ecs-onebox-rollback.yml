@@ -1,5 +1,5 @@
 # ECS Onebox — 使用远端备份 tarball 一键回滚（手动触发）
-name: 08b. ECS Onebox Rollback
+name: 08c. ECS Onebox Rollback
 
 on:
   workflow_dispatch:

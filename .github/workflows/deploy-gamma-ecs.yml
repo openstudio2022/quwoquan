@@ -1,4 +1,5 @@
-# ECS Onebox：hosted gate/打包 → self-hosted alpha/beta 预检 → ECS pre 部署 → self-hosted 端侧矩阵 → prod 就地升级 → gamma 烟测
+# ECS Onebox：手动触发的 gamma / onebox 演练链路
+# main 合入前的阻断验证已前移到 03 / 04 / 05；此处只保留显式手动发布与复验
 name: 08. Deploy Gamma ECS
 
 on:
@@ -8,26 +9,6 @@ on:
         description: 是否在 pre 门禁通过后执行 prod 就地升级（skip_upload + 新版本标签）
         type: boolean
         default: true
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/deploy-gamma-ecs.yml'
-      - '.github/workflows/app-env-device-matrix-self-hosted.yml'
-      - 'scripts/deploy_gamma_ecs.sh'
-      - 'scripts/rollback_gamma_ecs.sh'
-      - 'scripts/run_assistant_device_matrix.py'
-      - 'scripts/run_assistant_device_matrix_ci.py'
-      - 'scripts/run_chat_avatar*.py'
-      - 'scripts/verify_chat_avatar_commercial_matrix_evidence.py'
-      - 'scripts/run_chat_avatar_commercial_matrix_orchestrator.sh'
-      - 'scripts/start_local_gamma_mirror.sh'
-      - 'scripts/run_local_gamma_t3.py'
-      - 'specs/feature-tree/runtime/runtime-messaging/reliable-async-task-channel/avatar-e2e-validation.md'
-      - '.github/workflows/verify-chat-avatar-commercial-matrix.yml'
-      - 'quwoquan_app/**'
-      - 'quwoquan_service/**'
-      - 'deploy/local-gamma/**'
 
 concurrency:
   group: gamma-ecs-${{ github.ref }}

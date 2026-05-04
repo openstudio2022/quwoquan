@@ -1,8 +1,8 @@
 # =============================================================================
 # Service Pipeline — quwoquan_service CI/CD
 # =============================================================================
-# 触发条件：quwoquan_service/**、deploy/** 路径变动
-# 流程：Go 构建与测试 + Python (rec-model-service) Docker 镜像 → kustomize 校验
+# 触发条件：main 合入后的 quwoquan_service/**、deploy/** 路径变动 / 手动
+# 流程：Go 构建 + Python (rec-model-service) Docker 镜像 → kustomize/prod 部署清单校验
 # 当前部署目标：阿里云 ACK（deploy/kustomization/aliyun-prod）
 #
 # 【必须配置的 GitHub Secrets】（部署时）
@@ -17,14 +17,6 @@ on:
   push:
     branches:
       - main
-      - master
-    paths:
-      - 'quwoquan_service/**'
-      - 'deploy/**'
-  pull_request:
-    branches:
-      - main
-      - master
     paths:
       - 'quwoquan_service/**'
       - 'deploy/**'
@@ -64,89 +56,6 @@ jobs:
 
       # L2 由 delivery-gate 负责，此处仅 build
 
-  test-chat-service:
-    name: chat-service 构建与测试
-    runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.modified, 'quwoquan_service/services/chat-service/') ||
-      contains(github.event.head_commit.added, 'quwoquan_service/services/chat-service/') ||
-      github.event_name == 'workflow_dispatch'
-    services:
-      mongodb:
-        image: mongo:7-jammy
-        ports:
-          - 27017:27017
-    defaults:
-      run:
-        working-directory: quwoquan_service
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 设置 Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: quwoquan_service/go.mod
-
-      - name: 缓存 Go 模块
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            quwoquan_service/.cache
-          key: go-mod-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
-          restore-keys: |
-            go-mod-${{ runner.os }}-
-
-      - name: 构建 chat-service
-        run: go build ./services/chat-service/...
-
-      - name: 测试 chat-service
-        run: go test ./services/chat-service/... -v -count=1
-        env:
-          MONGO_URI: mongodb://localhost:27017
-
-  test-user-service:
-    name: user-service 构建与测试
-    runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.modified, 'quwoquan_service/services/user-service/') ||
-      contains(github.event.head_commit.added, 'quwoquan_service/services/user-service/') ||
-      github.event_name == 'workflow_dispatch'
-    services:
-      mongodb:
-        image: mongo:7-jammy
-        ports:
-          - 27017:27017
-    defaults:
-      run:
-        working-directory: quwoquan_service
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 设置 Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: quwoquan_service/go.mod
-
-      - name: 缓存 Go 模块
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            quwoquan_service/.cache
-          key: go-mod-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
-          restore-keys: |
-            go-mod-${{ runner.os }}-
-
-      - name: 构建 user-service
-        run: go build ./services/user-service/...
-
-      - name: 测试 user-service (L2)
-        run: go test ./services/user-service/... -v -count=1 -timeout=120s
-        env:
-          TEST_MONGO_URI: mongodb://localhost:27017
-          CI: "true"
-
   build-python:
     name: 构建 rec-model-service 镜像
     runs-on: ubuntu-latest
@@ -181,89 +90,6 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/recommendation-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  test-content-service:
-    name: content-service 构建与测试
-    runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.modified, 'quwoquan_service/services/content-service/') ||
-      contains(github.event.head_commit.added, 'quwoquan_service/services/content-service/') ||
-      github.event_name == 'workflow_dispatch'
-    services:
-      mongodb:
-        image: mongo:7-jammy
-        ports:
-          - 27017:27017
-    defaults:
-      run:
-        working-directory: quwoquan_service
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 设置 Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: quwoquan_service/go.mod
-
-      - name: 缓存 Go 模块
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            quwoquan_service/.cache
-          key: go-mod-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
-          restore-keys: |
-            go-mod-${{ runner.os }}-
-
-      - name: 构建 content-service
-        run: go build ./services/content-service/...
-
-      - name: 测试 content-service
-        run: go test ./services/content-service/... -v -count=1
-        env:
-          MONGO_URI: mongodb://localhost:27017
-
-  test-rtc-service:
-    name: rtc-service 构建与测试
-    runs-on: ubuntu-latest
-    if: |
-      contains(github.event.head_commit.modified, 'quwoquan_service/services/rtc-service/') ||
-      contains(github.event.head_commit.added, 'quwoquan_service/services/rtc-service/') ||
-      github.event_name == 'workflow_dispatch'
-    services:
-      mongodb:
-        image: mongo:7-jammy
-        ports:
-          - 27017:27017
-    defaults:
-      run:
-        working-directory: quwoquan_service
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 设置 Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: quwoquan_service/go.mod
-
-      - name: 缓存 Go 模块
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            quwoquan_service/.cache
-          key: go-mod-${{ runner.os }}-${{ hashFiles('quwoquan_service/go.sum') }}
-          restore-keys: |
-            go-mod-${{ runner.os }}-
-
-      - name: 构建 rtc-service
-        run: go build ./services/rtc-service/...
-
-      - name: 测试 rtc-service (L2)
-        run: go test ./services/rtc-service/... -v -count=1 -timeout=120s
-        env:
-          TEST_MONGO_URI: mongodb://localhost:27017
-          CI: "true"
 
   validate-deploy:
     name: 校验 Kustomize 部署

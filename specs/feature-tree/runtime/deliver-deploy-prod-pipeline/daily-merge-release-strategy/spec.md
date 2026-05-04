@@ -2,13 +2,13 @@
 
 ## 功能说明
 
-建立「日常代码仅合入 dev1.0 + 每日定时自动合并至 main + 合并后触发 deploy integration 与 prod 首阶段」的 release 策略，实现端到端自动化。
+建立「显式 PR + merge queue 进入 main」的 release 策略，替代旧的“每日定时自动合并 `dev1.0 -> main`”模型。
 
 ## 范围
 
-- **分支策略**：日常 PR 仅合入 dev1.0；main 仅由定时 merge 更新
-- **定时 merge**：每日早晨（如 6:00 Asia/Shanghai）自动 merge dev1.0 → main
-- **部署触发**：main 更新后自动触发 pre-release-gate（deploy integration）及 deploy-prod-auto（Stage 1 初始灰度）
+- **分支策略**：支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR
+- **merge queue**：`main` 的 required checks 统一由 `03/04/05` 承担
+- **部署触发**：进入 `main` 后自动触发 `02` 与 `07`，手动发布保留 `06/08`
 
 ## 适用范围与约束
 
@@ -31,9 +31,9 @@
 
 ## 验收标准概要
 
-- A1：分支策略文档明确「日常 PR → dev1.0」「main 仅由定时 merge 更新」
-- A2：merge-dev1.0-to-main workflow 定时执行（cron）并可 workflow_dispatch
-- A3：merge 成功后触发 pre-release-gate（或等效 deploy integration）
-- A4：pre-release-gate 通过后 deploy-prod-auto Stage 1 自动执行
+- A1：分支策略文档明确「显式 PR + merge queue 进入 main」，且不再存在定时 merge 口径
+- A2：`03` / `04` / `05` 仅在 merge queue / 手动路径运行，不在分支 push 上重复执行
+- A3：merge queue 全绿后进入 `main`
+- A4：进入 `main` 后触发 `02` 与 `07`
 - A5：deliver_to_production_runbook、ci_cd_end_to_end_design 与策略一致
 - A6：环境矩阵与上述 release 波次、Secrets（含 `GAMMA_PRODUCT_OPS_BASE_URL`）在文档层面对齐

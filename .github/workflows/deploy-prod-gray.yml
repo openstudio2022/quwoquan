@@ -1,7 +1,7 @@
 # 半自动灰度到 prod：workflow_dispatch，单步灰度 + SLO 卡点
 # 设计见 deploy/shared/deploy_prod_design.md
 # 版本号来源与灰度对象（整颗 seed-box）见 deploy/shared/deliver_to_production_runbook.md §3.4、§6.0
-name: 05. Deploy To Prod (Gray)
+name: 06. Deploy To Prod (Gray)
 
 on:
   workflow_dispatch:
