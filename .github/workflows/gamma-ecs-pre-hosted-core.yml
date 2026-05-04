@@ -153,7 +153,7 @@ jobs:
         working-directory: quwoquan_app
         run: flutter pub get
       - name: T3 API Contract
-        run: make test-api-contract
+        run: cd "$GITHUB_WORKSPACE" && make test-api-contract
 
   assistant_runtime_gamma:
     name: Gamma ECS - assistant runtime smoke (pre)
