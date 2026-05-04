@@ -21,6 +21,7 @@ func startEmbeddedPostgres() string {
 
 	embeddedPG = embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
+			Version(embeddedpostgres.V16).
 			Port(port).
 			Username("postgres").
 			Password("postgres"),

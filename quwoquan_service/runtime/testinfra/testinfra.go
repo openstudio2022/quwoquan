@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/alicebob/miniredis/v2"
+	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
@@ -30,10 +30,10 @@ type Suite struct {
 type SuiteOption func(*suiteConfig)
 
 type suiteConfig struct {
-	pg    bool
-	mongo bool
-	redis bool
-	pgPort uint32
+	pg      bool
+	mongo   bool
+	redis   bool
+	pgPort  uint32
 	mongoDB string
 }
 
@@ -77,9 +77,10 @@ func NewSuite(t *testing.T, opts ...SuiteOption) *Suite {
 		pgPort := cfg.pgPort
 		pg := embeddedpostgres.NewDatabase(
 			embeddedpostgres.DefaultConfig().
+				Version(embeddedpostgres.V16).
 				Port(pgPort).
-				DataPath(os.TempDir()+"/embedded-pg-data").
-				RuntimePath(os.TempDir()+"/embedded-pg-runtime"),
+				DataPath(os.TempDir() + "/embedded-pg-data").
+				RuntimePath(os.TempDir() + "/embedded-pg-runtime"),
 		)
 		if err := pg.Start(); err != nil {
 			t.Fatalf("testinfra: start embedded postgres: %v", err)
