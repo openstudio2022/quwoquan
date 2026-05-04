@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Assert main branch event
         run: |
-          echo "main 已完成显式合流；默认要求 03/04/05 已由 merge queue 先行放行。"
+          echo "main 已完成显式合流；默认要求 03/04/05 已由 PR required checks 先行放行。"
       - name: Parse gray_rollout_stages
         id: stages
         run: |

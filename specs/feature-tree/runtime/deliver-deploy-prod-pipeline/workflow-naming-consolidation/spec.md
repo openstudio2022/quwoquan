@@ -2,12 +2,12 @@
 
 ## 功能说明
 
-统一主干治理后的 GitHub Actions Workflow 命名规范：01～08 顺序唯一、名称可在 Actions UI 直接表达职责，并校验 merge queue / post-main / manual 三类职责边界。
+统一主干治理后的 GitHub Actions Workflow 命名规范：01～08 顺序唯一、名称可在 Actions UI 直接表达职责，并校验 PR rule / post-main / manual 三类职责边界。
 
 ## 范围
 
 - **命名规范**：01. App Pipeline → 08. Deploy Gamma ECS
-- **职责边界**：merge queue（03/04/05）、post-main（02/07）、manual（01/06/08）
+- **职责边界**：PR rule（03/04/05）、post-main（02/07）、manual（01/06/08）
 - **02/03 去重检查**：确认 Service Pipeline 与 Delivery Gate 职责互补、无冗余执行
 
 ## 适用范围与约束
@@ -29,5 +29,5 @@
 
 - A1：主工作流名称唯一且符合 01～08 序号
 - A2：`workflow_consolidation_plan.md` 含最新命名规范与 02/03 去重结论
-- A3：不存在 `merge-dev1.0-to-main.yml`、`05 wrapper` 等历史重复入口
+- A3：不存在 `merge-dev1.0-to-main.yml`、`05 wrapper` 等已删除的重复入口
 - A4：`ci_cd_end_to_end_design.md`、`deliver_to_production_runbook.md`、`branch_strategy.md` 与规范一致

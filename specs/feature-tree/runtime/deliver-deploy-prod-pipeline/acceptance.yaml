@@ -7,7 +7,7 @@ template: A1-A8
 focus_groups: []
 tests:
   contract:
-  - 场景：pre-release-gate workflow 存在且 v*-rc* 可触发
+  - 场景：pre-release-gate workflow 存在且 pull_request(main) 可触发
   - 场景：L3 对 integration 执行，失败即 fail
   - 场景：L4 Patrol/FTL 在 pre-release 执行
   integration:
@@ -23,13 +23,21 @@ execution:
   full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: pre-release tag 触发 gate-full + L3 + L4 串联
+    criteria: PR 到 main 时触发 03/04/05，且 pre-release 串联 gate-full + L3 + L4
     status: implemented
     linked_tasks:
     - T5
     - T6
     tests:
-    - file: scripts/gate.sh
+    - file: .github/workflows/delivery-gate.yml
+      functions:
+      - pull_request branches main
+    - file: .github/workflows/pre-release-gate.yml
+      functions:
+      - pull_request branches main
+    - file: .github/workflows/app-env-device-matrix-self-hosted.yml
+      functions:
+      - pull_request branches main
   A2:
     criteria: L3 对 integration 执行，失败阻塞发布
     status: implemented

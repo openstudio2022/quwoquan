@@ -7,14 +7,15 @@ template: A1-A4
 focus_groups: []
 tests:
   contract:
-  - 场景：6 个 workflow name 含 01～06 序号
-  - 场景：deploy-prod-auto 的 workflow_run 引用 04. Pre-Release Gate
+  - 场景：8 个 workflow name 含 01～08 序号
+  - 场景：03/04/05 作为 main required checks 的主门禁
+  - 场景：deploy-prod-auto 在 push main 后触发
 execution:
   local_gate: make gate
   full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: 6 个 workflow name 为 01～06 序号 + 首字母大写
+    criteria: 8 个 workflow name 为 01～08 序号 + 首字母大写
     status: implemented
     linked_tasks:
     - T1
@@ -22,7 +23,25 @@ level_acceptance:
     - file: .github/workflows/app_pipeline.yml
       functions:
       - name
+    - file: .github/workflows/service_pipeline.yml
+      functions:
+      - name
     - file: .github/workflows/delivery-gate.yml
+      functions:
+      - name
+    - file: .github/workflows/pre-release-gate.yml
+      functions:
+      - name
+    - file: .github/workflows/app-env-device-matrix-self-hosted.yml
+      functions:
+      - name
+    - file: .github/workflows/deploy-prod-gray.yml
+      functions:
+      - name
+    - file: .github/workflows/deploy-prod-auto.yml
+      functions:
+      - name
+    - file: .github/workflows/deploy-gamma-ecs.yml
       functions:
       - name
   A2:
@@ -36,14 +55,14 @@ level_acceptance:
       - section 2
       - section 4.6
   A3:
-    criteria: deploy-prod-auto workflow_run 正确引用 04. Pre-Release Gate
+    criteria: deploy-prod-auto 在 push main 后作为 post-main 动作执行
     status: implemented
     linked_tasks:
     - T2
     tests:
     - file: .github/workflows/deploy-prod-auto.yml
       functions:
-      - workflow_run
+      - push branches main
   A4:
     criteria: ci_cd_end_to_end_design、runbook 与规范一致
     status: implemented

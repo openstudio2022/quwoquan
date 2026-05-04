@@ -1,6 +1,6 @@
 # CI/CD 端到端闭环落实方案
 
-> 目标：进入 `main` 前完成 merge queue 阻断验证；进入 `main` 后再执行发布后续动作。
+> 目标：进入 `main` 前完成 pull request required checks 阻断验证；进入 `main` 后再执行发布后续动作。
 
 **当前部署目标**：CI/CD 仅考虑**阿里云 ACK** 部署。pre-release-gate、service_pipeline 使用 `CLOUD_PROVIDER=aliyun` 和 `deploy/kustomization/aliyun-integration`、`deploy/kustomization/aliyun-prod`。
 
@@ -16,9 +16,9 @@
 
 | Workflow 名称 | 文件 | 触发 | 职责 | 对应阶段 |
 |---------------|------|------|------|----------|
-| 03. Delivery Gate | `delivery-gate.yml` | `merge_group`、手动 | merge queue 快速主门禁：拓扑校验、L1+L2 | G0~G3 |
-| 05. App Env Device Matrix | `app-env-device-matrix-self-hosted.yml` | `merge_group`、`workflow_call`、手动 | self-hosted 设备矩阵；动态发现当前 Mac 上全部移动设备 | G3/G5b |
-| 04. Pre-Release Gate | `pre-release-gate.yml` | `merge_group`、手动 | deploy integration → L3 → L4 → gamma smoke | G3→G5b |
+| 03. Delivery Gate | `delivery-gate.yml` | `pull_request(main)`、手动 | PR 主门禁：拓扑校验、L1+L2 | G0~G3 |
+| 05. App Env Device Matrix | `app-env-device-matrix-self-hosted.yml` | `pull_request(main)`、`workflow_call`、手动 | self-hosted 设备矩阵；动态发现当前 Mac 上全部移动设备 | G3/G5b |
+| 04. Pre-Release Gate | `pre-release-gate.yml` | `pull_request(main)`、手动 | deploy integration → L3 → L4 → gamma smoke | G3→G5b |
 | 02. Service Pipeline | `service_pipeline.yml` | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize prod 校验 | G2 / post-main |
 | 07. Deploy To Prod (Auto) | `deploy-prod-auto.yml` | `push main`、手动 | main 后自动推进 prod 占位链路 | G5c |
 | 01. App Pipeline | `app_pipeline.yml` | `v*` tag、手动 | 端侧发布构建（macOS） | 发布 |
@@ -28,29 +28,29 @@
 ### 1.2 当前 pre-release 链路（已实现）
 
 ```text
-merge queue(main)
+pull request -> main
   → 03 Delivery Gate（L1+L2）
   → 05 App Env Device Matrix（alpha/beta self-hosted）
   → 04 Pre-Release Gate（deploy integration → L3 → L4 → gamma smoke）
   → 全绿后才允许进入 main
 ```
 
-**已落实**：`03/04/05` 都不再响应分支 push；merge queue 是唯一主干阻断路径。
+**已落实**：`03/04/05` 都不再响应分支 push；当前仓库通过 `main` 的 pull request merge rule 阻断主干进入。
 
 ### 1.3 ECS Onebox（gamma 镜像栈，`deploy-gamma-ecs.yml`）
 
-与 ACK integration **并行**的一条闭环：**08** 已改成**纯手动** onebox / gamma 演练链路；merge queue 主路径不再在 `main` 后重复触发这套重验证。部署前后在远端 `../gamma-backups/` 备份 tarball，结构化报告见 `artifacts/ecs-onebox/deploy-report.json`，回滚见 **`ecs-onebox-rollback.yml` / `scripts/rollback_gamma_ecs.sh`**。
+与 ACK integration **并行**的一条闭环：**08** 已改成**纯手动** onebox / gamma 演练链路；PR 主路径不再在 `main` 后重复触发这套重验证。部署前后在远端 `../gamma-backups/` 备份 tarball，结构化报告见 `artifacts/ecs-onebox/deploy-report.json`，回滚见 **`ecs-onebox-rollback.yml` / `scripts/rollback_gamma_ecs.sh`**。
 
 ---
 
 ## 2. 端到端闭环目标（已落实）
 
-**分支策略**：支持 `dev1.0` 分支开发与 trunk development 两种模式，但**进入 `main` 的唯一门禁都是 merge queue**，见 `deploy/shared/branch_strategy.md`。
+**分支策略**：支持 `dev1.0` 分支开发与 trunk development 两种模式，但**进入 `main` 的唯一门禁都是 pull request required checks**，见 `deploy/shared/branch_strategy.md`。
 
 ```text
 feature / dev1.0
   → 用户显式发起到 main 的 PR
-  → merge queue
+  → PR required checks
       ├─ 03 Delivery Gate
       ├─ 05 App Env Device Matrix
       └─ 04 Pre-Release Gate
@@ -149,10 +149,10 @@ deploy-integration:
 
 若当前 Mac 上暂时只连着 iPhone、只开了 Android Emulator，或两者同时存在，workflow 都会按实际发现结果展开；某一平台没有设备时会被跳过，但总设备数为 0 时直接 `gate_block`。
 
-### 4.4 merge queue / main 后验证清单
+### 4.4 PR / main 后验证清单
 
-1. **merge queue required checks**：确认 `03`、`04`、`05` 都作为 required checks 配置在 `main` 分支保护 / merge queue 中。
-2. **03 Delivery Gate**：确认 merge queue run 成功。
+1. **main required checks**：确认 `03`、`04`、`05` 都作为 `main` 分支保护中的 required checks 配置。
+2. **03 Delivery Gate**：确认 PR check run 成功。
 3. **04 Pre-Release Gate**：确认 `deploy-integration`、`l3`、`l4`、`assistant-runtime-gamma`、`release-evidence-summary` 全绿。
 4. **05 App Env Device Matrix**：确认当前 Mac 可见设备被正确发现，且至少一台设备执行成功。
 5. **07 Deploy To Prod (Auto)**：确认 main 合入后触发成功；`production` Environment 若启用审批，在 GitHub 上完成 Stage 2 审批。
@@ -183,7 +183,7 @@ deploy-integration:
 ## 6. 参考
 
 - `deploy/shared/environment_matrix.md` — 五环境矩阵、STAGING=integration 语义、各环境验证命令
-- `deploy/shared/branch_strategy.md` — 分支策略（显式 PR + merge queue）
+- `deploy/shared/branch_strategy.md` — 分支策略（显式 PR + required checks）
 - `deploy/shared/deliver_to_production_runbook.md` — 端到端运行手册
 - `.github/workflows/pre-release-gate.yml` — 当前 pre-release 流程
 - `scripts/deploy_to_integration.sh` — 构建脚本（需扩展或新建 apply 脚本）

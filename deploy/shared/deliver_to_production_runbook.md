@@ -71,7 +71,7 @@ make gate-local-gamma
 | 字段 | 含义 | 获取方式 |
 |------|------|----------|
 | **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`.release-state/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则从集群查：`kubectl get deployment seed-box -n seed-box-prod -o jsonpath='{.spec.template.spec.containers[0].image}'` 取 tag |
-| **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **merge queue 的 pre-release** 部署到 integration 的版本：tag 触发用该 tag 或解析值；必要时参考 `deploy/service/seed-box/kustomize/overlays/integration/kustomization.yaml` 的 `IMAGE_VERSION` |
+| **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **main PR required checks 中的 pre-release** 部署到 integration 的版本：tag 触发用该 tag 或解析值；必要时参考 `deploy/service/seed-box/kustomize/overlays/integration/kustomization.yaml` 的 `IMAGE_VERSION` |
 | **Current prod config version** | 当前生产正在使用的配置版本 | 从 **`.release-state/seed-box.state`** 的 **`to_config`** 读取；若无则从 deployment 环境变量 `CONFIG_VERSION` 读取 |
 | **Target config version** | 本次要上的配置版本 | 与 target image 对应，来自 pre-release 的 `CONFIG_VERSION`（同上） |
 
@@ -194,9 +194,9 @@ make config-rollback SERVICE=seed-box TO_CONFIG=<rollback-version>
 ## 8. 参考
 
 - `specs/00_MASTER_DEVELOPMENT_FLOW.md` — 主流程（含 Deploy 阶段 G5）
-- `deploy/shared/branch_strategy.md` — **分支策略**（显式 PR + merge queue）
+- `deploy/shared/branch_strategy.md` — **分支策略**（显式 PR + required checks）
 - `deploy/shared/ci_cd_end_to_end_design.md` — **CI/CD 端到端闭环落实方案**（pre-release workflow、secrets、实施顺序）
-- `deploy/shared/workflow_consolidation_plan.md` — **Workflow 命名规范**（01～08、merge queue/main-only）
+- `deploy/shared/workflow_consolidation_plan.md` — **Workflow 命名规范**（01～08、PR/main-only）
 - `.cursor/commands/deploy.md` — 部署命令
 - `deploy/shared/process_domain_mapping_runbook.md` — 部署拓扑
 - `deploy/service/config-release/runbook.md` — 配置发布与灰度

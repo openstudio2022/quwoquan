@@ -7,15 +7,15 @@ template: A1-A5
 focus_groups: []
 tests:
   contract:
-  - 场景：branch_strategy 明确 dev1.0/main 策略
-  - 场景：merge-dev1.0-to-main workflow 存在且含 schedule
-  - 场景：pre-release-gate 支持 push to main
+  - 场景：branch_strategy 明确 dev1.0/main PR 合流策略
+  - 场景：main 通过 required checks 阻断合入
+  - 场景：pre-release-gate 支持 pull_request 到 main
 execution:
   local_gate: make gate
   full_gate: make gate-full
 level_acceptance:
   A1:
-    criteria: 分支策略文档明确「日常 PR→dev1.0」「main 仅由定时 merge 更新」
+    criteria: 分支策略文档明确「日常 PR→dev1.0」「main 仅由显式 PR + required checks 更新」
     status: implemented
     linked_tasks:
     - T1
@@ -24,32 +24,40 @@ level_acceptance:
       functions:
       - content
   A2:
-    criteria: merge-dev1.0-to-main workflow 定时执行（cron）并可 workflow_dispatch
+    criteria: 03 / 04 / 05 作为 main 的 required checks 阻断合入
     status: implemented
     linked_tasks:
     - T2
     tests:
-    - file: .github/workflows/merge-dev1.0-to-main.yml
+    - file: deploy/shared/branch_strategy.md
       functions:
-      - schedule
-      - workflow_dispatch
+      - content
+    - file: .github/workflows/delivery-gate.yml
+      functions:
+      - pull_request branches main
+    - file: .github/workflows/pre-release-gate.yml
+      functions:
+      - pull_request branches main
+    - file: .github/workflows/app-env-device-matrix-self-hosted.yml
+      functions:
+      - pull_request branches main
   A3:
-    criteria: merge 成功后触发 pre-release-gate（或等效 deploy integration）
+    criteria: PR 更新后触发 pre-release-gate（或等效 deploy integration）
     status: implemented
     linked_tasks:
     - T3
     tests:
     - file: .github/workflows/pre-release-gate.yml
       functions:
-      - push branches main
+      - pull_request branches main
   A4:
-    criteria: pre-release-gate 通过后 deploy-prod-auto Stage 1 自动执行
+    criteria: main 合入后 deploy-prod-auto Stage 1 自动执行
     status: implemented
     linked_tasks: []
     tests:
     - file: .github/workflows/deploy-prod-auto.yml
       functions:
-      - workflow_run
+      - push branches main
   A5:
     criteria: deliver_to_production_runbook、ci_cd_end_to_end_design 与 branch_strategy
       一致
