@@ -107,6 +107,10 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
       isDark,
       ColorType.foregroundSecondary,
     );
+    final linkColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.selectionForeground,
+    );
     final surfaceTint = secondaryTextColor.withValues(
       alpha: isDark ? 0.08 : 0.03,
     );
@@ -147,6 +151,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
               child: _buildBody(
                 textColor: textColor,
                 secondaryTextColor: secondaryTextColor,
+                linkColor: linkColor,
               ),
             ),
         ],
@@ -223,6 +228,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
   Widget _buildBody({
     required Color textColor,
     required Color secondaryTextColor,
+    required Color linkColor,
   }) {
     return Padding(
       padding: EdgeInsets.only(
@@ -241,6 +247,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
               block: _viewModel.blocks[i],
               textColor: textColor,
               secondaryTextColor: secondaryTextColor,
+              linkColor: linkColor,
             ),
         ],
       ),
@@ -252,6 +259,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required AssistantJourneyBlockViewModel block,
     required Color textColor,
     required Color secondaryTextColor,
+    required Color linkColor,
   }) {
     if (block.kind == AssistantJourneyBlockKind.referenceStats) {
       return _buildReferenceStatsBlock(
@@ -259,6 +267,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
         block: block,
         textColor: textColor,
         secondaryTextColor: secondaryTextColor,
+        linkColor: linkColor,
       );
     }
     final bulletLines = block.items.isNotEmpty
@@ -355,6 +364,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                     reference: block.references[refIndex],
                     index: refIndex,
                     textColor: textColor,
+                    linkColor: linkColor,
                   ),
                 );
               }),
@@ -399,6 +409,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required AssistantJourneyBlockViewModel block,
     required Color textColor,
     required Color secondaryTextColor,
+    required Color linkColor,
   }) {
     if (block.headline.isEmpty && !block.hasReferences) {
       return const SizedBox.shrink();
@@ -427,6 +438,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                   reference: block.references[refIndex],
                   index: refIndex,
                   textColor: textColor,
+                  linkColor: linkColor,
                 ),
               );
             }),
@@ -502,13 +514,12 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
     required AssistantJourneyReferenceViewModel reference,
     required int index,
     required Color textColor,
+    required Color linkColor,
   }) {
+    final source = reference.source.trim();
     final title = reference.title.trim().isNotEmpty
         ? reference.title.trim()
-        : reference.url.trim();
-    final sourceSuffix = reference.source.trim().isNotEmpty
-        ? ' · ${reference.source.trim()}'
-        : '';
+        : (source.isNotEmpty ? source : '参考来源 ${index + 1}');
     final url = reference.url.trim();
     return GestureDetector(
       onTap: url.isNotEmpty
@@ -526,27 +537,16 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '${index + 1}. $title$sourceSuffix',
+            '${index + 1}. $title',
             style: TextStyle(
               fontSize: AppTypography.base,
-              fontWeight: FontWeight.w400,
-              color: textColor.withValues(alpha: 0.88),
+              fontWeight: FontWeight.w500,
+              color: url.isNotEmpty
+                  ? linkColor
+                  : textColor.withValues(alpha: 0.88),
               height: AppTypography.lineHeightRelaxed,
             ),
           ),
-          if (url.isNotEmpty && url != title)
-            Padding(
-              padding: EdgeInsets.only(top: AppSpacing.one),
-              child: Text(
-                url,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  fontWeight: FontWeight.w400,
-                  color: textColor.withValues(alpha: 0.72),
-                  height: AppTypography.lineHeightRelaxed,
-                ),
-              ),
-            ),
         ],
       ),
     );

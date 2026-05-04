@@ -13,8 +13,8 @@
         {
           "userId": "fixture_user_current",
           "displayName": "契约当前用户",
-          "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
-          "backgroundUrl": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1400",
+          "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_current/v1/background.png",
           "bio": "用于 alpha/beta/gamma 的当前用户主页。",
           "stats": {
             "followingCount": 12,
@@ -22,13 +22,44 @@
             "postCount": 4,
             "circleCount": 3,
             "likeCount": 128
+          },
+          "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_current/v1/background.png",
+          "personaRefs": [
+            "fixture_persona_daily",
+            "fixture_persona_work"
+          ],
+          "tags": [
+            "current",
+            "author",
+            "contact"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 45458,
+              "sourceHash": "sha256:98697a43d32295581560c8c5da1bce191baff7cc48524f85d2951ce97e675cde"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_current/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 134839,
+              "sourceHash": "sha256:680394855ec2aa542043a2ed116d3175b56dae5f911a813844b5ab889a96f029"
+            }
           }
         },
         {
           "userId": "fixture_user_photo",
           "displayName": "契约摄影师",
-          "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
-          "backgroundUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1400",
+          "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_photo/v1/background.png",
           "bio": "作者主页契约数据。",
           "stats": {
             "followingCount": 21,
@@ -36,13 +67,41 @@
             "postCount": 16,
             "circleCount": 2,
             "likeCount": 512
+          },
+          "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_photo/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "author",
+            "photo",
+            "contact"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 45645,
+              "sourceHash": "sha256:c96fb53f68ca4287d695e8e679db00956b80dc8f0f5d1bc537f05498d3924399"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_photo/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 87721,
+              "sourceHash": "sha256:d25c53422b1b661ea73961f26c26ac3088b6ccb31e3421aa84960fa80f86effd"
+            }
           }
         },
         {
           "userId": "fixture_user_travel",
           "displayName": "契约旅行家",
-          "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
-          "backgroundUrl": "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=1400",
+          "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_travel/v1/background.png",
           "bio": "旅行、天气和行程记录作者。",
           "stats": {
             "followingCount": 31,
@@ -50,13 +109,41 @@
             "postCount": 9,
             "circleCount": 2,
             "likeCount": 266
+          },
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_travel/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "author",
+            "travel",
+            "contact"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 46440,
+              "sourceHash": "sha256:849b1ab51ab84db69212be1e41640e801b47e381177144412ab726a6598aa75b"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_travel/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 101548,
+              "sourceHash": "sha256:86c2e3b10a31e674f0affea48737ebdece2abe102386b786dc220ebdd75e0bd7"
+            }
           }
         },
         {
           "userId": "fixture_user_video",
           "displayName": "契约剪辑师",
-          "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
-          "backgroundUrl": "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1400",
+          "avatarUrl": "media/avatar/user/fixture_user_video/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_video/v1/background.png",
           "bio": "视频剪辑与城市影像作者。",
           "stats": {
             "followingCount": 18,
@@ -64,13 +151,40 @@
             "postCount": 6,
             "circleCount": 1,
             "likeCount": 178
+          },
+          "avatarObjectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_video/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "author",
+            "video"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 47684,
+              "sourceHash": "sha256:3472d9f447a531f31d20213f08d6cdbe9aa97a96e25be52f74b452d42227c3dc"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_video/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 121216,
+              "sourceHash": "sha256:72a98bb5d59796f46aa9cd3055fae7a06d0cddba466929145fdbb430139adc4d"
+            }
           }
         },
         {
           "userId": "fixture_user_article",
           "displayName": "契约撰稿人",
-          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
-          "backgroundUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1400",
+          "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_article/v1/background.png",
           "bio": "文章、攻略与长图文作者。",
           "stats": {
             "followingCount": 24,
@@ -78,13 +192,41 @@
             "postCount": 8,
             "circleCount": 2,
             "likeCount": 320
+          },
+          "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_article/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "author",
+            "article",
+            "contact"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 53347,
+              "sourceHash": "sha256:56ed83f04fe6e45cf823a161e40039be9d3efacaffbd17e3173a6275ad24a13f"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_article/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 134506,
+              "sourceHash": "sha256:80d3b65c86a50112af363304e05e199d69100fc5b8d0bb744a387da431a96ea4"
+            }
           }
         },
         {
           "userId": "fixture_user_friend",
           "displayName": "契约好友",
-          "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
-          "backgroundUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1400",
+          "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_friend/v1/background.png",
           "bio": "与当前用户互关的同好。",
           "stats": {
             "followingCount": 18,
@@ -92,13 +234,40 @@
             "postCount": 3,
             "circleCount": 2,
             "likeCount": 88
+          },
+          "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_friend/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "contact",
+            "direct-chat"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 54949,
+              "sourceHash": "sha256:7a0f571a707963aaf78d445c3e6a78525e6c570a7dc7fd5dfee4188c24ebc41e"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_friend/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 95211,
+              "sourceHash": "sha256:869067a18762f2afc5a8998c01be99845d8d29beedb9578ccaa50dbf266d05ec"
+            }
           }
         },
         {
           "userId": "fixture_user_weekend_1",
           "displayName": "契约同伴一",
-          "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
-          "backgroundUrl": "https://images.unsplash.com/photo-1562774053-701939374585?w=1400",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_weekend_1/v1/background.png",
           "bio": "周末群成员，也是联系人同好。",
           "stats": {
             "followingCount": 9,
@@ -106,13 +275,40 @@
             "postCount": 2,
             "circleCount": 1,
             "likeCount": 54
+          },
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "contact",
+            "group-member"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 43291,
+              "sourceHash": "sha256:f90b4e806067a7f2d4eb2bba5e23096a05590cb5404270314aa8d854f38d8e84"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 125632,
+              "sourceHash": "sha256:6e58c00e0b353777926769f7a04d798219837579885c446c5251fbd69771a7c0"
+            }
           }
         },
         {
           "userId": "fixture_user_weekend_2",
           "displayName": "契约同伴二",
-          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
-          "backgroundUrl": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1400",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_weekend_2/v1/background.png",
           "bio": "周末群成员，提供路线建议。",
           "stats": {
             "followingCount": 7,
@@ -120,6 +316,154 @@
             "postCount": 1,
             "circleCount": 1,
             "likeCount": 37
+          },
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_weekend_2/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "contact",
+            "group-member"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 35109,
+              "sourceHash": "sha256:aa6a2fd13a218a207b0da2a3178443e7b4d50ab9e723a1eebaecb542c6338ebd"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_weekend_2/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 96160,
+              "sourceHash": "sha256:0fc85f6a5bf8152fe0393d3f3667a5addeeae2aab387ecabfeb77c85f3eade23"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_owner",
+          "stats": {
+            "followingCount": 0,
+            "followerCount": 0,
+            "postCount": 0,
+            "circleCount": 0,
+            "likeCount": 0
+          },
+          "displayName": "契约摄影社主理人",
+          "avatarObjectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_owner/v1/background.png",
+          "avatarUrl": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_owner/v1/background.png",
+          "bio": "摄影圈 owner，用于圈子权限和群聊同步验证。",
+          "personaRefs": [],
+          "tags": [
+            "circle-owner"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 51408,
+              "sourceHash": "sha256:33e282d5323aff713c7b0dddf56cb069555d33e76bb1922e789fcce78fb86f88"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_owner/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 124977,
+              "sourceHash": "sha256:bbe1bc1030fc07fd077b3eb99725c0b6e4adb8ed5f027b293e6e5902e178e18d"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_travel_owner",
+          "stats": {
+            "followingCount": 0,
+            "followerCount": 0,
+            "postCount": 0,
+            "circleCount": 0,
+            "likeCount": 0
+          },
+          "displayName": "契约旅行圈主",
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_travel_owner/v1/background.png",
+          "avatarUrl": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_travel_owner/v1/background.png",
+          "bio": "旅行圈 owner，用于圈子成员引用完整性验证。",
+          "personaRefs": [],
+          "tags": [
+            "circle-owner",
+            "travel"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 38987,
+              "sourceHash": "sha256:46f7c958a359fbc1456ecb19d1cf5beeac7da5e8e122e6bc77ec2f0c779fedcc"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_travel_owner/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 122552,
+              "sourceHash": "sha256:ef4a68db9c72d6861443b39762c30e67025cbc0a235b76a8c0356a93e2c85bd5"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_commenter",
+          "stats": {
+            "followingCount": 0,
+            "followerCount": 0,
+            "postCount": 0,
+            "circleCount": 0,
+            "likeCount": 0
+          },
+          "displayName": "契约评论者",
+          "avatarObjectKey": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_commenter/v1/background.png",
+          "avatarUrl": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_commenter/v1/background.png",
+          "bio": "内容详情评论作者，用于作者头像补水验证。",
+          "personaRefs": [],
+          "tags": [
+            "commenter"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 256,
+              "height": 256,
+              "sizeBytes": 50862,
+              "sourceHash": "sha256:afa64ec0de5efc732dc1057735d21e964a934078a43555793418feb66bca9515"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_commenter/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1200,
+              "height": 480,
+              "sizeBytes": 139615,
+              "sourceHash": "sha256:cb1e1e097c7ef969e87f9db1c463c78ff0111e19107c68867029a88304aba9cc"
+            }
           }
         }
       ]
@@ -142,9 +486,21 @@
     },
     "profile_feed_core": {
       "description": "我的作品、作者作品、生活记录与评论。",
-      "myPostIds": ["fixture_moment_001", "fixture_photo_001", "fixture_article_001", "fixture_video_001"],
-      "authorPostIds": ["fixture_photo_001", "fixture_photo_002", "fixture_article_001", "fixture_video_001"],
-      "commentIds": ["fixture_comment_photo_001"]
+      "myPostIds": [
+        "fixture_moment_001",
+        "fixture_photo_001",
+        "fixture_article_001",
+        "fixture_video_001"
+      ],
+      "authorPostIds": [
+        "fixture_photo_001",
+        "fixture_photo_002",
+        "fixture_article_001",
+        "fixture_video_001"
+      ],
+      "commentIds": [
+        "fixture_comment_photo_001"
+      ]
     },
     "relationship_core": {
       "description": "关注、互关、拉黑、可聊天、可通话能力矩阵。",
@@ -202,19 +558,49 @@
       "title": "用户主页与关系能力契约种子",
       "type": "user_profile",
       "domainId": "user",
-      "seedRefs": ["user_profile_core", "persona_core", "profile_feed_core", "relationship_core", "settings_core"],
+      "seedRefs": [
+        "user_profile_core",
+        "persona_core",
+        "profile_feed_core",
+        "relationship_core",
+        "settings_core"
+      ],
       "uiExpectations": {
-        "userIds": ["fixture_user_current", "fixture_user_photo"],
-        "textFragments": ["契约当前用户", "契约摄影师", "日常我"]
+        "userIds": [
+          "fixture_user_current",
+          "fixture_user_photo"
+        ],
+        "textFragments": [
+          "契约当前用户",
+          "契约摄影师",
+          "日常我"
+        ]
       },
       "remoteExpectations": {
-        "profileUserIds": ["fixture_user_current", "fixture_user_photo"],
-        "personaIds": ["fixture_persona_daily", "fixture_persona_work"]
+        "profileUserIds": [
+          "fixture_user_current",
+          "fixture_user_photo"
+        ],
+        "personaIds": [
+          "fixture_persona_daily",
+          "fixture_persona_work"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     }
   ]

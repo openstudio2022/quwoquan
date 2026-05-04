@@ -5,6 +5,7 @@ import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_process_timeline.dart';
+import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/widgets/message/assistant_journey_view_model.dart';
@@ -469,7 +470,8 @@ void main() {
       await tester.tap(find.textContaining('搜索了 1 篇').last);
       await tester.pump();
 
-      expect(find.text('1. 四川文旅公告 · 官方'), findsOneWidget);
+      expect(find.text('1. 四川文旅公告'), findsOneWidget);
+      expect(find.text('https://example.com/doc'), findsNothing);
     });
 
     testWidgets('有 search stage 时会展示独立 query design，而不是回退成 processing', (
@@ -563,7 +565,7 @@ void main() {
       );
     });
 
-    test('三阶段内容会按理解、检索设计、检索处理顺序归位', () {
+    test('过程内容会按理解、检索设计、检索处理、生成答案顺序归位', () {
       const journey = AssistantJourney(
         stages: <AssistantJourneyStage>[
           AssistantJourneyStage(
@@ -677,6 +679,7 @@ void main() {
           ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
           ProcessStepId.retrievalProcessing,
+          ProcessStepId.answerOrganization,
         ]),
       );
       expect(viewModel.blocks[1].kind, AssistantJourneyBlockKind.narrative);
@@ -964,7 +967,8 @@ void main() {
       expect(find.textContaining('4.2'), findsNothing);
     });
 
-    testWidgets('完成态头部不再展示完成图标，展开后会显示完整参考链接', (tester) async {
+    testWidgets('完成态头部不再展示完成图标，展开后仅显示可点击参考标题', (tester) async {
+      AssistantCitation? tappedCitation;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -984,6 +988,8 @@ void main() {
                   ],
                 ),
               ),
+              initiallyExpanded: true,
+              onReferenceTap: (reference) => tappedCitation = reference,
             ),
           ),
         ),
@@ -991,12 +997,16 @@ void main() {
 
       expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsNothing);
 
-      await tester.tap(find.byKey(TestKeys.assistantProcessHeader));
-      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.byIcon(CupertinoIcons.chevron_down).last);
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('https://example.com/doc'), findsOneWidget);
+      expect(find.text('1. 四川文旅公告'), findsOneWidget);
+      expect(find.text('https://example.com/doc'), findsNothing);
+
+      await tester.tap(find.text('1. 四川文旅公告'));
+      await tester.pump();
+
+      expect(tappedCitation?.url, 'https://example.com/doc');
     });
   });
 }

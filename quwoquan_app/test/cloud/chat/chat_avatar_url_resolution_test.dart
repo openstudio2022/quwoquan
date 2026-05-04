@@ -19,7 +19,7 @@ void main() {
 
       expect(
         item.avatarUrl,
-        'http://127.0.0.1:18080/media/avatar/conversation/conv_1/v2/hash.png?v=2',
+        'http://127.0.0.1:18088/media/avatar/conversation/conv_1/v2/hash.png?v=2',
       );
     });
 
@@ -35,7 +35,7 @@ void main() {
 
       expect(
         row.avatarUrl,
-        'http://127.0.0.1:18080/media/avatar/user/user_2/v1/profile.png',
+        'http://127.0.0.1:18088/media/avatar/user/user_2/v1/profile.png',
       );
     });
 
@@ -51,7 +51,7 @@ void main() {
 
       expect(
         map['senderAvatar'],
-        'http://127.0.0.1:18080/media/avatar/user/user_2/v3/profile.png?v=3',
+        'http://127.0.0.1:18088/media/avatar/user/user_2/v3/profile.png?v=3',
       );
     });
   });

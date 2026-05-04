@@ -27,20 +27,14 @@ class RoundedSquareAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = borderRadius ?? AppSpacing.contentPreviewCornerRadius;
-    final resolvedImageUrl = resolveAvatarImageUrl(imageUrl);
-    final hasImage = resolvedImageUrl.isNotEmpty;
+    final imageCandidates = resolveAvatarImageUrlCandidates(imageUrl);
+    final hasImage = imageCandidates.isNotEmpty;
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
     Widget avatar = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: hasImage
-          ? Image.network(
-              resolvedImageUrl,
-              width: size,
-              height: size,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, _) => _buildFallback(radius, isDark),
-            )
+          ? _buildNetworkImageWithFallback(imageCandidates, 0, radius, isDark)
           : _buildFallback(radius, isDark),
     );
 
@@ -49,6 +43,32 @@ class RoundedSquareAvatar extends StatelessWidget {
     }
 
     return avatar;
+  }
+
+  Widget _buildNetworkImageWithFallback(
+    List<String> candidates,
+    int index,
+    double radius,
+    bool isDark,
+  ) {
+    return Image.network(
+      candidates[index],
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, _) {
+        final next = index + 1;
+        if (next < candidates.length) {
+          return _buildNetworkImageWithFallback(
+            candidates,
+            next,
+            radius,
+            isDark,
+          );
+        }
+        return _buildFallback(radius, isDark);
+      },
+    );
   }
 
   Widget _buildFallback(double radius, bool isDark) {

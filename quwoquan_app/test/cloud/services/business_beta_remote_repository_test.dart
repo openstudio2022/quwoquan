@@ -30,7 +30,9 @@ void main() {
       expect(photoFeed.length, greaterThanOrEqualTo(3));
       expect(photoFeed.map((item) => item.id), contains('fixture_photo_001'));
       expect(
-        photoFeed.every((item) => item.primaryVisualUrl.startsWith('https://')),
+        photoFeed.every(
+          (item) => item.primaryVisualUrl.startsWith('media/image/post/'),
+        ),
         isTrue,
       );
       final videoFeed = await contentRepository.listDiscoveryFeed(
@@ -96,7 +98,9 @@ void main() {
       expect(circles.length, greaterThanOrEqualTo(6));
       expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
       expect(
-        circles.every((item) => item.coverUrl?.startsWith('https://') == true),
+        circles.every(
+          (item) => item.coverUrl?.startsWith('media/image/circle/') == true,
+        ),
         isTrue,
       );
       final circle = await circleRepository.getCircle('fixture_circle_photo');
@@ -119,7 +123,7 @@ void main() {
       expect(circleHomeFeed.length, greaterThanOrEqualTo(5));
       expect(
         circleHomeFeed.every(
-          (item) => item.primaryVisualUrl.startsWith('https://'),
+          (item) => item.primaryVisualUrl.startsWith('media/image/post/'),
         ),
         isTrue,
       );
@@ -128,7 +132,10 @@ void main() {
         'fixture_user_current',
       );
       expect(currentUser.displayName, '契约当前用户');
-      expect(currentUser.backgroundUrl.startsWith('https://'), isTrue);
+      expect(
+        currentUser.backgroundUrl.startsWith('media/background/user/'),
+        isTrue,
+      );
       final userPosts = await userRepository.listUserPosts(
         'fixture_user_current',
         limit: 20,
@@ -136,7 +143,9 @@ void main() {
       expect(userPosts.length, greaterThanOrEqualTo(4));
       expect(userPosts.map((item) => item.id), contains('fixture_moment_001'));
       expect(
-        userPosts.every((item) => item.primaryVisualUrl.startsWith('https://')),
+        userPosts.every(
+          (item) => item.primaryVisualUrl.startsWith('media/image/post/'),
+        ),
         isTrue,
       );
       final userWorks = await userRepository.listUserWorks(

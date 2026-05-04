@@ -230,7 +230,7 @@ void main() {
     });
 
     testWidgets(
-      'sendMessage 会把可见 2 阶段过程轨展示给 UI，同时保留 canonical 4 阶段到最终 assistant 消息',
+      'sendMessage 会把可见 4 阶段过程轨展示给 UI，并把 canonical 4 阶段落到最终 assistant 消息',
       (tester) async {
         final gateway = _FastAssistantGateway();
         final entry = _FakeStreamingLocalAssistantEntry();
@@ -270,11 +270,13 @@ void main() {
           ProcessStepId.understanding,
           ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
+          ProcessStepId.answerOrganization,
         ];
         const expectedCanonicalSteps = <ProcessStepId>[
           ProcessStepId.understanding,
           ProcessStepId.retrievalDesign,
           ProcessStepId.retrievalProcessing,
+          ProcessStepId.answerOrganization,
         ];
 
         expect(controller.assistantResponding, isFalse);
@@ -437,6 +439,7 @@ void main() {
             ProcessStepId.understanding,
             ProcessStepId.retrievalDesign,
             ProcessStepId.retrievalProcessing,
+            ProcessStepId.answerOrganization,
           ]),
         );
         expect(
@@ -798,14 +801,15 @@ void main() {
         finalAssistantMessage,
       );
       expect(controller.answerGateOpen, isFalse);
-      expect(
-        persistedTimeline.map((frame) => frame.stepId).toList(growable: false),
-        orderedEquals(const <ProcessStepId>[
-          ProcessStepId.understanding,
-          ProcessStepId.retrievalDesign,
-          ProcessStepId.retrievalProcessing,
-        ]),
-      );
+        expect(
+          persistedTimeline.map((frame) => frame.stepId).toList(growable: false),
+          orderedEquals(const <ProcessStepId>[
+            ProcessStepId.understanding,
+            ProcessStepId.retrievalDesign,
+            ProcessStepId.retrievalProcessing,
+            ProcessStepId.answerOrganization,
+          ]),
+        );
       expect(
         displayState.process.blocks.any(
           (block) =>
@@ -1050,6 +1054,7 @@ void main() {
             ProcessStepId.understanding,
             ProcessStepId.retrievalDesign,
             ProcessStepId.retrievalProcessing,
+            ProcessStepId.answerOrganization,
           ]),
         );
         expect(

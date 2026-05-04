@@ -4,7 +4,7 @@
   "description": "天气查询、出行建议、穿衣推荐、空气质量、紫外线指数。",
   "domainId": "weather",
   "executionTarget": "cloud",
-  "routingHints": ["天气", "降雨", "温度", "台风", "空气质量", "weather", "forecast", "rain", "temperature"],
+  "routingHints": ["天气", "降雨", "温度", "台风", "空气质量", "weather", "forecast", "rain", "temperature", "tian qi", "tianqi"],
   "iconHint": "cloud_sun",
   "toolPolicy": {
     "allowedTools": ["web_search", "search", "web_fetch"],

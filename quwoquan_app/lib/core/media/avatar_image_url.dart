@@ -10,89 +10,89 @@ String resolveAvatarImageUrl(
   String? gatewayBaseUrl,
   String? avatarCdnBaseUrl,
 }) {
+  final candidates = resolveAvatarImageUrlCandidates(
+    raw,
+    gatewayBaseUrl: gatewayBaseUrl,
+    avatarCdnBaseUrl: avatarCdnBaseUrl,
+  );
+  return candidates.isEmpty ? '' : candidates.first;
+}
+
+/// 返回头像可访问 URL 候选集，供 UI 在首选媒体入口失败时继续尝试 gateway 代理。
+List<String> resolveAvatarImageUrlCandidates(
+  String? raw, {
+  String? gatewayBaseUrl,
+  String? avatarCdnBaseUrl,
+}) {
   final source = raw?.trim() ?? '';
   if (source.isEmpty) {
-    return '';
+    return const <String>[];
   }
 
+  final gateway = gatewayBaseUrl ?? CloudRuntimeConfig.gatewayBaseUrl;
+  final cdn = avatarCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl;
   final lower = source.toLowerCase();
   if (lower.startsWith('data:image/')) {
-    return source;
+    return <String>[source];
   }
   if (lower.startsWith('http://') || lower.startsWith('https://')) {
-    return _resolveAbsoluteAvatarUrl(
+    return _resolveAbsoluteAvatarUrlCandidates(
       source,
-      gatewayBaseUrl: gatewayBaseUrl ?? CloudRuntimeConfig.gatewayBaseUrl,
-      avatarCdnBaseUrl:
-          avatarCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
+      gatewayBaseUrl: gateway,
+      avatarCdnBaseUrl: cdn,
     );
   }
   if (source.startsWith('//')) {
-    return 'https:$source';
+    return <String>['https:$source'];
   }
   if (_looksLikeBareHostUrl(source)) {
-    return 'https://$source';
+    return <String>['https://$source'];
   }
 
-  final base = _relativeAvatarBase(
-    gatewayBaseUrl ?? CloudRuntimeConfig.gatewayBaseUrl,
-    avatarCdnBaseUrl ?? CloudRuntimeConfig.mediaAvatarCdnBaseUrl,
-  );
-  if (base.isEmpty) {
-    return '';
-  }
-
+  final paths = <String>[];
   if (source.startsWith('/')) {
-    return _joinBaseAndPath(base, source);
+    paths.add(source);
+  } else if (_looksLikeMediaObjectKey(source)) {
+    paths.add('/$source');
   }
-  if (_looksLikeMediaObjectKey(source)) {
-    return _joinBaseAndPath(base, '/$source');
+  if (paths.isEmpty) {
+    return const <String>[];
   }
 
-  return '';
+  return _mediaUrlCandidates(
+    paths.first,
+    gatewayBaseUrl: gateway,
+    avatarCdnBaseUrl: cdn,
+  );
 }
 
-String _resolveAbsoluteAvatarUrl(
+List<String> _resolveAbsoluteAvatarUrlCandidates(
   String source, {
   required String gatewayBaseUrl,
   required String avatarCdnBaseUrl,
 }) {
   final uri = Uri.tryParse(source);
   if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-    return source;
+    return <String>[source];
   }
-  if (!_looksLikeMediaObjectKey(uri.path.replaceFirst(RegExp(r'^/+'), ''))) {
-    return source;
+  final objectKey = uri.path.replaceFirst(RegExp(r'^/+'), '');
+  if (!_looksLikeMediaObjectKey(objectKey)) {
+    return <String>[source];
   }
-
-  final base = _relativeAvatarBase(gatewayBaseUrl, avatarCdnBaseUrl);
-  if (base.isEmpty) {
-    return source;
-  }
-
-  // beta/local-gamma 服务端早期配置可能把媒体 URL 写成 127.0.0.1:18088；
-  // 对 iPad 来说这是设备本机，必须改写到 App 当前可访问的媒体/gateway base。
-  final shouldRewriteLoopback = _isLoopbackHost(uri.host);
+  final path = _uriPathWithQuery(uri);
   final shouldRewriteHttpToHttps =
       uri.scheme.toLowerCase() == 'http' &&
-      _normalizeBase(base).startsWith('https://');
-  if (!shouldRewriteLoopback && !shouldRewriteHttpToHttps) {
-    return source;
-  }
+      _normalizeBase(avatarCdnBaseUrl).startsWith('https://');
 
-  return _joinBaseAndPath(base, _uriPathWithQuery(uri));
-}
-
-String _relativeAvatarBase(String gatewayBaseUrl, String avatarCdnBaseUrl) {
-  final gateway = _normalizeBase(gatewayBaseUrl);
-  final cdn = _normalizeBase(avatarCdnBaseUrl);
-  if (cdn.isNotEmpty && !_isLoopbackBase(cdn)) {
-    return cdn;
+  final candidates = _mediaUrlCandidates(
+    path,
+    gatewayBaseUrl: gatewayBaseUrl,
+    avatarCdnBaseUrl: avatarCdnBaseUrl,
+  );
+  if (_isLoopbackHost(uri.host) || shouldRewriteHttpToHttps) {
+    return candidates.isEmpty ? <String>[source] : candidates;
   }
-  if (gateway.isNotEmpty) {
-    return gateway;
-  }
-  return cdn;
+  return _uniqueNonEmpty(<String>[source, ...candidates]);
 }
 
 String _normalizeBase(String raw) {
@@ -113,6 +113,32 @@ String _joinBaseAndPath(String base, String path) {
   return '$cleanBase$cleanPath';
 }
 
+List<String> _mediaUrlCandidates(
+  String path, {
+  required String gatewayBaseUrl,
+  required String avatarCdnBaseUrl,
+}) {
+  final cdn = _normalizeBase(avatarCdnBaseUrl);
+  final gateway = _normalizeBase(gatewayBaseUrl);
+  return _uniqueNonEmpty(<String>[
+    if (cdn.isNotEmpty) _joinBaseAndPath(cdn, path),
+    if (gateway.isNotEmpty) _joinBaseAndPath(gateway, path),
+  ]);
+}
+
+List<String> _uniqueNonEmpty(Iterable<String> values) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final value in values) {
+    final normalized = value.trim();
+    if (normalized.isEmpty || !seen.add(normalized)) {
+      continue;
+    }
+    result.add(normalized);
+  }
+  return List<String>.unmodifiable(result);
+}
+
 bool _looksLikeMediaObjectKey(String source) {
   final lower = source.toLowerCase();
   return lower.startsWith('media/avatar/') ||
@@ -126,12 +152,6 @@ bool _looksLikeBareHostUrl(String source) {
   }
   final firstSegment = source.split('/').first;
   return firstSegment.contains('.') && !firstSegment.startsWith('.');
-}
-
-bool _isLoopbackBase(String base) {
-  final uri = Uri.tryParse(base);
-  final host = uri?.host.toLowerCase() ?? '';
-  return _isLoopbackHost(host);
 }
 
 bool _isLoopbackHost(String host) {

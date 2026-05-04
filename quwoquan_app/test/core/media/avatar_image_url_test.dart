@@ -25,14 +25,36 @@ void main() {
       );
     });
 
-    test('falls back to gateway for local media paths', () {
+    test('uses explicit avatar CDN for local media paths', () {
       expect(
         resolveAvatarImageUrl(
           'media/avatar/default/group/v1/default.png',
           gatewayBaseUrl: 'http://127.0.0.1:18080/',
           avatarCdnBaseUrl: 'http://127.0.0.1:18088/',
         ),
-        'http://127.0.0.1:18080/media/avatar/default/group/v1/default.png',
+        'http://127.0.0.1:18088/media/avatar/default/group/v1/default.png',
+      );
+    });
+
+    test('uses explicit beta avatar CDN when both bases are loopback', () {
+      expect(
+        resolveAvatarImageUrl(
+          '/media/avatar/beta-avatar.png',
+          gatewayBaseUrl: 'http://127.0.0.1:18080/',
+          avatarCdnBaseUrl: 'http://127.0.0.1:18088/',
+        ),
+        'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
+      );
+      expect(
+        resolveAvatarImageUrlCandidates(
+          '/media/avatar/beta-avatar.png',
+          gatewayBaseUrl: 'http://127.0.0.1:18080/',
+          avatarCdnBaseUrl: 'http://127.0.0.1:18088/',
+        ),
+        <String>[
+          'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
+          'http://127.0.0.1:18080/media/avatar/beta-avatar.png',
+        ],
       );
     });
 
@@ -60,6 +82,31 @@ void main() {
         'https://beta-gateway.example.com/media/avatar/conversation/conv_1/v3/hash.png?v=3',
       );
     });
+
+    test(
+      'keeps beta simulator media port when avatar CDN matches loopback',
+      () {
+        expect(
+          resolveAvatarImageUrl(
+            'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
+            gatewayBaseUrl: 'http://127.0.0.1:18080',
+            avatarCdnBaseUrl: 'http://127.0.0.1:18088',
+          ),
+          'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
+        );
+        expect(
+          resolveAvatarImageUrlCandidates(
+            'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
+            gatewayBaseUrl: 'http://127.0.0.1:18080',
+            avatarCdnBaseUrl: 'http://127.0.0.1:18088',
+          ),
+          <String>[
+            'http://127.0.0.1:18088/media/avatar/beta-avatar.png',
+            'http://127.0.0.1:18080/media/avatar/beta-avatar.png',
+          ],
+        );
+      },
+    );
 
     test('rewrites http media URLs when configured avatar base is https', () {
       expect(

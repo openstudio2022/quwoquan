@@ -573,6 +573,8 @@ class UITextConstants {
       '已完成处理，耗时 %s 秒';
   static const String assistantProcessCompletedSummaryFullTemplate =
       '已完成处理，处理 %s 篇文档，耗时 %s 秒';
+  static const String assistantProcessFinalAnswerNarrative =
+      '已结合检索与核对结果生成最终回答。';
   static const String assistantProcessStageUnderstand = '理解问题';
   static const String assistantProcessStageSearch = '检索设计';
   static const String assistantProcessStageRetrievalDesign = '检索设计';

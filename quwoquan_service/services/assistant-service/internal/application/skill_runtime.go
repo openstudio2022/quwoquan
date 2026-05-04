@@ -62,6 +62,10 @@ func (r ModelDrivenSkillRuntime) SelectSkill(ctx context.Context, turn assistant
 	if IsP0ProactiveSkill(turn.SkillID) {
 		return DefaultSkillRuntime{}.SelectSkill(ctx, turn)
 	}
+	if manifest, ok := manifestByExplicitIDOrHint(catalog, turn); ok {
+		log.Printf("assistant skill selector manifest_selected turnId=%s skillId=%s", turn.TurnID, manifest.SkillID)
+		return selectionFromManifest(manifest), nil
+	}
 	model := r.Model
 	if model != nil && strings.TrimSpace(turn.Input.Text) != "" {
 		resp, err := model.Complete(ctx, ModelRequest{
@@ -92,6 +96,46 @@ func (r ModelDrivenSkillRuntime) SelectSkill(ctx context.Context, turn assistant
 		log.Printf("assistant skill selector degraded_fallback turnId=%s skillId=%s", turn.TurnID, selection.SkillID)
 	}
 	return selection, err
+}
+
+func manifestByExplicitIDOrHint(catalog []skillpkg.Manifest, turn assistant.AssistantTurn) (skillpkg.Manifest, bool) {
+	if len(catalog) == 0 {
+		return skillpkg.Manifest{}, false
+	}
+	if skillID := strings.TrimSpace(turn.SkillID); skillID != "" {
+		for _, manifest := range catalog {
+			if manifest.SkillID == skillID {
+				return manifest, true
+			}
+		}
+	}
+	input := strings.ToLower(strings.TrimSpace(turn.Input.Text))
+	if input == "" {
+		return skillpkg.Manifest{}, false
+	}
+	best := skillpkg.Manifest{}
+	bestScore := 0
+	bestSpecificity := 0
+	for _, manifest := range catalog {
+		score := 0
+		specificity := 0
+		for _, hint := range manifest.RoutingHints {
+			normalizedHint := strings.ToLower(strings.TrimSpace(hint))
+			if normalizedHint != "" && strings.Contains(input, normalizedHint) {
+				score++
+				specificity += len([]rune(normalizedHint))
+			}
+		}
+		if score > bestScore || (score == bestScore && specificity > bestSpecificity) {
+			best = manifest
+			bestScore = score
+			bestSpecificity = specificity
+		}
+	}
+	if bestScore == 0 {
+		return skillpkg.Manifest{}, false
+	}
+	return best, true
 }
 
 func p0SkillToolPolicy(skillID string) []string {

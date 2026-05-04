@@ -27,7 +27,7 @@ void main() {
       final provider = image.image as NetworkImage;
       expect(
         provider.url,
-        'http://127.0.0.1:18080/media/avatar/default/group/v1/default.png',
+        'http://127.0.0.1:18088/media/avatar/default/group/v1/default.png',
       );
       expect(find.text('契'), findsNothing);
     });

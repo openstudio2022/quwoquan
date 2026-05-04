@@ -17,7 +17,7 @@
           "conversationId": "fixture_conv_direct",
           "type": "direct",
           "title": "契约好友",
-          "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+          "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
           "creatorId": "fixture_user_current",
           "maxSeq": 2,
           "memberCount": 2,
@@ -28,7 +28,9 @@
           "messageCount": 2,
           "status": "active",
           "createdAt": "2026-04-29T08:00:00Z",
-          "updatedAt": "2026-04-29T08:00:00Z"
+          "updatedAt": "2026-04-29T08:00:00Z",
+          "targetUserId": "fixture_user_friend",
+          "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png"
         },
         {
           "_id": "fixture_conv_group",
@@ -36,7 +38,7 @@
           "conversationId": "fixture_conv_group",
           "type": "group",
           "title": "契约周末群",
-          "avatarUrl": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=160",
+          "avatarUrl": "media/avatar/group/fixture_conv_group/v1/composite.png",
           "creatorId": "fixture_user_current",
           "maxSeq": 5,
           "memberCount": 3,
@@ -47,7 +49,14 @@
           "messageCount": 5,
           "status": "active",
           "createdAt": "2026-04-29T09:00:00Z",
-          "updatedAt": "2026-04-29T09:00:00Z"
+          "updatedAt": "2026-04-29T09:00:00Z",
+          "avatarObjectKey": "media/avatar/group/fixture_conv_group/v1/composite.png",
+          "groupAvatarVersion": 1,
+          "groupAvatarSourceUserIds": [
+            "fixture_user_current",
+            "fixture_user_weekend_1",
+            "fixture_user_weekend_2"
+          ]
         },
         {
           "_id": "fixture_conv_photo_group",
@@ -55,7 +64,7 @@
           "conversationId": "fixture_conv_photo_group",
           "type": "group",
           "title": "契约摄影交流群",
-          "avatarUrl": "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=160",
+          "avatarUrl": "media/avatar/group/fixture_conv_photo_group/v1/composite.png",
           "creatorId": "fixture_user_photo",
           "maxSeq": 8,
           "memberCount": 5,
@@ -67,7 +76,14 @@
           "status": "active",
           "createdAt": "2026-04-29T09:20:00Z",
           "updatedAt": "2026-04-29T09:30:00Z",
-          "circleId": "fixture_circle_photo"
+          "circleId": "fixture_circle_photo",
+          "avatarObjectKey": "media/avatar/group/fixture_conv_photo_group/v1/composite.png",
+          "groupAvatarVersion": 1,
+          "groupAvatarSourceUserIds": [
+            "fixture_user_current",
+            "fixture_user_photo",
+            "fixture_user_friend"
+          ]
         },
         {
           "_id": "fixture_conv_travel_group",
@@ -75,7 +91,7 @@
           "conversationId": "fixture_conv_travel_group",
           "type": "group",
           "title": "契约旅行搭子群",
-          "avatarUrl": "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=160",
+          "avatarUrl": "media/avatar/group/fixture_conv_travel_group/v1/composite.png",
           "creatorId": "fixture_user_travel",
           "maxSeq": 6,
           "memberCount": 4,
@@ -87,7 +103,15 @@
           "status": "active",
           "createdAt": "2026-04-29T09:35:00Z",
           "updatedAt": "2026-04-29T09:45:00Z",
-          "circleId": "fixture_circle_travel"
+          "circleId": "fixture_circle_travel",
+          "avatarObjectKey": "media/avatar/group/fixture_conv_travel_group/v1/composite.png",
+          "groupAvatarVersion": 1,
+          "groupAvatarSourceUserIds": [
+            "fixture_user_current",
+            "fixture_user_travel",
+            "fixture_user_weekend_1",
+            "fixture_user_weekend_2"
+          ]
         },
         {
           "_id": "fixture_conv_article_direct",
@@ -95,7 +119,7 @@
           "conversationId": "fixture_conv_article_direct",
           "type": "direct",
           "title": "契约撰稿人",
-          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+          "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
           "creatorId": "fixture_user_current",
           "maxSeq": 3,
           "memberCount": 2,
@@ -106,7 +130,9 @@
           "messageCount": 3,
           "status": "active",
           "createdAt": "2026-04-29T09:40:00Z",
-          "updatedAt": "2026-04-29T09:50:00Z"
+          "updatedAt": "2026-04-29T09:50:00Z",
+          "targetUserId": "fixture_user_article",
+          "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png"
         }
       ],
       "messages": {
@@ -120,7 +146,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 1,
-            "createdAt": "2026-04-29T08:00:00Z"
+            "createdAt": "2026-04-29T08:00:00Z",
+            "senderDisplayNameSnapshot": "契约好友",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_friend/v1/avatar.png"
           },
           {
             "messageId": "fixture_msg_direct_2",
@@ -131,7 +161,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 2,
-            "createdAt": "2026-04-29T08:01:00Z"
+            "createdAt": "2026-04-29T08:01:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png"
           }
         ],
         "fixture_conv_group": [
@@ -144,7 +178,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 5,
-            "createdAt": "2026-04-29T09:00:00Z"
+            "createdAt": "2026-04-29T09:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png"
           },
           {
             "messageId": "fixture_msg_group_2",
@@ -155,7 +193,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 6,
-            "createdAt": "2026-04-29T09:05:00Z"
+            "createdAt": "2026-04-29T09:05:00Z",
+            "senderDisplayNameSnapshot": "契约同伴一",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png"
           },
           {
             "messageId": "fixture_msg_group_3",
@@ -166,7 +208,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 7,
-            "createdAt": "2026-04-29T09:10:00Z"
+            "createdAt": "2026-04-29T09:10:00Z",
+            "senderDisplayNameSnapshot": "契约同伴二",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png"
           }
         ],
         "fixture_conv_photo_group": [
@@ -179,7 +225,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 8,
-            "createdAt": "2026-04-29T09:30:00Z"
+            "createdAt": "2026-04-29T09:30:00Z",
+            "senderDisplayNameSnapshot": "契约摄影师",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_photo/v1/avatar.png"
           },
           {
             "messageId": "fixture_msg_photo_group_2",
@@ -190,7 +240,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 9,
-            "createdAt": "2026-04-29T09:35:00Z"
+            "createdAt": "2026-04-29T09:35:00Z",
+            "senderDisplayNameSnapshot": "契约好友",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_friend/v1/avatar.png"
           }
         ],
         "fixture_conv_travel_group": [
@@ -203,7 +257,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 6,
-            "createdAt": "2026-04-29T09:45:00Z"
+            "createdAt": "2026-04-29T09:45:00Z",
+            "senderDisplayNameSnapshot": "契约旅行家",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_travel/v1/avatar.png"
           }
         ],
         "fixture_conv_article_direct": [
@@ -216,7 +274,11 @@
             "type": "text",
             "messageType": "text",
             "seq": 3,
-            "createdAt": "2026-04-29T09:50:00Z"
+            "createdAt": "2026-04-29T09:50:00Z",
+            "senderDisplayNameSnapshot": "契约撰稿人",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_article/v1/avatar.png"
           }
         ]
       },
@@ -224,123 +286,137 @@
         "fixture_conv_direct": [
           {
             "userId": "fixture_user_current",
-            "displayName": "我",
-            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
             "role": "owner",
             "status": "joined",
-            "isCurrentUser": true
+            "isCurrentUser": true,
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png"
           },
           {
             "userId": "fixture_user_friend",
             "displayName": "契约好友",
-            "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png"
           }
         ],
         "fixture_conv_group": [
           {
             "userId": "fixture_user_current",
-            "displayName": "我",
-            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
             "role": "owner",
             "status": "joined",
-            "isCurrentUser": true
+            "isCurrentUser": true,
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png"
           },
           {
             "userId": "fixture_user_weekend_1",
             "displayName": "契约同伴一",
-            "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png"
           },
           {
             "userId": "fixture_user_weekend_2",
             "displayName": "契约同伴二",
-            "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png"
           }
         ],
         "fixture_conv_photo_group": [
           {
             "userId": "fixture_user_current",
-            "displayName": "我",
-            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": true
+            "isCurrentUser": true,
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png"
           },
           {
             "userId": "fixture_user_photo",
             "displayName": "契约摄影师",
-            "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
             "role": "owner",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png"
           },
           {
             "userId": "fixture_user_friend",
             "displayName": "契约好友",
-            "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png"
           }
         ],
         "fixture_conv_travel_group": [
           {
             "userId": "fixture_user_current",
-            "displayName": "我",
-            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": true
+            "isCurrentUser": true,
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png"
           },
           {
             "userId": "fixture_user_travel",
             "displayName": "契约旅行家",
-            "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
             "role": "owner",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png"
           },
           {
             "userId": "fixture_user_weekend_1",
             "displayName": "契约同伴一",
-            "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png"
           },
           {
             "userId": "fixture_user_weekend_2",
             "displayName": "契约同伴二",
-            "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png"
           }
         ],
         "fixture_conv_article_direct": [
           {
             "userId": "fixture_user_current",
-            "displayName": "我",
-            "avatarUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=160",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
             "role": "owner",
             "status": "joined",
-            "isCurrentUser": true
+            "isCurrentUser": true,
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png"
           },
           {
             "userId": "fixture_user_article",
             "displayName": "契约撰稿人",
-            "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+            "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
             "role": "member",
             "status": "joined",
-            "isCurrentUser": false
+            "isCurrentUser": false,
+            "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png"
           }
         ]
       },
@@ -375,8 +451,13 @@
           "muted": false,
           "pinned": false,
           "announcement": "契约群公告：周末集合时间已确认",
-          "adminUserIds": ["fixture_user_current"],
-          "transferCandidateUserIds": ["fixture_user_weekend_1", "fixture_user_weekend_2"]
+          "adminUserIds": [
+            "fixture_user_current"
+          ],
+          "transferCandidateUserIds": [
+            "fixture_user_weekend_1",
+            "fixture_user_weekend_2"
+          ]
         }
       ]
     },
@@ -386,58 +467,77 @@
         {
           "userId": "fixture_user_friend",
           "displayName": "契约好友",
-          "avatarUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160",
+          "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
           "relationship": "mutual_follow",
           "isFriend": true,
-          "bio": "与当前用户互关的同好"
+          "bio": "与当前用户互关的同好。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png"
         },
         {
           "userId": "fixture_user_weekend_1",
           "displayName": "契约同伴一",
-          "avatarUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
           "relationship": "circle_member",
           "isFriend": true,
-          "bio": "周末群成员"
+          "bio": "周末群成员，也是联系人同好。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png"
         },
         {
           "userId": "fixture_user_weekend_2",
           "displayName": "契约同伴二",
-          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
           "relationship": "circle_member",
           "isFriend": true,
-          "bio": "周末群成员"
+          "bio": "周末群成员，提供路线建议。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png"
         },
         {
           "userId": "fixture_user_photo",
           "displayName": "契约摄影师",
-          "avatarUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?w=160",
+          "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
           "relationship": "mutual_follow",
           "isFriend": true,
-          "bio": "摄影社圈主"
+          "bio": "作者主页契约数据。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png"
         },
         {
           "userId": "fixture_user_travel",
           "displayName": "契约旅行家",
-          "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160",
+          "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
           "relationship": "mutual_follow",
           "isFriend": true,
-          "bio": "旅行搭子"
+          "bio": "旅行、天气和行程记录作者。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png"
         },
         {
           "userId": "fixture_user_article",
           "displayName": "契约撰稿人",
-          "avatarUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=160",
+          "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
           "relationship": "mutual_follow",
           "isFriend": true,
-          "bio": "文章作者"
+          "bio": "文章、攻略与长图文作者。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png"
         }
       ],
-      "circleIds": ["fixture_circle_photo", "fixture_circle_travel", "fixture_circle_city", "fixture_circle_life"],
-      "groupConversationIds": ["fixture_conv_group", "fixture_conv_photo_group", "fixture_conv_travel_group"]
+      "circleIds": [
+        "fixture_circle_photo",
+        "fixture_circle_travel",
+        "fixture_circle_city",
+        "fixture_circle_life"
+      ],
+      "groupConversationIds": [
+        "fixture_conv_group",
+        "fixture_conv_photo_group",
+        "fixture_conv_travel_group"
+      ]
     },
     "chat_group_flow_core": {
       "description": "建群、加人、管理页所需成员候选。",
-      "candidateUserIds": ["fixture_user_friend", "fixture_user_weekend_1", "fixture_user_weekend_2"],
+      "candidateUserIds": [
+        "fixture_user_friend",
+        "fixture_user_weekend_1",
+        "fixture_user_weekend_2"
+      ],
       "defaultGroupTitle": "契约新建群"
     }
   },
@@ -447,20 +547,52 @@
       "title": "聊天 inbox 与详情契约种子",
       "type": "chat_inbox_detail",
       "domainId": "chat",
-      "seedRefs": ["chat_core", "chat_settings_core", "chat_contacts_core", "chat_group_flow_core"],
+      "seedRefs": [
+        "chat_core",
+        "chat_settings_core",
+        "chat_contacts_core",
+        "chat_group_flow_core"
+      ],
       "uiExpectations": {
-        "conversationIds": ["fixture_conv_direct", "fixture_conv_group"],
-        "textFragments": ["契约好友", "契约周末群", "契约消息已送达"]
+        "conversationIds": [
+          "fixture_conv_direct",
+          "fixture_conv_group"
+        ],
+        "textFragments": [
+          "契约好友",
+          "契约周末群",
+          "契约消息已送达"
+        ]
       },
       "remoteExpectations": {
-        "conversationIds": ["fixture_conv_direct", "fixture_conv_group"],
-        "messageIds": ["fixture_msg_direct_1", "fixture_msg_group_1"],
-        "memberUserIds": ["fixture_user_current", "fixture_user_friend"]
+        "conversationIds": [
+          "fixture_conv_direct",
+          "fixture_conv_group"
+        ],
+        "messageIds": [
+          "fixture_msg_direct_1",
+          "fixture_msg_group_1"
+        ],
+        "memberUserIds": [
+          "fixture_user_current",
+          "fixture_user_friend"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     }
   ]

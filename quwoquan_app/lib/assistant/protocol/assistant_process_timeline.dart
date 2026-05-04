@@ -362,6 +362,7 @@ const List<ProcessStepId> assistantVisibleProcessSteps = <ProcessStepId>[
   ProcessStepId.understanding,
   ProcessStepId.retrievalDesign,
   ProcessStepId.retrievalProcessing,
+  ProcessStepId.answerOrganization,
 ];
 
 JourneyStageId assistantJourneyStageForProcessStep(ProcessStepId stepId) {
@@ -499,8 +500,16 @@ List<ProcessTimelineFrame> buildProcessTimelineFromSnapshots({
     );
   }
 
-  // answerOrganization no longer appears as a visible timeline frame;
-  // readinessSummary content is merged into processingSummary.
+  if (answerProcessing.readinessSummary.trim().isNotEmpty) {
+    frames.add(
+      buildProcessTimelineFrame(
+        stepId: ProcessStepId.answerOrganization,
+        headline: answerProcessing.readinessSummary.trim(),
+        answerProcessing: answerProcessing,
+      ),
+    );
+  }
+
   final snapshotTimeline = normalizeProcessTimeline(frames);
   if (!hasStructuredProcessTimeline(processTimeline)) {
     return snapshotTimeline;
@@ -594,6 +603,7 @@ List<ProcessTimelineFrame> buildVisibleProcessTimeline(
     ?byStep[ProcessStepId.understanding],
     ?byStep[ProcessStepId.retrievalDesign],
     ?byStep[ProcessStepId.retrievalProcessing],
+    ?byStep[ProcessStepId.answerOrganization],
   ];
   return normalizeProcessTimeline(
     visible

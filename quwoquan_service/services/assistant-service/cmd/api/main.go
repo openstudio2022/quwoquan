@@ -475,6 +475,7 @@ func realSearchHandler(cfg providerCfg) tool.Handler {
 	provider := strings.TrimSpace(cfg.Provider)
 	client := searchHTTPClient(cfg.TimeoutMs)
 	return func(ctx context.Context, req tool.Request) (tool.Result, error) {
+		startedAt := time.Now()
 		query := inputString(req.Input, "query")
 		location := inputString(req.Input, "location")
 		locationSearchName := inputString(req.Input, "locationSearchName")
@@ -484,7 +485,7 @@ func realSearchHandler(cfg providerCfg) tool.Handler {
 		case "duckduckgo_html":
 			if shouldTryWeatherLookup(skillID, query, location, locationSearchName, req.Input) {
 				if summary, refs, weatherProvider, ok := openMeteoWeatherSearch(ctx, client, query, location, locationSearchName); ok {
-					log.Printf("assistant weather search completed provider=%s tool=%s query=%q refs=%d summaryLen=%d", weatherProvider, req.ToolName, query, len(refs), len([]rune(summary)))
+					log.Printf("assistant weather search completed provider=%s tool=%s query=%q refs=%d summaryLen=%d durationMs=%d", weatherProvider, req.ToolName, query, len(refs), len([]rune(summary)), time.Since(startedAt).Milliseconds())
 					return searchToolResult(req.ToolName, weatherProvider, summary, refs, true), nil
 				}
 				summary, refs := deterministicSearchFallbackResult(query, "weather lookup failed")
@@ -493,7 +494,7 @@ func realSearchHandler(cfg providerCfg) tool.Handler {
 			}
 			if shouldTryFinanceLookup(skillID, req.Input) {
 				if summary, refs, ok := yahooFinanceSearch(ctx, client, req.Input); ok {
-					log.Printf("assistant finance search completed provider=yahoo_finance tool=%s query=%q refs=%d summaryLen=%d", req.ToolName, query, len(refs), len([]rune(summary)))
+					log.Printf("assistant finance search completed provider=yahoo_finance tool=%s query=%q refs=%d summaryLen=%d durationMs=%d", req.ToolName, query, len(refs), len([]rune(summary)), time.Since(startedAt).Milliseconds())
 					return searchToolResult(req.ToolName, "yahoo_finance", summary, refs, true), nil
 				}
 			}
@@ -508,7 +509,7 @@ func realSearchHandler(cfg providerCfg) tool.Handler {
 					reliable = false
 				}
 			}
-			log.Printf("assistant search completed provider=%s tool=%s query=%q refs=%d summaryLen=%d", provider, req.ToolName, query, len(refs), len([]rune(summary)))
+			log.Printf("assistant search completed provider=%s tool=%s query=%q refs=%d summaryLen=%d durationMs=%d", provider, req.ToolName, query, len(refs), len([]rune(summary)), time.Since(startedAt).Milliseconds())
 			return searchToolResult(req.ToolName, provider, summary, refs, reliable), nil
 		default:
 			return tool.Result{}, fmt.Errorf("unsupported search_provider.provider %q", provider)
@@ -1156,6 +1157,7 @@ func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, c
 		current.Time,
 		tz,
 	)
+	summary = withLocalWeatherAuthoritySummary(candidate, placeName, "Open-Meteo", summary)
 	refs := []map[string]any{
 		{
 			"title":   "Open-Meteo Forecast API - " + placeName,
@@ -1176,6 +1178,7 @@ func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, c
 			"snippet": "Open-Meteo 天气预报接口说明，包含 current 与 daily 预报字段定义。",
 		},
 	}
+	refs = withLocalWeatherAuthorityReferences(candidate, placeName, refs)
 	return summary, refs, "open_meteo", true
 }
 
@@ -1233,6 +1236,7 @@ func metNoWeatherSearch(ctx context.Context, client *http.Client, name, admin st
 		precip,
 		current.Time,
 	)
+	summary = withLocalWeatherAuthoritySummary(name+" "+admin, placeName, "MET Norway", summary)
 	refs := []map[string]any{
 		{
 			"title":   "MET Norway Locationforecast - " + placeName,
@@ -1253,7 +1257,132 @@ func metNoWeatherSearch(ctx context.Context, client *http.Client, name, admin st
 			"snippet": "MET Norway / Yr 开放天气 API 使用条款与数据来源说明。",
 		},
 	}
+	refs = withLocalWeatherAuthorityReferences(name+" "+admin, placeName, refs)
 	return summary, refs, "met_no", true
+}
+
+func withLocalWeatherAuthoritySummary(query, placeName, structuredProvider, summary string) string {
+	if len(weatherAuthorityReferences(query, placeName)) == 0 {
+		return summary
+	}
+	provider := strings.TrimSpace(structuredProvider)
+	if provider == "" {
+		provider = "结构化天气 API"
+	}
+	return "天气证据优先按国家级气象服务入口与可解析的省/自治区/直辖市气象局排序；" +
+		provider + " 仅作为实时温度、湿度、风力、降水等结构化数据补充。 " + summary
+}
+
+func withLocalWeatherAuthorityReferences(query, placeName string, refs []map[string]any) []map[string]any {
+	authorityRefs := weatherAuthorityReferences(query, placeName)
+	if len(authorityRefs) == 0 {
+		return refs
+	}
+	merged := make([]map[string]any, 0, len(authorityRefs)+len(refs))
+	seen := map[string]bool{}
+	appendRef := func(ref map[string]any) {
+		rawURL, _ := ref["url"].(string)
+		key := strings.TrimSpace(rawURL)
+		if key != "" {
+			if seen[key] {
+				return
+			}
+			seen[key] = true
+		}
+		merged = append(merged, ref)
+	}
+	for _, ref := range authorityRefs {
+		appendRef(ref)
+	}
+	for _, ref := range refs {
+		appendRef(ref)
+	}
+	for i := range merged {
+		merged[i]["rank"] = i + 1
+	}
+	return merged
+}
+
+func weatherAuthorityReferences(query, placeName string) []map[string]any {
+	refs := []map[string]any{
+		{
+			"title":   "中国天气网",
+			"url":     "https://www.weather.com.cn/",
+			"source":  "weather_com_cn",
+			"snippet": "中国天气网为国家级天气服务入口，可按城市查询实况、预报、生活指数等信息。",
+		},
+		{
+			"title":   "中央气象台",
+			"url":     "https://www.nmc.cn/",
+			"source":  "national_meteorological_center",
+			"snippet": "中央气象台提供全国天气预报、气象预警、降水、台风和雷达等国家级气象服务。",
+		},
+		{
+			"title":   "中国气象局",
+			"url":     "https://www.cma.gov.cn/",
+			"source":  "china_meteorological_administration",
+			"snippet": "中国气象局为国家气象主管机构入口，可用于核验权威气象服务和区域气象机构信息。",
+		},
+	}
+	if ref, ok := regionalWeatherAuthorityReference(query + " " + placeName); ok {
+		refs = append(refs, ref)
+	}
+	return refs
+}
+
+func regionalWeatherAuthorityReference(raw string) (map[string]any, bool) {
+	normalized := strings.ToLower(raw)
+	regionRefs := []struct {
+		keywords []string
+		title    string
+		url      string
+		source   string
+	}{
+		{[]string{"北京", "beijing"}, "北京市气象局", "http://bj.cma.gov.cn/", "beijing_meteorological_bureau"},
+		{[]string{"上海", "shanghai"}, "上海市气象局", "http://sh.cma.gov.cn/", "shanghai_meteorological_bureau"},
+		{[]string{"天津", "tianjin"}, "天津市气象局", "http://tj.cma.gov.cn/", "tianjin_meteorological_bureau"},
+		{[]string{"重庆", "chongqing"}, "重庆市气象局", "http://cq.cma.gov.cn/", "chongqing_meteorological_bureau"},
+		{[]string{"河北", "hebei"}, "河北省气象局", "http://he.cma.gov.cn/", "hebei_meteorological_bureau"},
+		{[]string{"山西", "shanxi"}, "山西省气象局", "http://sx.cma.gov.cn/", "shanxi_meteorological_bureau"},
+		{[]string{"内蒙古", "inner mongolia"}, "内蒙古自治区气象局", "http://nm.cma.gov.cn/", "inner_mongolia_meteorological_bureau"},
+		{[]string{"辽宁", "liaoning"}, "辽宁省气象局", "http://ln.cma.gov.cn/", "liaoning_meteorological_bureau"},
+		{[]string{"吉林", "jilin"}, "吉林省气象局", "http://jl.cma.gov.cn/", "jilin_meteorological_bureau"},
+		{[]string{"黑龙江", "heilongjiang"}, "黑龙江省气象局", "http://hl.cma.gov.cn/", "heilongjiang_meteorological_bureau"},
+		{[]string{"江苏", "jiangsu"}, "江苏省气象局", "http://js.cma.gov.cn/", "jiangsu_meteorological_bureau"},
+		{[]string{"浙江", "zhejiang"}, "浙江省气象局", "http://zj.cma.gov.cn/", "zhejiang_meteorological_bureau"},
+		{[]string{"安徽", "anhui"}, "安徽省气象局", "http://ah.cma.gov.cn/", "anhui_meteorological_bureau"},
+		{[]string{"福建", "fujian"}, "福建省气象局", "http://fj.cma.gov.cn/", "fujian_meteorological_bureau"},
+		{[]string{"江西", "jiangxi"}, "江西省气象局", "http://jx.cma.gov.cn/", "jiangxi_meteorological_bureau"},
+		{[]string{"山东", "shandong"}, "山东省气象局", "http://sd.cma.gov.cn/", "shandong_meteorological_bureau"},
+		{[]string{"河南", "henan"}, "河南省气象局", "http://ha.cma.gov.cn/", "henan_meteorological_bureau"},
+		{[]string{"湖北", "hubei"}, "湖北省气象局", "http://hb.cma.gov.cn/", "hubei_meteorological_bureau"},
+		{[]string{"湖南", "hunan"}, "湖南省气象局", "http://hn.cma.gov.cn/", "hunan_meteorological_bureau"},
+		{[]string{"广东", "guangdong"}, "广东省气象局", "http://gd.cma.gov.cn/", "guangdong_meteorological_bureau"},
+		{[]string{"广西", "guangxi"}, "广西壮族自治区气象局", "http://gx.cma.gov.cn/", "guangxi_meteorological_bureau"},
+		{[]string{"海南", "hainan"}, "海南省气象局", "http://hi.cma.gov.cn/", "hainan_meteorological_bureau"},
+		{[]string{"四川", "sichuan"}, "四川省气象局", "http://sc.cma.gov.cn/", "sichuan_meteorological_bureau"},
+		{[]string{"贵州", "guizhou"}, "贵州省气象局", "http://gz.cma.gov.cn/", "guizhou_meteorological_bureau"},
+		{[]string{"云南", "yunnan"}, "云南省气象局", "http://yn.cma.gov.cn/", "yunnan_meteorological_bureau"},
+		{[]string{"西藏", "tibet", "xizang"}, "西藏自治区气象局", "http://xz.cma.gov.cn/", "xizang_meteorological_bureau"},
+		{[]string{"陕西", "shaanxi"}, "陕西省气象局", "http://sn.cma.gov.cn/", "shaanxi_meteorological_bureau"},
+		{[]string{"甘肃", "gansu"}, "甘肃省气象局", "http://gs.cma.gov.cn/", "gansu_meteorological_bureau"},
+		{[]string{"青海", "qinghai"}, "青海省气象局", "http://qh.cma.gov.cn/", "qinghai_meteorological_bureau"},
+		{[]string{"宁夏", "ningxia"}, "宁夏回族自治区气象局", "http://nx.cma.gov.cn/", "ningxia_meteorological_bureau"},
+		{[]string{"新疆", "xinjiang"}, "新疆维吾尔自治区气象局", "http://xj.cma.gov.cn/", "xinjiang_meteorological_bureau"},
+	}
+	for _, ref := range regionRefs {
+		for _, keyword := range ref.keywords {
+			if strings.Contains(normalized, strings.ToLower(keyword)) {
+				return map[string]any{
+					"title":   ref.title,
+					"url":     ref.url,
+					"source":  ref.source,
+					"snippet": ref.title + "为区域气象服务入口，可用于核验该省/自治区/直辖市范围内的天气预报、预警和实况信息。",
+				}, true
+			}
+		}
+	}
+	return nil, false
 }
 
 func weatherCodeText(code int) string {
@@ -1299,6 +1428,7 @@ func assistantClientModelTrace(req application.ModelRequest, userPrompt, respons
 }
 
 func (p openAICompatibleModelProvider) Complete(ctx context.Context, req application.ModelRequest) (application.ModelResponse, error) {
+	startedAt := time.Now()
 	prompt := req.Prompt
 	contextPrompt := application.FormatModelContextForPrompt(req.ContextTurns)
 	switch req.Stage {
@@ -1358,15 +1488,18 @@ func (p openAICompatibleModelProvider) Complete(ctx context.Context, req applica
 	httpReq.Header.Set("Content-Type", "application/json")
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
+		log.Printf("assistant model failed provider=openai_compatible stage=%s turnId=%s durationMs=%d err=%v", req.Stage, req.TurnID, time.Since(startedAt).Milliseconds(), err)
 		return application.ModelResponse{}, err
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		emitAssistantModelErrorLog(req, p.model, resp.StatusCode, string(respBody))
+		log.Printf("assistant model completed provider=openai_compatible stage=%s turnId=%s status=%d durationMs=%d", req.Stage, req.TurnID, resp.StatusCode, time.Since(startedAt).Milliseconds())
 		return application.ModelResponse{}, fmt.Errorf("model provider status=%d body=%s", resp.StatusCode, string(respBody))
 	}
-	log.Printf("assistant model response provider=openai_compatible stage=%s turnId=%s status=%d bodyLen=%d", req.Stage, req.TurnID, resp.StatusCode, len(respBody))
+	modelDurationMs := time.Since(startedAt).Milliseconds()
+	log.Printf("assistant model response provider=openai_compatible stage=%s turnId=%s status=%d bodyLen=%d durationMs=%d", req.Stage, req.TurnID, resp.StatusCode, len(respBody), modelDurationMs)
 	var decoded struct {
 		Choices []struct {
 			Message struct {
@@ -1413,6 +1546,7 @@ func (p openAICompatibleModelProvider) Complete(ctx context.Context, req applica
 	}
 	decoded.Usage["provider"] = "openai_compatible"
 	decoded.Usage["model"] = p.model
+	decoded.Usage["latencyMs"] = modelDurationMs
 	emitAssistantModelResponseLog(req, p.model, resp.StatusCode, rawText, decoded.Choices[0].FinishReason, decoded.Usage, delta)
 	trace := assistantClientModelTrace(req, prompt, outText, delta, decoded.Choices[0].FinishReason, decoded.Usage)
 	return application.ModelResponse{
@@ -1537,9 +1671,12 @@ func providerTimeout(ms int) time.Duration {
 }
 
 func searchProviderTimeout(ms int) time.Duration {
-	timeout := providerTimeout(ms)
-	if timeout < 45*time.Second {
-		return 45 * time.Second
+	if ms <= 0 {
+		return 8 * time.Second
+	}
+	timeout := time.Duration(ms) * time.Millisecond
+	if timeout > 10*time.Second {
+		return 10 * time.Second
 	}
 	return timeout
 }

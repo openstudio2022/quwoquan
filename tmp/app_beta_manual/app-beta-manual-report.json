@@ -37,8 +37,14 @@
     "/v1/rtc/calls"
   ],
   "checkedMediaUrls": [
-    "http://127.0.0.1:18088/media/avatar/beta-avatar.png",
-    "http://127.0.0.1:18088/media/image/beta-cover.png",
+    "http://127.0.0.1:18088/media/avatar/user/fixture_user_current/v1/avatar.png",
+    "http://127.0.0.1:18088/media/avatar/user/fixture_user_friend/v1/avatar.png",
+    "http://127.0.0.1:18088/media/avatar/group/fixture_conv_group/v1/composite.png",
+    "http://127.0.0.1:18080/media/avatar/user/fixture_user_current/v1/avatar.png",
+    "http://127.0.0.1:18080/media/avatar/user/fixture_user_friend/v1/avatar.png",
+    "http://127.0.0.1:18080/media/avatar/group/fixture_conv_group/v1/composite.png",
+    "http://127.0.0.1:18088/media/image/post/fixture_photo_001/v1/cover.png",
+    "http://127.0.0.1:18080/media/image/post/fixture_photo_001/v1/cover.png",
     "http://127.0.0.1:18088/media/video/beta-sample.mp4"
   ],
   "seedRefs": {

@@ -28,9 +28,15 @@ void main() {
       );
 
       expect(friendMessage.senderName, '契约好友');
-      expect(friendMessage.senderAvatar, startsWith('https://'));
-      expect(selfMessage.senderName, '我');
-      expect(selfMessage.senderAvatar, startsWith('https://'));
+      expect(
+        friendMessage.senderAvatar,
+        contains('/media/avatar/user/fixture_user_friend/v1/avatar.png'),
+      );
+      expect(selfMessage.senderName, '契约当前用户');
+      expect(
+        selfMessage.senderAvatar,
+        contains('/media/avatar/user/fixture_user_current/v1/avatar.png'),
+      );
     });
   });
 }

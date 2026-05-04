@@ -276,6 +276,61 @@ void main() {
       },
     );
 
+    test('persists answer organization narrative after final answer', () async {
+      final container = _containerWith(
+        assistantRepository: _FakeAssistantRepository(
+          events: <AssistantStreamEventWire>[
+            _event(seq: 1, eventType: 'turn_started'),
+            _event(
+              seq: 2,
+              eventType: 'observation_assessed',
+              payload: const <String, dynamic>{
+                'retrievalProcessing': <String, dynamic>{
+                  'searchedDocumentCount': 3,
+                  'processedDocumentCount': 3,
+                  'acceptedDocumentCount': 2,
+                  'processingSummary': '已核对深圳天气权威来源。',
+                },
+              },
+            ),
+            _event(
+              seq: 3,
+              eventType: 'assistant.answer.delta',
+              payload: const <String, dynamic>{'text': '深圳今天适合'},
+            ),
+            _event(
+              seq: 4,
+              eventType: 'assistant.answer.final',
+              payload: const <String, dynamic>{'text': '深圳今天适合短时户外活动，请留意午后阵雨。'},
+            ),
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+
+      await container
+          .read(personalAssistantStreamControllerProvider.notifier)
+          .send('Shen zhen tian qi');
+
+      final state = container.read(personalAssistantStreamControllerProvider);
+      expect(state.answer, contains('深圳今天适合短时户外活动'));
+      expect(state.processSummary.finalAnswerReady, isTrue);
+      expect(state.processSummary.finalAnswerSummary, '已结合检索与核对结果生成最终回答。');
+
+      final assistantRow =
+          state.transcript.last as AssistantAnswerTranscriptRow;
+      final processTimeline =
+          assistantRow.runArtifacts['processTimeline'] as List<dynamic>;
+      expect(
+        processTimeline.cast<Map>().any(
+          (frame) =>
+              frame['stepId'] == 'answer_organization' &&
+              frame['headline'] == '已结合检索与核对结果生成最终回答。',
+        ),
+        isTrue,
+      );
+    });
+
     test(
       'projects structured search queries as retrieval design lines',
       () async {

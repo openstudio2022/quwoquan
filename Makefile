@@ -19,6 +19,8 @@
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-ui-app-data-source-mode-ratchet
 .PHONY: verify-app-seed-manifest
+.PHONY: verify-avatar-user-pool
+.PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-business-env-data-inventory
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
@@ -61,6 +63,12 @@ verify-app-ui-app-data-source-mode-ratchet:
 
 verify-app-seed-manifest:
 	@python3 scripts/verify_app_seed_manifests.py
+
+verify-avatar-user-pool:
+	@python3 scripts/verify_avatar_user_pool_consistency.py
+
+probe-avatar-user-pool-gateway:
+	@python3 scripts/probe_avatar_user_pool_gateway.py
 
 verify-business-env-data-inventory:
 	@python3 scripts/verify_business_env_data_inventory.py
@@ -167,6 +175,8 @@ gate:
 	@bash scripts/verify_deployment_domain_mapping.sh
 	@bash scripts/verify_topology_contract_regression.sh
 	@$(MAKE) verify-reliable-task-topology
+	@$(MAKE) verify-avatar-user-pool
+	@$(MAKE) probe-avatar-user-pool-gateway
 	@bash scripts/report_deployment_mapping_impact.sh
 	@bash scripts/gate_repo.sh
 
