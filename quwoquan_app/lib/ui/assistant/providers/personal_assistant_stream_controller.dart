@@ -545,6 +545,14 @@ PersonalAssistantProcessSummary _projectProcessSummary(
     }
   }
 
+  if (event.eventType == 'search_query_generated' ||
+      event.eventType == 'assistant.search_query.generated') {
+    retrievalDesignNarrative = _firstNonEmpty(<String>[
+      _retrievalDesignFromSearchPlans(event),
+      retrievalDesignNarrative,
+    ]);
+  }
+
   switch (event.eventType) {
     case 'tool_use_requested':
     case 'tool_result_received':
@@ -592,6 +600,10 @@ String _processLineForEvent(AssistantStreamEventWire event) {
   );
   if (retrievalDesign.isNotEmpty) {
     return retrievalDesign;
+  }
+  if (event.eventType == 'search_query_generated' ||
+      event.eventType == 'assistant.search_query.generated') {
+    return _retrievalDesignFromSearchPlans(event);
   }
   final processingSummary = payload.nestedString(
     'retrievalProcessing',
@@ -765,6 +777,33 @@ int _firstPositiveInt(List<int> values) {
     }
   }
   return 0;
+}
+
+String _retrievalDesignFromSearchPlans(AssistantStreamEventWire event) {
+  final raw =
+      event.payload['searchPlans'] ?? event.payload['acceptedSearchPlans'];
+  if (raw is! List || raw.isEmpty) {
+    return '';
+  }
+  final lines = <String>[];
+  for (final item in raw) {
+    if (item is! Map) {
+      continue;
+    }
+    final query = _stringValue(item['query']);
+    if (query.isEmpty) {
+      continue;
+    }
+    final label = _firstNonEmpty(<String>[
+      _stringValue(item['label']),
+      _stringValue(item['dimension']),
+    ]);
+    lines.add(label.isEmpty ? query : '$label：$query');
+  }
+  if (lines.isEmpty) {
+    return '';
+  }
+  return lines.join('\n');
 }
 
 String _openedTurnAnswer(AssistantTurnEnvelopeWire turn) {

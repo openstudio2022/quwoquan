@@ -1,9 +1,11 @@
 package main
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestAlphaRuntimeIdentityAndConfigLoadsSameNamedOverlay(t *testing.T) {
@@ -52,6 +54,43 @@ func TestCurrentRuntimeEnvIsRejected(t *testing.T) {
 	t.Setenv("APP_ENV", "integration")
 	if _, _, _, _, _, err := resolveRuntimeIdentity(); err == nil {
 		t.Fatal("resolveRuntimeIdentity() should reject APP_ENV=integration")
+	}
+}
+
+func TestAssistantHTTPWriteTimeoutDefaultsForStreaming(t *testing.T) {
+	t.Setenv("ASSISTANT_HTTP_WRITE_TIMEOUT_SECONDS", "")
+	if got := assistantHTTPWriteTimeout(); got != 180*time.Second {
+		t.Fatalf("write timeout=%s, want 180s", got)
+	}
+}
+
+func TestSearchProviderTimeoutHasRealtimeFloor(t *testing.T) {
+	if got := searchProviderTimeout(10_000); got != 45*time.Second {
+		t.Fatalf("search timeout=%s, want 45s", got)
+	}
+	client := searchHTTPClient(10_000)
+	if client.Timeout != 45*time.Second {
+		t.Fatalf("client timeout=%s, want 45s", client.Timeout)
+	}
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type=%T, want *http.Transport", client.Transport)
+	}
+	if transport.TLSHandshakeTimeout != 45*time.Second {
+		t.Fatalf("tls handshake timeout=%s, want 45s", transport.TLSHandshakeTimeout)
+	}
+}
+
+func TestShouldTryWeatherLookupUsesModelLocationAndSearchQueries(t *testing.T) {
+	if !shouldTryWeatherLookup("", "outdoor plan", "", "Shenzhen", nil) {
+		t.Fatal("locationSearchName should route to weather lookup")
+	}
+	if !shouldTryWeatherLookup("", "outdoor plan", "", "", map[string]any{
+		"searchQueries": []any{
+			map[string]any{"dimension": "weather", "query": "Shenzhen forecast"},
+		},
+	}) {
+		t.Fatal("weather searchQueries should route to weather lookup")
 	}
 }
 

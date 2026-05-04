@@ -182,6 +182,9 @@ Future<void> _sendAndExpect(
   if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
     expect(streamState.answer, isNot(scenario.alphaMockStream.finalAnswer));
     expect(streamState.answer, isNot(contains('alpha mock')));
+    expect(streamState.answer, isNot(contains('工具观察')));
+    expect(streamState.answer, isNot(contains('工具结果')));
+    expect(streamState.answer, isNot(contains('根据工具')));
     expect(streamState.answerGateOpen, isTrue);
     expect(streamState.processSummary.searchCount, greaterThan(0));
     // 云侧在“检索无可靠摘要”场景会返回 acceptedCount=0，属合法路径。
@@ -236,6 +239,8 @@ void _assertCloudPersonalAssistantNarrativeQuality(
   expect(narrative, isNot(contains('\uFFFD')));
   expect(narrative, isNot(contains('我会先确认你的核心问题')));
   expect(narrative, isNot(contains('我会围绕')));
+  expect(narrative, isNot(contains('用户询问')));
+  expect(narrative, isNot(contains('该用户')));
   expect(narrative, isNot(contains('nextAction')));
   expect(narrative, isNot(contains('reliable=')));
   expect(

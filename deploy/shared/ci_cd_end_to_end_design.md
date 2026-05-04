@@ -72,37 +72,32 @@ config-gray-rollout / config-slo-gate / config-rollback
 
 **前置**：
 - integration 集群已创建（阿里云 ACK / 火山引擎 VKE / 华为云 CCE）
-- GitHub Secrets 配置：
-  - `INTEGRATION_KUBECONFIG`：integration 集群 kubeconfig（base64 编码）
-  - 或使用 OIDC：`INTEGRATION_CLUSTER_NAME`、云厂商 OIDC（阿里云 OIDC、GCP Workload Identity 等）
+- GitHub Secrets 配置（与 [`.github/workflows/pre-release-gate.yml`](../../.github/workflows/pre-release-gate.yml) 一致）：
+  - **`GAMMA_KUBECONFIG`**：integration 集群 kubeconfig（**base64 编码**）。未设置时 workflow 跳过 `kubectl apply`，仅打印 warning。
+  - 先前文档中的 `INTEGRATION_KUBECONFIG` 名称已弃用；请以 workflow 实际读取的 **`GAMMA_KUBECONFIG`** 为准。
+  - 或使用 OIDC：可在 job 内改为云厂商 `configure-credentials` + `kubectl`（需自行替换 shell 片段）。
 
-**实现要点**：
+**实现要点**（与当前 `pre-release-gate.yml` 语义对齐）：
 ```yaml
 deploy-integration:
   name: G5a Deploy to integration
   needs: [gate]
   runs-on: ubuntu-latest
   env:
-    KUBECONFIG: ${{ secrets.INTEGRATION_KUBECONFIG }}
+    GAMMA_KUBECONFIG: ${{ secrets.GAMMA_KUBECONFIG }}
   steps:
     - uses: actions/checkout@v4
     - uses: syntaqx/setup-kustomize@v1
     - run: |
-        # 可选：安装 kubectl
-        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-      # 若使用 OIDC，此处改为 cloud provider 的 configure-credentials action
     - name: Apply to integration
       run: |
-        CLOUD_PROVIDER=${CLOUD_PROVIDER:-aliyun}
-        kustomize build deploy/kustomization/${CLOUD_PROVIDER}-integration | \
-          kubectl apply -f - --server-side
+        if [ -z "$GAMMA_KUBECONFIG" ]; then echo "skip apply"; exit 0; fi
+        mkdir -p ~/.kube && echo "$GAMMA_KUBECONFIG" | base64 -d > ~/.kube/config
+        kustomize build deploy/kustomization/${CLOUD_PROVIDER}-integration | kubectl apply -f - --server-side
     - name: Wait for rollout
       run: kubectl rollout status deployment/seed-box -n seed-box-integration --timeout=5m
-    - name: Health check
-      run: |
-        # 可选：curl $GAMMA_BASE_URL/healthz
-        kubectl get pods -n seed-box-integration
 ```
 
 **多云**：通过 `CLOUD_PROVIDER` 选择 kustomization 文件；不同云需要不同 KUBECONFIG 或 OIDC 配置。
@@ -137,15 +132,33 @@ deploy-integration:
 | `GAMMA_BASE_URL` | gamma API 基址，L3/L4 使用 |
 | `GAMMA_PRODUCT_OPS_BASE_URL` | gamma 上 Ops/产品面 API 基址，`make test-api-contract` 必需 |
 | `GAMMA_TEST_AUTH_TOKEN` | L3/L4 鉴权 |
-| `GAMMA_KUBECONFIG` | gamma 集群 kubeconfig（或 OIDC 等效） |
+| `GAMMA_KUBECONFIG` | **integration** 集群 kubeconfig（base64）；`pre-release-gate.yml` 中 `deploy-integration` 使用；可选，缺省则跳过 apply |
+
+完整矩阵（含 05 / 06 / 08、Variables、self-hosted）见 **[environment_matrix.md §3](environment_matrix.md)**。
 
 ### 4.2 基础设施
 
-- **integration 集群**：K8s 集群（阿里云/火山/华为云），namespace `seed-box-integration`
+- **integration 集群**：K8s 集群（阿里云/火山/华为云），namespace `seed-box-integration`；`pre-release-gate.yml` 中 `kubectl rollout status deployment/seed-box -n seed-box-integration` 与 [`deploy/service/seed-box/kustomize/overlays/integration`](../../deploy/service/seed-box/kustomize/overlays/integration) 一致（若改名 overlay，须同步改 workflow）。
 - **镜像仓库**：kustomization 中 `images` 指向的 registry 可被集群拉取
 - **ConfigMap/Secret**：CONFIG_VERSION、IMAGE_VERSION 等与 kustomize overlay 一致
 
-### 4.3 版本注入
+### 4.3 Self-hosted Runner 标签（05b / 08）
+
+`app-env-device-matrix-self-hosted.yml` 要求：
+
+- **Android 矩阵**：Runner 同时具备标签 `self-hosted` 与 **`Linux`**（GitHub 为自托管机自动附加 OS 标签；Linux 主机注册后即可被选中）。
+- **iOS 矩阵**：Runner 同时具备 `self-hosted` 与 **`macOS`**。
+
+若仅有 **macOS** 自托管机，则无法满足「Android job 要求 `Linux`」的调度约束；应 **新增一台 Linux runner**，或由团队约定后 **统一改为自定义 label**（例如两 job 均跑在带 `android`/`ios` 标签的同一组机器上，并同步修改 `runs-on`）。
+
+### 4.4 合并 main 后手动验证清单（建议每次发版前执行）
+
+1. **03 Delivery Gate**：`dev1.0` 推送后确认对应当前 `HEAD` 的 run 成功。
+2. **04 Pre-Release Gate**：在 `main` 上确认 `gate`、`l3`、`l4`、`assistant` 及 `release-evidence-summary` 全绿；若红，查看 summary job 日志中的分项提示与 `GAMMA_*` 配置。
+3. **06 Deploy To Prod (Auto)**：确认上游 04 成功触发；`production` Environment 若启用审批，在 GitHub 上完成 Stage 2 审批。
+4. **08 Deploy Gamma ECS**：使用 `workflow_dispatch` 试跑 pre 阶段；确认 `GAMMA_ECS_PASSWORD` 或 `GAMMA_ECS_SSH_KEY`、self-hosted 在线且矩阵 job 未被队列饿死。
+
+### 4.5 版本注入
 
 当前 integration overlay 使用 `v2026.02.28.0` 等硬编码。pre-release tag 触发时，需要：
 - 从 tag 解析版本（如 `v1.0.0-rc.1` → `v1.0.0.rc1`）
@@ -158,7 +171,7 @@ deploy-integration:
 
 | 步骤 | 动作 | 状态 |
 |------|------|------|
-| 1 | 配置 `INTEGRATION_KUBECONFIG`（或 OIDC） | ✓ 按需 |
+| 1 | 配置 `GAMMA_KUBECONFIG`（integration kubeconfig，base64）或 OIDC | ✓ 按需 |
 | 2 | `deploy-integration` job（kubectl apply） | ✓ 已实现 |
 | 3 | L3/L4 job 依赖 `deploy-integration` | ✓ 已实现 |
 | 4 | `l3-api-contract` job（deploy 后执行） | ✓ 已实现 |

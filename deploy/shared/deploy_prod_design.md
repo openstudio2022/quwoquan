@@ -14,6 +14,16 @@
 | SLO 决策 | continue(0) / pause(10) / rollback(20)；rollback 时脚本内会调用 `config_release_rollback.sh` |
 | 实际部署 | 当前 runbook 未绑定「谁执行 kubectl apply 到 prod」；设计里假定由 workflow 或下游系统根据 state/版本执行 apply |
 
+### 1.0 GitHub Environment `production`（`06. Deploy To Prod (Auto)`）
+
+[`deploy-prod-auto.yml`](../../.github/workflows/deploy-prod-auto.yml) 中 **Stage 2 — Carry-on 100%** 使用 `environment: production`。
+
+- 须在仓库 **Settings → Environments** 下创建名为 **`production`** 的 Environment，否则该 job 会失败。
+- 若启用 **Required reviewers**，合并 `main` 且 04 全绿后，需在 GitHub Actions UI **手动批准** Stage 2；未批准则 workflow 处于 waiting，不等同于通过。
+- Stage 1（`gray-initial`）当前为占位 dry-run，不依赖该 Environment。
+
+详见 **[environment_matrix.md §3.1](environment_matrix.md)** 工作流对照表。
+
 ### 1.1 当前阶段（2 副本，首次上线）
 
 | 项目 | 说明 |

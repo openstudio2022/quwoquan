@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 
 class ChatListItemViewModel {
@@ -49,7 +50,7 @@ class ChatListItemViewModel {
       timeLabel: dto.lastMessageTime == null
           ? ''
           : ChatTimeFormatter.formatForConversationList(dto.lastMessageTime!),
-      avatarUrl: dto.avatarUrl.trim(),
+      avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
       previewIcon: preview.icon,
       unreadCount: dto.unreadCount,
       mentionUnreadCount: dto.mentionUnreadCount,

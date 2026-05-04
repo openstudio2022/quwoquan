@@ -6,7 +6,21 @@
 Target native_assets required define SdkRoot but it was not provided
 ```
 
-## 解决方案
+### 与 Xcode / 全量构建无关时
+该报错常见于 **`flutter run` 热重载路径**：工具链传给 native_assets 的环境缺少 `SdkRoot`（与全量 `flutter build` 不同）。Flutter 已在 master 修复（见 [flutter/flutter#180603](https://github.com/flutter/flutter/issues/180603) 及关联 PR）。
+
+**推荐**：将 Flutter SDK 升级到已包含上述修复的稳定版 / beta。
+
+**临时规避**（可能影响依赖 native assets 的 FFI 包，慎用）：
+```bash
+flutter config --no-enable-native-assets
+```
+恢复默认：
+```bash
+flutter config --enable-native-assets
+```
+
+## 解决方案（Xcode 工程侧）
 已在以下 xcconfig 文件中明确设置了 SDKROOT：
 - `Debug.xcconfig`
 - `Release.xcconfig`

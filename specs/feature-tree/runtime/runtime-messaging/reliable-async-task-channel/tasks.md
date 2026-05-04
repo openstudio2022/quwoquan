@@ -122,7 +122,11 @@
 - [x] local-gamma 拓扑：Docker compose 纳入 `chat-service`、可靠任务 Redis scene、共享 media mount；Caddy 补 `/v1/chat/*`、`/v1/user/sync`、`/media/*`；T3 默认包含 chat API contract。
 - [x] ECS 门禁：`deploy-gamma-ecs.yml` 增加 chat avatar API probe、self-hosted chat-avatar Patrol 矩阵、prod smoke 和 push paths；self-hosted workflow 支持 `matrix_kind=chat-avatar`。
 - [x] 本地可执行验证（2026-05-03）：`python3 -m py_compile scripts/run_chat_avatar*.py scripts/run_local_gamma_avatar_e2e.py scripts/run_local_gamma_t3.py`、`bash -n scripts/start_local_gamma_mirror.sh`、`go test ./runtime/reliabletask`、`go test ./services/chat-service/tests -run TestGroupAvatar`、`flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart` 均通过。
-- [ ] 真实环境矩阵证据：`beta`、`local-gamma`、`cloud-gamma-pre`、`cloud-gamma-prod-smoke` 仍需在可访问网关、ECS 凭据和 self-hosted Android/iOS 设备就绪后运行非 dry-run 报告；未全绿前不得声明商用完成。
+- [ ] 真实环境矩阵证据：`beta`、`local-gamma`、`cloud-gamma-pre`、`cloud-gamma-prod-smoke` 在可访问网关、ECS 凭据与本机或 self-hosted Android/iOS 就绪后运行 **非 dry-run** 报告；**且** `make verify-chat-avatar-commercial-matrix COMMERCIAL_MATRIX_MANIFEST=artifacts/commercial-matrix/chat-avatar/manifest.yaml`（或等价 `python3 scripts/verify_chat_avatar_commercial_matrix_evidence.py`）**退出码 0**。未满足前不得声明商用矩阵完成。
+  - 执行手册（不打折扣）：[`commercial-e2e-matrix-runbook.md`](./commercial-e2e-matrix-runbook.md)。
+  - 阶段顺序：**Phase L（local-gamma）→ Phase B（beta）→ Phase C（cloud pre/smoke）→ manifest 机器校验**；四条路径填入 [`artifacts/commercial-matrix/chat-avatar/manifest.sample.yaml`](../../../../../artifacts/commercial-matrix/chat-avatar/manifest.sample.yaml) 的副本后执行校验。
+  - 一键编排：`bash scripts/run_chat_avatar_commercial_matrix_orchestrator.sh` / `make run-chat-avatar-commercial-matrix-local`。
+  - 自检：`python3 scripts/check_avatar_commercial_matrix_prereqs.py --strict`（不替代 manifest 校验）。
 
 验收：
 - 建群首帧头像不得为空或契约占位，群头像异步生成不得阻塞建群。

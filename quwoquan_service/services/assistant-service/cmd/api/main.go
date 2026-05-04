@@ -231,7 +231,7 @@ func main() {
 		SourceID:          "assistant-service",
 		Src:               "assistant-service",
 	}, ioLogger, processLogger, exceptionLogger)
-	server := &http.Server{Addr: addr, Handler: observedHandler, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Addr: addr, Handler: observedHandler, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: assistantHTTPWriteTimeout(), IdleTimeout: 60 * time.Second}
 	log.Printf("assistant-service listening on %s env=%s", addr, appEnv)
 	if err := runHTTPServerWithGracefulShutdown(server, assistantShutdownTimeout()); err != nil {
 		log.Fatalf("assistant-service listen failed: %v", err)
@@ -473,7 +473,7 @@ func allowDeterministicProvider(appEnv string) bool {
 
 func realSearchHandler(cfg providerCfg) tool.Handler {
 	provider := strings.TrimSpace(cfg.Provider)
-	client := &http.Client{Timeout: providerTimeout(cfg.TimeoutMs)}
+	client := searchHTTPClient(cfg.TimeoutMs)
 	return func(ctx context.Context, req tool.Request) (tool.Result, error) {
 		query := inputString(req.Input, "query")
 		location := inputString(req.Input, "location")
@@ -482,11 +482,14 @@ func realSearchHandler(cfg providerCfg) tool.Handler {
 		log.Printf("assistant search requested provider=%s tool=%s query=%q", provider, req.ToolName, query)
 		switch provider {
 		case "duckduckgo_html":
-			if shouldTryWeatherLookup(skillID, query, location) {
-				if summary, refs, ok := openMeteoWeatherSearch(ctx, client, query, location, locationSearchName); ok {
-					log.Printf("assistant weather search completed provider=open_meteo tool=%s query=%q refs=%d summaryLen=%d", req.ToolName, query, len(refs), len([]rune(summary)))
-					return searchToolResult(req.ToolName, "open_meteo", summary, refs, true), nil
+			if shouldTryWeatherLookup(skillID, query, location, locationSearchName, req.Input) {
+				if summary, refs, weatherProvider, ok := openMeteoWeatherSearch(ctx, client, query, location, locationSearchName); ok {
+					log.Printf("assistant weather search completed provider=%s tool=%s query=%q refs=%d summaryLen=%d", weatherProvider, req.ToolName, query, len(refs), len([]rune(summary)))
+					return searchToolResult(req.ToolName, weatherProvider, summary, refs, true), nil
 				}
+				summary, refs := deterministicSearchFallbackResult(query, "weather lookup failed")
+				log.Printf("assistant weather search unavailable provider=open_meteo tool=%s query=%q", req.ToolName, query)
+				return searchToolResult(req.ToolName, "open_meteo", summary, refs, false), nil
 			}
 			if shouldTryFinanceLookup(skillID, req.Input) {
 				if summary, refs, ok := yahooFinanceSearch(ctx, client, req.Input); ok {
@@ -905,12 +908,18 @@ func firstSearchToken(query string) string {
 	return ""
 }
 
-func shouldTryWeatherLookup(skillID, query, location string) bool {
+func shouldTryWeatherLookup(skillID, query, location, locationSearchName string, input map[string]any) bool {
 	if strings.TrimSpace(location) != "" {
+		return true
+	}
+	if strings.TrimSpace(locationSearchName) != "" {
 		return true
 	}
 	normalized := strings.ToLower(strings.TrimSpace(query))
 	if skillID == "weather" {
+		return true
+	}
+	if searchQueriesMentionWeather(input["searchQueries"]) || searchQueriesMentionWeather(input["queries"]) {
 		return true
 	}
 	return strings.Contains(normalized, "天气") ||
@@ -918,6 +927,36 @@ func shouldTryWeatherLookup(skillID, query, location string) bool {
 		strings.Contains(normalized, "降雨") ||
 		strings.Contains(normalized, "weather") ||
 		strings.Contains(normalized, "forecast")
+}
+
+func searchQueriesMentionWeather(raw any) bool {
+	switch items := raw.(type) {
+	case []any:
+		for _, item := range items {
+			if searchQueryMentionsWeather(item) {
+				return true
+			}
+		}
+	case []map[string]any:
+		for _, item := range items {
+			if searchQueryMentionsWeather(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func searchQueryMentionsWeather(raw any) bool {
+	text := strings.ToLower(strings.TrimSpace(fmt.Sprint(raw)))
+	if text == "" || text == "<nil>" {
+		return false
+	}
+	return strings.Contains(text, "天气") ||
+		strings.Contains(text, "气温") ||
+		strings.Contains(text, "降雨") ||
+		strings.Contains(text, "weather") ||
+		strings.Contains(text, "forecast")
 }
 
 func weatherLocationCandidate(query, location string) string {
@@ -971,14 +1010,47 @@ type openMeteoForecastResponse struct {
 	} `json:"daily"`
 }
 
-func openMeteoWeatherSearch(ctx context.Context, client *http.Client, query, location, locationSearchName string) (string, []map[string]any, bool) {
+type metNoForecastResponse struct {
+	Properties struct {
+		Timeseries []struct {
+			Time string `json:"time"`
+			Data struct {
+				Instant struct {
+					Details struct {
+						AirTemperature   float64 `json:"air_temperature"`
+						RelativeHumidity float64 `json:"relative_humidity"`
+						WindSpeed        float64 `json:"wind_speed"`
+					} `json:"details"`
+				} `json:"instant"`
+				Next1Hours struct {
+					Summary struct {
+						SymbolCode string `json:"symbol_code"`
+					} `json:"summary"`
+					Details struct {
+						PrecipitationAmount float64 `json:"precipitation_amount"`
+					} `json:"details"`
+				} `json:"next_1_hours"`
+				Next6Hours struct {
+					Summary struct {
+						SymbolCode string `json:"symbol_code"`
+					} `json:"summary"`
+					Details struct {
+						PrecipitationAmount float64 `json:"precipitation_amount"`
+					} `json:"details"`
+				} `json:"next_6_hours"`
+			} `json:"data"`
+		} `json:"timeseries"`
+	} `json:"properties"`
+}
+
+func openMeteoWeatherSearch(ctx context.Context, client *http.Client, query, location, locationSearchName string) (string, []map[string]any, string, bool) {
 	candidates := []string{}
 	if strings.TrimSpace(locationSearchName) != "" {
 		candidates = append(candidates, strings.TrimSpace(locationSearchName))
 	}
 	candidate := weatherLocationCandidate(query, location)
 	if candidate == "" {
-		return "", nil, false
+		return "", nil, "", false
 	}
 	candidates = append(candidates, candidate)
 	seenCandidates := map[string]bool{}
@@ -987,38 +1059,38 @@ func openMeteoWeatherSearch(ctx context.Context, client *http.Client, query, loc
 			continue
 		}
 		seenCandidates[item] = true
-		if summary, refs, ok := openMeteoWeatherSearchCandidate(ctx, client, item); ok {
-			return summary, refs, true
+		if summary, refs, provider, ok := openMeteoWeatherSearchCandidate(ctx, client, item); ok {
+			return summary, refs, provider, true
 		}
 	}
-	return "", nil, false
+	return "", nil, "", false
 }
 
-func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, candidate string) (string, []map[string]any, bool) {
+func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, candidate string) (string, []map[string]any, string, bool) {
 	geoURL := "https://geocoding-api.open-meteo.com/v1/search?count=5&language=zh&format=json&name=" + url.QueryEscape(candidate)
 	geoReq, err := http.NewRequestWithContext(ctx, http.MethodGet, geoURL, nil)
 	if err != nil {
-		return "", nil, false
+		return "", nil, "", false
 	}
 	geoReq.Header.Set("User-Agent", "quwoquan-assistant-beta/1.0")
 	geoResp, err := client.Do(geoReq)
 	if err != nil {
 		log.Printf("assistant open_meteo geocode failed location=%q err=%v", candidate, err)
-		return "", nil, false
+		return "", nil, "", false
 	}
 	defer geoResp.Body.Close()
 	if geoResp.StatusCode < 200 || geoResp.StatusCode >= 300 {
 		log.Printf("assistant open_meteo geocode status location=%q status=%d", candidate, geoResp.StatusCode)
-		return "", nil, false
+		return "", nil, "", false
 	}
 	var geo openMeteoGeocodeResponse
 	if err := json.NewDecoder(io.LimitReader(geoResp.Body, 128*1024)).Decode(&geo); err != nil {
 		log.Printf("assistant open_meteo geocode decode failed location=%q err=%v", candidate, err)
-		return "", nil, false
+		return "", nil, "", false
 	}
 	if len(geo.Results) == 0 {
 		log.Printf("assistant open_meteo geocode empty location=%q", candidate)
-		return "", nil, false
+		return "", nil, "", false
 	}
 	place := geo.Results[0]
 	tz := strings.TrimSpace(place.Timezone)
@@ -1033,23 +1105,23 @@ func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, c
 	)
 	forecastReq, err := http.NewRequestWithContext(ctx, http.MethodGet, forecastURL, nil)
 	if err != nil {
-		return "", nil, false
+		return "", nil, "", false
 	}
 	forecastReq.Header.Set("User-Agent", "quwoquan-assistant-beta/1.0")
 	forecastResp, err := client.Do(forecastReq)
 	if err != nil {
 		log.Printf("assistant open_meteo forecast failed location=%q err=%v", candidate, err)
-		return "", nil, false
+		return metNoWeatherSearch(ctx, client, place.Name, place.Admin1, place.Latitude, place.Longitude)
 	}
 	defer forecastResp.Body.Close()
 	if forecastResp.StatusCode < 200 || forecastResp.StatusCode >= 300 {
 		log.Printf("assistant open_meteo forecast status location=%q status=%d", candidate, forecastResp.StatusCode)
-		return "", nil, false
+		return metNoWeatherSearch(ctx, client, place.Name, place.Admin1, place.Latitude, place.Longitude)
 	}
 	var forecast openMeteoForecastResponse
 	if err := json.NewDecoder(io.LimitReader(forecastResp.Body, 128*1024)).Decode(&forecast); err != nil {
 		log.Printf("assistant open_meteo forecast decode failed location=%q err=%v", candidate, err)
-		return "", nil, false
+		return "", nil, "", false
 	}
 	placeName := place.Name
 	if place.Admin1 != "" {
@@ -1104,7 +1176,84 @@ func openMeteoWeatherSearchCandidate(ctx context.Context, client *http.Client, c
 			"snippet": "Open-Meteo 天气预报接口说明，包含 current 与 daily 预报字段定义。",
 		},
 	}
-	return summary, refs, true
+	return summary, refs, "open_meteo", true
+}
+
+func metNoWeatherSearch(ctx context.Context, client *http.Client, name, admin string, lat, lon float64) (string, []map[string]any, string, bool) {
+	endpoint := fmt.Sprintf(
+		"https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=%s&lon=%s",
+		strconv.FormatFloat(lat, 'f', -1, 64),
+		strconv.FormatFloat(lon, 'f', -1, 64),
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", nil, "", false
+	}
+	req.Header.Set("User-Agent", "quwoquan-assistant-beta/1.0 contact=dev@quwoquan.local")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("assistant met_no forecast failed location=%q err=%v", name, err)
+		return "", nil, "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		log.Printf("assistant met_no forecast status location=%q status=%d", name, resp.StatusCode)
+		return "", nil, "", false
+	}
+	var forecast metNoForecastResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 256*1024)).Decode(&forecast); err != nil {
+		log.Printf("assistant met_no forecast decode failed location=%q err=%v", name, err)
+		return "", nil, "", false
+	}
+	if len(forecast.Properties.Timeseries) == 0 {
+		log.Printf("assistant met_no forecast empty location=%q", name)
+		return "", nil, "", false
+	}
+	placeName := strings.TrimSpace(name)
+	if strings.TrimSpace(admin) != "" {
+		placeName = placeName + "，" + strings.TrimSpace(admin)
+	}
+	current := forecast.Properties.Timeseries[0]
+	details := current.Data.Instant.Details
+	symbol := strings.ReplaceAll(current.Data.Next1Hours.Summary.SymbolCode, "_", " ")
+	if symbol == "" {
+		symbol = strings.ReplaceAll(current.Data.Next6Hours.Summary.SymbolCode, "_", " ")
+	}
+	precip := current.Data.Next1Hours.Details.PrecipitationAmount
+	if precip == 0 {
+		precip = current.Data.Next6Hours.Details.PrecipitationAmount
+	}
+	summary := fmt.Sprintf(
+		"MET Norway Locationforecast 实时天气：%s 当前气温%.1f°C，湿度%.0f%%，风速%.1fm/s，近期天气符号%s，未来降水量%.1fmm。数据时间：%s。",
+		placeName,
+		details.AirTemperature,
+		details.RelativeHumidity,
+		details.WindSpeed,
+		symbol,
+		precip,
+		current.Time,
+	)
+	refs := []map[string]any{
+		{
+			"title":   "MET Norway Locationforecast - " + placeName,
+			"url":     "https://api.met.no/weatherapi/locationforecast/2.0/documentation",
+			"source":  "met_no_locationforecast",
+			"snippet": summary + " 原始 endpoint: " + endpoint,
+		},
+		{
+			"title":   "MET Norway Locationforecast 数据模型说明",
+			"url":     "https://api.met.no/weatherapi/locationforecast/2.0/documentation",
+			"source":  "met_no_locationforecast_docs",
+			"snippet": "Locationforecast 接口说明，包含 instant、next_1_hours、next_6_hours 等字段定义。",
+		},
+		{
+			"title":   "Norwegian Meteorological Institute API Terms",
+			"url":     "https://developer.yr.no/doc/TermsOfService/",
+			"source":  "met_no_terms",
+			"snippet": "MET Norway / Yr 开放天气 API 使用条款与数据来源说明。",
+		},
+	}
+	return summary, refs, "met_no", true
 }
 
 func weatherCodeText(code int) string {
@@ -1180,21 +1329,21 @@ func (p openAICompatibleModelProvider) Complete(ctx context.Context, req applica
 	if req.Stage == "reasoning" {
 		body["response_format"] = map[string]string{"type": "json_object"}
 		body["messages"] = []map[string]string{
-			{"role": "system", "content": "输出唯一 JSON：nextAction（call_tool）、toolName（web_search 或 app_search）、toolInput（含 query，可含 location、locationSearchName、symbol 或 symbols）、stageNarrative（唯一面向用户叙事字段，120-220字，合并说明你如何理解问题、为何这样设计检索词、会优先核验哪些实时事实）。不要再输出其他面向用户叙事字段。toolInput.query 由你生成检索短词；如问题涉及天气、出行地点或本地实时信息，toolInput.location 填你识别出的地点，toolInput.locationSearchName 填适合地理检索的英文/拉丁写法（例如杭州用 Hangzhou、深圳用 Shenzhen），用于避免同名地误匹配；如问题涉及证券/股票，toolInput.symbol 或 symbols 填你能识别的交易代码（例如 A 股带 .SZ/.SS，港股带 .HK，美股保留 ticker）。拼音/缩写须自行理解为可用检索词。禁止输出 JSON 外文字。"},
+			{"role": "system", "content": "输出唯一 JSON：nextAction（call_tool）、toolName（web_search 或 app_search）、toolInput（含 query；可含 searchQueries:[{dimension,query}]、location、locationSearchName、symbol 或 symbols）、stageNarrative（唯一面向用户叙事字段，180-320字）。stageNarrative 必须使用第二人称“你/你的”，禁止写“用户/该用户/客户/提问者”；先用 2-4 句深入说明你真正要解决的问题，覆盖地点、时间、人数/对象、出行或决策约束、已知上下文和缺失信息；检索设计只占最后 1 句，简要说明会核验哪些事实，不要让检索词占据主体。toolInput.query 是主检索短词；如有天气、交通、景点、人流、股票、新闻等多个维度，在 toolInput.searchQueries 中每个维度一行列出结构化检索词。如问题涉及天气、出行地点或本地实时信息，toolInput.location 填你识别出的地点，toolInput.locationSearchName 填适合地理检索的英文/拉丁写法（例如杭州用 Hangzhou、深圳用 Shenzhen）；如问题涉及证券/股票，toolInput.symbol 或 symbols 填你能识别的交易代码。拼音/缩写须自行理解为可用检索词。禁止输出 JSON 外文字。"},
 			{"role": "user", "content": prompt},
 		}
 	}
 	if req.Stage == "evidence_processing" {
 		body["response_format"] = map[string]string{"type": "json_object"}
 		body["messages"] = []map[string]string{
-			{"role": "system", "content": "输出唯一 JSON：{\"retrievalProcessing\":{\"processingSummary\":\"...\",\"selectedKeyPoints\":[\"...\"],\"acceptedReferences\":[{\"title\":\"\",\"url\":\"\",\"source\":\"\",\"snippet\":\"\"}]},\"evidenceSufficient\":true}。processingSummary 为面向用户的证据处理叙事；references 仅保留高置信条目，可留空。若工具结果 reliable=false 或 references 为空，不得声称已接纳可靠资料，acceptedReferences 必须为空；面向用户文字不要出现 reliable=true/false 这类协议字段。"},
+			{"role": "system", "content": "输出唯一 JSON：{\"retrievalProcessing\":{\"processingSummary\":\"...\",\"selectedKeyPoints\":[\"...\"],\"acceptedReferences\":[{\"title\":\"\",\"url\":\"\",\"source\":\"\",\"snippet\":\"\"}]},\"evidenceSufficient\":true}。processingSummary 为面向用户的证据处理叙事，必须使用第二人称“你/你的”，禁止写“用户/该用户/客户/提问者”；先说明证据覆盖了你问题里的哪些维度，再说明未覆盖或需要自行复核的部分。acceptedReferences 只能从输入 references 中挑选；若输入有 2-4 条相关高置信引用，应保留 2-4 条不同来源或不同用途的引用，不要无故压缩成 1 条；若工具结果 reliable=false 或 references 为空，不得声称已接纳可靠资料，acceptedReferences 必须为空。面向用户文字不要出现 reliable=true/false、JSON 字段名、工具调用、工具结果、工具观察等协议或调试表述。"},
 			{"role": "user", "content": prompt},
 		}
 	}
 	if req.Stage == "final" {
 		body["response_format"] = map[string]string{"type": "json_object"}
 		body["messages"] = []map[string]string{
-			{"role": "system", "content": "输出唯一 JSON：{\"userMarkdown\":\"...\"}。userMarkdown 为面向用户的完整回答，可用 Markdown。若工具观察标记为可靠，请直接使用工具摘要中的事实给出可执行建议，不要再说没有可靠信息；若工具观察标记为不可靠，才说明实时证据不足并给下一步核验办法。面向用户正文不要出现 reliable=true/false、JSON 字段名、协议调试词，也不要写“工具观察标记为可靠/不可靠”这类内部状态表述。遵守法律法规；勿编造实时事实；不确定处提示用户自行核实；仅当用户问题确实涉及金融、股票、证券、基金、买卖或投资决策时才加注非投资建议声明；天气、出行、行程规划等非金融问题禁止出现投资建议声明。禁止输出 JSON 外文字。"},
+			{"role": "system", "content": "输出唯一 JSON：{\"userMarkdown\":\"...\"}。userMarkdown 为面向用户的完整回答，可用 Markdown，必须非空，必须使用第二人称“你/你的”，禁止写“用户/该用户/客户/提问者”。开头直接给结论或建议，不要用内部证据来源作为开场，不要出现“工具、观察、检索、证据标记、协议、JSON、reliable”等内部过程或调试表述；也不要复述同一会话前文里的生硬模板口吻。若输入证据可靠，请把事实自然融入回答并给可执行建议；若输入证据不足，才说明不确定性与下一步核验办法。Markdown 结构必须清晰：优先使用 2-4 个短小段落、项目符号或小标题；每个要点单独成行，避免把天气、原因、行动建议挤成一个长段。遵守法律法规；勿编造实时事实；不确定处提示用户自行核实；仅当用户问题确实涉及金融、股票、证券、基金、买卖或投资决策时才加注非投资建议声明；天气、出行、行程规划等非金融问题禁止出现投资建议声明。禁止输出 JSON 外文字。"},
 			{"role": "user", "content": prompt},
 		}
 	}
@@ -1387,6 +1536,22 @@ func providerTimeout(ms int) time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
+func searchProviderTimeout(ms int) time.Duration {
+	timeout := providerTimeout(ms)
+	if timeout < 45*time.Second {
+		return 45 * time.Second
+	}
+	return timeout
+}
+
+func searchHTTPClient(ms int) *http.Client {
+	timeout := searchProviderTimeout(ms)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSHandshakeTimeout = timeout
+	transport.ResponseHeaderTimeout = timeout
+	return &http.Client{Timeout: timeout, Transport: transport}
+}
+
 func requiresRealProvider(appEnv string) bool {
 	return appEnv == "beta" || appEnv == "gamma" || appEnv == "prod-gray" || appEnv == "prod"
 }
@@ -1517,6 +1682,19 @@ func assistantShutdownTimeout() time.Duration {
 	if err != nil || seconds <= 0 {
 		log.Printf("WARN: invalid ASSISTANT_SHUTDOWN_TIMEOUT_SECONDS=%q; using 10s", raw)
 		return 10 * time.Second
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func assistantHTTPWriteTimeout() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("ASSISTANT_HTTP_WRITE_TIMEOUT_SECONDS"))
+	if raw == "" {
+		return 180 * time.Second
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds <= 0 {
+		log.Printf("WARN: invalid ASSISTANT_HTTP_WRITE_TIMEOUT_SECONDS=%q; using 180s", raw)
+		return 180 * time.Second
 	}
 	return time.Duration(seconds) * time.Second
 }

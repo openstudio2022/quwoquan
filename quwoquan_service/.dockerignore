@@ -1,0 +1,9 @@
+# 缩小 compose 构建上下文（context: .），避免把本地虚拟环境打进镜像层导致 Colima/VM 磁盘耗尽
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/*.pyc
+.git/
+.cursor/
+.control-plane-state/

@@ -1,5 +1,6 @@
 // ignore_for_file: unnecessary_underscores
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 /// 圆角方形头像组件（替代 CircleAvatar）
@@ -26,15 +27,15 @@ class RoundedSquareAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = borderRadius ?? AppSpacing.contentPreviewCornerRadius;
-    final hasImage = imageUrl != null && imageUrl!.isNotEmpty;
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final resolvedImageUrl = resolveAvatarImageUrl(imageUrl);
+    final hasImage = resolvedImageUrl.isNotEmpty;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
     Widget avatar = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: hasImage
           ? Image.network(
-              imageUrl!,
+              resolvedImageUrl,
               width: size,
               height: size,
               fit: BoxFit.cover,

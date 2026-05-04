@@ -382,13 +382,27 @@ jobs:
           AA: ${{ needs.app-assistant-runtime-alpha.result }}
           AG: ${{ needs.app-assistant-runtime-gamma.result }}
         run: |
+          set -euo pipefail
+          echo "=== Pre-release evidence summary (needs.*.result) ==="
           echo "l3-api-contract=${L3}"
           echo "l4-android=${L4A}"
           echo "l4-ios=${L4I}"
           echo "assistant-runtime-alpha=${AA}"
           echo "assistant-runtime-gamma=${AG}"
-          test "${L3}" = "success"
-          test "${L4A}" = "success"
-          test "${L4I}" = "success"
-          test "${AA}" = "success"
-          test "${AG}" = "success"
+          fail=0
+          expect_success() {
+            local name="$1" val="$2" hint="$3"
+            if [ "${val}" != "success" ]; then
+              echo "::error::${name} expected success, got ${val}. ${hint}"
+              fail=1
+            fi
+          }
+          expect_success "l3-api-contract" "${L3}" "检查 make test-api-contract、网关路由与 secrets: GAMMA_BASE_URL, GAMMA_PRODUCT_OPS_BASE_URL, GAMMA_TEST_AUTH_TOKEN"
+          expect_success "l4-android" "${L4A}" "检查 Patrol / Android 模拟器与同上 GAMMA_* secrets"
+          expect_success "l4-ios" "${L4I}" "检查 Patrol / iOS 模拟器与同上 GAMMA_* secrets"
+          expect_success "assistant-runtime-alpha" "${AA}" "检查 flutter test assistant_environment_smoke_test（alpha + mock）"
+          expect_success "assistant-runtime-gamma" "${AG}" "检查 gamma remote 与 secrets.GAMMA_BASE_URL（及网关可达性）"
+          if [ "${fail}" -ne 0 ]; then
+            echo "::error::Pre-release 未全部成功；请按上列分项修复后重跑 workflow。"
+            exit 1
+          fi

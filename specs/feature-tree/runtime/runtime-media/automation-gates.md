@@ -39,4 +39,10 @@
 - **单一真相源**：[`video-end-to-end-commercial-matrix.md`](./video-end-to-end-commercial-matrix.md) 冻结「商用端到端全矩阵」的环境列表与证据口径。
 - **`make gate-runtime-media` / `gate-runtime-media-full`**：覆盖 runtime-media 既定自动化项与（full 模式下）`RUNTIME_MEDIA_T4_EVIDENCE` **不等于**该文件中 **`beta` / `local-gamma` / `cloud-gamma-pre` / `cloud-gamma-prod-smoke` 全矩阵 passed**。
 - **Dry-run**：脚本自检与占位 artifact **禁止**冒充矩阵 passed。
-- **资源缺失**：无 ECS 凭据、无 self-hosted Android/iOS、无法对接真实 gamma/pre/smoke 网关时 → **`GATE_BLOCK`**，不得宣称视频商用端到端全矩阵完成（与群头像 [`avatar-e2e-validation.md`](../runtime-messaging/reliable-async-task-channel/avatar-e2e-validation.md) 末尾口径一致）。
+- **资源缺失或路由错误**：无法 SSH/部署 ECS、无本机或 Runner 双端、或 `GAMMA_BASE_URL` 未指向 **Caddy gamma-proxy**（`verify_gamma_public_gateway_routing.py` 失败）时 → 不得宣称视频商用端到端全矩阵完成（与群头像 [`avatar-e2e-validation.md`](../runtime-messaging/reliable-async-task-channel/avatar-e2e-validation.md) 口径一致）。
+
+## 内容图片：商用端到端环境矩阵边界
+
+- **单一真相源**：[`image-end-to-end-commercial-matrix.md`](./image-end-to-end-commercial-matrix.md) 冻结「内容图片：上传—自适应—原图授权」商用全矩阵的环境列表、场景与证据口径；**当前默认 `GATE_BLOCK`** 直至四条环境均产出非 dry-run passed JSON。
+- **`make gate-runtime-media`**：含图片 URL/variant 元数据静态门禁与契约测试，**不等于**上述全矩阵完成。
+- **本地前置自检**：`python3 scripts/check_image_commercial_matrix_prereqs.py`（`--strict` 用于验收前自查；**不**替代云上四条证据）。

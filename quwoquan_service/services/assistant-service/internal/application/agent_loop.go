@@ -178,7 +178,7 @@ func pauseForVisibleStream(ctx context.Context, emit func(streaming.Envelope) er
 	if emit == nil {
 		return
 	}
-	timer := time.NewTimer(350 * time.Millisecond)
+	timer := time.NewTimer(220 * time.Millisecond)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
@@ -515,14 +515,95 @@ func buildSearchPlansForStep(turn assistant.AssistantTurn, skill SkillSelection,
 		if value, ok := step.Tool.Requested.Input["query"].(string); ok && value != "" {
 			query = value
 		}
+		if plans := searchPlansFromToolInput(step.Tool.Requested.Input, step.Tool.Requested.ToolName); len(plans) > 0 {
+			return plans
+		}
 	}
 	return []map[string]any{{
 		"query":          query,
-		"label":          step.Tool.Requested.ToolName,
+		"label":          "综合检索",
 		"purpose":        "",
 		"sourceType":     step.Tool.Requested.ToolName,
 		"freshnessHours": 24,
 	}}
+}
+
+func searchPlansFromToolInput(input map[string]any, toolName string) []map[string]any {
+	for _, key := range []string{"searchQueries", "queries"} {
+		if plans := searchPlansFromRaw(input[key], toolName); len(plans) > 0 {
+			return plans
+		}
+	}
+	return nil
+}
+
+func searchPlansFromRaw(raw any, toolName string) []map[string]any {
+	switch items := raw.(type) {
+	case []any:
+		plans := []map[string]any{}
+		for _, item := range items {
+			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
+				plans = append(plans, plan)
+			}
+		}
+		return plans
+	case []map[string]any:
+		plans := []map[string]any{}
+		for _, item := range items {
+			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
+				plans = append(plans, plan)
+			}
+		}
+		return plans
+	case []string:
+		plans := []map[string]any{}
+		for _, item := range items {
+			if plan := searchPlanFromAny(item, toolName); len(plan) > 0 {
+				plans = append(plans, plan)
+			}
+		}
+		return plans
+	default:
+		return nil
+	}
+}
+
+func searchPlanFromAny(raw any, toolName string) map[string]any {
+	switch item := raw.(type) {
+	case string:
+		query := strings.TrimSpace(item)
+		if query == "" {
+			return nil
+		}
+		return map[string]any{
+			"query":          query,
+			"label":          "检索",
+			"purpose":        "",
+			"sourceType":     toolName,
+			"freshnessHours": 24,
+		}
+	case map[string]any:
+		query := strings.TrimSpace(stringValue(item["query"]))
+		if query == "" {
+			return nil
+		}
+		label := strings.TrimSpace(stringValue(item["dimension"]))
+		if label == "" {
+			label = strings.TrimSpace(stringValue(item["label"]))
+		}
+		if label == "" {
+			label = "检索"
+		}
+		return map[string]any{
+			"query":          query,
+			"label":          label,
+			"purpose":        strings.TrimSpace(stringValue(item["purpose"])),
+			"sourceType":     toolName,
+			"freshnessHours": 24,
+		}
+	default:
+		return nil
+	}
 }
 
 func buildAcceptedSearchPlansForStep(turn assistant.AssistantTurn, skill SkillSelection, step ReactStepResult) []map[string]any {
@@ -765,13 +846,46 @@ func splitAnswerDeltas(text string) []string {
 	}
 	runes := []rune(text)
 	chunks := []string{}
-	const chunkSize = 80
-	for start := 0; start < len(runes); start += chunkSize {
-		end := start + chunkSize
-		if end > len(runes) {
-			end = len(runes)
+	const targetChunkSize = 36
+	const maxChunkSize = 52
+	for start := 0; start < len(runes); {
+		end := start + targetChunkSize
+		if end >= len(runes) {
+			chunks = append(chunks, string(runes[start:]))
+			break
+		}
+		limit := start + maxChunkSize
+		if limit > len(runes) {
+			limit = len(runes)
+		}
+		if boundary := answerChunkBoundary(runes, start, end, limit); boundary > start {
+			end = boundary
 		}
 		chunks = append(chunks, string(runes[start:end]))
+		start = end
 	}
 	return chunks
+}
+
+func answerChunkBoundary(runes []rune, start, preferred, limit int) int {
+	for i := preferred; i < limit; i++ {
+		if isAnswerChunkBoundaryRune(runes[i]) {
+			return i + 1
+		}
+	}
+	for i := preferred; i > start; i-- {
+		if isAnswerChunkBoundaryRune(runes[i-1]) {
+			return i
+		}
+	}
+	return preferred
+}
+
+func isAnswerChunkBoundaryRune(r rune) bool {
+	switch r {
+	case '\n', '。', '！', '？', '；', ';', '.', '!', '?':
+		return true
+	default:
+		return false
+	}
 }

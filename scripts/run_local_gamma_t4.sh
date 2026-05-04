@@ -70,7 +70,7 @@ fi
 
 _patrol_cache_bin=""
 if command -v dart >/dev/null 2>&1; then
-  _cache_root="$(dart pub cache path 2>/dev/null || true)"
+  _cache_root="${PUB_CACHE:-$HOME/.pub-cache}"
   if [[ -n "$_cache_root" && -d "$_cache_root/bin" ]]; then
     PATH="${PATH}:$_cache_root/bin"
     _patrol_cache_bin="$_cache_root/bin"

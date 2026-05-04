@@ -46,7 +46,8 @@ on:
 jobs:
   android:
     name: ${{ matrix.env }} / Android (self-hosted)
-    runs-on: self-hosted
+    # 须由 Linux 自托管机注册（默认带 self-hosted + Linux）；勿与 iOS 共用无 OS 区分的同一标签池，避免落到无 adb 的机器。
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -111,7 +112,8 @@ jobs:
 
   ios:
     name: ${{ matrix.env }} / iOS (self-hosted)
-    runs-on: self-hosted
+    # 须由 macOS 自托管机注册（默认带 self-hosted + macOS）。
+    runs-on: [self-hosted, macOS]
     timeout-minutes: 120
     strategy:
       fail-fast: false

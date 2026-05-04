@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
+import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 
 enum ChatContactsRowKind { user, circle, group }
@@ -44,19 +45,21 @@ class ChatContactsRow {
       kind: ChatContactsRowKind.user,
       id: dto.userId,
       displayName: dto.displayName,
-      avatarUrl: dto.avatarUrl,
+      avatarUrl: resolveAvatarImageUrl(dto.avatarUrl),
       subtitle: sub,
       isFriend: dto.isFriend,
       isStarred: dto.isStarred,
     );
   }
 
-  factory ChatContactsRow.fromContactTabCircleDto(ChatContactTabCircleRowDto d) {
+  factory ChatContactsRow.fromContactTabCircleDto(
+    ChatContactTabCircleRowDto d,
+  ) {
     return ChatContactsRow(
       kind: ChatContactsRowKind.circle,
       id: d.circleId,
       displayName: d.displayName,
-      avatarUrl: d.avatarUrl,
+      avatarUrl: resolveAvatarImageUrl(d.avatarUrl),
       subtitle: d.subtitle,
       circleId: d.circleId.isNotEmpty ? d.circleId : null,
     );
@@ -68,7 +71,7 @@ class ChatContactsRow {
       kind: ChatContactsRowKind.circle,
       id: circleId,
       displayName: (m['displayName'] ?? '').toString(),
-      avatarUrl: (m['avatarUrl'] ?? '').toString(),
+      avatarUrl: resolveAvatarImageUrl((m['avatarUrl'] ?? '').toString()),
       subtitle: (m['subtitle'] ?? '').toString(),
       circleId: circleId.isNotEmpty ? circleId : null,
     );
@@ -81,10 +84,9 @@ class ChatContactsRow {
       kind: ChatContactsRowKind.group,
       id: d.conversationId,
       displayName: d.displayName,
-      avatarUrl: d.avatarUrl,
+      avatarUrl: resolveAvatarImageUrl(d.avatarUrl),
       subtitle: d.subtitle,
-      conversationId:
-          d.conversationId.isNotEmpty ? d.conversationId : null,
+      conversationId: d.conversationId.isNotEmpty ? d.conversationId : null,
     );
   }
 
@@ -94,7 +96,7 @@ class ChatContactsRow {
       kind: ChatContactsRowKind.group,
       id: convId,
       displayName: (m['displayName'] ?? '').toString(),
-      avatarUrl: (m['avatarUrl'] ?? '').toString(),
+      avatarUrl: resolveAvatarImageUrl((m['avatarUrl'] ?? '').toString()),
       subtitle: (m['subtitle'] ?? '').toString(),
       conversationId: convId.isNotEmpty ? convId : null,
     );

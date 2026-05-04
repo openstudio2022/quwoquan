@@ -19,9 +19,12 @@ on:
       - 'scripts/run_assistant_device_matrix.py'
       - 'scripts/run_assistant_device_matrix_ci.py'
       - 'scripts/run_chat_avatar*.py'
+      - 'scripts/verify_chat_avatar_commercial_matrix_evidence.py'
+      - 'scripts/run_chat_avatar_commercial_matrix_orchestrator.sh'
       - 'scripts/start_local_gamma_mirror.sh'
       - 'scripts/run_local_gamma_t3.py'
       - 'specs/feature-tree/runtime/runtime-messaging/reliable-async-task-channel/avatar-e2e-validation.md'
+      - '.github/workflows/verify-chat-avatar-commercial-matrix.yml'
       - 'quwoquan_app/**'
       - 'quwoquan_service/**'
       - 'deploy/local-gamma/**'
@@ -238,6 +241,10 @@ jobs:
             --exclude='.dart_tool' \
             --exclude='build' \
             --exclude='node_modules' \
+            --exclude='.venv' \
+            --exclude='__pycache__' \
+            --exclude='.pytest_cache' \
+            --exclude='.mypy_cache' \
             --exclude='quwoquan_app/.dart_tool' \
             --exclude='quwoquan_app/build' \
             --exclude='apps/ops-portal/node_modules' \
@@ -269,7 +276,8 @@ jobs:
         id: urls
         run: |
           PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
-          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18080}"
+          # 与 compose 中 gamma-proxy 默认映射一致（ECS onebox 常用 18000→Caddy:80；勿用 content 直出端口充当网关）
+          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18000}"
           PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:18086}"
           MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-${BASE_URL}}"
           echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
@@ -410,7 +418,8 @@ jobs:
         id: urls
         run: |
           PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
-          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18080}"
+          # 与 compose 中 gamma-proxy 默认映射一致（ECS onebox 常用 18000→Caddy:80；勿用 content 直出端口充当网关）
+          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18000}"
           PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:18086}"
           echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
           echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"

@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 import ssl
 import subprocess
 import sys
@@ -212,8 +213,14 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", default="http://127.0.0.1:18080")
-    parser.add_argument("--product-ops-base-url", default="http://127.0.0.1:18086")
+    parser.add_argument(
+        "--base-url",
+        default=os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL", "http://127.0.0.1:18080"),
+    )
+    parser.add_argument(
+        "--product-ops-base-url",
+        default=os.environ.get("LOCAL_GAMMA_PRODUCT_OPS_BASE_URL", "http://127.0.0.1:18086"),
+    )
     parser.add_argument("--report", default="artifacts/local-gamma/t3_report.json")
     parser.add_argument("--enabled-domain", action="append", default=["content", "chat"])
     parser.add_argument("--skip-seed", action="store_true")

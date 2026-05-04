@@ -1,0 +1,25 @@
+# 仅对 manifest 执行群头像商用 E1–E4 证据机器校验（不跑 Patrol/ECS）。
+# 典型：从 Actions 下载 artifact 后填入 manifest，再 workflow_dispatch 本文件。
+name: 08b. Verify Chat Avatar Commercial Matrix Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_path:
+        description: 仓库内 manifest 相对路径（YAML/JSON）
+        required: true
+        default: artifacts/commercial-matrix/chat-avatar/manifest.yaml
+
+jobs:
+  verify:
+    name: verify-chat-avatar-commercial-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PyYAML
+        run: pip install pyyaml
+      - name: Verify manifest
+        run: |
+          python3 scripts/verify_chat_avatar_commercial_matrix_evidence.py \
+            --manifest "${{ inputs.manifest_path }}"

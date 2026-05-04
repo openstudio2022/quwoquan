@@ -35,19 +35,19 @@ dependencies:
   
   # 图片处理
   cached_network_image: ^3.4.1
-  image_picker: ^1.2.1
+  image_picker: ^1.2.2
   photo_manager: ^3.9.0
   camera: ^0.12.0+1
   
   # 视频播放
   video_player: ^2.11.1
-  chewie: ^1.13.0
+  chewie: ^1.13.1
   video_thumbnail: ^0.5.6
   
   # 其他
   intl: ^0.20.2
   uuid: ^4.5.3
-  go_router: ^17.2.0
+  go_router: ^17.2.3
   photo_view: ^0.15.0
   flutter_staggered_grid_view: ^0.7.0
   yaml: ^3.1.3
@@ -55,7 +55,7 @@ dependencies:
   url_launcher: ^6.3.2
   share_plus: ^12.0.2
   geolocator: ^14.0.2
-  google_fonts: ^8.0.2
+  google_fonts: ^8.1.0
   flutter_markdown_plus: ^1.0.7
   markdown: ^7.3.1
   file_picker: ^11.0.2
@@ -66,15 +66,15 @@ dependencies:
   record: ^6.2.0
   just_audio: ^0.10.5
   audio_session: ^0.2.3
-  connectivity_plus: ^7.1.0
+  connectivity_plus: ^7.1.1
 
   # 实时音视频通话
   livekit_client: ^2.7.0
   flutter_callkit_incoming: ^3.0.0
   web_socket_channel: ^3.0.3
   webview_flutter: ^4.13.1
-  sqflite: ^2.4.2
-  sqflite_common_ffi: ^2.4.0+2
+  sqflite: ^2.4.2+1
+  sqflite_common_ffi: ^2.4.0+3
 
   # Repository 抽象（Mock/Remote 共用）；见 packages/quwoquan_cloud_contracts
   quwoquan_cloud_contracts:
@@ -91,8 +91,8 @@ dev_dependencies:
   patrol: ^4.5.0
   integration_test:
     sdk: flutter
-  build_runner: ^2.13.1
-  test: ^1.31.0
+  build_runner: ^2.15.0
+  test: ^1.31.1
 
 dependency_overrides:
   # 暂时锁定到不依赖 objective_c native asset 的版本，规避 iOS 启动白屏
@@ -100,12 +100,12 @@ dependency_overrides:
   # livekit 传递依赖；升到 1.4.1 以对齐上游修复
   flutter_webrtc: ^1.4.1
   characters: ^1.4.1
-  matcher: ^0.12.19
+  matcher: ^0.12.20
   meta: ^1.18.2
-  test: ^1.31.0
-  test_api: ^0.7.11
-  test_core: ^0.6.17
-  dart_style: ^3.1.8
+  test: ^1.31.1
+  test_api: ^0.7.12
+  test_core: ^0.6.18
+  dart_style: ^3.1.9
   material_color_utilities: ^0.13.0
   # record_linux 0.7.2 缺少 record_platform_interface 1.5.0 新增的 startStream/hasPermission 签名
   record_linux: ^1.3.0

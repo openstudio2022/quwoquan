@@ -8,11 +8,79 @@ IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
 GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:18080}"
 PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test}"
 MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}"
+DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.m.daocloud.io/library}"
+
+library_image() {
+  local image="$1"
+  printf '%s/%s' "${DOCKER_LIBRARY_PREFIX%/}" "$image"
+}
+
+export LOCAL_GAMMA_POSTGRES_IMAGE="${LOCAL_GAMMA_POSTGRES_IMAGE:-$(library_image postgres:16-alpine)}"
+export LOCAL_GAMMA_MONGO_IMAGE="${LOCAL_GAMMA_MONGO_IMAGE:-$(library_image mongo:7-jammy)}"
+export LOCAL_GAMMA_REDIS_IMAGE="${LOCAL_GAMMA_REDIS_IMAGE:-$(library_image redis:7.2-alpine)}"
+export LOCAL_GAMMA_GO_BOOKWORM_IMAGE="${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-$(library_image golang:1.24-bookworm)}"
+export LOCAL_GAMMA_CADDY_IMAGE="${LOCAL_GAMMA_CADDY_IMAGE:-$(library_image caddy:2.8-alpine)}"
+export LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-$(library_image golang:1.24.3-alpine)}"
+export LOCAL_GAMMA_ALPINE_BASE_IMAGE="${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-$(library_image alpine:3.19)}"
+export LOCAL_GAMMA_PYTHON_BASE_IMAGE="${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-$(library_image python:3.11-slim)}"
 
 skip_build=0
 skip_up=0
 print_env=0
 down=0
+tunnel_pid_file="$ROOT/artifacts/local-gamma/colima-tunnels.pids"
+
+stop_colima_tunnels() {
+  if [[ ! -f "$tunnel_pid_file" ]]; then
+    return 0
+  fi
+  while IFS= read -r pid; do
+    if [[ -n "$pid" ]]; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
+  done < "$tunnel_pid_file"
+  rm -f "$tunnel_pid_file"
+}
+
+host_port_open() {
+  local port="$1"
+  python3 - "$port" <<'PY'
+import sys
+import urllib.request
+
+port = sys.argv[1]
+try:
+    body = urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=2).read()
+except Exception:
+    raise SystemExit(1)
+if b"business-beta" in body.lower():
+    raise SystemExit(1)
+raise SystemExit(0)
+PY
+}
+
+start_colima_tunnels_if_needed() {
+  command -v colima >/dev/null 2>&1 || return 0
+  command -v ssh >/dev/null 2>&1 || return 0
+  [[ "$(docker context show 2>/dev/null || true)" == "colima" ]] || return 0
+
+  local http_port="${LOCAL_GAMMA_HTTP_PORT:-18080}"
+  local product_ops_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18086}"
+  local ssh_config="$ROOT/artifacts/local-gamma/colima-ssh-config"
+  mkdir -p "$ROOT/artifacts/local-gamma"
+  stop_colima_tunnels
+  colima ssh-config > "$ssh_config"
+  : > "$tunnel_pid_file"
+  for port in "$http_port" "$product_ops_port"; do
+    if host_port_open "$port"; then
+      continue
+    fi
+    ssh -F "$ssh_config" -N -L "127.0.0.1:${port}:127.0.0.1:${port}" colima \
+      > "$ROOT/artifacts/local-gamma/colima-tunnel-${port}.log" 2>&1 &
+    echo "$!" >> "$tunnel_pid_file"
+  done
+  sleep 2
+}
 
 usage() {
   cat <<'USAGE'
@@ -187,6 +255,7 @@ PY
 }
 
 if [[ "$down" == "1" ]]; then
+  stop_colima_tunnels
   docker compose -f "$COMPOSE_FILE" down
   exit 0
 fi
@@ -211,11 +280,21 @@ if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose
   compose_up_args=(up -d --no-build)
 else
   compose_cmd=(docker compose -f "$COMPOSE_FILE")
-  compose_up_args=(up -d)
+  compose_up_args=(up -d --remove-orphans)
 fi
 
 if [[ "$skip_build" == "0" ]]; then
-  "${compose_cmd[@]}" build
+  if ! "${compose_cmd[@]}" build; then
+    if [[ "${LOCAL_GAMMA_ALLOW_CACHED_IMAGES_ON_BUILD_FAILURE:-1}" == "1" ]] && \
+      docker image inspect \
+        quwoquan_service-rec-model-service \
+        quwoquan_service-content-service \
+        quwoquan_service-chat-service >/dev/null 2>&1; then
+      echo "[local-gamma] WARN: docker build failed; using existing local service images (set LOCAL_GAMMA_ALLOW_CACHED_IMAGES_ON_BUILD_FAILURE=0 to make this fatal)" >&2
+    else
+      exit 1
+    fi
+  fi
 fi
 export LOCAL_GAMMA_CONFIG_VERSION="$CONFIG_VERSION"
 export LOCAL_GAMMA_IMAGE_VERSION="$IMAGE_VERSION"
@@ -295,13 +374,13 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_POSTGRES_PORT:-55432}:5432" \
     --healthcheck-command "pg_isready -U quwoquan" \
     --healthcheck-interval 5s --healthcheck-timeout 3s --healthcheck-retries 10 \
-    docker.io/library/postgres:16-alpine >/dev/null
+    "$LOCAL_GAMMA_POSTGRES_IMAGE" >/dev/null
 
   podman run --pull=never --name quwoquan_service_mongodb_1 -d \
     --net "$network_name" --network-alias mongodb \
     -v quwoquan_service_local-gamma-mongo:/data/db \
     -p "${LOCAL_GAMMA_MONGO_PORT:-37017}:27017" \
-    docker.io/library/mongo:7-jammy --replSet rs0 --bind_ip_all >/dev/null
+    "$LOCAL_GAMMA_MONGO_IMAGE" --replSet rs0 --bind_ip_all >/dev/null
 
   podman run --pull=never --name quwoquan_service_redis_1 -d \
     --net "$network_name" --network-alias redis \
@@ -309,7 +388,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -p "${LOCAL_GAMMA_REDIS_PORT:-36379}:6379" \
     --healthcheck-command "redis-cli ping" \
     --healthcheck-interval 5s --healthcheck-timeout 3s --healthcheck-retries 20 \
-    docker.io/library/redis:7.2-alpine redis-server --appendonly yes >/dev/null
+    "$LOCAL_GAMMA_REDIS_IMAGE" redis-server --appendonly yes >/dev/null
 
   wait_healthy quwoquan_service_postgres_1
   wait_running quwoquan_service_mongodb_1
@@ -318,7 +397,7 @@ if [[ "$podman_compose" == "1" ]]; then
 
   podman run --pull=never --rm --name quwoquan_service_mongo-init_1 \
     --net "$network_name" --network-alias mongo-init \
-    docker.io/library/mongo:7-jammy bash -lc "mongosh --host mongodb:27017 --quiet --eval '
+    "$LOCAL_GAMMA_MONGO_IMAGE" bash -lc "mongosh --host mongodb:27017 --quiet --eval '
       try {
         rs.status().ok
       } catch (e) {
@@ -355,7 +434,7 @@ if [[ "$podman_compose" == "1" ]]; then
     -w /workspace \
     --healthcheck-command "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 10 \
-    docker.io/library/golang:1.24-bookworm sh -lc "cd services/product-ops-service/cmd/api && /usr/local/go/bin/go run ." >/dev/null
+    "$LOCAL_GAMMA_GO_BOOKWORM_IMAGE" sh -lc "cd services/product-ops-service/cmd/api && /usr/local/go/bin/go run ." >/dev/null
   wait_healthy quwoquan_service_product-ops-service_1
 
   podman run --pull=never --name quwoquan_service_content-service_1 -d \
@@ -411,8 +490,11 @@ if [[ "$podman_compose" == "1" ]]; then
     docker.io/library/caddy:2.8-alpine >/dev/null
   wait_healthy quwoquan_service_gamma-proxy_1
 else
+  # Recreate the local mirror on every gate run so changed host port envs take effect.
+  "${compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
   "${compose_cmd[@]}" "${compose_up_args[@]}"
 fi
+start_colima_tunnels_if_needed
 
 # docker compose 分支不会逐项 wait_healthy；在宣告就绪前用主机侧探测避免 T3/T4 撞到端口未监听。
 wait_local_gamma_host_ready() {
@@ -425,8 +507,10 @@ wait_local_gamma_host_ready() {
 import urllib.request
 for url in ("${gw}/healthz", "http://127.0.0.1:${po_port}/healthz"):
     try:
-        urllib.request.urlopen(url, timeout=4)
+        body = urllib.request.urlopen(url, timeout=4).read()
     except Exception:
+        raise SystemExit(1)
+    if b"business-beta" in body.lower():
         raise SystemExit(1)
 raise SystemExit(0)
 PY

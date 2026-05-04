@@ -131,6 +131,39 @@ journey_acceptance:
       - "T4 release rehearsal 仍以受控演练入口为主，尚未自动化。"
     status: implemented
 
+  J4:
+    title: 内容图片上传、派生元数据、自适应展示与原图授权具备商用端到端证据
+    journey: user selects image -> init upload -> PUT -> complete -> post.publish -> feed/detail/immersive renders via AppImage policy -> optional original:access with audit
+    scenario_refs:
+      - media-upload-and-storage
+    done_when:
+      - "`beta` / `local-gamma` / `cloud-gamma-pre` / `cloud-gamma-prod-smoke` 四类环境各产出非 dry-run、可追溯 JSON+UI 证据（锚点含 `mediaId`/`postId`）"
+      - 证据字段与步骤与 `image-end-to-end-commercial-matrix.md` 一致且无矩阵缺项
+      - 原图授权链路的拒绝、限流与签名语义在矩阵中至少各有一次可核验记录或等价说明
+    release_guardrails:
+      - 不得以 `make gate-runtime-media` 或单独 CI 契约替代本节全矩阵声明
+      - dry-run / 纯本地 mock 报告禁止作为商用矩阵 passed 依据
+    evidence:
+      primary:
+        - T4_user_journey
+        - T3_cross_service_integration
+      supporting:
+        - T1_schema
+        - T2_module_interaction
+    tests:
+      planned:
+        - content image Patrol / device-matrix 与 cloud-gamma-pre smoke（与群头像 runbook 同构）
+      recorded:
+        - "工程内门禁与契约（不冒充矩阵）：`make gate-runtime-media`"
+        - "Go（示例）：`go test ./quwoquan_service/services/content-service/...`（以媒体/原图相关包测试为准）"
+        - "Dart（示例）：`flutter test test/ui/content/post/post_summary_view_test.dart`"
+        - "前置自检：`python3 scripts/check_image_commercial_matrix_prereqs.py`"
+    notes:
+      - "单一真相源：`specs/feature-tree/runtime/runtime-media/image-end-to-end-commercial-matrix.md`。"
+      - "四类环境非 dry-run 证据未齐备前，J4 保持 `GATE_BLOCK`；ECS 可为阿里云 onebox（见 deploy_gamma_ecs.sh），self-hosted 含本机设备。须将 GAMMA_BASE_URL 指向 Caddy 网关并通过 verify_gamma_public_gateway_routing.py。"
+      - "解除条件：按该矩阵文档「执行队列」Q1–Q4 全部归档 passed 证据后，更新本 journey `status` 为 `implemented` 并回填 `tests.recorded` 中四条 JSON 路径。"
+    status: gate_block
+
 release_acceptance:
   R1:
     title: runtime-media 可作为后续群头像、聊天媒体与内容媒体统一基线进入设计阶段
