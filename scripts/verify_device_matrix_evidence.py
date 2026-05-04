@@ -20,19 +20,40 @@ def parse_args() -> argparse.Namespace:
 def resolve_evidence_path(report_file: Path, artifact_root: Path, raw_path: str) -> Path | None:
     if not raw_path:
         return None
-    path = Path(raw_path)
-    if path.is_absolute():
-        return path if path.exists() else None
-    for base in [report_file.parent, *report_file.parents]:
-        try:
-            base.relative_to(artifact_root)
-        except ValueError:
+    raw = Path(raw_path)
+    candidate_paths: list[Path] = []
+    seen: set[Path] = set()
+
+    def add_candidate(path: Path) -> None:
+        if path not in seen:
+            seen.add(path)
+            candidate_paths.append(path)
+
+    add_candidate(raw)
+    if not raw.is_absolute():
+        parts = raw.parts
+        if len(parts) >= 2 and parts[0] == "artifacts" and parts[1] == "device-matrix":
+            stripped = Path(*parts[2:])
+            if str(stripped) not in {"", "."}:
+                add_candidate(stripped)
+
+    for path in candidate_paths:
+        if path.is_absolute():
+            if path.exists():
+                return path
             continue
-        candidate = base / path
+        for base in [report_file.parent, *report_file.parents]:
+            try:
+                base.relative_to(artifact_root)
+            except ValueError:
+                continue
+            candidate = base / path
+            if candidate.exists():
+                return candidate
+        candidate = artifact_root / path
         if candidate.exists():
             return candidate
-    candidate = artifact_root / path
-    return candidate if candidate.exists() else None
+    return None
 
 
 def expect_path(

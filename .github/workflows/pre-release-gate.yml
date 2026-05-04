@@ -387,7 +387,5 @@ jobs:
         run: |
           python3 scripts/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/gamma-selfhosted-artifacts" \
-            --report-glob "**/artifacts/device-matrix/*-android.json" \
-            --report-glob "**/artifacts/device-matrix/*-ios.json" \
-            --report-glob "**/artifacts/device-matrix/chat-avatar/*-android.json" \
-            --report-glob "**/artifacts/device-matrix/chat-avatar/*-ios.json"
+            --report-glob "**/*-android.json" \
+            --report-glob "**/*-ios.json"
