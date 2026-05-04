@@ -209,7 +209,9 @@ jobs:
             python3 scripts/run_assistant_device_matrix_ci.py --platform android
           fi
       - name: Upload Android matrix report
+        id: upload_android_matrix_report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
@@ -218,6 +220,19 @@ jobs:
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
+          compression-level: 0
+      - name: Retry Android matrix report upload
+        if: always() && steps.upload_android_matrix_report.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
+          path: |
+            artifacts/device-matrix/${{ matrix.env }}-android.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: true
 
   ios:
     name: ${{ matrix.env }} / iOS (self-hosted)
@@ -282,7 +297,9 @@ jobs:
             python3 scripts/run_assistant_device_matrix_ci.py --platform ios
           fi
       - name: Upload iOS matrix report
+        id: upload_ios_matrix_report
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
@@ -291,6 +308,19 @@ jobs:
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
+          compression-level: 0
+      - name: Retry iOS matrix report upload
+        if: always() && steps.upload_ios_matrix_report.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
+          path: |
+            artifacts/device-matrix/${{ matrix.env }}-ios.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: true
 
   app_env_device_matrix_summary:
     name: 05. App Env Device Matrix
