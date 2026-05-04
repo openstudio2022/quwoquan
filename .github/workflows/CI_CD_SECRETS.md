@@ -14,7 +14,7 @@
 | **service_pipeline.yml** | quwoquan_service/**、deploy/** | Go 构建、rec-model 镜像、kustomize 校验 | G2 |
 | **app_pipeline.yml** | quwoquan_app/**；v* tag → macOS 构建 | Flutter analyze、macOS 构建（L1 由 delivery-gate 负责） | G2 / 发布 |
 | **pre-release-gate.yml** | v*-rc* tag、手动 | L1+L2 → deploy → L3 → L4（L3 统一整合） | G3→G5b |
-| **deploy-gamma-ecs.yml** | 手动、push main | hosted 打包 → ECS pre → self-hosted 矩阵 → prod 就地升级 | G5a→G5b |
+| **deploy-gamma-ecs.yml** | 手动、push main | hosted gate/打包 → self-hosted alpha/beta 预检 → ECS pre → self-hosted 矩阵 → prod 就地升级 | G5a→G5b |
 | **app-env-device-matrix-self-hosted.yml** | 被调用 / 手动 | alpha/beta/gamma self-hosted 端侧矩阵 | G5b |
 | **ecs-onebox-rollback.yml** | 手动 | ECS onebox 备份回滚 | 运维 |
 
@@ -84,22 +84,23 @@
 
 ---
 
-## 六、App Env Device Matrix（app-env-device-matrix.yml）
+## 六、App Env Device Matrix（app-env-device-matrix.yml / app-env-device-matrix-self-hosted.yml）
 
-### hosted（GitHub Runner）矩阵
+### self-hosted（dev1.0/main push 与 05b 统一复用）
 
 | Secret | 用途 |
 |--------|------|
-| **GAMMA_BASE_URL** | 仅在本地跑 hosted **gamma** 时需要；当前 workflow 已收敛为 **仅 alpha/beta**，一般可不配 |
+| **GAMMA_BASE_URL** | gamma 场景或手动覆盖时使用；`dev1.0/main` push 的 `05` 当前固定跑 `alpha/beta`，通常不需要 |
+| **GAMMA_TEST_AUTH_TOKEN** | beta/gamma 远端链路鉴权 |
 
 ### 说明
 
-- **hosted** 矩阵为 `alpha/beta × Android/iOS`（快速回归）；**gamma 发布准入**改走 **05b `app-env-device-matrix-self-hosted.yml`**（需自建 self-hosted runner）。
+- `app-env-device-matrix.yml` 已改为 **wrapper**：`dev1.0/main` 的每次 push 统一调用 **05b `app-env-device-matrix-self-hosted.yml`**，不再使用 GitHub hosted 模拟器。
 - `alpha` 使用 `APP_DATA_SOURCE=mock`，不需要云侧 Secret。
-- `beta` 在 runner 内启动本地 beta assistant-service + gateway；Android 通过 `10.0.2.2` 访问 runner，iOS 通过 `127.0.0.1` 访问 runner。
+- `beta` 在 runner 内启动本地 beta assistant-service + gateway；设备通过仓库变量 `ANDROID_DEVICE_ID` / `IOS_DEVICE_ID` 指向本机模拟器或真机。
 - beta CI 默认使用 deterministic provider；真实模型链路仍以人工/专门 beta 验证为准。
 
-### self-hosted（05b）可选 Variables
+### self-hosted 可选 Variables
 
 | Variable | 用途 |
 |----------|------|

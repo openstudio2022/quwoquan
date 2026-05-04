@@ -36,7 +36,7 @@ v*-rc* tag
 
 ### 1.3 ECS Onebox（gamma 镜像栈，`deploy-gamma-ecs.yml`）
 
-与 ACK integration **并行**的一条闭环：**hosted 仅负责 gate + alpha/beta 快速矩阵 + 源码打包**；**ECS** 在同一机器同端口执行 **pre 全量部署** 与 **prod 就地升级**（`GAMMA_ECS_SKIP_UPLOAD`）；**self-hosted** 承担 **alpha/beta/gamma 发布准入矩阵** 与 prod 后 **gamma 烟测**。部署前后在远端 `../gamma-backups/` 备份 tarball，结构化报告见 `artifacts/ecs-onebox/deploy-report.json`，回滚见 **`ecs-onebox-rollback.yml` / `scripts/rollback_gamma_ecs.sh`**。
+与 ACK integration **并行**的一条闭环：**hosted 仅负责 gate + 源码打包**；**self-hosted** 负责 **alpha/beta 预检矩阵**、**alpha/beta/gamma 发布准入矩阵** 与 prod 后 **gamma 烟测**；**ECS** 在同一机器同端口执行 **pre 全量部署** 与 **prod 就地升级**（`GAMMA_ECS_SKIP_UPLOAD`）。部署前后在远端 `../gamma-backups/` 备份 tarball，结构化报告见 `artifacts/ecs-onebox/deploy-report.json`，回滚见 **`ecs-onebox-rollback.yml` / `scripts/rollback_gamma_ecs.sh`**。
 
 ---
 
