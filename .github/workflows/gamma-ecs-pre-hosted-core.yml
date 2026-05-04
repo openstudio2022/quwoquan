@@ -18,6 +18,8 @@ env:
   GAMMA_ECS_USER: ${{ vars.GAMMA_ECS_USER || 'root' }}
   GAMMA_ECS_PORT: ${{ vars.GAMMA_ECS_PORT || '22' }}
   GAMMA_ECS_REMOTE_DIR: ${{ vars.GAMMA_ECS_REMOTE_DIR || '/opt/quwoquan/gamma' }}
+  ASSISTANT_MODEL_PROVIDER: deterministic
+  ALLOW_DETERMINISTIC_BETA: "1"
 
 jobs:
   package_gamma_bundle:
@@ -107,6 +109,8 @@ jobs:
           GAMMA_ECS_CONTAINER_REGISTRY_MIRROR: ${{ vars.GAMMA_ECS_CONTAINER_REGISTRY_MIRROR }}
           GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS }}
           GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS }}
+          ASSISTANT_MODEL_PROVIDER: ${{ env.ASSISTANT_MODEL_PROVIDER }}
+          ALLOW_DETERMINISTIC_BETA: ${{ env.ALLOW_DETERMINISTIC_BETA }}
       - name: Upload ECS deploy report (pre)
         if: always()
         uses: actions/upload-artifact@v4
