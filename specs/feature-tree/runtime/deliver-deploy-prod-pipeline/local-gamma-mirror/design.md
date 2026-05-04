@@ -26,7 +26,7 @@
 
 ### 2. 本地 T1-T4 左移，不替代云端
 
-本地 gate 负责提交前质量；云端 gate 负责发布真实性。
+本地 gate 负责提交前质量；云端 `04/05` 负责进入 `main` 前的发布真实性。
 
 ```mermaid
 flowchart TB
@@ -35,7 +35,7 @@ flowchart TB
   LocalGate --> T3["T3 Local Real API"]
   LocalGate --> T4["T4 Local Device"]
   T4 --> CommitReady["Commit Ready"]
-  CommitReady --> CloudGamma["Cloud Gamma"]
+  CommitReady --> CloudGamma["Cloud Gamma PR Checks 04/05"]
   CloudGamma --> ProdGray["Prod Gray SLO"]
   ProdGray --> Prod["Prod"]
 ```
@@ -54,7 +54,7 @@ App、T3 runner、T4 runner 必须消费同一组 mirror endpoint：
 - `MEDIA_VIDEO_CDN_BASE_URL`
 - `MEDIA_UPLOAD_BASE_URL`
 
-`scripts/print_app_env_dart_defines.py` 从 `quwoquan_app/configs/gamma/app_runtime.yaml` 与本地 override 生成 Flutter/Patrol 参数，避免手抄漂移。
+`scripts/print_app_env_dart_defines.py` 从 `quwoquan_app/configs/gamma/app_runtime.yaml` 与本地 override 生成 Flutter/Patrol 参数，避免手抄漂移。`deploy/shared/gamma_validation_suites.json` 作为 assistant/avatar 与后续业务对象核心 gamma 旅程的单源，local-gamma 与云侧 gamma 共享其 suite id 与报告口径。
 
 ### 4. 配置版本策略
 
@@ -90,7 +90,7 @@ artifacts/local-gamma/config-root/
 | T1 | `make gate`、`make verify-app-env-package`、`make verify-app-seed-manifest` | 静态、metadata、拓扑、环境包、seed 清单通过 |
 | T2 | `gate_repo.sh` 内 Flutter/Go/Ops 模块测试 | Widget/Provider/Journey/模块测试通过 |
 | T3 | `scripts/run_local_gamma_t3.py` | health、manifest endpoints、真实存储副作用、错误响应、RemoteRepository smoke 通过 |
-| T4 | `scripts/run_local_gamma_t4.sh` | 至少一台模拟器或真机 Patrol 核心旅程通过 |
+| T4 | `scripts/run_local_gamma_t4.sh`（内部复用共享 `run_gamma_patrol_matrix_ci.py`） | 当前可见设备进入共享 gamma 巡检脚本并生成审计证据 |
 
 ## 报告模型
 
@@ -106,6 +106,7 @@ artifacts/local-gamma/config-root/
 - `tests.T1/T2/T3/T4`
 - `devices`
 - `skipped`
+- `gammaValidationSuiteRegistry`
 - `cloudGateReminder`
 
 本地设备、证书、DNS 或服务缺口导致无法验证时，状态必须为 `gate_block`，不得降级为通过。

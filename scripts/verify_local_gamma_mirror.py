@@ -53,6 +53,7 @@ def main() -> int:
             "dryRun": True,
             "commitSha": git_sha(),
             "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
             "tests": {
                 "T1": {"status": "passed", "reason": "dry-run"},
                 "T2": {"status": "passed", "reason": "dry-run"},
@@ -82,6 +83,7 @@ def main() -> int:
             "configVersion": args.config_version,
             "imageVersion": args.image_version,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
+            "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
             "tests": {
                 "T1": {"status": "passed", "source": "make gate"},
                 "T2": {"status": "passed", "source": "make gate"},

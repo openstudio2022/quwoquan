@@ -9,7 +9,7 @@ tests:
   contract:
   - 场景：branch_strategy 明确 dev1.0/main PR 合流策略
   - 场景：main 通过 required checks 阻断合入
-  - 场景：pre-release-gate 支持 pull_request 到 main
+  - 场景：pre-release-gate 以 ECS gamma 主门禁支持 pull_request 到 main
 execution:
   local_gate: make gate
   full_gate: make gate-full
@@ -42,7 +42,7 @@ level_acceptance:
       functions:
       - pull_request branches main
   A3:
-    criteria: PR 更新后触发 pre-release-gate（或等效 deploy integration）
+    criteria: PR 更新后触发 pre-release-gate（ECS gamma hosted pre + gamma self-hosted Android/iOS）
     status: implemented
     linked_tasks:
     - T3

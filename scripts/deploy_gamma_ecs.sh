@@ -15,9 +15,10 @@ REMOTE_DIR="${GAMMA_ECS_REMOTE_DIR:-/opt/quwoquan/gamma}"
 LOCAL_GAMMA_HTTP_PORT="${LOCAL_GAMMA_HTTP_PORT:-18000}"
 BASE_URL="${GAMMA_BASE_URL:-http://${ECS_HOST}:${LOCAL_GAMMA_HTTP_PORT}}"
 PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${ECS_HOST}:18086}"
+MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-${BASE_URL}}"
 STAGE="${GAMMA_ECS_STAGE:-pre}"
 SKIP_UPLOAD="${GAMMA_ECS_SKIP_UPLOAD:-0}"
-IMAGE_VERSION="${GAMMA_DEPLOY_IMAGE_VERSION:-$(git rev-parse --short HEAD 2>/dev/null || echo manual)}"
+IMAGE_VERSION="${GAMMA_DEPLOY_IMAGE_VERSION:-0.0.$(date +%Y%m%d%H%M%S)}"
 LOCAL_TARBALL="${GAMMA_ECS_LOCAL_TARBALL:-}"
 REPORT_DIR="${ROOT}/artifacts/ecs-onebox"
 REPORT_PATH="${REPORT_DIR}/deploy-report.json"
@@ -90,6 +91,7 @@ echo "[gamma-ecs] target=${ECS_USER}@${ECS_HOST}:${ECS_PORT}"
 echo "[gamma-ecs] remote_dir=${REMOTE_DIR}"
 echo "[gamma-ecs] base_url=${BASE_URL}"
 echo "[gamma-ecs] product_ops_base_url=${PRODUCT_OPS_BASE_URL}"
+echo "[gamma-ecs] media_base_url=${MEDIA_BASE_URL}"
 echo "[gamma-ecs] image_version=${IMAGE_VERSION}"
 echo "[gamma-ecs] skip_upload=${SKIP_UPLOAD}"
 
@@ -166,7 +168,7 @@ if remote_exec "test -f '${REMOTE_DIR}/.gamma_deploy_state.json'"; then
   )"
 fi
 
-remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-5400}") && bash -s" <<'REMOTE_SCRIPT'
+remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-deterministic}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-1}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-5400}") && bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 python3 - <<'PY'
 import json

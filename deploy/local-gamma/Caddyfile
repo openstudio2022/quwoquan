@@ -22,9 +22,17 @@ gamma-api.quwoquan-env.test {
 	handle @api_content {
 		reverse_proxy content-service:18080
 	}
-	@api_chat path /v1/chat* /v1/user/sync
+	@api_chat path /v1/chat*
 	handle @api_chat {
 		reverse_proxy chat-service:18081
+	}
+	@api_user path /v1/user*
+	handle @api_user {
+		reverse_proxy user-service:18082
+	}
+	@api_assistant path /v1/assistant*
+	handle @api_assistant {
+		reverse_proxy assistant-service:18087
 	}
 	handle /v1/ops/* {
 		reverse_proxy product-ops-service:18086
@@ -68,9 +76,17 @@ gamma-upload.quwoquan-env.test {
 	handle @pub_content {
 		reverse_proxy content-service:18080
 	}
-	@pub_chat path /v1/chat* /v1/user/sync
+	@pub_chat path /v1/chat*
 	handle @pub_chat {
 		reverse_proxy chat-service:18081
+	}
+	@pub_user path /v1/user*
+	handle @pub_user {
+		reverse_proxy user-service:18082
+	}
+	@pub_assistant path /v1/assistant*
+	handle @pub_assistant {
+		reverse_proxy assistant-service:18087
 	}
 	handle /v1/ops/* {
 		reverse_proxy product-ops-service:18086

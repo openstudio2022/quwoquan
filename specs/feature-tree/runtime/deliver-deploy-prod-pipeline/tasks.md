@@ -33,7 +33,7 @@ metadata → codegen → 业务逻辑 → 测试
 | T2 | 创建 `deploy/cloud-providers/volcengine/seed-box/overlays/{integration,prod}`，火山引擎特定 patch | [x] 已完成 |
 | T3 | 创建 `deploy/cloud-providers/huaweicloud/seed-box/overlays/{integration,prod}`，华为云特定 patch | [x] 已完成 |
 | T4 | 编写 `scripts/deploy_to_integration.sh`，支持 `CLOUD_PROVIDER` 参数，调用 kustomize 构建并 apply | [x] 已完成 |
-| T5 | 创建 `.github/workflows/pre-release-gate.yml`：v*-rc* 触发 gate-full → deploy integration → L3 → L4，全部通过输出「可灰度」 | [x] 已完成 |
+| T5 | 创建 `.github/workflows/pre-release-gate.yml`：收口为 ECS gamma hosted pre + self-hosted gamma Android/iOS 主门禁，全部通过输出「可灰度」 | [x] 已完成 |
 | T6 | 串联 daily-api-contract、e2e.yaml 与 pre-release-gate（或合并为统一 pre-release workflow） | [x] 已完成 |
 | T7 | 更新 `deploy/shared/deliver_to_production_runbook.md`，增加多云切换步骤与 `CLOUD_PROVIDER` 说明 | [x] 已完成 |
 | T8 | 更新 Makefile：`deploy-integration CLOUD_PROVIDER=aliyun\|volcengine\|huaweicloud` | [x] 已完成 |
@@ -45,7 +45,7 @@ metadata → codegen → 业务逻辑 → 测试
 | V1 | 验证 `kustomize build deploy/kustomization/aliyun-integration` 无错误 | [x] 已完成 |
 | V2 | 验证 `kustomize build deploy/kustomization/volcengine-integration` 无错误 | [x] 已完成 |
 | V3 | 验证 `kustomize build deploy/kustomization/huaweicloud-integration` 无错误 | [x] 已完成 |
-| V4 | 在至少一云（如阿里云）上执行端到端：deliver → deploy integration → L3 → L4 → 灰度 prod | 待执行（需集群） |
+| V4 | 在至少一套 ECS gamma / prod 环境上执行端到端：deliver → ECS gamma hosted pre → self-hosted gamma 旅程 → 灰度 prod | 待执行（需集群） |
 | V5 | 演练多云切换：同一 manifest 在阿里云与火山引擎分别渲染，确认无硬编码云厂商路径 | [x] 已完成 |
 
 ---

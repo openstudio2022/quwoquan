@@ -62,7 +62,8 @@ type config struct {
 		Database string `yaml:"database"`
 	} `yaml:"mongodb"`
 	Redis struct {
-		General redisSceneCfg `yaml:"general"`
+		General  redisSceneCfg `yaml:"general"`
+		Realtime redisSceneCfg `yaml:"realtime"`
 	} `yaml:"redis"`
 }
 
@@ -271,6 +272,9 @@ func applyEnvOverrides(cfg *config) {
 	if v := os.Getenv("REDIS_ADDR"); v != "" {
 		cfg.Redis.General.Addr = v
 	}
+	if v := os.Getenv("REDIS_REALTIME_ADDR"); v != "" {
+		cfg.Redis.Realtime.Addr = v
+	}
 }
 
 func validateRuntimeCompatibility(cfg config, _, _ string) error {
@@ -282,9 +286,45 @@ func validateRuntimeCompatibility(cfg config, _, _ string) error {
 
 func buildRedisRouter(cfg config) *rtredis.Router {
 	rc := cfg.Redis.General
+	rt := cfg.Redis.Realtime
+	if strings.TrimSpace(rt.Mode) == "" {
+		rt.Mode = rc.Mode
+	}
+	if strings.TrimSpace(rt.Addr) == "" && len(rt.Addrs) == 0 {
+		rt.Addr = rc.Addr
+		rt.Addrs = append([]string(nil), rc.Addrs...)
+	}
+	if strings.TrimSpace(rt.Password) == "" {
+		rt.Password = rc.Password
+	}
+	if rt.DB == 0 {
+		rt.DB = rc.DB
+	}
+	if !rt.TLS {
+		rt.TLS = rc.TLS
+	}
+	if rt.Pool.Size == 0 {
+		rt.Pool.Size = rc.Pool.Size
+	}
+	if rt.Pool.MinIdle == 0 {
+		rt.Pool.MinIdle = rc.Pool.MinIdle
+	}
+	if rt.Pool.ReadTimeoutMs == 0 {
+		rt.Pool.ReadTimeoutMs = rc.Pool.ReadTimeoutMs
+	}
+	if rt.Pool.WriteTimeoutMs == 0 {
+		rt.Pool.WriteTimeoutMs = rc.Pool.WriteTimeoutMs
+	}
+	if rt.Pool.DialTimeoutMs == 0 {
+		rt.Pool.DialTimeoutMs = rc.Pool.DialTimeoutMs
+	}
 	mode := rc.Mode
 	if mode == "" {
 		mode = "memory"
+	}
+	rtMode := rt.Mode
+	if rtMode == "" {
+		rtMode = mode
 	}
 	return rtredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
@@ -295,6 +335,14 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 				Password: rc.Password,
 				DB:       rc.DB,
 				TLS:      rc.TLS,
+			},
+			"realtime": {
+				Mode:     rtMode,
+				Addr:     rt.Addr,
+				Addrs:    rt.Addrs,
+				Password: rt.Password,
+				DB:       rt.DB,
+				TLS:      rt.TLS,
 			},
 		},
 		DefaultScene: "general",

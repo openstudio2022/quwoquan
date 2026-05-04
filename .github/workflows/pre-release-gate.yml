@@ -1,7 +1,6 @@
-# Pre-release 串联：deploy integration → L3 → L4 → gamma runtime smoke
+# Pre-release 串联：ECS gamma pre 部署 → hosted gamma 探测 → 本地 self-hosted gamma Android/iOS 集成测试
 # 触发：pull_request(main) + workflow_dispatch
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
-# 当前部署目标：阿里云 ACK
 name: 04. Pre-Release Gate
 
 on:
@@ -10,221 +9,345 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  CLOUD_PROVIDER: aliyun
-
 concurrency:
   group: pre-release-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  app-assistant-runtime-gamma:
-    name: Pre-release — Assistant runtime smoke (gamma)
-    needs: [deploy-integration]
-    if: ${{ needs.deploy-integration.outputs.deploy_applied == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: 准备 personal_assistant/.env
-        run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
-          fi
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: cd quwoquan_app && flutter pub get
-      - name: Assistant gamma smoke (remote；网关同集成环境)
-        working-directory: quwoquan_app
-        run: |
-          if [ -z "${GAMMA_BASE_URL:-}" ]; then
-            echo "::error::缺少 repository secret GAMMA_BASE_URL，无法执行 gamma 端云冒烟（需配置 gamma 网关基址）"
-            exit 1
-          fi
-          flutter test test/common/assistant/assistant_environment_smoke_test.dart \
-            --dart-define=APP_RUNTIME_ENV=gamma \
-            --dart-define=APP_DATA_SOURCE=remote \
-            --dart-define=CLOUD_GATEWAY_BASE_URL="${GAMMA_BASE_URL}"
+  gamma_pre_hosted:
+    name: Gamma ECS hosted pre chain
+    uses: ./.github/workflows/gamma-ecs-pre-hosted-core.yml
+    secrets: inherit
 
-  deploy-integration:
-    name: G5a Deploy to integration
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      deploy_applied: ${{ steps.deploy_mode.outputs.deploy_applied }}
-      skip_reason: ${{ steps.deploy_mode.outputs.skip_reason }}
-    env:
-      GAMMA_KUBECONFIG: ${{ secrets.GAMMA_KUBECONFIG }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: syntaqx/setup-kustomize@v1
-      - name: 解析 integration 部署模式
-        id: deploy_mode
-        run: |
-          if [ -z "${GAMMA_KUBECONFIG:-}" ]; then
-            echo "deploy_applied=false" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=missing_gamma_kubeconfig" >> "$GITHUB_OUTPUT"
-          else
-            echo "deploy_applied=true" >> "$GITHUB_OUTPUT"
-            echo "skip_reason=" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Install kubectl
-        run: |
-          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-      - name: Deploy to integration (kubectl apply)
-        run: |
-          if [ -z "$GAMMA_KUBECONFIG" ]; then
-            echo "::warning::GAMMA_KUBECONFIG not set — skipping apply (configure secret for end-to-end)"
-            exit 0
-          fi
-          mkdir -p ~/.kube
-          echo "$GAMMA_KUBECONFIG" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-          kustomize build deploy/kustomization/${{ env.CLOUD_PROVIDER }}-integration | kubectl apply -f - --server-side
-          touch .deploy-applied
-      - name: Wait for rollout
-        run: |
-          if [ -f .deploy-applied ]; then
-            kubectl rollout status deployment/seed-box -n seed-box-integration --timeout=5m
-          else
-            echo "Deploy skipped — no rollout wait"
-          fi
-
-  l3-api-contract:
-    name: Pre-release Gate — L3 (post-deploy)
-    needs: [deploy-integration]
-    if: ${{ needs.deploy-integration.outputs.deploy_applied == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      API_CONTRACT_ENV: gamma
-      GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
-      GAMMA_PRODUCT_OPS_BASE_URL: ${{ secrets.GAMMA_PRODUCT_OPS_BASE_URL }}
-      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: 准备 personal_assistant/.env
-        run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
-          fi
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - run: cd quwoquan_app && flutter pub get
-      - name: L3 API Contract
-        run: make test-api-contract
-
-  l4-mobile-self-hosted:
-    name: Pre-release Gate — L4 mobile (self-hosted)
-    needs: [deploy-integration]
-    if: ${{ needs.deploy-integration.outputs.deploy_applied == 'true' }}
+  discover_gamma_devices:
+    name: Discover gamma mobile devices (self-hosted)
     runs-on: [self-hosted, macOS]
-    timeout-minutes: 180
-    env:
-      API_CONTRACT_ENV: gamma
-      GAMMA_BASE_URL: ${{ secrets.GAMMA_BASE_URL }}
-      GAMMA_PRODUCT_OPS_BASE_URL: ${{ secrets.GAMMA_PRODUCT_OPS_BASE_URL }}
-      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ vars.MEDIA_AVATAR_CDN_BASE_URL }}
+    outputs:
+      has_android: ${{ steps.discover.outputs.has_android }}
+      has_ios: ${{ steps.discover.outputs.has_ios }}
+      android_count: ${{ steps.discover.outputs.android_count }}
+      ios_count: ${{ steps.discover.outputs.ios_count }}
+      device_summary: ${{ steps.discover.outputs.device_summary }}
     steps:
       - uses: actions/checkout@v4
-      - name: 准备 personal_assistant/.env
-        run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
-          fi
       - name: 校验 self-hosted macOS runner
         run: |
           if [ "${{ runner.os }}" != "macOS" ]; then
-            echo "::error::Pre-release L4 已统一到本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            echo "::error::04 gamma 端侧矩阵要求运行在本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
             exit 2
           fi
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
       - name: Install Flutter (PATH)
         run: |
           command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
           flutter --version
-      - run: cd quwoquan_app && flutter pub get
-      - name: Install Patrol CLI
+      - name: 发现当前 Mac 可见移动设备
+        id: discover
         run: |
-          if ! command -v patrol >/dev/null 2>&1; then
-            dart pub global activate patrol_cli
-            echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
-            export PATH="$HOME/.pub-cache/bin:$PATH"
+          python3 scripts/discover_flutter_mobile_devices.py \
+            --output "$RUNNER_TEMP/mobile-devices.json" \
+            --require-mobile
+          python3 - "$RUNNER_TEMP/mobile-devices.json" "$GITHUB_OUTPUT" <<'PY'
+          import json
+          import sys
+
+          path, output_path = sys.argv[1], sys.argv[2]
+          data = json.load(open(path, encoding="utf-8"))
+          android = data.get("android") or []
+          ios = data.get("ios") or []
+
+          def fmt(items):
+              return ", ".join(f'{item["name"]}({item["id"]})' for item in items)
+
+          summary_parts = []
+          if android:
+              summary_parts.append(f'android[{len(android)}]: {fmt(android)}')
+          if ios:
+              summary_parts.append(f'ios[{len(ios)}]: {fmt(ios)}')
+          summary = "；".join(summary_parts) if summary_parts else "未发现 iOS/Android 设备"
+
+          with open(output_path, "a", encoding="utf-8") as fh:
+              print(f'has_android={"true" if android else "false"}', file=fh)
+              print(f'has_ios={"true" if ios else "false"}', file=fh)
+              print(f'android_count={len(android)}', file=fh)
+              print(f'ios_count={len(ios)}', file=fh)
+              print("device_summary<<EOF", file=fh)
+              print(summary, file=fh)
+              print("EOF", file=fh)
+
+          print(f"::notice::gamma self-hosted devices => {summary}")
+          PY
+
+  gamma_assistant_android:
+    name: Gamma assistant / Android (self-hosted)
+    needs: [gamma_pre_hosted, discover_gamma_devices]
+    if: ${{ needs.discover_gamma_devices.outputs.has_android == 'true' }}
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 120
+    env:
+      API_CONTRACT_ENV: gamma
+      GAMMA_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.base_url }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+      ASSISTANT_MODEL_PROVIDER: deterministic
+      ALLOW_DETERMINISTIC_BETA: "1"
+      ASSISTANT_MATRIX_ALL_DEVICES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: 记录发现结果
+        run: |
+          echo "Android devices: ${{ needs.discover_gamma_devices.outputs.android_count }}"
+          echo "${{ needs.discover_gamma_devices.outputs.device_summary }}"
+      - name: 校验 self-hosted macOS runner
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::Gamma Android 端侧矩阵已统一到本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            exit 2
           fi
-          command -v patrol >/dev/null 2>&1 || { echo "::error::patrol CLI 未安装成功"; exit 2; }
-          patrol --version
-      - name: Gamma Patrol on every discovered device
+      - name: 准备 personal_assistant/.env
         run: |
-          python3 scripts/run_gamma_patrol_matrix_ci.py \
-            --report artifacts/device-matrix/gamma-patrol/report.json
-      - name: Upload gamma Patrol matrix report
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: Install Flutter (PATH)
+        run: |
+          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          command -v adb >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 adb 并在 PATH 中"; exit 2; }
+          flutter --version
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Run gamma assistant on Android (self-hosted)
+        run: python3 scripts/run_assistant_device_matrix_ci.py --platform android
+      - name: Upload gamma assistant Android report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pre-release-gamma-patrol-selfhosted
-          path: artifacts/device-matrix/gamma-patrol/**
+          name: gamma-assistant-selfhosted-android
+          path: |
+            artifacts/device-matrix/gamma-android.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+          if-no-files-found: ignore
+
+  gamma_assistant_ios:
+    name: Gamma assistant / iOS (self-hosted)
+    needs: [gamma_pre_hosted, discover_gamma_devices]
+    if: ${{ needs.discover_gamma_devices.outputs.has_ios == 'true' }}
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 120
+    env:
+      API_CONTRACT_ENV: gamma
+      GAMMA_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.base_url }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+      ASSISTANT_MODEL_PROVIDER: deterministic
+      ALLOW_DETERMINISTIC_BETA: "1"
+      ASSISTANT_MATRIX_ALL_DEVICES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: 记录发现结果
+        run: |
+          echo "iOS devices: ${{ needs.discover_gamma_devices.outputs.ios_count }}"
+          echo "${{ needs.discover_gamma_devices.outputs.device_summary }}"
+      - name: 校验 self-hosted macOS runner
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::Gamma iOS 端侧矩阵已统一到本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            exit 2
+          fi
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: Install Flutter (PATH)
+        run: |
+          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          command -v xcrun >/dev/null 2>&1 || { echo "::error::self-hosted runner 需具备 Xcode / xcrun"; exit 2; }
+          flutter --version
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Run gamma assistant on iOS (self-hosted)
+        run: python3 scripts/run_assistant_device_matrix_ci.py --platform ios
+      - name: Upload gamma assistant iOS report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-assistant-selfhosted-ios
+          path: |
+            artifacts/device-matrix/gamma-ios.json
+            artifacts/device-matrix/assistant_device_matrix_logs/**
+          if-no-files-found: ignore
+
+  gamma_chat_avatar_android:
+    name: Gamma chat avatar / Android (self-hosted)
+    needs: [gamma_pre_hosted, discover_gamma_devices]
+    if: ${{ needs.discover_gamma_devices.outputs.has_android == 'true' }}
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 120
+    env:
+      API_CONTRACT_ENV: gamma
+      GAMMA_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.base_url }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.media_base_url }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: 记录发现结果
+        run: |
+          echo "Android devices: ${{ needs.discover_gamma_devices.outputs.android_count }}"
+          echo "${{ needs.discover_gamma_devices.outputs.device_summary }}"
+      - name: 校验 self-hosted macOS runner
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::Gamma chat avatar Android 端侧矩阵要求本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            exit 2
+          fi
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: Install Flutter (PATH)
+        run: |
+          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          command -v adb >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 adb 并在 PATH 中"; exit 2; }
+          flutter --version
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Run gamma chat avatar on Android (self-hosted)
+        run: python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android
+      - name: Upload gamma chat avatar Android report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-chat-avatar-selfhosted-android
+          path: artifacts/device-matrix/chat-avatar/**
+          if-no-files-found: ignore
+
+  gamma_chat_avatar_ios:
+    name: Gamma chat avatar / iOS (self-hosted)
+    needs: [gamma_pre_hosted, discover_gamma_devices]
+    if: ${{ needs.discover_gamma_devices.outputs.has_ios == 'true' }}
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 120
+    env:
+      API_CONTRACT_ENV: gamma
+      GAMMA_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.base_url }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.media_base_url }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - name: 记录发现结果
+        run: |
+          echo "iOS devices: ${{ needs.discover_gamma_devices.outputs.ios_count }}"
+          echo "${{ needs.discover_gamma_devices.outputs.device_summary }}"
+      - name: 校验 self-hosted macOS runner
+        run: |
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            echo "::error::Gamma chat avatar iOS 端侧矩阵要求本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            exit 2
+          fi
+      - name: 准备 personal_assistant/.env
+        run: |
+          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
+          if [ -f quwoquan_app/assistant/.env.example ]; then
+            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
+          else
+            : > quwoquan_app/assistant/.env
+          fi
+          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+          else
+            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          fi
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: quwoquan_service/go.mod
+      - name: Install Flutter (PATH)
+        run: |
+          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
+          command -v xcrun >/dev/null 2>&1 || { echo "::error::self-hosted runner 需具备 Xcode / xcrun"; exit 2; }
+          flutter --version
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Run gamma chat avatar on iOS (self-hosted)
+        run: python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
+      - name: Upload gamma chat avatar iOS report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-chat-avatar-selfhosted-ios
+          path: artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
 
   release-evidence-summary:
     name: 04. Pre-Release Gate
     needs:
-      - deploy-integration
-      - l3-api-contract
-      - l4-mobile-self-hosted
-      - app-assistant-runtime-gamma
+      - gamma_pre_hosted
+      - discover_gamma_devices
+      - gamma_assistant_android
+      - gamma_assistant_ios
+      - gamma_chat_avatar_android
+      - gamma_chat_avatar_ios
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: 汇总并阻断失败项
         env:
-          DEPLOY: ${{ needs.deploy-integration.result }}
-          DEPLOY_APPLIED: ${{ needs.deploy-integration.outputs.deploy_applied }}
-          SKIP_REASON: ${{ needs.deploy-integration.outputs.skip_reason }}
-          L3: ${{ needs.l3-api-contract.result }}
-          L4: ${{ needs.l4-mobile-self-hosted.result }}
-          AG: ${{ needs.app-assistant-runtime-gamma.result }}
+          HOSTED: ${{ needs.gamma_pre_hosted.result }}
+          DISCOVER: ${{ needs.discover_gamma_devices.result }}
+          HAS_ANDROID: ${{ needs.discover_gamma_devices.outputs.has_android }}
+          HAS_IOS: ${{ needs.discover_gamma_devices.outputs.has_ios }}
+          ASSISTANT_ANDROID: ${{ needs.gamma_assistant_android.result }}
+          ASSISTANT_IOS: ${{ needs.gamma_assistant_ios.result }}
+          CHAT_ANDROID: ${{ needs.gamma_chat_avatar_android.result }}
+          CHAT_IOS: ${{ needs.gamma_chat_avatar_ios.result }}
         run: |
           set -euo pipefail
-          echo "=== Pre-release evidence summary (needs.*.result) ==="
-          echo "deploy-integration=${DEPLOY}"
-          echo "l3-api-contract=${L3}"
-          echo "l4-mobile-self-hosted=${L4}"
-          echo "assistant-runtime-gamma=${AG}"
           fail=0
           expect_success() {
             local name="$1" val="$2" hint="$3"
@@ -233,27 +356,38 @@ jobs:
               fail=1
             fi
           }
-          expect_success "deploy-integration" "${DEPLOY}" "检查 integration kustomize / kubectl / GAMMA_KUBECONFIG"
-          if [ "${DEPLOY_APPLIED}" = "true" ]; then
-            expect_success "l3-api-contract" "${L3}" "检查 make test-api-contract、网关路由与 secrets: GAMMA_BASE_URL, GAMMA_PRODUCT_OPS_BASE_URL, GAMMA_TEST_AUTH_TOKEN"
-            expect_success "l4-mobile-self-hosted" "${L4}" "检查本机 self-hosted runner、flutter devices --machine 可见设备、Patrol CLI 与同上 GAMMA_* 配置"
-            expect_success "assistant-runtime-gamma" "${AG}" "检查 gamma remote 与 secrets.GAMMA_BASE_URL（及网关可达性）"
+          expect_success "gamma-ecs-hosted-pre-chain" "${HOSTED}" "检查 ECS 打包/上传/部署、assistant gamma smoke、T3 API contract、avatar API probe"
+          expect_success "discover-gamma-devices" "${DISCOVER}" "检查 self-hosted runner 与 flutter devices --machine"
+          if [ "${HAS_ANDROID}" != "true" ]; then
+            echo "::error::gamma android device environment is required before merge, but no Android device was discovered"
+            fail=1
           else
-            echo "::notice::deploy-integration 未实际 apply（${SKIP_REASON:-unknown}），本次接受 L3/L4/gamma smoke 为 skipped。"
-            for name in l3-api-contract l4-mobile-self-hosted assistant-runtime-gamma; do
-              val=""
-              case "$name" in
-                l3-api-contract) val="${L3}" ;;
-                l4-mobile-self-hosted) val="${L4}" ;;
-                assistant-runtime-gamma) val="${AG}" ;;
-              esac
-              if [ "${val}" != "skipped" ] && [ "${val}" != "success" ]; then
-                echo "::error::${name} expected skipped/success when deploy not applied, got ${val}"
-                fail=1
-              fi
-            done
+            expect_success "gamma-assistant-android" "${ASSISTANT_ANDROID}" "检查 gamma Android assistant 设备矩阵"
+            expect_success "gamma-chat-avatar-android" "${CHAT_ANDROID}" "检查 gamma Android chat avatar 设备矩阵"
+          fi
+          if [ "${HAS_IOS}" != "true" ]; then
+            echo "::error::gamma ios device environment is required before merge, but no iOS device was discovered"
+            fail=1
+          else
+            expect_success "gamma-assistant-ios" "${ASSISTANT_IOS}" "检查 gamma iOS assistant 设备矩阵"
+            expect_success "gamma-chat-avatar-ios" "${CHAT_IOS}" "检查 gamma iOS chat avatar 设备矩阵"
           fi
           if [ "${fail}" -ne 0 ]; then
             echo "::error::Pre-release 未全部成功；请按上列分项修复后重跑 workflow。"
             exit 1
           fi
+      - name: 下载 gamma self-hosted artifacts
+        if: always()
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gamma-*-selfhosted-*
+          path: ${{ runner.temp }}/gamma-selfhosted-artifacts
+      - name: 校验 gamma self-hosted 证据产物
+        if: always()
+        run: |
+          python3 scripts/verify_device_matrix_evidence.py \
+            --artifact-root "${RUNNER_TEMP}/gamma-selfhosted-artifacts" \
+            --report-glob "**/artifacts/device-matrix/*-android.json" \
+            --report-glob "**/artifacts/device-matrix/*-ios.json" \
+            --report-glob "**/artifacts/device-matrix/chat-avatar/*-android.json" \
+            --report-glob "**/artifacts/device-matrix/chat-avatar/*-ios.json"

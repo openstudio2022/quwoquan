@@ -68,6 +68,7 @@ def main() -> int:
     matrix_report_path = report_path.parent / "avatar_device_matrix_report.json"
     report: dict[str, Any] = {
         "schemaVersion": 1,
+        "suiteId": "chat_avatar_sync",
         "scenario": "chat.group_avatar.sync_display_e2e.local_gamma",
         "status": "running",
         "failureCategory": "",
