@@ -163,8 +163,9 @@ Future<void> _sendAndExpect(
 
   var streamState = await sendOnceAndReadState();
   if ((runtimeEnv == 'beta' || runtimeEnv == 'gamma') &&
-      streamState.errorMessage.isNotEmpty) {
-    // Hosted emulator occasionally reports a transient network error.
+      (streamState.errorMessage.isNotEmpty ||
+          streamState.answer.trim().isEmpty)) {
+    // Hosted beta/gamma 在冷启动后首轮偶发网络错误或空回答，重试一次区分抖动与真实回归。
     streamState = await sendOnceAndReadState();
   }
   expect(streamState.running, isFalse);

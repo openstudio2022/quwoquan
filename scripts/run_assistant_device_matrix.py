@@ -240,7 +240,7 @@ def wait_for_gateway(base_url: str, timeout_seconds: int) -> bool:
             with urllib.request.urlopen(url, timeout=3) as response:
                 if response.status == 200:
                     return True
-        except (urllib.error.URLError, TimeoutError):
+        except (urllib.error.URLError, TimeoutError, OSError):
             time.sleep(1)
     return False
 
