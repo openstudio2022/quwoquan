@@ -1,9 +1,0 @@
-{
-  "templateId": "planner.postcondition_check",
-  "templateVersion": "v1",
-  "requiredVariables": [
-    "userQuery"
-  ],
-  "content": "你是后置门禁检查器。\\n问题: {{userQuery}}\\n请检查：结论是否有证据、是否覆盖用户每个子问题、是否给出下一步建议。若不满足，生成 GapFillTask（包含缺口原因、补查目标、单主题查询词）。"
-}
-

@@ -12,7 +12,7 @@
 **排除**：`lib/ui/chat/pages/chat_display_fallbacks.dart` 仅为 `export`，不占行（见 `dual-theme-page-coverage/page-dual-theme-matrix.md`）。  
 **P6 口径**：与 `page-dual-theme-matrix.md` 一致 — `✓`=full，`○`=partial（待按 S6 收敛），`—`=exempt。
 
-**挂靠面（不单独占行，验收结论记在父行备注）**：`publish_location_selector_page.dart` 内 `PublishLocationSearchPage`（Navigator.push 全屏）与父行共用 P1–P8；`app_router.dart` 内 `_CreateEntryRoutePage`（`CreateEntrySheet`）从属于创作入口链，与 `create_page.dart` / 路由 `create` 一并审计；`assistant_chat_settings_page.dart` 内 `_AssistantConversationHistoryPage` 与父行共用 P1–P8。
+**挂靠面（不单独占行，验收结论记在父行备注）**：`publish_location_selector_page.dart` 内 `PublishLocationSearchPage`（Navigator.push 全屏）与父行共用 P1–P8；`app_router.dart` 内 `_CreateEntryRoutePage`（`CreateEntrySheet`）从属于创作入口链，与 `create_page.dart` / 路由 `create` 一并审计。
 
 ---
 
@@ -46,14 +46,11 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/assistant/pages/assistant_tab_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | Tab 根；P4 MainAppShell；P2 无页内云行 Map |
 | `lib/ui/assistant/pages/assistant_management_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `SettingsInsetFormPageScaffold`；P2 同左 |
 | `lib/ui/assistant/pages/assistant_reference_webview_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | WebView 内容域 P2/P3 —；P6 壳层与双色矩阵 `assistant_reference_webview` full 对齐 |
-| `lib/ui/assistant/pages/assistant_conversation_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`/`AppScaffold`；P2 `AssistantTranscriptTimelineRow` + C4 协议载荷（Codec）；P5 对话态标准壳 |
-| `lib/ui/assistant/pages/personal_assistant_conversation_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | “找私助”并行入口；P2 `AssistantConversationWire`/`AssistantTurnEnvelopeWire`/`AssistantStreamEventWire`/`SkillSubscriptionWire` + `AppMessageWire`；P3 经 `assistantRepositoryProvider`/`appMessageRepositoryProvider` Mock/Remote；用户 query 与主动 AppMessage 均投影到统一 transcript |
+| `lib/ui/assistant/pages/personal_assistant_conversation_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | “找私助”唯一入口；P2 `AssistantConversationWire`/`AssistantTurnEnvelopeWire`/`AssistantStreamEventWire`/`SkillSubscriptionWire` + `AppMessageWire`；P3 经 `assistantRepositoryProvider`/`appMessageRepositoryProvider` Mock/Remote；用户 query 与主动 AppMessage 均投影到统一 transcript |
 | `lib/ui/assistant/pages/assistant_dev_replay_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 开发工具 |
 | `lib/ui/assistant/pages/assistant_skill_center_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AssistantSkillCatalogItemView`/`SkillSubscriptionWire` + `AssistantLocalSessionSummaryView`；P3 经 `assistantRepositoryProvider` Mock/Remote；含 AppLog 类埋点 |
-| `lib/ui/assistant/pages/assistant_chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `AssistantLocalSessionSummaryView`/`AssistantSessionDetailView`；`AppScaffold` |
 
 ---
 

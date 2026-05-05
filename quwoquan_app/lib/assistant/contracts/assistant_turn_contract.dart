@@ -2,12 +2,12 @@ export 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 export 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
+import 'package:quwoquan_app/assistant/contracts/planner_contracts.dart';
+import 'package:quwoquan_app/assistant/contracts/process_protocol.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart'
     show SlotStateSnapshot;
 import 'package:quwoquan_app/assistant/contracts/runtime_enums.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn.g.dart';
-import 'package:quwoquan_app/assistant/reasoning/contracts/planner_contracts.dart';
-import 'package:quwoquan_app/assistant/reasoning/contracts/process_protocol.dart';
 
 const String kAssistantTurnCurrentContractId = 'assistant_turn';
 

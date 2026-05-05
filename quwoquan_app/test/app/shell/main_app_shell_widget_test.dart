@@ -5,10 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
-import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -118,33 +117,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(MainAppShell), findsOneWidget);
-      expect(find.byKey(TestKeys.assistantDialogTab), findsOneWidget);
+      expect(find.byType(PersonalAssistantConversationPage), findsOneWidget);
     });
 
-    testWidgets('助理页仅在找小趣 tab 隐藏底部导航', (tester) async {
+    testWidgets('助理主入口隐藏底部导航并直接渲染找私助', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.assistant));
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
-      expect(find.byType(BottomNavigationWidget), findsNothing);
-
-      await tester.tap(find.byKey(TestKeys.assistantScheduleTab));
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
-      expect(find.byType(BottomNavigationWidget), findsOneWidget);
-
-      await tester.tap(find.byKey(TestKeys.assistantSkillsTab));
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
-      expect(find.byType(BottomNavigationWidget), findsOneWidget);
-
-      await tester.tap(find.byKey(TestKeys.assistantDialogTab));
-      await tester.pump(const Duration(milliseconds: 300));
-
-      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
+      expect(find.byType(PersonalAssistantConversationPage), findsOneWidget);
       expect(find.byType(BottomNavigationWidget), findsNothing);
     });
   });

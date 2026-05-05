@@ -446,18 +446,10 @@ domains:
       - lib/cloud/runtime/generated/assistant/
     mock_remote_shared_types: true
     ui_pages:
-      - path: quwoquan_app/lib/ui/assistant/pages/assistant_conversation_page.dart
-        status: compliant
-        note: 时间轴 `AssistantTranscriptTimelineRow` + C4 `PersistedAssistantTimelinePayload`（`PersistedTimelineTurnCodec`）；云 API 仍须 assistant metadata + Repository
-        target_dto: AssistantTranscriptTimelineRow
       - path: quwoquan_app/lib/ui/assistant/pages/personal_assistant_conversation_page.dart
         status: compliant
-        note: “找私助”并行入口；通过 AssistantRepository 消费 AssistantConversationWire / AssistantTurnEnvelopeWire / AssistantStreamEventWire / SkillSubscriptionWire，并经 AppMessageRepository 展示 P0 主动 Skill 消息摘要与反馈入口
+        note: “找私助”唯一入口；通过 AssistantRepository 消费 AssistantConversationWire / AssistantTurnEnvelopeWire / AssistantStreamEventWire / SkillSubscriptionWire，并经 AppMessageRepository 展示 P0 主动 Skill 消息摘要与反馈入口
         target_dto: AssistantStreamEventWire + SkillSubscriptionWire + AppMessageWire
-      - path: quwoquan_app/lib/ui/assistant/pages/assistant_tab_page.dart
-        status: compliant
-        note: Tab 壳；无页内云行 Map
-        target_dto: N/A
       - path: quwoquan_app/lib/ui/assistant/pages/assistant_management_page.dart
         status: compliant
         note: 设置壳；无页内云行 Map
@@ -472,10 +464,6 @@ domains:
         status: compliant
         note: 近期会话列表经 AssistantLocalSessionSummaryView；技能市场仍经 Provider
         target_dto: AssistantLocalSessionSummaryView
-      - path: quwoquan_app/lib/ui/assistant/pages/assistant_chat_settings_page.dart
-        status: compliant
-        note: 记录与会话偏好经 AssistantLocalSessionSummaryView / AssistantSessionDetailView
-        target_dto: AssistantSessionDetailView
 
   - id: welcome
     metadata_hint: N/A

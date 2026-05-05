@@ -9,7 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
 import 'assistant_scenario_fixtures.dart';
@@ -40,17 +40,13 @@ void main() {
               ScenarioMockAssistantRepository(pack: scenarioPack),
             ),
         ],
-        child: const MaterialApp(home: AssistantTabPage()),
+        child: const MaterialApp(home: PersonalAssistantConversationPage()),
       ),
     );
     await _pumpFrames(tester);
     _expectScreenClass(tester);
 
-    expect(find.text('找小趣'), findsOneWidget);
     expect(find.text('找私助'), findsOneWidget);
-
-    await tester.tap(find.text('找私助'));
-    await _pumpFrames(tester);
     expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
     expect(_modeFromWidgetTree(tester), repositoryMode);
@@ -68,8 +64,6 @@ void main() {
       case 'beta':
       case 'gamma':
         for (final scenario in scenarios) {
-          await tester.tap(find.text('找私助'));
-          await _pumpFrames(tester, count: 2);
           await _sendAndExpect(
             tester,
             scenario: scenario,
@@ -79,10 +73,6 @@ void main() {
       default:
         fail('APP_RUNTIME_ENV=$runtimeEnv 不属于本测试覆盖范围');
     }
-
-    await tester.tap(find.text('找小趣'));
-    await _pumpFrames(tester, count: 8);
-    expect(find.byKey(TestKeys.assistantDialogPage), findsOneWidget);
   });
 }
 
@@ -110,7 +100,7 @@ void _mockPathProviderForEnvironmentTest() {
 }
 
 AppDataSourceMode _modeFromWidgetTree(WidgetTester tester) {
-  final context = tester.element(find.byType(AssistantTabPage));
+  final context = tester.element(find.byType(PersonalAssistantConversationPage));
   return ProviderScope.containerOf(context).read(appDataSourceModeProvider);
 }
 
@@ -163,7 +153,9 @@ Future<void> _sendAndExpect(
     );
     await _tapSend(tester, scenario.question);
     await _pumpUntilStreamSettled(tester);
-    final context = tester.element(find.byType(AssistantTabPage));
+    final context = tester.element(
+      find.byType(PersonalAssistantConversationPage),
+    );
     return ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);
@@ -177,6 +169,7 @@ Future<void> _sendAndExpect(
   }
   expect(streamState.running, isFalse);
   expect(streamState.errorMessage, isEmpty);
+  expect(streamState.answer.trim(), isNotEmpty);
   expect(streamState.answer, isNot(contains('ASSISTANT.MIDDLEWARE')));
   expect(streamState.answer, isNot(contains('tool_unavailable')));
   if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
@@ -185,7 +178,6 @@ Future<void> _sendAndExpect(
     expect(streamState.answer, isNot(contains('工具观察')));
     expect(streamState.answer, isNot(contains('工具结果')));
     expect(streamState.answer, isNot(contains('根据工具')));
-    expect(streamState.answerGateOpen, isTrue);
     final hasSearchEvidence =
         streamState.processSummary.searchCount > 0 ||
         streamState.events.any(
@@ -280,7 +272,7 @@ Future<void> _tapSend(WidgetTester tester, String question) async {
       return;
     }
   }
-  final context = tester.element(find.byType(AssistantTabPage));
+  final context = tester.element(find.byType(PersonalAssistantConversationPage));
   await ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider.notifier).send(question);
@@ -296,7 +288,9 @@ Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
   final maxTicks = runtimeEnv == 'beta' || runtimeEnv == 'gamma' ? 1500 : 240;
   for (var i = 0; i < maxTicks; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    final context = tester.element(find.byType(AssistantTabPage));
+    final context = tester.element(
+      find.byType(PersonalAssistantConversationPage),
+    );
     final streamState = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);

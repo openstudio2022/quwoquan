@@ -13,4 +13,4 @@
 
 ## 度量
 
-见 [`quwoquan_app/assistant/scripts/count_weak_types_in_assistant.sh`](../../../assistant/scripts/count_weak_types_in_assistant.sh)（继承 `count_dynamic_in_assistant.sh` 并补充标签统计）。不作为硬门禁，仅作趋势基线。
+弱类型统计脚本已随旧本地助理栈下线；当前仅保留本约定作为边界说明，不再维护独立趋势脚本。

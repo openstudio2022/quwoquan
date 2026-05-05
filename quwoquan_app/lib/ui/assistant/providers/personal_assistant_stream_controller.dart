@@ -16,6 +16,7 @@ import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart'
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
 
 enum PersonalAssistantTranscriptRole { user, assistant, system }
 
@@ -74,6 +75,8 @@ class PersonalAssistantStreamState {
     this.appMessageUnreadCount = 0,
     this.managementSummaryLoading = false,
     this.feedbackMessage = '',
+    this.historyInitialized = false,
+    this.historyLoading = false,
   });
 
   final String conversationId;
@@ -88,6 +91,8 @@ class PersonalAssistantStreamState {
   final int appMessageUnreadCount;
   final bool managementSummaryLoading;
   final String feedbackMessage;
+  final bool historyInitialized;
+  final bool historyLoading;
 
   PersonalAssistantStreamState copyWith({
     String? conversationId,
@@ -102,6 +107,8 @@ class PersonalAssistantStreamState {
     int? appMessageUnreadCount,
     bool? managementSummaryLoading,
     String? feedbackMessage,
+    bool? historyInitialized,
+    bool? historyLoading,
   }) {
     return PersonalAssistantStreamState(
       conversationId: conversationId ?? this.conversationId,
@@ -118,6 +125,8 @@ class PersonalAssistantStreamState {
       managementSummaryLoading:
           managementSummaryLoading ?? this.managementSummaryLoading,
       feedbackMessage: feedbackMessage ?? this.feedbackMessage,
+      historyInitialized: historyInitialized ?? this.historyInitialized,
+      historyLoading: historyLoading ?? this.historyLoading,
     );
   }
 }
@@ -200,9 +209,71 @@ class PersonalAssistantProcessSummary {
 
 class PersonalAssistantStreamController
     extends Notifier<PersonalAssistantStreamState> {
+  Future<void>? _historyInitializationFuture;
+
   @override
   PersonalAssistantStreamState build() {
     return const PersonalAssistantStreamState();
+  }
+
+  Future<void> ensureHistoryInitialized() {
+    if (state.historyInitialized) {
+      return Future<void>.value();
+    }
+    final inFlight = _historyInitializationFuture;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final future = _initializeHistory();
+    _historyInitializationFuture = future.whenComplete(() {
+      _historyInitializationFuture = null;
+    });
+    return _historyInitializationFuture!;
+  }
+
+  Future<void> _initializeHistory() async {
+    if (state.historyInitialized) {
+      return;
+    }
+    state = state.copyWith(historyLoading: true);
+    try {
+      final profileSubjectId = await _historyProfileSubjectId();
+      final snapshot = await ref
+          .read(assistantHistoryLoaderProvider)
+          .load(profileSubjectId: profileSubjectId);
+      if (snapshot == null || snapshot.transcript.isEmpty) {
+        state = state.copyWith(historyInitialized: true, historyLoading: false);
+        return;
+      }
+      final currentIds = state.transcript.map((row) => row.id).toSet();
+      final importedRows = snapshot.transcript
+          .where((row) => !currentIds.contains(row.id))
+          .toList(growable: false);
+      state = state.copyWith(
+        transcript: <AssistantTranscriptTimelineRow>[
+          ...importedRows,
+          ...state.transcript,
+        ],
+        historyInitialized: true,
+        historyLoading: false,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        'PersonalAssistantStreamController history initialization failed: $error\n$stackTrace',
+      );
+      state = state.copyWith(historyInitialized: true, historyLoading: false);
+    }
+  }
+
+  Future<String> _historyProfileSubjectId() async {
+    try {
+      final activeContext = await ref.read(activePersonaContextProvider.future);
+      final profileSubjectId = activeContext.profileSubjectId.trim();
+      if (profileSubjectId.isNotEmpty) {
+        return profileSubjectId;
+      }
+    } catch (_) {}
+    return ref.read(currentUserIdProvider).trim();
   }
 
   Future<void> refreshManagementSummary() async {
@@ -228,6 +299,7 @@ class PersonalAssistantStreamController
     if (trimmed.isEmpty) {
       return;
     }
+    await ensureHistoryInitialized();
     state = state.copyWith(running: true, errorMessage: '');
     try {
       final turn = await ref
@@ -254,6 +326,7 @@ class PersonalAssistantStreamController
     if (trimmed.isEmpty || state.running) {
       return;
     }
+    await ensureHistoryInitialized();
     _debugPersonalAssistant(
       'send text="${_debugSnippet(trimmed)}" existingConversation=${state.conversationId}',
     );

@@ -1,14 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/assistant/protocol/assistant_session_wire.dart';
+import 'package:quwoquan_app/assistant/session/session_transcript_service.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/runtime_failure.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/notification/app_message_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/notification/app_message_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_skill_center_page.dart';
+import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 import 'package:quwoquan_app/ui/assistant/providers/skill_subscription_controller.dart';
 import '../../common/assistant/assistant_scenario_fixtures.dart';
@@ -106,6 +110,69 @@ void main() {
       expect(state.conversationId, 'acv_test_personal');
       expect(state.turnId, 'atn_test_personal');
     });
+
+    test(
+      'restores stored transcript before continuing personal assistant turns',
+      () async {
+        final historyLoader = _FakeAssistantHistoryLoader(
+          snapshot: await _buildAssistantHistorySnapshot(),
+        );
+        final container = _containerWith(
+          assistantRepository: _FakeAssistantRepository(
+            events: <AssistantStreamEventWire>[
+              _event(
+                seq: 1,
+                eventType: 'final_answer',
+                payload: const <String, dynamic>{'text': '你好，我是找私助。'},
+              ),
+            ],
+          ),
+          historyLoader: historyLoader,
+        );
+        addTearDown(container.dispose);
+
+        await container
+            .read(personalAssistantStreamControllerProvider.notifier)
+            .ensureHistoryInitialized();
+
+        var state = container.read(personalAssistantStreamControllerProvider);
+        expect(historyLoader.loadCount, 1);
+        expect(state.historyInitialized, isTrue);
+        expect(state.transcript.map((item) => item.runtimeType), <Type>[
+          UserTranscriptTimelineRow,
+          AssistantAnswerTranscriptRow,
+        ]);
+        expect(
+          (state.transcript.first as UserTranscriptTimelineRow).content,
+          '旧问题：深圳天气',
+        );
+        expect(
+          (state.transcript.last as AssistantAnswerTranscriptRow).content,
+          '旧回答：深圳今天多云转晴。',
+        );
+
+        await container
+            .read(personalAssistantStreamControllerProvider.notifier)
+            .send('那明天呢');
+
+        state = container.read(personalAssistantStreamControllerProvider);
+        expect(historyLoader.loadCount, 1);
+        expect(state.transcript.map((item) => item.runtimeType), <Type>[
+          UserTranscriptTimelineRow,
+          AssistantAnswerTranscriptRow,
+          UserTranscriptTimelineRow,
+          AssistantAnswerTranscriptRow,
+        ]);
+        expect(
+          (state.transcript[2] as UserTranscriptTimelineRow).content,
+          '那明天呢',
+        );
+        expect(
+          (state.transcript[3] as AssistantAnswerTranscriptRow).content,
+          '你好，我是找私助。',
+        );
+      },
+    );
 
     test(
       'keeps each personal assistant turn in canonical timeline order',
@@ -534,6 +601,7 @@ void main() {
 ProviderContainer _containerWith({
   required AssistantRepository assistantRepository,
   AppMessageRepository? appMessageRepository,
+  AssistantHistoryLoader? historyLoader,
 }) {
   return ProviderContainer(
     overrides: [
@@ -541,6 +609,48 @@ ProviderContainer _containerWith({
       appMessageRepositoryProvider.overrideWithValue(
         appMessageRepository ?? _FakeAppMessageRepository(),
       ),
+      activePersonaContextProvider.overrideWith(
+        (ref) async => ActivePersonaContextViewData.fallback(
+          profileSubjectId: 'persona_test',
+          ownerUserId: 'user_test',
+          displayName: '测试分身',
+          avatarUrl: '',
+        ),
+      ),
+      if (historyLoader != null)
+        assistantHistoryLoaderProvider.overrideWithValue(historyLoader),
+    ],
+  );
+}
+
+Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
+  final detail = AssistantSessionWireDetail(
+    sessionId: 'restored_session_001',
+    topicTitle: '深圳天气',
+    messages: <AssistantSessionWireMessage>[
+      AssistantSessionWireMessage.fromJson(<String, dynamic>{
+        'role': 'user',
+        'content': '旧问题：深圳天气',
+      }),
+      AssistantSessionWireMessage.fromJson(<String, dynamic>{
+        'role': 'assistant',
+        'content': '旧回答：深圳今天多云转晴。',
+      }),
+    ],
+  );
+  final result = await loadTranscriptRowsFromSessionDetail(
+    detail: detail,
+    pageSize: detail.messages.length,
+    profileSubjectId: 'persona_test',
+    normalizeAssistantContentForModel: (wire) =>
+        (wire['content'] ?? '').toString(),
+  );
+  return AssistantHistorySnapshot(
+    sessionId: detail.sessionId,
+    topicTitle: detail.topicTitle,
+    transcript: <AssistantTranscriptTimelineRow>[
+      ...result.hiddenRows,
+      ...result.visibleRows,
     ],
   );
 }
@@ -655,5 +765,20 @@ class _FakeAppMessageRepository implements AppMessageRepository {
   @override
   Future<AppMessageWire> readAppMessage(String messageId) {
     return getAppMessage(messageId);
+  }
+}
+
+class _FakeAssistantHistoryLoader implements AssistantHistoryLoader {
+  _FakeAssistantHistoryLoader({this.snapshot});
+
+  final AssistantHistorySnapshot? snapshot;
+  int loadCount = 0;
+
+  @override
+  Future<AssistantHistorySnapshot?> load({
+    required String profileSubjectId,
+  }) async {
+    loadCount += 1;
+    return snapshot;
   }
 }

@@ -17,7 +17,7 @@ class ChatDetailPage extends StatelessWidget {
     this.embedded = false,
   }) : assert(
          conversationId != AppConceptConstants.assistantConversationId,
-         'Assistant conversations must use AssistantConversationPage.',
+         'Assistant conversations must use PersonalAssistantConversationPage.',
        );
 
   final String conversationId;

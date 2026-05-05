@@ -1,10 +1,11 @@
 {
   "status": "passed",
   "dryRun": false,
-  "commitSha": "6d84db45",
+  "commitSha": "90bd77aa",
   "configVersion": "local-gamma-v1",
   "imageVersion": "0.0.1",
-  "generatedAt": "2026-05-04T12:35:33.412266+00:00",
+  "generatedAt": "2026-05-05T02:21:28.886890+00:00",
+  "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
   "tests": {
     "T1": {
       "status": "passed",
@@ -33,7 +34,7 @@
       "seed": {
         "status": "passed",
         "insertedCount": 10,
-        "output": "time=\"2026-05-04T20:33:59+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
+        "output": "time=\"2026-05-05T10:19:13+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
       },
       "endpoints": [
         {
@@ -74,7 +75,7 @@
           "domain": "chat",
           "path": "/v1/chat/inbox",
           "httpStatus": 200,
-          "bytes": 14648,
+          "bytes": 20502,
           "status": "passed"
         },
         {
@@ -132,12 +133,182 @@
       ]
     },
     "T4": {
+      "suiteId": "content_feed_patrol",
       "status": "passed",
-      "reason": "",
+      "startedAt": "2026-05-05T02:19:24.348111Z",
+      "endedAt": "2026-05-05T02:21:28.809490Z",
+      "environmentAlias": "local-gamma",
+      "target": "test/patrol/discovery/feed_load_test.dart",
+      "platform": "all",
       "gatewayBaseUrl": "http://127.0.0.1:18180",
       "productOpsBaseUrl": "http://127.0.0.1:18186",
-      "mediaBaseUrl": "http://127.0.0.1:18180",
-      "deviceId": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB"
+      "devices": [
+        {
+          "id": "emulator-5554",
+          "name": "sdk gphone64 arm64",
+          "targetPlatform": "android-arm64",
+          "sdk": "Android 12 (API 31)",
+          "emulator": true,
+          "ephemeral": false
+        },
+        {
+          "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+          "name": "iPhone 17 Pro",
+          "targetPlatform": "ios",
+          "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
+          "emulator": true,
+          "ephemeral": false
+        }
+      ],
+      "runs": [
+        {
+          "command": [
+            "patrol",
+            "test",
+            "-t",
+            "test/patrol/discovery/feed_load_test.dart",
+            "-d",
+            "emulator-5554",
+            "--dart-define=RUN_T4_PATROL=true",
+            "--dart-define=APP_RUNTIME_ENV=gamma",
+            "--dart-define=APP_DATA_SOURCE=remote",
+            "--dart-define=API_CONTRACT_ENV=gamma",
+            "--dart-define=CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=API_CONTRACT_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=http://127.0.0.1:18186",
+            "--dart-define=TEST_AUTH_TOKEN=local-gamma-token",
+            "--dart-define=MEDIA_AVATAR_CDN_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=MEDIA_IMAGE_CDN_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=MEDIA_VIDEO_CDN_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=MEDIA_UPLOAD_BASE_URL=http://127.0.0.1:18180"
+          ],
+          "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 51950,
+          "outputSummary": "• Building apk with entrypoint test_bundle.dart...\n✓ Completed building apk with entrypoint test_bundle.dart (21.1s)\n• Executing tests of apk with entrypoint test_bundle.dart on emulator-5554...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: file:///Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/app/reports/androidTests/connected/debug/index.html\n⏱️  Duration: 8s\n\n✓ Completed executing apk with entrypoint test_bundle.dart on emulator-5554 (8.6s)\n",
+          "logPath": "artifacts/local-gamma/runs/emulator-5554/patrol.log",
+          "device": {
+            "id": "emulator-5554",
+            "name": "sdk gphone64 arm64",
+            "targetPlatform": "android-arm64",
+            "sdk": "Android 12 (API 31)",
+            "emulator": true,
+            "ephemeral": false
+          },
+          "evidence": {
+            "runDirectory": "artifacts/local-gamma/runs/emulator-5554",
+            "deviceManifestPath": "artifacts/local-gamma/runs/emulator-5554/device.json",
+            "commandPath": "artifacts/local-gamma/runs/emulator-5554/command.json",
+            "rawLogPath": "artifacts/local-gamma/runs/emulator-5554/patrol.log",
+            "beforeScreenshot": {
+              "status": "captured",
+              "path": "artifacts/local-gamma/runs/emulator-5554/before.png",
+              "command": [
+                "adb",
+                "-s",
+                "emulator-5554",
+                "exec-out",
+                "screencap",
+                "-p"
+              ],
+              "stderrSummary": ""
+            },
+            "afterScreenshot": {
+              "status": "captured",
+              "path": "artifacts/local-gamma/runs/emulator-5554/after.png",
+              "command": [
+                "adb",
+                "-s",
+                "emulator-5554",
+                "exec-out",
+                "screencap",
+                "-p"
+              ],
+              "stderrSummary": ""
+            },
+            "failureScreenshot": {
+              "status": "skipped",
+              "reason": "command passed"
+            }
+          }
+        },
+        {
+          "command": [
+            "patrol",
+            "test",
+            "-t",
+            "test/patrol/discovery/feed_load_test.dart",
+            "-d",
+            "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+            "--dart-define=RUN_T4_PATROL=true",
+            "--dart-define=APP_RUNTIME_ENV=gamma",
+            "--dart-define=APP_DATA_SOURCE=remote",
+            "--dart-define=API_CONTRACT_ENV=gamma",
+            "--dart-define=CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=API_CONTRACT_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=http://127.0.0.1:18186",
+            "--dart-define=TEST_AUTH_TOKEN=local-gamma-token",
+            "--dart-define=MEDIA_AVATAR_CDN_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=MEDIA_IMAGE_CDN_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=MEDIA_VIDEO_CDN_BASE_URL=http://127.0.0.1:18180",
+            "--dart-define=MEDIA_UPLOAD_BASE_URL=http://127.0.0.1:18180"
+          ],
+          "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
+          "exitCode": 0,
+          "timedOut": false,
+          "durationMs": 62743,
+          "outputSummary": "• Building app with entrypoint test_bundle.dart for iOS simulator (debug)...\n\tBuilding com.example.quwoquanApp for simulator (ios)...\n✓ Completed building app with entrypoint test_bundle.dart for iOS simulator (28.0s)\n• Running app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/ios_results_1777947666000.xcresult\n⏱️  Duration: 22s\n\n✓ Completed executing app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro (22.3s)\n",
+          "logPath": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/patrol.log",
+          "device": {
+            "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+            "name": "iPhone 17 Pro",
+            "targetPlatform": "ios",
+            "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
+            "emulator": true,
+            "ephemeral": false
+          },
+          "evidence": {
+            "runDirectory": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+            "deviceManifestPath": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/device.json",
+            "commandPath": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/command.json",
+            "rawLogPath": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/patrol.log",
+            "beforeScreenshot": {
+              "status": "captured",
+              "path": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/before.png",
+              "command": [
+                "xcrun",
+                "simctl",
+                "io",
+                "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+                "screenshot",
+                "/Users/zhaoyuxi/Projects/quwoquan/artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/before.png"
+              ],
+              "outputSummary": "Detected file type 'PNG' from extension\nWrote screenshot to: /Users/zhaoyuxi/Projects/quwoquan/artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/before.png\n"
+            },
+            "afterScreenshot": {
+              "status": "captured",
+              "path": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/after.png",
+              "command": [
+                "xcrun",
+                "simctl",
+                "io",
+                "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+                "screenshot",
+                "/Users/zhaoyuxi/Projects/quwoquan/artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/after.png"
+              ],
+              "outputSummary": "Detected file type 'PNG' from extension\nWrote screenshot to: /Users/zhaoyuxi/Projects/quwoquan/artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/after.png\n"
+            },
+            "failureScreenshot": {
+              "status": "skipped",
+              "reason": "command passed"
+            }
+          }
+        }
+      ],
+      "failureReason": "",
+      "deviceInventoryPath": "artifacts/local-gamma/discovered_devices.json",
+      "evidenceRoot": "artifacts/local-gamma/runs"
     }
   },
   "cloudGateReminder": "Local gamma mirror does not replace cloud gamma, prod-gray SLO, rollback drill, or prod observability gates."

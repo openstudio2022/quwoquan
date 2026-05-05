@@ -134,16 +134,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
         run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          if [ -d quwoquan_app/personal_assistant ]; then
+            mkdir -p quwoquan_app/personal_assistant
+            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+            else
+              : > quwoquan_app/personal_assistant/.env
+            fi
           fi
       - uses: subosito/flutter-action@v2
         with:
@@ -166,16 +163,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
         run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          if [ -d quwoquan_app/personal_assistant ]; then
+            mkdir -p quwoquan_app/personal_assistant
+            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+            else
+              : > quwoquan_app/personal_assistant/.env
+            fi
           fi
       - uses: subosito/flutter-action@v2
         with:

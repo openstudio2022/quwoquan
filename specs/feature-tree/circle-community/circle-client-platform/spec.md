@@ -17,6 +17,7 @@
 ## 功能范围
 
 ### L3: directory-migration（目录迁移）
+
 - `lib/features/circles/pages/` → `lib/ui/circle/pages/`。
 - 创建 `lib/ui/circle/providers/`、`lib/ui/circle/widgets/`、`lib/ui/circle/models/` 子目录。
 - 更新 `app_router.dart`、`main_app_shell.dart`、`bottom_navigation.dart` 中的 import 路径。
@@ -24,6 +25,7 @@
 - 更新 acceptance.yaml 中引用 `features/circles/` 的路径（如 circles-channel-management-panel）。
 
 ### L3: circle-repository-creation（Repository 创建）
+
 - 创建 `lib/cloud/services/circle/circle_repository.dart`：Abstract 接口 + Mock 实现 + Remote 实现。
 - Abstract 接口方法与 service.yaml API 一一对应（listCircles, getCircle, createCircle, joinCircle, leaveCircle, getCircleFeed, getCircleStats, listMembers）。
 - Mock 实现：从 PrototypeMockData 提取圈子数据到 `lib/cloud/services/circle/mock/circle_mock_data.dart`。
@@ -32,6 +34,7 @@
 - 从 AppContentRepository 中移除 circles* 相关接口和实现。
 
 ### L3: circle-code-quality（代码质量清理）
+
 - circle_detail_page.dart 所有硬编码字面量替换为语义标签。
 - 所有圈子页面 import 改为绝对路径 `package:quwoquan_app/ui/circle/...`。
 - 操作文案硬编码（'分享圈子'、'保存封面'、'举报圈子'）替换为 UITextConstants。

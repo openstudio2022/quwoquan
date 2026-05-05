@@ -16,11 +16,13 @@
 
 ## 对标输入分析
 
-| 对标 | 借鉴点 | 适用边界 |
-|------|--------|----------|
-| chat 域迁移（Phase 2 已完成）| features/ → ui/chat/ 迁移模式 | 同项目已验证的迁移路径 |
-| content 域（已有 cloud/services/content/）| Repository 三层模式 | 同项目已有标杆 |
-| discovery 域（ui/discovery/）| providers/ + widgets/ 拆分 | 组件化参考 |
+
+| 对标                                    | 借鉴点                       | 适用边界        |
+| ------------------------------------- | ------------------------- | ----------- |
+| chat 域迁移（Phase 2 已完成）                 | features/ → ui/chat/ 迁移模式 | 同项目已验证的迁移路径 |
+| content 域（已有 cloud/services/content/） | Repository 三层模式           | 同项目已有标杆     |
+| discovery 域（ui/discovery/）            | providers/ + widgets/ 拆分  | 组件化参考       |
+
 
 ## 方案对比
 
@@ -93,30 +95,36 @@ abstract class CircleRepository {
 
 从 circles_page.dart（1445 行）提取：
 
-| 组件 | 目标文件 | 提取来源 |
-|------|----------|----------|
-| `CircleCard` | `widgets/circle_card.dart` | 推荐区圈子卡片（封面 + 名称） |
-| `ChannelPanel` | `widgets/channel_panel.dart` | 频道管理面板（拖拽排序 + 增删） |
-| `DiscoveryPostCard` | `widgets/discovery_post_card.dart` | 瀑布流内容卡片（_DiscoveryPostCard） |
-| `SubCategoryBar` | `widgets/sub_category_bar.dart` | 二级分类条（_SubCategoryBarDelegate + 内容） |
-| `CircleActivityCard` | `widgets/circle_activity_card.dart` | 活动卡片区 |
+
+| 组件                   | 目标文件                                | 提取来源                                |
+| -------------------- | ----------------------------------- | ----------------------------------- |
+| `CircleCard`         | `widgets/circle_card.dart`          | 推荐区圈子卡片（封面 + 名称）                    |
+| `ChannelPanel`       | `widgets/channel_panel.dart`        | 频道管理面板（拖拽排序 + 增删）                   |
+| `DiscoveryPostCard`  | `widgets/discovery_post_card.dart`  | 瀑布流内容卡片（_DiscoveryPostCard）         |
+| `SubCategoryBar`     | `widgets/sub_category_bar.dart`     | 二级分类条（_SubCategoryBarDelegate + 内容） |
+| `CircleActivityCard` | `widgets/circle_activity_card.dart` | 活动卡片区                               |
+
 
 从 circle_detail_page.dart（898 行）提取：
 
-| 组件 | 目标文件 | 提取来源 |
-|------|----------|----------|
-| `CircleHeader` | `widgets/circle_header.dart` | 封面 + 头像 + 描述 + 统计 + 操作按钮 |
-| `CircleStatChip` | `widgets/circle_stat_chip.dart` | _StatChip |
-| `CircleActionButton` | `widgets/circle_action_button.dart` | _ActionButton |
-| `CircleMoreMenu` | `widgets/circle_more_menu.dart` | _buildMoreMenu |
+
+| 组件                   | 目标文件                                | 提取来源                     |
+| -------------------- | ----------------------------------- | ------------------------ |
+| `CircleHeader`       | `widgets/circle_header.dart`        | 封面 + 头像 + 描述 + 统计 + 操作按钮 |
+| `CircleStatChip`     | `widgets/circle_stat_chip.dart`     | _StatChip                |
+| `CircleActionButton` | `widgets/circle_action_button.dart` | _ActionButton            |
+| `CircleMoreMenu`     | `widgets/circle_more_menu.dart`     | _buildMoreMenu           |
+
 
 ## 选型决策
 
-| 决策项 | 选定方案 | 理由 |
-|--------|----------|------|
-| 迁移策略 | 一次性迁移 | 代码体量可控，避免中间态 |
+
+| 决策项        | 选定方案                      | 理由                    |
+| ---------- | ------------------------- | --------------------- |
+| 迁移策略       | 一次性迁移                     | 代码体量可控，避免中间态          |
 | Repository | 单一 CircleRepository 18 方法 | 1:1 对应 circle-service |
-| 组件拆分 | 9 个独立 Widget | 职责单一、可复用 |
+| 组件拆分       | 9 个独立 Widget              | 职责单一、可复用              |
+
 
 ## 关键设计决策
 
@@ -128,11 +136,13 @@ abstract class CircleRepository {
 
 ## Story 与测试层映射
 
-| L4 Story | T1 单元 | T2 集成 | T3 契约 | T4 E2E |
-|----------|---------|---------|---------|--------|
-| features-to-ui-migration-contract | import 检查（零 features/circles/ 引用）| app_router 导航 | — | 三页面可正常打开 |
-| circle-repository-contract | Mock 返回正确类型 | Provider mock↔remote 切换 | 方法签名与 service.yaml 一致 | — |
-| circle-semantic-cleanup-contract | verify_dart_semantic.py 通过 | — | — | — |
+
+| L4 Story                          | T1 单元                             | T2 集成                   | T3 契约                 | T4 E2E   |
+| --------------------------------- | --------------------------------- | ----------------------- | --------------------- | -------- |
+| features-to-ui-migration-contract | import 检查（零 features/circles/ 引用） | app_router 导航           | —                     | 三页面可正常打开 |
+| circle-repository-contract        | Mock 返回正确类型                       | Provider mock↔remote 切换 | 方法签名与 service.yaml 一致 | —        |
+| circle-semantic-cleanup-contract  | verify_dart_semantic.py 通过        | —                       | —                     | —        |
+
 
 ## 未来演进
 
@@ -143,3 +153,4 @@ abstract class CircleRepository {
 
 - circle_stats_page.dart 的硬编码清理（体量较小，可在本次一并处理）。
 - 更新 `circles-channel-management-panel` 特性的 acceptance.yaml 路径。
+

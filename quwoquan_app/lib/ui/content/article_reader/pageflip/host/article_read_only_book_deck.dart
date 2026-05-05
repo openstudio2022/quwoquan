@@ -366,6 +366,58 @@ bool _paintBoundsTouchesLeftSpine({
   return (paintBounds.left - pageRect.left).abs() <= 1.0;
 }
 
+class _BackwardGeometryGuidePainter extends CustomPainter {
+  const _BackwardGeometryGuidePainter({
+    required this.foldLine,
+    required this.pageEdgeLine,
+  });
+
+  final (Offset, Offset) foldLine;
+  final (Offset, Offset) pageEdgeLine;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final foldPaint = Paint()
+      ..color = AppColors.error
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+    final pageEdgePaint = Paint()
+      ..color = AppColors.iosSystemCyanAccent
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(foldLine.$1, foldLine.$2, foldPaint);
+    canvas.drawLine(pageEdgeLine.$1, pageEdgeLine.$2, pageEdgePaint);
+    _paintLabel(canvas, 'F', foldLine.$1 + const Offset(4, 4), foldPaint.color);
+    _paintLabel(
+      canvas,
+      'E',
+      pageEdgeLine.$1 + const Offset(4, 4),
+      pageEdgePaint.color,
+    );
+  }
+
+  void _paintLabel(Canvas canvas, String label, Offset offset, Color color) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: TextStyle(
+          color: color,
+          fontSize: AppTypography.lg,
+          fontWeight: AppTypography.extraBold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, offset);
+  }
+
+  @override
+  bool shouldRepaint(covariant _BackwardGeometryGuidePainter oldDelegate) {
+    return oldDelegate.foldLine != foldLine ||
+        oldDelegate.pageEdgeLine != pageEdgeLine;
+  }
+}
+
 class ArticleReadOnlyBookDeck extends StatefulWidget {
   const ArticleReadOnlyBookDeck({
     super.key,
@@ -1058,12 +1110,19 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         clipper: ArticlePolygonClipper(geometry.previousFrontLocalPolygon),
         child: KeyedSubtree(
           key: const ValueKey<String>('article_backward_previous_front_plane'),
-          child: _buildCachedPageSurface(
-            context,
-            pageIndex,
-            pageSize,
-            kind: ArticlePageSurfaceKind.front,
-          ),
+          child: widget.debugPureBackwardGeometry
+              ? _buildBackwardGeometryProbeSurface(
+                  label: 'FRONT-GEOM',
+                  pageIndex: pageIndex,
+                  faceKind: 'front',
+                  color: AppColors.error,
+                )
+              : _buildCachedPageSurface(
+                  context,
+                  pageIndex,
+                  pageSize,
+                  kind: ArticlePageSurfaceKind.front,
+                ),
         ),
       ),
     );
@@ -1080,7 +1139,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return const SizedBox.shrink();
     }
     final softGeometry = geometry.softGeometry;
-    final palette = resolveArticleTemplatePalette(context, widget.template);
     return Positioned(
       left: softGeometry.positionViewport.dx,
       top: softGeometry.positionViewport.dy,
@@ -1102,25 +1160,36 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
                   key: const ValueKey<String>(
                     'article_backward_previous_back_region',
                   ),
-                  child: _buildCachedPageSurface(
-                    context,
-                    pageIndex,
-                    pageSize,
-                    kind: ArticlePageSurfaceKind.back,
+                  child: widget.debugPureBackwardGeometry
+                      ? _buildBackwardGeometryProbeSurface(
+                          label: 'BACK-GEOM',
+                          pageIndex: pageIndex,
+                          faceKind: 'back',
+                          color: AppColors.warning,
+                        )
+                      : _buildCachedPageSurface(
+                          context,
+                          pageIndex,
+                          pageSize,
+                          kind: ArticlePageSurfaceKind.back,
+                        ),
+                ),
+              ),
+              if (!widget.debugPureBackwardGeometry)
+                ClipPath(
+                  clipper: ArticlePolygonClipper(
+                    geometry.previousBackLocalPolygon,
+                  ),
+                  child: _buildFlippingSurfaceOverlay(
+                    palette: resolveArticleTemplatePalette(
+                      context,
+                      widget.template,
+                    ),
+                    direction: StPageFlipDirection.back,
+                    progress: _sceneProgress(scene),
+                    showBackside: true,
                   ),
                 ),
-              ),
-              ClipPath(
-                clipper: ArticlePolygonClipper(
-                  geometry.previousBackLocalPolygon,
-                ),
-                child: _buildFlippingSurfaceOverlay(
-                  palette: palette,
-                  direction: StPageFlipDirection.back,
-                  progress: _sceneProgress(scene),
-                  showBackside: true,
-                ),
-              ),
             ],
           ),
         ),
@@ -1146,11 +1215,50 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         clipper: ArticlePolygonClipper(residualPolygon),
         child: KeyedSubtree(
           key: const ValueKey<String>('article_backward_current_residual'),
-          child: _buildCachedPageSurface(
-            context,
-            pageIndex,
-            pageSize,
-            kind: ArticlePageSurfaceKind.bottom,
+          child: widget.debugPureBackwardGeometry
+              ? _buildBackwardGeometryProbeSurface(
+                  label: 'CURRENT-GEOM',
+                  pageIndex: pageIndex,
+                  faceKind: 'current',
+                  color: AppColors.success,
+                )
+              : _buildCachedPageSurface(
+                  context,
+                  pageIndex,
+                  pageSize,
+                  kind: ArticlePageSurfaceKind.bottom,
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackwardGeometryProbeSurface({
+    required String label,
+    required int pageIndex,
+    required String faceKind,
+    required Color color,
+  }) {
+    return ColoredBox(
+      color: color,
+      child: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppColors.overlayDark,
+            borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            child: Text(
+              '$label\npage=$pageIndex\nface=$faceKind\ngeometry=$faceKind',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: AppTypography.iosCaption2,
+                fontWeight: AppTypography.bold,
+                letterSpacing: 0.6,
+              ),
+            ),
           ),
         ),
       ),
@@ -1706,7 +1814,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           ? resolverClipBounds != null
           : null,
       backwardOverlayClippedToPaper: direction == StPageFlipDirection.back
-          ? resolverClipBounds != null
+          ? !widget.debugPureBackwardGeometry && resolverClipBounds != null
           : null,
       backwardBackVertexCount: backwardBackLocalPolygon.length >= 3
           ? backwardBackLocalPolygon.length
@@ -1834,7 +1942,27 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         pageSize: pageSize,
       ),
     );
+    if (widget.debugPureBackwardGeometry) {
+      layers.add(_buildBackwardGeometryGuideLayer(scene));
+    }
     return ArticleReadOnlyBookRenderBranch.paperFoldDynamic;
+  }
+
+  Widget _buildBackwardGeometryGuideLayer(StPageFlipScene scene) {
+    final geometry = _resolveBackwardFoldSurfaceGeometry(scene);
+    if (geometry == null) {
+      return const SizedBox.shrink();
+    }
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _BackwardGeometryGuidePainter(
+            foldLine: geometry.foldLineViewport,
+            pageEdgeLine: geometry.frontBackBoundaryViewport,
+          ),
+        ),
+      ),
+    );
   }
 
   bool _shouldCommitPageFlip({

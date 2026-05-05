@@ -100,30 +100,10 @@ surfaces:
       - GetConversation
       - ListMembers
 
-  - id: assistantDialog
-    owner: assistant
-    route_id: chatDetail
-    path_template: /chat/{id}
-    description: 私助完整对话页
-    operation_ids:
-      - CreateRun
-      - CreateRunStream
-      - ReportInteractionEvent
-      - ReportScorecard
-      - ReportPageContext
-      - GetSuggestedActions
-      - GetPolicy
-      - ListSkills
-      - ListAssistantTasks
-      - ListAssistantMemories
-      - ListConsents
-      - GrantSkillConsent
-      - RevokeSkillConsent
-
   - id: assistantHalfSheet
     owner: assistant
-    route_id: chatDetail
-    path_template: /chat/{id}
+    route_id: assistantPersonal
+    path_template: /assistant/personal
     description: 私助半弹层入口
     operation_ids:
       - ReportPageContext
@@ -136,11 +116,27 @@ surfaces:
     description: 找私助云端优先对话入口
     operation_ids:
       - CreateAssistantConversation
+      - GetAssistantConversation
       - CreateAssistantTurn
+      - GetAssistantTurn
       - StreamAssistantTurn
-      - ListSkills
       - ListAppMessages
       - GetAppMessageUnreadCount
+      - ReportInteractionEvent
+      - ReportScorecard
+      - ReportPageContext
+      - GetSuggestedActions
+      - GetPolicy
+      - ListSkills
+      - ListAssistantTasks
+      - ListAssistantMemories
+      - ListConsents
+      - GrantSkillConsent
+      - RevokeSkillConsent
+      - ListSkillSubscriptions
+      - CreateSkillSubscription
+      - GetSkillSubscription
+      - UpdateSkillSubscriptionStatus
 
   - id: assistantSettings
     owner: assistant
@@ -206,8 +202,6 @@ surfaces:
       - SearchCircles
       - SearchXiaoquResults
       - UpsertRecentSearch
-      - CreateRun
-      - CreateRunStream
 
   - id: homepagePicker
     owner: entity

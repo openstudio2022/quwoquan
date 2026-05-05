@@ -20,7 +20,6 @@ func generateAssistantCloudApiWireDart(metadataDir, appDir string) error {
 		"AssistantSearchCitationView",
 		"AssistantSearchResultView",
 		"AssistantSearchXiaoquRequestWire",
-		"AssistantCreateRunRequestWire",
 		"AssistantReportPageContextRequestWire",
 		"AssistantUserTaskView",
 		"AssistantUserMemoryView",

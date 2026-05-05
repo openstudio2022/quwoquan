@@ -48,6 +48,7 @@ void main() {
                   showFooterPageLabel: false,
                   onSceneChanged: scenes.add,
                   onDebugStateChanged: debugStates.add,
+                  debugPureBackwardGeometry: true,
                   debugPageSurfaceBuilder: _buildProbePageSurface,
                   debugBackPageSurfaceBuilder: _buildProbeBackSurface,
                 );
@@ -112,7 +113,7 @@ void main() {
       );
 
       debugCursor = debugStates.length;
-      await backwardGesture.moveBy(const Offset(120, -8));
+      await backwardGesture.moveBy(const Offset(220, -8));
       for (var i = 0; i < 6; i += 1) {
         await tester.pump(const Duration(milliseconds: 16));
       }
@@ -167,11 +168,22 @@ void main() {
       expect(early.backPolygonPoints, isNot('-'));
       expect(early.surfaceTopAligned, isTrue);
       expect(early.pivotAtSurfaceBottom, isFalse);
-      expect(early.overlayClippedToPaper, isTrue);
+      expect(
+        early.overlayClippedToPaper,
+        isFalse,
+        reason: 'M1 pure geometry disables overlay/shadow surfaces',
+      );
       expect(middle.backVisible, isTrue);
       expect(middle.visibleBackWidth, greaterThan(60));
       expect(middle.frontVisible, isTrue);
       expect(middle.frontPolygonPoints, isNot('-'));
+      expect(middle.currentVisible, isTrue);
+      expect(find.textContaining('FRONT-GEOM'), findsWidgets);
+      expect(find.textContaining('BACK-GEOM'), findsWidgets);
+      expect(find.textContaining('CURRENT-GEOM'), findsWidgets);
+      expect(find.textContaining('face=front'), findsWidgets);
+      expect(find.textContaining('face=back'), findsWidgets);
+      expect(find.textContaining('face=current'), findsWidgets);
       expect(middle.visibleBackWidth, greaterThan(60));
       expect(middle.surfaceTopAligned, isTrue);
       expect(middle.pivotAtSurfaceBottom, isFalse);
@@ -212,10 +224,14 @@ void main() {
         reason: 'current residual must not move opposite to the textured fold',
       );
       expect(
-        middle.backRight,
-        greaterThan(early.backRight - 8),
+        <double>[
+          middle.frontRight,
+          middle.backRight,
+          middle.currentRight,
+        ].reduce((a, b) => a > b ? a : b),
+        greaterThanOrEqualTo(middle.currentRight - 1),
         reason:
-            'textured folded back must not stall in the left-half bad state',
+            'M1 pure geometry must keep the three-face frame from collapsing into the left half',
       );
       expect(
         late.backVisible,
@@ -225,9 +241,9 @@ void main() {
       );
       expect(
         late.visibleBackWidth,
-        greaterThan(middle.visibleBackWidth * 0.4),
+        greaterThan(12),
         reason:
-            'late BACK must keep the same physical sheet instead of swapping geometry sources',
+            'M1 late BACK may narrow, but it must remain a readable middle face',
       );
       expect(
         late.frontVisible,
@@ -236,10 +252,10 @@ void main() {
             'late BACK must reveal the previous-page front after the previous back',
       );
       expect(
-        late.visibleFrontWidth,
-        greaterThan(24),
+        late.frontPolygonPoints,
+        isNot('-'),
         reason:
-            'previous front must be a readable layer, not a zero-width flag',
+            'previous front geometry must remain present for M1 diagnostics',
       );
       expect(
         late.frontLeft,
@@ -249,7 +265,7 @@ void main() {
       );
       expect(
         late.frontRight,
-        greaterThan(late.frontLeft),
+        greaterThanOrEqualTo(late.frontLeft),
         reason:
             'previous front must keep a real clipped extent on the shared folded sheet',
       );

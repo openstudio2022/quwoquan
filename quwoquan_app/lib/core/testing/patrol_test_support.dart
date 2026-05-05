@@ -23,8 +23,12 @@ Future<void> launchPatrolAppOnce(PatrolIntegrationTester $) async {
       ],
     );
   }
-  // 让首帧、路由与异步初始化有机会完成，再进入可见性断言。
-  await $.pumpAndSettle();
+  // gamma 远端冷启动会带来持续中的初始化任务，直接等待全局 settle
+  // 容易把 T4 卡死在启动阶段。这里仅给首帧和首轮路由足够时间，
+  // 后续由具体用例等待目标元素出现。
+  await $.pump();
+  await $.pump(const Duration(milliseconds: 300));
+  await $.pump(const Duration(seconds: 1));
 }
 
 final class _PatrolWelcomeCompletedNotifier extends WelcomeCompletedNotifier {

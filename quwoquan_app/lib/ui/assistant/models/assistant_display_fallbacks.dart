@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
-import 'package:quwoquan_app/assistant/domain/channel/channel.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_text_resolver.dart';
+import 'package:quwoquan_app/assistant/protocol/run_response.dart';
 
 Map<String, dynamic> _structuredPayload(AssistantRunResponse response) {
   final direct = response.structuredResponse;

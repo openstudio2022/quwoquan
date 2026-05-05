@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/assistant/protocol/trace_events.dart';
 
-/// 从 trace 列表提取 C6 回放用 payload（与 [AssistantConversationController] 记录逻辑一致）。
+/// 从 trace 列表提取 C6 回放用 payload，与当前私助 trace 记录格式保持一致。
 class AssistantReplayTracePayload {
   const AssistantReplayTracePayload({
     required this.queryPlan,

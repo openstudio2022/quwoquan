@@ -61,6 +61,7 @@ run_app() {
     python3 scripts/verify_cloud_services_semantic.py || exit 1
     python3 scripts/verify_route_and_context_semantic.py || exit 1
     python3 scripts/verify_no_personal_assistant_imports.py || exit 1
+    python3 scripts/verify_assistant_old_stack_retired.py || exit 1
     # L0 PA 降级响应契约静态分析（阻断）：
     #   - degraded:true 必须有 errorCode
     #   - finalText 不得泄漏 JSON envelope key

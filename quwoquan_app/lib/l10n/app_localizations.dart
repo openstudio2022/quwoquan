@@ -347,7 +347,7 @@ abstract class AppLocalizations {
   /// No description provided for @assistantEntryFind.
   ///
   /// In zh, this message translates to:
-  /// **'找小趣'**
+  /// **'找私助'**
   String get assistantEntryFind;
 
   /// No description provided for @assistantEntryAsk.

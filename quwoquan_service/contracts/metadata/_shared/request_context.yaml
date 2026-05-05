@@ -2,8 +2,6 @@ version: 1
 
 domain_operation_page_ids:
   assistant:
-    CreateRun: assistant.run.create
-    CreateRunStream: assistant.run.stream
     SearchXiaoquResults: assistant.search.xiaoqu
     ReportPageContext: assistant.page_context.report
     GetSuggestedActions: assistant.suggested_actions.get

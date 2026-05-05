@@ -148,34 +148,11 @@ class AppUiSurfaces {
     ],
   );
 
-  static const AppUiSurface assistantDialog = AppUiSurface(
-    id: 'assistantDialog',
-    owner: 'assistant',
-    routeId: 'chatDetail',
-    pathTemplate: '/chat/{id}',
-    description: '私助完整对话页',
-    operationIds: <String>[
-      'CreateRun',
-      'CreateRunStream',
-      'ReportInteractionEvent',
-      'ReportScorecard',
-      'ReportPageContext',
-      'GetSuggestedActions',
-      'GetPolicy',
-      'ListSkills',
-      'ListAssistantTasks',
-      'ListAssistantMemories',
-      'ListConsents',
-      'GrantSkillConsent',
-      'RevokeSkillConsent',
-    ],
-  );
-
   static const AppUiSurface assistantHalfSheet = AppUiSurface(
     id: 'assistantHalfSheet',
     owner: 'assistant',
-    routeId: 'chatDetail',
-    pathTemplate: '/chat/{id}',
+    routeId: 'assistantPersonal',
+    pathTemplate: '/assistant/personal',
     description: '私助半弹层入口',
     operationIds: <String>[
       'ReportPageContext',
@@ -191,11 +168,27 @@ class AppUiSurfaces {
     description: '找私助云端优先对话入口',
     operationIds: <String>[
       'CreateAssistantConversation',
+      'GetAssistantConversation',
       'CreateAssistantTurn',
+      'GetAssistantTurn',
       'StreamAssistantTurn',
-      'ListSkills',
       'ListAppMessages',
       'GetAppMessageUnreadCount',
+      'ReportInteractionEvent',
+      'ReportScorecard',
+      'ReportPageContext',
+      'GetSuggestedActions',
+      'GetPolicy',
+      'ListSkills',
+      'ListAssistantTasks',
+      'ListAssistantMemories',
+      'ListConsents',
+      'GrantSkillConsent',
+      'RevokeSkillConsent',
+      'ListSkillSubscriptions',
+      'CreateSkillSubscription',
+      'GetSkillSubscription',
+      'UpdateSkillSubscriptionStatus',
     ],
   );
 
@@ -279,8 +272,6 @@ class AppUiSurfaces {
       'SearchCircles',
       'SearchXiaoquResults',
       'UpsertRecentSearch',
-      'CreateRun',
-      'CreateRunStream',
     ],
   );
 
@@ -367,7 +358,6 @@ class AppUiSurfaces {
     chatTransferOwnership,
     chatAdmins,
     chatMemberSearch,
-    assistantDialog,
     assistantHalfSheet,
     personalAssistantDialog,
     assistantSettings,
@@ -394,7 +384,6 @@ class AppUiSurfaces {
     'chatTransferOwnership': chatTransferOwnership,
     'chatAdmins': chatAdmins,
     'chatMemberSearch': chatMemberSearch,
-    'assistantDialog': assistantDialog,
     'assistantHalfSheet': assistantHalfSheet,
     'personalAssistantDialog': personalAssistantDialog,
     'assistantSettings': assistantSettings,

@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -28,6 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = REPO_ROOT / "quwoquan_app"
 DEFAULT_REPORT = REPO_ROOT / "artifacts" / "device-matrix" / "gamma-patrol" / "report.json"
 DEFAULT_TARGET = "test/patrol/discovery/feed_load_test.dart"
+IOS_SDK_VERSION_PATTERN = re.compile(r"iOS[- ](\d+)(?:[-._](\d+))?")
 
 
 def utc_now() -> str:
@@ -124,6 +126,16 @@ def run_command(
     return result
 
 
+def ios_sdk_version(device: dict[str, Any]) -> tuple[int, int] | None:
+    sdk = str(device.get("sdk", "")).strip()
+    match = IOS_SDK_VERSION_PATTERN.search(sdk)
+    if match is None:
+        return None
+    major = int(match.group(1))
+    minor = int(match.group(2) or 0)
+    return (major, minor)
+
+
 def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any]]:
     payload = subprocess.run(
         [
@@ -158,6 +170,24 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
         if platform == "all" and target != "ios" and not target.startswith("android"):
             continue
         selected.append(device)
+    if not allowed_ids and platform in ("ios", "all"):
+        latest_ios_sdk = max(
+            (
+                version
+                for device in selected
+                if str(device.get("targetPlatform", "")).lower() == "ios"
+                for version in [ios_sdk_version(device)]
+                if version is not None
+            ),
+            default=None,
+        )
+        if latest_ios_sdk is not None:
+            selected = [
+                device
+                for device in selected
+                if str(device.get("targetPlatform", "")).lower() != "ios"
+                or ios_sdk_version(device) == latest_ios_sdk
+            ]
     return selected
 
 

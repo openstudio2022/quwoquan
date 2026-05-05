@@ -16,6 +16,7 @@
 .PHONY: verify-app-ui-map-literal-budget
 .PHONY: verify-app-session-b-current
 .PHONY: verify-app-assistant-search-weak-typing-ratchet
+.PHONY: verify-app-assistant-old-stack-retired
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-ui-app-data-source-mode-ratchet
 .PHONY: verify-app-seed-manifest
@@ -63,6 +64,9 @@ verify-app-ui-app-data-source-mode-ratchet:
 
 verify-app-seed-manifest:
 	@python3 scripts/verify_app_seed_manifests.py
+
+verify-app-assistant-old-stack-retired:
+	@python3 scripts/verify_assistant_old_stack_retired.py
 
 verify-avatar-user-pool:
 	@python3 scripts/verify_avatar_user_pool_consistency.py

@@ -127,56 +127,6 @@ class AssistantSearchXiaoquRequestWire {
       };
 }
 
-class AssistantCreateRunRequestWire {
-  const AssistantCreateRunRequestWire({
-    this.userQuery,
-    this.triggerType,
-    this.skillId,
-    this.profileSubjectId,
-    this.subAccountId,
-    this.personaContextVersion,
-    this.sourceSurfaceId,
-    this.sourceQuery,
-    this.fromGlobalSearch,
-  });
-
-  final String? userQuery;
-  final String? triggerType;
-  final String? skillId;
-  final String? profileSubjectId;
-  final String? subAccountId;
-  final String? personaContextVersion;
-  final String? sourceSurfaceId;
-  final String? sourceQuery;
-  final bool? fromGlobalSearch;
-
-  factory AssistantCreateRunRequestWire.fromJson(Map<String, dynamic> json) {
-    return AssistantCreateRunRequestWire(
-      userQuery: json['userQuery']?.toString(),
-      triggerType: json['triggerType']?.toString(),
-      skillId: (json['skillId'] ?? json['skill_id'] ?? json['id'] ?? '').toString(),
-      profileSubjectId: json['profileSubjectId']?.toString(),
-      subAccountId: json['subAccountId']?.toString(),
-      personaContextVersion: json['personaContextVersion']?.toString(),
-      sourceSurfaceId: json['sourceSurfaceId']?.toString(),
-      sourceQuery: json['sourceQuery']?.toString(),
-      fromGlobalSearch: (json['fromGlobalSearch'] as bool?),
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'userQuery': userQuery,
-        'triggerType': triggerType,
-        'skillId': skillId,
-        'profileSubjectId': profileSubjectId,
-        'subAccountId': subAccountId,
-        'personaContextVersion': personaContextVersion,
-        'sourceSurfaceId': sourceSurfaceId,
-        'sourceQuery': sourceQuery,
-        'fromGlobalSearch': fromGlobalSearch,
-      };
-}
-
 class AssistantReportPageContextRequestWire {
   const AssistantReportPageContextRequestWire({
     required this.pageType,

@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:quwoquan_app/assistant/contracts/assistant_journey.dart';
 import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/transcript/persisted_timeline/persisted_timeline_turn_codec.dart';
@@ -8,23 +5,22 @@ import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timel
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_turn_message_resolver.dart';
 import 'package:test/test.dart';
 
-import '../../assistant/assistant_test_fixture_paths.dart';
-
 void main() {
   group('assistant transcript row protocol parity', () {
     test('FromTranscriptRow 与 FromMessage(encode(row)) 对助手行一致', () {
-      final runPath = assistantMetadataFixturePath('wire_min_run_artifacts.json');
-      final base =
-          jsonDecode(File(runPath).readAsStringSync()) as Map<String, dynamic>;
-      final runArtifacts = RunArtifacts.fromJson(
-        <String, dynamic>{
-          ...base,
-          'retrievalProcessing': <String, dynamic>{
-            'processingSummary': 'done',
-            'processedDocumentCount': 1,
-            'acceptedDocumentCount': 1,
-          },
-        },
+      final runArtifacts = const RunArtifacts(
+        displayMarkdown: 'hello',
+        displayPlainText: 'hello',
+        journey: AssistantJourney(
+          summary: 'done',
+          stages: <AssistantJourneyStage>[],
+          entries: <AssistantJourneyEntry>[],
+        ),
+        retrievalProcessing: RetrievalProcessingSnapshot(
+          processingSummary: 'done',
+          processedDocumentCount: 1,
+          acceptedDocumentCount: 1,
+        ),
       ).toJson();
       final row = AssistantAnswerTranscriptRow(
         id: 'm1',

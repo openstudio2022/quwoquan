@@ -22,9 +22,6 @@ allowed_modal_popup:
   - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
     kind: sheet_exception
     reason: 建群向导多步贴底面板，业务编排复杂；底壳仍须 AppBottomModalSurface
-  - path: quwoquan_app/lib/ui/assistant/pages/assistant_conversation_page.dart
-    kind: sheet_exception
-    reason: 助理会话内嵌表单弹层，与标准选项表形态不同
   - path: quwoquan_app/lib/components/media/video/viewer/immersive_video_viewer.dart
     kind: sheet_exception
     reason: 沉浸式视频控件栈上的控制浮层

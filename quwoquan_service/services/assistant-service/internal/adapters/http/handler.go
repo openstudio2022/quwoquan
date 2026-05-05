@@ -57,8 +57,6 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/app-messages/{messageId}", h.handleGetAppMessage)
 	mux.HandleFunc("POST /v1/app-messages/{messageId}/ack", h.handleAckAppMessage)
 	mux.HandleFunc("POST /v1/app-messages/{messageId}/read", h.handleReadAppMessage)
-	mux.HandleFunc("POST /v1/assistant/runs", h.handleCreateRun)
-	mux.HandleFunc("POST /v1/assistant/runs/stream", h.handleCreateRunStream)
 	return mux
 }
 
@@ -456,54 +454,6 @@ func (h *Handler) handleStreamTurn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("assistant http stream_turn_ready turnId=%s events=%d", turnID, emitted)
-}
-
-func (h *Handler) handleCreateRun(w http.ResponseWriter, r *http.Request) {
-	var req map[string]any
-	if err := readJSON(r, &req); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	query := strings.TrimSpace(fmtString(req["userQuery"]))
-	if query == "" {
-		query = strings.TrimSpace(fmtString(req["sourceQuery"]))
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"runId":           resolveRequestID(r),
-		"traceId":         resolveTraceID(r),
-		"status":          "completed",
-		"summary":         "assistant-service final-state ingress placeholder",
-		"finalText":       buildRunResponseText(query),
-		"degraded":        false,
-		"sourceSurfaceId": fmtString(req["sourceSurfaceId"]),
-	})
-}
-
-func (h *Handler) handleCreateRunStream(w http.ResponseWriter, r *http.Request) {
-	var req map[string]any
-	if err := readJSON(r, &req); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleAssistant, "请求体无效", err.Error()))
-		return
-	}
-	query := strings.TrimSpace(fmtString(req["userQuery"]))
-	if query == "" {
-		query = strings.TrimSpace(fmtString(req["sourceQuery"]))
-	}
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("event: trace\n"))
-	_, _ = w.Write([]byte("data: {\"status\":\"running\"}\n\n"))
-	payload, _ := json.Marshal(map[string]any{
-		"runId":     resolveRequestID(r),
-		"traceId":   resolveTraceID(r),
-		"status":    "completed",
-		"finalText": buildRunResponseText(query),
-	})
-	_, _ = w.Write([]byte("event: final\n"))
-	_, _ = w.Write([]byte("data: "))
-	_, _ = w.Write(payload)
-	_, _ = w.Write([]byte("\n\n"))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

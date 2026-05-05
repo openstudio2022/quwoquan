@@ -19,11 +19,10 @@
 # 自主修复指引（编程助手用）：
 #   ...tool_observation...          → react_runtime.dart / llm_provider.dart
 #   ...history_contamination...     → agent_loop.dart / session_manager.dart / chat_detail_page.dart
-#   ...degraded_response_root_cause → capability_gateway.dart / run_response.dart
-#   ...message_history_protocol...  → session_manager.dart
-#   ...observability_root_cause...  → trace_events.dart / run_response.dart
-#   ...assistant_message_history... → chat_detail_page.dart (line 1007-1027)
-#   ...structured_response...       → agent_loop.dart / capability_gateway.dart
+#   ...assistant_answer_protocol... → assistant_repository / stream protocol / transcript payload
+#   ...assistant_message_history... → local timeline persistence / transcript rendering
+#   ...stream_controller...         → PersonalAssistantStreamController / resolver / provider
+#   ...assistant_skill_center...    → skill center page / consent management / repository projection
 
 set -euo pipefail
 
@@ -38,15 +37,13 @@ fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 桶 A: dart test — 纯 Dart VM，无 flutter shell（最快、最稳定）
-# 覆盖：A3/A4/A8 协议契约（降级响应根因、消息记录协议、可观测字段）
+# 覆盖：A3/A4/A8 协议契约（回答协议、消息时间轴、只读投影）
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_A_TESTS=(
-  "test/assistant/degraded_response_root_cause_contract_test.dart"
-  "test/assistant/message_history_protocol_contract_test.dart"
-  "test/assistant/observability_root_cause_contract_test.dart"
-  "test/assistant/quality_metrics_gate_test.dart"
-  "test/assistant/history_contamination_guard_test.dart"
+  "test/common/assistant/protocol/assistant_answer_protocol_leak_regression_test.dart"
   "test/ui/assistant/contract/assistant_message_history_contract_test.dart"
+  "test/ui/assistant/assistant_context_scope_read_view_test.dart"
+  "test/ui/assistant/assistant_structured_run_response_read_view_test.dart"
 )
 
 echo "[pa-core] ── Bucket A: flutter test (pure VM, no network) ─────────────────"
@@ -66,14 +63,12 @@ fi
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 桶 B: flutter test — 引擎集成测试（需要 flutter tester shell）
-# 覆盖：A3/A8/A9 工具观察协议、结构化输出契约、双 gate 集成
+# 覆盖：A3/A8/A9 状态编排、消息解析与 Provider 投影
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_B_TESTS=(
-  "test/assistant/structured_response_contract_test.dart"
-  "test/assistant/react_runtime_tool_observation_contract_test.dart"
-  "test/assistant/dual_gate_integration_test.dart"
-  "test/assistant/agent_loop_context_gate_test.dart"
-  "test/assistant/observability_completeness_test.dart"
+  "test/ui/assistant/personal_assistant_stream_controller_test.dart"
+  "test/ui/assistant/assistant_turn_message_resolver_transcript_row_test.dart"
+  "test/ui/assistant/personal_content_access_provider_test.dart"
 )
 
 echo "[pa-core] ── Bucket B: flutter test (engine integration) ─────────────────"
@@ -88,10 +83,12 @@ echo "[pa-core] Bucket B: OK"
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 桶 C: flutter test — UI 契约层（widget 级别但无网络依赖）
-# 覆盖：A3/A10 渲染稳定性、消息构建契约
+# 覆盖：A3/A10 页面与消息 UI 契约
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_C_TESTS=(
-  "test/ui/chat/widgets/"
+  "test/ui/assistant/assistant_transcript_bubble_envelope_test.dart"
+  "test/ui/assistant/assistant_management_page_consent_test.dart"
+  "test/ui/assistant/pages/assistant_skill_center_page_widget_test.dart"
 )
 
 echo "[pa-core] ── Bucket C: flutter test (UI contract) ────────────────────────"
