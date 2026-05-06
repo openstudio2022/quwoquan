@@ -379,6 +379,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: 汇总并阻断失败项
         env:
+          SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           HOSTED: ${{ needs.gamma_pre_hosted.result }}
           DISCOVER: ${{ needs.discover_gamma_devices.result }}
           HAS_ANDROID: ${{ needs.discover_gamma_devices.outputs.has_android }}
@@ -389,6 +390,14 @@ jobs:
           CHAT_IOS: ${{ needs.gamma_chat_avatar_ios.result }}
         run: |
           set -euo pipefail
+          if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
+            if [ "${HOSTED}" != "success" ]; then
+              echo "::error::gamma-ecs-hosted-pre-chain expected success, got ${HOSTED}. 检查 ECS 打包/上传/部署、assistant gamma smoke、T3 API contract、avatar API probe"
+              exit 1
+            fi
+            echo "::notice::gamma self-hosted matrix is disabled for this run; skip device evidence enforcement."
+            exit 0
+          fi
           fail=0
           expect_success() {
             local name="$1" val="$2" hint="$3"
@@ -418,13 +427,13 @@ jobs:
             exit 1
           fi
       - name: 下载 gamma self-hosted artifacts
-        if: always()
+        if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         uses: actions/download-artifact@v4
         with:
           pattern: gamma-*-selfhosted-*
           path: ${{ runner.temp }}/gamma-selfhosted-artifacts
       - name: 校验 gamma self-hosted 证据产物
-        if: always()
+        if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         run: |
           python3 scripts/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/gamma-selfhosted-artifacts" \

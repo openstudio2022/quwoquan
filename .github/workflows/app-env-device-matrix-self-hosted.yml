@@ -329,6 +329,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: 汇总并阻断失败项
         env:
+          SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           DISCOVER: ${{ needs.discover_devices.result }}
           ANDROID: ${{ needs.android.result }}
           IOS: ${{ needs.ios.result }}
@@ -336,6 +337,10 @@ jobs:
           HAS_IOS: ${{ needs.discover_devices.outputs.has_ios }}
         run: |
           set -euo pipefail
+          if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
+            echo "::notice::self-hosted mobile matrix is disabled for this run; skip device evidence enforcement."
+            exit 0
+          fi
           fail=0
           expect_success() {
             local name="$1" val="$2" hint="$3"
@@ -362,13 +367,13 @@ jobs:
             exit 1
           fi
       - name: 下载设备矩阵 artifacts
-        if: always()
+        if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         uses: actions/download-artifact@v4
         with:
           pattern: app-env-device-matrix-*
           path: ${{ runner.temp }}/app-env-device-matrix-artifacts
       - name: 校验设备矩阵证据产物
-        if: always()
+        if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         run: |
           python3 scripts/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
