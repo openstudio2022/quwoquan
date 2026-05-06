@@ -54,6 +54,7 @@ concurrency:
 jobs:
   discover_devices:
     name: Discover mobile devices (self-hosted)
+    if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: [self-hosted, macOS]
     outputs:
       env_json: ${{ steps.discover.outputs.env_json }}

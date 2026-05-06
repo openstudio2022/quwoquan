@@ -21,6 +21,7 @@ jobs:
 
   discover_gamma_devices:
     name: Discover gamma mobile devices (self-hosted)
+    if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: [self-hosted, macOS]
     outputs:
       has_android: ${{ steps.discover.outputs.has_android }}
