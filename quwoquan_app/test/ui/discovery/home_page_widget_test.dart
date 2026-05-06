@@ -80,6 +80,23 @@ void _setWideSize(WidgetTester tester) {
   tester.view.devicePixelRatio = 2.0;
 }
 
+Future<void> _scrollUntilFinderVisible(
+  WidgetTester tester,
+  Finder scrollable,
+  Finder target, {
+  Offset step = const Offset(0, -320),
+  int maxScrolls = 12,
+}) async {
+  for (var i = 0; i < maxScrolls; i++) {
+    if (target.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.drag(scrollable, step);
+    await tester.pumpAndSettle();
+  }
+  expect(target, findsOneWidget);
+}
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
@@ -264,11 +281,7 @@ void main() {
         ),
       );
 
-      await tester.dragUntilVisible(
-        coverCard,
-        scrollable,
-        const Offset(0, -320),
-      );
+      await _scrollUntilFinderVisible(tester, scrollable, coverCard);
       await tester.pumpAndSettle();
       expect(coverCard, findsOneWidget);
       expect(
@@ -281,11 +294,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.dragUntilVisible(
-        textOnlyCard,
-        scrollable,
-        const Offset(0, -320),
-      );
+      await _scrollUntilFinderVisible(tester, scrollable, textOnlyCard);
       await tester.pumpAndSettle();
       expect(textOnlyCard, findsOneWidget);
       expect(
@@ -298,11 +307,7 @@ void main() {
         findsNothing,
       );
 
-      await tester.dragUntilVisible(
-        bodyOnlyCoverCard,
-        scrollable,
-        const Offset(0, -320),
-      );
+      await _scrollUntilFinderVisible(tester, scrollable, bodyOnlyCoverCard);
       await tester.pumpAndSettle();
       expect(bodyOnlyCoverCard, findsOneWidget);
       expect(
@@ -324,11 +329,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.dragUntilVisible(
-        bodyOnlyTextCard,
-        scrollable,
-        const Offset(0, -320),
-      );
+      await _scrollUntilFinderVisible(tester, scrollable, bodyOnlyTextCard);
       await tester.pumpAndSettle();
       expect(bodyOnlyTextCard, findsOneWidget);
       expect(

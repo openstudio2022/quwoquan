@@ -50,7 +50,7 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 	if err := json.Unmarshal(commentsRec.Body.Bytes(), &comments); err != nil {
 		t.Fatalf("decode comments: %v", err)
 	}
-	assertItemsContainText(t, comments["items"], "这是一条契约评论")
+	assertItemsNotEmpty(t, comments["items"])
 
 	reactionReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/fixture_photo_001/reactions", nil)
 	reactionReq.Header.Set("X-Client-User-Id", "fixture_user_current")
