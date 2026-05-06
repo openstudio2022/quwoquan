@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import datetime as dt
 import http.client
 import json
@@ -337,6 +338,7 @@ def stream_assistant_turn(
 
         frames: List[Dict[str, Any]] = []
         buffer = ""
+        decoder = codecs.getincrementaldecoder("utf-8")()
         answer = ""
         while True:
             if time.monotonic() - started > timeout_seconds:
@@ -360,7 +362,7 @@ def stream_assistant_turn(
                 )
             if not chunk:
                 break
-            buffer += chunk.decode("utf-8", errors="replace")
+            buffer += decoder.decode(chunk)
             buffer = buffer.replace("\r\n", "\n")
             split_index = buffer.find("\n\n")
             while split_index >= 0:
@@ -381,6 +383,7 @@ def stream_assistant_turn(
                         "durationMs": int((time.monotonic() - started) * 1000),
                     }
                 split_index = buffer.find("\n\n")
+        buffer += decoder.decode(b"", final=True)
         return {
             "events": frames,
             "answer": answer.strip(),
