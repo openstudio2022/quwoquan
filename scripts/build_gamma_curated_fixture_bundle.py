@@ -132,8 +132,9 @@ def tracked_media_object_keys() -> Set[str]:
     payload = subprocess.run(
         ["git", "ls-files", str(MEDIA_ROOT.relative_to(ROOT))],
         cwd=str(ROOT),
-        text=True,
-        capture_output=True,
+        universal_newlines=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         check=True,
     )
     tracked: Set[str] = set()
