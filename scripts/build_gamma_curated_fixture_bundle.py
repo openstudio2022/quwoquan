@@ -129,24 +129,31 @@ def row_id(row: Dict[str, Any], *keys: str) -> str:
 
 
 def tracked_media_object_keys() -> Set[str]:
-    payload = subprocess.run(
-        ["git", "ls-files", str(MEDIA_ROOT.relative_to(ROOT))],
-        cwd=str(ROOT),
-        universal_newlines=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=True,
-    )
     tracked: Set[str] = set()
-    for line in payload.stdout.splitlines():
-        relative = line.strip()
-        if not relative:
-            continue
-        path = Path(relative)
-        try:
-            tracked.add(str(path.relative_to(MEDIA_ROOT.relative_to(ROOT))))
-        except ValueError:
-            continue
+    try:
+        payload = subprocess.run(
+            ["git", "ls-files", str(MEDIA_ROOT.relative_to(ROOT))],
+            cwd=str(ROOT),
+            universal_newlines=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+        )
+        for line in payload.stdout.splitlines():
+            relative = line.strip()
+            if not relative:
+                continue
+            path = Path(relative)
+            try:
+                tracked.add(str(path.relative_to(MEDIA_ROOT.relative_to(ROOT))))
+            except ValueError:
+                continue
+    except (OSError, subprocess.CalledProcessError):
+        if not MEDIA_ROOT.exists():
+            return tracked
+        for path in MEDIA_ROOT.rglob("*"):
+            if path.is_file():
+                tracked.add(str(path.relative_to(MEDIA_ROOT)))
     return tracked
 
 

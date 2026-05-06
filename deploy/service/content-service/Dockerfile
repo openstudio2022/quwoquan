@@ -1,7 +1,7 @@
 # Multi-stage build for content-service
 # Build context: quwoquan_service/
 
-ARG GO_BASE_IMAGE=golang:1.24.3-alpine
+ARG GO_BASE_IMAGE=golang:1.24-bookworm
 ARG ALPINE_BASE_IMAGE=alpine:3.19
 
 FROM ${GO_BASE_IMAGE} AS builder

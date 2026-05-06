@@ -320,7 +320,7 @@ pre_pull_local_gamma_images() {
     docker.io/library/mongo:7-jammy
     docker.io/library/redis:7.2-alpine
     docker.io/library/golang:1.24-bookworm
-    docker.io/library/golang:1.24.3-alpine
+    docker.io/library/golang:1.24-bookworm
     docker.io/library/python:3.11-slim
     docker.io/library/alpine:3.19
     docker.io/library/caddy:2.8.4-alpine

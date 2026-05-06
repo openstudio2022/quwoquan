@@ -90,7 +90,7 @@ services:
       context: .
       dockerfile: ../deploy/service/content-service/Dockerfile
       args:
-        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24.3-alpine}"
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
         ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
     environment:
       SERVICE_NAME: content-service
@@ -128,7 +128,7 @@ services:
       context: .
       dockerfile: ../deploy/service/chat-service/Dockerfile
       args:
-        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24.3-alpine}"
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
         ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
     environment:
       SERVICE_NAME: chat-service
