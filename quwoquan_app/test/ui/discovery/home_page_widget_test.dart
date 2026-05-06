@@ -12,6 +12,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
@@ -68,6 +69,9 @@ Widget _buildAppWithStableFollowingArticles() {
       contentFeatureFlagProvider(
         'enable_article_distribution_profiles',
       ).overrideWith((ref) => true),
+      discoveryFeedMapProvider.overrideWith(
+        _StableFollowingDiscoveryFeedMapNotifier.new,
+      ),
     ],
     child: ScreenUtilInit(
       designSize: const Size(393, 852),
@@ -164,6 +168,22 @@ class _StableFollowingArticleContentRepository extends MockContentRepository {
           ? 'journal'
           : 'tech',
     });
+  }
+}
+
+class _StableFollowingDiscoveryFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'following': const AsyncData(
+        DiscoveryFeedState(
+          items: <PostBaseDto>[],
+          seenItemIds: <String>[],
+          nextCursor: null,
+          isLoading: false,
+        ),
+      ),
+    };
   }
 }
 
