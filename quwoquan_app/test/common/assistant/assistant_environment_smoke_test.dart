@@ -284,9 +284,15 @@ Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
     'APP_RUNTIME_ENV',
     defaultValue: 'alpha',
   );
+  const maxTicksOverride = int.fromEnvironment(
+    'ASSISTANT_SMOKE_MAX_TICKS',
+    defaultValue: 0,
+  );
   // Hosted beta/gamma pipelines can be slower when emulators share network and
   // deterministic tool calls fan out; keep enough budget before declaring fail.
-  final maxTicks = runtimeEnv == 'beta' || runtimeEnv == 'gamma' ? 1500 : 240;
+  final maxTicks = maxTicksOverride > 0
+      ? maxTicksOverride
+      : (runtimeEnv == 'beta' || runtimeEnv == 'gamma' ? 1500 : 240);
   for (var i = 0; i < maxTicks; i++) {
     await tester.pump(const Duration(milliseconds: 100));
     final context = tester.element(

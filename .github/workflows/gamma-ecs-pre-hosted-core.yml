@@ -183,7 +183,8 @@ jobs:
             --dart-define=APP_RUNTIME_ENV=gamma \
             --dart-define=APP_DATA_SOURCE=remote \
             --dart-define=CLOUD_GATEWAY_BASE_URL="${GAMMA_BASE_URL}" \
-            --dart-define=ASSISTANT_SCENARIO_ID=travel_journey_basic
+            --dart-define=ASSISTANT_SCENARIO_ID=travel_journey_basic \
+            --dart-define=ASSISTANT_SMOKE_MAX_TICKS=600
 
   gamma_chat_avatar_api_probe_pre:
     name: Gamma ECS - chat avatar API probe (pre)
