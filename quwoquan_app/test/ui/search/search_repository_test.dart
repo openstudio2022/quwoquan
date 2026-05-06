@@ -129,7 +129,7 @@ void main() {
             <String, dynamic>{
               ...seedGroup.toMap(),
               'circleId': seedCircleId,
-              'circleName': CircleMockData.catalogCircleDtos.first.name,
+              'circleName': '本地回退圈子',
             },
           ],
         );
