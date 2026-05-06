@@ -6,8 +6,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
@@ -17,9 +17,55 @@ import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _buildApp({List<Override> overrides = const <Override>[]}) {
+Widget _buildApp() {
   return ProviderScope(
-    overrides: overrides,
+    child: ScreenUtilInit(
+      designSize: const Size(393, 852),
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/',
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (context, state) =>
+                  const Scaffold(body: HomePage(routeLocation: '/')),
+            ),
+            GoRoute(
+              path: '/circles',
+              builder: (context, state) => const Scaffold(body: CirclesPage()),
+            ),
+            GoRoute(
+              path: '/circle/:id',
+              builder: (context, state) => const SizedBox(),
+            ),
+            GoRoute(
+              path: '/chat/:id',
+              builder: (context, state) => const SizedBox(),
+            ),
+            GoRoute(
+              path: '/search',
+              builder: (context, state) => const GlobalSearchPage(
+                launchContext: SearchLaunchContext(entrySurfaceId: '/'),
+              ),
+            ),
+            GoRoute(
+              path: '/user/:username',
+              builder: (context, state) => const SizedBox(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildAppWithStableFollowingArticles() {
+  return ProviderScope(
+    overrides: [
+      contentRepositoryProvider.overrideWithValue(
+        _StableFollowingArticleContentRepository(),
+      ),
+    ],
     child: ScreenUtilInit(
       designSize: const Size(393, 852),
       child: MaterialApp.router(
@@ -182,15 +228,7 @@ void main() {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(
-        _buildApp(
-          overrides: <Override>[
-            contentRepositoryProvider.overrideWithValue(
-              _StableFollowingArticleContentRepository(),
-            ),
-          ],
-        ),
-      );
+      await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
 
       final addIcon = find.byIcon(CupertinoIcons.add).first;
@@ -329,7 +367,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_buildApp());
+      await tester.pumpWidget(_buildAppWithStableFollowingArticles());
       await tester.pumpAndSettle();
 
       final scrollable = find.byType(Scrollable).first;
