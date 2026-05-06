@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
@@ -15,8 +17,9 @@ import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Widget _buildApp() {
+Widget _buildApp({List<Override> overrides = const <Override>[]}) {
   return ProviderScope(
+    overrides: overrides,
     child: ScreenUtilInit(
       designSize: const Size(393, 852),
       child: MaterialApp.router(
@@ -55,6 +58,64 @@ Widget _buildApp() {
       ),
     ),
   );
+}
+
+class _StableFollowingArticleContentRepository extends MockContentRepository {
+  @override
+  List<PostBaseDto> embeddedDiscoveryArticlePostsForFollowingMix() {
+    return <PostBaseDto>[
+      _articlePost(
+        id: 'web-dev',
+        title: '给新同事的 Web 工程工具清单',
+        body: '从构建、调试到部署，把最容易漏掉的环节集中整理成一页。',
+        coverUrl: 'https://example.com/article-web-dev-cover.jpg',
+      ),
+      _articlePost(
+        id: 'ritual_plain',
+        title: '晨间复盘的十分钟礼记',
+        body: '把前一天的情绪、节奏和待办留在固定版式里，早晨更容易进入状态。',
+      ),
+      _articlePost(
+        id: 'diffuse_cover_body_only',
+        body: '把路线、风向和停留时间直接写进正文里，让临场决定也能保持连贯。',
+        coverUrl: 'https://example.com/article-diffuse-cover.jpg',
+      ),
+      _articlePost(
+        id: 'journal_plain_body_only',
+        body: '没有标题也没有封面，仍然可以用正文首句承接整张卡片的信息层级。',
+      ),
+    ];
+  }
+
+  PostBaseDto _articlePost({
+    required String id,
+    String title = '',
+    required String body,
+    String coverUrl = '',
+  }) {
+    return postBaseDtoFromMap(<String, dynamic>{
+      'id': id,
+      '_id': id,
+      'postId': id,
+      'contentType': 'article',
+      'type': 'article',
+      'authorId': 'fixture_user_current',
+      'displayName': '测试作者',
+      'title': title,
+      'body': body,
+      'coverUrl': coverUrl,
+      'imageUrl': coverUrl,
+      'mediaCoverUrl': coverUrl,
+      'createdAt': '2026-05-01T08:00:00Z',
+      'articleTemplate': id == 'ritual_plain'
+          ? 'ritual'
+          : id == 'diffuse_cover_body_only'
+          ? 'diffuse'
+          : id == 'journal_plain_body_only'
+          ? 'journal'
+          : 'tech',
+    });
+  }
 }
 
 void _suppressExpectedErrors() {
@@ -121,7 +182,15 @@ void main() {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(_buildApp());
+      await tester.pumpWidget(
+        _buildApp(
+          overrides: <Override>[
+            contentRepositoryProvider.overrideWithValue(
+              _StableFollowingArticleContentRepository(),
+            ),
+          ],
+        ),
+      );
       await tester.pumpAndSettle();
 
       final addIcon = find.byIcon(CupertinoIcons.add).first;
