@@ -13,9 +13,11 @@ import socket
 import ssl
 import sys
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -137,6 +139,7 @@ def build_surface_headers(
     )
     headers = {
         "Accept": accept,
+        "Accept-Encoding": "identity",
         "X-Client-User-Id": user_id,
         "X-Client-Page-Id": client_page_id,
         "X-Client-Surface-Id": ASSISTANT_SURFACE_ID,
@@ -218,6 +221,7 @@ def healthz_ok(base_url: str, test_auth_token: str, timeout_seconds: int) -> boo
         url,
         headers={
             "Accept": "application/json",
+            "Accept-Encoding": "identity",
             "X-Client-User-Id": "assistant_pr_smoke_health",
             "X-Test-Local-Gamma": "true",
             **(
@@ -329,6 +333,12 @@ def stream_assistant_turn(
                 ),
                 retryable=response.status >= 500,
             )
+        content_encoding = str(response.getheader("Content-Encoding", "")).strip().lower()
+        decompressor = None
+        if content_encoding == "gzip":
+            decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        elif content_encoding == "deflate":
+            decompressor = zlib.decompressobj()
         raw_sock = None
         if getattr(response, "fp", None) is not None:
             raw = getattr(response.fp, "raw", None)
@@ -362,6 +372,10 @@ def stream_assistant_turn(
                 )
             if not chunk:
                 break
+            if decompressor is not None:
+                chunk = decompressor.decompress(chunk)
+                if not chunk:
+                    continue
             buffer += decoder.decode(chunk)
             buffer = buffer.replace("\r\n", "\n")
             split_index = buffer.find("\n\n")
@@ -383,11 +397,16 @@ def stream_assistant_turn(
                         "durationMs": int((time.monotonic() - started) * 1000),
                     }
                 split_index = buffer.find("\n\n")
+        if decompressor is not None:
+            tail = decompressor.flush()
+            if tail:
+                buffer += decoder.decode(tail)
         buffer += decoder.decode(b"", final=True)
         return {
             "events": frames,
             "answer": answer.strip(),
             "durationMs": int((time.monotonic() - started) * 1000),
+            "contentEncoding": content_encoding,
         }
     finally:
         connection.close()
@@ -583,6 +602,8 @@ def main() -> int:
         validation = validate_stream_result(scenario, stream_result)
         report["assistant"]["answer"] = validation["answer"]
         report["assistant"]["eventTypes"] = validation["eventTypes"]
+        if stream_result.get("contentEncoding"):
+            report["assistant"]["contentEncoding"] = stream_result["contentEncoding"]
         add_step(
             report,
             "stream_turn",
@@ -602,6 +623,20 @@ def main() -> int:
             category=exc.category,
             message=str(exc),
             retryable=exc.retryable,
+        )
+        exit_code = 1
+    except Exception as exc:  # noqa: BLE001
+        report["status"] = "failed"
+        report["failureCategory"] = "unexpected_exception"
+        report["blockingReason"] = "{0}: {1}".format(type(exc).__name__, exc)
+        add_step(
+            report,
+            "failure",
+            "failed",
+            category="unexpected_exception",
+            message="{0}: {1}".format(type(exc).__name__, exc),
+            traceback="".join(traceback.format_exception(type(exc), exc, exc.__traceback__))[:4000],
+            retryable=False,
         )
         exit_code = 1
     finally:
