@@ -266,7 +266,7 @@ def stream_assistant_turn(
             raw_sock.settimeout(stall_timeout_seconds)
 
         frames: List[Dict[str, Any]] = []
-        frame_lines: List[str] = []
+        buffer = ""
         answer = ""
         while True:
             if time.monotonic() - started > timeout_seconds:
@@ -276,7 +276,10 @@ def stream_assistant_turn(
                     retryable=True,
                 )
             try:
-                line_bytes = response.fp.readline()
+                if hasattr(response.fp, "read1"):
+                    chunk = response.fp.read1(4096)
+                else:
+                    chunk = response.fp.read(4096)
             except socket.timeout:
                 raise ProbeFailure(
                     "stream_stalled",
@@ -285,22 +288,29 @@ def stream_assistant_turn(
                     ),
                     retryable=True,
                 )
-            if not line_bytes:
+            if not chunk:
                 break
-            line = line_bytes.decode("utf-8", errors="replace").rstrip("\r\n")
-            if not line:
-                frame = decode_sse_frame(frame_lines)
-                frame_lines = []
+            buffer += chunk.decode("utf-8", errors="replace")
+            buffer = buffer.replace("\r\n", "\n")
+            split_index = buffer.find("\n\n")
+            while split_index >= 0:
+                frame_text = buffer[:split_index]
+                buffer = buffer[split_index + 2 :]
+                frame = decode_sse_frame(frame_text.splitlines())
                 if frame is None:
+                    split_index = buffer.find("\n\n")
                     continue
                 frames.append(frame)
                 answer_text = extract_answer_from_event(frame)
                 if answer_text:
                     answer = answer_text
                 if str(frame.get("eventType", "")).strip() in ("final_answer", "turn_failed"):
-                    break
-                continue
-            frame_lines.append(line)
+                    return {
+                        "events": frames,
+                        "answer": answer.strip(),
+                        "durationMs": int((time.monotonic() - started) * 1000),
+                    }
+                split_index = buffer.find("\n\n")
         return {
             "events": frames,
             "answer": answer.strip(),

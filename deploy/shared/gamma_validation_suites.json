@@ -217,7 +217,7 @@
       "budgetSeconds": 240,
       "longTailType": "environment_sensitive",
       "currentRole": "运营事件可靠性回放旅程",
-      "currentPain": "依赖历史事件与 replay 状态，不适合 PR 阻断链路。",
+      "currentPain": "依赖已有事件与 replay 状态，不适合 PR 阻断链路。",
       "optimizationPlan": "保持在 daily/release，不纳入 PR。"
     }
   },
