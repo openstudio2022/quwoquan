@@ -20,16 +20,18 @@ void main() {
       final before = container
           .read(chatInboxListProvider)
           .items
-          .firstWhere((item) => item.id == 'conv_006');
+          .firstWhere(
+            (item) => item.unreadCount > 0 && item.mentionUnreadCount > 0,
+          );
       expect(before.unreadCount, greaterThan(0));
       expect(before.mentionUnreadCount, greaterThan(0));
 
-      notifier.markConversationRead('conv_006');
+      notifier.markConversationRead(before.id);
 
       final after = container
           .read(chatInboxListProvider)
           .items
-          .firstWhere((item) => item.id == 'conv_006');
+          .firstWhere((item) => item.id == before.id);
       expect(after.unreadCount, equals(0));
       expect(after.mentionUnreadCount, equals(0));
     });

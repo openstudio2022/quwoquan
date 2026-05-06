@@ -14,7 +14,7 @@ func TestContractFixtureSeed_ContentAlphaReadsViaHandler(t *testing.T) {
 		t.Fatalf("expected at least 4 seeded content records, got %d", evidence.InsertedCount)
 	}
 
-	feedReq := httptest.NewRequest(http.MethodGet, "/v1/content/feed?limit=10", nil)
+	feedReq := httptest.NewRequest(http.MethodGet, "/v1/content/feed?limit=100", nil)
 	feedRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(feedRec, feedReq)
 	if feedRec.Code != http.StatusOK {
