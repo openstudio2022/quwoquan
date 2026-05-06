@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -99,6 +100,7 @@ MEDIA_FIELD_NAMES = {
     "thumbnailUrl",
     "videoUrl",
 }
+DROP = object()
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -125,6 +127,69 @@ def row_id(row: dict[str, Any], *keys: str) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return ""
+
+
+def tracked_media_object_keys() -> set[str]:
+    payload = subprocess.run(
+        ["git", "ls-files", str(MEDIA_ROOT.relative_to(ROOT))],
+        cwd=str(ROOT),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    tracked: set[str] = set()
+    for line in payload.stdout.splitlines():
+        relative = line.strip()
+        if not relative:
+            continue
+        path = Path(relative)
+        try:
+            tracked.add(str(path.relative_to(MEDIA_ROOT.relative_to(ROOT))))
+        except ValueError:
+            continue
+    return tracked
+
+
+def prune_untracked_media_refs(
+    value: Any,
+    tracked_keys: set[str],
+    *,
+    field_name: str = "",
+) -> Any:
+    if isinstance(value, dict):
+        pruned: dict[str, Any] = {}
+        for key, nested in value.items():
+            next_value = prune_untracked_media_refs(
+                nested,
+                tracked_keys,
+                field_name=str(key),
+            )
+            if next_value is DROP:
+                continue
+            pruned[key] = next_value
+        return pruned
+    if isinstance(value, list):
+        items: list[Any] = []
+        for nested in value:
+            next_value = prune_untracked_media_refs(
+                nested,
+                tracked_keys,
+                field_name=field_name,
+            )
+            if next_value is DROP:
+                continue
+            items.append(next_value)
+        return items
+    if isinstance(value, str):
+        lower = field_name.lower()
+        looks_like_media_field = (
+            field_name in MEDIA_FIELD_NAMES
+            or field_name.endswith("ObjectKey")
+            or lower in {"mediaurls", "imageurls", "mediaobjectkeys", "imageobjectkeys"}
+        )
+        if looks_like_media_field and value.startswith("media/") and value not in tracked_keys:
+            return DROP
+    return value
 
 
 def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -246,6 +311,7 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
 
 
 def build_curated_scenarios() -> list[str]:
+    tracked_keys = tracked_media_object_keys()
     written: list[str] = []
     for relative_path, refs in CURATED_REFS.items():
         source_path = METADATA_ROOT / relative_path
@@ -266,6 +332,7 @@ def build_curated_scenarios() -> list[str]:
         ).strip()
         curated_payload["seedSets"] = curated_seed_sets
         curated_payload = prune_seed_payload(relative_path, curated_payload)
+        curated_payload = prune_untracked_media_refs(curated_payload, tracked_keys)
         scenarios = []
         for item in curated_payload.get("scenarios") or []:
             next_item = dict(item)
