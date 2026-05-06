@@ -295,7 +295,9 @@ Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
     final streamState = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);
-    if (!streamState.running && streamState.answer.isNotEmpty) {
+    // 一旦流结束就立刻交给上层判断成功/空回答/错误，并决定是否重试，
+    // 避免 hosted beta/gamma 在首轮快速失败后仍白白转满整段等待窗口。
+    if (!streamState.running) {
       return;
     }
   }
