@@ -65,6 +65,9 @@ Widget _buildAppWithStableFollowingArticles() {
       contentRepositoryProvider.overrideWithValue(
         _StableFollowingArticleContentRepository(),
       ),
+      contentFeatureFlagProvider(
+        'enable_article_distribution_profiles',
+      ).overrideWith((ref) => true),
     ],
     child: ScreenUtilInit(
       designSize: const Size(393, 852),
