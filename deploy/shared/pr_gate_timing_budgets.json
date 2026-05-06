@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "totalBudgetSeconds": 600,
+  "gates": {
+    "03.delivery_gate": {
+      "budgetSeconds": 360,
+      "criticalPath": "topology_regression + max(quwoquan_service, quwoquan_app, ops_portal)",
+      "phaseBudgetsSeconds": {
+        "topology_regression": 60,
+        "quwoquan_service": 180,
+        "quwoquan_app": 300,
+        "ops_portal": 180
+      }
+    },
+    "04.pre_release_gate_pr": {
+      "budgetSeconds": 180,
+      "criticalPath": "gamma_environment_ready + max(assistant_api_protocol_smoke, chat_avatar_api_probe)",
+      "phaseBudgetsSeconds": {
+        "gamma_environment_ready": 30,
+        "assistant_api_protocol_smoke": 60,
+        "chat_avatar_api_probe": 90
+      }
+    },
+    "05.app_env_device_matrix_pr": {
+      "budgetSeconds": 30,
+      "criticalPath": "summary_only_when_self_hosted_disabled_by_default_on_pr",
+      "phaseBudgetsSeconds": {
+        "pr_default_skip": 30
+      }
+    },
+    "09.gamma_full_validation": {
+      "budgetSeconds": 2700,
+      "criticalPath": "deploy + readiness + max(api_contract, assistant_ui_semantic_smoke, chat_avatar_api_probe) + ui_full_profile",
+      "phaseBudgetsSeconds": {
+        "deploy": 900,
+        "gamma_environment_ready": 90,
+        "gamma_api_contract": 240,
+        "assistant_ui_semantic_smoke": 600,
+        "chat_avatar_api_probe": 180,
+        "ui_full_profile": 900
+      }
+    }
+  }
+}

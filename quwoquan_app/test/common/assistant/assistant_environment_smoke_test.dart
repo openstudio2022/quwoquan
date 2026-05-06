@@ -14,6 +14,11 @@ import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_co
 
 import 'assistant_scenario_fixtures.dart';
 
+const _assistantSmokeProfile = String.fromEnvironment(
+  'ASSISTANT_SMOKE_PROFILE',
+  defaultValue: 'full_semantic',
+);
+
 void main() {
   const runtimeEnv = String.fromEnvironment(
     'APP_RUNTIME_ENV',
@@ -100,7 +105,9 @@ void _mockPathProviderForEnvironmentTest() {
 }
 
 AppDataSourceMode _modeFromWidgetTree(WidgetTester tester) {
-  final context = tester.element(find.byType(PersonalAssistantConversationPage));
+  final context = tester.element(
+    find.byType(PersonalAssistantConversationPage),
+  );
   return ProviderScope.containerOf(context).read(appDataSourceModeProvider);
 }
 
@@ -138,6 +145,7 @@ Future<void> _sendAndExpect(
   required AssistantScenario scenario,
   required String runtimeEnv,
 }) async {
+  final isFullSemanticSmoke = _assistantSmokeProfile != 'ui_sanity';
   Future<PersonalAssistantStreamState> sendOnceAndReadState() async {
     await tester.ensureVisible(find.byKey(TestKeys.assistantChatInputField));
     await tester.pump(const Duration(milliseconds: 100));
@@ -179,33 +187,8 @@ Future<void> _sendAndExpect(
     expect(streamState.answer, isNot(contains('工具观察')));
     expect(streamState.answer, isNot(contains('工具结果')));
     expect(streamState.answer, isNot(contains('根据工具')));
-    final hasSearchEvidence =
-        streamState.processSummary.searchCount > 0 ||
-        streamState.events.any(
-          (event) =>
-              event.eventType == 'search_query_generated' ||
-              event.eventType == 'assistant.search_query.generated' ||
-              event.eventType == 'search_query_accepted' ||
-              event.eventType == 'assistant.search_query.accepted' ||
-              event.eventType == 'tool_use_requested' ||
-              event.eventType == 'assistant.tool.requested' ||
-              event.eventType == 'tool_result_received' ||
-              event.eventType == 'assistant.tool.completed',
-        );
-    // 云侧在 geocode miss / 检索无可靠摘要场景会返回 searchedDocumentCount=0，
-    // 但仍应保留真实的检索或工具链事件证据。
-    expect(hasSearchEvidence, isTrue);
-    // 云侧在“检索无可靠摘要”场景会返回 acceptedCount=0，属合法路径。
-    expect(streamState.processSummary.acceptedCount, greaterThanOrEqualTo(0));
-    expect(streamState.processSummary.processingSummary, isNotEmpty);
   }
   if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
-    final expectedFragments = scenario.answerFragmentsFor(runtimeEnv);
-    expect(
-      expectedFragments.any(streamState.answer.contains),
-      isTrue,
-      reason: '云侧回答未命中任一期望片段: $expectedFragments',
-    );
     for (final eventType in const ['turn_started', 'final_answer']) {
       expect(
         streamState.events.any((event) => event.eventType == eventType),
@@ -213,6 +196,33 @@ Future<void> _sendAndExpect(
         reason:
             '期望关键 stream event $eventType，实际为 '
             '${streamState.events.map((event) => event.eventType).toList()}',
+      );
+    }
+    if (isFullSemanticSmoke) {
+      final hasSearchEvidence =
+          streamState.processSummary.searchCount > 0 ||
+          streamState.events.any(
+            (event) =>
+                event.eventType == 'search_query_generated' ||
+                event.eventType == 'assistant.search_query.generated' ||
+                event.eventType == 'search_query_accepted' ||
+                event.eventType == 'assistant.search_query.accepted' ||
+                event.eventType == 'tool_use_requested' ||
+                event.eventType == 'assistant.tool.requested' ||
+                event.eventType == 'tool_result_received' ||
+                event.eventType == 'assistant.tool.completed',
+          );
+      // 云侧在 geocode miss / 检索无可靠摘要场景会返回 searchedDocumentCount=0，
+      // 但仍应保留真实的检索或工具链事件证据。
+      expect(hasSearchEvidence, isTrue);
+      // 云侧在“检索无可靠摘要”场景会返回 acceptedCount=0，属合法路径。
+      expect(streamState.processSummary.acceptedCount, greaterThanOrEqualTo(0));
+      expect(streamState.processSummary.processingSummary, isNotEmpty);
+      final expectedFragments = scenario.answerFragmentsFor(runtimeEnv);
+      expect(
+        expectedFragments.any(streamState.answer.contains),
+        isTrue,
+        reason: '云侧回答未命中任一期望片段: $expectedFragments',
       );
     }
   } else {
@@ -229,7 +239,7 @@ Future<void> _sendAndExpect(
       );
     }
   }
-  if (runtimeEnv == 'beta' || runtimeEnv == 'gamma') {
+  if ((runtimeEnv == 'beta' || runtimeEnv == 'gamma') && isFullSemanticSmoke) {
     _assertCloudPersonalAssistantNarrativeQuality(streamState);
   }
 }
@@ -273,7 +283,9 @@ Future<void> _tapSend(WidgetTester tester, String question) async {
       return;
     }
   }
-  final context = tester.element(find.byType(PersonalAssistantConversationPage));
+  final context = tester.element(
+    find.byType(PersonalAssistantConversationPage),
+  );
   await ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider.notifier).send(question);
@@ -288,11 +300,22 @@ Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
     'ASSISTANT_SMOKE_MAX_TICKS',
     defaultValue: 0,
   );
+  const maxIdleTicksOverride = int.fromEnvironment(
+    'ASSISTANT_SMOKE_MAX_IDLE_TICKS',
+    defaultValue: 0,
+  );
   // Hosted beta/gamma pipelines can be slower when emulators share network and
   // deterministic tool calls fan out; keep enough budget before declaring fail.
   final maxTicks = maxTicksOverride > 0
       ? maxTicksOverride
       : (runtimeEnv == 'beta' || runtimeEnv == 'gamma' ? 1500 : 240);
+  final maxIdleTicks = maxIdleTicksOverride > 0
+      ? maxIdleTicksOverride
+      : (runtimeEnv == 'beta' || runtimeEnv == 'gamma'
+            ? (_assistantSmokeProfile == 'ui_sanity' ? 80 : 180)
+            : 60);
+  var lastSignature = '';
+  var idleTicks = 0;
   for (var i = 0; i < maxTicks; i++) {
     await tester.pump(const Duration(milliseconds: 100));
     final context = tester.element(
@@ -305,6 +328,28 @@ Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
     // 避免 hosted beta/gamma 在首轮快速失败后仍白白转满整段等待窗口。
     if (!streamState.running) {
       return;
+    }
+    final signature =
+        '${streamState.answer.length}|'
+        '${streamState.errorMessage.length}|'
+        '${streamState.events.length}|'
+        '${streamState.processSummary.processingSummary.length}|'
+        '${streamState.processSummary.searchCount}|'
+        '${streamState.processSummary.acceptedCount}';
+    if (signature == lastSignature) {
+      idleTicks += 1;
+      if (idleTicks >= maxIdleTicks) {
+        throw TestFailure(
+          'assistant smoke 无进展超时: '
+          'profile=$_assistantSmokeProfile '
+          'runtimeEnv=$runtimeEnv '
+          'events=${streamState.events.length} '
+          'answerLen=${streamState.answer.length}',
+        );
+      }
+    } else {
+      lastSignature = signature;
+      idleTicks = 0;
     }
   }
   await tester.pump(const Duration(milliseconds: 100));

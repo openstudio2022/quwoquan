@@ -1,0 +1,170 @@
+name: 09. Gamma Full Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_self_hosted_matrix:
+        description: 是否执行 gamma self-hosted assistant/chat-avatar 设备矩阵
+        type: boolean
+        default: true
+      run_patrol_ui:
+        description: 是否执行 gamma Patrol full UI profile
+        type: boolean
+        default: true
+  schedule:
+    - cron: "0 18 * * *"
+
+concurrency:
+  group: gamma-full-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gamma_hosted_full_validation:
+    name: Gamma hosted full validation
+    uses: ./.github/workflows/gamma-ecs-pre-hosted-core.yml
+    with:
+      assistant_scenario_id: ""
+      assistant_smoke_profile: full_semantic
+      assistant_smoke_max_ticks: "1500"
+      assistant_smoke_max_idle_ticks: "180"
+    secrets: inherit
+
+  gamma_ui_full:
+    name: Gamma Patrol full UI profile
+    needs: [gamma_hosted_full_validation]
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_patrol_ui }}
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 180
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    env:
+      GAMMA_BASE_URL: ${{ needs.gamma_hosted_full_validation.outputs.base_url }}
+      GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.gamma_hosted_full_validation.outputs.product_ops_base_url }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.gamma_hosted_full_validation.outputs.media_base_url }}
+      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: 准备 personal_assistant/.env
+        run: |
+          if [ -d quwoquan_app/personal_assistant ]; then
+            mkdir -p quwoquan_app/personal_assistant
+            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+            else
+              : > quwoquan_app/personal_assistant/.env
+            fi
+          fi
+      - name: 校验 self-hosted 工具链
+        run: |
+          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter"; exit 2; }
+          command -v patrol >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 patrol"; exit 2; }
+          flutter --version
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
+      - name: Run gamma Patrol full UI profile
+        run: make gamma-validate-ui-full
+      - name: Upload gamma Patrol full UI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-ui-full-profile
+          path: artifacts/gamma-validation/ui/**
+          if-no-files-found: ignore
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  gamma_assistant_device_matrix:
+    name: Gamma assistant device matrix
+    needs: [gamma_hosted_full_validation]
+    if: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_self_hosted_matrix) && vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+    uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
+    with:
+      env_json: '["gamma"]'
+      gamma_base_url: ${{ needs.gamma_hosted_full_validation.outputs.base_url }}
+    secrets: inherit
+
+  gamma_chat_avatar_device_matrix:
+    name: Gamma chat avatar device matrix
+    needs: [gamma_hosted_full_validation]
+    if: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_self_hosted_matrix) && vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+    uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
+    with:
+      env_json: '["gamma"]'
+      gamma_base_url: ${{ needs.gamma_hosted_full_validation.outputs.base_url }}
+      media_base_url: ${{ needs.gamma_hosted_full_validation.outputs.media_base_url }}
+      matrix_kind: chat-avatar
+    secrets: inherit
+
+  gamma_full_validation_summary:
+    name: 09. Gamma Full Validation
+    needs:
+      - gamma_hosted_full_validation
+      - gamma_ui_full
+      - gamma_assistant_device_matrix
+      - gamma_chat_avatar_device_matrix
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 输出 Gamma Full Validation 耗时摘要
+        env:
+          DEPLOY_SECONDS: ${{ needs.gamma_hosted_full_validation.outputs.deploy_duration_seconds }}
+          READY_SECONDS: ${{ needs.gamma_hosted_full_validation.outputs.readiness_duration_seconds }}
+          API_SECONDS: ${{ needs.gamma_hosted_full_validation.outputs.api_contract_duration_seconds }}
+          ASSISTANT_SECONDS: ${{ needs.gamma_hosted_full_validation.outputs.assistant_smoke_duration_seconds }}
+          CHAT_SECONDS: ${{ needs.gamma_hosted_full_validation.outputs.chat_avatar_probe_duration_seconds }}
+          UI_PROFILE_SECONDS: ${{ needs.gamma_ui_full.outputs.duration_seconds }}
+        run: |
+          FANOUT_SECONDS="${API_SECONDS:-0}"
+          if [ "${ASSISTANT_SECONDS:-0}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${ASSISTANT_SECONDS:-0}"; fi
+          if [ "${CHAT_SECONDS:-0}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${CHAT_SECONDS:-0}"; fi
+          CRITICAL_PATH_SECONDS=$(( ${DEPLOY_SECONDS:-0} + ${READY_SECONDS:-0} + FANOUT_SECONDS + ${UI_PROFILE_SECONDS:-0} ))
+          python3 scripts/render_ci_timing_summary.py \
+            --gate-key 09.gamma_full_validation \
+            --title "09. Gamma Full Validation" \
+            --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
+            --phase "deploy=${DEPLOY_SECONDS:-0}" \
+            --phase "gamma_environment_ready=${READY_SECONDS:-0}" \
+            --phase "gamma_api_contract=${API_SECONDS:-0}" \
+            --phase "assistant_ui_semantic_smoke=${ASSISTANT_SECONDS:-0}" \
+            --phase "chat_avatar_api_probe=${CHAT_SECONDS:-0}" \
+            --phase "ui_full_profile=${UI_PROFILE_SECONDS:-0}" \
+            --note "full gamma validation 与 PR gate 解耦；Patrol / self-hosted matrix 失败不再阻断 PR 合入。" \
+            --write-step-summary
+      - name: 汇总 full gamma validation 结果
+        env:
+          HOSTED: ${{ needs.gamma_hosted_full_validation.result }}
+          UI_FULL: ${{ needs.gamma_ui_full.result }}
+          ASSISTANT_MATRIX: ${{ needs.gamma_assistant_device_matrix.result }}
+          CHAT_MATRIX: ${{ needs.gamma_chat_avatar_device_matrix.result }}
+          SELF_HOSTED_ENABLED: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' && (github.event_name != 'workflow_dispatch' || inputs.run_self_hosted_matrix) }}
+          UI_ENABLED: ${{ github.event_name != 'workflow_dispatch' || inputs.run_patrol_ui }}
+        run: |
+          set -euo pipefail
+          fail=0
+          expect_success() {
+            local name="$1" value="$2" hint="$3"
+            if [ "${value}" != "success" ]; then
+              echo "::error::${name} expected success, got ${value}. ${hint}"
+              fail=1
+            fi
+          }
+          expect_success "gamma_hosted_full_validation" "${HOSTED}" "检查 deploy/readiness/T3/assistant full semantic smoke/chat avatar probe"
+          if [ "${UI_ENABLED}" = "true" ]; then
+            expect_success "gamma_ui_full" "${UI_FULL}" "检查 Patrol full UI profile"
+          fi
+          if [ "${SELF_HOSTED_ENABLED}" = "true" ]; then
+            expect_success "gamma_assistant_device_matrix" "${ASSISTANT_MATRIX}" "检查 gamma assistant self-hosted matrix"
+            expect_success "gamma_chat_avatar_device_matrix" "${CHAT_MATRIX}" "检查 gamma chat avatar self-hosted matrix"
+          fi
+          if [ "${fail}" -ne 0 ]; then
+            echo "::error::Gamma Full Validation 未全部成功；请查看各分项 artifact / 报告。"
+            exit 1
+          fi

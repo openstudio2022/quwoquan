@@ -314,7 +314,7 @@ config-slo-gate:
 	fi
 	@bash scripts/config_release_slo_gate.sh --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
-.PHONY: l2-content gate-full test-api-contract test-api-contract-chat
+.PHONY: l2-content gate-full test-api-contract test-api-contract-chat gamma-validate-smoke-full gamma-validate-ui-full gamma-validate-full
 
 # 本地 L2 契约测试（content-service，需 MongoDB 在 localhost:27017）
 # 提交前运行以避免 CI 失败。详见 .cursor/rules/03-testing.mdc §2.1
@@ -375,6 +375,56 @@ gate-full:
 		echo "[gate-full] GAMMA_* not set; running local gamma T3/T4 mirror gate"; \
 		$(MAKE) gate-local-gamma LOCAL_GAMMA_SKIP_GATE=1; \
 	fi
+
+gamma-validate-smoke-full:
+	@TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}"; \
+	if [ -z "$${GAMMA_BASE_URL:-}" ] || [ -z "$${GAMMA_PRODUCT_OPS_BASE_URL:-}" ] || [ -z "$$TOKEN" ]; then \
+		echo "FAIL: GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN(or TEST_AUTH_TOKEN) are required"; \
+		exit 2; \
+	fi; \
+	python3 scripts/verify_gamma_environment_ready.py \
+		--base-url "$${GAMMA_BASE_URL}" \
+		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
+		--report artifacts/gamma-validation/smoke/readiness.json && \
+	( \
+		cd quwoquan_app && \
+		flutter pub get && \
+		flutter test test/common/assistant/assistant_environment_smoke_test.dart \
+			--dart-define=APP_RUNTIME_ENV=gamma \
+			--dart-define=APP_DATA_SOURCE=remote \
+			--dart-define=CLOUD_GATEWAY_BASE_URL="$${GAMMA_BASE_URL}" \
+			--dart-define=ASSISTANT_SMOKE_PROFILE=full_semantic \
+			--dart-define=ASSISTANT_SMOKE_MAX_TICKS=$${ASSISTANT_SMOKE_MAX_TICKS:-1500} \
+			--dart-define=ASSISTANT_SMOKE_MAX_IDLE_TICKS=$${ASSISTANT_SMOKE_MAX_IDLE_TICKS:-180} \
+	) && \
+	python3 scripts/run_chat_avatar_e2e_probe.py \
+		--env cloud-gamma-full \
+		--base-url "$${GAMMA_BASE_URL}" \
+		--media-base-url "$${MEDIA_AVATAR_CDN_BASE_URL:-$${GAMMA_BASE_URL}}" \
+		--test-auth-token "$$TOKEN" \
+		--report artifacts/gamma-validation/smoke/chat_avatar_api_probe.json
+
+gamma-validate-ui-full:
+	@TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}"; \
+	if [ -z "$${GAMMA_BASE_URL:-}" ] || [ -z "$${GAMMA_PRODUCT_OPS_BASE_URL:-}" ] || [ -z "$$TOKEN" ]; then \
+		echo "FAIL: GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN(or TEST_AUTH_TOKEN) are required"; \
+		exit 2; \
+	fi; \
+	python3 scripts/verify_gamma_environment_ready.py \
+		--base-url "$${GAMMA_BASE_URL}" \
+		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
+		--report artifacts/gamma-validation/ui/readiness.json && \
+	python3 scripts/run_gamma_patrol_profile.py \
+		--profile daily_full \
+		--report artifacts/gamma-validation/ui/daily_full/report.json \
+		--gateway-base-url "$${GAMMA_BASE_URL}" \
+		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
+		--test-auth-token "$$TOKEN" \
+		--platform "$${GAMMA_UI_PLATFORM:-all}"
+
+gamma-validate-full:
+	@$(MAKE) gamma-validate-smoke-full
+	@$(MAKE) gamma-validate-ui-full
 
 # Deploy to integration. CLOUD_PROVIDER=aliyun|volcengine|huaweicloud (default: aliyun).
 # Usage: make deploy-integration [CLOUD_PROVIDER=volcengine]

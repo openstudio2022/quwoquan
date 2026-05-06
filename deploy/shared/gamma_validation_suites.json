@@ -1,18 +1,234 @@
 {
-  "version": 1,
+  "version": 2,
   "baselineRequiredSuites": [
     "assistant_main_chain",
     "chat_avatar_sync",
     "content_feed_patrol"
   ],
-  "futureExpansionRule": "每个业务对象都要补齐至少一个 gamma 核心用户旅程；assistant/avatar 只是第一批基线。",
+  "futureExpansionRule": "每个业务对象都要补齐至少一个 gamma 核心用户旅程；PR 只保留高信号抽样验证，full gamma 验证独立日跑/手动触发。",
+  "profiles": {
+    "pr_smoke": {
+      "description": "PR 必经 hosted gamma 抽样可用性验证：不做 full deploy，不跑全量 UI 旅程。",
+      "smokeCases": [
+        "assistant_api_protocol_smoke",
+        "chat_avatar_api_probe"
+      ],
+      "uiJourneys": []
+    },
+    "daily_full": {
+      "description": "日跑 full gamma 验证：保留 assistant full semantic smoke，并执行完整 Patrol UI 旅程集合。",
+      "smokeCases": [
+        "assistant_ui_semantic_smoke",
+        "chat_avatar_api_probe"
+      ],
+      "uiJourneys": [
+        "content_feed_patrol",
+        "content_like_post_patrol",
+        "content_comment_post_patrol",
+        "content_error_empty_state_patrol",
+        "content_create_entry_patrol",
+        "content_draft_preservation_patrol",
+        "chat_ime_input_patrol",
+        "chat_notification_entry_patrol",
+        "chat_orientation_stability_patrol",
+        "ops_event_ingestion_patrol",
+        "ops_event_reliability_replay_patrol"
+      ]
+    },
+    "release_candidate": {
+      "description": "发布前回归：基于 daily full，再结合 self-hosted gamma 设备矩阵做更高置信度验证。",
+      "smokeCases": [
+        "assistant_ui_semantic_smoke",
+        "chat_avatar_api_probe"
+      ],
+      "uiJourneys": [
+        "content_feed_patrol",
+        "content_like_post_patrol",
+        "content_comment_post_patrol",
+        "content_error_empty_state_patrol",
+        "content_create_entry_patrol",
+        "content_draft_preservation_patrol",
+        "chat_ime_input_patrol",
+        "chat_notification_entry_patrol",
+        "chat_orientation_stability_patrol",
+        "ops_event_ingestion_patrol",
+        "ops_event_reliability_replay_patrol"
+      ]
+    }
+  },
+  "smokeCases": {
+    "assistant_api_protocol_smoke": {
+      "path": "scripts/run_assistant_runtime_smoke.py",
+      "runner": "python",
+      "tier": "pr",
+      "budgetSeconds": 60,
+      "longTailType": "environment_coupling",
+      "currentRole": "PR hosted gamma 抽样助手主链验证",
+      "currentPain": "之前 PR 使用 Flutter UI + 真实 stream 收敛，长尾来自冷启动、工具链和等待窗口。",
+      "optimizationPlan": "改为 conversation -> turn -> SSE 协议探针，仅校验 turn_started / assistant.model.interaction / final_answer 与非空答案。"
+    },
+    "assistant_ui_semantic_smoke": {
+      "path": "quwoquan_app/test/common/assistant/assistant_environment_smoke_test.dart",
+      "runner": "flutter_test",
+      "tier": "daily",
+      "budgetSeconds": 600,
+      "longTailType": "test_body_heavy",
+      "currentRole": "助手 full semantic smoke",
+      "currentPain": "单文件同时承担页面打开、发送、stream 收敛、回答片段、事件完整性和 narrative 质量校验。",
+      "optimizationPlan": "迁出 PR；保留到 daily/release，并用 profile + idle fail-fast 限制无进展等待。"
+    },
+    "assistant_alpha_beta_ui_simulator": {
+      "path": "quwoquan_app/test/gamma/assistant_alpha_beta_simulator_test.dart",
+      "runner": "flutter_test",
+      "tier": "daily",
+      "budgetSeconds": 420,
+      "longTailType": "multi_scenario_loop",
+      "currentRole": "alpha/beta 多场景模拟器验证",
+      "currentPain": "scenarioId 为空时串行跑多个场景，单次失败会放大整轮时间。",
+      "optimizationPlan": "默认不进入 PR；增加 idle fail-fast 与场景级预算，按专项/日跑执行。"
+    },
+    "chat_avatar_api_probe": {
+      "path": "scripts/run_chat_avatar_e2e_probe.py",
+      "runner": "python",
+      "tier": "pr",
+      "budgetSeconds": 90,
+      "longTailType": "environment_coupling",
+      "currentRole": "gamma chat avatar 黑盒可用性探针",
+      "currentPain": "失败多由环境未就绪、媒体路由或异步任务链路抖动放大。",
+      "optimizationPlan": "保留在 PR，但放到 readiness gate 后执行，并在 full gamma 中复用同一探针口径。"
+    }
+  },
+  "uiJourneys": {
+    "content_feed_patrol": {
+      "path": "quwoquan_app/test/patrol/discovery/feed_load_test.dart",
+      "target": "test/patrol/discovery/feed_load_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 120,
+      "longTailType": "runner_overhead",
+      "currentRole": "发现页核心只读可用性旅程",
+      "currentPain": "用例逻辑轻，但 Patrol 启动、真机渲染和 gamma 网络让总包络偏重。",
+      "optimizationPlan": "PR 不默认执行；daily/full 作为 UI 可用性入口。"
+    },
+    "content_like_post_patrol": {
+      "path": "quwoquan_app/test/patrol/content/like_post_test.dart",
+      "target": "test/patrol/content/like_post_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 180,
+      "longTailType": "interaction_heavy",
+      "currentRole": "内容点赞核心交互旅程",
+      "currentPain": "涉及状态切换、真实网络与乐观更新回写。",
+      "optimizationPlan": "保留到 daily/release，不纳入 PR。"
+    },
+    "content_comment_post_patrol": {
+      "path": "quwoquan_app/test/patrol/content/comment_post_test.dart",
+      "target": "test/patrol/content/comment_post_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "interaction_heavy",
+      "currentRole": "内容评论真实 IME 旅程",
+      "currentPain": "依赖输入法、评论刷新与真实网络，定位成本高。",
+      "optimizationPlan": "保留到 daily/release，不纳入 PR。"
+    },
+    "content_error_empty_state_patrol": {
+      "path": "quwoquan_app/test/patrol/content/error_empty_state_test.dart",
+      "target": "test/patrol/content/error_empty_state_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 180,
+      "longTailType": "environment_sensitive",
+      "currentRole": "内容异常空态兜底旅程",
+      "currentPain": "对环境返回数据高度敏感。",
+      "optimizationPlan": "仅在 daily/full 验证。"
+    },
+    "content_create_entry_patrol": {
+      "path": "quwoquan_app/test/patrol/content/create_entry_start_actions_e2e_test.dart",
+      "target": "test/patrol/content/create_entry_start_actions_e2e_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "interaction_heavy",
+      "currentRole": "内容创作入口主路径",
+      "currentPain": "多步交互、依赖页面初始化和输入状态。",
+      "optimizationPlan": "迁出 PR，仅做 daily/release。"
+    },
+    "content_draft_preservation_patrol": {
+      "path": "quwoquan_app/test/patrol/content/content_draft_preservation_e2e_test.dart",
+      "target": "test/patrol/content/content_draft_preservation_e2e_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 300,
+      "longTailType": "stateful_flow",
+      "currentRole": "内容草稿保留旅程",
+      "currentPain": "状态机复杂、回放成本高，失败定位信号不适合 PR。",
+      "optimizationPlan": "仅保留到 daily/release。"
+    },
+    "chat_ime_input_patrol": {
+      "path": "quwoquan_app/test/patrol/chat/chat_ime_input_test.dart",
+      "target": "test/patrol/chat/chat_ime_input_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "interaction_heavy",
+      "currentRole": "聊天 IME 输入稳定性旅程",
+      "currentPain": "真机/模拟器输入法差异大，串行执行放大耗时。",
+      "optimizationPlan": "迁出 PR，在 daily/full 保留。"
+    },
+    "chat_notification_entry_patrol": {
+      "path": "quwoquan_app/test/patrol/chat/chat_notification_entry_test.dart",
+      "target": "test/patrol/chat/chat_notification_entry_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "environment_sensitive",
+      "currentRole": "聊天通知入口旅程",
+      "currentPain": "依赖通知上下文与后台/前台切换。",
+      "optimizationPlan": "迁出 PR，仅在 daily/release 运行。"
+    },
+    "chat_orientation_stability_patrol": {
+      "path": "quwoquan_app/test/patrol/chat/chat_orientation_stability_test.dart",
+      "target": "test/patrol/chat/chat_orientation_stability_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "interaction_heavy",
+      "currentRole": "聊天横竖屏稳定性旅程",
+      "currentPain": "旋转、输入与布局恢复串行放大耗时。",
+      "optimizationPlan": "迁出 PR，仅在 daily/release 运行。"
+    },
+    "ops_event_ingestion_patrol": {
+      "path": "quwoquan_app/test/patrol/ops/event_ingestion_journey_test.dart",
+      "target": "test/patrol/ops/event_ingestion_journey_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "environment_sensitive",
+      "currentRole": "运营事件入湖/展示旅程",
+      "currentPain": "依赖运营侧链路与真实服务状态。",
+      "optimizationPlan": "保持在 daily/release，不纳入 PR。"
+    },
+    "ops_event_reliability_replay_patrol": {
+      "path": "quwoquan_app/test/patrol/ops/event_reliability_replay_test.dart",
+      "target": "test/patrol/ops/event_reliability_replay_test.dart",
+      "runner": "patrol",
+      "tier": "daily",
+      "budgetSeconds": 240,
+      "longTailType": "environment_sensitive",
+      "currentRole": "运营事件可靠性回放旅程",
+      "currentPain": "依赖历史事件与 replay 状态，不适合 PR 阻断链路。",
+      "optimizationPlan": "保持在 daily/release，不纳入 PR。"
+    }
+  },
   "suites": {
     "assistant_main_chain": {
       "status": "required",
       "domain": "assistant",
-      "description": "Assistant 主链 remote smoke + self-hosted Android/iOS 设备矩阵。",
+      "description": "Assistant 主链：PR 使用 API/协议级 hosted smoke，daily/release 使用 full semantic smoke，并保留 self-hosted Android/iOS 设备矩阵。",
       "hostedChecks": [
-        "assistant_runtime_smoke"
+        "assistant_api_protocol_smoke",
+        "assistant_ui_semantic_smoke"
       ],
       "selfHostedChecks": [
         "assistant_device_matrix"
@@ -21,7 +237,7 @@
     "chat_avatar_sync": {
       "status": "required",
       "domain": "chat",
-      "description": "Chat avatar API probe + self-hosted Android/iOS 设备矩阵。",
+      "description": "Chat avatar 黑盒 API probe + self-hosted Android/iOS 设备矩阵。",
       "hostedChecks": [
         "chat_avatar_api_probe"
       ],
@@ -32,7 +248,7 @@
     "content_feed_patrol": {
       "status": "required",
       "domain": "content",
-      "description": "发现页内容 feed Patrol 核心旅程，作为当前 gamma 100 图 curated 子集的必过验收。",
+      "description": "发现页 feed Patrol 核心旅程，保留到 daily/full gamma 验证，不再成为 PR 必经链路。",
       "hostedChecks": [],
       "selfHostedChecks": [
         "gamma_patrol_matrix"

@@ -57,6 +57,7 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: [self-hosted, macOS]
     outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       env_json: ${{ steps.discover.outputs.env_json }}
       matrix_kind: ${{ steps.discover.outputs.matrix_kind }}
       gamma_base_url: ${{ steps.discover.outputs.gamma_base_url }}
@@ -68,6 +69,9 @@ jobs:
       device_summary: ${{ steps.discover.outputs.device_summary }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 解析当前触发下的矩阵默认值
         id: defaults
         env:
@@ -142,6 +146,11 @@ jobs:
 
           print(f"::notice::self-hosted mobile devices => {summary}")
           PY
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   android:
     name: ${{ matrix.env }} / Android (self-hosted)
@@ -327,6 +336,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: 输出 App Env Device Matrix 耗时摘要
+        env:
+          SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          DISCOVER_SECONDS: ${{ needs.discover_devices.outputs.duration_seconds }}
+        run: |
+          if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
+            python3 scripts/render_ci_timing_summary.py \
+              --gate-key 05.app_env_device_matrix_pr \
+              --title "05. App Env Device Matrix" \
+              --critical-path-seconds 0 \
+              --phase "pr_default_skip=0" \
+              --note "PR 默认跳过 self-hosted mobile matrix；启用后以 discover + 设备矩阵 artifacts 为准。" \
+              --write-step-summary
+          else
+            python3 scripts/render_ci_timing_summary.py \
+              --gate-key 05.app_env_device_matrix_pr \
+              --title "05. App Env Device Matrix" \
+              --critical-path-seconds "${DISCOVER_SECONDS:-0}" \
+              --phase "pr_default_skip=${DISCOVER_SECONDS:-0}" \
+              --note "self-hosted matrix 已启用；每个环境/平台的详细耗时保存在 device-matrix artifacts。" \
+              --write-step-summary
+          fi
       - name: 汇总并阻断失败项
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
