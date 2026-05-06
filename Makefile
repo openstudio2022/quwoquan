@@ -23,8 +23,10 @@
 .PHONY: verify-avatar-user-pool
 .PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-business-env-data-inventory
+.PHONY: verify-quwoquan-data
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
+.PHONY: verify-env-instance-isolation
 .PHONY: observability-es-up
 .PHONY: observability-es-down
 .PHONY: observability-es-health
@@ -76,6 +78,9 @@ probe-avatar-user-pool-gateway:
 
 verify-business-env-data-inventory:
 	@python3 scripts/verify_business_env_data_inventory.py
+
+verify-quwoquan-data:
+	@bash scripts/verify_quwoquan_data.sh
 
 verify-app-env-package:
 	@bash scripts/build_app_env_package.sh --env alpha
@@ -130,6 +135,9 @@ build-service-env:
 		exit 2; \
 	fi
 	@bash scripts/build_service_env_package.sh --service "$(SERVICE)" --env "$(ENV)"
+
+verify-env-instance-isolation:
+	@python3 scripts/verify_env_instance_isolation.py
 
 test-app-alpha-seed:
 	@cd quwoquan_app && flutter test test/cloud/services/contract_seeded_mock_repository_test.dart
@@ -239,6 +247,7 @@ verify:
 	@bash scripts/verify_recommendation_service_contract.sh
 	@bash scripts/verify_topology_contract_regression.sh
 	@bash scripts/verify_config_gray_parallel_binding.sh
+	@$(MAKE) verify-quwoquan-data
 
 codegen:
 	@$(MAKE) -C quwoquan_service codegen

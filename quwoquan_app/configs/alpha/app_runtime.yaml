@@ -8,6 +8,7 @@ runtime:
   mediaImageCdnBaseUrl: http://127.0.0.1:18088
   mediaVideoCdnBaseUrl: http://127.0.0.1:18088
   mediaUploadBaseUrl: http://127.0.0.1:18088
+  contractFixtureProfile: lite
   currentUserId: fixture_user_current
 seed:
   enabled: true

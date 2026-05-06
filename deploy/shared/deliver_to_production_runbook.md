@@ -49,6 +49,14 @@ make gate-local-gamma
 
 缺少本地 DNS/TLS、设备、服务依赖或 seed/reset 能力时，状态必须为 `GATE_BLOCK`，不得继续提交。
 
+### 3.1.2 多环境多实例口径
+
+- 端侧 `alpha` / `beta` / `gamma` 可在**不同模拟器**并行运行多个实例。
+- 每次启动必须显式绑定唯一 `device-id`，避免交互式 `flutter run` 争用全局 Flutter startup lock。
+- `beta` 服务端只允许一套本地集成栈；重新启动 beta 前必须停止旧实例并回收固定端口。
+- `gamma` 服务端只允许一套 ECS gamma 或一套 local-gamma mirror；部署 / mirror 切换必须先清理旧实例再重启。
+- 本手册中的“多实例”仅指端侧 App 进程，不代表服务端允许多套 beta/gamma 并行。
+
 ### 3.2 部署环境
 
 - **gamma**：gamma API 可访问，`GAMMA_BASE_URL`、`GAMMA_PRODUCT_OPS_BASE_URL`、`GAMMA_TEST_AUTH_TOKEN` 已配置
@@ -129,6 +137,23 @@ python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
 CI 使用 `.github/workflows/pre-release-gate.yml` 与 `.github/workflows/app-env-device-matrix-self-hosted.yml` 在本机 macOS self-hosted runner 上动态发现当前可见的 Android/iOS 设备，并要求两个平台都通过。artifact 必须包含设备清单、原始日志、命令清单与截图证据。
 
 失败 → 不得进入 G5c。
+
+### 5.3 端侧多模拟器并行验证
+
+若本次变更触及多环境启动链路，应额外验证：
+
+```bash
+scripts/start_app_instance.sh --env alpha --device-id <alpha-device>
+scripts/start_app_instance.sh --env beta --device-id <beta-device>
+scripts/start_app_instance.sh --env gamma --device-id <gamma-device>
+```
+
+通过判据：
+
+- 三个实例位于不同模拟器；
+- beta/gamma 未派生第二套服务端栈；
+- beta 重新启动时会先 stop 旧栈；
+- gamma 仅附着到同一套 ECS gamma 或同一套 local-gamma mirror。
 
 ---
 

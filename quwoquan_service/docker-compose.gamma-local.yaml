@@ -147,7 +147,7 @@ services:
       RELIABLE_TASK_READY_INDEX_STREAM: reliabletask:chat:avatar:ready:local-gamma
       RELIABLE_TASK_READY_INDEX_GROUP: chat.group_avatar_worker.local-gamma
       RELIABLE_TASK_READY_INDEX_QUEUE: reliabletask.chat.avatar
-      CHAT_GROUP_AVATAR_CDN_BASE_URL: "${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}"
+      CHAT_GROUP_AVATAR_CDN_BASE_URL: "${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}}"
       CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT: /var/lib/quwoquan/chat-media
       RUNTIME_SYNC_PATCH_TTL_HOURS: "720"
     depends_on:
@@ -305,7 +305,7 @@ services:
       - "${LOCAL_GAMMA_HTTPS_PORT:-443}:443"
       - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
     volumes:
-      - ../deploy/local-gamma/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../artifacts/local-gamma/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../artifacts/local-gamma/media:/srv/media:ro
       - local-gamma-caddy-data:/data
       - local-gamma-caddy-config:/config

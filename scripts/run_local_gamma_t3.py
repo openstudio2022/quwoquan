@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Set, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
-CONTENT_FIXTURE = ROOT / "quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json"
+METADATA_ROOT = ROOT / "quwoquan_service/contracts/metadata"
 COMPOSE_FILE = ROOT / "quwoquan_service/docker-compose.gamma-local.yaml"
 
 
@@ -82,10 +82,33 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def gamma_content_fixture_spec() -> Tuple[Path, list[str]]:
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    content_item = next(
+        (item for item in manifest.get("seedRefs", []) if item.get("domain") == "content"),
+        None,
+    )
+    if not isinstance(content_item, dict):
+        raise RuntimeError("app_gamma_seed_manifest.json missing content domain entry")
+    fixture_rel = str(content_item.get("fixturePath") or "").strip()
+    refs = [str(ref) for ref in content_item.get("refs", []) if str(ref).strip()]
+    if not fixture_rel or not refs:
+        raise RuntimeError("gamma content seed manifest entry must declare fixturePath and refs")
+    return METADATA_ROOT / fixture_rel, refs
+
+
 def seed_content() -> Dict[str, Any]:
-    fixture = json.loads(CONTENT_FIXTURE.read_text(encoding="utf-8"))
-    seed_set = fixture["seedSets"]["content_discovery_core"]
-    docs = [fixture_post_to_doc(post) for post in seed_set.get("posts", [])]
+    fixture_path, refs = gamma_content_fixture_spec()
+    fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+    docs_by_id: Dict[str, Dict[str, Any]] = {}
+    for ref in refs:
+        seed_set = fixture.get("seedSets", {}).get(ref)
+        if not isinstance(seed_set, dict):
+            continue
+        for post in seed_set.get("posts", []) or []:
+            doc = fixture_post_to_doc(post)
+            docs_by_id[str(doc["_id"])] = doc
+    docs = list(docs_by_id.values())
     js_path = ROOT / "artifacts/local-gamma/seed-content.js"
     js_path.parent.mkdir(parents=True, exist_ok=True)
     js_path.write_text(

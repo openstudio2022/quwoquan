@@ -75,6 +75,9 @@ fi
 beta_manual_stop_stack "$CLEAN_ENV"
 
 if [[ "$TERMINATE_APP" == "1" ]]; then
+  if [[ -n "$FLUTTER_DEVICE_ID" ]]; then
+    "$ROOT_DIR/scripts/stop_app_instance.sh" --env beta --device-id "$FLUTTER_DEVICE_ID" --quiet || true
+  fi
   beta_manual_terminate_flutter_app "$FLUTTER_DEVICE_ID" "$IOS_BUNDLE_ID" "$ANDROID_PACKAGE"
 fi
 

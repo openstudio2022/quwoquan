@@ -41,6 +41,23 @@ class CloudRuntimeConfig {
     defaultValue: 'http://127.0.0.1:18088',
   );
 
+  /// 当前 App 实例 ID。
+  ///
+  /// 由多实例启动脚本通过 `--dart-define=APP_INSTANCE_ID=...` 注入，用于
+  /// 诊断与报告，不改变业务环境语义。
+  static const String appInstanceId = String.fromEnvironment(
+    'APP_INSTANCE_ID',
+    defaultValue: '',
+  );
+
+  /// 当前 App 实例命名空间。
+  ///
+  /// 由启动脚本注入，便于区分 standalone / beta-manual / gamma-runner 等来源。
+  static const String appInstanceNamespace = String.fromEnvironment(
+    'APP_INSTANCE_NAMESPACE',
+    defaultValue: '',
+  );
+
   /// 地图供应商（baidu / amap）。
   ///
   /// 通过 `--dart-define=MAP_PROVIDER=baidu|amap` 注入。

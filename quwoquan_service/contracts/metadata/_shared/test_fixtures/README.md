@@ -18,7 +18,7 @@ contracts/metadata/_shared/test_fixtures/scenario_fixture.schema.json
 
 - `alpha`：端侧通过 MockRepository 读取 fixture seed。
 - `beta`：端侧通过 RemoteRepository 访问本地云服务；云服务测试前 reset + seed。
-- `gamma`：复用同一 fixture artifact，只替换网关、认证、部署与观测配置。
+- `gamma`：通过 `app_gamma_seed_manifest.json` 指向云侧 curated fixture 子集；当前 gamma 为远端精简媒体收口，alpha/beta 继续使用全量共享池。
 - `prod-gray` / `prod`：不读取测试 fixture。
 
 ## 字段约定

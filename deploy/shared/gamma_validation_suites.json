@@ -2,7 +2,8 @@
   "version": 1,
   "baselineRequiredSuites": [
     "assistant_main_chain",
-    "chat_avatar_sync"
+    "chat_avatar_sync",
+    "content_feed_patrol"
   ],
   "futureExpansionRule": "每个业务对象都要补齐至少一个 gamma 核心用户旅程；assistant/avatar 只是第一批基线。",
   "suites": {
@@ -29,9 +30,9 @@
       ]
     },
     "content_feed_patrol": {
-      "status": "planned",
+      "status": "required",
       "domain": "content",
-      "description": "发现页内容 feed Patrol 核心旅程，供 local-gamma / 后续 cloud gamma 复用。",
+      "description": "发现页内容 feed Patrol 核心旅程，作为当前 gamma 100 图 curated 子集的必过验收。",
       "hostedChecks": [],
       "selfHostedChecks": [
         "gamma_patrol_matrix"

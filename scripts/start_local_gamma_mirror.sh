@@ -7,7 +7,8 @@ CONFIG_VERSION="${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
 IMAGE_VERSION="${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
 GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-http://127.0.0.1:18080}"
 PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test}"
-MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}"
+MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}}"
+MEDIA_ORIGIN_BASE_URL="${LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL:-}"
 DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.m.daocloud.io/library}"
 
 library_image() {
@@ -29,6 +30,18 @@ skip_up=0
 print_env=0
 down=0
 tunnel_pid_file="$ROOT/artifacts/local-gamma/colima-tunnels.pids"
+stack_report="$ROOT/artifacts/local-gamma/stack_state.json"
+
+local_gamma_has_existing_stack() {
+  if docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null | awk 'NF {found=1} END {exit found ? 0 : 1}'; then
+    return 0
+  fi
+  if command -v podman >/dev/null 2>&1 && \
+    podman ps -a --format '{{.Names}}' 2>/dev/null | awk '/^quwoquan_service_(gamma-proxy|assistant-service|user-service|chat-service|content-service|product-ops-service|rec-model-service|redis|mongodb|postgres)_1$/ {found=1} END {exit found ? 0 : 1}'; then
+    return 0
+  fi
+  return 1
+}
 
 stop_colima_tunnels() {
   if [[ ! -f "$tunnel_pid_file" ]]; then
@@ -105,6 +118,11 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+restarted_from_previous=0
+if local_gamma_has_existing_stack; then
+  restarted_from_previous=1
+fi
 
 prepare_config_root() {
   local out="$ROOT/artifacts/local-gamma/config-root"
@@ -286,10 +304,177 @@ YAML
 
 prepare_media_root() {
   local media="$ROOT/artifacts/local-gamma/media"
-  mkdir -p "$media/media/avatar" "$media/media/image" "$media/media/video"
-  printf 'local-gamma avatar fixture\n' > "$media/media/avatar/local-gamma-avatar.txt"
-  printf 'local-gamma image fixture\n' > "$media/media/image/local-gamma-cover.txt"
-  printf 'local-gamma video fixture\n' > "$media/media/video/local-gamma-sample.txt"
+  local canonical_media_root="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
+  if [[ -d "$canonical_media_root" ]]; then
+    python3 "$ROOT/scripts/build_gamma_curated_fixture_bundle.py" \
+      --output-media-root "$media" >/dev/null
+    return 0
+  fi
+  if [[ -d "$media/media" ]] && [[ -f "$ROOT/deploy/shared/gamma_curated_media_bundle.json" ]]; then
+    echo "[local-gamma] reuse pre-synced gamma curated media bundle: $media"
+    return 0
+  fi
+  echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync artifacts/local-gamma/media first" >&2
+  return 1
+}
+
+prepare_caddyfile() {
+  local out="$ROOT/artifacts/local-gamma/Caddyfile"
+  mkdir -p "$(dirname "$out")"
+  python3 - "$out" "$MEDIA_ORIGIN_BASE_URL" <<'PY'
+import sys
+from pathlib import Path
+
+out_path = Path(sys.argv[1])
+media_origin = sys.argv[2].strip().rstrip("/")
+
+if media_origin:
+    media_api_block = "\n".join(
+        [
+            "\thandle /media/* {",
+            f"\t\treverse_proxy {media_origin}",
+            "\t}",
+        ]
+    )
+    media_host_block = "\n".join(
+        [
+            "gamma-avatar.quwoquan-env.test,",
+            "gamma-image.quwoquan-env.test,",
+            "gamma-video.quwoquan-env.test,",
+            "gamma-upload.quwoquan-env.test {",
+            "\timport local_gamma_tls",
+            f"\treverse_proxy {media_origin}",
+            "}",
+        ]
+    )
+    media_pub_block = "\n".join(
+        [
+            "\thandle /media/* {",
+            f"\t\treverse_proxy {media_origin}",
+            "\t}",
+        ]
+    )
+else:
+    media_api_block = "\n".join(
+        [
+            "\thandle /media/* {",
+            "\t\troot * /srv/media",
+            "\t\tfile_server",
+            "\t}",
+        ]
+    )
+    media_host_block = "\n".join(
+        [
+            "gamma-avatar.quwoquan-env.test,",
+            "gamma-image.quwoquan-env.test,",
+            "gamma-video.quwoquan-env.test,",
+            "gamma-upload.quwoquan-env.test {",
+            "\timport local_gamma_tls",
+            "\troot * /srv/media",
+            "\tfile_server",
+            "}",
+        ]
+    )
+    media_pub_block = "\n".join(
+        [
+            "\thandle /media/* {",
+            "\t\troot * /srv/media",
+            "\t\tfile_server",
+            "\t}",
+        ]
+    )
+
+content = f"""{{ 
+\tadmin 0.0.0.0:2019
+\tlocal_certs
+}}
+
+(local_gamma_tls) {{
+\ttls internal
+}}
+
+gamma-api.quwoquan-env.test {{
+\timport local_gamma_tls
+\thandle /healthz {{
+\t\treverse_proxy content-service:18080
+\t}}
+\thandle /livez {{
+\t\treverse_proxy content-service:18080
+\t}}
+\thandle /startupz {{
+\t\treverse_proxy content-service:18080
+\t}}
+\t@api_content path /v1/content*
+\thandle @api_content {{
+\t\treverse_proxy content-service:18080
+\t}}
+\t@api_chat path /v1/chat*
+\thandle @api_chat {{
+\t\treverse_proxy chat-service:18081
+\t}}
+\t@api_user path /v1/user*
+\thandle @api_user {{
+\t\treverse_proxy user-service:18082
+\t}}
+\t@api_assistant path /v1/assistant*
+\thandle @api_assistant {{
+\t\treverse_proxy assistant-service:18087
+\t}}
+\thandle /v1/ops/* {{
+\t\treverse_proxy product-ops-service:18086
+\t}}
+{media_api_block}
+\thandle {{
+\t\trespond "local-gamma mirror route is not ready for this path" 404
+\t}}
+}}
+
+gamma-product-ops.quwoquan-env.test {{
+\timport local_gamma_tls
+\thandle /healthz {{
+\t\treverse_proxy product-ops-service:18086
+\t}}
+\thandle /v1/ops/* {{
+\t\treverse_proxy product-ops-service:18086
+\t}}
+\thandle {{
+\t\trespond "local-gamma product-ops route is not ready for this path" 404
+\t}}
+}}
+
+{media_host_block}
+
+:80 {{
+\thandle /healthz {{
+\t\treverse_proxy content-service:18080
+\t}}
+\t@pub_content path /v1/content*
+\thandle @pub_content {{
+\t\treverse_proxy content-service:18080
+\t}}
+\t@pub_chat path /v1/chat*
+\thandle @pub_chat {{
+\t\treverse_proxy chat-service:18081
+\t}}
+\t@pub_user path /v1/user*
+\thandle @pub_user {{
+\t\treverse_proxy user-service:18082
+\t}}
+\t@pub_assistant path /v1/assistant*
+\thandle @pub_assistant {{
+\t\treverse_proxy assistant-service:18087
+\t}}
+\thandle /v1/ops/* {{
+\t\treverse_proxy product-ops-service:18086
+\t}}
+{media_pub_block}
+\thandle {{
+\t\trespond "local-gamma mirror route is not ready for this path" 404
+\t}}
+}}
+"""
+out_path.write_text(content.replace("{ ", "{").replace("\n\n\n", "\n\n"), encoding="utf-8")
+PY
 }
 
 print_defines() {
@@ -310,11 +495,13 @@ PY
 if [[ "$down" == "1" ]]; then
   stop_colima_tunnels
   docker compose -f "$COMPOSE_FILE" down
+  rm -f "$stack_report"
   exit 0
 fi
 
 prepare_config_root
 prepare_media_root
+prepare_caddyfile
 
 if [[ "$print_env" == "1" ]]; then
   print_defines
@@ -580,7 +767,7 @@ if [[ "$podman_compose" == "1" ]]; then
   podman run --pull=never --name quwoquan_service_gamma-proxy_1 -d \
     --net "$network_name" --network-alias gamma-proxy \
     -e LOCAL_GAMMA_TLS_MODE="${LOCAL_GAMMA_TLS_MODE:-internal}" \
-    -v "$ROOT/deploy/local-gamma/Caddyfile:/etc/caddy/Caddyfile:ro" \
+    -v "$ROOT/artifacts/local-gamma/Caddyfile:/etc/caddy/Caddyfile:ro" \
     -v "$ROOT/artifacts/local-gamma/media:/srv/media:ro" \
     -v quwoquan_service_local-gamma-caddy-data:/data \
     -v quwoquan_service_local-gamma-caddy-config:/config \
@@ -644,6 +831,30 @@ PY
 }
 wait_local_gamma_host_ready
 
+python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$restarted_from_previous" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+report_path, config_version, image_version, gateway, product_ops, media, restarted = sys.argv[1:8]
+payload = {
+    "status": "passed",
+    "serviceMode": "single-stack",
+    "restartedFromPrevious": restarted == "1",
+    "configVersion": config_version,
+    "imageVersion": image_version,
+    "gatewayBaseUrl": gateway,
+    "productOpsBaseUrl": product_ops,
+    "mediaBaseUrl": media,
+    "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+}
+path = Path(report_path)
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+
+echo "[local-gamma] service mode: single-stack"
 echo "[local-gamma] mirror started"
 echo "[local-gamma] gateway: $GATEWAY_BASE_URL"
 echo "[local-gamma] product-ops: $PRODUCT_OPS_BASE_URL"

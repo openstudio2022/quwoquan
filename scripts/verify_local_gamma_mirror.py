@@ -13,6 +13,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPORT = ROOT / "artifacts/local-gamma/report.json"
+DEFAULT_STACK_REPORT = ROOT / "artifacts/local-gamma/stack_state.json"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -40,6 +41,7 @@ def status_of(section: dict[str, Any]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
+    parser.add_argument("--stack-report", default=str(DEFAULT_STACK_REPORT))
     parser.add_argument("--t3-report", default=str(ROOT / "artifacts/local-gamma/t3_report.json"))
     parser.add_argument("--t4-report", default=str(ROOT / "artifacts/local-gamma/t4_report.json"))
     parser.add_argument("--config-version", default="local-gamma-v1")
@@ -54,6 +56,8 @@ def main() -> int:
             "commitSha": git_sha(),
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
+            "serviceMode": "single-stack",
+            "restartedFromPrevious": False,
             "tests": {
                 "T1": {"status": "passed", "reason": "dry-run"},
                 "T2": {"status": "passed", "reason": "dry-run"},
@@ -62,11 +66,13 @@ def main() -> int:
             },
         }
     else:
+        stack = load_json(Path(args.stack_report))
         t3 = load_json(Path(args.t3_report))
         t4 = load_json(Path(args.t4_report))
         statuses = {
             "T1": "passed",
             "T2": "passed",
+            "stack": status_of(stack),
             "T3": status_of(t3),
             "T4": status_of(t4),
         }
@@ -84,6 +90,9 @@ def main() -> int:
             "imageVersion": args.image_version,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
             "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
+            "serviceMode": str(stack.get("serviceMode") or "single-stack"),
+            "restartedFromPrevious": bool(stack.get("restartedFromPrevious")),
+            "stack": stack,
             "tests": {
                 "T1": {"status": "passed", "source": "make gate"},
                 "T2": {"status": "passed", "source": "make gate"},

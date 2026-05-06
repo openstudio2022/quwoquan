@@ -37,6 +37,7 @@ metadata → codegen → 业务逻辑 → 测试
 | T6 | 串联 daily-api-contract、e2e.yaml 与 pre-release-gate（或合并为统一 pre-release workflow） | [x] 已完成 |
 | T7 | 更新 `deploy/shared/deliver_to_production_runbook.md`，增加多云切换步骤与 `CLOUD_PROVIDER` 说明 | [x] 已完成 |
 | T8 | 更新 Makefile：`deploy-integration CLOUD_PROVIDER=aliyun\|volcengine\|huaweicloud` | [x] 已完成 |
+| T9 | 新增 `multi-environment-instance-isolation` 四件套并补端侧多实例 / beta-gamma 单套生命周期 | [ ] 进行中 |
 
 ### V — 测试 / 验证
 

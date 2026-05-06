@@ -68,10 +68,10 @@ void main() {
 
   group('ChatPage — 交互契约', () {
     testWidgets('tap 会话列表项触发导航', (tester) async {
-      await tester.pumpWidget(_scopedApp());
+      await tester.pumpWidget(_scopedApp(mock: _NavigationChatRepository()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('契约旅行搭子群').first);
+      await tester.tap(find.text('导航测试会话'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('chat-detail-page')), findsOneWidget);
     });
@@ -183,6 +183,28 @@ class _EmptyChatRepository extends MockChatRepository {
     int limit = 20,
   }) async {
     return const <ChatInboxDto>[];
+  }
+}
+
+class _NavigationChatRepository extends MockChatRepository {
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return <ChatInboxDto>[
+      ChatInboxDto(
+        id: 'conv_navigation_test',
+        type: 'direct',
+        title: '导航测试会话',
+        avatarUrl: '',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<ChatInboxDto>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return listInbox(cursor: cursor, limit: limit);
   }
 }
 

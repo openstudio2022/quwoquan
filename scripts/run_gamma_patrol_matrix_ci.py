@@ -30,6 +30,8 @@ APP_DIR = REPO_ROOT / "quwoquan_app"
 DEFAULT_REPORT = REPO_ROOT / "artifacts" / "device-matrix" / "gamma-patrol" / "report.json"
 DEFAULT_TARGET = "test/patrol/discovery/feed_load_test.dart"
 IOS_SDK_VERSION_PATTERN = re.compile(r"iOS[- ](\d+)(?:[-._](\d+))?")
+XCODE_GLOBAL_PRODUCTS_DIR = Path.home() / "Library" / "Developer" / "Xcode" / "XcodeDerivedData" / "Build" / "Products"
+PATROL_IOS_PRODUCTS_DIR = APP_DIR / "build" / "ios_integ" / "Build" / "Products"
 
 
 def utc_now() -> str:
@@ -224,6 +226,21 @@ def patrol_command(device: dict[str, Any], args: argparse.Namespace) -> list[str
     return command
 
 
+def ensure_patrol_ios_products_bridge() -> None:
+    """Bridge Patrol's expected ios_integ products path to Xcode 26 global products."""
+    patrol_products = PATROL_IOS_PRODUCTS_DIR
+    patrol_products.parent.mkdir(parents=True, exist_ok=True)
+    if patrol_products.is_symlink():
+        try:
+            if patrol_products.resolve() == XCODE_GLOBAL_PRODUCTS_DIR.resolve():
+                return
+        except FileNotFoundError:
+            patrol_products.unlink()
+    elif patrol_products.exists():
+        return
+    patrol_products.symlink_to(XCODE_GLOBAL_PRODUCTS_DIR)
+
+
 def dry_run_devices(args: argparse.Namespace) -> list[dict[str, Any]]:
     raw_ids = args.device_id or ["dry-run-device"]
     devices = []
@@ -330,6 +347,8 @@ def main() -> int:
             suite="gamma-patrol-matrix",
             extra={"target": args.target},
         )
+        if str(device.get("targetPlatform", "")).lower() == "ios":
+            ensure_patrol_ios_products_bridge()
         command = patrol_command(device, args)
         command_path = write_json(
             run_dir / "command.json",

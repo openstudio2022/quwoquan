@@ -1,0 +1,2335 @@
+{
+  "schemaVersion": "user.scenario-fixtures.v2",
+  "description": "用户域 alpha/beta/gamma 共享测试场景，覆盖我的主页、作者主页、persona 与关系能力。 [gamma-curated subset]",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "user_profile_core": {
+      "description": "当前用户、作者用户、头像、昵称与统计。",
+      "profiles": [
+        {
+          "userId": "fixture_user_current",
+          "displayName": "契约当前用户",
+          "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_current/v1/background.png",
+          "bio": "用于 alpha/beta/gamma 的当前用户主页。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 5,
+            "circleCount": 5,
+            "likeCount": 360
+          },
+          "primaryRole": "currentUserVariant",
+          "primaryTheme": "lifestyle",
+          "secondaryThemes": [
+            "coffee",
+            "parenting"
+          ],
+          "themeTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ],
+          "postThemeRefs": [
+            "lifestyle",
+            "coffee"
+          ],
+          "circleThemeRefs": [
+            "lifestyle",
+            "coffee"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "currentUserVariant",
+              "count": 11,
+              "userIds": [
+                "fixture_user_current",
+                "fixture_user_current",
+                "fixture_user_current",
+                "fixture_user_current",
+                "fixture_user_current",
+                "fixture_user_lifestyle_08",
+                "fixture_user_current",
+                "fixture_user_lifestyle_08",
+                "fixture_user_current",
+                "fixture_user_lifestyle_08",
+                "fixture_user_current"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 11,
+              "userIds": [
+                "fixture_user_weekend_1",
+                "fixture_user_weekend_1",
+                "fixture_user_weekend_1",
+                "fixture_user_lifestyle_04",
+                "fixture_user_weekend_1",
+                "fixture_user_lifestyle_04",
+                "fixture_user_lifestyle_04",
+                "fixture_user_weekend_1",
+                "fixture_user_lifestyle_04",
+                "fixture_user_weekend_1",
+                "fixture_user_lifestyle_04"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 6,
+              "userIds": [
+                "fixture_user_weekend_2",
+                "fixture_user_weekend_2",
+                "fixture_user_lifestyle_03",
+                "fixture_user_lifestyle_03",
+                "fixture_user_lifestyle_03",
+                "fixture_user_lifestyle_03"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_photo",
+                "fixture_user_travel",
+                "fixture_user_lifestyle_01",
+                "fixture_user_lifestyle_01",
+                "fixture_user_lifestyle_01"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 4,
+              "userIds": [
+                "fixture_user_friend",
+                "fixture_user_lifestyle_05",
+                "fixture_user_lifestyle_05",
+                "fixture_user_lifestyle_05"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 3,
+              "userIds": [
+                "fixture_user_lifestyle_02",
+                "fixture_user_lifestyle_02",
+                "fixture_user_lifestyle_02"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 3,
+              "userIds": [
+                "fixture_user_lifestyle_06",
+                "fixture_user_lifestyle_06",
+                "fixture_user_lifestyle_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 3,
+              "userIds": [
+                "fixture_user_lifestyle_07",
+                "fixture_user_lifestyle_07",
+                "fixture_user_lifestyle_07"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_current/v1/background.png",
+          "personaRefs": [
+            "fixture_persona_daily",
+            "fixture_persona_work"
+          ],
+          "tags": [
+            "author",
+            "contact",
+            "current"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 314652,
+              "sourceHash": "sha256:a46dcf5bfd715a61572f6867446d1acb0d3054fc6c235d75413729c96b883650"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_current/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2570495,
+              "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_photo",
+          "displayName": "契约摄影师",
+          "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_photo/v1/background.png",
+          "bio": "作者主页契约数据。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 8,
+            "circleCount": 5,
+            "likeCount": 360
+          },
+          "primaryRole": "leadAuthor",
+          "primaryTheme": "photography",
+          "secondaryThemes": [
+            "travel",
+            "cityWalk"
+          ],
+          "themeTags": [
+            "photography",
+            "travel",
+            "cityWalk"
+          ],
+          "postThemeRefs": [
+            "photography",
+            "travel"
+          ],
+          "circleThemeRefs": [
+            "photography",
+            "travel"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "currentUserVariant",
+              "count": 4,
+              "userIds": [
+                "fixture_user_current",
+                "fixture_user_photography_08",
+                "fixture_user_photography_08",
+                "fixture_user_photography_08"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 9,
+              "userIds": [
+                "fixture_user_photo",
+                "fixture_user_photo",
+                "fixture_user_photography_01",
+                "fixture_user_photo",
+                "fixture_user_photography_01",
+                "fixture_user_photo",
+                "fixture_user_photo",
+                "fixture_user_photography_01",
+                "fixture_user_photo"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 4,
+              "userIds": [
+                "fixture_user_friend",
+                "fixture_user_photography_05",
+                "fixture_user_photography_05",
+                "fixture_user_photography_05"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 8,
+              "userIds": [
+                "fixture_user_owner",
+                "fixture_user_photography_03",
+                "fixture_user_owner",
+                "fixture_user_photography_03",
+                "fixture_user_photography_03",
+                "fixture_user_owner",
+                "fixture_user_photography_03",
+                "fixture_user_owner"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 3,
+              "userIds": [
+                "fixture_user_photography_02",
+                "fixture_user_photography_02",
+                "fixture_user_photography_02"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 5,
+              "userIds": [
+                "fixture_user_photography_04",
+                "fixture_user_photography_04",
+                "fixture_user_photography_04",
+                "fixture_user_photography_04",
+                "fixture_user_photography_04"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 3,
+              "userIds": [
+                "fixture_user_photography_06",
+                "fixture_user_photography_06",
+                "fixture_user_photography_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 3,
+              "userIds": [
+                "fixture_user_photography_07",
+                "fixture_user_photography_07",
+                "fixture_user_photography_07"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_photo/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "author",
+            "contact",
+            "photo"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 379661,
+              "sourceHash": "sha256:6502fcc381a5f4e985749a0a1521abeb6f7ab54057662738f53979d3400892cc"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_photo/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 1857474,
+              "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_travel",
+          "displayName": "契约旅行家",
+          "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_travel/v1/background.png",
+          "bio": "旅行、天气和行程记录作者。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 6,
+            "circleCount": 5,
+            "likeCount": 360
+          },
+          "primaryRole": "leadAuthor",
+          "primaryTheme": "travel",
+          "secondaryThemes": [
+            "photography",
+            "outdoor"
+          ],
+          "themeTags": [
+            "travel",
+            "photography",
+            "outdoor"
+          ],
+          "postThemeRefs": [
+            "travel",
+            "photography"
+          ],
+          "circleThemeRefs": [
+            "travel",
+            "photography"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "currentUserVariant",
+              "count": 4,
+              "userIds": [
+                "fixture_user_current",
+                "fixture_user_travel_08",
+                "fixture_user_travel_08",
+                "fixture_user_travel_08"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 9,
+              "userIds": [
+                "fixture_user_travel",
+                "fixture_user_travel",
+                "fixture_user_travel_01",
+                "fixture_user_travel",
+                "fixture_user_travel_01",
+                "fixture_user_travel",
+                "fixture_user_travel",
+                "fixture_user_travel_01",
+                "fixture_user_travel"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 6,
+              "userIds": [
+                "fixture_user_weekend_1",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 9,
+              "userIds": [
+                "fixture_user_weekend_2",
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 3,
+              "userIds": [
+                "fixture_user_travel_02",
+                "fixture_user_travel_02",
+                "fixture_user_travel_02"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 3,
+              "userIds": [
+                "fixture_user_travel_05",
+                "fixture_user_travel_05",
+                "fixture_user_travel_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 3,
+              "userIds": [
+                "fixture_user_travel_06",
+                "fixture_user_travel_06",
+                "fixture_user_travel_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 3,
+              "userIds": [
+                "fixture_user_travel_07",
+                "fixture_user_travel_07",
+                "fixture_user_travel_07"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_travel/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "author",
+            "contact",
+            "travel"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 315882,
+              "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_travel/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2522887,
+              "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_video",
+          "displayName": "契约剪辑师",
+          "avatarUrl": "media/avatar/user/fixture_user_video/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_video/v1/background.png",
+          "bio": "视频剪辑与城市影像作者。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 6,
+            "circleCount": 6,
+            "likeCount": 360
+          },
+          "primaryRole": "groupOrganizer",
+          "primaryTheme": "cityWalk",
+          "secondaryThemes": [
+            "photography",
+            "coffee"
+          ],
+          "themeTags": [
+            "cityWalk",
+            "photography",
+            "coffee"
+          ],
+          "postThemeRefs": [
+            "cityWalk",
+            "photography",
+            "coffee"
+          ],
+          "circleThemeRefs": [
+            "cityWalk",
+            "photography"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "groupOrganizer",
+              "count": 11,
+              "userIds": [
+                "fixture_user_video",
+                "fixture_user_citywalk_04",
+                "fixture_user_video",
+                "fixture_user_citywalk_04",
+                "fixture_user_citywalk_04",
+                "fixture_user_video",
+                "fixture_user_citywalk_04",
+                "fixture_user_video",
+                "fixture_user_citywalk_04",
+                "fixture_user_video",
+                "fixture_user_video"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_citywalk_02",
+                "fixture_user_citywalk_02",
+                "fixture_user_citywalk_02",
+                "fixture_user_citywalk_02",
+                "fixture_user_citywalk_02"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 5,
+              "userIds": [
+                "fixture_user_citywalk_03",
+                "fixture_user_citywalk_03",
+                "fixture_user_citywalk_03",
+                "fixture_user_citywalk_03",
+                "fixture_user_citywalk_03"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 6,
+              "userIds": [
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 4,
+              "userIds": [
+                "fixture_user_citywalk_06",
+                "fixture_user_citywalk_06",
+                "fixture_user_citywalk_06",
+                "fixture_user_citywalk_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 4,
+              "userIds": [
+                "fixture_user_citywalk_07",
+                "fixture_user_citywalk_07",
+                "fixture_user_citywalk_07",
+                "fixture_user_citywalk_07"
+              ]
+            },
+            {
+              "role": "currentUserVariant",
+              "count": 4,
+              "userIds": [
+                "fixture_user_citywalk_08",
+                "fixture_user_citywalk_08",
+                "fixture_user_citywalk_08",
+                "fixture_user_citywalk_08"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_video/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "author",
+            "group-member",
+            "group-organizer",
+            "video"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 185953,
+              "sourceHash": "sha256:672248481e539def9d67847f3f1fc50561d0566f6f674fc4136c538c97a6761d"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_video/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2686628,
+              "sourceHash": "sha256:12a60e2b0ed98e1e382a77503dcda66a0f12f783d1db8b1aeadf30aae399058f"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_article",
+          "displayName": "契约撰稿人",
+          "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_article/v1/background.png",
+          "bio": "文章、攻略与长图文作者。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 6,
+            "circleCount": 4,
+            "likeCount": 360
+          },
+          "primaryRole": "leadAuthor",
+          "primaryTheme": "designWriting",
+          "secondaryThemes": [
+            "tech",
+            "coffee"
+          ],
+          "themeTags": [
+            "designWriting",
+            "tech",
+            "coffee"
+          ],
+          "postThemeRefs": [
+            "designWriting",
+            "tech"
+          ],
+          "circleThemeRefs": [
+            "tech",
+            "designWriting"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "leadAuthor",
+              "count": 2,
+              "userIds": [
+                "fixture_user_article",
+                "fixture_user_designwriting_01"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 1,
+              "userIds": [
+                "fixture_user_commenter"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 1,
+              "userIds": [
+                "fixture_user_designwriting_02"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 1,
+              "userIds": [
+                "fixture_user_designwriting_03"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 1,
+              "userIds": [
+                "fixture_user_designwriting_04"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_article/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "article",
+            "author",
+            "contact"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 408056,
+              "sourceHash": "sha256:a65a83ac7cb4ca02c18108bed8922a7a1c238871fbbd844848afc11ae9427d6c"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_article/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 1794125,
+              "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_friend",
+          "displayName": "契约好友",
+          "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_friend/v1/background.png",
+          "bio": "与当前用户互关的同好。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 6,
+            "circleCount": 5,
+            "likeCount": 360
+          },
+          "primaryRole": "friendContact",
+          "primaryTheme": "coffee",
+          "secondaryThemes": [
+            "food",
+            "designWriting"
+          ],
+          "themeTags": [
+            "coffee",
+            "food",
+            "designWriting"
+          ],
+          "postThemeRefs": [
+            "food",
+            "coffee",
+            "cityWalk"
+          ],
+          "circleThemeRefs": [
+            "coffee",
+            "food"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "currentUserVariant",
+              "count": 5,
+              "userIds": [
+                "fixture_user_current",
+                "fixture_user_coffee_08",
+                "fixture_user_coffee_08",
+                "fixture_user_coffee_08",
+                "fixture_user_coffee_08"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_photo",
+                "fixture_user_coffee_01",
+                "fixture_user_coffee_01",
+                "fixture_user_coffee_01",
+                "fixture_user_coffee_01"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 11,
+              "userIds": [
+                "fixture_user_friend",
+                "fixture_user_friend",
+                "fixture_user_coffee_05",
+                "fixture_user_coffee_05",
+                "fixture_user_friend",
+                "fixture_user_coffee_05",
+                "fixture_user_friend",
+                "fixture_user_coffee_05",
+                "fixture_user_friend",
+                "fixture_user_coffee_05",
+                "fixture_user_friend"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 4,
+              "userIds": [
+                "fixture_user_coffee_02",
+                "fixture_user_coffee_02",
+                "fixture_user_coffee_02",
+                "fixture_user_coffee_02"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 4,
+              "userIds": [
+                "fixture_user_coffee_03",
+                "fixture_user_coffee_03",
+                "fixture_user_coffee_03",
+                "fixture_user_coffee_03"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 4,
+              "userIds": [
+                "fixture_user_coffee_04",
+                "fixture_user_coffee_04",
+                "fixture_user_coffee_04",
+                "fixture_user_coffee_04"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 4,
+              "userIds": [
+                "fixture_user_coffee_06",
+                "fixture_user_coffee_06",
+                "fixture_user_coffee_06",
+                "fixture_user_coffee_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 4,
+              "userIds": [
+                "fixture_user_coffee_07",
+                "fixture_user_coffee_07",
+                "fixture_user_coffee_07",
+                "fixture_user_coffee_07"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_friend/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "contact",
+            "direct-chat"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 397870,
+              "sourceHash": "sha256:8e87b258e620ace60d04fb5111b628106e44786505233f83508351b5a1b1aaf7"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_friend/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 1117608,
+              "sourceHash": "sha256:37dc09790fcc630ecfe492e0332a73575e571006a14b5836f03f5c82951a6bea"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_weekend_1",
+          "displayName": "契约同伴一",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_weekend_1/v1/background.png",
+          "bio": "周末群成员，也是联系人同好。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 9,
+            "circleCount": 5,
+            "likeCount": 360
+          },
+          "primaryRole": "groupOrganizer",
+          "primaryTheme": "lifestyle",
+          "secondaryThemes": [
+            "coffee",
+            "parenting"
+          ],
+          "themeTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ],
+          "postThemeRefs": [
+            "cityWalk",
+            "photography",
+            "lifestyle",
+            "coffee",
+            "food",
+            "fitness"
+          ],
+          "circleThemeRefs": [
+            "lifestyle",
+            "coffee"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "currentUserVariant",
+              "count": 8,
+              "userIds": [
+                "fixture_user_current",
+                "fixture_user_current",
+                "fixture_user_current",
+                "fixture_user_current",
+                "fixture_user_lifestyle_08",
+                "fixture_user_current",
+                "fixture_user_lifestyle_08",
+                "fixture_user_current"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 12,
+              "userIds": [
+                "fixture_user_weekend_1",
+                "fixture_user_weekend_1",
+                "fixture_user_weekend_1",
+                "fixture_user_lifestyle_04",
+                "fixture_user_weekend_1",
+                "fixture_user_lifestyle_04",
+                "fixture_user_weekend_1",
+                "fixture_user_lifestyle_04",
+                "fixture_user_lifestyle_04",
+                "fixture_user_weekend_1",
+                "fixture_user_lifestyle_04",
+                "fixture_user_weekend_1"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 7,
+              "userIds": [
+                "fixture_user_weekend_2",
+                "fixture_user_weekend_2",
+                "fixture_user_lifestyle_03",
+                "fixture_user_lifestyle_03",
+                "fixture_user_lifestyle_03",
+                "fixture_user_lifestyle_03",
+                "fixture_user_lifestyle_03"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_travel",
+                "fixture_user_lifestyle_01",
+                "fixture_user_lifestyle_01",
+                "fixture_user_lifestyle_01",
+                "fixture_user_lifestyle_01"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 4,
+              "userIds": [
+                "fixture_user_lifestyle_02",
+                "fixture_user_lifestyle_02",
+                "fixture_user_lifestyle_02",
+                "fixture_user_lifestyle_02"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 3,
+              "userIds": [
+                "fixture_user_lifestyle_05",
+                "fixture_user_lifestyle_05",
+                "fixture_user_lifestyle_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 3,
+              "userIds": [
+                "fixture_user_lifestyle_06",
+                "fixture_user_lifestyle_06",
+                "fixture_user_lifestyle_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 2,
+              "userIds": [
+                "fixture_user_lifestyle_07",
+                "fixture_user_lifestyle_07"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "contact",
+            "group-member",
+            "group-organizer"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 278112,
+              "sourceHash": "sha256:f70940c147e344f69f607bf39c408003f44df3bf0f67b8de5243f77c11345361"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2570495,
+              "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_weekend_2",
+          "displayName": "契约同伴二",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_weekend_2/v1/background.png",
+          "bio": "周末群成员，提供路线建议。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 5,
+            "circleCount": 6,
+            "likeCount": 360
+          },
+          "primaryRole": "circleOwner",
+          "primaryTheme": "food",
+          "secondaryThemes": [
+            "coffee",
+            "lifestyle"
+          ],
+          "themeTags": [
+            "food",
+            "coffee",
+            "lifestyle"
+          ],
+          "postThemeRefs": [
+            "food",
+            "coffee",
+            "lifestyle"
+          ],
+          "circleThemeRefs": [
+            "food",
+            "coffee"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "currentUserVariant",
+              "count": 6,
+              "userIds": [
+                "fixture_user_current",
+                "fixture_user_current",
+                "fixture_user_food_08",
+                "fixture_user_food_08",
+                "fixture_user_food_08",
+                "fixture_user_food_08"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 7,
+              "userIds": [
+                "fixture_user_weekend_1",
+                "fixture_user_weekend_1",
+                "fixture_user_food_04",
+                "fixture_user_food_04",
+                "fixture_user_food_04",
+                "fixture_user_food_04",
+                "fixture_user_food_04"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 13,
+              "userIds": [
+                "fixture_user_weekend_2",
+                "fixture_user_weekend_2",
+                "fixture_user_weekend_2",
+                "fixture_user_food_03",
+                "fixture_user_weekend_2",
+                "fixture_user_food_03",
+                "fixture_user_food_03",
+                "fixture_user_weekend_2",
+                "fixture_user_food_03",
+                "fixture_user_weekend_2",
+                "fixture_user_weekend_2",
+                "fixture_user_food_03",
+                "fixture_user_weekend_2"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 6,
+              "userIds": [
+                "fixture_user_travel",
+                "fixture_user_food_01",
+                "fixture_user_food_01",
+                "fixture_user_food_01",
+                "fixture_user_food_01",
+                "fixture_user_food_01"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_food_02",
+                "fixture_user_food_02",
+                "fixture_user_food_02",
+                "fixture_user_food_02",
+                "fixture_user_food_02"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 6,
+              "userIds": [
+                "fixture_user_food_05",
+                "fixture_user_food_05",
+                "fixture_user_food_05",
+                "fixture_user_food_05",
+                "fixture_user_food_05",
+                "fixture_user_food_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 4,
+              "userIds": [
+                "fixture_user_food_06",
+                "fixture_user_food_06",
+                "fixture_user_food_06",
+                "fixture_user_food_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 4,
+              "userIds": [
+                "fixture_user_food_07",
+                "fixture_user_food_07",
+                "fixture_user_food_07",
+                "fixture_user_food_07"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_weekend_2/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "circle-owner",
+            "contact",
+            "group-member"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 401995,
+              "sourceHash": "sha256:8a3ae06e776a6441eb747732d62cd5562b2d0cd1e7d5d8f125407d252bce583d"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_weekend_2/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2062449,
+              "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_owner",
+          "displayName": "契约摄影社主理人",
+          "avatarUrl": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_owner/v1/background.png",
+          "bio": "摄影圈 owner，用于圈子权限和群聊同步验证。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 4,
+            "circleCount": 5,
+            "likeCount": 360
+          },
+          "primaryRole": "circleOwner",
+          "primaryTheme": "photography",
+          "secondaryThemes": [
+            "travel",
+            "cityWalk"
+          ],
+          "themeTags": [
+            "photography",
+            "travel",
+            "cityWalk"
+          ],
+          "postThemeRefs": [
+            "photography",
+            "travel"
+          ],
+          "circleThemeRefs": [
+            "photography",
+            "travel"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "leadAuthor",
+              "count": 8,
+              "userIds": [
+                "fixture_user_photo",
+                "fixture_user_photography_01",
+                "fixture_user_photo",
+                "fixture_user_photography_01",
+                "fixture_user_photography_01",
+                "fixture_user_photo",
+                "fixture_user_photo",
+                "fixture_user_photography_01"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 10,
+              "userIds": [
+                "fixture_user_owner",
+                "fixture_user_photography_03",
+                "fixture_user_owner",
+                "fixture_user_photography_03",
+                "fixture_user_owner",
+                "fixture_user_photography_03",
+                "fixture_user_photography_03",
+                "fixture_user_owner",
+                "fixture_user_photography_03",
+                "fixture_user_owner"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 4,
+              "userIds": [
+                "fixture_user_photography_02",
+                "fixture_user_photography_02",
+                "fixture_user_photography_02",
+                "fixture_user_photography_02"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 5,
+              "userIds": [
+                "fixture_user_photography_04",
+                "fixture_user_photography_04",
+                "fixture_user_photography_04",
+                "fixture_user_photography_04",
+                "fixture_user_photography_04"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 3,
+              "userIds": [
+                "fixture_user_photography_05",
+                "fixture_user_photography_05",
+                "fixture_user_photography_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 3,
+              "userIds": [
+                "fixture_user_photography_06",
+                "fixture_user_photography_06",
+                "fixture_user_photography_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 2,
+              "userIds": [
+                "fixture_user_photography_07",
+                "fixture_user_photography_07"
+              ]
+            },
+            {
+              "role": "currentUserVariant",
+              "count": 2,
+              "userIds": [
+                "fixture_user_photography_08",
+                "fixture_user_photography_08"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_owner/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "circle-owner"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 301039,
+              "sourceHash": "sha256:804f9b8f31bd1b322159af180d16a127d49f39bacca662c57a43e85179568a82"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_owner/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 1119236,
+              "sourceHash": "sha256:42766ca9d90c1d9253d8194f40de15c5fc4bdd7b378bce1f9ea4378304544e8c"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_travel_owner",
+          "displayName": "契约旅行圈主",
+          "avatarUrl": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_travel_owner/v1/background.png",
+          "bio": "旅行圈 owner，用于圈子成员引用完整性验证。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 6,
+            "circleCount": 5,
+            "likeCount": 360
+          },
+          "primaryRole": "circleOwner",
+          "primaryTheme": "travel",
+          "secondaryThemes": [
+            "photography",
+            "outdoor"
+          ],
+          "themeTags": [
+            "travel",
+            "photography",
+            "outdoor"
+          ],
+          "postThemeRefs": [
+            "travel",
+            "photography"
+          ],
+          "circleThemeRefs": [
+            "travel",
+            "photography"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "leadAuthor",
+              "count": 8,
+              "userIds": [
+                "fixture_user_travel",
+                "fixture_user_travel_01",
+                "fixture_user_travel",
+                "fixture_user_travel_01",
+                "fixture_user_travel_01",
+                "fixture_user_travel",
+                "fixture_user_travel",
+                "fixture_user_travel_01"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 10,
+              "userIds": [
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 4,
+              "userIds": [
+                "fixture_user_travel_02",
+                "fixture_user_travel_02",
+                "fixture_user_travel_02",
+                "fixture_user_travel_02"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 5,
+              "userIds": [
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 3,
+              "userIds": [
+                "fixture_user_travel_05",
+                "fixture_user_travel_05",
+                "fixture_user_travel_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 3,
+              "userIds": [
+                "fixture_user_travel_06",
+                "fixture_user_travel_06",
+                "fixture_user_travel_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 2,
+              "userIds": [
+                "fixture_user_travel_07",
+                "fixture_user_travel_07"
+              ]
+            },
+            {
+              "role": "currentUserVariant",
+              "count": 2,
+              "userIds": [
+                "fixture_user_travel_08",
+                "fixture_user_travel_08"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_travel_owner/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "circle-owner",
+            "travel"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 404830,
+              "sourceHash": "sha256:0282971cbebfb093e2d5371f416c77a8f49f15c1810cb02255341a45c3100fd6"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_travel_owner/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2136545,
+              "sourceHash": "sha256:584102cd74b9d094b22edfed04691aab7813486fe76d9a7a9de20ca58a0bbca3"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_commenter",
+          "displayName": "契约评论者",
+          "avatarUrl": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_commenter/v1/background.png",
+          "bio": "内容详情评论作者，用于作者头像补水验证。",
+          "stats": {
+            "followingCount": 96,
+            "followerCount": 240,
+            "postCount": 6,
+            "circleCount": 4,
+            "likeCount": 360
+          },
+          "primaryRole": "commenter",
+          "primaryTheme": "designWriting",
+          "secondaryThemes": [
+            "tech",
+            "coffee"
+          ],
+          "themeTags": [
+            "designWriting",
+            "tech",
+            "coffee"
+          ],
+          "postThemeRefs": [
+            "designWriting",
+            "tech"
+          ],
+          "circleThemeRefs": [
+            "designWriting",
+            "tech"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "leadAuthor",
+              "count": 3,
+              "userIds": [
+                "fixture_user_article",
+                "fixture_user_designwriting_01",
+                "fixture_user_designwriting_01"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 3,
+              "userIds": [
+                "fixture_user_commenter",
+                "fixture_user_commenter",
+                "fixture_user_designwriting_06"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 2,
+              "userIds": [
+                "fixture_user_designwriting_02",
+                "fixture_user_designwriting_02"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 2,
+              "userIds": [
+                "fixture_user_designwriting_03",
+                "fixture_user_designwriting_03"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 2,
+              "userIds": [
+                "fixture_user_designwriting_04",
+                "fixture_user_designwriting_04"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 1,
+              "userIds": [
+                "fixture_user_designwriting_05"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_commenter/v1/background.png",
+          "personaRefs": [],
+          "tags": [
+            "commenter"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 418320,
+              "sourceHash": "sha256:301045d656936605a700cf1b329d55fea7faed8800684384377b8c3b92c86c1e"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_commenter/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 1212244,
+              "sourceHash": "sha256:f19e6de501ad9d1f01af8184e3490b19c6a44d47c17d51ad2edd1e6960e428b8"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_travel_01",
+          "displayName": "契约旅行作者",
+          "avatarUrl": "media/avatar/user/fixture_user_travel_01/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_travel_01/v1/background.png",
+          "bio": "旅行 主题用户样本，覆盖作者、联系人、圈主与群成员。",
+          "stats": {
+            "followingCount": 23,
+            "followerCount": 74,
+            "postCount": 3,
+            "circleCount": 5,
+            "likeCount": 159
+          },
+          "primaryRole": "leadAuthor",
+          "primaryTheme": "travel",
+          "secondaryThemes": [
+            "photography",
+            "outdoor"
+          ],
+          "themeTags": [
+            "travel",
+            "photography",
+            "outdoor"
+          ],
+          "postThemeRefs": [
+            "travel",
+            "photography"
+          ],
+          "circleThemeRefs": [
+            "travel",
+            "photography"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "leadAuthor",
+              "count": 8,
+              "userIds": [
+                "fixture_user_travel",
+                "fixture_user_travel_01",
+                "fixture_user_travel",
+                "fixture_user_travel_01",
+                "fixture_user_travel_01",
+                "fixture_user_travel_01",
+                "fixture_user_travel",
+                "fixture_user_travel_01"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 9,
+              "userIds": [
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner",
+                "fixture_user_travel_03",
+                "fixture_user_travel_03",
+                "fixture_user_travel_03",
+                "fixture_user_travel_owner"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 4,
+              "userIds": [
+                "fixture_user_travel_02",
+                "fixture_user_travel_02",
+                "fixture_user_travel_02",
+                "fixture_user_travel_02"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 5,
+              "userIds": [
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04",
+                "fixture_user_travel_04"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 3,
+              "userIds": [
+                "fixture_user_travel_05",
+                "fixture_user_travel_05",
+                "fixture_user_travel_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 3,
+              "userIds": [
+                "fixture_user_travel_06",
+                "fixture_user_travel_06",
+                "fixture_user_travel_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 2,
+              "userIds": [
+                "fixture_user_travel_07",
+                "fixture_user_travel_07"
+              ]
+            },
+            {
+              "role": "currentUserVariant",
+              "count": 2,
+              "userIds": [
+                "fixture_user_travel_08",
+                "fixture_user_travel_08"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel_01/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_travel_01/v1/background.png",
+          "personaRefs": [
+            "persona_travel_01"
+          ],
+          "tags": [
+            "author",
+            "travel"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_travel_01/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 315882,
+              "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_travel_01/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2522887,
+              "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_citywalk_01",
+          "displayName": "契约城市漫步作者",
+          "avatarUrl": "media/avatar/user/fixture_user_citywalk_01/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_citywalk_01/v1/background.png",
+          "bio": "城市漫步 主题用户样本，覆盖作者、联系人、圈主与群成员。",
+          "stats": {
+            "followingCount": 26,
+            "followerCount": 86,
+            "postCount": 5,
+            "circleCount": 6,
+            "likeCount": 186
+          },
+          "primaryRole": "leadAuthor",
+          "primaryTheme": "cityWalk",
+          "secondaryThemes": [
+            "photography",
+            "coffee"
+          ],
+          "themeTags": [
+            "cityWalk",
+            "photography",
+            "coffee"
+          ],
+          "postThemeRefs": [
+            "cityWalk",
+            "photography",
+            "coffee"
+          ],
+          "circleThemeRefs": [
+            "cityWalk",
+            "photography"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "groupOrganizer",
+              "count": 10,
+              "userIds": [
+                "fixture_user_video",
+                "fixture_user_citywalk_04",
+                "fixture_user_video",
+                "fixture_user_citywalk_04",
+                "fixture_user_citywalk_04",
+                "fixture_user_citywalk_04",
+                "fixture_user_video",
+                "fixture_user_citywalk_04",
+                "fixture_user_video",
+                "fixture_user_video"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 6,
+              "userIds": [
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01",
+                "fixture_user_citywalk_01"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_citywalk_02",
+                "fixture_user_citywalk_02",
+                "fixture_user_citywalk_02",
+                "fixture_user_citywalk_02",
+                "fixture_user_citywalk_02"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 5,
+              "userIds": [
+                "fixture_user_citywalk_03",
+                "fixture_user_citywalk_03",
+                "fixture_user_citywalk_03",
+                "fixture_user_citywalk_03",
+                "fixture_user_citywalk_03"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 6,
+              "userIds": [
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05",
+                "fixture_user_citywalk_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 4,
+              "userIds": [
+                "fixture_user_citywalk_06",
+                "fixture_user_citywalk_06",
+                "fixture_user_citywalk_06",
+                "fixture_user_citywalk_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 4,
+              "userIds": [
+                "fixture_user_citywalk_07",
+                "fixture_user_citywalk_07",
+                "fixture_user_citywalk_07",
+                "fixture_user_citywalk_07"
+              ]
+            },
+            {
+              "role": "currentUserVariant",
+              "count": 3,
+              "userIds": [
+                "fixture_user_citywalk_08",
+                "fixture_user_citywalk_08",
+                "fixture_user_citywalk_08"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_01/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_citywalk_01/v1/background.png",
+          "personaRefs": [
+            "persona_citywalk_01"
+          ],
+          "tags": [
+            "author",
+            "cityWalk"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_citywalk_01/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 185953,
+              "sourceHash": "sha256:672248481e539def9d67847f3f1fc50561d0566f6f674fc4136c538c97a6761d"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_citywalk_01/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2686628,
+              "sourceHash": "sha256:2d2bdbaf47266d85ae214592df15a507298744f734036cfd0e2e6919dfd43bd6"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_outdoor_01",
+          "displayName": "契约户外作者",
+          "avatarUrl": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_outdoor_01/v1/background.png",
+          "bio": "户外 主题用户样本，覆盖作者、联系人、圈主与群成员。",
+          "stats": {
+            "followingCount": 47,
+            "followerCount": 170,
+            "postCount": 6,
+            "circleCount": 5,
+            "likeCount": 375
+          },
+          "primaryRole": "leadAuthor",
+          "primaryTheme": "outdoor",
+          "secondaryThemes": [
+            "travel",
+            "fitness"
+          ],
+          "themeTags": [
+            "outdoor",
+            "travel",
+            "fitness"
+          ],
+          "postThemeRefs": [
+            "outdoor",
+            "travel",
+            "pet"
+          ],
+          "circleThemeRefs": [
+            "outdoor",
+            "travel"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "leadAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_outdoor_01",
+                "fixture_user_outdoor_01",
+                "fixture_user_outdoor_01",
+                "fixture_user_outdoor_01",
+                "fixture_user_outdoor_01"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 5,
+              "userIds": [
+                "fixture_user_outdoor_02",
+                "fixture_user_outdoor_02",
+                "fixture_user_outdoor_02",
+                "fixture_user_outdoor_02",
+                "fixture_user_outdoor_02"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 5,
+              "userIds": [
+                "fixture_user_outdoor_03",
+                "fixture_user_outdoor_03",
+                "fixture_user_outdoor_03",
+                "fixture_user_outdoor_03",
+                "fixture_user_outdoor_03"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 5,
+              "userIds": [
+                "fixture_user_outdoor_04",
+                "fixture_user_outdoor_04",
+                "fixture_user_outdoor_04",
+                "fixture_user_outdoor_04",
+                "fixture_user_outdoor_04"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 5,
+              "userIds": [
+                "fixture_user_outdoor_05",
+                "fixture_user_outdoor_05",
+                "fixture_user_outdoor_05",
+                "fixture_user_outdoor_05",
+                "fixture_user_outdoor_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 5,
+              "userIds": [
+                "fixture_user_outdoor_06",
+                "fixture_user_outdoor_06",
+                "fixture_user_outdoor_06",
+                "fixture_user_outdoor_06",
+                "fixture_user_outdoor_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 4,
+              "userIds": [
+                "fixture_user_outdoor_07",
+                "fixture_user_outdoor_07",
+                "fixture_user_outdoor_07",
+                "fixture_user_outdoor_07"
+              ]
+            },
+            {
+              "role": "currentUserVariant",
+              "count": 4,
+              "userIds": [
+                "fixture_user_outdoor_08",
+                "fixture_user_outdoor_08",
+                "fixture_user_outdoor_08",
+                "fixture_user_outdoor_08"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_outdoor_01/v1/background.png",
+          "personaRefs": [
+            "persona_outdoor_01"
+          ],
+          "tags": [
+            "author",
+            "outdoor"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 404830,
+              "sourceHash": "sha256:0282971cbebfb093e2d5371f416c77a8f49f15c1810cb02255341a45c3100fd6"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_outdoor_01/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2339108,
+              "sourceHash": "sha256:8cddb1acab949e1a1ef0d77c48212e7b165c29a005eb90c7275ed9e2a400b70c"
+            }
+          }
+        },
+        {
+          "userId": "fixture_user_tech_01",
+          "displayName": "契约科技作者",
+          "avatarUrl": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+          "backgroundUrl": "media/background/user/fixture_user_tech_01/v1/background.png",
+          "bio": "科技 主题用户样本，覆盖作者、联系人、圈主与群成员。",
+          "stats": {
+            "followingCount": 50,
+            "followerCount": 182,
+            "postCount": 6,
+            "circleCount": 6,
+            "likeCount": 402
+          },
+          "primaryRole": "leadAuthor",
+          "primaryTheme": "tech",
+          "secondaryThemes": [
+            "designWriting",
+            "cityWalk"
+          ],
+          "themeTags": [
+            "tech",
+            "designWriting",
+            "cityWalk"
+          ],
+          "postThemeRefs": [
+            "tech",
+            "designWriting"
+          ],
+          "circleThemeRefs": [
+            "tech",
+            "designWriting"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "leadAuthor",
+              "count": 6,
+              "userIds": [
+                "fixture_user_tech_01",
+                "fixture_user_tech_01",
+                "fixture_user_tech_01",
+                "fixture_user_tech_01",
+                "fixture_user_tech_01",
+                "fixture_user_tech_01"
+              ]
+            },
+            {
+              "role": "secondaryAuthor",
+              "count": 6,
+              "userIds": [
+                "fixture_user_tech_02",
+                "fixture_user_tech_02",
+                "fixture_user_tech_02",
+                "fixture_user_tech_02",
+                "fixture_user_tech_02",
+                "fixture_user_tech_02"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 6,
+              "userIds": [
+                "fixture_user_tech_03",
+                "fixture_user_tech_03",
+                "fixture_user_tech_03",
+                "fixture_user_tech_03",
+                "fixture_user_tech_03",
+                "fixture_user_tech_03"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 6,
+              "userIds": [
+                "fixture_user_tech_04",
+                "fixture_user_tech_04",
+                "fixture_user_tech_04",
+                "fixture_user_tech_04",
+                "fixture_user_tech_04",
+                "fixture_user_tech_04"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 6,
+              "userIds": [
+                "fixture_user_tech_05",
+                "fixture_user_tech_05",
+                "fixture_user_tech_05",
+                "fixture_user_tech_05",
+                "fixture_user_tech_05",
+                "fixture_user_tech_05"
+              ]
+            },
+            {
+              "role": "commenter",
+              "count": 6,
+              "userIds": [
+                "fixture_user_tech_06",
+                "fixture_user_tech_06",
+                "fixture_user_tech_06",
+                "fixture_user_tech_06",
+                "fixture_user_tech_06",
+                "fixture_user_tech_06"
+              ]
+            },
+            {
+              "role": "casualMember",
+              "count": 4,
+              "userIds": [
+                "fixture_user_tech_07",
+                "fixture_user_tech_07",
+                "fixture_user_tech_07",
+                "fixture_user_tech_07"
+              ]
+            },
+            {
+              "role": "currentUserVariant",
+              "count": 4,
+              "userIds": [
+                "fixture_user_tech_08",
+                "fixture_user_tech_08",
+                "fixture_user_tech_08",
+                "fixture_user_tech_08"
+              ]
+            }
+          ],
+          "avatarObjectKey": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+          "backgroundObjectKey": "media/background/user/fixture_user_tech_01/v1/background.png",
+          "personaRefs": [
+            "persona_tech_01"
+          ],
+          "tags": [
+            "author",
+            "tech"
+          ],
+          "media": {
+            "avatar": {
+              "objectKey": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 512,
+              "height": 512,
+              "sizeBytes": 418320,
+              "sourceHash": "sha256:301045d656936605a700cf1b329d55fea7faed8800684384377b8c3b92c86c1e"
+            },
+            "background": {
+              "objectKey": "media/background/user/fixture_user_tech_01/v1/background.png",
+              "version": 1,
+              "mimeType": "image/png",
+              "width": 1600,
+              "height": 900,
+              "sizeBytes": 2148229,
+              "sourceHash": "sha256:120ec7f3b361ffbb59a5f9a70a183970081997dcbb1bc8aec8b5e65afd26401e"
+            }
+          }
+        }
+      ]
+    },
+    "persona_core": {
+      "description": "当前 persona、候选 persona 与 active context。",
+      "activePersonaId": "fixture_persona_daily",
+      "personas": [
+        {
+          "personaId": "fixture_persona_daily",
+          "name": "日常我",
+          "description": "默认日常 persona"
+        },
+        {
+          "personaId": "fixture_persona_work",
+          "name": "工作我",
+          "description": "工作场景 persona"
+        }
+      ]
+    },
+    "profile_feed_core": {
+      "description": "我的作品、作者作品、生活记录与评论。",
+      "myPostIds": [
+        "fixture_moment_001",
+        "fixture_post_lifestyle_001"
+      ],
+      "authorPostIds": [
+        "fixture_photo_001",
+        "fixture_photo_002",
+        "fixture_post_photography_001"
+      ],
+      "commentIds": [
+        "fixture_comment_photo_001"
+      ]
+    },
+    "relationship_core": {
+      "description": "关注、互关、拉黑、可聊天、可通话能力矩阵。",
+      "relationships": [
+        {
+          "sourceUserId": "fixture_user_current",
+          "targetUserId": "fixture_user_photo",
+          "following": true,
+          "mutualFollow": true,
+          "blocked": false,
+          "canChat": true,
+          "canCall": true
+        },
+        {
+          "sourceUserId": "fixture_user_current",
+          "targetUserId": "fixture_user_friend",
+          "following": true,
+          "mutualFollow": true,
+          "blocked": false,
+          "canChat": true,
+          "canCall": true
+        },
+        {
+          "sourceUserId": "fixture_user_current",
+          "targetUserId": "fixture_user_weekend_1",
+          "following": true,
+          "mutualFollow": true,
+          "blocked": false,
+          "canChat": true,
+          "canCall": true
+        }
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "user_profile_basic",
+      "title": "用户主页与关系能力契约种子",
+      "type": "user_profile",
+      "domainId": "user",
+      "seedRefs": [
+        "user_profile_core",
+        "persona_core",
+        "profile_feed_core",
+        "relationship_core"
+      ],
+      "uiExpectations": {
+        "userIds": [
+          "fixture_user_current",
+          "fixture_user_photo"
+        ],
+        "textFragments": [
+          "契约当前用户",
+          "契约摄影师",
+          "日常我"
+        ]
+      },
+      "remoteExpectations": {
+        "profileUserIds": [
+          "fixture_user_current",
+          "fixture_user_photo"
+        ],
+        "personaIds": [
+          "fixture_persona_daily",
+          "fixture_persona_work"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    }
+  ]
+}

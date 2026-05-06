@@ -38,6 +38,7 @@
 | **multi-cloud-deploy-overlay** | prod 侧部署覆盖层与切换 | **优先** |
 | **gray-release-to-prod** | G5c 灰度步进 + SLO 卡点 + 回滚 | **优先** |
 | **local-gamma-mirror** | 提交前左移预测试，复用 gamma 语义与旅程 | **并行配套** |
+| **multi-environment-instance-isolation** | 端侧多模拟器实例与 beta/gamma 单套服务生命周期 | **并行配套** |
 
 ## 验收标准概要
 
