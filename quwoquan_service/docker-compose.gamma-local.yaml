@@ -286,7 +286,7 @@ services:
       retries: 10
 
   gamma-proxy:
-    image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8-alpine}"
+    image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8.4-alpine}"
     depends_on:
       content-service:
         condition: service_healthy

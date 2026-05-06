@@ -323,7 +323,7 @@ pre_pull_local_gamma_images() {
     docker.io/library/golang:1.24.3-alpine
     docker.io/library/python:3.11-slim
     docker.io/library/alpine:3.19
-    docker.io/library/caddy:2.8-alpine
+    docker.io/library/caddy:2.8.4-alpine
   )
   for image in "${images[@]}"; do
     echo "[gamma-ecs] pre-pulling ${image}"

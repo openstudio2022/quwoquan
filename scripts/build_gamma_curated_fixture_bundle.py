@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 
 import argparse
 import hashlib
@@ -7,7 +6,7 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Set
 
 ROOT = Path(__file__).resolve().parents[1]
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
@@ -21,7 +20,7 @@ USER_SCENARIO = "user/test_fixtures/scenarios/user_scenarios.json"
 CIRCLE_SCENARIO = "social/circle/test_fixtures/scenarios/circle_scenarios.json"
 CHAT_SCENARIO = "messages/chat/test_fixtures/scenarios/chat_scenarios.json"
 
-CURATED_REFS: dict[str, list[str]] = {
+CURATED_REFS: Dict[str, List[str]] = {
     CONTENT_SCENARIO: [
         "content_discovery_core",
     ],
@@ -103,11 +102,11 @@ MEDIA_FIELD_NAMES = {
 DROP = object()
 
 
-def read_json(path: Path) -> dict[str, Any]:
+def read_json(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def write_json(path: Path, payload: dict[str, Any]) -> None:
+def write_json(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -121,7 +120,7 @@ def scenario_curated_path(relative_path: str) -> Path:
     return source.with_name(source.stem + ".gamma-curated.json")
 
 
-def row_id(row: dict[str, Any], *keys: str) -> str:
+def row_id(row: Dict[str, Any], *keys: str) -> str:
     for key in keys:
         value = row.get(key)
         if isinstance(value, str) and value.strip():
@@ -129,7 +128,7 @@ def row_id(row: dict[str, Any], *keys: str) -> str:
     return ""
 
 
-def tracked_media_object_keys() -> set[str]:
+def tracked_media_object_keys() -> Set[str]:
     payload = subprocess.run(
         ["git", "ls-files", str(MEDIA_ROOT.relative_to(ROOT))],
         cwd=str(ROOT),
@@ -137,7 +136,7 @@ def tracked_media_object_keys() -> set[str]:
         capture_output=True,
         check=True,
     )
-    tracked: set[str] = set()
+    tracked: Set[str] = set()
     for line in payload.stdout.splitlines():
         relative = line.strip()
         if not relative:
@@ -152,12 +151,12 @@ def tracked_media_object_keys() -> set[str]:
 
 def prune_untracked_media_refs(
     value: Any,
-    tracked_keys: set[str],
+    tracked_keys: Set[str],
     *,
     field_name: str = "",
 ) -> Any:
     if isinstance(value, dict):
-        pruned: dict[str, Any] = {}
+        pruned: Dict[str, Any] = {}
         for key, nested in value.items():
             next_value = prune_untracked_media_refs(
                 nested,
@@ -169,7 +168,7 @@ def prune_untracked_media_refs(
             pruned[key] = next_value
         return pruned
     if isinstance(value, list):
-        items: list[Any] = []
+        items: List[Any] = []
         for nested in value:
             next_value = prune_untracked_media_refs(
                 nested,
@@ -192,7 +191,7 @@ def prune_untracked_media_refs(
     return value
 
 
-def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str, Any]:
+def prune_seed_payload(relative_path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     seed_sets = payload.get("seedSets") or {}
 
     if relative_path == CONTENT_SCENARIO:
@@ -310,9 +309,9 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
     return payload
 
 
-def build_curated_scenarios() -> list[str]:
+def build_curated_scenarios() -> List[str]:
     tracked_keys = tracked_media_object_keys()
-    written: list[str] = []
+    written: List[str] = []
     for relative_path, refs in CURATED_REFS.items():
         source_path = METADATA_ROOT / relative_path
         payload = read_json(source_path)
@@ -345,9 +344,9 @@ def build_curated_scenarios() -> list[str]:
     return written
 
 
-def build_gamma_manifest() -> dict[str, Any]:
+def build_gamma_manifest() -> Dict[str, Any]:
     manifest = read_json(GAMMA_MANIFEST)
-    seed_refs: list[dict[str, Any]] = []
+    seed_refs: List[Dict[str, Any]] = []
     for entry in manifest.get("seedRefs", []):
         fixture_path = str(entry.get("fixturePath") or "").strip()
         curated_refs = CURATED_REFS.get(fixture_path)
@@ -368,8 +367,8 @@ def build_gamma_manifest() -> dict[str, Any]:
     return next_manifest
 
 
-def walk_media_refs(value: Any, field_name: str = "") -> list[str]:
-    refs: list[str] = []
+def walk_media_refs(value: Any, field_name: str = "") -> List[str]:
+    refs: List[str] = []
     if isinstance(value, dict):
         for key, nested in value.items():
             refs.extend(walk_media_refs(nested, str(key)))
@@ -388,7 +387,7 @@ def walk_media_refs(value: Any, field_name: str = "") -> list[str]:
     return refs
 
 
-def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
+def build_media_bundle(curated_paths: List[str]) -> Dict[str, Any]:
     object_keys = sorted(
         {
             ref
@@ -396,7 +395,7 @@ def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
             for ref in walk_media_refs(read_json(ROOT / relative_path))
         }
     )
-    media_objects: list[dict[str, Any]] = []
+    media_objects: List[Dict[str, Any]] = []
     image_count = 0
     for object_key in object_keys:
         path = MEDIA_ROOT / object_key
@@ -434,7 +433,7 @@ def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
     }
 
 
-def sync_media_root(bundle: dict[str, Any], output_root: Path) -> None:
+def sync_media_root(bundle: Dict[str, Any], output_root: Path) -> None:
     if output_root.exists():
         shutil.rmtree(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
