@@ -38,6 +38,11 @@ BAD_ANSWER_TOKENS = (
     "工具观察",
     "工具结果",
 )
+ASSISTANT_SURFACE_ID = "personalAssistantDialog"
+ASSISTANT_ROUTE_ID = "assistantPersonal"
+CLIENT_APP_VERSION = "ci-smoke"
+CLIENT_PLATFORM = "linux"
+SESSION_ID = format(int(time.time() * 1000000), "x")
 
 
 class ProbeFailure(RuntimeError):
@@ -105,10 +110,43 @@ def read_scenario(scenario_id: str) -> Dict[str, Any]:
     )
 
 
-def request_headers(user_id: str, test_auth_token: str, with_json: bool = False) -> Dict[str, str]:
+def build_surface_headers(
+    *,
+    user_id: str,
+    test_auth_token: str,
+    operation_id: str,
+    client_page_id: str,
+    accept: str,
+    with_json: bool = False,
+) -> Dict[str, str]:
+    ts = format(int(time.time() * 1000000), "x")
+    rand = format(int(time.time_ns() % (36**4)), "x")
+    trace_id = "APP.{0}.{1}.{2}.{3}.{4}".format(
+        SESSION_ID,
+        ASSISTANT_SURFACE_ID,
+        operation_id,
+        ts,
+        rand,
+    )
+    request_id = "APP.{0}.{1}.{2}.{3}".format(
+        ASSISTANT_SURFACE_ID,
+        operation_id,
+        ts,
+        rand,
+    )
     headers = {
-        "Accept": "application/json",
+        "Accept": accept,
         "X-Client-User-Id": user_id,
+        "X-Client-Page-Id": client_page_id,
+        "X-Client-Surface-Id": ASSISTANT_SURFACE_ID,
+        "X-Client-Route-Id": ASSISTANT_ROUTE_ID,
+        "X-Client-Operation-Id": operation_id,
+        "X-Client-Session-Id": SESSION_ID,
+        "X-Client-Sent-At": dt.datetime.now().isoformat(),
+        "X-Client-Device-Platform": CLIENT_PLATFORM,
+        "X-Client-App-Version": CLIENT_APP_VERSION,
+        "X-Trace-Id": trace_id,
+        "X-Request-Id": request_id,
         "X-Test-Local-Gamma": "true",
     }
     if test_auth_token:
@@ -126,6 +164,8 @@ def request_json(
     method: str,
     user_id: str,
     test_auth_token: str,
+    operation_id: str,
+    client_page_id: str,
     body: Optional[Dict[str, Any]] = None,
     timeout_seconds: int,
 ) -> Dict[str, Any]:
@@ -136,7 +176,14 @@ def request_json(
     req = urllib.request.Request(
         url,
         data=raw_body,
-        headers=request_headers(user_id, test_auth_token, with_json=body is not None),
+        headers=build_surface_headers(
+            user_id=user_id,
+            test_auth_token=test_auth_token,
+            operation_id=operation_id,
+            client_page_id=client_page_id,
+            accept="application/json",
+            with_json=body is not None,
+        ),
         method=method,
     )
     ctx = ssl._create_unverified_context()
@@ -168,7 +215,16 @@ def healthz_ok(base_url: str, test_auth_token: str, timeout_seconds: int) -> boo
     url = base_url.rstrip("/") + "/healthz"
     req = urllib.request.Request(
         url,
-        headers=request_headers("assistant_pr_smoke_health", test_auth_token),
+        headers={
+            "Accept": "application/json",
+            "X-Client-User-Id": "assistant_pr_smoke_health",
+            "X-Test-Local-Gamma": "true",
+            **(
+                {"Authorization": "Bearer " + test_auth_token, "X-Test-Auth-Token": test_auth_token}
+                if test_auth_token
+                else {}
+            ),
+        },
         method="GET",
     )
     ctx = ssl._create_unverified_context()
@@ -214,10 +270,17 @@ def decode_sse_frame(lines: List[str]) -> Optional[Dict[str, Any]]:
             data_lines.append(line.split(":", 1)[1].lstrip())
     if not data_lines:
         return None
+    raw_payload = "\n".join(data_lines)
     try:
-        payload = json.loads("\n".join(data_lines))
+        payload = json.loads(raw_payload)
     except ValueError as exc:
-        raise ProbeFailure("stream_decode_error", "invalid assistant SSE frame: {0}".format(exc))
+        message = "invalid assistant SSE frame: {0}".format(exc)
+        if isinstance(exc, json.JSONDecodeError):
+            start = max(exc.pos - 180, 0)
+            end = min(exc.pos + 180, len(raw_payload))
+            snippet = raw_payload[start:end].replace("\n", "\\n").replace("\r", "\\r")
+            message = "{0} | snippet={1}".format(message, snippet)
+        raise ProbeFailure("stream_decode_error", message)
     payload["_sseEventName"] = event_name
     return payload
 
@@ -244,7 +307,14 @@ def stream_assistant_turn(
     url = base_url.rstrip("/") + "/v1/assistant/turns/{0}/stream".format(turn_id)
     connection, path = open_http_connection(url, stall_timeout_seconds)
     body = "{}"
-    headers = request_headers(user_id, test_auth_token, with_json=True)
+    headers = build_surface_headers(
+        user_id=user_id,
+        test_auth_token=test_auth_token,
+        operation_id="StreamAssistantTurn",
+        client_page_id="assistant.stream.assistant.turn",
+        accept="text/event-stream",
+        with_json=True,
+    )
     started = time.monotonic()
     try:
         connection.request("POST", path, body=body, headers=headers)
@@ -445,6 +515,8 @@ def main() -> int:
             method="POST",
             user_id=args.user_id,
             test_auth_token=args.test_auth_token,
+            operation_id="CreateAssistantConversation",
+            client_page_id="assistant.create.assistant.conversation",
             body={"summary": "assistant protocol smoke {0}".format(args.scenario_id)},
             timeout_seconds=args.request_timeout_seconds,
         )
@@ -471,6 +543,8 @@ def main() -> int:
             method="POST",
             user_id=args.user_id,
             test_auth_token=args.test_auth_token,
+            operation_id="CreateAssistantTurn",
+            client_page_id="assistant.create.assistant.turn",
             body={
                 "turnType": "user",
                 "skillId": scenario.get("skillId", ""),
