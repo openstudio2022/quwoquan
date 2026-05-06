@@ -127,8 +127,8 @@ APP_ENV=prod SERVICE_NAME=seed-box CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSI
 
 运行口径补充：
 
-- `beta` 在开发机本地联调时只允许一套组合拓扑，重新启动前必须停止旧实例。
-- `gamma` 在 ECS 或 local-gamma mirror 中都只允许一套组合拓扑；部署 / mirror 切换应先清理历史实例再启动新实例。
+- `beta` 在开发机本地联调时只允许一套组合拓扑，重新启动前必须停止已有实例。
+- `gamma` 在 ECS 或 local-gamma mirror 中都只允许一套组合拓扑；部署 / mirror 切换应先清理已有实例再启动新实例。
 - 多实例能力只属于端侧 App 进程，不属于 `seed-box` / `recommendation-service` 这类组合进程。
 
 3) 发布前全量门禁：

@@ -51,8 +51,6 @@ CURATED_CONTENT_POST_IDS = {
     "fixture_video_001",
     "fixture_post_travel_001",
     "fixture_post_citywalk_001",
-    "fixture_post_tech_001",
-    "fixture_post_outdoor_001",
 }
 CURATED_CONTENT_COMMENT_IDS = {"fixture_comment_photo_001"}
 CURATED_USER_IDS = {
@@ -67,10 +65,6 @@ CURATED_USER_IDS = {
     "fixture_user_owner",
     "fixture_user_travel_owner",
     "fixture_user_commenter",
-    "fixture_user_travel_01",
-    "fixture_user_citywalk_01",
-    "fixture_user_tech_01",
-    "fixture_user_outdoor_01",
 }
 CURATED_CIRCLE_IDS = {
     "fixture_circle_life",
@@ -79,10 +73,6 @@ CURATED_CIRCLE_IDS = {
     "fixture_circle_travel",
     "fixture_circle_food",
     "fixture_circle_city",
-    "fixture_circle_travel_01",
-    "fixture_circle_citywalk_01",
-    "fixture_circle_tech_01",
-    "fixture_circle_outdoor_01",
 }
 CURATED_CHAT_CONVERSATION_IDS = {
     "fixture_conv_direct",
@@ -194,7 +184,11 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
             if key in CURATED_CIRCLE_IDS
         }
         seed["members"] = {
-            key: value
+            key: [
+                row
+                for row in value
+                if row_id(row, "userId") in CURATED_USER_IDS
+            ]
             for key, value in (seed.get("members") or {}).items()
             if key in CURATED_CIRCLE_IDS
         }
