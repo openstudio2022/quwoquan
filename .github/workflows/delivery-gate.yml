@@ -55,7 +55,8 @@ jobs:
         uses: syntaqx/setup-kustomize@v1
       - name: 安装 Python 依赖 (rec-model-service)
         run: |
-          pip install -r quwoquan_service/services/rec-model-service/requirements.txt
+          python3 -m venv quwoquan_service/services/rec-model-service/.venv
+          quwoquan_service/services/rec-model-service/.venv/bin/python -m pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: Gate (quwoquan_service)
         run: |
           bash scripts/gate_repo.sh --scope service

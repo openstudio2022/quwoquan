@@ -151,7 +151,7 @@ Future<void> _sendAndExpect(
     final pageFinder = find.byType(PersonalAssistantConversationPage);
     final context = tester.element(pageFinder);
     final container = ProviderScope.containerOf(context);
-    print(
+    debugPrint(
       '[assistant-env-smoke] start scenario=${scenario.id} runtimeEnv=$runtimeEnv profile=$_assistantSmokeProfile',
     );
     unawaited(
@@ -161,7 +161,7 @@ Future<void> _sendAndExpect(
     );
     await _pumpUntilStreamStarts(tester);
     await _pumpUntilStreamSettled(tester);
-    print(
+    debugPrint(
       '[assistant-env-smoke] settled scenario=${scenario.id} runtimeEnv=$runtimeEnv',
     );
     return container.read(personalAssistantStreamControllerProvider);
