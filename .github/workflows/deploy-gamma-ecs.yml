@@ -36,7 +36,7 @@ jobs:
       - name: 设置 Dart
         uses: dart-lang/setup-dart@v1
       - name: 安装 kustomize
-        uses: syntaqx/setup-kustomize@v1
+        run: bash scripts/install_kustomize.sh
       - name: 安装 Python 依赖 (rec-model-service)
         run: pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: 准备 personal_assistant/.env
