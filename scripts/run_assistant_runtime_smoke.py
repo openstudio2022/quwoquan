@@ -370,10 +370,7 @@ def stream_assistant_turn(
                     retryable=True,
                 )
             try:
-                if hasattr(response.fp, "read1"):
-                    chunk = response.fp.read1(4096)
-                else:
-                    chunk = response.fp.read(4096)
+                chunk = response.read(4096)
             except socket.timeout:
                 raise ProbeFailure(
                     "stream_stalled",
