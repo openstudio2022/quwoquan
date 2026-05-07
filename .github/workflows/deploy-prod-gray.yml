@@ -115,7 +115,8 @@ jobs:
       PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
     steps:
       - uses: actions/checkout@v4
-      - uses: syntaqx/setup-kustomize@v1
+      - name: 安装 kustomize
+        run: bash scripts/install_kustomize.sh
       - name: Install kubectl
         run: |
           curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
