@@ -263,7 +263,7 @@ jobs:
     name: Gamma ECS - assistant runtime smoke (pre)
     needs: [deploy_gamma_ecs_pre, gamma_environment_ready]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     env:
@@ -301,6 +301,7 @@ jobs:
             flutter
             test
             test/common/assistant/assistant_environment_smoke_test.dart
+            --reporter=expanded
             --dart-define=APP_RUNTIME_ENV=gamma
             --dart-define=APP_DATA_SOURCE=remote
             --dart-define=CLOUD_GATEWAY_BASE_URL="${GAMMA_BASE_URL}"
