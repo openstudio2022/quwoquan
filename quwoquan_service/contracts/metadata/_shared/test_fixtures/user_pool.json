@@ -211,19 +211,19 @@
         "objectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 314652,
-        "sourceHash": "sha256:a46dcf5bfd715a61572f6867446d1acb0d3054fc6c235d75413729c96b883650"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 45458,
+        "sourceHash": "sha256:98697a43d32295581560c8c5da1bce191baff7cc48524f85d2951ce97e675cde"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_current/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 2570495,
-        "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 134839,
+        "sourceHash": "sha256:680394855ec2aa542043a2ed116d3175b56dae5f911a813844b5ab889a96f029"
       },
       "bio": "用于 alpha/beta/gamma 的当前用户主页。",
       "personaRefs": [
@@ -482,19 +482,19 @@
         "objectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 379661,
-        "sourceHash": "sha256:6502fcc381a5f4e985749a0a1521abeb6f7ab54057662738f53979d3400892cc"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 45645,
+        "sourceHash": "sha256:c96fb53f68ca4287d695e8e679db00956b80dc8f0f5d1bc537f05498d3924399"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_photo/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 1857474,
-        "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 87721,
+        "sourceHash": "sha256:d25c53422b1b661ea73961f26c26ac3088b6ccb31e3421aa84960fa80f86effd"
       },
       "bio": "作者主页契约数据。",
       "personaRefs": [],
@@ -657,19 +657,19 @@
         "objectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 315882,
-        "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 46440,
+        "sourceHash": "sha256:849b1ab51ab84db69212be1e41640e801b47e381177144412ab726a6598aa75b"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_travel/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 2522887,
-        "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 101548,
+        "sourceHash": "sha256:86c2e3b10a31e674f0affea48737ebdece2abe102386b786dc220ebdd75e0bd7"
       },
       "bio": "旅行、天气和行程记录作者。",
       "personaRefs": [],
@@ -830,19 +830,19 @@
         "objectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 185953,
-        "sourceHash": "sha256:672248481e539def9d67847f3f1fc50561d0566f6f674fc4136c538c97a6761d"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 47684,
+        "sourceHash": "sha256:3472d9f447a531f31d20213f08d6cdbe9aa97a96e25be52f74b452d42227c3dc"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_video/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 2686628,
-        "sourceHash": "sha256:12a60e2b0ed98e1e382a77503dcda66a0f12f783d1db8b1aeadf30aae399058f"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 121216,
+        "sourceHash": "sha256:72a98bb5d59796f46aa9cd3055fae7a06d0cddba466929145fdbb430139adc4d"
       },
       "bio": "视频剪辑与城市影像作者。",
       "personaRefs": [],
@@ -1010,19 +1010,19 @@
         "objectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 408056,
-        "sourceHash": "sha256:a65a83ac7cb4ca02c18108bed8922a7a1c238871fbbd844848afc11ae9427d6c"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 53347,
+        "sourceHash": "sha256:56ed83f04fe6e45cf823a161e40039be9d3efacaffbd17e3173a6275ad24a13f"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_article/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 1794125,
-        "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 134506,
+        "sourceHash": "sha256:80d3b65c86a50112af363304e05e199d69100fc5b8d0bb744a387da431a96ea4"
       },
       "bio": "文章、攻略与长图文作者。",
       "personaRefs": [],
@@ -1129,19 +1129,19 @@
         "objectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 397870,
-        "sourceHash": "sha256:8e87b258e620ace60d04fb5111b628106e44786505233f83508351b5a1b1aaf7"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 54949,
+        "sourceHash": "sha256:7a0f571a707963aaf78d445c3e6a78525e6c570a7dc7fd5dfee4188c24ebc41e"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_friend/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 1117608,
-        "sourceHash": "sha256:37dc09790fcc630ecfe492e0332a73575e571006a14b5836f03f5c82951a6bea"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 95211,
+        "sourceHash": "sha256:869067a18762f2afc5a8998c01be99845d8d29beedb9578ccaa50dbf266d05ec"
       },
       "bio": "与当前用户互关的同好。",
       "personaRefs": [],
@@ -1305,19 +1305,19 @@
         "objectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 278112,
-        "sourceHash": "sha256:f70940c147e344f69f607bf39c408003f44df3bf0f67b8de5243f77c11345361"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 43291,
+        "sourceHash": "sha256:f90b4e806067a7f2d4eb2bba5e23096a05590cb5404270314aa8d854f38d8e84"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 2570495,
-        "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 125632,
+        "sourceHash": "sha256:6e58c00e0b353777926769f7a04d798219837579885c446c5251fbd69771a7c0"
       },
       "bio": "周末群成员，也是联系人同好。",
       "personaRefs": [],
@@ -1492,19 +1492,19 @@
         "objectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 401995,
-        "sourceHash": "sha256:8a3ae06e776a6441eb747732d62cd5562b2d0cd1e7d5d8f125407d252bce583d"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 35109,
+        "sourceHash": "sha256:aa6a2fd13a218a207b0da2a3178443e7b4d50ab9e723a1eebaecb542c6338ebd"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_weekend_2/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 2062449,
-        "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 96160,
+        "sourceHash": "sha256:0fc85f6a5bf8152fe0393d3f3667a5addeeae2aab387ecabfeb77c85f3eade23"
       },
       "bio": "周末群成员，提供路线建议。",
       "personaRefs": [],
@@ -1679,19 +1679,19 @@
         "objectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 301039,
-        "sourceHash": "sha256:804f9b8f31bd1b322159af180d16a127d49f39bacca662c57a43e85179568a82"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 51408,
+        "sourceHash": "sha256:33e282d5323aff713c7b0dddf56cb069555d33e76bb1922e789fcce78fb86f88"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_owner/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 1119236,
-        "sourceHash": "sha256:42766ca9d90c1d9253d8194f40de15c5fc4bdd7b378bce1f9ea4378304544e8c"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 124977,
+        "sourceHash": "sha256:bbe1bc1030fc07fd077b3eb99725c0b6e4adb8ed5f027b293e6e5902e178e18d"
       },
       "bio": "摄影圈 owner，用于圈子权限和群聊同步验证。",
       "personaRefs": [],
@@ -1845,19 +1845,19 @@
         "objectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 404830,
-        "sourceHash": "sha256:0282971cbebfb093e2d5371f416c77a8f49f15c1810cb02255341a45c3100fd6"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 38987,
+        "sourceHash": "sha256:46f7c958a359fbc1456ecb19d1cf5beeac7da5e8e122e6bc77ec2f0c779fedcc"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_travel_owner/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 2136545,
-        "sourceHash": "sha256:584102cd74b9d094b22edfed04691aab7813486fe76d9a7a9de20ca58a0bbca3"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 122552,
+        "sourceHash": "sha256:ef4a68db9c72d6861443b39762c30e67025cbc0a235b76a8c0356a93e2c85bd5"
       },
       "bio": "旅行圈 owner，用于圈子成员引用完整性验证。",
       "personaRefs": [],
@@ -2014,19 +2014,19 @@
         "objectKey": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 418320,
-        "sourceHash": "sha256:301045d656936605a700cf1b329d55fea7faed8800684384377b8c3b92c86c1e"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 50862,
+        "sourceHash": "sha256:afa64ec0de5efc732dc1057735d21e964a934078a43555793418feb66bca9515"
       },
       "backgroundMedia": {
         "objectKey": "media/background/user/fixture_user_commenter/v1/background.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 1212244,
-        "sourceHash": "sha256:f19e6de501ad9d1f01af8184e3490b19c6a44d47c17d51ad2edd1e6960e428b8"
+        "width": 1200,
+        "height": 480,
+        "sizeBytes": 139615,
+        "sourceHash": "sha256:cb1e1e097c7ef969e87f9db1c463c78ff0111e19107c68867029a88304aba9cc"
       },
       "bio": "内容详情评论作者，用于作者头像补水验证。",
       "personaRefs": [],
@@ -35386,29 +35386,29 @@
         "objectKey": "media/image/post/fixture_photo_001/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 960,
-        "sizeBytes": 1594628,
-        "sourceHash": "sha256:8fec33d77873f1c94559ccf64b13a919a70662fa4b983aacb3934497f96d44b5"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 102664,
+        "sourceHash": "sha256:f670d8f47da7c06b2c78b51aaaeaa7ca5b74e86263ba8d88f06d71ba0d54327a"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_photo_001/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 960,
-          "sizeBytes": 1594628,
-          "sourceHash": "sha256:8fec33d77873f1c94559ccf64b13a919a70662fa4b983aacb3934497f96d44b5"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 102664,
+          "sourceHash": "sha256:f670d8f47da7c06b2c78b51aaaeaa7ca5b74e86263ba8d88f06d71ba0d54327a"
         },
         {
           "objectKey": "media/image/post/fixture_photo_001/v1/image-2.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 722996,
-          "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 128906,
+          "sourceHash": "sha256:928e113eb8c00a81931619dbfdba452e9daec9624f18393dfaec8e2c7e82cf39"
         }
       ]
     },
@@ -35417,20 +35417,20 @@
         "objectKey": "media/image/post/fixture_photo_002/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 722996,
-        "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 101217,
+        "sourceHash": "sha256:5a935ed8917cf3fd660c67b455ac88f33cd8dcbb0023aadc182258cd7d2e4206"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_photo_002/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 722996,
-          "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 101217,
+          "sourceHash": "sha256:5a935ed8917cf3fd660c67b455ac88f33cd8dcbb0023aadc182258cd7d2e4206"
         }
       ]
     },
@@ -35439,20 +35439,20 @@
         "objectKey": "media/image/post/fixture_photo_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1670734,
-        "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 107439,
+        "sourceHash": "sha256:72b681e14dd691c99a47d70b82de2c55b10b969c46675ec695c70611b0af93d2"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_photo_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1670734,
-          "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 107439,
+          "sourceHash": "sha256:72b681e14dd691c99a47d70b82de2c55b10b969c46675ec695c70611b0af93d2"
         }
       ]
     },
@@ -35461,29 +35461,29 @@
         "objectKey": "media/image/post/fixture_video_001/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1440813,
-        "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 134440,
+        "sourceHash": "sha256:d78b28ae1f6d0ad07c35bddd3d35528752a410b6c14785b76e1d521c05b3a49d"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_video_001/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1440813,
-          "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 134440,
+          "sourceHash": "sha256:d78b28ae1f6d0ad07c35bddd3d35528752a410b6c14785b76e1d521c05b3a49d"
         },
         {
           "objectKey": "media/image/post/fixture_video_001/v1/image-2.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1557209,
-          "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 87301,
+          "sourceHash": "sha256:bee3884fe6d829e5a7caf6b59c5e29d489aa14ef48522b7158f245e21a47958e"
         }
       ]
     },
@@ -35492,29 +35492,29 @@
         "objectKey": "media/image/post/fixture_video_002/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1782764,
-        "sourceHash": "sha256:b3b39214e5640ec0b61df2d7472579e12ba774630c95daa892022a9647918080"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 99973,
+        "sourceHash": "sha256:abdef877ea7d8191f58ecfa90448581a8030a589170826bdb7ea46e9d81244b8"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_video_002/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1782764,
-          "sourceHash": "sha256:b3b39214e5640ec0b61df2d7472579e12ba774630c95daa892022a9647918080"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 99973,
+          "sourceHash": "sha256:abdef877ea7d8191f58ecfa90448581a8030a589170826bdb7ea46e9d81244b8"
         },
         {
           "objectKey": "media/image/post/fixture_video_002/v1/image-2.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 992783,
-          "sourceHash": "sha256:9595b3189c7d8b0839cd034507523d2c00e169bfb0734575481cc55f5c809973"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 100511,
+          "sourceHash": "sha256:c206d6ff17751b6f6f4182a119b96596cc008ce6aa59f7478a0516e236a7a857"
         }
       ]
     },
@@ -35523,29 +35523,29 @@
         "objectKey": "media/image/post/fixture_article_001/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1210083,
-        "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 104182,
+        "sourceHash": "sha256:b00f4d26ed0feeba25f9180b003629fc8a81fecb4dd187040cf79567e02c1214"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_article_001/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1210083,
-          "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 104182,
+          "sourceHash": "sha256:b00f4d26ed0feeba25f9180b003629fc8a81fecb4dd187040cf79567e02c1214"
         },
         {
           "objectKey": "media/image/post/fixture_article_001/v1/image-2.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 838670,
-          "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 149890,
+          "sourceHash": "sha256:66ee4f5489d8bd1031ee92c7f9992f9afd5e309b072bc4223b7c7d59e241a0ac"
         }
       ]
     },
@@ -35554,29 +35554,29 @@
         "objectKey": "media/image/post/fixture_article_002/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 838670,
-        "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 118346,
+        "sourceHash": "sha256:2aa389595aa25a5355ba50c62aff8c96719a9d7763214c0713a7089741415554"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_article_002/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 838670,
-          "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 118346,
+          "sourceHash": "sha256:2aa389595aa25a5355ba50c62aff8c96719a9d7763214c0713a7089741415554"
         },
         {
           "objectKey": "media/image/post/fixture_article_002/v1/image-2.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 963923,
-          "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 125298,
+          "sourceHash": "sha256:7814de89cdce689bb786d272d5e8a524c77dab5e83a7b4658ef10b66dafd8aaf"
         }
       ]
     },
@@ -35585,20 +35585,20 @@
         "objectKey": "media/image/post/fixture_moment_001/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 107245,
+        "sourceHash": "sha256:16796d65d08b96b78b9af868e624f6b458137fcca66a4e35c7a5dbc84b84abf4"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_moment_001/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 107245,
+          "sourceHash": "sha256:16796d65d08b96b78b9af868e624f6b458137fcca66a4e35c7a5dbc84b84abf4"
         }
       ]
     },
@@ -35607,20 +35607,20 @@
         "objectKey": "media/image/post/fixture_moment_002/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1400255,
-        "sourceHash": "sha256:0f9610d3b555fc68849d6740c0e05b398effef57829ffbd2993a525dd6db1a05"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 90667,
+        "sourceHash": "sha256:dfb8a799de0eede2ec7de76ab512ec6b814a58e41ca23035a5130f38d8a4eb5f"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_moment_002/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1400255,
-          "sourceHash": "sha256:0f9610d3b555fc68849d6740c0e05b398effef57829ffbd2993a525dd6db1a05"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 90667,
+          "sourceHash": "sha256:dfb8a799de0eede2ec7de76ab512ec6b814a58e41ca23035a5130f38d8a4eb5f"
         }
       ]
     },
@@ -35629,20 +35629,20 @@
         "objectKey": "media/image/post/fixture_moment_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 992783,
-        "sourceHash": "sha256:9643ef41d94280d288d560128f95761eb4dcc162110015785df7c506537b7d9c"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 114886,
+        "sourceHash": "sha256:71d1961b029006d84b0f3cb9303c8f825f4206cdd8ef240438ff69a0b955cc12"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_moment_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 992783,
-          "sourceHash": "sha256:9643ef41d94280d288d560128f95761eb4dcc162110015785df7c506537b7d9c"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 114886,
+          "sourceHash": "sha256:71d1961b029006d84b0f3cb9303c8f825f4206cdd8ef240438ff69a0b955cc12"
         }
       ]
     },
@@ -35722,20 +35722,20 @@
         "objectKey": "media/image/post/fixture_post_photography_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 926795,
-        "sourceHash": "sha256:c418865c74cd1d0271e09d418511f2486317b79b8e0392722e5c94390c077fed"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 121684,
+        "sourceHash": "sha256:58029ddb2f70a364f0f6e7840a74c16756758658d0c3fa963b82ee5e7691c84c"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_photography_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 926795,
-          "sourceHash": "sha256:c418865c74cd1d0271e09d418511f2486317b79b8e0392722e5c94390c077fed"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 121684,
+          "sourceHash": "sha256:58029ddb2f70a364f0f6e7840a74c16756758658d0c3fa963b82ee5e7691c84c"
         }
       ]
     },
@@ -35877,20 +35877,20 @@
         "objectKey": "media/image/post/fixture_post_photography_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 722996,
-        "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 133908,
+        "sourceHash": "sha256:378fcedf3b27ea8c7146270a7ece289331554dac5a3080508dfdf80f0e5db8ee"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_photography_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 722996,
-          "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 133908,
+          "sourceHash": "sha256:378fcedf3b27ea8c7146270a7ece289331554dac5a3080508dfdf80f0e5db8ee"
         }
       ]
     },
@@ -36032,20 +36032,20 @@
         "objectKey": "media/image/post/fixture_post_photography_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1195935,
-        "sourceHash": "sha256:7011f9a191006b1c1a5d59a8aea96c7ea3b2da5f2d4cc9d3e21780d364cb7f71"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 114604,
+        "sourceHash": "sha256:b4336db2084085f69bb1ac69b4ca35e1777b8facbfc5fd23e031263ecc0c0ea4"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_photography_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1195935,
-          "sourceHash": "sha256:7011f9a191006b1c1a5d59a8aea96c7ea3b2da5f2d4cc9d3e21780d364cb7f71"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 114604,
+          "sourceHash": "sha256:b4336db2084085f69bb1ac69b4ca35e1777b8facbfc5fd23e031263ecc0c0ea4"
         }
       ]
     },
@@ -36187,20 +36187,20 @@
         "objectKey": "media/image/post/fixture_post_photography_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 926795,
-        "sourceHash": "sha256:c418865c74cd1d0271e09d418511f2486317b79b8e0392722e5c94390c077fed"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 108103,
+        "sourceHash": "sha256:c646297f2dc8a7c8cc486952b08164b00905cd1ce7cca6096291cf884e37b1e0"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_photography_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 926795,
-          "sourceHash": "sha256:c418865c74cd1d0271e09d418511f2486317b79b8e0392722e5c94390c077fed"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 108103,
+          "sourceHash": "sha256:c646297f2dc8a7c8cc486952b08164b00905cd1ce7cca6096291cf884e37b1e0"
         }
       ]
     },
@@ -36342,20 +36342,20 @@
         "objectKey": "media/image/post/fixture_post_photography_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 722996,
-        "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 139141,
+        "sourceHash": "sha256:9357b44c4965bbcfcace78fc335ac3fe4c700c505b6faa77262c8daccdb5ffe7"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_photography_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 722996,
-          "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 139141,
+          "sourceHash": "sha256:9357b44c4965bbcfcace78fc335ac3fe4c700c505b6faa77262c8daccdb5ffe7"
         }
       ]
     },
@@ -36497,20 +36497,20 @@
         "objectKey": "media/image/post/fixture_post_photography_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1195935,
-        "sourceHash": "sha256:7011f9a191006b1c1a5d59a8aea96c7ea3b2da5f2d4cc9d3e21780d364cb7f71"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 128378,
+        "sourceHash": "sha256:2159d02b6ef6620f132d98a1cc6f5205f07ae2d26a2d90ddfe3bd798bdff7303"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_photography_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1195935,
-          "sourceHash": "sha256:7011f9a191006b1c1a5d59a8aea96c7ea3b2da5f2d4cc9d3e21780d364cb7f71"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 128378,
+          "sourceHash": "sha256:2159d02b6ef6620f132d98a1cc6f5205f07ae2d26a2d90ddfe3bd798bdff7303"
         }
       ]
     },
@@ -36723,20 +36723,20 @@
         "objectKey": "media/image/post/fixture_post_travel_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1557209,
-        "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 126939,
+        "sourceHash": "sha256:580fe90362a845dd74fda3160ab7e38ca1373b42b466bd7bba45030d5912b19d"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_travel_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1557209,
-          "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 126939,
+          "sourceHash": "sha256:580fe90362a845dd74fda3160ab7e38ca1373b42b466bd7bba45030d5912b19d"
         }
       ]
     },
@@ -36878,20 +36878,20 @@
         "objectKey": "media/image/post/fixture_post_travel_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1440813,
-        "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 146512,
+        "sourceHash": "sha256:9a86de19d285451ae3934b4ea5a1fffe2ab9fff227426f7bd12d7339c13f01cb"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_travel_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1440813,
-          "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 146512,
+          "sourceHash": "sha256:9a86de19d285451ae3934b4ea5a1fffe2ab9fff227426f7bd12d7339c13f01cb"
         }
       ]
     },
@@ -37033,20 +37033,20 @@
         "objectKey": "media/image/post/fixture_post_travel_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1670734,
-        "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 137377,
+        "sourceHash": "sha256:da919307e09313fb582885dd6691d4407c90db6a2f200a4e2f25851de5a2dc53"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_travel_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1670734,
-          "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 137377,
+          "sourceHash": "sha256:da919307e09313fb582885dd6691d4407c90db6a2f200a4e2f25851de5a2dc53"
         }
       ]
     },
@@ -37188,20 +37188,20 @@
         "objectKey": "media/image/post/fixture_post_travel_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1557209,
-        "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 102261,
+        "sourceHash": "sha256:065d2f4bd76e47e3ab10b3e4d86d1a952b4df9ff7ca74a6eced8b411edd7aedb"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_travel_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1557209,
-          "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 102261,
+          "sourceHash": "sha256:065d2f4bd76e47e3ab10b3e4d86d1a952b4df9ff7ca74a6eced8b411edd7aedb"
         }
       ]
     },
@@ -37343,20 +37343,20 @@
         "objectKey": "media/image/post/fixture_post_travel_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1440813,
-        "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 125097,
+        "sourceHash": "sha256:4eaf22d893a5c56691f85199077e9a4497c80303b4216316b031b0d6a8760c22"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_travel_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1440813,
-          "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 125097,
+          "sourceHash": "sha256:4eaf22d893a5c56691f85199077e9a4497c80303b4216316b031b0d6a8760c22"
         }
       ]
     },
@@ -37498,20 +37498,20 @@
         "objectKey": "media/image/post/fixture_post_travel_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1670734,
-        "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 145790,
+        "sourceHash": "sha256:50cf5bbbd904b4571932f14e64489c10c34ef0d145e6dea0fcaca6a0a1c716af"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_travel_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1670734,
-          "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 145790,
+          "sourceHash": "sha256:50cf5bbbd904b4571932f14e64489c10c34ef0d145e6dea0fcaca6a0a1c716af"
         }
       ]
     },
@@ -37724,20 +37724,20 @@
         "objectKey": "media/image/post/fixture_post_citywalk_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1195935,
-        "sourceHash": "sha256:7011f9a191006b1c1a5d59a8aea96c7ea3b2da5f2d4cc9d3e21780d364cb7f71"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 114654,
+        "sourceHash": "sha256:d06c6c630de3b0c4389cb6796fbf8450a1ec21232ce262806a9d67153e807a0b"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_citywalk_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1195935,
-          "sourceHash": "sha256:7011f9a191006b1c1a5d59a8aea96c7ea3b2da5f2d4cc9d3e21780d364cb7f71"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 114654,
+          "sourceHash": "sha256:d06c6c630de3b0c4389cb6796fbf8450a1ec21232ce262806a9d67153e807a0b"
         }
       ]
     },
@@ -37879,20 +37879,20 @@
         "objectKey": "media/image/post/fixture_post_citywalk_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 992783,
-        "sourceHash": "sha256:b11e70245c536592de48a7bf0e18a8b248744c046b655d8c5e8333956733a08f"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 125738,
+        "sourceHash": "sha256:ab30c2c78e7b160d8c7ebb590c5a8577b3ebbf4d6cbdf4b5911ba3b52950e936"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_citywalk_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 992783,
-          "sourceHash": "sha256:b11e70245c536592de48a7bf0e18a8b248744c046b655d8c5e8333956733a08f"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 125738,
+          "sourceHash": "sha256:ab30c2c78e7b160d8c7ebb590c5a8577b3ebbf4d6cbdf4b5911ba3b52950e936"
         }
       ]
     },
@@ -38034,20 +38034,20 @@
         "objectKey": "media/image/post/fixture_post_citywalk_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1782764,
-        "sourceHash": "sha256:5009e7ae8e813cdec176eaa1c57334f7d8cc6e2f80ffa3868c3b0c634205ad56"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 109051,
+        "sourceHash": "sha256:749e2ff85842a2334cf6aab71ea579213cb5aa1f0461dfa3e1ddcb22beaadffa"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_citywalk_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1782764,
-          "sourceHash": "sha256:5009e7ae8e813cdec176eaa1c57334f7d8cc6e2f80ffa3868c3b0c634205ad56"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 109051,
+          "sourceHash": "sha256:749e2ff85842a2334cf6aab71ea579213cb5aa1f0461dfa3e1ddcb22beaadffa"
         }
       ]
     },
@@ -38189,20 +38189,20 @@
         "objectKey": "media/image/post/fixture_post_citywalk_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1195935,
-        "sourceHash": "sha256:7011f9a191006b1c1a5d59a8aea96c7ea3b2da5f2d4cc9d3e21780d364cb7f71"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 137977,
+        "sourceHash": "sha256:7dd62de0ff8a012c01c9aa4948901a6c8337afa365055817cd427cab2bb6ea54"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_citywalk_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1195935,
-          "sourceHash": "sha256:7011f9a191006b1c1a5d59a8aea96c7ea3b2da5f2d4cc9d3e21780d364cb7f71"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 137977,
+          "sourceHash": "sha256:7dd62de0ff8a012c01c9aa4948901a6c8337afa365055817cd427cab2bb6ea54"
         }
       ]
     },
@@ -38344,20 +38344,20 @@
         "objectKey": "media/image/post/fixture_post_citywalk_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 992783,
-        "sourceHash": "sha256:28a61f370c4a45234c6238f50d46beedfec9a39a9901c00fdcb8d18cec9c61e1"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 132143,
+        "sourceHash": "sha256:2aaafe5c5c033e87bdcd242b1bed13e31911fc04d23cfe3574c1a2e6a4a6893f"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_citywalk_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 992783,
-          "sourceHash": "sha256:28a61f370c4a45234c6238f50d46beedfec9a39a9901c00fdcb8d18cec9c61e1"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 132143,
+          "sourceHash": "sha256:2aaafe5c5c033e87bdcd242b1bed13e31911fc04d23cfe3574c1a2e6a4a6893f"
         }
       ]
     },
@@ -38499,20 +38499,20 @@
         "objectKey": "media/image/post/fixture_post_citywalk_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1782764,
-        "sourceHash": "sha256:dfa2146df0a839fe01cda860c848be3a22b93a4baed4f7ebda4a7b296c6a3586"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 144316,
+        "sourceHash": "sha256:71ba5f01e431d9599b82d76868bd9b644c4aae2fd3a1393f056ebbf57532bea2"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_citywalk_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1782764,
-          "sourceHash": "sha256:dfa2146df0a839fe01cda860c848be3a22b93a4baed4f7ebda4a7b296c6a3586"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 144316,
+          "sourceHash": "sha256:71ba5f01e431d9599b82d76868bd9b644c4aae2fd3a1393f056ebbf57532bea2"
         }
       ]
     },
@@ -38725,20 +38725,20 @@
         "objectKey": "media/image/post/fixture_post_food_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 799016,
-        "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 141023,
+        "sourceHash": "sha256:8de0092db1fde4bab873b13f0d0d1326dda6e808098c2732e890dc842b81c408"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_food_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 799016,
-          "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 141023,
+          "sourceHash": "sha256:8de0092db1fde4bab873b13f0d0d1326dda6e808098c2732e890dc842b81c408"
         }
       ]
     },
@@ -38880,20 +38880,20 @@
         "objectKey": "media/image/post/fixture_post_food_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1237210,
-        "sourceHash": "sha256:6b4b5a9f8ac23315fd1632d842aba638da047cd9301e7bbf6fdfb529fb8deb27"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 146605,
+        "sourceHash": "sha256:6d95ff15c41f54ea71c3ad8c7227b16bf097dea87e7410c9555600cf92b5f715"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_food_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1237210,
-          "sourceHash": "sha256:6b4b5a9f8ac23315fd1632d842aba638da047cd9301e7bbf6fdfb529fb8deb27"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 146605,
+          "sourceHash": "sha256:6d95ff15c41f54ea71c3ad8c7227b16bf097dea87e7410c9555600cf92b5f715"
         }
       ]
     },
@@ -39035,20 +39035,20 @@
         "objectKey": "media/image/post/fixture_post_food_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1400255,
-        "sourceHash": "sha256:0f9610d3b555fc68849d6740c0e05b398effef57829ffbd2993a525dd6db1a05"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 101477,
+        "sourceHash": "sha256:7a3ebf53bcc48a81c3b995885e3231994faea5d0699f19f5669764a1efc95d32"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_food_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1400255,
-          "sourceHash": "sha256:0f9610d3b555fc68849d6740c0e05b398effef57829ffbd2993a525dd6db1a05"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 101477,
+          "sourceHash": "sha256:7a3ebf53bcc48a81c3b995885e3231994faea5d0699f19f5669764a1efc95d32"
         }
       ]
     },
@@ -39190,20 +39190,20 @@
         "objectKey": "media/image/post/fixture_post_food_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 799016,
-        "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 124064,
+        "sourceHash": "sha256:46f289352de56c698daac02383d80db6969268373c47f0649175c5643d6053e7"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_food_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 799016,
-          "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 124064,
+          "sourceHash": "sha256:46f289352de56c698daac02383d80db6969268373c47f0649175c5643d6053e7"
         }
       ]
     },
@@ -39345,20 +39345,20 @@
         "objectKey": "media/image/post/fixture_post_food_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1237210,
-        "sourceHash": "sha256:6b4b5a9f8ac23315fd1632d842aba638da047cd9301e7bbf6fdfb529fb8deb27"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 124388,
+        "sourceHash": "sha256:63c6bcde443d0f9e3696b8e12defac4ee0e4f8cb5ac3a4c16ec34be440ecb48b"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_food_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1237210,
-          "sourceHash": "sha256:6b4b5a9f8ac23315fd1632d842aba638da047cd9301e7bbf6fdfb529fb8deb27"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 124388,
+          "sourceHash": "sha256:63c6bcde443d0f9e3696b8e12defac4ee0e4f8cb5ac3a4c16ec34be440ecb48b"
         }
       ]
     },
@@ -39500,20 +39500,20 @@
         "objectKey": "media/image/post/fixture_post_food_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1400255,
-        "sourceHash": "sha256:0f9610d3b555fc68849d6740c0e05b398effef57829ffbd2993a525dd6db1a05"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 127121,
+        "sourceHash": "sha256:c50637d51429591f9ea2ac511b62e6ab6161e5fb000b1b4f6b711b647e7be92f"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_food_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1400255,
-          "sourceHash": "sha256:0f9610d3b555fc68849d6740c0e05b398effef57829ffbd2993a525dd6db1a05"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 127121,
+          "sourceHash": "sha256:c50637d51429591f9ea2ac511b62e6ab6161e5fb000b1b4f6b711b647e7be92f"
         }
       ]
     },
@@ -39726,20 +39726,20 @@
         "objectKey": "media/image/post/fixture_post_coffee_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 112306,
+        "sourceHash": "sha256:6cd265163c329637435ad257675cc60bb7f6fb2f6db065a446c542b538af9f7e"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_coffee_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 112306,
+          "sourceHash": "sha256:6cd265163c329637435ad257675cc60bb7f6fb2f6db065a446c542b538af9f7e"
         }
       ]
     },
@@ -39881,20 +39881,20 @@
         "objectKey": "media/image/post/fixture_post_coffee_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 799016,
-        "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 123471,
+        "sourceHash": "sha256:012a9bc79337f10976e99be0eac09f80cfb4f238ee1e5c0a867854aacd92b7d1"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_coffee_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 799016,
-          "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 123471,
+          "sourceHash": "sha256:012a9bc79337f10976e99be0eac09f80cfb4f238ee1e5c0a867854aacd92b7d1"
         }
       ]
     },
@@ -40036,20 +40036,20 @@
         "objectKey": "media/image/post/fixture_post_coffee_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1237210,
-        "sourceHash": "sha256:6b4b5a9f8ac23315fd1632d842aba638da047cd9301e7bbf6fdfb529fb8deb27"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 140867,
+        "sourceHash": "sha256:9d2af557d5d7e3357e28d2bb3af4e6a2b8f0c6b70fb1b4d33c8ee83042e41cc4"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_coffee_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1237210,
-          "sourceHash": "sha256:6b4b5a9f8ac23315fd1632d842aba638da047cd9301e7bbf6fdfb529fb8deb27"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 140867,
+          "sourceHash": "sha256:9d2af557d5d7e3357e28d2bb3af4e6a2b8f0c6b70fb1b4d33c8ee83042e41cc4"
         }
       ]
     },
@@ -40191,20 +40191,20 @@
         "objectKey": "media/image/post/fixture_post_coffee_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 119962,
+        "sourceHash": "sha256:b1571d67ca8f1725cd9db1c7569b56e3232bdf5c9d922632444b8ecae513b441"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_coffee_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 119962,
+          "sourceHash": "sha256:b1571d67ca8f1725cd9db1c7569b56e3232bdf5c9d922632444b8ecae513b441"
         }
       ]
     },
@@ -40346,20 +40346,20 @@
         "objectKey": "media/image/post/fixture_post_coffee_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 799016,
-        "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 145575,
+        "sourceHash": "sha256:9f7387ca1d6056739039f182418c88f250c80cd076026abc885d30648d4992dd"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_coffee_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 799016,
-          "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 145575,
+          "sourceHash": "sha256:9f7387ca1d6056739039f182418c88f250c80cd076026abc885d30648d4992dd"
         }
       ]
     },
@@ -40501,20 +40501,20 @@
         "objectKey": "media/image/post/fixture_post_coffee_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1237210,
-        "sourceHash": "sha256:6b4b5a9f8ac23315fd1632d842aba638da047cd9301e7bbf6fdfb529fb8deb27"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 111885,
+        "sourceHash": "sha256:acd125b65994573fe12edaa819f41b64762110faec077e460b70d10b4812c8a1"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_coffee_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1237210,
-          "sourceHash": "sha256:6b4b5a9f8ac23315fd1632d842aba638da047cd9301e7bbf6fdfb529fb8deb27"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 111885,
+          "sourceHash": "sha256:acd125b65994573fe12edaa819f41b64762110faec077e460b70d10b4812c8a1"
         }
       ]
     },
@@ -40727,20 +40727,20 @@
         "objectKey": "media/image/post/fixture_post_lifestyle_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 838670,
-        "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 96905,
+        "sourceHash": "sha256:3ca80ab8c9874b0d6b5b7d4bbd666e3aeefc8ed06ca3d736fbf1d7121c349e10"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_lifestyle_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 838670,
-          "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 96905,
+          "sourceHash": "sha256:3ca80ab8c9874b0d6b5b7d4bbd666e3aeefc8ed06ca3d736fbf1d7121c349e10"
         }
       ]
     },
@@ -40882,20 +40882,20 @@
         "objectKey": "media/image/post/fixture_post_lifestyle_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 799016,
-        "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 102108,
+        "sourceHash": "sha256:aa3c6d4b06cfb1dd4ee54292130335a5b3918acf636228fc9b22ff28c21439f6"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_lifestyle_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 799016,
-          "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 102108,
+          "sourceHash": "sha256:aa3c6d4b06cfb1dd4ee54292130335a5b3918acf636228fc9b22ff28c21439f6"
         }
       ]
     },
@@ -41037,20 +41037,20 @@
         "objectKey": "media/image/post/fixture_post_lifestyle_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 140930,
+        "sourceHash": "sha256:e6470c5507e4d0adc0d104de0dc59eb966e32a5badb90a2348a4d7f7b1f7c98c"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_lifestyle_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 140930,
+          "sourceHash": "sha256:e6470c5507e4d0adc0d104de0dc59eb966e32a5badb90a2348a4d7f7b1f7c98c"
         }
       ]
     },
@@ -41192,20 +41192,20 @@
         "objectKey": "media/image/post/fixture_post_lifestyle_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 838670,
-        "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 114548,
+        "sourceHash": "sha256:c05d62b947586308234adf5aff0dc7bca8462500099a5fd1974a9e5ce81068a3"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_lifestyle_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 838670,
-          "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 114548,
+          "sourceHash": "sha256:c05d62b947586308234adf5aff0dc7bca8462500099a5fd1974a9e5ce81068a3"
         }
       ]
     },
@@ -41347,20 +41347,20 @@
         "objectKey": "media/image/post/fixture_post_lifestyle_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 799016,
-        "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 126716,
+        "sourceHash": "sha256:e2ff8992cc9cee6b8777062d9ff04adb0dc132a0c7b5fc4c70410014a4d97cfa"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_lifestyle_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 799016,
-          "sourceHash": "sha256:354fe88ea2e55952af66c26aa729bc02bc711ea6a4f567a3517598dd9908dfb5"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 126716,
+          "sourceHash": "sha256:e2ff8992cc9cee6b8777062d9ff04adb0dc132a0c7b5fc4c70410014a4d97cfa"
         }
       ]
     },
@@ -41502,20 +41502,20 @@
         "objectKey": "media/image/post/fixture_post_lifestyle_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 167554,
+        "sourceHash": "sha256:129e10db4178bc32ac3a56b60a56b50b043e96f2cd1375c2bac37c7525e4b684"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_lifestyle_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 167554,
+          "sourceHash": "sha256:129e10db4178bc32ac3a56b60a56b50b043e96f2cd1375c2bac37c7525e4b684"
         }
       ]
     },
@@ -41728,20 +41728,20 @@
         "objectKey": "media/image/post/fixture_post_fitness_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1782764,
-        "sourceHash": "sha256:124839437e36542f42c006926f776bc3653f7094b88ca9bd8e6ba82cd1b8de3c"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 116511,
+        "sourceHash": "sha256:dad1155ed18909f788309cfe7ea3c57e116e1b28a51409503e72edb427ae7860"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_fitness_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1782764,
-          "sourceHash": "sha256:124839437e36542f42c006926f776bc3653f7094b88ca9bd8e6ba82cd1b8de3c"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 116511,
+          "sourceHash": "sha256:dad1155ed18909f788309cfe7ea3c57e116e1b28a51409503e72edb427ae7860"
         }
       ]
     },
@@ -41883,20 +41883,20 @@
         "objectKey": "media/image/post/fixture_post_fitness_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1557209,
-        "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 122946,
+        "sourceHash": "sha256:6d1e0cc35ad9f56ae05c89080a7c443897b635816b3c6b48e71c55ba9308ff29"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_fitness_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1557209,
-          "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 122946,
+          "sourceHash": "sha256:6d1e0cc35ad9f56ae05c89080a7c443897b635816b3c6b48e71c55ba9308ff29"
         }
       ]
     },
@@ -42038,20 +42038,20 @@
         "objectKey": "media/image/post/fixture_post_fitness_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1570899,
-        "sourceHash": "sha256:8f5629ce73f4b280a267c987901e217ff1343ff319d1dca9674a293f09310e82"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 129599,
+        "sourceHash": "sha256:18156b7393525d2cb56d1ddf67431ae7497705aa40a0d42cd6163ea504fd57c8"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_fitness_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1570899,
-          "sourceHash": "sha256:8f5629ce73f4b280a267c987901e217ff1343ff319d1dca9674a293f09310e82"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 129599,
+          "sourceHash": "sha256:18156b7393525d2cb56d1ddf67431ae7497705aa40a0d42cd6163ea504fd57c8"
         }
       ]
     },
@@ -42193,20 +42193,20 @@
         "objectKey": "media/image/post/fixture_post_fitness_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1782764,
-        "sourceHash": "sha256:1b08e62cb4ecf2d9768ebc22416b0cc487b0748197b8787cd5e349d8eefd27d5"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 146314,
+        "sourceHash": "sha256:4ea16b0d215aa21c00d0d73cbefc570fdc03c00f44f480c335cef5c68cb9bfe7"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_fitness_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1782764,
-          "sourceHash": "sha256:1b08e62cb4ecf2d9768ebc22416b0cc487b0748197b8787cd5e349d8eefd27d5"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 146314,
+          "sourceHash": "sha256:4ea16b0d215aa21c00d0d73cbefc570fdc03c00f44f480c335cef5c68cb9bfe7"
         }
       ]
     },
@@ -42348,20 +42348,20 @@
         "objectKey": "media/image/post/fixture_post_fitness_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1557209,
-        "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 119195,
+        "sourceHash": "sha256:4b625bd97f40b9e9bcb01bd98cf24806bd4180b962f3b6bd65b5f2a1199cf6a3"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_fitness_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1557209,
-          "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 119195,
+          "sourceHash": "sha256:4b625bd97f40b9e9bcb01bd98cf24806bd4180b962f3b6bd65b5f2a1199cf6a3"
         }
       ]
     },
@@ -42503,20 +42503,20 @@
         "objectKey": "media/image/post/fixture_post_fitness_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1570899,
-        "sourceHash": "sha256:8f5629ce73f4b280a267c987901e217ff1343ff319d1dca9674a293f09310e82"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 127450,
+        "sourceHash": "sha256:c2e4799f570f79d250457b7b37059e82c072ec59993f6726745cccd8c82a69e2"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_fitness_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1570899,
-          "sourceHash": "sha256:8f5629ce73f4b280a267c987901e217ff1343ff319d1dca9674a293f09310e82"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 127450,
+          "sourceHash": "sha256:c2e4799f570f79d250457b7b37059e82c072ec59993f6726745cccd8c82a69e2"
         }
       ]
     },
@@ -42729,20 +42729,20 @@
         "objectKey": "media/image/post/fixture_post_pet_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 106848,
+        "sourceHash": "sha256:33ed893c83078b64aacf69a4356e409f5a0223158b4607f9a30cc6bed054e008"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_pet_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 106848,
+          "sourceHash": "sha256:33ed893c83078b64aacf69a4356e409f5a0223158b4607f9a30cc6bed054e008"
         }
       ]
     },
@@ -42884,20 +42884,20 @@
         "objectKey": "media/image/post/fixture_post_pet_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 895287,
-        "sourceHash": "sha256:a5127d45bb5de5f5497021858bbacf0308bc3f4149c9c57807dba008642303f1"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 94195,
+        "sourceHash": "sha256:6a9b158f269d879673db7d1ad7a407a62f17576bc270dab6650fd431f8c9f2d2"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_pet_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 895287,
-          "sourceHash": "sha256:a5127d45bb5de5f5497021858bbacf0308bc3f4149c9c57807dba008642303f1"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 94195,
+          "sourceHash": "sha256:6a9b158f269d879673db7d1ad7a407a62f17576bc270dab6650fd431f8c9f2d2"
         }
       ]
     },
@@ -43039,20 +43039,20 @@
         "objectKey": "media/image/post/fixture_post_pet_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1258403,
-        "sourceHash": "sha256:22f16b7fff713eff0526ca79ea80d093d930496cc872bd955c8e5063daa07abb"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 143079,
+        "sourceHash": "sha256:7baeaed3e378e5369c69b7f3896d3e3b9a6d550ebdf0fa8f6a80931d8e89ced8"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_pet_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1258403,
-          "sourceHash": "sha256:22f16b7fff713eff0526ca79ea80d093d930496cc872bd955c8e5063daa07abb"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 143079,
+          "sourceHash": "sha256:7baeaed3e378e5369c69b7f3896d3e3b9a6d550ebdf0fa8f6a80931d8e89ced8"
         }
       ]
     },
@@ -43194,20 +43194,20 @@
         "objectKey": "media/image/post/fixture_post_pet_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 146140,
+        "sourceHash": "sha256:3c47449678ac5a1ec23bb9dfde700edc693dfc090e71a8d212fa5038741070b8"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_pet_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 146140,
+          "sourceHash": "sha256:3c47449678ac5a1ec23bb9dfde700edc693dfc090e71a8d212fa5038741070b8"
         }
       ]
     },
@@ -43349,20 +43349,20 @@
         "objectKey": "media/image/post/fixture_post_pet_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 895287,
-        "sourceHash": "sha256:a5127d45bb5de5f5497021858bbacf0308bc3f4149c9c57807dba008642303f1"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 151748,
+        "sourceHash": "sha256:c4c25ab646cb5f1e83c6f9e508fd47bbdcc82cdeb6541bf5fc127cd4e85e59cb"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_pet_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 895287,
-          "sourceHash": "sha256:a5127d45bb5de5f5497021858bbacf0308bc3f4149c9c57807dba008642303f1"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 151748,
+          "sourceHash": "sha256:c4c25ab646cb5f1e83c6f9e508fd47bbdcc82cdeb6541bf5fc127cd4e85e59cb"
         }
       ]
     },
@@ -43504,20 +43504,20 @@
         "objectKey": "media/image/post/fixture_post_pet_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1258403,
-        "sourceHash": "sha256:22f16b7fff713eff0526ca79ea80d093d930496cc872bd955c8e5063daa07abb"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 144405,
+        "sourceHash": "sha256:48b520372866a4ffcea189bbcab0506ab1514e31183b21f441424a86834048a7"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_pet_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1258403,
-          "sourceHash": "sha256:22f16b7fff713eff0526ca79ea80d093d930496cc872bd955c8e5063daa07abb"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 144405,
+          "sourceHash": "sha256:48b520372866a4ffcea189bbcab0506ab1514e31183b21f441424a86834048a7"
         }
       ]
     },
@@ -43730,20 +43730,20 @@
         "objectKey": "media/image/post/fixture_post_parenting_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 151590,
+        "sourceHash": "sha256:e80b0e9910aac2a343001205028de55048abaf22e8b22a6a982e7b72462c7657"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_parenting_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 151590,
+          "sourceHash": "sha256:e80b0e9910aac2a343001205028de55048abaf22e8b22a6a982e7b72462c7657"
         }
       ]
     },
@@ -43885,20 +43885,20 @@
         "objectKey": "media/image/post/fixture_post_parenting_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1745925,
-        "sourceHash": "sha256:eb3edcdf8e33dc88ddef0488d183a59d2eebe154d8ce329575995d8776ba2370"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 153001,
+        "sourceHash": "sha256:7f1f249404af8d7a22d4f4141bda53e9ebb4801990ff91fbb7aedab78083f98b"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_parenting_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1745925,
-          "sourceHash": "sha256:eb3edcdf8e33dc88ddef0488d183a59d2eebe154d8ce329575995d8776ba2370"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 153001,
+          "sourceHash": "sha256:7f1f249404af8d7a22d4f4141bda53e9ebb4801990ff91fbb7aedab78083f98b"
         }
       ]
     },
@@ -44040,20 +44040,20 @@
         "objectKey": "media/image/post/fixture_post_parenting_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1058627,
-        "sourceHash": "sha256:4a3df21c5c57eb0dbdc2454b3a79b451773c44cfe840d5f25a4cb6142a5e481a"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 115291,
+        "sourceHash": "sha256:ee61c7c8306b8bfdc23cb08bdf164c2c858ee8db5b2a64d9359f4f1705efc64f"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_parenting_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1058627,
-          "sourceHash": "sha256:4a3df21c5c57eb0dbdc2454b3a79b451773c44cfe840d5f25a4cb6142a5e481a"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 115291,
+          "sourceHash": "sha256:ee61c7c8306b8bfdc23cb08bdf164c2c858ee8db5b2a64d9359f4f1705efc64f"
         }
       ]
     },
@@ -44195,20 +44195,20 @@
         "objectKey": "media/image/post/fixture_post_parenting_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1698510,
-        "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 107805,
+        "sourceHash": "sha256:41f993ddd26aa762752992ccfa933e0cbab5e2f173cd85ee78e6a003eed6115f"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_parenting_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1698510,
-          "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 107805,
+          "sourceHash": "sha256:41f993ddd26aa762752992ccfa933e0cbab5e2f173cd85ee78e6a003eed6115f"
         }
       ]
     },
@@ -44350,20 +44350,20 @@
         "objectKey": "media/image/post/fixture_post_parenting_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1745925,
-        "sourceHash": "sha256:eb3edcdf8e33dc88ddef0488d183a59d2eebe154d8ce329575995d8776ba2370"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 138116,
+        "sourceHash": "sha256:42d3c917076823c9d0ffae786ba568edeb5e2c3a4ff859982a8f669bc8ea31ca"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_parenting_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1745925,
-          "sourceHash": "sha256:eb3edcdf8e33dc88ddef0488d183a59d2eebe154d8ce329575995d8776ba2370"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 138116,
+          "sourceHash": "sha256:42d3c917076823c9d0ffae786ba568edeb5e2c3a4ff859982a8f669bc8ea31ca"
         }
       ]
     },
@@ -44505,20 +44505,20 @@
         "objectKey": "media/image/post/fixture_post_parenting_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1058627,
-        "sourceHash": "sha256:4a3df21c5c57eb0dbdc2454b3a79b451773c44cfe840d5f25a4cb6142a5e481a"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 124315,
+        "sourceHash": "sha256:c84e95643d6e77201d8c565234d1e0b074f193335705241d0995c65c7d3a3070"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_parenting_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1058627,
-          "sourceHash": "sha256:4a3df21c5c57eb0dbdc2454b3a79b451773c44cfe840d5f25a4cb6142a5e481a"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 124315,
+          "sourceHash": "sha256:c84e95643d6e77201d8c565234d1e0b074f193335705241d0995c65c7d3a3070"
         }
       ]
     },
@@ -44731,20 +44731,20 @@
         "objectKey": "media/image/post/fixture_post_outdoor_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1258403,
-        "sourceHash": "sha256:22f16b7fff713eff0526ca79ea80d093d930496cc872bd955c8e5063daa07abb"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 111363,
+        "sourceHash": "sha256:a791c5bdb9d35162ac3c7b6613523e6da275625303f11ee5e380b9a701f1606b"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_outdoor_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1258403,
-          "sourceHash": "sha256:22f16b7fff713eff0526ca79ea80d093d930496cc872bd955c8e5063daa07abb"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 111363,
+          "sourceHash": "sha256:a791c5bdb9d35162ac3c7b6613523e6da275625303f11ee5e380b9a701f1606b"
         }
       ]
     },
@@ -44886,20 +44886,20 @@
         "objectKey": "media/image/post/fixture_post_outdoor_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1670734,
-        "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 140213,
+        "sourceHash": "sha256:e899629bb41bf59c1273ffdd3cd512c5f8cadebbd2d7c2c2a0956d6c005d4865"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_outdoor_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1670734,
-          "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 140213,
+          "sourceHash": "sha256:e899629bb41bf59c1273ffdd3cd512c5f8cadebbd2d7c2c2a0956d6c005d4865"
         }
       ]
     },
@@ -45041,20 +45041,20 @@
         "objectKey": "media/image/post/fixture_post_outdoor_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1557209,
-        "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 106491,
+        "sourceHash": "sha256:622fbf95494573813bb593976dd1f82c4ff124874da1d8c5b6207bf463978e2d"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_outdoor_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1557209,
-          "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 106491,
+          "sourceHash": "sha256:622fbf95494573813bb593976dd1f82c4ff124874da1d8c5b6207bf463978e2d"
         }
       ]
     },
@@ -45196,20 +45196,20 @@
         "objectKey": "media/image/post/fixture_post_outdoor_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1258403,
-        "sourceHash": "sha256:22f16b7fff713eff0526ca79ea80d093d930496cc872bd955c8e5063daa07abb"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 152836,
+        "sourceHash": "sha256:a190e3ae6d69dc5e850d8d40ab980d5e4b2241910bcbbb036cbb71f2cb88b761"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_outdoor_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1258403,
-          "sourceHash": "sha256:22f16b7fff713eff0526ca79ea80d093d930496cc872bd955c8e5063daa07abb"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 152836,
+          "sourceHash": "sha256:a190e3ae6d69dc5e850d8d40ab980d5e4b2241910bcbbb036cbb71f2cb88b761"
         }
       ]
     },
@@ -45351,20 +45351,20 @@
         "objectKey": "media/image/post/fixture_post_outdoor_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1670734,
-        "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 109708,
+        "sourceHash": "sha256:42fe6289da7c7b9c22701f83ed3f9bda8f346dd4be48bd6c58522be9b9c67b0e"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_outdoor_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1670734,
-          "sourceHash": "sha256:f9d2e008c9c52005f0b676f26dbd2a58a9e2e074d7c533b81f73022a36de17f6"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 109708,
+          "sourceHash": "sha256:42fe6289da7c7b9c22701f83ed3f9bda8f346dd4be48bd6c58522be9b9c67b0e"
         }
       ]
     },
@@ -45506,20 +45506,20 @@
         "objectKey": "media/image/post/fixture_post_outdoor_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1557209,
-        "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 123503,
+        "sourceHash": "sha256:c3ced7f10066f1e054f22bcd5526a62c6abb329129459f006e0ce0bc14b8a7b0"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_outdoor_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1557209,
-          "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 123503,
+          "sourceHash": "sha256:c3ced7f10066f1e054f22bcd5526a62c6abb329129459f006e0ce0bc14b8a7b0"
         }
       ]
     },
@@ -45732,20 +45732,20 @@
         "objectKey": "media/image/post/fixture_post_tech_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1210083,
-        "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 137067,
+        "sourceHash": "sha256:813dcb166a156411c0f1244e7592b2fd14814efeb3b51f1df32b78311d8c3ebb"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_tech_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1210083,
-          "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 137067,
+          "sourceHash": "sha256:813dcb166a156411c0f1244e7592b2fd14814efeb3b51f1df32b78311d8c3ebb"
         }
       ]
     },
@@ -45887,20 +45887,20 @@
         "objectKey": "media/image/post/fixture_post_tech_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 963923,
-        "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 123492,
+        "sourceHash": "sha256:46ee46e25a073150378c9f9c65ed0d93d4fae4c3a1101e5a6e6f78626a118013"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_tech_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 963923,
-          "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 123492,
+          "sourceHash": "sha256:46ee46e25a073150378c9f9c65ed0d93d4fae4c3a1101e5a6e6f78626a118013"
         }
       ]
     },
@@ -46042,20 +46042,20 @@
         "objectKey": "media/image/post/fixture_post_tech_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1432097,
-        "sourceHash": "sha256:239dade0c4a7d0463c39e5c3b7800c84529fdc36c2dae5e049b68f04e47aad23"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 163890,
+        "sourceHash": "sha256:9255a4d4bf3bcf4f4d93b269457f7aef9c19bd98d22cab002bc0c53c02177072"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_tech_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1432097,
-          "sourceHash": "sha256:239dade0c4a7d0463c39e5c3b7800c84529fdc36c2dae5e049b68f04e47aad23"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 163890,
+          "sourceHash": "sha256:9255a4d4bf3bcf4f4d93b269457f7aef9c19bd98d22cab002bc0c53c02177072"
         }
       ]
     },
@@ -46197,20 +46197,20 @@
         "objectKey": "media/image/post/fixture_post_tech_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1210083,
-        "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 109269,
+        "sourceHash": "sha256:f023dd54ab9c627389cb0580e336818cbb7bd42da75247bbeb2faaaafddee1bc"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_tech_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1210083,
-          "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 109269,
+          "sourceHash": "sha256:f023dd54ab9c627389cb0580e336818cbb7bd42da75247bbeb2faaaafddee1bc"
         }
       ]
     },
@@ -46352,20 +46352,20 @@
         "objectKey": "media/image/post/fixture_post_tech_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 963923,
-        "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 139129,
+        "sourceHash": "sha256:6c742bbcf348dbc810710c851ada0db6d07ba74e17ff34cc295bdf8acf660c9e"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_tech_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 963923,
-          "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 139129,
+          "sourceHash": "sha256:6c742bbcf348dbc810710c851ada0db6d07ba74e17ff34cc295bdf8acf660c9e"
         }
       ]
     },
@@ -46507,20 +46507,20 @@
         "objectKey": "media/image/post/fixture_post_tech_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1432097,
-        "sourceHash": "sha256:aeb228b6d99246ea3af76a3e6f27c34f8a2659b47cfa36c6cc7864fade82c8a9"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 159794,
+        "sourceHash": "sha256:e2ef9e67d411b909462d8d73323f627ba387d71af19489b5bc358e53deb8633c"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_tech_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1432097,
-          "sourceHash": "sha256:aeb228b6d99246ea3af76a3e6f27c34f8a2659b47cfa36c6cc7864fade82c8a9"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 159794,
+          "sourceHash": "sha256:e2ef9e67d411b909462d8d73323f627ba387d71af19489b5bc358e53deb8633c"
         }
       ]
     },
@@ -46733,20 +46733,20 @@
         "objectKey": "media/image/post/fixture_post_designwriting_003/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 963923,
-        "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 142764,
+        "sourceHash": "sha256:51699e4ecee8e5e0701de26bba18ffb994c4ee7e2ce0f26368d3db4efa7394f2"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_designwriting_003/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 963923,
-          "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 142764,
+          "sourceHash": "sha256:51699e4ecee8e5e0701de26bba18ffb994c4ee7e2ce0f26368d3db4efa7394f2"
         }
       ]
     },
@@ -46888,20 +46888,20 @@
         "objectKey": "media/image/post/fixture_post_designwriting_008/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 838670,
-        "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 133704,
+        "sourceHash": "sha256:3899a08e9277fb30ac2c2bf4ccb802a14d805e7b666919368b06cb76143ed4be"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_designwriting_008/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 838670,
-          "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 133704,
+          "sourceHash": "sha256:3899a08e9277fb30ac2c2bf4ccb802a14d805e7b666919368b06cb76143ed4be"
         }
       ]
     },
@@ -47043,20 +47043,20 @@
         "objectKey": "media/image/post/fixture_post_designwriting_013/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1210083,
-        "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 128760,
+        "sourceHash": "sha256:90655feefeb770b1dfd4d7f60c5d85bc6864c74e1a1e59a1b585b52951faeb12"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_designwriting_013/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1210083,
-          "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 128760,
+          "sourceHash": "sha256:90655feefeb770b1dfd4d7f60c5d85bc6864c74e1a1e59a1b585b52951faeb12"
         }
       ]
     },
@@ -47198,20 +47198,20 @@
         "objectKey": "media/image/post/fixture_post_designwriting_018/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 963923,
-        "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 110940,
+        "sourceHash": "sha256:d33e53f1ef2a60094a1308a597ad18aa7397dd66d1734142c7c26ebd90f1ae21"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_designwriting_018/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 963923,
-          "sourceHash": "sha256:a384302e5c6176ea2b67aab9b62432cd6794fbc29c7c8197eb5650073ce2411c"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 110940,
+          "sourceHash": "sha256:d33e53f1ef2a60094a1308a597ad18aa7397dd66d1734142c7c26ebd90f1ae21"
         }
       ]
     },
@@ -47353,20 +47353,20 @@
         "objectKey": "media/image/post/fixture_post_designwriting_023/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 838670,
-        "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 111274,
+        "sourceHash": "sha256:a0809f23200cba05be94d64b7c8775207ce1207d99f6285f7c189c98d422aa0c"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_designwriting_023/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 838670,
-          "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 111274,
+          "sourceHash": "sha256:a0809f23200cba05be94d64b7c8775207ce1207d99f6285f7c189c98d422aa0c"
         }
       ]
     },
@@ -47508,20 +47508,20 @@
         "objectKey": "media/image/post/fixture_post_designwriting_028/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1280,
-        "height": 720,
-        "sizeBytes": 1210083,
-        "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+        "width": 900,
+        "height": 600,
+        "sizeBytes": 133526,
+        "sourceHash": "sha256:6027117fcb9500551e5387a86e6912115820f065fe5d3870d7896801bf35281d"
       },
       "images": [
         {
           "objectKey": "media/image/post/fixture_post_designwriting_028/v1/cover.png",
           "version": 1,
           "mimeType": "image/png",
-          "width": 1280,
-          "height": 720,
-          "sizeBytes": 1210083,
-          "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158"
+          "width": 900,
+          "height": 600,
+          "sizeBytes": 133526,
+          "sourceHash": "sha256:6027117fcb9500551e5387a86e6912115820f065fe5d3870d7896801bf35281d"
         }
       ]
     },
@@ -49777,19 +49777,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_food/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 433387,
-        "sourceHash": "sha256:d3da980c18b9993108fb6cad451e02b786c061992cada9d3116c598f15bd2b28"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 50469,
+        "sourceHash": "sha256:73aece82a7a7ead770c05f8f837e35f2ce6c0b38788b557deb1d3f280a6c7de6"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_food/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1843350,
-        "sourceHash": "sha256:ab197b9a24fa6faa4841716a0edba172a1452fbbfedca2451942321b4284bd91"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 160356,
+        "sourceHash": "sha256:b56ebf8368111ccaa45977822137e40dd4012433931180622e2e6112d53b306a"
       }
     },
     "fixture_circle_tech": {
@@ -49797,19 +49797,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 433383,
-        "sourceHash": "sha256:bd4d0a0948271cc3ae21191822f0a38a600d45dc91ce4f710405751a82bfeca6"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 53706,
+        "sourceHash": "sha256:5e95eb948a393a7290548a023f9220d7f02f39a214a545ab5117efd9f8c4476e"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_tech/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1901855,
-        "sourceHash": "sha256:99897b5f793992c684eb8bc72fd0d247c4de0bfb2a7cb4e5c5651abc6682c2a7"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 114034,
+        "sourceHash": "sha256:5068b057b1e072a37992a458ce2d63f5f804bbbea5ce7961e05756128721b7a3"
       }
     },
     "fixture_circle_life": {
@@ -49817,19 +49817,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 492731,
-        "sourceHash": "sha256:e1877e1e186ddab049183d3a915fc46583009b9afd1d54110cddff11cfaeb2ed"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 46164,
+        "sourceHash": "sha256:b9972ef1f00e55152cf1ef10f8ae2cee76bc072fda66794070936761c17b8b7a"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_life/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2253108,
-        "sourceHash": "sha256:3a8a42f6576a0b163c01bdc7117f742b9e6da1c56d539d0f91417ddb3fdd5749"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 121953,
+        "sourceHash": "sha256:3278b115b567a56e3e92e48c8483fb1a5c2f2610965935662409832f7f4b9adc"
       }
     },
     "fixture_circle_city": {
@@ -49837,19 +49837,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_city/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 523599,
-        "sourceHash": "sha256:50d921506c0dd2513501cae0e2498087c0a0032a345f19ab315951fa778fdb89"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 35519,
+        "sourceHash": "sha256:31fa0c37d649f2528c0bb8b324d12cbcd057a3d815acfe1b5723a3bb06b35572"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_city/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2472777,
-        "sourceHash": "sha256:d3fa5455f58f22e4d8946236d55d640101901b94ff7c54414c2caafa05360c24"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 107330,
+        "sourceHash": "sha256:55fc869c58f92e6fd60f55a0cb3718af191df60bf9ea364691ab9afde92dac1d"
       }
     },
     "fixture_circle_travel": {
@@ -49857,19 +49857,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 473081,
-        "sourceHash": "sha256:6fd68cbfaf3c3f10dc23c816c784445fc6a826a881f4d2fae957bdabc17de398"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 48897,
+        "sourceHash": "sha256:f3cb34136fffa1a3b140ad9d320ea89edf734cf0b9a4fde17cff0a50a1e47aee"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_travel/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2204168,
-        "sourceHash": "sha256:824c268f3cd030cf0be9d5b520574de6be5204b8e9cc7e54b8dde2e45705cbe6"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 89356,
+        "sourceHash": "sha256:82c00ba7566d576553eea177153a767ac8b31e79d55c3f7ffc043cb82c7018ac"
       }
     },
     "fixture_circle_photo": {
@@ -49877,19 +49877,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 331991,
-        "sourceHash": "sha256:d287af8ef0a7294111145d2dd8f94bae9f316de0e056c5bfbf07b48cea922e6f"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 49424,
+        "sourceHash": "sha256:b3b4547ed15077ee29fb380892d56fba1a3d5f221b2a87550a397d9c18059347"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_photo/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1615223,
-        "sourceHash": "sha256:3e9f21e0cb25f18512b4b8bf60f9888422f001f951d5f9e131079de641b4cd81"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 131089,
+        "sourceHash": "sha256:a92c09c74227309126e45377fe12a3795b6311c1616ed6f4d1a029902ea7cfa0"
       }
     },
     "fixture_circle_photography_01": {
@@ -49897,10 +49897,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_photography_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 331991,
-        "sourceHash": "sha256:d287af8ef0a7294111145d2dd8f94bae9f316de0e056c5bfbf07b48cea922e6f"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 42993,
+        "sourceHash": "sha256:aace8af59709edfe8c9d5b668c50ffc7f866be0e6d030854175180788aafcc51"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_photography_01/v1/cover.jpg",
@@ -49926,10 +49926,10 @@
         "objectKey": "media/image/circle/fixture_circle_photography_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 958071,
-        "sourceHash": "sha256:888426cc9d82429f211ef70af207d829ee68badc382b9f05d2c6608b76f73590"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 129243,
+        "sourceHash": "sha256:e2e2778e38bbc07a0c288909f5fe948d7db13781ea6aaeaf93183e2a1f4495f6"
       }
     },
     "fixture_circle_photography_03": {
@@ -49957,19 +49957,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_photography_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 180288,
-        "sourceHash": "sha256:495c286e5442eec9738599950101567f059670b3bde6c2bddd33f354a4b9c6d8"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 44689,
+        "sourceHash": "sha256:acdf188ed86bbda7bf0e0f21ccaa6e085b2967808d59665149cff6f302631cca"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_photography_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 958071,
-        "sourceHash": "sha256:888426cc9d82429f211ef70af207d829ee68badc382b9f05d2c6608b76f73590"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 97979,
+        "sourceHash": "sha256:f9921200c5e4c0f2e869b92ca2091f1390e11eeee3a948b9b421ab3418c6ae69"
       }
     },
     "fixture_circle_photography_05": {
@@ -50006,10 +50006,10 @@
         "objectKey": "media/image/circle/fixture_circle_photography_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 958071,
-        "sourceHash": "sha256:888426cc9d82429f211ef70af207d829ee68badc382b9f05d2c6608b76f73590"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 139004,
+        "sourceHash": "sha256:7070d996d28d0f79ad4282aa2a6a1774bdd1bb357300b4f16281aa295276b487"
       }
     },
     "fixture_circle_travel_01": {
@@ -50017,10 +50017,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_travel_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 473081,
-        "sourceHash": "sha256:6fd68cbfaf3c3f10dc23c816c784445fc6a826a881f4d2fae957bdabc17de398"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 42456,
+        "sourceHash": "sha256:11ccc16c2f18e0a5a00213e33266e744b0782152b6ea8fb7f87c3469773099de"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_travel_01/v1/cover.jpg",
@@ -50046,10 +50046,10 @@
         "objectKey": "media/image/circle/fixture_circle_travel_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1917345,
-        "sourceHash": "sha256:ad00034f8e0ade35ac555b2219ffce152210edeafabcc42990885b25cd41ed34"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 97878,
+        "sourceHash": "sha256:91c8f1e0a7e87c8184f5a64103bf4193827f9f7df6d3c8d2e372d0334c87a821"
       }
     },
     "fixture_circle_travel_03": {
@@ -50077,19 +50077,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_travel_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 443561,
-        "sourceHash": "sha256:2fca8650433f088385477748b903d01f0060ba58e687edcf9dfbde2cbff2a1ef"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 52560,
+        "sourceHash": "sha256:36360e0eca3643c5884a1dcc3c5e3d2f9b806b5784aa9eebcb4c3e3a7f810804"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_travel_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1917345,
-        "sourceHash": "sha256:ad00034f8e0ade35ac555b2219ffce152210edeafabcc42990885b25cd41ed34"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 120710,
+        "sourceHash": "sha256:266f3cb8f21fef98f83353ba070e907f71bc959ec73cbc2058aa030197127299"
       }
     },
     "fixture_circle_travel_05": {
@@ -50126,10 +50126,10 @@
         "objectKey": "media/image/circle/fixture_circle_travel_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1917345,
-        "sourceHash": "sha256:ad00034f8e0ade35ac555b2219ffce152210edeafabcc42990885b25cd41ed34"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 86406,
+        "sourceHash": "sha256:c184b8943bcce6fce01a039fbc6359e3cde47ab798645006db6e9da98b7ee4ba"
       }
     },
     "fixture_circle_citywalk_01": {
@@ -50137,10 +50137,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_citywalk_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 523599,
-        "sourceHash": "sha256:6ab7e7c49688643aa055877fadc0007278a47eeceb97f12630ea1739c3dfb7c3"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 42080,
+        "sourceHash": "sha256:2173d41cbe942f1151a0ddecbd4e72821ee1bfd6d03ea7696d6797c755a08553"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_citywalk_01/v1/cover.jpg",
@@ -50166,10 +50166,10 @@
         "objectKey": "media/image/circle/fixture_circle_citywalk_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1336589,
-        "sourceHash": "sha256:436ac9834d9d47b9a7966d6caeecce9e653ae73f4a054e55b7420e8353dd47bf"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 158243,
+        "sourceHash": "sha256:b7d4d117edb0598c1b2e410d303e1454c2ff8fc2e8bda02084b2aa01670bea63"
       }
     },
     "fixture_circle_citywalk_03": {
@@ -50197,19 +50197,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_citywalk_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 329775,
-        "sourceHash": "sha256:c7953b70a4a67537d3858017da8841785a84a46b91964b7cac9c2958b3c68d2c"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 37398,
+        "sourceHash": "sha256:a3ccb52770a5725de0dd103ae3696ffbc07daa0a932999c701660a3e008968a0"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_citywalk_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1336589,
-        "sourceHash": "sha256:c1a0d7eca8e0a6169b0eef540c6ae86c1a3562b3b742ac4fc7f177773a1b9540"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 123885,
+        "sourceHash": "sha256:3ff2df75f4a60ea4b262ecdda2a47d872802ed863d143153f8de2d44d9d4eb4f"
       }
     },
     "fixture_circle_citywalk_05": {
@@ -50246,10 +50246,10 @@
         "objectKey": "media/image/circle/fixture_circle_citywalk_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1336589,
-        "sourceHash": "sha256:3b1990f0f6688d5c127766bb717c141302d52dd2a29b5fb55cd0e73432d869be"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 144491,
+        "sourceHash": "sha256:71f9dd2bfd1e6a1f56fb941da6d98fa5f395add838e039d003f8ab2c04c8a456"
       }
     },
     "fixture_circle_food_01": {
@@ -50257,10 +50257,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_food_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 433387,
-        "sourceHash": "sha256:d3da980c18b9993108fb6cad451e02b786c061992cada9d3116c598f15bd2b28"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 36333,
+        "sourceHash": "sha256:4e93757d6b4423c8259518f975d0d52e93f4e0f111808d0e74ab6db0442bf622"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_food_01/v1/cover.jpg",
@@ -50286,10 +50286,10 @@
         "objectKey": "media/image/circle/fixture_circle_food_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1637450,
-        "sourceHash": "sha256:5a873f8bbe84f4b2686359b977ca0e0032e7ecfd4660585231a8cbada13fe98d"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 111624,
+        "sourceHash": "sha256:f5d6b2c2d6fa49e49ba765e8ccc6627654c32f601d6105a9c8c93362dd5ccbb7"
       }
     },
     "fixture_circle_food_03": {
@@ -50317,19 +50317,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_food_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 412926,
-        "sourceHash": "sha256:96a24dad6fa23e6bbecbdc4a61d5b1a346d9867b69f485cf78b06820193b66e0"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 56768,
+        "sourceHash": "sha256:1908031f024e1c81672a7d114c6348bb400662ffec74c5c3ae5ce659dc5d9788"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_food_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1637450,
-        "sourceHash": "sha256:5a873f8bbe84f4b2686359b977ca0e0032e7ecfd4660585231a8cbada13fe98d"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 141507,
+        "sourceHash": "sha256:2bd665d23c253035e200f83babdf48dadb19cab93684cd0ded2cfd360756cc08"
       }
     },
     "fixture_circle_food_05": {
@@ -50366,10 +50366,10 @@
         "objectKey": "media/image/circle/fixture_circle_food_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1637450,
-        "sourceHash": "sha256:5a873f8bbe84f4b2686359b977ca0e0032e7ecfd4660585231a8cbada13fe98d"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 140429,
+        "sourceHash": "sha256:97608fc9c8b10b92a4a754e9a2c9c072a0d75508757bc2355e5ea869802ab764"
       }
     },
     "fixture_circle_coffee_01": {
@@ -50377,10 +50377,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_coffee_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 412926,
-        "sourceHash": "sha256:96a24dad6fa23e6bbecbdc4a61d5b1a346d9867b69f485cf78b06820193b66e0"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 45651,
+        "sourceHash": "sha256:8c7a80b184860c477cc02bf28e0d280a11f71572cd200555ea08f52e31c7531c"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_coffee_01/v1/cover.jpg",
@@ -50406,10 +50406,10 @@
         "objectKey": "media/image/circle/fixture_circle_coffee_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1046257,
-        "sourceHash": "sha256:365fdfeb8765cbcaeae1dcc919da6a89eb0dd324ecb686c1c9a71c98f9d97ecd"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 107087,
+        "sourceHash": "sha256:ca20e813c8cc2a45bb0e9cdee8121cec59f88f8e5cda04db199b540eb8d1a98f"
       }
     },
     "fixture_circle_coffee_03": {
@@ -50437,19 +50437,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_coffee_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 304773,
-        "sourceHash": "sha256:4d4bbf5c597f3731abdbe183023fcc1b5b9f7ae9c21eff742d1f4ad7903b08d3"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 52475,
+        "sourceHash": "sha256:1763a4f4545ff81d760ceeff820e773b6cd2810ceb36183b9d398c690baeb492"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_coffee_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1046257,
-        "sourceHash": "sha256:365fdfeb8765cbcaeae1dcc919da6a89eb0dd324ecb686c1c9a71c98f9d97ecd"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 95620,
+        "sourceHash": "sha256:e69557a163f5a8ed862a52b6b5d2bf6d21047385272031fbfd7bd264ecb4b494"
       }
     },
     "fixture_circle_coffee_05": {
@@ -50486,10 +50486,10 @@
         "objectKey": "media/image/circle/fixture_circle_coffee_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1046257,
-        "sourceHash": "sha256:365fdfeb8765cbcaeae1dcc919da6a89eb0dd324ecb686c1c9a71c98f9d97ecd"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 104534,
+        "sourceHash": "sha256:52c4aab9c570caac1442c4d7c9c4793b2e05322787bfdaf7595f13ba01c4987b"
       }
     },
     "fixture_circle_lifestyle_01": {
@@ -50497,10 +50497,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_lifestyle_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 492731,
-        "sourceHash": "sha256:e1877e1e186ddab049183d3a915fc46583009b9afd1d54110cddff11cfaeb2ed"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 41426,
+        "sourceHash": "sha256:b921c985c71b3c4565695b7092a91079bd329b32b032ea5895c543916297fa3b"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_lifestyle_01/v1/cover.jpg",
@@ -50526,10 +50526,10 @@
         "objectKey": "media/image/circle/fixture_circle_lifestyle_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1046257,
-        "sourceHash": "sha256:365fdfeb8765cbcaeae1dcc919da6a89eb0dd324ecb686c1c9a71c98f9d97ecd"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 112766,
+        "sourceHash": "sha256:3cd1f45dbe0b46ed57838022b743133fdc22786de0aefa89efebba318eeb1090"
       }
     },
     "fixture_circle_lifestyle_03": {
@@ -50557,19 +50557,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_lifestyle_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 304773,
-        "sourceHash": "sha256:4d4bbf5c597f3731abdbe183023fcc1b5b9f7ae9c21eff742d1f4ad7903b08d3"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 47737,
+        "sourceHash": "sha256:b71520541f53eba9cea987ba43e2485655e22cf54f41abff0ea3fd0020d84aa2"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_lifestyle_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1046257,
-        "sourceHash": "sha256:365fdfeb8765cbcaeae1dcc919da6a89eb0dd324ecb686c1c9a71c98f9d97ecd"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 114416,
+        "sourceHash": "sha256:6ca739bc7fef52cfc287f65f3c41efb476da8209acf428dd5245f4a25a57e2a0"
       }
     },
     "fixture_circle_lifestyle_05": {
@@ -50606,10 +50606,10 @@
         "objectKey": "media/image/circle/fixture_circle_lifestyle_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1046257,
-        "sourceHash": "sha256:365fdfeb8765cbcaeae1dcc919da6a89eb0dd324ecb686c1c9a71c98f9d97ecd"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 135596,
+        "sourceHash": "sha256:c0dc0093e685dfe393c8e4d69672185ddfb9377ca8d84ed888884ba6f2f4cd33"
       }
     },
     "fixture_circle_fitness_01": {
@@ -50617,10 +50617,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_fitness_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 468939,
-        "sourceHash": "sha256:92fa5ccb1e9cd4e7a9a74c9576dcc03c7623999bb7e741e096945b1bb882d97f"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 55393,
+        "sourceHash": "sha256:b9827d5ded7d5c0fff96c1354743055b6272fefa269dc041c2f61ad9f00f41df"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_fitness_01/v1/cover.jpg",
@@ -50646,10 +50646,10 @@
         "objectKey": "media/image/circle/fixture_circle_fitness_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2098067,
-        "sourceHash": "sha256:c8f664463b9d810fad852538d29f1cab6971cdb194234558415b2911bbe08f0c"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 161607,
+        "sourceHash": "sha256:d2df9c074004eca382ae596d9bf0ecf13976ca5029dd9d75b1ac8d50a3eed447"
       }
     },
     "fixture_circle_fitness_03": {
@@ -50677,19 +50677,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_fitness_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 459606,
-        "sourceHash": "sha256:712f984ab1a6e91cd3e0acb4f8b9b730deab27b0793cfe25b87515ad75a11984"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 52479,
+        "sourceHash": "sha256:27321021b65dd2f04e76d2ca98df649af6899857658647d83db10142e2bb98e2"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_fitness_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2098067,
-        "sourceHash": "sha256:c8f664463b9d810fad852538d29f1cab6971cdb194234558415b2911bbe08f0c"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 130397,
+        "sourceHash": "sha256:c6b82fd44a0dd1f7c92a766c7b0627af75c674f7f45bd140a9c1c67072008c42"
       }
     },
     "fixture_circle_fitness_05": {
@@ -50726,10 +50726,10 @@
         "objectKey": "media/image/circle/fixture_circle_fitness_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2098067,
-        "sourceHash": "sha256:c8f664463b9d810fad852538d29f1cab6971cdb194234558415b2911bbe08f0c"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 101341,
+        "sourceHash": "sha256:e8b5b2519bfc49d3415405ce01e468139ff6d2e2cd432aab9335c67cd95e0dff"
       }
     },
     "fixture_circle_pet_01": {
@@ -50737,10 +50737,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_pet_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 401072,
-        "sourceHash": "sha256:8ae39fa19b3ac03c86ea9e4ab15b4a0ea9a69dd89667d1667c8911eb68cd2d02"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 56529,
+        "sourceHash": "sha256:f64cdefabbb75c68908c45dbff0c6580a89fea9024120faf7ba8dc91f3f7b556"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_pet_01/v1/cover.jpg",
@@ -50766,10 +50766,10 @@
         "objectKey": "media/image/circle/fixture_circle_pet_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1117349,
-        "sourceHash": "sha256:17e7077b9e9acaed1cac1818480143425ec6146f0aef8d9d1d4780d8afe0e95b"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 123294,
+        "sourceHash": "sha256:1d5b442eaf77a62412b6c4ca9b8e69852d6ad25c51bed89781ea384d50b86969"
       }
     },
     "fixture_circle_pet_03": {
@@ -50797,19 +50797,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_pet_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 327777,
-        "sourceHash": "sha256:d65eed29601e882f987f82e29c3051ce928ed2b6487ab3649a8964cdcaffe63f"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 45133,
+        "sourceHash": "sha256:c61831fd3c6ac15d55caf842b5d273aaac28d855412b71636051ae17f9b7f55e"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_pet_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1117349,
-        "sourceHash": "sha256:17e7077b9e9acaed1cac1818480143425ec6146f0aef8d9d1d4780d8afe0e95b"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 107241,
+        "sourceHash": "sha256:feb951d3a36ceb07df1085e79b963b93402c5be513ebc907c7ec5d56ca47126d"
       }
     },
     "fixture_circle_pet_05": {
@@ -50846,10 +50846,10 @@
         "objectKey": "media/image/circle/fixture_circle_pet_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1117349,
-        "sourceHash": "sha256:17e7077b9e9acaed1cac1818480143425ec6146f0aef8d9d1d4780d8afe0e95b"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 137390,
+        "sourceHash": "sha256:c5d53244bd63e880e66e6ec6d6c9ea33ab5f9d0f41cae6f4a9095831e016a84c"
       }
     },
     "fixture_circle_parenting_01": {
@@ -50857,10 +50857,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_parenting_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 376777,
-        "sourceHash": "sha256:aa36720e915df9cb0a000d1aa64f1b2fc3f8fc86dce4301268d69145e8e0e017"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 52573,
+        "sourceHash": "sha256:64f9d283a8e9465fe4aef694742b20d29bb8a24e0845a7a270b7845edea19ff0"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_parenting_01/v1/cover.jpg",
@@ -50886,10 +50886,10 @@
         "objectKey": "media/image/circle/fixture_circle_parenting_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2333651,
-        "sourceHash": "sha256:5963b1ad7087db44d87680f325820cf5eb7155256ac3e81677cb0c665ffd470a"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 109794,
+        "sourceHash": "sha256:52e9799b4beef560af122aecf6014fbdf494a9c36d78d6964d12862c705628e7"
       }
     },
     "fixture_circle_parenting_03": {
@@ -50917,19 +50917,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_parenting_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 494277,
-        "sourceHash": "sha256:3542e86e98970d1c7eb5b611b4cb158b0bf555539dd57f79342edc498d85290e"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 48336,
+        "sourceHash": "sha256:cb4cc0b89daec3924b62f6de212775f88e4983a2c6b011084023596d21121220"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_parenting_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2333651,
-        "sourceHash": "sha256:5963b1ad7087db44d87680f325820cf5eb7155256ac3e81677cb0c665ffd470a"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 112726,
+        "sourceHash": "sha256:32373e15d311ce46338bceb65564380f43f6e821c530004e0aa1cd31867f856b"
       }
     },
     "fixture_circle_parenting_05": {
@@ -50966,10 +50966,10 @@
         "objectKey": "media/image/circle/fixture_circle_parenting_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2333651,
-        "sourceHash": "sha256:5963b1ad7087db44d87680f325820cf5eb7155256ac3e81677cb0c665ffd470a"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 147276,
+        "sourceHash": "sha256:d4ab25827f5fbd42824ad531110c0a767929bbc2f92c102492ed2d52c87bd5b3"
       }
     },
     "fixture_circle_outdoor_01": {
@@ -50977,10 +50977,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_outdoor_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 459606,
-        "sourceHash": "sha256:712f984ab1a6e91cd3e0acb4f8b9b730deab27b0793cfe25b87515ad75a11984"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 56457,
+        "sourceHash": "sha256:62f6ff8b969b407084adc57254e5d644937aa7ad19974b98485f6d320b75299b"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_outdoor_01/v1/cover.jpg",
@@ -51006,10 +51006,10 @@
         "objectKey": "media/image/circle/fixture_circle_outdoor_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2204168,
-        "sourceHash": "sha256:824c268f3cd030cf0be9d5b520574de6be5204b8e9cc7e54b8dde2e45705cbe6"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 106593,
+        "sourceHash": "sha256:c4d8805155fed764ef55bb5055d5f3d23e08d2ba52fd2a01b7785f3133d47cad"
       }
     },
     "fixture_circle_outdoor_03": {
@@ -51037,19 +51037,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_outdoor_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 473081,
-        "sourceHash": "sha256:6fd68cbfaf3c3f10dc23c816c784445fc6a826a881f4d2fae957bdabc17de398"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 46876,
+        "sourceHash": "sha256:85128c5414a929d4a09ec1b85cf50ecd90918e4232fe630121519b0cde3a7716"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_outdoor_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2204168,
-        "sourceHash": "sha256:824c268f3cd030cf0be9d5b520574de6be5204b8e9cc7e54b8dde2e45705cbe6"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 135129,
+        "sourceHash": "sha256:47f35717e8c139a1d636f58dedc7f16748a1185f85ea201c9ef7b28ba91a428d"
       }
     },
     "fixture_circle_outdoor_05": {
@@ -51086,10 +51086,10 @@
         "objectKey": "media/image/circle/fixture_circle_outdoor_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 2204168,
-        "sourceHash": "sha256:824c268f3cd030cf0be9d5b520574de6be5204b8e9cc7e54b8dde2e45705cbe6"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 113915,
+        "sourceHash": "sha256:9dca2553ce5501d99f3395259d4bd52a96e37c976b2787cabf6dd534a9c4d3d8"
       }
     },
     "fixture_circle_tech_01": {
@@ -51097,10 +51097,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_tech_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 433383,
-        "sourceHash": "sha256:fffe80d73d9e01a3617c9919190ac5b3186feace1ebd26d7d6627168bcfd6860"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 43233,
+        "sourceHash": "sha256:8d69038f1843ed281c6805ebbeaaf007f07e3214e0442471d4b372b01b995bcc"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_tech_01/v1/cover.jpg",
@@ -51126,10 +51126,10 @@
         "objectKey": "media/image/circle/fixture_circle_tech_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1239474,
-        "sourceHash": "sha256:941f691acd75abe1bf7b80807bd193bfb39abbde46386847c52d7b5bc1b4b5c1"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 99781,
+        "sourceHash": "sha256:e5bbb712e0342862319cfae7ff6c7ea2e8b17cee32ede1a9ab80d7db136c469d"
       }
     },
     "fixture_circle_tech_03": {
@@ -51157,19 +51157,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_tech_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 311097,
-        "sourceHash": "sha256:efd0eb37fc3f9de3edfd620c379f43bf9628015ee2cdd94386952abaef4a21db"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 42417,
+        "sourceHash": "sha256:84a61f84381c6c0b2cd484e6f2ebd86a99a6ad4796c286127822577ccd90c7c4"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_tech_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1239474,
-        "sourceHash": "sha256:941f691acd75abe1bf7b80807bd193bfb39abbde46386847c52d7b5bc1b4b5c1"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 135871,
+        "sourceHash": "sha256:888ff37af7f58311327b7a19cdb18be7d335513c7ebb0790d69215c4dc84c6cf"
       }
     },
     "fixture_circle_tech_05": {
@@ -51206,10 +51206,10 @@
         "objectKey": "media/image/circle/fixture_circle_tech_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1239474,
-        "sourceHash": "sha256:941f691acd75abe1bf7b80807bd193bfb39abbde46386847c52d7b5bc1b4b5c1"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 152947,
+        "sourceHash": "sha256:b5892ecf0824054689fea6658ec4f3498b0b3776f8306ef8b861a843ef8ecf0d"
       }
     },
     "fixture_circle_designwriting_01": {
@@ -51217,10 +51217,10 @@
         "objectKey": "media/avatar/circle/fixture_circle_designwriting_01/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 362874,
-        "sourceHash": "sha256:053c288184e229b7dede093604ede4d5731f592adbf428947ef88ae9867bbfff"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 51349,
+        "sourceHash": "sha256:f30883e1dadb65f546eff739843657cf3f760166f8dbfe261b8e4498e59c184d"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_designwriting_01/v1/cover.jpg",
@@ -51246,10 +51246,10 @@
         "objectKey": "media/image/circle/fixture_circle_designwriting_02/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1030243,
-        "sourceHash": "sha256:b7bad28caaea8610f1685303deb56b059b8be717011ad040a493352e09d14bed"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 110608,
+        "sourceHash": "sha256:7a9811933058c92cdd71ba348a01253388ad1a7ec8bcc0c2e9340b029e7d6300"
       }
     },
     "fixture_circle_designwriting_03": {
@@ -51277,19 +51277,19 @@
         "objectKey": "media/avatar/circle/fixture_circle_designwriting_04/v1/avatar.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 274253,
-        "sourceHash": "sha256:b6bafbd4f59545f4007338ccaa464c7ce7a103d26a92fcf8938f35c785ce18d7"
+        "width": 256,
+        "height": 256,
+        "sizeBytes": 52159,
+        "sourceHash": "sha256:100f59fe85e9e12cffca7bcbe40f744ea3fd1532f009b12f6dd369698be84aa8"
       },
       "cover": {
         "objectKey": "media/image/circle/fixture_circle_designwriting_04/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1030243,
-        "sourceHash": "sha256:b7bad28caaea8610f1685303deb56b059b8be717011ad040a493352e09d14bed"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 119664,
+        "sourceHash": "sha256:5c00b7a2dca9fb448f3b441d1f0714239fc8576b8cb5e4a84389410702f32b4f"
       }
     },
     "fixture_circle_designwriting_05": {
@@ -51326,10 +51326,10 @@
         "objectKey": "media/image/circle/fixture_circle_designwriting_06/v1/cover.png",
         "version": 1,
         "mimeType": "image/png",
-        "width": 1440,
-        "height": 900,
-        "sizeBytes": 1030243,
-        "sourceHash": "sha256:b7bad28caaea8610f1685303deb56b059b8be717011ad040a493352e09d14bed"
+        "width": 1200,
+        "height": 520,
+        "sizeBytes": 124812,
+        "sourceHash": "sha256:de96e725023a60f2910c2ecade7296ef55ac712bbfaab87d75e9b5513db703f4"
       }
     }
   },
@@ -51341,8 +51341,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 33940,
-        "sourceHash": "sha256:6d8aba304aa4ed8c8573ce3cb9a1e76c53662a33449d45161a5c4a59c734486d"
+        "sizeBytes": 44786,
+        "sourceHash": "sha256:4a563d0057c4b8f56f64936538b438091286707e215f3480087f4d5e1b8c2a15"
       }
     },
     "fixture_conv_photo_group": {
@@ -51352,8 +51352,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 33940,
-        "sourceHash": "sha256:6d8aba304aa4ed8c8573ce3cb9a1e76c53662a33449d45161a5c4a59c734486d"
+        "sizeBytes": 36943,
+        "sourceHash": "sha256:bdf4d85cdf43f874e6af189cae145a4c4ca5a433c4e8644c005a0b87cb089fdb"
       }
     },
     "fixture_conv_travel_group": {
@@ -51363,8 +51363,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 33940,
-        "sourceHash": "sha256:6d8aba304aa4ed8c8573ce3cb9a1e76c53662a33449d45161a5c4a59c734486d"
+        "sizeBytes": 47571,
+        "sourceHash": "sha256:b55ae73daba9ecd3098d05ac80e20edbdae660480dfdfd158f9026e3073c7414"
       }
     },
     "fixture_conv_circle_food": {
@@ -51374,8 +51374,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20140,
-        "sourceHash": "sha256:ceaefa74cc83cd5028534ad3bca91557d28ca8fedbed0fb8dfaf573bf99c1f4c"
+        "sizeBytes": 51050,
+        "sourceHash": "sha256:87c158d3b3169e39b3f8e2ead19f0d75b93bb071219fb828f14ee7dbf55e065b"
       }
     },
     "fixture_conv_circle_tech": {
@@ -51385,8 +51385,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17143,
-        "sourceHash": "sha256:d6e81866b7fe7ab88d50912fd738518a9a507cc3e2029fdfd75d7be9d9488616"
+        "sizeBytes": 56456,
+        "sourceHash": "sha256:26577f4bc4e1397001cf1d0c5afc9bacb34f8a549a06b3e19cfd875d2d9894c3"
       }
     },
     "fixture_conv_circle_life": {
@@ -51396,8 +51396,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17951,
-        "sourceHash": "sha256:81a70ed505e78e52329823e2147ca7fea33b9d718b9db7f559658bff827296eb"
+        "sizeBytes": 37480,
+        "sourceHash": "sha256:747f52acc7e61fef4aeeb456e4732bc2fb84ed764fc39751cf64e4bc2a9eb6fc"
       }
     },
     "fixture_conv_circle_city": {
@@ -51407,8 +51407,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 14286,
-        "sourceHash": "sha256:621884b36972391ea642d48cbab9074bbb258f3f78e0970e99ad75b1ffdd9d92"
+        "sizeBytes": 37517,
+        "sourceHash": "sha256:8c6f23665cf2a004fb326d20dacfea36613394b8c107ab3d7c274f59fe742e7b"
       }
     },
     "fixture_conv_circle_travel": {
@@ -51418,8 +51418,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18571,
-        "sourceHash": "sha256:c1f9c3418323c727cc936e265feaacbcddff435ff00f09e6b9247f4e70f4956d"
+        "sizeBytes": 53052,
+        "sourceHash": "sha256:0964dfe3d4561f402612000dd0b18a4f4042cb35a1422467257650aec7afad11"
       }
     },
     "fixture_conv_circle_photo": {
@@ -51429,8 +51429,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17267,
-        "sourceHash": "sha256:df307434a4a8b0141c5a7f9455db1abfe0412ce1bbb8df42e07bb372a2641b21"
+        "sizeBytes": 57626,
+        "sourceHash": "sha256:35a646ac3e05cc97d5491028a2a54a8a9fb764287efceb664125082c4d0e7c94"
       }
     },
     "fixture_conv_photography_01": {
@@ -51440,8 +51440,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17267,
-        "sourceHash": "sha256:df307434a4a8b0141c5a7f9455db1abfe0412ce1bbb8df42e07bb372a2641b21"
+        "sizeBytes": 50646,
+        "sourceHash": "sha256:aeb41f7418d170f6275b7af266243c8e3c2118145d1141b2de66f0a3d55caaee"
       }
     },
     "fixture_conv_photography_02": {
@@ -51451,8 +51451,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 16417,
-        "sourceHash": "sha256:ac2ce1e8de0edfeb07d9907291f70d5a7d79d4f7e34741663d950d213acb3b10"
+        "sizeBytes": 57366,
+        "sourceHash": "sha256:62086d8f280123fbda10fecbcdd1e50c842f9736d0ed541968d520368a529303"
       }
     },
     "fixture_conv_photography_03": {
@@ -51462,8 +51462,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17267,
-        "sourceHash": "sha256:df307434a4a8b0141c5a7f9455db1abfe0412ce1bbb8df42e07bb372a2641b21"
+        "sizeBytes": 43780,
+        "sourceHash": "sha256:f3fe5575b62a9fa3b62866de9020ab878e0481ddeda4e13932ed2c76e6d9101c"
       }
     },
     "fixture_conv_photography_04": {
@@ -51473,8 +51473,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 16755,
-        "sourceHash": "sha256:a8826275440c5185c73965b2734330619a2867a7b91dd364eeb789311663b56a"
+        "sizeBytes": 45929,
+        "sourceHash": "sha256:64067754827d4f8709b0a46888956005b4bcc0940dc98949981febfc9d6ad8d6"
       }
     },
     "fixture_conv_photography_05": {
@@ -51484,8 +51484,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17254,
-        "sourceHash": "sha256:1759674a244ba788d36cd6d2cf960b2d2ccbcc464ae8f26253521b83fa431b85"
+        "sizeBytes": 38304,
+        "sourceHash": "sha256:6d3b6cbdfd24c1c19fc137ec1e19968dc1bf71ab0dd8df358222a0b4514a39d2"
       }
     },
     "fixture_conv_photography_06": {
@@ -51495,8 +51495,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 16417,
-        "sourceHash": "sha256:ac2ce1e8de0edfeb07d9907291f70d5a7d79d4f7e34741663d950d213acb3b10"
+        "sizeBytes": 46512,
+        "sourceHash": "sha256:e02592f93f14306ad37be54d14feac9bfa85b26919a6c52cfee2fe14eb4e83ea"
       }
     },
     "fixture_conv_travel_01": {
@@ -51506,8 +51506,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18571,
-        "sourceHash": "sha256:c1f9c3418323c727cc936e265feaacbcddff435ff00f09e6b9247f4e70f4956d"
+        "sizeBytes": 41178,
+        "sourceHash": "sha256:b264c3d67b09cd019db44c2809dd4d132815a180e9ee9c4b38cd38b27ef117ca"
       }
     },
     "fixture_conv_travel_02": {
@@ -51517,8 +51517,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18933,
-        "sourceHash": "sha256:55800217991e006da5a054f4218b17607a751c67a3cb66b48a5427a30a50a760"
+        "sizeBytes": 42193,
+        "sourceHash": "sha256:ae6c5ead2c7f934524a015e098be0530d9bdfd717e6f864065fd2977a1c40efe"
       }
     },
     "fixture_conv_travel_03": {
@@ -51528,8 +51528,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18571,
-        "sourceHash": "sha256:c1f9c3418323c727cc936e265feaacbcddff435ff00f09e6b9247f4e70f4956d"
+        "sizeBytes": 48408,
+        "sourceHash": "sha256:2ef53e6b7b17ccce95cf9ab466d18437c86fadc696878f01ae7509ea2796a1af"
       }
     },
     "fixture_conv_travel_04": {
@@ -51539,8 +51539,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19080,
-        "sourceHash": "sha256:d868c82d9162e13fc21707728bce1f95e16b8e7a0be8ffda06f5747d2d345e00"
+        "sizeBytes": 42783,
+        "sourceHash": "sha256:83744248b2da151887d2ba8212bcbea996d183fe0b74831335f1d194cdc4cafe"
       }
     },
     "fixture_conv_travel_05": {
@@ -51550,8 +51550,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18234,
-        "sourceHash": "sha256:b214afe89afc2f03e2e62ca260b947e7055a0d142de95560b98e7d0e2688148e"
+        "sizeBytes": 46638,
+        "sourceHash": "sha256:efeaa52abdcb36aea79cc0fde9be5a4813aa83967eff813b00fdb655e65a451d"
       }
     },
     "fixture_conv_travel_06": {
@@ -51561,8 +51561,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18933,
-        "sourceHash": "sha256:55800217991e006da5a054f4218b17607a751c67a3cb66b48a5427a30a50a760"
+        "sizeBytes": 54908,
+        "sourceHash": "sha256:47b4e6108e6d731931d44f0a7fb594eedeb45aaf35f9219bf0dea2750525fca8"
       }
     },
     "fixture_conv_citywalk_01": {
@@ -51572,8 +51572,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 14286,
-        "sourceHash": "sha256:621884b36972391ea642d48cbab9074bbb258f3f78e0970e99ad75b1ffdd9d92"
+        "sizeBytes": 46161,
+        "sourceHash": "sha256:1642abeaae8dfc4a80cba0bce0d813e12e1ca79f51b7f7737c63f01f46b1d8a4"
       }
     },
     "fixture_conv_citywalk_02": {
@@ -51583,8 +51583,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 14286,
-        "sourceHash": "sha256:621884b36972391ea642d48cbab9074bbb258f3f78e0970e99ad75b1ffdd9d92"
+        "sizeBytes": 55722,
+        "sourceHash": "sha256:c505c26a6a2bcd867689cde672b46264f4801ef443041b9fce5f54945125465e"
       }
     },
     "fixture_conv_citywalk_03": {
@@ -51594,8 +51594,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17254,
-        "sourceHash": "sha256:1759674a244ba788d36cd6d2cf960b2d2ccbcc464ae8f26253521b83fa431b85"
+        "sizeBytes": 53021,
+        "sourceHash": "sha256:c911198ed39dc0436a1780b5209ad4397234c6cbb819e4929f2d0dd9ff2527a6"
       }
     },
     "fixture_conv_citywalk_04": {
@@ -51605,8 +51605,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 14289,
-        "sourceHash": "sha256:34434b9289abbfdc7f7a6d7fb4e240ec687523683b4504c699ffb2d28a208d33"
+        "sizeBytes": 52050,
+        "sourceHash": "sha256:fb1fb9600554181f89a04797a48084baa6eb07ed68484c707d3b7bab05141fe1"
       }
     },
     "fixture_conv_citywalk_05": {
@@ -51616,8 +51616,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17267,
-        "sourceHash": "sha256:df307434a4a8b0141c5a7f9455db1abfe0412ce1bbb8df42e07bb372a2641b21"
+        "sizeBytes": 47029,
+        "sourceHash": "sha256:2e4489725156ddc4b8121938189e4948b39b4685de476d313ca9be9b812282f6"
       }
     },
     "fixture_conv_citywalk_06": {
@@ -51627,8 +51627,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 14289,
-        "sourceHash": "sha256:34434b9289abbfdc7f7a6d7fb4e240ec687523683b4504c699ffb2d28a208d33"
+        "sizeBytes": 36539,
+        "sourceHash": "sha256:69b1971ee806b9c3cc125306bccc710fa711a54b2503f089e885d006021aa236"
       }
     },
     "fixture_conv_food_01": {
@@ -51638,8 +51638,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20140,
-        "sourceHash": "sha256:ceaefa74cc83cd5028534ad3bca91557d28ca8fedbed0fb8dfaf573bf99c1f4c"
+        "sizeBytes": 41918,
+        "sourceHash": "sha256:50ebffb2a34282bf7ac930ccf688140ebc390ea1da7514ee8f4fdae996978313"
       }
     },
     "fixture_conv_food_02": {
@@ -51649,8 +51649,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19304,
-        "sourceHash": "sha256:bc8717da1472ec8b12cda0a09b6a6377daf490117ec38fb929c27e4d388ae1d9"
+        "sizeBytes": 40556,
+        "sourceHash": "sha256:7893e92af4c7c06f4d4a9224c402ca8d9b38473f5d73dd087b250c8d55fb171a"
       }
     },
     "fixture_conv_food_03": {
@@ -51660,8 +51660,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20059,
-        "sourceHash": "sha256:5b616ffe3564360fb88efa97de9c9763d3d3787332a4816180bdf466b411bb13"
+        "sizeBytes": 48007,
+        "sourceHash": "sha256:6c67c13071433a071a041abd0b232ffdd543f0bc454f6709f3b11bbd2c6aad7a"
       }
     },
     "fixture_conv_food_04": {
@@ -51671,8 +51671,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19782,
-        "sourceHash": "sha256:d3528eb3f7850442bab097ae5e29341c9101e7369452027bf504423f9ad9a282"
+        "sizeBytes": 52020,
+        "sourceHash": "sha256:a80fbb865d2f7ac3b69e3b6476148d19c7f17fa6230fa7d2616f4225e0038381"
       }
     },
     "fixture_conv_food_05": {
@@ -51682,8 +51682,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20140,
-        "sourceHash": "sha256:ceaefa74cc83cd5028534ad3bca91557d28ca8fedbed0fb8dfaf573bf99c1f4c"
+        "sizeBytes": 46824,
+        "sourceHash": "sha256:d5e99f2aac35fac5f972ed6d65a538909e78d002a244de4781dc3380035fb828"
       }
     },
     "fixture_conv_food_06": {
@@ -51693,8 +51693,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19782,
-        "sourceHash": "sha256:d3528eb3f7850442bab097ae5e29341c9101e7369452027bf504423f9ad9a282"
+        "sizeBytes": 49031,
+        "sourceHash": "sha256:e2dfb0a0a132d33a009ae9e4ff16ac727fc0990e7ed756bab7d984d2e651a076"
       }
     },
     "fixture_conv_coffee_01": {
@@ -51704,8 +51704,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19304,
-        "sourceHash": "sha256:bc8717da1472ec8b12cda0a09b6a6377daf490117ec38fb929c27e4d388ae1d9"
+        "sizeBytes": 42766,
+        "sourceHash": "sha256:2159eada85d4dbcd75e162be6d1fd2f37fc4dd76dba502b34f6296acf6ac63f0"
       }
     },
     "fixture_conv_coffee_02": {
@@ -51715,8 +51715,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19464,
-        "sourceHash": "sha256:5f25a73c12458580cac902ef6d88a1d3f7dd4cb36e60bfe68da22ee93320e774"
+        "sizeBytes": 50201,
+        "sourceHash": "sha256:ce163cdb7ec1ca4e754ec29d49af2d9b1aa525901b454cf182ace5114fc1e386"
       }
     },
     "fixture_conv_coffee_03": {
@@ -51726,8 +51726,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18511,
-        "sourceHash": "sha256:99f68661008aa7c0ef3cfe768d7740fbe2bd16abc76711425564a724bae777c7"
+        "sizeBytes": 42567,
+        "sourceHash": "sha256:bdab701dab46e59f410ce7dbc093f2763a280ec661cadba29e8553065c0d17b3"
       }
     },
     "fixture_conv_coffee_04": {
@@ -51737,8 +51737,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19708,
-        "sourceHash": "sha256:3b738b76eaef18f68068afa1d839992ec97c5e94338e0c6cd348d085a047869a"
+        "sizeBytes": 48784,
+        "sourceHash": "sha256:00ad8d5562f81a5e7618aae75aa439f9d0813dec891d00acdd4cbf625660207b"
       }
     },
     "fixture_conv_coffee_05": {
@@ -51748,8 +51748,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17951,
-        "sourceHash": "sha256:81a70ed505e78e52329823e2147ca7fea33b9d718b9db7f559658bff827296eb"
+        "sizeBytes": 46129,
+        "sourceHash": "sha256:5939b8d4838843aedaecc7c0f0d963a34ae0df0f1b6e76da6223e2bbdb6f5129"
       }
     },
     "fixture_conv_coffee_06": {
@@ -51759,8 +51759,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19708,
-        "sourceHash": "sha256:3b738b76eaef18f68068afa1d839992ec97c5e94338e0c6cd348d085a047869a"
+        "sizeBytes": 51110,
+        "sourceHash": "sha256:247271d0f3b1f57c72617703d3fe1e30629e33784f2246c206c4ccc3425c9abf"
       }
     },
     "fixture_conv_lifestyle_01": {
@@ -51770,8 +51770,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17951,
-        "sourceHash": "sha256:81a70ed505e78e52329823e2147ca7fea33b9d718b9db7f559658bff827296eb"
+        "sizeBytes": 53890,
+        "sourceHash": "sha256:74bb9189f043159ebb74c316c0dcc1eca61f8d992758083a4e0db7bf97d61dcf"
       }
     },
     "fixture_conv_lifestyle_02": {
@@ -51781,8 +51781,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17674,
-        "sourceHash": "sha256:ac8358563cc7ce0a07c74d62b09b99dcbe33682df7bfb67b7afaa18486693bf2"
+        "sizeBytes": 52841,
+        "sourceHash": "sha256:be9add93a0a4c1161e0e85ed539cfc824245ac226407728000a8708fa8aca2cd"
       }
     },
     "fixture_conv_lifestyle_03": {
@@ -51792,8 +51792,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17951,
-        "sourceHash": "sha256:81a70ed505e78e52329823e2147ca7fea33b9d718b9db7f559658bff827296eb"
+        "sizeBytes": 59862,
+        "sourceHash": "sha256:a9f766192eab9ff155dac5872ae3abf01649ed671077e4cbbc04780c5ae20661"
       }
     },
     "fixture_conv_lifestyle_04": {
@@ -51803,8 +51803,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17789,
-        "sourceHash": "sha256:9358cf3443d428fbbb5579e432beb35ac46e6c24bb08ce504f19f47fb1813f4d"
+        "sizeBytes": 43730,
+        "sourceHash": "sha256:1b6e8e4a705205e00b866fca30ad33c80031d59a001996da29dca766d722b6f5"
       }
     },
     "fixture_conv_lifestyle_05": {
@@ -51814,8 +51814,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18511,
-        "sourceHash": "sha256:99f68661008aa7c0ef3cfe768d7740fbe2bd16abc76711425564a724bae777c7"
+        "sizeBytes": 48093,
+        "sourceHash": "sha256:6690e3ef94c70ad7f9050eb234f92f05278c026f0872c8b84d7f4bad79b78073"
       }
     },
     "fixture_conv_lifestyle_06": {
@@ -51825,8 +51825,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17674,
-        "sourceHash": "sha256:ac8358563cc7ce0a07c74d62b09b99dcbe33682df7bfb67b7afaa18486693bf2"
+        "sizeBytes": 56373,
+        "sourceHash": "sha256:11af4baa8fffb0aae91d934f0dc73dd387bff3b29d068381386a0fc1226bc18b"
       }
     },
     "fixture_conv_fitness_01": {
@@ -51836,8 +51836,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18933,
-        "sourceHash": "sha256:55800217991e006da5a054f4218b17607a751c67a3cb66b48a5427a30a50a760"
+        "sizeBytes": 43300,
+        "sourceHash": "sha256:557ff4cb0c2c020cd4f984d05c461f5a6ee19b84db4fbf43354dad4acae7aea8"
       }
     },
     "fixture_conv_fitness_02": {
@@ -51847,8 +51847,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18320,
-        "sourceHash": "sha256:905640a22861f55313df9d088df36d523178ad002b1e19c75011e39074af57ad"
+        "sizeBytes": 48223,
+        "sourceHash": "sha256:940c2333b5289a88bae0efac31213eae0f50483380d2f5f9ff63e489734455b0"
       }
     },
     "fixture_conv_fitness_03": {
@@ -51858,8 +51858,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19080,
-        "sourceHash": "sha256:d868c82d9162e13fc21707728bce1f95e16b8e7a0be8ffda06f5747d2d345e00"
+        "sizeBytes": 46772,
+        "sourceHash": "sha256:8f9bccc755fab048ef8a1f5870d3a840c7ff4819cbb4950e74c7e3aac6e2e209"
       }
     },
     "fixture_conv_fitness_04": {
@@ -51869,8 +51869,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18062,
-        "sourceHash": "sha256:f91dd61fe4064803e73f7a3ee2a27a933eff3b3c235046993824572691f49d38"
+        "sizeBytes": 47181,
+        "sourceHash": "sha256:f0bed06790f963f0e4852aca9acea288b95c6461fd2680d874e5fc89ab9f7979"
       }
     },
     "fixture_conv_fitness_05": {
@@ -51880,8 +51880,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19080,
-        "sourceHash": "sha256:d868c82d9162e13fc21707728bce1f95e16b8e7a0be8ffda06f5747d2d345e00"
+        "sizeBytes": 41663,
+        "sourceHash": "sha256:a80abe76e134f6ca27a72f724a4d2d0e8b83ae06365ed90735090333e03d8920"
       }
     },
     "fixture_conv_fitness_06": {
@@ -51891,8 +51891,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18320,
-        "sourceHash": "sha256:905640a22861f55313df9d088df36d523178ad002b1e19c75011e39074af57ad"
+        "sizeBytes": 53062,
+        "sourceHash": "sha256:c123e77859bc71cf8eb477747c7178442b2ed5b0fb4c63337ba378b0067bb010"
       }
     },
     "fixture_conv_pet_01": {
@@ -51902,8 +51902,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20140,
-        "sourceHash": "sha256:ceaefa74cc83cd5028534ad3bca91557d28ca8fedbed0fb8dfaf573bf99c1f4c"
+        "sizeBytes": 30091,
+        "sourceHash": "sha256:acf25ddb46384a348e4dd6566282bd505ef42b46ed6c3183f7cf8729952131fa"
       }
     },
     "fixture_conv_pet_02": {
@@ -51913,8 +51913,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19782,
-        "sourceHash": "sha256:d3528eb3f7850442bab097ae5e29341c9101e7369452027bf504423f9ad9a282"
+        "sizeBytes": 40264,
+        "sourceHash": "sha256:4aac8190c9fa4b5bb40fd98d8bf42ad2813599b535210c49c6f78d6f625105db"
       }
     },
     "fixture_conv_pet_03": {
@@ -51924,8 +51924,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20059,
-        "sourceHash": "sha256:5b616ffe3564360fb88efa97de9c9763d3d3787332a4816180bdf466b411bb13"
+        "sizeBytes": 46296,
+        "sourceHash": "sha256:34d796c70e2721dd0602a525e2095a6f1eb8b009d281df6a57c4c101134d296f"
       }
     },
     "fixture_conv_pet_04": {
@@ -51935,8 +51935,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19304,
-        "sourceHash": "sha256:bc8717da1472ec8b12cda0a09b6a6377daf490117ec38fb929c27e4d388ae1d9"
+        "sizeBytes": 36451,
+        "sourceHash": "sha256:04eabcb5209bc89ebb0e829a0f5fe3c0d5ac8be732d8b98b000590ae059a9694"
       }
     },
     "fixture_conv_pet_05": {
@@ -51946,8 +51946,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20059,
-        "sourceHash": "sha256:5b616ffe3564360fb88efa97de9c9763d3d3787332a4816180bdf466b411bb13"
+        "sizeBytes": 53401,
+        "sourceHash": "sha256:ac9fe8d2f9d43c7b9c654a9c69af51de94007a69dcbb3ceb79bd522a07c98d79"
       }
     },
     "fixture_conv_pet_06": {
@@ -51957,8 +51957,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19782,
-        "sourceHash": "sha256:d3528eb3f7850442bab097ae5e29341c9101e7369452027bf504423f9ad9a282"
+        "sizeBytes": 37512,
+        "sourceHash": "sha256:640fb4ccf76ca7a799406b8e36d36cec988620e1ff7578b5e34d8a167bf96c51"
       }
     },
     "fixture_conv_parenting_01": {
@@ -51968,8 +51968,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20140,
-        "sourceHash": "sha256:ceaefa74cc83cd5028534ad3bca91557d28ca8fedbed0fb8dfaf573bf99c1f4c"
+        "sizeBytes": 43659,
+        "sourceHash": "sha256:8af5c00bb1e496d7544e6dc3128193c97257ba43d55469cd136c63bed32eda52"
       }
     },
     "fixture_conv_parenting_02": {
@@ -51979,8 +51979,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18320,
-        "sourceHash": "sha256:905640a22861f55313df9d088df36d523178ad002b1e19c75011e39074af57ad"
+        "sizeBytes": 45112,
+        "sourceHash": "sha256:6f5b6457945f40e8d925d474f8d5428d85208d9ff8a7f2605686f5893118c81e"
       }
     },
     "fixture_conv_parenting_03": {
@@ -51990,8 +51990,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20059,
-        "sourceHash": "sha256:5b616ffe3564360fb88efa97de9c9763d3d3787332a4816180bdf466b411bb13"
+        "sizeBytes": 45217,
+        "sourceHash": "sha256:ee3ba7c5c2591c11b57f4ef4f45e4beabe30376cb2f7235ffd369ebeab0b8ede"
       }
     },
     "fixture_conv_parenting_04": {
@@ -52001,8 +52001,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18062,
-        "sourceHash": "sha256:f91dd61fe4064803e73f7a3ee2a27a933eff3b3c235046993824572691f49d38"
+        "sizeBytes": 47235,
+        "sourceHash": "sha256:ce794b825c096965aedc4742ae9f7ef88ae911fdac16b1078564ea0d89619067"
       }
     },
     "fixture_conv_parenting_05": {
@@ -52012,8 +52012,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 20059,
-        "sourceHash": "sha256:5b616ffe3564360fb88efa97de9c9763d3d3787332a4816180bdf466b411bb13"
+        "sizeBytes": 31387,
+        "sourceHash": "sha256:007f342c865aefbcab328c8577a3efce84f3d6b2afd1f4b0631ec447672a17e6"
       }
     },
     "fixture_conv_parenting_06": {
@@ -52023,8 +52023,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18320,
-        "sourceHash": "sha256:905640a22861f55313df9d088df36d523178ad002b1e19c75011e39074af57ad"
+        "sizeBytes": 51773,
+        "sourceHash": "sha256:626d3bf10215a4be9457182b4e22a7907cd716b004b0b0a6ec4eddc873c849cd"
       }
     },
     "fixture_conv_outdoor_01": {
@@ -52034,8 +52034,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18933,
-        "sourceHash": "sha256:55800217991e006da5a054f4218b17607a751c67a3cb66b48a5427a30a50a760"
+        "sizeBytes": 51075,
+        "sourceHash": "sha256:d4db2a24856155e9df156178350ac484cf336664cb9d7f81a59f903a0c508536"
       }
     },
     "fixture_conv_outdoor_02": {
@@ -52045,8 +52045,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18234,
-        "sourceHash": "sha256:b214afe89afc2f03e2e62ca260b947e7055a0d142de95560b98e7d0e2688148e"
+        "sizeBytes": 56437,
+        "sourceHash": "sha256:bcbc7e594eb02461229a4322b38adfec02bfd1c986ed04a7c645a9b135f3a9ff"
       }
     },
     "fixture_conv_outdoor_03": {
@@ -52056,8 +52056,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19080,
-        "sourceHash": "sha256:d868c82d9162e13fc21707728bce1f95e16b8e7a0be8ffda06f5747d2d345e00"
+        "sizeBytes": 54019,
+        "sourceHash": "sha256:6eb25b42258598a89d3a69c433ac9aaad19233260baa1c4c938075971222d311"
       }
     },
     "fixture_conv_outdoor_04": {
@@ -52067,8 +52067,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18571,
-        "sourceHash": "sha256:c1f9c3418323c727cc936e265feaacbcddff435ff00f09e6b9247f4e70f4956d"
+        "sizeBytes": 44232,
+        "sourceHash": "sha256:92a5f97ffe3b97ebf0d281f3d107c7bcf14f8a7c7f0b0832926d4973e13345fc"
       }
     },
     "fixture_conv_outdoor_05": {
@@ -52078,8 +52078,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19080,
-        "sourceHash": "sha256:d868c82d9162e13fc21707728bce1f95e16b8e7a0be8ffda06f5747d2d345e00"
+        "sizeBytes": 48295,
+        "sourceHash": "sha256:685e2658e8f92b30e7339951e64f045399f54245393521a045e460150dbe0c7d"
       }
     },
     "fixture_conv_outdoor_06": {
@@ -52089,8 +52089,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 18234,
-        "sourceHash": "sha256:b214afe89afc2f03e2e62ca260b947e7055a0d142de95560b98e7d0e2688148e"
+        "sizeBytes": 46256,
+        "sourceHash": "sha256:85bbb163ebaee8cbc9352a47323cb42259e5628dde6b953555e9fe494294ac95"
       }
     },
     "fixture_conv_tech_01": {
@@ -52100,8 +52100,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17143,
-        "sourceHash": "sha256:d6e81866b7fe7ab88d50912fd738518a9a507cc3e2029fdfd75d7be9d9488616"
+        "sizeBytes": 50438,
+        "sourceHash": "sha256:3c3bf79eb4a4ae0511b5afe72ca07aa8c798a9acc24335e42ee293b84a2a38f2"
       }
     },
     "fixture_conv_tech_02": {
@@ -52111,8 +52111,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 14289,
-        "sourceHash": "sha256:34434b9289abbfdc7f7a6d7fb4e240ec687523683b4504c699ffb2d28a208d33"
+        "sizeBytes": 62766,
+        "sourceHash": "sha256:9489c00badfda2343023dad106e9833ba619598f56acfce14f365f5c6d1ed9d3"
       }
     },
     "fixture_conv_tech_03": {
@@ -52122,8 +52122,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17097,
-        "sourceHash": "sha256:2e41e4257a2c2e8c0fb4b37b1f3434b66f53b1de5c8e5346e6a563d05b0f6884"
+        "sizeBytes": 42826,
+        "sourceHash": "sha256:358f18d8ebd0937582be45ab3866a36c4d0c95b80ee8616a29a86cc54ae6e482"
       }
     },
     "fixture_conv_tech_04": {
@@ -52133,8 +52133,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 14286,
-        "sourceHash": "sha256:621884b36972391ea642d48cbab9074bbb258f3f78e0970e99ad75b1ffdd9d92"
+        "sizeBytes": 35281,
+        "sourceHash": "sha256:00543a1a6fa55bc6f022a7720dab0ef170fe4af7fa8706f4daf5a8710f6316f0"
       }
     },
     "fixture_conv_tech_05": {
@@ -52144,8 +52144,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17097,
-        "sourceHash": "sha256:2e41e4257a2c2e8c0fb4b37b1f3434b66f53b1de5c8e5346e6a563d05b0f6884"
+        "sizeBytes": 35828,
+        "sourceHash": "sha256:cf8dadb4fc2d221fc8038be3b56c40afa3f02e6a39e69ffea45a5cf0450a377a"
       }
     },
     "fixture_conv_tech_06": {
@@ -52155,8 +52155,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 14289,
-        "sourceHash": "sha256:34434b9289abbfdc7f7a6d7fb4e240ec687523683b4504c699ffb2d28a208d33"
+        "sizeBytes": 46157,
+        "sourceHash": "sha256:9a77322bc1af814c75c997c29d01cf8bf6bf9898322c9abbe9e77fde44d64af0"
       }
     },
     "fixture_conv_designwriting_01": {
@@ -52166,8 +52166,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19464,
-        "sourceHash": "sha256:5f25a73c12458580cac902ef6d88a1d3f7dd4cb36e60bfe68da22ee93320e774"
+        "sizeBytes": 42996,
+        "sourceHash": "sha256:e0ce4669af0c7e4fcf7046a0d7402a92566ca31c9c4339f956defb724acd357b"
       }
     },
     "fixture_conv_designwriting_02": {
@@ -52177,8 +52177,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 17143,
-        "sourceHash": "sha256:d6e81866b7fe7ab88d50912fd738518a9a507cc3e2029fdfd75d7be9d9488616"
+        "sizeBytes": 38434,
+        "sourceHash": "sha256:53e4c3c6aa74eadefefa57b95f8e36220dbb7ef622d10ae82e2f7e316634a643"
       }
     },
     "fixture_conv_designwriting_03": {
@@ -52188,8 +52188,8 @@
         "mimeType": "image/png",
         "width": 256,
         "height": 256,
-        "sizeBytes": 19464,
-        "sourceHash": "sha256:5f25a73c12458580cac902ef6d88a1d3f7dd4cb36e60bfe68da22ee93320e774"
+        "sizeBytes": 51612,
+        "sourceHash": "sha256:3261dd8ea3ca6c79764c649ebcb85d8fd622051724f75d5b6679305181628965"
       }
     }
   },
