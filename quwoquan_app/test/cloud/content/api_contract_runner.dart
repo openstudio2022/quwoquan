@@ -36,6 +36,9 @@ import 'package:quwoquan_app/cloud/content/generated/content_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/privacy_settings_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 
 // dart-define 注入；本地执行时通过 make test-api-contract 传入。
 const _apiContractEnv = String.fromEnvironment(
@@ -241,10 +244,20 @@ void main() {
           .toList();
 
       for (final item in items) {
+        if (item.width == null || item.height == null || item.height! <= 0) {
+          expect(
+            item.aspectRatio,
+            isNull,
+            reason:
+                'aspectRatio should be null when image dimensions are absent',
+          );
+          continue;
+        }
+        final expectedAspectRatio = item.width! / item.height!;
         expect(
           item.aspectRatio,
-          isNotNull,
-          reason: 'PhotoPostDto.aspectRatio must be computable',
+          closeTo(expectedAspectRatio, 1e-9),
+          reason: 'PhotoPostDto.aspectRatio should mirror width/height',
         );
         expect(
           item.aspectRatio,
@@ -481,39 +494,46 @@ void main() {
       );
     });
 
-    test('POST/DELETE /v1/user/block/{id} 可用', () async {
-      if (!_apiAvailable)
-        return markTestSkipped('$_apiContractEnv unavailable');
-      if (_isLocalGammaContentOnly) {
-        return markTestSkipped(
-          'local gamma content mirror excludes user routes',
+    test(
+      'POST/DELETE /v1/user/profile-subjects/{targetProfileSubjectId}/block 可用',
+      () async {
+        if (!_apiAvailable)
+          return markTestSkipped('$_apiContractEnv unavailable');
+        if (_isLocalGammaContentOnly) {
+          return markTestSkipped(
+            'local gamma content mirror excludes user routes',
+          );
+        }
+        const targetUserId = 'contract_block_target_001';
+        final blockResp = await _client
+            .post(
+              Uri.parse(
+                '$_apiBase${UserApiMetadata.blockUserPath(targetProfileSubjectId: targetUserId)}',
+              ),
+              headers: _authHeaders(UserRequestPageIds.blockUser),
+            )
+            .timeout(const Duration(seconds: 10));
+        expect(
+          [200, 201, 204].contains(blockResp.statusCode),
+          isTrue,
+          reason: 'block user route should succeed',
         );
-      }
-      const targetUserId = 'contract_block_target_001';
-      final blockResp = await _client
-          .post(
-            Uri.parse('$_apiBase/v1/user/block/$targetUserId'),
-            headers: _authHeaders('user.block.create'),
-          )
-          .timeout(const Duration(seconds: 10));
-      expect(
-        [200, 201, 204].contains(blockResp.statusCode),
-        isTrue,
-        reason: 'block user route should succeed',
-      );
 
-      final unblockResp = await _client
-          .delete(
-            Uri.parse('$_apiBase/v1/user/block/$targetUserId'),
-            headers: _authHeaders('user.block.delete'),
-          )
-          .timeout(const Duration(seconds: 10));
-      expect(
-        [200, 204].contains(unblockResp.statusCode),
-        isTrue,
-        reason: 'unblock user route should succeed',
-      );
-    });
+        final unblockResp = await _client
+            .delete(
+              Uri.parse(
+                '$_apiBase${UserApiMetadata.unblockUserPath(targetProfileSubjectId: targetUserId)}',
+              ),
+              headers: _authHeaders(UserRequestPageIds.unblockUser),
+            )
+            .timeout(const Duration(seconds: 10));
+        expect(
+          [200, 204].contains(unblockResp.statusCode),
+          isTrue,
+          reason: 'unblock user route should succeed',
+        );
+      },
+    );
 
     test('PATCH /v1/user/settings/privacy 可写 blockedKeywords', () async {
       if (!_apiAvailable)
@@ -523,22 +543,41 @@ void main() {
           'local gamma content mirror excludes user routes',
         );
       }
+      const blockedKeywords = ['api_contract_kw'];
       final patchResp = await _client
           .patch(
-            Uri.parse('$_apiBase/v1/user/settings/privacy'),
+            Uri.parse('$_apiBase${UserApiMetadata.updatePrivacySettingsPath}'),
             headers: {
-              ..._authHeaders('user.settings.privacy.patch'),
+              ..._authHeaders(UserRequestPageIds.updatePrivacySettings),
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({
-              'blockedKeywords': ['api_contract_kw'],
-            }),
+            body: jsonEncode({'blockedKeywords': blockedKeywords}),
           )
           .timeout(const Duration(seconds: 10));
       expect(
         [200, 204].contains(patchResp.statusCode),
         isTrue,
         reason: 'privacy patch should accept blockedKeywords',
+      );
+
+      final getResp = await _client
+          .get(
+            Uri.parse('$_apiBase${UserApiMetadata.getPrivacySettingsPath}'),
+            headers: _authHeaders(UserRequestPageIds.getPrivacySettings),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect(
+        getResp.statusCode,
+        200,
+        reason: 'privacy settings should remain readable after patch',
+      );
+      final privacy = PrivacySettingsWireDto.fromMap(
+        jsonDecode(getResp.body) as Map<String, dynamic>,
+      );
+      expect(
+        privacy.blockedKeywords,
+        containsAll(blockedKeywords),
+        reason: 'privacy settings should persist blockedKeywords',
       );
     });
   });

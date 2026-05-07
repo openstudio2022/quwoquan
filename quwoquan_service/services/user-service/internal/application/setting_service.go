@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strings"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
@@ -37,7 +38,14 @@ func (s *SettingService) UpdateNotificationSettings(ctx context.Context, userID 
 		return err
 	}
 	if st == nil {
-		st = &model.UserSetting{UserID: userID, EnablePush: true, AllowStrangerMsg: true, ProfileVisibility: "public", AssistantEnabled: true}
+		st = &model.UserSetting{
+			UserID:            userID,
+			EnablePush:        true,
+			AllowStrangerMsg:  true,
+			ProfileVisibility: "public",
+			AssistantEnabled:  true,
+			BlockedKeywords:   []string{},
+		}
 	}
 	if v, ok := data["enablePush"].(bool); ok {
 		st.EnablePush = v
@@ -56,7 +64,14 @@ func (s *SettingService) UpdateNotificationSettings(ctx context.Context, userID 
 }
 
 func (s *SettingService) GetPrivacySettings(ctx context.Context, userID string) (*model.UserSetting, error) {
-	return s.GetNotificationSettings(ctx, userID)
+	st, err := s.GetNotificationSettings(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if st != nil && st.BlockedKeywords == nil {
+		st.BlockedKeywords = []string{}
+	}
+	return st, nil
 }
 
 func (s *SettingService) UpdatePrivacySettings(ctx context.Context, userID string, data map[string]any) error {
@@ -65,7 +80,14 @@ func (s *SettingService) UpdatePrivacySettings(ctx context.Context, userID strin
 		return err
 	}
 	if st == nil {
-		st = &model.UserSetting{UserID: userID, EnablePush: true, AllowStrangerMsg: true, ProfileVisibility: "public", AssistantEnabled: true}
+		st = &model.UserSetting{
+			UserID:            userID,
+			EnablePush:        true,
+			AllowStrangerMsg:  true,
+			ProfileVisibility: "public",
+			AssistantEnabled:  true,
+			BlockedKeywords:   []string{},
+		}
 	}
 	if v, ok := data["allowStrangerMsg"].(bool); ok {
 		st.AllowStrangerMsg = v
@@ -73,9 +95,47 @@ func (s *SettingService) UpdatePrivacySettings(ctx context.Context, userID strin
 	if v, ok := data["profileVisibility"].(string); ok {
 		st.ProfileVisibility = v
 	}
+	if blockedKeywords, ok := normalizeBlockedKeywords(data["blockedKeywords"]); ok {
+		st.BlockedKeywords = blockedKeywords
+	}
 	if err := s.settings.Upsert(ctx, st); err != nil {
 		return err
 	}
 	_ = s.scache.Del(ctx, userID)
 	return nil
+}
+
+func normalizeBlockedKeywords(raw any) ([]string, bool) {
+	if raw == nil {
+		return nil, false
+	}
+	var values []string
+	switch typed := raw.(type) {
+	case []string:
+		values = append(values, typed...)
+	case []any:
+		for _, item := range typed {
+			text, ok := item.(string)
+			if !ok {
+				continue
+			}
+			values = append(values, text)
+		}
+	default:
+		return nil, false
+	}
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		keyword := strings.TrimSpace(value)
+		if keyword == "" {
+			continue
+		}
+		if _, exists := seen[keyword]; exists {
+			continue
+		}
+		seen[keyword] = struct{}{}
+		normalized = append(normalized, keyword)
+	}
+	return normalized, true
 }

@@ -22,11 +22,11 @@ type pgSettingStoreBase struct {
 	pool *pgxpool.Pool
 }
 
-const userSettingCols = `user_id, enable_push, enable_marketing, quiet_hours_start, quiet_hours_end, default_incoming_call_ringtone_id, allow_caller_ringtone_override, enable_call_vibration, enable_group_call_ring, allow_stranger_msg, profile_visibility, content_language, feed_preference, assistant_enabled, default_theme_mode, default_font_size_preset, appearance_version, appearance_updated_at, updated_at`
+const userSettingCols = `user_id, enable_push, enable_marketing, quiet_hours_start, quiet_hours_end, default_incoming_call_ringtone_id, allow_caller_ringtone_override, enable_call_vibration, enable_group_call_ring, allow_stranger_msg, profile_visibility, content_language, feed_preference, assistant_enabled, default_theme_mode, default_font_size_preset, appearance_version, appearance_updated_at, blocked_keywords, updated_at`
 
 func scanUserSetting(row pgx.Row) (*model.UserSetting, error) {
 	e := &model.UserSetting{}
-	err := row.Scan(&e.UserID, &e.EnablePush, &e.EnableMarketing, &e.QuietHoursStart, &e.QuietHoursEnd, &e.DefaultIncomingCallRingtoneID, &e.AllowCallerRingtoneOverride, &e.EnableCallVibration, &e.EnableGroupCallRing, &e.AllowStrangerMsg, &e.ProfileVisibility, &e.ContentLanguage, &e.FeedPreference, &e.AssistantEnabled, &e.DefaultThemeMode, &e.DefaultFontSizePreset, &e.AppearanceVersion, &e.AppearanceUpdatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.UserID, &e.EnablePush, &e.EnableMarketing, &e.QuietHoursStart, &e.QuietHoursEnd, &e.DefaultIncomingCallRingtoneID, &e.AllowCallerRingtoneOverride, &e.EnableCallVibration, &e.EnableGroupCallRing, &e.AllowStrangerMsg, &e.ProfileVisibility, &e.ContentLanguage, &e.FeedPreference, &e.AssistantEnabled, &e.DefaultThemeMode, &e.DefaultFontSizePreset, &e.AppearanceVersion, &e.AppearanceUpdatedAt, &e.BlockedKeywords, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -46,8 +46,8 @@ func (s *pgSettingStoreBase) FindByID(ctx context.Context, id string) (*model.Us
 func (s *pgSettingStoreBase) Create(ctx context.Context, e *model.UserSetting) error {
 	e.UpdatedAt = time.Now().UTC()
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO user_settings (user_id, enable_push, enable_marketing, quiet_hours_start, quiet_hours_end, default_incoming_call_ringtone_id, allow_caller_ringtone_override, enable_call_vibration, enable_group_call_ring, allow_stranger_msg, profile_visibility, content_language, feed_preference, assistant_enabled, default_theme_mode, default_font_size_preset, appearance_version, appearance_updated_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
-		e.UserID, e.EnablePush, e.EnableMarketing, e.QuietHoursStart, e.QuietHoursEnd, e.DefaultIncomingCallRingtoneID, e.AllowCallerRingtoneOverride, e.EnableCallVibration, e.EnableGroupCallRing, e.AllowStrangerMsg, e.ProfileVisibility, e.ContentLanguage, e.FeedPreference, e.AssistantEnabled, e.DefaultThemeMode, e.DefaultFontSizePreset, e.AppearanceVersion, e.AppearanceUpdatedAt, e.UpdatedAt)
+		`INSERT INTO user_settings (user_id, enable_push, enable_marketing, quiet_hours_start, quiet_hours_end, default_incoming_call_ringtone_id, allow_caller_ringtone_override, enable_call_vibration, enable_group_call_ring, allow_stranger_msg, profile_visibility, content_language, feed_preference, assistant_enabled, default_theme_mode, default_font_size_preset, appearance_version, appearance_updated_at, blocked_keywords, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+		e.UserID, e.EnablePush, e.EnableMarketing, e.QuietHoursStart, e.QuietHoursEnd, e.DefaultIncomingCallRingtoneID, e.AllowCallerRingtoneOverride, e.EnableCallVibration, e.EnableGroupCallRing, e.AllowStrangerMsg, e.ProfileVisibility, e.ContentLanguage, e.FeedPreference, e.AssistantEnabled, e.DefaultThemeMode, e.DefaultFontSizePreset, e.AppearanceVersion, e.AppearanceUpdatedAt, e.BlockedKeywords, e.UpdatedAt)
 	return err
 }
 
@@ -55,8 +55,8 @@ func (s *pgSettingStoreBase) Create(ctx context.Context, e *model.UserSetting) e
 func (s *pgSettingStoreBase) Update(ctx context.Context, e *model.UserSetting) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE user_settings SET enable_push=$2, enable_marketing=$3, quiet_hours_start=$4, quiet_hours_end=$5, default_incoming_call_ringtone_id=$6, allow_caller_ringtone_override=$7, enable_call_vibration=$8, enable_group_call_ring=$9, allow_stranger_msg=$10, profile_visibility=$11, content_language=$12, feed_preference=$13, assistant_enabled=$14, default_theme_mode=$15, default_font_size_preset=$16, appearance_version=$17, appearance_updated_at=$18, updated_at=$19 WHERE user_id = $1`,
-		e.UserID, e.EnablePush, e.EnableMarketing, e.QuietHoursStart, e.QuietHoursEnd, e.DefaultIncomingCallRingtoneID, e.AllowCallerRingtoneOverride, e.EnableCallVibration, e.EnableGroupCallRing, e.AllowStrangerMsg, e.ProfileVisibility, e.ContentLanguage, e.FeedPreference, e.AssistantEnabled, e.DefaultThemeMode, e.DefaultFontSizePreset, e.AppearanceVersion, e.AppearanceUpdatedAt, e.UpdatedAt)
+		`UPDATE user_settings SET enable_push=$2, enable_marketing=$3, quiet_hours_start=$4, quiet_hours_end=$5, default_incoming_call_ringtone_id=$6, allow_caller_ringtone_override=$7, enable_call_vibration=$8, enable_group_call_ring=$9, allow_stranger_msg=$10, profile_visibility=$11, content_language=$12, feed_preference=$13, assistant_enabled=$14, default_theme_mode=$15, default_font_size_preset=$16, appearance_version=$17, appearance_updated_at=$18, blocked_keywords=$19, updated_at=$20 WHERE user_id = $1`,
+		e.UserID, e.EnablePush, e.EnableMarketing, e.QuietHoursStart, e.QuietHoursEnd, e.DefaultIncomingCallRingtoneID, e.AllowCallerRingtoneOverride, e.EnableCallVibration, e.EnableGroupCallRing, e.AllowStrangerMsg, e.ProfileVisibility, e.ContentLanguage, e.FeedPreference, e.AssistantEnabled, e.DefaultThemeMode, e.DefaultFontSizePreset, e.AppearanceVersion, e.AppearanceUpdatedAt, e.BlockedKeywords, e.UpdatedAt)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func (s *pgSettingStoreBase) ListByUserID(ctx context.Context, fkID string) ([]m
 	var result []model.UserSetting
 	for rows.Next() {
 		var e model.UserSetting
-		if err := rows.Scan(&e.UserID, &e.EnablePush, &e.EnableMarketing, &e.QuietHoursStart, &e.QuietHoursEnd, &e.DefaultIncomingCallRingtoneID, &e.AllowCallerRingtoneOverride, &e.EnableCallVibration, &e.EnableGroupCallRing, &e.AllowStrangerMsg, &e.ProfileVisibility, &e.ContentLanguage, &e.FeedPreference, &e.AssistantEnabled, &e.DefaultThemeMode, &e.DefaultFontSizePreset, &e.AppearanceVersion, &e.AppearanceUpdatedAt, &e.UpdatedAt); err != nil {
+		if err := rows.Scan(&e.UserID, &e.EnablePush, &e.EnableMarketing, &e.QuietHoursStart, &e.QuietHoursEnd, &e.DefaultIncomingCallRingtoneID, &e.AllowCallerRingtoneOverride, &e.EnableCallVibration, &e.EnableGroupCallRing, &e.AllowStrangerMsg, &e.ProfileVisibility, &e.ContentLanguage, &e.FeedPreference, &e.AssistantEnabled, &e.DefaultThemeMode, &e.DefaultFontSizePreset, &e.AppearanceVersion, &e.AppearanceUpdatedAt, &e.BlockedKeywords, &e.UpdatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, e)

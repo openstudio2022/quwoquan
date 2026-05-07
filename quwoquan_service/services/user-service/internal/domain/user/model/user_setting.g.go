@@ -24,5 +24,6 @@ type UserSetting struct {
 	DefaultFontSizePreset         string    `json:"defaultFontSizePreset" db:"default_font_size_preset"`
 	AppearanceVersion             int       `json:"appearanceVersion" db:"appearance_version"`
 	AppearanceUpdatedAt           time.Time `json:"appearanceUpdatedAt" db:"appearance_updated_at"`
+	BlockedKeywords               []string  `json:"blockedKeywords" db:"blocked_keywords"`
 	UpdatedAt                     time.Time `json:"updatedAt" db:"updated_at"`
 }
