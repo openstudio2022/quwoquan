@@ -22,12 +22,12 @@
 
 | 关联节点 | 说明 |
 |----------|------|
-| integration-deploy-and-l3-l4-gate | 含 04. Pre-Release Gate |
+| integration-deploy-and-l3-l4-gate | 含 04. Pre-Release Gate（ECS gamma 主门禁） |
 | gray-release-to-prod | 含 06/07 Deploy To Prod |
 
 ## 验收标准概要
 
 - A1：主工作流名称唯一且符合 01～08 序号
-- A2：`workflow_consolidation_plan.md` 含最新命名规范与 02/03 去重结论
+- A2：`workflow_consolidation_plan.md` 含最新命名规范与 02/03 去重结论，并明确 `04/05/08` 的 ECS gamma / self-hosted 分工
 - A3：不存在 `merge-dev1.0-to-main.yml`、`05 wrapper` 等已删除的重复入口
 - A4：`ci_cd_end_to_end_design.md`、`deliver_to_production_runbook.md`、`branch_strategy.md` 与规范一致

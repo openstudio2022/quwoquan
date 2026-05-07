@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/assistant/transcript/citation/assistant_citation.dart';
 import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
@@ -10,6 +15,7 @@ import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_reference_webview_page.dart';
@@ -22,10 +28,12 @@ class PersonalAssistantConversationPage extends ConsumerStatefulWidget {
     super.key,
     this.embedded = false,
     this.onBack,
+    this.assistantOpenContext,
   });
 
   final bool embedded;
   final VoidCallback? onBack;
+  final AssistantOpenContext? assistantOpenContext;
 
   @override
   ConsumerState<PersonalAssistantConversationPage> createState() =>
@@ -39,11 +47,23 @@ class _PersonalAssistantConversationPageState
   final FocusNode _inputFocusNode = FocusNode();
   bool _userScrolledAway = false;
   bool _showScrollFab = false;
+  bool _initialQueryHandled = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScrollChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(
+        ref
+            .read(personalAssistantStreamControllerProvider.notifier)
+            .ensureHistoryInitialized()
+            .then((_) => _sendInitialQueryIfNeeded()),
+      );
+    });
   }
 
   @override
@@ -100,6 +120,22 @@ class _PersonalAssistantConversationPageState
     await _sendText(text);
   }
 
+  Future<void> _sendInitialQueryIfNeeded() async {
+    if (!mounted || _initialQueryHandled) {
+      return;
+    }
+    _initialQueryHandled = true;
+    final query =
+        widget.assistantOpenContext?.hints['autoSendQuery']
+            ?.toString()
+            .trim() ??
+        '';
+    if (query.isEmpty) {
+      return;
+    }
+    await _sendText(query);
+  }
+
   Future<void> _openReference(AssistantCitation citation) async {
     final url = citation.url.trim();
     if (url.isEmpty) return;
@@ -153,6 +189,11 @@ class _PersonalAssistantConversationPageState
                 onPressed: widget.onBack,
                 child: const Icon(CupertinoIcons.back),
               ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => context.push(AppRoutePaths.assistantManagement),
+          child: const Icon(CupertinoIcons.settings),
+        ),
       ),
       child: SafeArea(child: content),
     );
@@ -206,101 +247,107 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Expanded(
-            child: ConversationTimeline(
-              controller: scrollController,
-              backgroundColor: chatListBg,
-              padding: timelinePadding,
-              itemCount: state.transcript.length,
-              overlays: <Widget>[
-                if (showScrollFab)
-                  Positioned(
-                    right: AppSpacing.md,
-                    bottom: AppSpacing.md,
-                    child: StreamingScrollFab(onTap: onScrollToBottom),
+            child: state.historyLoading && state.transcript.isEmpty
+                ? Center(child: CupertinoActivityIndicator(color: foreground))
+                : ConversationTimeline(
+                    controller: scrollController,
+                    backgroundColor: chatListBg,
+                    padding: timelinePadding,
+                    itemCount: state.transcript.length,
+                    overlays: <Widget>[
+                      if (showScrollFab)
+                        Positioned(
+                          right: AppSpacing.md,
+                          bottom: AppSpacing.md,
+                          child: StreamingScrollFab(onTap: onScrollToBottom),
+                        ),
+                    ],
+                    itemBuilder: (context, index) {
+                      final row = state.transcript[index];
+                      final isUserRow = row is UserTranscriptTimelineRow;
+                      final isAssistantMessage =
+                          row is AssistantAnswerTranscriptRow ||
+                          row is ErrorTranscriptTimelineRow;
+                      return AssistantMessageBubble(
+                        transcriptRow: row,
+                        isRight: isUserRow,
+                        bubbleColor: isUserRow ? bubbleSelf : bubbleOther,
+                        textColor: isUserRow ? AppColors.white : foreground,
+                        isSelectionMode: false,
+                        isSelected: false,
+                        onLongPressStart: (_) {},
+                        hideAvatarAndName: true,
+                        useFullWidth: true,
+                        renderSelfTextWithoutBubble: true,
+                        answerGateOpen:
+                            !state.running ||
+                            index != state.transcript.length - 1 ||
+                            !isAssistantMessage ||
+                            state.answerGateOpen,
+                        isAssistantRunning:
+                            state.running &&
+                            index == state.transcript.length - 1 &&
+                            isAssistantMessage,
+                        expandProcessByDefault:
+                            isAssistantMessage &&
+                            index == state.transcript.length - 1,
+                        runningStatusLabel:
+                            state.running &&
+                                index == state.transcript.length - 1 &&
+                                isAssistantMessage
+                            ? UITextConstants.assistantPhaseUnderstanding
+                            : null,
+                        showFeedbackActions:
+                            isAssistantMessage &&
+                            !state.running &&
+                            index == state.transcript.length - 1,
+                        feedbackStatus: state.feedbackMessage,
+                        onFeedbackHelpful: isAssistantMessage
+                            ? () => ref
+                                  .read(
+                                    personalAssistantStreamControllerProvider
+                                        .notifier,
+                                  )
+                                  .submitFeedback('useful')
+                            : null,
+                        onFeedbackUnhelpful: isAssistantMessage
+                            ? () => ref
+                                  .read(
+                                    personalAssistantStreamControllerProvider
+                                        .notifier,
+                                  )
+                                  .submitFeedback('irrelevant')
+                            : null,
+                        onCopyAnswer: isAssistantMessage
+                            ? () {
+                                final text = _assistantRowText(row);
+                                if (text.isNotEmpty) {
+                                  Clipboard.setData(ClipboardData(text: text));
+                                  ref
+                                      .read(
+                                        personalAssistantStreamControllerProvider
+                                            .notifier,
+                                      )
+                                      .submitFeedback('copied');
+                                }
+                              }
+                            : null,
+                        onReferenceTap: isAssistantMessage
+                            ? onReferenceTap
+                            : null,
+                        onShareAnswer: isAssistantMessage
+                            ? () {
+                                final text = _assistantRowText(row);
+                                if (text.isNotEmpty) {
+                                  SharePlus.instance.share(
+                                    ShareParams(text: text),
+                                  );
+                                }
+                              }
+                            : null,
+                      );
+                    },
                   ),
-              ],
-              itemBuilder: (context, index) {
-                final row = state.transcript[index];
-                final isUserRow = row is UserTranscriptTimelineRow;
-                final isAssistantMessage =
-                    row is AssistantAnswerTranscriptRow ||
-                    row is ErrorTranscriptTimelineRow;
-                return AssistantMessageBubble(
-                  transcriptRow: row,
-                  isRight: isUserRow,
-                  bubbleColor: isUserRow ? bubbleSelf : bubbleOther,
-                  textColor: isUserRow ? AppColors.white : foreground,
-                  isSelectionMode: false,
-                  isSelected: false,
-                  onLongPressStart: (_) {},
-                  hideAvatarAndName: true,
-                  useFullWidth: true,
-                  renderSelfTextWithoutBubble: true,
-                  answerGateOpen:
-                      !state.running ||
-                      index != state.transcript.length - 1 ||
-                      !isAssistantMessage ||
-                      state.answerGateOpen,
-                  isAssistantRunning:
-                      state.running &&
-                      index == state.transcript.length - 1 &&
-                      isAssistantMessage,
-                  expandProcessByDefault:
-                      isAssistantMessage &&
-                      index == state.transcript.length - 1,
-                  runningStatusLabel:
-                      state.running &&
-                          index == state.transcript.length - 1 &&
-                          isAssistantMessage
-                      ? UITextConstants.assistantPhaseUnderstanding
-                      : null,
-                  showFeedbackActions:
-                      isAssistantMessage &&
-                      !state.running &&
-                      index == state.transcript.length - 1,
-                  feedbackStatus: state.feedbackMessage,
-                  onFeedbackHelpful: isAssistantMessage
-                      ? () => ref
-                            .read(
-                              personalAssistantStreamControllerProvider
-                                  .notifier,
-                            )
-                            .submitFeedback('useful')
-                      : null,
-                  onFeedbackUnhelpful: isAssistantMessage
-                      ? () => ref
-                            .read(
-                              personalAssistantStreamControllerProvider
-                                  .notifier,
-                            )
-                            .submitFeedback('irrelevant')
-                      : null,
-                  onCopyAnswer: isAssistantMessage
-                      ? () {
-                          final text = _assistantRowText(row);
-                          if (text.isNotEmpty) {
-                            Clipboard.setData(ClipboardData(text: text));
-                            ref
-                                .read(
-                                  personalAssistantStreamControllerProvider
-                                      .notifier,
-                                )
-                                .submitFeedback('copied');
-                          }
-                        }
-                      : null,
-                  onReferenceTap: isAssistantMessage ? onReferenceTap : null,
-                  onShareAnswer: isAssistantMessage
-                      ? () {
-                          final text = _assistantRowText(row);
-                          if (text.isNotEmpty) {
-                            SharePlus.instance.share(ShareParams(text: text));
-                          }
-                        }
-                      : null,
-                );
-              },
-            ),
           ),
           ColoredBox(
             color: isDark ? background : AppColors.chatToolbarBackground,
@@ -317,17 +364,20 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
                       AppSpacing.containerSm,
                   AppSpacing.sm,
                 ),
-                child: CustomizableChatInputBar(
-                  controller: controller,
-                  focusNode: focusNode,
-                  textFieldKey: TestKeys.assistantChatInputField,
-                  hintText: UITextConstants.assistantAskPlaceholder,
-                  maxTextLength: 5000,
-                  maxVisibleLines: 5,
-                  onSend: state.running ? (_) async {} : onSend,
-                  sendButtonKey: TestKeys.assistantSendButton,
-                  showEmojiButton: true,
-                  extraPanelItems: const <ChatInputExtraPanelItem>[],
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: CustomizableChatInputBar(
+                    controller: controller,
+                    focusNode: focusNode,
+                    textFieldKey: TestKeys.assistantChatInputField,
+                    hintText: UITextConstants.assistantAskPlaceholder,
+                    maxTextLength: 5000,
+                    maxVisibleLines: 5,
+                    onSend: state.running ? (_) async {} : onSend,
+                    sendButtonKey: TestKeys.assistantSendButton,
+                    showEmojiButton: true,
+                    extraPanelItems: const <ChatInputExtraPanelItem>[],
+                  ),
                 ),
               ),
             ),

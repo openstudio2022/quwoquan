@@ -17,7 +17,7 @@
   "seed": {
     "status": "passed",
     "insertedCount": 10,
-    "output": "time=\"2026-05-04T20:33:59+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
+    "output": "time=\"2026-05-05T10:19:13+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
   },
   "endpoints": [
     {
@@ -58,7 +58,7 @@
       "domain": "chat",
       "path": "/v1/chat/inbox",
       "httpStatus": 200,
-      "bytes": 14648,
+      "bytes": 20502,
       "status": "passed"
     },
     {

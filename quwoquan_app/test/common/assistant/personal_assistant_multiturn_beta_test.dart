@@ -6,21 +6,21 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   _mockPathProviderForIntegrationTest();
 
-  testWidgets('找私助 beta 多轮继承上下文并可切到找小趣', (tester) async {
+  testWidgets('找私助 beta 多轮继承上下文', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: AssistantTabPage())),
+      const ProviderScope(
+        child: MaterialApp(home: PersonalAssistantConversationPage()),
+      ),
     );
     await _pumpFrames(tester, count: 8);
 
-    await tester.tap(find.text('找私助'));
-    await _pumpFrames(tester, count: 4);
     expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
     await _send(tester, 'Shen zhen tian qi');
@@ -53,15 +53,11 @@ void main() {
       isTrue,
     );
     expect(prompts.any((prompt) => prompt.contains('四口之家')), isTrue);
-
-    await tester.tap(find.text('找小趣'));
-    await _pumpFrames(tester, count: 8);
-    expect(find.byKey(TestKeys.assistantDialogPage), findsOneWidget);
   });
 }
 
 PersonalAssistantStreamState _controllerState(WidgetTester tester) {
-  final context = tester.element(find.byType(AssistantTabPage));
+  final context = tester.element(find.byType(PersonalAssistantConversationPage));
   return ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider);
@@ -82,7 +78,7 @@ Future<void> _send(WidgetTester tester, String text) async {
 }
 
 Future<void> _sendThroughController(WidgetTester tester, String text) async {
-  final context = tester.element(find.byType(AssistantTabPage));
+  final context = tester.element(find.byType(PersonalAssistantConversationPage));
   await ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider.notifier).send(text);

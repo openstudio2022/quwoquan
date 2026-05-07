@@ -5,11 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
+import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
@@ -57,6 +60,133 @@ Widget _buildApp() {
   );
 }
 
+Widget _buildAppWithStableFollowingArticles() {
+  return ProviderScope(
+    overrides: [
+      contentRepositoryProvider.overrideWithValue(
+        _StableFollowingArticleContentRepository(),
+      ),
+      contentFeatureFlagProvider(
+        'enable_article_distribution_profiles',
+      ).overrideWith((ref) => true),
+      discoveryFeedMapProvider.overrideWith(
+        _StableFollowingDiscoveryFeedMapNotifier.new,
+      ),
+    ],
+    child: ScreenUtilInit(
+      designSize: const Size(393, 852),
+      child: MaterialApp.router(
+        routerConfig: GoRouter(
+          initialLocation: '/',
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (context, state) =>
+                  const Scaffold(body: HomePage(routeLocation: '/')),
+            ),
+            GoRoute(
+              path: '/circles',
+              builder: (context, state) => const Scaffold(body: CirclesPage()),
+            ),
+            GoRoute(
+              path: '/circle/:id',
+              builder: (context, state) => const SizedBox(),
+            ),
+            GoRoute(
+              path: '/chat/:id',
+              builder: (context, state) => const SizedBox(),
+            ),
+            GoRoute(
+              path: '/search',
+              builder: (context, state) => const GlobalSearchPage(
+                launchContext: SearchLaunchContext(entrySurfaceId: '/'),
+              ),
+            ),
+            GoRoute(
+              path: '/user/:username',
+              builder: (context, state) => const SizedBox(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _StableFollowingArticleContentRepository extends MockContentRepository {
+  @override
+  List<PostBaseDto> embeddedDiscoveryArticlePostsForFollowingMix() {
+    return <PostBaseDto>[
+      _articlePost(
+        id: 'web-dev',
+        title: '给新同事的 Web 工程工具清单',
+        body: '从构建、调试到部署，把最容易漏掉的环节集中整理成一页。',
+        coverUrl: 'https://example.com/article-web-dev-cover.jpg',
+      ),
+      _articlePost(
+        id: 'ritual_plain',
+        title: '晨间复盘的十分钟礼记',
+        body: '把前一天的情绪、节奏和待办留在固定版式里，早晨更容易进入状态。',
+      ),
+      _articlePost(
+        id: 'diffuse_cover_body_only',
+        body: '把路线、风向和停留时间直接写进正文里，让临场决定也能保持连贯。',
+        coverUrl: 'https://example.com/article-diffuse-cover.jpg',
+      ),
+      _articlePost(
+        id: 'journal_plain_body_only',
+        body: '没有标题也没有封面，仍然可以用正文首句承接整张卡片的信息层级。',
+      ),
+    ];
+  }
+
+  PostBaseDto _articlePost({
+    required String id,
+    String title = '',
+    required String body,
+    String coverUrl = '',
+  }) {
+    return postBaseDtoFromMap(<String, dynamic>{
+      'id': id,
+      '_id': id,
+      'postId': id,
+      'contentType': 'article',
+      'type': 'article',
+      'authorId': 'fixture_user_current',
+      'displayName': '测试作者',
+      'title': title,
+      'body': body,
+      'coverUrl': coverUrl,
+      'imageUrl': coverUrl,
+      'mediaCoverUrl': coverUrl,
+      'createdAt': '2026-05-01T08:00:00Z',
+      'articleTemplate': id == 'ritual_plain'
+          ? 'ritual'
+          : id == 'diffuse_cover_body_only'
+          ? 'diffuse'
+          : id == 'journal_plain_body_only'
+          ? 'journal'
+          : 'tech',
+    });
+  }
+}
+
+class _StableFollowingDiscoveryFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'following': const AsyncData(
+        DiscoveryFeedState(
+          items: <PostBaseDto>[],
+          seenItemIds: <String>[],
+          nextCursor: null,
+          isLoading: false,
+        ),
+      ),
+    };
+  }
+}
+
 void _suppressExpectedErrors() {
   final original = FlutterError.onError;
   FlutterError.onError = (details) {
@@ -78,6 +208,23 @@ void _setPhoneSize(WidgetTester tester) {
 void _setWideSize(WidgetTester tester) {
   tester.view.physicalSize = const Size(2048, 2732);
   tester.view.devicePixelRatio = 2.0;
+}
+
+Future<void> _scrollUntilFinderVisible(
+  WidgetTester tester,
+  Finder scrollable,
+  Finder target, {
+  Offset step = const Offset(0, -320),
+  int maxScrolls = 12,
+}) async {
+  for (var i = 0; i < maxScrolls; i++) {
+    if (target.evaluate().isNotEmpty) {
+      return;
+    }
+    await tester.drag(scrollable, step);
+    await tester.pumpAndSettle();
+  }
+  expect(target, findsOneWidget);
 }
 
 void main() {
@@ -243,7 +390,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_buildApp());
+      await tester.pumpWidget(_buildAppWithStableFollowingArticles());
       await tester.pumpAndSettle();
 
       final scrollable = find.byType(Scrollable).first;
@@ -264,11 +411,7 @@ void main() {
         ),
       );
 
-      await tester.dragUntilVisible(
-        coverCard,
-        scrollable,
-        const Offset(0, -320),
-      );
+      await _scrollUntilFinderVisible(tester, scrollable, coverCard);
       await tester.pumpAndSettle();
       expect(coverCard, findsOneWidget);
       expect(
@@ -281,11 +424,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.dragUntilVisible(
-        textOnlyCard,
-        scrollable,
-        const Offset(0, -320),
-      );
+      await _scrollUntilFinderVisible(tester, scrollable, textOnlyCard);
       await tester.pumpAndSettle();
       expect(textOnlyCard, findsOneWidget);
       expect(
@@ -298,11 +437,7 @@ void main() {
         findsNothing,
       );
 
-      await tester.dragUntilVisible(
-        bodyOnlyCoverCard,
-        scrollable,
-        const Offset(0, -320),
-      );
+      await _scrollUntilFinderVisible(tester, scrollable, bodyOnlyCoverCard);
       await tester.pumpAndSettle();
       expect(bodyOnlyCoverCard, findsOneWidget);
       expect(
@@ -324,11 +459,7 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.dragUntilVisible(
-        bodyOnlyTextCard,
-        scrollable,
-        const Offset(0, -320),
-      );
+      await _scrollUntilFinderVisible(tester, scrollable, bodyOnlyTextCard);
       await tester.pumpAndSettle();
       expect(bodyOnlyTextCard, findsOneWidget);
       expect(

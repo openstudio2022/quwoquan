@@ -18,16 +18,16 @@ class TestKeys {
     'discovery_create_button',
   );
   static const createPage = ValueKey<String>('create_page');
+
   /// 沉浸文章顶栏「编辑 / 预览」分段控件。
   static const articleSurfaceModeSegmented = ValueKey<String>(
     'article_surface_mode_segmented',
   );
+
   /// 沉浸文章预览态横向翻页（含翻书动效）。
   static const articlePreviewBookPager = ValueKey<String>(
     'article_preview_book_pager',
   );
-  static const assistantTabPage = ValueKey<String>('assistant_tab_page');
-  static const assistantDialogPage = ValueKey<String>('assistant_dialog_page');
   static const fullscreenModalSurface = ValueKey<String>(
     'fullscreen_modal_surface',
   );
@@ -174,14 +174,6 @@ class TestKeys {
   static const assistantProcessBody = ValueKey<String>(
     'assistant_process_body',
   );
-
-  // ── Assistant Internal Tabs ─────────────────────────────────────────
-  static const assistantScheduleTab = ValueKey<String>(
-    'assistant_schedule_tab',
-  );
-  static const assistantDialogTab = ValueKey<String>('assistant_dialog_tab');
-  static const assistantSkillsTab = ValueKey<String>('assistant_skills_tab');
-
   // ── Author / Profile ────────────────────────────────────────────────
   static const authorAvatar = ValueKey<String>('author_avatar');
   static const authorName = ValueKey<String>('author_name');
@@ -359,7 +351,9 @@ class TestKeys {
   static const articlePageCurlHotzoneBottomRight = ValueKey<String>(
     'article_page_curl_hotzone_bottom_right',
   );
-  static const articleEditorPageGap = ValueKey<String>('article_editor_page_gap');
+  static const articleEditorPageGap = ValueKey<String>(
+    'article_editor_page_gap',
+  );
   static const articlePreviewCoverStrip = ValueKey<String>(
     'article_preview_cover_strip',
   );

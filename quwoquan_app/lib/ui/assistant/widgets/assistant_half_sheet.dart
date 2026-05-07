@@ -8,12 +8,9 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/assistant/config/assistant_prompt_config.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 
-/// 小趣半弹窗：约 50% 屏高、可拖拽，展示欢迎句、推荐 chips、「当前适合干啥」、输入框与「进入完整对话」。
+/// 私助半弹窗：约 50% 屏高、可拖拽，展示欢迎句、推荐 chips、「当前适合干啥」、输入框与「进入完整对话」。
 class AssistantHalfSheet extends StatelessWidget {
-  const AssistantHalfSheet({
-    super.key,
-    required this.openContext,
-  });
+  const AssistantHalfSheet({super.key, required this.openContext});
 
   final AssistantOpenContext openContext;
 
@@ -25,23 +22,34 @@ class AssistantHalfSheet extends StatelessWidget {
     await Future<void>.delayed(Duration.zero);
     if (!modalContext.mounted) return;
     modalContext.push(
-      AppRoutePaths.chatDetail(id: AppConceptConstants.assistantConversationId),
+      AppRoutePaths.assistantPersonal,
       extra: assistantOpenContext,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final bgColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final containerMd = AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.md] ?? AppSpacing.containerMd;
-    final intraSm = AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[DesignSemanticConstants.sm] ?? AppSpacing.intraGroupSm;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final bgColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final containerMd =
+        AppSpacing.semantic[DesignSemanticConstants
+            .container]?[DesignSemanticConstants.md] ??
+        AppSpacing.containerMd;
+    final intraSm =
+        AppSpacing.semantic[DesignSemanticConstants
+            .intraGroup]?[DesignSemanticConstants.sm] ??
+        AppSpacing.intraGroupSm;
 
     final welcome = AssistantPromptConfig.getWelcomeMessage(openContext);
     final chips = AssistantPromptConfig.getChips(openContext);
@@ -158,15 +166,23 @@ class AssistantHalfSheet extends StatelessWidget {
             ],
             const Spacer(),
             Padding(
-              padding: EdgeInsets.fromLTRB(containerMd, intraSm, containerMd, containerMd),
+              padding: EdgeInsets.fromLTRB(
+                containerMd,
+                intraSm,
+                containerMd,
+                containerMd,
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       decoration: InputDecoration(
-                        hintText: UITextConstants.assistantHalfSheetInputPlaceholder,
+                        hintText:
+                            UITextConstants.assistantHalfSheetInputPlaceholder,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppSpacing.borderRadius,
+                          ),
                         ),
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: containerMd,
@@ -184,13 +200,13 @@ class AssistantHalfSheet extends StatelessWidget {
                     onPressed: () {
                       Navigator.of(context).pop();
                       context.push(
-                        AppRoutePaths.chatDetail(
-                          id: AppConceptConstants.assistantConversationId,
-                        ),
+                        AppRoutePaths.assistantPersonal,
                         extra: openContext,
                       );
                     },
-                    child: Text(UITextConstants.assistantHalfSheetEnterFullChat),
+                    child: Text(
+                      UITextConstants.assistantHalfSheetEnterFullChat,
+                    ),
                   ),
                 ],
               ),
@@ -203,23 +219,22 @@ class AssistantHalfSheet extends StatelessWidget {
 }
 
 class ActionChip extends StatelessWidget {
-  const ActionChip({
-    super.key,
-    required this.label,
-    required this.onPressed,
-  });
+  const ActionChip({super.key, required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fgPrimary =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final surface =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final surface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -235,10 +250,7 @@ class ActionChip extends StatelessWidget {
         onPressed: onPressed,
         child: Text(
           label,
-          style: TextStyle(
-            fontSize: AppTypography.sm,
-            color: fgPrimary,
-          ),
+          style: TextStyle(fontSize: AppTypography.sm, color: fgPrimary),
         ),
       ),
     );

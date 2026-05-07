@@ -87,9 +87,14 @@ cp "$default_cfg" "$out_dir/default_config.yaml"
 cp "$env_cfg" "$out_dir/config.yaml"
 python3 - "$service" "$env_name" "$out_dir/report.json" <<'PY'
 import json
+import re
 import sys
 from pathlib import Path
-import yaml
+
+try:
+    import yaml  # type: ignore
+except ModuleNotFoundError:
+    yaml = None
 
 service, env_name, report_path = sys.argv[1:4]
 root = Path.cwd()
@@ -102,16 +107,99 @@ catalog_version = None
 retention_version = None
 enabled_modules = []
 
+
+def _parse_inline_list(value: str) -> list[str]:
+    value = value.strip()
+    if not (value.startswith("[") and value.endswith("]")):
+        return []
+    inner = value[1:-1].strip()
+    if not inner:
+        return []
+    return [item.strip().strip("'\"") for item in inner.split(",") if item.strip()]
+
+
+def _fallback_load_mapping(path: Path, target_env: str, target_service: str) -> tuple[str | None, list[str]]:
+    env_indent = None
+    service_indent = None
+    package = None
+    modules: list[str] = []
+    collecting_modules = False
+
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+
+        env_match = re.match(r"([A-Za-z0-9_-]+):\s*$", stripped)
+        if indent == 2 and env_match:
+            env_indent = env_match.group(1) if env_match.group(1) == target_env else None
+            service_indent = None
+            collecting_modules = False
+            continue
+        if env_indent != target_env:
+            continue
+
+        service_match = re.match(r"([A-Za-z0-9_.-]+):\s*$", stripped)
+        if indent == 4 and service_match:
+            service_indent = service_match.group(1) if service_match.group(1) == target_service else None
+            collecting_modules = False
+            continue
+        if service_indent != target_service:
+            continue
+
+        if indent <= 4:
+            break
+
+        if indent == 6 and stripped.startswith("package:"):
+            package = stripped.split(":", 1)[1].strip().strip("'\"")
+            collecting_modules = False
+            continue
+        if indent == 6 and stripped.startswith("modules:"):
+            value = stripped.split(":", 1)[1].strip()
+            modules = _parse_inline_list(value)
+            collecting_modules = not bool(modules) and not value
+            continue
+        if collecting_modules and indent >= 8 and stripped.startswith("- "):
+            modules.append(stripped[2:].strip().strip("'\""))
+            continue
+        if collecting_modules and indent <= 6:
+            collecting_modules = False
+
+    return package, modules
+
+
+def _fallback_load_top_level_version(path: Path) -> int | str | None:
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("version:"):
+            value = stripped.split(":", 1)[1].strip().strip("'\"")
+            if value.isdigit():
+                return int(value)
+            return value or None
+    return None
+
 if module_mapping_path.exists():
-    module_mapping = yaml.safe_load(module_mapping_path.read_text(encoding="utf-8")) or {}
-    package_cfg = ((module_mapping.get("environments") or {}).get(env_name) or {}).get(service)
-    if package_cfg:
-        module_package = package_cfg.get("package")
-        enabled_modules = package_cfg.get("modules") or []
+    if yaml is not None:
+        module_mapping = yaml.safe_load(module_mapping_path.read_text(encoding="utf-8")) or {}
+        package_cfg = ((module_mapping.get("environments") or {}).get(env_name) or {}).get(service)
+        if package_cfg:
+            module_package = package_cfg.get("package")
+            enabled_modules = package_cfg.get("modules") or []
+    else:
+        module_package, enabled_modules = _fallback_load_mapping(module_mapping_path, env_name, service)
 if catalog_path.exists():
-    catalog_version = (yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {}).get("version")
+    if yaml is not None:
+        catalog_version = (yaml.safe_load(catalog_path.read_text(encoding="utf-8")) or {}).get("version")
+    else:
+        catalog_version = _fallback_load_top_level_version(catalog_path)
 if retention_path.exists():
-    retention_version = (yaml.safe_load(retention_path.read_text(encoding="utf-8")) or {}).get("version")
+    if yaml is not None:
+        retention_version = (yaml.safe_load(retention_path.read_text(encoding="utf-8")) or {}).get("version")
+    else:
+        retention_version = _fallback_load_top_level_version(retention_path)
 
 report = {
     "status": "packaged",

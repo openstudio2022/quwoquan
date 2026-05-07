@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/contracts/orchestrator_state_contract.dart';
+import 'package:quwoquan_app/assistant/contracts/run_artifacts.dart';
 import 'package:quwoquan_app/assistant/contracts/turn_synthesis_state_contract.dart';
-import 'package:quwoquan_app/assistant/reasoning/contracts/run_artifacts.dart';
 
 class AssistantTurnQualityGates {
   const AssistantTurnQualityGates({

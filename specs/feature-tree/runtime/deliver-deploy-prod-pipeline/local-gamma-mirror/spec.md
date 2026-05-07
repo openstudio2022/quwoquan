@@ -2,7 +2,7 @@
 
 ## 功能说明
 
-`local-gamma-mirror` 是提交前本地预测试环境：在开发机通过 Docker 镜像栈、DNS/TLS 反代、gamma seed manifest 与真机/模拟器 runner，把 `T1 -> T4` 验证尽量左移到本地完成。
+`local-gamma-mirror` 是提交前本地预测试环境：在开发机通过 Docker 镜像栈、DNS/TLS 反代、gamma seed manifest 与真机/模拟器 runner，把 `T1 -> T4` 验证尽量左移到本地完成。它复用云侧 gamma 的配置语义、seed 来源、旅程注册表和报告字段，但**不再作为进入 `main` 的独立 merge gate**。
 
 本特性不新增运行环境枚举。服务仍以 `APP_ENV=gamma` 启动，端侧仍以 `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote` 运行；本地差异只体现在 endpoint、DNS/TLS、镜像编排和测试报告。
 
@@ -13,7 +13,7 @@
 - 本地 seed/reset：只消费 `app_gamma_seed_manifest.json` 与 metadata fixtures，不在脚本中临时造业务数据。
 - 本地 `T3`：真实 HTTP API、真实存储副作用、错误码、响应 schema、RemoteRepository 解码。
 - 本地 `T4`：模拟器/真机 Patrol 核心旅程，覆盖 IME、权限、媒体、弱网、横竖屏等设备能力路径。
-- 提交前报告：`artifacts/local-gamma/report.json` 记录 commit、镜像、配置、设备、DNS/TLS 与 `T1 -> T4` 结果。
+- 提交前报告：`artifacts/local-gamma/report.json` 记录 commit、镜像、配置、设备、DNS/TLS 与 `T1 -> T4` 结果，并指向共享的 `deploy/shared/gamma_validation_suites.json`。
 
 ## Out of Scope
 
@@ -29,4 +29,4 @@
 - A3：本地 Docker mirror 可启动 `gamma` 语义服务，满足 `CONFIG_VERSION`、依赖、health、DNS/TLS 与 media endpoint 前置检查。
 - A4：本地 `T3` runner 使用 `app_gamma_seed_manifest.json` 验证真实 API、真实存储副作用、错误响应和 RemoteRepository 边界。
 - A5：本地 `T4` runner 统一 App 与测试进程 endpoint，至少在一台模拟器或真机完成 Patrol 核心旅程。
-- A6：`gate-local-gamma` 生成 `artifacts/local-gamma/report.json`，并成为后续 commit 前强制准入要求。
+- A6：`gate-local-gamma` 生成 `artifacts/local-gamma/report.json`，作为提交前左移准入，但不再成为 `main` required check。

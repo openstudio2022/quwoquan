@@ -3,7 +3,7 @@
 import 'package:quwoquan_app/assistant/capabilities/capabilities.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 
-/// [AssistantConversationController.buildContextScope] 内 `privacyPolicy` 子树的只读投影与默认表。
+/// 私助打开上下文里 `privacyPolicy` 子树的只读投影与默认表。
 class AssistantPrivacyPolicyHintReadView {
   AssistantPrivacyPolicyHintReadView._(this._raw);
 

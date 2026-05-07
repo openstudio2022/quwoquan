@@ -7,8 +7,6 @@ class AssistantRequestPageIds {
   static const Map<String, String> operationToPageId = <String, String>{
     'CreateAssistantConversation': 'assistant.create.assistant.conversation',
     'CreateAssistantTurn': 'assistant.create.assistant.turn',
-    'CreateRun': 'assistant.run.create',
-    'CreateRunStream': 'assistant.run.stream',
     'CreateSkillSubscription': 'assistant.create.skill.subscription',
     'GetAssistantConversation': 'assistant.get.assistant.conversation',
     'GetAssistantTurn': 'assistant.get.assistant.turn',
@@ -34,8 +32,6 @@ class AssistantRequestPageIds {
 
   static const String createAssistantConversation = 'assistant.create.assistant.conversation';
   static const String createAssistantTurn = 'assistant.create.assistant.turn';
-  static const String createRun = 'assistant.run.create';
-  static const String createRunStream = 'assistant.run.stream';
   static const String createSkillSubscription = 'assistant.create.skill.subscription';
   static const String getAssistantConversation = 'assistant.get.assistant.conversation';
   static const String getAssistantTurn = 'assistant.get.assistant.turn';

@@ -44,13 +44,10 @@
 
 | path | domain | entry | dual_theme | exemption_reason | owner | evidence |
 |------|--------|-------|------------|------------------|-------|----------|
-| `lib/ui/assistant/pages/assistant_tab_page.dart` | assistant | Tab 根 | full | | TBD | `isDark` 分支 + `AppColors.white/black` 仅作浅表分隔，主结构随主题。 |
 | `lib/ui/assistant/pages/assistant_management_page.dart` | assistant | GoRoute | full | | TBD | `isDarkProvider` / 语义色混用，主背景可随主题。 |
 | `lib/ui/assistant/pages/assistant_reference_webview_page.dart` | assistant | GoRoute | full | | TBD | 文档内容仍不控；`setBackgroundColor`→`webViewPlaceholderBackground`；信息卡与 WebView 容器 `chromeInfoCardBackground` / `chromeInfoCardBorder`；主次文 `foregroundPrimary`/`Secondary`。 |
-| `lib/ui/assistant/pages/assistant_conversation_page.dart` | assistant | GoRoute | full | | TBD | `isDarkProvider` + 功能色。 |
 | `lib/ui/assistant/pages/assistant_dev_replay_page.dart` | assistant | 开发页 | full | | TBD | 具备 `isDark` 与功能色（工具页仍建议抽检）。 |
 | `lib/ui/assistant/pages/assistant_skill_center_page.dart` | assistant | GoRoute | full | | TBD | `isDarkProvider` 等。 |
-| `lib/ui/assistant/pages/assistant_chat_settings_page.dart` | assistant | GoRoute | full | | TBD | `isDarkProvider` 等。 |
 
 ---
 

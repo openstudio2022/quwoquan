@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
@@ -175,6 +177,40 @@ class _AssistantManagementPageState
                 fontSize: AppTypography.xsPlus,
                 color: fgSecondary,
                 height: AppTypography.bodyLineHeight,
+              ),
+            ),
+            SizedBox(height: AppSpacing.interGroupXl),
+            SettingsInsetGroupedSection(
+              isDark: isDark,
+              header: '配套能力',
+              child: CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => context.push(AppRoutePaths.assistantSkills),
+                child: Row(
+                  children: [
+                    Icon(
+                      CupertinoIcons.square_grid_2x2,
+                      color: fgPrimary,
+                      size: AppSpacing.twenty,
+                    ),
+                    SizedBox(width: AppSpacing.interGroupSm),
+                    Expanded(
+                      child: Text(
+                        '技能中心',
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontSize: AppTypography.base,
+                          fontWeight: FontWeight.w700,
+                          color: fgPrimary,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      CupertinoIcons.chevron_forward,
+                      color: fgSecondary,
+                    ),
+                  ],
+                ),
               ),
             ),
             SizedBox(height: AppSpacing.interGroupXl),

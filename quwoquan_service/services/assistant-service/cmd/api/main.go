@@ -468,7 +468,10 @@ func buildSearchRegistry(cfg providerCfg, appEnv string) (tool.Registry, error) 
 }
 
 func allowDeterministicProvider(appEnv string) bool {
-	return appEnv == "beta" && strings.TrimSpace(os.Getenv("ALLOW_DETERMINISTIC_BETA")) == "1"
+	if strings.TrimSpace(os.Getenv("ALLOW_DETERMINISTIC_BETA")) != "1" {
+		return false
+	}
+	return appEnv == "beta" || appEnv == "gamma"
 }
 
 func realSearchHandler(cfg providerCfg) tool.Handler {

@@ -7,7 +7,7 @@ import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import '../common/assistant/assistant_scenario_fixtures.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
 void main() {
@@ -27,17 +27,13 @@ void main() {
               ScenarioMockAssistantRepository(pack: scenarioPack),
             ),
         ],
-        child: const MaterialApp(home: AssistantTabPage()),
+        child: const MaterialApp(home: PersonalAssistantConversationPage()),
       ),
     );
     await _pumpFrames(tester);
     _expectScreenClass(tester);
 
-    expect(find.text('找小趣'), findsOneWidget);
     expect(find.text('找私助'), findsOneWidget);
-
-    await tester.tap(find.text('找私助'));
-    await _pumpFrames(tester);
     expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
     expect(_modeFromWidgetTree(tester), repositoryMode);
@@ -63,15 +59,13 @@ void main() {
       default:
         fail('APP_RUNTIME_ENV=$runtimeEnv 不属于本测试覆盖范围');
     }
-
-    await tester.tap(find.text('找小趣'));
-    await _pumpFrames(tester, count: 8);
-    expect(find.byKey(TestKeys.assistantDialogPage), findsOneWidget);
   });
 }
 
 AppDataSourceMode _modeFromWidgetTree(WidgetTester tester) {
-  final context = tester.element(find.byType(AssistantTabPage));
+  final context = tester.element(
+    find.byType(PersonalAssistantConversationPage),
+  );
   return ProviderScope.containerOf(context).read(appDataSourceModeProvider);
 }
 
@@ -123,7 +117,9 @@ Future<void> _sendAndExpect(
   await tester.tap(find.byKey(TestKeys.assistantSendButton));
   await _pumpUntilStreamSettled(tester);
 
-  final context = tester.element(find.byType(AssistantTabPage));
+  final context = tester.element(
+    find.byType(PersonalAssistantConversationPage),
+  );
   final streamState = ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider);
@@ -158,14 +154,54 @@ Future<void> _pumpUntilSendButtonVisible(WidgetTester tester) async {
 }
 
 Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
-  for (var i = 0; i < 240; i++) {
+  const runtimeEnv = String.fromEnvironment(
+    'APP_RUNTIME_ENV',
+    defaultValue: 'alpha',
+  );
+  const maxTicksOverride = int.fromEnvironment(
+    'ASSISTANT_SMOKE_MAX_TICKS',
+    defaultValue: 0,
+  );
+  const maxIdleTicksOverride = int.fromEnvironment(
+    'ASSISTANT_SMOKE_MAX_IDLE_TICKS',
+    defaultValue: 0,
+  );
+  final maxTicks = maxTicksOverride > 0
+      ? maxTicksOverride
+      : (runtimeEnv == 'beta' ? 1500 : 240);
+  final maxIdleTicks = maxIdleTicksOverride > 0
+      ? maxIdleTicksOverride
+      : (runtimeEnv == 'beta' ? 180 : 60);
+  var lastSignature = '';
+  var idleTicks = 0;
+  for (var i = 0; i < maxTicks; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    final context = tester.element(find.byType(AssistantTabPage));
+    final context = tester.element(
+      find.byType(PersonalAssistantConversationPage),
+    );
     final streamState = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);
-    if (!streamState.running && streamState.answer.isNotEmpty) {
+    if (!streamState.running) {
       return;
+    }
+    final signature =
+        '${streamState.answer.length}|'
+        '${streamState.errorMessage.length}|'
+        '${streamState.events.length}';
+    if (signature == lastSignature) {
+      idleTicks += 1;
+      if (idleTicks >= maxIdleTicks) {
+        throw TestFailure(
+          'assistant alpha/beta simulator smoke 无进展超时: '
+          'runtimeEnv=$runtimeEnv '
+          'events=${streamState.events.length} '
+          'answerLen=${streamState.answer.length}',
+        );
+      }
+    } else {
+      lastSignature = signature;
+      idleTicks = 0;
     }
   }
   await tester.pump(const Duration(milliseconds: 100));

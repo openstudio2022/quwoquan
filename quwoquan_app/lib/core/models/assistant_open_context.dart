@@ -1,6 +1,6 @@
 import 'package:quwoquan_app/core/models/visit_models.dart';
 
-/// 打开小趣时的来源。
+/// 打开私助时的来源。
 enum AssistantSource {
   discovery,
   circles,
@@ -31,7 +31,7 @@ String assistantPageTypeForSource(AssistantSource? source) {
   }
 }
 
-/// 打开小趣时的上下文，供半弹窗与会话页共用。
+/// 打开私助时的上下文，供半弹窗与会话页共用。
 class AssistantOpenContext {
   const AssistantOpenContext({
     required this.source,

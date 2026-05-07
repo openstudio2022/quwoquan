@@ -63,6 +63,10 @@ def verify_manifest(env: str, path: Path) -> None:
         repo_expectations = fixture.get("repositoryExpectations", {})
         if repo_expectations.get("alpha") != "mock" or repo_expectations.get("beta") != "remote" or repo_expectations.get("gamma") != "remote":
             fail(f"{rel(fixture_path)} repositoryExpectations must be alpha=mock beta/gamma=remote")
+        if env == "alpha":
+            delivery_channels = item.get("deliveryChannels")
+            if not isinstance(delivery_channels, list) or len(delivery_channels) < 2:
+                fail(f"{rel(path)} alpha domain {domain} must declare dual deliveryChannels")
         for ref in refs:
             if ref not in seed_sets:
                 fail(f"{rel(path)} references missing seedRef {ref} in {rel(fixture_path)}")

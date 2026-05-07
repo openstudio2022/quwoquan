@@ -90,7 +90,7 @@ services:
       context: .
       dockerfile: ../deploy/service/content-service/Dockerfile
       args:
-        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24.3-alpine}"
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
         ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
     environment:
       SERVICE_NAME: content-service
@@ -128,7 +128,7 @@ services:
       context: .
       dockerfile: ../deploy/service/chat-service/Dockerfile
       args:
-        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24.3-alpine}"
+        GO_BASE_IMAGE: "${LOCAL_GAMMA_GO_ALPINE_BASE_IMAGE:-golang:1.24-bookworm}"
         ALPINE_BASE_IMAGE: "${LOCAL_GAMMA_ALPINE_BASE_IMAGE:-alpine:3.19}"
     environment:
       SERVICE_NAME: chat-service
@@ -147,7 +147,7 @@ services:
       RELIABLE_TASK_READY_INDEX_STREAM: reliabletask:chat:avatar:ready:local-gamma
       RELIABLE_TASK_READY_INDEX_GROUP: chat.group_avatar_worker.local-gamma
       RELIABLE_TASK_READY_INDEX_QUEUE: reliabletask.chat.avatar
-      CHAT_GROUP_AVATAR_CDN_BASE_URL: "${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}"
+      CHAT_GROUP_AVATAR_CDN_BASE_URL: "${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}}"
       CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT: /var/lib/quwoquan/chat-media
       RUNTIME_SYNC_PATCH_TTL_HOURS: "720"
     depends_on:
@@ -164,6 +164,85 @@ services:
       - ../artifacts/local-gamma/media:/var/lib/quwoquan/chat-media
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18081/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 10
+
+  user-service:
+    image: "${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-docker.io/library/golang:1.24-bookworm}"
+    working_dir: /workspace/services/user-service
+    command: ["sh", "-lc", "/usr/local/go/bin/go run ./cmd/api"]
+    environment:
+      PATH: /go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      GOPROXY: "${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}"
+      GOSUMDB: "${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}"
+      SERVICE_NAME: user-service
+      APP_ENV: gamma
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
+      IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
+      USER_SERVICE_ADDR: ":18082"
+      POSTGRES_DSN: postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: quwoquan_user
+      REDIS_ADDR: redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "${LOCAL_GAMMA_USER_PORT:-18082}:18082"
+    volumes:
+      - .:/workspace
+      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - local-gamma-go-cache:/go
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18082/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 10
+
+  assistant-service:
+    image: "${LOCAL_GAMMA_GO_BOOKWORM_IMAGE:-docker.io/library/golang:1.24-bookworm}"
+    working_dir: /workspace
+    command: ["sh", "-lc", "cd services/assistant-service/cmd/api && /usr/local/go/bin/go run ."]
+    environment:
+      PATH: /go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      GOPROXY: "${LOCAL_GAMMA_GOPROXY:-https://goproxy.cn,direct}"
+      GOSUMDB: "${LOCAL_GAMMA_GOSUMDB:-sum.golang.google.cn}"
+      SERVICE_NAME: assistant-service
+      APP_ENV: gamma
+      CONFIG_ROOT: /etc/qwq-config
+      CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
+      IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
+      ASSISTANT_SERVICE_ADDR: ":18087"
+      MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: quwoquan_assistant
+      REDIS_GENERAL_ADDR: redis:6379
+      REDIS_REC_ADDR: redis:6379
+      ASSISTANT_MODEL_PROVIDER: "${ASSISTANT_MODEL_PROVIDER:-deterministic}"
+      ALLOW_DETERMINISTIC_BETA: "${ALLOW_DETERMINISTIC_BETA:-1}"
+      ASSISTANT_SCENARIO_SEED_REFS: "${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/workspace
+      - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - local-gamma-go-cache:/go
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18087/healthz >/dev/null 2>&1"]
       interval: 10s
       timeout: 3s
       start_period: 10s
@@ -207,11 +286,15 @@ services:
       retries: 10
 
   gamma-proxy:
-    image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8-alpine}"
+    image: "${LOCAL_GAMMA_CADDY_IMAGE:-docker.io/library/caddy:2.8.4-alpine}"
     depends_on:
       content-service:
         condition: service_healthy
       chat-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      assistant-service:
         condition: service_healthy
       product-ops-service:
         condition: service_healthy
@@ -222,7 +305,7 @@ services:
       - "${LOCAL_GAMMA_HTTPS_PORT:-443}:443"
       - "${LOCAL_GAMMA_ADMIN_PORT:-2019}:2019"
     volumes:
-      - ../deploy/local-gamma/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../artifacts/local-gamma/Caddyfile:/etc/caddy/Caddyfile:ro
       - ../artifacts/local-gamma/media:/srv/media:ro
       - local-gamma-caddy-data:/data
       - local-gamma-caddy-config:/config

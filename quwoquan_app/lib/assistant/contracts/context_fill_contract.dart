@@ -1,1 +1,3 @@
-export 'package:quwoquan_app/assistant/context/contracts/context_fill_contract.dart';
+import 'package:quwoquan_app/assistant/generated/contracts/context_fill_task.g.dart';
+
+typedef ContextFillTask = ContextFillTaskDto;

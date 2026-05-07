@@ -29,10 +29,13 @@ SKIP_APP=0
 KILL_EXISTING=1
 RESTART_STACK=1
 CLEAN_ENV=0
+VERIFY_MODE="${BETA_SEED_VERIFY_MODE:-fast}"
+MEDIA_PREP_MODE="${BETA_MEDIA_PREP_MODE:-symlink}"
 
 BETA_MANUAL_LABEL="app-beta-manual"
 BETA_MANUAL_STACK_NAME="app_beta_manual"
 BETA_MANUAL_LOG_DIR="$LOG_DIR"
+INSTANCE_NAMESPACE="${INSTANCE_NAMESPACE:-app-beta-manual}"
 BETA_MANUAL_OWNER_ID="${BETA_MANUAL_STACK_NAME}-$$-$(date +%s)"
 export BETA_MANUAL_OWNER_ID
 source "$ROOT_DIR/scripts/lib/beta_manual_lifecycle.sh"
@@ -53,6 +56,9 @@ Options:
   --local-public-host <host>  Host visible from the App device for gateway/media.
   --media-base-url <url>      Media CDN/upload base URL injected into Flutter app.
                              Defaults to http://<local-public-host>:${MEDIA_PORT}
+  --seed-verify <fast|full>   Seed verification mode before start (default: ${VERIFY_MODE}).
+  --media-mode <symlink|copy> Media root preparation mode (default: ${MEDIA_PREP_MODE}).
+  --full-matrix              Equivalent to --seed-verify full --media-mode copy.
   --skip-app                 Start/check beta cloud stack only; do not start Flutter.
   --restart                  Stop a managed previous stack before starting (default on).
   --clean-env                Remove runtime pid/env state before starting.
@@ -87,6 +93,19 @@ while [[ $# -gt 0 ]]; do
       MEDIA_VIDEO_CDN_BASE_URL="${2:-}"
       MEDIA_UPLOAD_BASE_URL="${2:-}"
       shift 2
+      ;;
+    --seed-verify)
+      VERIFY_MODE="${2:-}"
+      shift 2
+      ;;
+    --media-mode)
+      MEDIA_PREP_MODE="${2:-}"
+      shift 2
+      ;;
+    --full-matrix)
+      VERIFY_MODE="full"
+      MEDIA_PREP_MODE="copy"
+      shift
       ;;
     --skip-app)
       SKIP_APP=1
@@ -265,10 +284,15 @@ fi
 
 BETA_MANUAL_KILL_EXISTING="$KILL_EXISTING"
 beta_manual_init
+RESTARTED_FROM_PREVIOUS=0
+if [[ -f "$BETA_MANUAL_STATE_DIR/stack.env" ]] || [[ -n "$(beta_manual_port_pids "$GATEWAY_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$MEDIA_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$ASSISTANT_PORT")" ]]; then
+  RESTARTED_FROM_PREVIOUS=1
+fi
 ASSISTANT_LOG="$LOG_DIR/assistant-service-beta.log"
 GATEWAY_LOG="$LOG_DIR/app-beta-gateway.log"
 MEDIA_LOG="$LOG_DIR/app-beta-media.log"
 MEDIA_DIR="$LOG_DIR/media"
+SOURCE_MEDIA_ROOT="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 REPORT="$LOG_DIR/app-beta-manual-report.json"
 
 detect_device_kind() {
@@ -288,6 +312,63 @@ detect_device_kind() {
   echo "ios_or_macos"
 }
 
+resolve_single_flutter_device() {
+  python3 - "$ROOT_DIR" <<'PY'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+cmd = [sys.executable, str(root / "scripts" / "discover_flutter_mobile_devices.py")]
+result = subprocess.run(cmd, cwd=str(root), text=True, capture_output=True, check=False)
+if result.returncode != 0:
+    print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
+    raise SystemExit(1)
+payload = json.loads(result.stdout)
+devices = list(payload.get("devices") or [])
+if not devices:
+    print("GATE_BLOCK: no Flutter mobile device is visible for beta app launch.", file=sys.stderr)
+    raise SystemExit(2)
+if len(devices) == 1:
+    print(str(devices[0].get("id") or "").strip())
+    raise SystemExit(0)
+
+print("[app-beta-manual] multiple Flutter devices visible; pick one:", file=sys.stderr)
+for idx, device in enumerate(devices, 1):
+    print(
+        f"  [{idx}] {device.get('name', '')} ({device.get('id', '')}, {device.get('targetPlatform', '')})",
+        file=sys.stderr,
+    )
+
+try:
+    tty_in = open("/dev/tty", "r")
+    tty_out = open("/dev/tty", "w")
+except OSError:
+    print("GATE_BLOCK: no TTY available; rerun with --device-id <id>.", file=sys.stderr)
+    raise SystemExit(2)
+
+while True:
+    tty_out.write(f"Select device [1-{len(devices)}]: ")
+    tty_out.flush()
+    line = tty_in.readline()
+    if not line:
+        print("GATE_BLOCK: no selection received; rerun with --device-id <id>.", file=sys.stderr)
+        raise SystemExit(2)
+    choice = line.strip()
+    if choice.isdigit():
+        n = int(choice)
+        if 1 <= n <= len(devices):
+            print(str(devices[n - 1].get("id") or "").strip())
+            raise SystemExit(0)
+    print(f"  invalid selection: {choice!r}", file=sys.stderr)
+PY
+}
+
+if [[ "$SKIP_APP" != "1" && -z "$FLUTTER_DEVICE_ID" ]]; then
+  FLUTTER_DEVICE_ID="$(resolve_single_flutter_device)"
+fi
+
 DEVICE_KIND="$(detect_device_kind "$FLUTTER_DEVICE_ID")"
 ADB_REVERSE_ENABLED=0
 if [[ -z "$LOCAL_PUBLIC_HOST" ]]; then
@@ -303,6 +384,22 @@ MEDIA_AVATAR_CDN_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-http://${LOCAL_PUBLIC_HO
 MEDIA_IMAGE_CDN_BASE_URL="${MEDIA_IMAGE_CDN_BASE_URL:-http://${LOCAL_PUBLIC_HOST}:${MEDIA_PORT}}"
 MEDIA_VIDEO_CDN_BASE_URL="${MEDIA_VIDEO_CDN_BASE_URL:-http://${LOCAL_PUBLIC_HOST}:${MEDIA_PORT}}"
 MEDIA_UPLOAD_BASE_URL="${MEDIA_UPLOAD_BASE_URL:-http://${LOCAL_PUBLIC_HOST}:${MEDIA_PORT}}"
+
+case "$VERIFY_MODE" in
+  fast|full) ;;
+  *)
+    echo "FAIL: --seed-verify must be fast|full" >&2
+    exit 2
+    ;;
+esac
+
+case "$MEDIA_PREP_MODE" in
+  symlink|copy) ;;
+  *)
+    echo "FAIL: --media-mode must be symlink|copy" >&2
+    exit 2
+    ;;
+esac
 
 python3 scripts/verify_app_seed_manifests.py
 bash scripts/build_app_env_package.sh --env beta >/dev/null
@@ -326,13 +423,17 @@ beta_manual_record_metadata "device_kind" "$DEVICE_KIND"
 beta_manual_record_metadata "local_public_host" "$LOCAL_PUBLIC_HOST"
 beta_manual_record_metadata "media_port" "$MEDIA_PORT"
 beta_manual_record_metadata "media_avatar_cdn_base_url" "$MEDIA_AVATAR_CDN_BASE_URL"
+beta_manual_record_metadata "seed_verify_mode" "$VERIFY_MODE"
+beta_manual_record_metadata "media_prep_mode" "$MEDIA_PREP_MODE"
 
 cleanup() {
-  trap - EXIT INT TERM
+  trap - EXIT INT TERM HUP TSTP
   beta_manual_stop_stack "$CLEAN_ENV" "$BETA_MANUAL_OWNER_ID"
 }
 trap cleanup EXIT
 trap 'cleanup; exit 130' INT TERM
+trap 'cleanup; exit 129' HUP
+trap 'cleanup; exit 148' TSTP
 
 beta_manual_ensure_port_available "$ASSISTANT_PORT" "assistant-service"
 beta_manual_ensure_port_available "$GATEWAY_PORT" "gateway"
@@ -340,10 +441,30 @@ beta_manual_ensure_port_available "$MEDIA_PORT" "media-static"
 
 echo "[app-beta-manual] logs: $LOG_DIR"
 echo "[app-beta-manual] model: ${ASSISTANT_BETA_MODEL_REF:-unknown} (${ASSISTANT_MODEL_BASE_URL})"
-python3 scripts/verify_avatar_user_pool_consistency.py >/dev/null
-rm -rf "$MEDIA_DIR/media"
-mkdir -p "$MEDIA_DIR"
-cp -R "$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media/." "$MEDIA_DIR/"
+echo "[app-beta-manual] verify mode: $VERIFY_MODE"
+echo "[app-beta-manual] media mode: $MEDIA_PREP_MODE"
+if [[ "$VERIFY_MODE" == "full" ]]; then
+  python3 scripts/verify_avatar_user_pool_consistency.py >/dev/null
+else
+  echo "[app-beta-manual] fast mode: skip full shared-pool consistency verification"
+fi
+rm -rf "$MEDIA_DIR"
+mkdir -p "$MEDIA_DIR/media"
+case "$MEDIA_PREP_MODE" in
+  copy)
+    cp -R "$SOURCE_MEDIA_ROOT/." "$MEDIA_DIR/media/"
+    ;;
+  symlink)
+    ln -s "$SOURCE_MEDIA_ROOT/avatar" "$MEDIA_DIR/media/avatar"
+    ln -s "$SOURCE_MEDIA_ROOT/image" "$MEDIA_DIR/media/image"
+    if [[ -d "$SOURCE_MEDIA_ROOT/background" ]]; then
+      ln -s "$SOURCE_MEDIA_ROOT/background" "$MEDIA_DIR/media/background"
+    fi
+    if [[ -d "$SOURCE_MEDIA_ROOT/video" ]]; then
+      ln -s "$SOURCE_MEDIA_ROOT/video" "$MEDIA_DIR/media/video"
+    fi
+    ;;
+esac
 mkdir -p "$MEDIA_DIR/media/video"
 python3 - "$MEDIA_DIR" <<'PY'
 import sys
@@ -362,6 +483,7 @@ beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixtu
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_friend/v1/avatar.png" "media friend avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/group/fixture_conv_group/v1/composite.png" "media group avatar fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/post/fixture_photo_001/v1/cover.png" "media post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/image/post/fixture_post_photography_001/v1/cover.jpg" "media mixed-format post cover fixture" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 if [[ "$DEVICE_KIND" == "android_physical" && -n "$FLUTTER_DEVICE_ID" && "$LOCAL_PUBLIC_HOST" == "127.0.0.1" && -x "$(command -v adb 2>/dev/null || true)" ]]; then
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${GATEWAY_PORT}" "tcp:${GATEWAY_PORT}" >/dev/null 2>&1 || true
   adb -s "$FLUTTER_DEVICE_ID" reverse "tcp:${MEDIA_PORT}" "tcp:${MEDIA_PORT}" >/dev/null 2>&1 || true
@@ -430,7 +552,7 @@ beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/integration/locati
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/app-messages" "notification fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/rtc/calls" "rtc fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 
-python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "$ADB_REVERSE_ENABLED" <<'PY'
+python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -447,13 +569,19 @@ from pathlib import Path
     video_cdn,
     upload_base,
     adb_reverse,
-) = sys.argv[1:12]
+    restarted_from_previous,
+    flutter_device_id,
+    seed_verify_mode,
+    media_prep_mode,
+) = sys.argv[1:16]
 manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
 report = {
     "status": "ready",
     "mode": "manual-beta",
+    "serviceMode": "single-stack",
     "appRuntimeEnv": "beta",
     "appDataSource": "remote",
+    "flutterDeviceId": flutter_device_id,
     "gatewayBaseUrl": gateway,
     "deviceKind": device_kind,
     "localPublicHost": local_public_host,
@@ -461,7 +589,10 @@ report = {
     "imageCdnBaseUrl": image_cdn,
     "videoCdnBaseUrl": video_cdn,
     "uploadBaseUrl": upload_base,
+    "seedVerifyMode": seed_verify_mode,
+    "mediaPrepMode": media_prep_mode,
     "adbReverseEnabled": adb_reverse == "1",
+    "restartedFromPrevious": restarted_from_previous == "1",
     "assistantServiceUrl": f"http://127.0.0.1:{assistant_port}",
     "manifest": str(Path(manifest_path)),
     "checkedRoutes": [
@@ -516,21 +647,15 @@ if [[ "$SKIP_APP" == "1" ]]; then
   exit 0
 fi
 
-flutter_args=(
-  run
-  --dart-define=APP_RUNTIME_ENV=beta
-  --dart-define=APP_DATA_SOURCE=remote
-  "--dart-define=APP_CURRENT_USER_ID=${APP_CURRENT_USER_ID}"
-  "--dart-define=CLOUD_GATEWAY_BASE_URL=${GATEWAY_BASE_URL}"
-  "--dart-define=MEDIA_AVATAR_CDN_BASE_URL=${MEDIA_AVATAR_CDN_BASE_URL}"
-  "--dart-define=MEDIA_IMAGE_CDN_BASE_URL=${MEDIA_IMAGE_CDN_BASE_URL}"
-  "--dart-define=MEDIA_VIDEO_CDN_BASE_URL=${MEDIA_VIDEO_CDN_BASE_URL}"
-  "--dart-define=MEDIA_UPLOAD_BASE_URL=${MEDIA_UPLOAD_BASE_URL}"
-)
-if [[ -n "$FLUTTER_DEVICE_ID" ]]; then
-  flutter_args+=(-d "$FLUTTER_DEVICE_ID")
-fi
-
-echo "[app-beta-manual] starting Flutter app..."
-cd "$APP_DIR"
-flutter "${flutter_args[@]}"
+echo "[app-beta-manual] starting Flutter app on device: $FLUTTER_DEVICE_ID"
+bash "$ROOT_DIR/scripts/start_app_instance.sh" \
+  --env beta \
+  --device-id "$FLUTTER_DEVICE_ID" \
+  --gateway-base-url "$GATEWAY_BASE_URL" \
+  --media-avatar-base-url "$MEDIA_AVATAR_CDN_BASE_URL" \
+  --media-image-base-url "$MEDIA_IMAGE_CDN_BASE_URL" \
+  --media-video-base-url "$MEDIA_VIDEO_CDN_BASE_URL" \
+  --media-upload-base-url "$MEDIA_UPLOAD_BASE_URL" \
+  --current-user-id "$APP_CURRENT_USER_ID" \
+  --instance-namespace "$INSTANCE_NAMESPACE" \
+  --service-mode single-stack

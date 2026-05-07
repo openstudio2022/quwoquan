@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/assistant/contracts/preference_fact.dart';
-import 'package:quwoquan_app/assistant/contracts/skill_synthesis_contract.dart';
 
 class AssistantSkillHistorySummary {
   const AssistantSkillHistorySummary({
@@ -139,76 +138,6 @@ class AssistantSessionHistoryState {
     );
   }
 
-  factory AssistantSessionHistoryState.fromSkillSynthesis({
-    required SkillSynthesisInput input,
-    required SkillSynthesisOutput output,
-    required List<PreferenceFact> userPreferences,
-  }) {
-    final completed = <AssistantSkillHistorySummary>[];
-    final pending = <AssistantSkillPendingState>[];
-    for (final result in input.skillResults) {
-      final skillId = result.skillId.trim();
-      if (skillId.isEmpty) {
-        continue;
-      }
-      final acceptedEvidenceCount = result.acceptedEvidence.length;
-      final isCompleted =
-          result.answerReady &&
-          result.failureReason.trim().isEmpty &&
-          result.missingSlots.isEmpty &&
-          !result.hasPendingWork;
-      if (isCompleted) {
-        completed.add(
-          AssistantSkillHistorySummary(
-            skillId: skillId,
-            role: result.role.trim().isNotEmpty ? result.role.trim() : 'supporting',
-            summary: result.summary.trim(),
-            status: result.status.trim(),
-            answerReady: true,
-            acceptedEvidenceCount: acceptedEvidenceCount,
-          ),
-        );
-      } else {
-        pending.add(
-          AssistantSkillPendingState(
-            skillId: skillId,
-            role: result.role.trim().isNotEmpty ? result.role.trim() : 'supporting',
-            summary: result.summary.trim(),
-            status: result.status.trim(),
-            nextAction: output.nextAction.trim(),
-            missingSlots: result.missingSlots,
-            failureReason: result.failureReason.trim(),
-          ),
-        );
-      }
-    }
-    final pendingSkillIds = pending.map((item) => item.skillId).toSet();
-    for (final unresolvedSkill in output.unresolvedSkills) {
-      final skillId = unresolvedSkill.trim();
-      if (skillId.isEmpty || pendingSkillIds.contains(skillId)) {
-        continue;
-      }
-      pending.add(
-        AssistantSkillPendingState(
-          skillId: skillId,
-          status: output.partialCompletionState.trim(),
-          nextAction: output.nextAction.trim(),
-          summary: output.summary.trim(),
-        ),
-      );
-    }
-    return AssistantSessionHistoryState(
-      sessionSummary: output.summary.trim().isNotEmpty
-          ? output.summary.trim()
-          : input.sessionSummary.trim(),
-      completedSkillSummaries: completed,
-      pendingSkillStates: pending,
-      userPreferences: _dedupePreferenceFacts(userPreferences),
-      lastAcceptedEvidenceSummary:
-          _buildAcceptedEvidenceSummary(input.skillResults),
-    );
-  }
-
   AssistantSessionHistoryState mergeWith(
     AssistantSessionHistoryState other, {
     int maxSkillEntries = 8,
@@ -296,22 +225,6 @@ class AssistantSessionHistoryState {
         .toList(growable: false);
   }
 
-  static List<PreferenceFact> _dedupePreferenceFacts(
-    List<PreferenceFact> facts,
-  ) {
-    final deduped = <String, PreferenceFact>{};
-    for (final fact in facts) {
-      final key = fact.factId.trim().isNotEmpty
-          ? fact.factId.trim()
-          : '${fact.scope.trim()}:${fact.key.trim()}:${fact.value.trim()}';
-      if (key.trim().isEmpty || deduped.containsKey(key)) {
-        continue;
-      }
-      deduped[key] = fact;
-    }
-    return deduped.values.toList(growable: false);
-  }
-
   static List<PreferenceFact> _mergePreferenceFacts(
     List<PreferenceFact> existing,
     List<PreferenceFact> incoming, {
@@ -337,34 +250,4 @@ class AssistantSessionHistoryState {
     return merged.values.take(maxPreferenceFacts).toList(growable: false);
   }
 
-  static String _buildAcceptedEvidenceSummary(
-    List<SkillSynthesisSkillResult> skillResults,
-  ) {
-    final parts = <String>[];
-    for (final result in skillResults) {
-      if (result.acceptedEvidence.isEmpty) continue;
-      final evidenceSnippets = result.acceptedEvidence
-          .take(2)
-          .map((item) {
-            final map = item.cast<String, dynamic>();
-            final candidates = <String>[
-              (map['title'] as String?)?.trim() ?? '',
-              (map['snippet'] as String?)?.trim() ?? '',
-              (map['summary'] as String?)?.trim() ?? '',
-              (map['source'] as String?)?.trim() ?? '',
-              (map['url'] as String?)?.trim() ?? '',
-            ];
-            for (final candidate in candidates) {
-              if (candidate.isNotEmpty) return candidate;
-            }
-            return '';
-          })
-          .where((item) => item.isNotEmpty)
-          .toList(growable: false);
-      if (evidenceSnippets.isEmpty) continue;
-      parts.add('${result.skillId.trim()}: ${evidenceSnippets.join('；')}');
-      if (parts.length >= 3) break;
-    }
-    return parts.join(' | ').trim();
-  }
 }

@@ -90,7 +90,6 @@ class UITextConstants {
   static const String assistantFeedbackAddedToLater = '已加入稍后处理';
   static const String assistantTabSchedule = '日程';
   static const String assistantTabSkills = '技能';
-  static const String assistantEntryFind = '找小趣';
   static const String assistantEntryFindPersonal = '找私助';
   static const String assistantEntryAsk = '问小趣';
 

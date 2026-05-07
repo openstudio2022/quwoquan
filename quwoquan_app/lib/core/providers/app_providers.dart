@@ -166,20 +166,6 @@ class LastMainTabBeforeAssistantNotifier extends Notifier<MainTabDestination?> {
   void set(MainTabDestination? value) => state = value;
 }
 
-/// 助理页内部当前一级 tab（`schedule` / `dialog` / `personal` / `skills`）。
-/// 由主壳读取，用于决定助理路由下底部导航是否应当隐藏。
-final assistantInternalTabProvider =
-    NotifierProvider<AssistantInternalTabNotifier, String>(
-      AssistantInternalTabNotifier.new,
-    );
-
-class AssistantInternalTabNotifier extends Notifier<String> {
-  @override
-  String build() => 'dialog';
-
-  void set(String value) => state = value;
-}
-
 /// 用户数据Provider — 通过 UserProfileRepository 加载档案
 class UserDataNotifier extends Notifier<User?> {
   @override

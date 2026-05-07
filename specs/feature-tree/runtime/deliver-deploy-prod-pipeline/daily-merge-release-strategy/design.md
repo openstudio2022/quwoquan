@@ -7,8 +7,8 @@
 ## 适用场景与约束
 
 - **适用**：分支开发与 trunk development 并存的主干治理
-- **约束**：需要 GitHub branch protection；self-hosted runner 需在线且可见设备至少一台
-- **局限性**：integration / self-hosted 设备验证会成为进入 `main` 的真实阻断成本
+- **约束**：需要 GitHub branch protection；self-hosted runner 需在线，且 `04/05` 需要同时发现 Android 与 iOS 设备
+- **局限性**：ECS gamma / self-hosted 设备验证会成为进入 `main` 的真实阻断成本
 
 ## 业界对标与多方案对比
 
@@ -60,7 +60,7 @@ feature / dev1.0
 
 - `main` required checks：`03`、`04`、`05`
 - `03/04/05` 不再响应分支 push，避免重复耗时
-- self-hosted 设备矩阵至少要求当前 Mac 可见移动设备数 `>= 1`
+- self-hosted 设备矩阵对 `main` required checks 要求当前 Mac 同时具备可见 Android 与 iOS 设备
 
 ### 3. 分支保护建议
 

@@ -15,13 +15,17 @@ REMOTE_DIR="${GAMMA_ECS_REMOTE_DIR:-/opt/quwoquan/gamma}"
 LOCAL_GAMMA_HTTP_PORT="${LOCAL_GAMMA_HTTP_PORT:-18000}"
 BASE_URL="${GAMMA_BASE_URL:-http://${ECS_HOST}:${LOCAL_GAMMA_HTTP_PORT}}"
 PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${ECS_HOST}:18086}"
+MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-${BASE_URL}}"
+MEDIA_ORIGIN_BASE_URL="${GAMMA_ECS_MEDIA_ORIGIN_BASE_URL:-}"
 STAGE="${GAMMA_ECS_STAGE:-pre}"
 SKIP_UPLOAD="${GAMMA_ECS_SKIP_UPLOAD:-0}"
-IMAGE_VERSION="${GAMMA_DEPLOY_IMAGE_VERSION:-$(git rev-parse --short HEAD 2>/dev/null || echo manual)}"
+IMAGE_VERSION="${GAMMA_DEPLOY_IMAGE_VERSION:-0.0.$(date +%Y%m%d%H%M%S)}"
 LOCAL_TARBALL="${GAMMA_ECS_LOCAL_TARBALL:-}"
 REPORT_DIR="${ROOT}/artifacts/ecs-onebox"
 REPORT_PATH="${REPORT_DIR}/deploy-report.json"
 BACKUP_PARENT="${GAMMA_ECS_BACKUP_PARENT:-}"
+CURATED_MEDIA_ROOT="${ROOT}/artifacts/local-gamma/media"
+CURATED_MEDIA_BUNDLE="${ROOT}/deploy/shared/gamma_curated_media_bundle.json"
 
 SSH_OPTS=(
   -p "$ECS_PORT"
@@ -63,6 +67,15 @@ remote_tar_extract() {
   fi
 }
 
+remote_tar_extract_into() {
+  local remote_target="$1"
+  if [[ -n "${TMP_KEY_FILE:-}" ]]; then
+    ssh "${SSH_OPTS[@]}" -i "$TMP_KEY_FILE" "$SSH_TARGET" "mkdir -p '$remote_target' && tar -xzf - -C '$remote_target'"
+  else
+    sshpass -e ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$remote_target' && tar -xzf - -C '$remote_target'"
+  fi
+}
+
 if [[ -n "${GAMMA_ECS_SSH_KEY:-}" ]]; then
   TMP_KEY_FILE="$(mktemp)"
   printf '%s\n' "$GAMMA_ECS_SSH_KEY" >"$TMP_KEY_FILE"
@@ -78,6 +91,11 @@ else
   exit 2
 fi
 
+if [[ -n "$MEDIA_ORIGIN_BASE_URL" && "${GAMMA_ECS_ALLOW_MEDIA_ORIGIN_FALLBACK:-0}" != "1" ]]; then
+  echo "[gamma-ecs] curated subset mode ignores GAMMA_ECS_MEDIA_ORIGIN_BASE_URL; set GAMMA_ECS_ALLOW_MEDIA_ORIGIN_FALLBACK=1 to opt in" >&2
+  MEDIA_ORIGIN_BASE_URL=""
+fi
+
 mkdir -p "$REPORT_DIR"
 STARTED_AT="$(python3 - <<'PY'
 import datetime as dt
@@ -85,11 +103,22 @@ print(dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"))
 PY
 )"
 
+FAILURE_STAGE="prepare_curated_media"
+echo "[gamma-ecs] preparing gamma curated fixture/media bundle"
+python3 "$ROOT/scripts/build_gamma_curated_fixture_bundle.py" \
+  --output-media-root "$CURATED_MEDIA_ROOT" >/dev/null
+if [[ ! -f "$CURATED_MEDIA_BUNDLE" ]]; then
+  echo "::error::missing gamma curated media bundle: $CURATED_MEDIA_BUNDLE" >&2
+  exit 2
+fi
+
 echo "[gamma-ecs] stage=${STAGE}"
 echo "[gamma-ecs] target=${ECS_USER}@${ECS_HOST}:${ECS_PORT}"
 echo "[gamma-ecs] remote_dir=${REMOTE_DIR}"
 echo "[gamma-ecs] base_url=${BASE_URL}"
 echo "[gamma-ecs] product_ops_base_url=${PRODUCT_OPS_BASE_URL}"
+echo "[gamma-ecs] media_base_url=${MEDIA_BASE_URL}"
+echo "[gamma-ecs] media_origin_base_url=${MEDIA_ORIGIN_BASE_URL:-<none>}"
 echo "[gamma-ecs] image_version=${IMAGE_VERSION}"
 echo "[gamma-ecs] skip_upload=${SKIP_UPLOAD}"
 
@@ -150,10 +179,19 @@ if [[ "$SKIP_UPLOAD" != "1" ]]; then
       --exclude='quwoquan_app/.dart_tool' \
       --exclude='quwoquan_app/build' \
       --exclude='apps/ops-portal/node_modules' \
+      --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/media' \
+      --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media' \
+      --exclude='artifacts/local-gamma/media' \
       -czf - . | remote_tar_extract
   fi
+
+  echo "[gamma-ecs] uploading curated gamma media bundle"
+  FAILURE_STAGE="upload_curated_media"
+  remote_exec "rm -rf '$REMOTE_DIR/artifacts/local-gamma/media' && mkdir -p '$REMOTE_DIR/artifacts/local-gamma'"
+  tar -czf - -C "$ROOT/artifacts/local-gamma" media | remote_tar_extract_into "$REMOTE_DIR/artifacts/local-gamma"
 else
   echo "[gamma-ecs] skip_upload=1 — using existing tree at ${REMOTE_DIR}"
+  echo "[gamma-ecs] skip_upload=1 — reusing existing curated media bundle on remote"
 fi
 
 FAILURE_STAGE="remote_compose"
@@ -166,7 +204,7 @@ if remote_exec "test -f '${REMOTE_DIR}/.gamma_deploy_state.json'"; then
   )"
 fi
 
-remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-5400}") && bash -s" <<'REMOTE_SCRIPT'
+remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-deterministic}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-1}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-5400}") && bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 python3 - <<'PY'
 import json
@@ -282,10 +320,10 @@ pre_pull_local_gamma_images() {
     docker.io/library/mongo:7-jammy
     docker.io/library/redis:7.2-alpine
     docker.io/library/golang:1.24-bookworm
-    docker.io/library/golang:1.24.3-alpine
+    docker.io/library/golang:1.24-bookworm
     docker.io/library/python:3.11-slim
     docker.io/library/alpine:3.19
-    docker.io/library/caddy:2.8-alpine
+    docker.io/library/caddy:2.8.4-alpine
   )
   for image in "${images[@]}"; do
     echo "[gamma-ecs] pre-pulling ${image}"
@@ -360,14 +398,22 @@ wait(ops_url + "/healthz")
 PY
 
 python3 "${ROOT}/scripts/verify_gamma_public_gateway_routing.py" --base-url "${BASE_URL}"
+python3 "${ROOT}/scripts/verify_gamma_curated_media_routes.py" \
+  --base-url "${BASE_URL}" \
+  --report "${REPORT_DIR}/gamma-media-route-report.json"
+if [[ "${MEDIA_BASE_URL}" != "${BASE_URL}" ]]; then
+  python3 "${ROOT}/scripts/verify_gamma_curated_media_routes.py" \
+    --base-url "${MEDIA_BASE_URL}" \
+    --report "${REPORT_DIR}/gamma-media-public-route-report.json"
+fi
 
-python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$BASE_URL" "$PRODUCT_OPS_BASE_URL" "$REMOTE_DIR" <<'PY'
+python3 - "$REPORT_PATH" "$STARTED_AT" "$STAGE" "$IMAGE_VERSION" "$BASE_URL" "$PRODUCT_OPS_BASE_URL" "$REMOTE_DIR" "$MEDIA_ORIGIN_BASE_URL" "$MEDIA_BASE_URL" "$CURATED_MEDIA_BUNDLE" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-path, started, stage, image_version, base_url, ops_url, remote_dir = sys.argv[1:8]
+path, started, stage, image_version, base_url, ops_url, remote_dir, media_origin, media_base_url, media_bundle = sys.argv[1:11]
 report = {
     "startedAt": started,
     "endedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -376,7 +422,10 @@ report = {
     "imageVersion": image_version,
     "baseUrl": base_url,
     "productOpsBaseUrl": ops_url,
+    "mediaBaseUrl": media_base_url,
+    "curatedMediaBundle": media_bundle,
     "remoteDir": remote_dir,
+    "mediaOriginBaseUrl": media_origin or None,
     "failureStage": None,
 }
 Path(path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

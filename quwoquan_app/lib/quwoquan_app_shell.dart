@@ -9,8 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
-import 'package:quwoquan_app/assistant/api/assistant_api_gateway.dart';
-import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_service.dart';
@@ -99,9 +97,6 @@ class QuWoQuanAppRoot extends ConsumerStatefulWidget {
 
 class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     with WidgetsBindingObserver {
-  /// [dispose] 时不可用 [ref]，在启动成功时保存实例供 [dispose] 调用 [AssistantApiGateway.stop]。
-  AssistantApiGateway? _assistantApiGatewayForDispose;
-
   @override
   void initState() {
     super.initState();
@@ -114,7 +109,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   @override
   void dispose() {
-    _assistantApiGatewayForDispose?.stop();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -174,17 +168,6 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
 
   Future<void> _initializeApp() async {
     try {
-      await ref.read(assistantGatewayProvider).ensureRemoteConfigLoaded();
-      final enableAssistantApi =
-          (const String.fromEnvironment(
-            'PERSONAL_ASSISTANT_ENABLE_API',
-          )).toLowerCase() ==
-          'true';
-      if (enableAssistantApi) {
-        final gateway = ref.read(assistantApiGatewayProvider);
-        await gateway.start();
-        _assistantApiGatewayForDispose = gateway;
-      }
       await ref
           .read(appearanceSettingsControllerProvider.notifier)
           .ensureLoaded();

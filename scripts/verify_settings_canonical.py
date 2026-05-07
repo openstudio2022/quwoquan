@@ -54,7 +54,6 @@ DISCOVER_FILES = [
     "quwoquan_app/lib/ui/chat/pages/group_admins_page.dart",
     "quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart",
     "quwoquan_app/lib/ui/assistant/pages/assistant_management_page.dart",
-    "quwoquan_app/lib/ui/assistant/pages/assistant_chat_settings_page.dart",
     "quwoquan_app/lib/ui/assistant/pages/assistant_reference_webview_page.dart",
     "quwoquan_app/lib/ui/assistant/pages/assistant_skill_center_page.dart",
     "quwoquan_app/lib/ui/circle/pages/circle_edit_settings_page.dart",

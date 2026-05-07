@@ -14,22 +14,37 @@ jobs:
   topology_regression:
     name: Delivery Gate — Topology
     runs-on: ubuntu-latest
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Environment Topology Regression
         run: |
           bash scripts/verify_deployment_domain_mapping.sh
           bash scripts/verify_topology_contract_regression.sh
           bash scripts/report_deployment_mapping_impact.sh
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   quwoquan_service:
     name: Delivery Gate — Service (L2)
     runs-on: ubuntu-latest
     needs: topology_regression
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 设置 Go
         uses: actions/setup-go@v5
         with:
@@ -44,25 +59,32 @@ jobs:
       - name: Gate (quwoquan_service)
         run: |
           bash scripts/gate_repo.sh --scope service
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   quwoquan_app:
     name: Delivery Gate — App (L1)
     runs-on: ubuntu-latest
     needs: topology_regression
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
         run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          if [ -d quwoquan_app/personal_assistant ]; then
+            mkdir -p quwoquan_app/personal_assistant
+            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+            else
+              : > quwoquan_app/personal_assistant/.env
+            fi
           fi
       - uses: subosito/flutter-action@v2
         with:
@@ -71,13 +93,23 @@ jobs:
       - name: Gate (quwoquan_app)
         run: |
           bash scripts/gate_repo.sh --scope app
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   ops_portal:
     name: Delivery Gate — Ops Portal
     runs-on: ubuntu-latest
     needs: topology_regression
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 设置 Node
         uses: actions/setup-node@v4
         with:
@@ -86,6 +118,11 @@ jobs:
       - name: Gate (ops-portal)
         run: |
           bash scripts/gate_repo.sh --scope portal
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   delivery_gate_summary:
     name: 03. Delivery Gate
@@ -97,6 +134,31 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: 输出 Delivery Gate 耗时摘要
+        env:
+          TOPOLOGY_SECONDS: ${{ needs.topology_regression.outputs.duration_seconds }}
+          SERVICE_SECONDS: ${{ needs.quwoquan_service.outputs.duration_seconds }}
+          APP_SECONDS: ${{ needs.quwoquan_app.outputs.duration_seconds }}
+          PORTAL_SECONDS: ${{ needs.ops_portal.outputs.duration_seconds }}
+        run: |
+          TOPOLOGY_SECONDS="${TOPOLOGY_SECONDS:-0}"
+          SERVICE_SECONDS="${SERVICE_SECONDS:-0}"
+          APP_SECONDS="${APP_SECONDS:-0}"
+          PORTAL_SECONDS="${PORTAL_SECONDS:-0}"
+          FANOUT_SECONDS="${SERVICE_SECONDS}"
+          if [ "${APP_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${APP_SECONDS}"; fi
+          if [ "${PORTAL_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${PORTAL_SECONDS}"; fi
+          CRITICAL_PATH_SECONDS=$(( TOPOLOGY_SECONDS + FANOUT_SECONDS ))
+          python3 scripts/render_ci_timing_summary.py \
+            --gate-key 03.delivery_gate \
+            --title "03. Delivery Gate" \
+            --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
+            --phase "topology_regression=${TOPOLOGY_SECONDS}" \
+            --phase "quwoquan_service=${SERVICE_SECONDS}" \
+            --phase "quwoquan_app=${APP_SECONDS}" \
+            --phase "ops_portal=${PORTAL_SECONDS}" \
+            --write-step-summary
       - name: 汇总并阻断失败项
         env:
           TOPOLOGY: ${{ needs.topology_regression.result }}

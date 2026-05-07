@@ -1,5 +1,5 @@
 # ECS Onebox：手动触发的 gamma / onebox 演练链路
-# main 合入前的阻断验证已前移到 03 / 04 / 05；此处只保留显式手动发布与复验
+# main 合入前的阻断验证已前移到 03 / 04(ECS gamma) / 05；此处保留显式手动发布与 prod 复验
 name: 08. Deploy Gamma ECS
 
 on:
@@ -41,16 +41,13 @@ jobs:
         run: pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: 准备 personal_assistant/.env
         run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          if [ -d quwoquan_app/personal_assistant ]; then
+            mkdir -p quwoquan_app/personal_assistant
+            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+            else
+              : > quwoquan_app/personal_assistant/.env
+            fi
           fi
       - name: 设置 Flutter
         uses: subosito/flutter-action@v2
@@ -68,189 +65,15 @@ jobs:
     with:
       env_json: '["alpha","beta"]'
 
-  package_gamma_bundle:
-    name: Package gamma ECS bundle（hosted）
+  gamma_pre_validation:
+    name: Gamma ECS — pre hosted validation
     needs: [gate, alpha_beta_self_hosted]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create tarball
-        run: |
-          BUNDLE_PATH="${RUNNER_TEMP}/gamma-ecs-bundle.tgz"
-          tar \
-            --exclude='.git' \
-            --exclude='.dart_tool' \
-            --exclude='build' \
-            --exclude='node_modules' \
-            --exclude='.venv' \
-            --exclude='__pycache__' \
-            --exclude='.pytest_cache' \
-            --exclude='.mypy_cache' \
-            --exclude='quwoquan_app/.dart_tool' \
-            --exclude='quwoquan_app/build' \
-            --exclude='apps/ops-portal/node_modules' \
-            -czf "${BUNDLE_PATH}" .
-          cp "${BUNDLE_PATH}" gamma-ecs-bundle.tgz
-      - name: Upload bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: gamma-ecs-bundle
-          path: gamma-ecs-bundle.tgz
-
-  deploy_gamma_ecs_pre:
-    name: Deploy ECS — pre（全量上传）
-    needs: [package_gamma_bundle]
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    outputs:
-      base_url: ${{ steps.urls.outputs.base_url }}
-      product_ops_base_url: ${{ steps.urls.outputs.product_ops_base_url }}
-      media_base_url: ${{ steps.urls.outputs.media_base_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: gamma-ecs-bundle
-          path: bundle
-      - name: Resolve gamma URLs
-        id: urls
-        run: |
-          PUBLIC_HOST="${GAMMA_ECS_PUBLIC_HOST:-118.31.239.122}"
-          # 与 compose 中 gamma-proxy 默认映射一致（ECS onebox 常用 18000→Caddy:80；勿用 content 直出端口充当网关）
-          BASE_URL="${GAMMA_BASE_URL:-http://${PUBLIC_HOST}:18000}"
-          PRODUCT_OPS_BASE_URL="${GAMMA_PRODUCT_OPS_BASE_URL:-http://${PUBLIC_HOST}:18086}"
-          MEDIA_BASE_URL="${MEDIA_AVATAR_CDN_BASE_URL:-${BASE_URL}}"
-          echo "base_url=${BASE_URL}" >> "$GITHUB_OUTPUT"
-          echo "product_ops_base_url=${PRODUCT_OPS_BASE_URL}" >> "$GITHUB_OUTPUT"
-          echo "media_base_url=${MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
-        env:
-          GAMMA_ECS_PUBLIC_HOST: ${{ vars.GAMMA_ECS_PUBLIC_HOST || vars.GAMMA_ECS_HOST }}
-          GAMMA_BASE_URL: ${{ vars.GAMMA_BASE_URL }}
-          GAMMA_PRODUCT_OPS_BASE_URL: ${{ vars.GAMMA_PRODUCT_OPS_BASE_URL }}
-          MEDIA_AVATAR_CDN_BASE_URL: ${{ vars.MEDIA_AVATAR_CDN_BASE_URL }}
-      - name: Validate ECS credentials
-        env:
-          GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
-          GAMMA_ECS_SSH_KEY: ${{ secrets.GAMMA_ECS_SSH_KEY }}
-        run: |
-          if [ -z "${GAMMA_ECS_PASSWORD:-}" ] && [ -z "${GAMMA_ECS_SSH_KEY:-}" ]; then
-            echo "::error::需要配置 secrets.GAMMA_ECS_PASSWORD 或 secrets.GAMMA_ECS_SSH_KEY"
-            exit 2
-          fi
-      - name: Install sshpass（密码登录可选）
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y sshpass
-      - name: Deploy to ECS (pre)
-        run: bash scripts/deploy_gamma_ecs.sh
-        env:
-          GAMMA_ECS_STAGE: pre
-          GAMMA_DEPLOY_IMAGE_VERSION: 0.0.${{ github.run_number }}
-          GAMMA_ECS_LOCAL_TARBALL: ${{ github.workspace }}/bundle/gamma-ecs-bundle.tgz
-          GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
-          GAMMA_ECS_SSH_KEY: ${{ secrets.GAMMA_ECS_SSH_KEY }}
-          GAMMA_BASE_URL: ${{ steps.urls.outputs.base_url }}
-          GAMMA_PRODUCT_OPS_BASE_URL: ${{ steps.urls.outputs.product_ops_base_url }}
-          GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-          GAMMA_ECS_CONTAINER_REGISTRY_MIRROR: ${{ vars.GAMMA_ECS_CONTAINER_REGISTRY_MIRROR }}
-          GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS }}
-          GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS }}
-      - name: Upload ECS deploy report（pre）
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ecs-onebox-deploy-report-pre
-          path: artifacts/ecs-onebox/deploy-report.json
-          if-no-files-found: ignore
-
-  gamma_api_contract:
-    name: Gamma ECS — T3 API contract（pre 后）
-    needs: [deploy_gamma_ecs_pre]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      API_CONTRACT_ENV: gamma
-      LOCAL_GAMMA_T3_SCOPE: content
-      GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
-      GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.product_ops_base_url }}
-      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: 准备 personal_assistant/.env
-        run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
-          fi
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - name: 安装 Flutter 依赖
-        working-directory: quwoquan_app
-        run: flutter pub get
-      - name: T3 API Contract
-        run: make test-api-contract
-
-  gamma_chat_avatar_api_probe_pre:
-    name: Gamma ECS — chat avatar API probe（pre 后）
-    needs: [deploy_gamma_ecs_pre, gamma_api_contract]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.media_base_url }}
-      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Chat avatar API probe
-        run: |
-          python3 scripts/run_chat_avatar_e2e_probe.py \
-            --env cloud-gamma-pre \
-            --base-url "${GAMMA_BASE_URL}" \
-            --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
-            --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
-            --report artifacts/avatar-e2e/cloud-gamma-pre/avatar_e2e_report.json
-      - name: Upload chat avatar API probe report（pre）
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: chat-avatar-api-probe-pre
-          path: artifacts/avatar-e2e/cloud-gamma-pre/**
-          if-no-files-found: ignore
-
-  device_matrix_self_hosted:
-    name: Self-hosted — alpha/beta/gamma 矩阵（发布准入）
-    needs: [deploy_gamma_ecs_pre, gamma_api_contract]
+    uses: ./.github/workflows/gamma-ecs-pre-hosted-core.yml
     secrets: inherit
-    uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
-    with:
-      env_json: '["alpha","beta","gamma"]'
-      gamma_base_url: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
-
-  device_matrix_chat_avatar_self_hosted:
-    name: Self-hosted — chat avatar gamma 矩阵（pre 后）
-    needs: [deploy_gamma_ecs_pre, gamma_chat_avatar_api_probe_pre]
-    secrets: inherit
-    uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
-    with:
-      env_json: '["gamma"]'
-      gamma_base_url: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
-      media_base_url: ${{ needs.deploy_gamma_ecs_pre.outputs.media_base_url }}
-      matrix_kind: chat-avatar
 
   deploy_gamma_ecs_prod:
     name: Deploy ECS — prod（就地升级，跳过上传）
-    needs: [device_matrix_self_hosted, device_matrix_chat_avatar_self_hosted, gamma_chat_avatar_api_probe_pre, gamma_api_contract, deploy_gamma_ecs_pre]
+    needs: [gamma_pre_validation, ecs_onebox_pre_summary]
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.promote_to_prod }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -306,28 +129,25 @@ jobs:
 
   gamma_api_contract_prod:
     name: Gamma ECS — T3 API contract（prod 后）
-    needs: [deploy_gamma_ecs_prod, deploy_gamma_ecs_pre]
+    needs: [deploy_gamma_ecs_prod, gamma_pre_validation]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       API_CONTRACT_ENV: gamma
-      GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
-      GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.product_ops_base_url }}
+      GAMMA_BASE_URL: ${{ needs.gamma_pre_validation.outputs.base_url }}
+      GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.gamma_pre_validation.outputs.product_ops_base_url }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: 准备 personal_assistant/.env
         run: |
-          mkdir -p quwoquan_app/assistant quwoquan_app/personal_assistant
-          if [ -f quwoquan_app/assistant/.env.example ]; then
-            cp quwoquan_app/assistant/.env.example quwoquan_app/assistant/.env
-          else
-            : > quwoquan_app/assistant/.env
-          fi
-          if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-            cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-          else
-            cp quwoquan_app/assistant/.env quwoquan_app/personal_assistant/.env
+          if [ -d quwoquan_app/personal_assistant ]; then
+            mkdir -p quwoquan_app/personal_assistant
+            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
+              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
+            else
+              : > quwoquan_app/personal_assistant/.env
+            fi
           fi
       - uses: subosito/flutter-action@v2
         with:
@@ -337,16 +157,16 @@ jobs:
         working-directory: quwoquan_app
         run: flutter pub get
       - name: T3 API Contract
-        run: make test-api-contract
+        run: cd "$GITHUB_WORKSPACE" && make test-api-contract
 
   gamma_chat_avatar_api_probe_prod:
     name: Gamma ECS — chat avatar API probe（prod 后）
-    needs: [deploy_gamma_ecs_prod, gamma_api_contract_prod, deploy_gamma_ecs_pre]
+    needs: [deploy_gamma_ecs_prod, gamma_api_contract_prod, gamma_pre_validation]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.media_base_url }}
+      GAMMA_BASE_URL: ${{ needs.gamma_pre_validation.outputs.base_url }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.gamma_pre_validation.outputs.media_base_url }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -368,45 +188,39 @@ jobs:
 
   device_matrix_self_hosted_prod:
     name: Self-hosted — gamma 烟测（prod 后）
-    needs: [deploy_gamma_ecs_prod, gamma_api_contract_prod, deploy_gamma_ecs_pre]
+    needs: [deploy_gamma_ecs_prod, gamma_api_contract_prod, gamma_pre_validation]
     secrets: inherit
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
       env_json: '["gamma"]'
-      gamma_base_url: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
+      gamma_base_url: ${{ needs.gamma_pre_validation.outputs.base_url }}
 
   device_matrix_chat_avatar_self_hosted_prod:
     name: Self-hosted — chat avatar gamma 烟测（prod 后）
-    needs: [deploy_gamma_ecs_prod, gamma_chat_avatar_api_probe_prod, deploy_gamma_ecs_pre]
+    needs: [deploy_gamma_ecs_prod, gamma_chat_avatar_api_probe_prod, gamma_pre_validation]
     secrets: inherit
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
       env_json: '["gamma"]'
-      gamma_base_url: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
-      media_base_url: ${{ needs.deploy_gamma_ecs_pre.outputs.media_base_url }}
+      gamma_base_url: ${{ needs.gamma_pre_validation.outputs.base_url }}
+      media_base_url: ${{ needs.gamma_pre_validation.outputs.media_base_url }}
       matrix_kind: chat-avatar
 
   ecs_onebox_pre_summary:
     name: ECS Onebox — pre 门禁汇总
-    needs: [deploy_gamma_ecs_pre, gamma_api_contract, gamma_chat_avatar_api_probe_pre, device_matrix_self_hosted, device_matrix_chat_avatar_self_hosted]
+    needs: [gate, alpha_beta_self_hosted, gamma_pre_validation]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: 汇总 pre 阶段结果（T3 + self-hosted）
+      - name: 汇总 pre 阶段结果
         env:
-          DEPLOY_PRE: ${{ needs.deploy_gamma_ecs_pre.result }}
-          T3: ${{ needs.gamma_api_contract.result }}
-          CHAT_AVATAR_PROBE: ${{ needs.gamma_chat_avatar_api_probe_pre.result }}
-          MATRIX: ${{ needs.device_matrix_self_hosted.result }}
-          CHAT_AVATAR_MATRIX: ${{ needs.device_matrix_chat_avatar_self_hosted.result }}
+          GATE: ${{ needs.gate.result }}
+          ALPHA_BETA: ${{ needs.alpha_beta_self_hosted.result }}
+          GAMMA_PRE: ${{ needs.gamma_pre_validation.result }}
         run: |
-          echo "deploy_pre=${DEPLOY_PRE}"
-          echo "gamma_api_contract=${T3}"
-          echo "gamma_chat_avatar_api_probe=${CHAT_AVATAR_PROBE}"
-          echo "device_matrix_self_hosted=${MATRIX}"
-          echo "device_matrix_chat_avatar_self_hosted=${CHAT_AVATAR_MATRIX}"
-          test "${DEPLOY_PRE}" = "success"
-          test "${T3}" = "success"
-          test "${CHAT_AVATAR_PROBE}" = "success"
-          test "${MATRIX}" = "success"
-          test "${CHAT_AVATAR_MATRIX}" = "success"
+          echo "gate=${GATE}"
+          echo "alpha_beta_self_hosted=${ALPHA_BETA}"
+          echo "gamma_pre_validation=${GAMMA_PRE}"
+          test "${GATE}" = "success"
+          test "${ALPHA_BETA}" = "success"
+          test "${GAMMA_PRE}" = "success"

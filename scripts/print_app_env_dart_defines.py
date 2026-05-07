@@ -25,7 +25,10 @@ DEFINE_KEYS = {
     "mediaImageCdnBaseUrl": "MEDIA_IMAGE_CDN_BASE_URL",
     "mediaVideoCdnBaseUrl": "MEDIA_VIDEO_CDN_BASE_URL",
     "mediaUploadBaseUrl": "MEDIA_UPLOAD_BASE_URL",
+    "contractFixtureProfile": "CONTRACT_FIXTURE_PROFILE",
     "currentUserId": "APP_CURRENT_USER_ID",
+    "appInstanceId": "APP_INSTANCE_ID",
+    "appInstanceNamespace": "APP_INSTANCE_NAMESPACE",
 }
 
 
@@ -50,14 +53,34 @@ def parse_runtime_yaml(path: Path) -> dict[str, str]:
 def apply_overrides(values: dict[str, str], args: argparse.Namespace) -> dict[str, str]:
     overrides = {
         "gatewayBaseUrl": args.gateway_base_url or os.environ.get("LOCAL_GAMMA_GATEWAY_BASE_URL", ""),
-        "mediaAvatarCdnBaseUrl": args.media_base_url or os.environ.get("LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL", ""),
-        "mediaImageCdnBaseUrl": args.media_base_url or os.environ.get("LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL", ""),
-        "mediaVideoCdnBaseUrl": args.media_base_url or os.environ.get("LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL", ""),
-        "mediaUploadBaseUrl": args.media_base_url or os.environ.get("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", ""),
+        "mediaAvatarCdnBaseUrl": args.media_avatar_base_url
+        or args.media_base_url
+        or os.environ.get("LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL", ""),
+        "mediaImageCdnBaseUrl": args.media_image_base_url
+        or args.media_base_url
+        or os.environ.get("LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL", ""),
+        "mediaVideoCdnBaseUrl": args.media_video_base_url
+        or args.media_base_url
+        or os.environ.get("LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL", ""),
+        "mediaUploadBaseUrl": args.media_upload_base_url
+        or args.media_base_url
+        or os.environ.get("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", ""),
+        "contractFixtureProfile": args.contract_fixture_profile
+        or os.environ.get("CONTRACT_FIXTURE_PROFILE", ""),
+        "currentUserId": args.current_user_id,
+        "appInstanceId": args.app_instance_id,
+        "appInstanceNamespace": args.app_instance_namespace,
+    }
+    url_keys = {
+        "gatewayBaseUrl",
+        "mediaAvatarCdnBaseUrl",
+        "mediaImageCdnBaseUrl",
+        "mediaVideoCdnBaseUrl",
+        "mediaUploadBaseUrl",
     }
     for key, value in overrides.items():
         if value:
-            values[key] = value.rstrip("/")
+            values[key] = value.rstrip("/") if key in url_keys else value
     return values
 
 
@@ -67,6 +90,14 @@ def main() -> int:
     parser.add_argument("--format", choices=["args", "shell", "json"], default="args")
     parser.add_argument("--gateway-base-url", default="")
     parser.add_argument("--media-base-url", default="")
+    parser.add_argument("--media-avatar-base-url", default="")
+    parser.add_argument("--media-image-base-url", default="")
+    parser.add_argument("--media-video-base-url", default="")
+    parser.add_argument("--media-upload-base-url", default="")
+    parser.add_argument("--contract-fixture-profile", default="")
+    parser.add_argument("--current-user-id", default="")
+    parser.add_argument("--app-instance-id", default="")
+    parser.add_argument("--app-instance-namespace", default="")
     args = parser.parse_args()
 
     cfg = ROOT / "quwoquan_app" / "configs" / args.env / "app_runtime.yaml"

@@ -368,10 +368,37 @@ def send_sender_avatar_message(args: argparse.Namespace, report: dict[str, Any],
         },
     )
     actual = str(result.get("senderAvatarUrlSnapshot") or "").strip()
+    message_id = str(result.get("messageId") or result.get("id") or result.get("_id") or "").strip()
+    source = "send_response"
+    if not actual and message_id:
+        deadline = time.monotonic() + 8
+        while time.monotonic() < deadline:
+            listed = request_json(
+                args,
+                "GET",
+                f"/v1/chat/conversations/{urllib.parse.quote(conversation_id)}/messages?limit=20",
+                user_id=report["conversation"]["creatorUserId"],
+            )
+            for item in listed.get("items") or []:
+                item_id = str(item.get("id") or item.get("_id") or "").strip()
+                if item_id != message_id:
+                    continue
+                actual = str(item.get("senderAvatarUrlSnapshot") or "").strip()
+                source = "message_list"
+                break
+            if actual:
+                break
+            time.sleep(max(0.2, args.poll_interval_seconds))
     if actual != expected:
         raise ProbeFailure("sender_avatar_regression", f"sender avatar snapshot mismatch: {actual}")
     report["uiEvidence"]["senderAvatarPreserved"] = True
-    add_step(report, "sender_avatar_snapshot", "passed", messageId=result.get("id") or result.get("_id"))
+    add_step(
+        report,
+        "sender_avatar_snapshot",
+        "passed",
+        messageId=message_id,
+        verificationSource=source,
+    )
 
 
 def collect_mongo_evidence(args: argparse.Namespace, report: dict[str, Any], conversation_id: str) -> None:

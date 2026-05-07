@@ -16,14 +16,17 @@
 .PHONY: verify-app-ui-map-literal-budget
 .PHONY: verify-app-session-b-current
 .PHONY: verify-app-assistant-search-weak-typing-ratchet
+.PHONY: verify-app-assistant-old-stack-retired
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-ui-app-data-source-mode-ratchet
 .PHONY: verify-app-seed-manifest
 .PHONY: verify-avatar-user-pool
 .PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-business-env-data-inventory
+.PHONY: verify-quwoquan-data
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
+.PHONY: verify-env-instance-isolation
 .PHONY: observability-es-up
 .PHONY: observability-es-down
 .PHONY: observability-es-health
@@ -64,6 +67,9 @@ verify-app-ui-app-data-source-mode-ratchet:
 verify-app-seed-manifest:
 	@python3 scripts/verify_app_seed_manifests.py
 
+verify-app-assistant-old-stack-retired:
+	@python3 scripts/verify_assistant_old_stack_retired.py
+
 verify-avatar-user-pool:
 	@python3 scripts/verify_avatar_user_pool_consistency.py
 
@@ -72,6 +78,9 @@ probe-avatar-user-pool-gateway:
 
 verify-business-env-data-inventory:
 	@python3 scripts/verify_business_env_data_inventory.py
+
+verify-quwoquan-data:
+	@bash scripts/verify_quwoquan_data.sh
 
 verify-app-env-package:
 	@bash scripts/build_app_env_package.sh --env alpha
@@ -126,6 +135,9 @@ build-service-env:
 		exit 2; \
 	fi
 	@bash scripts/build_service_env_package.sh --service "$(SERVICE)" --env "$(ENV)"
+
+verify-env-instance-isolation:
+	@python3 scripts/verify_env_instance_isolation.py
 
 test-app-alpha-seed:
 	@cd quwoquan_app && flutter test test/cloud/services/contract_seeded_mock_repository_test.dart
@@ -235,6 +247,7 @@ verify:
 	@bash scripts/verify_recommendation_service_contract.sh
 	@bash scripts/verify_topology_contract_regression.sh
 	@bash scripts/verify_config_gray_parallel_binding.sh
+	@$(MAKE) verify-quwoquan-data
 
 codegen:
 	@$(MAKE) -C quwoquan_service codegen
@@ -301,7 +314,7 @@ config-slo-gate:
 	fi
 	@bash scripts/config_release_slo_gate.sh --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
-.PHONY: l2-content gate-full test-api-contract test-api-contract-chat
+.PHONY: l2-content gate-full test-api-contract test-api-contract-chat gamma-validate-smoke-full gamma-validate-ui-full gamma-validate-full
 
 # 本地 L2 契约测试（content-service，需 MongoDB 在 localhost:27017）
 # 提交前运行以避免 CI 失败。详见 .cursor/rules/03-testing.mdc §2.1
@@ -329,7 +342,7 @@ test-api-contract:
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=LOCAL_GAMMA_T3_SCOPE=$${LOCAL_GAMMA_T3_SCOPE:-} \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
-	cd quwoquan_app && flutter test test/cloud/ops/api_contract_runner.dart \
+	flutter test test/cloud/ops/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=$$OPS_BASE_URL
 
@@ -362,6 +375,56 @@ gate-full:
 		echo "[gate-full] GAMMA_* not set; running local gamma T3/T4 mirror gate"; \
 		$(MAKE) gate-local-gamma LOCAL_GAMMA_SKIP_GATE=1; \
 	fi
+
+gamma-validate-smoke-full:
+	@TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}"; \
+	if [ -z "$${GAMMA_BASE_URL:-}" ] || [ -z "$${GAMMA_PRODUCT_OPS_BASE_URL:-}" ] || [ -z "$$TOKEN" ]; then \
+		echo "FAIL: GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN(or TEST_AUTH_TOKEN) are required"; \
+		exit 2; \
+	fi; \
+	python3 scripts/verify_gamma_environment_ready.py \
+		--base-url "$${GAMMA_BASE_URL}" \
+		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
+		--report artifacts/gamma-validation/smoke/readiness.json && \
+	( \
+		cd quwoquan_app && \
+		flutter pub get && \
+		flutter test test/common/assistant/assistant_environment_smoke_test.dart \
+			--dart-define=APP_RUNTIME_ENV=gamma \
+			--dart-define=APP_DATA_SOURCE=remote \
+			--dart-define=CLOUD_GATEWAY_BASE_URL="$${GAMMA_BASE_URL}" \
+			--dart-define=ASSISTANT_SMOKE_PROFILE=full_semantic \
+			--dart-define=ASSISTANT_SMOKE_MAX_TICKS=$${ASSISTANT_SMOKE_MAX_TICKS:-1500} \
+			--dart-define=ASSISTANT_SMOKE_MAX_IDLE_TICKS=$${ASSISTANT_SMOKE_MAX_IDLE_TICKS:-180} \
+	) && \
+	python3 scripts/run_chat_avatar_e2e_probe.py \
+		--env cloud-gamma-full \
+		--base-url "$${GAMMA_BASE_URL}" \
+		--media-base-url "$${MEDIA_AVATAR_CDN_BASE_URL:-$${GAMMA_BASE_URL}}" \
+		--test-auth-token "$$TOKEN" \
+		--report artifacts/gamma-validation/smoke/chat_avatar_api_probe.json
+
+gamma-validate-ui-full:
+	@TOKEN="$${GAMMA_TEST_AUTH_TOKEN:-$${TEST_AUTH_TOKEN:-}}"; \
+	if [ -z "$${GAMMA_BASE_URL:-}" ] || [ -z "$${GAMMA_PRODUCT_OPS_BASE_URL:-}" ] || [ -z "$$TOKEN" ]; then \
+		echo "FAIL: GAMMA_BASE_URL / GAMMA_PRODUCT_OPS_BASE_URL / GAMMA_TEST_AUTH_TOKEN(or TEST_AUTH_TOKEN) are required"; \
+		exit 2; \
+	fi; \
+	python3 scripts/verify_gamma_environment_ready.py \
+		--base-url "$${GAMMA_BASE_URL}" \
+		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
+		--report artifacts/gamma-validation/ui/readiness.json && \
+	python3 scripts/run_gamma_patrol_profile.py \
+		--profile daily_full \
+		--report artifacts/gamma-validation/ui/daily_full/report.json \
+		--gateway-base-url "$${GAMMA_BASE_URL}" \
+		--product-ops-base-url "$${GAMMA_PRODUCT_OPS_BASE_URL}" \
+		--test-auth-token "$$TOKEN" \
+		--platform "$${GAMMA_UI_PLATFORM:-all}"
+
+gamma-validate-full:
+	@$(MAKE) gamma-validate-smoke-full
+	@$(MAKE) gamma-validate-ui-full
 
 # Deploy to integration. CLOUD_PROVIDER=aliyun|volcengine|huaweicloud (default: aliyun).
 # Usage: make deploy-integration [CLOUD_PROVIDER=volcengine]

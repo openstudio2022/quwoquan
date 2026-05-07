@@ -14,6 +14,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "quwoquan_app"
+USER_POOL = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.json"
+ALPHA_MANIFEST = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "app_alpha_seed_manifest.json"
 
 
 def run(cmd: list[str], cwd: Path = ROOT) -> str:
@@ -88,6 +90,23 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
             proc.kill()
 
 
+def load_shared_pool_summary() -> dict[str, object]:
+    pool = json.loads(USER_POOL.read_text(encoding="utf-8"))
+    return {
+        "schemaVersion": pool.get("schemaVersion"),
+        "statistics": pool.get("statistics"),
+        "sourceCatalogDigest": pool.get("sourceCatalogDigest"),
+    }
+
+
+def load_alpha_delivery_channels() -> dict[str, list[str]]:
+    manifest = json.loads(ALPHA_MANIFEST.read_text(encoding="utf-8"))
+    return {
+        str(item.get("domain")): [str(value) for value in item.get("deliveryChannels", [])]
+        for item in manifest.get("seedRefs", [])
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default="artifacts/app_alpha_beta_seed_matrix.json")
@@ -96,17 +115,21 @@ def main() -> int:
 
     report: dict[str, object] = {
         "status": "passed",
+        "sharedPool": {},
         "alpha": {},
         "beta": {},
     }
     try:
         run([sys.executable, "scripts/verify_app_seed_manifests.py"])
+        run([sys.executable, "scripts/verify_avatar_user_pool_consistency.py"])
         run(["bash", "scripts/build_app_env_package.sh", "--env", "alpha"])
         run(["bash", "scripts/build_app_env_package.sh", "--env", "beta"])
+        report["sharedPool"] = load_shared_pool_summary()
         alpha_output = run(
             [
                 "flutter",
                 "test",
+                "--dart-define=CONTRACT_FIXTURE_PROFILE=full",
                 "test/cloud/services/contract_seeded_mock_repository_test.dart",
             ],
             cwd=APP,
@@ -115,10 +138,12 @@ def main() -> int:
             "dataSource": "mock",
             "test": "test/cloud/services/contract_seeded_mock_repository_test.dart",
             "outputTail": alpha_output[-2000:],
+            "deliveryChannels": load_alpha_delivery_channels(),
         }
         report["beta"] = {
             "dataSource": "remote",
             **beta_gateway_smoke(args.gateway_port),
+            "gatewayProbe": run([sys.executable, "scripts/probe_avatar_user_pool_gateway.py"])[-1000:],
         }
     except Exception as exc:  # noqa: BLE001
         report["status"] = "failed"

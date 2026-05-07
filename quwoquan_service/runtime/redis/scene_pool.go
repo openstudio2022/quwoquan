@@ -260,6 +260,9 @@ func (c *goRedisClient) XReadGroup(
 	for _, stream := range names {
 		streamArgs = append(streamArgs, streams[stream])
 	}
+	// The in-memory client treats block<=0 as non-blocking. Mirror that here
+	// because go-redis maps Block=0 to Redis `BLOCK 0`, which hangs forever.
+	block = normalizeXReadGroupBlock(block)
 	result, err := c.rdb.XReadGroup(ctx, &goredis.XReadGroupArgs{
 		Group:    group,
 		Consumer: consumer,
@@ -288,6 +291,13 @@ func (c *goRedisClient) XReadGroup(
 		}
 	}
 	return out, nil
+}
+
+func normalizeXReadGroupBlock(block time.Duration) time.Duration {
+	if block <= 0 {
+		return -1
+	}
+	return block
 }
 
 func (c *goRedisClient) XAck(ctx context.Context, stream string, group string, ids ...string) error {

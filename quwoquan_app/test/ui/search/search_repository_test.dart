@@ -123,6 +123,16 @@ void main() {
           seedCircleId,
           limit: 1,
         )).first;
+        await circleStore.upsertGroups(
+          namespace: namespace,
+          groups: <Map<String, dynamic>>[
+            <String, dynamic>{
+              ...seedGroup.toMap(),
+              'circleId': seedCircleId,
+              'circleName': '本地回退圈子',
+            },
+          ],
+        );
         final repo = AppSearchRepository(
           circleRepository: _EmptyCircleRepository(),
           contentRepository: MockContentRepository(),

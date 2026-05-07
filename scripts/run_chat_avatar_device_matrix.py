@@ -16,6 +16,15 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
+from device_matrix_evidence import (
+    capture_device_screenshot,
+    repo_relative,
+    sanitize_device_id,
+    write_device_manifest,
+    write_discovered_devices_snapshot,
+    write_json,
+)
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 APP_DIR = REPO_ROOT / "quwoquan_app"
@@ -50,6 +59,7 @@ def run_command(
     env: dict[str, str] | None = None,
     timeout_seconds: int | None = None,
     include_output: bool = False,
+    log_path: Path | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     process: subprocess.Popen[str] | None = None
@@ -90,6 +100,10 @@ def run_command(
         "timedOut": timed_out,
         "outputSummary": summarize_output(output),
     }
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(output, encoding="utf-8")
+        result["logPath"] = repo_relative(log_path)
     if include_output:
         result["output"] = output
     return result
@@ -219,6 +233,8 @@ def run_probe(
     media_url: str,
     args: argparse.Namespace,
     out_dir: Path,
+    *,
+    log_path: Path | None = None,
 ) -> dict[str, Any]:
     path = out_dir / "probe.json"
     command = [
@@ -243,11 +259,21 @@ def run_probe(
         command.append("--compose-mongo")
     if args.dry_run:
         command.append("--dry-run")
-    result = run_command(command, cwd=REPO_ROOT, timeout_seconds=args.probe_timeout_seconds + 60)
+    result = run_command(
+        command,
+        cwd=REPO_ROOT,
+        timeout_seconds=args.probe_timeout_seconds + 60,
+        log_path=log_path,
+    )
     report: dict[str, Any] = {}
     if path.exists():
         report = json.loads(path.read_text(encoding="utf-8"))
-    return {"commandResult": result, "reportPath": str(path), "report": report}
+    return {
+        "command": command,
+        "commandResult": result,
+        "reportPath": str(path),
+        "report": report,
+    }
 
 
 def run_patrol(
@@ -258,6 +284,8 @@ def run_patrol(
     device: dict[str, Any],
     probe_report: dict[str, Any],
     out_dir: Path,
+    *,
+    log_path: Path | None = None,
 ) -> dict[str, Any]:
     ui_report = out_dir / "ui.json"
     conversation = probe_report.get("conversation") or {}
@@ -310,12 +338,33 @@ def run_patrol(
             json.dumps({"status": "passed", "dryRun": True}, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
-        return {"command": command, "exitCode": 0, "reportPath": str(ui_report), "report": json.loads(ui_report.read_text())}
-    result = run_command(command, cwd=APP_DIR, timeout_seconds=args.test_timeout_seconds)
+        return {
+            "command": command,
+            "commandResult": {
+                "command": command,
+                "exitCode": 0,
+                "timedOut": False,
+                "durationMs": 0,
+                "outputSummary": "dry-run",
+            },
+            "reportPath": str(ui_report),
+            "report": json.loads(ui_report.read_text()),
+        }
+    result = run_command(
+        command,
+        cwd=APP_DIR,
+        timeout_seconds=args.test_timeout_seconds,
+        log_path=log_path,
+    )
     report: dict[str, Any] = {}
     if ui_report.exists():
         report = json.loads(ui_report.read_text(encoding="utf-8"))
-    return {"commandResult": result, "reportPath": str(ui_report), "report": report}
+    return {
+        "command": command,
+        "commandResult": result,
+        "reportPath": str(ui_report),
+        "report": report,
+    }
 
 
 def main() -> int:
@@ -324,6 +373,7 @@ def main() -> int:
     requested_envs = envs(args.env)
     report: dict[str, Any] = {
         "schemaVersion": 1,
+        "suiteId": "chat_avatar_sync",
         "scenario": "chat.group_avatar.sync_display_e2e.matrix",
         "status": "running",
         "failureCategory": "",
@@ -335,6 +385,8 @@ def main() -> int:
         "platform": args.platform,
         "devices": [],
         "runs": [],
+        "deviceInventoryPath": "",
+        "evidenceRoot": "",
     }
     try:
         devices = dry_run_devices(args) if args.dry_run else discover_devices(args.platform)
@@ -348,6 +400,15 @@ def main() -> int:
             report["retryable"] = True
             return write_report(report, out, 2)
         report["devices"] = devices
+        evidence_root = out.parent / "runs"
+        report["evidenceRoot"] = repo_relative(evidence_root)
+        report["deviceInventoryPath"] = write_discovered_devices_snapshot(
+            out.parent / "discovered_devices.json",
+            devices,
+            suite="chat-avatar-device-matrix",
+            requested_environments=requested_envs,
+            extra={"platform": args.platform, "reportPath": repo_relative(out)},
+        )
         if any(env_name == "gamma" and not default_base_url(env_name, args.gateway_base_url) for env_name in requested_envs):
             report["status"] = "gate_block"
             report["failureCategory"] = "gateway_unreachable"
@@ -359,13 +420,71 @@ def main() -> int:
             base_url = default_base_url(env_name, args.gateway_base_url)
             media_url = default_media_url(env_name, args.media_base_url)
             for device in devices:
-                run_dir = out.parent / env_name / device["id"].replace("/", "_")
+                run_dir = evidence_root / env_name / sanitize_device_id(str(device.get("id", "")))
                 run_dir.mkdir(parents=True, exist_ok=True)
+                device_manifest_path = write_device_manifest(
+                    run_dir / "device.json",
+                    device,
+                    env_name=env_name,
+                    suite="chat-avatar-device-matrix",
+                    extra={
+                        "platformFilter": args.platform,
+                        "gatewayBaseUrl": base_url,
+                        "mediaBaseUrl": media_url,
+                    },
+                )
+                before_screenshot = capture_device_screenshot(device, run_dir / "before.png")
                 reverse = adb_reverse_if_needed(device, [base_url, media_url])
-                probe = run_probe(env_name, base_url, media_url, args, run_dir)
+                probe = run_probe(
+                    env_name,
+                    base_url,
+                    media_url,
+                    args,
+                    run_dir,
+                    log_path=run_dir / "probe.log",
+                )
+                probe_command_path = write_json(
+                    run_dir / "probe-command.json",
+                    {
+                        "capturedAt": utc_now(),
+                        "environment": env_name,
+                        "deviceId": device["id"],
+                        "command": probe.get("command", []),
+                    },
+                )
                 patrol = {"status": "skipped", "reason": "probe failed"}
+                patrol_command_path = ""
                 if (probe.get("report") or {}).get("status") == "passed":
-                    patrol = run_patrol(env_name, base_url, media_url, args, device, probe["report"], run_dir)
+                    patrol = run_patrol(
+                        env_name,
+                        base_url,
+                        media_url,
+                        args,
+                        device,
+                        probe["report"],
+                        run_dir,
+                        log_path=run_dir / "patrol.log",
+                    )
+                    patrol_command_path = write_json(
+                        run_dir / "patrol-command.json",
+                        {
+                            "capturedAt": utc_now(),
+                            "environment": env_name,
+                            "deviceId": device["id"],
+                            "command": patrol.get("command", []),
+                        },
+                    )
+                after_screenshot = (
+                    capture_device_screenshot(device, run_dir / "after.png")
+                    if ((patrol.get("report") or {}).get("status") == "passed")
+                    else {"status": "skipped", "reason": "patrol not passed"}
+                )
+                failure_screenshot = (
+                    capture_device_screenshot(device, run_dir / "failure.png")
+                    if ((probe.get("report") or {}).get("status") != "passed")
+                    or ((patrol.get("report") or {}).get("status") not in {"", "passed"})
+                    else {"status": "skipped", "reason": "no failure"}
+                )
                 run = {
                     "env": env_name,
                     "device": device,
@@ -374,6 +493,17 @@ def main() -> int:
                     "adbReverse": reverse,
                     "probe": probe,
                     "patrol": patrol,
+                    "evidence": {
+                        "runDirectory": repo_relative(run_dir),
+                        "deviceManifestPath": device_manifest_path,
+                        "probeCommandPath": probe_command_path,
+                        "probeLogPath": (probe.get("commandResult") or {}).get("logPath", ""),
+                        "patrolCommandPath": patrol_command_path,
+                        "patrolLogPath": (patrol.get("commandResult") or {}).get("logPath", ""),
+                        "beforeScreenshot": before_screenshot,
+                        "afterScreenshot": after_screenshot,
+                        "failureScreenshot": failure_screenshot,
+                    },
                 }
                 probe_failed = (probe.get("report") or {}).get("status") != "passed"
                 patrol_failed = (patrol.get("report") or {}).get("status") != "passed"

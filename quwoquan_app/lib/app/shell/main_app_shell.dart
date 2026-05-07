@@ -10,7 +10,7 @@ import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_bottom_nav_tap_meta.g.dart';
@@ -126,17 +126,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final themeDark = ref.watch(isDarkProvider);
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
     final isDark = themeDark || forceDark;
-    final assistantInternalTab = ref.watch(assistantInternalTabProvider);
     final shellBackground = forceDark
         ? AppColors.worksBackground
         : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
-    final assistantImmersive =
-        widget.currentLocation == AppRoutePaths.assistant &&
-        (assistantInternalTab == 'dialog' ||
-            assistantInternalTab == 'personal');
     final bottomNavHidden =
         ref.watch(bottomNavHiddenProvider).hidden ||
-        assistantImmersive ||
+        widget.currentLocation == AppRoutePaths.assistant ||
         widget.currentLocation == AppRoutePaths.circles;
 
     final statusBarStyle = SystemUiOverlayStyle(
@@ -159,7 +154,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
               index: _currentIndex,
               children: [
                 _buildPrimarySurface(),
-                const AssistantTabPage(),
+                PersonalAssistantConversationPage(onBack: _handleAssistantBack),
                 const ChatPage(),
                 const MyProfilePage(),
               ],
@@ -211,13 +206,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                     : previousTab,
               );
         }
-        // 助理入口根据当前内部 tab 决定是否走沉浸式，避免把日程/技能误判为全屏。
-        ref
-            .read(bottomNavHiddenProvider.notifier)
-            .setHidden(
-              ref.read(assistantInternalTabProvider) == 'dialog' ||
-                  ref.read(assistantInternalTabProvider) == 'personal',
-            );
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
         context.go(nextTab.routePath);
         break;
       case MainTabDestination.chat:
@@ -236,6 +225,17 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         context.go(AppRoutePaths.circles);
         break;
     }
+  }
+
+  void _handleAssistantBack() {
+    final lastTab = ref.read(lastMainTabBeforeAssistantProvider);
+    ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+    ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
+    if (lastTab != null) {
+      context.go(lastTab.routePath);
+      return;
+    }
+    context.go(AppRoutePaths.home);
   }
 
   Widget _buildPrimarySurface() {

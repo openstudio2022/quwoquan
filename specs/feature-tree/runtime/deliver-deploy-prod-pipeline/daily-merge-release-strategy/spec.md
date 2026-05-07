@@ -7,13 +7,13 @@
 ## 范围
 
 - **分支策略**：支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR
-- **PR 合入规则**：`main` 的 required checks 统一由 `03/04/05` 承担
+- **PR 合入规则**：`main` 的 required checks 统一由 `03/04/05` 承担，其中 `04` 是 ECS gamma 主门禁、`05` 是本地 self-hosted alpha/beta Android+iOS 设备矩阵
 - **部署触发**：进入 `main` 后自动触发 `02` 与 `07`，手动发布保留 `06/08`
 
 ## 适用范围与约束
 
-- **适用**：日节奏发布、integration/prod 自动化部署
-- **约束**：需 GitHub Actions 权限（PAT 或 GITHUB_TOKEN 用于 merge）；deploy-prod-auto 依赖 pre-release-gate 通过
+- **适用**：日节奏发布、ECS gamma / prod 自动化部署
+- **约束**：需 GitHub Actions 权限（PAT 或 GITHUB_TOKEN 用于 merge）；deploy-prod-auto 依赖 `03/04/05` 全绿
 - **不适用**：紧急 hotfix 直推 main（可保留 workflow_dispatch 或临时放开策略）
 
 ## 与父/子节点关系
@@ -22,7 +22,7 @@
 
 | 关联节点 | 说明 |
 |----------|------|
-| integration-deploy-and-l3-l4-gate | pre-release-gate 需支持 push to main 触发 |
+| integration-deploy-and-l3-l4-gate | 已收口为 ECS gamma hosted pre + 本地 self-hosted gamma 旅程 |
 | gray-release-to-prod | deploy-prod-auto Stage 1 全自动 |
 
 ## 多环境与波次（跨节点口径）
@@ -36,4 +36,4 @@
 - A3：PR required checks 全绿后进入 `main`
 - A4：进入 `main` 后触发 `02` 与 `07`
 - A5：deliver_to_production_runbook、ci_cd_end_to_end_design 与策略一致
-- A6：环境矩阵与上述 release 波次、Secrets（含 `GAMMA_PRODUCT_OPS_BASE_URL`）在文档层面对齐
+- A6：环境矩阵与上述 release 波次、ECS gamma / self-hosted Android+iOS 口径在文档层面对齐

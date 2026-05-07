@@ -25,7 +25,6 @@ import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dar
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/developer_settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
@@ -561,7 +560,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutePaths.assistantPersonal,
         builder: (context, state) {
+          final assistantOpenContext = state.extra is AssistantOpenContext
+              ? state.extra as AssistantOpenContext
+              : null;
           return PersonalAssistantConversationPage(
+            assistantOpenContext: assistantOpenContext,
             onBack: () {
               if (context.canPop()) {
                 context.pop();
@@ -672,7 +675,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
 
           if (isAssistant) {
-            return AssistantConversationPage(
+            return PersonalAssistantConversationPage(
               onBack: handleBack,
               assistantOpenContext: assistantOpenContext,
             );

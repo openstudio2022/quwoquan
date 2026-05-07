@@ -1,9 +1,0 @@
-{
-  "templateId": "stack.identity",
-  "version": "2026.03.05",
-  "stage": "global",
-  "domainId": "global",
-  "requiredVariables": ["_static"],
-  "outputContract": "none",
-  "selfCheckRules": ["no_fabrication"]
-}

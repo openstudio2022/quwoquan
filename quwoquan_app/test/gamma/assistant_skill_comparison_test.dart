@@ -12,7 +12,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import '../common/assistant/assistant_eval_scenario_fixtures.dart';
-import 'package:quwoquan_app/ui/assistant/pages/assistant_tab_page.dart';
+import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 
 void main() {
@@ -36,18 +36,16 @@ void main() {
               ScenarioEvalMockAssistantRepository(pack: scenarioPack),
             ),
         ],
-        child: const MaterialApp(home: AssistantTabPage()),
+        child: const MaterialApp(home: PersonalAssistantConversationPage()),
       ),
     );
     await _pumpFrames(tester);
     _expectScreenClass(tester);
 
-    await tester.tap(find.text('找私助'));
-    await _pumpFrames(tester);
     expect(find.byKey(TestKeys.assistantChatInputField), findsOneWidget);
 
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(AssistantTabPage)),
+      tester.element(find.byType(PersonalAssistantConversationPage)),
     );
     final mode = container.read(appDataSourceModeProvider);
 
@@ -58,7 +56,9 @@ void main() {
           .send(scenario.question);
       await _pumpUntilStreamSettled(tester);
 
-      final context = tester.element(find.byType(AssistantTabPage));
+      final context = tester.element(
+        find.byType(PersonalAssistantConversationPage),
+      );
       final state = ProviderScope.containerOf(
         context,
       ).read(personalAssistantStreamControllerProvider);
@@ -258,7 +258,9 @@ const _forbiddenAnswerFragments = <String>[
 Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
   for (var i = 0; i < 240; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    final context = tester.element(find.byType(AssistantTabPage));
+    final context = tester.element(
+      find.byType(PersonalAssistantConversationPage),
+    );
     final state = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);

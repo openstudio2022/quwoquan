@@ -2,6 +2,7 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/arti
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
+import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
 class ArticleReaderDebugMapper {
@@ -11,6 +12,20 @@ class ArticleReaderDebugMapper {
     required ArticleFlipPipelineOutput output,
     required ArticleFlipPipelineInput input,
   }) {
+    final backwardGeometry = output.direction == StPageFlipDirection.back
+        ? resolveBackwardFoldFrameGeometry(
+            flippingArea: input.renderFrame.flippingClipArea,
+            bottomArea: input.renderFrame.bottomClipArea,
+            anchor: input.renderFrame.flippingAnchor,
+            angle: input.renderFrame.angle,
+            bounds: input.scene.layout.bounds,
+            pageSize: input.pageSize,
+            pageViewportRect: resolveBookPageRect(
+              input.scene.layout,
+              isRightPage: true,
+            ),
+          )
+        : null;
     return ArticleReaderPipelineDebugState(
       pipelineName: output.debugLabel ?? output.renderBranchName,
       renderBranchName: output.renderBranchName,
@@ -22,52 +37,26 @@ class ArticleReaderDebugMapper {
               mainline: output.renderBranchName,
               phase: input.renderFrame.backwardLeafFrame?.phase.name,
               currentResidualBounds:
-                  input.renderFrame.backwardProjectedFrame == null
-                  ? null
-                  : polygonBounds(
-                      input
-                          .renderFrame
-                          .backwardProjectedFrame!
-                          .currentResidualPolygon,
-                    ),
-              backVertexCount: input
-                  .renderFrame
-                  .backwardProjectedFrame
-                  ?.previousBackPolygon
-                  .length,
-              frontVertexCount: input
-                  .renderFrame
-                  .backwardProjectedFrame
-                  ?.previousFrontPolygon
-                  .length,
-              edgeEnteredPage:
-                  input.renderFrame.backwardProjectedFrame?.edgeEnteredPage,
-              backPolygonPoints:
-                  input.renderFrame.backwardProjectedFrame == null
+                  backwardGeometry?.currentResidualViewportBounds,
+              backVertexCount:
+                  backwardGeometry?.previousBackLocalPolygon.length,
+              frontVertexCount:
+                  backwardGeometry?.previousFrontViewportPolygon.length,
+              edgeEnteredPage: backwardGeometry != null,
+              backPolygonPoints: backwardGeometry == null
                   ? null
                   : articleDiagnosticPolygonSignature(
-                      input
-                          .renderFrame
-                          .backwardProjectedFrame!
-                          .previousBackPolygon,
+                      backwardGeometry.previousBackLocalPolygon,
                     ),
-              frontPolygonPoints:
-                  input.renderFrame.backwardProjectedFrame == null
+              frontPolygonPoints: backwardGeometry == null
                   ? null
                   : articleDiagnosticPolygonSignature(
-                      input
-                          .renderFrame
-                          .backwardProjectedFrame!
-                          .previousFrontPolygon,
+                      backwardGeometry.previousFrontViewportPolygon,
                     ),
-              currentPolygonPoints:
-                  input.renderFrame.backwardProjectedFrame == null
+              currentPolygonPoints: backwardGeometry == null
                   ? null
                   : articleDiagnosticPolygonSignature(
-                      input
-                          .renderFrame
-                          .backwardProjectedFrame!
-                          .currentResidualPolygon,
+                      backwardGeometry.currentResidualViewportPolygon,
                     ),
             )
           : null,

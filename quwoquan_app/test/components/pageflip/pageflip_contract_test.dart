@@ -40,6 +40,9 @@ void main() {
       final diagnosticSignaturesSource = _readAppSource(
         'lib/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart',
       );
+      final debugMapperSource = _readAppSource(
+        'lib/ui/content/article_reader/pageflip/diagnostics/article_reader_debug_mapper.dart',
+      );
       final currentBarrelSource = _readAppSource(
         'lib/ui/content/widgets/article_paged_canvas.dart',
       );
@@ -121,6 +124,18 @@ void main() {
       expect(
         controllerSource,
         contains('movingEdgeLine: calculation.getBackwardMovingEdgeLine()'),
+      );
+      expect(
+        debugMapperSource,
+        contains('resolveBackwardFoldFrameGeometry('),
+        reason:
+            'diagnostics must consume the same M1 BackwardFoldFrame resolver as paint',
+      );
+      expect(
+        debugMapperSource,
+        isNot(contains('backwardProjectedFrame')),
+        reason:
+            'backwardProjectedFrame is retired diagnostics-only data and must not drive M1/M2 diagnostics',
       );
       expect(backwardBuilderSource, isNot(contains('_resolveMovingEdgeLine(')));
       expect(
@@ -209,6 +224,12 @@ void main() {
       );
       expect(
         backwardLayerSource,
+        contains('_buildBackwardGeometryGuideLayer('),
+      );
+      expect(hostSource, contains('debugPureBackwardGeometry'));
+      expect(hostSource, contains('if (!widget.debugPureBackwardGeometry)'));
+      expect(
+        backwardLayerSource,
         isNot(contains('resolveBackwardSoftPageGeometry(')),
       );
       expect(hostSource, contains('resolveBackwardFoldFrameGeometry('));
@@ -223,6 +244,11 @@ void main() {
       expect(hostSource, isNot(contains('resolveBackwardSpineFoldGeometry(')));
       final softGeometrySource = _readAppSource(
         'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
+      );
+      expect(
+        softGeometrySource,
+        isNot(contains('resolveBackwardFoldSurfaceGeometry({')),
+        reason: 'M1 keeps one public BACK three-face resolver',
       );
       expect(softGeometrySource, isNot(contains('const tilt = 0.0')));
       expect(softGeometrySource, isNot(contains('final _ = localPagePoint')));
@@ -761,6 +787,53 @@ void main() {
       );
     });
 
+    test('backward fold frame keeps M1 geometry ordered across phases', () {
+      const pageSize = Size(420, 584);
+      const bounds = StPageFlipBoundsRect(
+        left: -210,
+        top: 12,
+        width: 840,
+        height: 584,
+        pageWidth: 420,
+      );
+      final pageViewportRect = Rect.fromLTWH(
+        bounds.left + bounds.pageWidth,
+        bounds.top,
+        bounds.pageWidth,
+        bounds.height,
+      );
+      const samples = <Offset>[
+        Offset(-48, 520),
+        Offset(-180, 502),
+        Offset(-284, 480),
+      ];
+
+      for (final sample in samples) {
+        final calculation = StPageFlipCalculation(
+          direction: StPageFlipDirection.back,
+          corner: StPageFlipCorner.bottom,
+          pageWidth: pageSize.width,
+          pageHeight: pageSize.height,
+        );
+        expect(calculation.calc(sample), isTrue);
+        final geometry = resolveBackwardFoldFrameGeometry(
+          flippingArea: calculation.getFlippingClipArea(),
+          bottomArea: calculation.getBottomClipArea(),
+          anchor: calculation.getActiveCorner(),
+          angle: calculation.getAngle(),
+          bounds: bounds,
+          pageSize: pageSize,
+          pageViewportRect: pageViewportRect,
+        );
+        expect(geometry, isNotNull, reason: 'sample=$sample');
+        _expectM1BackwardGeometryOrder(
+          geometry!,
+          pageViewportRect: pageViewportRect,
+          reason: 'sample=$sample',
+        );
+      }
+    });
+
     test('backward previous-page fold surface edge stays page-clipped', () {
       const pageSize = Size(420, 584);
       const localPoints = <Offset>[
@@ -1017,6 +1090,42 @@ double _lineMinX((Offset, Offset) line) {
 
 double _lineMaxX((Offset, Offset) line) {
   return line.$1.dx > line.$2.dx ? line.$1.dx : line.$2.dx;
+}
+
+void _expectM1BackwardGeometryOrder(
+  BackwardFoldSurfaceGeometry geometry, {
+  required Rect pageViewportRect,
+  required String reason,
+}) {
+  final pageEdgeX = _lineAverageX(geometry.frontBackBoundaryViewport);
+  final foldX = _lineAverageX(geometry.foldLineViewport);
+  final pageEdgeRight = _lineMaxX(geometry.frontBackBoundaryViewport);
+  final foldLeft = _lineMinX(geometry.foldLineViewport);
+  final frontBounds = geometry.previousFrontViewportBounds;
+  final backBounds = geometry.previousBackViewportBounds;
+  final currentBounds = geometry.currentResidualViewportBounds;
+  expect(frontBounds, isNotNull, reason: reason);
+  expect(backBounds, isNotNull, reason: reason);
+  expect(currentBounds, isNotNull, reason: reason);
+  expect(pageEdgeX, lessThan(foldX), reason: reason);
+  expect(frontBounds!.left, closeTo(pageViewportRect.left, 1), reason: reason);
+  expect(frontBounds.right, closeTo(pageEdgeRight, 18), reason: reason);
+  expect(
+    backBounds!.left,
+    lessThanOrEqualTo(pageEdgeRight + 18),
+    reason: reason,
+  );
+  expect(backBounds.right, greaterThanOrEqualTo(foldLeft - 18), reason: reason);
+  expect(currentBounds!.left, closeTo(foldLeft, 18), reason: reason);
+  expect(
+    <double>[
+      frontBounds.right,
+      backBounds.right,
+      currentBounds.right,
+    ].reduce((a, b) => a > b ? a : b),
+    greaterThan(pageViewportRect.left + pageViewportRect.width * 0.65),
+    reason: reason,
+  );
 }
 
 Rect? _polygonBounds(List<Offset> polygon) {

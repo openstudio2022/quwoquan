@@ -12,6 +12,13 @@
 | prod | 真实用户数据 | 真实用户数据 | 正式发布 |
 | prod-gray | 同一个生产 App 包 | 云侧灰度策略/配置版本 | 灰度，不是单独 App 包 |
 
+### 多实例 / 单套补充约束
+
+- 端侧 `alpha` / `beta` / `gamma` 可在**不同模拟器**并行运行多个实例，但每个实例都必须显式绑定 `device-id`。
+- `beta` 云侧数据源只允许一套本地服务栈；重新启动 beta 时必须先停止旧实例并回收 `18080/18087/18088` 等固定端口。
+- `gamma` 云侧数据源只允许一套 ECS gamma 或一套 local-gamma mirror；并行只体现在多个端侧实例同时访问同一套 gamma。
+- 不得为端侧多实例再复制一套 beta/gamma seed 数据；仍以既有 `app_beta_seed_manifest.json` / `app_gamma_seed_manifest.json` 为唯一真相源。
+
 ## 页面依赖矩阵
 
 | 范围 | 页面 | 业务对象 | seedRefs |
@@ -31,6 +38,7 @@
 - 测试数据按业务对象组织，页面只引用 scenario id 或 seedRef。
 - `alpha` 端侧 mock、`beta/gamma` 云侧 seed 必须使用同一业务对象 ID。
 - 人工 beta 数据必须进入 fixture 与 `app_beta_seed_manifest.json`，不得在脚本或数据库临时追加。
+- beta / gamma 服务端不允许因端侧多实例而新增第二套本地/云侧栈；任何“切换”都必须是 stop-then-start。
 - 生产 App 只有一个包，禁止独立 `app-prod-gray`；灰度由应用市场分发策略、端侧上下文和云侧策略控制。
 - `prod/prod-gray` 禁止 `test_fixtures`、`seedRefs`、`requiresSeedReset`、`mock` 数据源。
 
@@ -43,6 +51,11 @@
 | 趣信消息 | `MockChatRepository` 从 `chat_core` 初始化 | `RemoteChatRepository.listInbox/listConversations/listMessages/listMembers` | `GET /v1/chat/inbox`、`GET /v1/chat/conversations`、`GET /v1/chat/conversations/{conversationId}/messages` |
 | 趣信联系人 | `chat_contacts_core` | `RemoteChatRepository.listContacts`，圈子/趣群 tab 由 `ListCircles/ListConversations` 派生 | `GET /v1/chat/contacts`、`GET /v1/circles`、`GET /v1/chat/conversations` |
 | 我的主页/作者主页 | `MockUserProfileRepository` 从 `user_profile_core/profile_feed_core` 初始化 | `RemoteUserProfileRepository`，当前用户由环境包 `runtime.currentUserId` 注入 | `GET /v1/me`、`GET /v1/user/{id}`、`GET /v1/content/profile-subjects/{id}/posts`、`GET /v1/users/{id}/works`、`GET /v1/users/{id}/circles` |
+
+**并行运行说明**：
+
+- `alpha` / `beta` / `gamma` 的页面真实数据链路允许被多个端侧实例并发消费。
+- `beta/gamma` 的 RemoteRepository 不得通过“第二套本地服务栈”来实现并行，而应共享同一套 remote endpoint。
 
 ## 收口任务清单
 

@@ -64,8 +64,12 @@ def verify_asset(errors: list[str], context: str, asset: dict[str, Any]) -> None
     actual_hash = "sha256:" + hashlib.sha256(raw).hexdigest()
     if expected_hash != actual_hash:
         fail(errors, f"{context} sourceHash mismatch: expected {expected_hash}, got {actual_hash}")
-    if asset.get("mimeType") != "image/png":
-        fail(errors, f"{context} fixture assets currently must declare image/png, got {asset.get('mimeType')!r}")
+    mime_type = str(asset.get("mimeType") or "")
+    if mime_type not in {"image/png", "image/jpeg"}:
+        fail(
+            errors,
+            f"{context} fixture assets currently must declare image/png or image/jpeg, got {asset.get('mimeType')!r}",
+        )
     if not isinstance(asset.get("width"), int) or not isinstance(asset.get("height"), int):
         fail(errors, f"{context} must declare integer width/height")
 

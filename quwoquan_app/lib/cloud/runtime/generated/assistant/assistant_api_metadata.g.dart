@@ -14,8 +14,6 @@ class AssistantApiMetadata {
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'CreateAssistantConversation': '/v1/assistant/conversations',
     'CreateAssistantTurn': '/v1/assistant/conversations/{conversationId}/turns',
-    'CreateRun': '/v1/assistant/runs',
-    'CreateRunStream': '/v1/assistant/runs/stream',
     'CreateSkillSubscription': '/v1/assistant/skill-subscriptions',
     'GetAssistantConversation': '/v1/assistant/conversations/{conversationId}',
     'GetAssistantTurn': '/v1/assistant/turns/{turnId}',
@@ -42,8 +40,6 @@ class AssistantApiMetadata {
   static const Map<String, String> operationToMethod = <String, String>{
     'CreateAssistantConversation': 'POST',
     'CreateAssistantTurn': 'POST',
-    'CreateRun': 'POST',
-    'CreateRunStream': 'POST',
     'CreateSkillSubscription': 'POST',
     'GetAssistantConversation': 'GET',
     'GetAssistantTurn': 'GET',
@@ -69,8 +65,6 @@ class AssistantApiMetadata {
 
   static const String createAssistantConversationOperation = 'CreateAssistantConversation';
   static const String createAssistantTurnOperation = 'CreateAssistantTurn';
-  static const String createRunOperation = 'CreateRun';
-  static const String createRunStreamOperation = 'CreateRunStream';
   static const String createSkillSubscriptionOperation = 'CreateSkillSubscription';
   static const String getAssistantConversationOperation = 'GetAssistantConversation';
   static const String getAssistantTurnOperation = 'GetAssistantTurn';
@@ -100,8 +94,6 @@ class AssistantApiMetadata {
       'conversationId': conversationId,
     });
   }
-  static const String createRunPath = '/v1/assistant/runs';
-  static const String createRunStreamPath = '/v1/assistant/runs/stream';
   static const String createSkillSubscriptionPath = '/v1/assistant/skill-subscriptions';
   static const String getAssistantConversationPathTemplate = '/v1/assistant/conversations/{conversationId}';
   static String getAssistantConversationPath({required String conversationId}) {

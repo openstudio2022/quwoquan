@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/assistant/application/assistant_providers.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/assistant/generated/contracts/skill_subscription.g.dart';
+import 'package:quwoquan_app/assistant/session/assistant_session_manager.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_action_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_skill_center_package_toggle_payload.g.dart';
@@ -889,7 +889,9 @@ class _AssistantSkillCenterPageState
     if (!mounted) return;
     setState(() => _loadingSessions = true);
     try {
-      final sessions = await ref.read(assistantGatewayProvider).listSessions();
+      final manager = AssistantSessionManager();
+      await manager.load();
+      final sessions = manager.listSessionDescriptors();
       if (!mounted) return;
       setState(() {
         _recentSessions = sessions

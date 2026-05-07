@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:quwoquan_app/assistant/contracts/assistant_turn_contract.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_content_filters.dart';
 import 'package:quwoquan_app/assistant/protocol/assistant_display_state_projection.dart';
-import 'package:quwoquan_app/assistant/infrastructure/llm/llm_provider.dart';
 import 'package:quwoquan_app/assistant/infrastructure/llm/llm_response_parser.dart';
 
 class AssistantDisplayProjection {
@@ -19,6 +18,12 @@ class AssistantDisplayProjection {
 }
 
 abstract final class AssistantDisplayTextResolver {
+  static final RegExp _xmlToolCallPattern = RegExp(
+    r'<tool_call>.*?</tool_call>|<function=[^>]+>.*?</function>|'
+    r'</?tool_call>|<function=[^>]*>|</function>|'
+    r'<parameter=[^>]*>.*?</parameter>|</?parameter[^>]*>',
+    dotAll: true,
+  );
   static final RegExp _wrappedMarkdownFenceRe = RegExp(
     r'^```(?:md|markdown)\s*\r?\n([\s\S]*?)\r?\n```$',
     caseSensitive: false,
@@ -158,7 +163,7 @@ abstract final class AssistantDisplayTextResolver {
   }
 
   static String normalizeMarkdown(String raw) {
-    var text = OpenAiCompatibleLlmProvider.stripXmlToolCalls(raw).trim();
+    var text = _stripXmlToolCalls(raw).trim();
     if (text.isEmpty) return '';
     text = _stripResidualXmlToolFragments(text);
     text = _stripWrappedMarkdownEnvelope(text);
@@ -298,7 +303,7 @@ abstract final class AssistantDisplayTextResolver {
     final text = raw.trim();
     if (text.isEmpty) return false;
     if (_containsInternalProtocolFields(text)) return true;
-    final stripped = OpenAiCompatibleLlmProvider.stripXmlToolCalls(text).trim();
+    final stripped = _stripXmlToolCalls(text).trim();
     if (stripped.isEmpty) {
       return _containsAnyMarker(text, const <String>[
         '<tool_call',
@@ -382,7 +387,7 @@ abstract final class AssistantDisplayTextResolver {
   }
 
   static bool isRenderableDisplayText(String raw) {
-    final text = OpenAiCompatibleLlmProvider.stripXmlToolCalls(raw).trim();
+    final text = _stripXmlToolCalls(raw).trim();
     if (text.isEmpty) return false;
     return !AssistantContentFilters.isNotDisplayable(text) &&
         !containsUnsafeDisplayProtocolLeak(text) &&
@@ -415,7 +420,7 @@ abstract final class AssistantDisplayTextResolver {
   }
 
   static bool hasStructuredPrefixLeak(String raw) {
-    final strippedXml = OpenAiCompatibleLlmProvider.stripXmlToolCalls(
+    final strippedXml = _stripXmlToolCalls(
       raw,
     ).trimLeft();
     if (strippedXml.isEmpty) return false;
@@ -676,5 +681,9 @@ abstract final class AssistantDisplayTextResolver {
         .replaceAll('<parameter>', '')
         .replaceAll('</parameter>', '')
         .trim();
+  }
+
+  static String _stripXmlToolCalls(String text) {
+    return text.replaceAll(_xmlToolCallPattern, '').trim();
   }
 }

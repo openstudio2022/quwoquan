@@ -1,0 +1,576 @@
+{
+  "schemaVersion": "circle.scenario-fixtures.v2",
+  "description": "圈子域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.circles 初始化 MockCircleRepository。 [gamma-curated subset]",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "circle_core": {
+      "description": "圈子列表、详情、默认群与成员共享真实图片种子。",
+      "circles": [
+        {
+          "id": "fixture_circle_food",
+          "name": "契约美食探店",
+          "ownerId": "fixture_user_weekend_2",
+          "role": "owner",
+          "joinStatus": "joined",
+          "isFollowed": true,
+          "coverUrl": "media/image/circle/fixture_circle_food/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_food/v1/avatar.png",
+          "description": "美食 核心夹具圈子。",
+          "visibility": "public",
+          "joinPolicy": "approval",
+          "circleType": "flagshipCircle",
+          "primaryTheme": "food",
+          "secondaryThemes": [
+            "coffee"
+          ],
+          "themeTags": [
+            "food",
+            "coffee"
+          ],
+          "categoryId": "food",
+          "subCategory": "探店",
+          "domainId": "food",
+          "memberCount": 6,
+          "postCount": 18,
+          "weeklyActiveCount": 16,
+          "conversationId": "fixture_conv_circle_food",
+          "autoSyncChat": true,
+          "defaultPublicGroupId": "fixture_group_food_public",
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-05-06T00:00:00Z",
+          "ownerDisplayNameSnapshot": "契约同伴二",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_food/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_food/v1/cover.png"
+        },
+        {
+          "id": "fixture_circle_tech",
+          "name": "契约科技前沿",
+          "ownerId": "fixture_user_article",
+          "role": "member",
+          "joinStatus": "joined",
+          "isFollowed": true,
+          "coverUrl": "media/image/circle/fixture_circle_tech/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
+          "description": "科技 核心夹具圈子。",
+          "visibility": "public",
+          "joinPolicy": "approval",
+          "circleType": "flagshipCircle",
+          "primaryTheme": "tech",
+          "secondaryThemes": [
+            "designWriting"
+          ],
+          "themeTags": [
+            "tech",
+            "designWriting"
+          ],
+          "categoryId": "tech",
+          "subCategory": "AI",
+          "domainId": "tech",
+          "memberCount": 6,
+          "postCount": 18,
+          "weeklyActiveCount": 16,
+          "conversationId": "fixture_conv_circle_tech",
+          "autoSyncChat": true,
+          "defaultPublicGroupId": "fixture_group_tech_public",
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-05-06T00:00:00Z",
+          "ownerDisplayNameSnapshot": "契约撰稿人",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_tech/v1/cover.png"
+        },
+        {
+          "id": "fixture_circle_life",
+          "name": "契约生活方式",
+          "ownerId": "fixture_user_weekend_1",
+          "role": "member",
+          "joinStatus": "joined",
+          "isFollowed": true,
+          "coverUrl": "media/image/circle/fixture_circle_life/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
+          "description": "生活方式 核心夹具圈子。",
+          "visibility": "public",
+          "joinPolicy": "approval",
+          "circleType": "flagshipCircle",
+          "primaryTheme": "lifestyle",
+          "secondaryThemes": [
+            "coffee"
+          ],
+          "themeTags": [
+            "lifestyle",
+            "coffee"
+          ],
+          "categoryId": "life",
+          "subCategory": "生活",
+          "domainId": "lifestyle",
+          "memberCount": 6,
+          "postCount": 18,
+          "weeklyActiveCount": 16,
+          "conversationId": "fixture_conv_circle_life",
+          "autoSyncChat": true,
+          "defaultPublicGroupId": "fixture_group_life_public",
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-05-06T00:00:00Z",
+          "ownerDisplayNameSnapshot": "契约同伴一",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_life/v1/cover.png"
+        },
+        {
+          "id": "fixture_circle_city",
+          "name": "契约城市漫步",
+          "ownerId": "fixture_user_video",
+          "role": "member",
+          "joinStatus": "joined",
+          "isFollowed": true,
+          "coverUrl": "media/image/circle/fixture_circle_city/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_city/v1/avatar.png",
+          "description": "城市漫步 核心夹具圈子。",
+          "visibility": "public",
+          "joinPolicy": "approval",
+          "circleType": "flagshipCircle",
+          "primaryTheme": "cityWalk",
+          "secondaryThemes": [
+            "photography"
+          ],
+          "themeTags": [
+            "cityWalk",
+            "photography"
+          ],
+          "categoryId": "meet",
+          "subCategory": "城市",
+          "domainId": "social_meet",
+          "memberCount": 6,
+          "postCount": 18,
+          "weeklyActiveCount": 16,
+          "conversationId": "fixture_conv_circle_city",
+          "autoSyncChat": true,
+          "defaultPublicGroupId": "fixture_group_city_public",
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-05-06T00:00:00Z",
+          "ownerDisplayNameSnapshot": "契约剪辑师",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_city/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_city/v1/cover.png"
+        },
+        {
+          "id": "fixture_circle_travel",
+          "name": "契约旅行手账",
+          "ownerId": "fixture_user_travel_owner",
+          "role": "member",
+          "joinStatus": "joined",
+          "isFollowed": true,
+          "coverUrl": "media/image/circle/fixture_circle_travel/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
+          "description": "旅行 核心夹具圈子。",
+          "visibility": "public",
+          "joinPolicy": "approval",
+          "circleType": "flagshipCircle",
+          "primaryTheme": "travel",
+          "secondaryThemes": [
+            "photography"
+          ],
+          "themeTags": [
+            "travel",
+            "photography"
+          ],
+          "categoryId": "travel",
+          "subCategory": "攻略",
+          "domainId": "culture_arts",
+          "memberCount": 6,
+          "postCount": 18,
+          "weeklyActiveCount": 16,
+          "conversationId": "fixture_conv_circle_travel",
+          "autoSyncChat": true,
+          "defaultPublicGroupId": "fixture_group_travel_public",
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-05-06T00:00:00Z",
+          "ownerDisplayNameSnapshot": "契约旅行圈主",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_travel/v1/cover.png"
+        },
+        {
+          "id": "fixture_circle_photo",
+          "name": "契约摄影社",
+          "ownerId": "fixture_user_owner",
+          "role": "member",
+          "joinStatus": "joined",
+          "isFollowed": true,
+          "coverUrl": "media/image/circle/fixture_circle_photo/v1/cover.png",
+          "avatarUrl": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "description": "摄影 核心夹具圈子。",
+          "visibility": "public",
+          "joinPolicy": "approval",
+          "circleType": "flagshipCircle",
+          "primaryTheme": "photography",
+          "secondaryThemes": [
+            "travel"
+          ],
+          "themeTags": [
+            "photography",
+            "travel"
+          ],
+          "categoryId": "humanity",
+          "subCategory": "影像",
+          "domainId": "culture_arts",
+          "memberCount": 6,
+          "postCount": 18,
+          "weeklyActiveCount": 16,
+          "conversationId": "fixture_conv_circle_photo",
+          "autoSyncChat": true,
+          "defaultPublicGroupId": "fixture_group_photo_public",
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-05-06T00:00:00Z",
+          "ownerDisplayNameSnapshot": "契约摄影社主理人",
+          "avatarObjectKey": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+          "coverObjectKey": "media/image/circle/fixture_circle_photo/v1/cover.png"
+        }
+      ],
+      "groups": {
+        "fixture_circle_food": [
+          {
+            "_id": "fixture_group_food_public",
+            "circleId": "fixture_circle_food",
+            "groupType": "public_group",
+            "name": "契约美食探店公开群",
+            "description": "契约美食探店 默认公开群。",
+            "visibility": "public",
+            "joinPolicy": "apply_only",
+            "ownerUserId": "fixture_user_weekend_2",
+            "memberCount": 6,
+            "conversationId": "fixture_conv_circle_food",
+            "storageEnabled": true,
+            "noticeEnabled": true,
+            "isDefaultPublicGroup": true,
+            "status": "active",
+            "createdAt": "2026-05-06T00:00:00Z",
+            "updatedAt": "2026-05-06T00:00:00Z",
+            "ownerDisplayNameSnapshot": "契约同伴二"
+          }
+        ],
+        "fixture_circle_tech": [
+          {
+            "_id": "fixture_group_tech_public",
+            "circleId": "fixture_circle_tech",
+            "groupType": "public_group",
+            "name": "契约科技前沿公开群",
+            "description": "契约科技前沿 默认公开群。",
+            "visibility": "public",
+            "joinPolicy": "apply_only",
+            "ownerUserId": "fixture_user_article",
+            "memberCount": 6,
+            "conversationId": "fixture_conv_circle_tech",
+            "storageEnabled": true,
+            "noticeEnabled": true,
+            "isDefaultPublicGroup": true,
+            "status": "active",
+            "createdAt": "2026-05-06T00:00:00Z",
+            "updatedAt": "2026-05-06T00:00:00Z",
+            "ownerDisplayNameSnapshot": "契约撰稿人"
+          }
+        ],
+        "fixture_circle_life": [
+          {
+            "_id": "fixture_group_life_public",
+            "circleId": "fixture_circle_life",
+            "groupType": "public_group",
+            "name": "契约生活方式公开群",
+            "description": "契约生活方式 默认公开群。",
+            "visibility": "public",
+            "joinPolicy": "apply_only",
+            "ownerUserId": "fixture_user_weekend_1",
+            "memberCount": 6,
+            "conversationId": "fixture_conv_circle_life",
+            "storageEnabled": true,
+            "noticeEnabled": true,
+            "isDefaultPublicGroup": true,
+            "status": "active",
+            "createdAt": "2026-05-06T00:00:00Z",
+            "updatedAt": "2026-05-06T00:00:00Z",
+            "ownerDisplayNameSnapshot": "契约同伴一"
+          }
+        ],
+        "fixture_circle_city": [
+          {
+            "_id": "fixture_group_city_public",
+            "circleId": "fixture_circle_city",
+            "groupType": "public_group",
+            "name": "契约城市漫步公开群",
+            "description": "契约城市漫步 默认公开群。",
+            "visibility": "public",
+            "joinPolicy": "apply_only",
+            "ownerUserId": "fixture_user_video",
+            "memberCount": 6,
+            "conversationId": "fixture_conv_circle_city",
+            "storageEnabled": true,
+            "noticeEnabled": true,
+            "isDefaultPublicGroup": true,
+            "status": "active",
+            "createdAt": "2026-05-06T00:00:00Z",
+            "updatedAt": "2026-05-06T00:00:00Z",
+            "ownerDisplayNameSnapshot": "契约剪辑师"
+          }
+        ],
+        "fixture_circle_travel": [
+          {
+            "_id": "fixture_group_travel_public",
+            "circleId": "fixture_circle_travel",
+            "groupType": "public_group",
+            "name": "契约旅行手账公开群",
+            "description": "契约旅行手账 默认公开群。",
+            "visibility": "public",
+            "joinPolicy": "apply_only",
+            "ownerUserId": "fixture_user_travel_owner",
+            "memberCount": 6,
+            "conversationId": "fixture_conv_circle_travel",
+            "storageEnabled": true,
+            "noticeEnabled": true,
+            "isDefaultPublicGroup": true,
+            "status": "active",
+            "createdAt": "2026-05-06T00:00:00Z",
+            "updatedAt": "2026-05-06T00:00:00Z",
+            "ownerDisplayNameSnapshot": "契约旅行圈主"
+          }
+        ],
+        "fixture_circle_photo": [
+          {
+            "_id": "fixture_group_photo_public",
+            "circleId": "fixture_circle_photo",
+            "groupType": "public_group",
+            "name": "契约摄影社公开群",
+            "description": "契约摄影社 默认公开群。",
+            "visibility": "public",
+            "joinPolicy": "apply_only",
+            "ownerUserId": "fixture_user_owner",
+            "memberCount": 6,
+            "conversationId": "fixture_conv_circle_photo",
+            "storageEnabled": true,
+            "noticeEnabled": true,
+            "isDefaultPublicGroup": true,
+            "status": "active",
+            "createdAt": "2026-05-06T00:00:00Z",
+            "updatedAt": "2026-05-06T00:00:00Z",
+            "ownerDisplayNameSnapshot": "契约摄影社主理人"
+          }
+        ]
+      },
+      "members": {
+        "fixture_circle_food": [
+          {
+            "_id": "fixture_member_food_fixture_user_weekend_2",
+            "circleId": "fixture_circle_food",
+            "userId": "fixture_user_weekend_2",
+            "role": "owner",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-05-06T00:00:00Z",
+            "contribution": 10,
+            "displayName": "契约同伴二",
+            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png"
+          }
+        ],
+        "fixture_circle_tech": [],
+        "fixture_circle_life": [
+          {
+            "_id": "fixture_member_life_fixture_user_current",
+            "circleId": "fixture_circle_life",
+            "userId": "fixture_user_current",
+            "role": "member",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-05-06T00:00:00Z",
+            "contribution": 3,
+            "displayName": "契约当前用户",
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png"
+          },
+          {
+            "_id": "fixture_member_life_fixture_user_weekend_1",
+            "circleId": "fixture_circle_life",
+            "userId": "fixture_user_weekend_1",
+            "role": "owner",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-05-06T00:00:00Z",
+            "contribution": 10,
+            "displayName": "契约同伴一",
+            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png"
+          }
+        ],
+        "fixture_circle_city": [
+          {
+            "_id": "fixture_member_city_fixture_user_video",
+            "circleId": "fixture_circle_city",
+            "userId": "fixture_user_video",
+            "role": "owner",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-05-06T00:00:00Z",
+            "contribution": 10,
+            "displayName": "契约剪辑师",
+            "avatarObjectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_video/v1/avatar.png"
+          }
+        ],
+        "fixture_circle_travel": [
+          {
+            "_id": "fixture_member_travel_fixture_user_travel",
+            "circleId": "fixture_circle_travel",
+            "userId": "fixture_user_travel",
+            "role": "member",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-05-06T00:00:00Z",
+            "contribution": 3,
+            "displayName": "契约旅行家",
+            "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png"
+          },
+          {
+            "_id": "fixture_member_travel_fixture_user_travel_owner",
+            "circleId": "fixture_circle_travel",
+            "userId": "fixture_user_travel_owner",
+            "role": "owner",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-05-06T00:00:00Z",
+            "contribution": 10,
+            "displayName": "契约旅行圈主",
+            "avatarObjectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png"
+          }
+        ],
+        "fixture_circle_photo": [
+          {
+            "_id": "fixture_member_photo_fixture_user_photo",
+            "circleId": "fixture_circle_photo",
+            "userId": "fixture_user_photo",
+            "role": "member",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-05-06T00:00:00Z",
+            "contribution": 3,
+            "displayName": "契约摄影师",
+            "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png"
+          },
+          {
+            "_id": "fixture_member_photo_fixture_user_owner",
+            "circleId": "fixture_circle_photo",
+            "userId": "fixture_user_owner",
+            "role": "owner",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-05-06T00:00:00Z",
+            "contribution": 10,
+            "displayName": "契约摄影社主理人",
+            "avatarObjectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+            "avatarUrl": "media/avatar/user/fixture_user_owner/v1/avatar.png"
+          }
+        ]
+      },
+      "files": {
+        "fixture_circle_photo": [
+          {
+            "_id": "fixture_file_photo_guide",
+            "circleId": "fixture_circle_photo",
+            "groupId": "fixture_group_photo_public",
+            "name": "摄影路线指南.png",
+            "fileType": "image",
+            "mimeType": "image/png",
+            "sizeBytes": 4096,
+            "objectKey": "media/image/circle/fixture_circle_photo/v1/cover.png",
+            "uploaderId": "fixture_user_owner",
+            "status": "active",
+            "createdAt": "2026-05-11T20:00:00Z",
+            "updatedAt": "2026-05-11T20:00:00Z"
+          }
+        ]
+      }
+    },
+    "circle_group_chat_link_core": {
+      "description": "圈子默认公开群与聊天会话的对齐关系。",
+      "links": [
+        {
+          "circleId": "fixture_circle_food",
+          "groupId": "fixture_group_food_public",
+          "conversationId": "fixture_conv_circle_food"
+        },
+        {
+          "circleId": "fixture_circle_tech",
+          "groupId": "fixture_group_tech_public",
+          "conversationId": "fixture_conv_circle_tech"
+        },
+        {
+          "circleId": "fixture_circle_life",
+          "groupId": "fixture_group_life_public",
+          "conversationId": "fixture_conv_circle_life"
+        },
+        {
+          "circleId": "fixture_circle_city",
+          "groupId": "fixture_group_city_public",
+          "conversationId": "fixture_conv_circle_city"
+        },
+        {
+          "circleId": "fixture_circle_travel",
+          "groupId": "fixture_group_travel_public",
+          "conversationId": "fixture_conv_circle_travel"
+        },
+        {
+          "circleId": "fixture_circle_photo",
+          "groupId": "fixture_group_photo_public",
+          "conversationId": "fixture_conv_circle_photo"
+        }
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "circle_list_detail_basic",
+      "title": "圈子列表与详情契约种子",
+      "type": "circle_list_detail",
+      "domainId": "circle",
+      "seedRefs": [
+        "circle_core",
+        "circle_group_chat_link_core"
+      ],
+      "uiExpectations": {
+        "circleIds": [
+          "fixture_circle_photo",
+          "fixture_circle_travel"
+        ],
+        "textFragments": [
+          "契约摄影社",
+          "契约旅行手账"
+        ]
+      },
+      "remoteExpectations": {
+        "circleIds": [
+          "fixture_circle_photo",
+          "fixture_circle_travel"
+        ],
+        "groupIds": [
+          "fixture_group_photo_public"
+        ],
+        "memberUserIds": [
+          "fixture_user_owner",
+          "fixture_user_current"
+        ],
+        "fileIds": [
+          "fixture_file_photo_guide"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    }
+  ]
+}
