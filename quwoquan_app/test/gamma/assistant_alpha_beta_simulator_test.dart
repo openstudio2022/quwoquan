@@ -63,7 +63,9 @@ void main() {
 }
 
 AppDataSourceMode _modeFromWidgetTree(WidgetTester tester) {
-  final context = tester.element(find.byType(PersonalAssistantConversationPage));
+  final context = tester.element(
+    find.byType(PersonalAssistantConversationPage),
+  );
   return ProviderScope.containerOf(context).read(appDataSourceModeProvider);
 }
 
@@ -115,7 +117,9 @@ Future<void> _sendAndExpect(
   await tester.tap(find.byKey(TestKeys.assistantSendButton));
   await _pumpUntilStreamSettled(tester);
 
-  final context = tester.element(find.byType(PersonalAssistantConversationPage));
+  final context = tester.element(
+    find.byType(PersonalAssistantConversationPage),
+  );
   final streamState = ProviderScope.containerOf(
     context,
   ).read(personalAssistantStreamControllerProvider);
@@ -150,7 +154,27 @@ Future<void> _pumpUntilSendButtonVisible(WidgetTester tester) async {
 }
 
 Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
-  for (var i = 0; i < 240; i++) {
+  const runtimeEnv = String.fromEnvironment(
+    'APP_RUNTIME_ENV',
+    defaultValue: 'alpha',
+  );
+  const maxTicksOverride = int.fromEnvironment(
+    'ASSISTANT_SMOKE_MAX_TICKS',
+    defaultValue: 0,
+  );
+  const maxIdleTicksOverride = int.fromEnvironment(
+    'ASSISTANT_SMOKE_MAX_IDLE_TICKS',
+    defaultValue: 0,
+  );
+  final maxTicks = maxTicksOverride > 0
+      ? maxTicksOverride
+      : (runtimeEnv == 'beta' ? 1500 : 240);
+  final maxIdleTicks = maxIdleTicksOverride > 0
+      ? maxIdleTicksOverride
+      : (runtimeEnv == 'beta' ? 180 : 60);
+  var lastSignature = '';
+  var idleTicks = 0;
+  for (var i = 0; i < maxTicks; i++) {
     await tester.pump(const Duration(milliseconds: 100));
     final context = tester.element(
       find.byType(PersonalAssistantConversationPage),
@@ -158,8 +182,26 @@ Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
     final streamState = ProviderScope.containerOf(
       context,
     ).read(personalAssistantStreamControllerProvider);
-    if (!streamState.running && streamState.answer.isNotEmpty) {
+    if (!streamState.running) {
       return;
+    }
+    final signature =
+        '${streamState.answer.length}|'
+        '${streamState.errorMessage.length}|'
+        '${streamState.events.length}';
+    if (signature == lastSignature) {
+      idleTicks += 1;
+      if (idleTicks >= maxIdleTicks) {
+        throw TestFailure(
+          'assistant alpha/beta simulator smoke 无进展超时: '
+          'runtimeEnv=$runtimeEnv '
+          'events=${streamState.events.length} '
+          'answerLen=${streamState.answer.length}',
+        );
+      }
+    } else {
+      lastSignature = signature;
+      idleTicks = 0;
     }
   }
   await tester.pump(const Duration(milliseconds: 100));

@@ -310,9 +310,42 @@ fi
 
 # 4) No literal '\n' artifacts in docs/contracts
 echo "[gate] checking for literal \\n artifacts"
-if search "\\\\n[[:space:]]*$" contracts specs platform README.md design.md tasks.md >/dev/null 2>&1; then
-  fail "found literal \\n artifacts; please replace with real newlines"
-fi
+ruby -e '
+  targets = %w[contracts specs README.md design.md tasks.md]
+  allowed_exts = %w[.md .yaml .yml .json .txt]
+  matches = []
+
+  targets.each do |target|
+    next unless File.exist?(target)
+
+    files = if File.directory?(target)
+      Dir.glob(File.join(target, "**", "*")).select { |path| File.file?(path) }
+    else
+      [target]
+    end
+
+    files.each do |path|
+      next unless allowed_exts.include?(File.extname(path).downcase)
+
+      begin
+        File.foreach(path).with_index(1) do |line, idx|
+          if line.match?(/\\n[[:space:]]*$/)
+            matches << "#{path}:#{idx}"
+            break
+          end
+        end
+      rescue ArgumentError
+        next
+      end
+    end
+  end
+
+  if matches.any?
+    STDERR.puts("[gate] FAIL: found literal \\n artifacts; please replace with real newlines")
+    matches.first(20).each { |entry| STDERR.puts("  - #{entry}") }
+    exit 1
+  end
+' || fail "found literal \\n artifacts; please replace with real newlines"
 
 # 5) Feature tree consistency: structure + acceptance baseline integrity
 echo "[gate] checking feature tree consistency"

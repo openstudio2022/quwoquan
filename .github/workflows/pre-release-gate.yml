@@ -1,4 +1,4 @@
-# Pre-release 串联：ECS gamma pre 部署 → hosted gamma 探测 → 本地 self-hosted gamma Android/iOS 集成测试
+# Pre-release 串联：PR 使用 hosted gamma readiness + 协议级 smoke；full deploy / full gamma 验证改走独立 workflow
 # 触发：pull_request(main) + workflow_dispatch
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 name: 04. Pre-Release Gate
@@ -15,8 +15,8 @@ concurrency:
 
 jobs:
   gamma_pre_hosted:
-    name: Gamma ECS hosted pre chain
-    uses: ./.github/workflows/gamma-ecs-pre-hosted-core.yml
+    name: Gamma hosted PR chain
+    uses: ./.github/workflows/gamma-pr-hosted-core.yml
     secrets: inherit
 
   discover_gamma_devices:
@@ -377,6 +377,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: 输出 PR hosted 耗时摘要
+        env:
+          READY_SECONDS: ${{ needs.gamma_pre_hosted.outputs.readiness_duration_seconds }}
+          ASSISTANT_SECONDS: ${{ needs.gamma_pre_hosted.outputs.assistant_protocol_smoke_duration_seconds }}
+          CHAT_SECONDS: ${{ needs.gamma_pre_hosted.outputs.chat_avatar_probe_duration_seconds }}
+          CRITICAL_SECONDS: ${{ needs.gamma_pre_hosted.outputs.critical_path_seconds }}
+        run: |
+          python3 scripts/render_ci_timing_summary.py \
+            --gate-key 04.pre_release_gate_pr \
+            --title "04. Pre-Release Gate" \
+            --critical-path-seconds "${CRITICAL_SECONDS:-0}" \
+            --phase gamma_environment_ready="${READY_SECONDS:-0}" \
+            --phase assistant_api_protocol_smoke="${ASSISTANT_SECONDS:-0}" \
+            --phase chat_avatar_api_probe="${CHAT_SECONDS:-0}" \
+            --note "PR 已移除 gamma ECS full deploy；full gamma 验证改走独立 workflow/命令。" \
+            --write-step-summary
       - name: 汇总并阻断失败项
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
@@ -392,7 +408,7 @@ jobs:
           set -euo pipefail
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
             if [ "${HOSTED}" != "success" ]; then
-              echo "::error::gamma-ecs-hosted-pre-chain expected success, got ${HOSTED}. 检查 ECS 打包/上传/部署、assistant gamma smoke、T3 API contract、avatar API probe"
+              echo "::error::gamma-hosted-pr-chain expected success, got ${HOSTED}. 检查 gamma readiness、assistant protocol smoke、chat avatar API probe"
               exit 1
             fi
             echo "::notice::gamma self-hosted matrix is disabled for this run; skip device evidence enforcement."
@@ -406,7 +422,7 @@ jobs:
               fail=1
             fi
           }
-          expect_success "gamma-ecs-hosted-pre-chain" "${HOSTED}" "检查 ECS 打包/上传/部署、assistant gamma smoke、T3 API contract、avatar API probe"
+          expect_success "gamma-hosted-pr-chain" "${HOSTED}" "检查 gamma readiness、assistant protocol smoke、chat avatar API probe"
           expect_success "discover-gamma-devices" "${DISCOVER}" "检查 self-hosted runner 与 flutter devices --machine"
           if [ "${HAS_ANDROID}" != "true" ]; then
             echo "::error::gamma android device environment is required before merge, but no Android device was discovered"

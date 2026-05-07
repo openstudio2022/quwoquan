@@ -2,6 +2,27 @@ name: Gamma ECS Pre Hosted Core
 
 on:
   workflow_call:
+    inputs:
+      assistant_scenario_id:
+        description: 单场景 smoke 可填 scenario id；留空则跑全部 gamma 场景
+        required: false
+        type: string
+        default: travel_journey_basic
+      assistant_smoke_profile:
+        description: ui_sanity 或 full_semantic
+        required: false
+        type: string
+        default: ui_sanity
+      assistant_smoke_max_ticks:
+        description: assistant smoke 总等待 tick 上限（100ms/tick）
+        required: false
+        type: string
+        default: "600"
+      assistant_smoke_max_idle_ticks:
+        description: assistant smoke 无进展 tick 上限（100ms/tick）
+        required: false
+        type: string
+        default: "120"
     outputs:
       base_url:
         description: ECS gamma gateway base URL
@@ -12,6 +33,27 @@ on:
       media_base_url:
         description: ECS gamma media base URL
         value: ${{ jobs.deploy_gamma_ecs_pre.outputs.media_base_url }}
+      package_duration_seconds:
+        description: Package gamma bundle duration
+        value: ${{ jobs.package_gamma_bundle.outputs.duration_seconds }}
+      deploy_duration_seconds:
+        description: Deploy gamma ECS duration
+        value: ${{ jobs.deploy_gamma_ecs_pre.outputs.duration_seconds }}
+      readiness_duration_seconds:
+        description: Gamma readiness duration
+        value: ${{ jobs.gamma_environment_ready.outputs.duration_seconds }}
+      api_contract_duration_seconds:
+        description: API contract duration
+        value: ${{ jobs.gamma_api_contract.outputs.duration_seconds }}
+      assistant_smoke_duration_seconds:
+        description: Assistant smoke duration
+        value: ${{ jobs.assistant_runtime_gamma.outputs.duration_seconds }}
+      chat_avatar_probe_duration_seconds:
+        description: Chat avatar probe duration
+        value: ${{ jobs.gamma_chat_avatar_api_probe_pre.outputs.duration_seconds }}
+      critical_path_seconds:
+        description: Full hosted critical path seconds
+        value: ${{ jobs.hosted_validation_summary.outputs.critical_path_seconds }}
 
 env:
   GAMMA_ECS_HOST: ${{ vars.GAMMA_ECS_HOST || secrets.GAMMA_ECS_HOST || '118.31.239.122' }}
@@ -26,8 +68,13 @@ jobs:
     name: Package gamma ECS bundle (hosted)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Create tarball
         run: |
           BUNDLE_PATH="${RUNNER_TEMP}/gamma-ecs-bundle.tgz"
@@ -50,6 +97,11 @@ jobs:
         with:
           name: gamma-ecs-bundle
           path: gamma-ecs-bundle.tgz
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   deploy_gamma_ecs_pre:
     name: Deploy ECS - pre (full upload)
@@ -60,8 +112,12 @@ jobs:
       base_url: ${{ steps.urls.outputs.base_url }}
       product_ops_base_url: ${{ steps.urls.outputs.product_ops_base_url }}
       media_base_url: ${{ steps.urls.outputs.media_base_url }}
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Download bundle
         uses: actions/download-artifact@v4
         with:
@@ -118,12 +174,55 @@ jobs:
           name: ecs-onebox-deploy-report-pre
           path: artifacts/ecs-onebox/deploy-report.json
           if-no-files-found: ignore
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  gamma_environment_ready:
+    name: Gamma ECS - readiness gate (pre)
+    needs: [deploy_gamma_ecs_pre]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Verify gamma environment readiness
+        run: |
+          python3 scripts/verify_gamma_environment_ready.py \
+            --base-url "${GAMMA_BASE_URL}" \
+            --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}" \
+            --report artifacts/gamma-readiness/full/report.json \
+            --wait-seconds 120 \
+            --poll-interval-seconds 5
+        env:
+          GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
+          GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.product_ops_base_url }}
+      - name: Upload gamma readiness report (pre)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamma-readiness-pre
+          path: artifacts/gamma-readiness/full/**
+          if-no-files-found: ignore
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   gamma_api_contract:
     name: Gamma ECS - T3 API contract (pre)
-    needs: [deploy_gamma_ecs_pre]
+    needs: [deploy_gamma_ecs_pre, gamma_environment_ready]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     env:
       API_CONTRACT_ENV: gamma
       LOCAL_GAMMA_T3_SCOPE: content
@@ -132,6 +231,9 @@ jobs:
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 准备 personal_assistant/.env
         run: |
           if [ -d quwoquan_app/personal_assistant ]; then
@@ -151,16 +253,30 @@ jobs:
         run: flutter pub get
       - name: T3 API Contract
         run: cd "$GITHUB_WORKSPACE" && make test-api-contract
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   assistant_runtime_gamma:
     name: Gamma ECS - assistant runtime smoke (pre)
-    needs: [deploy_gamma_ecs_pre]
+    needs: [deploy_gamma_ecs_pre, gamma_environment_ready]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     env:
       GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
+      ASSISTANT_SCENARIO_ID: ${{ inputs.assistant_scenario_id }}
+      ASSISTANT_SMOKE_PROFILE: ${{ inputs.assistant_smoke_profile }}
+      ASSISTANT_SMOKE_MAX_TICKS: ${{ inputs.assistant_smoke_max_ticks }}
+      ASSISTANT_SMOKE_MAX_IDLE_TICKS: ${{ inputs.assistant_smoke_max_idle_ticks }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 准备 personal_assistant/.env
         run: |
           if [ -d quwoquan_app/personal_assistant ]; then
@@ -175,28 +291,49 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: cd quwoquan_app && flutter pub get
+      - name: 安装 Flutter 依赖
+        working-directory: quwoquan_app
+        run: flutter pub get
       - name: Assistant gamma smoke (remote)
         working-directory: quwoquan_app
         run: |
-          flutter test test/common/assistant/assistant_environment_smoke_test.dart \
-            --dart-define=APP_RUNTIME_ENV=gamma \
-            --dart-define=APP_DATA_SOURCE=remote \
-            --dart-define=CLOUD_GATEWAY_BASE_URL="${GAMMA_BASE_URL}" \
-            --dart-define=ASSISTANT_SCENARIO_ID=travel_journey_basic \
-            --dart-define=ASSISTANT_SMOKE_MAX_TICKS=600
+          args=(
+            flutter
+            test
+            test/common/assistant/assistant_environment_smoke_test.dart
+            --dart-define=APP_RUNTIME_ENV=gamma
+            --dart-define=APP_DATA_SOURCE=remote
+            --dart-define=CLOUD_GATEWAY_BASE_URL="${GAMMA_BASE_URL}"
+            --dart-define=ASSISTANT_SMOKE_PROFILE="${ASSISTANT_SMOKE_PROFILE}"
+            --dart-define=ASSISTANT_SMOKE_MAX_TICKS="${ASSISTANT_SMOKE_MAX_TICKS}"
+            --dart-define=ASSISTANT_SMOKE_MAX_IDLE_TICKS="${ASSISTANT_SMOKE_MAX_IDLE_TICKS}"
+          )
+          if [ -n "${ASSISTANT_SCENARIO_ID}" ]; then
+            args+=(--dart-define=ASSISTANT_SCENARIO_ID="${ASSISTANT_SCENARIO_ID}")
+          fi
+          "${args[@]}"
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
   gamma_chat_avatar_api_probe_pre:
     name: Gamma ECS - chat avatar API probe (pre)
-    needs: [deploy_gamma_ecs_pre, gamma_api_contract]
+    needs: [deploy_gamma_ecs_pre, gamma_environment_ready]
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     env:
       GAMMA_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.base_url }}
       MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.deploy_gamma_ecs_pre.outputs.media_base_url }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Chat avatar API probe
         run: |
           python3 scripts/run_chat_avatar_e2e_probe.py \
@@ -212,3 +349,70 @@ jobs:
           name: chat-avatar-api-probe-pre
           path: artifacts/avatar-e2e/cloud-gamma-pre/**
           if-no-files-found: ignore
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
+  hosted_validation_summary:
+    name: Gamma ECS hosted summary
+    needs:
+      - package_gamma_bundle
+      - deploy_gamma_ecs_pre
+      - gamma_environment_ready
+      - gamma_api_contract
+      - assistant_runtime_gamma
+      - gamma_chat_avatar_api_probe_pre
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      critical_path_seconds: ${{ steps.critical_path.outputs.critical_path_seconds }}
+    steps:
+      - id: critical_path
+        name: Compute critical path
+        env:
+          PACKAGE: ${{ needs.package_gamma_bundle.outputs.duration_seconds }}
+          DEPLOY: ${{ needs.deploy_gamma_ecs_pre.outputs.duration_seconds }}
+          READY: ${{ needs.gamma_environment_ready.outputs.duration_seconds }}
+          API: ${{ needs.gamma_api_contract.outputs.duration_seconds }}
+          ASSISTANT: ${{ needs.assistant_runtime_gamma.outputs.duration_seconds }}
+          CHAT: ${{ needs.gamma_chat_avatar_api_probe_pre.outputs.duration_seconds }}
+        run: |
+          PACKAGE_SECONDS="${PACKAGE:-0}"
+          DEPLOY_SECONDS="${DEPLOY:-0}"
+          READY_SECONDS="${READY:-0}"
+          API_SECONDS="${API:-0}"
+          ASSISTANT_SECONDS="${ASSISTANT:-0}"
+          CHAT_SECONDS="${CHAT:-0}"
+          FANOUT_SECONDS="${API_SECONDS}"
+          if [ "${ASSISTANT_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${ASSISTANT_SECONDS}"; fi
+          if [ "${CHAT_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${CHAT_SECONDS}"; fi
+          echo "critical_path_seconds=$(( PACKAGE_SECONDS + DEPLOY_SECONDS + READY_SECONDS + FANOUT_SECONDS ))" >> "$GITHUB_OUTPUT"
+      - name: Assert hosted jobs
+        env:
+          PACKAGE_RESULT: ${{ needs.package_gamma_bundle.result }}
+          DEPLOY_RESULT: ${{ needs.deploy_gamma_ecs_pre.result }}
+          READY_RESULT: ${{ needs.gamma_environment_ready.result }}
+          API_RESULT: ${{ needs.gamma_api_contract.result }}
+          ASSISTANT_RESULT: ${{ needs.assistant_runtime_gamma.result }}
+          CHAT_RESULT: ${{ needs.gamma_chat_avatar_api_probe_pre.result }}
+        run: |
+          set -euo pipefail
+          fail=0
+          expect_success() {
+            local name="$1" value="$2" hint="$3"
+            if [ "${value}" != "success" ]; then
+              echo "::error::${name} expected success, got ${value}. ${hint}"
+              fail=1
+            fi
+          }
+          expect_success "package_gamma_bundle" "${PACKAGE_RESULT}" "检查打包工件"
+          expect_success "deploy_gamma_ecs_pre" "${DEPLOY_RESULT}" "检查 ECS full upload / 部署 / 远端启动"
+          expect_success "gamma_environment_ready" "${READY_RESULT}" "检查 /healthz、product-ops readiness 与公网路由探针"
+          expect_success "gamma_api_contract" "${API_RESULT}" "检查 gamma T3 API contract"
+          expect_success "assistant_runtime_gamma" "${ASSISTANT_RESULT}" "检查 assistant UI smoke"
+          expect_success "gamma_chat_avatar_api_probe_pre" "${CHAT_RESULT}" "检查 chat avatar API probe"
+          if [ "${fail}" -ne 0 ]; then
+            exit 1
+          fi
