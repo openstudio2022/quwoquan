@@ -333,12 +333,23 @@ def stream_assistant_turn(
                 ),
                 retryable=response.status >= 500,
             )
-        content_encoding = str(response.getheader("Content-Encoding", "")).strip().lower()
+        response_headers = {
+            str(key).lower(): str(value) for key, value in response.getheaders()
+        }
+        content_encoding = str(response_headers.get("content-encoding", "")).strip().lower()
         decompressor = None
         if content_encoding == "gzip":
             decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
         elif content_encoding == "deflate":
             decompressor = zlib.decompressobj()
+        elif content_encoding in ("br", "zstd"):
+            raise ProbeFailure(
+                "unsupported_content_encoding",
+                "assistant stream returned unsupported content-encoding={0} headers={1}".format(
+                    content_encoding,
+                    json.dumps(response_headers, ensure_ascii=False, sort_keys=True)[:800],
+                ),
+            )
         raw_sock = None
         if getattr(response, "fp", None) is not None:
             raw = getattr(response.fp, "raw", None)
@@ -350,6 +361,7 @@ def stream_assistant_turn(
         buffer = ""
         decoder = codecs.getincrementaldecoder("utf-8")()
         answer = ""
+        first_bytes_hex = ""
         while True:
             if time.monotonic() - started > timeout_seconds:
                 raise ProbeFailure(
@@ -372,11 +384,31 @@ def stream_assistant_turn(
                 )
             if not chunk:
                 break
+            if not first_bytes_hex and chunk:
+                first_bytes_hex = chunk[:32].hex()
+                if not content_encoding and chunk[:2] == b"\x1f\x8b":
+                    content_encoding = "gzip-sniffed"
+                    decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
             if decompressor is not None:
                 chunk = decompressor.decompress(chunk)
                 if not chunk:
                     continue
-            buffer += decoder.decode(chunk)
+            try:
+                buffer += decoder.decode(chunk)
+            except UnicodeDecodeError as exc:
+                raise ProbeFailure(
+                    "stream_transport_encoding",
+                    (
+                        "assistant stream bytes are not utf-8; "
+                        "content-encoding={0}; first-bytes={1}; headers={2}; detail={3}"
+                    ).format(
+                        content_encoding or "none",
+                        first_bytes_hex or chunk[:32].hex(),
+                        json.dumps(response_headers, ensure_ascii=False, sort_keys=True)[:800],
+                        exc,
+                    ),
+                    retryable=True,
+                )
             buffer = buffer.replace("\r\n", "\n")
             split_index = buffer.find("\n\n")
             while split_index >= 0:
@@ -407,6 +439,8 @@ def stream_assistant_turn(
             "answer": answer.strip(),
             "durationMs": int((time.monotonic() - started) * 1000),
             "contentEncoding": content_encoding,
+            "responseHeaders": response_headers,
+            "firstBytesHex": first_bytes_hex,
         }
     finally:
         connection.close()
