@@ -177,6 +177,15 @@ def main() -> int:
     if env_name == "beta":
         command.extend(["--service-start-timeout-seconds", "180"])
 
+    # iOS 26+ 等新模拟器在全场景 smoke 下容易超过默认 420s（见 beta-ios 矩阵报告：
+    # iPhone 17 Pro 上多次 SIGTERM/timeout），为 beta/gamma 的 iOS 矩阵单独放宽。
+    if env_name in {"beta", "gamma"} and args.platform == "ios":
+        ios_test_timeout = os.environ.get(
+            "ASSISTANT_DEVICE_MATRIX_TEST_TIMEOUT_SECONDS", "900"
+        ).strip()
+        if ios_test_timeout.isdigit():
+            command.extend(["--test-timeout-seconds", ios_test_timeout])
+
     code = subprocess.call(command, cwd=str(REPO_ROOT))
     if env_name == "gamma" and code != 0:
         diagnose_gamma_failure()
