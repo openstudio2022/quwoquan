@@ -66,6 +66,7 @@ func TestAssistantHTTPWriteTimeoutDefaultsForStreaming(t *testing.T) {
 }
 
 func TestGammaAllowsDeterministicModelProviderWhenGateFlagEnabled(t *testing.T) {
+	t.Setenv("ALLOW_DETERMINISTIC_BETA", "")
 	if _, err := buildModelProvider(providerCfg{Provider: "deterministic"}, "gamma"); err == nil {
 		t.Fatal("gamma deterministic provider should require explicit gate flag")
 	}
