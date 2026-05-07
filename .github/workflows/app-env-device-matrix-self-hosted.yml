@@ -13,6 +13,11 @@ on:
         description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]'
         required: true
         default: '["alpha","beta","gamma"]'
+      allow_missing_platforms:
+        description: '缺席平台是否允许跳过（已发现的平台仍必须成功）'
+        required: false
+        default: false
+        type: boolean
       gamma_base_url:
         description: 可选覆盖 gamma 网关（默认 secrets.GAMMA_BASE_URL）
         required: false
@@ -31,6 +36,11 @@ on:
         description: 'JSON array of environments'
         required: true
         type: string
+      allow_missing_platforms:
+        description: '是否允许缺席平台跳过'
+        required: false
+        type: boolean
+        default: false
       gamma_base_url:
         description: '可选覆盖 gamma 网关（默认走 secrets.GAMMA_BASE_URL）'
         required: false
@@ -59,6 +69,7 @@ jobs:
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       env_json: ${{ steps.discover.outputs.env_json }}
+      allow_missing_platforms: ${{ steps.discover.outputs.allow_missing_platforms }}
       matrix_kind: ${{ steps.discover.outputs.matrix_kind }}
       gamma_base_url: ${{ steps.discover.outputs.gamma_base_url }}
       media_base_url: ${{ steps.discover.outputs.media_base_url }}
@@ -77,17 +88,20 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_ENV_JSON: ${{ inputs.env_json }}
+          INPUT_ALLOW_MISSING_PLATFORMS: ${{ inputs.allow_missing_platforms }}
           INPUT_MATRIX_KIND: ${{ inputs.matrix_kind }}
           INPUT_GAMMA_BASE_URL: ${{ inputs.gamma_base_url }}
           INPUT_MEDIA_BASE_URL: ${{ inputs.media_base_url }}
         run: |
           if [ "${EVENT_NAME}" = "pull_request" ]; then
             echo 'env_json=["alpha","beta"]' >> "$GITHUB_OUTPUT"
+            echo 'allow_missing_platforms=false' >> "$GITHUB_OUTPUT"
             echo 'matrix_kind=assistant' >> "$GITHUB_OUTPUT"
             echo 'gamma_base_url=' >> "$GITHUB_OUTPUT"
             echo 'media_base_url=' >> "$GITHUB_OUTPUT"
           else
             echo "env_json=${INPUT_ENV_JSON}" >> "$GITHUB_OUTPUT"
+            echo "allow_missing_platforms=${INPUT_ALLOW_MISSING_PLATFORMS:-false}" >> "$GITHUB_OUTPUT"
             echo "matrix_kind=${INPUT_MATRIX_KIND:-assistant}" >> "$GITHUB_OUTPUT"
             echo "gamma_base_url=${INPUT_GAMMA_BASE_URL}" >> "$GITHUB_OUTPUT"
             echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
@@ -133,6 +147,10 @@ jobs:
 
           with open(output_path, "a", encoding="utf-8") as fh:
               print(f'env_json={env_json}', file=fh)
+              print(
+                  'allow_missing_platforms=${{ steps.defaults.outputs.allow_missing_platforms }}',
+                  file=fh,
+              )
               print(f'matrix_kind={matrix_kind}', file=fh)
               print(f'gamma_base_url={gamma_base_url}', file=fh)
               print(f'media_base_url={media_base_url}', file=fh)
@@ -366,37 +384,24 @@ jobs:
           IOS: ${{ needs.ios.result }}
           HAS_ANDROID: ${{ needs.discover_devices.outputs.has_android }}
           HAS_IOS: ${{ needs.discover_devices.outputs.has_ios }}
+          ALLOW_MISSING_PLATFORMS: ${{ needs.discover_devices.outputs.allow_missing_platforms }}
         run: |
           set -euo pipefail
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
             echo "::notice::self-hosted mobile matrix is disabled for this run; skip device evidence enforcement."
             exit 0
           fi
-          fail=0
-          expect_success() {
-            local name="$1" val="$2" hint="$3"
-            if [ "${val}" != "success" ]; then
-              echo "::error::${name} expected success, got ${val}. ${hint}"
-              fail=1
-            fi
-          }
-          expect_success "discover_devices" "${DISCOVER}" "检查 self-hosted runner、flutter devices --machine 与可见移动设备数量"
-          if [ "${HAS_ANDROID}" != "true" ]; then
-            echo "::error::android device environment is required before merge, but no Android device was discovered"
-            fail=1
-          else
-            expect_success "android" "${ANDROID}" "检查 Android 设备矩阵执行与 beta/gamma 网关链路"
+          args=()
+          if [ "${ALLOW_MISSING_PLATFORMS}" = "true" ]; then
+            args+=(--allow-missing-platforms)
           fi
-          if [ "${HAS_IOS}" != "true" ]; then
-            echo "::error::ios device environment is required before merge, but no iOS device was discovered"
-            fail=1
-          else
-            expect_success "ios" "${IOS}" "检查 iOS 设备矩阵执行与 beta/gamma 网关链路"
-          fi
-          if [ "${fail}" -ne 0 ]; then
-            echo "::error::App Env Device Matrix 未全部成功；请按上列分项修复后重跑。"
-            exit 1
-          fi
+          python3 scripts/check_device_matrix_gate.py \
+            --discover-result "${DISCOVER}" \
+            --android-result "${ANDROID}" \
+            --ios-result "${IOS}" \
+            --has-android "${HAS_ANDROID}" \
+            --has-ios "${HAS_IOS}" \
+            "${args[@]}"
       - name: 下载设备矩阵 artifacts
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         uses: actions/download-artifact@v4

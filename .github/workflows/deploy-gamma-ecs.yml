@@ -64,6 +64,7 @@ jobs:
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
       env_json: '["alpha","beta"]'
+      allow_missing_platforms: true
 
   gamma_pre_validation:
     name: Gamma ECS — pre hosted validation
@@ -193,6 +194,7 @@ jobs:
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
       env_json: '["gamma"]'
+      allow_missing_platforms: true
       gamma_base_url: ${{ needs.gamma_pre_validation.outputs.base_url }}
 
   device_matrix_chat_avatar_self_hosted_prod:
@@ -202,6 +204,7 @@ jobs:
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
       env_json: '["gamma"]'
+      allow_missing_platforms: true
       gamma_base_url: ${{ needs.gamma_pre_validation.outputs.base_url }}
       media_base_url: ${{ needs.gamma_pre_validation.outputs.media_base_url }}
       matrix_kind: chat-avatar

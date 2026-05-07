@@ -58,7 +58,8 @@ feature / dev1.0
 - 只在 `pull_request(main)`、`workflow_call`、手动路径运行。
 - 统一使用 `self-hosted + macOS` runner。
 - 通过 `flutter devices --machine` 动态发现设备。
-- **Android 与 iOS 都必须存在且都成功**；不再接受“某一平台缺席但另一平台通过”的口径。
+- 默认要求 **Android 与 iOS 都必须存在且都成功**；不再接受“某一平台缺席但另一平台通过”的口径。
+- 但在被 `08` 等手动 wrapper 复用时，可以通过 `allow_missing_platforms=true` 放宽为“缺席平台跳过，但已发现的平台仍必须成功”。
 - summary job 同样会下载 artifact 并校验证据。
 
 ### 3.3 `08. Deploy Gamma ECS`
@@ -67,6 +68,7 @@ feature / dev1.0
 
 - `gate` + alpha/beta 本地矩阵
 - 复用与 `04` 相同的 `gamma-ecs-pre-hosted-core.yml`
+- self-hosted 设备矩阵调用 `05` 时开启 `allow_missing_platforms=true`，避免在当前开发机暂时缺席某一平台时把整条手动部署链路直接卡死。
 - pre 门禁通过后，继续执行 ECS prod 就地升级与 prod 烟测
 
 ## 4. 本地 left-shift 与 local-gamma
