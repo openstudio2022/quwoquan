@@ -4,10 +4,10 @@ on:
   workflow_call:
     inputs:
       assistant_scenario_id:
-        description: 单场景 smoke 可填 scenario id；留空则跑全部 gamma 场景
+        description: 单场景 smoke 可填 scenario id；默认使用轻量 gamma 场景以控制 hosted 关键路径
         required: false
         type: string
-        default: travel_journey_basic
+        default: weather_shenzhen_pinyin
       assistant_smoke_profile:
         description: ui_sanity 或 full_semantic
         required: false

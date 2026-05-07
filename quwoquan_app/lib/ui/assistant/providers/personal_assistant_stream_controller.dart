@@ -267,7 +267,10 @@ class PersonalAssistantStreamController
 
   Future<String> _historyProfileSubjectId() async {
     try {
-      final activeContext = await ref.read(activePersonaContextProvider.future);
+      // 历史初始化不应被活动分身上下文无限阻塞；超时后回退到当前用户。
+      final activeContext = await ref
+          .read(activePersonaContextProvider.future)
+          .timeout(const Duration(seconds: 3));
       final profileSubjectId = activeContext.profileSubjectId.trim();
       if (profileSubjectId.isNotEmpty) {
         return profileSubjectId;

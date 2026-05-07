@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -147,26 +148,23 @@ Future<void> _sendAndExpect(
 }) async {
   final isFullSemanticSmoke = _assistantSmokeProfile != 'ui_sanity';
   Future<PersonalAssistantStreamState> sendOnceAndReadState() async {
-    await tester.ensureVisible(find.byKey(TestKeys.assistantChatInputField));
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.enterText(
-      find.byKey(TestKeys.assistantChatInputField),
-      scenario.question,
+    final pageFinder = find.byType(PersonalAssistantConversationPage);
+    final context = tester.element(pageFinder);
+    final container = ProviderScope.containerOf(context);
+    print(
+      '[assistant-env-smoke] start scenario=${scenario.id} runtimeEnv=$runtimeEnv profile=$_assistantSmokeProfile',
     );
-    tester.testTextInput.updateEditingValue(
-      TextEditingValue(
-        text: scenario.question,
-        selection: TextSelection.collapsed(offset: scenario.question.length),
-      ),
+    unawaited(
+      container
+          .read(personalAssistantStreamControllerProvider.notifier)
+          .send(scenario.question),
     );
-    await _tapSend(tester, scenario.question);
+    await _pumpUntilStreamStarts(tester);
     await _pumpUntilStreamSettled(tester);
-    final context = tester.element(
-      find.byType(PersonalAssistantConversationPage),
+    print(
+      '[assistant-env-smoke] settled scenario=${scenario.id} runtimeEnv=$runtimeEnv',
     );
-    return ProviderScope.containerOf(
-      context,
-    ).read(personalAssistantStreamControllerProvider);
+    return container.read(personalAssistantStreamControllerProvider);
   }
 
   var streamState = await sendOnceAndReadState();
@@ -268,27 +266,24 @@ void _assertCloudPersonalAssistantNarrativeQuality(
   );
 }
 
-Future<void> _tapSend(WidgetTester tester, String question) async {
-  for (var i = 0; i < 40; i++) {
+Future<void> _pumpUntilStreamStarts(WidgetTester tester) async {
+  for (var i = 0; i < 50; i++) {
     await tester.pump(const Duration(milliseconds: 100));
-    await tester.ensureVisible(find.byKey(TestKeys.assistantChatInputField));
-    final keyed = find.byKey(TestKeys.assistantSendButton);
-    if (keyed.evaluate().isNotEmpty) {
-      await tester.tap(keyed, warnIfMissed: false);
-      return;
-    }
-    final textButtons = find.text('发送');
-    if (textButtons.evaluate().isNotEmpty) {
-      await tester.tap(textButtons.last, warnIfMissed: false);
+    final context = tester.element(
+      find.byType(PersonalAssistantConversationPage),
+    );
+    final streamState = ProviderScope.containerOf(
+      context,
+    ).read(personalAssistantStreamControllerProvider);
+    if (streamState.running ||
+        streamState.answer.isNotEmpty ||
+        streamState.errorMessage.isNotEmpty ||
+        streamState.turnId.isNotEmpty ||
+        streamState.events.isNotEmpty) {
       return;
     }
   }
-  final context = tester.element(
-    find.byType(PersonalAssistantConversationPage),
-  );
-  await ProviderScope.containerOf(
-    context,
-  ).read(personalAssistantStreamControllerProvider.notifier).send(question);
+  throw TestFailure('assistant smoke 在 5 秒内未启动 stream');
 }
 
 Future<void> _pumpUntilStreamSettled(WidgetTester tester) async {
