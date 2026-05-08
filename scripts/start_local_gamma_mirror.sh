@@ -306,13 +306,13 @@ YAML
 prepare_media_root() {
   local media="$ROOT/artifacts/local-gamma/media"
   local canonical_media_root="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
+  if [[ -d "$media/media" ]]; then
+    echo "[local-gamma] reuse pre-synced gamma curated media bundle: $media"
+    return 0
+  fi
   if [[ -d "$canonical_media_root" ]]; then
     python3 "$ROOT/scripts/build_gamma_curated_fixture_bundle.py" \
       --output-media-root "$media" >/dev/null
-    return 0
-  fi
-  if [[ -d "$media/media" ]] && [[ -f "$ROOT/deploy/shared/gamma_curated_media_bundle.json" ]]; then
-    echo "[local-gamma] reuse pre-synced gamma curated media bundle: $media"
     return 0
   fi
   echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync artifacts/local-gamma/media first" >&2
