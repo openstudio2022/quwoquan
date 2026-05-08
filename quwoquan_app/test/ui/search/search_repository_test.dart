@@ -5,7 +5,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
@@ -20,6 +19,7 @@ import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
+import '../../common/chat/chat_mock_seed_refs.dart';
 
 void main() {
   group('AppSearchRepository', () {
@@ -90,8 +90,7 @@ void main() {
           );
         },
       );
-      final query = (ChatMockData.contacts.first['displayName'] as String)
-          .substring(0, 1);
+      final query = chatDisplayNameFor('user_002').substring(0, 1);
 
       final response = await repo.search(
         SearchRequest(

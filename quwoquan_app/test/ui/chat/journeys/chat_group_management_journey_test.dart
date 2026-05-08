@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/group_admins_page.dart';
@@ -14,13 +13,14 @@ import 'package:quwoquan_app/ui/chat/pages/group_manage_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/transfer_ownership_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import '../../../common/chat/chat_mock_seed_refs.dart';
 
 const _testConvId = 'conv_002';
 
 List<Override> _chatTestOverrides(ChatRepository repo) => [
-      chatRepositoryProvider.overrideWithValue(repo),
-      currentUserIdProvider.overrideWithValue(ChatMockData.currentUserProfileId),
-    ];
+  chatRepositoryProvider.overrideWithValue(repo),
+  currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
+];
 
 /// 完整路由栈：settings → manage → transfer-ownership / admins
 Widget _scopedApp({ChatRepository? mock}) {
@@ -46,15 +46,13 @@ Widget _scopedApp({ChatRepository? mock}) {
                   GoRoute(
                     path: 'transfer-ownership',
                     builder: (_, state) => TransferOwnershipPage(
-                      conversationId:
-                          state.pathParameters['id'] ?? _testConvId,
+                      conversationId: state.pathParameters['id'] ?? _testConvId,
                     ),
                   ),
                   GoRoute(
                     path: 'admins',
                     builder: (_, state) => GroupAdminsPage(
-                      conversationId:
-                          state.pathParameters['id'] ?? _testConvId,
+                      conversationId: state.pathParameters['id'] ?? _testConvId,
                     ),
                   ),
                 ],
@@ -90,7 +88,9 @@ void _suppressImageErrors() {
 
 void main() {
   group('旅程 A — 设置页入口权限', () {
-    testWidgets('J-A1: 群主 Provider state 验证（isOwner=true）且设置页存在', (tester) async {
+    testWidgets('J-A1: 群主 Provider state 验证（isOwner=true）且设置页存在', (
+      tester,
+    ) async {
       _suppressImageErrors();
       // 用 ProviderContainer 验证 conv_002 加载后当前用户为 owner
       final container = ProviderContainer(
@@ -104,17 +104,18 @@ void main() {
       await notifier.load();
 
       final state = container.read(conversationMembersProvider(_testConvId));
-      expect(state.isOwner, isTrue,
-          reason: 'conv_002 的当前用户（user_001）应为群主');
+      expect(state.isOwner, isTrue, reason: 'conv_002 的当前用户（user_001）应为群主');
       expect(state.isAdminOrOwner, isTrue);
 
       // widget 层：渲染 ChatSettingsPage，验证页面存在（UI 分离测试见 widget test）
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(body: ChatSettingsPage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(body: ChatSettingsPage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -135,28 +136,32 @@ void main() {
   group('旅程 B — 群管理页元素验证', () {
     testWidgets('J-B1: GroupManagePage 含二维码进群开关', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp.router(
-          routerConfig: GoRouter(
-            initialLocation: '/chat/$_testConvId/settings/manage',
-            routes: [
-              GoRoute(
-                path: '/chat/:id/settings',
-                builder: (_, s) => ChatSettingsPage(
-                    conversationId: s.pathParameters['id'] ?? _testConvId),
-                routes: [
-                  GoRoute(
-                    path: 'manage',
-                    builder: (_, s) => GroupManagePage(
-                        conversationId: s.pathParameters['id'] ?? _testConvId),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp.router(
+            routerConfig: GoRouter(
+              initialLocation: '/chat/$_testConvId/settings/manage',
+              routes: [
+                GoRoute(
+                  path: '/chat/:id/settings',
+                  builder: (_, s) => ChatSettingsPage(
+                    conversationId: s.pathParameters['id'] ?? _testConvId,
                   ),
-                ],
-              ),
-            ],
+                  routes: [
+                    GoRoute(
+                      path: 'manage',
+                      builder: (_, s) => GroupManagePage(
+                        conversationId: s.pathParameters['id'] ?? _testConvId,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -165,12 +170,14 @@ void main() {
 
     testWidgets('J-B2: GroupManagePage 含入群审核开关', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupManagePage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupManagePage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -179,12 +186,14 @@ void main() {
 
     testWidgets('J-B3: 群主可见群主管理权转让和群管理员入口', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupManagePage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupManagePage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -194,12 +203,14 @@ void main() {
 
     testWidgets('J-B4: 群主可见解散群聊按钮', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupManagePage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupManagePage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -210,14 +221,16 @@ void main() {
   group('旅程 C — 群主转让完整旅程', () {
     testWidgets('J-C1: TransferOwnershipPage 页面标题正确', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(
-            body: TransferOwnershipPage(conversationId: _testConvId),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(
+              body: TransferOwnershipPage(conversationId: _testConvId),
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -226,14 +239,16 @@ void main() {
 
     testWidgets('J-C2: 转让页成员列表不含群主自身', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(
-            body: TransferOwnershipPage(conversationId: _testConvId),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(
+              body: TransferOwnershipPage(conversationId: _testConvId),
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -243,14 +258,16 @@ void main() {
 
     testWidgets('J-C3: 搜索框可见且可输入过滤', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(
-            body: TransferOwnershipPage(conversationId: _testConvId),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(
+              body: TransferOwnershipPage(conversationId: _testConvId),
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -264,14 +281,16 @@ void main() {
 
     testWidgets('J-C4: 点击成员弹出确认弹窗', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(
-            body: TransferOwnershipPage(conversationId: _testConvId),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(
+              body: TransferOwnershipPage(conversationId: _testConvId),
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -287,14 +306,16 @@ void main() {
     testWidgets('J-C5: 确认转让后 transferOwnership 被调用', (tester) async {
       _suppressImageErrors();
       final tracking = _TrackingChatRepository();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(tracking),
-        child: MaterialApp(
-          home: Scaffold(
-            body: TransferOwnershipPage(conversationId: _testConvId),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(tracking),
+          child: MaterialApp(
+            home: Scaffold(
+              body: TransferOwnershipPage(conversationId: _testConvId),
+            ),
           ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -315,12 +336,15 @@ void main() {
       addTearDown(container.dispose);
 
       // 触发加载
-      final notifier =
-          container.read(conversationMembersProvider(_testConvId).notifier);
+      final notifier = container.read(
+        conversationMembersProvider(_testConvId).notifier,
+      );
       await notifier.load();
 
-      expect(container.read(conversationMembersProvider(_testConvId)).isOwner,
-          isTrue);
+      expect(
+        container.read(conversationMembersProvider(_testConvId)).isOwner,
+        isTrue,
+      );
 
       // 执行转让：user_002 变为新群主
       await notifier.transferOwnership('user_002');
@@ -337,12 +361,14 @@ void main() {
   group('旅程 D — 管理员设置完整旅程', () {
     testWidgets('J-D1: GroupAdminsPage 页面标题正确', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -351,12 +377,14 @@ void main() {
 
     testWidgets('J-D2: GroupAdminsPage 列表不含群主', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -366,12 +394,14 @@ void main() {
 
     testWidgets('J-D4: 初始管理员显示管理员标签', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -381,12 +411,14 @@ void main() {
 
     testWidgets('J-D6: 超过 3 人弹出限制提示', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(MockChatRepository()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -415,12 +447,14 @@ void main() {
     testWidgets('J-D7: 点击完成调用 updateGroupAdmins', (tester) async {
       _suppressImageErrors();
       final tracking = _TrackingChatRepository();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(tracking),
-        child: MaterialApp(
-          home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(tracking),
+          child: MaterialApp(
+            home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -439,8 +473,9 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final notifier =
-          container.read(conversationMembersProvider(_testConvId).notifier);
+      final notifier = container.read(
+        conversationMembersProvider(_testConvId).notifier,
+      );
       await notifier.load();
 
       // 将 user_003（张华）设为管理员，取消 user_002
@@ -466,12 +501,14 @@ void main() {
   group('旅程 E — 错误态与边界', () {
     testWidgets('J-E1: listMembers 失败时 GroupAdminsPage 不崩溃', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(_ErrorMembersRepo()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(_ErrorMembersRepo()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -485,12 +522,14 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final notifier =
-          container.read(conversationMembersProvider(_testConvId).notifier);
+      final notifier = container.read(
+        conversationMembersProvider(_testConvId).notifier,
+      );
       await notifier.load();
 
-      final stateBefore =
-          container.read(conversationMembersProvider(_testConvId));
+      final stateBefore = container.read(
+        conversationMembersProvider(_testConvId),
+      );
       expect(stateBefore.isOwner, isTrue);
 
       // 替换为失败 repo 并尝试转让
@@ -499,18 +538,21 @@ void main() {
       );
       addTearDown(failContainer.dispose);
 
-      final failNotifier = failContainer
-          .read(conversationMembersProvider(_testConvId).notifier);
+      final failNotifier = failContainer.read(
+        conversationMembersProvider(_testConvId).notifier,
+      );
       await failNotifier.load();
-      final previousState =
-          failContainer.read(conversationMembersProvider(_testConvId));
+      final previousState = failContainer.read(
+        conversationMembersProvider(_testConvId),
+      );
 
       try {
         await failNotifier.transferOwnership('user_002');
       } catch (_) {}
 
-      final stateAfter =
-          failContainer.read(conversationMembersProvider(_testConvId));
+      final stateAfter = failContainer.read(
+        conversationMembersProvider(_testConvId),
+      );
       expect(stateAfter.currentUserRole, equals(previousState.currentUserRole));
     });
 
@@ -521,12 +563,14 @@ void main() {
       );
       addTearDown(container.dispose);
 
-      final notifier =
-          container.read(conversationMembersProvider(_testConvId).notifier);
+      final notifier = container.read(
+        conversationMembersProvider(_testConvId).notifier,
+      );
       await notifier.load();
 
-      final stateBefore =
-          container.read(conversationMembersProvider(_testConvId));
+      final stateBefore = container.read(
+        conversationMembersProvider(_testConvId),
+      );
       final adminsBefore = stateBefore.members
           .where((m) => m.role == 'admin')
           .map((m) => m.userId)
@@ -536,8 +580,9 @@ void main() {
         await notifier.updateGroupAdmins(['user_999']);
       } catch (_) {}
 
-      final stateAfter =
-          container.read(conversationMembersProvider(_testConvId));
+      final stateAfter = container.read(
+        conversationMembersProvider(_testConvId),
+      );
       final adminsAfter = stateAfter.members
           .where((m) => m.role == 'admin')
           .map((m) => m.userId)
@@ -548,12 +593,14 @@ void main() {
 
     testWidgets('J-E4: 空成员列表时 GroupAdminsPage 安全渲染', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(ProviderScope(
-        overrides: _chatTestOverrides(_EmptyMembersRepo()),
-        child: MaterialApp(
-          home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(_EmptyMembersRepo()),
+          child: MaterialApp(
+            home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 

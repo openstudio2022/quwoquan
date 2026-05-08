@@ -509,7 +509,7 @@ func TestListUserPostsByIdentity(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/profile-subjects/identity_feed_author/posts?identity=work&type=article&limit=20",
+		"/v1/content/sub-accounts/identity_feed_author/posts?identity=work&type=article&limit=20",
 		nil,
 	)
 	rec := httptest.NewRecorder()

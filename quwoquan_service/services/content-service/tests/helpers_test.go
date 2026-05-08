@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"quwoquan_service/services/content-service/internal/application"
 )
 
 // createPost is a shared test helper: create draft then publish it, returning
@@ -49,12 +51,13 @@ func createDraftPost(t *testing.T, payload string) map[string]any {
 func createDraftPostWithAuthor(t *testing.T, authorID string, payload string) map[string]any {
 	t.Helper()
 	payload = normalizeCreatePostPayloadForTest(t, payload)
+	if strings.TrimSpace(authorID) == "" {
+		authorID = application.AnonymousFallbackSubAccountID
+	}
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
-	if authorID != "" {
-		req.Header.Set("X-Client-User-Id", authorID)
-		req.Header.Set("X-Client-Sub-Account-Id", authorID)
-	}
+	req.Header.Set("X-Client-User-Id", authorID)
+	req.Header.Set("X-Client-Sub-Account-Id", authorID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -100,16 +103,17 @@ func publishPostWithAuthor(
 	payload string,
 ) map[string]any {
 	t.Helper()
+	if strings.TrimSpace(authorID) == "" {
+		authorID = application.AnonymousFallbackSubAccountID
+	}
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/v1/content/posts/"+postID+"/publish",
 		strings.NewReader(payload),
 	)
 	req.Header.Set("Content-Type", "application/json")
-	if authorID != "" {
-		req.Header.Set("X-Client-User-Id", authorID)
-		req.Header.Set("X-Client-Sub-Account-Id", authorID)
-	}
+	req.Header.Set("X-Client-User-Id", authorID)
+	req.Header.Set("X-Client-Sub-Account-Id", authorID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

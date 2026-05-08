@@ -6,13 +6,13 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
+import '../../../common/chat/chat_mock_seed_refs.dart';
 
 void _suppressImageErrors() {
   final original = FlutterError.onError;
@@ -86,7 +86,7 @@ Map<String, dynamic> _groupConversation(
     'type': 'group',
     'title': title,
     'avatarUrl': avatarUrl,
-    'creatorId': ChatMockData.currentUserProfileId,
+    'creatorId': chatCurrentUserProfileId(),
     'maxSeq': 0,
     'memberCount': memberCount,
     'maxGroupSize': 500,
@@ -108,8 +108,8 @@ Map<String, dynamic> _member(
 }) {
   return <String, dynamic>{
     'userId': userId,
-    'displayName': ChatMockData.nameFor(userId),
-    'avatarUrl': ChatMockData.avatarFor(userId),
+    'displayName': chatDisplayNameFor(userId),
+    'avatarUrl': chatAvatarUrlFor(userId),
     'role': role,
     'isCurrentUser': isCurrentUser,
     'joinedAt': DateTime.utc(
@@ -153,7 +153,7 @@ void main() {
       seedMembers: <String, List<Map<String, dynamic>>>{
         'conv_existing': <Map<String, dynamic>>[
           _member(
-            ChatMockData.currentUserProfileId,
+            chatCurrentUserProfileId(),
             order: 0,
             role: 'owner',
             isCurrentUser: true,
@@ -162,7 +162,7 @@ void main() {
         ],
         'conv_source': <Map<String, dynamic>>[
           _member(
-            ChatMockData.currentUserProfileId,
+            chatCurrentUserProfileId(),
             order: 0,
             role: 'owner',
             isCurrentUser: true,
@@ -201,7 +201,7 @@ void main() {
     _suppressImageErrors();
 
     final container = _buildContainer(MockChatRepository());
-    final keepAlive = container.listen(chatInboxListProvider, (_, __) {});
+    final keepAlive = container.listen(chatInboxListProvider, (_, _) {});
     addTearDown(keepAlive.close);
     await _pumpStartGroupChatPage(tester, container: container);
 
@@ -256,14 +256,14 @@ void main() {
         _groupConversation(
           'conv_source_with_avatar',
           '有头像候选群',
-          avatarUrl: ChatMockData.avatarFor('user_003'),
+          avatarUrl: chatAvatarUrlFor('user_003'),
         ),
         _groupConversation('conv_source_placeholder', '占位讨论组'),
       ],
       seedMembers: <String, List<Map<String, dynamic>>>{
         'conv_existing': <Map<String, dynamic>>[
           _member(
-            ChatMockData.currentUserProfileId,
+            chatCurrentUserProfileId(),
             order: 0,
             role: 'owner',
             isCurrentUser: true,
