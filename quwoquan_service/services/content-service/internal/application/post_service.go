@@ -330,8 +330,8 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		strings.TrimSpace(asString(payload["assistantUsePolicy"])),
 	)
 	post := &postmodel.Post{
-		ID:               fmt.Sprintf("post_%d", now.UnixNano()),
-		AuthorId:         strings.TrimSpace(asString(payload["authorId"])),
+		ID:       fmt.Sprintf("post_%d", now.UnixNano()),
+		AuthorId: strings.TrimSpace(asString(payload["authorId"])),
 		PersonaContextVersion: asInt64Flexible(
 			payload["personaContextVersion"],
 		),
@@ -974,8 +974,7 @@ func (s *PostService) SharePost(ctx context.Context, postID, userID string) (int
 		post,
 		directShareKey(userID),
 		userID,
-		true,
-	)
+		true)
 	s.mu.Unlock()
 	return shareCount, changed, shared, nil
 }
@@ -1000,8 +999,7 @@ func (s *PostService) UnsharePost(ctx context.Context, postID, userID string) (i
 		post,
 		directShareKey(userID),
 		userID,
-		false,
-	)
+		false)
 	s.mu.Unlock()
 	return shareCount, changed, shared, nil
 }
@@ -1043,8 +1041,7 @@ func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circle
 		post,
 		key,
 		userID,
-		true,
-	)
+		true)
 	s.mu.Unlock()
 	return map[string]any{
 		"postId":         post.ID,
@@ -1758,9 +1755,9 @@ func (s *PostService) AddComment(
 
 	isAuthor := authorID == post.AuthorId
 	comment := map[string]any{
-		"_id":              fmt.Sprintf("comment_%d", now.UnixNano()),
-		"postId":           post.ID,
-		"authorId":         authorID,
+		"_id":      fmt.Sprintf("comment_%d", now.UnixNano()),
+		"postId":   post.ID,
+		"authorId": authorID,
 		"personaContextVersion": asInt64Flexible(
 			personaContextVersion,
 		),
