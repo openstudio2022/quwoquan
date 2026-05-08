@@ -16,7 +16,6 @@ from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 METADATA = ROOT / "quwoquan_service" / "contracts" / "metadata"
-FORWARDED_PREFIXES = ("/v1/assistant",)
 MEDIA_OBJECT_KEY_FIELDS = {
     "avatarObjectKey",
     "backgroundObjectKey",
@@ -44,9 +43,8 @@ def user_profile_wire(profile: dict) -> dict:
     stats = profile.get("stats") or {}
     user_id = profile.get("userId", "")
     return {
-        "profileSubjectId": user_id,
+        "subAccountId": user_id,
         "ownerUserId": user_id,
-        "subAccountId": "",
         "userHandle": user_id,
         "username": user_id,
         "nickname": profile.get("displayName", user_id),
@@ -80,8 +78,10 @@ def work_item_wire(post: dict) -> dict:
 
 
 class AssistantBetaGateway(BaseHTTPRequestHandler):
-    upstream_host: str = "127.0.0.1"
-    upstream_port: int = 18087
+    assistant_upstream_host: str = "127.0.0.1"
+    assistant_upstream_port: int = 18087
+    chat_upstream_host: str = "127.0.0.1"
+    chat_upstream_port: int = 18081
     avatar_cdn_base_url: str = ""
     image_cdn_base_url: str = ""
     video_cdn_base_url: str = ""
@@ -115,11 +115,12 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 return
             self.send_error(404, "media route is not available in local beta gateway")
             return
-        fixture_payload = self._fixture_response(parsed.path, parsed.query)
-        if fixture_payload is not None:
-            self._send_json(fixture_payload)
-            return
-        if not parsed.path.startswith(FORWARDED_PREFIXES):
+        upstream = self._upstream_for_path(parsed.path)
+        if upstream is None:
+            fixture_payload = self._fixture_response(parsed.path, parsed.query)
+            if fixture_payload is not None:
+                self._send_json(fixture_payload)
+                return
             self.send_error(404, "route is not available in local beta gateway")
             return
 
@@ -132,7 +133,8 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         }
 
         stream_response = parsed.path.endswith("/stream")
-        conn = HTTPConnection(self.upstream_host, self.upstream_port, timeout=240 if stream_response else 30)
+        upstream_name, upstream_host, upstream_port = upstream
+        conn = HTTPConnection(upstream_host, upstream_port, timeout=240 if stream_response else 30)
         try:
             conn.request(self.command, self.path, body=body, headers=headers)
             upstream = conn.getresponse()
@@ -147,7 +149,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 return
             payload = upstream.read()
         except Exception as exc:  # noqa: BLE001
-            self.send_error(502, f"assistant beta gateway upstream failed: {exc}")
+            self.send_error(502, f"{upstream_name} upstream failed: {exc}")
             return
         finally:
             conn.close()
@@ -212,13 +214,18 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
+    def _upstream_for_path(self, path: str) -> tuple[str, str, int] | None:
+        if path.startswith("/v1/assistant"):
+            return ("assistant-service", self.assistant_upstream_host, self.assistant_upstream_port)
+        if path.startswith("/v1/chat") or path == "/v1/user/sync":
+            return ("chat-service", self.chat_upstream_host, self.chat_upstream_port)
+        return None
+
     def _fixture_response(self, path: str, query: str = "") -> object | None:
         if path == "/healthz":
             return {"status": "ok", "gateway": "business-beta"}
 
         content = seed_set("content/test_fixtures/scenarios/content_scenarios.json", "content_discovery_core")
-        chat = seed_set("messages/chat/test_fixtures/scenarios/chat_scenarios.json", "chat_core")
-        chat_contacts = seed_set("messages/chat/test_fixtures/scenarios/chat_scenarios.json", "chat_contacts_core")
         circle = seed_set("social/circle/test_fixtures/scenarios/circle_scenarios.json", "circle_core")
         circle_home = seed_set("social/circle/test_fixtures/scenarios/circle_scenarios.json", "circle_home_feed_core")
         user = seed_set("user/test_fixtures/scenarios/user_scenarios.json", "user_profile_core")
@@ -263,22 +270,6 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             post_id = path.split("/")[-1]
             posts = [p for p in content.get("posts", []) if p.get("id") == post_id or p.get("postId") == post_id]
             return posts[0] if posts else {}
-        if path == "/v1/chat/inbox":
-            return {"items": chat.get("conversations", [])}
-        if path == "/v1/chat/conversations":
-            return {"items": chat.get("conversations", [])}
-        if path == "/v1/chat/contacts":
-            return {"items": chat_contacts.get("contacts", [])}
-        if path.startswith("/v1/chat/conversations/") and path.count("/") == 4:
-            conv_id = path.split("/")[-1]
-            conversations = [c for c in chat.get("conversations", []) if c.get("conversationId") == conv_id or c.get("id") == conv_id]
-            return conversations[0] if conversations else {}
-        if path.startswith("/v1/chat/conversations/") and path.endswith("/messages"):
-            conv_id = path.split("/")[-2]
-            return {"items": chat.get("messages", {}).get(conv_id, [])}
-        if path.startswith("/v1/chat/conversations/") and path.endswith("/members"):
-            conv_id = path.split("/")[-2]
-            return {"items": chat.get("members", {}).get(conv_id, [])}
         if path == "/v1/circles":
             return {"items": circle.get("circles", [])}
         if path.startswith("/v1/circles/") and path.endswith("/feed"):
@@ -300,10 +291,8 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         if path == "/v1/user/personas/active":
             profile = user_profile_wire(user.get("profiles", [])[0])
             return {
-                "personaId": profile["profileSubjectId"],
-                "profileSubjectId": profile["profileSubjectId"],
+                "subAccountId": profile["subAccountId"],
                 "ownerUserId": profile["ownerUserId"],
-                "subAccountId": profile["profileSubjectId"],
                 "subjectType": profile["subjectType"],
                 "displayName": profile["displayName"],
                 "avatarUrl": profile["avatarUrl"],
@@ -324,11 +313,11 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
                 "version": 1,
                 "updatedAt": "2026-01-01T00:00:00Z",
             }
-        if path.startswith("/v1/user/profile-subjects/") and path.endswith("/relationship/capability"):
+        if path.startswith("/v1/user/sub-accounts/") and path.endswith("/relationship/capability"):
             target_id = path.split("/")[-3]
             return {
-                "viewerProfileSubjectId": "fixture_user_current",
-                "targetProfileSubjectId": target_id,
+                "viewerSubAccountId": "fixture_user_current",
+                "targetSubAccountId": target_id,
                 "relationState": "none",
                 "relationTier": "public",
                 "canFollow": target_id != "fixture_user_current",
@@ -429,13 +418,19 @@ def main() -> None:
     parser.add_argument("--listen-port", type=int, default=18080)
     parser.add_argument("--upstream-host", default="127.0.0.1")
     parser.add_argument("--upstream-port", type=int, default=18087)
+    parser.add_argument("--assistant-upstream-host", default="")
+    parser.add_argument("--assistant-upstream-port", type=int, default=0)
+    parser.add_argument("--chat-upstream-host", default="127.0.0.1")
+    parser.add_argument("--chat-upstream-port", type=int, default=18081)
     parser.add_argument("--avatar-cdn-base-url", default="")
     parser.add_argument("--image-cdn-base-url", default="")
     parser.add_argument("--video-cdn-base-url", default="")
     args = parser.parse_args()
 
-    AssistantBetaGateway.upstream_host = args.upstream_host
-    AssistantBetaGateway.upstream_port = args.upstream_port
+    AssistantBetaGateway.assistant_upstream_host = args.assistant_upstream_host or args.upstream_host
+    AssistantBetaGateway.assistant_upstream_port = args.assistant_upstream_port or args.upstream_port
+    AssistantBetaGateway.chat_upstream_host = args.chat_upstream_host
+    AssistantBetaGateway.chat_upstream_port = args.chat_upstream_port
     AssistantBetaGateway.avatar_cdn_base_url = args.avatar_cdn_base_url
     AssistantBetaGateway.image_cdn_base_url = args.image_cdn_base_url
     AssistantBetaGateway.video_cdn_base_url = args.video_cdn_base_url
@@ -451,7 +446,8 @@ def main() -> None:
     print(
         "[business-beta-gateway] listening "
         f"http://{args.listen_host}:{args.listen_port} -> "
-        f"http://{args.upstream_host}:{args.upstream_port}"
+        f"assistant=http://{AssistantBetaGateway.assistant_upstream_host}:{AssistantBetaGateway.assistant_upstream_port} "
+        f"chat=http://{AssistantBetaGateway.chat_upstream_host}:{AssistantBetaGateway.chat_upstream_port}"
     )
     try:
         server.serve_forever()

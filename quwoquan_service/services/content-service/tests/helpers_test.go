@@ -45,7 +45,7 @@ func createDraftPost(t *testing.T, payload string) map[string]any {
 }
 
 // createDraftPostWithAuthor creates a draft as the given author
-// (sets X-Client-User-Id) and returns the draft payload.
+// (sets X-Client-User-Id and X-Client-Sub-Account-Id) and returns the draft payload.
 func createDraftPostWithAuthor(t *testing.T, authorID string, payload string) map[string]any {
 	t.Helper()
 	payload = normalizeCreatePostPayloadForTest(t, payload)
@@ -53,6 +53,7 @@ func createDraftPostWithAuthor(t *testing.T, authorID string, payload string) ma
 	req.Header.Set("Content-Type", "application/json")
 	if authorID != "" {
 		req.Header.Set("X-Client-User-Id", authorID)
+		req.Header.Set("X-Client-Sub-Account-Id", authorID)
 	}
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -107,6 +108,7 @@ func publishPostWithAuthor(
 	req.Header.Set("Content-Type", "application/json")
 	if authorID != "" {
 		req.Header.Set("X-Client-User-Id", authorID)
+		req.Header.Set("X-Client-Sub-Account-Id", authorID)
 	}
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)

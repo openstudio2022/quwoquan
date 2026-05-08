@@ -612,15 +612,6 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: profileSubjectId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 触发本次助手执行时的稳定公开主体 ID
-
       - name: subAccountId
         type: string
         constraints: [NULLABLE]
@@ -628,7 +619,7 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: 触发本次助手执行时的子账号 ID（兼容 current persona 语义）
+        description: 触发本次助手执行时的稳定公开主体 ID
 
       - name: personaContextVersion
         type: int
@@ -1779,13 +1770,6 @@ entities:
         log_policy: allow
         api_exposure: write
         ops_exposure: read
-      - name: profileSubjectId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: write
-        ops_exposure: read
       - name: subAccountId
         type: string
         constraints: [NULLABLE]
@@ -1842,13 +1826,6 @@ entities:
         ops_exposure: read
       - name: userActions
         type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: write
-        ops_exposure: read
-      - name: profileSubjectId
-        type: string
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow

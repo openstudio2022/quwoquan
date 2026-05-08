@@ -317,7 +317,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
         children: [
           // 用户头像 - 基于原型代码增强，支持发布者类型
           GestureDetector(
-            onTap: () => widget.onUserTap(widget.post.authorProfileSubjectId),
+            onTap: () => widget.onUserTap(widget.post.subAccountId),
             child: Container(
               width: AppSpacing.avatarSize.w,
               height: AppSpacing.avatarSize.w,
@@ -353,7 +353,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: () => widget.onUserTap(widget.post.authorProfileSubjectId),
+                      onTap: () => widget.onUserTap(widget.post.subAccountId),
                       child: Text(
                         widget.presentation.displayName.isNotEmpty
                             ? widget.presentation.displayName

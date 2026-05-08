@@ -73,6 +73,7 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
                             initialPage: 2,
                             coverUrl: '',
                             showFooterPageLabel: true,
+                            debugPureBackwardGeometry: true,
                             onSceneChanged: (scene) {
                               _pendingScene = scene;
                               if (_sceneUpdateScheduled) {
@@ -190,7 +191,7 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
     debugPrint(
       '[pageflip][scene] '
       'state=${scene.state.name} '
-      'cur=${scene.currentPageIndex} '
+      'cur=${_pageLabel(scene.currentPageIndex)} '
       'turn=${_pageLabel(scene.flippingPageIndex)} '
       'under=${_pageLabel(scene.bottomPageIndex)} '
       'dir=${scene.direction?.name ?? "-"} '
@@ -209,7 +210,7 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       '[pageflip][debug] '
       'branch=${debugState.renderBranch.name} '
       'dir=${debugState.renderDirection?.name ?? "-"} '
-      'cur=${debugState.currentPageIndex} '
+      'cur=${_pageLabel(debugState.currentPageIndex)} '
       'turn=${_pageLabel(debugState.turningPageIndex)} '
       'under=${_pageLabel(debugState.underlayPageIndex)} '
       'req=${_tripletLabel(debugState.requestedRectoPageIndex, debugState.requestedVersoPageIndex, debugState.requestedBottomPageIndex)} '
@@ -228,11 +229,11 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'spineBottom=${_offsetLabel(debugState.backwardSpineBottom)} '
       'seam=${_doubleLabel(debugState.backwardSeamX)} '
       'foldX=${_doubleLabel(debugState.backwardFoldX)} '
-      'pageEdgeX=${_doubleLabel(debugState.backwardPageEdgeX)} '
-      'foldSurfaceEdgeX=${_doubleLabel(debugState.backwardFoldSurfaceEdgeX)} '
+      'freeEdgeX=${_doubleLabel(debugState.backwardPageEdgeX)} '
+      'freeEdgeSurfaceX=${_doubleLabel(debugState.backwardFoldSurfaceEdgeX)} '
       'foldLine=${_offsetLabel(debugState.backwardFoldLineTop)}>${_offsetLabel(debugState.backwardFoldLineBottom)} '
-      'pageEdgeLine=${_offsetLabel(debugState.backwardPageEdgeLineTop)}>${_offsetLabel(debugState.backwardPageEdgeLineBottom)} '
-      'foldSurfaceEdgeLine=${_offsetLabel(debugState.backwardFoldSurfaceEdgeLineTop)}>${_offsetLabel(debugState.backwardFoldSurfaceEdgeLineBottom)} '
+      'freeEdgeLine=${_offsetLabel(debugState.backwardPageEdgeLineTop)}>${_offsetLabel(debugState.backwardPageEdgeLineBottom)} '
+      'freeEdgeSurfaceLine=${_offsetLabel(debugState.backwardFoldSurfaceEdgeLineTop)}>${_offsetLabel(debugState.backwardFoldSurfaceEdgeLineBottom)} '
       'coveredWidth=${_doubleLabel(debugState.backwardCoveredWidth)} '
       'rectoCoverage=${_doubleLabel(debugState.backwardRectoCoverage)} '
       'versoWidth=${_doubleLabel(debugState.backwardVersoWidth)} '
@@ -250,7 +251,7 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'paintBack=${_rectLabel(debugState.backwardBackPaintBounds)} '
       'paintLaidFront=${_rectLabel(debugState.backwardLaidFrontPaintBounds)} '
       'paintFoldSurface=${_rectLabel(debugState.backwardFoldSurfacePaintBounds)} '
-      'paintCurrent=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
+      'currentUnderlay=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
       'paintVerso=${_doubleLabel(debugState.backwardPaintedVersoWidth)} '
       'backPixels=${debugState.backwardBackPixelSurfaceStrategy ?? "-"} '
       'surfaceOrigin=${_offsetLabel(debugState.backwardSurfaceOrigin)} '
@@ -285,12 +286,12 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
         'paintBack=${_rectLabel(debugState.backwardBackPaintBounds)} '
         'paintLaidFront=${_rectLabel(debugState.backwardLaidFrontPaintBounds)} '
         'paintFoldSurface=${_rectLabel(debugState.backwardFoldSurfacePaintBounds)} '
-        'paintCurrent=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
+        'currentUnderlay=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
         'rectoWidth=${_doubleLabel(debugState.backwardRectoWidth)} '
         'rectoCoverage=${_doubleLabel(debugState.backwardRectoCoverage)} '
         'versoWidth=${_doubleLabel(debugState.backwardVersoWidth)} '
-        'pageEdgeX=${_doubleLabel(debugState.backwardPageEdgeX)} '
-        'foldSurfaceEdgeX=${_doubleLabel(debugState.backwardFoldSurfaceEdgeX)} '
+        'freeEdgeX=${_doubleLabel(debugState.backwardPageEdgeX)} '
+        'freeEdgeSurfaceX=${_doubleLabel(debugState.backwardFoldSurfaceEdgeX)} '
         'foldDirection=${debugState.backwardFoldDirection ?? "-"} '
         'spineLocked=${debugState.backwardLeftSpineLocked ?? "-"} '
         'phase=${debugState.backwardPhase ?? "-"}',
@@ -299,7 +300,8 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
   }
 }
 
-String _pageLabel(int? pageIndex) => pageIndex?.toString() ?? '-';
+String _pageLabel(int? pageIndex) =>
+    pageIndex == null ? '-' : '${pageIndex + 1}';
 
 String _tripletLabel(int? a, int? b, int? c) {
   return '${_pageLabel(a)}/${_pageLabel(b)}/${_pageLabel(c)}';
@@ -437,6 +439,24 @@ class _DebugInfoCard extends StatelessWidget {
     final borderColor = (isDark ? AppColors.white : AppColors.black).withValues(
       alpha: 0.18,
     );
+    final isBackward = debugState.renderDirection == StPageFlipDirection.back;
+    final overlayFrontRect = isBackward
+        ? debugState.backwardFrontPaintBounds ?? debugState.frontBounds
+        : debugState.frontBounds;
+    final overlayBackRect = isBackward
+        ? debugState.backwardBackPaintBounds ?? debugState.backBounds
+        : debugState.backBounds;
+    final faceSummary = isBackward
+        ? 'layers ${debugState.backwardReplayFrontLayerCount ?? "-"} | '
+              'recto ${_doubleLabel(debugState.backwardRectoCoverage)} | '
+              'verso ${_doubleLabel(debugState.backwardVersoWidth)}'
+        : null;
+    final polygonSummary = isBackward
+        ? 'sheet ${_presenceLabel(debugState.backwardSheetPolygonPoints)} | '
+              'front ${_presenceLabel(debugState.backwardFrontPolygonPoints)} | '
+              'back ${_presenceLabel(debugState.backwardBackPolygonPoints)} | '
+              'bottom ${_presenceLabel(debugState.backwardBottomClipPolygonPoints)}'
+        : null;
     return DecoratedBox(
       key: const ValueKey('article_read_only_book_debug_card'),
       decoration: BoxDecoration(
@@ -501,14 +521,12 @@ class _DebugInfoCard extends StatelessWidget {
                 label: 'clip',
                 value: _rectLabel(debugState.bottomClipBounds),
               ),
-              _DebugLine(
-                label: 'front',
-                value: _rectLabel(debugState.frontBounds),
-              ),
-              _DebugLine(
-                label: 'back',
-                value: _rectLabel(debugState.backBounds),
-              ),
+              _DebugLine(label: 'front', value: _rectLabel(overlayFrontRect)),
+              _DebugLine(label: 'back', value: _rectLabel(overlayBackRect)),
+              if (faceSummary != null)
+                _DebugLine(label: 'faces', value: faceSummary),
+              if (polygonSummary != null)
+                _DebugLine(label: 'polys', value: polygonSummary),
               _DebugLine(
                 label: 'guide',
                 value: debugState.guideX == null
@@ -541,6 +559,10 @@ class _DebugInfoCard extends StatelessWidget {
       return '-';
     }
     return '${rect.left.toStringAsFixed(0)},${rect.top.toStringAsFixed(0)} → ${rect.right.toStringAsFixed(0)},${rect.bottom.toStringAsFixed(0)}';
+  }
+
+  String _presenceLabel(String? value) {
+    return value == null || value == '-' ? '-' : 'ok';
   }
 }
 

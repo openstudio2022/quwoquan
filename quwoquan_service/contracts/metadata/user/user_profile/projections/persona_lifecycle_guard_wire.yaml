@@ -19,7 +19,7 @@ client_projection:
       dart_type: String
       nullable: false
       source: subAccountId
-      aliases: [subAccountId, personaId, id]
+      aliases: [subAccountId, id]
       default: "''"
     - name: canDelete
       dart_type: bool

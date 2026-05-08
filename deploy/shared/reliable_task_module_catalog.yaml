@@ -357,8 +357,8 @@ tasks:
     partitionKey: conversationId
     payloadAllowlist: [rosterRevision, triggers, actorID]
     mergePolicy:
-      delayFromNow: 1m
-      maxDelay: 10m
+      delayFromNow: 2s
+      maxDelay: 30s
       fields:
         rosterRevision: max
         triggers: union

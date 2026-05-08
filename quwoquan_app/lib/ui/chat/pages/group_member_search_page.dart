@@ -41,7 +41,7 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
     context.push(
       AppRoutePaths.userProfile(username: username),
       extra: UserProfileRouteExtra(
-        profileSubjectId: username,
+        subAccountId: username,
         avatar: m.avatarUrl,
         displayName: m.displayName,
       ),

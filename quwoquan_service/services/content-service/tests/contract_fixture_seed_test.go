@@ -111,7 +111,6 @@ func seedContentContractFixture(t *testing.T, seedRef string) contractSeedEviden
 			comment.AuthorID,
 			comment.Content,
 			"",
-			"",
 			comment.AuthorID,
 			"",
 		); err != nil {
@@ -162,7 +161,6 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 	return &postmodel.Post{
 		ID:                        id,
 		AuthorId:                  fp.AuthorID,
-		ProfileSubjectId:          fp.AuthorID,
 		AuthorDisplayNameSnapshot: fp.DisplayName,
 		AuthorAvatarUrlSnapshot:   fp.AvatarURL,
 		ContentType:               fp.ContentType,

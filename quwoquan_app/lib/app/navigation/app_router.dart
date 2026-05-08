@@ -499,7 +499,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           } else if (state.extra is Map) {
             final m = state.extra! as Map;
             extra = UserProfileRouteExtra(
-              profileSubjectId: m['profileSubjectId']?.toString(),
+              subAccountId:
+                  (m['subAccountId'] ?? m['profileSubjectId'])?.toString(),
               avatar: m['avatar']?.toString(),
               displayName: m['displayName']?.toString(),
               backgroundImage: m['backgroundImage']?.toString(),
@@ -507,7 +508,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return OtherProfilePage(
             username: username,
-            profileSubjectId: extra?.safeProfileSubjectId,
+            subAccountId: extra?.safeSubAccountId,
             initialAvatarUrl: extra?.safeAvatar,
             initialDisplayName: extra?.safeDisplayName,
             initialBackgroundImageUrl: extra?.safeBackgroundImage,

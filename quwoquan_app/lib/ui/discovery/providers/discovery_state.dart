@@ -12,10 +12,7 @@ class DiscoveryUiState {
     this.feedData = const <String, List<Post>>{},
     this.isLoading = const <String, bool>{},
     this.errorMessages = const <String, String?>{},
-    this.followingUsers = const {
-      'nature_photographer',
-      'travel_photographer',
-    },
+    this.followingUsers = const {'nature_photographer', 'travel_photographer'},
     this.savedPosts = const <String>{},
     this.likedPosts = const <String>{},
     this.postLikesCount = const <String, int>{},
@@ -87,8 +84,7 @@ class DiscoveryUiState {
       isStoriesLoading: isStoriesLoading ?? this.isStoriesLoading,
       currentUser: clearCurrentUser ? null : (currentUser ?? this.currentUser),
       userProfileData: userProfileData ?? this.userProfileData,
-      isUserProfileLoading:
-          isUserProfileLoading ?? this.isUserProfileLoading,
+      isUserProfileLoading: isUserProfileLoading ?? this.isUserProfileLoading,
     );
   }
 }
@@ -136,24 +132,45 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
     state = state.copyWith(followingUsers: next);
   }
 
+  void setFollowState(String subAccountId, bool isFollowing) {
+    final next = Set<String>.from(state.followingUsers);
+    if (isFollowing) {
+      next.add(subAccountId);
+    } else {
+      next.remove(subAccountId);
+    }
+    state = state.copyWith(followingUsers: next);
+  }
+
   /// [baseLikesCount] 帖子原始点赞数，首次点赞时用于与本地状态合并，保证详情与列表一致
   void toggleLike(String postId, {int? baseLikesCount}) {
     if (state.likedPosts.contains(postId)) {
       final liked = Set<String>.from(state.likedPosts)..remove(postId);
-      final currentCount =
-          state.postLikesCount[postId] ?? baseLikesCount ?? 0;
+      final currentCount = state.postLikesCount[postId] ?? baseLikesCount ?? 0;
       final counts = Map<String, int>.from(state.postLikesCount)
-        ..[postId] =
-            (currentCount - 1).clamp(0, double.infinity).toInt();
+        ..[postId] = (currentCount - 1).clamp(0, double.infinity).toInt();
       state = state.copyWith(likedPosts: liked, postLikesCount: counts);
     } else {
       final liked = {...state.likedPosts, postId};
-      final currentCount =
-          state.postLikesCount[postId] ?? baseLikesCount ?? 0;
+      final currentCount = state.postLikesCount[postId] ?? baseLikesCount ?? 0;
       final counts = Map<String, int>.from(state.postLikesCount)
         ..[postId] = currentCount + 1;
       state = state.copyWith(likedPosts: liked, postLikesCount: counts);
     }
+  }
+
+  void setLikeState(String postId, bool isLiked, {int? likeCount}) {
+    final liked = Set<String>.from(state.likedPosts);
+    final counts = Map<String, int>.from(state.postLikesCount);
+    if (isLiked) {
+      liked.add(postId);
+    } else {
+      liked.remove(postId);
+    }
+    if (likeCount != null) {
+      counts[postId] = likeCount;
+    }
+    state = state.copyWith(likedPosts: liked, postLikesCount: counts);
   }
 
   /// [baseBookmarksCount] 帖子原始收藏数，首次收藏时用于与本地状态合并
@@ -163,8 +180,7 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
       final currentCount =
           state.postBookmarksCount[postId] ?? baseBookmarksCount ?? 0;
       final counts = Map<String, int>.from(state.postBookmarksCount)
-        ..[postId] =
-            (currentCount - 1).clamp(0, double.infinity).toInt();
+        ..[postId] = (currentCount - 1).clamp(0, double.infinity).toInt();
       state = state.copyWith(savedPosts: saved, postBookmarksCount: counts);
     } else {
       final saved = {...state.savedPosts, postId};
@@ -176,6 +192,20 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
     }
   }
 
+  void setSaveState(String postId, bool isSaved, {int? bookmarkCount}) {
+    final saved = Set<String>.from(state.savedPosts);
+    final counts = Map<String, int>.from(state.postBookmarksCount);
+    if (isSaved) {
+      saved.add(postId);
+    } else {
+      saved.remove(postId);
+    }
+    if (bookmarkCount != null) {
+      counts[postId] = bookmarkCount;
+    }
+    state = state.copyWith(savedPosts: saved, postBookmarksCount: counts);
+  }
+
   void incrementShares(String postId) {
     final currentCount = state.postSharesCount[postId] ?? 0;
     final counts = Map<String, int>.from(state.postSharesCount)
@@ -183,14 +213,59 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
     state = state.copyWith(postSharesCount: counts);
   }
 
+  void setShareCount(String postId, int shareCount) {
+    final counts = Map<String, int>.from(state.postSharesCount)
+      ..[postId] = shareCount;
+    state = state.copyWith(postSharesCount: counts);
+  }
+
   void applyMediaViewerResult(MediaViewerResult result) {
+    final scopePostIds = result.effectiveScopePostIds;
+    final scopeProfileIds = result.effectiveScopeProfileIds;
+    final nextFollowing = Set<String>.from(state.followingUsers);
+    final nextSaved = Set<String>.from(state.savedPosts);
+    final nextLiked = Set<String>.from(state.likedPosts);
+    final nextLikeCounts = Map<String, int>.from(state.postLikesCount);
+    final nextBookmarkCounts = Map<String, int>.from(state.postBookmarksCount);
+    final nextShareCounts = Map<String, int>.from(state.postSharesCount);
+    for (final profileId in scopeProfileIds) {
+      if (result.followingUsers.contains(profileId)) {
+        nextFollowing.add(profileId);
+      } else {
+        nextFollowing.remove(profileId);
+      }
+    }
+    for (final postId in scopePostIds) {
+      if (result.likedPosts.contains(postId)) {
+        nextLiked.add(postId);
+      } else {
+        nextLiked.remove(postId);
+      }
+      if (result.savedPosts.contains(postId)) {
+        nextSaved.add(postId);
+      } else {
+        nextSaved.remove(postId);
+      }
+      final likeCount = result.postLikesCount[postId];
+      if (likeCount != null) {
+        nextLikeCounts[postId] = likeCount;
+      }
+      final bookmarkCount = result.postBookmarksCount[postId];
+      if (bookmarkCount != null) {
+        nextBookmarkCounts[postId] = bookmarkCount;
+      }
+      final shareCount = result.postSharesCount[postId];
+      if (shareCount != null) {
+        nextShareCounts[postId] = shareCount;
+      }
+    }
     state = state.copyWith(
-      followingUsers: Set<String>.from(result.followingUsers),
-      savedPosts: Set<String>.from(result.savedPosts),
-      likedPosts: Set<String>.from(result.likedPosts),
-      postLikesCount: Map<String, int>.from(result.postLikesCount),
-      postBookmarksCount: Map<String, int>.from(result.postBookmarksCount),
-      postSharesCount: Map<String, int>.from(result.postSharesCount),
+      followingUsers: nextFollowing,
+      savedPosts: nextSaved,
+      likedPosts: nextLiked,
+      postLikesCount: nextLikeCounts,
+      postBookmarksCount: nextBookmarkCounts,
+      postSharesCount: nextShareCounts,
     );
   }
 
@@ -223,7 +298,9 @@ class DiscoveryNotifier extends Notifier<DiscoveryUiState> {
 }
 
 final discoveryStateProvider =
-    NotifierProvider<DiscoveryNotifier, DiscoveryUiState>(DiscoveryNotifier.new);
+    NotifierProvider<DiscoveryNotifier, DiscoveryUiState>(
+      DiscoveryNotifier.new,
+    );
 
 final activeTabProvider = Provider<String>((ref) {
   return ref.watch(discoveryStateProvider).activeTab;

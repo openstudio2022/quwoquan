@@ -57,6 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--initial-member-id", action="append", default=[])
     parser.add_argument("--added-member-id", default="user_test_004")
     parser.add_argument("--removed-member-id", default="user_test_004")
+    parser.add_argument("--fixture-conversation-id", default="")
+    parser.add_argument("--fixture-add-member-id", default="")
     parser.add_argument("--title-prefix", default="avatar-e2e")
     parser.add_argument("--report", default="artifacts/avatar-e2e/beta/avatar_e2e_report.json")
     parser.add_argument("--timeout-seconds", type=int, default=180)
@@ -116,6 +118,13 @@ def report_template(args: argparse.Namespace, members: list[str]) -> dict[str, A
             "groupAvatarVersionBefore": 0,
             "groupAvatarVersionAfterAdd": 0,
             "groupAvatarVersionAfterRemove": 0,
+        },
+        "fixtureConversation": {
+            "conversationId": args.fixture_conversation_id,
+            "avatarUrl": "",
+            "resolvedAvatarUrl": "",
+            "groupAvatarVersionBefore": 0,
+            "groupAvatarVersionAfterAdd": 0,
         },
         "serviceEvidence": {
             "taskOutbox": {"status": "not_collected", "records": []},
@@ -494,6 +503,8 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
         raise ProbeFailure("gateway_unreachable", "healthz failed")
     report["steps"][-1]["status"] = "passed"
 
+    verify_fixture_group(args, report)
+
     title = f"{args.title_prefix}-{normalize_env(args.env)}-{int(time.time())}"
     created = request_json(
         args,
@@ -553,6 +564,86 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
 
     verify_media(args, report, str(report["conversation"]["finalAvatarUrl"]))
     collect_mongo_evidence(args, report, conversation_id)
+
+
+def verify_fixture_group(args: argparse.Namespace, report: dict[str, Any]) -> None:
+    fixture_conversation_id = args.fixture_conversation_id.strip()
+    if not fixture_conversation_id:
+        return
+    inbox = request_json(
+        args,
+        "GET",
+        "/v1/chat/inbox?limit=50",
+        user_id=args.creator_id,
+    )
+    fixture_item = None
+    for item in inbox.get("items") or []:
+        item_id = str(item.get("conversationId") or item.get("id") or item.get("_id") or "").strip()
+        if item_id == fixture_conversation_id:
+            fixture_item = item
+            break
+    if fixture_item is None:
+        raise ProbeFailure("env_not_ready", f"fixture conversation missing from inbox: {fixture_conversation_id}")
+    avatar_url = str(fixture_item.get("avatarUrl") or "").strip()
+    if has_bad_avatar_placeholder(avatar_url):
+        raise ProbeFailure("media_load_failed", f"fixture inbox avatar invalid: {avatar_url}")
+    if not request_ok(args, resolve_media_url(args, avatar_url), timeout=10):
+        raise ProbeFailure("media_load_failed", f"fixture inbox avatar not reachable: {avatar_url}")
+    report["uiEvidence"]["conversationListAvatarVisible"] = True
+
+    detail = request_json(
+        args,
+        "GET",
+        f"/v1/chat/conversations/{urllib.parse.quote(fixture_conversation_id)}",
+        user_id=args.creator_id,
+    )
+    detail_avatar_url = str(detail.get("avatarUrl") or "").strip()
+    if has_bad_avatar_placeholder(detail_avatar_url):
+        raise ProbeFailure("media_load_failed", f"fixture conversation avatar invalid: {detail_avatar_url}")
+    if not request_ok(args, resolve_media_url(args, detail_avatar_url), timeout=10):
+        raise ProbeFailure("media_load_failed", f"fixture conversation avatar not reachable: {detail_avatar_url}")
+    initial_version = parse_version(detail)
+    if initial_version <= 0:
+        raise ProbeFailure("avatar_task_timeout", f"fixture conversation version not ready: {detail}")
+    report["fixtureConversation"]["avatarUrl"] = detail_avatar_url
+    report["fixtureConversation"]["resolvedAvatarUrl"] = resolve_media_url(args, detail_avatar_url)
+    report["fixtureConversation"]["groupAvatarVersionBefore"] = initial_version
+    report["uiEvidence"]["conversationDetailAvatarVisible"] = True
+    add_step(
+        report,
+        "fixture_group_ready",
+        "passed",
+        conversationId=fixture_conversation_id,
+        avatarUrl=detail_avatar_url,
+        version=initial_version,
+    )
+
+    fixture_add_member_id = args.fixture_add_member_id.strip()
+    if not fixture_add_member_id:
+        return
+    request_json(
+        args,
+        "POST",
+        f"/v1/chat/conversations/{urllib.parse.quote(fixture_conversation_id)}/members",
+        user_id=args.creator_id,
+        body={"userIds": [fixture_add_member_id]},
+    )
+    after_add = wait_for_avatar_version(args, report, fixture_conversation_id, initial_version + 1)
+    after_add_avatar = str(after_add.get("avatarUrl") or "").strip()
+    if not request_ok(args, resolve_media_url(args, after_add_avatar), timeout=10):
+        raise ProbeFailure("media_load_failed", f"fixture updated avatar not reachable: {after_add_avatar}")
+    report["fixtureConversation"]["avatarUrl"] = after_add_avatar
+    report["fixtureConversation"]["resolvedAvatarUrl"] = resolve_media_url(args, after_add_avatar)
+    report["fixtureConversation"]["groupAvatarVersionAfterAdd"] = parse_version(after_add)
+    add_step(
+        report,
+        "fixture_group_add_member_avatar_update",
+        "passed",
+        conversationId=fixture_conversation_id,
+        avatarUrl=after_add_avatar,
+        version=parse_version(after_add),
+        addedMemberId=fixture_add_member_id,
+    )
 
 
 def write_report(report: dict[str, Any], path: Path) -> None:

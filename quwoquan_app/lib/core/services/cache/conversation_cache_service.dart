@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 
 /// 会话本地缓存，按 namespace 隔离，避免 persona 切换时相互污染。
 class ConversationCacheService extends ChangeNotifier {
@@ -39,17 +40,17 @@ class ConversationCacheService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Map<String, dynamic>? get(String id) {
+  ConversationCacheRecord? get(String id) {
     final bucket = _activeBucket;
     if (bucket.memory.containsKey(id)) {
       final entry = bucket.memory.remove(id)!;
       bucket.memory[id] = entry;
-      return entry.data;
+      return entry.record;
     }
     if (bucket.disk.containsKey(id)) {
       final entry = bucket.disk[id]!;
       _putMemory(bucket, id, entry);
-      return entry.data;
+      return entry.record;
     }
     return null;
   }
@@ -72,44 +73,43 @@ class ConversationCacheService extends ChangeNotifier {
     return (_activeBucket.memory[id] ?? _activeBucket.disk[id])?.lastMessageAt;
   }
 
-  List<Map<String, dynamic>> getAll() {
+  List<ConversationCacheRecord> getAll() {
     final bucket = _activeBucket;
     final seen = <String>{};
-    final result = <Map<String, dynamic>>[];
+    final result = <ConversationCacheRecord>[];
     for (final entry in bucket.memory.entries) {
       seen.add(entry.key);
-      result.add(entry.value.data);
+      result.add(entry.value.record);
     }
     for (final entry in bucket.disk.entries) {
       if (!seen.contains(entry.key)) {
-        result.add(entry.value.data);
+        result.add(entry.value.record);
       }
     }
     return result;
   }
 
-  void put(String id, Map<String, dynamic> data, {String? updatedAt}) {
-    if (id.trim().isEmpty) {
+  void put(ConversationCacheRecord record) {
+    if (record.id.trim().isEmpty) {
       return;
     }
     final bucket = _activeBucket;
-    final entry = _entryFromMap(data, updatedAt: updatedAt);
-    _putMemory(bucket, id, entry);
-    bucket.disk[id] = entry;
+    final entry = _entryFromRecord(record);
+    _putMemory(bucket, record.id, entry);
+    bucket.disk[record.id] = entry;
     notifyListeners();
   }
 
-  void putAll(List<Map<String, dynamic>> items) {
+  void putAll(Iterable<ConversationCacheRecord> records) {
     final bucket = _activeBucket;
     var changed = false;
-    for (final item in items) {
-      final id = item['_id'] as String? ?? item['id'] as String? ?? '';
-      if (id.isEmpty) {
+    for (final record in records) {
+      if (record.id.isEmpty) {
         continue;
       }
-      final entry = _entryFromMap(item);
-      _putMemory(bucket, id, entry);
-      bucket.disk[id] = entry;
+      final entry = _entryFromRecord(record);
+      _putMemory(bucket, record.id, entry);
+      bucket.disk[record.id] = entry;
       changed = true;
     }
     if (changed) {
@@ -117,68 +117,51 @@ class ConversationCacheService extends ChangeNotifier {
     }
   }
 
-  void updateListFields(
-    String id, {
-    String? lastMessagePreview,
-    String? lastMessageAt,
-    int? unreadCount,
-    int? mentionUnreadCount,
-  }) {
+  void replaceAll(Iterable<ConversationCacheRecord> records) {
+    final bucket = _activeBucket;
+    bucket.memory.clear();
+    bucket.disk.clear();
+    for (final record in records) {
+      if (record.id.isEmpty) {
+        continue;
+      }
+      final entry = _entryFromRecord(record);
+      _putMemory(bucket, record.id, entry);
+      bucket.disk[record.id] = entry;
+    }
+    notifyListeners();
+  }
+
+  void applyListPatch(String id, ConversationListPatch patch) {
     final bucket = _activeBucket;
     final entry = bucket.memory[id] ?? bucket.disk[id];
     if (entry == null) {
       return;
     }
-    final updated = Map<String, dynamic>.from(entry.data);
-    if (lastMessagePreview != null) {
-      updated['lastMessagePreview'] = lastMessagePreview;
-    }
-    if (lastMessageAt != null) {
-      updated['lastMessageAt'] = lastMessageAt;
-      updated['lastMessageTime'] = lastMessageAt;
-    }
-    if (unreadCount != null) {
-      updated['unreadCount'] = unreadCount;
-    }
-    if (mentionUnreadCount != null) {
-      updated['mentionUnreadCount'] = mentionUnreadCount;
-    }
-    final newEntry = _CacheEntry(
-      data: updated,
-      updatedAt: entry.updatedAt,
-      settingsUpdatedAt: entry.settingsUpdatedAt,
-      lastMessageAt: lastMessageAt ?? entry.lastMessageAt,
+    final nextRecord = entry.record.copyWith(
+      lastMessagePreview: patch.lastMessagePreview,
+      lastMessageAt: patch.lastMessageAt,
+      unreadCount: patch.unreadCount,
+      mentionUnreadCount: patch.mentionUnreadCount,
     );
+    final newEntry = _entryFromRecord(nextRecord);
     _putMemory(bucket, id, newEntry);
     bucket.disk[id] = newEntry;
     notifyListeners();
   }
 
-  void updateConversationAvatar(
-    String id, {
-    required String avatarUrl,
-    int? groupAvatarVersion,
-    String? groupAvatarSourceHash,
-  }) {
+  void applyAvatarPatch(String id, ConversationAvatarPatch patch) {
     final bucket = _activeBucket;
     final entry = bucket.memory[id] ?? bucket.disk[id];
     if (entry == null) {
       return;
     }
-    final updated = Map<String, dynamic>.from(entry.data);
-    updated['avatarUrl'] = avatarUrl;
-    if (groupAvatarVersion != null) {
-      updated['groupAvatarVersion'] = groupAvatarVersion;
-    }
-    if (groupAvatarSourceHash != null) {
-      updated['groupAvatarSourceHash'] = groupAvatarSourceHash;
-    }
-    final newEntry = _CacheEntry(
-      data: updated,
-      updatedAt: entry.updatedAt,
-      settingsUpdatedAt: entry.settingsUpdatedAt,
-      lastMessageAt: entry.lastMessageAt,
+    final nextRecord = entry.record.copyWith(
+      avatarUrl: patch.avatarUrl,
+      groupAvatarVersion: patch.groupAvatarVersion,
+      groupAvatarSourceHash: patch.groupAvatarSourceHash,
     );
+    final newEntry = _entryFromRecord(nextRecord);
     _putMemory(bucket, id, newEntry);
     bucket.disk[id] = newEntry;
     notifyListeners();
@@ -217,38 +200,25 @@ class ConversationCacheService extends ChangeNotifier {
     }
   }
 
-  _CacheEntry _entryFromMap(Map<String, dynamic> data, {String? updatedAt}) {
+  _CacheEntry _entryFromRecord(ConversationCacheRecord record) {
     return _CacheEntry(
-      data: Map<String, dynamic>.from(data),
-      updatedAt: updatedAt ?? _asIsoString(data['updatedAt']) ?? '',
-      settingsUpdatedAt: _asIsoString(data['settingsUpdatedAt']) ?? '',
-      lastMessageAt:
-          _asIsoString(data['lastMessageAt']) ??
-          _asIsoString(data['lastMessageTime']) ??
-          '',
+      record: record,
+      updatedAt: record.updatedAt,
+      settingsUpdatedAt: record.settingsTimestamp,
+      lastMessageAt: record.messageTimestamp,
     );
-  }
-
-  String? _asIsoString(dynamic value) {
-    if (value is String) {
-      return value;
-    }
-    if (value is DateTime) {
-      return value.toIso8601String();
-    }
-    return null;
   }
 }
 
 class _CacheEntry {
   _CacheEntry({
-    required this.data,
+    required this.record,
     required this.updatedAt,
     this.settingsUpdatedAt = '',
     this.lastMessageAt = '',
   });
 
-  final Map<String, dynamic> data;
+  final ConversationCacheRecord record;
   final String updatedAt;
   final String settingsUpdatedAt;
   final String lastMessageAt;

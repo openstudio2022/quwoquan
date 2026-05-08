@@ -2,9 +2,8 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class ProfileSubjectWireDto {
-  final String profileSubjectId;
-  final String ownerUserId;
   final String subAccountId;
+  final String ownerUserId;
   final String userHandle;
   final String nickname;
   final String displayName;
@@ -25,9 +24,8 @@ class ProfileSubjectWireDto {
   final DateTime? updatedAt;
 
   ProfileSubjectWireDto({
-    this.profileSubjectId = '',
-    this.ownerUserId = '',
     this.subAccountId = '',
+    this.ownerUserId = '',
     this.userHandle = '',
     this.nickname = '',
     this.displayName = '',
@@ -50,9 +48,8 @@ class ProfileSubjectWireDto {
 
   factory ProfileSubjectWireDto.fromMap(Map<String, dynamic> m) {
     return ProfileSubjectWireDto(
-      profileSubjectId: _firstNonEmptyWireString(m, <String>['profileSubjectId', 'subAccountId', 'userId']) ?? '',
+      subAccountId: _firstNonEmptyWireString(m, <String>['subAccountId', 'userId']) ?? '',
       ownerUserId: _firstNonEmptyWireString(m, <String>['ownerUserId']) ?? '',
-      subAccountId: m['subAccountId']?.toString() ?? '',
       userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['nickname']?.toString() ?? '',
       nickname: m['nickname']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
@@ -76,9 +73,8 @@ class ProfileSubjectWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'profileSubjectId': profileSubjectId,
-      'ownerUserId': ownerUserId,
       'subAccountId': subAccountId,
+      'ownerUserId': ownerUserId,
       'userHandle': userHandle,
       'nickname': nickname,
       'displayName': displayName,
@@ -101,9 +97,8 @@ class ProfileSubjectWireDto {
   }
 
   ProfileSubjectWireDto copyWith({
-    String? profileSubjectId,
-    String? ownerUserId,
     String? subAccountId,
+    String? ownerUserId,
     String? userHandle,
     String? nickname,
     String? displayName,
@@ -124,9 +119,8 @@ class ProfileSubjectWireDto {
     DateTime? updatedAt,
   }) {
     return ProfileSubjectWireDto(
-      profileSubjectId: profileSubjectId ?? this.profileSubjectId,
-      ownerUserId: ownerUserId ?? this.ownerUserId,
       subAccountId: subAccountId ?? this.subAccountId,
+      ownerUserId: ownerUserId ?? this.ownerUserId,
       userHandle: userHandle ?? this.userHandle,
       nickname: nickname ?? this.nickname,
       displayName: displayName ?? this.displayName,

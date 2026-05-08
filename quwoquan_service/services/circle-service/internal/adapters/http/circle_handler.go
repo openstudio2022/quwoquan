@@ -496,18 +496,12 @@ func resolveUserID(r *http.Request) string {
 	if uid := r.Header.Get("X-Client-User-Id"); uid != "" {
 		return uid
 	}
-	if uid := r.Header.Get("X-User-Id"); uid != "" {
-		return uid
-	}
 	return "anonymous"
 }
 
 func resolveActorProfileSubjectID(r *http.Request) string {
-	if actorID := r.Header.Get("X-Profile-Subject-Id"); actorID != "" {
+	if actorID := r.Header.Get("X-Client-Sub-Account-Id"); actorID != "" {
 		return actorID
-	}
-	if personaID := r.Header.Get("X-Persona-Id"); personaID != "" {
-		return personaID
 	}
 	return resolveUserID(r)
 }

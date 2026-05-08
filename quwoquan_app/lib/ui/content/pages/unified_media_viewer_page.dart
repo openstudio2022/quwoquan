@@ -47,7 +47,7 @@ class UnifiedMediaViewerPage extends StatelessWidget {
                 context.push(
                   '/user/$userId',
                   extra: UserProfileRouteExtra(
-                    profileSubjectId: userId,
+                    subAccountId: userId,
                     avatar: avatarUrl,
                     displayName: displayName,
                     backgroundImage: backgroundUrl,

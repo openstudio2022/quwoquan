@@ -1,0 +1,85 @@
+{
+  "schemaVersion": "quwoquan_data.retrieval_plan.v1",
+  "generated_at": "2026-05-08T00:02:27Z",
+  "batch_id": "west_lake_loop_001",
+  "round": 2,
+  "status": "planned",
+  "query": "杭州西湖 亲子 半日路线 酒店 咖啡 游记",
+  "search_queries": [
+    {
+      "dimension": "主检索",
+      "query": "杭州西湖 亲子 半日路线 酒店 咖啡 游记",
+      "purpose": "围绕批次主主题补齐公开网页证据，并为本轮事实抽取提供总入口。",
+      "round": 2,
+      "status": "pending",
+      "target_domains": [
+        "mafengwo.cn",
+        "you.ctrip.com",
+        "xiaohongshu.com"
+      ],
+      "entity_refs": [],
+      "tag_refs": []
+    },
+    {
+      "dimension": "实体补齐",
+      "query": "西湖亲子友好酒店 杭州西湖 亲子 半日路线 酒店 咖啡 游记",
+      "purpose": "补齐缺失实体「西湖亲子友好酒店」的公开证据与内容上下文。",
+      "round": 2,
+      "status": "pending",
+      "target_domains": [
+        "mafengwo.cn",
+        "you.ctrip.com",
+        "xiaohongshu.com"
+      ],
+      "entity_refs": [
+        "trees/entities/住宿/西湖亲子友好酒店.yaml"
+      ],
+      "tag_refs": []
+    },
+    {
+      "dimension": "标签视角",
+      "query": "杭州西湖 亲子 半日路线 酒店 咖啡 游记 亲子",
+      "purpose": "补齐缺失标签「亲子」对应的内容视角与叙事线索。",
+      "round": 2,
+      "status": "pending",
+      "target_domains": [
+        "mafengwo.cn",
+        "you.ctrip.com",
+        "xiaohongshu.com"
+      ],
+      "entity_refs": [],
+      "tag_refs": [
+        "trees/tags/人群/亲子.yaml"
+      ]
+    },
+    {
+      "dimension": "来源扩展",
+      "query": "杭州西湖 亲子 半日路线 酒店 咖啡 游记 不同来源 对比",
+      "purpose": "当前来源视角不足，补齐不同站点或不同写法的可核验证据。",
+      "round": 2,
+      "status": "pending",
+      "target_domains": [
+        "mafengwo.cn",
+        "you.ctrip.com",
+        "xiaohongshu.com"
+      ],
+      "entity_refs": [],
+      "tag_refs": []
+    }
+  ],
+  "location": "杭州",
+  "location_search_name": "Hangzhou",
+  "target_domains": [
+    "mafengwo.cn",
+    "you.ctrip.com",
+    "xiaohongshu.com"
+  ],
+  "missing_entity_refs": [
+    "trees/entities/住宿/西湖亲子友好酒店.yaml"
+  ],
+  "missing_tag_refs": [
+    "trees/tags/人群/亲子.yaml"
+  ],
+  "planner_prompt": "你是 quwoquan_data 的命令式证据采集规划器。\n\n请严格输出一个 JSON 对象，不要输出 JSON 之外的文字。字段如下：\n- query: 主检索短词，直接面向本轮最重要的补齐目标\n- search_queries: 数组；每项都包含 dimension、query、purpose、entity_refs、tag_refs、target_domains\n- location: 当前批次的地点中文名；如没有则输出空字符串\n- location_search_name: 适合公开网页检索的地理名英文/拉丁写法；如没有则输出空字符串\n- target_domains: 本轮优先保留证据的域名列表\n- round: 本轮轮次\n- status: planned 或 ready_for_finalize 或 exhausted\n\n约束：\n1. query 必须短而明确，不要把整段自然语言塞进去。\n2. search_queries 要优先补齐缺失实体、缺失标签和缺失内容视角，而不是机械重复主 query。\n3. 每条 search_queries 都要写清 purpose，解释为什么这一条能补齐当前缺口。\n4. 只能规划公开可核验的网页证据；不要假设登录态、验证码绕过或受限接口。\n5. 输出中必须保留 entity_refs 和 tag_refs，便于后续把证据落到 raw/ 与 facts.ndjson。\n\n\n当前批次上下文：\nbatch_id=west_lake_loop_001\nmain_query=杭州西湖 亲子 半日路线 酒店 咖啡 游记\nnext_round=2\nlocation=杭州\nlocation_search_name=Hangzhou\ntarget_domains=mafengwo.cn, you.ctrip.com, xiaohongshu.com\nmissing_entity_refs=['trees/entities/住宿/西湖亲子友好酒店.yaml']\nmissing_tag_refs=['trees/tags/人群/亲子.yaml']\nfact_count=1\n",
+  "stop_reason": ""
+}

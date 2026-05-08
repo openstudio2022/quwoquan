@@ -17,7 +17,7 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
-    description: 发起屏蔽的稳定公开主体 ID（profileSubjectId）
+    description: 发起屏蔽的稳定公开主体 ID（subAccountId）
 
   - name: blockedId
     type: string
@@ -26,7 +26,7 @@ fields:
     log_policy: allow
     api_exposure: read
     ops_exposure: read
-    description: 被屏蔽的稳定公开主体 ID（profileSubjectId）
+    description: 被屏蔽的稳定公开主体 ID（subAccountId）
 
   - name: reason
     type: string

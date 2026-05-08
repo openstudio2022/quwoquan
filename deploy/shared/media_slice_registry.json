@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "media-slice-registry.v1",
+  "description": "切片级媒体路由表。优先解析 objectKey 中的 /s/{sliceId}/，未迁移到显式 sliceId 的 legacy fixture 通过 prefix 回落到固定 slice。",
+  "allocation": {
+    "strategy": "sequential-capacity",
+    "limits": {
+      "avatar": {
+        "maxObjects": 50000,
+        "maxBytes": 1073741824
+      },
+      "image": {
+        "maxObjects": 50000,
+        "maxBytes": 5368709120
+      },
+      "video": {
+        "maxObjects": 5000,
+        "maxBytes": 21474836480
+      }
+    },
+    "writableSlices": {
+      "avatar": "avatar-seed-0001",
+      "image": "image-seed-0001",
+      "video": "video-seed-0001"
+    }
+  },
+  "slices": [
+    {
+      "sliceId": "avatar-seed-0001",
+      "mediaFamily": "avatar",
+      "originType": "local_root",
+      "localRoot": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media",
+      "publicBaseUrl": "",
+      "healthState": "healthy",
+      "priority": 100,
+      "objectKeyTemplate": "{domain}/{assetKind}/s/{sliceId}/{ownerType}/{ownerId}/{assetId}_{variant}.{ext}"
+    },
+    {
+      "sliceId": "image-seed-0001",
+      "mediaFamily": "image",
+      "originType": "local_root",
+      "localRoot": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media",
+      "publicBaseUrl": "",
+      "healthState": "healthy",
+      "priority": 100,
+      "objectKeyTemplate": "{domain}/{assetKind}/s/{sliceId}/{ownerType}/{ownerId}/{assetId}_{variant}.{ext}"
+    },
+    {
+      "sliceId": "video-seed-0001",
+      "mediaFamily": "video",
+      "originType": "local_root",
+      "localRoot": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media",
+      "publicBaseUrl": "",
+      "healthState": "healthy",
+      "priority": 100,
+      "objectKeyTemplate": "{domain}/{assetKind}/s/{sliceId}/{ownerType}/{ownerId}/{assetId}_{variant}.{ext}"
+    },
+    {
+      "sliceId": "legacy-avatar",
+      "mediaFamily": "avatar",
+      "originType": "local_root",
+      "localRoot": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media",
+      "legacyPrefixes": [
+        "media/avatar/",
+        "media/background/"
+      ],
+      "publicBaseUrl": "",
+      "healthState": "healthy",
+      "priority": 10
+    },
+    {
+      "sliceId": "legacy-image",
+      "mediaFamily": "image",
+      "originType": "local_root",
+      "localRoot": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media",
+      "legacyPrefixes": [
+        "media/image/"
+      ],
+      "publicBaseUrl": "",
+      "healthState": "healthy",
+      "priority": 10
+    },
+    {
+      "sliceId": "legacy-video",
+      "mediaFamily": "video",
+      "originType": "local_root",
+      "localRoot": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media",
+      "legacyPrefixes": [
+        "media/video/"
+      ],
+      "publicBaseUrl": "",
+      "healthState": "healthy",
+      "priority": 10
+    }
+  ]
+}

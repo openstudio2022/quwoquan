@@ -7,8 +7,12 @@ tables:
     entity: UserProfile
     pk: user_id
     columns:
-      - { name: user_id, type: VARCHAR(36), constraints: [PK] }
-      - { name: phone, type: VARCHAR(20), constraints: [UNIQUE, NOT_NULL] }
+      - { name: user_id, type: VARCHAR(96), constraints: [PK] }
+      - { name: account_state, type: VARCHAR(32), constraints: [NOT_NULL], default: "'active'" }
+      - { name: identity_origin, type: VARCHAR(32), constraints: [NOT_NULL], default: "'phone'" }
+      - { name: logical_shard, type: INTEGER, constraints: [NOT_NULL], default: 0 }
+      - { name: anonymous_retention_policy, type: VARCHAR(32), constraints: [NOT_NULL], default: "'preserve'" }
+      - { name: phone, type: VARCHAR(64), constraints: [UNIQUE] }
       - { name: nickname, type: VARCHAR(64), constraints: [UNIQUE, NOT_NULL] }
       - { name: avatar_url, type: TEXT }
       - { name: avatar_asset_id, type: VARCHAR(64) }
@@ -37,11 +41,10 @@ tables:
 
   personas:
     entity: Persona
-    pk: id
+    pk: sub_account_id
     fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
     columns:
-      - { name: id, type: VARCHAR(36), constraints: [PK] }
-      - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: user_id, type: VARCHAR(96), constraints: [NOT_NULL] }
       - { name: display_name, type: VARCHAR(64), constraints: [NOT_NULL] }
       - { name: user_handle, type: VARCHAR(64) }
       - { name: phone, type: VARCHAR(20) }
@@ -56,7 +59,7 @@ tables:
       - { name: is_active, type: BOOLEAN, constraints: [NOT_NULL], default: false }
       - { name: status, type: VARCHAR(16), constraints: [NOT_NULL], default: "'active'" }
       - { name: retired_at, type: TIMESTAMPTZ }
-      - { name: sub_account_id, type: VARCHAR(36), constraints: [NOT_NULL, UNIQUE] }
+      - { name: sub_account_id, type: VARCHAR(96), constraints: [PK, NOT_NULL, UNIQUE] }
       - { name: isolation_level, type: VARCHAR(16), constraints: [NOT_NULL], default: "'open'" }
       - { name: purpose_hint, type: VARCHAR(128) }
       - { name: inherits_profile_from_owner, type: BOOLEAN, constraints: [NOT_NULL], default: true }
@@ -83,8 +86,8 @@ tables:
     pk: id
     fk: { column: owner_id, references: user_profiles.user_id, on_delete: CASCADE }
     columns:
-      - { name: id, type: VARCHAR(36), constraints: [PK] }
-      - { name: owner_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: id, type: VARCHAR(64), constraints: [PK] }
+      - { name: owner_id, type: VARCHAR(96), constraints: [NOT_NULL] }
       - { name: credential_type, type: VARCHAR(16), constraints: [NOT_NULL] }
       - { name: credential_key, type: VARCHAR(256), constraints: [NOT_NULL] }
       - { name: display_label, type: VARCHAR(32) }
@@ -98,12 +101,33 @@ tables:
       - { name: uq_credential_owner_type, columns: [owner_id, credential_type] }
     cache_excluded: true
 
+  anonymous_device_bindings:
+    entity: AnonymousDeviceBinding
+    pk: id
+    fk: { column: owner_id, references: user_profiles.user_id, on_delete: CASCADE }
+    columns:
+      - { name: id, type: VARCHAR(64), constraints: [PK] }
+      - { name: owner_id, type: VARCHAR(96), constraints: [NOT_NULL] }
+      - { name: install_id_hash, type: VARCHAR(256), constraints: [NOT_NULL] }
+      - { name: device_fingerprint_hash, type: VARCHAR(256), constraints: [NOT_NULL] }
+      - { name: platform, type: VARCHAR(16), constraints: [NOT_NULL] }
+      - { name: app_version, type: VARCHAR(32) }
+      - { name: last_seen_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+    indexes:
+      - { name: idx_anonymous_device_bindings_owner_id, columns: [owner_id] }
+      - { name: idx_anonymous_device_bindings_install_id_hash, columns: [install_id_hash] }
+    unique_constraints:
+      - { name: uq_anonymous_device_bindings_fingerprint, columns: [device_fingerprint_hash] }
+    cache_excluded: true
+
   user_auth:
     entity: UserAuth
     pk: user_id
     fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
     columns:
-      - { name: user_id, type: VARCHAR(36), constraints: [PK] }
+      - { name: user_id, type: VARCHAR(96), constraints: [PK] }
       - { name: password_hash, type: VARCHAR(256), constraints: [NOT_NULL] }
       - { name: otp_secret, type: VARCHAR(128) }
       - { name: refresh_token, type: VARCHAR(512) }
@@ -121,8 +145,8 @@ tables:
     pk: id
     fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
     columns:
-      - { name: id, type: VARCHAR(36), constraints: [PK] }
-      - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: id, type: VARCHAR(64), constraints: [PK] }
+      - { name: user_id, type: VARCHAR(96), constraints: [NOT_NULL] }
       - { name: device_id, type: VARCHAR(128), constraints: [NOT_NULL] }
       - { name: platform, type: VARCHAR(16), constraints: [NOT_NULL] }
       - { name: push_token, type: VARCHAR(512) }
@@ -137,7 +161,7 @@ tables:
     pk: user_id
     fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
     columns:
-      - { name: user_id, type: VARCHAR(36), constraints: [PK] }
+      - { name: user_id, type: VARCHAR(96), constraints: [PK] }
       - { name: enable_push, type: BOOLEAN, constraints: [NOT_NULL], default: true }
       - { name: enable_marketing, type: BOOLEAN, constraints: [NOT_NULL], default: false }
       - { name: quiet_hours_start, type: TIME }
@@ -162,12 +186,12 @@ tables:
     pk: id
     fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
     columns:
-      - { name: id, type: VARCHAR(36), constraints: [PK] }
-      - { name: user_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: id, type: VARCHAR(64), constraints: [PK] }
+      - { name: user_id, type: VARCHAR(96), constraints: [NOT_NULL] }
       - { name: source, type: VARCHAR(16), constraints: [NOT_NULL] }
       - { name: proposed_changes, type: JSONB, constraints: [NOT_NULL] }
       - { name: status, type: VARCHAR(16), constraints: [NOT_NULL] }
-      - { name: reviewed_by, type: VARCHAR(36) }
+      - { name: reviewed_by, type: VARCHAR(96) }
       - { name: version, type: INTEGER, constraints: [NOT_NULL], default: 1 }
       - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
       - { name: resolved_at, type: TIMESTAMPTZ }

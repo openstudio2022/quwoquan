@@ -104,6 +104,7 @@ func TestMain(m *testing.M) {
 		_ = followStore.EnsureIndexes(ctx)
 	}
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
+	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
 
@@ -113,6 +114,10 @@ func TestMain(m *testing.M) {
 	blockCache := cache.NewBlockCache(redisClient)
 	userEventPublisher := mq.NewEventPublisher(redisClient)
 	userSyncService := runtimesync.NewService(redisClient, redisClient)
+	shardDirectory, err := application.LoadDefaultShardDirectory()
+	if err != nil {
+		panic(err)
+	}
 
 	// 6. Services
 	profileService := application.NewProfileService(
@@ -138,7 +143,14 @@ func TestMain(m *testing.M) {
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
 	settingService := application.NewSettingService(settingStore, settingCache)
-	authService := application.NewAuthService(profileStore, personaStore, credentialStore, profileCache)
+	authService := application.NewAuthService(
+		profileStore,
+		personaStore,
+		credentialStore,
+		anonymousDeviceBindingStore,
+		profileCache,
+		shardDirectory,
+	)
 	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
 	inviteService := application.NewInviteService(inviteStore, personaStore)

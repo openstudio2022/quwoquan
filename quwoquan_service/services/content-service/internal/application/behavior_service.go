@@ -84,10 +84,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		if _, ok := supportedBehaviorActions[action]; !ok {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "action 不支持", "unsupported action: "+firstNonEmptyLocal(eventInput.Action, eventInput.Type))
 		}
-		userID := strings.TrimSpace(eventInput.UserID)
-		if userID == "" {
-			userID = "guest"
-		}
+		userID := normalizeAnonymousSubAccountID(eventInput.UserID)
 		contentID := strings.TrimSpace(firstNonEmptyLocal(eventInput.ContentID, eventInput.PostID))
 		if contentID == "" {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "contentId 必填", "missing contentId")

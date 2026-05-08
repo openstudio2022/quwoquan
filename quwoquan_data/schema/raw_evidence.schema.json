@@ -1,0 +1,38 @@
+{
+  "title": "RawEvidence",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "evidence_type",
+    "round",
+    "collector"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string" },
+    "evidence_type": {
+      "type": "string",
+      "enum": ["search_result", "page", "asset", "fact"]
+    },
+    "round": { "type": "integer", "minimum": 1 },
+    "collector": { "type": "string" },
+    "source_url": { "type": "string" },
+    "title": { "type": "string" },
+    "domain": { "type": "string" },
+    "snippet": { "type": "string" },
+    "plain_text": { "type": "string" },
+    "fetched_at": { "type": "string" },
+    "evidence_hash": { "type": "string" },
+    "asset_id": { "type": "string" },
+    "object_key": { "type": "string" },
+    "caption": { "type": "string" },
+    "fact_id": { "type": "string" },
+    "entity_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "tag_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

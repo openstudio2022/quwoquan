@@ -23,9 +23,9 @@ class BackwardArticleFlipPipeline extends ArticleFlipPipeline {
     return ArticleFlipPipelineOutput(
       direction: direction,
       staticSuppressionPages: dynamicOwnedPages,
-      renderBranchName: 'backwardThreeFacePaperFoldPipeline',
+      renderBranchName: 'backwardPaperFoldMainlinePipeline',
       debugLabel: hasBackwardFoldFrame
-          ? 'backward/three-face-paper-fold'
+          ? 'backward/paper-fold-mainline'
           : 'backward/waiting-fold-frame',
     );
   }

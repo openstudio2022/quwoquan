@@ -6,7 +6,6 @@ import (
 )
 
 type Persona struct {
-	ID                          string     `json:"id" db:"id"`
 	UserID                      string     `json:"userId" db:"user_id"`
 	DisplayName                 string     `json:"displayName" db:"display_name"`
 	UserHandle                  string     `json:"userHandle" db:"user_handle"`

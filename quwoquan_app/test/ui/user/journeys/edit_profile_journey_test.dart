@@ -31,10 +31,9 @@ class _EditProfileMockRepository extends MockUserProfileRepository {
     if (_updatedProfile.isEmpty) return base;
     final nick = _updatedProfile['nickname'] as String?;
     return ProfileSubjectViewData(
-      profileSubjectId: base.profileSubjectId,
+      subAccountId: base.subAccountId,
       ownerUserId: base.ownerUserId,
       subjectType: base.subjectType,
-      subAccountId: base.subAccountId,
       userHandle: (_updatedProfile['userHandle'] as String?) ?? base.userHandle,
       username: (_updatedProfile['username'] as String?) ?? base.username,
       displayName:

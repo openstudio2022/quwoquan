@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 
 void main() {
@@ -17,8 +19,27 @@ void main() {
 
       final baseUrl = 'http://${server.address.host}:${server.port}';
       final contentRepository = RemoteContentRepository(baseUrl: baseUrl);
-      final chatRepository = RemoteChatRepository(baseUrl: baseUrl);
+      const currentUserId = 'fixture_user_current';
+      final chatRepository = RemoteChatRepository(
+        baseUrl: baseUrl,
+        mergeRequestContext: (base) async {
+          return CloudRequestHeaders.withOwnerSubAccountContext(
+            base,
+            ownerUserId: currentUserId,
+            subAccountId: currentUserId,
+          );
+        },
+      );
       final circleRepository = RemoteCircleRepository(baseUrl: baseUrl);
+      final userIdentityRepository = RemoteUserRepository(
+        baseUrl: baseUrl,
+        mergeRequestContext: (base) async {
+          return CloudRequestHeaders.withOwnerSubAccountContext(
+            base,
+            ownerUserId: currentUserId,
+          );
+        },
+      );
       final userRepository = RemoteUserProfileRepository(baseUrl: baseUrl);
 
       final photoFeed = await contentRepository.listDiscoveryFeed(
@@ -55,10 +76,7 @@ void main() {
       final inbox = await chatRepository.listInbox(limit: 20);
       expect(inbox.length, greaterThanOrEqualTo(5));
       expect(inbox.map((item) => item.id), contains('fixture_conv_direct'));
-      expect(
-        inbox.every((item) => item.avatarUrl.trim().isNotEmpty),
-        isTrue,
-      );
+      expect(inbox.every((item) => item.avatarUrl.trim().isNotEmpty), isTrue);
       final messages = await chatRepository.listMessages(
         conversationId: 'fixture_conv_direct',
         limit: 20,
@@ -70,6 +88,7 @@ void main() {
         contacts.map((item) => item.userId),
         contains('fixture_user_friend'),
       );
+      expect(contacts.every((item) => item.isFriend), isTrue);
       final groupMembers = await chatRepository.listMembers(
         conversationId: 'fixture_conv_group',
         limit: 20,
@@ -131,6 +150,10 @@ void main() {
       final currentUser = await userRepository.getUserProfile(
         'fixture_user_current',
       );
+      final activePersonaContext = await userIdentityRepository
+          .getActivePersonaContext();
+      expect(activePersonaContext.ownerUserId, currentUserId);
+      expect(activePersonaContext.subAccountId, currentUserId);
       expect(currentUser.displayName, '契约当前用户');
       expect(
         currentUser.backgroundUrl.startsWith('media/background/user/'),
@@ -342,13 +365,20 @@ class _ContractSeedHttpServer {
   void _serve() {
     _server.listen((request) async {
       final path = request.uri.path;
+      if (_requiresClientUserId(path) && !_hasClientUserId(request)) {
+        _writeJson(request, <String, dynamic>{
+          'code': 'INVALID_ARGUMENT',
+          'message': 'X-Client-User-Id header required',
+        }, statusCode: HttpStatus.badRequest);
+        return;
+      }
       if (path == '/v1/content/feed') {
         _writeJson(request, {
           'items': _filteredFeed(request.uri.queryParameters),
         });
         return;
       }
-      if (path.startsWith('/v1/content/profile-subjects/') &&
+      if (path.startsWith('/v1/content/sub-accounts/') &&
           path.endsWith('/posts')) {
         final userId = path.split('/')[4];
         final selectedIds = userId == 'fixture_user_current'
@@ -414,6 +444,10 @@ class _ContractSeedHttpServer {
       }
       if (path == '/v1/user/profile') {
         _writeJson(request, {'items': _fixtures.userSeed['profiles']});
+        return;
+      }
+      if (path == '/v1/user/personas/active') {
+        _writeJson(request, _activePersonaContext('fixture_user_current'));
         return;
       }
       if (path == '/v1/me') {
@@ -534,7 +568,7 @@ class _ContractSeedHttpServer {
     final stats = (profile['stats'] as Map<String, dynamic>?) ?? {};
     final userId = profile['userId'].toString();
     return <String, dynamic>{
-      'profileSubjectId': userId,
+      'subAccountId': userId,
       'ownerUserId': userId,
       'userHandle': userId,
       'username': userId,
@@ -549,6 +583,20 @@ class _ContractSeedHttpServer {
       'postCount': stats['postCount'] ?? 0,
       'circleCount': stats['circleCount'] ?? 0,
       'likeCount': stats['likeCount'] ?? 0,
+    };
+  }
+
+  Map<String, dynamic> _activePersonaContext(String userId) {
+    final profile = _profile(userId);
+    return <String, dynamic>{
+      'ownerUserId': userId,
+      'subAccountId': userId,
+      'subjectType': 'owner',
+      'displayName': profile['displayName'],
+      'avatarUrl': profile['avatarUrl'],
+      'personaContextVersion': '1',
+      'personaSnapshotVersion': 1,
+      'isPrimary': true,
     };
   }
 
@@ -574,5 +622,14 @@ class _ContractSeedHttpServer {
       ..headers.contentType = ContentType.json
       ..write(json.encode(payload));
     request.response.close();
+  }
+
+  bool _requiresClientUserId(String path) {
+    return path.startsWith('/v1/chat') || path == '/v1/user/personas/active';
+  }
+
+  bool _hasClientUserId(HttpRequest request) {
+    final userId = request.headers.value('X-Client-User-Id')?.trim() ?? '';
+    return userId.isNotEmpty;
   }
 }

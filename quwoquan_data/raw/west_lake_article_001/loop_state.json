@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "quwoquan_data.batch_loop_state.v1",
+  "batch_id": "west_lake_article_001",
+  "current_round": 1,
+  "last_planned_round": 2,
+  "status": "completed",
+  "completed": true,
+  "ready_for_finalize": true,
+  "stop_reason": "dry_run_passed",
+  "rounds_without_new_queries": 0,
+  "missing_entity_refs": [],
+  "missing_tag_refs": [],
+  "next_queries": [],
+  "summary": {
+    "search_result_count": 2,
+    "page_count": 2,
+    "asset_count": 2,
+    "fact_count": 1,
+    "perspective_count": 2,
+    "evidence_url_count": 2
+  }
+}

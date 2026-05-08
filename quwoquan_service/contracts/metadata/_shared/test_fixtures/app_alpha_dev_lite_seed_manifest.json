@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "app-seed-manifest.v1",
+  "environment": "alpha",
+  "description": "alpha-dev-lite 默认本地 mock 清单：只保留 App 调试所需核心 seedRef，服务全量 seed 请继续使用 app_alpha_seed_manifest.json。",
+  "seedRefs": [
+    {
+      "domain": "assistant",
+      "fixturePath": "assistant/test_fixtures/scenarios/assistant_scenarios.lite.json",
+      "refs": [
+        "assistant_p0_core"
+      ],
+      "resetScope": "fixture_assistant_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/assistant/conversations",
+        "/v1/assistant/skill-subscriptions"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    },
+    {
+      "domain": "content",
+      "fixturePath": "content/test_fixtures/scenarios/content_scenarios.lite.json",
+      "refs": [
+        "content_discovery_core"
+      ],
+      "resetScope": "fixture_content_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/content/feed"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    },
+    {
+      "domain": "circle",
+      "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.lite.json",
+      "refs": [
+        "circle_core"
+      ],
+      "resetScope": "fixture_circle_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/circles"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    },
+    {
+      "domain": "chat",
+      "fixturePath": "messages/chat/test_fixtures/scenarios/chat_scenarios.lite.json",
+      "refs": [
+        "chat_core",
+        "chat_contacts_core"
+      ],
+      "resetScope": "fixture_chat_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/chat/inbox"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    },
+    {
+      "domain": "user",
+      "fixturePath": "user/test_fixtures/scenarios/user_scenarios.lite.json",
+      "refs": [
+        "user_profile_core",
+        "profile_feed_core",
+        "relationship_core"
+      ],
+      "resetScope": "fixture_user_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/user/profile"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    },
+    {
+      "domain": "entity",
+      "fixturePath": "entity/test_fixtures/scenarios/entity_scenarios.lite.json",
+      "refs": [
+        "entity_homepage_core"
+      ],
+      "resetScope": "fixture_entity_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/entity/homepages"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    },
+    {
+      "domain": "integration",
+      "fixturePath": "integration/test_fixtures/scenarios/integration_scenarios.lite.json",
+      "refs": [
+        "location_poi_core"
+      ],
+      "resetScope": "fixture_integration_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/integration/locations/pois"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    },
+    {
+      "domain": "notification",
+      "fixturePath": "notification/test_fixtures/scenarios/notification_scenarios.lite.json",
+      "refs": [
+        "notification_core"
+      ],
+      "resetScope": "fixture_notification_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/app-messages"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    },
+    {
+      "domain": "rtc",
+      "fixturePath": "rtc/test_fixtures/scenarios/rtc_scenarios.lite.json",
+      "refs": [
+        "rtc_core"
+      ],
+      "resetScope": "fixture_rtc_*",
+      "targetStore": "alpha-dev-lite:app-fixture-json",
+      "verifiedEndpoints": [
+        "/v1/rtc/calls"
+      ],
+      "deliveryChannels": [
+        "app-fixture-json"
+      ]
+    }
+  ],
+  "appAssets": {
+    "alphaOnlyFixtureAllowlist": [
+      "assistant/test_fixtures/scenarios/assistant_scenarios.lite.json",
+      "content/test_fixtures/scenarios/content_scenarios.lite.json",
+      "social/circle/test_fixtures/scenarios/circle_scenarios.lite.json",
+      "messages/chat/test_fixtures/scenarios/chat_scenarios.lite.json",
+      "user/test_fixtures/scenarios/user_scenarios.lite.json",
+      "entity/test_fixtures/scenarios/entity_scenarios.lite.json",
+      "integration/test_fixtures/scenarios/integration_scenarios.lite.json",
+      "notification/test_fixtures/scenarios/notification_scenarios.lite.json",
+      "rtc/test_fixtures/scenarios/rtc_scenarios.lite.json"
+    ]
+  },
+  "gateway": {
+    "routes": []
+  }
+}

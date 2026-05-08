@@ -611,7 +611,7 @@ ProviderContainer _containerWith({
       ),
       activePersonaContextProvider.overrideWith(
         (ref) async => ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'persona_test',
+          subAccountId: 'persona_test',
           ownerUserId: 'user_test',
           displayName: '测试分身',
           avatarUrl: '',
@@ -641,7 +641,7 @@ Future<AssistantHistorySnapshot> _buildAssistantHistorySnapshot() async {
   final result = await loadTranscriptRowsFromSessionDetail(
     detail: detail,
     pageSize: detail.messages.length,
-    profileSubjectId: 'persona_test',
+    subAccountId: 'persona_test',
     normalizeAssistantContentForModel: (wire) =>
         (wire['content'] ?? '').toString(),
   );
@@ -776,7 +776,7 @@ class _FakeAssistantHistoryLoader implements AssistantHistoryLoader {
 
   @override
   Future<AssistantHistorySnapshot?> load({
-    required String profileSubjectId,
+    required String subAccountId,
   }) async {
     loadCount += 1;
     return snapshot;

@@ -4,14 +4,13 @@ import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 
 void main() {
   group('PostReadProjectionFacade', () {
-    test('authorProfileSubjectId 优先使用 canonical 字段', () {
+    test('subAccountId 与 authorId 保持同一真相源', () {
       final dto = MomentPostDto.fromMap(<String, dynamic>{
         '_id': 'p_canonical',
         'postId': 'p_canonical',
         'type': 'moment',
         'contentType': 'micro',
         'authorId': 'current_author',
-        'profileSubjectId': 'persona_author',
         'displayName': 'User',
         'authorAvatarUrl': '',
         'body': 'hello',
@@ -22,7 +21,7 @@ void main() {
         'createdAt': '2026-01-01T00:00:00.000Z',
       });
       expect(dto.authorId, 'current_author');
-      expect(dto.authorProfileSubjectId, 'persona_author');
+      expect(dto.subAccountId, 'current_author');
     });
 
     test('presentationFor matches fromPostBase for feedCard', () {
@@ -32,7 +31,6 @@ void main() {
         'type': 'moment',
         'contentType': 'micro',
         'authorId': 'a1',
-        'authorProfileSubjectId': 'a1',
         'displayName': 'User',
         'authorAvatarUrl': '',
         'body': 'hello',
@@ -57,7 +55,6 @@ void main() {
         'type': 'article',
         'contentType': 'article',
         'authorId': 'u',
-        'authorProfileSubjectId': 'u',
         'displayName': 'U',
         'authorAvatarUrl': '',
         'title': 'T',
@@ -85,7 +82,6 @@ void main() {
         'type': 'moment',
         'contentType': 'micro',
         'authorId': 'a1',
-        'authorProfileSubjectId': 'a1',
         'displayName': 'User',
         'authorAvatarUrl': '',
         'body': 'x',

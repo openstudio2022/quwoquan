@@ -7,17 +7,17 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/user/profile-subjects/{targetProfileSubjectId}/block
+    path: /v1/user/sub-accounts/{targetSubAccountId}/block
     operation: BlockUser
-    description: 屏蔽公开主体（profileSubject 级别）
+    description: 屏蔽公开主体（subAccount 级别）
 
   - method: DELETE
-    path: /v1/user/profile-subjects/{targetProfileSubjectId}/block
+    path: /v1/user/sub-accounts/{targetSubAccountId}/block
     operation: UnblockUser
-    description: 取消屏蔽公开主体（profileSubject 级别）
+    description: 取消屏蔽公开主体（subAccount 级别）
 
   - method: GET
-    path: /v1/user/profile-subjects/blocked
+    path: /v1/user/blocked
     operation: ListBlockedUsers
     description: 已屏蔽公开主体列表
 
@@ -39,12 +39,12 @@ contract_test:
       scenarios:
         - name: block_unblock_toggle
           routes:
-            - POST /v1/user/profile-subjects/{targetProfileSubjectId}/block
-            - DELETE /v1/user/profile-subjects/{targetProfileSubjectId}/block
+            - POST /v1/user/sub-accounts/{targetSubAccountId}/block
+            - DELETE /v1/user/sub-accounts/{targetSubAccountId}/block
           assertions: [block_created, block_removed]
 
         - name: blocked_list
-          route: GET /v1/user/profile-subjects/blocked
+          route: GET /v1/user/blocked
           assertions: [status_200, items_match_schema]
 
     service_side:

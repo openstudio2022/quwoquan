@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "notification.scenario-fixtures.v1",
+  "description": "通知域 alpha/beta/gamma 共享测试场景，覆盖 App 壳未读数与助手主动消息。 [alpha-dev-lite subset]",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "notification_core": {
+      "description": "应用内消息、未读数与助手主动通知。",
+      "appMessages": [
+        {
+          "messageId": "fixture_app_message_assistant_stock",
+          "type": "assistant",
+          "title": "股票哨兵提醒",
+          "body": "契约股票哨兵触发了一条消息。",
+          "read": false,
+          "createdAt": "2026-04-29T08:00:00Z"
+        },
+        {
+          "messageId": "fixture_app_message_chat",
+          "type": "chat",
+          "title": "契约好友发来消息",
+          "body": "契约消息已送达",
+          "read": false,
+          "createdAt": "2026-04-29T08:01:00Z"
+        }
+      ],
+      "unreadCount": 2
+    }
+  },
+  "scenarios": [
+    {
+      "id": "notification_app_message_basic",
+      "title": "应用内消息契约种子",
+      "type": "app_message",
+      "domainId": "notification",
+      "seedRefs": [
+        "notification_core"
+      ],
+      "uiExpectations": {
+        "messageIds": [
+          "fixture_app_message_assistant_stock",
+          "fixture_app_message_chat"
+        ],
+        "textFragments": [
+          "股票哨兵提醒",
+          "契约好友发来消息"
+        ]
+      },
+      "remoteExpectations": {
+        "messageIds": [
+          "fixture_app_message_assistant_stock",
+          "fixture_app_message_chat"
+        ],
+        "unreadCount": 2
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    }
+  ]
+}

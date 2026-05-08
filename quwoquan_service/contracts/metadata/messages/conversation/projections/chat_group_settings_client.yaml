@@ -1,7 +1,7 @@
 version: 2
 read_model: ChatGroupSettings
 description: |
-  群管理页开关与会话类型（从 GetConversation / 群设置合并对象解析；与 Mock _defaultSettings 键对齐）。
+  群管理页开关与圈子绑定信息（从 GetConversation / 群设置合并对象解析；与 Mock _defaultSettings 键对齐）。
 
 client_projection:
   dart_class: ChatGroupSettingsDto
@@ -42,3 +42,10 @@ client_projection:
       source: type
       aliases: [type, conversationType]
       default: "'group'"
+
+    - name: circleId
+      dart_type: String
+      nullable: false
+      source: circleId
+      aliases: [circleId]
+      default: "''"

@@ -300,6 +300,7 @@ class PageflipEngine {
       pageHeight: pageSize.height,
     );
     calc.calc(localPagePoint);
+    final canonicalFoldGeometry = calc.getCanonicalFoldGeometry();
     final canonicalFrame = buildBackwardRenderFrame(
       BackwardRenderFrameData(
         localPagePoint: localPagePoint,
@@ -314,7 +315,8 @@ class PageflipEngine {
         flippingAnchor: calc.getActiveCorner(),
         bottomAnchor: calc.getBottomPagePosition(),
         angle: calc.getAngle(),
-        movingEdgeLine: null,
+        foldLine: canonicalFoldGeometry?.foldLine,
+        freeEdgeLine: canonicalFoldGeometry?.freeEdgeLine,
         shadow: null,
         maxShadowOpacity: 1.0,
       ),

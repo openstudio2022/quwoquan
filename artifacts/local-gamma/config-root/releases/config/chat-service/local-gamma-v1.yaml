@@ -1,0 +1,38 @@
+config:
+  version: "local-gamma-v1"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+service:
+  http:
+    addr: ":18081"
+mongodb:
+  uri: "mongodb://mongodb:27017"
+  database: "quwoquan_chat"
+redis:
+  realtime:
+    mode: standalone
+    addr: "redis:6379"
+  general:
+    mode: standalone
+    addr: "redis:6379"
+  reliable_task:
+    mode: standalone
+    addr: "redis:6379"
+runtime:
+  media:
+    group_avatar_cdn_base_url: "http://127.0.0.1:18180"
+    group_avatar_local_media_root: "/var/lib/quwoquan/chat-media"
+  sync:
+    patch_ttl_hours: 720
+  reliable_task:
+    ready_index:
+      enabled: true
+      stream: "reliabletask:chat:avatar:ready:local-gamma"
+      group: "chat.group_avatar_worker.local-gamma"
+      queue: "reliabletask.chat.avatar"
+  observability:
+    runtime_media:
+      group_avatar_recompute_duration_ms_p95: 500
+      group_avatar_fallback_ratio: 0.05
+      hint_to_pull_delay_ms_p95: 500
+      patch_fanout_failure_ratio: 0.01

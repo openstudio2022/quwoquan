@@ -12,8 +12,6 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       'identity': identity,
       'assistantUsePolicy': assistantUsePolicy,
       'authorId': authorId,
-      'authorProfileSubjectId': authorProfileSubjectId,
-      'profileSubjectId': authorProfileSubjectId,
       'authorNickname': displayName,
       'displayName': displayName,
       'authorAvatarUrl': avatarUrl,

@@ -51,7 +51,7 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "_id": post_id,
         "authorId": post.get("authorId", ""),
-        "profileSubjectId": post.get("profileSubjectId") or post.get("authorId", ""),
+        "subAccountId": post.get("subAccountId") or post.get("authorId", ""),
         "authorDisplayNameSnapshot": post.get("displayName", ""),
         "authorAvatarUrlSnapshot": post.get("authorAvatarUrl") or post.get("avatarUrl", ""),
         "personaContextVersion": 1,
@@ -82,7 +82,7 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def gamma_content_fixture_spec() -> Tuple[Path, List[str]]:
+def gamma_content_fixture_spec() -> Tuple[Path, list[str]]:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     content_item = next(
         (item for item in manifest.get("seedRefs", []) if item.get("domain") == "content"),

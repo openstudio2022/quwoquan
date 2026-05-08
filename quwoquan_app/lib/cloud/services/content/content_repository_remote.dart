@@ -15,6 +15,7 @@ CommentDto _commentDtoFromContentWire(Map<String, dynamic> obj) {
   }
   return CommentDto.fromMap(obj);
 }
+
 class RemoteContentRepository implements ContentRepository {
   RemoteContentRepository({
     CloudHttpClient? httpClient,
@@ -127,9 +128,7 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<PostBaseDto> createPost({
-    required CreatePostRequestWire body,
-  }) async {
+  Future<PostBaseDto> createPost({required CreatePostRequestWire body}) async {
     final uri = _uri(ContentApiMetadata.createPostPath);
     final decoded = await _httpClient.postJson(
       uri,
@@ -184,6 +183,35 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
+  Future<bool> sharePost({required String postId}) async {
+    final uri = _uri(ContentApiMetadata.sharePostPath(postId: postId));
+    final decoded = await _httpClient.postJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.sharePost),
+      body: {},
+    );
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.sharePost,
+    );
+    return obj['changed'] == true;
+  }
+
+  @override
+  Future<bool> unsharePost({required String postId}) async {
+    final uri = _uri(ContentApiMetadata.unsharePostPath(postId: postId));
+    final decoded = await _httpClient.deleteJson(
+      uri,
+      headers: CloudRequestHeaders.forPage(ContentRequestPageIds.unsharePost),
+    );
+    final obj = CloudResponseDecoder.asObject(
+      decoded,
+      context: ContentRequestPageIds.unsharePost,
+    );
+    return obj['changed'] == true;
+  }
+
+  @override
   Future<ContentReactionState> getReactionState({
     required String postId,
   }) async {
@@ -234,15 +262,13 @@ class RemoteContentRepository implements ContentRepository {
     required String postId,
     required String content,
     String? replyToCommentId,
-    String? personaId,
-    String? profileSubjectId,
+    String? subAccountId,
     String? personaContextVersion,
   }) async {
     final uri = _uri(ContentApiMetadata.createCommentPath(postId: postId));
     final body = <String, dynamic>{'content': content};
     if (replyToCommentId != null) body['replyToCommentId'] = replyToCommentId;
-    if (personaId != null) body['personaId'] = personaId;
-    if (profileSubjectId != null) body['profileSubjectId'] = profileSubjectId;
+    if (subAccountId != null) body['subAccountId'] = subAccountId;
     if (personaContextVersion != null) {
       body['personaContextVersion'] = personaContextVersion;
     }
@@ -600,7 +626,9 @@ class RemoteContentRepository implements ContentRepository {
   }
 
   @override
-  Future<ContentMediaAssetWireDto> getMediaAsset({required String mediaId}) async {
+  Future<ContentMediaAssetWireDto> getMediaAsset({
+    required String mediaId,
+  }) async {
     final uri = _uri(ContentApiMetadata.getMediaAssetPath(mediaId: mediaId));
     final decoded = await _httpClient.getJson(
       uri,
@@ -721,7 +749,7 @@ class RemoteContentRepository implements ContentRepository {
       query['type'] = resolvedType;
     }
     final uri = _uri(
-      ContentApiMetadata.listUserPostsPath(profileSubjectId: userId),
+      ContentApiMetadata.listUserPostsPath(subAccountId: userId),
       queryParameters: query,
     );
     final decoded = await _httpClient.getJson(

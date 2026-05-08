@@ -88,7 +88,7 @@ func refreshUserAvatarInConversation(
 	if err != nil || conv == nil {
 		return nil
 	}
-	if conv.Type != "group" && conv.Type != "circle" {
+	if !IsGroupConversation(*conv) {
 		return nil
 	}
 

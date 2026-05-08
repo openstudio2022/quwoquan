@@ -140,7 +140,7 @@ func TestProfileInteractionActivitiesSent(t *testing.T) {
 	if item["activityType"] != "comment" {
 		t.Fatalf("expected activityType=comment, got %v", item["activityType"])
 	}
-	if item["actorProfileSubjectId"] != "actor_sent_comment" {
-		t.Fatalf("expected actorProfileSubjectId=actor_sent_comment, got %v", item["actorProfileSubjectId"])
+	if item["actorSubAccountId"] != "actor_sent_comment" {
+		t.Fatalf("expected actorSubAccountId=actor_sent_comment, got %v", item["actorSubAccountId"])
 	}
 }

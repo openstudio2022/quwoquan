@@ -33,7 +33,7 @@ abstract class UserRepository {
     String? purposeHint,
   });
   Future<PersonaManagementItemViewData> updatePersona(
-    String personaId, {
+    String subAccountId, {
     String? displayName,
     String? userHandle,
     String? phone,
@@ -45,18 +45,18 @@ abstract class UserRepository {
     List<String>? syncTargetIds,
     List<String>? fieldsMask,
   });
-  Future<void> activatePersona(String personaId);
+  Future<void> activatePersona(String subAccountId);
   Future<int> applyPersonaProfileSync(
-    String personaId, {
+    String subAccountId, {
     required List<String> fieldsMask,
     String applyScope = 'all_sub_accounts',
     List<String> syncTargetIds = const <String>[],
   });
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String personaId,
+    String subAccountId,
   );
-  Future<void> retirePersona(String personaId);
-  Future<void> deleteEmptyPersona(String personaId);
+  Future<void> retirePersona(String subAccountId);
+  Future<void> deleteEmptyPersona(String subAccountId);
 
   Future<UserSettingDto> getNotificationSettings();
   Future<UserSettingDto> getPrivacySettings();
@@ -65,8 +65,8 @@ abstract class UserRepository {
 /// 与网关 `ListSubAccounts` 同形 JSON，经 `jsonDecode` 再走 Wire → View（与 Remote 对齐）。
 const String _kMockPersonasWireJson = r'''
 [
-  {"personaId":"persona_primary","subAccountId":"persona_primary","profileSubjectId":"persona_primary","displayName":"主分身","userHandle":"main_handle","phone":"13800000000","email":"main@example.com","avatarUrl":"https://i.pravatar.cc/150?u=user_001","isolationLevel":"open","profileVisibility":"public","isPrimary":true,"isActive":true,"inheritsProfileFromOwner":true,"overriddenProfileFields":[]},
-  {"personaId":"persona_photo","subAccountId":"persona_photo","profileSubjectId":"persona_photo","displayName":"摄影分身","userHandle":"photo_handle","phone":"13800000000","email":"photo@example.com","avatarUrl":"https://i.pravatar.cc/150?u=user_001_photo","isolationLevel":"semi","profileVisibility":"public","isPrimary":false,"isActive":false,"hasAttributedHistory":true,"inheritsProfileFromOwner":false,"overriddenProfileFields":["email"]}
+  {"subAccountId":"persona_primary","displayName":"主分身","userHandle":"main_handle","phone":"13800000000","email":"main@example.com","avatarUrl":"https://i.pravatar.cc/150?u=user_001","isolationLevel":"open","profileVisibility":"public","isPrimary":true,"isActive":true,"inheritsProfileFromOwner":true,"overriddenProfileFields":[]},
+  {"subAccountId":"persona_photo","displayName":"摄影分身","userHandle":"photo_handle","phone":"13800000000","email":"photo@example.com","avatarUrl":"https://i.pravatar.cc/150?u=user_001_photo","isolationLevel":"semi","profileVisibility":"public","isPrimary":false,"isActive":false,"hasAttributedHistory":true,"inheritsProfileFromOwner":false,"overriddenProfileFields":["email"]}
 ]
 ''';
 
@@ -86,7 +86,7 @@ class MockUserRepository implements UserRepository {
       _decodeMockPersonasWire();
 
   @override
-  Future<void> activatePersona(String personaId) async {}
+  Future<void> activatePersona(String subAccountId) async {}
 
   @override
   Future<PersonaManagementItemViewData> createPersona({
@@ -95,10 +95,9 @@ class MockUserRepository implements UserRepository {
     String isolationLevel = 'open',
     String? purposeHint,
   }) async {
+    final generatedSubAccountId = 'persona_${displayName.hashCode.abs()}';
     return PersonaManagementItemViewData.fromMap(<String, dynamic>{
-      'personaId': 'persona_${displayName.hashCode.abs()}',
-      'subAccountId': 'persona_${displayName.hashCode.abs()}',
-      'profileSubjectId': 'persona_${displayName.hashCode.abs()}',
+      'subAccountId': generatedSubAccountId,
       'displayName': displayName,
       'userHandle': userHandle ?? '',
       'phone': _mockPersonas.first['phone'] ?? '',
@@ -114,7 +113,7 @@ class MockUserRepository implements UserRepository {
 
   @override
   Future<int> applyPersonaProfileSync(
-    String personaId, {
+    String subAccountId, {
     required List<String> fieldsMask,
     String applyScope = 'all_sub_accounts',
     List<String> syncTargetIds = const <String>[],
@@ -123,7 +122,7 @@ class MockUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> deleteEmptyPersona(String personaId) async {}
+  Future<void> deleteEmptyPersona(String subAccountId) async {}
 
   @override
   Future<ActivePersonaContextViewData> getActivePersonaContext() async {
@@ -144,16 +143,15 @@ class MockUserRepository implements UserRepository {
 
   @override
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String personaId,
+    String subAccountId,
   ) async {
     return PersonaLifecycleGuardViewData.fromMap(<String, dynamic>{
-      'personaId': personaId,
-      'subAccountId': personaId,
-      'canDelete': personaId != 'persona_primary',
-      'canRetire': personaId != 'persona_primary',
+      'subAccountId': subAccountId,
+      'canDelete': subAccountId != 'persona_primary',
+      'canRetire': subAccountId != 'persona_primary',
       'requiredAction': '',
-      'reasonCode': personaId == 'persona_primary' ? 'primary_guard' : '',
-      'message': personaId == 'persona_primary' ? '主分身不可删除' : '',
+      'reasonCode': subAccountId == 'persona_primary' ? 'primary_guard' : '',
+      'message': subAccountId == 'persona_primary' ? '主分身不可删除' : '',
     });
   }
 
@@ -181,11 +179,11 @@ class MockUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> retirePersona(String personaId) async {}
+  Future<void> retirePersona(String subAccountId) async {}
 
   @override
   Future<PersonaManagementItemViewData> updatePersona(
-    String personaId, {
+    String subAccountId, {
     String? displayName,
     String? userHandle,
     String? phone,
@@ -198,9 +196,7 @@ class MockUserRepository implements UserRepository {
     List<String>? fieldsMask,
   }) async {
     return PersonaManagementItemViewData.fromMap(<String, dynamic>{
-      'personaId': personaId,
-      'subAccountId': personaId,
-      'profileSubjectId': personaId,
+      'subAccountId': subAccountId,
       'displayName': displayName ?? '已更新分身',
       'userHandle': userHandle ?? 'updated_handle',
       'phone': phone ?? '',
@@ -220,26 +216,41 @@ class MockUserRepository implements UserRepository {
   }
 }
 
+typedef UserRemoteMergeRequestContext =
+    Future<Map<String, String>> Function(Map<String, String> baseHeaders);
+
 class RemoteUserRepository implements UserRepository {
   RemoteUserRepository({
     CloudHttpClient? httpClient,
     http.Client? client,
     String? baseUrl,
+    UserRemoteMergeRequestContext? mergeRequestContext,
   }) : _httpClient =
            httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+       _mergeRequestContext = mergeRequestContext;
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
+  final UserRemoteMergeRequestContext? _mergeRequestContext;
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+
+  Future<Map<String, String>> _resolveHeaders(String clientPageId) async {
+    final base = CloudRequestHeaders.forPage(clientPageId);
+    final merger = _mergeRequestContext;
+    if (merger == null) {
+      return base;
+    }
+    return merger(base);
+  }
 
   @override
   Future<List<PersonaManagementItemViewData>> listPersonas() async {
     final uri = _uri(UserApiMetadata.listPersonasPath);
     final items = await _httpClient.getJsonItemList(
       uri,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listPersonas),
+      headers: await _resolveHeaders(UserRequestPageIds.listPersonas),
       context: UserRequestPageIds.listPersonas,
     );
     return items
@@ -256,7 +267,7 @@ class RemoteUserRepository implements UserRepository {
     final uri = _uri(UserApiMetadata.getPersonaManagementSummaryPath);
     final object = await _httpClient.getJsonObject(
       uri,
-      headers: CloudRequestHeaders.forPage(
+      headers: await _resolveHeaders(
         UserRequestPageIds.getPersonaManagementSummary,
       ),
       context: UserRequestPageIds.getPersonaManagementSummary,
@@ -271,7 +282,7 @@ class RemoteUserRepository implements UserRepository {
     final uri = _uri(UserApiMetadata.getActivePersonaContextPath);
     final object = await _httpClient.getJsonObject(
       uri,
-      headers: CloudRequestHeaders.forPage(
+      headers: await _resolveHeaders(
         UserRequestPageIds.getActivePersonaContext,
       ),
       context: UserRequestPageIds.getActivePersonaContext,
@@ -297,7 +308,7 @@ class RemoteUserRepository implements UserRepository {
     );
     final object = await _httpClient.postJsonObject(
       uri,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.createPersona),
+      headers: await _resolveHeaders(UserRequestPageIds.createPersona),
       body: request.toMap(),
       context: UserRequestPageIds.createPersona,
     );
@@ -308,7 +319,7 @@ class RemoteUserRepository implements UserRepository {
 
   @override
   Future<PersonaManagementItemViewData> updatePersona(
-    String personaId, {
+    String subAccountId, {
     String? displayName,
     String? userHandle,
     String? phone,
@@ -320,7 +331,9 @@ class RemoteUserRepository implements UserRepository {
     List<String>? syncTargetIds,
     List<String>? fieldsMask,
   }) async {
-    final uri = _uri(UserApiMetadata.updatePersonaPath(personaId: personaId));
+    final uri = _uri(
+      UserApiMetadata.updatePersonaPath(subAccountId: subAccountId),
+    );
     final request = PersonaUpdateRequestDto(
       displayName: displayName,
       userHandle: userHandle,
@@ -335,7 +348,7 @@ class RemoteUserRepository implements UserRepository {
     );
     final object = await _httpClient.patchJsonObject(
       uri,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.updatePersona),
+      headers: await _resolveHeaders(UserRequestPageIds.updatePersona),
       body: request.toMap(),
       context: UserRequestPageIds.updatePersona,
     );
@@ -345,28 +358,30 @@ class RemoteUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> activatePersona(String personaId) async {
-    final uri = _uri(UserApiMetadata.activatePersonaPath(personaId: personaId));
+  Future<void> activatePersona(String subAccountId) async {
+    final uri = _uri(
+      UserApiMetadata.activatePersonaPath(subAccountId: subAccountId),
+    );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),
+      headers: await _resolveHeaders(UserRequestPageIds.activatePersona),
       body: const <String, dynamic>{},
     );
   }
 
   @override
   Future<int> applyPersonaProfileSync(
-    String personaId, {
+    String subAccountId, {
     required List<String> fieldsMask,
     String applyScope = 'all_sub_accounts',
     List<String> syncTargetIds = const <String>[],
   }) async {
     final uri = _uri(
-      UserApiMetadata.applyPersonaProfileSyncPath(personaId: personaId),
+      UserApiMetadata.applyPersonaProfileSyncPath(subAccountId: subAccountId),
     );
     final object = await _httpClient.postJsonObject(
       uri,
-      headers: CloudRequestHeaders.forPage(
+      headers: await _resolveHeaders(
         UserRequestPageIds.applyPersonaProfileSync,
       ),
       body: <String, dynamic>{
@@ -385,14 +400,14 @@ class RemoteUserRepository implements UserRepository {
 
   @override
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String personaId,
+    String subAccountId,
   ) async {
     final uri = _uri(
-      UserApiMetadata.getPersonaLifecycleGuardPath(personaId: personaId),
+      UserApiMetadata.getPersonaLifecycleGuardPath(subAccountId: subAccountId),
     );
     final object = await _httpClient.getJsonObject(
       uri,
-      headers: CloudRequestHeaders.forPage(
+      headers: await _resolveHeaders(
         UserRequestPageIds.getPersonaLifecycleGuard,
       ),
       context: UserRequestPageIds.getPersonaLifecycleGuard,
@@ -403,25 +418,25 @@ class RemoteUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> retirePersona(String personaId) async {
-    final uri = _uri(UserApiMetadata.retirePersonaPath(personaId: personaId));
+  Future<void> retirePersona(String subAccountId) async {
+    final uri = _uri(
+      UserApiMetadata.retirePersonaPath(subAccountId: subAccountId),
+    );
     await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.retirePersona),
+      headers: await _resolveHeaders(UserRequestPageIds.retirePersona),
       body: const <String, dynamic>{},
     );
   }
 
   @override
-  Future<void> deleteEmptyPersona(String personaId) async {
+  Future<void> deleteEmptyPersona(String subAccountId) async {
     final uri = _uri(
-      UserApiMetadata.deleteEmptyPersonaPath(personaId: personaId),
+      UserApiMetadata.deleteEmptyPersonaPath(subAccountId: subAccountId),
     );
     await _httpClient.deleteJson(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.deleteEmptyPersona,
-      ),
+      headers: await _resolveHeaders(UserRequestPageIds.deleteEmptyPersona),
     );
   }
 
@@ -430,7 +445,7 @@ class RemoteUserRepository implements UserRepository {
     final uri = _uri(UserApiMetadata.getNotificationSettingsPath);
     final object = await _httpClient.getJsonObject(
       uri,
-      headers: CloudRequestHeaders.forPage(
+      headers: await _resolveHeaders(
         UserRequestPageIds.getNotificationSettings,
       ),
       context: UserRequestPageIds.getNotificationSettings,
@@ -443,9 +458,7 @@ class RemoteUserRepository implements UserRepository {
     final uri = _uri(UserApiMetadata.getPrivacySettingsPath);
     final object = await _httpClient.getJsonObject(
       uri,
-      headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.getPrivacySettings,
-      ),
+      headers: await _resolveHeaders(UserRequestPageIds.getPrivacySettings),
       context: UserRequestPageIds.getPrivacySettings,
     );
     return _userSettingDtoFromWire(object);

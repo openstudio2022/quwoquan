@@ -17,33 +17,49 @@ import (
 
 const groupAvatarCanvasSize = 256
 
-// RenderGroupAvatarPNG 将最多 9 张成员头像合成为一张 PNG（2–9 宫格）。
+// RenderGroupAvatarPNG 将最多 9 张成员头像合成为一张 PNG（1–9 宫格）。
 // 下载失败或 URL 为空时使用占位图，保证始终产出非空 PNG。
 func RenderGroupAvatarPNG(ctx context.Context, client *http.Client, avatarURLs []string, canvas int) ([]byte, error) {
-	if canvas <= 0 {
-		canvas = groupAvatarCanvasSize
-	}
 	if client == nil {
 		client = http.DefaultClient
 	}
-	n := len(avatarURLs)
+	images := make([]image.Image, 0, min(len(avatarURLs), 9))
+	for idx := 0; idx < len(avatarURLs) && idx < 9; idx++ {
+		url := strings.TrimSpace(avatarURLs[idx])
+		var img image.Image
+		if url != "" {
+			if fetched, err := fetchAvatarImage(ctx, client, url); err == nil && fetched != nil {
+				img = fetched
+			}
+		}
+		images = append(images, img)
+	}
+	return RenderGroupAvatarImagesPNG(images, canvas)
+}
+
+// RenderGroupAvatarImagesPNG 使用与运行时完全相同的布局规则，将最多 9 张成员头像合成为 PNG。
+// 传入 nil image 时会按对应位置回退为占位块，供离线 fixture 生成与运行时复用同一几何真相源。
+func RenderGroupAvatarImagesPNG(images []image.Image, canvas int) ([]byte, error) {
+	if canvas <= 0 {
+		canvas = groupAvatarCanvasSize
+	}
+	n := len(images)
 	if n == 0 {
-		return nil, fmt.Errorf("group avatar render requires at least one avatar url")
+		return nil, fmt.Errorf("group avatar render requires at least one image")
 	}
 	if n > 9 {
-		avatarURLs = avatarURLs[:9]
+		images = images[:9]
 		n = 9
 	}
-	if n < 2 {
-		avatarURLs = append(append([]string{}, avatarURLs...), "")
-		n = 2
-	}
 
-	cols := int(ceilSqrt(n))
-	rows := (n + cols - 1) / cols
-	cellW := canvas / cols
-	cellH := canvas / rows
-	if cellW <= 0 || cellH <= 0 {
+	frames, err := avatarGridFrames(canvas, n)
+	if err != nil {
+		return nil, err
+	}
+	if len(frames) != n {
+		return nil, fmt.Errorf("group avatar frame count mismatch: %d != %d", len(frames), n)
+	}
+	if len(frames) == 0 {
 		return nil, fmt.Errorf("invalid canvas size %d", canvas)
 	}
 
@@ -51,21 +67,10 @@ func RenderGroupAvatarPNG(ctx context.Context, client *http.Client, avatarURLs [
 	draw.Draw(dst, dst.Bounds(), &image.Uniform{color.RGBA{0xe8, 0xe8, 0xec, 0xff}}, image.Point{}, draw.Src)
 
 	for idx := 0; idx < n; idx++ {
-		row := idx / cols
-		col := idx % cols
-		x0 := col * cellW
-		y0 := row * cellH
-		cell := image.Rect(x0, y0, x0+cellW, y0+cellH)
-
+		cell := frames[idx]
 		var tile image.Image
-		url := ""
-		if idx < len(avatarURLs) {
-			url = strings.TrimSpace(avatarURLs[idx])
-		}
-		if url != "" {
-			if img, err := fetchAvatarImage(ctx, client, url); err == nil && img != nil {
-				tile = centerCropSquare(img, cell.Dx(), cell.Dy())
-			}
+		if images[idx] != nil {
+			tile = centerCropSquare(images[idx], cell.Dx(), cell.Dy())
 		}
 		if tile == nil {
 			tile = placeholderTile(cell.Dx(), cell.Dy(), idx)
@@ -78,6 +83,76 @@ func RenderGroupAvatarPNG(ctx context.Context, client *http.Client, avatarURLs [
 		return nil, fmt.Errorf("encode group avatar png: %w", err)
 	}
 	return buf.Bytes(), nil
+}
+
+func avatarGridRows(n int) []int {
+	switch {
+	case n <= 0:
+		return nil
+	case n == 1:
+		return []int{1}
+	case n == 2:
+		return []int{2}
+	case n == 3:
+		return []int{1, 2}
+	case n == 4:
+		return []int{2, 2}
+	case n == 5:
+		return []int{2, 3}
+	case n == 6:
+		return []int{3, 3}
+	case n == 7:
+		return []int{1, 3, 3}
+	case n == 8:
+		return []int{2, 3, 3}
+	default:
+		return []int{3, 3, 3}
+	}
+}
+
+func avatarGridFrames(canvas int, n int) ([]image.Rectangle, error) {
+	rows := avatarGridRows(n)
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("group avatar requires at least one tile")
+	}
+	if n == 1 {
+		return []image.Rectangle{image.Rect(0, 0, canvas, canvas)}, nil
+	}
+	maxCols := 1
+	for _, row := range rows {
+		if row > maxCols {
+			maxCols = row
+		}
+	}
+	padding := canvas / 20
+	gap := canvas / 64
+	if gap < 2 {
+		gap = 2
+	}
+	inner := canvas - padding*2
+	cellSize := inner
+	if maxCols > 1 {
+		cellSize = (inner - gap*(maxCols-1)) / maxCols
+	}
+	if cellSize <= 0 {
+		return nil, fmt.Errorf("invalid group avatar geometry canvas=%d n=%d", canvas, n)
+	}
+	totalHeight := len(rows)*cellSize + (len(rows)-1)*gap
+	originY := (canvas - totalHeight) / 2
+	frames := make([]image.Rectangle, 0, n)
+	for rowIndex, cols := range rows {
+		rowWidth := cols * cellSize
+		if cols > 1 {
+			rowWidth += (cols - 1) * gap
+		}
+		originX := (canvas - rowWidth) / 2
+		y := originY + rowIndex*(cellSize+gap)
+		for col := 0; col < cols; col++ {
+			x := originX + col*(cellSize+gap)
+			frames = append(frames, image.Rect(x, y, x+cellSize, y+cellSize))
+		}
+	}
+	return frames, nil
 }
 
 func ceilSqrt(n int) int {

@@ -16,7 +16,7 @@ func doRequest(t *testing.T, method, path string, body any) *httptest.ResponseRe
 	}
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-Id", "test_user_001")
+	req.Header.Set("X-Client-User-Id", "test_user_001")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	return rec
@@ -30,7 +30,7 @@ func doRequestAs(t *testing.T, method, path, userID string, body any) *httptest.
 	}
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-User-Id", userID)
+	req.Header.Set("X-Client-User-Id", userID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	return rec
@@ -52,7 +52,7 @@ func doRequestAsWithHeaders(
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
 	if userID != "" {
-		req.Header.Set("X-User-Id", userID)
+		req.Header.Set("X-Client-User-Id", userID)
 	}
 	for key, value := range headers {
 		req.Header.Set(key, value)

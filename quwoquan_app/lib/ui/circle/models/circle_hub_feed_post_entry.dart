@@ -25,8 +25,7 @@ class CircleHubFeedPostEntry {
   factory CircleHubFeedPostEntry.fromPostDto(PostBaseDto p) {
     final raw = Map<String, dynamic>.from(p.toMap());
     raw['postId'] = raw['postId'] ?? p.id;
-    raw['contentType'] =
-        raw['contentType'] ?? raw['type'] ?? p.type;
+    raw['contentType'] = raw['contentType'] ?? raw['type'] ?? p.type;
     raw['contentIdentity'] =
         raw['contentIdentity'] ?? raw['identity'] ?? p.identity;
     raw['authorNickname'] =
@@ -43,10 +42,7 @@ class CircleHubFeedPostEntry {
 
   /// MediaViewer 回写关注态、互动快照 fallback 等用同一作者主键解析顺序。
   String get wireAuthorRelationshipId =>
-      (raw['authorProfileSubjectId'] ??
-              raw['authorId'] ??
-              raw['userId'] ??
-              '')
+      (raw['subAccountId'] ?? raw['authorId'] ?? raw['userId'] ?? '')
           .toString();
 
   /// Wire 计数优先（含用户操作后的回写），其次 [dto]。
@@ -130,9 +126,13 @@ class CircleHubFeedPostEntry {
 
   String get wireAuthorAvatarUrl {
     final d = dto;
-    if (d != null && d.avatarUrl.trim().isNotEmpty) return d.avatarUrl.trim();
+    if (d != null && d.avatarUrl.trim().isNotEmpty) {
+      return d.avatarUrl.trim();
+    }
     final rp = tryReadPresentation();
-    if (rp != null && rp.avatarUrl.trim().isNotEmpty) return rp.avatarUrl.trim();
+    if (rp != null && rp.avatarUrl.trim().isNotEmpty) {
+      return rp.avatarUrl.trim();
+    }
     return (raw['authorAvatarUrl'] ?? raw['avatarUrl'] ?? '').toString();
   }
 
@@ -153,7 +153,8 @@ class CircleHubFeedPostEntry {
     if (width != null && height != null && width > 0 && height > 0) {
       return width / height;
     }
-    final hasVideo = (raw['videoUrl']?.toString().trim() ?? '').isNotEmpty ||
+    final hasVideo =
+        (raw['videoUrl']?.toString().trim() ?? '').isNotEmpty ||
         (d?.mediaVideoUrl.isNotEmpty ?? false);
     if (hasVideo) return 9 / 16;
     final hasImage =
@@ -175,6 +176,10 @@ class CircleHubFeedPostEntry {
   void applyMediaViewerResult(MediaViewerResult result) {
     final id = postIdForKey;
     if (id.isEmpty) return;
+    final scopePostIds = result.effectiveScopePostIds;
+    if (scopePostIds.isNotEmpty && !scopePostIds.contains(id)) {
+      return;
+    }
 
     final authorId = wireAuthorRelationshipId;
 
@@ -195,9 +200,17 @@ class CircleHubFeedPostEntry {
       raw['shareCount'] = shareCount;
     }
 
+    final commentCount = result.postCommentCount[id];
+    if (commentCount != null) {
+      raw['commentCount'] = commentCount;
+      raw['commentsCount'] = commentCount;
+    }
+
     raw['isLiked'] = result.likedPosts.contains(id);
     raw['isSaved'] = result.savedPosts.contains(id);
-    if (authorId.isNotEmpty) {
+    if (authorId.isNotEmpty &&
+        (result.effectiveScopeProfileIds.isEmpty ||
+            result.effectiveScopeProfileIds.contains(authorId))) {
       raw['isFollowingAuthor'] = result.followingUsers.contains(authorId);
     }
 

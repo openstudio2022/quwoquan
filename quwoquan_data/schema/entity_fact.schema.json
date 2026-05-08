@@ -1,0 +1,58 @@
+{
+  "title": "EntityFact",
+  "type": "object",
+  "required": [
+    "entity_id",
+    "name",
+    "aliases",
+    "kind",
+    "summary",
+    "city",
+    "address_text",
+    "geo",
+    "scene_tag_refs",
+    "category_tag_refs",
+    "media_refs",
+    "evidence_refs",
+    "search_terms"
+  ],
+  "properties": {
+    "entity_id": { "type": "string" },
+    "name": { "type": "string" },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "kind": { "type": "string" },
+    "summary": { "type": "string" },
+    "city": { "type": "string" },
+    "address_text": { "type": "string" },
+    "geo": {
+      "type": ["object", "null"],
+      "properties": {
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" }
+      }
+    },
+    "scene_tag_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "category_tag_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "media_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "search_terms": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

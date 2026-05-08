@@ -22,8 +22,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/ui/chat/models/start_group_pickable_member.dart';
+import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/start_group_member_wizard_provider.dart';
 import 'package:quwoquan_app/ui/chat/services/start_group_chat_wire.dart';
+import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 
 // settings-canonical-exception: 多步发起群聊向导，完整 Inset 化见后续 slice owner:chat CR-20260329-003
 
@@ -47,8 +50,7 @@ class StartGroupChatPage extends ConsumerStatefulWidget {
 class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _listScrollController = ScrollController();
-  final Map<String, StartGroupPickableMember> _selectedMembers = {};
-  final Set<String> _existingMemberIds = <String>{};
+  late final String _wizardId;
 
   List<ChatInboxDto> _groupInboxRows = [];
   List<ChatContactRowDto> _contacts = [];
@@ -60,6 +62,21 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   @override
   void initState() {
     super.initState();
+    _wizardId =
+        '${widget.conversationId ?? 'create'}_${DateTime.now().microsecondsSinceEpoch}';
+    Future<void>.microtask(() {
+      if (!mounted) {
+        return;
+      }
+      final wizard = ref.read(
+        startGroupMemberWizardProvider(_wizardId).notifier,
+      );
+      if (widget.isCreateMode) {
+        wizard.completeBootstrap(const <String>{});
+      } else {
+        wizard.setBootstrapLoading();
+      }
+    });
     _loadData();
   }
 
@@ -81,7 +98,14 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               limit: 500,
             )
           : const <ChatConversationMemberDto>[];
+      final lockedMemberIds = existingMembers
+          .map((member) => member.userId)
+          .where((id) => id.isNotEmpty)
+          .toSet();
       if (mounted) {
+        ref
+            .read(startGroupMemberWizardProvider(_wizardId).notifier)
+            .completeBootstrap(lockedMemberIds);
         setState(() {
           final convId = widget.conversationId ?? '';
           _groupInboxRows = inbox
@@ -94,20 +118,20 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               .toList(growable: false);
           _contacts = contacts;
           final activeCircleIds = inbox
-              .where((row) => row.type == 'circle' && row.circleId.isNotEmpty)
+              .where((row) => row.circleId.isNotEmpty)
               .map((row) => row.circleId)
               .toSet();
           _circles = circleSummaries
               .where((circle) => activeCircleIds.contains(circle.id))
               .toList(growable: false);
-          _existingMemberIds
-            ..clear()
-            ..addAll(
-              existingMembers.map((m) => m.userId).where((id) => id.isNotEmpty),
-            );
         });
       }
     } catch (_) {
+      if (mounted && !widget.isCreateMode) {
+        ref
+            .read(startGroupMemberWizardProvider(_wizardId).notifier)
+            .completeBootstrap(const <String>{});
+      }
       // Fallback: leave empty lists
     }
   }
@@ -122,20 +146,17 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   Set<String> get _mutualContactIds {
     return _contacts
         .map((contact) => contact.userId)
-        .where((id) => id.isNotEmpty && !_existingMemberIds.contains(id))
+        .where((id) => id.isNotEmpty)
         .toSet();
   }
 
-  void _mergeSelectedMembers(List<StartGroupPickableMember> members) {
-    setState(() {
-      for (final member in members) {
-        final userId = member.userId;
-        if (userId.isEmpty || _existingMemberIds.contains(userId)) {
-          continue;
-        }
-        _selectedMembers[userId] = member;
-      }
-    });
+  bool get _selectionBootstrapReady {
+    if (widget.isCreateMode) {
+      return true;
+    }
+    return ref
+        .read(startGroupMemberWizardProvider(_wizardId))
+        .isBootstrapLoaded;
   }
 
   void _handleCreateConversationSuccess(String conversationId) {
@@ -163,25 +184,30 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     AppToast.show(context, message);
   }
 
+  Future<void> _refreshChatEntryLists() async {
+    await ref.read(chatInboxListProvider.notifier).refresh();
+    ref.invalidate(
+      chatContactsRowsForSubTabProvider(UITextConstants.contactsTabFunGroup),
+    );
+  }
+
   void _toggleSelectedMember(StartGroupPickableMember member) {
-    final userId = member.userId;
-    if (userId.isEmpty) {
+    if (!_selectionBootstrapReady) {
       return;
     }
-    setState(() {
-      if (_selectedMembers.containsKey(userId)) {
-        _selectedMembers.remove(userId);
-      } else {
-        _selectedMembers[userId] = member;
-      }
-    });
+    ref
+        .read(startGroupMemberWizardProvider(_wizardId).notifier)
+        .toggleMember(member);
   }
 
   Future<void> _submitSelection() async {
-    if (_submitting || _selectedMembers.isEmpty) {
+    final wizardState = ref.read(startGroupMemberWizardProvider(_wizardId));
+    if (_submitting || wizardState.selectedMembers.isEmpty) {
       return;
     }
-    final selectedIds = _selectedMembers.keys.toList(growable: false);
+    final selectedIds = wizardState.selectedMembers.keys.toList(
+      growable: false,
+    );
     if (widget.isCreateMode && selectedIds.length >= 500) {
       AppToast.show(context, '群成员数量超过上限');
       return;
@@ -193,7 +219,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         final ChatConversationCreatedDto created = await repo
             .createConversation(
               type: 'group',
-              title: _selectedMembers.values
+              title: wizardState.selectedMembers.values
                   .map((member) => member.displayName)
                   .where((name) => name.isNotEmpty)
                   .take(3)
@@ -205,7 +231,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         if (!context.mounted) {
           return;
         }
-        await ref.read(chatInboxListProvider.notifier).refresh();
+        await _refreshChatEntryLists();
         if (!context.mounted) {
           return;
         }
@@ -215,7 +241,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           conversationId: widget.conversationId!,
           userIds: selectedIds,
         );
-        await ref.read(chatInboxListProvider.notifier).refresh();
+        await _refreshChatEntryLists();
         if (!context.mounted) {
           return;
         }
@@ -234,6 +260,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _openSelectGroupChatSheet() {
+    if (!_selectionBootstrapReady) {
+      _showEmptySelectableMembersToast('正在同步群成员状态，请稍后再试');
+      return;
+    }
     showCupertinoModalPopup<void>(
       context: context,
       barrierColor: AppColors.transparent,
@@ -246,7 +276,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               .listMembers(conversationId: group.id, limit: 500);
           final selectableMembers = selectableFromChatMembers(
             members,
-            existingMemberIds: _existingMemberIds,
             mutualContactIds: _mutualContactIds,
             mutualOnly: true,
           );
@@ -260,7 +289,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           _openMemberSelectSheet(
             title: group.title,
             members: selectableMembers,
-            onConfirm: _mergeSelectedMembers,
           );
         },
         onClose: () => Navigator.of(context).pop(),
@@ -269,6 +297,10 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _openSelectCircleSheet() {
+    if (!_selectionBootstrapReady) {
+      _showEmptySelectableMembersToast('正在同步群成员状态，请稍后再试');
+      return;
+    }
     showCupertinoModalPopup<void>(
       context: context,
       barrierColor: AppColors.transparent,
@@ -281,7 +313,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               .listMembers(circle.id, limit: 500);
           final selectableMembers = selectableFromCircleRosterItems(
             members,
-            existingMemberIds: _existingMemberIds,
             mutualContactIds: _mutualContactIds,
             mutualOnly: true,
           );
@@ -296,7 +327,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
             title:
                 '${circle.name} (${circle.memberCount}${UITextConstants.friendsCount})',
             members: selectableMembers,
-            onConfirm: _mergeSelectedMembers,
           );
         },
         onClose: () => Navigator.of(context).pop(),
@@ -307,7 +337,6 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   void _openMemberSelectSheet({
     required String title,
     required List<StartGroupPickableMember> members,
-    required void Function(List<StartGroupPickableMember>) onConfirm,
   }) {
     showCupertinoModalPopup<void>(
       context: context,
@@ -315,7 +344,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       builder: (context) => _MemberSelectSheet(
         title: title,
         members: members,
-        onConfirm: onConfirm,
+        wizardId: _wizardId,
         onBack: () => Navigator.of(context).pop(),
       ),
     );
@@ -349,6 +378,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    final wizardState = ref.watch(startGroupMemberWizardProvider(_wizardId));
+    final selectionReady = widget.isCreateMode || wizardState.isBootstrapLoaded;
     final bgColor = SettingsSemanticConstants.pageBackground(isDark);
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
@@ -359,14 +390,16 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       ColorType.foregroundSecondary,
     );
     final dividerColor = SettingsSemanticConstants.dividerColor(isDark);
-    final selectedMembers = _selectedMembers.values.toList(growable: false);
+    final selectedMembers = wizardState.selectedMembers.values.toList(
+      growable: false,
+    );
     final visibleSelectedCount = _selectedExpanded
         ? selectedMembers.length
         : (selectedMembers.length > 12 ? 12 : selectedMembers.length);
     final friendsWithLetter = _contacts
         .where((contact) {
           final userId = contact.userId;
-          if (userId.isEmpty || _existingMemberIds.contains(userId)) {
+          if (userId.isEmpty) {
             return false;
           }
           final displayName = contact.displayName;
@@ -406,18 +439,36 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               label: UITextConstants.selectFriendsFromGroupChat,
               fgPrimary: fgPrimary,
               isDark: isDark,
-              onTap: _openSelectGroupChatSheet,
+              onTap: selectionReady ? _openSelectGroupChatSheet : null,
             ),
             _SelectionListDivider(isDark: isDark),
             _SectionRow(
               label: UITextConstants.selectFriendsFromCircle,
               fgPrimary: fgPrimary,
               isDark: isDark,
-              onTap: _openSelectCircleSheet,
+              onTap: selectionReady ? _openSelectCircleSheet : null,
             ),
           ],
         ),
       ),
+      if (!selectionReady) ...[
+        SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            const CupertinoActivityIndicator(),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                '正在同步群成员状态…',
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  color: fgSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
       SizedBox(height: AppSpacing.md),
       _SelectionSectionLabel(
         title: UITextConstants.relatedSameInterest,
@@ -449,7 +500,8 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                       builder: (context) {
                         final m = membersForLetter[index];
                         final username = m.userId;
-                        final selected = _selectedMembers.containsKey(username);
+                        final selected = wizardState.isSelected(username);
+                        final locked = wizardState.isLocked(username);
                         final pickable = StartGroupPickableMember(
                           userId: username,
                           displayName: m.displayName.isNotEmpty
@@ -463,11 +515,15 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                           avatarUrl: m.avatarUrl,
                           selected: selected,
                           fgPrimary: fgPrimary,
-                          onTap: () => _toggleSelectedMember(pickable),
+                          fgSecondary: fgSecondary,
+                          locked: locked,
+                          onTap: selectionReady && !locked
+                              ? () => _toggleSelectedMember(pickable)
+                              : null,
                           onAvatarTap: () => context.push(
                             AppRoutePaths.userProfile(username: username),
                             extra: UserProfileRouteExtra(
-                              profileSubjectId: username,
+                              subAccountId: username,
                               avatar: m.avatarUrl.isNotEmpty
                                   ? m.avatarUrl
                                   : null,
@@ -591,8 +647,13 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                               : userId,
                           avatarUrl: member.avatarUrl,
                           isDark: isDark,
-                          onRemove: () =>
-                              setState(() => _selectedMembers.remove(userId)),
+                          onRemove: () => ref
+                              .read(
+                                startGroupMemberWizardProvider(
+                                  _wizardId,
+                                ).notifier,
+                              )
+                              .deselectMemberIds(<String>[userId]),
                         );
                       }),
                     ),
@@ -860,7 +921,7 @@ class _SectionRow extends StatelessWidget {
   final String label;
   final Color fgPrimary;
   final bool isDark;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -883,14 +944,18 @@ class _SectionRow extends StatelessWidget {
                   label,
                   style: TextStyle(
                     fontSize: AppTypography.lg,
-                    color: fgPrimary,
+                    color: onTap == null
+                        ? SettingsSemanticConstants.secondaryColor(isDark)
+                        : fgPrimary,
                   ),
                 ),
               ),
               Icon(
                 CupertinoIcons.chevron_forward,
                 size: AppSpacing.iconMedium,
-                color: SettingsSemanticConstants.selectionChevronColor(isDark),
+                color: onTap == null
+                    ? SettingsSemanticConstants.secondaryColor(isDark)
+                    : SettingsSemanticConstants.selectionChevronColor(isDark),
               ),
             ],
           ),
@@ -907,6 +972,8 @@ class _RelatedFriendRow extends StatelessWidget {
     required this.avatarUrl,
     required this.selected,
     required this.fgPrimary,
+    required this.fgSecondary,
+    required this.locked,
     required this.onTap,
     required this.onAvatarTap,
     required this.isDark,
@@ -917,7 +984,9 @@ class _RelatedFriendRow extends StatelessWidget {
   final String avatarUrl;
   final bool selected;
   final Color fgPrimary;
-  final VoidCallback onTap;
+  final Color fgSecondary;
+  final bool locked;
+  final VoidCallback? onTap;
   final VoidCallback onAvatarTap;
   final bool isDark;
 
@@ -937,7 +1006,11 @@ class _RelatedFriendRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _SelectionIndicator(selected: selected, onTap: onTap),
+              _SelectionIndicator(
+                selected: selected,
+                onTap: onTap,
+                enabled: !locked && onTap != null,
+              ),
               GestureDetector(
                 onTap: onAvatarTap,
                 child: RoundedSquareAvatar(
@@ -951,14 +1024,27 @@ class _RelatedFriendRow extends StatelessWidget {
               ),
               SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: AppTypography.lg,
-                    color: fgPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: AppTypography.lg,
+                        color: locked ? fgSecondary : fgPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (locked)
+                      Text(
+                        '已在群中',
+                        style: TextStyle(
+                          fontSize: AppTypography.sm,
+                          color: fgSecondary,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -1004,16 +1090,21 @@ class _LetterIndex extends StatelessWidget {
 }
 
 class _SelectionIndicator extends StatelessWidget {
-  const _SelectionIndicator({required this.selected, required this.onTap});
+  const _SelectionIndicator({
+    required this.selected,
+    required this.onTap,
+    this.enabled = true,
+  });
 
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      onPressed: onTap,
+      onPressed: enabled ? onTap : null,
       minimumSize: Size(
         AppSpacing.minInteractiveSize,
         AppSpacing.minInteractiveSize,
@@ -1022,7 +1113,9 @@ class _SelectionIndicator extends StatelessWidget {
         selected
             ? CupertinoIcons.check_mark_circled_solid
             : CupertinoIcons.circle,
-        color: selected ? AppColors.primaryColor : CupertinoColors.systemGrey2,
+        color: selected
+            ? AppColors.primaryColor.withValues(alpha: enabled ? 1 : 0.6)
+            : CupertinoColors.systemGrey2,
         size: AppSpacing.iconMedium,
       ),
     );
@@ -1046,6 +1139,9 @@ class _SelectGroupChatSheet extends StatefulWidget {
 }
 
 class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
+  static const double _groupConversationAvatarSize =
+      ChatConversationAvatarTokens.listSize;
+
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
@@ -1068,7 +1164,7 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
     final url = group.avatarUrl.trim();
     if (url.isNotEmpty) {
       return RoundedSquareAvatar(
-        size: AppSpacing.avatarSize,
+        size: _groupConversationAvatarSize,
         imageUrl: url,
         name: group.title,
         backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
@@ -1079,6 +1175,7 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
       isDark: isDark,
       icon: Icons.group,
       tintColor: AppColors.primaryColor,
+      size: _groupConversationAvatarSize,
     );
   }
 
@@ -1103,7 +1200,7 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
           child: Row(
             children: [
               _buildLeading(group, isDark),
-              SizedBox(width: AppSpacing.sm),
+              SizedBox(width: ChatConversationAvatarTokens.leadingGap),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1221,7 +1318,9 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
                                 _SelectionListDivider(
                                   isDark: isDark,
                                   leadingInset:
-                                      AppSpacing.avatarSize + AppSpacing.sm,
+                                      ChatConversationAvatarTokens.dividerInset(
+                                        _groupConversationAvatarSize,
+                                      ),
                                 ),
                             ],
                           ],
@@ -1453,25 +1552,24 @@ class _SelectCircleSheetState extends State<_SelectCircleSheet> {
 }
 
 /// 群成员/圈成员多选 sheet（图三）
-class _MemberSelectSheet extends StatefulWidget {
+class _MemberSelectSheet extends ConsumerStatefulWidget {
   const _MemberSelectSheet({
     required this.title,
     required this.members,
-    required this.onConfirm,
+    required this.wizardId,
     required this.onBack,
   });
 
   final String title;
   final List<StartGroupPickableMember> members;
-  final void Function(List<StartGroupPickableMember> selected) onConfirm;
+  final String wizardId;
   final VoidCallback onBack;
 
   @override
-  State<_MemberSelectSheet> createState() => _MemberSelectSheetState();
+  ConsumerState<_MemberSelectSheet> createState() => _MemberSelectSheetState();
 }
 
-class _MemberSelectSheetState extends State<_MemberSelectSheet> {
-  final Set<String> _selectedIds = <String>{};
+class _MemberSelectSheetState extends ConsumerState<_MemberSelectSheet> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
@@ -1483,7 +1581,16 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
     return member.displayName.trim();
   }
 
-  bool get _allSelected => _selectedIds.length == widget.members.length;
+  bool _allSelected(StartGroupMemberWizardState state) {
+    final selectableIds = widget.members
+        .map(_memberId)
+        .where((id) => id.isNotEmpty && !state.isLocked(id))
+        .toList(growable: false);
+    if (selectableIds.isEmpty) {
+      return false;
+    }
+    return selectableIds.every((id) => state.selectedMembers.containsKey(id));
+  }
 
   @override
   void dispose() {
@@ -1492,33 +1599,39 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
   }
 
   void _toggleMember(StartGroupPickableMember member) {
-    final id = _memberId(member);
-    if (id.isEmpty) {
-      return;
-    }
-    setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
-      } else {
-        _selectedIds.add(id);
-      }
-    });
+    ref
+        .read(startGroupMemberWizardProvider(widget.wizardId).notifier)
+        .toggleMember(member);
   }
 
-  void _toggleAll() {
-    setState(() {
-      if (_allSelected) {
-        _selectedIds.clear();
-      } else {
-        _selectedIds
-          ..clear()
-          ..addAll(widget.members.map(_memberId).where((id) => id.isNotEmpty));
-      }
-    });
+  void _toggleAll(StartGroupMemberWizardState state) {
+    final selectableMembers = widget.members
+        .where((member) {
+          final id = _memberId(member);
+          return id.isNotEmpty && !state.isLocked(id);
+        })
+        .toList(growable: false);
+    if (selectableMembers.isEmpty) {
+      return;
+    }
+    final notifier = ref.read(
+      startGroupMemberWizardProvider(widget.wizardId).notifier,
+    );
+    final allSelected = selectableMembers.every(
+      (member) => state.selectedMembers.containsKey(_memberId(member)),
+    );
+    if (allSelected) {
+      notifier.deselectMemberIds(selectableMembers.map(_memberId));
+      return;
+    }
+    notifier.selectMembers(selectableMembers);
   }
 
   @override
   Widget build(BuildContext context) {
+    final wizardState = ref.watch(
+      startGroupMemberWizardProvider(widget.wizardId),
+    );
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final pageBg = SettingsSemanticConstants.pageBackground(isDark);
     final toolbarBg = SettingsSemanticConstants.selectionToolbarBackground(
@@ -1540,6 +1653,12 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
           return name.contains(query) || userId.contains(query);
         })
         .toList(growable: false);
+    final allSelected = _allSelected(wizardState);
+    final hasSelectableMembers = widget.members.any((member) {
+      final id = _memberId(member);
+      return id.isNotEmpty && !wizardState.isLocked(id);
+    });
+    final selectedCount = wizardState.selectedMembers.length;
 
     return AppScaffold(
       backgroundColor: pageBg,
@@ -1607,12 +1726,16 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                               Builder(
                                 builder: (context) {
                                   final member = filtered[index];
-                                  final selected = _selectedIds.contains(
-                                    _memberId(member),
+                                  final memberId = _memberId(member);
+                                  final selected = wizardState.isSelected(
+                                    memberId,
                                   );
+                                  final locked = wizardState.isLocked(memberId);
                                   return CupertinoButton(
                                     padding: EdgeInsets.zero,
-                                    onPressed: () => _toggleMember(member),
+                                    onPressed: locked
+                                        ? null
+                                        : () => _toggleMember(member),
                                     child: ConstrainedBox(
                                       constraints: BoxConstraints(
                                         minHeight: SettingsSemanticConstants
@@ -1628,8 +1751,10 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                                           children: [
                                             _SelectionIndicator(
                                               selected: selected,
-                                              onTap: () =>
-                                                  _toggleMember(member),
+                                              onTap: locked
+                                                  ? null
+                                                  : () => _toggleMember(member),
+                                              enabled: !locked,
                                             ),
                                             RoundedSquareAvatar(
                                               size: AppSpacing.avatarSize,
@@ -1642,12 +1767,30 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                                             ),
                                             SizedBox(width: AppSpacing.sm),
                                             Expanded(
-                                              child: Text(
-                                                member.displayName,
-                                                style: TextStyle(
-                                                  fontSize: AppTypography.lg,
-                                                  color: fgPrimary,
-                                                ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    member.displayName,
+                                                    style: TextStyle(
+                                                      fontSize:
+                                                          AppTypography.lg,
+                                                      color: locked
+                                                          ? fgSecondary
+                                                          : fgPrimary,
+                                                    ),
+                                                  ),
+                                                  if (locked)
+                                                    Text(
+                                                      '已在群中',
+                                                      style: TextStyle(
+                                                        fontSize:
+                                                            AppTypography.sm,
+                                                        color: fgSecondary,
+                                                      ),
+                                                    ),
+                                                ],
                                               ),
                                             ),
                                           ],
@@ -1693,19 +1836,24 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
-                  onPressed: _toggleAll,
+                  onPressed: hasSelectableMembers
+                      ? () => _toggleAll(wizardState)
+                      : null,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _SelectionIndicator(
-                        selected: _allSelected,
-                        onTap: _toggleAll,
+                        selected: allSelected,
+                        onTap: hasSelectableMembers
+                            ? () => _toggleAll(wizardState)
+                            : null,
+                        enabled: hasSelectableMembers,
                       ),
                       Text(
                         UITextConstants.selectAll,
                         style: TextStyle(
                           fontSize: AppTypography.lg,
-                          color: fgPrimary,
+                          color: hasSelectableMembers ? fgPrimary : fgSecondary,
                         ),
                       ),
                     ],
@@ -1728,28 +1876,19 @@ class _MemberSelectSheetState extends State<_MemberSelectSheet> {
                   borderRadius: BorderRadius.circular(
                     SettingsSemanticConstants.actionButtonBorderRadius,
                   ),
-                  onPressed: _selectedIds.isEmpty
+                  onPressed: selectedCount == 0
                       ? null
-                      : () {
-                          final list = widget.members
-                              .where(
-                                (member) =>
-                                    _selectedIds.contains(_memberId(member)),
-                              )
-                              .toList(growable: false);
-                          Navigator.of(context).pop();
-                          widget.onConfirm(list);
-                        },
+                      : () => Navigator.of(context).pop(),
                   minimumSize: Size(
                     SettingsSemanticConstants.actionButtonHeightMedium,
                     SettingsSemanticConstants.actionButtonHeightMedium,
                   ),
                   child: Text(
-                    '${UITextConstants.selectAction}（${_selectedIds.length}）',
+                    '${UITextConstants.selectAction}（$selectedCount）',
                     style: TextStyle(
                       fontSize: AppTypography.lg,
                       fontWeight: FontWeight.w500,
-                      color: _selectedIds.isEmpty
+                      color: selectedCount == 0
                           ? SettingsSemanticConstants.actionButtonDisabledForeground(
                               isDark,
                             )
@@ -1772,17 +1911,19 @@ class _SquareSymbolAvatar extends StatelessWidget {
     required this.isDark,
     required this.icon,
     required this.tintColor,
+    this.size = AppSpacing.avatarSize,
   });
 
   final bool isDark;
   final IconData icon;
   final Color tintColor;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: AppSpacing.avatarSize,
-      height: AppSpacing.avatarSize,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: tintColor.withValues(alpha: isDark ? 0.18 : 0.14),
         borderRadius: BorderRadius.circular(
@@ -1790,7 +1931,11 @@ class _SquareSymbolAvatar extends StatelessWidget {
         ),
       ),
       alignment: Alignment.center,
-      child: Icon(icon, color: tintColor, size: AppSpacing.iconLarge),
+      child: Icon(
+        icon,
+        color: tintColor,
+        size: size * ChatConversationAvatarTokens.placeholderIconScale,
+      ),
     );
   }
 }

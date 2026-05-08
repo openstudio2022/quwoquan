@@ -4,6 +4,8 @@ import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
+import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
@@ -11,13 +13,12 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_group_settings_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_message_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
-import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
-import 'package:quwoquan_app/cloud/services/app_content/app_content_prototype_codec.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 
 class MockChatRepository implements ChatRepository {
   MockChatRepository({
@@ -29,10 +30,7 @@ class MockChatRepository implements ChatRepository {
     final contactSeed = ContractFixtureRuntimeLoader.chatSeedSet(
       'chat_contacts_core',
     );
-    final contractConversations = _listOfMap(contractSeed?['conversations']);
-    final contractMembers = _mapOfList(contractSeed?['members']);
-    final contractMessages = _mapOfList(contractSeed?['messages']);
-    _contactRows = _mergeRowsByKeys(
+    final mergedContacts = _mergeRowsByKeys(
       _listOfMap(contactSeed?['contacts']),
       <Map<String, dynamic>>[
         ...AppContentPrototypeBundle.instance.chatMockContacts.map(
@@ -42,6 +40,9 @@ class MockChatRepository implements ChatRepository {
       ],
       const <String>['userId', 'contactId', 'id'],
     );
+    _contactRows = mergedContacts
+        .map(ChatContactRowDto.fromMap)
+        .toList(growable: false);
     _contactCircleIds =
         (contactSeed?['circleIds'] as List?)
             ?.map((id) => id.toString())
@@ -52,39 +53,60 @@ class MockChatRepository implements ChatRepository {
         (contactSeed?['groupConversationIds'] as List?)
             ?.map((id) => id.toString())
             .where((id) => id.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
+            .toSet() ??
+        <String>{};
+
+    final contractConversations = _listOfMap(contractSeed?['conversations']);
     final repositoryConversations =
         seedConversations ??
         _mergeRowsById(contractConversations, ChatMockData.conversations);
     final inboxRows =
         seedConversations ??
         _mergeRowsById(contractConversations, ChatMockData.inboxItems);
+
     _conversationCache = repositoryConversations
-        .map((conversation) => Map<String, dynamic>.from(conversation))
+        .map(ConversationCacheRecord.fromWireMap)
         .toList(growable: true);
     _inboxOverrides = {
-      for (final item in inboxRows)
-        ((item['conversationId'] ?? item['id'] ?? item['_id']) as String):
-            Map<String, dynamic>.from(item),
+      for (final row in inboxRows)
+        ChatInboxDto.fromMap(row).id: ChatInboxDto.fromMap(row),
     };
+
+    final contractMembers = _mapOfList(contractSeed?['members']);
     final initialMembers = seedMembers ?? contractMembers;
     if (initialMembers != null) {
       for (final entry in initialMembers.entries) {
         _membersCache[entry.key] = entry.value
-            .map((member) => Map<String, dynamic>.from(member))
+            .map(ChatConversationMemberDto.fromMap)
             .toList(growable: true);
       }
     }
+
+    final contractMessages = _mapOfList(contractSeed?['messages']);
     final initialMessages = seedMessages ?? contractMessages;
     if (initialMessages != null) {
       for (final entry in initialMessages.entries) {
         _messagesCache[entry.key] = entry.value
-            .map((message) => Map<String, dynamic>.from(message))
+            .map(ChatMessageDto.fromMap)
             .toList(growable: true);
       }
     }
   }
+
+  int _seqCounter = 100;
+  late final List<ConversationCacheRecord> _conversationCache;
+  late final List<ChatContactRowDto> _contactRows;
+  late final List<String> _contactCircleIds;
+  late final Set<String> _contactGroupConversationIds;
+  late final Map<String, ChatInboxDto> _inboxOverrides;
+  final Map<String, List<ChatConversationMemberDto>> _membersCache =
+      <String, List<ChatConversationMemberDto>>{};
+  final Map<String, List<ChatMessageDto>> _messagesCache =
+      <String, List<ChatMessageDto>>{};
+  final Map<String, ChatGroupSettingsDto> _settingsCache =
+      <String, ChatGroupSettingsDto>{};
+
+  static final ChatGroupSettingsDto _defaultSettings = ChatGroupSettingsDto();
 
   static List<Map<String, dynamic>>? _listOfMap(Object? value) {
     if (value is! List) {
@@ -94,6 +116,21 @@ class MockChatRepository implements ChatRepository {
         .whereType<Map>()
         .map((item) => item.cast<String, dynamic>())
         .toList(growable: false);
+  }
+
+  static Map<String, List<Map<String, dynamic>>>? _mapOfList(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return value.map(
+      (key, raw) => MapEntry(
+        key.toString(),
+        ((raw as List?) ?? const <dynamic>[])
+            .whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .toList(growable: false),
+      ),
+    );
   }
 
   static List<Map<String, dynamic>> _mergeRowsById(
@@ -152,116 +189,107 @@ class MockChatRepository implements ChatRepository {
     return byId.values.toList(growable: false);
   }
 
-  static Map<String, List<Map<String, dynamic>>>? _mapOfList(Object? value) {
-    if (value is! Map) {
-      return null;
+  ConversationCacheRecord? _findConversation(String conversationId) {
+    for (final conversation in _conversationCache) {
+      if (conversation.id == conversationId) {
+        return conversation;
+      }
     }
-    return value.map(
-      (key, raw) => MapEntry(
-        key.toString(),
-        ((raw as List?) ?? const <dynamic>[])
-            .whereType<Map>()
-            .map((item) => item.cast<String, dynamic>())
-            .toList(growable: false),
-      ),
+    return null;
+  }
+
+  void _replaceConversation(ConversationCacheRecord next) {
+    final index = _conversationCache.indexWhere((item) => item.id == next.id);
+    if (index >= 0) {
+      _conversationCache[index] = next;
+      return;
+    }
+    _conversationCache.insert(0, next);
+  }
+
+  List<ChatConversationMemberDto> _ensureMembersCache(String conversationId) {
+    return _membersCache.putIfAbsent(
+      conversationId,
+      () => ChatMockData.membersFor(
+        conversationId,
+      ).map(ChatConversationMemberDto.fromMap).toList(growable: true),
     );
   }
 
-  int _seqCounter = 100;
-  late final List<Map<String, dynamic>> _conversationCache;
-  late final List<Map<String, dynamic>> _contactRows;
-  late final List<String> _contactCircleIds;
-  late final List<String> _contactGroupConversationIds;
-  late final Map<String, Map<String, dynamic>> _inboxOverrides;
-
-  // 实例级可变成员缓存（key: conversationId），首次访问时从 ChatMockData 深拷贝初始化
-  // 使用实例级（非 static）保证测试隔离；在同一 ProviderContainer 内 Provider 返回同一实例，故应用内有效
-  final Map<String, List<Map<String, dynamic>>> _membersCache = {};
-  final Map<String, List<Map<String, dynamic>>> _messagesCache = {};
-
-  // 实例级可变设置缓存（key: conversationId）
-  final Map<String, Map<String, dynamic>> _settingsCache = {};
-
-  static const Map<String, dynamic> _defaultSettings = {
-    'qrCodeJoinEnabled': true,
-    'joinRequiresApproval': false,
-    'nameEditableByAdminOnly': false,
-    'privacyShieldAdminOnly': false,
-  };
-
-  static String _conversationIdOf(Map<String, dynamic> conversation) {
-    return (conversation['_id'] ?? conversation['id'] ?? '').toString();
-  }
-
-  List<Map<String, dynamic>> _ensureMembersCache(String conversationId) {
-    if (!_membersCache.containsKey(conversationId)) {
-      _membersCache[conversationId] = ChatMockData.membersFor(
-        conversationId,
-      ).map((member) => Map<String, dynamic>.from(member)).toList();
-    }
-    return _membersCache[conversationId]!;
-  }
-
-  List<Map<String, dynamic>> _messagesFor(String conversationId) {
-    final seeded = _messagesCache[conversationId];
-    if (seeded != null) {
-      return seeded;
-    }
-    return ChatMockData.messagesFor(
+  List<ChatMessageDto> _messagesFor(String conversationId) {
+    return _messagesCache.putIfAbsent(
       conversationId,
-    ).map((message) => Map<String, dynamic>.from(message)).toList();
+      () => ChatMockData.messagesFor(
+        conversationId,
+      ).map(ChatMessageDto.fromMap).toList(growable: true),
+    );
+  }
+
+  ChatInboxDto _effectiveInbox(ConversationCacheRecord record) {
+    final base = record.toChatInboxDto();
+    final override = _inboxOverrides[record.id];
+    if (override == null) {
+      return base;
+    }
+    return override.copyWith(
+      id: record.id,
+      type: record.type.isEmpty ? override.type : record.type,
+      title: record.title.isEmpty ? override.title : record.title,
+      avatarUrl: record.avatarUrl.isEmpty ? override.avatarUrl : record.avatarUrl,
+      groupAvatarVersion: record.groupAvatarVersion,
+      lastMessagePreview: record.lastMessagePreview.isEmpty
+          ? override.lastMessagePreview
+          : record.lastMessagePreview,
+      lastMessageType: record.lastMessageType.isEmpty
+          ? override.lastMessageType
+          : record.lastMessageType,
+      lastMessageTime: _parseIso(record.lastMessageAt) ?? override.lastMessageTime,
+      lastSeq: record.lastSeq > 0 ? record.lastSeq : override.lastSeq,
+      circleId: record.circleId.isEmpty ? override.circleId : record.circleId,
+    );
+  }
+
+  void _syncInboxFromConversation(ConversationCacheRecord record) {
+    _inboxOverrides[record.id] = _effectiveInbox(record);
   }
 
   void _bumpMembersRosterAfterMemberChange(
     String conversationId,
     int memberCount,
   ) {
-    final index = _conversationCache.indexWhere(
-      (conversation) => _conversationIdOf(conversation) == conversationId,
-    );
-    if (index < 0) {
+    final current = _findConversation(conversationId);
+    if (current == null) {
       return;
     }
-    final cur = Map<String, dynamic>.from(_conversationCache[index]);
-    final prevRev = (cur['membersRosterRevision'] as num?)?.toInt() ?? 0;
-    final next = <String, dynamic>{
-      ...cur,
-      'memberCount': memberCount,
-      'membersRosterRevision': prevRev + 1,
-      'updatedAt': DateTime.now().toIso8601String(),
-    };
-    if ((cur['type'] ?? '').toString() == 'group') {
+    var next = current.copyWith(
+      memberCount: memberCount,
+      membersRosterRevision: (current.membersRosterRevision ?? 0) + 1,
+      updatedAt: DateTime.now().toIso8601String(),
+    );
+    if (current.type == 'group') {
       final members = _ensureMembersCache(conversationId);
       final sourceHash = _groupAvatarSourceHash(members);
-      final previousSourceHash = (cur['groupAvatarSourceHash'] ?? '')
-          .toString();
-      if (sourceHash.isNotEmpty && sourceHash != previousSourceHash) {
-        final nextVersion =
-            ((cur['groupAvatarVersion'] as num?)?.toInt() ?? 0) + 1;
-        final renderedUrl = _renderedGroupAvatarUrl(
-          conversationId,
-          sourceHash,
-          nextVersion,
+      if (sourceHash.isNotEmpty && sourceHash != current.groupAvatarSourceHash) {
+        final nextVersion = current.groupAvatarVersion + 1;
+        next = next.copyWith(
+          avatarUrl: _renderedGroupAvatarUrl(
+            conversationId,
+            sourceHash,
+            nextVersion,
+          ),
+          groupAvatarVersion: nextVersion,
+          groupAvatarSourceHash: sourceHash,
         );
-        next['avatarUrl'] = renderedUrl;
-        next['groupAvatarVersion'] = nextVersion;
-        next['groupAvatarSourceHash'] = sourceHash;
       }
     }
-    _conversationCache[index] = next;
-    final override = _inboxOverrides[conversationId];
-    if (override != null) {
-      _inboxOverrides[conversationId] = <String, dynamic>{...override, ...next};
-    }
+    _replaceConversation(next);
+    _syncInboxFromConversation(next);
   }
 
-  static String _groupAvatarSourceHash(List<Map<String, dynamic>> members) {
+  static String _groupAvatarSourceHash(List<ChatConversationMemberDto> members) {
     return members
         .take(9)
-        .map(
-          (member) =>
-              '${member['userId'] ?? ''}:${member['avatarUrl'] ?? member['avatar'] ?? ''}',
-        )
+        .map((member) => '${member.userId}:${member.avatarUrl}')
         .join('|');
   }
 
@@ -276,23 +304,42 @@ class MockChatRepository implements ChatRepository {
         '_v${version}_$stableHash';
   }
 
+  String _matchDirectConversationId(String userId, String displayName) {
+    for (final conversation in _conversationCache) {
+      final isDirectLike =
+          conversation.type == 'direct' || conversation.type == 'encrypted';
+      if (!isDirectLike) {
+        continue;
+      }
+      final title = conversation.title.trim();
+      if (title.isNotEmpty && title == displayName.trim()) {
+        return conversation.id;
+      }
+    }
+    for (final conversation in _conversationCache) {
+      final isDirectLike =
+          conversation.type == 'direct' || conversation.type == 'encrypted';
+      if (!isDirectLike) {
+        continue;
+      }
+      final members = _ensureMembersCache(conversation.id);
+      if (members.any((member) => member.userId == userId)) {
+        return conversation.id;
+      }
+    }
+    return '';
+  }
+
   @override
   Future<List<ChatInboxDto>> listInbox({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final rows = _conversationCache
-        .where((conversation) => conversation['status'] == 'active')
-        .map((conversation) {
-          final conversationId = _conversationIdOf(conversation);
-          final override = _inboxOverrides[conversationId] ?? const {};
-          return <String, dynamic>{...conversation, ...override};
-        })
+        .where((conversation) => conversation.status == 'active')
+        .map(_effectiveInbox)
         .toList(growable: false);
-    final capped = limit > 0 && limit < rows.length
-        ? rows.take(limit).toList(growable: false)
-        : rows;
-    return capped.map(ChatInboxDto.fromMap).toList(growable: false);
+    return rows.take(limit).toList(growable: false);
   }
 
   @override
@@ -300,18 +347,7 @@ class MockChatRepository implements ChatRepository {
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final rows = _conversationCache
-        .where((conversation) => conversation['status'] == 'active')
-        .map((conversation) {
-          final conversationId = _conversationIdOf(conversation);
-          final override = _inboxOverrides[conversationId] ?? const {};
-          return <String, dynamic>{...conversation, ...override};
-        })
-        .toList(growable: false);
-    final capped = limit > 0 && limit < rows.length
-        ? rows.take(limit).toList(growable: false)
-        : rows;
-    return capped.map(ChatInboxDto.fromMap).toList(growable: false);
+    return listInbox(cursor: cursor, limit: limit);
   }
 
   @override
@@ -325,28 +361,24 @@ class MockChatRepository implements ChatRepository {
     }
     return _conversationCache
         .where((conversation) {
-          final title = (conversation['title'] ?? '').toString().toLowerCase();
-          final preview = (conversation['lastMessagePreview'] ?? '')
-              .toString()
-              .toLowerCase();
+          final title = conversation.title.toLowerCase();
+          final preview = conversation.lastMessagePreview.toLowerCase();
           return title.contains(normalizedQuery) ||
               preview.contains(normalizedQuery);
         })
         .take(limit)
         .map((conversation) {
-          final title = (conversation['title'] ?? '').toString();
-          final preview = (conversation['lastMessagePreview'] ?? '').toString();
+          final title = conversation.title;
+          final preview = conversation.lastMessagePreview;
           final highlight = title.toLowerCase().contains(normalizedQuery)
               ? title
               : preview;
           return ConversationSearchItemView.fromMap(<String, dynamic>{
-            ...conversation,
-            'conversationId':
-                conversation['conversationId'] ?? conversation['_id'],
+            ...conversation.toWireMap(),
             'highlightText': highlight,
             'matchedField': title.toLowerCase().contains(normalizedQuery)
                 ? 'title'
-                : 'last_message',
+                : 'lastMessagePreview',
           });
         })
         .toList(growable: false);
@@ -362,81 +394,71 @@ class MockChatRepository implements ChatRepository {
     List<String>? initialMemberIds,
   }) async {
     final conversationId = 'conv_new_${DateTime.now().millisecondsSinceEpoch}';
-    final nowUtc = DateTime.now().toUtc();
-    final now = nowUtc.toIso8601String();
-    final conversation = <String, dynamic>{
-      '_id': conversationId,
-      'id': conversationId,
-      'type': type,
-      'title': title ?? '',
-      'circleId': circleId,
-      'circleGroupId': circleGroupId,
-      'maxGroupSize': maxGroupSize ?? 500,
-      'status': 'active',
-      'memberCount': (initialMemberIds?.length ?? 0) + 1,
-      'membersRosterRevision': 1,
-      'maxSeq': 0,
-      'createdAt': now,
-      'updatedAt': now,
-      'creatorId': ChatMockData.currentUserProfileId,
-      'lastMessagePreview': '',
-      'lastMessageTime': now,
-    };
-    _conversationCache.insert(0, conversation);
-    _membersCache[conversationId] = [
-      <String, dynamic>{
-        'userId': ChatMockData.currentUserProfileId,
-        'displayName': '我',
-        'avatarUrl': ChatMockData.avatarFor(ChatMockData.currentUserProfileId),
-        'role': 'owner',
-        'isCurrentUser': true,
-        'joinedAt': nowUtc.toIso8601String(),
-      },
+    final now = DateTime.now().toUtc().toIso8601String();
+    final record = ConversationCacheRecord(
+      id: conversationId,
+      type: type,
+      title: title ?? '',
+      creatorId: ChatMockData.currentUserProfileId,
+      circleId: circleId ?? '',
+      circleGroupId: circleGroupId,
+      maxSeq: 0,
+      lastSeq: 0,
+      memberCount: (initialMemberIds?.length ?? 0) + 1,
+      maxGroupSize: maxGroupSize ?? 500,
+      status: 'active',
+      createdAt: now,
+      updatedAt: now,
+      settingsUpdatedAt: now,
+      lastMessageAt: now,
+      membersRosterRevision: 1,
+    );
+    _replaceConversation(record);
+    _syncInboxFromConversation(record);
+    if (type == 'group') {
+      _contactGroupConversationIds.add(conversationId);
+    }
+    _membersCache[conversationId] = <ChatConversationMemberDto>[
+      ChatConversationMemberDto(
+        userId: ChatMockData.currentUserProfileId,
+        displayName: '我',
+        avatarUrl: ChatMockData.avatarFor(ChatMockData.currentUserProfileId),
+        role: 'owner',
+        isCurrentUser: true,
+        joinedAt: DateTime.parse(now),
+      ),
       for (var i = 0; i < (initialMemberIds?.length ?? 0); i++)
-        <String, dynamic>{
-          'userId': initialMemberIds![i],
-          'displayName': ChatMockData.nameFor(initialMemberIds[i]),
-          'avatarUrl': ChatMockData.avatarFor(initialMemberIds[i]),
-          'role': 'member',
-          'isCurrentUser': false,
-          'joinedAt': nowUtc
-              .add(Duration(milliseconds: i + 1))
-              .toIso8601String(),
-        },
+        ChatConversationMemberDto(
+          userId: initialMemberIds![i],
+          displayName: ChatMockData.nameFor(initialMemberIds[i]),
+          avatarUrl: ChatMockData.avatarFor(initialMemberIds[i]),
+          role: 'member',
+          joinedAt: DateTime.parse(now).add(Duration(milliseconds: i + 1)),
+        ),
     ];
-    return ChatConversationCreatedDto.fromMap(conversation);
+    return ChatConversationCreatedDto(conversationId: conversationId);
   }
 
   @override
   Future<ConversationDto> getConversation(String conversationId) async {
-    final raw = Map<String, dynamic>.from(
-      _conversationCache.firstWhere(
-        (conversation) => _conversationIdOf(conversation) == conversationId,
-        orElse: () => _conversationCache.first,
-      ),
-    );
-    return ConversationDto.fromMap(raw);
+    final record =
+        _findConversation(conversationId) ??
+        (_conversationCache.isNotEmpty ? _conversationCache.first : null);
+    if (record == null) {
+      return ConversationDto.fromMap(const <String, dynamic>{});
+    }
+    return ConversationDto.fromMap(record.toWireMap());
   }
 
   @override
-  Future<void> updateConversationTitle(
-    String conversationId,
-    String title,
-  ) async {
-    final index = _conversationCache.indexWhere(
-      (c) => _conversationIdOf(c) == conversationId,
-    );
-    if (index < 0) {
+  Future<void> updateConversationTitle(String conversationId, String title) async {
+    final record = _findConversation(conversationId);
+    if (record == null) {
       return;
     }
-    final cur = Map<String, dynamic>.from(_conversationCache[index]);
-    cur['title'] = title;
-    _conversationCache[index] = cur;
-    final inbox = _inboxOverrides[conversationId];
-    if (inbox != null) {
-      _inboxOverrides[conversationId] = Map<String, dynamic>.from(inbox)
-        ..['title'] = title;
-    }
+    final next = record.copyWith(title: title);
+    _replaceConversation(next);
+    _syncInboxFromConversation(next);
   }
 
   @override
@@ -445,9 +467,17 @@ class MockChatRepository implements ChatRepository {
     String? before,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _messagesFor(
-      conversationId,
-    ).map(ChatMessageDto.fromMap).toList(growable: false);
+    var messages = List<ChatMessageDto>.from(_messagesFor(conversationId));
+    if (before != null && before.trim().isNotEmpty) {
+      final pivot = messages.indexWhere((message) => message.id == before.trim());
+      if (pivot > 0) {
+        messages = messages.take(pivot).toList(growable: false);
+      }
+    }
+    if (limit > 0 && messages.length > limit) {
+      messages = messages.take(limit).toList(growable: false);
+    }
+    return messages;
   }
 
   @override
@@ -461,37 +491,27 @@ class MockChatRepository implements ChatRepository {
     }
     final results = <MessageSearchItemView>[];
     for (final conversation in _conversationCache) {
-      final conversationId =
-          (conversation['_id'] ?? conversation['conversationId'] ?? '')
-              .toString();
-      final conversationTitle = conversation['title']?.toString();
-      final conversationAvatarUrl = conversation['avatarUrl']?.toString();
-      final messages = _messagesFor(conversationId);
+      final messages = _messagesFor(conversation.id);
       for (final message in messages) {
-        final content = (message['content'] ?? '').toString();
-        final senderName =
-            (message['senderDisplayName'] ??
-                    message['senderDisplayNameSnapshot'] ??
-                    message['senderName'] ??
-                    '')
-                .toString();
+        final content = (message.content ?? '').trim();
+        final senderName = (message.senderName ?? '').trim();
         if (!content.toLowerCase().contains(normalizedQuery) &&
             !senderName.toLowerCase().contains(normalizedQuery)) {
           continue;
         }
         results.add(
           MessageSearchItemView.fromMap(<String, dynamic>{
-            ...message,
-            'conversationId': conversationId,
-            'conversationTitle': conversationTitle,
-            'conversationAvatarUrl': conversationAvatarUrl,
+            ...message.toMap(),
+            'conversationId': conversation.id,
+            'conversationTitle': conversation.title,
+            'conversationAvatarUrl': conversation.avatarUrl,
             'contentPreview': content,
             'highlightText': content.toLowerCase().contains(normalizedQuery)
                 ? content
                 : senderName,
             'matchedField': content.toLowerCase().contains(normalizedQuery)
                 ? 'content'
-                : 'sender',
+                : 'senderDisplayName',
           }),
         );
         if (results.length >= limit) {
@@ -512,26 +532,66 @@ class MockChatRepository implements ChatRepository {
     CloudJsonMap? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
-    String? senderPersonaId,
-    String? senderProfileSubjectId,
+    String? senderSubAccountId,
     String? personaContextVersion,
     String? senderDisplayNameSnapshot,
     String? senderAvatarUrlSnapshot,
     required String clientMsgId,
   }) async {
-    _seqCounter++;
-    return SendMessageResponse.fromMap({
-      'messageId': 'msg_mock_${DateTime.now().millisecondsSinceEpoch}',
-      'seq': _seqCounter,
-      'timestamp': DateTime.now().toIso8601String(),
-    });
+    _seqCounter += 1;
+    final now = DateTime.now().toUtc();
+    final message = ChatMessageDto(
+      id: 'msg_mock_${now.microsecondsSinceEpoch}',
+      conversationId: conversationId,
+      seq: _seqCounter,
+      clientMsgId: clientMsgId,
+      senderId: senderSubAccountId ?? ChatMockData.currentUserProfileId,
+      senderName: senderDisplayNameSnapshot,
+      senderAvatar: senderAvatarUrlSnapshot,
+      senderSubAccountId: senderSubAccountId,
+      type: type,
+      content: content,
+      mediaUrl: mediaUrl,
+      media: media,
+      cardPayload: cardPayload,
+      replyToMessageId: replyToMessageId,
+      mentions: mentions,
+      status: 'sent',
+      timestamp: now,
+    );
+    final messages = _messagesFor(conversationId)..add(message);
+    final record = _findConversation(conversationId);
+    if (record != null) {
+      final next = record.copyWith(
+        maxSeq: _seqCounter,
+        lastSeq: _seqCounter,
+        messageCount: messages.length,
+        lastMessagePreview: content,
+        lastMessageType: type,
+        lastMessageAt: now.toIso8601String(),
+        updatedAt: now.toIso8601String(),
+      );
+      _replaceConversation(next);
+      _syncInboxFromConversation(next);
+    }
+    return SendMessageResponse(id: message.id, seq: message.seq, timestamp: now);
   }
 
   @override
   Future<void> recallMessage({
     required String conversationId,
     required String messageId,
-  }) async {}
+  }) async {
+    final messages = _messagesFor(conversationId);
+    final index = messages.indexWhere((message) => message.id == messageId);
+    if (index < 0) {
+      return;
+    }
+    messages[index] = messages[index].copyWith(
+      status: 'recalled',
+      recalledAt: DateTime.now().toUtc(),
+    );
+  }
 
   @override
   Future<SyncResponse> syncMessages({
@@ -539,25 +599,35 @@ class MockChatRepository implements ChatRepository {
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
   }) async {
-    final msgs = _messagesFor(conversationId);
-    return SyncResponse.fromMap(<String, dynamic>{
-      'messages': msgs,
-      'hasMore': false,
-    });
+    final all = _messagesFor(conversationId)
+        .where((message) => message.seq > lastSeq)
+        .toList(growable: false);
+    final page = limit > 0 && all.length > limit
+        ? all.take(limit).toList(growable: false)
+        : all;
+    return SyncResponse(messages: page, hasMore: all.length > page.length);
   }
 
   @override
   Future<void> markAsRead({
     required String conversationId,
     required String messageId,
-  }) async {}
+  }) async {
+    final inbox = _inboxOverrides[conversationId];
+    if (inbox != null) {
+      _inboxOverrides[conversationId] = inbox.copyWith(
+        unreadCount: 0,
+        mentionUnreadCount: 0,
+      );
+    }
+  }
 
   @override
   Future<List<ChatMessageReceiptDto>> getReceipts({
     required String conversationId,
     required String messageId,
   }) async {
-    return const [];
+    return const <ChatMessageReceiptDto>[];
   }
 
   @override
@@ -568,15 +638,15 @@ class MockChatRepository implements ChatRepository {
     String? role,
     String? sort,
   }) async {
-    var rows = _ensureMembersCache(
-      conversationId,
-    ).map((m) => ChatConversationMemberDto.fromMap(m)).toList();
+    var rows = List<ChatConversationMemberDto>.from(
+      _ensureMembersCache(conversationId),
+    );
     rows = sortChatMemberDtos(rows, sort);
     if (role != null && role.isNotEmpty) {
-      rows = rows.where((m) => m.role == role).toList();
+      rows = rows.where((member) => member.role == role).toList();
     }
     if (limit > 0 && rows.length > limit) {
-      rows = rows.take(limit).toList();
+      rows = rows.take(limit).toList(growable: false);
     }
     return rows;
   }
@@ -587,36 +657,31 @@ class MockChatRepository implements ChatRepository {
     required List<String> userIds,
   }) async {
     final members = _ensureMembersCache(conversationId);
-    final existingIds = members
-        .map((member) => (member['userId'] ?? '').toString())
-        .toSet();
-    var maxJoinedMs = 0;
-    for (final m in members) {
-      final d = DateTime.tryParse((m['joinedAt'] ?? '').toString());
-      if (d != null && d.millisecondsSinceEpoch > maxJoinedMs) {
-        maxJoinedMs = d.millisecondsSinceEpoch;
+    final existingIds = members.map((member) => member.userId).toSet();
+    var latestJoinedAt = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    for (final member in members) {
+      final joinedAt = member.joinedAt;
+      if (joinedAt != null && joinedAt.isAfter(latestJoinedAt)) {
+        latestJoinedAt = joinedAt;
       }
     }
-    var step = 0;
+    var added = 0;
     for (final userId in userIds) {
       if (existingIds.contains(userId)) {
         continue;
       }
-      step++;
-      final joinedAt = DateTime.fromMillisecondsSinceEpoch(
-        maxJoinedMs + step,
-        isUtc: true,
-      ).toIso8601String();
-      members.add(<String, dynamic>{
-        'userId': userId,
-        'displayName': ChatMockData.nameFor(userId),
-        'avatarUrl': ChatMockData.avatarFor(userId),
-        'role': 'member',
-        'isCurrentUser': false,
-        'joinedAt': joinedAt,
-      });
+      added += 1;
+      members.add(
+        ChatConversationMemberDto(
+          userId: userId,
+          displayName: ChatMockData.nameFor(userId),
+          avatarUrl: ChatMockData.avatarFor(userId),
+          role: 'member',
+          joinedAt: latestJoinedAt.add(Duration(milliseconds: added)),
+        ),
+      );
     }
-    if (step > 0) {
+    if (added > 0) {
       _bumpMembersRosterAfterMemberChange(conversationId, members.length);
     }
   }
@@ -627,7 +692,7 @@ class MockChatRepository implements ChatRepository {
     required String userId,
   }) async {
     final members = _ensureMembersCache(conversationId)
-      ..removeWhere((member) => member['userId'] == userId);
+      ..removeWhere((member) => member.userId == userId);
     _bumpMembersRosterAfterMemberChange(conversationId, members.length);
   }
 
@@ -645,17 +710,29 @@ class MockChatRepository implements ChatRepository {
     required String conversationId,
     bool? muted,
     bool? pinned,
-  }) async {}
+  }) async {
+    final record = _findConversation(conversationId);
+    if (record == null) {
+      return;
+    }
+    final next = record.copyWith(
+      muted: muted,
+      pinned: pinned,
+    );
+    _replaceConversation(next);
+    final current = _effectiveInbox(next);
+    _inboxOverrides[conversationId] = current.copyWith(
+      muted: muted ?? current.muted,
+      pinned: pinned ?? current.pinned,
+    );
+  }
 
   @override
   Future<List<ChatContactRowDto>> listContacts({
     String? cursor,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return _contactRows
-        .map(ChatContactRowDto.fromMap)
-        .take(limit)
-        .toList(growable: false);
+    return _contactRows.take(limit).toList(growable: false);
   }
 
   @override
@@ -670,18 +747,21 @@ class MockChatRepository implements ChatRepository {
           .where((circle) => ids.contains(circle['id']?.toString()))
           .take(limit)
           .map(
-            (circle) => ChatContactTabCircleRowDto.fromMap(<String, dynamic>{
-              'circleId': circle['id'],
-              'displayName': circle['name'],
-              'avatarUrl': circle['avatarUrl'] ?? circle['coverUrl'],
-              'subtitle': circle['description'] ?? '',
-            }),
+            (circle) => ChatContactTabCircleRowDto(
+              circleId: circle['id']?.toString() ?? '',
+              displayName: circle['name']?.toString() ?? '',
+              avatarUrl:
+                  circle['avatarUrl']?.toString() ??
+                  circle['coverUrl']?.toString() ??
+                  '',
+              subtitle: circle['description']?.toString() ?? '',
+            ),
           )
           .toList(growable: false);
     }
     return ChatMockData.contactTabCircles
         .take(limit)
-        .map((e) => ChatContactTabCircleRowDto.fromMap(e))
+        .map(ChatContactTabCircleRowDto.fromMap)
         .toList(growable: false);
   }
 
@@ -690,39 +770,29 @@ class MockChatRepository implements ChatRepository {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     if (_contactGroupConversationIds.isNotEmpty) {
-      final ids = _contactGroupConversationIds.toSet();
       return _conversationCache
-          .where((conversation) {
-            final id =
-                conversation['conversationId']?.toString() ??
-                conversation['id']?.toString() ??
-                '';
-            return ids.contains(id);
-          })
+          .where((conversation) => _contactGroupConversationIds.contains(conversation.id))
           .take(limit)
           .map(
-            (conversation) =>
-                ChatContactTabFunGroupRowDto.fromMap(<String, dynamic>{
-                  'conversationId':
-                      conversation['conversationId'] ?? conversation['id'],
-                  'displayName': conversation['title'],
-                  'avatarUrl':
-                      conversation['avatarUrl'] ?? conversation['avatar'],
-                  'subtitle': conversation['lastMessagePreview'] ?? '',
-                }),
+            (conversation) => ChatContactTabFunGroupRowDto(
+              conversationId: conversation.id,
+              displayName: conversation.title,
+              avatarUrl: conversation.avatarUrl,
+              subtitle: conversation.lastMessagePreview,
+            ),
           )
           .toList(growable: false);
     }
     return ChatMockData.contactTabFunGroups
         .take(limit)
-        .map((e) => ChatContactTabFunGroupRowDto.fromMap(e))
+        .map(ChatContactTabFunGroupRowDto.fromMap)
         .toList(growable: false);
   }
 
   @override
   Future<List<String>> listMemberUserIds(String conversationId) async {
     return _ensureMembersCache(conversationId)
-        .map((m) => m['userId']?.toString() ?? '')
+        .map((member) => member.userId)
         .where((id) => id.isNotEmpty)
         .toList(growable: false);
   }
@@ -734,28 +804,23 @@ class MockChatRepository implements ChatRepository {
   }) async {
     final normalizedQuery = query.trim().toLowerCase();
     return _contactRows
-        .map(ChatContactRowDto.fromMap)
-        .where((c) => c.displayName.toLowerCase().contains(normalizedQuery))
+        .where((contact) => contact.displayName.toLowerCase().contains(normalizedQuery))
         .take(limit)
         .map((contact) {
-          final displayName = contact.displayName;
-          final matchedConversation = ChatMockData.conversations.firstWhere(
-            (conversation) =>
-                (conversation['type'] == 'direct' ||
-                    conversation['type'] == 'encrypted') &&
-                (conversation['title']?.toString().trim() == displayName),
-            orElse: () => <String, dynamic>{},
+          final conversationId = _matchDirectConversationId(
+            contact.userId,
+            contact.displayName,
           );
-          return ChatContactSearchItemDto.fromMap(<String, dynamic>{
-            ...contact.toMap(),
-            'contactId': contact.userId,
-            'conversationId':
-                matchedConversation['_id'] ?? matchedConversation['id'] ?? '',
-            'conversationType': matchedConversation['type'] ?? 'direct',
-            'subtitle': '联系人',
-            'highlightText': displayName,
-            'matchedField': 'displayName',
-          });
+          return ChatContactSearchItemDto(
+            contactId: contact.userId,
+            displayName: contact.displayName,
+            avatarUrl: contact.avatarUrl,
+            conversationId: conversationId.isEmpty ? null : conversationId,
+            conversationType: conversationId.isEmpty ? null : 'direct',
+            subtitle: '联系人',
+            highlightText: contact.displayName,
+            matchedField: 'displayName',
+          );
         })
         .toList(growable: false);
   }
@@ -763,31 +828,39 @@ class MockChatRepository implements ChatRepository {
   @override
   Future<List<ChatConversationTimestampDto>> getConversationTimestamps() async {
     return _conversationCache
-        .where((conversation) => conversation['status'] == 'active')
-        .map((c) {
-          return ChatConversationTimestampDto.fromMap(<String, dynamic>{
-            'id': c['_id'] ?? c['id'],
-            'updatedAt': c['updatedAt'] ?? DateTime.now().toIso8601String(),
-            'type': c['type'] ?? 'direct',
-          });
+        .where((conversation) => conversation.status == 'active')
+        .map((conversation) {
+          final inbox = _effectiveInbox(conversation);
+          return ChatConversationTimestampDto(
+            conversationId: conversation.id,
+            updatedAt: conversation.updatedAt,
+            settingsUpdatedAt: conversation.settingsTimestamp,
+            lastMessageAt: conversation.lastMessageAt,
+            lastMessageTime: conversation.lastMessageAt,
+            lastMessagePreview: inbox.lastMessagePreview,
+            unreadCount: inbox.unreadCount,
+            type: conversation.type,
+          );
         })
-        .toList();
+        .toList(growable: false);
   }
 
   @override
   Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
     return _conversationCache
-        .where((c) => ids.contains(c['_id'] ?? c['id']))
-        .map((c) => ConversationDto.fromMap(Map<String, dynamic>.from(c)))
-        .toList();
+        .where((conversation) => ids.contains(conversation.id))
+        .map((conversation) => ConversationDto.fromMap(conversation.toWireMap()))
+        .toList(growable: false);
   }
 
   @override
   Future<ChatGroupSettingsDto> getGroupSettings(String conversationId) async {
-    final conversation = await getConversation(conversationId);
-    final merged = Map<String, dynamic>.from(conversation.toMap())
-      ..addAll(_settingsCache[conversationId] ?? _defaultSettings);
-    return ChatGroupSettingsDto.fromMap(merged);
+    final conversation = _findConversation(conversationId);
+    final settings = _settingsCache[conversationId] ?? _defaultSettings;
+    return settings.copyWith(
+      conversationType: conversation?.type ?? settings.conversationType,
+      circleId: conversation?.circleId ?? settings.circleId,
+    );
   }
 
   @override
@@ -795,26 +868,23 @@ class MockChatRepository implements ChatRepository {
     String conversationId,
     ChatGroupSettingsDto settings,
   ) async {
-    _settingsCache[conversationId] = <String, dynamic>{
-      'qrCodeJoinEnabled': settings.qrCodeJoinEnabled,
-      'joinRequiresApproval': settings.joinRequiresApproval,
-      'nameEditableByAdminOnly': settings.nameEditableByAdminOnly,
-      'privacyShieldAdminOnly': settings.privacyShieldAdminOnly,
-    };
+    _settingsCache[conversationId] = settings;
   }
 
   @override
-  Future<void> transferOwnership(
-    String conversationId,
-    String newOwnerId,
-  ) async {
-    final members = await listMembers(conversationId: conversationId);
-    final asMaps = members.map((m) => m.toMap()).toList();
-    for (final m in asMaps) {
-      if (m['isCurrentUser'] == true) m['role'] = 'member';
-      if (m['userId'] == newOwnerId) m['role'] = 'owner';
-    }
-    _membersCache[conversationId] = asMaps;
+  Future<void> transferOwnership(String conversationId, String newOwnerId) async {
+    final members = _ensureMembersCache(conversationId);
+    _membersCache[conversationId] = members
+        .map((member) {
+          if (member.userId == newOwnerId) {
+            return member.copyWith(role: 'owner');
+          }
+          if (member.role == 'owner') {
+            return member.copyWith(role: 'member');
+          }
+          return member;
+        })
+        .toList(growable: true);
   }
 
   @override
@@ -822,22 +892,34 @@ class MockChatRepository implements ChatRepository {
     String conversationId,
     List<String> adminIds,
   ) async {
-    final members = await listMembers(conversationId: conversationId);
-    final asMaps = members.map((m) => m.toMap()).toList();
-    for (final m in asMaps) {
-      if (m['role'] == 'owner') continue;
-      m['role'] = adminIds.contains(m['userId']) ? 'admin' : 'member';
-    }
-    _membersCache[conversationId] = asMaps;
+    final members = _ensureMembersCache(conversationId);
+    _membersCache[conversationId] = members
+        .map((member) {
+          if (member.role == 'owner') {
+            return member;
+          }
+          return member.copyWith(
+            role: adminIds.contains(member.userId) ? 'admin' : 'member',
+          );
+        })
+        .toList(growable: true);
   }
 
   @override
   Future<void> dissolveConversation(String conversationId) async {
-    _conversationCache.removeWhere(
-      (conversation) => _conversationIdOf(conversation) == conversationId,
-    );
+    _conversationCache.removeWhere((conversation) => conversation.id == conversationId);
     _membersCache.remove(conversationId);
+    _messagesCache.remove(conversationId);
     _settingsCache.remove(conversationId);
     _inboxOverrides.remove(conversationId);
+    _contactGroupConversationIds.remove(conversationId);
   }
+}
+
+DateTime? _parseIso(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(normalized);
 }

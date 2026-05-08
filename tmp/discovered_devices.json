@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-05-04T18:13:38.096483Z",
+  "suite": "gamma-patrol-matrix",
+  "requestedEnvironments": [
+    "gamma"
+  ],
+  "deviceCount": 1,
+  "devices": [
+    {
+      "id": "dry-run-ios",
+      "name": "Dry Run Device",
+      "targetPlatform": "ios",
+      "sdk": "dry-run",
+      "emulator": true,
+      "screenClass": "phone"
+    }
+  ],
+  "extra": {
+    "target": "test/patrol/discovery/feed_load_test.dart",
+    "platform": "ios",
+    "reportPath": "tmp/gamma-patrol-dry-run.json"
+  }
+}

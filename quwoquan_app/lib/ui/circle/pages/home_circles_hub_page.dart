@@ -19,6 +19,7 @@ import 'package:quwoquan_app/ui/circle/services/home_circles_hub_wire.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_media_image.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -522,8 +523,13 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final initialIndex = viewerDtos
         .indexWhere((item) => item.id == tappedDto.id)
         .clamp(0, viewerDtos.length - 1);
-    final relationshipState = ref.read(userRelationshipStateProvider);
-    final postInteractionState = ref.read(postInteractionStateProvider);
+    final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+      posts: viewerDtos,
+      discoveryState: ref.read(discoveryStateProvider),
+      relationshipState: ref.read(userRelationshipStateProvider),
+      postInteractionState: ref.read(postInteractionStateProvider),
+    );
+    primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
     final result = await context.push<Object?>(
       _isVideoPost(tappedDto)
           ? AppRoutePaths.videoViewer(index: '$initialIndex')
@@ -547,41 +553,11 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         source: 'circle',
         circleId: tapped.wireCircleId.isEmpty ? null : tapped.wireCircleId,
         rawPostsById: mediaRaws,
-        interactionSnapshot: MediaViewerInteractionSnapshot(
-          followingUsers: Set<String>.from(
-            relationshipState.followingProfileIds,
-          ),
-          likedPosts: Set<String>.from(postInteractionState.likedPostIds),
-          savedPosts: Set<String>.from(postInteractionState.savedPostIds),
-          postLikesCount: {
-            for (final e in viewerEntries)
-              e.dto.id: postInteractionState.likeCountFor(
-                e.dto.id,
-                fallback: e.hubEntry.wireLikeCount,
-              ),
-          },
-          postBookmarksCount: {
-            for (final e in viewerEntries)
-              e.dto.id: postInteractionState.bookmarkCountFor(
-                e.dto.id,
-                fallback: e.hubEntry.wireBookmarkCount,
-              ),
-          },
-          postSharesCount: {
-            for (final e in viewerEntries)
-              e.dto.id: postInteractionState.shareCountFor(
-                e.dto.id,
-                fallback: e.hubEntry.wireShareCount,
-              ),
-          },
-        ),
+        interactionSnapshot: interactionSnapshot,
       ),
     );
     if (result is MediaViewerResult) {
-      ref
-          .read(userRelationshipStateProvider.notifier)
-          .applyViewerResult(result);
-      ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
+      applyMediaViewerResultToInteractionState(ref, result);
       setState(() {
         CircleHubFeedPostEntry.applyResultToList(_circleFeedItems, result);
       });

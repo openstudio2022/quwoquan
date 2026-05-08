@@ -96,8 +96,6 @@ class GeneratedPostRuntimeMetadata {
     'sourceType',
     'deviceInfo',
     'publishLocation',
-    'personaId',
-    'profileSubjectId',
     'authorDisplayNameSnapshot',
     'authorAvatarUrlSnapshot',
     'personaContextVersion',

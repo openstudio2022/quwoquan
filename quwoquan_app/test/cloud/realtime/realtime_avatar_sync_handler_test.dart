@@ -8,6 +8,7 @@ import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 
@@ -142,20 +143,17 @@ class _ResyncChatRepository extends MockChatRepository {
 class _FakeLocalChatSearchStore extends LocalChatSearchStore {
   _FakeLocalChatSearchStore();
 
-  final Map<String, Map<String, dynamic>> _conversations =
-      <String, Map<String, dynamic>>{};
+  final Map<String, ConversationCacheRecord> _conversations =
+      <String, ConversationCacheRecord>{};
   int _lastUserSyncSeq = 0;
 
   void seedConversation(Map<String, dynamic> conversation) {
-    final id =
-        conversation['conversationId']?.toString() ??
-        conversation['id']?.toString() ??
-        conversation['_id']?.toString() ??
-        '';
+    final record = ConversationCacheRecord.fromWireMap(conversation);
+    final id = record.id;
     if (id.isEmpty) {
       return;
     }
-    _conversations[id] = Map<String, dynamic>.from(conversation);
+    _conversations[id] = record;
   }
 
   @override
@@ -187,14 +185,11 @@ class _FakeLocalChatSearchStore extends LocalChatSearchStore {
     if (existing == null) {
       return;
     }
-    final updated = <String, dynamic>{...existing, 'avatarUrl': avatarUrl};
-    if (groupAvatarVersion != null) {
-      updated['groupAvatarVersion'] = groupAvatarVersion;
-    }
-    if (groupAvatarSourceHash != null) {
-      updated['groupAvatarSourceHash'] = groupAvatarSourceHash;
-    }
-    _conversations[conversationId] = updated;
+    _conversations[conversationId] = existing.copyWith(
+      avatarUrl: avatarUrl,
+      groupAvatarVersion: groupAvatarVersion,
+      groupAvatarSourceHash: groupAvatarSourceHash,
+    );
   }
 
   @override
@@ -205,7 +200,7 @@ class _FakeLocalChatSearchStore extends LocalChatSearchStore {
   }) async {}
 
   @override
-  Future<List<Map<String, dynamic>>> listConversationPayloads({
+  Future<List<ConversationCacheRecord>> listConversationRecords({
     required LocalSearchNamespace namespace,
     int? limit = 200,
   }) async {
@@ -218,7 +213,7 @@ void main() {
     final store = _FakeLocalChatSearchStore();
     final namespace = LocalSearchNamespace.fromActivePersonaContext(
       ActivePersonaContextViewData.fallback(
-        profileSubjectId: 'user_001',
+        subAccountId: 'user_001',
         ownerUserId: 'user_001',
         displayName: '测试用户',
         avatarUrl: '',
@@ -244,7 +239,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              profileSubjectId: 'user_001',
+              subAccountId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',
@@ -256,15 +251,17 @@ void main() {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               ref
                   .read(conversationCacheProvider)
-                  .put('conv_001', <String, dynamic>{
-                    'id': 'conv_001',
-                    '_id': 'conv_001',
-                    'conversationId': 'conv_001',
-                    'type': 'group',
-                    'title': '群聊',
-                    'groupAvatarVersion': 1,
-                    'avatarUrl': 'https://cdn.example.com/old.png?v=1',
-                  });
+                  .put(
+                    ConversationCacheRecord.fromWireMap(<String, dynamic>{
+                      'id': 'conv_001',
+                      '_id': 'conv_001',
+                      'conversationId': 'conv_001',
+                      'type': 'group',
+                      'title': '群聊',
+                      'groupAvatarVersion': 1,
+                      'avatarUrl': 'https://cdn.example.com/old.png?v=1',
+                    }),
+                  );
               RealtimeMessageHandler(ref.read).handle(<String, dynamic>{
                 'type': 'sync_hint',
                 'latestSyncSeq': 1,
@@ -284,21 +281,21 @@ void main() {
     );
     final cache = container.read(conversationCacheProvider);
     expect(
-      cache.get('conv_001')?['avatarUrl'],
+      cache.get('conv_001')?.avatarUrl,
       'https://cdn.example.com/group.png?v=2',
     );
-    expect(cache.get('conv_001')?['groupAvatarVersion'], 2);
+    expect(cache.get('conv_001')?.groupAvatarVersion, 2);
 
-    final stored = await store.listConversationPayloads(namespace: namespace);
-    expect(stored.single['avatarUrl'], 'https://cdn.example.com/group.png?v=2');
-    expect(stored.single['groupAvatarVersion'], 2);
+    final stored = await store.listConversationRecords(namespace: namespace);
+    expect(stored.single.avatarUrl, 'https://cdn.example.com/group.png?v=2');
+    expect(stored.single.groupAvatarVersion, 2);
   });
 
   testWidgets('patch gap 触发全量修复并推进游标', (tester) async {
     final store = _FakeLocalChatSearchStore();
     final namespace = LocalSearchNamespace.fromActivePersonaContext(
       ActivePersonaContextViewData.fallback(
-        profileSubjectId: 'user_001',
+        subAccountId: 'user_001',
         ownerUserId: 'user_001',
         displayName: '测试用户',
         avatarUrl: '',
@@ -325,7 +322,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              profileSubjectId: 'user_001',
+              subAccountId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',
@@ -337,16 +334,18 @@ void main() {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               ref
                   .read(conversationCacheProvider)
-                  .put('conv_001', <String, dynamic>{
-                    'id': 'conv_001',
-                    '_id': 'conv_001',
-                    'conversationId': 'conv_001',
-                    'type': 'group',
-                    'title': '群聊',
-                    'groupAvatarVersion': 1,
-                    'avatarUrl': 'https://cdn.example.com/old.png?v=1',
-                    'updatedAt': '2026-04-23T09:00:00.000Z',
-                  });
+                  .put(
+                    ConversationCacheRecord.fromWireMap(<String, dynamic>{
+                      'id': 'conv_001',
+                      '_id': 'conv_001',
+                      'conversationId': 'conv_001',
+                      'type': 'group',
+                      'title': '群聊',
+                      'groupAvatarVersion': 1,
+                      'avatarUrl': 'https://cdn.example.com/old.png?v=1',
+                      'updatedAt': '2026-04-23T09:00:00.000Z',
+                    }),
+                  );
               RealtimeMessageHandler(ref.read).handle(<String, dynamic>{
                 'type': 'sync_hint',
                 'latestSyncSeq': 3,
@@ -366,10 +365,10 @@ void main() {
     );
     final cache = container.read(conversationCacheProvider);
     expect(
-      cache.get('conv_001')?['avatarUrl'],
+      cache.get('conv_001')?.avatarUrl,
       'https://cdn.example.com/full-sync.png?v=3',
     );
-    expect(cache.get('conv_001')?['groupAvatarVersion'], 3);
+    expect(cache.get('conv_001')?.groupAvatarVersion, 3);
     expect(await store.lastUserSyncSeq(namespace: namespace), 3);
   });
 
@@ -384,7 +383,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              profileSubjectId: 'user_001',
+              subAccountId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',
@@ -424,7 +423,7 @@ void main() {
     final store = _FakeLocalChatSearchStore();
     final namespace = LocalSearchNamespace.fromActivePersonaContext(
       ActivePersonaContextViewData.fallback(
-        profileSubjectId: 'user_001',
+        subAccountId: 'user_001',
         ownerUserId: 'user_001',
         displayName: '测试用户',
         avatarUrl: '',
@@ -450,7 +449,7 @@ void main() {
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
             () async => ActivePersonaContextViewData.fallback(
-              profileSubjectId: 'user_001',
+              subAccountId: 'user_001',
               ownerUserId: 'user_001',
               displayName: '测试用户',
               avatarUrl: '',
@@ -462,15 +461,17 @@ void main() {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               ref
                   .read(conversationCacheProvider)
-                  .put('conv_001', <String, dynamic>{
-                    'id': 'conv_001',
-                    '_id': 'conv_001',
-                    'conversationId': 'conv_001',
-                    'type': 'group',
-                    'title': '群聊',
-                    'groupAvatarVersion': 1,
-                    'avatarUrl': 'https://cdn.example.com/old.png?v=1',
-                  });
+                  .put(
+                    ConversationCacheRecord.fromWireMap(<String, dynamic>{
+                      'id': 'conv_001',
+                      '_id': 'conv_001',
+                      'conversationId': 'conv_001',
+                      'type': 'group',
+                      'title': '群聊',
+                      'groupAvatarVersion': 1,
+                      'avatarUrl': 'https://cdn.example.com/old.png?v=1',
+                    }),
+                  );
               RealtimeMessageHandler(ref.read).handle(<String, dynamic>{
                 'type': 'sync_hint',
                 'latestSyncSeq': 4,
@@ -493,7 +494,7 @@ void main() {
     expect(await store.lastUserSyncSeq(namespace: namespace), 0);
     expect(syncService.hasAvatarPatchSyncFailure, isTrue);
     expect(
-      cache.get('conv_001')?['avatarUrl'],
+      cache.get('conv_001')?.avatarUrl,
       'https://cdn.example.com/old.png?v=1',
     );
   });

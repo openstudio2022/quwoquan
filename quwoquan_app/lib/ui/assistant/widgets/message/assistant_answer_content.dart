@@ -45,6 +45,7 @@ class AssistantAnswerContent extends StatelessWidget {
     }
     final textStyle = TextStyle(
       fontSize: AppTypography.base,
+      fontWeight: AppTypography.regular,
       color: textColor,
       height: AppTypography.lineHeightRelaxed,
     );
@@ -69,25 +70,25 @@ class AssistantAnswerContent extends StatelessWidget {
           pPadding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
           h1: textStyle.copyWith(
             fontSize: AppTypography.xl,
-            fontWeight: FontWeight.w700,
+            fontWeight: AppTypography.medium,
             height: AppTypography.bodyLineHeight,
           ),
           h1Padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
           h2: textStyle.copyWith(
             fontSize: AppTypography.lg,
-            fontWeight: FontWeight.w700,
+            fontWeight: AppTypography.medium,
           ),
           h2Padding: EdgeInsets.only(bottom: AppSpacing.xs),
           h3: textStyle.copyWith(
             fontSize: AppTypography.base,
-            fontWeight: FontWeight.w600,
+            fontWeight: AppTypography.regular,
           ),
           h3Padding: EdgeInsets.only(bottom: AppSpacing.xs),
-          strong: textStyle.copyWith(fontWeight: FontWeight.w700),
+          strong: textStyle.copyWith(fontWeight: AppTypography.regular),
           em: textStyle.copyWith(fontStyle: FontStyle.italic),
           a: textStyle.copyWith(
             color: linkColor,
-            fontWeight: FontWeight.w600,
+            fontWeight: AppTypography.regular,
             decoration: TextDecoration.underline,
             decorationColor: linkColor.withValues(alpha: 0.4),
           ),
@@ -128,7 +129,7 @@ class AssistantAnswerContent extends StatelessWidget {
           tableBorder: TableBorder.all(
             color: textColor.withValues(alpha: 0.08),
           ),
-          tableHead: textStyle.copyWith(fontWeight: FontWeight.w600),
+          tableHead: textStyle.copyWith(fontWeight: AppTypography.medium),
           tableBody: textStyle,
         );
     final children = visibleBlocks.isNotEmpty
@@ -256,7 +257,7 @@ class AssistantAnswerContent extends StatelessWidget {
           padding: EdgeInsets.only(bottom: AppSpacing.one),
           child: SelectableText(
             title,
-            style: textStyle.copyWith(fontWeight: FontWeight.w700),
+            style: textStyle.copyWith(fontWeight: AppTypography.regular),
           ),
         ),
       if (body.isNotEmpty)
@@ -296,7 +297,7 @@ class AssistantAnswerContent extends StatelessWidget {
               padding: EdgeInsets.only(bottom: AppSpacing.one),
               child: SelectableText(
                 title,
-                style: textStyle.copyWith(fontWeight: FontWeight.w700),
+                style: textStyle.copyWith(fontWeight: AppTypography.regular),
               ),
             ),
           if (block.body.trim().isNotEmpty)
@@ -357,7 +358,7 @@ class AssistantAnswerContent extends StatelessWidget {
               padding: EdgeInsets.only(bottom: AppSpacing.one),
               child: SelectableText(
                 title,
-                style: textStyle.copyWith(fontWeight: FontWeight.w700),
+                style: textStyle.copyWith(fontWeight: AppTypography.regular),
               ),
             ),
           if (body.isNotEmpty) SelectableText(body, style: textStyle),
@@ -663,7 +664,7 @@ class _AssistantLinkBuilder extends MarkdownElementBuilder {
         text,
         style: (preferredStyle ?? parentStyle ?? const TextStyle()).copyWith(
           color: linkColor,
-          fontWeight: FontWeight.w600,
+          fontWeight: AppTypography.regular,
           decoration: TextDecoration.underline,
           decorationColor: linkColor.withValues(alpha: 0.4),
         ),
@@ -696,7 +697,7 @@ class _AssistantCitationChip extends StatelessWidget {
             style: TextStyle(
               fontSize: AppTypography.xsPlus,
               color: textColor,
-              fontWeight: FontWeight.w600,
+              fontWeight: AppTypography.regular,
               height: AppSpacing.textLineHeightDense,
             ),
           ),

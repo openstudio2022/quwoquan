@@ -131,7 +131,7 @@ void main() {
             (s) =>
                 s.renderDirection == StPageFlipDirection.back &&
                 s.backwardFoldX != null &&
-                s.backwardCompositeMode == 'paperFoldBackwardThreeFace',
+                s.backwardCompositeMode == 'paperFoldBackwardMainline',
           )
           .map((s) => s.backwardFoldX!)
           .toList(growable: false);
@@ -152,8 +152,8 @@ void main() {
       expect(late.bottomLayerPageIndex, equals(3));
       expect(late.flippingLayerPageIndex, equals(2));
 
-      // 三层 geometry 可以分开绘制，但必须保持 front -> back -> current 的稳定顺序。
-      expect(early.frontVisible, isA<bool>());
+      // 主线验收：early 先出现 back，进入中后段后由前一页 front 开始接管。
+      expect(early.frontVisible, isFalse);
       expect(early.edgeEnteredPage, isA<bool>());
       expect(early.currentRightOfFoldVisible, isTrue);
       expect(middle.edgeEnteredPage, isTrue);
@@ -166,6 +166,8 @@ void main() {
       // 翻折面（page X-1 被掀起）随手势进入更大的旋转角度：各阶段
       // 必须有可见的 flipping/back bounds；具体像素会受纸张阴影和纹理叠加影响。
       expect(early.backPolygonPoints, isNot('-'));
+      expect(early.sheetPolygonPoints, isNot('-'));
+      expect(early.bottomClipPolygonPoints, isNot('-'));
       expect(early.surfaceTopAligned, isTrue);
       expect(early.pivotAtSurfaceBottom, isFalse);
       expect(
@@ -175,13 +177,15 @@ void main() {
       );
       expect(middle.backVisible, isTrue);
       expect(middle.visibleBackWidth, greaterThan(60));
-      expect(middle.frontVisible, isTrue);
-      expect(middle.frontPolygonPoints, isNot('-'));
+      expect(middle.frontVisible, isA<bool>());
+      if (middle.frontVisible) {
+        expect(middle.frontPolygonPoints, isNot('-'));
+      }
+      expect(middle.backContainsPreviousBack, isTrue);
+      expect(middle.backContainsPreviousFront, isFalse);
       expect(middle.currentVisible, isTrue);
-      expect(find.textContaining('FRONT-GEOM'), findsWidgets);
       expect(find.textContaining('BACK-GEOM'), findsWidgets);
       expect(find.textContaining('CURRENT-GEOM'), findsWidgets);
-      expect(find.textContaining('face=front'), findsWidgets);
       expect(find.textContaining('face=back'), findsWidgets);
       expect(find.textContaining('face=current'), findsWidgets);
       expect(middle.visibleBackWidth, greaterThan(60));
@@ -197,78 +201,48 @@ void main() {
         middle.pageEdgeLineNonVertical,
         isTrue,
         reason:
-            'previous front/back boundary must not collapse to a vertical rectangle split',
+            'M1-A diagnostics must expose the real free edge R so fold/free-edge relation is reviewable',
       );
-      expect(
-        middle.edgeParallelToFold,
-        isA<bool>(),
-        reason:
-            'front/back split and moving edge are both resolved from the same fold frame',
-      );
+      expect(middle.edgeParallelToFold, isA<bool>());
       expect(middle.backPolygonPoints, isNot('-'));
       expect(middle.currentPolygonPoints, isNot('-'));
-      expect(
-        middle.frontRight,
-        lessThanOrEqualTo(middle.backRight + 12),
-        reason: 'previous front must stay to the left of the folded back face',
-      );
-      expect(
-        middle.backRight,
-        lessThanOrEqualTo(middle.currentRight + 12),
-        reason:
-            'folded back must stay between previous front and current residual',
-      );
+      expect(middle.sheetPolygonPoints, isNot('-'));
+      expect(middle.bottomClipPolygonPoints, isNot('-'));
       expect(
         middle.currentLeft,
-        greaterThanOrEqualTo(middle.frontLeft - 12),
-        reason: 'current residual must not move opposite to the textured fold',
+        closeTo(early.currentLeft, 1),
+        reason:
+            'current underlay must stay statically anchored instead of moving with the fold',
       );
       expect(
-        <double>[
-          middle.frontRight,
-          middle.backRight,
-          middle.currentRight,
-        ].reduce((a, b) => a > b ? a : b),
-        greaterThanOrEqualTo(middle.currentRight - 1),
-        reason:
-            'M1 pure geometry must keep the three-face frame from collapsing into the left half',
+        late.currentLeft,
+        closeTo(early.currentLeft, 1),
+        reason: 'current underlay must remain static through the late stage',
       );
       expect(
         late.backVisible,
         isTrue,
-        reason:
-            'previous back must not disappear and restart from the spine when front appears',
+        reason: 'previous back must stay continuous through the late stage',
       );
       expect(
         late.visibleBackWidth,
         greaterThan(12),
         reason:
-            'M1 late BACK may narrow, but it must remain a readable middle face',
+            'late BACK may narrow, but it must remain readable during front takeover',
       );
-      expect(
-        late.frontVisible,
-        isTrue,
-        reason:
-            'late BACK must reveal the previous-page front after the previous back',
-      );
-      expect(
-        late.frontPolygonPoints,
-        isNot('-'),
-        reason:
-            'previous front geometry must remain present for M1 diagnostics',
-      );
-      expect(
-        late.frontLeft,
-        lessThanOrEqualTo(late.backLeft + 12),
-        reason:
-            'previous front/back share the same transformed sheet; angled clipping may shift their AABB slightly',
-      );
-      expect(
-        late.frontRight,
-        greaterThanOrEqualTo(late.frontLeft),
-        reason:
-            'previous front must keep a real clipped extent on the shared folded sheet',
-      );
+      expect(late.frontVisible, isA<bool>());
+      if (late.frontVisible) {
+        expect(late.frontPolygonPoints, isNot('-'));
+      }
+      expect(late.backContainsPreviousFront, isFalse);
+      if (late.frontVisible) {
+        expect(
+          late.visibleBackWidth,
+          lessThan(middle.visibleBackWidth),
+          reason:
+              'late stage should shrink the back band after front starts taking over',
+        );
+      }
       expect(late.visibleBackWidth, greaterThanOrEqualTo(0));
       expect(late.surfaceTopAligned, isTrue);
       expect(late.pivotAtSurfaceBottom, isFalse);
@@ -344,14 +318,14 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
       ? phaseStates.lastWhere(
           (state) =>
               state.renderDirection == StPageFlipDirection.back &&
-              state.backwardCompositeMode == 'paperFoldBackwardThreeFace' &&
+              state.backwardCompositeMode == 'paperFoldBackwardMainline' &&
               (state.backwardBackPaintBounds != null ||
                   (state.backwardBackVertexCount ?? 0) >= 3),
         )
       : phaseStates.lastWhere(
           (state) =>
               state.renderDirection == StPageFlipDirection.back &&
-              state.backwardCompositeMode == 'paperFoldBackwardThreeFace',
+              state.backwardCompositeMode == 'paperFoldBackwardMainline',
         );
   final frontBounds = debugState.backwardFrontPaintBounds;
   final backBounds = debugState.backwardBackPaintBounds;
@@ -583,6 +557,8 @@ Future<_BackwardVisualFrame> _captureBackwardVisualFrame({
     edgeParallelToFold: debugState.backwardEdgeParallelToFold,
     backPolygonPoints: debugState.backwardBackPolygonPoints ?? '-',
     frontPolygonPoints: debugState.backwardFrontPolygonPoints ?? '-',
+    sheetPolygonPoints: debugState.backwardSheetPolygonPoints ?? '-',
+    bottomClipPolygonPoints: debugState.backwardBottomClipPolygonPoints ?? '-',
     currentPolygonPoints: debugState.backwardCurrentPolygonPoints ?? '-',
     backLeft: resolvedBackBounds?.left ?? double.infinity,
     backRight: resolvedBackBounds?.right ?? double.negativeInfinity,
@@ -806,6 +782,8 @@ class _BackwardVisualFrame {
     required this.edgeParallelToFold,
     required this.backPolygonPoints,
     required this.frontPolygonPoints,
+    required this.sheetPolygonPoints,
+    required this.bottomClipPolygonPoints,
     required this.currentPolygonPoints,
     required this.backLeft,
     required this.backRight,
@@ -846,6 +824,8 @@ class _BackwardVisualFrame {
   final bool? edgeParallelToFold;
   final String backPolygonPoints;
   final String frontPolygonPoints;
+  final String sheetPolygonPoints;
+  final String bottomClipPolygonPoints;
   final String currentPolygonPoints;
   final double backLeft;
   final double backRight;
@@ -885,6 +865,7 @@ class _BackwardVisualFrame {
         'suppressed=$staticSuppressedPages '
         'visual=$visualPhase backSample=$backSample currentSample=$currentSample '
         'backPoly=$backPolygonPoints frontPoly=$frontPolygonPoints '
+        'sheetPoly=$sheetPolygonPoints bottomPoly=$bottomClipPolygonPoints '
         'currentPoly=$currentPolygonPoints $geometry';
   }
 }

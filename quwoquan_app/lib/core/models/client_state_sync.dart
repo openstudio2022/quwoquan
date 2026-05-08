@@ -75,6 +75,20 @@ class ClientStateSyncOutboxEntry {
   final DateTime nextFlushAt;
   final int retryCount;
 
+  factory ClientStateSyncOutboxEntry.fromMap(Map<String, dynamic> map) {
+    return ClientStateSyncOutboxEntry(
+      coalesceKey: (map['coalesceKey'] ?? '').toString(),
+      objectType: (map['objectType'] ?? '').toString(),
+      objectId: (map['objectId'] ?? '').toString(),
+      intentType: (map['intentType'] ?? '').toString(),
+      desiredBoolValue: map['desiredBoolValue'] == true,
+      nextFlushAt:
+          DateTime.tryParse(map['nextFlushAt']?.toString() ?? '')?.toUtc() ??
+          DateTime.now().toUtc(),
+      retryCount: _int(map['retryCount'], 0),
+    );
+  }
+
   ClientStateSyncOutboxEntry copyWith({
     String? coalesceKey,
     String? objectType,
@@ -94,6 +108,18 @@ class ClientStateSyncOutboxEntry {
       retryCount: retryCount ?? this.retryCount,
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'coalesceKey': coalesceKey,
+      'objectType': objectType,
+      'objectId': objectId,
+      'intentType': intentType,
+      'desiredBoolValue': desiredBoolValue,
+      'nextFlushAt': nextFlushAt.toUtc().toIso8601String(),
+      'retryCount': retryCount,
+    };
+  }
 }
 
 class ClientStateSyncOutboxState {
@@ -103,10 +129,32 @@ class ClientStateSyncOutboxState {
 
   final List<ClientStateSyncOutboxEntry> entries;
 
+  factory ClientStateSyncOutboxState.fromMap(Map<String, dynamic> map) {
+    final rawEntries = map['entries'];
+    return ClientStateSyncOutboxState(
+      entries: rawEntries is List
+          ? rawEntries
+                .whereType<Map>()
+                .map(
+                  (entry) => ClientStateSyncOutboxEntry.fromMap(
+                    entry.cast<String, dynamic>(),
+                  ),
+                )
+                .toList(growable: false)
+          : const <ClientStateSyncOutboxEntry>[],
+    );
+  }
+
   ClientStateSyncOutboxState copyWith({
     List<ClientStateSyncOutboxEntry>? entries,
   }) {
     return ClientStateSyncOutboxState(entries: entries ?? this.entries);
+  }
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'entries': entries.map((entry) => entry.toMap()).toList(growable: false),
+    };
   }
 }
 

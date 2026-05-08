@@ -48,6 +48,7 @@ class UserRequestPageIds {
     'ListUserLifeItems': 'user.lifeItems',
     'ListUserLikes': 'user.likes',
     'ListUserWorks': 'user.works',
+    'LoginAnonymous': 'user.login.anonymous',
     'LoginWithApple': 'user.login.with.apple',
     'LoginWithPhone': 'user.login.with.phone',
     'LoginWithWechat': 'user.login.with.wechat',
@@ -115,6 +116,7 @@ class UserRequestPageIds {
   static const String listUserLifeItems = 'user.lifeItems';
   static const String listUserLikes = 'user.likes';
   static const String listUserWorks = 'user.works';
+  static const String loginAnonymous = 'user.login.anonymous';
   static const String loginWithApple = 'user.login.with.apple';
   static const String loginWithPhone = 'user.login.with.phone';
   static const String loginWithWechat = 'user.login.with.wechat';

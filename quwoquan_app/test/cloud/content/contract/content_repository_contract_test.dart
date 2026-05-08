@@ -135,6 +135,15 @@ void main() {
       await repo.unfavoritePost(postId: 'test');
     });
 
+    test('sharePost / unsharePost 返回幂等变化标记', () async {
+      final changed = await repo.sharePost(postId: 'test');
+      final unchanged = await repo.sharePost(postId: 'test');
+      final removed = await repo.unsharePost(postId: 'test');
+      expect(changed, isTrue);
+      expect(unchanged, isFalse);
+      expect(removed, isTrue);
+    });
+
     test('getReactionState 返回互动状态', () async {
       final state = await repo.getReactionState(postId: 'test');
       expect(state, isA<ContentReactionState>());

@@ -1,0 +1,18 @@
+template_id: content_template_micro_post
+label: 微趣帖
+summary: 预留的轻量点滴模板，当前仅保留定义，不进入 batch run 生成链路。
+content_type: micro
+content_identity: moment
+required_post_fields:
+  - contentType
+  - contentIdentity
+  - body
+optional_post_fields:
+  - title
+  - mediaUrls
+  - coverUrl
+  - locationName
+semantic_fields:
+  - entity_refs
+  - tag_refs
+  - source_urls

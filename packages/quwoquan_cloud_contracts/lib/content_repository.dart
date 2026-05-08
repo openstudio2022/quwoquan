@@ -44,9 +44,7 @@ abstract class ContentRepository {
 
   Future<ContentPostDetailPayload> getPost({required String postId});
 
-  Future<PostBaseDto> createPost({
-    required CreatePostRequestWire body,
-  });
+  Future<PostBaseDto> createPost({required CreatePostRequestWire body});
 
   Future<PostBaseDto> updatePost({
     required String postId,
@@ -120,6 +118,8 @@ abstract class ContentRepository {
   Future<void> unlikePost({required String postId});
   Future<void> favoritePost({required String postId});
   Future<void> unfavoritePost({required String postId});
+  Future<bool> sharePost({required String postId});
+  Future<bool> unsharePost({required String postId});
   Future<ContentReactionState> getReactionState({required String postId});
   Future<CommentPage> listComments({
     required String postId,
@@ -131,8 +131,7 @@ abstract class ContentRepository {
     required String postId,
     required String content,
     String? replyToCommentId,
-    String? personaId,
-    String? profileSubjectId,
+    String? subAccountId,
     String? personaContextVersion,
   });
   Future<void> deleteComment({

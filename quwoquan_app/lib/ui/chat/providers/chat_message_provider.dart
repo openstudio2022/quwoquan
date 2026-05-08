@@ -120,21 +120,22 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
   }) async {
     final activeContext = await _resolveActivePersonaContext();
     final clientMsgId = _uuid.v4();
-    final resolvedSenderId = activeContext.profileSubjectId;
-    final resolvedSenderPersonaId = activeContext.personaId;
+    final resolvedSenderSubAccountId = activeContext.subAccountId.isNotEmpty
+        ? activeContext.subAccountId
+        : activeContext.ownerUserId;
     final optimistic = MessageDto(
       id: clientMsgId,
       conversationId: conversationId,
       seq: _unconfirmedSeq,
       clientMsgId: clientMsgId,
-      senderId: resolvedSenderId,
+      senderId: resolvedSenderSubAccountId,
       senderName: senderName ?? activeContext.displayName,
       senderAvatar: resolveAvatarImageUrl(
         senderAvatar ?? activeContext.avatarUrl,
       ),
-      senderPersonaId: resolvedSenderPersonaId.isEmpty
+      senderSubAccountId: resolvedSenderSubAccountId.isEmpty
           ? null
-          : resolvedSenderPersonaId,
+          : resolvedSenderSubAccountId,
       type: type,
       content: content,
       mediaUrl: mediaUrl,
@@ -149,10 +150,9 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
         content: content,
         mediaUrl: mediaUrl,
         media: media,
-        senderPersonaId: resolvedSenderPersonaId.isEmpty
+        senderSubAccountId: resolvedSenderSubAccountId.isEmpty
             ? null
-            : resolvedSenderPersonaId,
-        senderProfileSubjectId: resolvedSenderId,
+            : resolvedSenderSubAccountId,
         personaContextVersion: activeContext.contextVersion,
         senderDisplayNameSnapshot: senderName ?? activeContext.displayName,
         senderAvatarUrlSnapshot: senderAvatar ?? activeContext.avatarUrl,
@@ -188,16 +188,18 @@ class ChatMessageNotifier extends Notifier<ChatMessageState> {
     }).toList();
     state = state.copyWith(messages: _sorted(retrying));
     try {
+      final retrySenderSubAccountId = msg.senderSubAccountId?.isNotEmpty == true
+          ? msg.senderSubAccountId
+          : (activeContext.subAccountId.isNotEmpty
+                ? activeContext.subAccountId
+                : activeContext.ownerUserId);
       final resp = await _repo.sendMessage(
         conversationId: conversationId,
         type: msg.type,
         content: msg.content ?? '',
         mediaUrl: msg.mediaUrl,
         media: msg.media,
-        senderPersonaId:
-            msg.senderPersonaId ??
-            (activeContext.personaId.isEmpty ? null : activeContext.personaId),
-        senderProfileSubjectId: msg.senderId,
+        senderSubAccountId: retrySenderSubAccountId,
         personaContextVersion: activeContext.contextVersion,
         senderDisplayNameSnapshot: msg.senderName ?? activeContext.displayName,
         senderAvatarUrlSnapshot: msg.senderAvatar ?? activeContext.avatarUrl,

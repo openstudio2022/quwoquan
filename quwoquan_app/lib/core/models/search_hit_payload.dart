@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
 
 /// 全局搜索 [SearchHit] 的具名载荷（sealed），避免跨层持匿名 Map 作为业务状态。
@@ -21,6 +22,16 @@ final class SearchHitPayloadWireMap extends SearchHitPayload {
 
   @override
   Map<String, dynamic> toWireMap() => map;
+}
+
+/// 聊天联系人命中（与 [ChatContactSearchItemDto] 同源）。
+final class SearchHitPayloadChatContact extends SearchHitPayload {
+  const SearchHitPayloadChatContact(this.item);
+
+  final ChatContactSearchItemDto item;
+
+  @override
+  Map<String, dynamic> toWireMap() => item.toMap();
 }
 
 /// 内容帖子命中（与 [PostSearchItemView] 同源）。
@@ -54,7 +65,7 @@ Map<String, dynamic> postSearchItemViewToSearchHitWire(
     'title': item.title,
     'summary': item.summary,
     'coverUrl': item.coverUrl,
-    'authorProfileSubjectId': item.authorProfileSubjectId,
+    'authorId': item.authorId,
     'authorDisplayName': item.authorDisplayName,
     'authorAvatarUrl': item.authorAvatarUrl,
     'circleId': item.circleId,

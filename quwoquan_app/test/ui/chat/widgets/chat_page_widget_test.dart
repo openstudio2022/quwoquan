@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
+import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 
 Widget _scopedApp({ChatRepository? mock}) {
   final repo = mock ?? MockChatRepository();
@@ -71,7 +73,7 @@ void main() {
       await tester.pumpWidget(_scopedApp(mock: _NavigationChatRepository()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('导航测试会话'));
+      await tester.tap(find.text('产品共创群').first);
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('chat-detail-page')), findsOneWidget);
     });
@@ -156,6 +158,20 @@ void main() {
       expect(find.text('预渲染群头像'), findsOneWidget);
       expect(find.byType(Image), findsWidgets);
       expect(find.byIcon(Icons.group), findsNothing);
+    });
+
+    testWidgets('主列表会话头像使用共享边长 token', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        _scopedApp(mock: _RenderedGroupAvatarChatRepository()),
+      );
+      await tester.pumpAndSettle();
+
+      final avatarFinder = find.byType(RoundedSquareAvatar).first;
+      final size = tester.getSize(avatarFinder);
+
+      expect(size.width, ChatConversationAvatarTokens.listSize);
+      expect(size.height, ChatConversationAvatarTokens.listSize);
     });
 
     testWidgets('群会话缺失 avatarUrl 时不再渲染九宫格拼图', (tester) async {

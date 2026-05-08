@@ -19,14 +19,7 @@ client_projection:
       dart_type: String
       nullable: false
       source: subAccountId
-      aliases: [subAccountId, personaId, id]
-      default: "''"
-
-    - name: profileSubjectId
-      dart_type: String
-      nullable: false
-      source: profileSubjectId
-      aliases: [profileSubjectId, subAccountId]
+      aliases: [subAccountId, id]
       default: "''"
 
     - name: displayName

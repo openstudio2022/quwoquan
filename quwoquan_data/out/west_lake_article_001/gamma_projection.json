@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "quwoquan_data.projection.v2",
+  "generated_at": "2026-05-08T00:02:27Z",
+  "environment": "gamma",
+  "batch_id": "west_lake_article_001",
+  "query": "杭州西湖 半日路线 亲子 酒店 咖啡 游记",
+  "content_type_ref": "trees/content/作品/文章帖.yaml",
+  "entity_ids": [
+    "entity_place_west_lake",
+    "entity_stay_west_lake_family_hotel",
+    "entity_life_longjing_road_coffee"
+  ],
+  "entity_refs": [
+    "trees/entities/地点/西湖.yaml",
+    "trees/entities/住宿/西湖亲子友好酒店.yaml",
+    "trees/entities/本地生活/龙井路咖啡.yaml"
+  ],
+  "post_titles": [
+    "西湖亲子半日城市漫游路线"
+  ],
+  "post_source_ids": [
+    "west_lake_article_001_article_001"
+  ],
+  "asset_refs": [
+    "media/image/entity/west_lake/v1/cover.png",
+    "media/image/entity/west_lake_family_hotel/v1/cover.png",
+    "media/image/entity/longjing_road_coffee/v1/cover.png",
+    "media/image/post/west_lake_article_001/v1/cover.png",
+    "media/image/post/west_lake_article_001/v1/hotel.png"
+  ],
+  "scope": "dry_run",
+  "dry_run_only": true
+}

@@ -5,14 +5,12 @@ typedef PersonaContextLoader = Future<ActivePersonaContextViewData> Function();
 class LocalSearchNamespace {
   const LocalSearchNamespace({
     required this.ownerUserId,
-    required this.profileSubjectId,
     required this.subAccountId,
     required this.subjectType,
     required this.personaContextVersion,
   });
 
   final String ownerUserId;
-  final String profileSubjectId;
   final String subAccountId;
   final String subjectType;
   final String personaContextVersion;
@@ -21,10 +19,6 @@ class LocalSearchNamespace {
     final subAccount = subAccountId.trim();
     if (subAccount.isNotEmpty) {
       return subAccount;
-    }
-    final subjectId = profileSubjectId.trim();
-    if (subjectId.isNotEmpty) {
-      return subjectId;
     }
     return ownerUserId.trim();
   }
@@ -35,7 +29,6 @@ class LocalSearchNamespace {
     return <String, dynamic>{
       'key': key,
       'ownerUserId': ownerUserId,
-      'profileSubjectId': profileSubjectId,
       'subAccountId': subAccountId,
       'subjectType': subjectType,
       'personaContextVersion': personaContextVersion,
@@ -46,10 +39,12 @@ class LocalSearchNamespace {
   factory LocalSearchNamespace.fromActivePersonaContext(
     ActivePersonaContextViewData context,
   ) {
+    final subAccountId = context.subAccountId.trim().isNotEmpty
+        ? context.subAccountId.trim()
+        : context.ownerUserId.trim();
     return LocalSearchNamespace(
       ownerUserId: context.ownerUserId.trim(),
-      profileSubjectId: context.profileSubjectId.trim(),
-      subAccountId: context.subAccountId.trim(),
+      subAccountId: subAccountId,
       subjectType: context.subjectType.trim(),
       personaContextVersion: context.personaContextVersion.trim(),
     );

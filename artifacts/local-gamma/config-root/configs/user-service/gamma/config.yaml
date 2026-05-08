@@ -1,0 +1,10 @@
+# gamma overrides (cloud integration env)
+service:
+  http:
+    addr: ":18081"
+
+redis:
+  general:
+    mode: standalone
+    addr: ""
+    db: 0

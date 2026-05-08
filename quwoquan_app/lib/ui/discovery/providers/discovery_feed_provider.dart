@@ -88,6 +88,9 @@ class DiscoveryFeedMapNotifier
         limit: 20,
         cursor: null,
       );
+      ref
+          .read(postInteractionStateProvider.notifier)
+          .applyConfirmedPosts(page.items);
       final seen = page.items
           .map((item) => item.id)
           .where((id) => id.isNotEmpty)
@@ -134,6 +137,9 @@ class DiscoveryFeedMapNotifier
         limit: 20,
         cursor: value.nextCursor,
       );
+      ref
+          .read(postInteractionStateProvider.notifier)
+          .applyConfirmedPosts(page.items);
       final seen = value.seenItemIds.toSet();
       final dedupedNew = page.items
           .where((item) => !seen.contains(item.id))

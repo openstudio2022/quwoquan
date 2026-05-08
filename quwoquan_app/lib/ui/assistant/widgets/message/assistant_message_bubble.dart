@@ -388,9 +388,10 @@ class AssistantMessageBubble extends StatelessWidget {
             answerText,
             textAlign: TextAlign.left,
             style: TextStyle(
-              fontSize: AppTypography.lg,
+              fontSize: AppTypography.base,
+              fontWeight: AppTypography.regular,
               color: AppColors.white,
-              height: AppTypography.bodyLineHeight,
+              height: AppTypography.lineHeightRelaxed,
             ),
           ),
         ),
@@ -409,7 +410,12 @@ class AssistantMessageBubble extends StatelessWidget {
           ),
           child: SelectableText(
             answerText,
-            style: TextStyle(fontSize: AppTypography.lg, color: textColor),
+            style: TextStyle(
+              fontSize: AppTypography.base,
+              fontWeight: AppTypography.regular,
+              color: textColor,
+              height: AppTypography.lineHeightRelaxed,
+            ),
           ),
         ),
       );

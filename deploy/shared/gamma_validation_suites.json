@@ -248,7 +248,7 @@
     "content_feed_patrol": {
       "status": "required",
       "domain": "content",
-      "description": "发现页 feed Patrol 核心旅程，保留到 daily/full gamma 验证，不再成为 PR 必经链路。",
+      "description": "发现页内容 feed Patrol 核心旅程，作为当前 gamma 100 图 curated 子集的必过验收。",
       "hostedChecks": [],
       "selfHostedChecks": [
         "gamma_patrol_matrix"

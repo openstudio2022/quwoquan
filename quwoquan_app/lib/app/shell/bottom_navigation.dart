@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,9 +19,10 @@ class BottomNavigationWidget extends ConsumerWidget {
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
     final isDark = themeDark || forceDark;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    // 与 [MainAppShell] 主壳底同色，避免 glassSurface + BackdropFilter 的半透明毛玻璃感。
     final navBackground = forceDark
-        ? AppColors.worksBackground.withValues(alpha: 0.9)
-        : AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
+        ? AppColors.worksBackground
+        : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
     final activeColor = forceDark
         ? CupertinoColors.white
         : AppColors.iosLabel(context);
@@ -59,51 +58,42 @@ class BottomNavigationWidget extends ConsumerWidget {
       ),
     ];
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: forceDark ? 0 : AppSpacing.eighteen,
-          sigmaY: forceDark ? 0 : AppSpacing.eighteen,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: navBackground,
+        border: Border(
+          top: BorderSide(color: borderColor, width: AppSpacing.hairline),
         ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: navBackground,
-            border: Border(
-              top: BorderSide(color: borderColor, width: AppSpacing.hairline),
-            ),
-          ),
-          child: SizedBox(
-            height: AppSpacing.bottomNavHeight + bottomInset,
-            child: Padding(
-              padding: EdgeInsets.only(bottom: bottomInset),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: List<Widget>.generate(destinations.length, (index) {
-                  final selected =
-                      (currentIndex < 0 ? 0 : currentIndex) == index;
-                  final destination = destinations[index];
-                  return Expanded(
-                    child: CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size.fromHeight(
-                        AppSpacing.bottomNavHeight,
-                      ),
-                      onPressed: () {
-                        if (selected) return;
-                        HapticFeedback.selectionClick();
-                        onTap(index);
-                      },
-                      child: _BottomNavItem(
-                        destination: destination,
-                        selected: selected,
-                        activeColor: activeColor,
-                        inactiveColor: inactiveColor,
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
+      ),
+      child: SizedBox(
+        height: AppSpacing.bottomNavHeight + bottomInset,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: List<Widget>.generate(destinations.length, (index) {
+              final selected = (currentIndex < 0 ? 0 : currentIndex) == index;
+              final destination = destinations[index];
+              return Expanded(
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size.fromHeight(
+                    AppSpacing.bottomNavHeight,
+                  ),
+                  onPressed: () {
+                    if (selected) return;
+                    HapticFeedback.selectionClick();
+                    onTap(index);
+                  },
+                  child: _BottomNavItem(
+                    destination: destination,
+                    selected: selected,
+                    activeColor: activeColor,
+                    inactiveColor: inactiveColor,
+                  ),
+                ),
+              );
+            }),
           ),
         ),
       ),

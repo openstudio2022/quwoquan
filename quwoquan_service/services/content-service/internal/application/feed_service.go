@@ -73,9 +73,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 	if limit <= 0 {
 		limit = 20
 	}
-	if req.UserID == "" {
-		req.UserID = "guest"
-	}
+	req.UserID = normalizeAnonymousSubAccountID(req.UserID)
 	views := make([]FeedItemView, 0, limit)
 	requestedIdentity := normalizeRequestedIdentity(req.Identity)
 	requestedType := normalizeRequestType(req.Type)
@@ -221,9 +219,7 @@ func (s *FeedService) Recommend(ctx context.Context, req RecommendRequest) (*rtr
 		limit = 20
 	}
 	userID := strings.TrimSpace(req.UserID)
-	if userID == "" {
-		userID = "guest"
-	}
+	userID = normalizeAnonymousSubAccountID(userID)
 	return s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
 		UserID:    userID,
 		SessionID: strings.TrimSpace(req.SessionID),

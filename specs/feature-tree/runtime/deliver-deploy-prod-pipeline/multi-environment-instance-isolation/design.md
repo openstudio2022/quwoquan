@@ -5,7 +5,7 @@
 当前端侧和本地环境脚本对“实例”与“服务栈”的边界定义不清：
 
 - 端侧 `flutter run` 可以在多个终端里启动，但缺少统一的 `device-id`、pid、环境记录，容易留下暂停的 Flutter 进程与全局 startup lock。
-- beta 手工联调脚本已有部分生命周期管理，但默认目录、端口和状态文件基本固定，容易在重新启动时留下半挂起进程。
+- beta 手工联调脚本已有部分生命周期管理，但默认目录、端口和状态文件基本固定，容易在重新启动时遗留半挂起进程。
 - gamma 的真实语义是**单套云侧服务**，但本地脚本与 runbook 未充分强调“只能切换、不能并行复制”。
 
 本设计将“端侧多实例”与“云侧单套服务”拆开治理，避免把 App 进程并行误扩展成服务端多套。
@@ -57,7 +57,7 @@ flowchart TB
 
 gamma 有两个入口，但语义一致：
 
-- ECS gamma：部署时清理已有实例，再启动新实例。
+- ECS gamma：部署时清理历史实例，再启动新实例。
 - local-gamma mirror：本地只保留一套 mirror，切换时先 down 再 up。
 
 因此 gamma 的“并行”只允许是多个端侧实例同时接入同一套 gamma，而不是复制第二套 gamma 服务。
@@ -137,7 +137,7 @@ beta / gamma 的报告需额外记录：
 
 - Flutter SDK startup lock 是全局共享资源：
   - 缓解：强制 `device-id`，避免交互式选择；stop 时显式回收 Flutter child process。
-- beta 脚本已有残留目录：
+- beta 脚本已有历史残留目录：
   - 缓解：启动前清理 stale pid，报告里标记 `restartedFromPrevious`。
 - gamma 可能被实现成“第二套 local-gamma”：
   - 缓解：在 spec、runbook、验证脚本中把 gamma 明确定义为单套切换。

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 import hashlib
 import json
 import shutil
-import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
@@ -20,7 +20,7 @@ USER_SCENARIO = "user/test_fixtures/scenarios/user_scenarios.json"
 CIRCLE_SCENARIO = "social/circle/test_fixtures/scenarios/circle_scenarios.json"
 CHAT_SCENARIO = "messages/chat/test_fixtures/scenarios/chat_scenarios.json"
 
-CURATED_REFS: Dict[str, List[str]] = {
+CURATED_REFS: dict[str, list[str]] = {
     CONTENT_SCENARIO: [
         "content_discovery_core",
     ],
@@ -51,6 +51,8 @@ CURATED_CONTENT_POST_IDS = {
     "fixture_video_001",
     "fixture_post_travel_001",
     "fixture_post_citywalk_001",
+    "fixture_post_tech_001",
+    "fixture_post_outdoor_001",
 }
 CURATED_CONTENT_COMMENT_IDS = {"fixture_comment_photo_001"}
 CURATED_USER_IDS = {
@@ -65,6 +67,10 @@ CURATED_USER_IDS = {
     "fixture_user_owner",
     "fixture_user_travel_owner",
     "fixture_user_commenter",
+    "fixture_user_travel_01",
+    "fixture_user_citywalk_01",
+    "fixture_user_tech_01",
+    "fixture_user_outdoor_01",
 }
 CURATED_CIRCLE_IDS = {
     "fixture_circle_life",
@@ -73,6 +79,10 @@ CURATED_CIRCLE_IDS = {
     "fixture_circle_travel",
     "fixture_circle_food",
     "fixture_circle_city",
+    "fixture_circle_travel_01",
+    "fixture_circle_citywalk_01",
+    "fixture_circle_tech_01",
+    "fixture_circle_outdoor_01",
 }
 CURATED_CHAT_CONVERSATION_IDS = {
     "fixture_conv_direct",
@@ -99,14 +109,13 @@ MEDIA_FIELD_NAMES = {
     "thumbnailUrl",
     "videoUrl",
 }
-DROP = object()
 
 
-def read_json(path: Path) -> Dict[str, Any]:
+def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def write_json(path: Path, payload: Dict[str, Any]) -> None:
+def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -120,7 +129,7 @@ def scenario_curated_path(relative_path: str) -> Path:
     return source.with_name(source.stem + ".gamma-curated.json")
 
 
-def row_id(row: Dict[str, Any], *keys: str) -> str:
+def row_id(row: dict[str, Any], *keys: str) -> str:
     for key in keys:
         value = row.get(key)
         if isinstance(value, str) and value.strip():
@@ -128,78 +137,7 @@ def row_id(row: Dict[str, Any], *keys: str) -> str:
     return ""
 
 
-def tracked_media_object_keys() -> Set[str]:
-    tracked: Set[str] = set()
-    try:
-        payload = subprocess.run(
-            ["git", "ls-files", str(MEDIA_ROOT.relative_to(ROOT))],
-            cwd=str(ROOT),
-            universal_newlines=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True,
-        )
-        for line in payload.stdout.splitlines():
-            relative = line.strip()
-            if not relative:
-                continue
-            path = Path(relative)
-            try:
-                tracked.add(str(path.relative_to(MEDIA_ROOT.relative_to(ROOT))))
-            except ValueError:
-                continue
-    except (OSError, subprocess.CalledProcessError):
-        if not MEDIA_ROOT.exists():
-            return tracked
-        for path in MEDIA_ROOT.rglob("*"):
-            if path.is_file():
-                tracked.add(str(path.relative_to(MEDIA_ROOT)))
-    return tracked
-
-
-def prune_untracked_media_refs(
-    value: Any,
-    tracked_keys: Set[str],
-    *,
-    field_name: str = "",
-) -> Any:
-    if isinstance(value, dict):
-        pruned: Dict[str, Any] = {}
-        for key, nested in value.items():
-            next_value = prune_untracked_media_refs(
-                nested,
-                tracked_keys,
-                field_name=str(key),
-            )
-            if next_value is DROP:
-                continue
-            pruned[key] = next_value
-        return pruned
-    if isinstance(value, list):
-        items: List[Any] = []
-        for nested in value:
-            next_value = prune_untracked_media_refs(
-                nested,
-                tracked_keys,
-                field_name=field_name,
-            )
-            if next_value is DROP:
-                continue
-            items.append(next_value)
-        return items
-    if isinstance(value, str):
-        lower = field_name.lower()
-        looks_like_media_field = (
-            field_name in MEDIA_FIELD_NAMES
-            or field_name.endswith("ObjectKey")
-            or lower in {"mediaurls", "imageurls", "mediaobjectkeys", "imageobjectkeys"}
-        )
-        if looks_like_media_field and value.startswith("media/") and value not in tracked_keys:
-            return DROP
-    return value
-
-
-def prune_seed_payload(relative_path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str, Any]:
     seed_sets = payload.get("seedSets") or {}
 
     if relative_path == CONTENT_SCENARIO:
@@ -256,11 +194,7 @@ def prune_seed_payload(relative_path: str, payload: Dict[str, Any]) -> Dict[str,
             if key in CURATED_CIRCLE_IDS
         }
         seed["members"] = {
-            key: [
-                row
-                for row in value
-                if row_id(row, "userId") in CURATED_USER_IDS
-            ]
+            key: value
             for key, value in (seed.get("members") or {}).items()
             if key in CURATED_CIRCLE_IDS
         }
@@ -317,9 +251,8 @@ def prune_seed_payload(relative_path: str, payload: Dict[str, Any]) -> Dict[str,
     return payload
 
 
-def build_curated_scenarios() -> List[str]:
-    tracked_keys = tracked_media_object_keys()
-    written: List[str] = []
+def build_curated_scenarios() -> list[str]:
+    written: list[str] = []
     for relative_path, refs in CURATED_REFS.items():
         source_path = METADATA_ROOT / relative_path
         payload = read_json(source_path)
@@ -339,7 +272,6 @@ def build_curated_scenarios() -> List[str]:
         ).strip()
         curated_payload["seedSets"] = curated_seed_sets
         curated_payload = prune_seed_payload(relative_path, curated_payload)
-        curated_payload = prune_untracked_media_refs(curated_payload, tracked_keys)
         scenarios = []
         for item in curated_payload.get("scenarios") or []:
             next_item = dict(item)
@@ -352,9 +284,9 @@ def build_curated_scenarios() -> List[str]:
     return written
 
 
-def build_gamma_manifest() -> Dict[str, Any]:
+def build_gamma_manifest() -> dict[str, Any]:
     manifest = read_json(GAMMA_MANIFEST)
-    seed_refs: List[Dict[str, Any]] = []
+    seed_refs: list[dict[str, Any]] = []
     for entry in manifest.get("seedRefs", []):
         fixture_path = str(entry.get("fixturePath") or "").strip()
         curated_refs = CURATED_REFS.get(fixture_path)
@@ -375,8 +307,8 @@ def build_gamma_manifest() -> Dict[str, Any]:
     return next_manifest
 
 
-def walk_media_refs(value: Any, field_name: str = "") -> List[str]:
-    refs: List[str] = []
+def walk_media_refs(value: Any, field_name: str = "") -> list[str]:
+    refs: list[str] = []
     if isinstance(value, dict):
         for key, nested in value.items():
             refs.extend(walk_media_refs(nested, str(key)))
@@ -395,7 +327,7 @@ def walk_media_refs(value: Any, field_name: str = "") -> List[str]:
     return refs
 
 
-def build_media_bundle(curated_paths: List[str]) -> Dict[str, Any]:
+def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
     object_keys = sorted(
         {
             ref
@@ -403,7 +335,7 @@ def build_media_bundle(curated_paths: List[str]) -> Dict[str, Any]:
             for ref in walk_media_refs(read_json(ROOT / relative_path))
         }
     )
-    media_objects: List[Dict[str, Any]] = []
+    media_objects: list[dict[str, Any]] = []
     image_count = 0
     for object_key in object_keys:
         path = MEDIA_ROOT / object_key
@@ -441,7 +373,7 @@ def build_media_bundle(curated_paths: List[str]) -> Dict[str, Any]:
     }
 
 
-def sync_media_root(bundle: Dict[str, Any], output_root: Path) -> None:
+def sync_media_root(bundle: dict[str, Any], output_root: Path) -> None:
     if output_root.exists():
         shutil.rmtree(output_root)
     output_root.mkdir(parents=True, exist_ok=True)

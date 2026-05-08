@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-05-05T03:30:19.916728Z",
+  "suite": "gamma-patrol-matrix",
+  "environment": "gamma",
+  "device": {
+    "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+    "name": "iPhone 17 Pro",
+    "targetPlatform": "ios",
+    "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
+    "emulator": true,
+    "ephemeral": false
+  },
+  "extra": {
+    "target": "test/patrol/discovery/feed_load_test.dart"
+  }
+}

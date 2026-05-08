@@ -844,7 +844,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                         width: sideSlotWidth,
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: widget.mode == ProfileMode.other
+                          child:
+                              (widget.mode == ProfileMode.other ||
+                                  widget.onBack != null)
                               ? ProfileIosIconButton(
                                   icon: CupertinoIcons.back,
                                   onPressed:

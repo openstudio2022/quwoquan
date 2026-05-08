@@ -21,7 +21,7 @@ class AssistantHistorySnapshot {
 abstract class AssistantHistoryLoader {
   const AssistantHistoryLoader();
 
-  Future<AssistantHistorySnapshot?> load({required String profileSubjectId});
+  Future<AssistantHistorySnapshot?> load({required String subAccountId});
 }
 
 class LocalAssistantHistoryLoader implements AssistantHistoryLoader {
@@ -29,7 +29,7 @@ class LocalAssistantHistoryLoader implements AssistantHistoryLoader {
 
   @override
   Future<AssistantHistorySnapshot?> load({
-    required String profileSubjectId,
+    required String subAccountId,
   }) async {
     if (_shouldSkipLocalLoad()) {
       return null;
@@ -47,7 +47,7 @@ class LocalAssistantHistoryLoader implements AssistantHistoryLoader {
     final result = await loadTranscriptRowsFromSessionDetail(
       detail: detail,
       pageSize: detail.messages.length,
-      profileSubjectId: profileSubjectId,
+      subAccountId: subAccountId,
       normalizeAssistantContentForModel:
           assistantHistoryTextForModelFromMessageMap,
     );

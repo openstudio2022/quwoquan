@@ -23,6 +23,22 @@ class StPageFlipFoldGeometry {
   final List<Offset> bottomClipArea;
 }
 
+class StPageFlipCanonicalFoldGeometry {
+  const StPageFlipCanonicalFoldGeometry({
+    required this.direction,
+    required this.foldLine,
+    required this.freeEdgeLine,
+    required this.flippingClipArea,
+    required this.bottomClipArea,
+  });
+
+  final StPageFlipDirection direction;
+  final (Offset, Offset) foldLine;
+  final (Offset, Offset) freeEdgeLine;
+  final List<Offset> flippingClipArea;
+  final List<Offset> bottomClipArea;
+}
+
 List<Offset> interpolatePoints(Offset start, Offset end) {
   final sizeX = (start.dx - end.dx).abs();
   final sizeY = (start.dy - end.dy).abs();
@@ -94,6 +110,92 @@ Offset? pointInRect(Rect rect, Offset? point) {
     return point;
   }
   return null;
+}
+
+Offset resolveBackwardReplayCanonicalPoint({
+  required Offset localPagePoint,
+  required double pageWidth,
+  required double pageHeight,
+}) {
+  return Offset(
+    (pageWidth + localPagePoint.dx).clamp(0.0, pageWidth).toDouble(),
+    localPagePoint.dy.clamp(0.0, pageHeight).toDouble(),
+  );
+}
+
+Offset mirrorPagePointHorizontally({
+  required Offset point,
+  required double pageWidth,
+}) {
+  return Offset(
+    (pageWidth - point.dx).clamp(0.0, pageWidth).toDouble(),
+    point.dy,
+  );
+}
+
+(Offset, Offset) orderPageLineTopToBottom((Offset, Offset) line) {
+  if (line.$1.dy < line.$2.dy) {
+    return line;
+  }
+  if (line.$1.dy > line.$2.dy) {
+    return (line.$2, line.$1);
+  }
+  return line.$1.dx <= line.$2.dx ? line : (line.$2, line.$1);
+}
+
+(Offset, Offset)? resolveAnalyticFoldLineForPagePoint({
+  required Offset dragPoint,
+  required StPageFlipCorner corner,
+  required double pageWidth,
+  required double pageHeight,
+}) {
+  final originalCorner = corner == StPageFlipCorner.top
+      ? Offset(pageWidth, 0)
+      : Offset(pageWidth, pageHeight);
+  final midpoint = Offset(
+    (originalCorner.dx + dragPoint.dx) / 2,
+    (originalCorner.dy + dragPoint.dy) / 2,
+  );
+  final dx = dragPoint.dx - originalCorner.dx;
+  final dy = dragPoint.dy - originalCorner.dy;
+  if ((dx * dx + dy * dy) <= 0.000001) {
+    return null;
+  }
+  final direction = Offset(-dy, dx);
+  final line = <Offset>[
+    midpoint - direction * 10000,
+    midpoint + direction * 10000,
+  ];
+  final rectEdges = <List<Offset>>[
+    <Offset>[Offset.zero, Offset(pageWidth, 0)],
+    <Offset>[Offset(pageWidth, 0), Offset(pageWidth, pageHeight)],
+    <Offset>[Offset(pageWidth, pageHeight), Offset(0, pageHeight)],
+    <Offset>[Offset(0, pageHeight), Offset.zero],
+  ];
+  final intersections = <Offset>[];
+  final bounds = Rect.fromLTWH(-0.5, -0.5, pageWidth + 1, pageHeight + 1);
+  for (final edge in rectEdges) {
+    Offset? point;
+    try {
+      point = pointInRect(bounds, intersectLines(line, edge));
+    } catch (_) {
+      continue;
+    }
+    if (point != null &&
+        intersections.every(
+          (existing) => distanceBetweenPoints(existing, point) > 0.5,
+        )) {
+      intersections.add(point);
+    }
+  }
+  if (intersections.length < 2) {
+    return null;
+  }
+  intersections.sort((a, b) {
+    final byY = a.dy.compareTo(b.dy);
+    return byY == 0 ? a.dx.compareTo(b.dx) : byY;
+  });
+  return (intersections.first, intersections.last);
 }
 
 Offset limitPointToCircle(
@@ -192,14 +294,16 @@ class StPageFlipCalculation {
       try {
         _calculateIntersectPoint(_position);
       } catch (_) {
-        return direction == StPageFlipDirection.back;
+        _topIntersectPoint = null;
+        _sideIntersectPoint = null;
+        _bottomIntersectPoint = null;
+        return false;
       }
       return true;
     } catch (_) {
-      if (direction == StPageFlipDirection.back) {
-        _position = localPos;
-        return true;
-      }
+      _topIntersectPoint = null;
+      _sideIntersectPoint = null;
+      _bottomIntersectPoint = null;
       return false;
     }
   }
@@ -281,25 +385,55 @@ class StPageFlipCalculation {
     return (_rect.topRight, _rect.bottomRight);
   }
 
+  StPageFlipCanonicalFoldGeometry? getCanonicalFoldGeometry() {
+    switch (direction) {
+      case StPageFlipDirection.forward:
+        final foldLine = _resolveForwardFoldLine();
+        if (foldLine == null) {
+          return null;
+        }
+        return StPageFlipCanonicalFoldGeometry(
+          direction: direction,
+          foldLine: foldLine,
+          freeEdgeLine: (_rect.topRight, _rect.bottomRight),
+          flippingClipArea: List<Offset>.unmodifiable(getFlippingClipArea()),
+          bottomClipArea: List<Offset>.unmodifiable(getBottomClipArea()),
+        );
+      case StPageFlipDirection.back:
+        final foldLine = _resolveBackwardFoldLine();
+        final freeEdgeLine = getBackwardMovingEdgeLine();
+        if (foldLine == null || freeEdgeLine == null) {
+          return null;
+        }
+        return StPageFlipCanonicalFoldGeometry(
+          direction: direction,
+          foldLine: orderPageLineTopToBottom(foldLine),
+          freeEdgeLine: orderPageLineTopToBottom(freeEdgeLine),
+          flippingClipArea: List<Offset>.unmodifiable(getFlippingClipArea()),
+          bottomClipArea: List<Offset>.unmodifiable(getBottomClipArea()),
+        );
+    }
+  }
+
   StPageFlipFoldGeometry? getForwardFoldGeometry() {
     if (direction != StPageFlipDirection.forward) {
       return null;
     }
-    final foldLine = _resolveForwardFoldLine();
-    if (foldLine == null) {
+    final canonicalGeometry = getCanonicalFoldGeometry();
+    if (canonicalGeometry == null) {
       return null;
     }
     return StPageFlipFoldGeometry(
-      foldLine: foldLine,
+      foldLine: canonicalGeometry.foldLine,
       originalLeftEdgeLine: (Offset.zero, Offset(0, pageHeight)),
       originalRightEdgeLine: (
         Offset(pageWidth, 0),
         Offset(pageWidth, pageHeight),
       ),
       transformedLeftEdgeLine: (_rect.topLeft, _rect.bottomLeft),
-      transformedRightEdgeLine: (_rect.topRight, _rect.bottomRight),
-      flippingClipArea: List<Offset>.unmodifiable(getFlippingClipArea()),
-      bottomClipArea: List<Offset>.unmodifiable(getBottomClipArea()),
+      transformedRightEdgeLine: canonicalGeometry.freeEdgeLine,
+      flippingClipArea: canonicalGeometry.flippingClipArea,
+      bottomClipArea: canonicalGeometry.bottomClipArea,
     );
   }
 
@@ -485,57 +619,23 @@ class StPageFlipCalculation {
     if (analyticLine != null) {
       return analyticLine;
     }
+    return _resolveBoundaryLineFromIntersections();
+  }
+
+  (Offset, Offset)? _resolveBackwardFoldLine() {
+    final analyticLine = _resolveAnalyticBackwardFoldLine();
+    if (analyticLine != null) {
+      return analyticLine;
+    }
+    return _resolveBoundaryLineFromIntersections();
+  }
+
+  (Offset, Offset)? _resolveBoundaryLineFromIntersections() {
     final intersections = <Offset>[
       ?_topIntersectPoint,
       ?_sideIntersectPoint,
       ?_bottomIntersectPoint,
     ];
-    if (intersections.length >= 2) {
-      return (intersections.first, intersections.last);
-    }
-    return null;
-  }
-
-  (Offset, Offset)? _resolveAnalyticForwardFoldLine() {
-    final originalCorner = corner == StPageFlipCorner.top
-        ? Offset(pageWidth, 0)
-        : Offset(pageWidth, pageHeight);
-    final midpoint = Offset(
-      (originalCorner.dx + _position.dx) / 2,
-      (originalCorner.dy + _position.dy) / 2,
-    );
-    final dx = _position.dx - originalCorner.dx;
-    final dy = _position.dy - originalCorner.dy;
-    if ((dx * dx + dy * dy) <= 0.000001) {
-      return null;
-    }
-    final direction = Offset(-dy, dx);
-    final line = <Offset>[
-      midpoint - direction * 10000,
-      midpoint + direction * 10000,
-    ];
-    final rectEdges = <List<Offset>>[
-      <Offset>[Offset.zero, Offset(pageWidth, 0)],
-      <Offset>[Offset(pageWidth, 0), Offset(pageWidth, pageHeight)],
-      <Offset>[Offset(pageWidth, pageHeight), Offset(0, pageHeight)],
-      <Offset>[Offset(0, pageHeight), Offset.zero],
-    ];
-    final intersections = <Offset>[];
-    final bounds = Rect.fromLTWH(-0.5, -0.5, pageWidth + 1, pageHeight + 1);
-    for (final edge in rectEdges) {
-      Offset? point;
-      try {
-        point = pointInRect(bounds, intersectLines(line, edge));
-      } catch (_) {
-        continue;
-      }
-      if (point != null &&
-          intersections.every(
-            (existing) => distanceBetweenPoints(existing, point) > 0.5,
-          )) {
-        intersections.add(point);
-      }
-    }
     if (intersections.length < 2) {
       return null;
     }
@@ -544,6 +644,29 @@ class StPageFlipCalculation {
       return byY == 0 ? a.dx.compareTo(b.dx) : byY;
     });
     return (intersections.first, intersections.last);
+  }
+
+  (Offset, Offset)? _resolveAnalyticForwardFoldLine() {
+    return resolveAnalyticFoldLineForPagePoint(
+      dragPoint: _position,
+      corner: corner,
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
+    );
+  }
+
+  (Offset, Offset)? _resolveAnalyticBackwardFoldLine() {
+    final replayPoint = resolveBackwardReplayCanonicalPoint(
+      localPagePoint: _position,
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
+    );
+    return resolveAnalyticFoldLineForPagePoint(
+      dragPoint: replayPoint,
+      corner: corner,
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
+    );
   }
 
   Offset _checkPositionAtCenterLine(

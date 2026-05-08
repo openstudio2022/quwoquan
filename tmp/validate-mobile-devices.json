@@ -1,0 +1,77 @@
+{
+  "deviceCount": 4,
+  "platforms": [
+    "android",
+    "ios"
+  ],
+  "android": [
+    {
+      "id": "emulator-5554",
+      "name": "sdk gphone64 arm64",
+      "targetPlatform": "android-arm64",
+      "sdk": "Android 12 (API 31)",
+      "emulator": true,
+      "ephemeral": false
+    }
+  ],
+  "ios": [
+    {
+      "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+      "name": "iPhone 17 Pro",
+      "targetPlatform": "ios",
+      "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
+      "emulator": true,
+      "ephemeral": false
+    },
+    {
+      "id": "4426EB5F-ED62-4078-B491-DCAFACB34AC3",
+      "name": "iPhone 15 Pro",
+      "targetPlatform": "ios",
+      "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+      "emulator": true,
+      "ephemeral": false
+    },
+    {
+      "id": "EAF3A223-E742-433D-B116-A152DCC7FF84",
+      "name": "iPad Pro (12.9-inch) (6th generation)",
+      "targetPlatform": "ios",
+      "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+      "emulator": true,
+      "ephemeral": false
+    }
+  ],
+  "devices": [
+    {
+      "id": "emulator-5554",
+      "name": "sdk gphone64 arm64",
+      "targetPlatform": "android-arm64",
+      "sdk": "Android 12 (API 31)",
+      "emulator": true,
+      "ephemeral": false
+    },
+    {
+      "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+      "name": "iPhone 17 Pro",
+      "targetPlatform": "ios",
+      "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
+      "emulator": true,
+      "ephemeral": false
+    },
+    {
+      "id": "4426EB5F-ED62-4078-B491-DCAFACB34AC3",
+      "name": "iPhone 15 Pro",
+      "targetPlatform": "ios",
+      "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+      "emulator": true,
+      "ephemeral": false
+    },
+    {
+      "id": "EAF3A223-E742-433D-B116-A152DCC7FF84",
+      "name": "iPad Pro (12.9-inch) (6th generation)",
+      "targetPlatform": "ios",
+      "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+      "emulator": true,
+      "ephemeral": false
+    }
+  ]
+}

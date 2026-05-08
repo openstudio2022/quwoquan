@@ -4,13 +4,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT_DIR/quwoquan_app"
 ASSISTANT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/assistant-service"
+CHAT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/chat-service"
 LOG_DIR="$ROOT_DIR/tmp/app_beta_manual"
 MANIFEST="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
 ASSISTANT_APP_CONFIG="$ROOT_DIR/quwoquan_app/assistant/config.json"
 
 ASSISTANT_PORT="${ASSISTANT_PORT:-18087}"
+CHAT_PORT="${CHAT_PORT:-18081}"
 GATEWAY_PORT="${GATEWAY_PORT:-18080}"
 MEDIA_PORT="${MEDIA_PORT:-18088}"
+CHAT_SEED_REFS="${CHAT_SEED_REFS:-chat_core,chat_settings_core,chat_contacts_core,chat_group_flow_core}"
+CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017}"
+CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
+CHAT_REDIS_ADDR="${CHAT_REDIS_ADDR:-localhost:6379}"
 GATEWAY_BASE_URL_EXPLICIT=0
 if [[ -n "${GATEWAY_BASE_URL:-}" ]]; then
   GATEWAY_BASE_URL_EXPLICIT=1
@@ -285,14 +291,20 @@ fi
 BETA_MANUAL_KILL_EXISTING="$KILL_EXISTING"
 beta_manual_init
 RESTARTED_FROM_PREVIOUS=0
-if [[ -f "$BETA_MANUAL_STATE_DIR/stack.env" ]] || [[ -n "$(beta_manual_port_pids "$GATEWAY_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$MEDIA_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$ASSISTANT_PORT")" ]]; then
+if [[ -f "$BETA_MANUAL_STATE_DIR/stack.env" ]] || [[ -n "$(beta_manual_port_pids "$GATEWAY_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$MEDIA_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$ASSISTANT_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$CHAT_PORT")" ]]; then
   RESTARTED_FROM_PREVIOUS=1
 fi
 ASSISTANT_LOG="$LOG_DIR/assistant-service-beta.log"
+CHAT_LOG="$LOG_DIR/chat-service-beta.log"
+CHAT_SEED_LOG="$LOG_DIR/chat-seed.log"
 GATEWAY_LOG="$LOG_DIR/app-beta-gateway.log"
 MEDIA_LOG="$LOG_DIR/app-beta-media.log"
 MEDIA_DIR="$LOG_DIR/media"
 SOURCE_MEDIA_ROOT="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
+CANONICAL_SOURCE_MEDIA_ROOT="$SOURCE_MEDIA_ROOT"
+if [[ -d "$SOURCE_MEDIA_ROOT/media" ]]; then
+  CANONICAL_SOURCE_MEDIA_ROOT="$SOURCE_MEDIA_ROOT/media"
+fi
 REPORT="$LOG_DIR/app-beta-manual-report.json"
 
 detect_device_kind() {
@@ -416,6 +428,7 @@ beta_manual_record_metadata "stack" "$BETA_MANUAL_STACK_NAME"
 beta_manual_record_metadata "controller_pid" "$$"
 beta_manual_record_metadata "owner_id" "$BETA_MANUAL_OWNER_ID"
 beta_manual_record_metadata "assistant_port" "$ASSISTANT_PORT"
+beta_manual_record_metadata "chat_port" "$CHAT_PORT"
 beta_manual_record_metadata "gateway_port" "$GATEWAY_PORT"
 beta_manual_record_metadata "gateway_base_url" "$GATEWAY_BASE_URL"
 beta_manual_record_metadata "flutter_device_id" "$FLUTTER_DEVICE_ID"
@@ -436,6 +449,7 @@ trap 'cleanup; exit 129' HUP
 trap 'cleanup; exit 148' TSTP
 
 beta_manual_ensure_port_available "$ASSISTANT_PORT" "assistant-service"
+beta_manual_ensure_port_available "$CHAT_PORT" "chat-service"
 beta_manual_ensure_port_available "$GATEWAY_PORT" "gateway"
 beta_manual_ensure_port_available "$MEDIA_PORT" "media-static"
 
@@ -452,16 +466,16 @@ rm -rf "$MEDIA_DIR"
 mkdir -p "$MEDIA_DIR/media"
 case "$MEDIA_PREP_MODE" in
   copy)
-    cp -R "$SOURCE_MEDIA_ROOT/." "$MEDIA_DIR/media/"
+    cp -R "$CANONICAL_SOURCE_MEDIA_ROOT/." "$MEDIA_DIR/media/"
     ;;
   symlink)
-    ln -s "$SOURCE_MEDIA_ROOT/avatar" "$MEDIA_DIR/media/avatar"
-    ln -s "$SOURCE_MEDIA_ROOT/image" "$MEDIA_DIR/media/image"
-    if [[ -d "$SOURCE_MEDIA_ROOT/background" ]]; then
-      ln -s "$SOURCE_MEDIA_ROOT/background" "$MEDIA_DIR/media/background"
+    ln -s "$CANONICAL_SOURCE_MEDIA_ROOT/avatar" "$MEDIA_DIR/media/avatar"
+    ln -s "$CANONICAL_SOURCE_MEDIA_ROOT/image" "$MEDIA_DIR/media/image"
+    if [[ -d "$CANONICAL_SOURCE_MEDIA_ROOT/background" ]]; then
+      ln -s "$CANONICAL_SOURCE_MEDIA_ROOT/background" "$MEDIA_DIR/media/background"
     fi
-    if [[ -d "$SOURCE_MEDIA_ROOT/video" ]]; then
-      ln -s "$SOURCE_MEDIA_ROOT/video" "$MEDIA_DIR/media/video"
+    if [[ -d "$CANONICAL_SOURCE_MEDIA_ROOT/video" ]]; then
+      ln -s "$CANONICAL_SOURCE_MEDIA_ROOT/video" "$MEDIA_DIR/media/video"
     fi
     ;;
 esac
@@ -511,6 +525,49 @@ beta_manual_wait_http_ok "http://127.0.0.1:${ASSISTANT_PORT}/healthz" "assistant
   exit 1
 }
 
+echo "[app-beta-manual] seeding local chat fixture db refs: $CHAT_SEED_REFS"
+IFS=',' read -r -a CHAT_SEED_REF_ARRAY <<< "$CHAT_SEED_REFS"
+CHAT_SEED_ARGS=()
+for seed_ref in "${CHAT_SEED_REF_ARRAY[@]}"; do
+  if [[ -n "${seed_ref// }" ]]; then
+    CHAT_SEED_ARGS+=(--seed-ref "$seed_ref")
+  fi
+done
+(
+  cd "$CHAT_SERVICE_DIR"
+  go run ./cmd/seed-fixture \
+    --mongo-uri "$CHAT_MONGO_URI" \
+    --database "$CHAT_MONGO_DATABASE" \
+    "${CHAT_SEED_ARGS[@]}"
+) >"$CHAT_SEED_LOG" 2>&1 || {
+  echo "chat seed log: $CHAT_SEED_LOG" >&2
+  exit 1
+}
+
+echo "[app-beta-manual] starting chat-service beta on :$CHAT_PORT"
+beta_manual_start_process \
+  "chat-service" \
+  "$CHAT_LOG" \
+  "$CHAT_SERVICE_DIR" \
+  env \
+    APP_ENV=beta \
+    CHAT_SERVICE_ADDR=":${CHAT_PORT}" \
+    MONGO_URI="$CHAT_MONGO_URI" \
+    MONGO_DATABASE="$CHAT_MONGO_DATABASE" \
+    REDIS_ADDR="$CHAT_REDIS_ADDR" \
+    CHAT_GROUP_AVATAR_CDN_BASE_URL="$MEDIA_AVATAR_CDN_BASE_URL" \
+    CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT="$MEDIA_DIR" \
+    USER_SERVICE_BASE_URL="$GATEWAY_BASE_URL" \
+    RELIABLE_TASK_CATALOG_PATH="$ROOT_DIR/deploy/shared/reliable_task_module_catalog.yaml" \
+    RELIABLE_TASK_RETENTION_POLICY_PATH="$ROOT_DIR/deploy/shared/reliable_task_retention_policy.yaml" \
+    go run ./cmd/api
+
+beta_manual_wait_http_ok "http://127.0.0.1:${CHAT_PORT}/healthz" "chat-service" 60 || {
+  echo "chat log: $CHAT_LOG" >&2
+  echo "chat seed log: $CHAT_SEED_LOG" >&2
+  exit 1
+}
+
 echo "[app-beta-manual] starting unified local beta gateway on :$GATEWAY_PORT"
 beta_manual_start_process \
   "gateway" \
@@ -519,8 +576,10 @@ beta_manual_start_process \
   python3 scripts/dev_assistant_beta_gateway.py \
     --listen-host 127.0.0.1 \
     --listen-port "$GATEWAY_PORT" \
-    --upstream-host 127.0.0.1 \
-    --upstream-port "$ASSISTANT_PORT" \
+    --assistant-upstream-host 127.0.0.1 \
+    --assistant-upstream-port "$ASSISTANT_PORT" \
+    --chat-upstream-host 127.0.0.1 \
+    --chat-upstream-port "$CHAT_PORT" \
     --avatar-cdn-base-url "$MEDIA_AVATAR_CDN_BASE_URL" \
     --image-cdn-base-url "$MEDIA_IMAGE_CDN_BASE_URL" \
     --video-cdn-base-url "$MEDIA_VIDEO_CDN_BASE_URL"
@@ -529,9 +588,28 @@ beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/healthz" "gateway" 30
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/assistant/skill-subscriptions" "assistant route" 60 || { echo "assistant log: $ASSISTANT_LOG" >&2; echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/config/app" "app config fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/content/feed" "content fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/inbox" "chat fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/contacts" "chat contacts fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/conversations" "chat conversations fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/inbox" "chat inbox route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/contacts" "chat contacts route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/chat/conversations" "chat conversations route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+python3 - "$GATEWAY_PORT" <<'PY' || { echo "gateway log: $GATEWAY_LOG" >&2; echo "chat log: $CHAT_LOG" >&2; exit 1; }
+import json
+import sys
+from urllib.request import Request, urlopen
+
+port = sys.argv[1]
+req = Request(
+    f"http://127.0.0.1:{port}/v1/user/sync",
+    data=json.dumps({"afterSeq": 0, "limit": 1}).encode("utf-8"),
+    headers={
+        "Content-Type": "application/json",
+        "X-Client-User-Id": "fixture_user_current",
+    },
+    method="POST",
+)
+with urlopen(req, timeout=30) as resp:
+    if resp.status != 200:
+        raise SystemExit(f"user sync route unhealthy: {resp.status}")
+PY
 beta_manual_wait_http_ok "http://127.0.0.1:${MEDIA_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "host media avatar route" 30 || { echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/user/fixture_user_current/v1/avatar.png" "gateway current user avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/media/avatar/user/fixture_user_friend/v1/avatar.png" "gateway friend avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
@@ -552,7 +630,7 @@ beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/integration/locati
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/app-messages" "notification fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/rtc/calls" "rtc fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 
-python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" <<'PY'
+python3 - "$REPORT" "$MANIFEST" "$GATEWAY_BASE_URL" "$ASSISTANT_PORT" "$CHAT_PORT" "$DEVICE_KIND" "$LOCAL_PUBLIC_HOST" "$MEDIA_AVATAR_CDN_BASE_URL" "$MEDIA_IMAGE_CDN_BASE_URL" "$MEDIA_VIDEO_CDN_BASE_URL" "$MEDIA_UPLOAD_BASE_URL" "$ADB_REVERSE_ENABLED" "$RESTARTED_FROM_PREVIOUS" "$FLUTTER_DEVICE_ID" "$VERIFY_MODE" "$MEDIA_PREP_MODE" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -562,6 +640,7 @@ from pathlib import Path
     manifest_path,
     gateway,
     assistant_port,
+    chat_port,
     device_kind,
     local_public_host,
     avatar_cdn,
@@ -573,7 +652,7 @@ from pathlib import Path
     flutter_device_id,
     seed_verify_mode,
     media_prep_mode,
-) = sys.argv[1:16]
+) = sys.argv[1:17]
 manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
 report = {
     "status": "ready",
@@ -594,6 +673,7 @@ report = {
     "adbReverseEnabled": adb_reverse == "1",
     "restartedFromPrevious": restarted_from_previous == "1",
     "assistantServiceUrl": f"http://127.0.0.1:{assistant_port}",
+    "chatServiceUrl": f"http://127.0.0.1:{chat_port}",
     "manifest": str(Path(manifest_path)),
     "checkedRoutes": [
         "/healthz",
@@ -603,6 +683,7 @@ report = {
         "/v1/chat/inbox",
         "/v1/chat/contacts",
         "/v1/chat/conversations",
+        "/v1/user/sync",
         "/v1/circles",
         "/v1/circles/fixture_circle_photo/feed",
         "/v1/user/profile",
@@ -643,7 +724,7 @@ echo "[app-beta-manual] APP_RUNTIME_ENV=beta APP_DATA_SOURCE=remote CLOUD_GATEWA
 
 if [[ "$SKIP_APP" == "1" ]]; then
   echo "[app-beta-manual] --skip-app set; beta cloud stack keeps running until Ctrl-C."
-  beta_manual_wait_until_stopped assistant-service gateway media-static
+  beta_manual_wait_until_stopped assistant-service chat-service gateway media-static
   exit 0
 fi
 

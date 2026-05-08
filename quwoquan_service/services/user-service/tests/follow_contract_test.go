@@ -372,14 +372,14 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 		if !ok {
 			t.Fatalf("unexpected item payload: %#v", raw)
 		}
-		profileSubjectID := item["profileSubjectId"]
-		if profileSubjectID == "ps_filtered_target_b" || profileSubjectID == "ps_filtered_target_c" {
+		subAccountID := item["subAccountId"]
+		if subAccountID == "ps_filtered_target_b" || subAccountID == "ps_filtered_target_c" {
 			t.Fatalf("filtered targets should not leak into visible page, got %#v", item)
 		}
-		if _, exists := seen[profileSubjectID.(string)]; exists {
+		if _, exists := seen[subAccountID.(string)]; exists {
 			t.Fatalf("expected no duplicate visible items, got %#v", items)
 		}
-		seen[profileSubjectID.(string)] = struct{}{}
+		seen[subAccountID.(string)] = struct{}{}
 	}
 	snapshot := followtelemetry.Collector().Snapshot()
 	if snapshot[followtelemetry.MetricGraphFilterMismatchCount] <= 0 {

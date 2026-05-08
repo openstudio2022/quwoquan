@@ -25,7 +25,7 @@ import 'package:quwoquan_app/core/models/search_models.dart';
 
 void main() {
   group('ProfileSubjectWireDto', () {
-    test('userId 仅填充 profileSubjectId，不再冒充 ownerUserId', () {
+    test('userId 仅填充 subAccountId，不再冒充 ownerUserId', () {
       final dto = ProfileSubjectWireDto.fromMap(<String, dynamic>{
         'userId': 'u_owner',
         'nickname': 'nick',
@@ -35,7 +35,7 @@ void main() {
         'circleCount': 4,
         'likeCount': 5,
       });
-      expect(dto.profileSubjectId, 'u_owner');
+      expect(dto.subAccountId, 'u_owner');
       expect(dto.ownerUserId, isEmpty);
       expect(dto.displayName, 'nick');
     });
@@ -50,7 +50,7 @@ void main() {
 
     test('toMap round-trip 稳定', () {
       final dto = ProfileSubjectWireDto.fromMap(<String, dynamic>{
-        'profileSubjectId': 'ps1',
+        'subAccountId': 'ps1',
         'ownerUserId': 'o1',
         'subAccountId': '',
         'userHandle': 'handle_1',
@@ -70,7 +70,7 @@ void main() {
         'inheritsFromOwner': false,
       });
       final restored = ProfileSubjectWireDto.fromMap(dto.toMap());
-      expect(restored.profileSubjectId, dto.profileSubjectId);
+      expect(restored.subAccountId, dto.subAccountId);
       expect(restored.userHandle, 'handle_1');
       expect(restored.followerCount, dto.followerCount);
     });
@@ -103,7 +103,7 @@ void main() {
         'avatarUrl': 'https://a.test/1.jpg',
         'isFollowing': true,
       });
-      expect(dto.profileSubjectId, 'rel_1');
+      expect(dto.subAccountId, 'rel_1');
       expect(dto.displayName, '朋友');
       expect(dto.isFollowing, isTrue);
     });
@@ -139,10 +139,10 @@ void main() {
         'createdAt': '2026-02-02T12:00:00Z',
       });
       expect(dto.activityId, 'act_1');
-      expect(dto.actorProfileSubjectId, 'actor_sub');
+      expect(dto.actorSubAccountId, 'actor_sub');
       expect(dto.actorDisplayName, '小明');
       expect(dto.actorAvatarUrl, 'https://av.test/z.jpg');
-      expect(dto.targetProfileSubjectId, 'tgt_sub');
+      expect(dto.targetSubAccountId, 'tgt_sub');
       expect(dto.targetContentId, 'post_99');
       expect(dto.targetContentSummary, '摘要');
     });
@@ -163,10 +163,9 @@ void main() {
   });
 
   group('PersonaManagementItemWireDto', () {
-    test('personaId / id 别名与扩展字段', () {
+    test('subAccountId / id 别名与扩展字段', () {
       final dto = PersonaManagementItemWireDto.fromMap(<String, dynamic>{
-        'personaId': 'per_1',
-        'profileSubjectId': 'subj_1',
+        'subAccountId': 'per_1',
         'nickname': '分身名',
         'userHandle': 'persona_handle',
         'phone': '13800000000',
@@ -175,7 +174,6 @@ void main() {
         'overriddenProfileFields': <String>['email'],
       });
       expect(dto.subAccountId, 'per_1');
-      expect(dto.profileSubjectId, 'subj_1');
       expect(dto.displayName, '分身名');
       expect(dto.userHandle, 'persona_handle');
       expect(dto.phone, '13800000000');
@@ -200,7 +198,6 @@ void main() {
     test('无 subAccountId 时 subjectType 归一为 user', () {
       final view = PersonaManagementItemViewData.fromPersonaManagementItemWire(
         PersonaManagementItemWireDto.fromMap(<String, dynamic>{
-          'profileSubjectId': 'owner_row',
           'displayName': '主号',
         }),
       );
@@ -225,8 +222,6 @@ void main() {
   group('ActivePersonaContextWireDto', () {
     test('persona envelope 字段可稳定解码', () {
       final dto = ActivePersonaContextWireDto.fromMap(<String, dynamic>{
-        'personaId': 'persona_main',
-        'profileSubjectId': 'subject_main',
         'subAccountId': 'persona_main',
         'ownerUserId': 'user_main',
         'contextVersion': 3,
@@ -234,8 +229,7 @@ void main() {
         'sourceSurfaceId': 'notification_center',
         'explicitOverride': true,
       });
-      expect(dto.personaId, 'persona_main');
-      expect(dto.profileSubjectId, 'subject_main');
+      expect(dto.subAccountId, 'persona_main');
       expect(dto.ownerUserId, 'user_main');
       expect(dto.personaContextVersion, '3');
       expect(dto.personaSnapshotVersion, 2);
@@ -243,21 +237,19 @@ void main() {
       expect(dto.explicitOverride, isTrue);
     });
 
-    test('view data 暴露 canonical personaId 与 typed envelope', () {
+    test('view data 暴露 canonical subAccountId 与 typed envelope', () {
       final view = ActivePersonaContextViewData.fromActivePersonaContextWire(
         ActivePersonaContextWireDto.fromMap(<String, dynamic>{
-          'personaId': 'persona_photo',
-          'profileSubjectId': 'subject_photo',
           'subAccountId': 'persona_photo',
           'ownerUserId': 'user_owner',
           'contextVersion': 5,
         }),
       );
-      expect(view.personaId, 'persona_photo');
+      expect(view.subAccountId, 'persona_photo');
       expect(view.contextVersion, '5');
       expect(
         view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
-        containsPair('personaId', 'persona_photo'),
+        containsPair('subAccountId', 'persona_photo'),
       );
       expect(
         view.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
@@ -280,11 +272,11 @@ void main() {
   group('SocialRelationSearchItemWireDto', () {
     test('显式空 subAccountId 不截断 userId（skip_empty_string_aliases）', () {
       final dto = SocialRelationSearchItemWireDto.fromMap(<String, dynamic>{
-        'profileSubjectId': '',
+        'subAccountId': '',
         'userId': 'search_u1',
         'nickname': 'n',
       });
-      expect(dto.profileSubjectId, 'search_u1');
+      expect(dto.subAccountId, 'search_u1');
     });
   });
 
@@ -358,14 +350,14 @@ void main() {
   });
 
   group('ActivePersonaContextWireDto', () {
-    test('skip_empty 后 userId 回填 profileSubjectId', () {
+    test('skip_empty 后 userId 回填 subAccountId', () {
       final dto = ActivePersonaContextWireDto.fromMap(<String, dynamic>{
-        'profileSubjectId': '',
         'subAccountId': '',
         'userId': 'ctx_u',
         'nickname': '展示',
       });
-      expect(dto.profileSubjectId, 'ctx_u');
+      expect(dto.subAccountId, '');
+      expect(dto.ownerUserId, 'ctx_u');
     });
   });
 
@@ -376,7 +368,6 @@ void main() {
         'subAccounts': <Map<String, dynamic>>[
           <String, dynamic>{
             'subAccountId': 's1',
-            'profileSubjectId': 'p1',
             'displayName': 'A',
           },
         ],
@@ -395,8 +386,8 @@ void main() {
   group('RelationshipCapabilityWireDto', () {
     test('映射到 RelationshipCapabilityDto', () {
       final dto = RelationshipCapabilityWireDto.fromMap(<String, dynamic>{
-        'viewerProfileSubjectId': 'v1',
-        'targetProfileSubjectId': 't1',
+        'viewerSubAccountId': 'v1',
+        'targetSubAccountId': 't1',
         'relationState': 'following',
         'canFollow': false,
         'canUnfollow': true,

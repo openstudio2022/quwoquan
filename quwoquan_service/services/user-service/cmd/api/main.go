@@ -122,6 +122,11 @@ func main() {
 	defer redisRouter.Close()
 	redisClient := redisRouter.Scene("general")
 
+	shardDirectory, err := application.LoadDefaultShardDirectory()
+	if err != nil {
+		log.Fatalf("load shard directory: %v", err)
+	}
+
 	// 5. Stores
 	profileStore := persistence.NewPgProfileStore(pgPool)
 	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
@@ -130,6 +135,7 @@ func main() {
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
+	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
 
@@ -172,7 +178,14 @@ func main() {
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
 	settingService := application.NewSettingService(settingStore, settingCache)
-	authService := application.NewAuthService(profileStore, personaStore, credentialStore, profileCache)
+	authService := application.NewAuthService(
+		profileStore,
+		personaStore,
+		credentialStore,
+		anonymousDeviceBindingStore,
+		profileCache,
+		shardDirectory,
+	)
 	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
 	inviteService := application.NewInviteService(inviteStore, personaStore)

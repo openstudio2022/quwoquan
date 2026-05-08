@@ -1,0 +1,21 @@
+{
+  "capturedAt": "2026-05-04T18:13:38.096858Z",
+  "target": "test/patrol/discovery/feed_load_test.dart",
+  "deviceId": "dry-run-ios",
+  "command": [
+    "patrol",
+    "test",
+    "-t",
+    "test/patrol/discovery/feed_load_test.dart",
+    "-d",
+    "dry-run-ios",
+    "--dart-define=RUN_T4_PATROL=true",
+    "--dart-define=APP_RUNTIME_ENV=gamma",
+    "--dart-define=APP_DATA_SOURCE=remote",
+    "--dart-define=API_CONTRACT_ENV=gamma",
+    "--dart-define=CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:18080",
+    "--dart-define=API_CONTRACT_BASE_URL=http://127.0.0.1:18080",
+    "--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=http://127.0.0.1:18086",
+    "--dart-define=TEST_AUTH_TOKEN=dry-run-token"
+  ]
+}

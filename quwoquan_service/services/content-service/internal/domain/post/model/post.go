@@ -16,8 +16,6 @@ type Comment struct {
 	ID                        string    `json:"_id" bson:"_id"`
 	PostId                    string    `json:"postId" bson:"postId"`
 	AuthorId                  string    `json:"authorId" bson:"authorId"`
-	PersonaId                 string    `json:"personaId" bson:"personaId"`
-	ProfileSubjectId          string    `json:"profileSubjectId" bson:"profileSubjectId"`
 	AuthorDisplayNameSnapshot string    `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
 	AuthorAvatarUrlSnapshot   string    `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
 	PersonaContextVersion     int64     `json:"personaContextVersion" bson:"personaContextVersion"`
@@ -86,8 +84,6 @@ type MediaAsset struct {
 type Post struct {
 	ID                        string         `json:"_id" bson:"_id"`
 	AuthorId                  string         `json:"authorId" bson:"authorId"`
-	PersonaId                 string         `json:"personaId" bson:"personaId"`
-	ProfileSubjectId          string         `json:"profileSubjectId" bson:"profileSubjectId"`
 	AuthorDisplayNameSnapshot string         `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
 	AuthorAvatarUrlSnapshot   string         `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
 	PersonaContextVersion     int64          `json:"personaContextVersion" bson:"personaContextVersion"`
@@ -168,36 +164,36 @@ type PostCircleReshare struct {
 
 // PostSearchItemView domain model.
 type PostSearchItemView struct {
-	PostId                 string    `json:"postId" bson:"postId"`
-	ContentType            string    `json:"contentType" bson:"contentType"`
-	ContentIdentity        string    `json:"contentIdentity" bson:"contentIdentity"`
-	Title                  string    `json:"title" bson:"title"`
-	Summary                string    `json:"summary" bson:"summary"`
-	CoverUrl               string    `json:"coverUrl" bson:"coverUrl"`
-	AuthorProfileSubjectId string    `json:"authorProfileSubjectId" bson:"authorProfileSubjectId"`
-	AuthorDisplayName      string    `json:"authorDisplayName" bson:"authorDisplayName"`
-	AuthorAvatarUrl        string    `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
-	CircleId               string    `json:"circleId" bson:"circleId"`
-	CircleName             string    `json:"circleName" bson:"circleName"`
-	CategoryId             string    `json:"categoryId" bson:"categoryId"`
-	SubCategory            string    `json:"subCategory" bson:"subCategory"`
-	LikeCount              int64     `json:"likeCount" bson:"likeCount"`
-	HighlightText          string    `json:"highlightText" bson:"highlightText"`
-	MatchedField           string    `json:"matchedField" bson:"matchedField"`
-	PublishedAt            time.Time `json:"publishedAt" bson:"publishedAt"`
+	PostId            string    `json:"postId" bson:"postId"`
+	ContentType       string    `json:"contentType" bson:"contentType"`
+	ContentIdentity   string    `json:"contentIdentity" bson:"contentIdentity"`
+	Title             string    `json:"title" bson:"title"`
+	Summary           string    `json:"summary" bson:"summary"`
+	CoverUrl          string    `json:"coverUrl" bson:"coverUrl"`
+	AuthorId          string    `json:"authorId" bson:"authorId"`
+	AuthorDisplayName string    `json:"authorDisplayName" bson:"authorDisplayName"`
+	AuthorAvatarUrl   string    `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
+	CircleId          string    `json:"circleId" bson:"circleId"`
+	CircleName        string    `json:"circleName" bson:"circleName"`
+	CategoryId        string    `json:"categoryId" bson:"categoryId"`
+	SubCategory       string    `json:"subCategory" bson:"subCategory"`
+	LikeCount         int64     `json:"likeCount" bson:"likeCount"`
+	HighlightText     string    `json:"highlightText" bson:"highlightText"`
+	MatchedField      string    `json:"matchedField" bson:"matchedField"`
+	PublishedAt       time.Time `json:"publishedAt" bson:"publishedAt"`
 }
 
 // ProfileInteractionActivityView domain model.
 type ProfileInteractionActivityView struct {
-	ActivityId             string    `json:"activityId" bson:"activityId"`
-	ActivityType           string    `json:"activityType" bson:"activityType"`
-	Direction              string    `json:"direction" bson:"direction"`
-	ActorProfileSubjectId  string    `json:"actorProfileSubjectId" bson:"actorProfileSubjectId"`
-	ActorDisplayName       string    `json:"actorDisplayName" bson:"actorDisplayName"`
-	ActorAvatarUrl         string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
-	TargetProfileSubjectId string    `json:"targetProfileSubjectId" bson:"targetProfileSubjectId"`
-	TargetContentId        string    `json:"targetContentId" bson:"targetContentId"`
-	TargetContentType      string    `json:"targetContentType" bson:"targetContentType"`
-	TargetContentSummary   string    `json:"targetContentSummary" bson:"targetContentSummary"`
-	CreatedAt              time.Time `json:"createdAt" bson:"createdAt"`
+	ActivityId           string    `json:"activityId" bson:"activityId"`
+	ActivityType         string    `json:"activityType" bson:"activityType"`
+	Direction            string    `json:"direction" bson:"direction"`
+	ActorSubAccountId    string    `json:"actorSubAccountId" bson:"actorSubAccountId"`
+	ActorDisplayName     string    `json:"actorDisplayName" bson:"actorDisplayName"`
+	ActorAvatarUrl       string    `json:"actorAvatarUrl" bson:"actorAvatarUrl"`
+	TargetSubAccountId   string    `json:"targetSubAccountId" bson:"targetSubAccountId"`
+	TargetContentId      string    `json:"targetContentId" bson:"targetContentId"`
+	TargetContentType    string    `json:"targetContentType" bson:"targetContentType"`
+	TargetContentSummary string    `json:"targetContentSummary" bson:"targetContentSummary"`
+	CreatedAt            time.Time `json:"createdAt" bson:"createdAt"`
 }

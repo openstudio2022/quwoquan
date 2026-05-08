@@ -123,19 +123,17 @@ class RemoteCircleRepository implements CircleRepository {
   Future<void> joinCircle(
     String circleId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {
     final uri = _uri(CircleApiMetadata.joinCirclePath(circleId: circleId));
     final resp = await _client.post(
       uri,
-      headers: CloudRequestHeaders.withPersonaContext(
+      headers: CloudRequestHeaders.withOwnerSubAccountContext(
         CloudRequestHeaders.forPage(CircleRequestPageIds.joinCircle),
         ownerUserId: ownerUserId,
-        actorProfileSubjectId: actorProfileSubjectId,
-        personaId: personaId,
-        personaContextVersion: personaContextVersion,
+        subAccountId: subAccountId,
+        subAccountContextVersion: subAccountContextVersion,
       ),
     );
     _ensureSuccess(resp);
@@ -145,19 +143,17 @@ class RemoteCircleRepository implements CircleRepository {
   Future<void> leaveCircle(
     String circleId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {
     final uri = _uri(CircleApiMetadata.leaveCirclePath(circleId: circleId));
     final resp = await _client.post(
       uri,
-      headers: CloudRequestHeaders.withPersonaContext(
+      headers: CloudRequestHeaders.withOwnerSubAccountContext(
         CloudRequestHeaders.forPage(CircleRequestPageIds.leaveCircle),
         ownerUserId: ownerUserId,
-        actorProfileSubjectId: actorProfileSubjectId,
-        personaId: personaId,
-        personaContextVersion: personaContextVersion,
+        subAccountId: subAccountId,
+        subAccountContextVersion: subAccountContextVersion,
       ),
     );
     _ensureSuccess(resp);

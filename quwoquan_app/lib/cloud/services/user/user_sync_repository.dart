@@ -81,19 +81,34 @@ class MockUserSyncRepository implements UserSyncRepository {
   }
 }
 
+typedef UserSyncRemoteMergeRequestContext =
+    Future<Map<String, String>> Function(Map<String, String> baseHeaders);
+
 class RemoteUserSyncRepository implements UserSyncRepository {
   RemoteUserSyncRepository({
     CloudHttpClient? httpClient,
     http.Client? client,
     String? baseUrl,
+    UserSyncRemoteMergeRequestContext? mergeRequestContext,
   }) : _httpClient =
            httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+       _mergeRequestContext = mergeRequestContext;
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
+  final UserSyncRemoteMergeRequestContext? _mergeRequestContext;
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
+
+  Future<Map<String, String>> _resolveHeaders(String clientPageId) async {
+    final base = CloudRequestHeaders.forPage(clientPageId);
+    final merger = _mergeRequestContext;
+    if (merger == null) {
+      return base;
+    }
+    return merger(base);
+  }
 
   @override
   Future<UserSyncPullResult> pull({
@@ -102,7 +117,7 @@ class RemoteUserSyncRepository implements UserSyncRepository {
   }) async {
     final result = await _httpClient.postJsonObject(
       _uri(UserApiMetadata.pullUserSyncPath),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.pullUserSync),
+      headers: await _resolveHeaders(UserRequestPageIds.pullUserSync),
       body: <String, dynamic>{'afterSeq': afterSeq, 'limit': limit},
       context: UserRequestPageIds.pullUserSync,
     );

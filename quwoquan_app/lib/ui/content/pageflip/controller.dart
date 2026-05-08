@@ -693,6 +693,7 @@ class StPageFlipController {
         .clamp(0.0, 1.0)
         .toDouble();
     final pageSize = Size(_layout.bounds.pageWidth, _layout.bounds.height);
+    final canonicalFoldGeometry = calculation.getCanonicalFoldGeometry();
     return buildBackwardDynamicRenderFrame(
       BackwardRenderFrameData(
         localPagePoint: localPagePoint,
@@ -705,7 +706,8 @@ class StPageFlipController {
         flippingAnchor: calculation.getActiveCorner(),
         bottomAnchor: calculation.getBottomPagePosition(),
         angle: calculation.getAngle(),
-        movingEdgeLine: calculation.getBackwardMovingEdgeLine(),
+        foldLine: canonicalFoldGeometry?.foldLine,
+        freeEdgeLine: canonicalFoldGeometry?.freeEdgeLine,
         shadow: _buildShadowData(
           calculation.getShadowStartPoint(),
           calculation.getShadowAngle(),

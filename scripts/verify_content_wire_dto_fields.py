@@ -139,9 +139,6 @@ def main() -> int:
 
     missing = []
     for name in sorted(comment_fields):
-        if name == "profileSubjectId" and "profileSubjectId" not in comment_keys:
-            if "authorId" in comment_keys:
-                continue
         if name not in comment_keys and name != "_id":
             missing.append(name)
         if name == "_id" and "_id" not in comment_keys and "id" not in comment_keys:
@@ -165,7 +162,7 @@ def main() -> int:
         "type",
         "body",
         "thumbnailUrl",
-        "profileSubjectId",
+        "subAccountId",
         "authorDisplayNameSnapshot",
         "authorAvatarUrlSnapshot",
         "displayName",

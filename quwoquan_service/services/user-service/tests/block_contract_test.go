@@ -13,7 +13,7 @@ func TestBlock_Success(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/blocked_1/block",
+		"/v1/user/sub-accounts/blocked_1/block",
 		"",
 		authHeadersForPersona("blocker_1", "ps_blocker_1"),
 	)
@@ -24,7 +24,7 @@ func TestBlock_Success(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/profile-subjects/blocked_1/block/check",
+		"/v1/user/sub-accounts/blocked_1/block/check",
 		"",
 		authHeadersForPersona("blocker_1", "ps_blocker_1"),
 	)
@@ -45,14 +45,14 @@ func TestBlock_Idempotent(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/blocked_2/block",
+		"/v1/user/sub-accounts/blocked_2/block",
 		"",
 		authHeadersForPersona("blocker_2", "ps_blocker_2"),
 	)
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/blocked_2/block",
+		"/v1/user/sub-accounts/blocked_2/block",
 		"",
 		authHeadersForPersona("blocker_2", "ps_blocker_2"),
 	)
@@ -69,14 +69,14 @@ func TestUnblock_Success(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/blocked_3/block",
+		"/v1/user/sub-accounts/blocked_3/block",
 		"",
 		authHeadersForPersona("blocker_3", "ps_blocker_3"),
 	)
 	rec := doRequest(
 		t,
 		http.MethodDelete,
-		"/v1/user/profile-subjects/blocked_3/block",
+		"/v1/user/sub-accounts/blocked_3/block",
 		"",
 		authHeadersForPersona("blocker_3", "ps_blocker_3"),
 	)
@@ -87,7 +87,7 @@ func TestUnblock_Success(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/profile-subjects/blocked_3/block/check",
+		"/v1/user/sub-accounts/blocked_3/block/check",
 		"",
 		authHeadersForPersona("blocker_3", "ps_blocker_3"),
 	)
@@ -105,14 +105,14 @@ func TestListBlocked(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/victim_a/block",
+		"/v1/user/sub-accounts/victim_a/block",
 		"",
 		authHeadersForPersona("blocker_4", "ps_blocker_4"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/victim_b/block",
+		"/v1/user/sub-accounts/victim_b/block",
 		"",
 		authHeadersForPersona("blocker_4", "ps_blocker_4"),
 	)

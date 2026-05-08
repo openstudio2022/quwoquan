@@ -98,8 +98,8 @@ class PostSummaryView {
     Map<String, dynamic>? wire,
   }) {
     final author = PostAuthorSummary(
-      id: dto.authorProfileSubjectId,
-      username: dto.authorProfileSubjectId,
+      id: dto.subAccountId,
+      username: dto.subAccountId,
       name: dto.displayName,
       avatar: dto.avatarUrl,
     );
@@ -139,7 +139,7 @@ class PostSummaryView {
     return PostSummaryView(
       id: dto.id,
       type: dto.type,
-      authorId: dto.authorProfileSubjectId,
+      authorId: dto.subAccountId,
       displayName: dto.displayName,
       avatarUrl: dto.avatarUrl,
       backgroundImage: dto.authorBackgroundUrl,

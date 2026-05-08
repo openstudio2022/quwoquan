@@ -66,8 +66,8 @@ func (h *ContentHandler) Routes() http.Handler {
 			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET/PATCH"))
 		}
 	})
-	mux.HandleFunc("GET /v1/content/profile-subjects/{profileSubjectId}/interactions/received", h.handleListProfileInteractionActivitiesReceived)
-	mux.HandleFunc("GET /v1/content/profile-subjects/{profileSubjectId}/interactions/sent", h.handleListProfileInteractionActivitiesSent)
+	mux.HandleFunc("GET /v1/content/sub-accounts/{subAccountId}/interactions/received", h.handleListProfileInteractionActivitiesReceived)
+	mux.HandleFunc("GET /v1/content/sub-accounts/{subAccountId}/interactions/sent", h.handleListProfileInteractionActivitiesSent)
 	mux.HandleFunc("GET /v1/content/posts/search", h.handleSearchPosts)
 	RegisterGeneratedRoutes(mux, h)
 	return mux
@@ -209,17 +209,19 @@ func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request
 		))
 		return
 	}
-	// Inject authorId from auth header if not in payload
-	existingAuthor, _ := payload["authorId"].(string)
-	if strings.TrimSpace(existingAuthor) == "" {
-		if profileSubjectID, _ := payload["profileSubjectId"].(string); strings.TrimSpace(profileSubjectID) != "" {
-			payload["authorId"] = profileSubjectID
-		} else if personaID, _ := payload["personaId"].(string); strings.TrimSpace(personaID) != "" {
-			payload["authorId"] = personaID
-		} else if uid := resolveUserID(r); uid != "" {
-			payload["authorId"] = uid
-		}
+	subAccountID := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
+	if subAccountID == "" {
+		subAccountID = resolveUserID(r)
 	}
+	if subAccountID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"缺少 X-Client-Sub-Account-Id",
+			"missing X-Client-Sub-Account-Id",
+		))
+		return
+	}
+	payload["authorId"] = subAccountID
 	post, err := h.postService.CreatePost(r.Context(), payload)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -267,7 +269,7 @@ func (h *ContentHandler) handleCreateReport(w http.ResponseWriter, r *http.Reque
 	}
 	reporterID := resolveUserID(r)
 	if strings.TrimSpace(reporterID) == "" {
-		reporterID = "guest"
+		reporterID = application.AnonymousFallbackSubAccountID
 	}
 	report, err := h.reportService.CreateReport(r.Context(), reporterID, body)
 	if err != nil {
@@ -691,13 +693,52 @@ func (h *ContentHandler) handleUnfavoritePost(w http.ResponseWriter, r *http.Req
 	})
 }
 
+func (h *ContentHandler) handleSharePost(w http.ResponseWriter, r *http.Request, postID string) {
+	shareCount, changed, shared, err := h.postService.SharePost(
+		r.Context(),
+		postID,
+		resolveUserID(r),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"postId":     postID,
+		"shared":     shared,
+		"changed":    changed,
+		"shareCount": shareCount,
+	})
+}
+
+func (h *ContentHandler) handleUnsharePost(w http.ResponseWriter, r *http.Request, postID string) {
+	shareCount, changed, shared, err := h.postService.UnsharePost(
+		r.Context(),
+		postID,
+		resolveUserID(r),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"postId":     postID,
+		"shared":     shared,
+		"changed":    changed,
+		"shareCount": shareCount,
+	})
+}
+
 func (h *ContentHandler) handleGetReactionState(w http.ResponseWriter, r *http.Request, postID string) {
-	liked, favorited := h.postService.GetReactionState(postID, resolveUserID(r))
+	liked, favorited, shared := h.postService.GetReactionState(
+		postID,
+		resolveUserID(r),
+	)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"postId":    postID,
 		"liked":     liked,
 		"favorited": favorited,
-		"shared":    false,
+		"shared":    shared,
 		"reported":  false,
 		"updatedAt": time.Now().UTC().Format(time.RFC3339),
 	})
@@ -707,17 +748,23 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 	var body struct {
 		Content               string `json:"content"`
 		ReplyToCommentID      string `json:"replyToCommentId"`
-		PersonaId             string `json:"personaId"`
-		ProfileSubjectID      string `json:"profileSubjectId"`
 		PersonaContextVersion string `json:"personaContextVersion"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
 		return
 	}
-	personaId := body.PersonaId
-	if personaId == "" {
-		personaId = strings.TrimSpace(r.Header.Get("X-Persona-Id"))
+	subAccountID := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
+	if subAccountID == "" {
+		subAccountID = resolveUserID(r)
+	}
+	if subAccountID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"缺少 X-Client-Sub-Account-Id",
+			"missing X-Client-Sub-Account-Id",
+		))
+		return
 	}
 	comment, commentCount, err := h.postService.AddComment(
 		r.Context(),
@@ -725,8 +772,7 @@ func (h *ContentHandler) handleCreateComment(w http.ResponseWriter, r *http.Requ
 		resolveUserID(r),
 		body.Content,
 		body.ReplyToCommentID,
-		personaId,
-		body.ProfileSubjectID,
+		subAccountID,
 		body.PersonaContextVersion,
 	)
 	if err != nil {
@@ -854,9 +900,9 @@ func (h *ContentHandler) handleListProfileInteractionActivitiesSent(w http.Respo
 }
 
 func (h *ContentHandler) handleListProfileInteractionActivities(w http.ResponseWriter, r *http.Request, direction string) {
-	profileSubjectID := r.PathValue("profileSubjectId")
-	if strings.TrimSpace(profileSubjectID) == "" {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "profileSubjectId 不能为空", "missing profileSubjectId"))
+	subAccountID := r.PathValue("subAccountId")
+	if strings.TrimSpace(subAccountID) == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "subAccountId 不能为空", "missing subAccountId"))
 		return
 	}
 	limit := 20
@@ -865,7 +911,7 @@ func (h *ContentHandler) handleListProfileInteractionActivities(w http.ResponseW
 			limit = n
 		}
 	}
-	items, err := h.postService.ListProfileInteractionActivities(r.Context(), profileSubjectID, direction, limit)
+	items, err := h.postService.ListProfileInteractionActivities(r.Context(), subAccountID, direction, limit)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -914,7 +960,7 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			userID = strings.TrimSpace(raw[:idx])
 		}
 	}
-	if raw := strings.TrimPrefix(r.URL.Path, "/v1/content/profile-subjects/"); raw != r.URL.Path {
+	if raw := strings.TrimPrefix(r.URL.Path, "/v1/content/sub-accounts/"); raw != r.URL.Path {
 		if idx := strings.Index(raw, "/posts"); idx > 0 {
 			userID = strings.TrimSpace(raw[:idx])
 		}
@@ -985,6 +1031,12 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		return
 	case "UnfavoritePost":
 		h.handleUnfavoritePost(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "SharePost":
+		h.handleSharePost(w, r, postIDFromPath(r.URL.Path))
+		return
+	case "UnsharePost":
+		h.handleUnsharePost(w, r, postIDFromPath(r.URL.Path))
 		return
 	case "GetReactionState":
 		h.handleGetReactionState(w, r, postIDFromPath(r.URL.Path))

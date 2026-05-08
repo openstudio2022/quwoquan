@@ -3,12 +3,12 @@ package application
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
 
 	runtimegovernance "quwoquan_service/runtime/governance"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	credentialPhone  = "phone"
-	credentialWechat = "wechat"
-	credentialApple  = "apple"
+	credentialPhone           = "phone"
+	credentialWechat          = "wechat"
+	credentialApple           = "apple"
+	credentialAnonymousDevice = "anonymous_device"
 
 	defaultIsolationLevel = "open"
 	personaStatusActive   = "active"
@@ -31,38 +32,51 @@ const (
 
 // AuthService handles OwnerAccount authentication and credential binding.
 type AuthService struct {
-	profiles    userrepo.ProfileRepository
-	personas    userrepo.PersonaRepository
-	credentials userrepo.CredentialRepository
-	pcache      *cache.ProfileCache
+	profiles         userrepo.ProfileRepository
+	personas         userrepo.PersonaRepository
+	credentials      userrepo.CredentialRepository
+	anonymousDevices userrepo.AnonymousDeviceBindingRepository
+	pcache           *cache.ProfileCache
+	shardDirectory   *ShardDirectory
 }
 
 func NewAuthService(
 	profiles userrepo.ProfileRepository,
 	personas userrepo.PersonaRepository,
 	credentials userrepo.CredentialRepository,
+	anonymousDevices userrepo.AnonymousDeviceBindingRepository,
 	pcache *cache.ProfileCache,
+	shardDirectory *ShardDirectory,
 ) *AuthService {
 	return &AuthService{
-		profiles:    profiles,
-		personas:    personas,
-		credentials: credentials,
-		pcache:      pcache,
+		profiles:         profiles,
+		personas:         personas,
+		credentials:      credentials,
+		anonymousDevices: anonymousDevices,
+		pcache:           pcache,
+		shardDirectory:   shardDirectory,
 	}
 }
 
 // LoginResult is returned after a successful authentication.
 type LoginResult struct {
-	AccessToken     string `json:"accessToken"`
-	RefreshToken    string `json:"refreshToken"`
-	OwnerID         string `json:"ownerId"`
-	ActiveSubID     string `json:"activeSub"`
-	SubAccountCount int    `json:"subAccountCount"`
+	AccessToken              string         `json:"accessToken"`
+	RefreshToken             string         `json:"refreshToken"`
+	OwnerID                  string         `json:"ownerId"`
+	ActiveSub                map[string]any `json:"activeSub"`
+	SubAccountCount          int            `json:"subAccountCount"`
+	AccountState             string         `json:"accountState"`
+	IdentityOrigin           string         `json:"identityOrigin"`
+	LogicalShard             int            `json:"logicalShard"`
+	AnonymousRetentionPolicy string         `json:"anonymousRetentionPolicy"`
 }
 
 // LoginWithCredential authenticates via the given credential type and key.
 // It creates a new OwnerAccount + default SubAccount if not found.
 func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey, displayLabel string) (*LoginResult, error) {
+	if strings.TrimSpace(credType) == credentialAnonymousDevice {
+		credKey = normalizeAnonymousCredentialKey(credKey)
+	}
 	existing, err := s.credentials.FindByTypeAndKey(ctx, credType, credKey)
 	if err != nil {
 		return nil, fmt.Errorf("credential lookup: %w", err)
@@ -80,13 +94,40 @@ func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey
 		}
 	}
 
+	return s.issueLoginResult(ctx, ownerID, credType, credKey)
+}
+
+func (s *AuthService) issueLoginResult(
+	ctx context.Context,
+	ownerID, credType, credKey string,
+) (*LoginResult, error) {
+	if _, err := s.resolvePhysicalShard(ownerID); err != nil {
+		return nil, err
+	}
+	profile, err := s.profiles.FindByID(ctx, ownerID)
+	if err != nil {
+		return nil, fmt.Errorf("load profile: %w", err)
+	}
+	if profile != nil && strings.TrimSpace(credType) != credentialAnonymousDevice {
+		updated := false
+		if strings.TrimSpace(profile.AccountState) == accountStateAnonymous {
+			promoteRegisteredProfile(profile)
+			updated = true
+		}
+		if strings.TrimSpace(credType) == credentialPhone && strings.TrimSpace(profile.Phone) == "" {
+			profile.Phone = credKey
+			updated = true
+		}
+		if updated {
+			if err := s.profiles.Update(ctx, profile); err != nil {
+				return nil, fmt.Errorf("promote owner profile: %w", err)
+			}
+		}
+	}
+
 	activeSub, err := s.personas.FindActiveByUserID(ctx, ownerID)
 	if err != nil {
 		return nil, err
-	}
-	activeSubID := ""
-	if activeSub != nil {
-		activeSubID = activeSub.SubAccountID
 	}
 
 	subs, err := s.personas.FindByUserID(ctx, ownerID)
@@ -104,12 +145,74 @@ func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey
 	}
 
 	return &LoginResult{
-		AccessToken:     accessToken,
-		RefreshToken:    refreshToken,
-		OwnerID:         ownerID,
-		ActiveSubID:     activeSubID,
-		SubAccountCount: len(subs),
+		AccessToken:              accessToken,
+		RefreshToken:             refreshToken,
+		OwnerID:                  ownerID,
+		ActiveSub:                buildActiveSubEnvelope(activeSub),
+		SubAccountCount:          len(subs),
+		AccountState:             defaultString(profileField(profile, func(p *model.UserProfile) string { return p.AccountState }), accountStateForCredentialType(credType)),
+		IdentityOrigin:           defaultString(profileField(profile, func(p *model.UserProfile) string { return p.IdentityOrigin }), identityOriginValue(credType)),
+		LogicalShard:             profileIntField(profile, func(p *model.UserProfile) int { return p.LogicalShard }),
+		AnonymousRetentionPolicy: defaultString(profileField(profile, func(p *model.UserProfile) string { return p.AnonymousRetentionPolicy }), anonymousRetentionPolicyForCredentialType(credType)),
 	}, nil
+}
+
+func (s *AuthService) LoginAnonymously(
+	ctx context.Context,
+	installID string,
+	deviceFingerprintHash string,
+	platform string,
+	appVersion string,
+) (*LoginResult, error) {
+	installIDHash := hashInstallID(installID)
+	deviceFingerprintHash = normalizeAnonymousCredentialKey(deviceFingerprintHash)
+	if installIDHash == "" {
+		return nil, fmt.Errorf("installId is required")
+	}
+	if deviceFingerprintHash == "" {
+		return nil, fmt.Errorf("deviceFingerprintHash is required")
+	}
+
+	var ownerID string
+	if s.anonymousDevices != nil {
+		binding, err := s.anonymousDevices.FindByDeviceFingerprintHash(ctx, deviceFingerprintHash)
+		if err != nil {
+			return nil, fmt.Errorf("lookup anonymous device binding: %w", err)
+		}
+		if binding != nil {
+			ownerID = strings.TrimSpace(binding.OwnerID)
+			_ = s.anonymousDevices.Touch(ctx, binding.ID, installIDHash, platform, appVersion)
+		}
+	}
+	if ownerID == "" {
+		existing, err := s.credentials.FindByTypeAndKey(ctx, credentialAnonymousDevice, deviceFingerprintHash)
+		if err != nil {
+			return nil, fmt.Errorf("anonymous credential lookup: %w", err)
+		}
+		if existing != nil {
+			ownerID = existing.OwnerID
+			_ = s.credentials.UpdateLastUsed(ctx, existing.ID)
+		}
+	}
+	if ownerID == "" {
+		displayLabel := anonymousDisplayLabel(platform)
+		created, err := s.createOwnerAccount(ctx, credentialAnonymousDevice, deviceFingerprintHash, displayLabel)
+		if err != nil {
+			return nil, fmt.Errorf("create anonymous owner account: %w", err)
+		}
+		ownerID = created
+	}
+	if err := s.ensureAnonymousDeviceBinding(
+		ctx,
+		ownerID,
+		installIDHash,
+		deviceFingerprintHash,
+		platform,
+		appVersion,
+	); err != nil {
+		return nil, fmt.Errorf("persist anonymous device binding: %w", err)
+	}
+	return s.issueLoginResult(ctx, ownerID, credentialAnonymousDevice, "")
 }
 
 // BindCredential binds a new credential to an existing OwnerAccount.
@@ -135,14 +238,32 @@ func (s *AuthService) BindCredential(ctx context.Context, ownerID, credType, cre
 		return ErrCredentialConflict
 	}
 
-	return s.credentials.Create(ctx, &model.CredentialBinding{
-		ID:             uuid.New().String(),
+	if err := s.credentials.Create(ctx, &model.CredentialBinding{
+		ID:             generateCredentialBindingID(),
 		OwnerID:        ownerID,
 		CredentialType: credType,
 		CredentialKey:  credKey,
 		DisplayLabel:   displayLabel,
 		IsActive:       true,
-	})
+	}); err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(credType) == credentialAnonymousDevice {
+		return nil
+	}
+	profile, err := s.profiles.FindByID(ctx, ownerID)
+	if err != nil {
+		return err
+	}
+	if profile == nil {
+		return nil
+	}
+	promoteRegisteredProfile(profile)
+	if strings.TrimSpace(credType) == credentialPhone && strings.TrimSpace(profile.Phone) == "" {
+		profile.Phone = credKey
+	}
+	return s.profiles.Update(ctx, profile)
 }
 
 // UnbindCredential deactivates a credential, but prevents removing the last one.
@@ -164,20 +285,33 @@ func (s *AuthService) ListCredentials(ctx context.Context, ownerID string) ([]mo
 
 // createOwnerAccount creates a new user_profiles row + default persona + initial credential.
 func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey, displayLabel string) (string, error) {
-	ownerID := uuid.New().String()
-	subAccountID := uuid.New().String()
-	personaID := uuid.New().String()
+	identity, err := buildOwnerIdentity(credType)
+	if err != nil {
+		return "", err
+	}
+	ownerID := identity.OwnerID
+	if _, err := s.resolvePhysicalShard(ownerID); err != nil {
+		return "", err
+	}
+	subAccountID, err := buildSubAccountIdentity(identity.RootPrefix)
+	if err != nil {
+		return "", err
+	}
 
 	profile := &model.UserProfile{
-		UserID:          ownerID,
-		Phone:           credKey, // placeholder; real phone only if credType=phone
-		Nickname:        "user_" + ownerID[:8],
-		Status:          "active",
-		ProfileVersion:  1,
-		SubAccountCount: 1,
+		UserID:                   ownerID,
+		Phone:                    "",
+		Nickname:                 defaultNickname(ownerID),
+		Status:                   "active",
+		AccountState:             accountStateForCredentialType(credType),
+		IdentityOrigin:           identityOriginValue(credType),
+		LogicalShard:             identity.LogicalShard,
+		AnonymousRetentionPolicy: anonymousRetentionPolicyForCredentialType(credType),
+		ProfileVersion:           1,
+		SubAccountCount:          1,
 	}
-	if credType != credentialPhone {
-		profile.Phone = "pending_" + ownerID[:8] // placeholder until phone is bound
+	if credType == credentialPhone {
+		profile.Phone = credKey
 	}
 
 	if err := s.profiles.Create(ctx, profile); err != nil {
@@ -185,7 +319,6 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 	}
 
 	persona := &model.Persona{
-		ID:                       personaID,
 		UserID:                   ownerID,
 		SubAccountID:             subAccountID,
 		DisplayName:              profile.Nickname,
@@ -202,7 +335,7 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 	}
 
 	cred := &model.CredentialBinding{
-		ID:             uuid.New().String(),
+		ID:             generateCredentialBindingID(),
 		OwnerID:        ownerID,
 		CredentialType: credType,
 		CredentialKey:  credKey,
@@ -214,6 +347,70 @@ func (s *AuthService) createOwnerAccount(ctx context.Context, credType, credKey,
 	}
 
 	return ownerID, nil
+}
+
+func (s *AuthService) resolvePhysicalShard(ownerID string) (string, error) {
+	if s == nil || s.shardDirectory == nil {
+		return "", nil
+	}
+	physicalShard := strings.TrimSpace(s.shardDirectory.ResolvePhysicalShardForOwnerID(ownerID))
+	if physicalShard == "" {
+		return "", fmt.Errorf("resolve physical shard for owner %s", ownerID)
+	}
+	return physicalShard, nil
+}
+
+func buildActiveSubEnvelope(activeSub *model.Persona) map[string]any {
+	if activeSub == nil {
+		return map[string]any{}
+	}
+	return map[string]any{
+		"subAccountId": activeSub.SubAccountID,
+	}
+}
+
+func generateCredentialBindingID() string {
+	id, err := generateIdentityEntropyBody()
+	if err != nil {
+		return "cb_fallback"
+	}
+	return "cb_" + id
+}
+
+func defaultNickname(ownerID string) string {
+	trimmed := strings.TrimSpace(ownerID)
+	if len(trimmed) > 10 {
+		trimmed = trimmed[len(trimmed)-10:]
+	}
+	trimmed = strings.ReplaceAll(trimmed, "_", "")
+	return "user_" + strings.ToLower(trimmed)
+}
+
+func extractOwnerRootPrefix(ownerID string) string {
+	parts := strings.Split(strings.TrimSpace(ownerID), "_")
+	if len(parts) >= 5 && parts[0] == "uo" {
+		return parts[3]
+	}
+	return "0000"
+}
+
+func identityOriginValue(credType string) string {
+	origin, _ := identityOriginForCredentialType(credType)
+	return origin
+}
+
+func profileField(profile *model.UserProfile, getter func(*model.UserProfile) string) string {
+	if profile == nil || getter == nil {
+		return ""
+	}
+	return strings.TrimSpace(getter(profile))
+}
+
+func profileIntField(profile *model.UserProfile, getter func(*model.UserProfile) int) int {
+	if profile == nil || getter == nil {
+		return 0
+	}
+	return getter(profile)
 }
 
 // Sentinel errors – returned from AuthService methods.
@@ -260,10 +457,13 @@ func (s *SubAccountService) CreateSubAccount(ctx context.Context, ownerID string
 		}
 	}
 	owner, _ := s.profiles.FindByID(ctx, ownerID)
+	newSubAccountID, err := buildSubAccountIdentity(extractOwnerRootPrefix(ownerID))
+	if err != nil {
+		return nil, err
+	}
 	p := &model.Persona{
-		ID:                       uuid.New().String(),
 		UserID:                   ownerID,
-		SubAccountID:             uuid.New().String(),
+		SubAccountID:             newSubAccountID,
 		IsolationLevel:           defaultIsolationLevel,
 		InheritsProfileFromOwner: true,
 		OverriddenProfileFields:  encodeProfileFieldList(nil),
@@ -398,7 +598,7 @@ func (s *SubAccountService) ActivateSubAccount(ctx context.Context, ownerID, sub
 	if err := s.personas.DeactivateAll(ctx, ownerID); err != nil {
 		return err
 	}
-	if err := s.personas.ActivateOne(ctx, target.ID); err != nil {
+	if err := s.personas.ActivateOne(ctx, target.SubAccountID); err != nil {
 		return err
 	}
 	now := time.Now().UTC()
@@ -447,7 +647,7 @@ func (s *SubAccountService) DeleteSubAccount(ctx context.Context, ownerID, subAc
 	if hasHistory {
 		return ErrSubAccountRetireRequired
 	}
-	if err := s.personas.Delete(ctx, target.ID); err != nil {
+	if err := s.personas.Delete(ctx, target.SubAccountID); err != nil {
 		return err
 	}
 	_ = s.pcache.Del(ctx, ownerID)
@@ -478,7 +678,6 @@ func (s *SubAccountService) ApplyPersonaProfileSync(ctx context.Context, ownerID
 	return map[string]any{
 		"status":       "ok",
 		"appliedCount": applied,
-		"personaId":    personaID,
 		"fieldsMask":   fieldsMask,
 	}, nil
 }
@@ -498,8 +697,6 @@ func (s *SubAccountService) GetActivePersonaContextView(ctx context.Context, own
 	view := buildProfileSubjectView(owner, persona)
 	return map[string]any{
 		"ownerUserId":            ownerID,
-		"personaId":              view["subAccountId"],
-		"profileSubjectId":       view["profileSubjectId"],
 		"subAccountId":           view["subAccountId"],
 		"displayName":            view["displayName"],
 		"avatarUrl":              view["avatarUrl"],
@@ -618,13 +815,11 @@ func (s *SubAccountService) RetirePersona(ctx context.Context, ownerID, personaI
 	}
 	_ = s.pcache.Del(ctx, ownerID)
 	return map[string]any{
-		"profileSubjectId":     target.SubAccountID,
 		"requestedAction":      "retire",
 		"allowed":              true,
 		"reason":               "allowed",
 		"hasAttributedHistory": true,
 		"requiresSuccessor":    false,
-		"personaId":            target.SubAccountID,
 		"subAccountId":         target.SubAccountID,
 		"canDelete":            false,
 		"canRetire":            false,
@@ -734,7 +929,6 @@ func buildProfileSubjectView(owner *model.UserProfile, persona *model.Persona) m
 		owner = &model.UserProfile{UserID: persona.UserID}
 	}
 	subjectType := "user"
-	profileSubjectID := owner.UserID
 	subAccountID := ""
 	userHandle := strings.TrimSpace(owner.UserID)
 	displayName := owner.Nickname
@@ -745,7 +939,6 @@ func buildProfileSubjectView(owner *model.UserProfile, persona *model.Persona) m
 
 	if persona != nil {
 		subjectType = "persona"
-		profileSubjectID = persona.SubAccountID
 		subAccountID = persona.SubAccountID
 		userHandle = resolvedPersonaUserHandle(persona)
 		if persona.DisplayName != "" {
@@ -773,11 +966,10 @@ func buildProfileSubjectView(owner *model.UserProfile, persona *model.Persona) m
 	}
 
 	return map[string]any{
-		"profileSubjectId":  profileSubjectID,
 		"ownerUserId":       owner.UserID,
 		"subjectType":       subjectType,
 		"subAccountId":      subAccountID,
-		"userId":            profileSubjectID,
+		"userId":            defaultString(subAccountID, owner.UserID),
 		"userHandle":        userHandle,
 		"username":          userHandle,
 		"displayName":       displayName,
@@ -816,9 +1008,7 @@ func BuildPersonaManagementItemWithHistory(persona model.Persona, hasAttributedH
 		retiredAt = persona.RetiredAt.Format(time.RFC3339)
 	}
 	return map[string]any{
-		"personaId":                persona.SubAccountID,
 		"subAccountId":             persona.SubAccountID,
-		"profileSubjectId":         persona.SubAccountID,
 		"displayName":              persona.DisplayName,
 		"userHandle":               resolvedPersonaUserHandle(&persona),
 		"phone":                    persona.Phone,
@@ -1063,13 +1253,11 @@ func buildPersonaLifecycleGuardView(target *model.Persona, activeCount int, hasA
 		requiredAction = "retire"
 	}
 	return map[string]any{
-		"profileSubjectId":     target.SubAccountID,
 		"requestedAction":      "delete",
 		"allowed":              canDelete,
 		"reason":               reason,
 		"hasAttributedHistory": hasAttributedHistory,
 		"requiresSuccessor":    requiresSuccessor,
-		"personaId":            target.SubAccountID,
 		"subAccountId":         target.SubAccountID,
 		"canDelete":            canDelete,
 		"canRetire":            canRetire,
@@ -1204,6 +1392,67 @@ func defaultString(value, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func hashInstallID(installID string) string {
+	normalized := strings.TrimSpace(strings.ToLower(installID))
+	if normalized == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(sum[:])
+}
+
+func anonymousDisplayLabel(platform string) string {
+	label := strings.TrimSpace(strings.ToLower(platform))
+	if label == "" {
+		label = "anonymous_device"
+	}
+	if len(label) > 32 {
+		return label[:32]
+	}
+	return label
+}
+
+func generateAnonymousDeviceBindingID() (string, error) {
+	entropyBody, err := generateIdentityEntropyBody()
+	if err != nil {
+		return "", err
+	}
+	return "adb_" + entropyBody, nil
+}
+
+func (s *AuthService) ensureAnonymousDeviceBinding(
+	ctx context.Context,
+	ownerID, installIDHash, deviceFingerprintHash, platform, appVersion string,
+) error {
+	if s.anonymousDevices == nil {
+		return nil
+	}
+	existing, err := s.anonymousDevices.FindByDeviceFingerprintHash(ctx, deviceFingerprintHash)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return s.anonymousDevices.Touch(ctx, existing.ID, installIDHash, platform, appVersion)
+	}
+	bindingID, err := generateAnonymousDeviceBindingID()
+	if err != nil {
+		return err
+	}
+	normalizedPlatform := strings.TrimSpace(platform)
+	if normalizedPlatform == "" {
+		normalizedPlatform = "unknown"
+	}
+	return s.anonymousDevices.Create(ctx, &model.AnonymousDeviceBinding{
+		ID:                    bindingID,
+		OwnerID:               strings.TrimSpace(ownerID),
+		InstallIDHash:         strings.TrimSpace(installIDHash),
+		DeviceFingerprintHash: strings.TrimSpace(deviceFingerprintHash),
+		Platform:              normalizedPlatform,
+		AppVersion:            strings.TrimSpace(appVersion),
+		LastSeenAt:            time.Now().UTC(),
+	})
 }
 
 var (

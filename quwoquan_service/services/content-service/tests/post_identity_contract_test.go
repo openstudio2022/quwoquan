@@ -468,14 +468,13 @@ func TestProjectionRebuildDryRunBackfillsCurrentFields(t *testing.T) {
 	}
 }
 
-func TestDiscoveryProjectionPersistsProfileSubjectID(t *testing.T) {
+func TestDiscoveryProjectionPersistsAuthorSubAccountID(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := createPostWithAuthor(t, "projection_author", `{
 		"contentType":"article",
 		"title":"作者主键投影",
-		"body":"发现流必须保留 canonical profileSubjectId",
-		"profileSubjectId":"persona_projection_author"
+		"body":"发现流必须保留 canonical subAccountId"
 	}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
@@ -488,8 +487,8 @@ func TestDiscoveryProjectionPersistsProfileSubjectID(t *testing.T) {
 		Decode(&projected); err != nil {
 		t.Fatalf("expected discovery projection, got %v", err)
 	}
-	if projected["profileSubjectId"] != "persona_projection_author" {
-		t.Fatalf("expected profileSubjectId=persona_projection_author, got %v", projected["profileSubjectId"])
+	if projected["authorId"] != "projection_author" {
+		t.Fatalf("expected authorId=projection_author, got %v", projected["authorId"])
 	}
 }
 

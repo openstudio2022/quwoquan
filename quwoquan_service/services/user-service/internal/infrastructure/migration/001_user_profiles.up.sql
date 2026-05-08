@@ -3,8 +3,12 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE IF NOT EXISTS user_profiles (
-    user_id                  VARCHAR(36) PRIMARY KEY,
-    phone                    VARCHAR(20) NOT NULL UNIQUE,
+    user_id                  VARCHAR(96) PRIMARY KEY,
+    account_state            VARCHAR(32) NOT NULL DEFAULT 'active',
+    identity_origin          VARCHAR(32) NOT NULL DEFAULT 'phone',
+    logical_shard            INTEGER NOT NULL DEFAULT 0,
+    anonymous_retention_policy VARCHAR(32) NOT NULL DEFAULT 'preserve',
+    phone                    VARCHAR(64) UNIQUE,
     nickname                 VARCHAR(64) NOT NULL UNIQUE,
     avatar_url               TEXT,
     avatar_asset_id          VARCHAR(64),

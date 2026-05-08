@@ -1,0 +1,85 @@
+{
+  "suiteId": "content_feed_patrol",
+  "status": "passed",
+  "startedAt": "2026-05-04T18:13:38.096320Z",
+  "endedAt": "2026-05-04T18:13:38.265777Z",
+  "environmentAlias": "gamma",
+  "target": "test/patrol/discovery/feed_load_test.dart",
+  "platform": "ios",
+  "gatewayBaseUrl": "http://127.0.0.1:18080",
+  "productOpsBaseUrl": "http://127.0.0.1:18086",
+  "devices": [
+    {
+      "id": "dry-run-ios",
+      "name": "Dry Run Device",
+      "targetPlatform": "ios",
+      "sdk": "dry-run",
+      "emulator": true,
+      "screenClass": "phone"
+    }
+  ],
+  "runs": [
+    {
+      "command": [
+        "patrol",
+        "test",
+        "-t",
+        "test/patrol/discovery/feed_load_test.dart",
+        "-d",
+        "dry-run-ios",
+        "--dart-define=RUN_T4_PATROL=true",
+        "--dart-define=APP_RUNTIME_ENV=gamma",
+        "--dart-define=APP_DATA_SOURCE=remote",
+        "--dart-define=API_CONTRACT_ENV=gamma",
+        "--dart-define=CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:18080",
+        "--dart-define=API_CONTRACT_BASE_URL=http://127.0.0.1:18080",
+        "--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=http://127.0.0.1:18086",
+        "--dart-define=TEST_AUTH_TOKEN=dry-run-token"
+      ],
+      "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
+      "exitCode": 0,
+      "timedOut": false,
+      "durationMs": 0,
+      "outputSummary": "dry-run",
+      "logPath": "tmp/runs/dry-run-ios/patrol.log",
+      "device": {
+        "id": "dry-run-ios",
+        "name": "Dry Run Device",
+        "targetPlatform": "ios",
+        "sdk": "dry-run",
+        "emulator": true,
+        "screenClass": "phone"
+      },
+      "evidence": {
+        "runDirectory": "tmp/runs/dry-run-ios",
+        "deviceManifestPath": "tmp/runs/dry-run-ios/device.json",
+        "commandPath": "tmp/runs/dry-run-ios/command.json",
+        "rawLogPath": "tmp/runs/dry-run-ios/patrol.log",
+        "beforeScreenshot": {
+          "status": "failed",
+          "path": "tmp/runs/dry-run-ios/before.png",
+          "command": [
+            "xcrun",
+            "simctl",
+            "io",
+            "dry-run-ios",
+            "screenshot",
+            "/Users/zhaoyuxi/Projects/quwoquan/tmp/runs/dry-run-ios/before.png"
+          ],
+          "outputSummary": "Invalid device: dry-run-ios\n"
+        },
+        "afterScreenshot": {
+          "status": "skipped",
+          "reason": "command failed"
+        },
+        "failureScreenshot": {
+          "status": "skipped",
+          "reason": "command passed"
+        }
+      }
+    }
+  ],
+  "failureReason": "",
+  "deviceInventoryPath": "tmp/discovered_devices.json",
+  "evidenceRoot": "tmp/runs"
+}

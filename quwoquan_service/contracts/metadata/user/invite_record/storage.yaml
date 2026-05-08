@@ -7,9 +7,9 @@ tables:
     entity: InviteRecord
     pk: id
     columns:
-      - { name: id, type: VARCHAR(36), constraints: [PK] }
-      - { name: inviter_sub_account_id, type: VARCHAR(36), constraints: [NOT_NULL] }
-      - { name: inviter_owner_account_id, type: VARCHAR(36), constraints: [NOT_NULL] }
+      - { name: id, type: VARCHAR(64), constraints: [PK] }
+      - { name: inviter_sub_account_id, type: VARCHAR(96), constraints: [NOT_NULL] }
+      - { name: inviter_owner_account_id, type: VARCHAR(96), constraints: [NOT_NULL] }
       - { name: channel, type: VARCHAR(16), constraints: [NOT_NULL] }
       - { name: link_code, type: VARCHAR(32), constraints: [NOT_NULL, UNIQUE] }
       - { name: invitee_phone_hash, type: VARCHAR(64) }

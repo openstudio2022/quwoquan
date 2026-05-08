@@ -7,6 +7,7 @@ class ChatGroupSettingsDto {
   final bool nameEditableByAdminOnly;
   final bool privacyShieldAdminOnly;
   final String conversationType;
+  final String circleId;
 
   ChatGroupSettingsDto({
     this.qrCodeJoinEnabled = true,
@@ -14,6 +15,7 @@ class ChatGroupSettingsDto {
     this.nameEditableByAdminOnly = false,
     this.privacyShieldAdminOnly = false,
     this.conversationType = 'group',
+    this.circleId = '',
   });
 
   factory ChatGroupSettingsDto.fromMap(Map<String, dynamic> m) {
@@ -23,6 +25,7 @@ class ChatGroupSettingsDto {
       nameEditableByAdminOnly: m['nameEditableByAdminOnly'] as bool? ?? false,
       privacyShieldAdminOnly: m['privacyShieldAdminOnly'] as bool? ?? false,
       conversationType: m['type']?.toString() ?? m['conversationType']?.toString() ?? 'group',
+      circleId: m['circleId']?.toString() ?? '',
     );
   }
 
@@ -33,6 +36,7 @@ class ChatGroupSettingsDto {
       'nameEditableByAdminOnly': nameEditableByAdminOnly,
       'privacyShieldAdminOnly': privacyShieldAdminOnly,
       'conversationType': conversationType,
+      'circleId': circleId,
     };
   }
 
@@ -42,6 +46,7 @@ class ChatGroupSettingsDto {
     bool? nameEditableByAdminOnly,
     bool? privacyShieldAdminOnly,
     String? conversationType,
+    String? circleId,
   }) {
     return ChatGroupSettingsDto(
       qrCodeJoinEnabled: qrCodeJoinEnabled ?? this.qrCodeJoinEnabled,
@@ -49,6 +54,7 @@ class ChatGroupSettingsDto {
       nameEditableByAdminOnly: nameEditableByAdminOnly ?? this.nameEditableByAdminOnly,
       privacyShieldAdminOnly: privacyShieldAdminOnly ?? this.privacyShieldAdminOnly,
       conversationType: conversationType ?? this.conversationType,
+      circleId: circleId ?? this.circleId,
     );
   }
 }

@@ -89,7 +89,6 @@ class AssistantSearchXiaoquRequestWire {
   const AssistantSearchXiaoquRequestWire({
     required this.userQuery,
     this.searchIntensity,
-    this.profileSubjectId,
     this.subAccountId,
     this.personaContextVersion,
     this.sourceSurfaceId,
@@ -98,7 +97,6 @@ class AssistantSearchXiaoquRequestWire {
 
   final String userQuery;
   final String? searchIntensity;
-  final String? profileSubjectId;
   final String? subAccountId;
   final String? personaContextVersion;
   final String? sourceSurfaceId;
@@ -108,7 +106,6 @@ class AssistantSearchXiaoquRequestWire {
     return AssistantSearchXiaoquRequestWire(
       userQuery: (json['userQuery'] ?? '').toString(),
       searchIntensity: json['searchIntensity']?.toString(),
-      profileSubjectId: json['profileSubjectId']?.toString(),
       subAccountId: json['subAccountId']?.toString(),
       personaContextVersion: json['personaContextVersion']?.toString(),
       sourceSurfaceId: json['sourceSurfaceId']?.toString(),
@@ -119,7 +116,6 @@ class AssistantSearchXiaoquRequestWire {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'userQuery': userQuery,
         'searchIntensity': searchIntensity,
-        'profileSubjectId': profileSubjectId,
         'subAccountId': subAccountId,
         'personaContextVersion': personaContextVersion,
         'sourceSurfaceId': sourceSurfaceId,
@@ -133,7 +129,6 @@ class AssistantReportPageContextRequestWire {
     required this.businessObjects,
     this.userAction,
     this.userActions,
-    this.profileSubjectId,
     this.subAccountId,
     this.personaContextVersion,
   });
@@ -142,7 +137,6 @@ class AssistantReportPageContextRequestWire {
   final List<Map<String, dynamic>> businessObjects;
   final String? userAction;
   final List<Map<String, dynamic>>? userActions;
-  final String? profileSubjectId;
   final String? subAccountId;
   final String? personaContextVersion;
 
@@ -158,7 +152,6 @@ class AssistantReportPageContextRequestWire {
             ?.whereType<Map>()
             .map((m) => m.cast<String, dynamic>())
             .toList(growable: false),
-      profileSubjectId: json['profileSubjectId']?.toString(),
       subAccountId: json['subAccountId']?.toString(),
       personaContextVersion: json['personaContextVersion']?.toString(),
     );
@@ -169,7 +162,6 @@ class AssistantReportPageContextRequestWire {
         'businessObjects': businessObjects,
         'userAction': userAction,
         'userActions': userActions,
-        'profileSubjectId': profileSubjectId,
         'subAccountId': subAccountId,
         'personaContextVersion': personaContextVersion,
       };

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quwoquan-data"
+version = "0.2.0"
+description = "Cold-start dry-run tooling for quwoquan entity facts, post templates and search-first batch plans."
+requires-python = ">=3.11"
+dependencies = [
+  "PyYAML",
+]
+
+[project.scripts]
+qwq-data = "cli:main"
+
+[tool.quwoquan_data]
+default_image_batch = "west_lake_image_001"
+default_article_batch = "west_lake_article_001"
+
+[tool.setuptools]
+package-dir = {"" = "tools"}
+py-modules = ["batch", "cli", "common", "retrieval_contract", "tree_ops"]

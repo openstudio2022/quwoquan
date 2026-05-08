@@ -25,7 +25,7 @@ api_routes:
   - method: POST
     path: /v1/chat/conversations
     operation: CreateConversation
-    description: 创建会话（自动创建 ConversationMember + ConversationUserState）
+    description: 创建会话（自动创建 ConversationMember + ConversationUserState；圈子发起的默认群仍使用 group + circleId）
     request_entity: Conversation
     writable_fields: [type, title, circleId, circleGroupId, maxGroupSize, initialMemberIds]
 
@@ -54,7 +54,7 @@ api_routes:
     operation: SendMessage
     description: 发送消息（clientMsgId 幂等 + seq 分配，返回 messageId + seq + timestamp）
     request_entity: Message
-    writable_fields: [type, content, mediaUrl, media, cardPayload, replyToMessageId, mentions, clientMsgId, senderPersonaId, senderProfileSubjectId, senderDisplayNameSnapshot, senderAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [type, content, mediaUrl, media, cardPayload, replyToMessageId, mentions, clientMsgId, senderSubAccountId, senderDisplayNameSnapshot, senderAvatarUrlSnapshot, personaContextVersion]
 
   - method: POST
     path: /v1/chat/conversations/{conversationId}/messages/{messageId}/recall
@@ -325,7 +325,7 @@ contract_test:
             - "db.conversation_members.CountDocuments → 999 (unchanged)"
 
   coverage_requirements:
-    - all conversation types (direct/group/circle/encrypted) covered
+    - all conversation types (direct/group/encrypted, with legacy circle compatibility) covered
     - circleGroupId compatibility link covered
     - message seq monotonicity verified under concurrent sends
     - clientMsgId dedup verified

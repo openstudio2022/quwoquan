@@ -161,8 +161,8 @@ class RelationshipCapabilityDto {
     RelationshipCapabilityWireDto w,
   ) {
     return RelationshipCapabilityDto(
-      viewerSubAccountId: w.viewerProfileSubjectId,
-      targetSubAccountId: w.targetProfileSubjectId,
+      viewerSubAccountId: w.viewerSubAccountId,
+      targetSubAccountId: w.targetSubAccountId,
       relationState: w.relationState,
       relationTier: w.relationTier,
       canFollow: w.canFollow,
@@ -231,7 +231,7 @@ class RelationshipCapabilityDto {
 /// 关系能力位 Repository（三层模式）
 ///
 /// 对应云侧路由（contracts/metadata/user/follow_edge/service.yaml）：
-///   GET /v1/user/{userId}/relationship/capability
+///   GET /v1/user/sub-accounts/{subAccountId}/relationship/capability
 abstract class RelationshipCapabilityRepository {
   Future<RelationshipCapabilityDto> getCapability(String targetUserId);
 
@@ -274,7 +274,7 @@ class RemoteRelationshipCapabilityRepository
   @override
   Future<RelationshipCapabilityDto> getCapability(String targetUserId) async {
     final path = UserApiMetadata.getRelationshipCapabilityPath(
-      profileSubjectId: targetUserId,
+      subAccountId: targetUserId,
     );
     final uri = Uri.parse('$_baseUrl$path');
     final resp = await _client.get(

@@ -14,14 +14,14 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 abstract class InviteRepository {
   /// 为指定分身生成邀请链接。
   Future<InviteGenerateResponseDto> generate({
-    required String personaId,
+    required String subAccountId,
     required String channel,
     String? inviteePhone,
   });
 
   /// 列出分身发出的邀请列表。
   Future<List<InviteRecordListItemDto>> listByPersona({
-    required String personaId,
+    required String subAccountId,
     String? statusFilter,
     int limit = CloudApiDefaults.pageLimit,
   });
@@ -36,16 +36,15 @@ abstract class InviteRepository {
 class MockInviteRepository implements InviteRepository {
   @override
   Future<InviteGenerateResponseDto> generate({
-    required String personaId,
+    required String subAccountId,
     required String channel,
     String? inviteePhone,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
     return InviteGenerateResponseDto.fromMap(<String, dynamic>{
       'id': 'mock_invite_${DateTime.now().millisecondsSinceEpoch}',
-      'linkCode': 'MOCK${personaId.hashCode.abs() % 10000}',
-      'inviterSubAccountId': personaId,
-      'inviterPersonaId': personaId,
+      'linkCode': 'MOCK${subAccountId.hashCode.abs() % 10000}',
+      'inviterSubAccountId': subAccountId,
       'channel': channel,
       'status': 'pending',
     });
@@ -53,7 +52,7 @@ class MockInviteRepository implements InviteRepository {
 
   @override
   Future<List<InviteRecordListItemDto>> listByPersona({
-    required String personaId,
+    required String subAccountId,
     String? statusFilter,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
@@ -86,13 +85,12 @@ class RemoteInviteRepository implements InviteRepository {
 
   @override
   Future<InviteGenerateResponseDto> generate({
-    required String personaId,
+    required String subAccountId,
     required String channel,
     String? inviteePhone,
   }) async {
     final body = <String, dynamic>{
-      'personaId': personaId,
-      'subAccountId': personaId,
+      'subAccountId': subAccountId,
       'channel': channel,
     };
     if (inviteePhone != null) {
@@ -113,13 +111,12 @@ class RemoteInviteRepository implements InviteRepository {
 
   @override
   Future<List<InviteRecordListItemDto>> listByPersona({
-    required String personaId,
+    required String subAccountId,
     String? statusFilter,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final params = <String, String>{
-      'personaId': personaId,
-      'subAccountId': personaId,
+      'subAccountId': subAccountId,
       'limit': '$limit',
     };
     if (statusFilter != null) {

@@ -118,9 +118,12 @@ func TestDissolveCircleConversation_Forbidden(t *testing.T) {
 
 	created := createConversation(
 		t,
-		`{"type":"circle","title":"圈子群","circleId":"circle_001","maxGroupSize":500}`,
+		`{"type":"group","title":"圈子群","circleId":"circle_001","maxGroupSize":500}`,
 	)
 	convID := created["_id"].(string)
+	if created["type"] != "group" {
+		t.Fatalf("expected circle-bound conversation to expose type=group, got %v", created["type"])
+	}
 
 	code, _ := doDelete(t, "/v1/chat/conversations/"+convID, "user_test_001")
 	if code != 403 {

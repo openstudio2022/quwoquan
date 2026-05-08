@@ -32,23 +32,23 @@ type Conversation struct {
 
 // Message belongs to a Conversation, ordered by per-conversation seq.
 type Message struct {
-	ID               string         `json:"_id" bson:"_id"`
-	ConversationId   string         `json:"conversationId" bson:"conversationId"`
-	Seq              int64          `json:"seq" bson:"seq"`
-	ClientMsgId      string         `json:"clientMsgId" bson:"clientMsgId"`
-	SenderId         string         `json:"senderId" bson:"senderId"`
-	SenderPersonaId  string         `json:"senderPersonaId" bson:"senderPersonaId"`
-	Type             string         `json:"type" bson:"type"`
-	Content          string         `json:"content" bson:"content"`
-	MediaUrl         string         `json:"mediaUrl" bson:"mediaUrl"`
-	Media            map[string]any `json:"media,omitempty" bson:"media,omitempty"`
-	CardPayload      map[string]any `json:"cardPayload" bson:"cardPayload"`
-	ReplyToMessageId string         `json:"replyToMessageId" bson:"replyToMessageId"`
-	Mentions         []string       `json:"mentions" bson:"mentions"`
-	Status           string         `json:"status" bson:"status"`
-	RecalledAt       *time.Time     `json:"recalledAt" bson:"recalledAt"`
-	Metadata         map[string]any `json:"metadata" bson:"metadata"`
-	Timestamp        time.Time      `json:"timestamp" bson:"timestamp"`
+	ID                 string         `json:"_id" bson:"_id"`
+	ConversationId     string         `json:"conversationId" bson:"conversationId"`
+	Seq                int64          `json:"seq" bson:"seq"`
+	ClientMsgId        string         `json:"clientMsgId" bson:"clientMsgId"`
+	SenderId           string         `json:"senderId" bson:"senderId"`
+	SenderSubAccountId string         `json:"senderSubAccountId" bson:"senderSubAccountId"`
+	Type               string         `json:"type" bson:"type"`
+	Content            string         `json:"content" bson:"content"`
+	MediaUrl           string         `json:"mediaUrl" bson:"mediaUrl"`
+	Media              map[string]any `json:"media,omitempty" bson:"media,omitempty"`
+	CardPayload        map[string]any `json:"cardPayload" bson:"cardPayload"`
+	ReplyToMessageId   string         `json:"replyToMessageId" bson:"replyToMessageId"`
+	Mentions           []string       `json:"mentions" bson:"mentions"`
+	Status             string         `json:"status" bson:"status"`
+	RecalledAt         *time.Time     `json:"recalledAt" bson:"recalledAt"`
+	Metadata           map[string]any `json:"metadata" bson:"metadata"`
+	Timestamp          time.Time      `json:"timestamp" bson:"timestamp"`
 }
 
 // ConversationMember tracks membership in a conversation (independent collection for scale).

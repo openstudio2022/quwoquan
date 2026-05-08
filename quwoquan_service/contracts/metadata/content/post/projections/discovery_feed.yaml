@@ -28,7 +28,6 @@ fields:
   - { name: contentType, type: enum }
   - { name: contentIdentity, type: enum, description: "内容身份层。moment/work，用于跨面统一过滤" }
   - { name: authorId, type: string }
-  - { name: profileSubjectId, type: string, description: "作者 canonical profile subject id；与 authorId 分离" }
   - { name: title, type: string }
   - { name: tags, type: "[]string" }
   - { name: coverUrl, type: string }
@@ -99,13 +98,6 @@ client_projection:
       source: authorId
       aliases: [userId, author_id]
       default: "''"
-
-    - name: authorProfileSubjectId
-      dart_type: String
-      nullable: false
-      source: profileSubjectId
-      aliases: [authorProfileSubjectId, profileSubjectId, personaId]
-      default: "m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? ''"
 
     - name: displayName
       dart_type: String

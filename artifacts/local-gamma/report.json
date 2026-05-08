@@ -1,10 +1,10 @@
 {
   "status": "passed",
   "dryRun": false,
-  "commitSha": "90bd77aa",
+  "commitSha": "85cf2440",
   "configVersion": "local-gamma-v1",
   "imageVersion": "0.0.1",
-  "generatedAt": "2026-05-05T02:21:28.886890+00:00",
+  "generatedAt": "2026-05-05T03:31:35.213784+00:00",
   "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
   "tests": {
     "T1": {
@@ -34,7 +34,7 @@
       "seed": {
         "status": "passed",
         "insertedCount": 10,
-        "output": "time=\"2026-05-05T10:19:13+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
+        "output": "time=\"2026-05-05T11:29:30+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
       },
       "endpoints": [
         {
@@ -75,7 +75,7 @@
           "domain": "chat",
           "path": "/v1/chat/inbox",
           "httpStatus": 200,
-          "bytes": 20502,
+          "bytes": 26356,
           "status": "passed"
         },
         {
@@ -135,8 +135,8 @@
     "T4": {
       "suiteId": "content_feed_patrol",
       "status": "passed",
-      "startedAt": "2026-05-05T02:19:24.348111Z",
-      "endedAt": "2026-05-05T02:21:28.809490Z",
+      "startedAt": "2026-05-05T03:29:37.873719Z",
+      "endedAt": "2026-05-05T03:31:35.137936Z",
       "environmentAlias": "local-gamma",
       "target": "test/patrol/discovery/feed_load_test.dart",
       "platform": "all",
@@ -185,8 +185,8 @@
           "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
           "exitCode": 0,
           "timedOut": false,
-          "durationMs": 51950,
-          "outputSummary": "• Building apk with entrypoint test_bundle.dart...\n✓ Completed building apk with entrypoint test_bundle.dart (21.1s)\n• Executing tests of apk with entrypoint test_bundle.dart on emulator-5554...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: file:///Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/app/reports/androidTests/connected/debug/index.html\n⏱️  Duration: 8s\n\n✓ Completed executing apk with entrypoint test_bundle.dart on emulator-5554 (8.6s)\n",
+          "durationMs": 34584,
+          "outputSummary": "• Building apk with entrypoint test_bundle.dart...\n✓ Completed building apk with entrypoint test_bundle.dart (9.9s)\n• Executing tests of apk with entrypoint test_bundle.dart on emulator-5554...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: file:///Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/app/reports/androidTests/connected/debug/index.html\n⏱️  Duration: 6s\n\n✓ Completed executing apk with entrypoint test_bundle.dart on emulator-5554 (6.5s)\n",
           "logPath": "artifacts/local-gamma/runs/emulator-5554/patrol.log",
           "device": {
             "id": "emulator-5554",
@@ -257,8 +257,8 @@
           "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
           "exitCode": 0,
           "timedOut": false,
-          "durationMs": 62743,
-          "outputSummary": "• Building app with entrypoint test_bundle.dart for iOS simulator (debug)...\n\tBuilding com.example.quwoquanApp for simulator (ios)...\n✓ Completed building app with entrypoint test_bundle.dart for iOS simulator (28.0s)\n• Running app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/ios_results_1777947666000.xcresult\n⏱️  Duration: 22s\n\n✓ Completed executing app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro (22.3s)\n",
+          "durationMs": 74378,
+          "outputSummary": "• Building app with entrypoint test_bundle.dart for iOS simulator (debug)...\n\tBuilding com.example.quwoquanApp for simulator (ios)...\n✓ Completed building app with entrypoint test_bundle.dart for iOS simulator (42.5s)\n• Running app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/ios_results_1777951870163.xcresult\n⏱️  Duration: 24s\n\n✓ Completed executing app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro (24.4s)\n",
           "logPath": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/patrol.log",
           "device": {
             "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",

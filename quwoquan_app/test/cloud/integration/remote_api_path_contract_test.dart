@@ -509,6 +509,18 @@ void main() {
       },
     );
 
+    test('sharePost → POST /v1/content/posts/{postId}/share', () async {
+      await repo.sharePost(postId: 'p1');
+      expect(log.last.method, 'POST');
+      expect(log.last.path, ContentApiMetadata.sharePostPath(postId: 'p1'));
+    });
+
+    test('unsharePost → DELETE /v1/content/posts/{postId}/share', () async {
+      await repo.unsharePost(postId: 'p1');
+      expect(log.last.method, 'DELETE');
+      expect(log.last.path, ContentApiMetadata.unsharePostPath(postId: 'p1'));
+    });
+
     test('listComments → GET /v1/content/posts/{postId}/comments', () async {
       await repo.listComments(postId: 'p1');
       expect(log.last.method, 'GET');
@@ -629,7 +641,7 @@ void main() {
       expect(log.last.method, 'PATCH');
       expect(
         log.last.path,
-        UserApiMetadata.updatePersonaPath(personaId: 'persona_1'),
+        UserApiMetadata.updatePersonaPath(subAccountId: 'persona_1'),
       );
     });
 
@@ -638,7 +650,7 @@ void main() {
       expect(log.last.method, 'POST');
       expect(
         log.last.path,
-        UserApiMetadata.activatePersonaPath(personaId: 'persona_1'),
+        UserApiMetadata.activatePersonaPath(subAccountId: 'persona_1'),
       );
     });
 
@@ -649,7 +661,7 @@ void main() {
         expect(log.last.method, 'DELETE');
         expect(
           log.last.path,
-          UserApiMetadata.deleteEmptyPersonaPath(personaId: 'persona_1'),
+          UserApiMetadata.deleteEmptyPersonaPath(subAccountId: 'persona_1'),
         );
       },
     );
@@ -664,7 +676,7 @@ void main() {
         expect(log.last.method, 'POST');
         expect(
           log.last.path,
-          UserApiMetadata.applyPersonaProfileSyncPath(personaId: 'persona_1'),
+          UserApiMetadata.applyPersonaProfileSyncPath(subAccountId: 'persona_1'),
         );
       },
     );
@@ -676,7 +688,7 @@ void main() {
         expect(log.last.method, 'GET');
         expect(
           log.last.path,
-          UserApiMetadata.getPersonaLifecycleGuardPath(personaId: 'persona_1'),
+          UserApiMetadata.getPersonaLifecycleGuardPath(subAccountId: 'persona_1'),
         );
       },
     );
@@ -686,7 +698,7 @@ void main() {
       expect(log.last.method, 'POST');
       expect(
         log.last.path,
-        UserApiMetadata.retirePersonaPath(personaId: 'persona_1'),
+        UserApiMetadata.retirePersonaPath(subAccountId: 'persona_1'),
       );
     });
 
@@ -719,25 +731,25 @@ void main() {
     });
 
     test(
-      'blockUser → POST /v1/user/profile-subjects/{targetProfileSubjectId}/block',
+      'blockUser → POST /v1/user/sub-accounts/{targetSubAccountId}/block',
       () async {
         await repo.blockUser('u1');
         expect(log.last.method, 'POST');
         expect(
           log.last.path,
-          UserApiMetadata.blockUserPath(targetProfileSubjectId: 'u1'),
+          UserApiMetadata.blockUserPath(targetSubAccountId: 'u1'),
         );
       },
     );
 
     test(
-      'unblockUser → DELETE /v1/user/profile-subjects/{targetProfileSubjectId}/block',
+      'unblockUser → DELETE /v1/user/sub-accounts/{targetSubAccountId}/block',
       () async {
         await repo.unblockUser('u1');
         expect(log.last.method, 'DELETE');
         expect(
           log.last.path,
-          UserApiMetadata.unblockUserPath(targetProfileSubjectId: 'u1'),
+          UserApiMetadata.unblockUserPath(targetSubAccountId: 'u1'),
         );
       },
     );

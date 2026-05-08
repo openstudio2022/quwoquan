@@ -74,7 +74,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   RelationshipCapabilityDto? _relationshipCapability;
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = <String>{};
-  Map<String, Object?>? _actionMenuMessage;
+  ChatMessageDisplayItem? _actionMenuMessage;
   Offset? _actionMenuPosition;
   bool _speechReady = false;
   String _lastAsrText = '';
@@ -493,7 +493,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   void _onLongPressMessage(
-    Map<String, Object?> message,
+    ChatMessageDisplayItem message,
     Offset globalPosition,
   ) {
     setState(() {
@@ -507,16 +507,16 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     if (msg == null) return;
     switch (action) {
       case 'forward':
-        _shareMessages(<Map<String, Object?>>[msg]);
+        _shareMessages(<ChatMessageDisplayItem>[msg]);
         break;
       case 'select':
         setState(() {
           _isSelectionMode = true;
-          _selectedIds.add(msg['id'] as String);
+          _selectedIds.add(msg.id);
         });
         break;
       case 'copy':
-        final content = msg['content'] as String? ?? '';
+        final content = msg.content;
         if (content.isNotEmpty) {
           Clipboard.setData(ClipboardData(text: content));
           if (mounted) {
@@ -525,10 +525,10 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         }
         break;
       case 'recall':
-        if (msg['isSelf'] == true) {
+        if (msg.isSelf) {
           ref
               .read(chatMessageProvider(widget.conversationId).notifier)
-              .recallMessage((msg['id'] as String?) ?? '');
+              .recallMessage(msg.id);
         }
         break;
       case 'delete':
@@ -540,9 +540,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     });
   }
 
-  Future<void> _shareMessages(List<Map<String, Object?>> messages) async {
+  Future<void> _shareMessages(List<ChatMessageDisplayItem> messages) async {
     final lines = messages
-        .map((item) => (item['content'] as String?)?.trim() ?? '')
+        .map((item) => item.content.trim())
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
     if (lines.isEmpty) return;
@@ -583,7 +583,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
     final displayMessages = ref
         .watch(chatMessageProvider(widget.conversationId))
         .messages
-        .map((dto) => dto.toDisplayMap(currentUserId: currentUserId))
+        .map((dto) => dto.toDisplayItem(currentUserId: currentUserId))
         .toList();
     final timelinePadding = EdgeInsets.symmetric(
       horizontal:
@@ -620,10 +620,10 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
               itemBuilder: (context, index) {
                 final msg = displayMessages[index];
                 final prevTime = index > 0
-                    ? displayMessages[index - 1]['timestamp'] as String?
+                    ? displayMessages[index - 1].timestampLabel
                     : null;
-                final showTime = index == 0 || msg['timestamp'] != prevTime;
-                final timeStr = formatChatTime(msg['timestamp'] as String?);
+                final showTime = index == 0 || msg.timestampLabel != prevTime;
+                final timeStr = formatChatTime(msg.timestampLabel);
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
@@ -647,26 +647,25 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                       ),
                     ChatMessageBubble(
                       message: msg,
-                      isRight: msg['isSelf'] == true,
-                      bubbleColor: msg['isSelf'] == true
+                      isRight: msg.isSelf,
+                      bubbleColor: msg.isSelf
                           ? AppColors.chatBubbleOutgoing
                           : AppColors.chatBubbleIncoming,
-                      textColor: msg['isSelf'] == true ? AppColors.white : fgPrimary,
+                      textColor: msg.isSelf ? AppColors.white : fgPrimary,
                       isSelectionMode: _isSelectionMode,
-                      isSelected: _selectedIds.contains(msg['id']),
+                      isSelected: _selectedIds.contains(msg.id),
                       onLongPressStart: (details) => _onLongPressMessage(
-                        Map<String, Object?>.from(msg),
+                        msg,
                         details.globalPosition,
                       ),
                       onTap: _isSelectionMode
-                          ? () => _toggleSelect(msg['id'] as String)
+                          ? () => _toggleSelect(msg.id)
                           : null,
                       receiptEnabled: false,
                       memberCount: _memberCount,
-                      messageStatus: msg['status'] as String?,
                       onAvatarTap: () {
-                        final senderId = msg['senderId'] as String? ?? '';
-                        if (msg['isSelf'] == true) {
+                        final senderId = msg.senderId;
+                        if (msg.isSelf) {
                           final currentUser = ref.read(userDataProvider);
                           final userId = currentUser?.username ?? currentUser?.id;
                           if (userId != null && userId.isNotEmpty) {
@@ -678,7 +677,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                           context.push(
                             AppRoutePaths.userProfile(username: senderId),
                             extra: UserProfileRouteExtra(
-                              profileSubjectId: senderId,
+                              subAccountId: senderId,
                             ),
                           );
                         }
@@ -759,9 +758,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                       onPressed: () async {
                         final selectedMessages = displayMessages
                             .where(
-                              (item) => _selectedIds.contains(
-                                (item['id'] as String?) ?? '',
-                              ),
+                              (item) => _selectedIds.contains(item.id),
                             )
                             .toList(growable: false);
                         await _shareMessages(selectedMessages);

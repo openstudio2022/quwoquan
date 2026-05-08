@@ -5,6 +5,10 @@ class AuthLoginResultDto {
   final String accessToken;
   final String refreshToken;
   final String ownerId;
+  final String accountState;
+  final String identityOrigin;
+  final int logicalShard;
+  final String anonymousRetentionPolicy;
   final Map<String, dynamic>? activeSub;
   final int subAccountCount;
 
@@ -12,6 +16,10 @@ class AuthLoginResultDto {
     this.accessToken = '',
     this.refreshToken = '',
     this.ownerId = '',
+    this.accountState = '',
+    this.identityOrigin = '',
+    this.logicalShard = 0,
+    this.anonymousRetentionPolicy = '',
     this.activeSub,
     this.subAccountCount = 0,
   });
@@ -21,6 +29,10 @@ class AuthLoginResultDto {
       accessToken: m['accessToken']?.toString() ?? '',
       refreshToken: m['refreshToken']?.toString() ?? '',
       ownerId: m['ownerId']?.toString() ?? m['ownerAccountId']?.toString() ?? '',
+      accountState: m['accountState']?.toString() ?? '',
+      identityOrigin: m['identityOrigin']?.toString() ?? '',
+      logicalShard: (m['logicalShard'] as num?)?.toInt() ?? 0,
+      anonymousRetentionPolicy: m['anonymousRetentionPolicy']?.toString() ?? '',
       activeSub: _parseStringKeyMap(m['activeSub']) ?? null,
       subAccountCount: (m['subAccountCount'] as num?)?.toInt() ?? 0,
     );
@@ -31,6 +43,10 @@ class AuthLoginResultDto {
       'accessToken': accessToken,
       'refreshToken': refreshToken,
       'ownerId': ownerId,
+      'accountState': accountState,
+      'identityOrigin': identityOrigin,
+      'logicalShard': logicalShard,
+      'anonymousRetentionPolicy': anonymousRetentionPolicy,
       'activeSub': activeSub,
       'subAccountCount': subAccountCount,
     };
@@ -40,6 +56,10 @@ class AuthLoginResultDto {
     String? accessToken,
     String? refreshToken,
     String? ownerId,
+    String? accountState,
+    String? identityOrigin,
+    int? logicalShard,
+    String? anonymousRetentionPolicy,
     Map<String, dynamic>? activeSub,
     int? subAccountCount,
   }) {
@@ -47,6 +67,10 @@ class AuthLoginResultDto {
       accessToken: accessToken ?? this.accessToken,
       refreshToken: refreshToken ?? this.refreshToken,
       ownerId: ownerId ?? this.ownerId,
+      accountState: accountState ?? this.accountState,
+      identityOrigin: identityOrigin ?? this.identityOrigin,
+      logicalShard: logicalShard ?? this.logicalShard,
+      anonymousRetentionPolicy: anonymousRetentionPolicy ?? this.anonymousRetentionPolicy,
       activeSub: activeSub ?? this.activeSub,
       subAccountCount: subAccountCount ?? this.subAccountCount,
     );

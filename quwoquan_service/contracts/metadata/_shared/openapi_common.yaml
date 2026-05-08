@@ -45,13 +45,27 @@ components:
       schema:
         type: string
       description: 异步触发载体 ID（messageId/topicOffset 的安全编码/jobRunId 等）
-    XPersonaId:
-      name: X-Persona-Id
+    XClientUserId:
+      name: X-Client-User-Id
       in: header
       required: false
       schema:
         type: string
-      description: 可选 persona 上下文（当前激活分身）
+      description: ownerID，上下游统一根账号标识
+    XClientSubAccountId:
+      name: X-Client-Sub-Account-Id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: subAccountID，对外可见主体标识
+    XClientSubAccountContextVersion:
+      name: X-Client-Sub-Account-Context-Version
+      in: header
+      required: false
+      schema:
+        type: string
+      description: subAccount 上下文版本
     XClientPageId:
       name: X-Client-Page-Id
       in: header

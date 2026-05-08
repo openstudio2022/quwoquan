@@ -1,0 +1,461 @@
+version: 1
+compatibleRuntimeVersion: ">=1.0.0"
+schemaVersion: 1
+
+modules:
+  chat.api:
+    domain: chat
+    capabilities: [api]
+    requiredStores: [chat.mongodb]
+    requiredQueues: []
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  chat.task_outbox_dispatcher:
+    domain: chat
+    capabilities: [outbox_dispatch]
+    requiredStores: [chat.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.chat.avatar, reliabletask.chat.projection]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  chat.group_avatar_worker:
+    domain: chat
+    capabilities: [task_worker]
+    requiredStores: [chat.mongodb, reliabletask.task, reliabletask.notification_outbox]
+    requiredQueues: [reliabletask.chat.avatar]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  chat.roster_projection_worker:
+    domain: chat
+    capabilities: [task_worker]
+    requiredStores: [chat.mongodb, reliabletask.task, reliabletask.notification_outbox]
+    requiredQueues: [reliabletask.chat.projection]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  chat.inbox_projection_worker:
+    domain: chat
+    capabilities: [task_worker]
+    requiredStores: [chat.mongodb, reliabletask.task, reliabletask.notification_outbox]
+    requiredQueues: [reliabletask.chat.projection]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  chat.notification_outbox_dispatcher:
+    domain: chat
+    capabilities: [notification_dispatch]
+    requiredStores: [chat.mongodb, reliabletask.notification_outbox]
+    requiredQueues: [reliabletask.notification.fanout]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  user.task_outbox_dispatcher:
+    domain: user
+    capabilities: [outbox_dispatch]
+    requiredStores: [user.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.user.avatar]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  user.avatar_propagation_worker:
+    domain: user
+    capabilities: [task_worker]
+    requiredStores: [user.mongodb, reliabletask.task, reliabletask.notification_outbox]
+    requiredQueues: [reliabletask.user.avatar]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  user.notification_outbox_dispatcher:
+    domain: user
+    capabilities: [notification_dispatch]
+    requiredStores: [user.mongodb, reliabletask.notification_outbox]
+    requiredQueues: [reliabletask.notification.fanout]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  user.api:
+    domain: user
+    capabilities: [api]
+    requiredStores: [user.mongodb]
+    requiredQueues: []
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  content.api:
+    domain: content
+    capabilities: [api]
+    requiredStores: [content.mongodb]
+    requiredQueues: []
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  content.task_outbox_dispatcher:
+    domain: content
+    capabilities: [outbox_dispatch]
+    requiredStores: [content.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.content.projection]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  content.search_index_worker:
+    domain: content
+    capabilities: [task_worker]
+    requiredStores: [content.mongodb, reliabletask.task]
+    requiredQueues: [reliabletask.content.projection]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  content.feed_projection_worker:
+    domain: content
+    capabilities: [task_worker]
+    requiredStores: [content.mongodb, reliabletask.task, reliabletask.notification_outbox]
+    requiredQueues: [reliabletask.content.projection]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  circle.api:
+    domain: circle
+    capabilities: [api]
+    requiredStores: [circle.mongodb]
+    requiredQueues: []
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  circle.task_outbox_dispatcher:
+    domain: circle
+    capabilities: [outbox_dispatch]
+    requiredStores: [circle.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.circle.projection]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  circle.member_projection_worker:
+    domain: circle
+    capabilities: [task_worker]
+    requiredStores: [circle.mongodb, reliabletask.task]
+    requiredQueues: [reliabletask.circle.projection]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  assistant.api:
+    domain: assistant
+    capabilities: [api]
+    requiredStores: [assistant.mongodb]
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+
+  assistant.task_outbox_dispatcher:
+    domain: assistant
+    capabilities: [outbox_dispatch]
+    requiredStores: [assistant.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.assistant.projection]
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  assistant.run_projection_worker:
+    domain: assistant
+    capabilities: [task_worker]
+    requiredStores: [assistant.mongodb, reliabletask.task]
+    requiredQueues: [reliabletask.assistant.projection]
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+
+  notification.api:
+    domain: notification
+    capabilities: [api]
+    requiredStores: [notification.mongodb]
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  notification.notification_outbox_dispatcher:
+    domain: notification
+    capabilities: [notification_dispatch]
+    requiredStores: [notification.mongodb, reliabletask.notification_outbox]
+    requiredQueues: [reliabletask.notification.fanout]
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  notification.fanout_worker:
+    domain: notification
+    capabilities: [notification_fanout]
+    requiredStores: [notification.mongodb, reliabletask.notification_outbox, reliabletask.notification_ledger]
+    requiredQueues: [reliabletask.notification.fanout]
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  notification.delivery_retry_worker:
+    domain: notification
+    capabilities: [notification_retry]
+    requiredStores: [notification.mongodb, reliabletask.notification_ledger]
+    requiredQueues: [reliabletask.notification.fanout]
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  integration.api:
+    domain: integration
+    capabilities: [api]
+    requiredStores: [integration.mongodb]
+    requiredQueues: []
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  integration.task_outbox_dispatcher:
+    domain: integration
+    capabilities: [outbox_dispatch]
+    requiredStores: [integration.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.integration.external]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  integration.external_retry_worker:
+    domain: integration
+    capabilities: [task_worker]
+    requiredStores: [integration.mongodb, reliabletask.task]
+    requiredQueues: [reliabletask.integration.external]
+    planes: [user-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  entity.api:
+    domain: entity
+    capabilities: [api]
+    requiredStores: [entity.mongodb]
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+
+  entity.task_outbox_dispatcher:
+    domain: entity
+    capabilities: [outbox_dispatch]
+    requiredStores: [entity.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.entity.projection]
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  entity.readmodel_projection_worker:
+    domain: entity
+    capabilities: [task_worker]
+    requiredStores: [entity.mongodb, reliabletask.task]
+    requiredQueues: [reliabletask.entity.projection]
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+
+  ops.api:
+    domain: ops
+    capabilities: [api]
+    requiredStores: [ops.mongodb]
+    requiredQueues: []
+    planes: [platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+
+  ops.task_outbox_dispatcher:
+    domain: ops
+    capabilities: [outbox_dispatch]
+    requiredStores: [ops.mongodb, reliabletask.outbox]
+    requiredQueues: [reliabletask.ops.audit]
+    planes: [platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  ops.audit_projection_worker:
+    domain: ops
+    capabilities: [task_worker]
+    requiredStores: [ops.mongodb, reliabletask.task]
+    requiredQueues: [reliabletask.ops.audit]
+    planes: [platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+
+  recommendation.api:
+    domain: recommendation
+    capabilities: [api]
+    requiredStores: []
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  realtime.gateway:
+    domain: realtime
+    capabilities: [gateway]
+    requiredStores: []
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  rtc.api:
+    domain: rtc
+    capabilities: [api]
+    requiredStores: [rtc.mongodb]
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  rtc.signaling_worker:
+    domain: rtc
+    capabilities: [realtime_worker]
+    requiredStores: [rtc.mongodb]
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  media.sfu:
+    domain: media
+    capabilities: [media_infra]
+    requiredStores: []
+    requiredQueues: []
+    planes: [user-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  turn.relay:
+    domain: turn
+    capabilities: [network_relay]
+    requiredStores: []
+    requiredQueues: []
+    planes: [user-plane]
+    allowOnebox: false
+    allowStandalonePackage: true
+  gateway.api:
+    domain: gateway
+    capabilities: [api_gateway]
+    requiredStores: []
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane, product-control-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+  orchestrator.workflow_worker:
+    domain: orchestrator
+    capabilities: [workflow_worker]
+    requiredStores: []
+    requiredQueues: []
+    planes: [platform-control-plane, product-control-plane]
+    allowOnebox: true
+    allowStandalonePackage: true
+
+tasks:
+  chat.group_avatar.recompute:
+    ownerDomain: chat
+    dispatcherModule: chat.task_outbox_dispatcher
+    workerModule: chat.group_avatar_worker
+    queue: reliabletask.chat.avatar
+    partitionKey: conversationId
+    payloadAllowlist: [rosterRevision, triggers, actorID]
+    mergePolicy:
+      delayFromNow: 1m
+      maxDelay: 10m
+      fields:
+        rosterRevision: max
+        triggers: union
+    retryPolicy:
+      maxAttempts: 8
+      backoff: exponential
+    retentionPolicyRef: reliabletask.retention.standard.v1
+    rateLimitPolicyRef: reliabletask.rate.chat_avatar.v1
+    runtimeFailureModule: CHAT.GROUP_AVATAR
+  chat.roster_projection.rebuild:
+    ownerDomain: chat
+    dispatcherModule: chat.task_outbox_dispatcher
+    workerModule: chat.roster_projection_worker
+    queue: reliabletask.chat.projection
+    partitionKey: conversationId
+    payloadAllowlist: [rosterRevision]
+    mergePolicy:
+      delayFromNow: 10s
+      maxDelay: 2m
+      fields:
+        rosterRevision: max
+    retryPolicy:
+      maxAttempts: 8
+      backoff: exponential
+    retentionPolicyRef: reliabletask.retention.standard.v1
+    rateLimitPolicyRef: reliabletask.rate.projection.v1
+    runtimeFailureModule: CHAT.ROSTER_PROJECTION
+  chat.inbox_projection.update:
+    ownerDomain: chat
+    dispatcherModule: chat.task_outbox_dispatcher
+    workerModule: chat.inbox_projection_worker
+    queue: reliabletask.chat.projection
+    partitionKey: conversationId
+    payloadAllowlist: [maxSeq]
+    mergePolicy:
+      delayFromNow: 5s
+      maxDelay: 1m
+      fields:
+        maxSeq: max
+    retryPolicy:
+      maxAttempts: 8
+      backoff: exponential
+    retentionPolicyRef: reliabletask.retention.standard.v1
+    rateLimitPolicyRef: reliabletask.rate.projection.v1
+    runtimeFailureModule: CHAT.INBOX_PROJECTION
+  user.avatar.propagate:
+    ownerDomain: user
+    dispatcherModule: user.task_outbox_dispatcher
+    workerModule: user.avatar_propagation_worker
+    queue: reliabletask.user.avatar
+    partitionKey: userId
+    payloadAllowlist: [avatarVersion]
+    mergePolicy:
+      delayFromNow: 30s
+      maxDelay: 5m
+      fields:
+        avatarVersion: max
+    retryPolicy:
+      maxAttempts: 8
+      backoff: exponential
+    retentionPolicyRef: reliabletask.retention.standard.v1
+    rateLimitPolicyRef: reliabletask.rate.projection.v1
+    runtimeFailureModule: USER.AVATAR_PROPAGATION
+  content.search_index.refresh:
+    ownerDomain: content
+    dispatcherModule: content.task_outbox_dispatcher
+    workerModule: content.search_index_worker
+    queue: reliabletask.content.projection
+    partitionKey: postId
+    payloadAllowlist: [fromSeq, toSeq]
+    mergePolicy:
+      delayFromNow: 5s
+      maxDelay: 1m
+      fields:
+        fromSeq: min
+        toSeq: max
+    retryPolicy:
+      maxAttempts: 8
+      backoff: exponential
+    retentionPolicyRef: reliabletask.retention.standard.v1
+    rateLimitPolicyRef: reliabletask.rate.projection.v1
+    runtimeFailureModule: CONTENT.SEARCH_INDEX
+  notification.patch.fanout:
+    ownerDomain: notification
+    dispatcherModule: notification.notification_outbox_dispatcher
+    workerModule: notification.fanout_worker
+    queue: reliabletask.notification.fanout
+    partitionKey: recipientShard
+    payloadAllowlist: [notificationId, recipientShard, patchType]
+    mergePolicy:
+      delayFromNow: 0s
+      maxDelay: 0s
+      fields:
+        notificationId: identity
+    retryPolicy:
+      maxAttempts: 10
+      backoff: exponential
+    retentionPolicyRef: reliabletask.retention.notification.v1
+    rateLimitPolicyRef: reliabletask.rate.notification_fanout.v1
+    runtimeFailureModule: NOTIFICATION.FANOUT

@@ -8,7 +8,7 @@ void main() {
       'conversationId': 'c1',
       'seq': 1,
       'senderId': 'current_sender',
-      'senderProfileSubjectId': 'persona_sender',
+      'senderSubAccountId': 'persona_sender',
       'senderName': '旧名字',
       'senderDisplayNameSnapshot': '记录分身名',
       'senderAvatar': 'https://example.com/old.jpg',

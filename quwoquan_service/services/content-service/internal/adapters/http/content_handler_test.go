@@ -48,6 +48,15 @@ func (s *stubFeatureProvider) GetFeatures(_ context.Context, _ string) (*rtrec.U
 	return s.features, nil
 }
 
+func setActorHeaders(req *http.Request, ownerID, subAccountID string) {
+	if ownerID != "" {
+		req.Header.Set("X-Client-User-Id", ownerID)
+	}
+	if subAccountID != "" {
+		req.Header.Set("X-Client-Sub-Account-Id", subAccountID)
+	}
+}
+
 func TestHealthz(t *testing.T) {
 	req := httptest.NewRequest("GET", "/healthz", nil)
 	rec := httptest.NewRecorder()
@@ -88,6 +97,7 @@ func TestCreatePostBodyBindingRejectsUnknownField(t *testing.T) {
 		"/v1/content/posts",
 		bytes.NewBufferString(`{"unknownField":"x"}`),
 	)
+	setActorHeaders(req, "owner_test_unknown", "sub_test_unknown")
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -101,6 +111,7 @@ func TestCreatePostBodyBindingAcceptsWritableFields(t *testing.T) {
 		"/v1/content/posts",
 		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"p1","type":"paragraph","text":"b"}]}}`),
 	)
+	setActorHeaders(req, "owner_test_create", "sub_test_create")
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -202,6 +213,7 @@ func TestCreatePostWithLocationField(t *testing.T) {
 		"/v1/content/posts",
 		bytes.NewBufferString(`{"contentType":"article","location":{"latitude":39.9,"longitude":116.4},"locationName":"Beijing","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"loc test"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
 	)
+	setActorHeaders(req, "owner_test_location", "sub_test_location")
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -224,6 +236,7 @@ func TestMomentRequiresBodyOrMedia(t *testing.T) {
 		"/v1/content/posts",
 		bytes.NewBufferString(`{"contentType":"micro","body":"","mediaUrls":[],"videoUrl":""}`),
 	)
+	setActorHeaders(req, "owner_test_moment", "sub_test_moment")
 	rec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -238,7 +251,7 @@ func TestPostImmutableAfterPublish(t *testing.T) {
 		"/v1/content/posts",
 		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"t"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
 	)
-	createReq.Header.Set("X-Client-User-Id", "u1")
+	setActorHeaders(createReq, "u1", "u1")
 	createRec := httptest.NewRecorder()
 	handler.ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusCreated {
@@ -252,7 +265,7 @@ func TestPostImmutableAfterPublish(t *testing.T) {
 		"/v1/content/posts/"+postID+"/publish",
 		bytes.NewBufferString(`{}`),
 	)
-	publishReq.Header.Set("X-Client-User-Id", "u1")
+	setActorHeaders(publishReq, "u1", "u1")
 	publishRec := httptest.NewRecorder()
 	handler.ServeHTTP(publishRec, publishReq)
 	if publishRec.Code != http.StatusOK {
@@ -278,7 +291,7 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 		"/v1/content/posts",
 		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"to delete"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
 	)
-	createReq.Header.Set("X-Client-User-Id", "u_delete")
+	setActorHeaders(createReq, "u_delete", "u_delete")
 	createRec := httptest.NewRecorder()
 	handler.ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusCreated {
@@ -289,7 +302,7 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 	postID, _ := created["_id"].(string)
 
 	delReq := httptest.NewRequest("DELETE", "/v1/content/posts/"+postID, nil)
-	delReq.Header.Set("X-Client-User-Id", "u_delete")
+	setActorHeaders(delReq, "u_delete", "u_delete")
 	delRec := httptest.NewRecorder()
 	handler.ServeHTTP(delRec, delReq)
 	if delRec.Code != http.StatusOK {
@@ -311,7 +324,7 @@ func TestUpdatePostCirclesRequiresPublic(t *testing.T) {
 		"/v1/content/posts",
 		bytes.NewBufferString(`{"contentType":"article","visibility":"private","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"private"},{"id":"p1","type":"paragraph","text":"仅圈子分发测试"}]}}`),
 	)
-	createReq.Header.Set("X-Client-User-Id", "author1")
+	setActorHeaders(createReq, "author1", "author1")
 	createRec := httptest.NewRecorder()
 	handler.ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusCreated {
@@ -326,7 +339,7 @@ func TestUpdatePostCirclesRequiresPublic(t *testing.T) {
 		"/v1/content/posts/"+postID+"/circles",
 		bytes.NewBufferString(`{"add":["circle_a"]}`),
 	)
-	circleReq.Header.Set("X-Client-User-Id", "author1")
+	setActorHeaders(circleReq, "author1", "author1")
 	circleRec := httptest.NewRecorder()
 	handler.ServeHTTP(circleRec, circleReq)
 	if circleRec.Code != http.StatusBadRequest {

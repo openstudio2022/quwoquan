@@ -1,0 +1,25 @@
+entity_id: entity_place_west_lake
+name: 西湖
+aliases:
+  - 杭州西湖
+kind: scenic_spot
+summary: 杭州最核心的湖滨景观带，适合傍晚漫游、城市种草和多点串联式内容生产。
+city: 杭州
+address_text: 浙江省杭州市西湖风景名胜区
+geo:
+  latitude: 30.2431
+  longitude: 120.1500
+scene_tag_refs:
+  - trees/tags/场景/周末一日.yaml
+  - trees/tags/时间线/傍晚.yaml
+category_tag_refs:
+  - trees/tags/主题/城市漫游.yaml
+  - trees/tags/主题/湖景.yaml
+media_refs:
+  - media/image/entity/west_lake/v1/cover.png
+evidence_refs:
+  - https://www.hangzhou.gov.cn/
+search_terms:
+  - 西湖
+  - 杭州西湖
+  - 西湖 傍晚 散步

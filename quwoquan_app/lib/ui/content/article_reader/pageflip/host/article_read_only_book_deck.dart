@@ -164,6 +164,8 @@ class ArticleReadOnlyBookDebugState {
     this.backwardEdgeParallelToFold,
     this.backwardBackPolygonPoints,
     this.backwardFrontPolygonPoints,
+    this.backwardSheetPolygonPoints,
+    this.backwardBottomClipPolygonPoints,
     this.backwardCurrentPolygonPoints,
     this.backwardFoldDirection,
     this.guideX,
@@ -251,6 +253,8 @@ class ArticleReadOnlyBookDebugState {
   final bool? backwardEdgeParallelToFold;
   final String? backwardBackPolygonPoints;
   final String? backwardFrontPolygonPoints;
+  final String? backwardSheetPolygonPoints;
+  final String? backwardBottomClipPolygonPoints;
   final String? backwardCurrentPolygonPoints;
   final String? backwardFoldDirection;
   final List<int> availableSnapshotIndices;
@@ -340,6 +344,8 @@ class ArticleReadOnlyBookDebugState {
     backwardEdgeParallelToFold,
     backwardBackPolygonPoints,
     backwardFrontPolygonPoints,
+    backwardSheetPolygonPoints,
+    backwardBottomClipPolygonPoints,
     backwardCurrentPolygonPoints,
     backwardFoldDirection,
     availableSnapshotIndices.join(','),
@@ -369,11 +375,11 @@ bool _paintBoundsTouchesLeftSpine({
 class _BackwardGeometryGuidePainter extends CustomPainter {
   const _BackwardGeometryGuidePainter({
     required this.foldLine,
-    required this.pageEdgeLine,
+    this.freeEdgeLine,
   });
 
   final (Offset, Offset) foldLine;
-  final (Offset, Offset) pageEdgeLine;
+  final (Offset, Offset)? freeEdgeLine;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -386,14 +392,18 @@ class _BackwardGeometryGuidePainter extends CustomPainter {
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
     canvas.drawLine(foldLine.$1, foldLine.$2, foldPaint);
-    canvas.drawLine(pageEdgeLine.$1, pageEdgeLine.$2, pageEdgePaint);
+    if (freeEdgeLine case final freeEdge?) {
+      canvas.drawLine(freeEdge.$1, freeEdge.$2, pageEdgePaint);
+    }
     _paintLabel(canvas, 'F', foldLine.$1 + const Offset(4, 4), foldPaint.color);
-    _paintLabel(
-      canvas,
-      'E',
-      pageEdgeLine.$1 + const Offset(4, 4),
-      pageEdgePaint.color,
-    );
+    if (freeEdgeLine case final freeEdge?) {
+      _paintLabel(
+        canvas,
+        'R',
+        freeEdge.$1 + const Offset(4, 4),
+        pageEdgePaint.color,
+      );
+    }
   }
 
   void _paintLabel(Canvas canvas, String label, Offset offset, Color color) {
@@ -414,7 +424,7 @@ class _BackwardGeometryGuidePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _BackwardGeometryGuidePainter oldDelegate) {
     return oldDelegate.foldLine != foldLine ||
-        oldDelegate.pageEdgeLine != pageEdgeLine;
+        oldDelegate.freeEdgeLine != freeEdgeLine;
   }
 }
 
@@ -857,7 +867,11 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (_sceneRenderDirection(scene) != StPageFlipDirection.back) {
       return null;
     }
-    return 0;
+    final frame = _resolveBackwardLeafFrame(scene);
+    if (frame == null) {
+      return 0;
+    }
+    return frame.rectoCoverageNormalized > 0.001 ? 1 : 0;
   }
 
   String? _resolveBackwardReplayBackSurfaceStrategy(StPageFlipScene scene) {
@@ -866,7 +880,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     }
     return scene.flippingPageIndex == null
         ? null
-        : 'paperFoldThreeFaceBackSurface';
+        : 'paperFoldBackMainlineSurface';
   }
 
   Set<int> _resolveBackwardDynamicOwnedPageSet(StPageFlipScene scene) {
@@ -968,10 +982,10 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         ? 'leftward'
         : 'rightward';
     final frontFirst = frontPaintBounds != null && backPaintBounds == null;
-    final phase = frontPaintBounds == null ? 'backOnly' : 'frontDominant';
+    final phase = frontPaintBounds == null ? 'backOnly' : 'frontTakeover';
     return <String>[
-      'route=paperFoldBackwardThreeFace',
-      'mainline=paperFoldBackThreeFace',
+      'route=paperFoldBackwardMainline',
+      'mainline=paperFoldBackMainline',
       'flipping=singleTurningSheet',
       'flippingSheetCount=$flippingSheetCount',
       'frontSheetId=${frontSheetId ?? "none"}',
@@ -979,7 +993,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       'frontBackSameSheet=${frontSheetId != null && frontSheetId == backSheetId}',
       'currentLayerPresent=$currentLayerPresent',
       'multiSliceViolation=$multiSliceViolation',
-      'frontLayers=0',
+      'frontLayers=${frontPaintBounds == null ? 0 : 1}',
       'backSurface=$backStrategy',
       'backFirst=${backPaintBounds != null && frontPaintBounds == null}',
       'frontFirst=$frontFirst',
@@ -1079,11 +1093,20 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       scene.layout.bounds.pageWidth,
       scene.layout.bounds.height,
     );
+    final projectedFrame = frame.backwardProjectedFrame;
+    final backwardLeafFrame = _resolveBackwardLeafFrame(scene);
+    if (projectedFrame == null) {
+      return null;
+    }
     return resolveBackwardFoldFrameGeometry(
       flippingArea: frame.flippingClipArea,
       bottomArea: frame.bottomClipArea,
       anchor: frame.flippingAnchor,
       angle: frame.angle,
+      foldLine: projectedFrame.foldLine,
+      freeEdgeLine: projectedFrame.projectedRightEdgeLine,
+      frontBackBoundaryLine: projectedFrame.frontBackBoundaryLine,
+      rectoCoverageNormalized: backwardLeafFrame?.rectoCoverageNormalized ?? 0,
       bounds: scene.layout.bounds,
       pageSize: pageSize,
       pageViewportRect: _backwardPageRect(scene),
@@ -1094,41 +1117,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     return resolveBookPageRect(scene.layout, isRightPage: true);
   }
 
-  Widget _buildBackwardPreviousFrontPlaneLayer({
-    required BuildContext context,
-    required StPageFlipScene scene,
-    required int pageIndex,
-    required Size pageSize,
-  }) {
-    final geometry = _resolveBackwardFoldSurfaceGeometry(scene);
-    if (geometry == null || geometry.previousFrontLocalPolygon.length < 3) {
-      return const SizedBox.shrink();
-    }
-    return Positioned.fromRect(
-      rect: _backwardPageRect(scene),
-      child: ClipPath(
-        clipper: ArticlePolygonClipper(geometry.previousFrontLocalPolygon),
-        child: KeyedSubtree(
-          key: const ValueKey<String>('article_backward_previous_front_plane'),
-          child: widget.debugPureBackwardGeometry
-              ? _buildBackwardGeometryProbeSurface(
-                  label: 'FRONT-GEOM',
-                  pageIndex: pageIndex,
-                  faceKind: 'front',
-                  color: AppColors.error,
-                )
-              : _buildCachedPageSurface(
-                  context,
-                  pageIndex,
-                  pageSize,
-                  kind: ArticlePageSurfaceKind.front,
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackwardPreviousBackSoftLayer({
+  Widget _buildBackwardPreviousLeafSoftLayer({
     required BuildContext context,
     required StPageFlipScene scene,
     required int pageIndex,
@@ -1139,6 +1128,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return const SizedBox.shrink();
     }
     final softGeometry = geometry.softGeometry;
+    final backLocalPolygon = geometry.previousBackLocalPolygon;
     return Positioned(
       left: softGeometry.positionViewport.dx,
       top: softGeometry.positionViewport.dy,
@@ -1152,10 +1142,32 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           child: Stack(
             fit: StackFit.expand,
             children: <Widget>[
-              ClipPath(
-                clipper: ArticlePolygonClipper(
-                  geometry.previousBackLocalPolygon,
+              if (geometry.previousFrontLocalPolygon.length >= 3)
+                ClipPath(
+                  clipper: ArticlePolygonClipper(
+                    geometry.previousFrontLocalPolygon,
+                  ),
+                  child: KeyedSubtree(
+                    key: const ValueKey<String>(
+                      'article_backward_previous_front_region',
+                    ),
+                    child: widget.debugPureBackwardGeometry
+                        ? _buildBackwardGeometryProbeSurface(
+                            label: 'FRONT-GEOM',
+                            pageIndex: pageIndex,
+                            faceKind: 'front',
+                            color: AppColors.error,
+                          )
+                        : _buildCachedPageSurface(
+                            context,
+                            pageIndex,
+                            pageSize,
+                            kind: ArticlePageSurfaceKind.front,
+                          ),
+                  ),
                 ),
+              ClipPath(
+                clipper: ArticlePolygonClipper(backLocalPolygon),
                 child: KeyedSubtree(
                   key: const ValueKey<String>(
                     'article_backward_previous_back_region',
@@ -1177,9 +1189,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
               ),
               if (!widget.debugPureBackwardGeometry)
                 ClipPath(
-                  clipper: ArticlePolygonClipper(
-                    geometry.previousBackLocalPolygon,
-                  ),
+                  clipper: ArticlePolygonClipper(backLocalPolygon),
                   child: _buildFlippingSurfaceOverlay(
                     palette: resolveArticleTemplatePalette(
                       context,
@@ -1203,33 +1213,25 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required int pageIndex,
     required Size pageSize,
   }) {
-    final geometry = _resolveBackwardFoldSurfaceGeometry(scene);
-    final residualPolygon =
-        geometry?.currentResidualPagePolygon ?? const <Offset>[];
-    if (residualPolygon.length < 3) {
-      return const SizedBox.shrink();
-    }
+    final currentChild = KeyedSubtree(
+      key: const ValueKey<String>('article_backward_current_residual_region'),
+      child: widget.debugPureBackwardGeometry
+          ? _buildBackwardGeometryProbeSurface(
+              label: 'CURRENT-GEOM',
+              pageIndex: pageIndex,
+              faceKind: 'current',
+              color: AppColors.success,
+            )
+          : _buildCachedPageSurface(
+              context,
+              pageIndex,
+              pageSize,
+              kind: ArticlePageSurfaceKind.bottom,
+            ),
+    );
     return Positioned.fromRect(
       rect: _backwardPageRect(scene),
-      child: ClipPath(
-        clipper: ArticlePolygonClipper(residualPolygon),
-        child: KeyedSubtree(
-          key: const ValueKey<String>('article_backward_current_residual'),
-          child: widget.debugPureBackwardGeometry
-              ? _buildBackwardGeometryProbeSurface(
-                  label: 'CURRENT-GEOM',
-                  pageIndex: pageIndex,
-                  faceKind: 'current',
-                  color: AppColors.success,
-                )
-              : _buildCachedPageSurface(
-                  context,
-                  pageIndex,
-                  pageSize,
-                  kind: ArticlePageSurfaceKind.bottom,
-                ),
-        ),
-      ),
+      child: currentChild,
     );
   }
 
@@ -1239,6 +1241,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required String faceKind,
     required Color color,
   }) {
+    final displayPageNumber = pageIndex + 1;
     return ColoredBox(
       color: color,
       child: Center(
@@ -1250,7 +1253,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
             child: Text(
-              '$label\npage=$pageIndex\nface=$faceKind\ngeometry=$faceKind',
+              '$label\npage=${displayPageNumber.toString().padLeft(2, '0')}\nface=$faceKind\ngeometry=$faceKind',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: AppColors.white,
@@ -1548,11 +1551,11 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     final resolverClipBounds =
         backwardFoldSurfaceGeometry?.sheetViewportBounds ??
         dynamicFlippingGeometry?.clipViewportBounds;
-
     final backwardFoldLine = backwardFoldSurfaceGeometry?.foldLineViewport;
     final backwardPageEdgeLine =
-        backwardFoldSurfaceGeometry?.frontBackBoundaryViewport;
-    final backwardFoldSurfaceEdgeLine = backwardFoldLine;
+        backwardFoldSurfaceGeometry?.freeEdgeLineViewport;
+    final backwardFoldSurfaceEdgeLine =
+        backwardFoldSurfaceGeometry?.freeEdgeLineViewport;
     final backwardSurfaceAngle =
         renderFrame?.angle ?? scene.calculation?.getAngle();
     final backwardSurfaceShowsBack =
@@ -1589,17 +1592,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     final backwardBackBounds = backwardBackFoldBounds;
     final backwardFrontBounds = backwardFoldFrontBounds;
     final backwardCurrentResidualBounds =
-        backwardFoldSurfaceGeometry?.currentResidualViewportBounds ??
-        (backwardFoldLine == null || backwardFoldLine.$1.dx >= pageRect.right
-            ? null
-            : Rect.fromLTRB(
-                backwardFoldLine.$1.dx.clamp(pageRect.left, pageRect.right),
-                pageRect.top,
-                pageRect.right,
-                pageRect.bottom,
-              ));
+        backwardFoldSurfaceGeometry?.currentUnderlayRect ?? backwardPageRect;
     final backwardMainline = direction == StPageFlipDirection.back
-        ? 'paperFoldBackThreeFace'
+        ? 'paperFoldBackMainline'
         : null;
     final backwardFlippingSheetCount =
         direction == StPageFlipDirection.back &&
@@ -1607,13 +1602,15 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
             scene.flippingPageIndex != null
         ? 1
         : null;
-    final backwardFrontSheetId =
+    final backwardLeafSheetId =
         direction == StPageFlipDirection.back && scene.flippingPageIndex != null
-        ? 'threeFaceFront:${scene.flippingPageIndex}'
+        ? 'mainlineLeaf:${scene.flippingPageIndex}'
         : null;
-    final backwardBackSheetId =
-        direction == StPageFlipDirection.back && scene.flippingPageIndex != null
-        ? 'threeFaceBack:${scene.flippingPageIndex}'
+    final backwardFrontSheetId = backwardFrontFoldVisible
+        ? backwardLeafSheetId
+        : null;
+    final backwardBackSheetId = direction == StPageFlipDirection.back
+        ? backwardLeafSheetId
         : null;
     final backwardCurrentLayerPresent = direction == StPageFlipDirection.back
         ? backwardCurrentResidualBounds != null
@@ -1642,9 +1639,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         backwardLocalClipPolygon;
     final backwardFrontLocalPolygon =
         backwardFoldSurfaceGeometry?.previousFrontLocalPolygon ??
-        (backwardFrontBounds == null
-            ? const <Offset>[]
-            : backwardLocalClipPolygon);
+        const <Offset>[];
     final backwardCurrentResidualPolygon =
         backwardFoldSurfaceGeometry?.currentResidualViewportPolygon ??
         rectToPolygon(backwardCurrentResidualBounds);
@@ -1681,8 +1676,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       pendingCaptureIndices: const <int>[],
       bottomClipBounds: dynamicBottomBounds,
       flippingClipBounds: dynamicFlippingBounds,
-      frontBounds: null,
-      backBounds: null,
+      frontBounds: direction == StPageFlipDirection.back
+          ? backwardFrontBounds
+          : null,
+      backBounds: direction == StPageFlipDirection.back
+          ? backwardBackBounds
+          : null,
       flippingAnchor:
           renderFrame?.flippingAnchor ?? scene.calculation?.getActiveCorner(),
       bottomAnchor:
@@ -1745,25 +1744,27 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         scene: scene,
         dynamicOwnedPages: backwardDynamicOwnedPageSet,
       ),
-      backwardReplaySlices: _resolveBackwardReplaySliceLabel(
-        backwardLeafFrame,
-        scene,
-        pageRect: pageRect,
-        frontPaintBounds: backwardFrontBounds,
-        backPaintBounds: backwardBackBounds,
-        surfaceAngle: backwardSurfaceAngle,
-        flippingSheetCount: backwardFlippingSheetCount ?? 0,
-        frontSheetId: backwardFrontSheetId,
-        backSheetId: backwardBackSheetId,
-        currentLayerPresent: backwardCurrentLayerPresent ?? false,
-        multiSliceViolation: backwardMultiSliceViolation ?? true,
-      ),
+      backwardReplaySlices: direction == StPageFlipDirection.back
+          ? 'route=paperFoldBackwardMainline/mainline=paperFoldBackMainline/flipping=singleTurningSheet/frontEnabled=$backwardFrontFoldVisible/currentLayerPresent=${backwardCurrentLayerPresent ?? false}/multiSliceViolation=${backwardMultiSliceViolation ?? true}'
+          : _resolveBackwardReplaySliceLabel(
+              backwardLeafFrame,
+              scene,
+              pageRect: pageRect,
+              frontPaintBounds: backwardFrontBounds,
+              backPaintBounds: backwardBackBounds,
+              surfaceAngle: backwardSurfaceAngle,
+              flippingSheetCount: backwardFlippingSheetCount ?? 0,
+              frontSheetId: backwardFrontSheetId,
+              backSheetId: backwardBackSheetId,
+              currentLayerPresent: backwardCurrentLayerPresent ?? false,
+              multiSliceViolation: backwardMultiSliceViolation ?? true,
+            ),
       backwardCompositeMode: _hasBackwardPaperFoldFrame(scene)
-          ? 'paperFoldBackwardThreeFace'
+          ? 'paperFoldBackwardMainline'
           : null,
       backwardFrontPaintBounds: backwardFrontBounds,
       backwardBackPaintBounds: backwardBackBounds,
-      backwardLaidFrontPaintBounds: null,
+      backwardLaidFrontPaintBounds: backwardFrontBounds,
       backwardFoldSurfacePaintBounds: backwardFoldSurfaceBounds,
       backwardCurrentResidualBounds: backwardCurrentResidualBounds,
       backwardMainline: backwardMainline,
@@ -1774,7 +1775,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       backwardMultiSliceViolation: backwardMultiSliceViolation,
       backwardPaintedVersoWidth: backwardLeafFrame?.versoRevealWidthNormalized,
       backwardBackPixelSurfaceStrategy: _hasBackwardPaperFoldFrame(scene)
-          ? 'paperFoldThreeFaceBackSurface'
+          ? 'paperFoldBackMainlineSurface'
           : null,
       backwardSurfaceOrigin: direction == StPageFlipDirection.back
           ? Offset.zero
@@ -1811,17 +1812,17 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         backwardLeafFrame,
       ),
       backwardEdgeEnteredPage: direction == StPageFlipDirection.back
-          ? resolverClipBounds != null
+          ? backBoundsViewport != null
           : null,
       backwardOverlayClippedToPaper: direction == StPageFlipDirection.back
-          ? !widget.debugPureBackwardGeometry && resolverClipBounds != null
+          ? !widget.debugPureBackwardGeometry && backBoundsViewport != null
           : null,
       backwardBackVertexCount: backwardBackLocalPolygon.length >= 3
           ? backwardBackLocalPolygon.length
           : null,
-      backwardFrontVertexCount: backwardFrontLocalPolygon.length < 3
-          ? null
-          : backwardFrontLocalPolygon.length,
+      backwardFrontVertexCount: backwardFrontLocalPolygon.length >= 3
+          ? backwardFrontLocalPolygon.length
+          : null,
       backwardEdgeParallelToFold:
           backwardFoldLine == null || backwardPageEdgeLine == null
           ? null
@@ -1831,6 +1832,13 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           : null,
       backwardFrontPolygonPoints: backwardFrontLocalPolygon.length >= 3
           ? articleDiagnosticPolygonSignature(backwardFrontLocalPolygon)
+          : null,
+      backwardSheetPolygonPoints: backwardLocalClipPolygon.length >= 3
+          ? articleDiagnosticPolygonSignature(backwardLocalClipPolygon)
+          : null,
+      backwardBottomClipPolygonPoints:
+          diagnosticBottomArea != null && diagnosticBottomArea.length >= 3
+          ? articleDiagnosticPolygonSignature(diagnosticBottomArea)
           : null,
       backwardCurrentPolygonPoints: backwardCurrentResidualPolygon.length >= 3
           ? articleDiagnosticPolygonSignature(backwardCurrentResidualPolygon)
@@ -1927,15 +1935,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       );
     }
     layers.add(
-      _buildBackwardPreviousFrontPlaneLayer(
-        context: context,
-        scene: scene,
-        pageIndex: scene.flippingPageIndex!,
-        pageSize: pageSize,
-      ),
-    );
-    layers.add(
-      _buildBackwardPreviousBackSoftLayer(
+      _buildBackwardPreviousLeafSoftLayer(
         context: context,
         scene: scene,
         pageIndex: scene.flippingPageIndex!,
@@ -1958,7 +1958,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         child: CustomPaint(
           painter: _BackwardGeometryGuidePainter(
             foldLine: geometry.foldLineViewport,
-            pageEdgeLine: geometry.frontBackBoundaryViewport,
+            freeEdgeLine: geometry.freeEdgeLineViewport,
           ),
         ),
       ),

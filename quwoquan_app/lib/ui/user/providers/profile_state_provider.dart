@@ -108,6 +108,18 @@ class ProfileNotifier extends Notifier<ProfileState> {
     return ProfileState(userId: _userId);
   }
 
+  bool? _pendingFollowIntent(String subAccountId) {
+    for (final entry
+        in ref.read(clientStateSyncOutboxProvider).entries.reversed) {
+      if (entry.objectType == 'profile' &&
+          entry.intentType == 'follow' &&
+          entry.objectId == subAccountId) {
+        return entry.desiredBoolValue;
+      }
+    }
+    return null;
+  }
+
   Future<void> loadProfile() async {
     state = ProfileState(userId: _userId).copyWith(isLoading: true);
     try {
@@ -117,8 +129,11 @@ class ProfileNotifier extends Notifier<ProfileState> {
       final works = await repo.listUserWorks(_userId);
       final lifeItems = await repo.listUserLifeItems(_userId);
       final circles = await repo.listProfileCircles(_userId);
-      final profileSubjectId = profile.profileSubjectId.isNotEmpty
-          ? profile.profileSubjectId
+      ref
+          .read(postInteractionStateProvider.notifier)
+          .applyConfirmedPosts(posts);
+      final subAccountId = profile.subAccountId.isNotEmpty
+          ? profile.subAccountId
           : _userId;
       final reconcileCap = ref
           .read(relationshipCapabilityRepositoryProvider)
@@ -127,14 +142,16 @@ class ProfileNotifier extends Notifier<ProfileState> {
       bool? optimisticFollowOverride;
       final sharedFollowing = ref
           .read(userRelationshipStateProvider)
-          .isFollowing(profileSubjectId);
+          .isFollowing(subAccountId);
+      final pendingFollowIntent = _pendingFollowIntent(subAccountId);
       if (reconcileCap) {
         try {
           seededCapability = await ref
               .read(relationshipCapabilityRepositoryProvider)
-              .getCapability(profileSubjectId);
-          if (sharedFollowing != seededCapability.viewerFollowsTarget) {
-            optimisticFollowOverride = sharedFollowing;
+              .getCapability(subAccountId);
+          final desiredFollowing = pendingFollowIntent ?? sharedFollowing;
+          if (desiredFollowing != seededCapability.viewerFollowsTarget) {
+            optimisticFollowOverride = desiredFollowing;
           }
         } catch (_) {
           seededCapability = null;
@@ -142,6 +159,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
       }
       final seededFollowing =
           optimisticFollowOverride ??
+          pendingFollowIntent ??
           seededCapability?.viewerFollowsTarget ??
           sharedFollowing;
       state = state.copyWith(
@@ -157,7 +175,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
       );
       ref
           .read(userRelationshipStateProvider.notifier)
-          .setFollowing(profileSubjectId, seededFollowing);
+          .setFollowing(subAccountId, seededFollowing);
     } catch (_) {
       state = state.copyWith(isLoading: false);
     }
@@ -169,38 +187,45 @@ class ProfileNotifier extends Notifier<ProfileState> {
 
   Future<void> _loadRelationshipCapability() async {
     try {
-      final targetUserId = state.profile?.profileSubjectId.isNotEmpty == true
-          ? state.profile!.profileSubjectId
+      final targetUserId = state.profile?.subAccountId.isNotEmpty == true
+          ? state.profile!.subAccountId
           : _userId;
       final seededFollowing = ref
           .read(userRelationshipStateProvider)
           .isFollowing(targetUserId);
+      final pendingFollowIntent = _pendingFollowIntent(targetUserId);
       final capRepo = ref.read(relationshipCapabilityRepositoryProvider);
-      var cap = await capRepo.getCapability(targetUserId);
-      if (ref
-              .read(relationshipCapabilityRepositoryProvider)
-              .reconcilesCapabilityWithSharedRelationshipState &&
-          seededFollowing &&
-          !cap.viewerFollowsTarget) {
-        state = state.copyWith(optimisticFollowOverride: true);
+      final cap = await capRepo.getCapability(targetUserId);
+      final reconcileCap = ref
+          .read(relationshipCapabilityRepositoryProvider)
+          .reconcilesCapabilityWithSharedRelationshipState;
+      final effectiveFollowing =
+          pendingFollowIntent ??
+          (reconcileCap ? seededFollowing : cap.viewerFollowsTarget);
+      if (reconcileCap && effectiveFollowing != cap.viewerFollowsTarget) {
+        state = state.copyWith(optimisticFollowOverride: effectiveFollowing);
       }
-      final latestTargetId = state.profile?.profileSubjectId.isNotEmpty == true
-          ? state.profile!.profileSubjectId
+      final latestTargetId = state.profile?.subAccountId.isNotEmpty == true
+          ? state.profile!.subAccountId
           : _userId;
       if (latestTargetId != targetUserId) {
         return;
       }
       ref
           .read(userRelationshipStateProvider.notifier)
-          .setFollowing(targetUserId, cap.viewerFollowsTarget);
+          .setFollowing(targetUserId, effectiveFollowing);
       state = state.copyWith(
         capability: cap,
-        isFollowing: cap.viewerFollowsTarget,
-        clearOptimisticFollowOverride: true,
+        isFollowing: effectiveFollowing,
+        optimisticFollowOverride: effectiveFollowing == cap.viewerFollowsTarget
+            ? null
+            : effectiveFollowing,
+        clearOptimisticFollowOverride:
+            effectiveFollowing == cap.viewerFollowsTarget,
       );
     } catch (_) {
-      final targetUserId = state.profile?.profileSubjectId.isNotEmpty == true
-          ? state.profile!.profileSubjectId
+      final targetUserId = state.profile?.subAccountId.isNotEmpty == true
+          ? state.profile!.subAccountId
           : _userId;
       final seededFollowing = ref
           .read(userRelationshipStateProvider)
@@ -242,19 +267,23 @@ class ProfileNotifier extends Notifier<ProfileState> {
   }
 
   Future<void> toggleFollow() async {
-    final profileSubjectId = state.profile?.profileSubjectId.isNotEmpty == true
-        ? state.profile!.profileSubjectId
+    final subAccountId = state.profile?.subAccountId.isNotEmpty == true
+        ? state.profile!.subAccountId
         : _userId;
     final wasFollowing = state.isFollowing;
     final nextFollowing = !wasFollowing;
     ref
         .read(userRelationshipStateProvider.notifier)
-        .setFollowing(profileSubjectId, nextFollowing);
+        .setFollowing(subAccountId, nextFollowing);
+    ref
+        .read(discoveryStateProvider.notifier)
+        .setFollowState(subAccountId, nextFollowing);
     ref
         .read(clientStateSyncOutboxProvider.notifier)
         .enqueueFollow(
-          profileSubjectId: profileSubjectId,
+          subAccountId: subAccountId,
           shouldFollow: nextFollowing,
+          flushImmediately: true,
         );
     state = state.copyWith(
       isFollowing: nextFollowing,

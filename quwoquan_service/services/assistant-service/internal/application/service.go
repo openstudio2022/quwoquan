@@ -639,7 +639,6 @@ func (s *AssistantService) ReportPageContext(ctx context.Context, userID string,
 	if s.cache != nil {
 		_ = s.cache.HSet(ctx, contextKey, "pageType", input.PageType)
 		_ = s.cache.HSet(ctx, contextKey, "userAction", input.UserAction)
-		_ = s.cache.HSet(ctx, contextKey, "profileSubjectId", input.ProfileSubjectID)
 		_ = s.cache.HSet(ctx, contextKey, "subAccountId", input.SubAccountID)
 		_ = s.cache.HSet(ctx, contextKey, "personaContextVersion", input.PersonaContextVersion)
 		if len(input.UserActions) > 0 {

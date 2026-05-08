@@ -327,7 +327,6 @@ components:
         id: { type: string }
         postId: { type: string }
         authorId: { type: string }
-        personaId: { type: string, nullable: true }
         displayName: { type: string }
         avatarUrl: { type: string }
         content: { type: string }
@@ -357,7 +356,6 @@ components:
       properties:
         content: { type: string, maxLength: 500 }
         replyToCommentId: { type: string }
-        personaId: { type: string }
     CreateCommentResponse:
       type: object
       required: [id]
@@ -365,7 +363,6 @@ components:
         id: { type: string }
         postId: { type: string }
         authorId: { type: string }
-        personaId: { type: string, nullable: true }
         displayName: { type: string }
         avatarUrl: { type: string }
         content: { type: string }

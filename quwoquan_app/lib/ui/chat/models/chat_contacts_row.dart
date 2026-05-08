@@ -65,18 +65,6 @@ class ChatContactsRow {
     );
   }
 
-  factory ChatContactsRow.fromContactTabCircleMap(Map<String, dynamic> m) {
-    final circleId = (m['circleId'] ?? m['id'] ?? '').toString();
-    return ChatContactsRow(
-      kind: ChatContactsRowKind.circle,
-      id: circleId,
-      displayName: (m['displayName'] ?? '').toString(),
-      avatarUrl: resolveAvatarImageUrl((m['avatarUrl'] ?? '').toString()),
-      subtitle: (m['subtitle'] ?? '').toString(),
-      circleId: circleId.isNotEmpty ? circleId : null,
-    );
-  }
-
   factory ChatContactsRow.fromContactTabFunGroupDto(
     ChatContactTabFunGroupRowDto d,
   ) {
@@ -87,18 +75,6 @@ class ChatContactsRow {
       avatarUrl: resolveAvatarImageUrl(d.avatarUrl),
       subtitle: d.subtitle,
       conversationId: d.conversationId.isNotEmpty ? d.conversationId : null,
-    );
-  }
-
-  factory ChatContactsRow.fromContactTabFunGroupMap(Map<String, dynamic> m) {
-    final convId = (m['conversationId'] ?? m['id'] ?? '').toString();
-    return ChatContactsRow(
-      kind: ChatContactsRowKind.group,
-      id: convId,
-      displayName: (m['displayName'] ?? '').toString(),
-      avatarUrl: resolveAvatarImageUrl((m['avatarUrl'] ?? '').toString()),
-      subtitle: (m['subtitle'] ?? '').toString(),
-      conversationId: convId.isNotEmpty ? convId : null,
     );
   }
 
@@ -114,7 +90,7 @@ class ChatContactsRow {
         context.push(
           AppRoutePaths.userProfile(username: id),
           extra: UserProfileRouteExtra(
-            profileSubjectId: id,
+            subAccountId: id,
             avatar: avatarUrl,
             displayName: displayName,
           ),

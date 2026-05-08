@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
+	runtimesync "quwoquan_service/runtime/sync"
 	"quwoquan_service/services/chat-service/internal/application"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 )
@@ -17,6 +18,7 @@ type ChatHandler struct {
 	messageService      *application.MessageService
 	memberService       *application.MemberService
 	inboxService        *application.InboxService
+	userSyncService     *runtimesync.Service
 }
 
 func NewChatHandler(
@@ -24,18 +26,21 @@ func NewChatHandler(
 	messageService *application.MessageService,
 	memberService *application.MemberService,
 	inboxService *application.InboxService,
+	userSyncService *runtimesync.Service,
 ) *ChatHandler {
 	return &ChatHandler{
 		conversationService: conversationService,
 		messageService:      messageService,
 		memberService:       memberService,
 		inboxService:        inboxService,
+		userSyncService:     userSyncService,
 	}
 }
 
 func (h *ChatHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", h.handleHealthz)
+	mux.HandleFunc("POST /v1/user/sync", h.handlePullUserSync)
 	mux.HandleFunc("GET /v1/chat/conversations/search", h.handleSearchConversations)
 	mux.HandleFunc("GET /v1/chat/messages/search", h.handleSearchMessages)
 	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
@@ -47,6 +52,44 @@ func (h *ChatHandler) Routes() http.Handler {
 
 func (h *ChatHandler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *ChatHandler) handlePullUserSync(w http.ResponseWriter, r *http.Request) {
+	if h.userSyncService == nil {
+		writeHTTPError(
+			w,
+			r,
+			rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleChat, rterr.KindSystem, "sync_not_configured"),
+				"同步暂不可用",
+				"chat user sync service is not configured",
+			),
+		)
+		return
+	}
+	userID := resolveUserID(r)
+	if userID == "" {
+		writeHTTPError(
+			w,
+			r,
+			rterr.NewInvalidArgument(rterr.ModuleChat, "X-Client-User-Id header required", "missing X-Client-User-Id"),
+		)
+		return
+	}
+	var body struct {
+		AfterSeq int64 `json:"afterSeq"`
+		Limit    int   `json:"limit"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+		return
+	}
+	resp, err := h.userSyncService.Pull(r.Context(), userID, body.AfterSeq, body.Limit)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ── Conversation ─────────────────────────────────────────────────────────────
@@ -147,8 +190,7 @@ func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 		ReplyToMessageId          string         `json:"replyToMessageId"`
 		Mentions                  []string       `json:"mentions"`
 		ClientMsgId               string         `json:"clientMsgId"`
-		SenderPersonaId           string         `json:"senderPersonaId"`
-		SenderProfileSubjectId    string         `json:"senderProfileSubjectId"`
+		SenderSubAccountId        string         `json:"senderSubAccountId"`
 		PersonaContextVersion     int64          `json:"personaContextVersion"`
 		SenderDisplayNameSnapshot string         `json:"senderDisplayNameSnapshot"`
 		SenderAvatarUrlSnapshot   string         `json:"senderAvatarUrlSnapshot"`
@@ -158,12 +200,23 @@ func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	senderID := strings.TrimSpace(body.SenderProfileSubjectId)
+	senderID := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
 	if senderID == "" {
 		senderID = resolveUserID(r)
 	}
+	if senderID == "" {
+		senderID = strings.TrimSpace(body.SenderSubAccountId)
+	}
+	if senderID == "" {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleChat,
+			"缺少 X-Client-Sub-Account-Id",
+			"missing X-Client-Sub-Account-Id",
+		))
+		return
+	}
 	resp, err := h.messageService.SendMessage(r.Context(), application.SendMessageRequest{
-		ConversationId: convId, SenderId: senderID, SenderPersonaId: strings.TrimSpace(body.SenderPersonaId),
+		ConversationId: convId, SenderId: senderID,
 		PersonaContextVersion:     body.PersonaContextVersion,
 		SenderDisplayNameSnapshot: strings.TrimSpace(body.SenderDisplayNameSnapshot),
 		SenderAvatarUrlSnapshot:   strings.TrimSpace(body.SenderAvatarUrlSnapshot), Type: body.Type,
@@ -526,18 +579,18 @@ func (h *ChatHandler) handleSearchMessages(w http.ResponseWriter, r *http.Reques
 	for _, hit := range hits {
 		cursor = hit.Message.ID
 		items = append(items, map[string]any{
-			"messageId":              hit.Message.ID,
-			"conversationId":         hit.Conversation.ID,
-			"conversationTitle":      hit.Conversation.Title,
-			"conversationAvatarUrl":  application.ResolveConversationAvatarURL(hit.Conversation),
-			"senderProfileSubjectId": "",
-			"senderDisplayName":      hit.Message.SenderId,
-			"senderAvatarUrl":        "",
-			"messageType":            hit.Message.Type,
-			"contentSnippet":         hit.Message.Content,
-			"highlightText":          hit.Message.Content,
-			"matchedField":           "content",
-			"timestamp":              hit.Message.Timestamp,
+			"messageId":             hit.Message.ID,
+			"conversationId":        hit.Conversation.ID,
+			"conversationTitle":     hit.Conversation.Title,
+			"conversationAvatarUrl": application.ResolveConversationAvatarURL(hit.Conversation),
+			"senderSubAccountId":    hit.Message.SenderId,
+			"senderDisplayName":     hit.Message.SenderId,
+			"senderAvatarUrl":       "",
+			"messageType":           hit.Message.Type,
+			"contentSnippet":        hit.Message.Content,
+			"highlightText":         hit.Message.Content,
+			"matchedField":          "content",
+			"timestamp":             hit.Message.Timestamp,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "cursor": cursor})
@@ -587,7 +640,7 @@ func conversationToWire(conv model.Conversation) map[string]any {
 		"id":                    conv.ID,
 		"_id":                   conv.ID,
 		"conversationId":        conv.ID,
-		"type":                  conv.Type,
+		"type":                  application.PublicConversationType(conv.Type, conv.CircleId),
 		"title":                 conv.Title,
 		"avatarUrl":             avatarURL,
 		"groupAvatarVersion":    conv.GroupAvatarVersion,
@@ -610,23 +663,23 @@ func conversationToWire(conv model.Conversation) map[string]any {
 
 func messageToWire(msg model.Message) map[string]any {
 	wire := map[string]any{
-		"id":               msg.ID,
-		"_id":              msg.ID,
-		"conversationId":   msg.ConversationId,
-		"seq":              msg.Seq,
-		"clientMsgId":      msg.ClientMsgId,
-		"senderId":         msg.SenderId,
-		"senderPersonaId":  msg.SenderPersonaId,
-		"type":             msg.Type,
-		"content":          msg.Content,
-		"mediaUrl":         msg.MediaUrl,
-		"media":            msg.Media,
-		"cardPayload":      msg.CardPayload,
-		"replyToMessageId": msg.ReplyToMessageId,
-		"mentions":         msg.Mentions,
-		"status":           msg.Status,
-		"metadata":         msg.Metadata,
-		"timestamp":        msg.Timestamp,
+		"id":                 msg.ID,
+		"_id":                msg.ID,
+		"conversationId":     msg.ConversationId,
+		"seq":                msg.Seq,
+		"clientMsgId":        msg.ClientMsgId,
+		"senderId":           msg.SenderId,
+		"senderSubAccountId": msg.SenderId,
+		"type":               msg.Type,
+		"content":            msg.Content,
+		"mediaUrl":           msg.MediaUrl,
+		"media":              msg.Media,
+		"cardPayload":        msg.CardPayload,
+		"replyToMessageId":   msg.ReplyToMessageId,
+		"mentions":           msg.Mentions,
+		"status":             msg.Status,
+		"metadata":           msg.Metadata,
+		"timestamp":          msg.Timestamp,
 	}
 	if msg.RecalledAt != nil {
 		wire["recalledAt"] = msg.RecalledAt

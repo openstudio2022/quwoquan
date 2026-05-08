@@ -19,11 +19,11 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 
 const double _momentCellVerticalPadding = AppSpacing.fourteen;
 const double _momentSectionGap = AppSpacing.interGroupSm;
@@ -75,7 +75,7 @@ class MomentSocialFeed extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final discoveryState = ref.watch(discoveryStateProvider);
+    ref.watch(postInteractionStateProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(feedTabId));
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final articleDistributionEnabled = ref.watch(
@@ -205,11 +205,8 @@ class MomentSocialFeed extends ConsumerWidget {
         wideLayout: isMultiColumn,
         item: dto,
         isDark: isDark,
-        isLiked: discoveryState.likedPosts.contains(dto.id),
-        likeCount: (() {
-          final n = discoveryState.getPostLikesCount(dto.id);
-          return n > 0 ? n : dto.likeCount;
-        })(),
+        isLiked: effectivePostLiked(ref, dto.id),
+        likeCount: effectivePostLikeCount(ref, dto.id, fallback: dto.likeCount),
         sourceCircleName: _resolveSourceCircleName(ref, dto.id),
         onUserTap: (id) => onUserTap(
           id,
@@ -227,15 +224,25 @@ class MomentSocialFeed extends ConsumerWidget {
           ref,
           dto,
           enableIdentityTemplate: ref.read(
-            contentFeatureFlagProvider(
-              'enable_identity_share_template',
-            ),
+            contentFeatureFlagProvider('enable_identity_share_template'),
           ),
         ),
         onLikeTap: () {
-          ref
-              .read(discoveryStateProvider.notifier)
-              .toggleLike(dto.id, baseLikesCount: dto.likeCount);
+          final wasLiked = effectivePostLiked(ref, dto.id);
+          final currentLikeCount = effectivePostLikeCount(
+            ref,
+            dto.id,
+            fallback: dto.likeCount,
+          );
+          final nextLikeCount = wasLiked
+              ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
+              : currentLikeCount + 1;
+          syncPostLikeIntent(
+            ref,
+            postId: dto.id,
+            isLiked: !wasLiked,
+            likeCount: nextLikeCount,
+          );
         },
         onMoreTap: () {
           if (onMoreTap != null) {
@@ -247,8 +254,8 @@ class MomentSocialFeed extends ConsumerWidget {
       );
     }
 
-    final bottomPad = MediaQuery.of(context).padding.bottom +
-        AppSpacing.bottomNavHeight;
+    final bottomPad =
+        MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight;
 
     if (isMultiColumn) {
       return ColoredBox(
@@ -264,8 +271,7 @@ class MomentSocialFeed extends ConsumerWidget {
             bottomPad + AppSpacing.sm,
           ),
           itemCount: feedPosts.length,
-          itemBuilder: (context, index) =>
-              buildCard(feedPosts[index], index),
+          itemBuilder: (context, index) => buildCard(feedPosts[index], index),
         ),
       );
     }
@@ -273,13 +279,10 @@ class MomentSocialFeed extends ConsumerWidget {
     return ColoredBox(
       color: pageBackground,
       child: ListView.separated(
-        padding: EdgeInsets.fromLTRB(
-          0, 0, 0, bottomPad,
-        ),
+        padding: EdgeInsets.fromLTRB(0, 0, 0, bottomPad),
         itemCount: feedPosts.length,
-        separatorBuilder: (context, index) => SizedBox(
-          height: AppSpacing.intraGroupSm,
-        ),
+        separatorBuilder: (context, index) =>
+            SizedBox(height: AppSpacing.intraGroupSm),
         itemBuilder: (context, index) => buildCard(feedPosts[index], index),
       ),
     );
@@ -300,7 +303,7 @@ class MomentSocialFeed extends ConsumerWidget {
       context,
       template: template,
       onActionCompleted: (result) async {
-        _recordShare(ref, post.id, result.actionId);
+        await _recordShare(ref, post.id, result.actionId);
       },
     );
   }
@@ -375,7 +378,7 @@ class MomentSocialFeed extends ConsumerWidget {
       ),
     );
     if (result.success) {
-      _recordShare(ref, post.id, result.actionId);
+      await _recordShare(ref, post.id, result.actionId);
     }
   }
 
@@ -402,8 +405,23 @@ class MomentSocialFeed extends ConsumerWidget {
     );
   }
 
-  void _recordShare(WidgetRef ref, String postId, String actionId) {
-    ref.read(discoveryStateProvider.notifier).incrementShares(postId);
+  Future<void> _recordShare(
+    WidgetRef ref,
+    String postId,
+    String actionId,
+  ) async {
+    final raw = _rawDiscoveryItem(ref, postId);
+    final rawShareCount = (raw?['shareCount'] as num?)?.toInt() ?? 0;
+    final baselineShareCount = effectivePostShareCount(
+      ref,
+      postId,
+      fallback: rawShareCount,
+    );
+    await syncPostShareIntent(
+      ref,
+      postId: postId,
+      baselineShareCount: baselineShareCount,
+    );
     ref
         .read(contentBehaviorTrackerProvider)
         .trackShare(postId, tags: <String>[actionId]);
@@ -568,7 +586,10 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: AppTypography.feedAuthorNameResponsive(context),
+                                fontSize:
+                                    AppTypography.feedAuthorNameResponsive(
+                                      context,
+                                    ),
                                 fontWeight: AppTypography.medium,
                                 color: fg,
                                 letterSpacing: -0.08,
@@ -644,13 +665,9 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
               likeCount: widget.likeCount,
               likeCtrl: _likeCtrl,
               onLike: () {
-                final wasLiked = widget.isLiked;
                 HapticFeedback.lightImpact();
                 _likeCtrl.forward(from: 0);
                 widget.onLikeTap();
-                final repo = ref.read(contentInteractionRepositoryProvider);
-                if (wasLiked) repo.unlike(widget.item.id);
-                if (!wasLiked) repo.like(widget.item.id);
               },
               onComment: widget.onCommentTap,
               onShare: widget.onShareTap,

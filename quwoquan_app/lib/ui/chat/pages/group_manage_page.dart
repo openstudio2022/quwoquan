@@ -25,9 +25,9 @@ class GroupManagePage extends ConsumerStatefulWidget {
 class _GroupManagePageState extends ConsumerState<GroupManagePage> {
   Future<void> _onConfirmDissolve() async {
     try {
-      await ref.read(chatRepositoryProvider).dissolveConversation(
-            widget.conversationId,
-          );
+      await ref
+          .read(chatRepositoryProvider)
+          .dissolveConversation(widget.conversationId);
       await ref.read(chatInboxListProvider.notifier).refresh();
       if (!mounted) {
         return;
@@ -80,8 +80,9 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
     final notifier = ref.read(
       conversationMembersProvider(widget.conversationId).notifier,
     );
-    final chevronColor =
-        SettingsSemanticConstants.selectionChevronColor(isDark);
+    final chevronColor = SettingsSemanticConstants.selectionChevronColor(
+      isDark,
+    );
 
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
@@ -111,9 +112,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                           ? null
                           : (v) {
                               notifier.updateGroupSettings(
-                                groupSettings.copyWith(
-                                  qrCodeJoinEnabled: v,
-                                ),
+                                groupSettings.copyWith(qrCodeJoinEnabled: v),
                               );
                             },
                       activeTrackColor:
@@ -134,9 +133,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                           ? null
                           : (v) {
                               notifier.updateGroupSettings(
-                                groupSettings.copyWith(
-                                  joinRequiresApproval: v,
-                                ),
+                                groupSettings.copyWith(joinRequiresApproval: v),
                               );
                             },
                       activeTrackColor:
@@ -212,10 +209,9 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
                   ],
                 ),
               ),
-              if (groupSettings.conversationType != 'circle') ...[
+              if (groupSettings.circleId.isEmpty) ...[
                 SizedBox(
-                  height:
-                      SettingsSemanticConstants.insetFormSectionVerticalGap,
+                  height: SettingsSemanticConstants.insetFormSectionVerticalGap,
                 ),
                 SettingsInsetGroupedSection(
                   isDark: isDark,

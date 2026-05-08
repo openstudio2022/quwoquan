@@ -18,8 +18,7 @@
           "contentIdentity": "work",
           "identity": "work",
           "authorId": "fixture_user_photo",
-          "authorProfileSubjectId": "fixture_user_photo",
-          "profileSubjectId": "fixture_user_photo",
+          "subAccountId": "fixture_user_photo",
           "displayName": "契约摄影师",
           "authorAvatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
@@ -90,8 +89,7 @@
           "contentIdentity": "work",
           "identity": "work",
           "authorId": "fixture_user_photo",
-          "authorProfileSubjectId": "fixture_user_photo",
-          "profileSubjectId": "fixture_user_photo",
+          "subAccountId": "fixture_user_photo",
           "displayName": "契约摄影师",
           "authorAvatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
@@ -158,8 +156,7 @@
           "contentIdentity": "work",
           "identity": "work",
           "authorId": "fixture_user_travel",
-          "authorProfileSubjectId": "fixture_user_travel",
-          "profileSubjectId": "fixture_user_travel",
+          "subAccountId": "fixture_user_travel",
           "displayName": "契约旅行家",
           "authorAvatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
@@ -179,10 +176,12 @@
           "coverUrl": "media/image/post/fixture_video_001/v1/cover.png",
           "thumbnailUrl": "media/image/post/fixture_video_001/v1/cover.png",
           "mediaUrls": [
-            "media/image/post/fixture_video_001/v1/cover.png"
+            "media/image/post/fixture_video_001/v1/cover.png",
+            "media/image/post/fixture_video_001/v1/image-2.png"
           ],
           "imageUrls": [
-            "media/image/post/fixture_video_001/v1/cover.png"
+            "media/image/post/fixture_video_001/v1/cover.png",
+            "media/image/post/fixture_video_001/v1/image-2.png"
           ],
           "circleIds": [
             "fixture_circle_travel"
@@ -206,10 +205,12 @@
           "coverObjectKey": "media/image/post/fixture_video_001/v1/cover.png",
           "thumbnailObjectKey": "media/image/post/fixture_video_001/v1/cover.png",
           "mediaObjectKeys": [
-            "media/image/post/fixture_video_001/v1/cover.png"
+            "media/image/post/fixture_video_001/v1/cover.png",
+            "media/image/post/fixture_video_001/v1/image-2.png"
           ],
           "imageObjectKeys": [
-            "media/image/post/fixture_video_001/v1/cover.png"
+            "media/image/post/fixture_video_001/v1/cover.png",
+            "media/image/post/fixture_video_001/v1/image-2.png"
           ],
           "tags": [
             "fixture",
@@ -217,6 +218,7 @@
             "videoCoverPost"
           ],
           "locationName": "杭州",
+          "videoUrl": "media/video/beta-sample.mp4",
           "durationMs": 45000
         },
         {
@@ -227,8 +229,7 @@
           "contentIdentity": "work",
           "identity": "work",
           "authorId": "fixture_user_article",
-          "authorProfileSubjectId": "fixture_user_article",
-          "profileSubjectId": "fixture_user_article",
+          "subAccountId": "fixture_user_article",
           "displayName": "契约撰稿人",
           "authorAvatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
@@ -248,10 +249,12 @@
           "coverUrl": "media/image/post/fixture_article_001/v1/cover.png",
           "thumbnailUrl": "media/image/post/fixture_article_001/v1/cover.png",
           "mediaUrls": [
-            "media/image/post/fixture_article_001/v1/cover.png"
+            "media/image/post/fixture_article_001/v1/cover.png",
+            "media/image/post/fixture_article_001/v1/image-2.png"
           ],
           "imageUrls": [
-            "media/image/post/fixture_article_001/v1/cover.png"
+            "media/image/post/fixture_article_001/v1/cover.png",
+            "media/image/post/fixture_article_001/v1/image-2.png"
           ],
           "circleIds": [
             "fixture_circle_tech"
@@ -275,10 +278,12 @@
           "coverObjectKey": "media/image/post/fixture_article_001/v1/cover.png",
           "thumbnailObjectKey": "media/image/post/fixture_article_001/v1/cover.png",
           "mediaObjectKeys": [
-            "media/image/post/fixture_article_001/v1/cover.png"
+            "media/image/post/fixture_article_001/v1/cover.png",
+            "media/image/post/fixture_article_001/v1/image-2.png"
           ],
           "imageObjectKeys": [
-            "media/image/post/fixture_article_001/v1/cover.png"
+            "media/image/post/fixture_article_001/v1/cover.png",
+            "media/image/post/fixture_article_001/v1/image-2.png"
           ],
           "tags": [
             "fixture",
@@ -315,8 +320,7 @@
           "contentIdentity": "moment",
           "identity": "moment",
           "authorId": "fixture_user_current",
-          "authorProfileSubjectId": "fixture_user_current",
-          "profileSubjectId": "fixture_user_current",
+          "subAccountId": "fixture_user_current",
           "displayName": "契约当前用户",
           "authorAvatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
@@ -383,8 +387,7 @@
           "contentIdentity": "work",
           "identity": "work",
           "authorId": "fixture_user_photo",
-          "authorProfileSubjectId": "fixture_user_photo",
-          "profileSubjectId": "fixture_user_photo",
+          "subAccountId": "fixture_user_photo",
           "displayName": "契约摄影师",
           "authorAvatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
@@ -401,8 +404,14 @@
           "title": "晨光 #1",
           "summary": "今天把底片送洗了。，用于 heroPost 视觉与作者头像同源验证。",
           "body": "共享池真实图片样本，主题=摄影，作者=契约摄影师，圈子=契约摄影社。",
-          "mediaUrls": [],
-          "imageUrls": [],
+          "coverUrl": "media/image/post/fixture_post_photography_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/post/fixture_post_photography_001/v1/cover.jpg",
+          "mediaUrls": [
+            "media/image/post/fixture_post_photography_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_post_photography_001/v1/cover.jpg"
+          ],
           "circleIds": [
             "fixture_circle_photo"
           ],
@@ -422,8 +431,14 @@
           "authorAvatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
           "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
           "authorBackgroundObjectKey": "media/background/user/fixture_user_photo/v1/background.png",
-          "mediaObjectKeys": [],
-          "imageObjectKeys": [],
+          "coverObjectKey": "media/image/post/fixture_post_photography_001/v1/cover.jpg",
+          "thumbnailObjectKey": "media/image/post/fixture_post_photography_001/v1/cover.jpg",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_post_photography_001/v1/cover.jpg"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_post_photography_001/v1/cover.jpg"
+          ],
           "tags": [
             "fixture",
             "photography",
@@ -439,8 +454,7 @@
           "contentIdentity": "work",
           "identity": "work",
           "authorId": "fixture_user_travel",
-          "authorProfileSubjectId": "fixture_user_travel",
-          "profileSubjectId": "fixture_user_travel",
+          "subAccountId": "fixture_user_travel",
           "displayName": "契约旅行家",
           "authorAvatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
@@ -457,8 +471,14 @@
           "title": "山口 #1",
           "summary": "把下一站写进了备忘录。，用于 heroPost 视觉与作者头像同源验证。",
           "body": "共享池真实图片样本，主题=旅行，作者=契约旅行家，圈子=契约旅行手账。",
-          "mediaUrls": [],
-          "imageUrls": [],
+          "coverUrl": "media/image/post/fixture_post_travel_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/post/fixture_post_travel_001/v1/cover.jpg",
+          "mediaUrls": [
+            "media/image/post/fixture_post_travel_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_post_travel_001/v1/cover.jpg"
+          ],
           "circleIds": [
             "fixture_circle_travel"
           ],
@@ -478,8 +498,14 @@
           "authorAvatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
           "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
           "authorBackgroundObjectKey": "media/background/user/fixture_user_travel/v1/background.png",
-          "mediaObjectKeys": [],
-          "imageObjectKeys": [],
+          "coverObjectKey": "media/image/post/fixture_post_travel_001/v1/cover.jpg",
+          "thumbnailObjectKey": "media/image/post/fixture_post_travel_001/v1/cover.jpg",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_post_travel_001/v1/cover.jpg"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_post_travel_001/v1/cover.jpg"
+          ],
           "tags": [
             "fixture",
             "travel",
@@ -495,8 +521,7 @@
           "contentIdentity": "work",
           "identity": "work",
           "authorId": "fixture_user_video",
-          "authorProfileSubjectId": "fixture_user_video",
-          "profileSubjectId": "fixture_user_video",
+          "subAccountId": "fixture_user_video",
           "displayName": "契约剪辑师",
           "authorAvatarUrl": "media/avatar/user/fixture_user_video/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_video/v1/avatar.png",
@@ -513,8 +538,14 @@
           "title": "天桥 #1",
           "summary": "下班后绕了一圈老街。，用于 heroPost 视觉与作者头像同源验证。",
           "body": "共享池真实图片样本，主题=城市漫步，作者=契约剪辑师，圈子=契约城市漫步。",
-          "mediaUrls": [],
-          "imageUrls": [],
+          "coverUrl": "media/image/post/fixture_post_citywalk_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/post/fixture_post_citywalk_001/v1/cover.jpg",
+          "mediaUrls": [
+            "media/image/post/fixture_post_citywalk_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_post_citywalk_001/v1/cover.jpg"
+          ],
           "circleIds": [
             "fixture_circle_city"
           ],
@@ -534,8 +565,14 @@
           "authorAvatarObjectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
           "avatarObjectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
           "authorBackgroundObjectKey": "media/background/user/fixture_user_video/v1/background.png",
-          "mediaObjectKeys": [],
-          "imageObjectKeys": [],
+          "coverObjectKey": "media/image/post/fixture_post_citywalk_001/v1/cover.jpg",
+          "thumbnailObjectKey": "media/image/post/fixture_post_citywalk_001/v1/cover.jpg",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_post_citywalk_001/v1/cover.jpg"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_post_citywalk_001/v1/cover.jpg"
+          ],
           "tags": [
             "fixture",
             "cityWalk",
@@ -551,8 +588,7 @@
           "contentIdentity": "work",
           "identity": "work",
           "authorId": "fixture_user_current",
-          "authorProfileSubjectId": "fixture_user_current",
-          "profileSubjectId": "fixture_user_current",
+          "subAccountId": "fixture_user_current",
           "displayName": "契约当前用户",
           "authorAvatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
           "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
@@ -569,8 +605,14 @@
           "title": "窗边 #1",
           "summary": "把桌面重新整理了一遍。，用于 heroPost 视觉与作者头像同源验证。",
           "body": "共享池真实图片样本，主题=生活方式，作者=契约当前用户，圈子=契约生活方式。",
-          "mediaUrls": [],
-          "imageUrls": [],
+          "coverUrl": "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+          "mediaUrls": [
+            "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
           "circleIds": [
             "fixture_circle_life"
           ],
@@ -590,11 +632,151 @@
           "authorAvatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
           "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
           "authorBackgroundObjectKey": "media/background/user/fixture_user_current/v1/background.png",
-          "mediaObjectKeys": [],
-          "imageObjectKeys": [],
+          "coverObjectKey": "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+          "thumbnailObjectKey": "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg"
+          ],
           "tags": [
             "fixture",
             "lifestyle",
+            "heroPost"
+          ],
+          "locationName": ""
+        },
+        {
+          "postId": "fixture_post_outdoor_001",
+          "id": "fixture_post_outdoor_001",
+          "contentType": "image",
+          "type": "image",
+          "contentIdentity": "work",
+          "identity": "work",
+          "authorId": "fixture_user_outdoor_01",
+          "subAccountId": "fixture_user_outdoor_01",
+          "displayName": "契约户外作者",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_outdoor_01/v1/background.png",
+          "postType": "heroPost",
+          "primaryTheme": "outdoor",
+          "secondaryThemes": [
+            "travel"
+          ],
+          "themeTags": [
+            "outdoor",
+            "travel"
+          ],
+          "title": "山脊 #1",
+          "summary": "今天的风把山脊吹得很干净。，用于 heroPost 视觉与作者头像同源验证。",
+          "body": "共享池真实图片样本，主题=户外，作者=契约户外作者，圈子=户外契约户外营地。",
+          "coverUrl": "media/image/post/fixture_post_outdoor_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/post/fixture_post_outdoor_001/v1/cover.jpg",
+          "mediaUrls": [
+            "media/image/post/fixture_post_outdoor_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_post_outdoor_001/v1/cover.jpg"
+          ],
+          "circleIds": [
+            "fixture_circle_outdoor_01"
+          ],
+          "circleNames": [
+            "户外契约户外营地"
+          ],
+          "circleId": "fixture_circle_outdoor_01",
+          "circleName": "户外契约户外营地",
+          "width": 1280,
+          "height": 720,
+          "likeCount": 48,
+          "commentCount": 4,
+          "favoriteCount": 16,
+          "shareCount": 2,
+          "createdAt": "2026-05-24T16:00:00Z",
+          "authorDisplayNameSnapshot": "契约户外作者",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_outdoor_01/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_post_outdoor_001/v1/cover.jpg",
+          "thumbnailObjectKey": "media/image/post/fixture_post_outdoor_001/v1/cover.jpg",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_post_outdoor_001/v1/cover.jpg"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_post_outdoor_001/v1/cover.jpg"
+          ],
+          "tags": [
+            "fixture",
+            "outdoor",
+            "heroPost"
+          ],
+          "locationName": ""
+        },
+        {
+          "postId": "fixture_post_tech_001",
+          "id": "fixture_post_tech_001",
+          "contentType": "image",
+          "type": "image",
+          "contentIdentity": "work",
+          "identity": "work",
+          "authorId": "fixture_user_tech_01",
+          "subAccountId": "fixture_user_tech_01",
+          "displayName": "契约科技作者",
+          "authorAvatarUrl": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+          "avatarUrl": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+          "authorBackgroundUrl": "media/background/user/fixture_user_tech_01/v1/background.png",
+          "postType": "heroPost",
+          "primaryTheme": "tech",
+          "secondaryThemes": [
+            "designWriting"
+          ],
+          "themeTags": [
+            "tech",
+            "designWriting"
+          ],
+          "title": "工作流 #1",
+          "summary": "今天把一条重复动作自动化了。，用于 heroPost 视觉与作者头像同源验证。",
+          "body": "共享池真实图片样本，主题=科技，作者=契约科技作者，圈子=契约科技前沿。",
+          "coverUrl": "media/image/post/fixture_post_tech_001/v1/cover.jpg",
+          "thumbnailUrl": "media/image/post/fixture_post_tech_001/v1/cover.jpg",
+          "mediaUrls": [
+            "media/image/post/fixture_post_tech_001/v1/cover.jpg"
+          ],
+          "imageUrls": [
+            "media/image/post/fixture_post_tech_001/v1/cover.jpg"
+          ],
+          "circleIds": [
+            "fixture_circle_tech"
+          ],
+          "circleNames": [
+            "契约科技前沿"
+          ],
+          "circleId": "fixture_circle_tech",
+          "circleName": "契约科技前沿",
+          "width": 1280,
+          "height": 720,
+          "likeCount": 48,
+          "commentCount": 4,
+          "favoriteCount": 16,
+          "shareCount": 2,
+          "createdAt": "2026-05-26T00:00:00Z",
+          "authorDisplayNameSnapshot": "契约科技作者",
+          "authorAvatarObjectKey": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+          "avatarObjectKey": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+          "authorBackgroundObjectKey": "media/background/user/fixture_user_tech_01/v1/background.png",
+          "coverObjectKey": "media/image/post/fixture_post_tech_001/v1/cover.jpg",
+          "thumbnailObjectKey": "media/image/post/fixture_post_tech_001/v1/cover.jpg",
+          "mediaObjectKeys": [
+            "media/image/post/fixture_post_tech_001/v1/cover.jpg"
+          ],
+          "imageObjectKeys": [
+            "media/image/post/fixture_post_tech_001/v1/cover.jpg"
+          ],
+          "tags": [
+            "fixture",
+            "tech",
             "heroPost"
           ],
           "locationName": ""

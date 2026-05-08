@@ -55,14 +55,14 @@ func (s *SearchService) SearchSocialRelations(
 	for _, profile := range profiles {
 		persona, _ := s.personas.FindActiveByUserID(ctx, profile.UserID)
 		view := buildProfileSubjectView(&profile, persona)
-		profileSubjectID := strings.TrimSpace(asString(view["profileSubjectId"]))
-		if profileSubjectID == "" {
-			profileSubjectID = strings.TrimSpace(profile.UserID)
+		subAccountID := strings.TrimSpace(asString(view["subAccountId"]))
+		if subAccountID == "" {
+			subAccountID = strings.TrimSpace(profile.UserID)
 		}
-		if profileSubjectID == "" {
+		if subAccountID == "" {
 			continue
 		}
-		if _, ok := seen[profileSubjectID]; ok {
+		if _, ok := seen[subAccountID]; ok {
 			continue
 		}
 
@@ -74,19 +74,18 @@ func (s *SearchService) SearchSocialRelations(
 			displayName = strings.TrimSpace(profile.Nickname)
 		}
 		if displayName == "" {
-			displayName = profileSubjectID
+			displayName = subAccountID
 		}
 
 		results = append(results, map[string]any{
-			"profileSubjectId": profileSubjectID,
-			"subAccountId":     strings.TrimSpace(asString(view["subAccountId"])),
-			"username":         firstNonEmpty(strings.TrimSpace(asString(view["username"])), strings.TrimSpace(profile.Nickname), profileSubjectID),
-			"displayName":      displayName,
-			"avatarUrl":        strings.TrimSpace(asString(view["avatarUrl"])),
-			"headline":         strings.TrimSpace(asString(view["bio"])),
-			"chatAvailable":    true,
+			"subAccountId":  subAccountID,
+			"username":      firstNonEmpty(strings.TrimSpace(asString(view["username"])), strings.TrimSpace(profile.Nickname), subAccountID),
+			"displayName":   displayName,
+			"avatarUrl":     strings.TrimSpace(asString(view["avatarUrl"])),
+			"headline":      strings.TrimSpace(asString(view["bio"])),
+			"chatAvailable": true,
 		})
-		seen[profileSubjectID] = struct{}{}
+		seen[subAccountID] = struct{}{}
 	}
 	return results, nil
 }

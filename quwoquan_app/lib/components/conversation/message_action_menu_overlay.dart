@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -16,7 +17,7 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
     required this.onClose,
   });
 
-  final Map<String, dynamic> message;
+  final ChatMessageDisplayItem message;
   final Offset position;
   final void Function(String action) onAction;
   final VoidCallback onClose;
@@ -53,17 +54,15 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
     }
   }
 
-  static bool _isWithinRecallWindow(Map<String, dynamic> message) {
-    final sentAtIso = message['sentAtIso'] as String?;
-    if (sentAtIso != null) {
-      final sentAt = DateTime.tryParse(sentAtIso);
+  static bool _isWithinRecallWindow(ChatMessageDisplayItem message) {
+    if (message.sentAtIso.isNotEmpty) {
+      final sentAt = DateTime.tryParse(message.sentAtIso);
       if (sentAt != null) {
         return DateTime.now().difference(sentAt) <= _recallWindowDuration;
       }
     }
-    final timestampRaw = message['timestamp'];
-    if (timestampRaw is String) {
-      final parsed = DateTime.tryParse(timestampRaw);
+    if (message.timestampLabel.isNotEmpty) {
+      final parsed = DateTime.tryParse(message.timestampLabel);
       if (parsed != null) {
         return DateTime.now().difference(parsed) <= _recallWindowDuration;
       }
@@ -73,8 +72,8 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final type = message['type'] as String? ?? 'text';
-    final isSelf = message['isSelf'] == true;
+    final type = message.type;
+    final isSelf = message.isSelf;
     final canRecall = isSelf && _isWithinRecallWindow(message);
     final actions = <MapEntry<String, String>>[
       MapEntry('forward', UITextConstants.messageActionForward),

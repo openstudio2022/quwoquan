@@ -17,6 +17,7 @@ import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/search/services/search_network_results_media_wiring.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_summary_card.dart';
@@ -703,6 +704,7 @@ class _SearchNetworkResultsPageState
       final detail = await ref
           .read(contentRepositoryProvider)
           .getPost(postId: postId);
+      applyConfirmedInteractionPost(ref, detail.post);
       if (!mounted) {
         return;
       }
@@ -715,7 +717,14 @@ class _SearchNetworkResultsPageState
       final route = dto.isVideoLike
           ? '/video-viewer/0'
           : '/media-viewer/photo/0';
-      await context.push<Object?>(
+      final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+        posts: <PostBaseDto>[dto],
+        discoveryState: ref.read(discoveryStateProvider),
+        relationshipState: ref.read(userRelationshipStateProvider),
+        postInteractionState: ref.read(postInteractionStateProvider),
+      );
+      primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+      final result = await context.push<Object?>(
         route,
         extra: MediaViewerExtra(
           posts: <PostSummaryView>[
@@ -732,8 +741,12 @@ class _SearchNetworkResultsPageState
               : (dto.identity == 'moment' ? 'moment' : 'photo'),
           source: 'global-search-network',
           rawPostsById: searchNetworkSinglePostMediaRaws(dto: dto, wire: raw),
+          interactionSnapshot: interactionSnapshot,
         ),
       );
+      if (result is MediaViewerResult) {
+        applyMediaViewerResultToInteractionState(ref, result);
+      }
     } catch (_) {
       return;
     }

@@ -408,7 +408,7 @@ class SocialRelationshipCapabilityView {
 
 class SocialRelationSearchItemView {
   const SocialRelationSearchItemView({
-    required this.profileSubjectId,
+    required this.subAccountId,
     required this.username,
     required this.displayName,
     this.avatarUrl,
@@ -417,7 +417,7 @@ class SocialRelationSearchItemView {
     required this.relationshipCapability,
   });
 
-  final String profileSubjectId;
+  final String subAccountId;
   final String username;
   final String displayName;
   final String? avatarUrl;
@@ -430,11 +430,11 @@ class SocialRelationSearchItemView {
     SocialRelationSearchItemWireDto w,
     Map<String, dynamic> row,
   ) {
-    final profileSubjectId = w.profileSubjectId;
+    final subAccountId = w.subAccountId;
     final displayName = w.displayName.isNotEmpty
         ? w.displayName
-        : profileSubjectId;
-    final username = w.username.isNotEmpty ? w.username : profileSubjectId;
+        : subAccountId;
+    final username = w.username.isNotEmpty ? w.username : subAccountId;
     final nested = w.relationshipCapability;
     final Map<String, dynamic> effectiveCap =
         (nested != null && nested.isNotEmpty)
@@ -451,7 +451,7 @@ class SocialRelationSearchItemView {
       canStartVideoCall: cap.canStartVideoCall,
     );
     return SocialRelationSearchItemView(
-      profileSubjectId: profileSubjectId,
+      subAccountId: subAccountId,
       username: username,
       displayName: displayName,
       avatarUrl: w.avatarUrl,
@@ -522,7 +522,7 @@ class MessageSearchItemView {
     required this.conversationId,
     this.conversationTitle,
     this.conversationAvatarUrl,
-    this.senderProfileSubjectId,
+    this.senderSubAccountId,
     this.senderDisplayName,
     this.senderAvatarUrl,
     required this.messageType,
@@ -537,7 +537,7 @@ class MessageSearchItemView {
   final String conversationId;
   final String? conversationTitle;
   final String? conversationAvatarUrl;
-  final String? senderProfileSubjectId;
+  final String? senderSubAccountId;
   final String? senderDisplayName;
   final String? senderAvatarUrl;
   final String messageType;
@@ -555,8 +555,11 @@ class MessageSearchItemView {
       conversationId: (map['conversationId'] ?? '').toString().trim(),
       conversationTitle: map['conversationTitle']?.toString(),
       conversationAvatarUrl: map['conversationAvatarUrl']?.toString(),
-      senderProfileSubjectId: (map['senderProfileSubjectId'] ?? map['senderId'])
-          ?.toString(),
+      senderSubAccountId:
+          (map['senderSubAccountId'] ??
+                  map['senderProfileSubjectId'] ??
+                  map['senderId'])
+              ?.toString(),
       senderDisplayName:
           (map['senderDisplayName'] ??
                   map['senderDisplayNameSnapshot'] ??

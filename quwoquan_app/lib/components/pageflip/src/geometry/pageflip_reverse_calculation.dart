@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
 import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
@@ -27,4 +28,6 @@ class PageflipReverseCalculation {
   Offset getBottomPagePosition() => _calculation.getBottomPagePosition();
   List<Offset> getFlippingClipArea() => _calculation.getFlippingClipArea();
   List<Offset> getBottomClipArea() => _calculation.getBottomClipArea();
+  StPageFlipCanonicalFoldGeometry? getCanonicalFoldGeometry() =>
+      _calculation.getCanonicalFoldGeometry();
 }

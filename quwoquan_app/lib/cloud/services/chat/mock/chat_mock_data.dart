@@ -79,7 +79,7 @@ class ChatMockData {
     {
       '_id': 'conv_003',
       'id': 'conv_003',
-      'type': 'circle',
+      'type': 'group',
       'title': '摄影爱好者圈子',
       'avatarUrl': avatarFor('photo'),
       'creatorId': 'user_003',
@@ -274,7 +274,7 @@ class ChatMockData {
     },
     {
       'id': 'conv_003',
-      'type': 'circle',
+      'type': 'group',
       'title': '摄影爱好者圈子',
       'circleId': 'circle_001',
       'avatarUrl': avatarFor('photo'),

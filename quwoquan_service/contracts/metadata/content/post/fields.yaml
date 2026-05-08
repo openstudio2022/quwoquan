@@ -21,24 +21,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: true
-
-      - name: personaId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 发布时使用的分身
-
-      - name: profileSubjectId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 稳定公开主体 ID；优先于 current personaId / authorId 作为作者身份主键
+        description: 作者稳定公开主体 ID（subAccountId）
 
       - name: authorDisplayNameSnapshot
         type: string
@@ -65,7 +48,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 写入时绑定的 persona 上下文版本
+        description: 写入时绑定的 subAccount 上下文版本
 
       - name: contentType
         type: enum
@@ -483,23 +466,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
-      - name: personaId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: profileSubjectId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 稳定公开主体 ID；优先于 current personaId 作为评论作者主键
+        description: 评论作者稳定公开主体 ID（subAccountId）
 
       - name: authorDisplayNameSnapshot
         type: string
@@ -526,7 +493,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 发表评论时绑定的 persona 上下文版本
+        description: 发表评论时绑定的 subAccount 上下文版本
 
       - name: content
         type: string
@@ -1129,7 +1096,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: actorProfileSubjectId
+      - name: actorSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1150,7 +1117,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: targetProfileSubjectId
+      - name: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1240,7 +1207,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: authorProfileSubjectId
+      - name: authorId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC

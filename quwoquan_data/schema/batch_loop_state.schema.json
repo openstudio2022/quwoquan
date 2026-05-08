@@ -1,0 +1,55 @@
+{
+  "title": "BatchLoopState",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "batch_id",
+    "current_round",
+    "last_planned_round",
+    "status",
+    "completed",
+    "ready_for_finalize",
+    "stop_reason",
+    "rounds_without_new_queries",
+    "missing_entity_refs",
+    "missing_tag_refs",
+    "next_queries"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string" },
+    "batch_id": { "type": "string" },
+    "current_round": { "type": "integer", "minimum": 0 },
+    "last_planned_round": { "type": "integer", "minimum": 0 },
+    "status": {
+      "type": "string",
+      "enum": ["awaiting_collection", "needs_more_evidence", "ready_for_finalize", "completed", "exhausted"]
+    },
+    "completed": { "type": "boolean" },
+    "ready_for_finalize": { "type": "boolean" },
+    "stop_reason": { "type": "string" },
+    "rounds_without_new_queries": { "type": "integer", "minimum": 0 },
+    "missing_entity_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "missing_tag_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "next_queries": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "search_result_count": { "type": "integer", "minimum": 0 },
+        "page_count": { "type": "integer", "minimum": 0 },
+        "asset_count": { "type": "integer", "minimum": 0 },
+        "fact_count": { "type": "integer", "minimum": 0 },
+        "perspective_count": { "type": "integer", "minimum": 0 },
+        "evidence_url_count": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

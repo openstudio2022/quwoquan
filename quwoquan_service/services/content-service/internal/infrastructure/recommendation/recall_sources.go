@@ -2,6 +2,7 @@ package recommendation
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -9,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtrec "quwoquan_service/runtime/recommendation"
+	"quwoquan_service/services/content-service/internal/application"
 )
 
 // TagRecallSource retrieves candidates matching user interest tags.
@@ -39,8 +41,8 @@ func (s *TagRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) (
 
 // HotRecallSource retrieves trending content by engagement score.
 type HotRecallSource struct {
-	coll    *mongo.Collection
-	maxAge  time.Duration
+	coll   *mongo.Collection
+	maxAge time.Duration
 }
 
 func NewHotRecallSource(db *mongo.Database, maxAge time.Duration) *HotRecallSource {
@@ -134,7 +136,7 @@ func NewAuthorRecallSource(db *mongo.Database) *AuthorRecallSource {
 }
 
 func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
-	if req.UserID == "" || req.UserID == "guest" {
+	if strings.TrimSpace(req.UserID) == "" || req.UserID == application.AnonymousFallbackSubAccountID {
 		return nil, nil
 	}
 

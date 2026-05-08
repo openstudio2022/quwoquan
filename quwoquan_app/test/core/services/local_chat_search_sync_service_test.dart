@@ -7,7 +7,9 @@ import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
@@ -28,9 +30,8 @@ void main() {
       );
       cache = ConversationCacheService();
       currentContext = ActivePersonaContextViewData.fallback(
-        profileSubjectId: 'user_owner',
+        subAccountId: 'user_owner',
         ownerUserId: 'user_owner',
-        subAccountId: '',
         subjectType: 'owner',
         displayName: '主账号',
         avatarUrl: '',
@@ -58,9 +59,8 @@ void main() {
       expect(repo.listContactsCalls, equals(1));
 
       currentContext = ActivePersonaContextViewData.fallback(
-        profileSubjectId: 'subject_sub_001',
-        ownerUserId: 'user_owner',
         subAccountId: 'sub_001',
+        ownerUserId: 'user_owner',
         subjectType: 'sub_account',
         displayName: '子账号',
         avatarUrl: '',
@@ -72,9 +72,8 @@ void main() {
 
       final ownerNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'user_owner',
+          subAccountId: 'user_owner',
           ownerUserId: 'user_owner',
-          subAccountId: '',
           subjectType: 'owner',
           displayName: '主账号',
           avatarUrl: '',
@@ -145,22 +144,24 @@ void main() {
       );
       await store.upsertMessages(
         namespace: namespace,
-        conversation: const <String, dynamic>{
-          'conversationId': 'conv_1',
-          'title': '摄影讨论组',
-          'type': 'group',
-        },
-        messages: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'messageId': 'msg_1',
+        conversation: ConversationCacheRecord.fromWireMap(
+          const <String, dynamic>{
             'conversationId': 'conv_1',
-            'content': '讨论布光技巧',
-            'senderDisplayName': '小趣',
-            'senderProfileSubjectId': 'u_1',
-            'type': 'text',
-            'seq': 1,
-            'timestamp': '2026-03-27T10:00:00.000Z',
+            'title': '摄影讨论组',
+            'type': 'group',
           },
+        ),
+        messages: const <LocalChatSearchMessageRecord>[
+          LocalChatSearchMessageRecord(
+            messageId: 'msg_1',
+            conversationId: 'conv_1',
+            contentPreview: '讨论布光技巧',
+            senderDisplayName: '小趣',
+            senderSubAccountId: 'u_1',
+            messageType: 'text',
+            seq: 1,
+            timestamp: '2026-03-27T10:00:00.000Z',
+          ),
         ],
       );
 
@@ -204,27 +205,29 @@ void main() {
       );
       await store.upsertMessages(
         namespace: namespace,
-        conversation: const <String, dynamic>{
-          'conversationId': 'conv_1',
-          'title': '摄影讨论组',
-          'type': 'group',
-        },
-        messages: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'messageId': 'msg_1',
+        conversation: ConversationCacheRecord.fromWireMap(
+          const <String, dynamic>{
             'conversationId': 'conv_1',
-            'content': '讨论布光技巧',
-            'senderDisplayName': '小趣',
-            'senderProfileSubjectId': 'u_1',
-            'type': 'text',
-            'seq': 1,
-            'timestamp': '2026-03-27T10:00:00.000Z',
+            'title': '摄影讨论组',
+            'type': 'group',
           },
+        ),
+        messages: const <LocalChatSearchMessageRecord>[
+          LocalChatSearchMessageRecord(
+            messageId: 'msg_1',
+            conversationId: 'conv_1',
+            contentPreview: '讨论布光技巧',
+            senderDisplayName: '小趣',
+            senderSubAccountId: 'u_1',
+            messageType: 'text',
+            seq: 1,
+            timestamp: '2026-03-27T10:00:00.000Z',
+          ),
         ],
       );
 
       expect(
-        await store.listConversationPayloads(namespace: namespace),
+        await store.listConversationRecords(namespace: namespace),
         isNotEmpty,
       );
       expect(

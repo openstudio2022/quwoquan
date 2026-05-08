@@ -21,7 +21,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: direct/group/circle/encrypted（assistant 不再是独立会话类型，小趣通过成员邀请参与任意会话）
+        description: direct/group/encrypted（legacy circle 输入与存量记录兼容读取，但主语义统一归并为 group；assistant 不再是独立会话类型，小趣通过成员邀请参与任意会话）
 
       - name: title
         type: string
@@ -91,7 +91,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 关联圈子（type=circle 时）
+        description: 关联圈子；有值时表示该会话为圈子发起/绑定的默认群，但会话主类型仍为 group
 
       - name: circleGroupId
         type: string
@@ -273,23 +273,16 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: 发送者稳定公开主体 ID（subAccountId）
 
-      - name: senderPersonaId
+      - name: senderSubAccountId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
-      - name: senderProfileSubjectId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 稳定公开主体 ID；优先于 current senderPersonaId 作为消息发送者主键
+        description: 兼容消息快照/缓存模型时显式返回的发送者 subAccountId
 
       - name: senderDisplayNameSnapshot
         type: string
@@ -316,7 +309,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 发送消息时绑定的 persona 上下文版本
+        description: 发送消息时绑定的 subAccount 上下文版本
 
       - name: type
         type: enum
@@ -944,7 +937,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: senderProfileSubjectId
+      - name: senderSubAccountId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC

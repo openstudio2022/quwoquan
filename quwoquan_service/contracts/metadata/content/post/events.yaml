@@ -90,7 +90,7 @@ events:
     recommend_impact: engagement_signal
 
   - name: ContentReacted
-    description: 互动状态变更（点赞/收藏/分享/举报）
+    description: 互动状态变更（点赞/收藏/权威分享记录/举报）
     producer: content-service
     consumers: [recommendation-engine, notification-service]
     channel: direct
@@ -110,7 +110,7 @@ events:
     recommend_impact: hot_path_signal
 
   - name: ContentShared
-    description: 内容分享
+    description: 内容分享 telemetry（推荐/通知信号；不直接驱动 post.shareCount）
     producer: content-service
     consumers: [recommendation-engine, notification-service]
     channel: event_store

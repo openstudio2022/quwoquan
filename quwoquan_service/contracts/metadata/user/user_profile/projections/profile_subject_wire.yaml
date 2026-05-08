@@ -16,10 +16,10 @@ client_projection:
   base_class: ""
   output_path: cloud/runtime/generated/user/profile_subject_wire_dto.g.dart
   fields:
-    - name: profileSubjectId
+    - name: subAccountId
       dart_type: String
       nullable: false
-      source: profileSubjectId
+      source: subAccountId
       aliases: [subAccountId, userId]
       default: "''"
       skip_empty_string_aliases: true
@@ -31,13 +31,6 @@ client_projection:
       aliases: [ownerUserId]
       default: "''"
       skip_empty_string_aliases: true
-
-    - name: subAccountId
-      dart_type: String
-      nullable: false
-      source: subAccountId
-      aliases: [subAccountId]
-      default: "''"
 
     - name: userHandle
       dart_type: String

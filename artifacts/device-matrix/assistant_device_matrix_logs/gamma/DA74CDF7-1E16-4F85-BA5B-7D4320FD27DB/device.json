@@ -1,0 +1,18 @@
+{
+  "capturedAt": "2026-05-05T19:02:50.585320Z",
+  "suite": "assistant-device-matrix",
+  "environment": "gamma",
+  "device": {
+    "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+    "name": "iPhone 17 Pro",
+    "targetPlatform": "ios",
+    "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
+    "emulator": true,
+    "ephemeral": false,
+    "screenClass": "phone",
+    "gatewayBaseUrl": "http://127.0.0.1:18180"
+  },
+  "extra": {
+    "screenClass": "phone"
+  }
+}

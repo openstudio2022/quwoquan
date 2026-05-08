@@ -133,18 +133,19 @@ class CommentNotifier extends Notifier<CommentState> {
   Future<CommentDto?> addComment(
     String content, {
     String? replyToCommentId,
-    String? personaId,
+    String? subAccountId,
   }) async {
+    final baselineCommentCount = ref
+        .read(postInteractionStateProvider)
+        .commentCountFor(postId, fallback: state.comments.length);
     final activeContext = await _resolveActivePersonaContext();
-    final resolvedProfileSubjectId = activeContext.profileSubjectId;
-    final resolvedPersonaId = personaId ?? activeContext.personaId;
+    final resolvedSubAccountId = subAccountId ?? activeContext.subAccountId;
     final optimistic = CommentDto(
       id: 'pending_${DateTime.now().millisecondsSinceEpoch}',
       postId: postId,
-      authorId: resolvedProfileSubjectId,
+      authorId: resolvedSubAccountId,
       content: content,
       replyToCommentId: replyToCommentId,
-      personaId: resolvedPersonaId.isEmpty ? null : resolvedPersonaId,
       displayName: activeContext.displayName,
       avatarUrl: activeContext.avatarUrl,
       createdAt: DateTime.now(),
@@ -153,13 +154,21 @@ class CommentNotifier extends Notifier<CommentState> {
       comments: [optimistic, ...state.comments],
       pendingComments: [...state.pendingComments, optimistic],
     );
+    ref
+        .read(postInteractionStateProvider.notifier)
+        .stageOptimisticComment(
+          postId,
+          baseCommentCount: baselineCommentCount,
+          delta: 1,
+        );
     try {
       final confirmed = await _repo.createComment(
         postId: postId,
         content: content,
         replyToCommentId: replyToCommentId,
-        personaId: resolvedPersonaId.isEmpty ? null : resolvedPersonaId,
-        profileSubjectId: resolvedProfileSubjectId,
+        subAccountId: resolvedSubAccountId.isEmpty
+            ? null
+            : resolvedSubAccountId,
         personaContextVersion: activeContext.contextVersion,
       );
       state = state.copyWith(
@@ -178,19 +187,43 @@ class CommentNotifier extends Notifier<CommentState> {
             .where((c) => c.id != optimistic.id)
             .toList(),
       );
+      ref
+          .read(postInteractionStateProvider.notifier)
+          .rollbackOptimisticComment(
+            postId,
+            baseCommentCount: baselineCommentCount,
+            delta: 1,
+          );
       rethrow;
     }
   }
 
   Future<void> deleteComment(String commentId) async {
     final original = state.comments;
+    final baselineCommentCount = ref
+        .read(postInteractionStateProvider)
+        .commentCountFor(postId, fallback: original.length);
     state = state.copyWith(
       comments: state.comments.where((c) => c.id != commentId).toList(),
     );
+    ref
+        .read(postInteractionStateProvider.notifier)
+        .stageOptimisticComment(
+          postId,
+          baseCommentCount: baselineCommentCount,
+          delta: -1,
+        );
     try {
       await _repo.deleteComment(postId: postId, commentId: commentId);
     } catch (e) {
       state = state.copyWith(comments: original);
+      ref
+          .read(postInteractionStateProvider.notifier)
+          .rollbackOptimisticComment(
+            postId,
+            baseCommentCount: baselineCommentCount,
+            delta: -1,
+          );
       rethrow;
     }
   }

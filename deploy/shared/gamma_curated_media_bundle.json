@@ -1,0 +1,689 @@
+{
+  "schemaVersion": "gamma-curated-media-bundle.v1",
+  "environment": "gamma",
+  "selectionProfile": "gamma-curated-core-100",
+  "maxImageObjectCount": 100,
+  "imageObjectCount": 96,
+  "totalObjectCount": 97,
+  "mediaObjects": [
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_city/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_city/v1/avatar.png",
+      "sourceHash": "sha256:c615cee4341e2d26e054492f505dde25cee1eaef5bc2cccfdd254f5448b82797",
+      "mimeType": "image/png",
+      "sizeBytes": 523600
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_citywalk_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_citywalk_01/v1/avatar.png",
+      "sourceHash": "sha256:e9a0c7d2328247463ab33a08a35184d9d4e385fc74a0ebf0d49d89840b09ad1d",
+      "mimeType": "image/png",
+      "sizeBytes": 523600
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_food/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_food/v1/avatar.png",
+      "sourceHash": "sha256:d3da980c18b9993108fb6cad451e02b786c061992cada9d3116c598f15bd2b28",
+      "mimeType": "image/png",
+      "sizeBytes": 433387
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_life/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_life/v1/avatar.png",
+      "sourceHash": "sha256:e1877e1e186ddab049183d3a915fc46583009b9afd1d54110cddff11cfaeb2ed",
+      "mimeType": "image/png",
+      "sizeBytes": 492731
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_outdoor_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_outdoor_01/v1/avatar.png",
+      "sourceHash": "sha256:712f984ab1a6e91cd3e0acb4f8b9b730deab27b0793cfe25b87515ad75a11984",
+      "mimeType": "image/png",
+      "sizeBytes": 459606
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+      "sourceHash": "sha256:d287af8ef0a7294111145d2dd8f94bae9f316de0e056c5bfbf07b48cea922e6f",
+      "mimeType": "image/png",
+      "sizeBytes": 331991
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_tech/v1/avatar.png",
+      "sourceHash": "sha256:a216a7fcd645dcf87341b8cd2d80aac11dbcd68bc56abaf13c7d32b3b374b595",
+      "mimeType": "image/png",
+      "sizeBytes": 433384
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_tech_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_tech_01/v1/avatar.png",
+      "sourceHash": "sha256:ce2af9a177de55a8fa4685f1b390d8c1c688294d70fd0f61203ac7095a839b2f",
+      "mimeType": "image/png",
+      "sizeBytes": 433384
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_travel/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_travel/v1/avatar.png",
+      "sourceHash": "sha256:6fd68cbfaf3c3f10dc23c816c784445fc6a826a881f4d2fae957bdabc17de398",
+      "mimeType": "image/png",
+      "sizeBytes": 473081
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_travel_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_travel_01/v1/avatar.png",
+      "sourceHash": "sha256:6fd68cbfaf3c3f10dc23c816c784445fc6a826a881f4d2fae957bdabc17de398",
+      "mimeType": "image/png",
+      "sizeBytes": 473081
+    },
+    {
+      "objectKey": "media/avatar/group/fixture_conv_group/v1/composite.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/group/fixture_conv_group/v1/composite.png",
+      "sourceHash": "sha256:0f12f7f439a503d1ae6c60e351670750ef657ae2ce9a2e65369b402fd70c59f4",
+      "mimeType": "image/png",
+      "sizeBytes": 72404
+    },
+    {
+      "objectKey": "media/avatar/group/fixture_conv_photo_group/v1/composite.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/group/fixture_conv_photo_group/v1/composite.png",
+      "sourceHash": "sha256:ad3484a6f2b62f70b3fe5aa3953916396e192f6a205d74991105ec5c59062f36",
+      "mimeType": "image/png",
+      "sizeBytes": 71231
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_article/v1/avatar.png",
+      "sourceHash": "sha256:a65a83ac7cb4ca02c18108bed8922a7a1c238871fbbd844848afc11ae9427d6c",
+      "mimeType": "image/png",
+      "sizeBytes": 408056
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_citywalk_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_citywalk_01/v1/avatar.png",
+      "sourceHash": "sha256:672248481e539def9d67847f3f1fc50561d0566f6f674fc4136c538c97a6761d",
+      "mimeType": "image/png",
+      "sizeBytes": 185953
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_citywalk_02/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_citywalk_02/v1/avatar.jpg",
+      "sourceHash": "sha256:47f747da15b89c67ead37946fdb899d38ed1b79a2cf71225599a1a1c3af5f198",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 70428
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_citywalk_03/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_citywalk_03/v1/avatar.jpg",
+      "sourceHash": "sha256:b4aadc22d76358c355a8b85d87d9243101f860add37b312a0ba4af4995193d96",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 41646
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_citywalk_04/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_citywalk_04/v1/avatar.png",
+      "sourceHash": "sha256:6502fcc381a5f4e985749a0a1521abeb6f7ab54057662738f53979d3400892cc",
+      "mimeType": "image/png",
+      "sizeBytes": 379661
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_citywalk_05/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_citywalk_05/v1/avatar.jpg",
+      "sourceHash": "sha256:b4aadc22d76358c355a8b85d87d9243101f860add37b312a0ba4af4995193d96",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 41646
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_commenter/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_commenter/v1/avatar.png",
+      "sourceHash": "sha256:301045d656936605a700cf1b329d55fea7faed8800684384377b8c3b92c86c1e",
+      "mimeType": "image/png",
+      "sizeBytes": 418320
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_current/v1/avatar.png",
+      "sourceHash": "sha256:a46dcf5bfd715a61572f6867446d1acb0d3054fc6c235d75413729c96b883650",
+      "mimeType": "image/png",
+      "sizeBytes": 314652
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_food_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_food_01/v1/avatar.png",
+      "sourceHash": "sha256:8e87b258e620ace60d04fb5111b628106e44786505233f83508351b5a1b1aaf7",
+      "mimeType": "image/png",
+      "sizeBytes": 397870
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_food_02/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_food_02/v1/avatar.jpg",
+      "sourceHash": "sha256:9dfb56579277430f7f1eb56e8b11ea15b19e9bac4c5c24e68adc102c6432676b",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 89665
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_food_03/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_food_03/v1/avatar.jpg",
+      "sourceHash": "sha256:06f1f40dd58005e89cfc207014cfd5b9bd7d5c889805dccb53576cd624042c4c",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 76474
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_food_04/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_food_04/v1/avatar.png",
+      "sourceHash": "sha256:8a3ae06e776a6441eb747732d62cd5562b2d0cd1e7d5d8f125407d252bce583d",
+      "mimeType": "image/png",
+      "sizeBytes": 401995
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_food_05/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_food_05/v1/avatar.jpg",
+      "sourceHash": "sha256:06f1f40dd58005e89cfc207014cfd5b9bd7d5c889805dccb53576cd624042c4c",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 76474
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_friend/v1/avatar.png",
+      "sourceHash": "sha256:8e87b258e620ace60d04fb5111b628106e44786505233f83508351b5a1b1aaf7",
+      "mimeType": "image/png",
+      "sizeBytes": 397870
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
+      "sourceHash": "sha256:a46dcf5bfd715a61572f6867446d1acb0d3054fc6c235d75413729c96b883650",
+      "mimeType": "image/png",
+      "sizeBytes": 314652
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_lifestyle_02/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_lifestyle_02/v1/avatar.jpg",
+      "sourceHash": "sha256:42c7f2f64d34578f30f4e4d4d4a3fd33de1e4fbac6a7765c87aa518cc5963b41",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 52590
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_lifestyle_03/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_lifestyle_03/v1/avatar.jpg",
+      "sourceHash": "sha256:ff3b87c97850a4ff7489dbd632d82ce1f4f57ec3ad53793bba3b82399f563ef9",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 50423
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_lifestyle_04/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_lifestyle_04/v1/avatar.png",
+      "sourceHash": "sha256:f70940c147e344f69f607bf39c408003f44df3bf0f67b8de5243f77c11345361",
+      "mimeType": "image/png",
+      "sizeBytes": 278112
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+      "sourceHash": "sha256:0282971cbebfb093e2d5371f416c77a8f49f15c1810cb02255341a45c3100fd6",
+      "mimeType": "image/png",
+      "sizeBytes": 404830
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_outdoor_02/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_outdoor_02/v1/avatar.jpg",
+      "sourceHash": "sha256:c722dad22a77542955f6c3278ef1e6279479cc764c7ea4f5e9efbcd3d2b1d8e8",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 55331
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_outdoor_03/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_outdoor_03/v1/avatar.jpg",
+      "sourceHash": "sha256:5eb25bf7e24770943f750d6cc8ed3ab5551e6e55f31ed23fa100068bb6c72798",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 78241
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_outdoor_04/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_outdoor_04/v1/avatar.png",
+      "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27",
+      "mimeType": "image/png",
+      "sizeBytes": 315882
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_outdoor_05/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_outdoor_05/v1/avatar.jpg",
+      "sourceHash": "sha256:5eb25bf7e24770943f750d6cc8ed3ab5551e6e55f31ed23fa100068bb6c72798",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 78241
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_outdoor_06/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_outdoor_06/v1/avatar.jpg",
+      "sourceHash": "sha256:c722dad22a77542955f6c3278ef1e6279479cc764c7ea4f5e9efbcd3d2b1d8e8",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 55331
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_owner/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_owner/v1/avatar.png",
+      "sourceHash": "sha256:804f9b8f31bd1b322159af180d16a127d49f39bacca662c57a43e85179568a82",
+      "mimeType": "image/png",
+      "sizeBytes": 301039
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_photo/v1/avatar.png",
+      "sourceHash": "sha256:6502fcc381a5f4e985749a0a1521abeb6f7ab54057662738f53979d3400892cc",
+      "mimeType": "image/png",
+      "sizeBytes": 379661
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_photography_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_photography_01/v1/avatar.png",
+      "sourceHash": "sha256:6502fcc381a5f4e985749a0a1521abeb6f7ab54057662738f53979d3400892cc",
+      "mimeType": "image/png",
+      "sizeBytes": 379661
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_photography_02/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_photography_02/v1/avatar.jpg",
+      "sourceHash": "sha256:ed0d3436b88e383fa2a3ff9b0c31ae9ebc620fe425f36dcc6c81a2f53208090f",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 47228
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_photography_03/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_photography_03/v1/avatar.jpg",
+      "sourceHash": "sha256:47f747da15b89c67ead37946fdb899d38ed1b79a2cf71225599a1a1c3af5f198",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 70428
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_photography_04/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_photography_04/v1/avatar.png",
+      "sourceHash": "sha256:804f9b8f31bd1b322159af180d16a127d49f39bacca662c57a43e85179568a82",
+      "mimeType": "image/png",
+      "sizeBytes": 301039
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_tech_01/v1/avatar.png",
+      "sourceHash": "sha256:301045d656936605a700cf1b329d55fea7faed8800684384377b8c3b92c86c1e",
+      "mimeType": "image/png",
+      "sizeBytes": 418320
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_tech_02/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_tech_02/v1/avatar.jpg",
+      "sourceHash": "sha256:b4aadc22d76358c355a8b85d87d9243101f860add37b312a0ba4af4995193d96",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 41646
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_tech_03/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_tech_03/v1/avatar.jpg",
+      "sourceHash": "sha256:2a77d93a19796cbd86978701f68c2fbeb4f4c48753906a0d46aeee21a58e3a5e",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 98977
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_tech_04/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_tech_04/v1/avatar.png",
+      "sourceHash": "sha256:672248481e539def9d67847f3f1fc50561d0566f6f674fc4136c538c97a6761d",
+      "mimeType": "image/png",
+      "sizeBytes": 185953
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_tech_05/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_tech_05/v1/avatar.jpg",
+      "sourceHash": "sha256:2a77d93a19796cbd86978701f68c2fbeb4f4c48753906a0d46aeee21a58e3a5e",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 98977
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_tech_06/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_tech_06/v1/avatar.jpg",
+      "sourceHash": "sha256:b4aadc22d76358c355a8b85d87d9243101f860add37b312a0ba4af4995193d96",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 41646
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_travel/v1/avatar.png",
+      "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27",
+      "mimeType": "image/png",
+      "sizeBytes": 315882
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_travel_01/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_travel_01/v1/avatar.png",
+      "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27",
+      "mimeType": "image/png",
+      "sizeBytes": 315882
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_travel_02/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_travel_02/v1/avatar.jpg",
+      "sourceHash": "sha256:5eb25bf7e24770943f750d6cc8ed3ab5551e6e55f31ed23fa100068bb6c72798",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 78241
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_travel_03/v1/avatar.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_travel_03/v1/avatar.jpg",
+      "sourceHash": "sha256:c722dad22a77542955f6c3278ef1e6279479cc764c7ea4f5e9efbcd3d2b1d8e8",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 55331
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_travel_04/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_travel_04/v1/avatar.png",
+      "sourceHash": "sha256:0282971cbebfb093e2d5371f416c77a8f49f15c1810cb02255341a45c3100fd6",
+      "mimeType": "image/png",
+      "sizeBytes": 404830
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_travel_owner/v1/avatar.png",
+      "sourceHash": "sha256:0282971cbebfb093e2d5371f416c77a8f49f15c1810cb02255341a45c3100fd6",
+      "mimeType": "image/png",
+      "sizeBytes": 404830
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_video/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_video/v1/avatar.png",
+      "sourceHash": "sha256:672248481e539def9d67847f3f1fc50561d0566f6f674fc4136c538c97a6761d",
+      "mimeType": "image/png",
+      "sizeBytes": 185953
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+      "sourceHash": "sha256:f70940c147e344f69f607bf39c408003f44df3bf0f67b8de5243f77c11345361",
+      "mimeType": "image/png",
+      "sizeBytes": 278112
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+      "sourceHash": "sha256:8a3ae06e776a6441eb747732d62cd5562b2d0cd1e7d5d8f125407d252bce583d",
+      "mimeType": "image/png",
+      "sizeBytes": 401995
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_article/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_article/v1/background.png",
+      "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5",
+      "mimeType": "image/png",
+      "sizeBytes": 1794125
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_citywalk_01/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_citywalk_01/v1/background.png",
+      "sourceHash": "sha256:6a3fce461dd3683b391eb6c6eb40e4f30e4397c55c6c79213bcbae3cec7051af",
+      "mimeType": "image/png",
+      "sizeBytes": 2686629
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_commenter/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_commenter/v1/background.png",
+      "sourceHash": "sha256:f19e6de501ad9d1f01af8184e3490b19c6a44d47c17d51ad2edd1e6960e428b8",
+      "mimeType": "image/png",
+      "sizeBytes": 1212244
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_current/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_current/v1/background.png",
+      "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3",
+      "mimeType": "image/png",
+      "sizeBytes": 2570495
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_friend/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_friend/v1/background.png",
+      "sourceHash": "sha256:37dc09790fcc630ecfe492e0332a73575e571006a14b5836f03f5c82951a6bea",
+      "mimeType": "image/png",
+      "sizeBytes": 1117608
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_outdoor_01/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_outdoor_01/v1/background.png",
+      "sourceHash": "sha256:8cddb1acab949e1a1ef0d77c48212e7b165c29a005eb90c7275ed9e2a400b70c",
+      "mimeType": "image/png",
+      "sizeBytes": 2339108
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_owner/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_owner/v1/background.png",
+      "sourceHash": "sha256:42766ca9d90c1d9253d8194f40de15c5fc4bdd7b378bce1f9ea4378304544e8c",
+      "mimeType": "image/png",
+      "sizeBytes": 1119236
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_photo/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_photo/v1/background.png",
+      "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c",
+      "mimeType": "image/png",
+      "sizeBytes": 1857474
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_tech_01/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_tech_01/v1/background.png",
+      "sourceHash": "sha256:5a26aa6ef2581ab84b866696c1819f02cafd19c5fea0c34152b70ec804eb5977",
+      "mimeType": "image/png",
+      "sizeBytes": 2148230
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_travel/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_travel/v1/background.png",
+      "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079",
+      "mimeType": "image/png",
+      "sizeBytes": 2522887
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_travel_01/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_travel_01/v1/background.png",
+      "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079",
+      "mimeType": "image/png",
+      "sizeBytes": 2522887
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_travel_owner/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_travel_owner/v1/background.png",
+      "sourceHash": "sha256:584102cd74b9d094b22edfed04691aab7813486fe76d9a7a9de20ca58a0bbca3",
+      "mimeType": "image/png",
+      "sizeBytes": 2136545
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_video/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_video/v1/background.png",
+      "sourceHash": "sha256:f9135032e2ab0645d2a930261cabad3d39b71d7047df46904d22505a3821021f",
+      "mimeType": "image/png",
+      "sizeBytes": 2686629
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_weekend_1/v1/background.png",
+      "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3",
+      "mimeType": "image/png",
+      "sizeBytes": 2570495
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_weekend_2/v1/background.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_weekend_2/v1/background.png",
+      "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438",
+      "mimeType": "image/png",
+      "sizeBytes": 2062449
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_city/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_city/v1/cover.png",
+      "sourceHash": "sha256:ef6877fd9a741bae6acf96f4562427e5723360638bb4389d6081acda9ace11ac",
+      "mimeType": "image/png",
+      "sizeBytes": 2472778
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_citywalk_01/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_citywalk_01/v1/cover.jpg",
+      "sourceHash": "sha256:614dbc867bfdf987c79f2a87f79d83cbaea363b69c0704da39dccc50f93bb23c",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 639944
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_food/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_food/v1/cover.png",
+      "sourceHash": "sha256:ab197b9a24fa6faa4841716a0edba172a1452fbbfedca2451942321b4284bd91",
+      "mimeType": "image/png",
+      "sizeBytes": 1843350
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_life/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_life/v1/cover.png",
+      "sourceHash": "sha256:3a8a42f6576a0b163c01bdc7117f742b9e6da1c56d539d0f91417ddb3fdd5749",
+      "mimeType": "image/png",
+      "sizeBytes": 2253108
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_outdoor_01/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_outdoor_01/v1/cover.jpg",
+      "sourceHash": "sha256:70fead47dcf028545244f1d2c6849f3ef24cf1bb9110311e3ea18b6f2b473fe9",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 483806
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_photo/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_photo/v1/cover.png",
+      "sourceHash": "sha256:3e9f21e0cb25f18512b4b8bf60f9888422f001f951d5f9e131079de641b4cd81",
+      "mimeType": "image/png",
+      "sizeBytes": 1615223
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_tech/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_tech/v1/cover.png",
+      "sourceHash": "sha256:b95980ec76c3947f7da9722a5ee9ed1685216b3511334b786fc0d00a95112858",
+      "mimeType": "image/png",
+      "sizeBytes": 1901856
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_tech_01/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_tech_01/v1/cover.jpg",
+      "sourceHash": "sha256:e6667407f265cae35c39e97b9a2be2004f0148cfde8a9dcf648a15cd85ff9d94",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 391770
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_travel/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_travel/v1/cover.png",
+      "sourceHash": "sha256:824c268f3cd030cf0be9d5b520574de6be5204b8e9cc7e54b8dde2e45705cbe6",
+      "mimeType": "image/png",
+      "sizeBytes": 2204168
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_travel_01/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_travel_01/v1/cover.jpg",
+      "sourceHash": "sha256:ae76a8d4fd4640dbbc5e1baa5f378b402ff5695ef3e9b11eb462fc33c98eee75",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 522919
+    },
+    {
+      "objectKey": "media/image/post/fixture_article_001/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_article_001/v1/cover.png",
+      "sourceHash": "sha256:f263e5c274b33b95a5487a0f26e8ed6dbff5b2ef82c26aa735bea8ada1aad158",
+      "mimeType": "image/png",
+      "sizeBytes": 1210083
+    },
+    {
+      "objectKey": "media/image/post/fixture_article_001/v1/image-2.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_article_001/v1/image-2.png",
+      "sourceHash": "sha256:e878b7fb873993baa73863506fa68f73a623675e0028ca082ebb91d24d1b7993",
+      "mimeType": "image/png",
+      "sizeBytes": 838670
+    },
+    {
+      "objectKey": "media/image/post/fixture_moment_001/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_moment_001/v1/cover.png",
+      "sourceHash": "sha256:7f950417c7b30ae34dbe30e472b5e494aaf03a2d716ab5af7768438afd7042c4",
+      "mimeType": "image/png",
+      "sizeBytes": 1698510
+    },
+    {
+      "objectKey": "media/image/post/fixture_photo_001/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_photo_001/v1/cover.png",
+      "sourceHash": "sha256:8fec33d77873f1c94559ccf64b13a919a70662fa4b983aacb3934497f96d44b5",
+      "mimeType": "image/png",
+      "sizeBytes": 1594628
+    },
+    {
+      "objectKey": "media/image/post/fixture_photo_001/v1/image-2.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_photo_001/v1/image-2.png",
+      "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3",
+      "mimeType": "image/png",
+      "sizeBytes": 722996
+    },
+    {
+      "objectKey": "media/image/post/fixture_photo_002/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_photo_002/v1/cover.png",
+      "sourceHash": "sha256:d483f715b49375bad2be77462228fcfd04864a78ef5542bb70f3315b1b597da3",
+      "mimeType": "image/png",
+      "sizeBytes": 722996
+    },
+    {
+      "objectKey": "media/image/post/fixture_post_citywalk_001/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_post_citywalk_001/v1/cover.jpg",
+      "sourceHash": "sha256:02484855e35d85c8b05322ea54f65229308c156ae849efcec1e4df236ddaab52",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 449758
+    },
+    {
+      "objectKey": "media/image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_post_lifestyle_001/v1/cover.jpg",
+      "sourceHash": "sha256:039c46454270274456375554acec4f3438dfdffcaabc38e077ccde7cc1accde5",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 438380
+    },
+    {
+      "objectKey": "media/image/post/fixture_post_outdoor_001/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_post_outdoor_001/v1/cover.jpg",
+      "sourceHash": "sha256:db06484d56e0b555805c469e8bc40f8085c2950f7e0882c9650761875e77928d",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 367650
+    },
+    {
+      "objectKey": "media/image/post/fixture_post_photography_001/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_post_photography_001/v1/cover.jpg",
+      "sourceHash": "sha256:124aaa1219b737a1aab0c2d41aa01ec6162b56f6cb67a402f755427a1c00e62d",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 541811
+    },
+    {
+      "objectKey": "media/image/post/fixture_post_tech_001/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_post_tech_001/v1/cover.jpg",
+      "sourceHash": "sha256:ee5ed80e5f3312f36374c4738418676bfcbf0603786779695c3c4f9194ebf740",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 306919
+    },
+    {
+      "objectKey": "media/image/post/fixture_post_travel_001/v1/cover.jpg",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_post_travel_001/v1/cover.jpg",
+      "sourceHash": "sha256:943152f645c079464523c6da95bd3bdc6dc4d54758877194f97b00051bc5fa69",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 417403
+    },
+    {
+      "objectKey": "media/image/post/fixture_video_001/v1/cover.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_video_001/v1/cover.png",
+      "sourceHash": "sha256:b610407fd3e15a335a8f6c2b9387fc26f44a5acdbd8b30e68bd4120916d7ecd1",
+      "mimeType": "image/png",
+      "sizeBytes": 1440813
+    },
+    {
+      "objectKey": "media/image/post/fixture_video_001/v1/image-2.png",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/post/fixture_video_001/v1/image-2.png",
+      "sourceHash": "sha256:4d02c0847e98f118b915ff088b2101b0c61abf92b09ea5ebed07b8423a6a5aef",
+      "mimeType": "image/png",
+      "sizeBytes": 1557209
+    },
+    {
+      "objectKey": "media/video/beta-sample.mp4",
+      "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/video/beta-sample.mp4",
+      "sourceHash": "sha256:3bee83cd93579b8504f6102a3ea57af43d230bdfefd60acc239c198aebb2136d",
+      "mimeType": "video/mp4",
+      "sizeBytes": 24
+    }
+  ]
+}

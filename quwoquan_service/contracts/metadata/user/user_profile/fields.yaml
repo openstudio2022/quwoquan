@@ -2,8 +2,8 @@ version: 1
 aggregate: UserProfile
 
 # 语义说明：
-#   UserProfile = 用户根实体（私有管理平面）
-#   Persona     = 用户分身（应用平面，强隔离）
+#   UserProfile = 用户根实体（owner）
+#   Persona     = 子账号主体容器（内部实现仍沿用 Persona 命名，但只保留 subAccountId 作为主体 ID）
 
 entities:
   UserProfile:
@@ -17,17 +17,57 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: false
-        description: 全局唯一用户 ID
+        description: 全局唯一 owner ID；匿名与注册账号都使用同一稳定主键规则
+
+      - name: accountState
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+        recommend_feature: false
+        description: 账号生命周期状态：anonymous | active | suspended | deleted
+
+      - name: identityOrigin
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 首次创建来源：anonymous_device | phone | wechat | apple | migrated_seed
+
+      - name: logicalShard
+        type: int
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        recommend_feature: false
+        description: 固定逻辑槽位；由结构化 ownerId 生成并长期稳定
+
+      - name: anonymousRetentionPolicy
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+        recommend_feature: false
+        description: 匿名痕迹保留策略；当前固定为 preserve
 
       - name: phone
         type: string
-        constraints: [UK, NOT_NULL]
+        constraints: [UK, NULLABLE]
         classification: PII
         log_policy: mask
         api_exposure: drop
         ops_exposure: mask
         recommend_feature: false
-        description: 手机号（登录凭证）
+        description: 手机号（登录凭证）；匿名账号允许为空
 
       - name: nickname
         type: string
@@ -226,16 +266,8 @@ entities:
         recommend_feature: false
 
   Persona:
-    description: 用户分身——应用内真实身份主体，强隔离，外部不可关联到同一用户根实体
+    description: 用户子账号——应用内真实身份主体；只保留 subAccountId 作为主体 ID
     fields:
-      - name: id
-        type: string
-        constraints: [PK]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: userId
         type: string
         constraints: [FK_user_profiles_CASCADE]
@@ -397,12 +429,12 @@ entities:
 
       - name: subAccountId
         type: string
-        constraints: [NOT_NULL, UK]
+        constraints: [PK, NOT_NULL, UK]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 全局唯一子账号 ID（跨域上下文引用标识，区别于 personas.id）
+        description: 全局唯一子账号 ID；也是跨域上下文唯一主体 ID
 
       - name: isolationLevel
         type: enum
@@ -577,12 +609,95 @@ entities:
 
     enums:
       CredentialType:
-        values: [phone, wechat, apple]
+        values: [phone, wechat, apple, anonymous_device]
         description: 支持的第三方凭证类型
 
     business_rules:
       - id: last_credential_protection
         description: OwnerAccount 至少保留 1 个 isActive=true 的凭证，不能全部解绑
+
+  AnonymousDeviceBinding:
+    description: 匿名设备到 owner 账号的稳定绑定，不直接暴露或依赖原始设备标识
+    cache_excluded: true
+    fields:
+      - name: id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: ownerId
+        type: string
+        constraints: [FK_user_profiles_CASCADE, NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+        description: 绑定到的匿名或已升级 owner ID
+
+      - name: installIdHash
+        type: string
+        constraints: [NOT_NULL]
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: 安装实例标识的哈希值，仅用于审计和定位
+
+      - name: deviceFingerprintHash
+        type: string
+        constraints: [NOT_NULL]
+        classification: SECRET
+        log_policy: drop
+        api_exposure: drop
+        ops_exposure: drop
+        description: 设备指纹摘要；同设备稳定命中同一匿名 owner
+
+      - name: platform
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: appVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: lastSeenAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: drop
+        ops_exposure: read
+
+    unique_constraints:
+      - columns: [deviceFingerprintHash]
+        description: 同一设备指纹只能绑定到一个 owner
 
   UserAuth:
     description: 认证凭证（安全隔离，不缓存到 Redis）
@@ -1073,23 +1188,7 @@ entities:
   ActivePersonaContextView:
     description: 当前激活分身上下文快照；供 content/chat/circle/assistant/notification 统一消费
     fields:
-      - name: personaId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: ownerUserId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: profileSubjectId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1166,14 +1265,6 @@ entities:
   PersonaManagementItemView:
     description: 用户私有的分身管理列表项视图
     fields:
-      - name: profileSubjectId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: subAccountId
         type: string
         constraints: [NOT_NULL]
@@ -1364,7 +1455,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: activeProfileSubjectId
+      - name: activeSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1372,7 +1463,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: primaryProfileSubjectId
+      - name: primarySubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1383,7 +1474,7 @@ entities:
   PersonaLifecycleGuardView:
     description: owner 在删除/退役前读取的生命周期保护视图
     fields:
-      - name: profileSubjectId
+      - name: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1436,13 +1527,14 @@ entities:
   ProfileSubjectView:
     description: 统一个人主页主体读模型；用户与分身最终都映射到此视图
     fields:
-      - name: profileSubjectId
+      - name: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: 稳定公开主体 ID；个人主页、关系图谱与跨域动作统一以此为真相源
 
       - name: ownerUserId
         type: string
@@ -1461,15 +1553,6 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
-      - name: subAccountId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 分身内部 canonical key；不承担公开句柄语义
 
       - name: userHandle
         type: string
@@ -1904,7 +1987,7 @@ entities:
   SocialRelationSearchItemView:
     description: 社交关系搜索结果项视图，统一承接“人”的搜索对象
     fields:
-      - name: profileSubjectId
+      - name: subAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC

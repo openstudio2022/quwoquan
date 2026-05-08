@@ -18,7 +18,8 @@ class BackwardRenderFrameData {
     required this.flippingAnchor,
     required this.bottomAnchor,
     required this.angle,
-    required this.movingEdgeLine,
+    required this.foldLine,
+    required this.freeEdgeLine,
     required this.maxShadowOpacity,
     this.shadow,
   });
@@ -33,7 +34,8 @@ class BackwardRenderFrameData {
   final ui.Offset flippingAnchor;
   final ui.Offset bottomAnchor;
   final double angle;
-  final (ui.Offset, ui.Offset)? movingEdgeLine;
+  final (ui.Offset, ui.Offset)? foldLine;
+  final (ui.Offset, ui.Offset)? freeEdgeLine;
   final double maxShadowOpacity;
   final StPageFlipShadowData? shadow;
 }
@@ -81,12 +83,36 @@ ui.Rect? _polygonAxisBounds(List<ui.Offset> polygon) {
 double _lineAverageX((ui.Offset, ui.Offset) line) =>
     (line.$1.dx + line.$2.dx) / 2;
 
-(ui.Offset, ui.Offset) _shiftLineToAverageX(
-  (ui.Offset, ui.Offset) line,
-  double targetAverageX,
-) {
-  final dx = targetAverageX - _lineAverageX(line);
-  return (line.$1 + ui.Offset(dx, 0), line.$2 + ui.Offset(dx, 0));
+double _resolveRectoCoverageFromFoldLine({
+  required (ui.Offset, ui.Offset) foldLine,
+  required ui.Size pageSize,
+}) {
+  if (pageSize.width <= 0) {
+    return 0.0;
+  }
+  final coveredWidth = (_lineAverageX(foldLine) / pageSize.width)
+      .clamp(0.0, 1.0)
+      .toDouble();
+  if (coveredWidth <= 0.5) {
+    return 0.0;
+  }
+  return (2.0 - 1.0 / coveredWidth).clamp(0.0, 1.0).toDouble();
+}
+
+(ui.Offset, ui.Offset) _interpolateBoundaryLine({
+  required (ui.Offset, ui.Offset) startLine,
+  required (ui.Offset, ui.Offset) endLine,
+  required double t,
+}) {
+  final clampedT = t.clamp(0.0, 1.0).toDouble();
+  ui.Offset lerp(ui.Offset a, ui.Offset b) => ui.Offset(
+    ui.lerpDouble(a.dx, b.dx, clampedT) ?? a.dx,
+    ui.lerpDouble(a.dy, b.dy, clampedT) ?? a.dy,
+  );
+  return _orderLineTopToBottom((
+    lerp(startLine.$1, endLine.$1),
+    lerp(startLine.$2, endLine.$2),
+  ));
 }
 
 StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
@@ -106,8 +132,8 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
     localPagePoint: data.localPagePoint,
     previousFoldSurfaceArea: data.flippingClipArea,
     currentResidualArea: data.bottomClipArea,
-    movingEdgeLine: data.movingEdgeLine,
-    frame: backwardLeafFrame,
+    foldLine: data.foldLine,
+    freeEdgeLine: data.freeEdgeLine,
     pageSize: data.pageSize,
   );
 
@@ -152,167 +178,166 @@ ArticlePageBackwardProjectedFrame? _buildBackwardProjectedFrame({
   required ui.Offset localPagePoint,
   required List<ui.Offset> previousFoldSurfaceArea,
   required List<ui.Offset> currentResidualArea,
-  required (ui.Offset, ui.Offset)? movingEdgeLine,
-  required ArticlePageBackwardLeafFrame frame,
+  required (ui.Offset, ui.Offset)? foldLine,
+  required (ui.Offset, ui.Offset)? freeEdgeLine,
   required ui.Size pageSize,
 }) {
   if (pageSize.width <= 0 || pageSize.height <= 0) {
     return null;
   }
-  final rawCanonicalMovingEdgeLine = movingEdgeLine == null
+  final canonicalFoldLine = foldLine == null
       ? null
-      : _orderLineTopToBottom(movingEdgeLine);
-  final canonicalMovingEdgeLine = rawCanonicalMovingEdgeLine == null
+      : _clipLineToPageRect(_orderLineTopToBottom(foldLine), pageSize);
+  final canonicalFreeEdgeLine = freeEdgeLine == null
       ? null
-      : _clipLineToPageRect(rawCanonicalMovingEdgeLine, pageSize);
-  final previousFoldSurfaceCandidate = canonicalMovingEdgeLine == null
-      ? _clipPolygonToPageRect(previousFoldSurfaceArea, pageSize)
-      : _buildCanonicalBackwardSheetPolygon(
-          movingEdgeLine: canonicalMovingEdgeLine,
-          pageSize: pageSize,
-        );
-  final previousFoldSurfacePolygon = previousFoldSurfaceCandidate.isNotEmpty
-      ? previousFoldSurfaceCandidate
-      : _clipPolygonToPageRect(previousFoldSurfaceArea, pageSize);
-  if (previousFoldSurfacePolygon.isEmpty) {
+      : _clipLineToPageRect(_orderLineTopToBottom(freeEdgeLine), pageSize);
+  final canonicalSpineLine = _orderLineTopToBottom((
+    ui.Offset.zero,
+    ui.Offset(0, pageSize.height),
+  ));
+  if (canonicalFoldLine == null || canonicalFreeEdgeLine == null) {
     return null;
   }
-  final mirroredCurrentResidualPolygon = _clipPolygonToPageRect(
+  final frontBackBoundaryFactor = _resolveRectoCoverageFromFoldLine(
+    foldLine: canonicalFoldLine,
+    pageSize: pageSize,
+  );
+  final canonicalFrontBackBoundaryLine = _interpolateBoundaryLine(
+    startLine: canonicalSpineLine,
+    endLine: canonicalFoldLine,
+    t: frontBackBoundaryFactor,
+  );
+  final resolvedFoldSurfacePolygon = _clipPolygonToPageRect(
+    previousFoldSurfaceArea,
+    pageSize,
+  );
+  if (resolvedFoldSurfacePolygon.isEmpty) {
+    return null;
+  }
+
+  final spineMid = ui.Offset(0, pageSize.height / 2);
+  final backCandidate = frontBackBoundaryFactor <= 0.001
+      ? resolvedFoldSurfacePolygon
+      : _clipPolygonByLine(
+          polygon: resolvedFoldSurfacePolygon,
+          line: canonicalFrontBackBoundaryLine,
+          keepPositive:
+              _lineSide(
+                _lineMidpoint(canonicalFoldLine),
+                canonicalFrontBackBoundaryLine,
+              ) >=
+              0,
+        );
+  final frontCandidate = frontBackBoundaryFactor > 0.001
+      ? _clipPolygonByLine(
+          polygon: resolvedFoldSurfacePolygon,
+          line: canonicalFrontBackBoundaryLine,
+          keepPositive:
+              _lineSide(spineMid, canonicalFrontBackBoundaryLine) >= 0,
+        )
+      : const <ui.Offset>[];
+  final hasValidSplit =
+      frontBackBoundaryFactor > 0.001 &&
+      backCandidate.length >= 3 &&
+      frontCandidate.length >= 3;
+  final previousBackFoldPolygon = hasValidSplit
+      ? backCandidate
+      : resolvedFoldSurfacePolygon;
+  final resolvedFrontFoldPolygon = hasValidSplit
+      ? frontCandidate
+      : const <ui.Offset>[];
+  final currentResidualPolygon = _clipPolygonToPageRect(
     currentResidualArea,
     pageSize,
   );
-  final currentResidualPolygon = mirroredCurrentResidualPolygon.isNotEmpty
-      ? mirroredCurrentResidualPolygon
-      : _buildCurrentResidualFromMovingEdge(
-          movingEdgeLine: canonicalMovingEdgeLine,
-          pageSize: pageSize,
-        );
-
-  /// Fold progress [ArticlePageBackwardLeafFrame.rectoCoverageNormalized] is
-  /// defined along the canonical BACK sheet between the spine and the
-  /// calculation right edge.
-  final sheetPageBounds = _polygonAxisBounds(previousFoldSurfacePolygon);
-  final resolvedMovingEdgeLine =
-      canonicalMovingEdgeLine ??
-      _orderLineTopToBottom((
-        ui.Offset(sheetPageBounds?.right ?? pageSize.width, 0),
-        ui.Offset(sheetPageBounds?.right ?? pageSize.width, pageSize.height),
-      ));
-  final (ui.Offset, ui.Offset) foldLine;
-  if (sheetPageBounds != null &&
-      sheetPageBounds.width > 1e-3 &&
-      sheetPageBounds.height > 1e-3) {
-    final foldX =
-        (sheetPageBounds.left +
-                (_lineAverageX(resolvedMovingEdgeLine) - sheetPageBounds.left) *
-                    frame.rectoCoverageNormalized)
-            .clamp(sheetPageBounds.left, sheetPageBounds.right)
-            .toDouble();
-    foldLine = _shiftLineToAverageX(resolvedMovingEdgeLine, foldX);
-  } else {
-    final frontRevealX = pageSize.width * frame.rectoCoverageNormalized;
-    foldLine = _shiftLineToAverageX(resolvedMovingEdgeLine, frontRevealX);
-  }
-
-  /// Page-space split, parallel to the moving paper edge so the front/back
-  /// boundary stays on the same folded sheet instead of collapsing to a
-  /// vertical progress rectangle.
-  final movingEdgeMid = ui.Offset(
-    (resolvedMovingEdgeLine.$1.dx + resolvedMovingEdgeLine.$2.dx) / 2,
-    (resolvedMovingEdgeLine.$1.dy + resolvedMovingEdgeLine.$2.dy) / 2,
-  );
-  final keepMovingSidePositive = _lineSide(movingEdgeMid, foldLine) >= 0;
-  final backClip = _clipPolygonByLine(
-    polygon: previousFoldSurfacePolygon,
-    line: foldLine,
-    keepPositive: keepMovingSidePositive,
-  );
-  final frontClip = _clipPolygonByLine(
-    polygon: previousFoldSurfacePolygon,
-    line: foldLine,
-    keepPositive: !keepMovingSidePositive,
-  );
-  List<ui.Offset> fallbackFrontClip() {
-    if (sheetPageBounds == null) {
-      return const <ui.Offset>[];
-    }
-    return <ui.Offset>[
-      ui.Offset(sheetPageBounds.left, sheetPageBounds.top),
-      foldLine.$1,
-      foldLine.$2,
-      ui.Offset(sheetPageBounds.left, sheetPageBounds.bottom),
-    ];
-  }
-
-  late final List<ui.Offset> previousBackFoldPolygon;
-  late final List<ui.Offset> previousFrontFoldPolygon;
-  if (frame.rectoCoverageNormalized <= 0.02) {
-    previousBackFoldPolygon = previousFoldSurfacePolygon;
-    previousFrontFoldPolygon = const <ui.Offset>[];
-  } else if (frame.rectoCoverageNormalized >= 0.98) {
-    previousFrontFoldPolygon = frontClip.length >= 3
-        ? frontClip
-        : fallbackFrontClip();
-
-    /// Keep >=3 verts so diagnostics bounds stay defined when line-clipping
-    /// degenerates at the page edge.
-    previousBackFoldPolygon = backClip.length >= 3
-        ? backClip
-        : previousFoldSurfacePolygon;
-  } else {
-    previousBackFoldPolygon = backClip.length >= 3
-        ? backClip
-        : previousFoldSurfacePolygon;
-    previousFrontFoldPolygon = frontClip.length >= 3
-        ? frontClip
-        : fallbackFrontClip();
-  }
   return ArticlePageBackwardProjectedFrame(
-    foldLine: foldLine,
-    projectedRightEdgeLine: resolvedMovingEdgeLine,
-    foldSurfaceMovingEdgeLine: resolvedMovingEdgeLine,
+    foldLine: canonicalFoldLine,
+    projectedRightEdgeLine: canonicalFreeEdgeLine,
+    frontBackBoundaryLine: canonicalFrontBackBoundaryLine,
+    foldSurfaceMovingEdgeLine: canonicalFreeEdgeLine,
     replayLocalPoint: localPagePoint,
     previousBackPagePolygon: const <ui.Offset>[],
     previousLaidFrontPolygon: const <ui.Offset>[],
-    previousFoldSurfacePolygon: previousFoldSurfacePolygon,
+    previousFoldSurfacePolygon: resolvedFoldSurfacePolygon,
     previousBackFoldPolygon: previousBackFoldPolygon,
-    previousFrontFoldPolygon: previousFrontFoldPolygon,
+    previousFrontFoldPolygon: resolvedFrontFoldPolygon,
     previousBackPolygon: previousBackFoldPolygon,
-    previousFrontPolygon: previousFrontFoldPolygon,
+    previousFrontPolygon: resolvedFrontFoldPolygon,
     currentResidualPolygon: currentResidualPolygon,
-    edgeEnteredPage: frame.rectoCoverageNormalized > 0.02,
-    foldLineSource: 'backCalculationParallelBoundary',
-    edgeLineSource: canonicalMovingEdgeLine == null
-        ? 'degeneratePageRightEdgeFallback'
-        : 'backCalculationRectRightEdge',
+    edgeEnteredPage:
+        previousBackFoldPolygon.isNotEmpty ||
+        resolvedFrontFoldPolygon.isNotEmpty,
+    foldLineSource: 'backwardCanonicalFoldLine',
+    edgeLineSource: 'backwardCanonicalFreeEdgeLine',
   );
 }
 
-List<ui.Offset> _buildCanonicalBackwardSheetPolygon({
-  required (ui.Offset, ui.Offset) movingEdgeLine,
-  required ui.Size pageSize,
-}) {
-  final sheet = <ui.Offset>[
-    ui.Offset.zero,
-    movingEdgeLine.$1,
-    movingEdgeLine.$2,
-    ui.Offset(0, pageSize.height),
-  ];
-  return _clipPolygonToPageRect(sheet, pageSize);
-}
-
-(ui.Offset, ui.Offset) _clipLineToPageRect(
+(ui.Offset, ui.Offset)? _clipLineToPageRect(
   (ui.Offset, ui.Offset) line,
   ui.Size pageSize,
 ) {
-  ui.Offset clampPoint(ui.Offset point) {
-    return ui.Offset(
-      point.dx.clamp(0.0, pageSize.width).toDouble(),
-      point.dy.clamp(0.0, pageSize.height).toDouble(),
-    );
+  final orderedLine = _orderLineTopToBottom(line);
+  final bounds = ui.Rect.fromLTWH(
+    -0.5,
+    -0.5,
+    pageSize.width + 1,
+    pageSize.height + 1,
+  );
+  final rectEdges = <List<ui.Offset>>[
+    <ui.Offset>[ui.Offset.zero, ui.Offset(pageSize.width, 0)],
+    <ui.Offset>[
+      ui.Offset(pageSize.width, 0),
+      ui.Offset(pageSize.width, pageSize.height),
+    ],
+    <ui.Offset>[
+      ui.Offset(pageSize.width, pageSize.height),
+      ui.Offset(0, pageSize.height),
+    ],
+    <ui.Offset>[ui.Offset(0, pageSize.height), ui.Offset.zero],
+  ];
+  final intersections = <ui.Offset>[];
+  for (final edge in rectEdges) {
+    ui.Offset? point;
+    try {
+      point = pointInRect(
+        bounds,
+        intersectLines(<ui.Offset>[orderedLine.$1, orderedLine.$2], edge),
+      );
+    } catch (_) {
+      continue;
+    }
+    if (point != null &&
+        intersections.every(
+          (existing) => distanceBetweenPoints(existing, point) > 0.5,
+        )) {
+      intersections.add(point);
+    }
   }
+  if (intersections.length >= 2) {
+    intersections.sort((a, b) {
+      final byY = a.dy.compareTo(b.dy);
+      return byY == 0 ? a.dx.compareTo(b.dx) : byY;
+    });
+    return _orderLineTopToBottom((intersections.first, intersections.last));
+  }
+  final insidePoints = <ui.Offset>[
+    if (pointInRect(bounds, orderedLine.$1) != null) orderedLine.$1,
+    if (pointInRect(bounds, orderedLine.$2) != null) orderedLine.$2,
+  ];
+  if (insidePoints.length >= 2) {
+    return _orderLineTopToBottom((insidePoints.first, insidePoints.last));
+  }
+  if (intersections.length == 1 && insidePoints.length == 1) {
+    return _orderLineTopToBottom((intersections.first, insidePoints.first));
+  }
+  return null;
+}
 
-  return _orderLineTopToBottom((clampPoint(line.$1), clampPoint(line.$2)));
+ui.Offset _lineMidpoint((ui.Offset, ui.Offset) line) {
+  return ui.Offset(
+    (line.$1.dx + line.$2.dx) / 2,
+    (line.$1.dy + line.$2.dy) / 2,
+  );
 }
 
 List<ui.Offset> _buildCurrentResidualFromMovingEdge({

@@ -18,7 +18,7 @@ void main() {
 
     test('getUserProfile 返回完整档案', () async {
       final profile = await repo.getUserProfile('nature_photographer');
-      expect(profile.profileSubjectId, 'nature_photographer');
+      expect(profile.subAccountId, 'nature_photographer');
       expect(profile.displayName, isNotEmpty);
       expect(profile.avatarUrl, isNotEmpty);
       expect(profile.followerCount, greaterThan(0));
@@ -105,7 +105,7 @@ void main() {
       expect(following, isList);
       expect(following, isNotEmpty);
       for (final u in following) {
-        expect(u.profileSubjectId, isNotEmpty);
+        expect(u.subAccountId, isNotEmpty);
         expect(u.displayName, isNotEmpty);
         expect(u.avatarUrl, isNotEmpty);
       }
@@ -116,7 +116,7 @@ void main() {
       expect(followers, isList);
       expect(followers, isNotEmpty);
       for (final u in followers) {
-        expect(u.profileSubjectId, isNotEmpty);
+        expect(u.subAccountId, isNotEmpty);
         expect(u.displayName, isNotEmpty);
       }
     });
@@ -269,7 +269,7 @@ void main() {
 
     test('不存在的 userId — getUserProfile 返回默认档案', () async {
       final profile = await repo.getUserProfile('nonexistent_user_xyz');
-      expect(profile.profileSubjectId, 'nonexistent_user_xyz');
+      expect(profile.subAccountId, 'nonexistent_user_xyz');
       expect(profile.displayName, isNotEmpty);
     });
 

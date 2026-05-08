@@ -1,0 +1,131 @@
+{
+  "schemaVersion": "shared-media-composition-rules.v1",
+  "description": "共享池真实图片扩容的规模、角色、内容和环境一致性规则。",
+  "targets": {
+    "themeCount": 12,
+    "userCount": 96,
+    "postsPerTheme": 32,
+    "crossThemePostCount": 96,
+    "circleCount": 72,
+    "directConversationCount": 95,
+    "groupConversationCount": 75,
+    "mediaAssetCountFloor": 1000,
+    "entityCountFloor": 1000
+  },
+  "roles": [
+    "leadAuthor",
+    "secondaryAuthor",
+    "circleOwner",
+    "groupOrganizer",
+    "friendContact",
+    "commenter",
+    "casualMember",
+    "currentUserVariant"
+  ],
+  "roleDisplayNames": {
+    "leadAuthor": "主作者",
+    "secondaryAuthor": "副作者",
+    "circleOwner": "圈主",
+    "groupOrganizer": "组织者",
+    "friendContact": "联系人",
+    "commenter": "评论者",
+    "casualMember": "成员",
+    "currentUserVariant": "当前用户镜像"
+  },
+  "roleHierarchy": [
+    "leadAuthor",
+    "secondaryAuthor",
+    "circleOwner",
+    "groupOrganizer",
+    "friendContact",
+    "commenter",
+    "casualMember",
+    "currentUserVariant"
+  ],
+  "perThemeRoleSlots": {
+    "leadAuthor": 1,
+    "secondaryAuthor": 1,
+    "circleOwner": 1,
+    "groupOrganizer": 1,
+    "friendContact": 2,
+    "commenter": 1,
+    "casualMember": 1,
+    "currentUserVariant": 0
+  },
+  "crossThemePairs": [
+    ["photography", "travel"],
+    ["cityWalk", "coffee"],
+    ["food", "lifestyle"],
+    ["tech", "designWriting"],
+    ["outdoor", "pet"],
+    ["fitness", "lifestyle"]
+  ],
+  "associationRules": {
+    "userThemeTags": "user.primaryTheme + user.secondaryThemes",
+    "postThemeRefs": "derive from authored posts primaryTheme/secondaryThemes",
+    "circleThemeRefs": "derive from owned circles and memberships primaryTheme/secondaryThemes",
+    "groupPersonaMix": "derive from group conversation member roles ordered by conversation member order",
+    "sameSourceProjection": [
+      "user.profile.avatarUrl",
+      "content.post.authorAvatarUrl",
+      "chat.contact.avatarUrl",
+      "chat.member.avatarUrl",
+      "chat.message.senderAvatarUrlSnapshot"
+    ]
+  },
+  "postTypeMix": {
+    "heroPost": 8,
+    "galleryPost": 6,
+    "momentPost": 8,
+    "articlePost": 5,
+    "videoCoverPost": 5
+  },
+  "circleTypes": [
+    "flagshipCircle",
+    "nicheCircle",
+    "eventCircle",
+    "localHubCircle",
+    "hybridCircle"
+  ],
+  "chatTypes": [
+    "directConversation",
+    "interestGroupConversation",
+    "circlePublicGroupConversation"
+  ],
+  "membership": {
+    "membersPerCircle": 6,
+    "membersPerHybridCircle": 8,
+    "membersPerGroupConversation": 6,
+    "commentsEveryNPosts": 4
+  },
+  "formats": {
+    "coreLegacy": "png",
+    "generatedPrimary": "jpg",
+    "groupComposite": "png"
+  },
+  "environmentParity": {
+    "alpha": {
+      "localMock": true,
+      "serviceSeed": true,
+      "delivery": [
+        "repo-fixture-json",
+        "shared-media-root",
+        "service-test-store"
+      ]
+    },
+    "beta": {
+      "remote": true,
+      "delivery": [
+        "service-test-store",
+        "gateway-cdn-url-derivation"
+      ]
+    },
+    "gamma": {
+      "remote": true,
+      "delivery": [
+        "gamma-test-namespace",
+        "gateway-cdn-url-derivation"
+      ]
+    }
+  }
+}

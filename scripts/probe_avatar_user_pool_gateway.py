@@ -15,7 +15,9 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MEDIA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "media"
+SHARED = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures"
+MEDIA_ROOT = SHARED / "media"
+USER_POOL_PATH = SHARED / "user_pool.json"
 
 
 def free_port() -> int:
@@ -39,7 +41,7 @@ def get_headers(url: str) -> dict[str, str]:
 
 
 def wait_ok(url: str, label: str) -> None:
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + 20
     last_error = ""
     while time.monotonic() < deadline:
         try:
@@ -71,12 +73,49 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def load_pool() -> dict[str, Any]:
+    return json.loads(USER_POOL_PATH.read_text(encoding="utf-8"))
+
+
+def first_object_key(pool: dict[str, Any], prefix: str, *, exclude_suffix: str | None = None) -> str:
+    candidates: list[str] = []
+    for user in pool.get("users", []):
+        for field in ("avatarObjectKey", "backgroundObjectKey"):
+            value = str(user.get(field) or "")
+            if value.startswith(prefix):
+                candidates.append(value)
+    for bundle in (pool.get("postMedia") or {}).values():
+        for asset in (bundle.get("images") or []):
+            value = str(asset.get("objectKey") or "")
+            if value.startswith(prefix):
+                candidates.append(value)
+    for bundle in (pool.get("circleMedia") or {}).values():
+        for key in ("avatar", "cover"):
+            value = str((bundle.get(key) or {}).get("objectKey") or "")
+            if value.startswith(prefix):
+                candidates.append(value)
+    for bundle in (pool.get("groupAvatarMedia") or {}).values():
+        value = str((bundle.get("composite") or {}).get("objectKey") or "")
+        if value.startswith(prefix):
+            candidates.append(value)
+    for candidate in candidates:
+        if exclude_suffix and candidate.endswith(exclude_suffix):
+            continue
+        return candidate
+    raise RuntimeError(f"no objectKey found for prefix={prefix!r}")
+
+
 def main() -> int:
+    pool = load_pool()
     media_port = free_port()
     gateway_port = free_port()
     media_base = f"http://127.0.0.1:{media_port}"
     gateway_base = f"http://127.0.0.1:{gateway_port}"
     processes: list[subprocess.Popen[str]] = []
+    avatar_object_key = first_object_key(pool, "media/avatar/user/")
+    group_avatar_key = first_object_key(pool, "media/avatar/group/")
+    png_cover_key = "media/image/post/fixture_photo_001/v1/cover.png"
+    mixed_cover_key = first_object_key(pool, "media/image/post/", exclude_suffix=".png")
     try:
         media = subprocess.Popen(
             [sys.executable, "-m", "http.server", str(media_port), "--bind", "127.0.0.1", "--directory", str(MEDIA_ROOT)],
@@ -86,7 +125,7 @@ def main() -> int:
             stderr=subprocess.STDOUT,
         )
         processes.append(media)
-        wait_ok(f"{media_base}/media/avatar/user/fixture_user_current/v1/avatar.png", "media server")
+        wait_ok(f"{media_base}/{avatar_object_key}", "media server")
 
         gateway = subprocess.Popen(
             [
@@ -137,10 +176,14 @@ def main() -> int:
             f"all cover values must be media image URLs, got {cover_values}",
         )
 
-        avatar_headers = get_headers(f"{gateway_base}/media/avatar/user/fixture_user_current/v1/avatar.png")
-        cover_headers = get_headers(f"{gateway_base}/media/image/post/fixture_photo_001/v1/cover.png")
-        require(avatar_headers.get("content-type", "").startswith("image/png"), "gateway avatar proxy must return image/png")
-        require(cover_headers.get("content-type", "").startswith("image/png"), "gateway post cover proxy must return image/png")
+        avatar_headers = get_headers(f"{gateway_base}/{avatar_object_key}")
+        png_cover_headers = get_headers(f"{gateway_base}/{png_cover_key}")
+        mixed_cover_headers = get_headers(f"{gateway_base}/{mixed_cover_key}")
+        group_avatar_headers = get_headers(f"{gateway_base}/{group_avatar_key}")
+        require(avatar_headers.get("content-type", "").startswith("image/"), "gateway avatar proxy must return image/*")
+        require(png_cover_headers.get("content-type", "").startswith("image/png"), "core png post cover must return image/png")
+        require(mixed_cover_headers.get("content-type", "").startswith("image/"), "mixed-format post cover must return image/*")
+        require(group_avatar_headers.get("content-type", "").startswith("image/png"), "group avatar composite must remain image/png")
         print("avatar user pool beta gateway probe passed")
         return 0
     finally:

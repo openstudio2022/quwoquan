@@ -69,18 +69,17 @@ func pathParam(r *http.Request, name string) string {
 func isParamSlot(_ []string, _ int, _ string) bool { return false }
 
 func userIDFromHeader(r *http.Request) string {
-	return r.Header.Get("X-Client-User-Id")
+	return strings.TrimSpace(r.Header.Get("X-Client-User-Id"))
 }
 
-func profileSubjectIDFromHeader(r *http.Request) string {
-	return strings.TrimSpace(r.Header.Get("X-Profile-Subject-Id"))
-}
-
-func personaIDFromHeader(r *http.Request) string {
-	return strings.TrimSpace(r.Header.Get("X-Persona-Id"))
+func subAccountIDFromHeader(r *http.Request) string {
+	return strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
 }
 
 func personaContextVersionFromHeader(r *http.Request) string {
+	if value := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Context-Version")); value != "" {
+		return value
+	}
 	return strings.TrimSpace(r.Header.Get("X-Persona-Context-Version"))
 }
 

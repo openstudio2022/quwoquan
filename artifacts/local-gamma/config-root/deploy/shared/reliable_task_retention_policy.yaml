@@ -1,0 +1,55 @@
+version: 1
+policies:
+  reliabletask.retention.standard.v1:
+    outbox:
+      dispatchedTtl: 168h
+      failedTtl: 720h
+      archiveAfter: 24h
+    task:
+      doneTtl: 168h
+      deadTtl: 2160h
+      archiveAfter: 24h
+    notification:
+      dispatchedTtl: 168h
+      failedTtl: 720h
+      archiveAfter: 24h
+    dlq:
+      ttl: 2160h
+      requiresManualRecoveryPlan: true
+  reliabletask.retention.notification.v1:
+    outbox:
+      dispatchedTtl: 168h
+      failedTtl: 2160h
+      archiveAfter: 24h
+    task:
+      doneTtl: 168h
+      deadTtl: 2160h
+      archiveAfter: 24h
+    notification:
+      dispatchedTtl: 168h
+      failedTtl: 2160h
+      archiveAfter: 24h
+    deliveryLedger:
+      deliveredTtl: 168h
+      failedTtl: 2160h
+      archiveAfter: 24h
+    dlq:
+      ttl: 2160h
+      requiresManualRecoveryPlan: true
+
+rateLimits:
+  reliabletask.rate.chat_avatar.v1:
+    dispatchPerSecond: 50
+    claimPerSecond: 20
+    retryPerSecond: 10
+    priority: high
+  reliabletask.rate.projection.v1:
+    dispatchPerSecond: 200
+    claimPerSecond: 100
+    retryPerSecond: 30
+    priority: normal
+  reliabletask.rate.notification_fanout.v1:
+    dispatchPerSecond: 100
+    claimPerSecond: 50
+    retryPerSecond: 20
+    priority: low

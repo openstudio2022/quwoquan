@@ -1,0 +1,18 @@
+{
+  "capturedAt": "2026-05-04T18:36:28.070307Z",
+  "suite": "assistant-device-matrix",
+  "environment": "beta",
+  "device": {
+    "id": "EAF3A223-E742-433D-B116-A152DCC7FF84",
+    "name": "iPad Pro (12.9-inch) (6th generation)",
+    "targetPlatform": "ios",
+    "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+    "emulator": true,
+    "ephemeral": false,
+    "screenClass": "tablet",
+    "gatewayBaseUrl": "http://127.0.0.1:18080"
+  },
+  "extra": {
+    "screenClass": "tablet"
+  }
+}

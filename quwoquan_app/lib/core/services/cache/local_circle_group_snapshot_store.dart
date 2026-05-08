@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_group_wire_normalize.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -116,14 +117,14 @@ class LocalCircleGroupSnapshotStore {
     await batch.commit(noResult: true);
   }
 
-  Future<List<Map<String, dynamic>>> searchGroups({
+  Future<List<LocalCircleGroupSnapshotRecord>> searchGroups({
     required LocalSearchNamespace namespace,
     required String query,
     int limit = 20,
   }) async {
     final normalizedQuery = _normalize(query);
     if (normalizedQuery == null) {
-      return const <Map<String, dynamic>>[];
+      return const <LocalCircleGroupSnapshotRecord>[];
     }
     final database = await _database;
     final rows = await database.rawQuery(
@@ -138,12 +139,16 @@ class LocalCircleGroupSnapshotStore {
       <Object?>[namespace.key, '%$normalizedQuery%', limit],
     );
     return rows
-        .map((row) => _decodePayload(row['payload_json']))
-        .where((item) => item.isNotEmpty)
+        .map((row) => LocalCircleGroupSnapshotRecord.fromWireMap(
+              _decodePayload(row['payload_json']),
+            ))
+        .where((item) => item.groupId.isNotEmpty && item.circleId.isNotEmpty)
         .map((item) {
-          item['matchedField'] = _matchedField(query, item);
-          item['highlightText'] = _highlightText(item, item['matchedField']);
-          return item;
+          final matchedField = _matchedField(query, item);
+          return item.copyWith(
+            matchedField: matchedField,
+            highlightText: _highlightText(item, matchedField),
+          );
         })
         .toList(growable: false);
   }
@@ -275,15 +280,18 @@ class LocalCircleGroupSnapshotStore {
     );
   }
 
-  String _matchedField(String query, Map<String, dynamic> payload) {
+  String _matchedField(
+    String query,
+    LocalCircleGroupSnapshotRecord payload,
+  ) {
     final normalizedQuery = _normalize(query);
     if (normalizedQuery == null) {
       return '';
     }
     for (final entry in <String, String>{
-      'name': _string(payload['name']),
-      'description': _string(payload['description']),
-      'circleName': _string(payload['circleName']),
+      'name': payload.name,
+      'description': payload.description,
+      'circleName': payload.circleName,
     }.entries) {
       final value = _normalize(entry.value);
       if (value != null && value.contains(normalizedQuery)) {
@@ -293,15 +301,18 @@ class LocalCircleGroupSnapshotStore {
     return '';
   }
 
-  String _highlightText(Map<String, dynamic> payload, Object? matchedField) {
-    switch (_string(matchedField)) {
+  String _highlightText(
+    LocalCircleGroupSnapshotRecord payload,
+    String matchedField,
+  ) {
+    switch (matchedField) {
       case 'description':
-        return _string(payload['description']);
+        return payload.description;
       case 'circleName':
-        return _string(payload['circleName']);
+        return payload.circleName;
       case 'name':
       default:
-        return _string(payload['name']);
+        return payload.name;
     }
   }
 

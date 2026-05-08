@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "scenario": "chat.group_avatar.sync_display_e2e",
+  "status": "passed",
+  "failureCategory": "",
+  "blockingReason": "",
+  "retryable": false,
+  "startedAt": "2026-05-05T19:02:42.683558Z",
+  "endedAt": "2026-05-05T19:04:43.929943Z",
+  "environment": {
+    "env": "local-gamma",
+    "runtimeKind": "local-gamma-mirror",
+    "gatewayBaseUrl": "http://127.0.0.1:18180",
+    "mediaBaseUrl": "http://127.0.0.1:18180",
+    "commitSha": "",
+    "githubRunId": ""
+  },
+  "device": {},
+  "conversation": {
+    "conversationId": "459251794d8c08f7c306531f",
+    "creatorUserId": "user_test_001",
+    "memberIds": [
+      "user_test_001",
+      "user_test_002",
+      "user_test_003"
+    ],
+    "addedMemberId": "user_test_004",
+    "removedMemberId": "user_test_004",
+    "initialAvatarUrl": "http://127.0.0.1:18180/media/avatar/default/group/v1/default.png?v=1",
+    "finalAvatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2",
+    "groupAvatarVersionBefore": 0,
+    "groupAvatarVersionAfterAdd": 1,
+    "groupAvatarVersionAfterRemove": 2,
+    "initialAvatarUrlResolved": "http://127.0.0.1:18180/media/avatar/default/group/v1/default.png?v=1",
+    "finalAvatarUrlResolved": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2"
+  },
+  "serviceEvidence": {
+    "taskOutbox": {
+      "status": "failed",
+      "error": "Expecting value: line 1 column 1 (char 0)",
+      "output": "a354:user_test_002\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_002\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.786Z\",\"deliveredSeq\":{\"high\":0,\"low\":71,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22a581c20c7f982bf88ea354:user_test_003\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_003\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.787Z\",\"deliveredSeq\":{\"high\":0,\"low\":71,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22a581c20c7f982bf88ea354:user_test_004\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_004\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.787Z\",\"deliveredSeq\":{\"high\":0,\"low\":36,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_001\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_001\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.188Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_002\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_002\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.189Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_003\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_003\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.189Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null}]}\n\nrs0 [direct: primary] test> "
+    },
+    "asyncTask": {
+      "status": "failed",
+      "error": "Expecting value: line 1 column 1 (char 0)",
+      "output": "a354:user_test_002\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_002\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.786Z\",\"deliveredSeq\":{\"high\":0,\"low\":71,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22a581c20c7f982bf88ea354:user_test_003\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_003\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.787Z\",\"deliveredSeq\":{\"high\":0,\"low\":71,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22a581c20c7f982bf88ea354:user_test_004\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_004\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.787Z\",\"deliveredSeq\":{\"high\":0,\"low\":36,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_001\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_001\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.188Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_002\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_002\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.189Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_003\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_003\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.189Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null}]}\n\nrs0 [direct: primary] test> "
+    },
+    "notificationOutbox": {
+      "status": "failed",
+      "error": "Expecting value: line 1 column 1 (char 0)",
+      "output": "a354:user_test_002\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_002\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.786Z\",\"deliveredSeq\":{\"high\":0,\"low\":71,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22a581c20c7f982bf88ea354:user_test_003\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_003\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.787Z\",\"deliveredSeq\":{\"high\":0,\"low\":71,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22a581c20c7f982bf88ea354:user_test_004\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_004\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.787Z\",\"deliveredSeq\":{\"high\":0,\"low\":36,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_001\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_001\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.188Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_002\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_002\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.189Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_003\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_003\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.189Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null}]}\n\nrs0 [direct: primary] test> "
+    },
+    "deliveryLedger": {
+      "status": "failed",
+      "error": "Expecting value: line 1 column 1 (char 0)",
+      "output": "a354:user_test_002\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_002\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.786Z\",\"deliveredSeq\":{\"high\":0,\"low\":71,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22a581c20c7f982bf88ea354:user_test_003\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_003\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.787Z\",\"deliveredSeq\":{\"high\":0,\"low\":71,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22a581c20c7f982bf88ea354:user_test_004\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22a581c20c7f982bf88ea354\",\"recipientId\":\"user_test_004\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:03:42.787Z\",\"deliveredSeq\":{\"high\":0,\"low\":36,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_001\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_001\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.188Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_002\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_002\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.189Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null},{\"_id\":\"notification-22d3471d55c18568a0504de3:user_test_003\",\"attempts\":0,\"eventType\":\"conversation.avatar.updated\",\"notificationId\":\"notification-22d3471d55c18568a0504de3\",\"recipientId\":\"user_test_003\",\"status\":\"delivered\",\"updatedAt\":\"2026-05-05T19:04:43.189Z\",\"deliveredSeq\":{\"high\":0,\"low\":72,\"unsigned\":false},\"lastFailure\":null}]}\n\nrs0 [direct: primary] test> "
+    },
+    "syncPatches": [
+      {
+        "syncSeq": 71,
+        "type": "conversation.avatar.updated",
+        "userId": "user_test_001",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v1/562bf87ef47cdfa0.png?v=1",
+          "conversationId": "459251794d8c08f7c306531f",
+          "groupAvatarAssetId": "ga_459251794d8c08f7c306531f_v1",
+          "groupAvatarSourceHash": "562bf87ef47cdfa0c271d727ce8e998173db5b2d7b0ea380d9ac026a18294448",
+          "groupAvatarVersion": "1",
+          "updatedAt": "2026-05-05 19:03:42.781376073 +0000 UTC m=+199.516850788"
+        },
+        "occurredAt": "2026-05-05T19:03:42.786045509Z"
+      },
+      {
+        "syncSeq": 71,
+        "type": "conversation.avatar.updated",
+        "userId": "user_test_002",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v1/562bf87ef47cdfa0.png?v=1",
+          "conversationId": "459251794d8c08f7c306531f",
+          "groupAvatarAssetId": "ga_459251794d8c08f7c306531f_v1",
+          "groupAvatarSourceHash": "562bf87ef47cdfa0c271d727ce8e998173db5b2d7b0ea380d9ac026a18294448",
+          "groupAvatarVersion": "1",
+          "updatedAt": "2026-05-05 19:03:42.781376073 +0000 UTC m=+199.516850788"
+        },
+        "occurredAt": "2026-05-05T19:03:42.786538742Z"
+      },
+      {
+        "syncSeq": 71,
+        "type": "conversation.avatar.updated",
+        "userId": "user_test_003",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v1/562bf87ef47cdfa0.png?v=1",
+          "conversationId": "459251794d8c08f7c306531f",
+          "groupAvatarAssetId": "ga_459251794d8c08f7c306531f_v1",
+          "groupAvatarSourceHash": "562bf87ef47cdfa0c271d727ce8e998173db5b2d7b0ea380d9ac026a18294448",
+          "groupAvatarVersion": "1",
+          "updatedAt": "2026-05-05 19:03:42.781376073 +0000 UTC m=+199.516850788"
+        },
+        "occurredAt": "2026-05-05T19:03:42.786996617Z"
+      },
+      {
+        "syncSeq": 36,
+        "type": "conversation.avatar.updated",
+        "userId": "user_test_004",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v1/562bf87ef47cdfa0.png?v=1",
+          "conversationId": "459251794d8c08f7c306531f",
+          "groupAvatarAssetId": "ga_459251794d8c08f7c306531f_v1",
+          "groupAvatarSourceHash": "562bf87ef47cdfa0c271d727ce8e998173db5b2d7b0ea380d9ac026a18294448",
+          "groupAvatarVersion": "1",
+          "updatedAt": "2026-05-05 19:03:42.781376073 +0000 UTC m=+199.516850788"
+        },
+        "occurredAt": "2026-05-05T19:03:42.787417256Z"
+      },
+      {
+        "syncSeq": 72,
+        "type": "conversation.avatar.updated",
+        "userId": "user_test_001",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2",
+          "conversationId": "459251794d8c08f7c306531f",
+          "groupAvatarAssetId": "ga_459251794d8c08f7c306531f_v2",
+          "groupAvatarSourceHash": "d0a9ecb99b950ecb6231d1e2a41f1b89ebf65e24786f440def46883a66582edb",
+          "groupAvatarVersion": "2",
+          "updatedAt": "2026-05-05 19:04:43.182834667 +0000 UTC m=+259.918309340"
+        },
+        "occurredAt": "2026-05-05T19:04:43.188683571Z"
+      },
+      {
+        "syncSeq": 72,
+        "type": "conversation.avatar.updated",
+        "userId": "user_test_002",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2",
+          "conversationId": "459251794d8c08f7c306531f",
+          "groupAvatarAssetId": "ga_459251794d8c08f7c306531f_v2",
+          "groupAvatarSourceHash": "d0a9ecb99b950ecb6231d1e2a41f1b89ebf65e24786f440def46883a66582edb",
+          "groupAvatarVersion": "2",
+          "updatedAt": "2026-05-05 19:04:43.182834667 +0000 UTC m=+259.918309340"
+        },
+        "occurredAt": "2026-05-05T19:04:43.189168167Z"
+      },
+      {
+        "syncSeq": 72,
+        "type": "conversation.avatar.updated",
+        "userId": "user_test_003",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2",
+          "conversationId": "459251794d8c08f7c306531f",
+          "groupAvatarAssetId": "ga_459251794d8c08f7c306531f_v2",
+          "groupAvatarSourceHash": "d0a9ecb99b950ecb6231d1e2a41f1b89ebf65e24786f440def46883a66582edb",
+          "groupAvatarVersion": "2",
+          "updatedAt": "2026-05-05 19:04:43.182834667 +0000 UTC m=+259.918309340"
+        },
+        "occurredAt": "2026-05-05T19:04:43.189606499Z"
+      }
+    ]
+  },
+  "serviceEndpointEvidence": {
+    "healthz": "http://127.0.0.1:18180/healthz",
+    "chatConversations": "/v1/chat/conversations",
+    "userSync": "/v1/user/sync",
+    "media": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2"
+  },
+  "uiEvidence": {
+    "conversationListAvatarVisible": false,
+    "conversationDetailAvatarVisible": false,
+    "avatarImageLoaded": true,
+    "senderAvatarPreserved": true,
+    "screenshots": []
+  },
+  "steps": [
+    {
+      "name": "healthz",
+      "status": "passed",
+      "at": "2026-05-05T19:02:42.683903Z"
+    },
+    {
+      "name": "create_conversation",
+      "status": "passed",
+      "at": "2026-05-05T19:02:42.695216Z",
+      "conversationId": "459251794d8c08f7c306531f",
+      "avatarUrl": "http://127.0.0.1:18180/media/avatar/default/group/v1/default.png?v=1"
+    },
+    {
+      "name": "add_member_avatar_update",
+      "status": "passed",
+      "at": "2026-05-05T19:03:42.971117Z",
+      "version": 1,
+      "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v1/562bf87ef47cdfa0.png?v=1"
+    },
+    {
+      "name": "sender_avatar_snapshot",
+      "status": "passed",
+      "at": "2026-05-05T19:03:42.987127Z",
+      "messageId": "c51db4ed5fa849122a605da1",
+      "verificationSource": "message_list"
+    },
+    {
+      "name": "remove_member_avatar_update",
+      "status": "passed",
+      "at": "2026-05-05T19:04:43.261749Z",
+      "version": 2,
+      "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2"
+    },
+    {
+      "name": "media_check",
+      "status": "passed",
+      "at": "2026-05-05T19:04:43.274497Z",
+      "avatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2",
+      "resolvedAvatarUrl": "http://127.0.0.1:18180/media/avatar/conversation/459251794d8c08f7c306531f/v2/d0a9ecb99b950ecb.png?v=2"
+    }
+  ]
+}

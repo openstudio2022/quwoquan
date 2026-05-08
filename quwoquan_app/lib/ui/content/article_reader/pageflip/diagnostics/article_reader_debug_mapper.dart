@@ -12,12 +12,21 @@ class ArticleReaderDebugMapper {
     required ArticleFlipPipelineOutput output,
     required ArticleFlipPipelineInput input,
   }) {
-    final backwardGeometry = output.direction == StPageFlipDirection.back
+    final backwardProjectedFrame = input.renderFrame.backwardProjectedFrame;
+    final backwardGeometry =
+        output.direction == StPageFlipDirection.back &&
+            backwardProjectedFrame != null
         ? resolveBackwardFoldFrameGeometry(
             flippingArea: input.renderFrame.flippingClipArea,
             bottomArea: input.renderFrame.bottomClipArea,
             anchor: input.renderFrame.flippingAnchor,
             angle: input.renderFrame.angle,
+            foldLine: backwardProjectedFrame.foldLine,
+            freeEdgeLine: backwardProjectedFrame.projectedRightEdgeLine,
+            frontBackBoundaryLine: backwardProjectedFrame.frontBackBoundaryLine,
+            rectoCoverageNormalized:
+                input.renderFrame.backwardLeafFrame?.rectoCoverageNormalized ??
+                0,
             bounds: input.scene.layout.bounds,
             pageSize: input.pageSize,
             pageViewportRect: resolveBookPageRect(
@@ -52,6 +61,17 @@ class ArticleReaderDebugMapper {
                   ? null
                   : articleDiagnosticPolygonSignature(
                       backwardGeometry.previousFrontViewportPolygon,
+                    ),
+              sheetPolygonPoints: backwardGeometry == null
+                  ? null
+                  : articleDiagnosticPolygonSignature(
+                      backwardGeometry.sheetViewportPolygon,
+                    ),
+              bottomClipPolygonPoints:
+                  input.renderFrame.bottomClipArea.length < 3
+                  ? null
+                  : articleDiagnosticPolygonSignature(
+                      input.renderFrame.bottomClipArea,
                     ),
               currentPolygonPoints: backwardGeometry == null
                   ? null

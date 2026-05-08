@@ -1,0 +1,506 @@
+{
+  "schemaVersion": 1,
+  "scenario": "chat.group_avatar.sync_display_e2e",
+  "status": "passed",
+  "failureCategory": "",
+  "blockingReason": "",
+  "retryable": false,
+  "startedAt": "2026-05-07T01:44:29.816110Z",
+  "endedAt": "2026-05-07T01:44:43.379763Z",
+  "environment": {
+    "env": "beta",
+    "runtimeKind": "local-stack",
+    "gatewayBaseUrl": "http://127.0.0.1:18080",
+    "mediaBaseUrl": "http://127.0.0.1:18088",
+    "commitSha": "",
+    "githubRunId": ""
+  },
+  "device": {},
+  "conversation": {
+    "conversationId": "fde2ce7a1605be88af82fc96",
+    "creatorUserId": "fixture_user_current",
+    "memberIds": [
+      "fixture_user_current",
+      "fixture_user_friend",
+      "fixture_user_weekend_1"
+    ],
+    "addedMemberId": "fixture_user_article",
+    "removedMemberId": "fixture_user_article",
+    "initialAvatarUrl": "http://127.0.0.1:18088/media/avatar/default/group/v1/default.png?v=1",
+    "finalAvatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2",
+    "groupAvatarVersionBefore": 0,
+    "groupAvatarVersionAfterAdd": 1,
+    "groupAvatarVersionAfterRemove": 2,
+    "initialAvatarUrlResolved": "http://127.0.0.1:18088/media/avatar/default/group/v1/default.png?v=1",
+    "finalAvatarUrlResolved": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2"
+  },
+  "fixtureConversation": {
+    "conversationId": "fixture_conv_group",
+    "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fixture_conv_group/v2/a8a0d4b0755dc4ce.png?v=2",
+    "resolvedAvatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fixture_conv_group/v2/a8a0d4b0755dc4ce.png?v=2",
+    "groupAvatarVersionBefore": 1,
+    "groupAvatarVersionAfterAdd": 2
+  },
+  "serviceEvidence": {
+    "taskOutbox": {
+      "status": "collected",
+      "records": [
+        {
+          "_id": "outbox-37218692d1b0217c903f897f",
+          "taskType": "chat.group_avatar.recompute",
+          "ownerDomain": "chat",
+          "aggregateType": "conversationId",
+          "aggregateId": "fde2ce7a1605be88af82fc96",
+          "dedupeKey": "chat.group_avatar.recompute:fde2ce7a1605be88af82fc96",
+          "idempotencyKey": "chat.group_avatar.recompute:fde2ce7a1605be88af82fc96",
+          "partitionKey": "fde2ce7a1605be88af82fc96",
+          "shardId": 24,
+          "payload": {
+            "rosterRevision": "2",
+            "triggers": "conversation.created,members.added",
+            "actorID": "fixture_user_current"
+          },
+          "trigger": "conversation.created,members.added",
+          "status": "dispatched",
+          "startAt": "2026-05-07T01:44:35.961Z",
+          "maxDelayUntil": "2026-05-07T01:45:03.942Z",
+          "createdByModule": "chat.task_outbox_dispatcher",
+          "createdAt": "2026-05-07T01:44:33.943Z",
+          "updatedAt": "2026-05-07T01:44:36.131Z",
+          "dispatchAttempts": 1
+        },
+        {
+          "_id": "outbox-12ccd326560fe215d86ab671",
+          "taskType": "chat.group_avatar.recompute",
+          "ownerDomain": "chat",
+          "aggregateType": "conversationId",
+          "aggregateId": "fde2ce7a1605be88af82fc96",
+          "dedupeKey": "chat.group_avatar.recompute:fde2ce7a1605be88af82fc96",
+          "idempotencyKey": "chat.group_avatar.recompute:fde2ce7a1605be88af82fc96",
+          "partitionKey": "fde2ce7a1605be88af82fc96",
+          "shardId": 24,
+          "payload": {
+            "rosterRevision": "3",
+            "triggers": "member.removed",
+            "actorID": "fixture_user_article"
+          },
+          "trigger": "member.removed",
+          "status": "dispatched",
+          "startAt": "2026-05-07T01:44:40.005Z",
+          "maxDelayUntil": "2026-05-07T01:45:08.005Z",
+          "createdByModule": "chat.task_outbox_dispatcher",
+          "createdAt": "2026-05-07T01:44:38.005Z",
+          "updatedAt": "2026-05-07T01:44:40.127Z",
+          "dispatchAttempts": 1
+        }
+      ]
+    },
+    "asyncTask": {
+      "status": "collected",
+      "records": [
+        {
+          "_id": "task-92498e143be62e088be94a27",
+          "outboxId": "outbox-37218692d1b0217c903f897f",
+          "taskType": "chat.group_avatar.recompute",
+          "ownerDomain": "chat",
+          "aggregateType": "conversationId",
+          "aggregateId": "fde2ce7a1605be88af82fc96",
+          "dedupeKey": "chat.group_avatar.recompute:fde2ce7a1605be88af82fc96",
+          "idempotencyKey": "chat.group_avatar.recompute:fde2ce7a1605be88af82fc96",
+          "partitionKey": "fde2ce7a1605be88af82fc96",
+          "shardId": 24,
+          "payload": {
+            "triggers": "conversation.created,members.added",
+            "actorID": "fixture_user_current",
+            "rosterRevision": "2"
+          },
+          "status": "succeeded",
+          "attempts": 0,
+          "nextAttemptAt": "2026-05-07T01:44:36.131Z",
+          "createdAt": "2026-05-07T01:44:36.131Z",
+          "updatedAt": "2026-05-07T01:44:36.317Z",
+          "leaseOwner": "",
+          "leaseToken": "",
+          "leaseUntil": "2026-05-07T01:45:06.308Z"
+        },
+        {
+          "_id": "task-14e53aa5d342e0bd0c6757da",
+          "outboxId": "outbox-12ccd326560fe215d86ab671",
+          "taskType": "chat.group_avatar.recompute",
+          "ownerDomain": "chat",
+          "aggregateType": "conversationId",
+          "aggregateId": "fde2ce7a1605be88af82fc96",
+          "dedupeKey": "chat.group_avatar.recompute:fde2ce7a1605be88af82fc96",
+          "idempotencyKey": "chat.group_avatar.recompute:fde2ce7a1605be88af82fc96",
+          "partitionKey": "fde2ce7a1605be88af82fc96",
+          "shardId": 24,
+          "payload": {
+            "rosterRevision": "3",
+            "triggers": "member.removed",
+            "actorID": "fixture_user_article"
+          },
+          "status": "succeeded",
+          "attempts": 0,
+          "nextAttemptAt": "2026-05-07T01:44:40.127Z",
+          "createdAt": "2026-05-07T01:44:40.127Z",
+          "updatedAt": "2026-05-07T01:44:40.366Z",
+          "leaseOwner": "",
+          "leaseToken": "",
+          "leaseUntil": "2026-05-07T01:45:10.353Z"
+        }
+      ]
+    },
+    "notificationOutbox": {
+      "status": "collected",
+      "records": [
+        {
+          "_id": "notification-1727ce3874731c79edc9a48f",
+          "eventType": "conversation.avatar.updated",
+          "ownerDomain": "chat",
+          "aggregateType": "conversation",
+          "aggregateId": "fde2ce7a1605be88af82fc96",
+          "dedupeKey": "conversation.avatar.updated:fde2ce7a1605be88af82fc96:1",
+          "payload": {
+            "conversationId": "fde2ce7a1605be88af82fc96",
+            "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v1/ae36785f9d5b2995.png?v=1",
+            "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v1",
+            "groupAvatarVersion": "1",
+            "groupAvatarSourceHash": "ae36785f9d5b299554410d8f5e4263e2efaa5f6bdf09e19a6ee38eec7219d2b3",
+            "updatedAt": "2026-05-07 09:44:36.31439 +0800 CST m=+154.186346209"
+          },
+          "recipientIds": [
+            "fixture_user_article",
+            "fixture_user_current",
+            "fixture_user_friend",
+            "fixture_user_weekend_1"
+          ],
+          "status": "succeeded",
+          "attempts": 0,
+          "nextAttemptAt": "2026-05-07T01:44:36.315Z",
+          "createdAt": "2026-05-07T01:44:36.315Z",
+          "updatedAt": "2026-05-07T01:44:36.334Z",
+          "leaseOwner": "",
+          "leaseToken": "",
+          "leaseUntil": "2026-05-07T01:45:06.320Z"
+        },
+        {
+          "_id": "notification-99f182fa907de345784b904f",
+          "eventType": "conversation.avatar.updated",
+          "ownerDomain": "chat",
+          "aggregateType": "conversation",
+          "aggregateId": "fde2ce7a1605be88af82fc96",
+          "dedupeKey": "conversation.avatar.updated:fde2ce7a1605be88af82fc96:2",
+          "payload": {
+            "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2",
+            "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v2",
+            "groupAvatarVersion": "2",
+            "groupAvatarSourceHash": "6d7bfaade0270ba3d45cd0810d18fb78c07049ce15f5a84fff2437f449c7109b",
+            "updatedAt": "2026-05-07 09:44:40.36021 +0800 CST m=+158.232162376",
+            "conversationId": "fde2ce7a1605be88af82fc96"
+          },
+          "recipientIds": [
+            "fixture_user_current",
+            "fixture_user_friend",
+            "fixture_user_weekend_1"
+          ],
+          "status": "succeeded",
+          "attempts": 0,
+          "nextAttemptAt": "2026-05-07T01:44:40.362Z",
+          "createdAt": "2026-05-07T01:44:40.362Z",
+          "updatedAt": "2026-05-07T01:44:40.396Z",
+          "leaseOwner": "",
+          "leaseToken": "",
+          "leaseUntil": "2026-05-07T01:45:10.369Z"
+        }
+      ]
+    },
+    "deliveryLedger": {
+      "status": "collected",
+      "records": [
+        {
+          "_id": "notification-1727ce3874731c79edc9a48f:fixture_user_article",
+          "attempts": 0,
+          "eventType": "conversation.avatar.updated",
+          "notificationId": "notification-1727ce3874731c79edc9a48f",
+          "recipientId": "fixture_user_article",
+          "status": "delivered",
+          "updatedAt": "2026-05-07T01:44:36.328Z",
+          "deliveredSeq": {
+            "low": 3,
+            "high": 0,
+            "unsigned": false
+          },
+          "lastFailure": null
+        },
+        {
+          "_id": "notification-1727ce3874731c79edc9a48f:fixture_user_current",
+          "attempts": 0,
+          "eventType": "conversation.avatar.updated",
+          "notificationId": "notification-1727ce3874731c79edc9a48f",
+          "recipientId": "fixture_user_current",
+          "status": "delivered",
+          "updatedAt": "2026-05-07T01:44:36.330Z",
+          "deliveredSeq": {
+            "low": 10,
+            "high": 0,
+            "unsigned": false
+          },
+          "lastFailure": null
+        },
+        {
+          "_id": "notification-1727ce3874731c79edc9a48f:fixture_user_friend",
+          "attempts": 0,
+          "eventType": "conversation.avatar.updated",
+          "notificationId": "notification-1727ce3874731c79edc9a48f",
+          "recipientId": "fixture_user_friend",
+          "status": "delivered",
+          "updatedAt": "2026-05-07T01:44:36.331Z",
+          "deliveredSeq": {
+            "low": 7,
+            "high": 0,
+            "unsigned": false
+          },
+          "lastFailure": null
+        },
+        {
+          "_id": "notification-1727ce3874731c79edc9a48f:fixture_user_weekend_1",
+          "attempts": 0,
+          "eventType": "conversation.avatar.updated",
+          "notificationId": "notification-1727ce3874731c79edc9a48f",
+          "recipientId": "fixture_user_weekend_1",
+          "status": "delivered",
+          "updatedAt": "2026-05-07T01:44:36.332Z",
+          "deliveredSeq": {
+            "low": 9,
+            "high": 0,
+            "unsigned": false
+          },
+          "lastFailure": null
+        },
+        {
+          "_id": "notification-99f182fa907de345784b904f:fixture_user_current",
+          "attempts": 0,
+          "eventType": "conversation.avatar.updated",
+          "notificationId": "notification-99f182fa907de345784b904f",
+          "recipientId": "fixture_user_current",
+          "status": "delivered",
+          "updatedAt": "2026-05-07T01:44:40.390Z",
+          "deliveredSeq": {
+            "low": 11,
+            "high": 0,
+            "unsigned": false
+          },
+          "lastFailure": null
+        },
+        {
+          "_id": "notification-99f182fa907de345784b904f:fixture_user_friend",
+          "attempts": 0,
+          "eventType": "conversation.avatar.updated",
+          "notificationId": "notification-99f182fa907de345784b904f",
+          "recipientId": "fixture_user_friend",
+          "status": "delivered",
+          "updatedAt": "2026-05-07T01:44:40.391Z",
+          "deliveredSeq": {
+            "low": 8,
+            "high": 0,
+            "unsigned": false
+          },
+          "lastFailure": null
+        },
+        {
+          "_id": "notification-99f182fa907de345784b904f:fixture_user_weekend_1",
+          "attempts": 0,
+          "eventType": "conversation.avatar.updated",
+          "notificationId": "notification-99f182fa907de345784b904f",
+          "recipientId": "fixture_user_weekend_1",
+          "status": "delivered",
+          "updatedAt": "2026-05-07T01:44:40.394Z",
+          "deliveredSeq": {
+            "low": 10,
+            "high": 0,
+            "unsigned": false
+          },
+          "lastFailure": null
+        }
+      ],
+      "deliveredRecipients": [
+        "fixture_user_article",
+        "fixture_user_current",
+        "fixture_user_friend",
+        "fixture_user_weekend_1"
+      ]
+    },
+    "syncPatches": [
+      {
+        "syncSeq": 10,
+        "type": "conversation.avatar.updated",
+        "userId": "fixture_user_current",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v1/ae36785f9d5b2995.png?v=1",
+          "conversationId": "fde2ce7a1605be88af82fc96",
+          "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v1",
+          "groupAvatarSourceHash": "ae36785f9d5b299554410d8f5e4263e2efaa5f6bdf09e19a6ee38eec7219d2b3",
+          "groupAvatarVersion": "1",
+          "updatedAt": "2026-05-07 09:44:36.31439 +0800 CST m=+154.186346209"
+        },
+        "occurredAt": "2026-05-07T01:44:36.330138Z"
+      },
+      {
+        "syncSeq": 7,
+        "type": "conversation.avatar.updated",
+        "userId": "fixture_user_friend",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v1/ae36785f9d5b2995.png?v=1",
+          "conversationId": "fde2ce7a1605be88af82fc96",
+          "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v1",
+          "groupAvatarSourceHash": "ae36785f9d5b299554410d8f5e4263e2efaa5f6bdf09e19a6ee38eec7219d2b3",
+          "groupAvatarVersion": "1",
+          "updatedAt": "2026-05-07 09:44:36.31439 +0800 CST m=+154.186346209"
+        },
+        "occurredAt": "2026-05-07T01:44:36.331776Z"
+      },
+      {
+        "syncSeq": 9,
+        "type": "conversation.avatar.updated",
+        "userId": "fixture_user_weekend_1",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v1/ae36785f9d5b2995.png?v=1",
+          "conversationId": "fde2ce7a1605be88af82fc96",
+          "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v1",
+          "groupAvatarSourceHash": "ae36785f9d5b299554410d8f5e4263e2efaa5f6bdf09e19a6ee38eec7219d2b3",
+          "groupAvatarVersion": "1",
+          "updatedAt": "2026-05-07 09:44:36.31439 +0800 CST m=+154.186346209"
+        },
+        "occurredAt": "2026-05-07T01:44:36.332821Z"
+      },
+      {
+        "syncSeq": 3,
+        "type": "conversation.avatar.updated",
+        "userId": "fixture_user_article",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v1/ae36785f9d5b2995.png?v=1",
+          "conversationId": "fde2ce7a1605be88af82fc96",
+          "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v1",
+          "groupAvatarSourceHash": "ae36785f9d5b299554410d8f5e4263e2efaa5f6bdf09e19a6ee38eec7219d2b3",
+          "groupAvatarVersion": "1",
+          "updatedAt": "2026-05-07 09:44:36.31439 +0800 CST m=+154.186346209"
+        },
+        "occurredAt": "2026-05-07T01:44:36.32874Z"
+      },
+      {
+        "syncSeq": 11,
+        "type": "conversation.avatar.updated",
+        "userId": "fixture_user_current",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2",
+          "conversationId": "fde2ce7a1605be88af82fc96",
+          "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v2",
+          "groupAvatarSourceHash": "6d7bfaade0270ba3d45cd0810d18fb78c07049ce15f5a84fff2437f449c7109b",
+          "groupAvatarVersion": "2",
+          "updatedAt": "2026-05-07 09:44:40.36021 +0800 CST m=+158.232162376"
+        },
+        "occurredAt": "2026-05-07T01:44:40.390351Z"
+      },
+      {
+        "syncSeq": 8,
+        "type": "conversation.avatar.updated",
+        "userId": "fixture_user_friend",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2",
+          "conversationId": "fde2ce7a1605be88af82fc96",
+          "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v2",
+          "groupAvatarSourceHash": "6d7bfaade0270ba3d45cd0810d18fb78c07049ce15f5a84fff2437f449c7109b",
+          "groupAvatarVersion": "2",
+          "updatedAt": "2026-05-07 09:44:40.36021 +0800 CST m=+158.232162376"
+        },
+        "occurredAt": "2026-05-07T01:44:40.391775Z"
+      },
+      {
+        "syncSeq": 10,
+        "type": "conversation.avatar.updated",
+        "userId": "fixture_user_weekend_1",
+        "payload": {
+          "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2",
+          "conversationId": "fde2ce7a1605be88af82fc96",
+          "groupAvatarAssetId": "ga_fde2ce7a1605be88af82fc96_v2",
+          "groupAvatarSourceHash": "6d7bfaade0270ba3d45cd0810d18fb78c07049ce15f5a84fff2437f449c7109b",
+          "groupAvatarVersion": "2",
+          "updatedAt": "2026-05-07 09:44:40.36021 +0800 CST m=+158.232162376"
+        },
+        "occurredAt": "2026-05-07T01:44:40.39403Z"
+      }
+    ]
+  },
+  "serviceEndpointEvidence": {
+    "healthz": "http://127.0.0.1:18080/healthz",
+    "chatConversations": "/v1/chat/conversations",
+    "userSync": "/v1/user/sync",
+    "media": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2"
+  },
+  "uiEvidence": {
+    "conversationListAvatarVisible": true,
+    "conversationDetailAvatarVisible": true,
+    "avatarImageLoaded": true,
+    "senderAvatarPreserved": true,
+    "screenshots": []
+  },
+  "steps": [
+    {
+      "name": "healthz",
+      "status": "passed",
+      "at": "2026-05-07T01:44:29.816243Z"
+    },
+    {
+      "name": "fixture_group_ready",
+      "status": "passed",
+      "at": "2026-05-07T01:44:29.855910Z",
+      "conversationId": "fixture_conv_group",
+      "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fixture_conv_group/v1/4649c8cb8a582d2d.png?v=1",
+      "version": 1
+    },
+    {
+      "name": "fixture_group_add_member_avatar_update",
+      "status": "passed",
+      "at": "2026-05-07T01:44:33.896865Z",
+      "conversationId": "fixture_conv_group",
+      "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fixture_conv_group/v2/a8a0d4b0755dc4ce.png?v=2",
+      "version": 2,
+      "addedMemberId": "fixture_user_article"
+    },
+    {
+      "name": "create_conversation",
+      "status": "passed",
+      "at": "2026-05-07T01:44:33.945756Z",
+      "conversationId": "fde2ce7a1605be88af82fc96",
+      "avatarUrl": "http://127.0.0.1:18088/media/avatar/default/group/v1/default.png?v=1"
+    },
+    {
+      "name": "add_member_avatar_update",
+      "status": "passed",
+      "at": "2026-05-07T01:44:37.980856Z",
+      "version": 1,
+      "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v1/ae36785f9d5b2995.png?v=1"
+    },
+    {
+      "name": "sender_avatar_snapshot",
+      "status": "passed",
+      "at": "2026-05-07T01:44:38.000689Z",
+      "messageId": "0b4c0cbd061fc27d5af0f7cb",
+      "verificationSource": "message_list"
+    },
+    {
+      "name": "remove_member_avatar_update",
+      "status": "passed",
+      "at": "2026-05-07T01:44:42.019997Z",
+      "version": 2,
+      "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2"
+    },
+    {
+      "name": "media_check",
+      "status": "passed",
+      "at": "2026-05-07T01:44:42.028201Z",
+      "avatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2",
+      "resolvedAvatarUrl": "http://127.0.0.1:18088/media/avatar/conversation/fde2ce7a1605be88af82fc96/v2/6d7bfaade0270ba3.png?v=2"
+    }
+  ]
+}

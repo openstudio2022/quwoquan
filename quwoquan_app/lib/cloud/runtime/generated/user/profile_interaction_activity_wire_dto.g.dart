@@ -5,10 +5,10 @@ class ProfileInteractionActivityWireDto {
   final String activityId;
   final String activityType;
   final String direction;
-  final String actorProfileSubjectId;
+  final String actorSubAccountId;
   final String actorDisplayName;
   final String actorAvatarUrl;
-  final String targetProfileSubjectId;
+  final String targetSubAccountId;
   final String targetContentId;
   final String targetContentType;
   final String targetContentSummary;
@@ -18,10 +18,10 @@ class ProfileInteractionActivityWireDto {
     this.activityId = '',
     this.activityType = '',
     this.direction = 'received',
-    this.actorProfileSubjectId = '',
+    this.actorSubAccountId = '',
     this.actorDisplayName = '',
     this.actorAvatarUrl = '',
-    this.targetProfileSubjectId = '',
+    this.targetSubAccountId = '',
     this.targetContentId = '',
     this.targetContentType = '',
     this.targetContentSummary = '',
@@ -33,10 +33,10 @@ class ProfileInteractionActivityWireDto {
       activityId: m['activityId']?.toString() ?? m['id']?.toString() ?? '',
       activityType: m['activityType']?.toString() ?? m['contentType']?.toString() ?? '',
       direction: m['direction']?.toString() ?? 'received',
-      actorProfileSubjectId: m['actorProfileSubjectId']?.toString() ?? m['userId']?.toString() ?? '',
+      actorSubAccountId: m['actorSubAccountId']?.toString() ?? m['userId']?.toString() ?? '',
       actorDisplayName: m['actorDisplayName']?.toString() ?? m['nickname']?.toString() ?? m['displayName']?.toString() ?? '',
       actorAvatarUrl: m['actorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? '',
-      targetProfileSubjectId: m['targetProfileSubjectId']?.toString() ?? m['targetUserId']?.toString() ?? '',
+      targetSubAccountId: m['targetSubAccountId']?.toString() ?? m['targetUserId']?.toString() ?? '',
       targetContentId: m['targetContentId']?.toString() ?? m['postId']?.toString() ?? '',
       targetContentType: m['targetContentType']?.toString() ?? m['contentType']?.toString() ?? '',
       targetContentSummary: m['targetContentSummary']?.toString() ?? m['targetTitle']?.toString() ?? '',
@@ -49,10 +49,10 @@ class ProfileInteractionActivityWireDto {
       'activityId': activityId,
       'activityType': activityType,
       'direction': direction,
-      'actorProfileSubjectId': actorProfileSubjectId,
+      'actorSubAccountId': actorSubAccountId,
       'actorDisplayName': actorDisplayName,
       'actorAvatarUrl': actorAvatarUrl,
-      'targetProfileSubjectId': targetProfileSubjectId,
+      'targetSubAccountId': targetSubAccountId,
       'targetContentId': targetContentId,
       'targetContentType': targetContentType,
       'targetContentSummary': targetContentSummary,
@@ -64,10 +64,10 @@ class ProfileInteractionActivityWireDto {
     String? activityId,
     String? activityType,
     String? direction,
-    String? actorProfileSubjectId,
+    String? actorSubAccountId,
     String? actorDisplayName,
     String? actorAvatarUrl,
-    String? targetProfileSubjectId,
+    String? targetSubAccountId,
     String? targetContentId,
     String? targetContentType,
     String? targetContentSummary,
@@ -77,10 +77,10 @@ class ProfileInteractionActivityWireDto {
       activityId: activityId ?? this.activityId,
       activityType: activityType ?? this.activityType,
       direction: direction ?? this.direction,
-      actorProfileSubjectId: actorProfileSubjectId ?? this.actorProfileSubjectId,
+      actorSubAccountId: actorSubAccountId ?? this.actorSubAccountId,
       actorDisplayName: actorDisplayName ?? this.actorDisplayName,
       actorAvatarUrl: actorAvatarUrl ?? this.actorAvatarUrl,
-      targetProfileSubjectId: targetProfileSubjectId ?? this.targetProfileSubjectId,
+      targetSubAccountId: targetSubAccountId ?? this.targetSubAccountId,
       targetContentId: targetContentId ?? this.targetContentId,
       targetContentType: targetContentType ?? this.targetContentType,
       targetContentSummary: targetContentSummary ?? this.targetContentSummary,

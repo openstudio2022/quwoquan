@@ -11,7 +11,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 关注发起方的稳定公开主体 ID（profileSubjectId）
+        description: 关注发起方的稳定公开主体 ID（subAccountId）
 
       - name: followeeId
         type: string
@@ -20,7 +20,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 被关注目标的稳定公开主体 ID（profileSubjectId）
+        description: 被关注目标的稳定公开主体 ID（subAccountId）
 
       - name: source
         type: string
@@ -44,9 +44,9 @@ entities:
         description: 幂等保证
 
   FollowCommandRequest:
-    description: persona-aware follow / unfollow 命令请求
+    description: sub-account 级别 follow / unfollow 命令请求
     fields:
-      - name: actorProfileSubjectId
+      - name: actorSubAccountId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC
@@ -74,9 +74,9 @@ entities:
         description: 客户端幂等键；为空时由服务端使用主体对唯一约束兜底
 
   FollowCommandResult:
-    description: persona-aware follow / unfollow 命令返回
+    description: sub-account 级别 follow / unfollow 命令返回
     fields:
-      - name: actorProfileSubjectId
+      - name: actorSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -84,7 +84,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: targetProfileSubjectId
+      - name: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -120,7 +120,7 @@ entities:
   RelationshipView:
     description: 基础关系态查询视图
     fields:
-      - name: viewerProfileSubjectId
+      - name: viewerSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -128,7 +128,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: targetProfileSubjectId
+      - name: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -162,19 +162,11 @@ entities:
         ops_exposure: read
 
   FollowingListItemView:
-    description: following 列表项；以 ProfileSubject 为展示主键
+    description: following 列表项；以 subAccountId 为展示主键
     fields:
-      - name: profileSubjectId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: subAccountId
         type: string
-        constraints: [NULLABLE]
+        constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -231,19 +223,11 @@ entities:
         ops_exposure: read
 
   FollowerListItemView:
-    description: followers 列表项；以 ProfileSubject 为展示主键
+    description: followers 列表项；以 subAccountId 为展示主键
     fields:
-      - name: profileSubjectId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
       - name: subAccountId
         type: string
-        constraints: [NULLABLE]
+        constraints: [NOT_NULL]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
@@ -302,7 +286,7 @@ entities:
   RelationshipCapabilityView:
     description: 主页按钮矩阵与聊天/通话门禁统一消费的关系能力视图
     fields:
-      - name: viewerProfileSubjectId
+      - name: viewerSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -310,7 +294,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: targetProfileSubjectId
+      - name: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC

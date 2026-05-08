@@ -319,7 +319,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
       ),
       itemBuilder: (context, i) {
         final u = list[i];
-        final userId = u.profileSubjectId;
+        final userId = u.subAccountId;
         final nickname = u.displayName;
         final avatarUrl = u.avatarUrl;
         final isFollowing = u.isFollowing;
@@ -330,7 +330,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
               context.push(
                 AppRoutePaths.userProfile(username: userId),
                 extra: UserProfileRouteExtra(
-                  profileSubjectId: userId,
+                  subAccountId: userId,
                   avatar: avatarUrl.isNotEmpty ? avatarUrl : null,
                   displayName: nickname.isNotEmpty ? nickname : null,
                 ),

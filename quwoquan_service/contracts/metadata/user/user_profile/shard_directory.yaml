@@ -1,0 +1,12 @@
+version: 1
+rule_version: "01"
+slot_count: 16384
+hash_fn: xxhash64
+default_physical_shard: user-primary-a
+entries:
+  - prefix: ""
+    physical_shard: user-primary-a
+  - prefix: "01af0"
+    physical_shard: user-primary-a
+  - prefix: "01af1"
+    physical_shard: user-primary-b

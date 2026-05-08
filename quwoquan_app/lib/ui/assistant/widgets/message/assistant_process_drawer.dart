@@ -187,7 +187,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
                       _headerLabel(),
                       style: TextStyle(
                         fontSize: AppTypography.base,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: AppTypography.regular,
                         color: textColor,
                         height: AppTypography.bodyLineHeight,
                       ),
@@ -605,7 +605,7 @@ class _AssistantProcessDrawerState extends State<AssistantProcessDrawer> {
             parts.label,
             style: TextStyle(
               fontSize: AppTypography.sm,
-              fontWeight: FontWeight.w600,
+              fontWeight: AppTypography.regular,
               color: secondaryTextColor.withValues(alpha: 0.92),
               height: AppTypography.bodyLineHeight,
             ),

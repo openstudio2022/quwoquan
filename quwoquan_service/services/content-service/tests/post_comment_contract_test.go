@@ -144,16 +144,242 @@ func TestGetCounters(t *testing.T) {
 	}
 }
 
-func TestCommentWithPersonaId(t *testing.T) {
+func TestCommentCountersStayConsistentAcrossReadModels(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPost(
+		t,
+		`{"contentType":"image","title":"Comment counters consistency","mediaUrls":["https://example.com/img.jpg"]}`,
+	)
+	postID, _ := created["_id"].(string)
+
+	createReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/content/posts/"+postID+"/comments",
+		strings.NewReader(`{"content":"一致性评论"}`),
+	)
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("X-Client-User-Id", "comment_consistency_user")
+	createRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create comment: expected 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+	var createResp map[string]any
+	if err := json.Unmarshal(createRec.Body.Bytes(), &createResp); err != nil {
+		t.Fatalf("decode create comment: %v", err)
+	}
+	commentCount, _ := createResp["commentCount"].(float64)
+	if commentCount != 1 {
+		t.Fatalf("expected create response commentCount=1, got %v", createResp["commentCount"])
+	}
+	comment, _ := createResp["comment"].(map[string]any)
+	commentID, _ := comment["_id"].(string)
+
+	counterReq := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/posts/"+postID+"/counters",
+		nil,
+	)
+	counterRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(counterRec, counterReq)
+	if counterRec.Code != http.StatusOK {
+		t.Fatalf("get counters: expected 200, got %d", counterRec.Code)
+	}
+	var counterResp map[string]any
+	if err := json.Unmarshal(counterRec.Body.Bytes(), &counterResp); err != nil {
+		t.Fatalf("decode counters: %v", err)
+	}
+	if counterResp["comment"] != float64(1) {
+		t.Fatalf("expected counters.comment=1, got %v", counterResp["comment"])
+	}
+
+	postReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	postRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusOK {
+		t.Fatalf("get post: expected 200, got %d", postRec.Code)
+	}
+	var postResp map[string]any
+	if err := json.Unmarshal(postRec.Body.Bytes(), &postResp); err != nil {
+		t.Fatalf("decode post: %v", err)
+	}
+	if postResp["commentCount"] != float64(1) {
+		t.Fatalf("expected post.commentCount=1, got %v", postResp["commentCount"])
+	}
+
+	deleteReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/v1/content/posts/"+postID+"/comments/"+commentID,
+		nil,
+	)
+	deleteReq.Header.Set("X-Client-User-Id", "comment_consistency_user")
+	deleteRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("delete comment: expected 204, got %d", deleteRec.Code)
+	}
+
+	counterRec = httptest.NewRecorder()
+	testHandler.ServeHTTP(counterRec, counterReq)
+	if counterRec.Code != http.StatusOK {
+		t.Fatalf("get counters after delete: expected 200, got %d", counterRec.Code)
+	}
+	counterResp = map[string]any{}
+	if err := json.Unmarshal(counterRec.Body.Bytes(), &counterResp); err != nil {
+		t.Fatalf("decode counters after delete: %v", err)
+	}
+	if counterResp["comment"] != float64(0) {
+		t.Fatalf("expected counters.comment=0 after delete, got %v", counterResp["comment"])
+	}
+}
+
+func TestShareCountersStayAuthoritativeAndIdempotent(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPost(
+		t,
+		`{"contentType":"image","title":"Share counters consistency","mediaUrls":["https://example.com/img.jpg"]}`,
+	)
+	postID, _ := created["_id"].(string)
+
+	shareReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/content/posts/"+postID+"/share",
+		strings.NewReader(`{}`),
+	)
+	shareReq.Header.Set("Content-Type", "application/json")
+	shareReq.Header.Set("X-Client-User-Id", "share_counter_user")
+	shareRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(shareRec, shareReq)
+	if shareRec.Code != http.StatusOK {
+		t.Fatalf("share post: expected 200, got %d: %s", shareRec.Code, shareRec.Body.String())
+	}
+	var shareResp map[string]any
+	if err := json.Unmarshal(shareRec.Body.Bytes(), &shareResp); err != nil {
+		t.Fatalf("decode share response: %v", err)
+	}
+	if shareResp["changed"] != true {
+		t.Fatalf("expected first share changed=true, got %v", shareResp["changed"])
+	}
+	if shareResp["shareCount"] != float64(1) {
+		t.Fatalf("expected first shareCount=1, got %v", shareResp["shareCount"])
+	}
+
+	shareRec = httptest.NewRecorder()
+	testHandler.ServeHTTP(shareRec, shareReq)
+	if shareRec.Code != http.StatusOK {
+		t.Fatalf("repeat share post: expected 200, got %d: %s", shareRec.Code, shareRec.Body.String())
+	}
+	shareResp = map[string]any{}
+	if err := json.Unmarshal(shareRec.Body.Bytes(), &shareResp); err != nil {
+		t.Fatalf("decode repeat share response: %v", err)
+	}
+	if shareResp["changed"] != false {
+		t.Fatalf("expected repeated share changed=false, got %v", shareResp["changed"])
+	}
+	if shareResp["shareCount"] != float64(1) {
+		t.Fatalf("expected repeated shareCount to remain 1, got %v", shareResp["shareCount"])
+	}
+
+	reactionReq := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/posts/"+postID+"/reactions",
+		nil,
+	)
+	reactionReq.Header.Set("X-Client-User-Id", "share_counter_user")
+	reactionRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(reactionRec, reactionReq)
+	if reactionRec.Code != http.StatusOK {
+		t.Fatalf("get reaction state: expected 200, got %d", reactionRec.Code)
+	}
+	var reactionResp map[string]any
+	if err := json.Unmarshal(reactionRec.Body.Bytes(), &reactionResp); err != nil {
+		t.Fatalf("decode reaction state: %v", err)
+	}
+	if reactionResp["shared"] != true {
+		t.Fatalf("expected reaction.shared=true, got %v", reactionResp["shared"])
+	}
+
+	counterReq := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/content/posts/"+postID+"/counters",
+		nil,
+	)
+	counterRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(counterRec, counterReq)
+	if counterRec.Code != http.StatusOK {
+		t.Fatalf("get counters: expected 200, got %d", counterRec.Code)
+	}
+	var counterResp map[string]any
+	if err := json.Unmarshal(counterRec.Body.Bytes(), &counterResp); err != nil {
+		t.Fatalf("decode counters: %v", err)
+	}
+	if counterResp["share"] != float64(1) {
+		t.Fatalf("expected counters.share=1, got %v", counterResp["share"])
+	}
+
+	postReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	postRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusOK {
+		t.Fatalf("get post: expected 200, got %d", postRec.Code)
+	}
+	var postResp map[string]any
+	if err := json.Unmarshal(postRec.Body.Bytes(), &postResp); err != nil {
+		t.Fatalf("decode post: %v", err)
+	}
+	if postResp["shareCount"] != float64(1) {
+		t.Fatalf("expected post.shareCount=1, got %v", postResp["shareCount"])
+	}
+
+	unshareReq := httptest.NewRequest(
+		http.MethodDelete,
+		"/v1/content/posts/"+postID+"/share",
+		nil,
+	)
+	unshareReq.Header.Set("X-Client-User-Id", "share_counter_user")
+	unshareRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(unshareRec, unshareReq)
+	if unshareRec.Code != http.StatusOK {
+		t.Fatalf("unshare post: expected 200, got %d: %s", unshareRec.Code, unshareRec.Body.String())
+	}
+	var unshareResp map[string]any
+	if err := json.Unmarshal(unshareRec.Body.Bytes(), &unshareResp); err != nil {
+		t.Fatalf("decode unshare response: %v", err)
+	}
+	if unshareResp["changed"] != true {
+		t.Fatalf("expected unshare changed=true, got %v", unshareResp["changed"])
+	}
+	if unshareResp["shareCount"] != float64(0) {
+		t.Fatalf("expected unshare shareCount=0, got %v", unshareResp["shareCount"])
+	}
+
+	reactionRec = httptest.NewRecorder()
+	testHandler.ServeHTTP(reactionRec, reactionReq)
+	if reactionRec.Code != http.StatusOK {
+		t.Fatalf("get reaction state after unshare: expected 200, got %d", reactionRec.Code)
+	}
+	reactionResp = map[string]any{}
+	if err := json.Unmarshal(reactionRec.Body.Bytes(), &reactionResp); err != nil {
+		t.Fatalf("decode reaction state after unshare: %v", err)
+	}
+	if reactionResp["shared"] != false {
+		t.Fatalf("expected reaction.shared=false after unshare, got %v", reactionResp["shared"])
+	}
+}
+
+func TestCommentUsesSubAccountHeader(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := createPost(t, `{"contentType":"image","title":"Persona comment","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
 
-	commentBody := `{"content":"分身评论","personaId":"persona_abc"}`
+	commentBody := `{"content":"分身评论"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(commentBody))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_persona_test")
+	req.Header.Set("X-Client-Sub-Account-Id", "sub_commenter_abc")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -163,8 +389,8 @@ func TestCommentWithPersonaId(t *testing.T) {
 	var resp map[string]any
 	json.Unmarshal(rec.Body.Bytes(), &resp)
 	comment, _ := resp["comment"].(map[string]any)
-	if comment["personaId"] != "persona_abc" {
-		t.Errorf("expected personaId=persona_abc, got %v", comment["personaId"])
+	if comment["authorId"] != "sub_commenter_abc" {
+		t.Errorf("expected authorId=sub_commenter_abc, got %v", comment["authorId"])
 	}
 }
 

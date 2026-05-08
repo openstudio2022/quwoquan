@@ -4,21 +4,21 @@ import 'package:flutter/foundation.dart';
 @immutable
 class ResonanceBuddyViewData {
   const ResonanceBuddyViewData({
-    required this.profileSubjectId,
+    required this.subAccountId,
     required this.displayName,
     required this.avatarUrl,
     required this.bio,
     required this.resonancePoints,
   });
 
-  final String profileSubjectId;
+  final String subAccountId;
   final String displayName;
   final String avatarUrl;
   final String bio;
   final int resonancePoints;
 
   Map<String, dynamic> toWireMap() => <String, dynamic>{
-    'profileSubjectId': profileSubjectId,
+    'subAccountId': subAccountId,
     'displayName': displayName,
     'avatarUrl': avatarUrl,
     'bio': bio,
@@ -27,7 +27,7 @@ class ResonanceBuddyViewData {
 
   factory ResonanceBuddyViewData.fromWireMap(Map<String, dynamic> m) {
     return ResonanceBuddyViewData(
-      profileSubjectId: (m['profileSubjectId'] ?? '').toString(),
+      subAccountId: (m['subAccountId'] ?? m['profileSubjectId'] ?? '').toString(),
       displayName: (m['displayName'] ?? '').toString(),
       avatarUrl: (m['avatarUrl'] ?? '').toString(),
       bio: (m['bio'] ?? '').toString(),
@@ -39,7 +39,7 @@ class ResonanceBuddyViewData {
   static const List<ResonanceBuddyViewData>
   prototype = <ResonanceBuddyViewData>[
     ResonanceBuddyViewData(
-      profileSubjectId: 'res_u1',
+      subAccountId: 'res_u1',
       displayName: '陈摄影师',
       avatarUrl:
           'https://images.unsplash.com/photo-1603987248955-9c142c5ae89b?q=80&w=150',
@@ -47,7 +47,7 @@ class ResonanceBuddyViewData {
       resonancePoints: 12,
     ),
     ResonanceBuddyViewData(
-      profileSubjectId: 'res_u2',
+      subAccountId: 'res_u2',
       displayName: '阿强',
       avatarUrl:
           'https://images.unsplash.com/photo-1755519024555-a660fefc8dc3?q=80&w=150',
@@ -55,7 +55,7 @@ class ResonanceBuddyViewData {
       resonancePoints: 9,
     ),
     ResonanceBuddyViewData(
-      profileSubjectId: 'res_u3',
+      subAccountId: 'res_u3',
       displayName: 'Sarah',
       avatarUrl:
           'https://images.unsplash.com/photo-1643816831234-e7cb32194e92?q=80&w=150',

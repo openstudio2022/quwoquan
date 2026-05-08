@@ -23,8 +23,8 @@ func TestProfileSubjectView_GetMeProfileUsesActiveSubAccount(t *testing.T) {
 	}
 
 	body := parseJSON(t, rec)
-	if body["profileSubjectId"] != "sa_me_profile" {
-		t.Fatalf("expected active subAccount profileSubjectId, got %v", body["profileSubjectId"])
+	if body["subAccountId"] != "sa_me_profile" {
+		t.Fatalf("expected active subAccountId, got %v", body["subAccountId"])
 	}
 	if body["ownerUserId"] != "owner_me_profile" {
 		t.Fatalf("expected ownerUserId=owner_me_profile, got %v", body["ownerUserId"])
@@ -57,9 +57,6 @@ func TestProfileSubjectView_GetSubAccountProfile(t *testing.T) {
 	}
 
 	body := parseJSON(t, rec)
-	if body["profileSubjectId"] != "sa_public_profile" {
-		t.Fatalf("expected profileSubjectId=sa_public_profile, got %v", body["profileSubjectId"])
-	}
 	if body["subAccountId"] != "sa_public_profile" {
 		t.Fatalf("expected subAccountId=sa_public_profile, got %v", body["subAccountId"])
 	}
@@ -119,7 +116,7 @@ func TestProfileSubjectView_FeatureFlagOffFallsBackToPersonaID(t *testing.T) {
 
 	personaRec := doRequest(t, http.MethodGet, "/v1/user/sa_flag_profile", "", authHeaders("viewer_subject"))
 	if personaRec.Code != http.StatusOK {
-		t.Fatalf("flag-off personaId fallback should stay available, got %d: %s", personaRec.Code, personaRec.Body.String())
+		t.Fatalf("flag-off legacy sub-account fallback should stay available, got %d: %s", personaRec.Code, personaRec.Body.String())
 	}
 }
 
@@ -174,7 +171,7 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_search_viewer/block",
+		"/v1/user/sub-accounts/ps_search_viewer/block",
 		"",
 		authHeadersForPersona("search_owner_profile", "ps_search_target"),
 	)
@@ -205,8 +202,8 @@ func TestSearchSocialRelations_DoesNotExposeOwnerUserID(t *testing.T) {
 	if _, exists := first["ownerUserId"]; exists {
 		t.Fatalf("search result must not expose ownerUserId, got %#v", first)
 	}
-	if first["profileSubjectId"] != "ps_search_target" {
-		t.Fatalf("expected persona profileSubjectId, got %#v", first)
+	if first["subAccountId"] != "ps_search_target" {
+		t.Fatalf("expected persona subAccountId, got %#v", first)
 	}
 	snapshot := followtelemetry.Collector().Snapshot()
 	if snapshot[followtelemetry.MetricRelationshipCapabilityMismatch] <= 0 {

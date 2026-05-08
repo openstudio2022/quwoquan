@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
 import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
@@ -112,6 +113,7 @@ class ArticlePageBackwardProjectedFrame {
   const ArticlePageBackwardProjectedFrame({
     required this.foldLine,
     required this.projectedRightEdgeLine,
+    required this.frontBackBoundaryLine,
     required this.foldSurfaceMovingEdgeLine,
     required this.replayLocalPoint,
     required this.previousBackPagePolygon,
@@ -129,6 +131,7 @@ class ArticlePageBackwardProjectedFrame {
 
   final (ui.Offset, ui.Offset) foldLine;
   final (ui.Offset, ui.Offset) projectedRightEdgeLine;
+  final (ui.Offset, ui.Offset) frontBackBoundaryLine;
   final (ui.Offset, ui.Offset) foldSurfaceMovingEdgeLine;
   final ui.Offset replayLocalPoint;
   final List<ui.Offset> previousBackPagePolygon;
@@ -276,10 +279,15 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
               0.72)
           .clamp(0.0, 1.0)
           .toDouble();
-  final rectoCoverage = math
-      .max(math.max(rectoCoverageByFold, rectoCoverageByCurl), settleProgress)
-      .clamp(0.0, 1.0)
-      .toDouble();
+  // Recto ownership must stay locked until the fold crosses the page midpoint.
+  // Curl timing may change appearance, but it must not make the front face
+  // appear before the physical fold has exposed the spine-side segment.
+  final rectoCoverage = coveredWidth > 0.5
+      ? math
+            .max(math.max(rectoCoverageByFold, rectoCoverageByCurl), settleProgress)
+            .clamp(0.0, 1.0)
+            .toDouble()
+      : 0.0;
   final versoOverlayStart = (coveredWidth * rectoCoverage)
       .clamp(0.0, coveredWidth)
       .toDouble();
@@ -448,9 +456,10 @@ ui.Offset resolveBackwardReplayLocalPagePoint({
   required ui.Offset localPagePoint,
   required ui.Size pageSize,
 }) {
-  return ui.Offset(
-    (pageSize.width + localPagePoint.dx).clamp(0.0, pageSize.width).toDouble(),
-    localPagePoint.dy.clamp(0.0, pageSize.height),
+  return resolveBackwardReplayCanonicalPoint(
+    localPagePoint: localPagePoint,
+    pageWidth: pageSize.width,
+    pageHeight: pageSize.height,
   );
 }
 

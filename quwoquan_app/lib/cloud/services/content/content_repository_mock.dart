@@ -48,16 +48,23 @@ class MockContentRepository implements ContentRepository {
   Exception? throwOnLike;
   Exception? throwOnCreateComment;
   Exception? throwOnFavorite;
+  Exception? throwOnShare;
 
   int likePostCallCount = 0;
   int createCommentCallCount = 0;
+  int sharePostCallCount = 0;
   String? lastCommentText;
   String? lastCommentPostId;
 
-  Map<String, dynamic> reactionStateStub = {'liked': false, 'favorited': false};
+  Map<String, dynamic> reactionStateStub = {
+    'liked': false,
+    'favorited': false,
+    'shared': false,
+  };
   List<CommentDto> commentsStub = [];
   int countersStubLikeCount = 0;
   int countersStubCommentCount = 0;
+  int countersStubShareCount = 0;
 
   PostBaseDto _mockPostDto(
     String postId, {
@@ -246,8 +253,7 @@ class MockContentRepository implements ContentRepository {
               : matched == (item['displayName']?.toString() ?? '')
               ? 'author'
               : 'body',
-          'authorProfileSubjectId':
-              item['profileSubjectId'] ?? item['authorId'] ?? '',
+          'authorId': item['authorId'] ?? item['subAccountId'] ?? '',
           'authorDisplayName':
               item['displayName'] ?? item['authorDisplayNameSnapshot'] ?? '',
           'authorAvatarUrl':
@@ -304,6 +310,30 @@ class MockContentRepository implements ContentRepository {
   Future<void> unfavoritePost({required String postId}) async {}
 
   @override
+  Future<bool> sharePost({required String postId}) async {
+    sharePostCallCount++;
+    if (throwOnShare != null) {
+      throw throwOnShare!;
+    }
+    final changed = reactionStateStub['shared'] != true;
+    reactionStateStub = {...reactionStateStub, 'shared': true};
+    if (changed) {
+      countersStubShareCount++;
+    }
+    return changed;
+  }
+
+  @override
+  Future<bool> unsharePost({required String postId}) async {
+    final changed = reactionStateStub['shared'] == true;
+    reactionStateStub = {...reactionStateStub, 'shared': false};
+    if (changed && countersStubShareCount > 0) {
+      countersStubShareCount--;
+    }
+    return changed;
+  }
+
+  @override
   Future<ContentReactionState> getReactionState({
     required String postId,
   }) async {
@@ -331,8 +361,7 @@ class MockContentRepository implements ContentRepository {
     required String postId,
     required String content,
     String? replyToCommentId,
-    String? personaId,
-    String? profileSubjectId,
+    String? subAccountId,
     String? personaContextVersion,
   }) async {
     createCommentCallCount++;
@@ -344,8 +373,7 @@ class MockContentRepository implements ContentRepository {
       'postId': postId,
       'content': content,
       'authorId': 'mock_user',
-      'profileSubjectId': profileSubjectId ?? 'mock_user',
-      'personaId': personaId,
+      'subAccountId': subAccountId ?? 'mock_user',
       'personaContextVersion': personaContextVersion,
       'replyCount': 0,
       'likeCount': 0,
@@ -437,6 +465,7 @@ class MockContentRepository implements ContentRepository {
     return PostEngagementCounters(
       likeCount: countersStubLikeCount,
       commentCount: countersStubCommentCount,
+      shareCount: countersStubShareCount,
     );
   }
 

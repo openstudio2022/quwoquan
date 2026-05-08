@@ -16,11 +16,11 @@ import (
 // contract.yaml: multiple error scenarios
 func TestPost_ErrorCases(t *testing.T) {
 	cases := []struct {
-		name     string
-		method   string
-		url      string
-		body     string
-		wantCode int
+		name        string
+		method      string
+		url         string
+		body        string
+		wantCode    int
 		wantCode4xx bool
 	}{
 		{
@@ -31,10 +31,10 @@ func TestPost_ErrorCases(t *testing.T) {
 			wantCode: http.StatusBadRequest,
 		},
 		{
-			name:     "missing_content_type",
-			method:   http.MethodPost,
-			url:      "/v1/content/posts",
-			body:     `{}`,
+			name:        "missing_content_type",
+			method:      http.MethodPost,
+			url:         "/v1/content/posts",
+			body:        `{}`,
 			wantCode4xx: true,
 		},
 		{
@@ -81,9 +81,10 @@ func TestPost_ErrorCases(t *testing.T) {
 // header returns 401 when authentication middleware is enforced.
 // contract.yaml: post_unauthorized / go_func: TestPost_Unauthorized_Returns401
 //
-// NOTE: The current handler falls back to "user_guest" when X-Client-User-Id is
-// absent (no auth middleware yet). When auth is added, update assertion to expect
-// 401. Currently validates that the endpoint responds without a 5xx error.
+// NOTE: The current handler still falls back to a structured anonymous subAccountId
+// when X-Client-User-Id is absent (no auth middleware yet). When auth is added,
+// update assertion to expect 401. Currently validates that the endpoint responds
+// without a 5xx error.
 func TestPost_Unauthorized_Returns401(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost, "/v1/content/posts",
@@ -96,7 +97,7 @@ func TestPost_Unauthorized_Returns401(t *testing.T) {
 	testHandler.ServeHTTP(rec, req)
 
 	// When auth middleware is added, this should return 401.
-	// Until then, accept 201 (guest fallback) or 401 — never a 5xx.
+	// Until then, accept 201 (anonymous fallback) or 401 — never a 5xx.
 	if rec.Code >= 500 {
 		t.Errorf("missing userId should not cause 5xx, got %d: %s", rec.Code, rec.Body.String())
 	}

@@ -13,7 +13,7 @@ class PostSearchItemView {
     this.title,
     this.summary,
     this.coverUrl,
-    this.authorProfileSubjectId,
+    this.authorId,
     this.authorDisplayName,
     this.authorAvatarUrl,
     this.circleId,
@@ -32,7 +32,7 @@ class PostSearchItemView {
   final String? title;
   final String? summary;
   final String? coverUrl;
-  final String? authorProfileSubjectId;
+  final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
   final String? circleId;
@@ -57,9 +57,7 @@ class PostSearchItemView {
       summary: (map['summary'] ?? map['body'] ?? map['highlightText'])
           ?.toString(),
       coverUrl: (map['coverUrl'] ?? map['thumbnailUrl'])?.toString(),
-      authorProfileSubjectId:
-          (map['authorProfileSubjectId'] ?? map['profileSubjectId'])
-              ?.toString(),
+      authorId: (map['authorId'] ?? map['subAccountId'])?.toString(),
       authorDisplayName:
           (map['authorDisplayName'] ??
                   map['authorDisplayNameSnapshot'] ??

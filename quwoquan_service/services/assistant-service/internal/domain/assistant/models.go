@@ -199,7 +199,6 @@ type PageContextInput struct {
 	BusinessObjects       []map[string]any `json:"businessObjects,omitempty"`
 	UserAction            string           `json:"userAction,omitempty"`
 	UserActions           []string         `json:"userActions,omitempty"`
-	ProfileSubjectID      string           `json:"profileSubjectId,omitempty"`
 	SubAccountID          string           `json:"subAccountId,omitempty"`
 	PersonaContextVersion string           `json:"personaContextVersion,omitempty"`
 }
@@ -207,7 +206,6 @@ type PageContextInput struct {
 type SearchRequest struct {
 	UserQuery             string `json:"userQuery"`
 	SearchIntensity       string `json:"searchIntensity,omitempty"`
-	ProfileSubjectID      string `json:"profileSubjectId,omitempty"`
 	SubAccountID          string `json:"subAccountId,omitempty"`
 	PersonaContextVersion string `json:"personaContextVersion,omitempty"`
 	SourceSurfaceID       string `json:"sourceSurfaceId,omitempty"`

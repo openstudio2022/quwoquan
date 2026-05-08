@@ -8,7 +8,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/runtime/contractfixture"
+	runtimemedia "quwoquan_service/runtime/media"
+	"quwoquan_service/services/chat-service/internal/application"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
+	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
 type contractSeedEvidence struct {
@@ -32,21 +35,24 @@ type chatFixtureSeedSet struct {
 }
 
 type chatFixtureConversation struct {
-	ID                 string `json:"_id"`
-	Type               string `json:"type"`
-	Title              string `json:"title"`
-	AvatarURL          string `json:"avatarUrl"`
-	CreatorID          string `json:"creatorId"`
-	MaxSeq             int64  `json:"maxSeq"`
-	MemberCount        int    `json:"memberCount"`
-	MaxGroupSize       int    `json:"maxGroupSize"`
-	ReceiptEnabled     bool   `json:"receiptEnabled"`
-	LastMessagePreview string `json:"lastMessagePreview"`
-	LastMessageTime    string `json:"lastMessageTime"`
-	MessageCount       int    `json:"messageCount"`
-	Status             string `json:"status"`
-	CreatedAt          string `json:"createdAt"`
-	UpdatedAt          string `json:"updatedAt"`
+	ID                     string   `json:"_id"`
+	Type                   string   `json:"type"`
+	Title                  string   `json:"title"`
+	AvatarURL              string   `json:"avatarUrl"`
+	CreatorID              string   `json:"creatorId"`
+	CircleID               string   `json:"circleId"`
+	MaxSeq                 int64    `json:"maxSeq"`
+	MemberCount            int      `json:"memberCount"`
+	MaxGroupSize           int      `json:"maxGroupSize"`
+	ReceiptEnabled         bool     `json:"receiptEnabled"`
+	GroupAvatarVersion     int64    `json:"groupAvatarVersion"`
+	GroupAvatarSourceUsers []string `json:"groupAvatarSourceUserIds"`
+	LastMessagePreview     string   `json:"lastMessagePreview"`
+	LastMessageTime        string   `json:"lastMessageTime"`
+	MessageCount           int      `json:"messageCount"`
+	Status                 string   `json:"status"`
+	CreatedAt              string   `json:"createdAt"`
+	UpdatedAt              string   `json:"updatedAt"`
 }
 
 type chatFixtureMessage struct {
@@ -103,8 +109,8 @@ func seedChatContractFixture(t *testing.T, seedRef string) contractSeedEvidence 
 		inserted++
 	}
 	for conversationID, members := range seedSet.Members {
-		for _, fm := range members {
-			member := chatMemberFromFixture(conversationID, fm)
+		for idx, fm := range members {
+			member := chatMemberFromFixture(conversationID, idx, fm)
 			if _, err := mongoDB.Collection("conversation_members").InsertOne(ctx, member); err != nil {
 				t.Fatalf("seed member %s/%s: %v", conversationID, fm.UserID, err)
 			}
@@ -127,6 +133,7 @@ func seedChatContractFixture(t *testing.T, seedRef string) contractSeedEvidence 
 		}
 		inserted++
 	}
+	backfillSeededGroupAvatars(t)
 
 	return contractSeedEvidence{
 		SeedRefs:      []string{seedRef},
@@ -171,6 +178,7 @@ func chatConversationFromFixture(fc chatFixtureConversation) *model.Conversation
 		Title:              fc.Title,
 		AvatarUrl:          fc.AvatarURL,
 		CreatorId:          fc.CreatorID,
+		CircleId:           fc.CircleID,
 		MaxSeq:             fc.MaxSeq,
 		MemberCount:        fc.MemberCount,
 		MaxGroupSize:       fc.MaxGroupSize,
@@ -206,7 +214,9 @@ func chatMessageFromFixture(conversationID string, fm chatFixtureMessage) *model
 	}
 }
 
-func chatMemberFromFixture(conversationID string, fm chatFixtureMember) *model.ConversationMember {
+func chatMemberFromFixture(conversationID string, order int, fm chatFixtureMember) *model.ConversationMember {
+	joinedAt := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC).
+		Add(time.Duration(order) * time.Second)
 	return &model.ConversationMember{
 		ID:             conversationID + "_" + fm.UserID,
 		ConversationId: conversationID,
@@ -216,7 +226,29 @@ func chatMemberFromFixture(conversationID string, fm chatFixtureMember) *model.C
 		AvatarVersion:  1,
 		MemberType:     "user",
 		Role:           fm.Role,
-		JoinedAt:       time.Now().UTC(),
+		JoinedAt:       joinedAt,
+	}
+}
+
+func backfillSeededGroupAvatars(t *testing.T) {
+	t.Helper()
+	const testAvatarCDNBase = "http://127.0.0.1:18081"
+	repo := persistence.NewMongoChatStore(mongoDB)
+	media := runtimemedia.NewGroupAvatarService(
+		redisRouter.Scene("general"),
+		testAvatarCDNBase,
+		testChatMediaRoot,
+	)
+	if err := application.BackfillMissingGroupAvatars(
+		context.Background(),
+		repo,
+		nil,
+		media,
+		nil,
+		nil,
+		200,
+	); err != nil {
+		t.Fatalf("backfill seeded group avatars: %v", err)
 	}
 }
 

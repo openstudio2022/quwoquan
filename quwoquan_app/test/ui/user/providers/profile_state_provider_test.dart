@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
@@ -13,10 +16,9 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
   @override
   Future<ProfileSubjectViewData> getUserProfile(String userId) async {
     return ProfileSubjectViewData(
-      profileSubjectId: userId,
-      ownerUserId: 'owner-1',
-      subjectType: 'persona',
       subAccountId: userId,
+      ownerUserId: 'owner-1',
+      subjectType: 'subAccount',
       userHandle: 'user_name',
       username: 'user_name',
       displayName: '展示名',
@@ -51,9 +53,8 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
   Future<void> followUser(
     String targetUserId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {
     followCalls += 1;
   }
@@ -62,9 +63,8 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
   Future<void> unfollowUser(
     String targetUserId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {
     unfollowCalls += 1;
   }
@@ -91,6 +91,33 @@ class _TestRelationshipCapabilityRepository
 }
 
 void main() {
+  late Directory tempDir;
+
+  setUpAll(() async {
+    tempDir = await Directory.systemTemp.createTemp('profile_state_test_');
+    Hive.init(tempDir.path);
+    final box = await Hive.openBox<String>('client_interaction_state');
+    await box.clear();
+    await box.close();
+  });
+
+  setUp(() async {
+    if (Hive.isBoxOpen('client_interaction_state')) {
+      await Hive.box<String>('client_interaction_state').clear();
+      return;
+    }
+    final box = await Hive.openBox<String>('client_interaction_state');
+    await box.clear();
+    await box.close();
+  });
+
+  tearDownAll(() async {
+    await Hive.close();
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
+
   test('toggleFollow 仅通过 optimistic overlay 更新展示 capability', () async {
     final userRepo = _TestUserProfileRepository();
     final container = ProviderContainer(

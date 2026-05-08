@@ -16,6 +16,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -279,7 +280,7 @@ class _HomePageState extends ConsumerState<HomePage>
     context.push(
       AppRoutePaths.userProfile(username: userId),
       extra: UserProfileRouteExtra(
-        profileSubjectId: userId,
+        subAccountId: userId,
         avatar: avatarUrl,
         displayName: displayName,
         backgroundImage: backgroundUrl,
@@ -328,9 +329,13 @@ class _HomePageState extends ConsumerState<HomePage>
               .indexWhere((item) => item.id == post.id)
               .clamp(0, viewerPosts.length - 1)
         : mediaIndex;
-    final discoveryState = ref.read(discoveryStateProvider);
-    final relationshipState = ref.read(userRelationshipStateProvider);
-    final postInteractionState = ref.read(postInteractionStateProvider);
+    final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+      posts: viewerPosts,
+      discoveryState: ref.read(discoveryStateProvider),
+      relationshipState: ref.read(userRelationshipStateProvider),
+      postInteractionState: ref.read(postInteractionStateProvider),
+    );
+    primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
     final result = await context.push<Object?>(
       post.isVideoLike
           ? '/video-viewer/$initialIndex'
@@ -343,58 +348,11 @@ class _HomePageState extends ConsumerState<HomePage>
         source: 'following',
         initialImageIndex: mediaIndex,
         rawPostsById: rawPostsById,
-        interactionSnapshot: MediaViewerInteractionSnapshot(
-          followingUsers: Set<String>.from(
-            relationshipState.followingProfileIds.isEmpty
-                ? discoveryState.followingUsers
-                : relationshipState.followingProfileIds,
-          ),
-          likedPosts: Set<String>.from(
-            postInteractionState.likedPostIds.isEmpty
-                ? discoveryState.likedPosts
-                : postInteractionState.likedPostIds,
-          ),
-          savedPosts: Set<String>.from(
-            postInteractionState.savedPostIds.isEmpty
-                ? discoveryState.savedPosts
-                : postInteractionState.savedPostIds,
-          ),
-          postLikesCount: {
-            for (final item in viewerPosts)
-              item.id: postInteractionState.likeCountFor(
-                item.id,
-                fallback: discoveryState.getPostLikesCount(item.id) > 0
-                    ? discoveryState.getPostLikesCount(item.id)
-                    : item.likeCount,
-              ),
-          },
-          postBookmarksCount: {
-            for (final item in viewerPosts)
-              item.id: postInteractionState.bookmarkCountFor(
-                item.id,
-                fallback: discoveryState.getPostBookmarksCount(item.id) > 0
-                    ? discoveryState.getPostBookmarksCount(item.id)
-                    : item.favoriteCount,
-              ),
-          },
-          postSharesCount: {
-            for (final item in viewerPosts)
-              item.id: postInteractionState.shareCountFor(
-                item.id,
-                fallback: discoveryState.getPostSharesCount(item.id) > 0
-                    ? discoveryState.getPostSharesCount(item.id)
-                    : item.shareCount,
-              ),
-          },
-        ),
+        interactionSnapshot: interactionSnapshot,
       ),
     );
     if (result is MediaViewerResult) {
-      ref
-          .read(userRelationshipStateProvider.notifier)
-          .applyViewerResult(result);
-      ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
-      ref.read(discoveryStateProvider.notifier).applyMediaViewerResult(result);
+      applyMediaViewerResultToInteractionState(ref, result);
     }
   }
 
