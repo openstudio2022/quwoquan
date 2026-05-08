@@ -10,7 +10,12 @@ import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart
 
 ProviderContainer _container(ContentRepository repo) {
   return ProviderContainer(
-    overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      contentRepositoryProvider.overrideWithValue(repo),
+      postInteractionStateProvider.overrideWith(
+        _NoopPostInteractionStateNotifier.new,
+      ),
+    ],
   );
 }
 
@@ -179,4 +184,40 @@ class _FailingContentRepository extends MockContentRepository {
     String? cursor,
     String sort = kFeedSortRecommend,
   }) async => throw Exception('network_error');
+}
+
+class _NoopPostInteractionStateNotifier extends PostInteractionStateNotifier {
+  @override
+  PostInteractionState build() => const PostInteractionState();
+
+  @override
+  void applyConfirmedPosts(Iterable<PostBaseDto> posts) {
+    final nextConfirmedShareCounts = Map<String, int>.from(
+      state.confirmedShareCounts,
+    );
+    final nextPendingShareDeltas = Map<String, int>.from(
+      state.pendingShareDeltas,
+    );
+    final nextConfirmedCommentCounts = Map<String, int>.from(
+      state.confirmedCommentCounts,
+    );
+    final nextPendingCommentDeltas = Map<String, int>.from(
+      state.pendingCommentDeltas,
+    );
+    for (final post in posts) {
+      if (post.id.trim().isEmpty) {
+        continue;
+      }
+      nextConfirmedShareCounts[post.id] = post.shareCount;
+      nextPendingShareDeltas.remove(post.id);
+      nextConfirmedCommentCounts[post.id] = post.commentCount;
+      nextPendingCommentDeltas.remove(post.id);
+    }
+    state = state.copyWith(
+      confirmedShareCounts: nextConfirmedShareCounts,
+      pendingShareDeltas: nextPendingShareDeltas,
+      confirmedCommentCounts: nextConfirmedCommentCounts,
+      pendingCommentDeltas: nextPendingCommentDeltas,
+    );
+  }
 }

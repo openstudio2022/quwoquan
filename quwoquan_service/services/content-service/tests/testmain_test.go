@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -103,7 +104,15 @@ func TestMain(m *testing.M) {
 	testPostService = postService
 	reportService := application.NewReportService(reportStore, eventSpy)
 	behaviorService := application.NewBehaviorService(hotPath, postStore)
-	testHandler = contenhttp.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
+	baseHandler := contenhttp.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
+	testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
+			if userID := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); userID != "" {
+				r.Header.Set("X-Client-Sub-Account-Id", userID)
+			}
+		}
+		baseHandler.ServeHTTP(w, r)
+	})
 
 	code := m.Run()
 

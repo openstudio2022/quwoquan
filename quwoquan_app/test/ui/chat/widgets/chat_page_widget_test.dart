@@ -209,7 +209,7 @@ class _NavigationChatRepository extends MockChatRepository {
       ChatInboxDto(
         id: 'conv_navigation_test',
         type: 'direct',
-        title: '导航测试会话',
+        title: '产品共创群',
         avatarUrl: '',
       ),
     ];
