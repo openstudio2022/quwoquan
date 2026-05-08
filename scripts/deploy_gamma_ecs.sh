@@ -26,6 +26,13 @@ REPORT_PATH="${REPORT_DIR}/deploy-report.json"
 BACKUP_PARENT="${GAMMA_ECS_BACKUP_PARENT:-}"
 CURATED_MEDIA_ROOT="${ROOT}/artifacts/local-gamma/media"
 CURATED_MEDIA_BUNDLE="${ROOT}/deploy/shared/gamma_curated_media_bundle.json"
+DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}"
+DEFAULT_COMPOSE_TIMEOUT_SECONDS="${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}"
+DEFAULT_SKIP_IMAGE_PREPULL="${GAMMA_ECS_SKIP_IMAGE_PREPULL:-0}"
+if [[ "$SKIP_UPLOAD" == "1" ]]; then
+  DEFAULT_SKIP_IMAGE_PREPULL="${GAMMA_ECS_SKIP_IMAGE_PREPULL:-1}"
+  DEFAULT_COMPOSE_TIMEOUT_SECONDS="${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-2400}"
+fi
 
 SSH_OPTS=(
   -p "$ECS_PORT"
@@ -103,15 +110,6 @@ print(dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"))
 PY
 )"
 
-FAILURE_STAGE="prepare_curated_media"
-echo "[gamma-ecs] preparing gamma curated fixture/media bundle"
-python3 "$ROOT/scripts/build_gamma_curated_fixture_bundle.py" \
-  --output-media-root "$CURATED_MEDIA_ROOT" >/dev/null
-if [[ ! -f "$CURATED_MEDIA_BUNDLE" ]]; then
-  echo "::error::missing gamma curated media bundle: $CURATED_MEDIA_BUNDLE" >&2
-  exit 2
-fi
-
 echo "[gamma-ecs] stage=${STAGE}"
 echo "[gamma-ecs] target=${ECS_USER}@${ECS_HOST}:${ECS_PORT}"
 echo "[gamma-ecs] remote_dir=${REMOTE_DIR}"
@@ -151,6 +149,15 @@ BACKUP_REMOTE="${BACKUP_PARENT:-$REMOTE_DIR/../gamma-backups}"
 echo "[gamma-ecs] remote_backup_parent=${BACKUP_REMOTE}"
 
 if [[ "$SKIP_UPLOAD" != "1" ]]; then
+  FAILURE_STAGE="prepare_curated_media"
+  echo "[gamma-ecs] preparing gamma curated fixture/media bundle"
+  python3 "$ROOT/scripts/build_gamma_curated_fixture_bundle.py" \
+    --output-media-root "$CURATED_MEDIA_ROOT" >/dev/null
+  if [[ ! -f "$CURATED_MEDIA_BUNDLE" ]]; then
+    echo "::error::missing gamma curated media bundle: $CURATED_MEDIA_BUNDLE" >&2
+    exit 2
+  fi
+
   echo "[gamma-ecs] creating remote backup snapshot (if tree exists)"
   FAILURE_STAGE="backup"
   remote_exec "mkdir -p '$BACKUP_REMOTE'"
@@ -204,7 +211,7 @@ if remote_exec "test -f '${REMOTE_DIR}/.gamma_deploy_state.json'"; then
   )"
 fi
 
-remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-deterministic}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-1}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-5400}") && bash -s" <<'REMOTE_SCRIPT'
+remote_exec "cd '${REMOTE_DIR}' && export PREV_IMAGE_VERSION=$(printf '%q' "$PREV_IMAGE_VERSION") IMAGE_VERSION=$(printf '%q' "$IMAGE_VERSION") STAGE=$(printf '%q' "$STAGE") GAMMA_TEST_AUTH_TOKEN=$(printf '%q' "${GAMMA_TEST_AUTH_TOKEN:-gamma-ecs-token}") LOCAL_GAMMA_GATEWAY_BASE_URL=$(printf '%q' "${BASE_URL}") LOCAL_GAMMA_PRODUCT_OPS_BASE_URL=$(printf '%q' "${PRODUCT_OPS_BASE_URL}") LOCAL_GAMMA_MEDIA_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL=$(printf '%q' "${MEDIA_BASE_URL}") LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL=$(printf '%q' "${MEDIA_ORIGIN_BASE_URL}") LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX=$(printf '%q' "${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}") ASSISTANT_MODEL_PROVIDER=$(printf '%q' "${ASSISTANT_MODEL_PROVIDER:-deterministic}") ALLOW_DETERMINISTIC_BETA=$(printf '%q' "${ALLOW_DETERMINISTIC_BETA:-1}") ASSISTANT_SCENARIO_SEED_REFS=$(printf '%q' "${ASSISTANT_SCENARIO_SEED_REFS:-assistant_p0_core}") ASSISTANT_SEARCH_PROVIDER=$(printf '%q' "${ASSISTANT_SEARCH_PROVIDER:-}") GAMMA_ECS_CONTAINER_REGISTRY_MIRROR=$(printf '%q' "${GAMMA_ECS_CONTAINER_REGISTRY_MIRROR:-}") GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_IMAGE_PULL_TIMEOUT_SECONDS}") GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS=$(printf '%q' "${DEFAULT_COMPOSE_TIMEOUT_SECONDS}") GAMMA_ECS_SKIP_IMAGE_PREPULL=$(printf '%q' "${DEFAULT_SKIP_IMAGE_PREPULL}") && bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 python3 - <<'PY'
 import json
@@ -314,7 +321,12 @@ CONF
 }
 
 pre_pull_local_gamma_images() {
+  if [[ "${GAMMA_ECS_SKIP_IMAGE_PREPULL:-0}" == "1" ]]; then
+    echo "[gamma-ecs] skip image pre-pull"
+    return 0
+  fi
   local timeout_seconds="${GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS:-600}"
+  local parallelism="${GAMMA_ECS_IMAGE_PULL_PARALLELISM:-4}"
   local images=(
     docker.io/library/postgres:16-alpine
     docker.io/library/mongo:7-jammy
@@ -325,10 +337,21 @@ pre_pull_local_gamma_images() {
     docker.io/library/alpine:3.19
     docker.io/library/caddy:2.8.4-alpine
   )
+  local pids=()
   for image in "${images[@]}"; do
-    echo "[gamma-ecs] pre-pulling ${image}"
-    timeout "$timeout_seconds" docker pull "$image" || \
-      echo "[gamma-ecs] pre-pull 跳过/失败: ${image}（后续 compose build 会重试拉取）" >&2
+    (
+      echo "[gamma-ecs] pre-pulling ${image}"
+      timeout "$timeout_seconds" docker pull "$image" || \
+        echo "[gamma-ecs] pre-pull 跳过/失败: ${image}（后续 compose build 会重试拉取）" >&2
+    ) &
+    pids+=("$!")
+    if (( ${#pids[@]} >= parallelism )); then
+      wait "${pids[0]}" || true
+      pids=("${pids[@]:1}")
+    fi
+  done
+  for pid in "${pids[@]}"; do
+    wait "$pid" || true
   done
 }
 
@@ -350,7 +373,7 @@ export LOCAL_GAMMA_HTTPS_PORT="${LOCAL_GAMMA_HTTPS_PORT:-18443}"
 export LOCAL_GAMMA_ADMIN_PORT="${LOCAL_GAMMA_ADMIN_PORT:-12019}"
 
 set +e
-timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-5400}" bash scripts/start_local_gamma_mirror.sh
+timeout "${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-3600}" bash scripts/start_local_gamma_mirror.sh
 rc=$?
 set -e
 if [[ "$rc" -ne 0 ]]; then

@@ -432,6 +432,16 @@ void main() {
       expect(d.defaultIncomingCallRingtoneId, 'official.blue-wave');
       expect(d.allowCallerRingtoneOverride, isFalse);
     });
+
+    test('空 ringtone 字符串回退为 null，兼容存量 NULL 行', () {
+      final w = CallSettingsWireDto.fromMap(<String, dynamic>{
+        'defaultIncomingCallRingtoneId': '',
+        'allowCallerRingtoneOverride': true,
+      });
+      final d = CallSettingsDto.fromCallSettingsWire(w);
+      expect(d.defaultIncomingCallRingtoneId, isNull);
+      expect(d.allowCallerRingtoneOverride, isTrue);
+    });
   });
 
   group('PrivacySettingsWireDto', () {

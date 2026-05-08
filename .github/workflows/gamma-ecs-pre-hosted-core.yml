@@ -148,7 +148,14 @@ jobs:
             exit 2
           fi
       - name: Install sshpass (password auth optional)
+        env:
+          GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
+          GAMMA_ECS_SSH_KEY: ${{ secrets.GAMMA_ECS_SSH_KEY }}
         run: |
+          if [ -n "${GAMMA_ECS_SSH_KEY:-}" ] || [ -z "${GAMMA_ECS_PASSWORD:-}" ]; then
+            echo "skip sshpass install"
+            exit 0
+          fi
           sudo apt-get update
           sudo apt-get install -y sshpass
       - name: Deploy to ECS (pre)

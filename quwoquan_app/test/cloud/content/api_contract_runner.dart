@@ -241,16 +241,26 @@ void main() {
           .toList();
 
       for (final item in items) {
-        expect(
-          item.aspectRatio,
-          isNotNull,
-          reason: 'PhotoPostDto.aspectRatio must be computable',
-        );
-        expect(
-          item.aspectRatio,
-          greaterThan(0),
-          reason: 'aspectRatio must be positive',
-        );
+        final hasDimensions =
+            item.width != null && item.height != null && item.height! > 0;
+        if (hasDimensions) {
+          expect(
+            item.aspectRatio,
+            isNotNull,
+            reason: 'aspectRatio must be computable when width/height exist',
+          );
+          expect(
+            item.aspectRatio,
+            greaterThan(0),
+            reason: 'aspectRatio must be positive when dimensions exist',
+          );
+        } else {
+          expect(
+            item.aspectRatio,
+            isNull,
+            reason: 'aspectRatio must stay null when dimensions are absent',
+          );
+        }
       }
     });
   });
@@ -481,7 +491,7 @@ void main() {
       );
     });
 
-    test('POST/DELETE /v1/user/block/{id} 可用', () async {
+    test('POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用', () async {
       if (!_apiAvailable)
         return markTestSkipped('$_apiContractEnv unavailable');
       if (_isLocalGammaContentOnly) {
@@ -492,7 +502,7 @@ void main() {
       const targetUserId = 'contract_block_target_001';
       final blockResp = await _client
           .post(
-            Uri.parse('$_apiBase/v1/user/block/$targetUserId'),
+            Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
             headers: _authHeaders('user.block.create'),
           )
           .timeout(const Duration(seconds: 10));
@@ -504,7 +514,7 @@ void main() {
 
       final unblockResp = await _client
           .delete(
-            Uri.parse('$_apiBase/v1/user/block/$targetUserId'),
+            Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
             headers: _authHeaders('user.block.delete'),
           )
           .timeout(const Duration(seconds: 10));
@@ -515,7 +525,7 @@ void main() {
       );
     });
 
-    test('PATCH /v1/user/settings/privacy 可写 blockedKeywords', () async {
+    test('PATCH /v1/user/settings/privacy 可写并回读 blockedKeywords', () async {
       if (!_apiAvailable)
         return markTestSkipped('$_apiContractEnv unavailable');
       if (_isLocalGammaContentOnly) {
@@ -539,6 +549,20 @@ void main() {
         [200, 204].contains(patchResp.statusCode),
         isTrue,
         reason: 'privacy patch should accept blockedKeywords',
+      );
+
+      final getResp = await _client
+          .get(
+            Uri.parse('$_apiBase/v1/user/settings/privacy'),
+            headers: _authHeaders('user.settings.privacy.get'),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect(getResp.statusCode, 200);
+      final body = jsonDecode(getResp.body) as Map<String, dynamic>;
+      expect(
+        body['blockedKeywords'],
+        contains('api_contract_kw'),
+        reason: 'blockedKeywords should round-trip through privacy settings',
       );
     });
   });

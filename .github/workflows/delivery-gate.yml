@@ -16,14 +16,29 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+      service: ${{ steps.detect.outputs.service }}
+      app: ${{ steps.detect.outputs.app }}
+      portal: ${{ steps.detect.outputs.portal }}
+      topology: ${{ steps.detect.outputs.topology }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - id: detect
+        name: Detect impacted scopes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/detect_ci_impacted_scopes.py \
+            --base-sha "${BASE_SHA}" \
+            --head-sha "${HEAD_SHA}" \
+            --github-output "$GITHUB_OUTPUT"
       - name: Environment Topology Regression
+        if: ${{ steps.detect.outputs.topology == 'true' }}
         run: |
           bash scripts/verify_deployment_domain_mapping.sh
           bash scripts/verify_topology_contract_regression.sh
@@ -38,6 +53,7 @@ jobs:
     name: Delivery Gate — Service (L2)
     runs-on: ubuntu-latest
     needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.service == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -69,6 +85,7 @@ jobs:
     name: Delivery Gate — App (L1)
     runs-on: ubuntu-latest
     needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.app == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -103,6 +120,7 @@ jobs:
     name: Delivery Gate — Ops Portal
     runs-on: ubuntu-latest
     needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.portal == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -175,10 +193,17 @@ jobs:
               fail=1
             fi
           }
+          expect_success_or_skipped() {
+            local name="$1" val="$2" hint="$3"
+            if [ "${val}" != "success" ] && [ "${val}" != "skipped" ]; then
+              echo "::error::${name} expected success/skipped, got ${val}. ${hint}"
+              fail=1
+            fi
+          }
           expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
-          expect_success "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
-          expect_success "quwoquan_app" "${APP}" "检查 app scope gate 输出"
-          expect_success "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
+          expect_success_or_skipped "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
+          expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope gate 输出"
+          expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
           if [ "${fail}" -ne 0 ]; then
             echo "::error::Delivery Gate 未全部成功；请按上列分项修复后重跑。"
             exit 1

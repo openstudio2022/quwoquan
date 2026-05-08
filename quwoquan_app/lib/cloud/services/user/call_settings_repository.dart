@@ -23,7 +23,10 @@ class CallSettingsDto {
 
   factory CallSettingsDto.fromCallSettingsWire(CallSettingsWireDto w) {
     return CallSettingsDto(
-      defaultIncomingCallRingtoneId: w.defaultIncomingCallRingtoneId,
+      defaultIncomingCallRingtoneId:
+          (w.defaultIncomingCallRingtoneId?.trim().isEmpty ?? true)
+              ? null
+              : w.defaultIncomingCallRingtoneId,
       allowCallerRingtoneOverride: w.allowCallerRingtoneOverride,
       enableCallVibration: w.enableCallVibration,
       enableGroupCallRing: w.enableGroupCallRing,

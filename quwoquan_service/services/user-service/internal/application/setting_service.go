@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"strings"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
@@ -73,9 +74,56 @@ func (s *SettingService) UpdatePrivacySettings(ctx context.Context, userID strin
 	if v, ok := data["profileVisibility"].(string); ok {
 		st.ProfileVisibility = v
 	}
+	if blocked, ok := normalizeStringList(data["blockedKeywords"]); ok {
+		st.BlockedKeywords = blocked
+	}
 	if err := s.settings.Upsert(ctx, st); err != nil {
 		return err
 	}
 	_ = s.scache.Del(ctx, userID)
 	return nil
+}
+
+func normalizeStringList(raw any) ([]string, bool) {
+	switch value := raw.(type) {
+	case []string:
+		return uniqueNormalizedStrings(value), true
+	case []any:
+		items := make([]string, 0, len(value))
+		for _, item := range value {
+			items = append(items, strings.TrimSpace(toString(item)))
+		}
+		return uniqueNormalizedStrings(items), true
+	default:
+		return nil, false
+	}
+}
+
+func uniqueNormalizedStrings(items []string) []string {
+	if len(items) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]struct{}, len(items))
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		normalized := strings.TrimSpace(item)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	return out
+}
+
+func toString(raw any) string {
+	switch value := raw.(type) {
+	case string:
+		return value
+	default:
+		return ""
+	}
 }

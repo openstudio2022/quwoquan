@@ -179,6 +179,7 @@ tables:
       - { name: default_font_size_preset, type: VARCHAR(16), constraints: [NOT_NULL], default: "'md'" }
       - { name: appearance_version, type: INTEGER, constraints: [NOT_NULL], default: 1 }
       - { name: appearance_updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: blocked_keywords, type: "TEXT[]" }
       - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
 
   profile_update_proposals:

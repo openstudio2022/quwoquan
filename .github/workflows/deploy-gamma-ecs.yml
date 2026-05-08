@@ -23,52 +23,67 @@ env:
   ALLOW_DETERMINISTIC_BETA: "1"
 
 jobs:
-  gate:
-    name: Gate — T1/T2 preflight
+  required_checks_preflight:
+    name: Preflight — required PR checks
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
+    permissions:
+      checks: read
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - name: 设置 Go
-        uses: actions/setup-go@v5
+      - name: Verify required checks on current SHA
+        uses: actions/github-script@v7
         with:
-          go-version-file: quwoquan_service/go.mod
-      - name: 设置 Dart
-        uses: dart-lang/setup-dart@v1
-      - name: 安装 kustomize
-        uses: syntaqx/setup-kustomize@v1
-      - name: 安装 Python 依赖 (rec-model-service)
-        run: pip install -r quwoquan_service/services/rec-model-service/requirements.txt
-      - name: 准备 personal_assistant/.env
-        run: |
-          if [ -d quwoquan_app/personal_assistant ]; then
-            mkdir -p quwoquan_app/personal_assistant
-            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-            else
-              : > quwoquan_app/personal_assistant/.env
-            fi
-          fi
-      - name: 设置 Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - name: Gate
-        run: make gate
-
-  alpha_beta_self_hosted:
-    name: Self-hosted — alpha/beta assistant 矩阵（pre-deploy）
-    needs: [gate]
-    secrets: inherit
-    uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
-    with:
-      env_json: '["alpha","beta"]'
-      allow_missing_platforms: true
+          script: |
+            const required = [
+              '03. Delivery Gate',
+              '04. Pre-Release Gate',
+              '05. App Env Device Matrix',
+            ];
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const ref = context.sha;
+            const { data } = await github.rest.checks.listForRef({
+              owner,
+              repo,
+              ref,
+              per_page: 100,
+            });
+            const runs = data.check_runs || [];
+            const failures = [];
+            for (const name of required) {
+              const matches = runs
+                .filter((run) => run.name === name)
+                .sort((left, right) => {
+                  const l = new Date(left.completed_at || left.started_at || 0).getTime();
+                  const r = new Date(right.completed_at || right.started_at || 0).getTime();
+                  return r - l;
+                });
+              if (matches.length === 0) {
+                failures.push(`${name}: missing on ${ref}`);
+                continue;
+              }
+              const latest = matches[0];
+              if (latest.status !== 'completed' || latest.conclusion !== 'success') {
+                failures.push(
+                  `${name}: expected completed/success, got ${latest.status}/${latest.conclusion}`
+                );
+              } else {
+                core.notice(`${name} already green on ${ref}`);
+              }
+            }
+            if (failures.length > 0) {
+              core.setFailed(
+                [
+                  '08 requires the same SHA to have green required PR checks before deploy.',
+                  ...failures,
+                ].join('\n')
+              );
+            }
 
   gamma_pre_validation:
     name: Gamma ECS — pre hosted validation
-    needs: [gate, alpha_beta_self_hosted]
+    needs: [required_checks_preflight]
     uses: ./.github/workflows/gamma-ecs-pre-hosted-core.yml
     secrets: inherit
 
@@ -103,7 +118,14 @@ jobs:
             exit 2
           fi
       - name: Install sshpass（密码登录可选）
+        env:
+          GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
+          GAMMA_ECS_SSH_KEY: ${{ secrets.GAMMA_ECS_SSH_KEY }}
         run: |
+          if [ -n "${GAMMA_ECS_SSH_KEY:-}" ] || [ -z "${GAMMA_ECS_PASSWORD:-}" ]; then
+            echo "skip sshpass install"
+            exit 0
+          fi
           sudo apt-get update
           sudo apt-get install -y sshpass
       - name: Deploy to ECS (prod)
@@ -119,6 +141,7 @@ jobs:
           GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
           GAMMA_ECS_CONTAINER_REGISTRY_MIRROR: ${{ vars.GAMMA_ECS_CONTAINER_REGISTRY_MIRROR }}
           GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_IMAGE_PULL_TIMEOUT_SECONDS }}
+          GAMMA_ECS_SKIP_IMAGE_PREPULL: "1"
           GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS: ${{ vars.GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS }}
       - name: Upload ECS deploy report（prod）
         if: always()
@@ -211,19 +234,16 @@ jobs:
 
   ecs_onebox_pre_summary:
     name: ECS Onebox — pre 门禁汇总
-    needs: [gate, alpha_beta_self_hosted, gamma_pre_validation]
+    needs: [required_checks_preflight, gamma_pre_validation]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: 汇总 pre 阶段结果
         env:
-          GATE: ${{ needs.gate.result }}
-          ALPHA_BETA: ${{ needs.alpha_beta_self_hosted.result }}
+          REQUIRED_CHECKS: ${{ needs.required_checks_preflight.result }}
           GAMMA_PRE: ${{ needs.gamma_pre_validation.result }}
         run: |
-          echo "gate=${GATE}"
-          echo "alpha_beta_self_hosted=${ALPHA_BETA}"
+          echo "required_checks_preflight=${REQUIRED_CHECKS}"
           echo "gamma_pre_validation=${GAMMA_PRE}"
-          test "${GATE}" = "success"
-          test "${ALPHA_BETA}" = "success"
+          test "${REQUIRED_CHECKS}" = "success"
           test "${GAMMA_PRE}" = "success"

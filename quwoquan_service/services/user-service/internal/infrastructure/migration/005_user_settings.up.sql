@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
     default_font_size_preset VARCHAR(16) NOT NULL DEFAULT 'md',
     appearance_version       INTEGER NOT NULL DEFAULT 1,
     appearance_updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    blocked_keywords         TEXT[],
     updated_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
     ,CONSTRAINT fk_user_settings_user_id FOREIGN KEY (user_id) REFERENCES user_profiles(user_id) ON DELETE CASCADE
 );
