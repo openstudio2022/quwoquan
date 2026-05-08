@@ -30,11 +30,6 @@ jobs:
       ios_count: ${{ steps.discover.outputs.ios_count }}
       device_summary: ${{ steps.discover.outputs.device_summary }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          sparse-checkout: |
-            scripts
       - name: 校验 self-hosted macOS runner
         run: |
           if [ "${{ runner.os }}" != "macOS" ]; then
@@ -48,16 +43,67 @@ jobs:
       - name: 发现当前 Mac 可见移动设备
         id: discover
         run: |
-          python3 scripts/discover_flutter_mobile_devices.py \
-            --app-dir "$GITHUB_WORKSPACE" \
-            --output "$RUNNER_TEMP/mobile-devices.json" \
-            --require-mobile
           python3 - "$RUNNER_TEMP/mobile-devices.json" "$GITHUB_OUTPUT" <<'PY'
           import json
+          import subprocess
           import sys
+          from pathlib import Path
 
-          path, output_path = sys.argv[1], sys.argv[2]
-          data = json.load(open(path, encoding="utf-8"))
+          output_json, output_path = sys.argv[1], sys.argv[2]
+          result = subprocess.run(
+              ["flutter", "devices", "--machine"],
+              cwd=str(Path.home()),
+              text=True,
+              capture_output=True,
+              check=False,
+          )
+          if result.returncode != 0:
+              sys.stderr.write("flutter devices --machine failed:\n")
+              sys.stderr.write((result.stdout or "") + (result.stderr or ""))
+              raise SystemExit(result.returncode)
+          raw = result.stdout or ""
+          start = raw.find("[")
+          end = raw.rfind("]")
+          if start < 0 or end < start:
+              sys.stderr.write("flutter devices output missing JSON array\n")
+              raise SystemExit(2)
+          devices = json.loads(raw[start : end + 1])
+          filtered = []
+          for device in devices:
+              target = str(device.get("targetPlatform", "")).lower()
+              if target != "ios" and not target.startswith("android"):
+                  continue
+              device_id = str(device.get("id", "")).strip()
+              if not device_id:
+                  continue
+              filtered.append(
+                  {
+                      "id": device_id,
+                      "name": str(device.get("name", "")),
+                      "targetPlatform": str(device.get("targetPlatform", "")),
+                      "sdk": str(device.get("sdk", "")),
+                      "emulator": bool(device.get("emulator", False)),
+                      "ephemeral": bool(device.get("ephemeral", False)),
+                  }
+              )
+          data = {
+              "deviceCount": len(filtered),
+              "android": [
+                  item
+                  for item in filtered
+                  if str(item.get("targetPlatform", "")).lower().startswith("android")
+              ],
+              "ios": [
+                  item
+                  for item in filtered
+                  if str(item.get("targetPlatform", "")).lower() == "ios"
+              ],
+              "devices": filtered,
+          }
+          Path(output_json).write_text(
+              json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
           android = data.get("android") or []
           ios = data.get("ios") or []
 
@@ -82,6 +128,13 @@ jobs:
 
           print(f"::notice::gamma self-hosted devices => {summary}")
           PY
+          python3 - "$RUNNER_TEMP/mobile-devices.json" <<'PY'
+          import json
+          import sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          if int(data.get("deviceCount", 0)) == 0:
+              raise SystemExit(2)
+          PY
 
   gamma_assistant_android:
     name: Gamma assistant / Android (self-hosted)
@@ -101,6 +154,7 @@ jobs:
         with:
           fetch-depth: 1
           sparse-checkout: |
+            .gitmodules
             scripts
             packages
             quwoquan_app
@@ -184,6 +238,7 @@ jobs:
         with:
           fetch-depth: 1
           sparse-checkout: |
+            .gitmodules
             scripts
             packages
             quwoquan_app
@@ -262,6 +317,7 @@ jobs:
         with:
           fetch-depth: 1
           sparse-checkout: |
+            .gitmodules
             scripts
             packages
             quwoquan_app
@@ -340,6 +396,7 @@ jobs:
         with:
           fetch-depth: 1
           sparse-checkout: |
+            .gitmodules
             scripts
             packages
             quwoquan_app
