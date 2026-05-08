@@ -251,6 +251,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          filter: blob:none
+          submodules: false
+          sparse-checkout-cone-mode: true
           sparse-checkout: |
             .gitmodules
             scripts
@@ -361,6 +364,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          filter: blob:none
+          submodules: false
+          sparse-checkout-cone-mode: true
           sparse-checkout: |
             .gitmodules
             scripts
