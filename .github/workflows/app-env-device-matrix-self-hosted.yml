@@ -94,7 +94,7 @@ jobs:
         run: |
           if [ "${EVENT_NAME}" = "pull_request" ]; then
             echo 'env_json=["alpha","beta"]' >> "$GITHUB_OUTPUT"
-            echo 'allow_missing_platforms=false' >> "$GITHUB_OUTPUT"
+            echo 'allow_missing_platforms=true' >> "$GITHUB_OUTPUT"
             echo 'matrix_kind=assistant' >> "$GITHUB_OUTPUT"
             echo 'gamma_base_url=' >> "$GITHUB_OUTPUT"
             echo 'media_base_url=' >> "$GITHUB_OUTPUT"
@@ -445,7 +445,7 @@ jobs:
               --critical-path-seconds "${CRITICAL_PATH_SECONDS:-0}" \
               --phase "discover_devices=${DISCOVER_SECONDS:-0}" \
               --phase "mobile_matrix=${MOBILE_SECONDS:-0}" \
-              --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；详细耗时保存在 device-matrix artifacts。" \
+              --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；PR 默认允许缺席平台跳过，已发现的平台必须成功，详细耗时保存在 device-matrix artifacts。" \
               --write-step-summary
           fi
       - name: 汇总并阻断失败项
