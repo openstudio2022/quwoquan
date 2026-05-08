@@ -255,18 +255,37 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          filter: blob:none
-          submodules: false
-          sparse-checkout-cone-mode: true
-          sparse-checkout: |
-            .gitmodules
-            scripts
-            packages
-            quwoquan_app
-            quwoquan_service
+      - name: 准备缓存工作树
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CACHE_ROOT="${HOME}/.cache/quwoquan-mobile-matrix"
+          REPO_DIR="${CACHE_ROOT}/repo"
+          AUTH_HEADER="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64)"
+          sync_repo() {
+            mkdir -p "${REPO_DIR}"
+            if [ ! -d "${REPO_DIR}/.git" ]; then
+              rm -rf "${REPO_DIR}"
+              git init "${REPO_DIR}"
+              git -C "${REPO_DIR}" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+            fi
+            git -C "${REPO_DIR}" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+            git -C "${REPO_DIR}" config --local gc.auto 0
+            git -C "${REPO_DIR}" sparse-checkout init --cone
+            git -C "${REPO_DIR}" sparse-checkout set .gitmodules scripts packages quwoquan_app quwoquan_service
+            git -C "${REPO_DIR}" -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" fetch --depth=1 --filter=blob:none origin "${GITHUB_SHA}"
+            git -C "${REPO_DIR}" checkout --force --detach FETCH_HEAD
+            git -C "${REPO_DIR}" clean -ffd
+          }
+          mkdir -p "${CACHE_ROOT}"
+          if ! sync_repo; then
+            echo "::warning::cached repo sync failed, rebuilding local repo cache"
+            rm -rf "${REPO_DIR}"
+            sync_repo
+          fi
+          rm -rf "${GITHUB_WORKSPACE}/repo"
+          ln -s "${REPO_DIR}" "${GITHUB_WORKSPACE}/repo"
       - name: 记录发现结果
         run: |
           echo "Android devices: ${{ needs.discover_devices.outputs.android_count }}"
@@ -279,6 +298,7 @@ jobs:
             exit 2
           fi
       - name: 准备 personal_assistant/.env
+        working-directory: ${{ github.workspace }}/repo
         run: |
           if [ -d quwoquan_app/personal_assistant ]; then
             mkdir -p quwoquan_app/personal_assistant
@@ -302,10 +322,11 @@ jobs:
           command -v xcrun >/dev/null 2>&1 || { echo "::error::self-hosted runner 需具备 Xcode / xcrun"; exit 2; }
           flutter --version
       - name: 安装 Flutter 依赖
-        working-directory: quwoquan_app
+        working-directory: ${{ github.workspace }}/repo/quwoquan_app
         run: flutter pub get
       - id: run_matrix
         name: Run mobile matrix environments
+        working-directory: ${{ github.workspace }}/repo
         run: |
           ENV_NAMES="$(python3 - <<'PY'
           import json
@@ -363,10 +384,10 @@ jobs:
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-mobile
           path: |
-            artifacts/device-matrix/*-android.json
-            artifacts/device-matrix/*-ios.json
-            artifacts/device-matrix/assistant_device_matrix_logs/**
-            artifacts/device-matrix/chat-avatar/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/*-android.json
+            ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
+            ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
           compression-level: 0
       - name: Retry mobile matrix report upload
@@ -375,10 +396,10 @@ jobs:
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-mobile
           path: |
-            artifacts/device-matrix/*-android.json
-            artifacts/device-matrix/*-ios.json
-            artifacts/device-matrix/assistant_device_matrix_logs/**
-            artifacts/device-matrix/chat-avatar/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/*-android.json
+            ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
+            ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
           compression-level: 0
           overwrite: true

@@ -10,6 +10,8 @@ import (
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"quwoquan_service/runtime/testinfra"
 )
 
 var embeddedPG *embeddedpostgres.EmbeddedPostgres
@@ -21,7 +23,7 @@ func startEmbeddedPostgres() string {
 
 	embeddedPG = embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
-			Version(embeddedpostgres.V16).
+			Version(testinfra.StableEmbeddedPostgresVersion).
 			Port(port).
 			Username("postgres").
 			Password("postgres"),
