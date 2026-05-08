@@ -102,6 +102,7 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             scripts
+            packages
             quwoquan_app
             quwoquan_service
       - name: 记录发现结果
@@ -184,6 +185,7 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             scripts
+            packages
             quwoquan_app
             quwoquan_service
       - name: 记录发现结果
@@ -261,6 +263,7 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             scripts
+            packages
             quwoquan_app
             quwoquan_service
       - name: 记录发现结果
@@ -338,6 +341,7 @@ jobs:
           fetch-depth: 1
           sparse-checkout: |
             scripts
+            packages
             quwoquan_app
             quwoquan_service
       - name: 记录发现结果
