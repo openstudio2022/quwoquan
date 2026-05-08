@@ -34,6 +34,9 @@ if [[ "$SKIP_UPLOAD" == "1" ]]; then
   DEFAULT_SKIP_IMAGE_PREPULL="${GAMMA_ECS_SKIP_IMAGE_PREPULL:-1}"
   DEFAULT_COMPOSE_TIMEOUT_SECONDS="${GAMMA_ECS_COMPOSE_TIMEOUT_SECONDS:-2400}"
 fi
+UPLOAD_STAGE_SUFFIX="${GAMMA_ECS_UPLOAD_STAGE_SUFFIX:-$(date +%Y%m%d%H%M%S)}"
+REMOTE_STAGE_DIR="${REMOTE_DIR}.incoming-${UPLOAD_STAGE_SUFFIX}"
+REMOTE_PREV_DIR="${REMOTE_DIR}.prev"
 
 SSH_OPTS=(
   -p "$ECS_PORT"
@@ -82,6 +85,10 @@ remote_tar_extract_into() {
   else
     sshpass -e ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "mkdir -p '$remote_target' && tar -xzf - -C '$remote_target'"
   fi
+}
+
+activate_remote_stage_dir() {
+  remote_exec "rm -rf '$REMOTE_PREV_DIR'; if [ -d '$REMOTE_DIR' ]; then mv '$REMOTE_DIR' '$REMOTE_PREV_DIR'; fi; mv '$REMOTE_STAGE_DIR' '$REMOTE_DIR'"
 }
 
 if [[ -n "${GAMMA_ECS_SSH_KEY:-}" ]]; then
@@ -166,18 +173,18 @@ if [[ "$SKIP_UPLOAD" != "1" ]]; then
 
   echo "[gamma-ecs] uploading repository snapshot"
   FAILURE_STAGE="upload"
+  remote_exec "rm -rf '$REMOTE_STAGE_DIR' && mkdir -p '$REMOTE_STAGE_DIR'"
   if [[ -n "$LOCAL_TARBALL" ]]; then
     if [[ ! -f "$LOCAL_TARBALL" ]]; then
       echo "::error::GAMMA_ECS_LOCAL_TARBALL not found: $LOCAL_TARBALL" >&2
       exit 2
     fi
-    remote_exec "mkdir -p '$REMOTE_DIR'"
     if [[ -n "${TMP_KEY_FILE:-}" ]]; then
-      scp "${SCP_OPTS[@]}" -i "$TMP_KEY_FILE" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_DIR/.incoming-repo.tgz"
+      scp "${SCP_OPTS[@]}" -i "$TMP_KEY_FILE" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_STAGE_DIR/.incoming-repo.tgz"
     else
-      sshpass -e scp "${SCP_OPTS[@]}" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_DIR/.incoming-repo.tgz"
+      sshpass -e scp "${SCP_OPTS[@]}" "$LOCAL_TARBALL" "$SSH_TARGET:$REMOTE_STAGE_DIR/.incoming-repo.tgz"
     fi
-    remote_exec "tar -xzf '$REMOTE_DIR/.incoming-repo.tgz' -C '$REMOTE_DIR' && rm -f '$REMOTE_DIR/.incoming-repo.tgz'"
+    remote_exec "tar -xzf '$REMOTE_STAGE_DIR/.incoming-repo.tgz' -C '$REMOTE_STAGE_DIR' && rm -f '$REMOTE_STAGE_DIR/.incoming-repo.tgz'"
   else
     tar \
       --exclude='.git' \
@@ -190,8 +197,10 @@ if [[ "$SKIP_UPLOAD" != "1" ]]; then
       --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/media' \
       --exclude='quwoquan_service/contracts/metadata/_shared/test_fixtures/original_media' \
       --exclude='artifacts/local-gamma/media' \
-      -czf - . | remote_tar_extract
+      -czf - . | remote_tar_extract_into "$REMOTE_STAGE_DIR"
   fi
+  activate_remote_stage_dir
+  remote_exec "rm -rf '$REMOTE_PREV_DIR'"
 
   echo "[gamma-ecs] uploading curated gamma media bundle"
   FAILURE_STAGE="upload_curated_media"
