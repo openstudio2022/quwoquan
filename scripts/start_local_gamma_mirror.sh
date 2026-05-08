@@ -10,6 +10,7 @@ PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-
 MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_PUBLIC_BASE_URL:-${LOCAL_GAMMA_MEDIA_BASE_URL:-http://127.0.0.1:18080}}"
 MEDIA_ORIGIN_BASE_URL="${LOCAL_GAMMA_MEDIA_ORIGIN_BASE_URL:-}"
 DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.m.daocloud.io/library}"
+HOST_READY_TIMEOUT_SECONDS="${LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS:-360}"
 
 library_image() {
   local image="$1"
@@ -792,8 +793,8 @@ wait_local_gamma_host_ready() {
   local gw_local="http://127.0.0.1:${LOCAL_GAMMA_HTTP_PORT:-18080}"
   local po_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18086}"
   local user_port="${LOCAL_GAMMA_USER_PORT:-18082}"
-  local deadline=$(( $(date +%s) + 180 ))
-  echo "[local-gamma] waiting for host probes: ${gw}/healthz or ${gw_local}/healthz + http://127.0.0.1:${po_port}/healthz + http://127.0.0.1:${user_port}/healthz"
+  local deadline=$(( $(date +%s) + HOST_READY_TIMEOUT_SECONDS ))
+  echo "[local-gamma] waiting for host probes (${HOST_READY_TIMEOUT_SECONDS}s): ${gw}/healthz or ${gw_local}/healthz + http://127.0.0.1:${po_port}/healthz + http://127.0.0.1:${user_port}/healthz"
   while (( $(date +%s) < deadline )); do
     if python3 - <<PY
 import urllib.request
@@ -826,7 +827,25 @@ PY
     fi
     sleep 2
   done
-  echo "[local-gamma] FAIL: host cannot reach ${gw}/healthz or ${gw_local}/healthz plus http://127.0.0.1:${po_port}/healthz within 180s" >&2
+  echo "[local-gamma] FAIL: host cannot reach ${gw}/healthz or ${gw_local}/healthz plus http://127.0.0.1:${po_port}/healthz within ${HOST_READY_TIMEOUT_SECONDS}s" >&2
+  python3 - <<PY >&2
+import urllib.request
+
+urls = [
+    "${gw}/healthz",
+    "${gw_local}/healthz",
+    "http://127.0.0.1:${po_port}/healthz",
+    "http://127.0.0.1:${user_port}/healthz",
+]
+for url in urls:
+    try:
+        body = urllib.request.urlopen(url, timeout=4).read(120)
+        print(f"[local-gamma] probe {url} -> ok body={body!r}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[local-gamma] probe {url} -> {exc}")
+PY
+  docker compose -f "$COMPOSE_FILE" ps >&2 || true
+  docker compose -f "$COMPOSE_FILE" logs --tail 80 gamma-proxy product-ops-service user-service >&2 || true
   return 1
 }
 wait_local_gamma_host_ready
