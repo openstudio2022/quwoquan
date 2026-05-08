@@ -324,6 +324,34 @@ jobs:
       - name: 安装 Flutter 依赖
         working-directory: ${{ github.workspace }}/repo/quwoquan_app
         run: flutter pub get
+      - name: 预热 sqlite3 macOS native asset
+        working-directory: ${{ github.workspace }}/repo/quwoquan_app
+        run: |
+          set -euo pipefail
+          warmup_script="$(mktemp "${PWD}/.dart_tool/sqlite3-prewarm.XXXXXX.dart")"
+          cat > "${warmup_script}" <<'DART'
+          import 'package:sqlite3/sqlite3.dart';
+
+          void main() {
+            final db = sqlite3.openInMemory();
+            db.execute('select 1;');
+            db.dispose();
+            print('sqlite3-prewarm-ok ${sqlite3.version}');
+          }
+          DART
+          cleanup() {
+            rm -f "${warmup_script}"
+          }
+          trap cleanup EXIT
+          attempts=0
+          until dart run "${warmup_script}"; do
+            attempts=$((attempts + 1))
+            if [ "${attempts}" -ge 5 ]; then
+              echo "::error::sqlite3 native asset prewarm failed after ${attempts} attempts"
+              exit 1
+            fi
+            sleep $((attempts * 5))
+          done
       - id: run_matrix
         name: Run mobile matrix environments
         working-directory: ${{ github.workspace }}/repo
