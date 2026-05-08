@@ -80,6 +80,10 @@ jobs:
       device_summary: ${{ steps.discover.outputs.device_summary }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            scripts
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -120,6 +124,7 @@ jobs:
         id: discover
         run: |
           python3 scripts/discover_flutter_mobile_devices.py \
+            --app-dir "$GITHUB_WORKSPACE" \
             --output "$RUNNER_TEMP/mobile-devices.json" \
             --require-mobile
           python3 - "$RUNNER_TEMP/mobile-devices.json" "$GITHUB_OUTPUT" <<'PY'
@@ -168,7 +173,12 @@ jobs:
         if: always()
         name: Finish timer
         run: |
-          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+          started_at="${{ steps.start.outputs.started_at }}"
+          if [ -n "${started_at}" ]; then
+            echo "duration_seconds=$(( $(date +%s) - started_at ))" >> "$GITHUB_OUTPUT"
+          else
+            echo "duration_seconds=0" >> "$GITHUB_OUTPUT"
+          fi
 
   android:
     name: ${{ matrix.env }} / Android (self-hosted)
@@ -191,6 +201,12 @@ jobs:
       CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            scripts
+            quwoquan_app
+            quwoquan_service
       - name: 记录发现结果
         run: |
           echo "Android devices: ${{ needs.discover_devices.outputs.android_count }}"
@@ -280,6 +296,12 @@ jobs:
       CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          sparse-checkout: |
+            scripts
+            quwoquan_app
+            quwoquan_service
       - name: 记录发现结果
         run: |
           echo "iOS devices: ${{ needs.discover_devices.outputs.ios_count }}"

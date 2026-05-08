@@ -107,9 +107,11 @@ func TestMain(m *testing.M) {
 	baseHandler := contenhttp.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 	testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id")) == "" {
+			subAccountID := application.AnonymousFallbackSubAccountID
 			if userID := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); userID != "" {
-				r.Header.Set("X-Client-Sub-Account-Id", userID)
+				subAccountID = userID
 			}
+			r.Header.Set("X-Client-Sub-Account-Id", subAccountID)
 		}
 		baseHandler.ServeHTTP(w, r)
 	})
