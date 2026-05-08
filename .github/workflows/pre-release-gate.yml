@@ -136,8 +136,8 @@ jobs:
               raise SystemExit(2)
           PY
 
-  gamma_assistant_android:
-    name: Gamma assistant / Android (self-hosted)
+  gamma_android:
+    name: Gamma / Android (self-hosted)
     needs: [gamma_pre_hosted, discover_gamma_devices]
     if: ${{ needs.discover_gamma_devices.outputs.has_android == 'true' }}
     runs-on: [self-hosted, macOS]
@@ -145,10 +145,12 @@ jobs:
     env:
       API_CONTRACT_ENV: gamma
       GAMMA_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.base_url }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.media_base_url }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
+      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -194,34 +196,47 @@ jobs:
       - name: 安装 Flutter 依赖
         working-directory: quwoquan_app
         run: flutter pub get
-      - name: Run gamma assistant on Android (self-hosted)
-        run: python3 scripts/run_assistant_device_matrix_ci.py --platform android
-      - name: Upload gamma assistant Android report
-        id: upload_gamma_assistant_android_report
+      - name: Run gamma Android self-hosted matrices
+        run: |
+          failures=0
+          echo "::group::Run gamma assistant on Android (self-hosted)"
+          python3 scripts/run_assistant_device_matrix_ci.py --platform android || failures=$((failures + 1))
+          echo "::endgroup::"
+          echo "::group::Run gamma chat avatar on Android (self-hosted)"
+          python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android || failures=$((failures + 1))
+          echo "::endgroup::"
+          if [ "${failures}" -ne 0 ]; then
+            echo "::error::Gamma Android self-hosted matrices encountered ${failures} failure(s)"
+            exit 1
+          fi
+      - name: Upload gamma Android report bundle
+        id: upload_gamma_android_report
         if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: gamma-assistant-selfhosted-android
+          name: gamma-bundle-selfhosted-android
           path: |
             artifacts/device-matrix/gamma-android.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
           compression-level: 0
-      - name: Retry gamma assistant Android report upload
-        if: always() && steps.upload_gamma_assistant_android_report.outcome == 'failure'
+      - name: Retry gamma Android report bundle upload
+        if: always() && steps.upload_gamma_android_report.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: gamma-assistant-selfhosted-android
+          name: gamma-bundle-selfhosted-android
           path: |
             artifacts/device-matrix/gamma-android.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
           compression-level: 0
           overwrite: true
 
-  gamma_assistant_ios:
-    name: Gamma assistant / iOS (self-hosted)
+  gamma_ios:
+    name: Gamma / iOS (self-hosted)
     needs: [gamma_pre_hosted, discover_gamma_devices]
     if: ${{ needs.discover_gamma_devices.outputs.has_ios == 'true' }}
     runs-on: [self-hosted, macOS]
@@ -229,10 +244,12 @@ jobs:
     env:
       API_CONTRACT_ENV: gamma
       GAMMA_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.base_url }}
+      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.media_base_url }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
       ASSISTANT_MODEL_PROVIDER: deterministic
       ALLOW_DETERMINISTIC_BETA: "1"
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
+      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -274,182 +291,41 @@ jobs:
       - name: 安装 Flutter 依赖
         working-directory: quwoquan_app
         run: flutter pub get
-      - name: Run gamma assistant on iOS (self-hosted)
-        run: python3 scripts/run_assistant_device_matrix_ci.py --platform ios
-      - name: Upload gamma assistant iOS report
-        id: upload_gamma_assistant_ios_report
+      - name: Run gamma iOS self-hosted matrices
+        run: |
+          failures=0
+          echo "::group::Run gamma assistant on iOS (self-hosted)"
+          python3 scripts/run_assistant_device_matrix_ci.py --platform ios || failures=$((failures + 1))
+          echo "::endgroup::"
+          echo "::group::Run gamma chat avatar on iOS (self-hosted)"
+          python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios || failures=$((failures + 1))
+          echo "::endgroup::"
+          if [ "${failures}" -ne 0 ]; then
+            echo "::error::Gamma iOS self-hosted matrices encountered ${failures} failure(s)"
+            exit 1
+          fi
+      - name: Upload gamma iOS report bundle
+        id: upload_gamma_ios_report
         if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: gamma-assistant-selfhosted-ios
+          name: gamma-bundle-selfhosted-ios
           path: |
             artifacts/device-matrix/gamma-ios.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
+            artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
           compression-level: 0
-      - name: Retry gamma assistant iOS report upload
-        if: always() && steps.upload_gamma_assistant_ios_report.outcome == 'failure'
+      - name: Retry gamma iOS report bundle upload
+        if: always() && steps.upload_gamma_ios_report.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: gamma-assistant-selfhosted-ios
+          name: gamma-bundle-selfhosted-ios
           path: |
             artifacts/device-matrix/gamma-ios.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
-          if-no-files-found: ignore
-          compression-level: 0
-          overwrite: true
-
-  gamma_chat_avatar_android:
-    name: Gamma chat avatar / Android (self-hosted)
-    needs: [gamma_pre_hosted, discover_gamma_devices]
-    if: ${{ needs.discover_gamma_devices.outputs.has_android == 'true' }}
-    runs-on: [self-hosted, macOS]
-    timeout-minutes: 120
-    env:
-      API_CONTRACT_ENV: gamma
-      GAMMA_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.base_url }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.media_base_url }}
-      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          sparse-checkout: |
-            .gitmodules
-            scripts
-            packages
-            quwoquan_app
-            quwoquan_service
-      - name: 记录发现结果
-        run: |
-          echo "Android devices: ${{ needs.discover_gamma_devices.outputs.android_count }}"
-          echo "${{ needs.discover_gamma_devices.outputs.device_summary }}"
-      - name: 校验 self-hosted macOS runner
-        run: |
-          if [ "${{ runner.os }}" != "macOS" ]; then
-            echo "::error::Gamma chat avatar Android 端侧矩阵要求本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
-            exit 2
-          fi
-      - name: 准备 personal_assistant/.env
-        run: |
-          if [ -d quwoquan_app/personal_assistant ]; then
-            mkdir -p quwoquan_app/personal_assistant
-            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-            else
-              : > quwoquan_app/personal_assistant/.env
-            fi
-          fi
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: quwoquan_service/go.mod
-      - name: Install Flutter (PATH)
-        run: |
-          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
-          command -v adb >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 adb 并在 PATH 中"; exit 2; }
-          flutter --version
-      - name: 安装 Flutter 依赖
-        working-directory: quwoquan_app
-        run: flutter pub get
-      - name: Run gamma chat avatar on Android (self-hosted)
-        run: python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android
-      - name: Upload gamma chat avatar Android report
-        id: upload_gamma_chat_avatar_android_report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: gamma-chat-avatar-selfhosted-android
-          path: artifacts/device-matrix/chat-avatar/**
-          if-no-files-found: ignore
-          compression-level: 0
-      - name: Retry gamma chat avatar Android report upload
-        if: always() && steps.upload_gamma_chat_avatar_android_report.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: gamma-chat-avatar-selfhosted-android
-          path: artifacts/device-matrix/chat-avatar/**
-          if-no-files-found: ignore
-          compression-level: 0
-          overwrite: true
-
-  gamma_chat_avatar_ios:
-    name: Gamma chat avatar / iOS (self-hosted)
-    needs: [gamma_pre_hosted, discover_gamma_devices]
-    if: ${{ needs.discover_gamma_devices.outputs.has_ios == 'true' }}
-    runs-on: [self-hosted, macOS]
-    timeout-minutes: 120
-    env:
-      API_CONTRACT_ENV: gamma
-      GAMMA_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.base_url }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.gamma_pre_hosted.outputs.media_base_url }}
-      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          sparse-checkout: |
-            .gitmodules
-            scripts
-            packages
-            quwoquan_app
-            quwoquan_service
-      - name: 记录发现结果
-        run: |
-          echo "iOS devices: ${{ needs.discover_gamma_devices.outputs.ios_count }}"
-          echo "${{ needs.discover_gamma_devices.outputs.device_summary }}"
-      - name: 校验 self-hosted macOS runner
-        run: |
-          if [ "${{ runner.os }}" != "macOS" ]; then
-            echo "::error::Gamma chat avatar iOS 端侧矩阵要求本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
-            exit 2
-          fi
-      - name: 准备 personal_assistant/.env
-        run: |
-          if [ -d quwoquan_app/personal_assistant ]; then
-            mkdir -p quwoquan_app/personal_assistant
-            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-            else
-              : > quwoquan_app/personal_assistant/.env
-            fi
-          fi
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: quwoquan_service/go.mod
-      - name: Install Flutter (PATH)
-        run: |
-          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
-          command -v xcrun >/dev/null 2>&1 || { echo "::error::self-hosted runner 需具备 Xcode / xcrun"; exit 2; }
-          flutter --version
-      - name: 安装 Flutter 依赖
-        working-directory: quwoquan_app
-        run: flutter pub get
-      - name: Run gamma chat avatar on iOS (self-hosted)
-        run: python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
-      - name: Upload gamma chat avatar iOS report
-        id: upload_gamma_chat_avatar_ios_report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: gamma-chat-avatar-selfhosted-ios
-          path: artifacts/device-matrix/chat-avatar/**
-          if-no-files-found: ignore
-          compression-level: 0
-      - name: Retry gamma chat avatar iOS report upload
-        if: always() && steps.upload_gamma_chat_avatar_ios_report.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: gamma-chat-avatar-selfhosted-ios
-          path: artifacts/device-matrix/chat-avatar/**
+            artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
           compression-level: 0
           overwrite: true
@@ -459,10 +335,8 @@ jobs:
     needs:
       - gamma_pre_hosted
       - discover_gamma_devices
-      - gamma_assistant_android
-      - gamma_assistant_ios
-      - gamma_chat_avatar_android
-      - gamma_chat_avatar_ios
+      - gamma_android
+      - gamma_ios
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -490,10 +364,8 @@ jobs:
           DISCOVER: ${{ needs.discover_gamma_devices.result }}
           HAS_ANDROID: ${{ needs.discover_gamma_devices.outputs.has_android }}
           HAS_IOS: ${{ needs.discover_gamma_devices.outputs.has_ios }}
-          ASSISTANT_ANDROID: ${{ needs.gamma_assistant_android.result }}
-          ASSISTANT_IOS: ${{ needs.gamma_assistant_ios.result }}
-          CHAT_ANDROID: ${{ needs.gamma_chat_avatar_android.result }}
-          CHAT_IOS: ${{ needs.gamma_chat_avatar_ios.result }}
+          ANDROID: ${{ needs.gamma_android.result }}
+          IOS: ${{ needs.gamma_ios.result }}
         run: |
           set -euo pipefail
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
@@ -518,15 +390,13 @@ jobs:
             echo "::error::gamma android device environment is required before merge, but no Android device was discovered"
             fail=1
           else
-            expect_success "gamma-assistant-android" "${ASSISTANT_ANDROID}" "检查 gamma Android assistant 设备矩阵"
-            expect_success "gamma-chat-avatar-android" "${CHAT_ANDROID}" "检查 gamma Android chat avatar 设备矩阵"
+            expect_success "gamma-android-selfhosted" "${ANDROID}" "检查 gamma Android assistant/chat avatar 设备矩阵"
           fi
           if [ "${HAS_IOS}" != "true" ]; then
             echo "::error::gamma ios device environment is required before merge, but no iOS device was discovered"
             fail=1
           else
-            expect_success "gamma-assistant-ios" "${ASSISTANT_IOS}" "检查 gamma iOS assistant 设备矩阵"
-            expect_success "gamma-chat-avatar-ios" "${CHAT_IOS}" "检查 gamma iOS chat avatar 设备矩阵"
+            expect_success "gamma-ios-selfhosted" "${IOS}" "检查 gamma iOS assistant/chat avatar 设备矩阵"
           fi
           if [ "${fail}" -ne 0 ]; then
             echo "::error::Pre-release 未全部成功；请按上列分项修复后重跑 workflow。"

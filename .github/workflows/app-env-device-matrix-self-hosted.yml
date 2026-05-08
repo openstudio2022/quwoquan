@@ -234,17 +234,12 @@ jobs:
           fi
 
   android:
-    name: ${{ matrix.env }} / Android (self-hosted)
+    name: Android (self-hosted)
     needs: [discover_devices]
     if: ${{ needs.discover_devices.outputs.has_android == 'true' }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        env: ${{ fromJson(needs.discover_devices.outputs.env_json) }}
     env:
-      API_CONTRACT_ENV: ${{ matrix.env }}
       GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
       MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
@@ -297,12 +292,30 @@ jobs:
       - name: 安装 Flutter 依赖
         working-directory: quwoquan_app
         run: flutter pub get
-      - name: Run ${{ matrix.env }} on Android (self-hosted)
+      - name: Run Android matrix environments
         run: |
-          if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
-            python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android
-          else
-            python3 scripts/run_assistant_device_matrix_ci.py --platform android
+          ENV_NAMES="$(python3 - <<'PY'
+          import json
+          print("\n".join(json.loads("""${{ needs.discover_devices.outputs.env_json }}""")))
+          PY
+          )"
+          failures=0
+          while IFS= read -r env_name; do
+            [ -n "${env_name}" ] || continue
+            echo "::group::Run ${env_name} on Android (self-hosted)"
+            export API_CONTRACT_ENV="${env_name}"
+            if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
+              python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android || failures=$((failures + 1))
+            else
+              python3 scripts/run_assistant_device_matrix_ci.py --platform android || failures=$((failures + 1))
+            fi
+            echo "::endgroup::"
+          done <<EOF
+          ${ENV_NAMES}
+          EOF
+          if [ "${failures}" -ne 0 ]; then
+            echo "::error::Android matrix encountered ${failures} failing environment(s)"
+            exit 1
           fi
       - name: Upload Android matrix report
         id: upload_android_matrix_report
@@ -310,9 +323,9 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-android
           path: |
-            artifacts/device-matrix/${{ matrix.env }}-android.json
+            artifacts/device-matrix/*-android.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
@@ -321,9 +334,9 @@ jobs:
         if: always() && steps.upload_android_matrix_report.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-android
           path: |
-            artifacts/device-matrix/${{ matrix.env }}-android.json
+            artifacts/device-matrix/*-android.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
@@ -331,17 +344,12 @@ jobs:
           overwrite: true
 
   ios:
-    name: ${{ matrix.env }} / iOS (self-hosted)
+    name: iOS (self-hosted)
     needs: [discover_devices]
     if: ${{ needs.discover_devices.outputs.has_ios == 'true' }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        env: ${{ fromJson(needs.discover_devices.outputs.env_json) }}
     env:
-      API_CONTRACT_ENV: ${{ matrix.env }}
       GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
       MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
@@ -390,12 +398,30 @@ jobs:
       - name: 安装 Flutter 依赖
         working-directory: quwoquan_app
         run: flutter pub get
-      - name: Run ${{ matrix.env }} on iOS (self-hosted)
+      - name: Run iOS matrix environments
         run: |
-          if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
-            python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
-          else
-            python3 scripts/run_assistant_device_matrix_ci.py --platform ios
+          ENV_NAMES="$(python3 - <<'PY'
+          import json
+          print("\n".join(json.loads("""${{ needs.discover_devices.outputs.env_json }}""")))
+          PY
+          )"
+          failures=0
+          while IFS= read -r env_name; do
+            [ -n "${env_name}" ] || continue
+            echo "::group::Run ${env_name} on iOS (self-hosted)"
+            export API_CONTRACT_ENV="${env_name}"
+            if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
+              python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios || failures=$((failures + 1))
+            else
+              python3 scripts/run_assistant_device_matrix_ci.py --platform ios || failures=$((failures + 1))
+            fi
+            echo "::endgroup::"
+          done <<EOF
+          ${ENV_NAMES}
+          EOF
+          if [ "${failures}" -ne 0 ]; then
+            echo "::error::iOS matrix encountered ${failures} failing environment(s)"
+            exit 1
           fi
       - name: Upload iOS matrix report
         id: upload_ios_matrix_report
@@ -403,9 +429,9 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-ios
           path: |
-            artifacts/device-matrix/${{ matrix.env }}-ios.json
+            artifacts/device-matrix/*-ios.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
@@ -414,9 +440,9 @@ jobs:
         if: always() && steps.upload_ios_matrix_report.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-ios
           path: |
-            artifacts/device-matrix/${{ matrix.env }}-ios.json
+            artifacts/device-matrix/*-ios.json
             artifacts/device-matrix/assistant_device_matrix_logs/**
             artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
