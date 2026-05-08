@@ -1,4 +1,4 @@
-# Pre-release 串联：PR 使用 hosted gamma readiness + 协议级 smoke；full deploy / full gamma 验证改走独立 workflow
+# Pre-release 串联：PR / dispatch 仅保留 hosted gamma readiness + 协议级 smoke；full gamma 设备验证改走独立 workflow
 # 触发：pull_request(main) + workflow_dispatch
 # 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
 name: 04. Pre-Release Gate
@@ -21,7 +21,7 @@ jobs:
 
   discover_gamma_devices:
     name: Discover gamma mobile devices (self-hosted)
-    if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+    if: ${{ false }}
     runs-on: [self-hosted, macOS]
     outputs:
       has_android: ${{ steps.discover.outputs.has_android }}
@@ -139,7 +139,7 @@ jobs:
   gamma_android:
     name: Gamma / Android (self-hosted)
     needs: [gamma_pre_hosted, discover_gamma_devices]
-    if: ${{ needs.discover_gamma_devices.outputs.has_android == 'true' }}
+    if: ${{ false }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 120
     env:
@@ -238,7 +238,7 @@ jobs:
   gamma_ios:
     name: Gamma / iOS (self-hosted)
     needs: [gamma_pre_hosted, discover_gamma_devices]
-    if: ${{ needs.discover_gamma_devices.outputs.has_ios == 'true' }}
+    if: ${{ false }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 120
     env:
@@ -355,11 +355,11 @@ jobs:
             --phase gamma_environment_ready="${READY_SECONDS:-0}" \
             --phase assistant_api_protocol_smoke="${ASSISTANT_SECONDS:-0}" \
             --phase chat_avatar_api_probe="${CHAT_SECONDS:-0}" \
-            --note "PR 已移除 gamma ECS full deploy；full gamma 验证改走独立 workflow/命令。" \
+            --note "PR / dispatch 已移除 gamma self-hosted 设备矩阵与 full gamma deploy；full gamma 验证改走 09 workflow。" \
             --write-step-summary
       - name: 汇总并阻断失败项
         env:
-          SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          SELF_HOSTED_ENABLED: false
           HOSTED: ${{ needs.gamma_pre_hosted.result }}
           DISCOVER: ${{ needs.discover_gamma_devices.result }}
           HAS_ANDROID: ${{ needs.discover_gamma_devices.outputs.has_android }}
@@ -403,13 +403,13 @@ jobs:
             exit 1
           fi
       - name: 下载 gamma self-hosted artifacts
-        if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
+        if: ${{ false }}
         uses: actions/download-artifact@v4
         with:
           pattern: gamma-*-selfhosted-*
           path: ${{ runner.temp }}/gamma-selfhosted-artifacts
       - name: 校验 gamma self-hosted 证据产物
-        if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
+        if: ${{ false }}
         run: |
           python3 scripts/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/gamma-selfhosted-artifacts" \
