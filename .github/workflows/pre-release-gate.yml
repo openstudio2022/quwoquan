@@ -355,7 +355,7 @@ jobs:
             --phase gamma_environment_ready="${READY_SECONDS:-0}" \
             --phase assistant_api_protocol_smoke="${ASSISTANT_SECONDS:-0}" \
             --phase chat_avatar_api_probe="${CHAT_SECONDS:-0}" \
-            --note "PR / dispatch 已移除 gamma self-hosted 设备矩阵与 full gamma deploy；full gamma 验证改走 09 workflow。" \
+            --note "04 仅阻断 shared gamma readiness；assistant/chat avatar hosted 探针仅记录漂移并在 08/09 做权威阻断，self-hosted/full gamma 验证改走独立 workflow。" \
             --write-step-summary
       - name: 汇总并阻断失败项
         env:
@@ -370,7 +370,7 @@ jobs:
           set -euo pipefail
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
             if [ "${HOSTED}" != "success" ]; then
-              echo "::error::gamma-hosted-pr-chain expected success, got ${HOSTED}. 检查 gamma readiness、assistant protocol smoke、chat avatar API probe"
+              echo "::error::gamma-hosted-pr-chain expected success, got ${HOSTED}. 检查 gamma readiness、product-ops readiness 与公网路由探针"
               exit 1
             fi
             echo "::notice::gamma self-hosted matrix is disabled for this run; skip device evidence enforcement."
