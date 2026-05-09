@@ -1,11 +1,21 @@
 # rec-model-service: FastAPI + Python 3.11
 ARG PYTHON_BASE_IMAGE=python:3.11-slim
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
 FROM ${PYTHON_BASE_IMAGE}
 
 WORKDIR /app
 
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=8 \
+    PIP_PROGRESS_BAR=off
+
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir \
+    --index-url "${PIP_INDEX_URL}" \
+    --trusted-host "${PIP_TRUSTED_HOST}" \
+    -r requirements.txt
 
 COPY generated/ ./generated/
 COPY app/ ./app/
