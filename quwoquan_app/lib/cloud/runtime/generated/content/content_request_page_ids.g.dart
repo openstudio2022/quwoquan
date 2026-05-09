@@ -6,6 +6,7 @@ class ContentRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortMediaUpload': 'content.media.abort',
+    'BindMediaAssetsToPost': 'content.bind.media.assets.to.post',
     'CompleteMediaUpload': 'content.media.complete',
     'CreateComment': 'content.comment.create',
     'CreatePost': 'content.post.create',
@@ -53,6 +54,7 @@ class ContentRequestPageIds {
   };
 
   static const String abortMediaUpload = 'content.media.abort';
+  static const String bindMediaAssetsToPost = 'content.bind.media.assets.to.post';
   static const String completeMediaUpload = 'content.media.complete';
   static const String createComment = 'content.comment.create';
   static const String createPost = 'content.post.create';

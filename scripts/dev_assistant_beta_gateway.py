@@ -215,6 +215,12 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _upstream_for_path(self, path: str) -> tuple[str, str, int] | None:
+        if path in {"/v1/chat/contacts", "/v1/chat/inbox"}:
+            return None
+        if path.startswith("/v1/chat/conversations/") and (
+            path.endswith("/messages") or path.endswith("/members")
+        ):
+            return None
         if path.startswith("/v1/assistant"):
             return ("assistant-service", self.assistant_upstream_host, self.assistant_upstream_port)
         if path.startswith("/v1/chat") or path == "/v1/user/sync":
@@ -228,6 +234,8 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         content = seed_set("content/test_fixtures/scenarios/content_scenarios.json", "content_discovery_core")
         circle = seed_set("social/circle/test_fixtures/scenarios/circle_scenarios.json", "circle_core")
         circle_home = seed_set("social/circle/test_fixtures/scenarios/circle_scenarios.json", "circle_home_feed_core")
+        chat = seed_set("messages/chat/test_fixtures/scenarios/chat_scenarios.json", "chat_core")
+        chat_contacts = seed_set("messages/chat/test_fixtures/scenarios/chat_scenarios.json", "chat_contacts_core")
         user = seed_set("user/test_fixtures/scenarios/user_scenarios.json", "user_profile_core")
         user_feed = seed_set("user/test_fixtures/scenarios/user_scenarios.json", "profile_feed_core")
         entity = seed_set("entity/test_fixtures/scenarios/entity_scenarios.json", "entity_homepage_core")
@@ -286,6 +294,16 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
             circle_id = path.split("/")[-1]
             circles = [c for c in circle.get("circles", []) if c.get("id") == circle_id]
             return {"data": circles[0] if circles else {}}
+        if path == "/v1/chat/contacts":
+            return {"items": chat_contacts.get("contacts", [])}
+        if path == "/v1/chat/inbox":
+            return {"items": chat.get("conversations", [])}
+        if path.startswith("/v1/chat/conversations/") and path.endswith("/messages"):
+            conversation_id = path.split("/")[-2]
+            return {"items": (chat.get("messages") or {}).get(conversation_id, [])}
+        if path.startswith("/v1/chat/conversations/") and path.endswith("/members"):
+            conversation_id = path.split("/")[-2]
+            return {"items": (chat.get("members") or {}).get(conversation_id, [])}
         if path == "/v1/me":
             return user_profile_wire(user.get("profiles", [])[0])
         if path == "/v1/user/personas/active":

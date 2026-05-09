@@ -581,7 +581,7 @@ void main() {
 
     expect(backwardBinding, isNotNull);
     expect(backwardBinding!.rectoPageIndex, 2);
-    expect(backwardBinding.versoPageIndex, 3);
+    expect(backwardBinding.versoPageIndex, 2);
     expect(backwardBinding.bottomPageIndex, 3);
   });
 
@@ -611,7 +611,7 @@ void main() {
     expect(binding!.coveredPageIndex, equals(3));
     expect(binding.leafPageIndex, equals(2));
     expect(binding.leafRectoPageIndex, equals(2));
-    expect(binding.leafVersoPageIndex, equals(3));
+    expect(binding.leafVersoPageIndex, equals(2));
     expect(binding.requiredPageIndices, equals(<int>{2, 3}));
   });
 

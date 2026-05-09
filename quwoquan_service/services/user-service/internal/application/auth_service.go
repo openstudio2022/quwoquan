@@ -694,7 +694,7 @@ func (s *SubAccountService) GetActivePersonaContextView(ctx context.Context, own
 	if owner == nil {
 		return map[string]any{}, nil
 	}
-	view := buildProfileSubjectView(owner, persona)
+	view := buildSubAccountProfileView(owner, persona)
 	return map[string]any{
 		"ownerUserId":            ownerID,
 		"subAccountId":           view["subAccountId"],
@@ -834,7 +834,7 @@ func (s *SubAccountService) GetSubAccountProfile(ctx context.Context, subAccount
 	return s.personas.FindBySubAccountID(ctx, subAccountID)
 }
 
-// GetSubAccountProfileView projects a sub-account to the public ProfileSubjectView shape.
+// GetSubAccountProfileView projects a sub-account to the public profile view shape.
 func (s *SubAccountService) GetSubAccountProfileView(ctx context.Context, handleOrPersonaID string) (map[string]any, error) {
 	startedAt := time.Now()
 	defer func() {
@@ -865,7 +865,7 @@ func (s *SubAccountService) GetSubAccountProfileView(ctx context.Context, handle
 	if err != nil {
 		return nil, err
 	}
-	view := buildPublicProfileSubjectView(owner, persona)
+	view := buildPublicSubAccountProfileView(owner, persona)
 	if hasPublicLeakage(view) {
 		usertelemetry.RolloutCollector().RecordPublicLeakage()
 		delete(view, "ownerUserId")
@@ -875,7 +875,7 @@ func (s *SubAccountService) GetSubAccountProfileView(ctx context.Context, handle
 	return view, nil
 }
 
-// GetMeProfileView projects the active owner/sub-account subject for the viewer.
+// GetMeProfileView projects the viewer's active owner/sub-account identity.
 func (s *SubAccountService) GetMeProfileView(ctx context.Context, userID string) (map[string]any, error) {
 	owner, err := s.profiles.FindByID(ctx, userID)
 	if err != nil {
@@ -888,7 +888,7 @@ func (s *SubAccountService) GetMeProfileView(ctx context.Context, userID string)
 	if err != nil {
 		return nil, err
 	}
-	return buildProfileSubjectView(owner, persona), nil
+	return buildSubAccountProfileView(owner, persona), nil
 }
 
 func (s *SubAccountService) resolvePublicPersona(ctx context.Context, handleOrPersonaID string) (*model.Persona, error) {
@@ -906,8 +906,8 @@ func (s *SubAccountService) resolvePublicPersona(ctx context.Context, handleOrPe
 	return s.personas.FindBySubAccountID(ctx, handleOrPersonaID)
 }
 
-func buildPublicProfileSubjectView(owner *model.UserProfile, persona *model.Persona) map[string]any {
-	view := buildProfileSubjectView(owner, persona)
+func buildPublicSubAccountProfileView(owner *model.UserProfile, persona *model.Persona) map[string]any {
+	view := buildSubAccountProfileView(owner, persona)
 	delete(view, "ownerUserId")
 	return view
 }
@@ -921,7 +921,7 @@ func hasPublicLeakage(view map[string]any) bool {
 	return false
 }
 
-func buildProfileSubjectView(owner *model.UserProfile, persona *model.Persona) map[string]any {
+func buildSubAccountProfileView(owner *model.UserProfile, persona *model.Persona) map[string]any {
 	if owner == nil && persona == nil {
 		return map[string]any{}
 	}

@@ -383,8 +383,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     if (raw == null) {
       return false;
     }
-    if (raw[ArticleDetailWireKeys.articleDocument] is Map &&
-        (raw[ArticleDetailWireKeys.articleDocument] as Map).isNotEmpty) {
+    if ((raw[ArticleDetailWireKeys.articleMarkdown]?.toString().trim() ?? '')
+        .isNotEmpty) {
       return true;
     }
     if (raw[ArticleDetailWireKeys.articleBlocks] is List &&
@@ -853,7 +853,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   String _documentSourceName(ArticleDetailDocumentSource source) {
     return switch (source) {
-      ArticleDetailDocumentSource.articleDocument => 'article_document',
+      ArticleDetailDocumentSource.markdown => 'markdown',
       ArticleDetailDocumentSource.articleBlocks => 'article_blocks',
       ArticleDetailDocumentSource.cards => 'cards',
       ArticleDetailDocumentSource.body => 'body',
@@ -866,7 +866,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     required ArticleDetailView article,
     required bool hydrated,
   }) {
-    if (article.documentSource == ArticleDetailDocumentSource.articleDocument) {
+    if (article.documentSource == ArticleDetailDocumentSource.markdown) {
       return;
     }
     final bookReaderEnabled = ref.read(

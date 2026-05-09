@@ -109,7 +109,7 @@ func TestCreatePostBodyBindingAcceptsWritableFields(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"p1","type":"paragraph","text":"b"}]}}`),
+		bytes.NewBufferString(`{"contentType":"article","articleMarkdown":"# 测试文章\n\nb","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
 	)
 	setActorHeaders(req, "owner_test_create", "sub_test_create")
 	rec := httptest.NewRecorder()
@@ -211,7 +211,7 @@ func TestCreatePostWithLocationField(t *testing.T) {
 	req := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","location":{"latitude":39.9,"longitude":116.4},"locationName":"Beijing","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"loc test"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
+		bytes.NewBufferString(`{"contentType":"article","location":{"latitude":39.9,"longitude":116.4},"locationName":"Beijing","articleMarkdown":"# loc test\n\nb","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
 	)
 	setActorHeaders(req, "owner_test_location", "sub_test_location")
 	rec := httptest.NewRecorder()
@@ -249,7 +249,7 @@ func TestPostImmutableAfterPublish(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"t"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
+		bytes.NewBufferString(`{"contentType":"article","articleMarkdown":"# t\n\nb","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
 	)
 	setActorHeaders(createReq, "u1", "u1")
 	createRec := httptest.NewRecorder()
@@ -289,7 +289,7 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"to delete"},{"id":"p1","type":"paragraph","text":"b"}]}}`),
+		bytes.NewBufferString(`{"contentType":"article","articleMarkdown":"# to delete\n\nb","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
 	)
 	setActorHeaders(createReq, "u_delete", "u_delete")
 	createRec := httptest.NewRecorder()
@@ -322,7 +322,7 @@ func TestUpdatePostCirclesRequiresPublic(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","visibility":"private","articleDocument":{"template":"gentle","fontPreset":"clean","titleStyle":"major","nodes":[{"id":"title","type":"documentTitle","text":"private"},{"id":"p1","type":"paragraph","text":"仅圈子分发测试"}]}}`),
+		bytes.NewBufferString(`{"contentType":"article","visibility":"private","articleMarkdown":"# private\n\n仅圈子分发测试","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
 	)
 	setActorHeaders(createReq, "author1", "author1")
 	createRec := httptest.NewRecorder()

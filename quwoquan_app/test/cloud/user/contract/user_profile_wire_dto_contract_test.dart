@@ -9,7 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/privacy_settings_wire_
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_quota_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_subject_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_capability_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
@@ -24,9 +24,9 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/core/models/search_models.dart';
 
 void main() {
-  group('ProfileSubjectWireDto', () {
+  group('SubAccountProfileWireDto', () {
     test('userId 仅填充 subAccountId，不再冒充 ownerUserId', () {
-      final dto = ProfileSubjectWireDto.fromMap(<String, dynamic>{
+      final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
         'userId': 'u_owner',
         'nickname': 'nick',
         'followerCount': 1,
@@ -41,7 +41,7 @@ void main() {
     });
 
     test('backgroundImage 别名映射到 backgroundUrl', () {
-      final dto = ProfileSubjectWireDto.fromMap(<String, dynamic>{
+      final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
         'userId': 'u1',
         'backgroundImage': 'https://bg.example/x.jpg',
       });
@@ -49,7 +49,7 @@ void main() {
     });
 
     test('toMap round-trip 稳定', () {
-      final dto = ProfileSubjectWireDto.fromMap(<String, dynamic>{
+      final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
         'subAccountId': 'ps1',
         'ownerUserId': 'o1',
         'subAccountId': '',
@@ -69,17 +69,17 @@ void main() {
         'profileVisibility': 'public',
         'inheritsFromOwner': false,
       });
-      final restored = ProfileSubjectWireDto.fromMap(dto.toMap());
+      final restored = SubAccountProfileWireDto.fromMap(dto.toMap());
       expect(restored.subAccountId, dto.subAccountId);
       expect(restored.userHandle, 'handle_1');
       expect(restored.followerCount, dto.followerCount);
     });
   });
 
-  group('ProfileSubjectViewData — Wire 映射', () {
+  group('SubAccountProfileViewData — Wire 映射', () {
     test('展示名在 wire 空串时回退到 subjectId', () {
-      final view = ProfileSubjectViewData.fromProfileSubjectWire(
-        ProfileSubjectWireDto.fromMap(<String, dynamic>{
+      final view = SubAccountProfileViewData.fromSubAccountProfileWire(
+        SubAccountProfileWireDto.fromMap(<String, dynamic>{
           'userId': 'only_id',
           'nickname': '',
           'displayName': '',

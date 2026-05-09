@@ -291,25 +291,31 @@
             "articlePost"
           ],
           "locationName": "线上专栏",
-          "articleDocument": {
-            "blocks": [
-              {
-                "type": "paragraph",
-                "text": "文章、攻略与长图文作者。"
-              },
-              {
-                "type": "image",
-                "imageUrl": "media/image/post/fixture_article_001/v1/cover.png",
-                "imageObjectKey": "media/image/post/fixture_article_001/v1/cover.png"
-              }
-            ],
+          "articleMarkdown": "---\ntitle: 契约驱动的发现页文章\nsummary: 契约驱动的发现页文章。\ntemplate: journal\nfontPreset: clean\ncoverImage: asset://fixture_asset_1_fixture_article_001_v1_cover_png\n---\n\n# 契约驱动的发现页文章\n\n文章、攻略与长图文作者。\n\n:::figure id=\"fixture_asset_1_fixture_article_001_v1_cover_png\" layout=\"fullWidth\" caption=\"\"\nasset://fixture_asset_1_fixture_article_001_v1_cover_png\n:::\n",
+          "articleMarkdownVersion": "qwq-rich-md/1",
+          "articleMarkdownDigest": "sha256:0f0487ec553cf0b58d6d988e8d3129f853e3735cc441dc16c73b70d391d06ea5",
+          "articleAssetManifest": {
+            "schemaVersion": 1,
+            "articleMarkdownVersion": "qwq-rich-md/1",
+            "articleMarkdownDigest": "sha256:0f0487ec553cf0b58d6d988e8d3129f853e3735cc441dc16c73b70d391d06ea5",
             "assets": [
               {
-                "id": "fixture_article_001_asset_1",
-                "imageUrl": "media/image/post/fixture_article_001/v1/cover.png",
-                "imageObjectKey": "media/image/post/fixture_article_001/v1/cover.png"
+                "assetId": "fixture_asset_1_fixture_article_001_v1_cover_png",
+                "kind": "image",
+                "scope": "cold_start",
+                "objectKey": "media/image/post/fixture_article_001/v1/cover.png",
+                "caption": "封面",
+                "sha256": "fixture:ba89098f205f7c3a6f4ea2136632e229de17ebd5d9bc350a22f5dd354c45a855"
               }
             ]
+          },
+          "articleRenderProfile": {
+            "template": "journal",
+            "fontPreset": "clean",
+            "layoutPolicy": {
+              "wrapDowngrade": "compactWidthToFullWidth",
+              "galleryDowngrade": "singleColumn"
+            }
           }
         },
         {

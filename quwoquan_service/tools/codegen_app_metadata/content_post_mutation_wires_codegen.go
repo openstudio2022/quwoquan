@@ -9,7 +9,7 @@ func dartMutationWireFieldType(field string) string {
 	switch field {
 	case "tags", "mediaUrls", "circleIds":
 		return "List<String>?"
-	case "articleDocument", "location", "primaryHomepageSnapshot", "deviceInfo", "publishLocation":
+	case "articleDocument", "articleAssetManifest", "articleRenderProfile", "location", "primaryHomepageSnapshot", "deviceInfo", "publishLocation":
 		return "CloudJsonMap?"
 	default:
 		return "String?"

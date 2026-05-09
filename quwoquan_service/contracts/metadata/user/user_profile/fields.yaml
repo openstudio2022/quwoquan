@@ -1524,7 +1524,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-  ProfileSubjectView:
+  SubAccountProfileView:
     description: 统一个人主页主体读模型；用户与分身最终都映射到此视图
     fields:
       - name: subAccountId
@@ -1688,7 +1688,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-  ProfileSubjectMutation:
+  SubAccountProfileMutation:
     description: 统一资料编辑 mutation；显式携带同步范围与同步目标
     fields:
       - name: nickname

@@ -22,11 +22,11 @@ slices:
     done_when:
       - "`user_profile / follow_edge / block_edge / content/post / messages/conversation / assistant/*` 的字段、request_context、errors 与路由边界冻结"
       - "`PersonaProfileView`、`ActivePersonaContextView`、`RelationshipCapabilityView` 与 graph list item 可由 metadata 表达"
-      - 记录 `OwnerAccount / SubAccount / ProfileSubject / username` 主链路命名退出 metadata
+      - 记录 `OwnerAccount / SubAccount / username` 主链路命名退出 metadata
       - feature flag 与 telemetry schema 有正式落点
     status: partial
     notes:
-      - "M1/M2 已冻结 `userId / personaId / userHandle`、`ProfileSubjectView`、`ActivePersonaContextView` 与 content canonical `profileSubjectId` 主链路。"
+      - "M1/M2 已冻结 `userId / personaId / userHandle`、`SubAccountProfileView`、`ActivePersonaContextView` 与 content canonical `profileSubjectId` 主链路。"
       - "`follow_edge / social graph / assistant` 的 Journey 级 metadata 与 request context 收口仍待后续 scenario 完成。"
 
   - id: P2
@@ -45,7 +45,7 @@ slices:
       - "`make -C quwoquan_service verify-metadata` 通过"
       - "`make codegen` 与 `make codegen-app` 产出可被 App 与 service 消费的生成物"
       - App / cloud / assistant 不再维护第二套 path、operation 或 request context override
-      - 旧 `sub-account / personas / profile-subject` 生成物退出主链路
+      - 旧 `personas / public-profile` 生成物退出主链路，统一回到 `sub-account / sub-accounts`
     status: partial
     notes:
       - "user-service、content-service 与 App 对 `ProfileSubject` / canonical subject 的 codegen 消费已经转绿。"
@@ -110,7 +110,7 @@ slices:
       - block gate、计数修正与列表过滤在弱网和重试下不串号
     status: partial
     notes:
-      - "M4 补全后，user-service follow/block/list/capability/search 已切到 `profile-subjects` 单轨，App follow outbox 与主页 capability 也统一围绕 graph projection 工作。"
+      - "M4 补全后，user-service follow/block/list/capability/search 已切到 `sub-accounts` 单轨，App follow outbox 与主页 capability 也统一围绕 graph projection 工作。"
       - "列表 overfetch+fill、owner 映射隐藏、计数自动修正与 flag-off edge 可读性回归已补齐，但共同粉丝 / 审计映射等更强隔离验证仍未全部完成。"
 
   - id: P6
@@ -134,7 +134,7 @@ slices:
       - Journey 级主路径回归清单、灰度门槛与失败处置手册明确
     status: partial
     notes:
-      - "M1/M2 已有分身管理与公开身份场景的 verify/codegen/T2/T3 证据，并补齐 profile-subject rollout flag 与 telemetry。"
+      - "M1/M2 已有分身管理与公开身份场景的 verify/codegen/T2/T3 证据，并补齐 sub-account public-profile rollout flag 与 telemetry。"
       - "M4 补全后已补齐 `ops.user.persona_context_v1 / ops.user.persona_graph_v1`、graph/follow 指标最小触发断言与 follow/graph rollback rehearsal。"
       - "M5 已补齐 `runtime/persona` dry-run/validate 工具、`scripts/persona_migration_dry_run.sh` / `scripts/persona_migration_validate.sh`、`ops.user.persona_model_v2 / persona_sync_v2 / persona_graph_v2` 开关映射，以及 persona sync patch type。"
       - "但完整 Journey 级迁移演练、上下文透传与关注图跨域灰度回滚尚未完成，因此不能宣告 P6 implemented。"

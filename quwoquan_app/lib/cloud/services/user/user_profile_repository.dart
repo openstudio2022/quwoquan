@@ -14,7 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_subject_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
@@ -55,7 +55,7 @@ abstract class UserProfileRepository {
   const UserProfileRepository();
 
   // ── 档案 ──────────────────────────────────────────────────────────────────
-  Future<ProfileSubjectViewData> getUserProfile(String userId);
+  Future<SubAccountProfileViewData> getUserProfile(String userId);
   Future<void> updateProfile(ProfileEditUpdatePayload data);
 
   // ── 主页 Tab 数据 ─────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ abstract class UserProfileRepository {
   Future<void> deletePersona(String subAccountId);
   Future<void> activatePersona(String subAccountId);
 
-  Future<ProfileSubjectViewData> getProfileSubject(String userId) async {
+  Future<SubAccountProfileViewData> getSubAccountProfile(String userId) async {
     final profile = await getUserProfile(userId);
     final stats = await getUserStats(userId);
     return profile.mergeStats(stats);
@@ -175,7 +175,7 @@ abstract class UserProfileRepository {
   List<Map<String, dynamic>> resonanceBuddyPreviewWireRows();
 }
 
-/// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [ProfileSubjectWireDto]。
+/// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [SubAccountProfileWireDto]。
 const String _kBundledMockUserProfilesJson = r'''
 {
   "user_001": {
@@ -298,15 +298,15 @@ class MockUserProfileRepository extends UserProfileRepository {
       <RecentSearchEntryWireDto>[];
 
   @override
-  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
     final contractWire = _contractProfileWireByUserId[userId];
     if (contractWire != null) {
-      return ProfileSubjectViewData.fromProfileSubjectWire(contractWire);
+      return SubAccountProfileViewData.fromSubAccountProfileWire(contractWire);
     }
     final wire =
         _mockProfileWireByUserId[userId] ??
-        ProfileSubjectWireDto.fromMap(_defaultProfile(userId));
-    return ProfileSubjectViewData.fromProfileSubjectWire(wire);
+        SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
+    return SubAccountProfileViewData.fromSubAccountProfileWire(wire);
   }
 
   @override
@@ -780,17 +780,17 @@ class MockUserProfileRepository extends UserProfileRepository {
     };
   }
 
-  static final Map<String, ProfileSubjectWireDto> _mockProfileWireByUserId = {
+  static final Map<String, SubAccountProfileWireDto> _mockProfileWireByUserId = {
     for (final e in _decodeBundledMockUserProfiles(
       _kBundledMockUserProfilesJson,
     ).entries)
-      e.key: ProfileSubjectWireDto.fromMap(e.value),
+      e.key: SubAccountProfileWireDto.fromMap(e.value),
   };
 
-  static final Map<String, ProfileSubjectWireDto> _contractProfileWireByUserId =
+  static final Map<String, SubAccountProfileWireDto> _contractProfileWireByUserId =
       {
         for (final item in _contractProfileRows())
-          item['userId'].toString(): ProfileSubjectWireDto.fromMap(
+          item['userId'].toString(): SubAccountProfileWireDto.fromMap(
             _contractProfileWire(item),
           ),
       };
@@ -994,7 +994,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   // ── 档案 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
     if (userId == 'me') {
       final meUrl = _uri(UserApiMetadata.getMeProfilePath);
       final meResp = await _client.get(
@@ -1006,8 +1006,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
           json.decode(meResp.body),
           context: UserRequestPageIds.getMeProfile,
         );
-        return ProfileSubjectViewData.fromProfileSubjectWire(
-          ProfileSubjectWireDto.fromMap(map),
+        return SubAccountProfileViewData.fromSubAccountProfileWire(
+          SubAccountProfileWireDto.fromMap(map),
         );
       }
     }
@@ -1026,8 +1026,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         json.decode(subjectResp.body),
         context: UserRequestPageIds.getSubAccountProfile,
       );
-      return ProfileSubjectViewData.fromProfileSubjectWire(
-        ProfileSubjectWireDto.fromMap(map),
+      return SubAccountProfileViewData.fromSubAccountProfileWire(
+        SubAccountProfileWireDto.fromMap(map),
       );
     }
 

@@ -76,12 +76,6 @@ func normalizeCreatePostPayloadForTest(t *testing.T, payload string) string {
 	if err := json.Unmarshal([]byte(payload), &body); err != nil {
 		t.Fatalf("normalize create post payload: %v", err)
 	}
-	if strings.TrimSpace(asTestString(body["contentType"])) == "article" && body["articleDocument"] == nil {
-		body["articleDocument"] = map[string]any{
-			"title": asTestString(body["title"]),
-			"body":  asTestString(body["body"]),
-		}
-	}
 	normalized, err := json.Marshal(body)
 	if err != nil {
 		t.Fatalf("marshal normalized create post payload: %v", err)

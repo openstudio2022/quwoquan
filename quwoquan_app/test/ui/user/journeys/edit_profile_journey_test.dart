@@ -26,11 +26,11 @@ class _EditProfileMockRepository extends MockUserProfileRepository {
   }
 
   @override
-  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
     final base = await super.getUserProfile(userId);
     if (_updatedProfile.isEmpty) return base;
     final nick = _updatedProfile['nickname'] as String?;
-    return ProfileSubjectViewData(
+    return SubAccountProfileViewData(
       subAccountId: base.subAccountId,
       ownerUserId: base.ownerUserId,
       subjectType: base.subjectType,

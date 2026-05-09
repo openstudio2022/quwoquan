@@ -84,6 +84,7 @@ class StPageFlipRenderFrame {
     this.reversePose,
     this.backwardLeafFrame,
     this.backwardProjectedFrame,
+    this.routeBSpineMirroredApplied = false,
   });
 
   final ui.Offset localPagePoint;
@@ -102,28 +103,28 @@ class StPageFlipRenderFrame {
   final ArticlePageBackwardLeafFrame? backwardLeafFrame;
   final ArticlePageBackwardProjectedFrame? backwardProjectedFrame;
 
+  /// True iff this frame's BACK geometry has been X-mirrored to align with
+  /// the forward rendering pipeline (route B M1 invariant). Only set on
+  /// portrait single-page BACK frames.
+  final bool routeBSpineMirroredApplied;
+
   bool get usesThreeStageBackflow =>
       direction == StPageFlipDirection.back &&
       renderDirection == StPageFlipDirection.forward &&
       reversePose != null;
 }
 
+/// 后翻 projected frame：路线 B 主线下仅承载 fold line 与 free-edge line，
+/// 用于 diagnostic guide layer。所有派生多边形（previousFoldSurfacePolygon /
+/// previousFrontFoldPolygon / previousBackFoldPolygon / currentResidualPolygon
+/// 等）已被废弃；sheet 与 current 的真相源是 `flippingClipArea` 与
+/// `bottomClipArea`，渲染层直接消费、不得再在此处派生。
 @immutable
 class ArticlePageBackwardProjectedFrame {
   const ArticlePageBackwardProjectedFrame({
     required this.foldLine,
     required this.projectedRightEdgeLine,
-    required this.frontBackBoundaryLine,
-    required this.foldSurfaceMovingEdgeLine,
     required this.replayLocalPoint,
-    required this.previousBackPagePolygon,
-    required this.previousLaidFrontPolygon,
-    required this.previousFoldSurfacePolygon,
-    required this.previousBackFoldPolygon,
-    required this.previousFrontFoldPolygon,
-    required this.previousBackPolygon,
-    required this.previousFrontPolygon,
-    required this.currentResidualPolygon,
     required this.edgeEnteredPage,
     required this.foldLineSource,
     required this.edgeLineSource,
@@ -131,23 +132,10 @@ class ArticlePageBackwardProjectedFrame {
 
   final (ui.Offset, ui.Offset) foldLine;
   final (ui.Offset, ui.Offset) projectedRightEdgeLine;
-  final (ui.Offset, ui.Offset) frontBackBoundaryLine;
-  final (ui.Offset, ui.Offset) foldSurfaceMovingEdgeLine;
   final ui.Offset replayLocalPoint;
-  final List<ui.Offset> previousBackPagePolygon;
-  final List<ui.Offset> previousLaidFrontPolygon;
-  final List<ui.Offset> previousFoldSurfacePolygon;
-  final List<ui.Offset> previousBackFoldPolygon;
-  final List<ui.Offset> previousFrontFoldPolygon;
-  final List<ui.Offset> previousBackPolygon;
-  final List<ui.Offset> previousFrontPolygon;
-  final List<ui.Offset> currentResidualPolygon;
   final bool edgeEnteredPage;
   final String foldLineSource;
   final String edgeLineSource;
-
-  int get previousBackVertexCount => previousBackPolygon.length;
-  int get previousFrontVertexCount => previousFrontPolygon.length;
 }
 
 enum ArticlePageBackwardLeafPhase { emerge, unroll, settle }

@@ -64,7 +64,7 @@
 
 - `OwnerAccount / Persona(SubAccount)` 聚合
 - 分身创建、切换、停用/删除保护、配额、主分身与激活态
-- `ProfileSubjectView / ProfileSubjectMutation`
+- `SubAccountProfileView / SubAccountProfileMutation`
 - 可见性、继承/覆写、审计映射
 - 对外只暴露 `profileSubjectId / subAccountId`，不暴露 owner 映射
 

@@ -15,10 +15,6 @@ class BackwardArticleFlipPipeline extends ArticleFlipPipeline {
     final dynamicOwnedPages = <int>{
       if (hasBackwardFoldFrame && input.scene.flippingPageIndex != null)
         input.scene.flippingPageIndex!,
-      if (hasBackwardFoldFrame && input.textureBinding?.bottomPageIndex != null)
-        input.textureBinding!.bottomPageIndex!,
-      if (hasBackwardFoldFrame && input.scene.bottomPageIndex != null)
-        input.scene.bottomPageIndex!,
     };
     return ArticleFlipPipelineOutput(
       direction: direction,

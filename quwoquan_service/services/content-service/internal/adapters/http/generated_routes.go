@@ -35,6 +35,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	switch operation {
 	case "AbortMediaUpload":
 		h.handleNotImplemented(w, r, operation)
+	case "BindMediaAssetsToPost":
+		h.handleNotImplemented(w, r, operation)
 	case "CompleteMediaUpload":
 		h.handleNotImplemented(w, r, operation)
 	case "CreateComment":
@@ -151,6 +153,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "FavoritePost"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/like", operation: "UnlikePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/like", operation: "LikePost"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/media:bind", operation: "BindMediaAssetsToPost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/publish", operation: "PublishPost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/quote", operation: "QuoteToCircle"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetReactionState"},
@@ -274,7 +277,10 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"tags":                      {},
 		"mediaUrls":                 {},
 		"coverUrl":                  {},
-		"articleDocument":           {},
+		"articleMarkdown":           {},
+		"articleMarkdownVersion":    {},
+		"articleAssetManifest":      {},
+		"articleRenderProfile":      {},
 		"videoUrl":                  {},
 		"illustrationAssetId":       {},
 		"location":                  {},
@@ -301,7 +307,10 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"summary":                 {},
 		"tags":                    {},
 		"coverUrl":                {},
-		"articleDocument":         {},
+		"articleMarkdown":         {},
+		"articleMarkdownVersion":  {},
+		"articleAssetManifest":    {},
+		"articleRenderProfile":    {},
 		"primaryHomepageId":       {},
 		"primaryHomepageType":     {},
 		"primaryHomepageSnapshot": {},
@@ -331,7 +340,10 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"tags":                    {},
 		"mediaUrls":               {},
 		"coverUrl":                {},
-		"articleDocument":         {},
+		"articleMarkdown":         {},
+		"articleMarkdownVersion":  {},
+		"articleAssetManifest":    {},
+		"articleRenderProfile":    {},
 		"videoUrl":                {},
 		"illustrationAssetId":     {},
 		"location":                {},

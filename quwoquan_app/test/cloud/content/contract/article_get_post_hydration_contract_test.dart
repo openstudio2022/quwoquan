@@ -15,20 +15,24 @@ void main() {
       final mockRepo = MockContentRepository();
       final detail = await mockRepo.getPost(postId: 'web-dev');
       expect(detail.detailWire.articleTemplate, isNotNull);
-      expect(detail.detailWire.articleDocument, isNotNull);
-      expect(detail.detailWire.articleDocument!.nodes, isNotEmpty);
+      expect(detail.detailWire.articleMarkdown, isNotNull);
+      expect(detail.detailWire.articleMarkdown, contains('#'));
+      expect(detail.detailWire.articleAssetManifest, isNotNull);
     });
 
     test('Mock getPost 与 Remote getPost 投射结果保持一致', () async {
-      final dtoFixture = ContentMockData.discoveryArticleData.firstWhere((item) {
-        final doc = item.articleDocument;
-        return doc != null && doc.isNotEmpty;
+      final dtoFixture = ContentMockData.discoveryArticleData.firstWhere((
+        item,
+      ) {
+        final digest = item.articleMarkdownDigest;
+        return digest != null && digest.isNotEmpty;
       });
-      final rawFixture = Map<String, dynamic>.from(dtoFixture.toDiscoveryWireMap());
       final postId =
-          rawFixture['postId']?.toString() ?? 'article_contract_post';
+          dtoFixture.toDiscoveryWireMap()['postId']?.toString() ??
+          'article_contract_post';
       final mockRepo = MockContentRepository();
       final mockDetail = await mockRepo.getPost(postId: postId);
+      final rawFixture = mockDetail.mergedArticleWireMap;
       final remoteRepo = RemoteContentRepository(
         client: MockClient((request) async {
           return http.Response(
@@ -49,10 +53,7 @@ void main() {
         fallbackArticleId: postId,
       );
 
-      expect(
-        remoteView.documentSource,
-        ArticleDetailDocumentSource.articleDocument,
-      );
+      expect(remoteView.documentSource, ArticleDetailDocumentSource.markdown);
       expect(remoteView.title, equals(mockView.title));
       expect(remoteView.description, equals(mockView.description));
       expect(remoteView.template, equals(mockView.template));
@@ -64,7 +65,7 @@ void main() {
       );
     });
 
-    test('summary snapshot 在 hydration 后切到 canonical articleDocument', () {
+    test('summary snapshot 在 hydration 后切到 canonical articleMarkdown', () {
       const summaryRaw = <String, dynamic>{
         'postId': 'article_hydration_switch',
         'contentType': 'article',
@@ -84,14 +85,11 @@ void main() {
         'title': '分发标题',
         'body': '分发摘要正文',
         'coverUrl': 'https://example.com/cover.jpg',
-        'articleDocument': <String, dynamic>{
-          'title': '水合后标题',
-          'body': '水合后正文第一段。\n水合后正文第二段。',
-          'blocks': <Map<String, dynamic>>[
-            {'id': 'h2', 'type': 'heading2', 'offset': 0, 'text': '水合章节'},
-            {'id': 'p1', 'type': 'paragraph', 'offset': 4, 'text': '水合后正文第一段。'},
-          ],
-        },
+        'articleMarkdown':
+            '---\ntitle: 水合后标题\n---\n\n# 水合后标题\n\n## 水合章节\n\n水合后正文第一段。\n\n水合后正文第二段。\n',
+        'articleMarkdownVersion': 'qwq-rich-md/1',
+        'articleAssetManifest': <String, dynamic>{'assets': []},
+        'articleRenderProfile': <String, dynamic>{'template': 'journal'},
       };
 
       final before = projectArticleDetailView(
@@ -105,7 +103,7 @@ void main() {
 
       expect(before.documentSource, ArticleDetailDocumentSource.body);
       expect(before.description, equals('分发摘要正文'));
-      expect(after.documentSource, ArticleDetailDocumentSource.articleDocument);
+      expect(after.documentSource, ArticleDetailDocumentSource.markdown);
       expect(after.title, equals('水合后标题'));
       expect(after.description, contains('水合后正文第一段'));
     });

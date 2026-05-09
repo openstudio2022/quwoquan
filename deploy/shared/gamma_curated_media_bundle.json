@@ -9,14 +9,14 @@
     {
       "objectKey": "media/avatar/circle/fixture_circle_city/v1/avatar.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_city/v1/avatar.png",
-      "sourceHash": "sha256:c615cee4341e2d26e054492f505dde25cee1eaef5bc2cccfdd254f5448b82797",
+      "sourceHash": "sha256:80f17121c37fffd73eb7d3ed1b717f7b2d13941925cf2a4649efaa1b4b0850a3",
       "mimeType": "image/png",
       "sizeBytes": 523600
     },
     {
       "objectKey": "media/avatar/circle/fixture_circle_citywalk_01/v1/avatar.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_citywalk_01/v1/avatar.png",
-      "sourceHash": "sha256:e9a0c7d2328247463ab33a08a35184d9d4e385fc74a0ebf0d49d89840b09ad1d",
+      "sourceHash": "sha256:2255e3ebeec09ed77dd3797597bf8eeec66611a8bbf18a33d1914b5add1ce31f",
       "mimeType": "image/png",
       "sizeBytes": 523600
     },
@@ -51,14 +51,14 @@
     {
       "objectKey": "media/avatar/circle/fixture_circle_tech/v1/avatar.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_tech/v1/avatar.png",
-      "sourceHash": "sha256:a216a7fcd645dcf87341b8cd2d80aac11dbcd68bc56abaf13c7d32b3b374b595",
+      "sourceHash": "sha256:c9ee45711a391eabed06cf86d4d5fbe34383bc4e4bf93840612c0367f5f0d592",
       "mimeType": "image/png",
       "sizeBytes": 433384
     },
     {
       "objectKey": "media/avatar/circle/fixture_circle_tech_01/v1/avatar.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/avatar/circle/fixture_circle_tech_01/v1/avatar.png",
-      "sourceHash": "sha256:ce2af9a177de55a8fa4685f1b390d8c1c688294d70fd0f61203ac7095a839b2f",
+      "sourceHash": "sha256:2592877bd026461e9b73dd9d7e5d6b10aa74e181cf584a13afaa7de9d648460e",
       "mimeType": "image/png",
       "sizeBytes": 433384
     },
@@ -415,7 +415,7 @@
     {
       "objectKey": "media/background/user/fixture_user_citywalk_01/v1/background.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_citywalk_01/v1/background.png",
-      "sourceHash": "sha256:6a3fce461dd3683b391eb6c6eb40e4f30e4397c55c6c79213bcbae3cec7051af",
+      "sourceHash": "sha256:0bec2fd6ae4fdbfc8d4fe6193e6ab6e88dba9f5e377a0c45011f3f04b52fe83e",
       "mimeType": "image/png",
       "sizeBytes": 2686629
     },
@@ -464,7 +464,7 @@
     {
       "objectKey": "media/background/user/fixture_user_tech_01/v1/background.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_tech_01/v1/background.png",
-      "sourceHash": "sha256:5a26aa6ef2581ab84b866696c1819f02cafd19c5fea0c34152b70ec804eb5977",
+      "sourceHash": "sha256:64057bb25d05d96b1d50a6d1ac70a9b4c80eef37b241726711525b54597ddec0",
       "mimeType": "image/png",
       "sizeBytes": 2148230
     },
@@ -492,7 +492,7 @@
     {
       "objectKey": "media/background/user/fixture_user_video/v1/background.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/background/user/fixture_user_video/v1/background.png",
-      "sourceHash": "sha256:f9135032e2ab0645d2a930261cabad3d39b71d7047df46904d22505a3821021f",
+      "sourceHash": "sha256:f4760d66680c453346716c84810c8708ae0c00e5d9b1f3127d2a3a27b8b3b518",
       "mimeType": "image/png",
       "sizeBytes": 2686629
     },
@@ -513,7 +513,7 @@
     {
       "objectKey": "media/image/circle/fixture_circle_city/v1/cover.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_city/v1/cover.png",
-      "sourceHash": "sha256:ef6877fd9a741bae6acf96f4562427e5723360638bb4389d6081acda9ace11ac",
+      "sourceHash": "sha256:8978f23308b2ba0555928c29691c5b909296f7563442e818f090450d0ab520bc",
       "mimeType": "image/png",
       "sizeBytes": 2472778
     },
@@ -555,7 +555,7 @@
     {
       "objectKey": "media/image/circle/fixture_circle_tech/v1/cover.png",
       "relativePath": "quwoquan_service/contracts/metadata/_shared/test_fixtures/media/media/image/circle/fixture_circle_tech/v1/cover.png",
-      "sourceHash": "sha256:b95980ec76c3947f7da9722a5ee9ed1685216b3511334b786fc0d00a95112858",
+      "sourceHash": "sha256:5f203b113d474d6a8cf4d6cc1d36f4c87335413be1998283a7586bad93a32e12",
       "mimeType": "image/png",
       "sizeBytes": 1901856
     },

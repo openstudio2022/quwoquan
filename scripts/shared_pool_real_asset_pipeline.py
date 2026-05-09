@@ -271,6 +271,58 @@ def sha256_bytes(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def article_cover_asset_id(object_key: str) -> str:
+    return "fixture_asset_" + object_key.replace("/", "_").replace(".", "_")
+
+
+def build_article_payload(*, title: str, summary: str, body: str, cover: dict[str, Any]) -> dict[str, Any]:
+    cover_object_key = str(cover.get("objectKey") or "")
+    asset_id = article_cover_asset_id(cover_object_key)
+    markdown = (
+        f"---\n"
+        f"title: {title}\n"
+        f"summary: {summary}\n"
+        f"template: journal\n"
+        f"fontPreset: clean\n"
+        f"coverImage: asset://{asset_id}\n"
+        f"---\n\n"
+        f"# {title}\n\n"
+        f"{body}\n\n"
+        f":::figure id=\"{asset_id}\" layout=\"fullWidth\" caption=\"\"\n"
+        f"asset://{asset_id}\n"
+        f":::\n"
+    )
+    markdown_digest = sha256_bytes(markdown.encode("utf-8"))
+    return {
+        "articleMarkdown": markdown,
+        "articleMarkdownVersion": "qwq-rich-md/1",
+        "articleMarkdownDigest": markdown_digest,
+        "articleAssetManifest": {
+            "schemaVersion": 1,
+            "articleMarkdownVersion": "qwq-rich-md/1",
+            "articleMarkdownDigest": markdown_digest,
+            "assets": [
+                {
+                    "assetId": asset_id,
+                    "kind": "image",
+                    "scope": "cold_start",
+                    "objectKey": cover_object_key,
+                    "caption": "封面",
+                    "sha256": str(cover.get("sourceHash") or ""),
+                }
+            ],
+        },
+        "articleRenderProfile": {
+            "template": "journal",
+            "fontPreset": "clean",
+            "layoutPolicy": {
+                "wrapDowngrade": "compactWidthToFullWidth",
+                "galleryDowngrade": "singleColumn",
+            },
+        },
+    }
+
+
 def palette(seed: str) -> tuple[tuple[int, int, int], tuple[int, int, int], tuple[int, int, int]]:
     digest = hashlib.sha256(seed.encode("utf-8")).digest()
     colors = []
@@ -1040,13 +1092,14 @@ def ensure_core_posts(posts: list[dict[str, Any]], post_assets: dict[str, list[d
             "locationName": spec["locationName"],
         }
         if spec["postType"] == "articlePost":
-            row["articleDocument"] = {
-                "blocks": [
-                    {"type": "paragraph", "text": spec["body"]},
-                    {"type": "image", "imageUrl": cover["objectKey"], "imageObjectKey": cover["objectKey"]},
-                ],
-                "assets": [{"id": f"{spec['postId']}_asset_1", "imageUrl": cover["objectKey"], "imageObjectKey": cover["objectKey"]}],
-            }
+            row.update(
+                build_article_payload(
+                    title=spec["headline"],
+                    summary=spec["summary"],
+                    body=spec["body"],
+                    cover=cover,
+                )
+            )
         post_assets[spec["postId"]] = assets
         if spec["postId"] in existing:
             posts[existing[spec["postId"]]] = row
@@ -1291,10 +1344,14 @@ def content_row(post: dict[str, Any], circles_by_id: dict[str, dict[str, Any]]) 
         row["videoUrl"] = post["videoObjectKey"]
         row["durationMs"] = 45000
     if content_type == "article":
-        row["articleDocument"] = post.get("articleDocument") or {
-            "blocks": [{"type": "paragraph", "text": post["body"]}],
-            "assets": [],
-        }
+        row.update(
+            build_article_payload(
+                title=str(post.get("headline") or post.get("title") or post["body"]),
+                summary=str(post.get("summary") or post["body"]),
+                body=str(post.get("body") or post.get("summary") or ""),
+                cover=post["coverAsset"],
+            )
+        )
     return row
 
 

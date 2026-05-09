@@ -13,7 +13,11 @@ class ContentPostDetailWireDto {
   final String? badge;
   final String? articleTemplate;
   final String? articleFontPreset;
-  final ArticleDocumentWireDto? articleDocument;
+  final String? articleMarkdown;
+  final String? articleMarkdownVersion;
+  final String? articleMarkdownDigest;
+  final Map<String, dynamic>? articleAssetManifest;
+  final Map<String, dynamic>? articleRenderProfile;
   final List<ContentPostDetailArticleBlockWireDto>? articleBlocks;
   final List<ContentPostDetailArticlePageWireDto>? articlePages;
   final String? coverUrlWire;
@@ -31,7 +35,11 @@ class ContentPostDetailWireDto {
     this.badge,
     this.articleTemplate,
     this.articleFontPreset,
-    this.articleDocument,
+    this.articleMarkdown,
+    this.articleMarkdownVersion,
+    this.articleMarkdownDigest,
+    this.articleAssetManifest,
+    this.articleRenderProfile,
     this.articleBlocks,
     this.articlePages,
     this.coverUrlWire,
@@ -51,7 +59,11 @@ class ContentPostDetailWireDto {
       badge: m['badge']?.toString() ?? null,
       articleTemplate: m['articleTemplate']?.toString() ?? null,
       articleFontPreset: m['articleFontPreset']?.toString() ?? null,
-      articleDocument: m['articleDocument'] == null ? null : ArticleDocumentWireDto.fromMap(_parseStringKeyMap(m['articleDocument'])!),
+      articleMarkdown: m['articleMarkdown']?.toString() ?? null,
+      articleMarkdownVersion: m['articleMarkdownVersion']?.toString() ?? null,
+      articleMarkdownDigest: m['articleMarkdownDigest']?.toString() ?? null,
+      articleAssetManifest: _parseStringKeyMap(m['articleAssetManifest']) ?? null,
+      articleRenderProfile: _parseStringKeyMap(m['articleRenderProfile']) ?? null,
       articleBlocks: m['articleBlocks'] == null ? null : _parseProjectionDtoList(m['articleBlocks'], ContentPostDetailArticleBlockWireDto.fromMap),
       articlePages: m['articlePages'] == null ? null : _parseProjectionDtoList(m['articlePages'], ContentPostDetailArticlePageWireDto.fromMap),
       coverUrlWire: m['coverUrl']?.toString() ?? null,
@@ -72,7 +84,11 @@ class ContentPostDetailWireDto {
       'badge': badge,
       'articleTemplate': articleTemplate,
       'articleFontPreset': articleFontPreset,
-      'articleDocument': articleDocument,
+      'articleMarkdown': articleMarkdown,
+      'articleMarkdownVersion': articleMarkdownVersion,
+      'articleMarkdownDigest': articleMarkdownDigest,
+      'articleAssetManifest': articleAssetManifest,
+      'articleRenderProfile': articleRenderProfile,
       'articleBlocks': articleBlocks,
       'articlePages': articlePages,
       'coverUrlWire': coverUrlWire,
@@ -92,7 +108,11 @@ class ContentPostDetailWireDto {
     String? badge,
     String? articleTemplate,
     String? articleFontPreset,
-    ArticleDocumentWireDto? articleDocument,
+    String? articleMarkdown,
+    String? articleMarkdownVersion,
+    String? articleMarkdownDigest,
+    Map<String, dynamic>? articleAssetManifest,
+    Map<String, dynamic>? articleRenderProfile,
     List<ContentPostDetailArticleBlockWireDto>? articleBlocks,
     List<ContentPostDetailArticlePageWireDto>? articlePages,
     String? coverUrlWire,
@@ -110,7 +130,11 @@ class ContentPostDetailWireDto {
       badge: badge ?? this.badge,
       articleTemplate: articleTemplate ?? this.articleTemplate,
       articleFontPreset: articleFontPreset ?? this.articleFontPreset,
-      articleDocument: articleDocument ?? this.articleDocument,
+      articleMarkdown: articleMarkdown ?? this.articleMarkdown,
+      articleMarkdownVersion: articleMarkdownVersion ?? this.articleMarkdownVersion,
+      articleMarkdownDigest: articleMarkdownDigest ?? this.articleMarkdownDigest,
+      articleAssetManifest: articleAssetManifest ?? this.articleAssetManifest,
+      articleRenderProfile: articleRenderProfile ?? this.articleRenderProfile,
       articleBlocks: articleBlocks ?? this.articleBlocks,
       articlePages: articlePages ?? this.articlePages,
       coverUrlWire: coverUrlWire ?? this.coverUrlWire,

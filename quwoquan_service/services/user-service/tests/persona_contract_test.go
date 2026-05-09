@@ -30,7 +30,7 @@ func seedPersonaInviteHistory(t *testing.T, recordID, subAccountID, ownerID stri
 func TestGetPersonaLifecycleGuard_HistoryCoverageBySource(t *testing.T) {
 	cases := []struct {
 		name string
-		seed func(t *testing.T, profileSubjectID string)
+		seed func(t *testing.T, subAccountID string)
 	}{
 		{
 			name: "content_post",

@@ -624,7 +624,7 @@ beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/settings/appe
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/content/profile-subjects/fixture_user_current/posts" "profile posts fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/users/fixture_user_current/works" "profile works fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/users/fixture_user_current/circles" "profile circles fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
-beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/profile-subjects/fixture_user_current/relationship/capability" "relationship capability fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/user/sub-accounts/fixture_user_current/relationship/capability" "relationship capability fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/entity/homepages" "entity fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/integration/locations/pois" "integration fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "http://127.0.0.1:${GATEWAY_PORT}/v1/app-messages" "notification fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
@@ -693,7 +693,7 @@ report = {
         "/v1/content/profile-subjects/fixture_user_current/posts",
         "/v1/users/fixture_user_current/works",
         "/v1/users/fixture_user_current/circles",
-        "/v1/user/profile-subjects/fixture_user_current/relationship/capability",
+        "/v1/user/sub-accounts/fixture_user_current/relationship/capability",
         "/v1/entity/homepages",
         "/v1/integration/locations/pois",
         "/v1/app-messages",

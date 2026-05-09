@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart'
-    show ProfileSubjectViewData, UserLifeItem, UserWorkItem;
+    show SubAccountProfileViewData, UserLifeItem, UserWorkItem;
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -28,7 +28,7 @@ class ProfileState {
   });
 
   final String userId;
-  final ProfileSubjectViewData? profile;
+  final SubAccountProfileViewData? profile;
   final CreationSubTab activeSubTab;
   final CreationWorkFormat activeWorkFormat;
   final CreationVisibility activeVisibility;
@@ -56,7 +56,7 @@ class ProfileState {
   }
 
   ProfileState copyWith({
-    ProfileSubjectViewData? profile,
+    SubAccountProfileViewData? profile,
     CreationSubTab? activeSubTab,
     CreationWorkFormat? activeWorkFormat,
     CreationVisibility? activeVisibility,
@@ -124,7 +124,7 @@ class ProfileNotifier extends Notifier<ProfileState> {
     state = ProfileState(userId: _userId).copyWith(isLoading: true);
     try {
       final repo = ref.read(userProfileRepositoryProvider);
-      final profile = await repo.getProfileSubject(_userId);
+      final profile = await repo.getSubAccountProfile(_userId);
       final posts = await repo.listUserPosts(_userId);
       final works = await repo.listUserWorks(_userId);
       final lifeItems = await repo.listUserLifeItems(_userId);

@@ -836,6 +836,16 @@ features:
               domain: ""
               status: specified
               tags: []
+            - id: markdown-article-kernel
+              name: markdown-article-kernel
+              level: L3_story
+              path: discovery-content/content-type-framework/markdown-article-kernel
+              domain: content
+              status: in_progress
+              tags:
+                - markdown
+                - article
+                - metadata-first
         - id: dual-rail-discovery-redesign
           name: dual-rail-discovery-redesign
           level: L2_feature

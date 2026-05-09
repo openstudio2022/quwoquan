@@ -5,13 +5,7 @@ import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 ///
 /// 取代原来从 `Map<String, dynamic>` 中 article['stats']['likes']、
 /// article['author']['name'] 等写死字符串访问。
-enum ArticleDetailDocumentSource {
-  articleDocument,
-  articleBlocks,
-  cards,
-  body,
-  empty,
-}
+enum ArticleDetailDocumentSource { markdown, articleBlocks, cards, body, empty }
 
 class ArticleDetailView {
   const ArticleDetailView({

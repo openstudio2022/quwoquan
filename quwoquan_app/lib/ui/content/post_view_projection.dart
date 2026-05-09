@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.da
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/markdown/qwq_markdown.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
 /// 统一投射入口：raw post map → [PostSummaryView]（DTO 驱动）。
@@ -71,8 +72,8 @@ ArticleDetailView projectArticleDetailView(
     cards: cards,
     body: body,
   );
-  final hasExplicitArticleDocument =
-      documentSource == ArticleDetailDocumentSource.articleDocument;
+  final hasMarkdownDocument =
+      documentSource == ArticleDetailDocumentSource.markdown;
   final seedPages = _projectArticlePages(
     raw: raw,
     postTitle: post.title ?? '',
@@ -89,7 +90,7 @@ ArticleDetailView projectArticleDetailView(
     raw: raw,
     body: body,
     cards: cards,
-    document: hasExplicitArticleDocument ? document : null,
+    document: hasMarkdownDocument ? document : null,
   );
   final pages = _projectArticlePages(
     raw: raw,
@@ -99,7 +100,7 @@ ArticleDetailView projectArticleDetailView(
     body: body,
     coverImage: coverImage,
     cards: cards,
-    document: hasExplicitArticleDocument ? document : null,
+    document: hasMarkdownDocument ? document : null,
   );
   final preferDocumentText =
       documentSource != ArticleDetailDocumentSource.body &&
@@ -154,9 +155,9 @@ ArticleDetailDocumentSource _resolveArticleDocumentSource({
   required List<ArticleCardView> cards,
   required String body,
 }) {
-  final rawDocument = raw[ArticleDetailWireKeys.articleDocument];
-  if (rawDocument is Map && rawDocument.isNotEmpty) {
-    return ArticleDetailDocumentSource.articleDocument;
+  final markdown = raw[ArticleDetailWireKeys.articleMarkdown]?.toString() ?? '';
+  if (markdown.trim().isNotEmpty) {
+    return ArticleDetailDocumentSource.markdown;
   }
   final rawBlocks = raw[ArticleDetailWireKeys.articleBlocks];
   if (rawBlocks is List && rawBlocks.isNotEmpty) {
@@ -171,17 +172,116 @@ ArticleDetailDocumentSource _resolveArticleDocumentSource({
   return ArticleDetailDocumentSource.empty;
 }
 
+ArticleDocumentData _projectMarkdownArticleDocument(String markdown) {
+  final parsed = const QwqMarkdownParser().parse(markdown).document;
+  final nodes = <ArticleDocumentNode>[];
+  final title = parsed.frontMatter.title.trim();
+  if (title.isNotEmpty) {
+    nodes.add(
+      ArticleDocumentNode(
+        id: 'document_title',
+        type: ArticleDocumentNodeType.documentTitle,
+        text: title,
+      ),
+    );
+  }
+  var seed = 0;
+  for (final block in parsed.blocks) {
+    switch (block.kind) {
+      case QwqMarkdownBlockKind.heading:
+        nodes.add(
+          ArticleDocumentNode(
+            id: block.id.isNotEmpty ? block.id : 'heading_${seed++}',
+            type: block.level >= 3
+                ? ArticleDocumentNodeType.headingMinor
+                : ArticleDocumentNodeType.headingMajor,
+            text: block.text,
+          ),
+        );
+      case QwqMarkdownBlockKind.paragraph:
+      case QwqMarkdownBlockKind.quote:
+      case QwqMarkdownBlockKind.callout:
+      case QwqMarkdownBlockKind.card:
+        if (block.text.trim().isNotEmpty) {
+          nodes.add(
+            ArticleDocumentNode(
+              id: block.id.isNotEmpty ? block.id : 'paragraph_${seed++}',
+              type: ArticleDocumentNodeType.paragraph,
+              text: block.text,
+            ),
+          );
+        }
+      case QwqMarkdownBlockKind.orderedItem:
+        nodes.add(
+          ArticleDocumentNode(
+            id: block.id.isNotEmpty ? block.id : 'ordered_${seed++}',
+            type: ArticleDocumentNodeType.orderedItem,
+            text: block.text,
+          ),
+        );
+      case QwqMarkdownBlockKind.bulletItem:
+        nodes.add(
+          ArticleDocumentNode(
+            id: block.id.isNotEmpty ? block.id : 'bullet_${seed++}',
+            type: ArticleDocumentNodeType.bulletItem,
+            text: block.text,
+          ),
+        );
+      case QwqMarkdownBlockKind.image:
+      case QwqMarkdownBlockKind.figure:
+        final ref = block.assetRef;
+        if (ref != null) {
+          nodes.add(
+            ArticleDocumentNode(
+              id: block.id.isNotEmpty ? block.id : ref.assetId,
+              type: ArticleDocumentNodeType.figure,
+              assetId: ref.assetId,
+              imageUrl: 'asset://${ref.assetId}',
+              imageLayout: ref.layout.name,
+              caption: ref.caption,
+            ),
+          );
+        }
+      case QwqMarkdownBlockKind.gallery:
+        for (final ref in block.assetRefs) {
+          nodes.add(
+            ArticleDocumentNode(
+              id: '${block.id}_${ref.assetId}',
+              type: ArticleDocumentNodeType.figure,
+              assetId: ref.assetId,
+              imageUrl: 'asset://${ref.assetId}',
+              imageLayout: ref.layout.name,
+              caption: ref.caption,
+            ),
+          );
+        }
+      case QwqMarkdownBlockKind.section:
+      case QwqMarkdownBlockKind.codeBlock:
+      case QwqMarkdownBlockKind.spacer:
+      case QwqMarkdownBlockKind.horizontalRule:
+        break;
+    }
+  }
+  return ArticleDocumentData(
+    nodes: nodes,
+    template: parsed.frontMatter.template.isNotEmpty
+        ? parsed.frontMatter.template
+        : 'gentle',
+    fontPreset: parsed.frontMatter.fontPreset.isNotEmpty
+        ? parsed.frontMatter.fontPreset
+        : 'clean',
+    coverImageUrl: parsed.frontMatter.coverImage,
+  );
+}
+
 ArticleDocumentData _projectArticleDocument({
   required Map<String, dynamic> raw,
   required String postTitle,
   required List<ArticlePageData> pages,
 }) {
-  final rawDocument = Map<String, dynamic>.from(
-    raw[ArticleDetailWireKeys.articleDocument] as Map? ??
-        const <String, dynamic>{},
-  );
-  if (rawDocument.isNotEmpty) {
-    return ArticleDocumentData.fromMap(rawDocument);
+  final markdown = raw[ArticleDetailWireKeys.articleMarkdown]?.toString() ?? '';
+  if (markdown.trim().isNotEmpty) {
+    return _projectMarkdownArticleDocument(markdown);
   }
   final rawBlocks =
       (raw[ArticleDetailWireKeys.articleBlocks] as List?) ?? const <Object?>[];
@@ -205,8 +305,9 @@ ArticleDocumentData _projectArticleDocument({
 
     for (final entry in rawBlocks.whereType<Map>()) {
       final block = Map<String, dynamic>.from(entry);
-      final type =
-          (block[ArticleBlockWireKeys.type] ?? 'paragraph').toString().trim();
+      final type = (block[ArticleBlockWireKeys.type] ?? 'paragraph')
+          .toString()
+          .trim();
       final text = (block[ArticleBlockWireKeys.text] ?? '').toString();
       final imageUrl =
           (block[ArticleBlockWireKeys.imagePath] ??
@@ -223,8 +324,10 @@ ArticleDocumentData _projectArticleDocument({
           orderedIndex = 0;
           blocks.add(
             ArticleDocumentBlock(
-              id: (block[ArticleBlockWireKeys.id] ?? 'heading2_${blocks.length}')
-                  .toString(),
+              id:
+                  (block[ArticleBlockWireKeys.id] ??
+                          'heading2_${blocks.length}')
+                      .toString(),
               type: ArticleDocumentBlockType.heading2,
               offset: buffer.length,
               text: text,
@@ -235,8 +338,10 @@ ArticleDocumentData _projectArticleDocument({
           orderedIndex = 0;
           blocks.add(
             ArticleDocumentBlock(
-              id: (block[ArticleBlockWireKeys.id] ?? 'heading3_${blocks.length}')
-                  .toString(),
+              id:
+                  (block[ArticleBlockWireKeys.id] ??
+                          'heading3_${blocks.length}')
+                      .toString(),
               type: ArticleDocumentBlockType.heading3,
               offset: buffer.length,
               text: text,
@@ -274,8 +379,7 @@ ArticleDocumentData _projectArticleDocument({
                 offset: buffer.length,
                 imageUrl: imageUrl,
                 imageLayout: imageLayout,
-                caption:
-                    (block[ArticleBlockWireKeys.caption] ?? '').toString(),
+                caption: (block[ArticleBlockWireKeys.caption] ?? '').toString(),
               ),
             );
           }
@@ -422,12 +526,13 @@ List<ArticlePageData> _projectArticlePages({
 
     for (final entry in rawBlocks.whereType<Map>()) {
       final block = Map<String, dynamic>.from(entry);
-      final type =
-          (block[ArticleBlockWireKeys.type] ?? 'paragraph').toString().trim();
-      final text =
-          (block[ArticleBlockWireKeys.text] ?? '').toString().trim();
-      final imagePath =
-          (block[ArticleBlockWireKeys.imagePath] ?? '').toString().trim();
+      final type = (block[ArticleBlockWireKeys.type] ?? 'paragraph')
+          .toString()
+          .trim();
+      final text = (block[ArticleBlockWireKeys.text] ?? '').toString().trim();
+      final imagePath = (block[ArticleBlockWireKeys.imagePath] ?? '')
+          .toString()
+          .trim();
       final imageLayout =
           (block[ArticleBlockWireKeys.imageLayout] ?? 'fullWidth')
               .toString()
@@ -572,11 +677,13 @@ List<ArticleContentBlockView> _projectArticleContentBlocksFromDocument(
             ArticleDocumentNode? narrowParagraph;
             ArticleDocumentNode? belowParagraph;
             if (index + 1 < bodyNodes.length &&
-                bodyNodes[index + 1].type == ArticleDocumentNodeType.paragraph) {
+                bodyNodes[index + 1].type ==
+                    ArticleDocumentNodeType.paragraph) {
               narrowParagraph = bodyNodes[index + 1];
               index += 1;
               if (index + 1 < bodyNodes.length &&
-                  bodyNodes[index + 1].type == ArticleDocumentNodeType.paragraph) {
+                  bodyNodes[index + 1].type ==
+                      ArticleDocumentNodeType.paragraph) {
                 belowParagraph = bodyNodes[index + 1];
                 index += 1;
               }
@@ -675,12 +782,13 @@ List<ArticleContentBlockView> _projectArticleContentBlocks({
         .toList(growable: false);
     for (var index = 0; index < normalized.length; index++) {
       final block = normalized[index];
-      final type =
-          (block[ArticleBlockWireKeys.type] ?? 'paragraph').toString().trim();
-      final text =
-          (block[ArticleBlockWireKeys.text] ?? '').toString().trim();
-      final imageUrl =
-          (block[ArticleBlockWireKeys.imagePath] ?? '').toString().trim();
+      final type = (block[ArticleBlockWireKeys.type] ?? 'paragraph')
+          .toString()
+          .trim();
+      final text = (block[ArticleBlockWireKeys.text] ?? '').toString().trim();
+      final imageUrl = (block[ArticleBlockWireKeys.imagePath] ?? '')
+          .toString()
+          .trim();
       final imageLayout =
           (block[ArticleBlockWireKeys.imageLayout] ?? 'fullWidth')
               .toString()
@@ -737,12 +845,12 @@ List<ArticleContentBlockView> _projectArticleContentBlocks({
           if ((imageLayout == 'wrapLeft' || imageLayout == 'wrapRight') &&
               index + 1 < normalized.length) {
             final next = normalized[index + 1];
-            final nextType =
-                (next[ArticleBlockWireKeys.type] ?? 'paragraph')
-                    .toString()
-                    .trim();
-            final nextText =
-                (next[ArticleBlockWireKeys.text] ?? '').toString().trim();
+            final nextType = (next[ArticleBlockWireKeys.type] ?? 'paragraph')
+                .toString()
+                .trim();
+            final nextText = (next[ArticleBlockWireKeys.text] ?? '')
+                .toString()
+                .trim();
             if (nextType == 'paragraph' && nextText.isNotEmpty) {
               blocks.add(
                 ArticleContentBlockView(

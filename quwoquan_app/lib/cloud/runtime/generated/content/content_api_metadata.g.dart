@@ -14,6 +14,7 @@ class ContentApiMetadata {
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AbortMediaUpload': '/v1/content/media/uploads/{sessionId}:abort',
+    'BindMediaAssetsToPost': '/v1/content/posts/{postId}/media:bind',
     'CompleteMediaUpload': '/v1/content/media/uploads/{sessionId}:complete',
     'CreateComment': '/v1/content/posts/{postId}/comments',
     'CreatePost': '/v1/content/posts',
@@ -62,6 +63,7 @@ class ContentApiMetadata {
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AbortMediaUpload': 'POST',
+    'BindMediaAssetsToPost': 'POST',
     'CompleteMediaUpload': 'POST',
     'CreateComment': 'POST',
     'CreatePost': 'POST',
@@ -109,6 +111,7 @@ class ContentApiMetadata {
   };
 
   static const String abortMediaUploadOperation = 'AbortMediaUpload';
+  static const String bindMediaAssetsToPostOperation = 'BindMediaAssetsToPost';
   static const String completeMediaUploadOperation = 'CompleteMediaUpload';
   static const String createCommentOperation = 'CreateComment';
   static const String createPostOperation = 'CreatePost';
@@ -158,6 +161,12 @@ class ContentApiMetadata {
   static String abortMediaUploadPath({required String sessionId}) {
     return _fillPath(abortMediaUploadPathTemplate, <String, String>{
       'sessionId': sessionId,
+    });
+  }
+  static const String bindMediaAssetsToPostPathTemplate = '/v1/content/posts/{postId}/media:bind';
+  static String bindMediaAssetsToPostPath({required String postId}) {
+    return _fillPath(bindMediaAssetsToPostPathTemplate, <String, String>{
+      'postId': postId,
     });
   }
   static const String completeMediaUploadPathTemplate = '/v1/content/media/uploads/{sessionId}:complete';

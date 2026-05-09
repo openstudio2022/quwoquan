@@ -10,8 +10,8 @@ derived_from:
 
 slices:
   - id: P1
-    title: freeze profile subject metadata
-    goal: 收口 `ProfileSubjectView / Mutation / InheritanceState` 及共享枚举
+    title: freeze sub-account profile metadata
+    goal: 收口 `SubAccountProfileView / Mutation / InheritanceState` 及共享枚举
     depends_on: []
     acceptance_refs:
       - A1

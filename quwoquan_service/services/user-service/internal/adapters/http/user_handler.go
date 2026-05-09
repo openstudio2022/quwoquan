@@ -246,7 +246,7 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 		writeHTTPError(w, r, err)
 		return
 	}
-	if activeViewerID, resolveErr := h.resolveActorProfileSubjectID(r.Context(), r, ""); resolveErr == nil && activeViewerID != "" {
+	if activeViewerID, resolveErr := h.resolveActorSubAccountID(r.Context(), r, ""); resolveErr == nil && activeViewerID != "" {
 		viewerID = activeViewerID
 	}
 	for _, item := range items {
@@ -393,7 +393,7 @@ func (h *UserHandler) handleFollow(w http.ResponseWriter, r *http.Request) {
 		writeInvalidArg(w, r, "targetSubAccountId required")
 		return
 	}
-	followerID, err := h.resolveActorProfileSubjectID(r.Context(), r, anyString(body["actorSubAccountId"]))
+	followerID, err := h.resolveActorSubAccountID(r.Context(), r, anyString(body["actorSubAccountId"]))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -424,7 +424,7 @@ func (h *UserHandler) handleUnfollow(w http.ResponseWriter, r *http.Request) {
 		writeInvalidArg(w, r, "targetSubAccountId required")
 		return
 	}
-	followerID, err := h.resolveActorProfileSubjectID(r.Context(), r, anyString(body["actorSubAccountId"]))
+	followerID, err := h.resolveActorSubAccountID(r.Context(), r, anyString(body["actorSubAccountId"]))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -454,7 +454,7 @@ func (h *UserHandler) handleListFollowing(w http.ResponseWriter, r *http.Request
 		followtelemetry.Collector().RecordGraphListLatency(time.Since(startedAt))
 	}()
 	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
-	viewerID, _ := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	viewerID, _ := h.resolveActorSubAccountID(r.Context(), r, "")
 	items, next, err := h.collectFollowListItems(
 		r.Context(),
 		viewerID,
@@ -476,7 +476,7 @@ func (h *UserHandler) handleListFollowers(w http.ResponseWriter, r *http.Request
 		followtelemetry.Collector().RecordGraphListLatency(time.Since(startedAt))
 	}()
 	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
-	viewerID, _ := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	viewerID, _ := h.resolveActorSubAccountID(r.Context(), r, "")
 	items, next, err := h.collectFollowListItems(
 		r.Context(),
 		viewerID,
@@ -498,7 +498,7 @@ func (h *UserHandler) handleGetRelationship(w http.ResponseWriter, r *http.Reque
 		writeInvalidArg(w, r, "subAccountId required")
 		return
 	}
-	userID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	userID, err := h.resolveActorSubAccountID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -517,7 +517,7 @@ func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *
 		writeInvalidArg(w, r, "subAccountId required")
 		return
 	}
-	viewerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	viewerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -549,7 +549,7 @@ func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 		writeInvalidArg(w, r, "targetSubAccountId required")
 		return
 	}
-	blockerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	blockerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -567,7 +567,7 @@ func (h *UserHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		writeInvalidArg(w, r, "targetSubAccountId required")
 		return
 	}
-	blockerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	blockerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -580,7 +580,7 @@ func (h *UserHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) handleListBlocked(w http.ResponseWriter, r *http.Request) {
-	blockerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	blockerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -599,7 +599,7 @@ func (h *UserHandler) handleCheckBlocked(w http.ResponseWriter, r *http.Request)
 		writeInvalidArg(w, r, "targetSubAccountId required")
 		return
 	}
-	blockerID, err := h.resolveActorProfileSubjectID(r.Context(), r, "")
+	blockerID, err := h.resolveActorSubAccountID(r.Context(), r, "")
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -612,7 +612,7 @@ func (h *UserHandler) handleCheckBlocked(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"blocked": blocked})
 }
 
-func (h *UserHandler) resolveActorProfileSubjectID(
+func (h *UserHandler) resolveActorSubAccountID(
 	ctx context.Context,
 	r *http.Request,
 	explicitActorID string,
@@ -688,7 +688,7 @@ func relationshipState(rel *followrepo.Relationship, viewerID, targetID string) 
 
 func (h *UserHandler) collectFollowListItems(
 	ctx context.Context,
-	viewerID, profileSubjectID, cursor string,
+	viewerID, subAccountID, cursor string,
 	limit int,
 	listFollowing bool,
 ) ([]map[string]any, string, error) {
@@ -704,9 +704,9 @@ func (h *UserHandler) collectFollowListItems(
 			err   error
 		)
 		if listFollowing {
-			edges, nextCursor, err = h.follow.ListFollowing(ctx, profileSubjectID, nextCursor, limit)
+			edges, nextCursor, err = h.follow.ListFollowing(ctx, subAccountID, nextCursor, limit)
 		} else {
-			edges, nextCursor, err = h.follow.ListFollowers(ctx, profileSubjectID, nextCursor, limit)
+			edges, nextCursor, err = h.follow.ListFollowers(ctx, subAccountID, nextCursor, limit)
 		}
 		if err != nil {
 			return nil, "", err

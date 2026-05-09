@@ -6,14 +6,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_quo
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_subject_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_profile_stats_wire_dto.g.dart';
 
 @immutable
-class ProfileSubjectViewData {
-  const ProfileSubjectViewData({
+class SubAccountProfileViewData {
+  const SubAccountProfileViewData({
     required this.subAccountId,
     required this.ownerUserId,
     required this.subjectType,
@@ -55,9 +55,9 @@ class ProfileSubjectViewData {
   final List<String> overriddenFields;
   final DateTime? updatedAt;
 
-  /// Wire DTO 解码在 [ProfileSubjectWireDto]（含 `skip_empty_string_aliases`）；此处仅做展示层回退。
-  factory ProfileSubjectViewData.fromProfileSubjectWire(
-    ProfileSubjectWireDto w,
+  /// Wire DTO 解码在 [SubAccountProfileWireDto]（含 `skip_empty_string_aliases`）；此处仅做展示层回退。
+  factory SubAccountProfileViewData.fromSubAccountProfileWire(
+    SubAccountProfileWireDto w,
   ) {
     final subAccountId = w.subAccountId;
     final nickname = w.nickname;
@@ -69,7 +69,7 @@ class ProfileSubjectViewData {
         : (w.username.isNotEmpty ? w.username : subAccountId);
     final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'user';
     final username = w.username.isNotEmpty ? w.username : userHandle;
-    return ProfileSubjectViewData(
+    return SubAccountProfileViewData(
       subAccountId: subAccountId,
       ownerUserId: w.ownerUserId,
       subjectType: subjectType,
@@ -93,15 +93,15 @@ class ProfileSubjectViewData {
   }
 
   /// 仅用于 Repository / 契约解码边界；页面与业务层请使用 [fromProfileSubjectWire]。
-  @Deprecated('Use fromProfileSubjectWire(ProfileSubjectWireDto)')
-  factory ProfileSubjectViewData.fromMap(Map<String, dynamic> map) {
-    return ProfileSubjectViewData.fromProfileSubjectWire(
-      ProfileSubjectWireDto.fromMap(map),
+  @Deprecated('Use fromSubAccountProfileWire(SubAccountProfileWireDto)')
+  factory SubAccountProfileViewData.fromMap(Map<String, dynamic> map) {
+    return SubAccountProfileViewData.fromSubAccountProfileWire(
+      SubAccountProfileWireDto.fromMap(map),
     );
   }
 
-  ProfileSubjectViewData mergeStats(UserProfileStatsViewData stats) {
-    return ProfileSubjectViewData(
+  SubAccountProfileViewData mergeStats(UserProfileStatsViewData stats) {
+    return SubAccountProfileViewData(
       subAccountId: subAccountId,
       ownerUserId: ownerUserId,
       subjectType: subjectType,
@@ -161,7 +161,7 @@ class UserProfileStatsViewData {
     );
   }
 
-  factory UserProfileStatsViewData.fromProfile(ProfileSubjectViewData p) {
+  factory UserProfileStatsViewData.fromProfile(SubAccountProfileViewData p) {
     return UserProfileStatsViewData(
       followingCount: p.followingCount,
       circleCount: p.circleCount,
@@ -286,8 +286,8 @@ class ProfileSocialRelationRowViewData {
   }
 }
 
-/// 清单用户档案展示面别名：端侧统一 [ProfileSubjectViewData]（与 codegen UserProfileDto wire 对齐由 Repository 负责）。
-typedef UserProfileViewData = ProfileSubjectViewData;
+/// 清单用户档案展示面别名：端侧统一 [SubAccountProfileViewData]（与 codegen UserProfileDto wire 对齐由 Repository 负责）。
+typedef UserProfileViewData = SubAccountProfileViewData;
 
 /// 清单 PersonaDto：端侧管理行统一 [PersonaManagementItemViewData]。
 typedef PersonaDtoSurface = PersonaManagementItemViewData;

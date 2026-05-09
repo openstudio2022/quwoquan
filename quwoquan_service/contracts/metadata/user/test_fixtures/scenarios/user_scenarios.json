@@ -624,7 +624,7 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2686629,
-              "sourceHash": "sha256:f9135032e2ab0645d2a930261cabad3d39b71d7047df46904d22505a3821021f"
+              "sourceHash": "sha256:f4760d66680c453346716c84810c8708ae0c00e5d9b1f3127d2a3a27b8b3b518"
             }
           }
         },
@@ -1725,7 +1725,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_photography_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_photography_01/v1/background.png",
           "subAccountRefs": [
-            "persona_photography_01"
+            "sub_account_photography_01"
           ],
           "tags": [
             "author",
@@ -1873,7 +1873,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_photography_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_photography_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_photography_02"
+            "sub_account_photography_02"
           ],
           "tags": [
             "author",
@@ -2030,7 +2030,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_photography_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_photography_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_photography_03"
+            "sub_account_photography_03"
           ],
           "tags": [
             "circle-owner",
@@ -2193,7 +2193,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_photography_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_photography_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_photography_04"
+            "sub_account_photography_04"
           ],
           "tags": [
             "group-member",
@@ -2345,7 +2345,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_photography_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_photography_05/v1/background.png",
           "subAccountRefs": [
-            "persona_photography_05"
+            "sub_account_photography_05"
           ],
           "tags": [
             "contact",
@@ -2496,7 +2496,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_photography_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_photography_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_photography_06"
+            "sub_account_photography_06"
           ],
           "tags": [
             "commenter",
@@ -2640,7 +2640,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_photography_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_photography_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_photography_07"
+            "sub_account_photography_07"
           ],
           "tags": [
             "group-member",
@@ -2784,7 +2784,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_photography_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_photography_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_photography_08"
+            "sub_account_photography_08"
           ],
           "tags": [
             "author",
@@ -2934,7 +2934,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_01/v1/background.png",
           "subAccountRefs": [
-            "persona_travel_01"
+            "sub_account_travel_01"
           ],
           "tags": [
             "author",
@@ -3082,7 +3082,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_travel_02"
+            "sub_account_travel_02"
           ],
           "tags": [
             "author",
@@ -3239,7 +3239,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_travel_03"
+            "sub_account_travel_03"
           ],
           "tags": [
             "circle-owner",
@@ -3402,7 +3402,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_travel_04"
+            "sub_account_travel_04"
           ],
           "tags": [
             "group-member",
@@ -3554,7 +3554,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_05/v1/background.png",
           "subAccountRefs": [
-            "persona_travel_05"
+            "sub_account_travel_05"
           ],
           "tags": [
             "contact",
@@ -3705,7 +3705,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_travel_06"
+            "sub_account_travel_06"
           ],
           "tags": [
             "commenter",
@@ -3849,7 +3849,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_travel_07"
+            "sub_account_travel_07"
           ],
           "tags": [
             "group-member",
@@ -3993,7 +3993,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_travel_08"
+            "sub_account_travel_08"
           ],
           "tags": [
             "author",
@@ -4151,7 +4151,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_01/v1/background.png",
           "subAccountRefs": [
-            "persona_citywalk_01"
+            "sub_account_citywalk_01"
           ],
           "tags": [
             "author",
@@ -4174,7 +4174,7 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2686629,
-              "sourceHash": "sha256:6a3fce461dd3683b391eb6c6eb40e4f30e4397c55c6c79213bcbae3cec7051af"
+              "sourceHash": "sha256:0bec2fd6ae4fdbfc8d4fe6193e6ab6e88dba9f5e377a0c45011f3f04b52fe83e"
             }
           }
         },
@@ -4309,7 +4309,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_citywalk_02"
+            "sub_account_citywalk_02"
           ],
           "tags": [
             "author",
@@ -4467,7 +4467,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_citywalk_03"
+            "sub_account_citywalk_03"
           ],
           "tags": [
             "circle-owner",
@@ -4625,7 +4625,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_citywalk_04"
+            "sub_account_citywalk_04"
           ],
           "tags": [
             "cityWalk",
@@ -4790,7 +4790,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_05/v1/background.png",
           "subAccountRefs": [
-            "persona_citywalk_05"
+            "sub_account_citywalk_05"
           ],
           "tags": [
             "cityWalk",
@@ -4813,7 +4813,7 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2686629,
-              "sourceHash": "sha256:98524a24cb68c5ab25ccc92869f48dcb9bd1622200bd2fcd13072d96d22e952c"
+              "sourceHash": "sha256:a34cf75c2b666ce7ed8713c5f4aaa0467bd3e99ddf3cdb33fce304d29e7fcbab"
             }
           }
         },
@@ -4942,7 +4942,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_citywalk_06"
+            "sub_account_citywalk_06"
           ],
           "tags": [
             "cityWalk",
@@ -5093,7 +5093,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_citywalk_07"
+            "sub_account_citywalk_07"
           ],
           "tags": [
             "cityWalk",
@@ -5238,7 +5238,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_citywalk_08"
+            "sub_account_citywalk_08"
           ],
           "tags": [
             "author",
@@ -5396,7 +5396,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_food_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_food_01/v1/background.png",
           "subAccountRefs": [
-            "persona_food_01"
+            "sub_account_food_01"
           ],
           "tags": [
             "author",
@@ -5554,7 +5554,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_food_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_food_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_food_02"
+            "sub_account_food_02"
           ],
           "tags": [
             "author",
@@ -5712,7 +5712,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_food_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_food_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_food_03"
+            "sub_account_food_03"
           ],
           "tags": [
             "circle-owner",
@@ -5870,7 +5870,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_food_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_food_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_food_04"
+            "sub_account_food_04"
           ],
           "tags": [
             "food",
@@ -6035,7 +6035,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_food_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_food_05/v1/background.png",
           "subAccountRefs": [
-            "persona_food_05"
+            "sub_account_food_05"
           ],
           "tags": [
             "contact",
@@ -6187,7 +6187,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_food_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_food_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_food_06"
+            "sub_account_food_06"
           ],
           "tags": [
             "commenter",
@@ -6338,7 +6338,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_food_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_food_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_food_07"
+            "sub_account_food_07"
           ],
           "tags": [
             "food",
@@ -6483,7 +6483,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_food_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_food_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_food_08"
+            "sub_account_food_08"
           ],
           "tags": [
             "author",
@@ -6635,7 +6635,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_coffee_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_coffee_01/v1/background.png",
           "subAccountRefs": [
-            "persona_coffee_01"
+            "sub_account_coffee_01"
           ],
           "tags": [
             "author",
@@ -6787,7 +6787,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_coffee_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_coffee_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_coffee_02"
+            "sub_account_coffee_02"
           ],
           "tags": [
             "author",
@@ -6939,7 +6939,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_coffee_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_coffee_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_coffee_03"
+            "sub_account_coffee_03"
           ],
           "tags": [
             "circle-owner",
@@ -7091,7 +7091,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_coffee_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_coffee_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_coffee_04"
+            "sub_account_coffee_04"
           ],
           "tags": [
             "coffee",
@@ -7250,7 +7250,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_coffee_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_coffee_05/v1/background.png",
           "subAccountRefs": [
-            "persona_coffee_05"
+            "sub_account_coffee_05"
           ],
           "tags": [
             "coffee",
@@ -7402,7 +7402,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_coffee_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_coffee_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_coffee_06"
+            "sub_account_coffee_06"
           ],
           "tags": [
             "coffee",
@@ -7554,7 +7554,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_coffee_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_coffee_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_coffee_07"
+            "sub_account_coffee_07"
           ],
           "tags": [
             "coffee",
@@ -7698,7 +7698,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_coffee_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_coffee_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_coffee_08"
+            "sub_account_coffee_08"
           ],
           "tags": [
             "author",
@@ -7848,7 +7848,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_lifestyle_01/v1/background.png",
           "subAccountRefs": [
-            "persona_lifestyle_01"
+            "sub_account_lifestyle_01"
           ],
           "tags": [
             "author",
@@ -7998,7 +7998,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_lifestyle_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_lifestyle_02"
+            "sub_account_lifestyle_02"
           ],
           "tags": [
             "author",
@@ -8155,7 +8155,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_lifestyle_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_lifestyle_03"
+            "sub_account_lifestyle_03"
           ],
           "tags": [
             "circle-owner",
@@ -8320,7 +8320,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_lifestyle_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_lifestyle_04"
+            "sub_account_lifestyle_04"
           ],
           "tags": [
             "group-member",
@@ -8472,7 +8472,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_lifestyle_05/v1/background.png",
           "subAccountRefs": [
-            "persona_lifestyle_05"
+            "sub_account_lifestyle_05"
           ],
           "tags": [
             "contact",
@@ -8625,7 +8625,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_lifestyle_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_lifestyle_06"
+            "sub_account_lifestyle_06"
           ],
           "tags": [
             "commenter",
@@ -8769,7 +8769,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_lifestyle_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_lifestyle_07"
+            "sub_account_lifestyle_07"
           ],
           "tags": [
             "group-member",
@@ -8915,7 +8915,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_lifestyle_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_lifestyle_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_lifestyle_08"
+            "sub_account_lifestyle_08"
           ],
           "tags": [
             "author",
@@ -9068,7 +9068,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_fitness_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_fitness_01/v1/background.png",
           "subAccountRefs": [
-            "persona_fitness_01"
+            "sub_account_fitness_01"
           ],
           "tags": [
             "author",
@@ -9225,7 +9225,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_fitness_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_fitness_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_fitness_02"
+            "sub_account_fitness_02"
           ],
           "tags": [
             "author",
@@ -9383,7 +9383,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_fitness_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_fitness_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_fitness_03"
+            "sub_account_fitness_03"
           ],
           "tags": [
             "circle-owner",
@@ -9543,7 +9543,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_fitness_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_fitness_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_fitness_04"
+            "sub_account_fitness_04"
           ],
           "tags": [
             "fitness",
@@ -9705,7 +9705,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_fitness_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_fitness_05/v1/background.png",
           "subAccountRefs": [
-            "persona_fitness_05"
+            "sub_account_fitness_05"
           ],
           "tags": [
             "contact",
@@ -9862,7 +9862,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_fitness_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_fitness_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_fitness_06"
+            "sub_account_fitness_06"
           ],
           "tags": [
             "commenter",
@@ -10014,7 +10014,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_fitness_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_fitness_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_fitness_07"
+            "sub_account_fitness_07"
           ],
           "tags": [
             "fitness",
@@ -10165,7 +10165,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_fitness_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_fitness_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_fitness_08"
+            "sub_account_fitness_08"
           ],
           "tags": [
             "author",
@@ -10317,7 +10317,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_pet_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_pet_01/v1/background.png",
           "subAccountRefs": [
-            "persona_pet_01"
+            "sub_account_pet_01"
           ],
           "tags": [
             "author",
@@ -10475,7 +10475,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_pet_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_pet_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_pet_02"
+            "sub_account_pet_02"
           ],
           "tags": [
             "author",
@@ -10632,7 +10632,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_pet_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_pet_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_pet_03"
+            "sub_account_pet_03"
           ],
           "tags": [
             "circle-owner",
@@ -10793,7 +10793,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_pet_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_pet_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_pet_04"
+            "sub_account_pet_04"
           ],
           "tags": [
             "group-member",
@@ -10954,7 +10954,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_pet_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_pet_05/v1/background.png",
           "subAccountRefs": [
-            "persona_pet_05"
+            "sub_account_pet_05"
           ],
           "tags": [
             "contact",
@@ -11112,7 +11112,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_pet_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_pet_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_pet_06"
+            "sub_account_pet_06"
           ],
           "tags": [
             "commenter",
@@ -11263,7 +11263,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_pet_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_pet_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_pet_07"
+            "sub_account_pet_07"
           ],
           "tags": [
             "group-member",
@@ -11415,7 +11415,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_pet_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_pet_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_pet_08"
+            "sub_account_pet_08"
           ],
           "tags": [
             "author",
@@ -11567,7 +11567,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_parenting_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_parenting_01/v1/background.png",
           "subAccountRefs": [
-            "persona_parenting_01"
+            "sub_account_parenting_01"
           ],
           "tags": [
             "author",
@@ -11724,7 +11724,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_parenting_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_parenting_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_parenting_02"
+            "sub_account_parenting_02"
           ],
           "tags": [
             "author",
@@ -11881,7 +11881,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_parenting_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_parenting_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_parenting_03"
+            "sub_account_parenting_03"
           ],
           "tags": [
             "circle-owner",
@@ -12041,7 +12041,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_parenting_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_parenting_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_parenting_04"
+            "sub_account_parenting_04"
           ],
           "tags": [
             "group-member",
@@ -12202,7 +12202,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_parenting_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_parenting_05/v1/background.png",
           "subAccountRefs": [
-            "persona_parenting_05"
+            "sub_account_parenting_05"
           ],
           "tags": [
             "contact",
@@ -12359,7 +12359,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_parenting_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_parenting_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_parenting_06"
+            "sub_account_parenting_06"
           ],
           "tags": [
             "commenter",
@@ -12510,7 +12510,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_parenting_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_parenting_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_parenting_07"
+            "sub_account_parenting_07"
           ],
           "tags": [
             "group-member",
@@ -12661,7 +12661,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_parenting_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_parenting_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_parenting_08"
+            "sub_account_parenting_08"
           ],
           "tags": [
             "author",
@@ -12814,7 +12814,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_01/v1/background.png",
           "subAccountRefs": [
-            "persona_outdoor_01"
+            "sub_account_outdoor_01"
           ],
           "tags": [
             "author",
@@ -12971,7 +12971,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_outdoor_02"
+            "sub_account_outdoor_02"
           ],
           "tags": [
             "author",
@@ -13129,7 +13129,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_outdoor_03"
+            "sub_account_outdoor_03"
           ],
           "tags": [
             "circle-owner",
@@ -13289,7 +13289,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_outdoor_04"
+            "sub_account_outdoor_04"
           ],
           "tags": [
             "group-member",
@@ -13451,7 +13451,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_05/v1/background.png",
           "subAccountRefs": [
-            "persona_outdoor_05"
+            "sub_account_outdoor_05"
           ],
           "tags": [
             "contact",
@@ -13608,7 +13608,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_outdoor_06"
+            "sub_account_outdoor_06"
           ],
           "tags": [
             "commenter",
@@ -13760,7 +13760,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_outdoor_07"
+            "sub_account_outdoor_07"
           ],
           "tags": [
             "group-member",
@@ -13911,7 +13911,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_outdoor_08"
+            "sub_account_outdoor_08"
           ],
           "tags": [
             "author",
@@ -14069,7 +14069,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_01/v1/background.png",
           "subAccountRefs": [
-            "persona_tech_01"
+            "sub_account_tech_01"
           ],
           "tags": [
             "author",
@@ -14092,7 +14092,7 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2148230,
-              "sourceHash": "sha256:5a26aa6ef2581ab84b866696c1819f02cafd19c5fea0c34152b70ec804eb5977"
+              "sourceHash": "sha256:64057bb25d05d96b1d50a6d1ac70a9b4c80eef37b241726711525b54597ddec0"
             }
           }
         },
@@ -14232,7 +14232,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_tech_02"
+            "sub_account_tech_02"
           ],
           "tags": [
             "author",
@@ -14395,7 +14395,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_tech_03"
+            "sub_account_tech_03"
           ],
           "tags": [
             "circle-owner",
@@ -14561,7 +14561,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_tech_04"
+            "sub_account_tech_04"
           ],
           "tags": [
             "group-member",
@@ -14728,7 +14728,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_05/v1/background.png",
           "subAccountRefs": [
-            "persona_tech_05"
+            "sub_account_tech_05"
           ],
           "tags": [
             "contact",
@@ -14751,7 +14751,7 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2148230,
-              "sourceHash": "sha256:31582c96da785cb30757f3d0135eda6ea2d8af56970c8666ffe8a9fcbb736b8d"
+              "sourceHash": "sha256:42a1dcf362ea90de833ebf177259f3a9485fdae931566b5b2cba144afb41138a"
             }
           }
         },
@@ -14891,7 +14891,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_tech_06"
+            "sub_account_tech_06"
           ],
           "tags": [
             "commenter",
@@ -15042,7 +15042,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_tech_07"
+            "sub_account_tech_07"
           ],
           "tags": [
             "group-member",
@@ -15193,7 +15193,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_tech_08"
+            "sub_account_tech_08"
           ],
           "tags": [
             "author",
@@ -15328,7 +15328,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_designwriting_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_designwriting_01/v1/background.png",
           "subAccountRefs": [
-            "persona_designwriting_01"
+            "sub_account_designwriting_01"
           ],
           "tags": [
             "author",
@@ -15461,7 +15461,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_designwriting_02/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_designwriting_02/v1/background.jpg",
           "subAccountRefs": [
-            "persona_designwriting_02"
+            "sub_account_designwriting_02"
           ],
           "tags": [
             "author",
@@ -15594,7 +15594,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_designwriting_03/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_designwriting_03/v1/background.jpg",
           "subAccountRefs": [
-            "persona_designwriting_03"
+            "sub_account_designwriting_03"
           ],
           "tags": [
             "circle-owner",
@@ -15727,7 +15727,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_designwriting_04/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_designwriting_04/v1/background.jpg",
           "subAccountRefs": [
-            "persona_designwriting_04"
+            "sub_account_designwriting_04"
           ],
           "tags": [
             "designWriting",
@@ -15855,7 +15855,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_designwriting_05/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_designwriting_05/v1/background.png",
           "subAccountRefs": [
-            "persona_designwriting_05"
+            "sub_account_designwriting_05"
           ],
           "tags": [
             "contact",
@@ -15982,7 +15982,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_designwriting_06/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_designwriting_06/v1/background.jpg",
           "subAccountRefs": [
-            "persona_designwriting_06"
+            "sub_account_designwriting_06"
           ],
           "tags": [
             "commenter",
@@ -16102,7 +16102,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_designwriting_07/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_designwriting_07/v1/background.jpg",
           "subAccountRefs": [
-            "persona_designwriting_07"
+            "sub_account_designwriting_07"
           ],
           "tags": [
             "designWriting",
@@ -16222,7 +16222,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_designwriting_08/v1/avatar.jpg",
           "backgroundObjectKey": "media/background/user/fixture_user_designwriting_08/v1/background.jpg",
           "subAccountRefs": [
-            "persona_designwriting_08"
+            "sub_account_designwriting_08"
           ],
           "tags": [
             "author",
@@ -16254,18 +16254,18 @@
       ]
     },
     "persona_core": {
-      "description": "当前 persona、候选 persona 与 active context。",
+      "description": "当前 sub-account、候选 sub-account 与 active context。",
       "activeSubAccountId": "fixture_persona_daily",
       "personas": [
         {
           "subAccountId": "fixture_persona_daily",
           "name": "日常我",
-          "description": "默认日常 persona"
+          "description": "默认日常 sub-account"
         },
         {
           "subAccountId": "fixture_persona_work",
           "name": "工作我",
-          "description": "工作场景 persona"
+          "description": "工作场景 sub-account"
         }
       ]
     },

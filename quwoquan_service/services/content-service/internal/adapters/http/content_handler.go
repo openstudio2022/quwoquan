@@ -457,9 +457,11 @@ func (h *ContentHandler) handleQuoteToCircle(w http.ResponseWriter, r *http.Requ
 func (h *ContentHandler) handleInitMediaUpload(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		MediaType string `json:"mediaType"`
+		AssetScope string `json:"assetScope"`
+		SourceKind string `json:"sourceKind"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
-	resp := h.postService.InitMediaUpload(r.Context(), resolveUserID(r), body.MediaType)
+	resp := h.postService.InitMediaUpload(r.Context(), resolveUserID(r), body.MediaType, body.AssetScope, body.SourceKind)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -497,6 +499,22 @@ func (h *ContentHandler) handleGetMediaAsset(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, asset)
+}
+
+func (h *ContentHandler) handleBindMediaAssetsToPost(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		AssetIDs []string `json:"assetIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
+		return
+	}
+	resp, err := h.postService.BindMediaAssetsToPost(r.Context(), postIDFromPath(r.URL.Path), body.AssetIDs)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *ContentHandler) handleRequestOriginalImageAccess(w http.ResponseWriter, r *http.Request) {
@@ -1076,6 +1094,9 @@ func (h *ContentHandler) handleNotImplemented(w http.ResponseWriter, r *http.Req
 		return
 	case "GetMediaAsset":
 		h.handleGetMediaAsset(w, r)
+		return
+	case "BindMediaAssetsToPost":
+		h.handleBindMediaAssetsToPost(w, r)
 		return
 	case "RequestOriginalImageAccess":
 		h.handleRequestOriginalImageAccess(w, r)

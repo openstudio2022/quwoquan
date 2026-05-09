@@ -1,0 +1,163 @@
+version: 1
+node: discovery-content/content-type-framework/markdown-article-kernel
+status: draft
+
+content_post:
+  fields:
+    add:
+      - name: articleMarkdown
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        search_field: true
+        description: QWQ Rich Markdown v1 原文，长文唯一持久化真相源。
+
+      - name: articleMarkdownVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: Markdown 规范版本，当前为 `qwq-rich-md/1`。
+
+      - name: articleMarkdownDigest
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 规范化 Markdown 的 sha256 digest，用于幂等、审计和缓存。
+
+      - name: articleAssetManifest
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 长文素材清单，正文 asset 引用必须存在于该 manifest。
+
+      - name: articleRenderProfile
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 模板、字体、布局能力与小屏降级策略。
+
+    deprecate_new_write:
+      - name: articleDocument
+        reason: Markdown 已成为长文唯一持久化真相源；articleDocument 不再进入新写入主链。
+
+  service:
+    CreatePost:
+      writable_fields_add:
+        - articleMarkdown
+        - articleMarkdownVersion
+        - articleAssetManifest
+        - articleRenderProfile
+      writable_fields_remove:
+        - articleDocument
+    UpdatePost:
+      writable_fields_add:
+        - articleMarkdown
+        - articleMarkdownVersion
+        - articleAssetManifest
+        - articleRenderProfile
+      writable_fields_remove:
+        - articleDocument
+    PromotePostToWork:
+      writable_fields_add:
+        - articleMarkdown
+        - articleMarkdownVersion
+        - articleAssetManifest
+        - articleRenderProfile
+      writable_fields_remove:
+        - articleDocument
+
+  projections:
+    content_post_detail_wire:
+      add_fields:
+        - articleMarkdown
+        - articleMarkdownVersion
+        - articleMarkdownDigest
+        - articleAssetManifest
+        - articleRenderProfile
+      deprecate_fields:
+        - articleDocument
+        - articleBlocks
+        - articlePages
+    discovery_feed:
+      add_fields:
+        - articleMarkdownDigest
+        - articleRenderProfile
+      keep_summary_only: true
+
+  storage:
+    posts:
+      text_search_fields_add:
+        - articleMarkdown
+      indexes_add:
+        - name: idx_posts_article_markdown_digest
+          keys: { articleMarkdownDigest: 1 }
+          sparse: true
+
+media_asset:
+  fields:
+    add_or_refine:
+      - name: postId
+        change: allow_nullable_or_replace_with_bindings
+        reason: 草稿素材和冷启动素材需要先于 Post 存在。
+      - name: ownerId
+        type: string
+        constraints: [NULLABLE]
+        description: 素材所有者，用户或系统运营账号。
+      - name: assetScope
+        type: enum
+        enum_values: [draft, published, cold_start]
+        constraints: [NULLABLE]
+        description: 素材生命周期 scope。
+      - name: objectKey
+        type: string
+        constraints: [NULLABLE]
+        description: 对象存储 key。
+      - name: sha256
+        type: string
+        constraints: [NULLABLE]
+        description: 原始文件 hash。
+      - name: sourceKind
+        type: enum
+        enum_values: [user_upload, ai_generated, cold_start_crawl, remote_import]
+        constraints: [NULLABLE]
+        description: 素材来源类型。
+      - name: sourceUrl
+        type: string
+        constraints: [NULLABLE]
+        description: 冷启动或导入素材的来源 URL。
+      - name: license
+        type: object
+        constraints: [NULLABLE]
+        description: 授权与审计信息。
+
+  service:
+    add_or_refine_operations:
+      - operation: InitMediaUpload
+        change: 支持 draft/cold_start scope。
+      - operation: CompleteMediaUpload
+        change: 返回可写入 articleAssetManifest 的 asset descriptor。
+      - operation: BindMediaAssetsToPost
+        path: /v1/content/posts/{postId}/media:bind
+        method: POST
+        description: 发布或草稿转正时将素材绑定到 Post。
+
+codegen:
+  required_commands:
+    - make -C quwoquan_service verify-metadata
+    - make codegen
+    - make codegen-app

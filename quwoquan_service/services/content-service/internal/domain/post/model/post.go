@@ -56,8 +56,15 @@ type DeletedPostTombstone struct {
 type MediaAsset struct {
 	ID                      string         `json:"_id" bson:"_id"`
 	PostId                  string         `json:"postId" bson:"postId"`
+	OwnerId                 string         `json:"ownerId" bson:"ownerId"`
+	AssetScope              string         `json:"assetScope" bson:"assetScope"`
 	Type                    string         `json:"type" bson:"type"`
 	OriginUrl               string         `json:"originUrl" bson:"originUrl"`
+	ObjectKey               string         `json:"objectKey" bson:"objectKey"`
+	Sha256                  string         `json:"sha256" bson:"sha256"`
+	SourceKind              string         `json:"sourceKind" bson:"sourceKind"`
+	SourceUrl               string         `json:"sourceUrl" bson:"sourceUrl"`
+	License                 map[string]any `json:"license" bson:"license"`
 	CdnUrl                  string         `json:"cdnUrl" bson:"cdnUrl"`
 	ThumbnailUrl            string         `json:"thumbnailUrl" bson:"thumbnailUrl"`
 	Width                   int64          `json:"width" bson:"width"`
@@ -95,6 +102,11 @@ type Post struct {
 	MediaUrls                 []string       `json:"mediaUrls" bson:"mediaUrls"`
 	CoverUrl                  string         `json:"coverUrl" bson:"coverUrl"`
 	ArticleDocument           map[string]any `json:"articleDocument" bson:"articleDocument"`
+	ArticleMarkdown           string         `json:"articleMarkdown" bson:"articleMarkdown"`
+	ArticleMarkdownVersion    string         `json:"articleMarkdownVersion" bson:"articleMarkdownVersion"`
+	ArticleMarkdownDigest     string         `json:"articleMarkdownDigest" bson:"articleMarkdownDigest"`
+	ArticleAssetManifest      map[string]any `json:"articleAssetManifest" bson:"articleAssetManifest"`
+	ArticleRenderProfile      map[string]any `json:"articleRenderProfile" bson:"articleRenderProfile"`
 	ArticleTemplate           string         `json:"articleTemplate" bson:"articleTemplate"`
 	ArticleFontPreset         string         `json:"articleFontPreset" bson:"articleFontPreset"`
 	VideoUrl                  string         `json:"videoUrl" bson:"videoUrl"`

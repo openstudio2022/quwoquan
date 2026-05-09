@@ -106,7 +106,7 @@ class ArticleBackwardPageSurfaceBinding {
 
   int get leafRectoPageIndex => leafPageIndex;
 
-  int get leafVersoPageIndex => coveredPageIndex;
+  int get leafVersoPageIndex => leafPageIndex;
 
   List<int> get prioritizedPageIndices {
     final indices = <int>[coveredPageIndex];
@@ -258,7 +258,7 @@ ArticlePageTextureBinding? resolveArticlePageTextureBinding({
   return ArticlePageTextureBinding(
     direction: direction,
     rectoPageIndex: flippingPageIndex,
-    versoPageIndex: currentPageIndex,
+    versoPageIndex: flippingPageIndex,
     bottomPageIndex: currentPageIndex,
   );
 }

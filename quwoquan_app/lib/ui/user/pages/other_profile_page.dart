@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
-/// 他人主页入口；壳内档案为 ProfileSubjectViewData（UserProfileViewData 别名）。
+/// 他人主页入口；壳内档案统一为子账号资料视图（`UserProfileViewData` 别名）。
 ///
 /// 路由：/user/:username
 class OtherProfilePage extends ConsumerWidget {

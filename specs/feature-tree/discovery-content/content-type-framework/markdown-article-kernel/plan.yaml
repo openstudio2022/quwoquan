@@ -1,0 +1,141 @@
+version: 1
+node: discovery-content/content-type-framework/markdown-article-kernel
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  metadata_draft: metadata-change-draft.yaml
+  changelog:
+    - specs/changelog/CR-20260508-019-markdown-article-kernel.yaml
+
+slices:
+  - id: D0
+    title: freeze markdown kernel sources
+    goal: 冻结 M0 规格、验收、设计、metadata 草案和 CR，作为后续 `/dev` 唯一执行口径。
+    depends_on: []
+    acceptance_refs: [A1, A2, A3, A4, A5, A6, A7, A8]
+    planned_evidence:
+      - governance_sync_review
+    done_when:
+      - `spec.md / design.md / acceptance.yaml / plan.yaml / metadata-change-draft.yaml / CR` 齐备
+      - 明确 Markdown 是唯一持久化真相源
+      - 明确旧 `articleDocument` 预制数据全部重生成
+    status: planned
+
+  - id: D1
+    title: implement app markdown ast
+    goal: 新增端侧 Markdown parser wrapper、`QwqMarkdownAst` 模型、front matter 与富布局指令解析。
+    depends_on: [D0]
+    acceptance_refs: [A1, A2]
+    planned_evidence:
+      - T1_parser_snapshot
+      - T1_rich_directive_validation
+    done_when:
+      - 标准 Markdown 可解析为 `QwqMarkdownDocument`
+      - `figure/gallery/callout/card/section/spacer` 可解析为受控 block
+      - 任意 HTML 与未知指令按规范拒绝或降级
+    status: planned
+
+  - id: D2
+    title: implement markdown pagination reader
+    goal: 基于 AST 实现 Markdown 分页 page model 与只读侵入式 reader，复用现有 pageflip 物理层能力。
+    depends_on: [D1]
+    acceptance_refs: [A1, A2, A7]
+    planned_evidence:
+      - T2_reader_widget
+      - T2_multi_viewport_pagination
+      - T4_pageflip_smoke
+    done_when:
+      - `MarkdownPaginationEngine` 输出 `QwqMarkdownPageData`
+      - 大屏 wrap、小屏通栏降级可测
+      - 详情页/沉浸式 reader 可消费同一 page model
+    status: planned
+
+  - id: D3
+    title: update content post metadata
+    goal: metadata-first 新增 Markdown 字段、manifest、render profile、素材治理字段和服务 writable fields。
+    depends_on: [D0]
+    acceptance_refs: [A1, A3, A6, A8]
+    planned_evidence:
+      - T1_metadata_verify
+      - T3_generated_contracts
+    done_when:
+      - `Post` 新增 `articleMarkdown/articleMarkdownVersion/articleMarkdownDigest/articleAssetManifest/articleRenderProfile`
+      - `CreatePost/UpdatePost` writable fields 移除新写入 `articleDocument`
+      - 详情投影返回 Markdown 字段
+      - metadata verify/codegen/codegen-app 通过
+    status: planned
+
+  - id: D4
+    title: implement service markdown storage
+    goal: content-service 支持 Markdown 创建、更新、读取、digest 计算、manifest 校验与素材 bind。
+    depends_on: [D3]
+    acceptance_refs: [A1, A3, A6]
+    planned_evidence:
+      - T3_content_service_contract
+      - T3_media_asset_bind_contract
+    done_when:
+      - Markdown 长文可写入和读取
+      - manifest 缺失或正文引用不存在时拒绝发布
+      - detail/discovery 投影返回 Markdown 与 render profile
+    status: planned
+
+  - id: D5
+    title: migrate create entry markdown session
+    goal: 改造全局创作入口，支持 Markdown 导入、AST 编辑会话、预览和发布 payload。
+    depends_on: [D1, D2, D3]
+    acceptance_refs: [A3, A4]
+    planned_evidence:
+      - T2_create_markdown_session
+      - T3_create_payload_contract
+      - T4_publish_readback
+    done_when:
+      - 长文发布 payload 使用 Markdown 字段
+      - 导入 Markdown 会归一化 asset 引用
+      - 可视化编辑 round-trip 回 Markdown
+    status: planned
+
+  - id: D6
+    title: produce quwoquan_data markdown packages
+    goal: 改造 `quwoquan_data`，让 batch run 产出可发布 Markdown 成品包和 dry-run CreatePost payload。
+    depends_on: [D0, D3]
+    acceptance_refs: [A5, A6]
+    planned_evidence:
+      - T1_data_cli
+      - T3_dry_run_projection
+    done_when:
+      - `raw/{batch_id}/pages/*/source.md` 可校验
+      - `publish/{batch_id}/posts/{post_id}/article.md/gallery.md/manifest.json/images/*` 齐备
+      - `posts.ndjson` 或 projection 中使用 Markdown 字段
+    status: planned
+
+  - id: D7
+    title: remove article document seed truth source
+    goal: 清理旧 `articleDocument` 长文 fixture、seed 和冷启动样例，按 Markdown 重生成。
+    depends_on: [D3, D5, D6]
+    acceptance_refs: [A8]
+    planned_evidence:
+      - T1_fixture_scan
+      - T3_seed_manifest_gate
+    done_when:
+      - 新增 seed 不包含 `articleDocument` 长文真相源
+      - 旧预制长文均有 Markdown 替代包
+      - 门禁可阻止回退
+    status: planned
+
+  - id: D8
+    title: close t1 to t4 gates
+    goal: 补齐端云数据 T1-T4、视觉、契约、seed 与 gate 验证。
+    depends_on: [D2, D4, D5, D6, D7]
+    acceptance_refs: [A1, A2, A3, A4, A5, A6, A7, A8]
+    planned_evidence:
+      - T1_unit_schema
+      - T2_widget_visual
+      - T3_contract_integration
+      - T4_beta_gamma_journey
+    done_when:
+      - `make gate-full` 通过
+      - Markdown 长文在详情页、发现沉浸式、侵入式媒体浏览器一致
+      - beta/gamma remote 路径验证通过
+    status: planned

@@ -624,7 +624,7 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2686629,
-              "sourceHash": "sha256:f9135032e2ab0645d2a930261cabad3d39b71d7047df46904d22505a3821021f"
+              "sourceHash": "sha256:f4760d66680c453346716c84810c8708ae0c00e5d9b1f3127d2a3a27b8b3b518"
             }
           }
         },
@@ -1725,7 +1725,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_travel_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_travel_01/v1/background.png",
           "subAccountRefs": [
-            "persona_travel_01"
+            "sub_account_travel_01"
           ],
           "tags": [
             "author",
@@ -1881,7 +1881,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_citywalk_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_citywalk_01/v1/background.png",
           "subAccountRefs": [
-            "persona_citywalk_01"
+            "sub_account_citywalk_01"
           ],
           "tags": [
             "author",
@@ -1904,7 +1904,7 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2686629,
-              "sourceHash": "sha256:6a3fce461dd3683b391eb6c6eb40e4f30e4397c55c6c79213bcbae3cec7051af"
+              "sourceHash": "sha256:0bec2fd6ae4fdbfc8d4fe6193e6ab6e88dba9f5e377a0c45011f3f04b52fe83e"
             }
           }
         },
@@ -2032,7 +2032,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_outdoor_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_outdoor_01/v1/background.png",
           "subAccountRefs": [
-            "persona_outdoor_01"
+            "sub_account_outdoor_01"
           ],
           "tags": [
             "author",
@@ -2188,7 +2188,7 @@
           "avatarObjectKey": "media/avatar/user/fixture_user_tech_01/v1/avatar.png",
           "backgroundObjectKey": "media/background/user/fixture_user_tech_01/v1/background.png",
           "subAccountRefs": [
-            "persona_tech_01"
+            "sub_account_tech_01"
           ],
           "tags": [
             "author",
@@ -2211,25 +2211,25 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2148230,
-              "sourceHash": "sha256:5a26aa6ef2581ab84b866696c1819f02cafd19c5fea0c34152b70ec804eb5977"
+              "sourceHash": "sha256:64057bb25d05d96b1d50a6d1ac70a9b4c80eef37b241726711525b54597ddec0"
             }
           }
         }
       ]
     },
     "persona_core": {
-      "description": "当前 persona、候选 persona 与 active context。",
+      "description": "当前 sub-account、候选 sub-account 与 active context。",
       "activeSubAccountId": "fixture_persona_daily",
       "personas": [
         {
           "subAccountId": "fixture_persona_daily",
           "name": "日常我",
-          "description": "默认日常 persona"
+          "description": "默认日常 sub-account"
         },
         {
           "subAccountId": "fixture_persona_work",
           "name": "工作我",
-          "description": "工作场景 persona"
+          "description": "工作场景 sub-account"
         }
       ]
     },

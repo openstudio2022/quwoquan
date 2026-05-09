@@ -827,17 +827,25 @@ void main() {
               'coverUrl': post.coverUrl,
               'articleTemplate': post.articleTemplate,
               'articleFontPreset': post.articleFontPreset,
-              'articleDocument': <String, dynamic>{
+              'articleMarkdown':
+                  '---\n'
+                  'title: ${post.title}\n'
+                  'template: ${post.articleTemplate}\n'
+                  'fontPreset: ${post.articleFontPreset}\n'
+                  '---\n\n'
+                  '第一页前言。\n\n'
+                  '第二段落继续展开说明。\n\n'
+                  '第三段落把正文推到下一页。\n',
+              'articleMarkdownVersion': 'qwq-rich-md/1',
+              'articleAssetManifest': const <String, dynamic>{
+                'schemaVersion': 1,
+                'articleMarkdownVersion': 'qwq-rich-md/1',
+                'articleMarkdownDigest': 'fixture:test',
+                'assets': <Map<String, dynamic>>[],
+              },
+              'articleRenderProfile': <String, dynamic>{
                 'template': post.articleTemplate,
                 'fontPreset': post.articleFontPreset,
-                'coverImageUrl': post.coverUrl,
-                'titleStyle': 'major',
-                'nodes': <Map<String, dynamic>>[
-                  {'id': 'title', 'type': 'documentTitle', 'text': post.title},
-                  {'id': 'p0', 'type': 'paragraph', 'text': '第一页前言。'},
-                  {'id': 'p1', 'type': 'paragraph', 'text': '第二段落继续展开说明。'},
-                  {'id': 'p2', 'type': 'paragraph', 'text': '第三段落把正文推到下一页。'},
-                ],
               },
             },
           }),
@@ -1055,17 +1063,25 @@ void main() {
           'coverUrl': post.coverUrl,
           'articleTemplate': post.articleTemplate,
           'articleFontPreset': post.articleFontPreset,
-          'articleDocument': <String, dynamic>{
+          'articleMarkdown':
+              '---\n'
+              'title: 水合后的标题\n'
+              'template: ${post.articleTemplate}\n'
+              'fontPreset: ${post.articleFontPreset}\n'
+              '---\n\n'
+              '## 水合章节\n\n'
+              '水合后的正文第一段。\n\n'
+              '水合后的正文第二段。\n',
+          'articleMarkdownVersion': 'qwq-rich-md/1',
+          'articleAssetManifest': const <String, dynamic>{
+            'schemaVersion': 1,
+            'articleMarkdownVersion': 'qwq-rich-md/1',
+            'articleMarkdownDigest': 'fixture:hydrated',
+            'assets': <Map<String, dynamic>>[],
+          },
+          'articleRenderProfile': <String, dynamic>{
             'template': post.articleTemplate,
             'fontPreset': post.articleFontPreset,
-            'coverImageUrl': post.coverUrl,
-            'titleStyle': 'major',
-            'nodes': <Map<String, dynamic>>[
-              {'id': 'title', 'type': 'documentTitle', 'text': '水合后的标题'},
-              {'id': 'h2', 'type': 'headingMajor', 'text': '水合章节'},
-              {'id': 'p1', 'type': 'paragraph', 'text': '水合后的正文第一段。'},
-              {'id': 'p2', 'type': 'paragraph', 'text': '水合后的正文第二段。'},
-            ],
           },
         },
       },

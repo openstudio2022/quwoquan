@@ -14,8 +14,8 @@ class _TestUserProfileRepository extends MockUserProfileRepository {
   int unfollowCalls = 0;
 
   @override
-  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
-    return ProfileSubjectViewData(
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
+    return SubAccountProfileViewData(
       subAccountId: userId,
       ownerUserId: 'owner-1',
       subjectType: 'subAccount',

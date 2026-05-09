@@ -1,645 +1,1252 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import math
+import re
+import shutil
 import sys
+from html import unescape
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 from common import (
-    BATCH_LOOP_STATE_SCHEMA_VERSION,
-    RETRIEVAL_PLAN_SCHEMA_VERSION,
+    DISCOVERY_SCHEMA_VERSION,
+    PACKAGE_MANIFEST_SCHEMA_VERSION,
+    RUNTIME_ROOT,
     SUPPORTED_CONTENT_TYPES,
     SUPPORTED_SEARCH_PROVIDERS,
     SUPPORTED_TARGETS,
-    batch_plan_path_from_arg,
-    content_template_for_ref,
+    TOPIC_ASSET_MANIFEST_SCHEMA_VERSION,
+    TOPIC_ENRICHMENT_SCHEMA_VERSION,
+    TOPIC_TASK_SCHEMA_VERSION,
+    crawl_spec_path_from_arg,
+    download_topic_image_dir,
+    download_topic_source_dir,
+    ensure_runtime_layout,
+    discovery_path,
     entity_name_for_ref,
     entity_payload_for_ref,
     load_user_pool,
-    loop_state_path,
     now_iso,
-    out_batch_dir,
-    publish_batch_dir,
-    raw_batch_dir,
-    raw_batch_file,
+    out_topic_dir,
+    publish_topic_dir,
     read_json,
     read_ndjson,
     read_yaml,
     ref_exists,
-    retrieval_plan_path,
+    run_topic_dir,
     tag_id_for_ref,
-    tag_label_for_ref,
     write_json,
     write_ndjson,
     write_text,
+    runtime_rel_ref,
+    topic_tasks_path,
 )
-from retrieval_contract import (
-    build_retrieval_prompt,
-    default_location_search_name,
-    search_query_item,
+from native_fetch import (
+    NativeFetchError,
+    download_binary,
+    fetch_html_page,
+    safe_filename_from_url,
+)
+
+ARTICLE_QUALITY_WEIGHTS = {
+    "contentCompleteness": 25,
+    "actionability": 20,
+    "sourceCredibility": 15,
+    "freshness": 10,
+    "richness": 10,
+    "engagementSignal": 10,
+    "cleanliness": 10,
+}
+IMAGE_QUALITY_WEIGHTS = {
+    "rightsClarity": 30,
+    "watermarkCleanliness": 20,
+    "resolution": 15,
+    "composition": 15,
+    "relevance": 10,
+    "storytelling": 10,
+}
+MIN_ARTICLE_SOURCE_BODY_CHARS = 280
+MIN_ARTICLE_SOURCE_PARAGRAPH_CHARS = 45
+MIN_IMAGE_SOURCE_BODY_CHARS = 40
+MIN_ARTICLE_PAGE_TEXT_CHARS = 240
+MIN_IMAGE_PAGE_TEXT_CHARS = 40
+PLACEHOLDER_TITLE_RE = re.compile(r"(公开样本|图片候选)\s*\d+$")
+PLACEHOLDER_URL_RES = (
+    re.compile(r"west_lake_(article|image|crawl_validation)_\d+", re.I),
+    re.compile(r"west-lake-image", re.I),
+    re.compile(r"mafengwo\.cn/i/[^/\d][^/]*$", re.I),
+)
+ARTICLE_TEMPLATE_PHRASES = (
+    "为什么这个选题值得写",
+    "正文叙事骨架",
+    "先定主步行段",
+    "热度高样本可直通",
+    "正文至少保留一个“实体锚点”段",
+    "正文至少保留一个\"实体锚点\"段",
+    "端侧可以消费的原创 Markdown 成品",
+    "端侧可以消费的原创 markdown 成品",
 )
 
 
-def _required_string(plan: dict[str, Any], field: str, errors: list[str]) -> None:
-    value = plan.get(field)
-    if not isinstance(value, str) or not value.strip():
-        errors.append(f"batch_plan 缺少 {field}")
+def _normalize_text(value: Any) -> str:
+    return " ".join(unescape(str(value or "")).replace("\ufeff", "").split())
 
 
-def _required_string_list(plan: dict[str, Any], field: str, errors: list[str]) -> None:
-    value = plan.get(field)
-    if not isinstance(value, list) or not value or not all(
-        isinstance(item, str) and item.strip() for item in value
-    ):
-        errors.append(f"batch_plan 的 {field} 必须是非空字符串数组")
+def _strip_markdown_links(text: str) -> str:
+    return re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
 
 
-def _required_int(plan: dict[str, Any], field: str, errors: list[str]) -> None:
-    value = plan.get(field)
-    if not isinstance(value, int) or value < 1:
-        errors.append(f"batch_plan 的 {field} 必须是 >= 1 的整数")
+def _clean_markdown_line(text: str) -> str:
+    value = _normalize_text(_strip_markdown_links(text))
+    value = re.sub(r"^[#>*\-\d\.\s]+", "", value)
+    return value.strip()
 
 
-def completion_policy(plan: dict[str, Any]) -> dict[str, int]:
-    payload = dict(plan.get("completion_policy", {}))
-    return {
-        "min_fact_count": int(payload.get("min_fact_count", 1)),
-        "min_evidence_urls": int(payload.get("min_evidence_urls", 1)),
-        "min_perspective_count": int(payload.get("min_perspective_count", 1)),
-        "no_new_query_stop_rounds": int(payload.get("no_new_query_stop_rounds", 1)),
-    }
+def _looks_like_placeholder_url(url: str) -> bool:
+    normalized = str(url or "").strip()
+    if not normalized:
+        return True
+    return any(pattern.search(normalized) for pattern in PLACEHOLDER_URL_RES)
 
 
-def retrieval_context(plan: dict[str, Any]) -> dict[str, str]:
-    payload = dict(plan.get("retrieval_context", {}))
-    location = str(payload.get("location", "")).strip()
-    if not location and plan.get("entity_refs"):
-        first_entity = entity_payload_for_ref(str(plan["entity_refs"][0]))
-        location = str(first_entity.get("city", "")).strip()
-    location_search_name = str(payload.get("location_search_name", "")).strip()
-    if location and not location_search_name:
-        location_search_name = default_location_search_name(location)
-    return {
-        "location": location,
-        "location_search_name": location_search_name,
-    }
+def _looks_like_placeholder_title(value: str) -> bool:
+    return bool(PLACEHOLDER_TITLE_RE.search(_normalize_text(value)))
 
 
-def validate_batch_plan(plan: dict[str, Any], selected_targets: list[str]) -> list[str]:
-    errors: list[str] = []
-    for field in ("batch_id", "query", "search_provider", "content_type_ref"):
-        _required_string(plan, field, errors)
-    for field in ("allow_domains", "creator_refs", "entity_refs", "tag_refs", "target_envs"):
-        _required_string_list(plan, field, errors)
-    for field in ("fetch_top_k", "expansion_rounds"):
-        _required_int(plan, field, errors)
-    if not isinstance(plan.get("publish_policy"), dict):
-        errors.append("batch_plan 缺少 publish_policy")
-    if errors:
-        return errors
+def _looks_like_default_topic_title(topic_id: str, task_type: str, value: str) -> bool:
+    return _normalize_text(value).lower() == _normalize_text(
+        _default_topic_title(topic_id, task_type)
+    ).lower()
 
-    search_provider = str(plan["search_provider"]).strip()
-    if search_provider not in SUPPORTED_SEARCH_PROVIDERS:
-        errors.append(
-            f"search_provider 只支持 {', '.join(sorted(SUPPORTED_SEARCH_PROVIDERS))}，收到 {search_provider}"
-        )
-    target_set = set(plan.get("target_envs", [])) | set(selected_targets)
-    invalid_targets = sorted(target_set - SUPPORTED_TARGETS)
-    if invalid_targets:
-        errors.append(f"target_envs 非法: {', '.join(invalid_targets)}")
 
-    template_ref = str(plan["content_type_ref"])
-    if not ref_exists(template_ref):
-        errors.append(f"content_type_ref 不存在: {template_ref}")
+def _looks_like_placeholder_snippet(task_type: str, value: str) -> bool:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return True
+    placeholder_phrases = [
+        "被组织进同一条家庭半日路线",
+        "优先看权利清晰、无平台水印",
+        "适合做封面或组图",
+    ]
+    if task_type == "article":
+        placeholder_phrases.append("文章任务")
     else:
-        template = content_template_for_ref(template_ref)
-        if template.get("content_type") not in SUPPORTED_CONTENT_TYPES:
-            errors.append(
-                f"当前 batch run 仅支持 image/article，收到 {template.get('content_type')}"
-            )
+        placeholder_phrases.append("图片任务")
+    return any(phrase in normalized for phrase in placeholder_phrases)
 
-    user_pool = load_user_pool()
-    for user_id in plan.get("creator_refs", []):
-        if user_id not in user_pool:
-            errors.append(f"creator_refs 不存在于 user_pool: {user_id}")
-    for ref in plan.get("entity_refs", []):
-        if not ref_exists(ref):
-            errors.append(f"entity_refs 引用不存在: {ref}")
-    for ref in plan.get("tag_refs", []):
-        if not ref_exists(ref):
-            errors.append(f"tag_refs 引用不存在: {ref}")
 
-    for key, value in completion_policy(plan).items():
-        if value < 1:
-            errors.append(f"completion_policy.{key} 必须 >= 1")
+def _extract_text_from_html(source: str) -> str:
+    text = re.sub(r"<script[\s\S]*?</script>", " ", source, flags=re.I)
+    text = re.sub(r"<style[\s\S]*?</style>", " ", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    return _normalize_text(text)
+
+
+def _extract_source_body_text(source_markdown: str) -> str:
+    text = source_markdown.replace("\ufeff", "").strip()
+    if text.startswith("---"):
+        parts = text.split("\n---", 1)
+        if len(parts) == 2:
+            text = parts[1]
+    body_lines: list[str] = []
+    for raw_line in text.splitlines():
+        cleaned = raw_line.rstrip()
+        normalized = cleaned.strip()
+        if not normalized:
+            body_lines.append("")
+            continue
+        if re.match(r"^-\s*(source_id|candidate_id|url|source_url|fetched_at|round)\s*:", normalized):
+            continue
+        if re.match(r"^##\s*title\s*:", normalized, re.I):
+            continue
+        if re.match(r"^(title|summary|source_url|fetched_at|task_type)\s*:", normalized, re.I):
+            continue
+        body_lines.append(cleaned)
+    return "\n".join(body_lines).strip()
+
+
+def _extract_source_paragraphs(source_markdown: str) -> list[str]:
+    body = _extract_source_body_text(source_markdown)
+    if not body:
+        return []
+    paragraphs: list[str] = []
+    seen: set[str] = set()
+    for chunk in re.split(r"\n\s*\n", body):
+        cleaned = _clean_markdown_line(chunk)
+        if not cleaned:
+            continue
+        if cleaned in seen:
+            continue
+        seen.add(cleaned)
+        paragraphs.append(cleaned)
+    return paragraphs
+
+
+def _placeholder_reasons(task_type: str, row: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    title = str(row.get("title", "")).strip()
+    snippet = str(row.get("snippet", "")).strip()
+    source_url = str(row.get("sourceUrl", "")).strip()
+    if _looks_like_placeholder_url(source_url):
+        reasons.append("placeholder_source_url")
+    if _looks_like_placeholder_title(title):
+        reasons.append("placeholder_title")
+    if _looks_like_placeholder_snippet(task_type, snippet):
+        reasons.append("placeholder_snippet")
+    if any(reasons) and any(_int_value(row.get(field)) > 0 for field in ("likes", "shares", "comments")):
+        reasons.append("placeholder_engagement")
+    return reasons
+
+
+def _page_authenticity_reasons(
+    task_type: str,
+    row: dict[str, Any],
+    page_html: str,
+    source_markdown: str,
+) -> tuple[list[str], dict[str, Any]]:
+    reasons = _placeholder_reasons(task_type, row)
+    page_text = _extract_text_from_html(page_html)
+    source_body = _normalize_text(_extract_source_body_text(source_markdown))
+    source_paragraphs = _extract_source_paragraphs(source_markdown)
+    if 'data-topic-id="' in page_html or 'data-source-id="' in page_html:
+        reasons.append("page_html_placeholder_shell")
+    min_page_chars = MIN_ARTICLE_PAGE_TEXT_CHARS if task_type == "article" else MIN_IMAGE_PAGE_TEXT_CHARS
+    if len(page_text) < min_page_chars:
+        reasons.append("page_html_too_short")
+    min_body_chars = MIN_ARTICLE_SOURCE_BODY_CHARS if task_type == "article" else MIN_IMAGE_SOURCE_BODY_CHARS
+    if len(source_body) < min_body_chars:
+        reasons.append("source_markdown_too_short")
+    if task_type == "article" and len(
+        [item for item in source_paragraphs if len(item) >= MIN_ARTICLE_SOURCE_PARAGRAPH_CHARS]
+    ) < 3:
+        reasons.append("source_markdown_not_article_like")
+    snippet = _normalize_text(row.get("snippet", ""))
+    if snippet and source_body and snippet == source_body:
+        reasons.append("source_markdown_equals_snippet")
+    return _dedupe_strings(reasons), {
+        "pageText": page_text,
+        "sourceBodyText": source_body,
+        "sourceParagraphs": source_paragraphs,
+    }
+
+
+def _default_topic_title(topic_id: str, task_type: str) -> str:
+    compact = topic_id.replace("_", " ").strip()
+    if task_type == "image":
+        return f"{compact} 图片任务".strip()
+    return f"{compact} 文章任务".strip()
+
+
+def _default_enrichment_row(spec: dict[str, Any], topic_id: str, task_type: str) -> dict[str, Any]:
+    return {
+        "schemaVersion": TOPIC_ENRICHMENT_SCHEMA_VERSION,
+        "specId": spec["spec_id"],
+        "topicId": topic_id,
+        "taskType": task_type,
+        "publishReady": False,
+        "title": _default_topic_title(topic_id, task_type),
+        "summary": "",
+        "entityRefs": list(spec.get("entity_refs", [])),
+        "tagRefs": list(spec.get("tag_refs", [])),
+        "selectedCandidateIds": [],
+        "sourceUrls": [],
+    }
+
+
+def _ensure_topic_runtime_files(
+    spec: dict[str, Any],
+    topic_id: str,
+    task_type: str,
+) -> tuple[Path, Path, Path]:
+    topic_dir = run_topic_dir(spec["spec_id"], topic_id)
+    pages_root = topic_dir / "pages"
+    source_pool_path = topic_dir / "source_pool.ndjson"
+    enrichment_path = topic_dir / "enrichment.ndjson"
+    pages_root.mkdir(parents=True, exist_ok=True)
+    if not source_pool_path.exists():
+        write_ndjson(source_pool_path, [])
+    if not enrichment_path.exists():
+        write_ndjson(enrichment_path, [_default_enrichment_row(spec, topic_id, task_type)])
+    return topic_dir, source_pool_path, enrichment_path
+
+
+def _asset_publish_eligibility(row: dict[str, Any]) -> str:
+    if str(row.get("rightsStatus", "")).strip() != "clear":
+        return "rejected"
+    if str(row.get("watermarkStatus", "")).strip() != "clean":
+        return "rejected"
+    if str(row.get("sourceRole", "")).strip() == "discovery_only":
+        return "rejected"
+    return "approved"
+
+
+def _asset_license_hint(source_url: str) -> dict[str, str]:
+    normalized = _normalize_domain(urlparse(source_url).netloc)
+    if (
+        normalized.endswith("wikimedia.org")
+        or normalized.endswith("wikivoyage.org")
+        or normalized.endswith("wikipedia.org")
+    ):
+        return {
+            "name": "wikimedia_source_page",
+            "usage": "see_source_page_license",
+        }
+    return {"name": "unknown", "usage": "requires_review"}
+
+
+def _top_downloaded_image_asset(assets: list[dict[str, Any]]) -> dict[str, Any] | None:
+    image_assets = [
+        asset
+        for asset in assets
+        if str(asset.get("mimeType", "")).startswith("image/")
+        and int(asset.get("width") or 0) > 0
+        and int(asset.get("height") or 0) > 0
+    ]
+    if not image_assets:
+        return None
+    return max(
+        image_assets,
+        key=lambda asset: int(asset.get("width") or 0) * int(asset.get("height") or 0),
+    )
+
+
+def _keyword_relevance_score(*values: str) -> int:
+    joined = " ".join(_normalize_text(value).lower() for value in values if value)
+    if any(keyword in joined for keyword in ("西湖", "hangzhou", "west lake", "杭州")):
+        return 10
+    return 6 if joined else 0
+
+
+def _image_quality_breakdown(
+    row: dict[str, Any],
+    assets: list[dict[str, Any]],
+    *,
+    page_text: str,
+    source_body: str,
+) -> dict[str, int]:
+    top_asset = _top_downloaded_image_asset(assets)
+    max_dimension = 0
+    if top_asset is not None:
+        max_dimension = max(
+            int(top_asset.get("width") or 0),
+            int(top_asset.get("height") or 0),
+        )
+    resolution = (
+        15
+        if max_dimension >= 2400
+        else 13
+        if max_dimension >= 1600
+        else 11
+        if max_dimension >= 1200
+        else 8
+        if max_dimension >= 800
+        else 4
+        if max_dimension > 0
+        else 0
+    )
+    aspect_ratio = 0.0
+    if top_asset is not None and int(top_asset.get("height") or 0) > 0:
+        aspect_ratio = int(top_asset.get("width") or 0) / int(top_asset.get("height") or 1)
+    composition = (
+        15
+        if 1.2 <= aspect_ratio <= 1.8
+        else 12
+        if 0.9 <= aspect_ratio <= 2.1
+        else 8
+        if aspect_ratio > 0
+        else 0
+    )
+    storytelling = (
+        10
+        if len(_normalize_text(source_body)) >= 260 or len(_normalize_text(page_text)) >= 600
+        else 8
+        if len(_normalize_text(source_body)) >= 120 or len(_normalize_text(page_text)) >= 240
+        else 5
+        if top_asset is not None
+        else 0
+    )
+    return {
+        "rightsClarity": 30 if str(row.get("rightsStatus", "")).strip() == "clear" else 0,
+        "watermarkCleanliness": 20
+        if str(row.get("watermarkStatus", "")).strip() == "clean"
+        else 0,
+        "resolution": resolution,
+        "composition": composition,
+        "relevance": _keyword_relevance_score(
+            str(row.get("title", "")),
+            str(row.get("query", "")),
+            page_text,
+            source_body,
+        ),
+        "storytelling": storytelling,
+    }
+
+
+def _topic_keywords_for_paragraph_ranking(row: dict[str, Any]) -> list[str]:
+    keywords: list[str] = []
+    seen: set[str] = set()
+    for raw_value in (
+        str(row.get("title", "")),
+        str(row.get("topicTitle", "")),
+        str(row.get("query", "")),
+        str(row.get("snippet", "")),
+    ):
+        normalized = _normalize_text(raw_value)
+        for token in re.findall(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{4,}", normalized):
+            cleaned = token.strip()
+            lowered = cleaned.lower()
+            if lowered in {"真实", "来源", "旅行", "指南", "topic", "image", "article"}:
+                continue
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            keywords.append(cleaned)
+    priority = ["西湖", "湖滨", "景区", "步行", "游览", "白堤", "苏堤", "断桥", "雷峰塔"]
+    for keyword in reversed(priority):
+        if keyword in keywords:
+            keywords.remove(keyword)
+            keywords.insert(0, keyword)
+    return keywords[:12]
+
+
+def _article_paragraph_relevance_score(paragraph: str, row: dict[str, Any]) -> int:
+    normalized = _normalize_text(paragraph)
+    if not normalized:
+        return -999
+    score = 0
+    for keyword in _topic_keywords_for_paragraph_ranking(row):
+        if keyword and keyword in normalized:
+            score += 4 if keyword in {"西湖", "湖滨", "景区", "白堤", "苏堤", "断桥", "雷峰塔"} else 2
+    penalty_terms = (
+        "机场",
+        "火车站",
+        "安检",
+        "高速公路",
+        "检票口",
+        "候车",
+        "出站",
+        "班车",
+        "客运",
+        "地铁",
+    )
+    penalty_hits = sum(1 for term in penalty_terms if term in normalized)
+    if penalty_hits and "西湖" not in normalized and "景区" not in normalized:
+        score -= penalty_hits * 4
+    if len(normalized) >= 45:
+        score += 1
+    return score
+
+
+def _select_source_markdown_paragraphs(
+    task_type: str,
+    row: dict[str, Any],
+    paragraphs: list[str],
+) -> list[str]:
+    cleaned = [_normalize_text(paragraph) for paragraph in paragraphs if _normalize_text(paragraph)]
+    if task_type != "article":
+        return cleaned[:12]
+    scored = [
+        (index, paragraph, _article_paragraph_relevance_score(paragraph, row))
+        for index, paragraph in enumerate(cleaned)
+    ]
+    ranked = sorted(scored, key=lambda item: (-item[2], item[0]))
+    selected = sorted(ranked[: min(8, len(ranked))], key=lambda item: item[0])
+    if not selected:
+        return cleaned[:12]
+    if max(item[2] for item in selected) <= 0:
+        return cleaned[:12]
+    return [paragraph for _, paragraph, score in selected if score > -4][:8] or cleaned[:12]
+
+
+def _hydrate_source_artifacts(
+    spec: dict[str, Any],
+    topic_id: str,
+    task_type: str,
+    row: dict[str, Any],
+    *,
+    force: bool = False,
+) -> list[str]:
+    errors: list[str] = []
+    source_id = str(row.get("sourceId", "")).strip()
+    source_url = str(row.get("sourceUrl", "")).strip()
+    if not source_id:
+        return ["source 缺少 sourceId，无法补抓取"]
+    page_dir = run_topic_dir(spec["spec_id"], topic_id) / "pages" / source_id
+    page_html_path = page_dir / "page.html"
+    source_md_path = page_dir / "source.md"
+    asset_manifest_path = page_dir / "asset_manifest.json"
+    download_dir = download_topic_source_dir(spec["spec_id"], topic_id, source_id)
+    image_download_dir = download_topic_image_dir(spec["spec_id"], topic_id, source_id)
+    if force:
+        shutil.rmtree(page_dir, ignore_errors=True)
+        shutil.rmtree(download_dir, ignore_errors=True)
+        shutil.rmtree(image_download_dir, ignore_errors=True)
+    if (
+        page_html_path.exists()
+        and source_md_path.exists()
+        and asset_manifest_path.exists()
+    ):
+        return []
+    if _looks_like_placeholder_url(source_url):
+        return []
+    try:
+        fetched = fetch_html_page(source_url)
+    except NativeFetchError as error:
+        return [str(error)]
+    page_dir.mkdir(parents=True, exist_ok=True)
+    download_dir.mkdir(parents=True, exist_ok=True)
+    write_text(download_dir / "page.html", fetched.html)
+    write_text(page_html_path, fetched.html)
+
+    source_lines = [
+        "---",
+        f"title: {fetched.title}",
+        f"source_url: {fetched.final_url}",
+        f"fetched_at: {now_iso()}",
+        f"task_type: {task_type}",
+        "---",
+        "",
+    ]
+    selected_paragraphs = _select_source_markdown_paragraphs(
+        task_type,
+        row,
+        list(fetched.paragraphs) or [fetched.text],
+    )
+    for paragraph in selected_paragraphs or [fetched.text]:
+        cleaned = _normalize_text(paragraph)
+        if cleaned:
+            source_lines.extend([cleaned, ""])
+    write_text(source_md_path, "\n".join(source_lines).strip() + "\n")
+
+    assets: list[dict[str, Any]] = []
+    for index, image_url in enumerate(fetched.image_urls[:3], start=1):
+        filename = safe_filename_from_url(image_url, fallback=f"{source_id}_{index:02d}.bin")
+        target_path = download_topic_image_dir(spec["spec_id"], topic_id, source_id) / filename
+        try:
+            downloaded = download_binary(image_url, target_path)
+        except NativeFetchError as error:
+            errors.append(str(error))
+            continue
+        if not str(downloaded.mime_type).startswith("image/"):
+            continue
+        largest_dimension = max(downloaded.width or 0, downloaded.height or 0)
+        if largest_dimension < 200:
+            continue
+        asset_id = f"{source_id}_asset_{index:02d}"
+        assets.append(
+            {
+                "assetId": asset_id,
+                "kind": "image",
+                "scope": "runtime_download",
+                "objectKey": runtime_rel_ref(downloaded.local_path),
+                "localPath": runtime_rel_ref(downloaded.local_path),
+                "downloadStatus": "downloaded",
+                "sourceUrl": downloaded.source_url,
+                "caption": fetched.title,
+                "sha256": downloaded.sha256,
+                "mimeType": downloaded.mime_type,
+                "width": downloaded.width,
+                "height": downloaded.height,
+                "license": _asset_license_hint(source_url),
+                "rightsStatus": row.get("rightsStatus", ""),
+                "watermarkStatus": row.get("watermarkStatus", ""),
+                "publishEligibility": _asset_publish_eligibility(row),
+                "platform": row.get("platform", row.get("domain", "")),
+                "sourceId": source_id,
+                "sourceCandidateId": row.get("candidateId", ""),
+                "originPageUrl": fetched.final_url,
+            }
+        )
+    write_json(
+        asset_manifest_path,
+        {
+            "schemaVersion": TOPIC_ASSET_MANIFEST_SCHEMA_VERSION,
+            "specId": spec["spec_id"],
+            "topicId": topic_id,
+            "sourceId": source_id,
+            "taskType": task_type,
+            "assets": assets,
+        },
+    )
     return errors
 
 
-def ensure_raw_skeleton(batch_id: str) -> None:
-    raw_dir = raw_batch_dir(batch_id)
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("search_results.ndjson", "pages.ndjson", "assets.ndjson", "facts.ndjson"):
-        path = raw_batch_file(batch_id, name)
-        if not path.exists():
-            write_text(path, "")
+def _required_string(payload: dict[str, Any], field: str, errors: list[str]) -> None:
+    value = payload.get(field)
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"crawl_spec 缺少 {field}")
 
 
-def load_loop_state(batch_id: str) -> dict[str, Any]:
-    path = loop_state_path(batch_id)
-    if path.exists():
-        return dict(read_json(path))
+def _required_string_list(payload: dict[str, Any], field: str, errors: list[str]) -> None:
+    value = payload.get(field)
+    if not isinstance(value, list) or not value or not all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        errors.append(f"crawl_spec 的 {field} 必须是非空字符串数组")
+
+
+def _required_dict(payload: dict[str, Any], field: str, errors: list[str]) -> None:
+    if not isinstance(payload.get(field), dict):
+        errors.append(f"crawl_spec 缺少 {field}")
+
+
+def _required_lane(spec: dict[str, Any], lane: str, errors: list[str]) -> None:
+    lane_payload = spec.get(f"{lane}_lane")
+    if not isinstance(lane_payload, dict):
+        errors.append(f"crawl_spec 缺少 {lane}_lane")
+        return
+    allow_domains = lane_payload.get("allow_domains")
+    if not isinstance(allow_domains, list) or not all(
+        isinstance(item, str) and item.strip() for item in allow_domains
+    ):
+        errors.append(f"crawl_spec 的 {lane}_lane.allow_domains 必须是字符串数组")
+
+
+def _discovery_policy(spec: dict[str, Any]) -> dict[str, int]:
+    payload = dict(spec.get("discovery_policy", {}))
     return {
-        "schemaVersion": BATCH_LOOP_STATE_SCHEMA_VERSION,
-        "batch_id": batch_id,
-        "current_round": 0,
-        "last_planned_round": 0,
-        "status": "needs_more_evidence",
-        "completed": False,
-        "ready_for_finalize": False,
-        "stop_reason": "",
-        "rounds_without_new_queries": 0,
-        "missing_entity_refs": [],
-        "missing_tag_refs": [],
-        "next_queries": [],
-        "summary": {
-            "search_result_count": 0,
-            "page_count": 0,
-            "asset_count": 0,
-            "fact_count": 0,
-            "perspective_count": 0,
-            "evidence_url_count": 0,
-        },
+        "min_article_topics": int(payload.get("min_article_topics", 20)),
+        "min_image_topics": int(payload.get("min_image_topics", 1)),
+        "min_candidate_sources_per_task": int(
+            payload.get("min_candidate_sources_per_task", 20)
+        ),
+        "min_article_publish_topics": int(payload.get("min_article_publish_topics", 6)),
+        "min_image_publish_topics": int(payload.get("min_image_publish_topics", 1)),
     }
 
 
-def load_retrieval_plan(batch_id: str) -> dict[str, Any]:
-    path = retrieval_plan_path(batch_id)
-    if path.exists():
-        return dict(read_json(path))
-    return {}
+def _sample_topics(spec: dict[str, Any], lane: str) -> list[str]:
+    payload = dict(spec.get("sample_topics", {}))
+    value = payload.get(lane, [])
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
 
 
-def load_raw_state(batch_id: str) -> dict[str, Any]:
-    return {
-        "search_results": read_ndjson(raw_batch_file(batch_id, "search_results.ndjson")),
-        "pages": read_ndjson(raw_batch_file(batch_id, "pages.ndjson")),
-        "assets": read_ndjson(raw_batch_file(batch_id, "assets.ndjson")),
-        "facts": read_ndjson(raw_batch_file(batch_id, "facts.ndjson")),
-        "loop_state": load_loop_state(batch_id),
-        "retrieval_plan": load_retrieval_plan(batch_id),
-    }
+def _lane_creator_refs(spec: dict[str, Any], lane: str) -> list[str]:
+    payload = dict(spec.get("creator_refs", {}))
+    value = payload.get(lane, [])
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
 
 
-def int_round(value: Any) -> int:
-    if isinstance(value, int) and value >= 0:
-        return value
-    return 0
+def validate_crawl_spec(spec: dict[str, Any], selected_targets: list[str]) -> list[str]:
+    errors: list[str] = []
+    for field in ("spec_id", "query", "search_provider"):
+        _required_string(spec, field, errors)
+    for field in ("entity_refs", "tag_refs", "target_envs"):
+        _required_string_list(spec, field, errors)
+    for field in ("publish_policy", "discovery_policy", "sample_topics", "creator_refs"):
+        _required_dict(spec, field, errors)
+    _required_lane(spec, "article", errors)
+    _required_lane(spec, "image", errors)
+    if errors:
+        return errors
+
+    if str(spec["search_provider"]).strip() not in SUPPORTED_SEARCH_PROVIDERS:
+        errors.append(
+            f"search_provider 只支持 {', '.join(sorted(SUPPORTED_SEARCH_PROVIDERS))}，收到 {spec['search_provider']}"
+        )
+    invalid_targets = sorted(
+        (set(spec.get("target_envs", [])) | set(selected_targets)) - SUPPORTED_TARGETS
+    )
+    if invalid_targets:
+        errors.append(f"target_envs 非法: {', '.join(invalid_targets)}")
+
+    for lane in ("article", "image"):
+        if not _sample_topics(spec, lane):
+            errors.append(f"crawl_spec.sample_topics.{lane} 至少需要 1 个 topic_id")
+        if not _lane_creator_refs(spec, lane):
+            errors.append(f"crawl_spec.creator_refs.{lane} 至少需要 1 个作者")
+
+    user_pool = load_user_pool()
+    for lane in ("article", "image"):
+        for user_id in _lane_creator_refs(spec, lane):
+            if user_id not in user_pool:
+                errors.append(f"creator_refs.{lane} 不存在于 user_pool: {user_id}")
+
+    for ref in spec.get("entity_refs", []):
+        if not ref_exists(ref):
+            errors.append(f"entity_refs 引用不存在: {ref}")
+    for ref in spec.get("tag_refs", []):
+        if not ref_exists(ref):
+            errors.append(f"tag_refs 引用不存在: {ref}")
+
+    policy = _discovery_policy(spec)
+    for key, value in policy.items():
+        if value < 1 and key != "min_image_publish_topics":
+            errors.append(f"discovery_policy.{key} 必须 >= 1")
+        if key == "min_image_publish_topics" and value < 0:
+            errors.append("discovery_policy.min_image_publish_topics 必须 >= 0")
+
+    publish_policy = dict(spec.get("publish_policy", {}))
+    for field in ("visibility", "assistant_use_policy"):
+        if not str(publish_policy.get(field, "")).strip():
+            errors.append(f"publish_policy 缺少 {field}")
+    return errors
 
 
-def max_round_in_rows(rows: list[dict[str, Any]]) -> int:
-    rounds = [int_round(row.get("round")) for row in rows]
-    return max(rounds, default=0)
-
-
-def normalize_domain(value: str) -> str:
+def _normalize_domain(value: str) -> str:
     normalized = value.strip().lower()
     if normalized.startswith("www."):
         normalized = normalized[4:]
     return normalized
 
 
-def round_list(batch_state: dict[str, Any]) -> list[int]:
-    values = [
-        max_round_in_rows(batch_state["search_results"]),
-        max_round_in_rows(batch_state["pages"]),
-        max_round_in_rows(batch_state["assets"]),
-        max_round_in_rows(batch_state["facts"]),
-        int_round(batch_state["loop_state"].get("current_round")),
-    ]
-    return [value for value in values if value > 0]
+def _bool_value(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
 
 
-def distinct_domains(rows: list[dict[str, Any]], facts: list[dict[str, Any]]) -> set[str]:
-    domains = {
-        normalize_domain(str(row.get("domain", "")))
-        for row in rows
-        if normalize_domain(str(row.get("domain", "")))
-    }
-    for row in facts:
-        parsed = urlparse(str(row.get("source_url", "")).strip())
-        if parsed.netloc:
-            domains.add(normalize_domain(parsed.netloc))
-    return domains
+def _int_value(value: Any) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value).strip() or "0")
+    except ValueError:
+        return 0
 
 
-def distinct_evidence_urls(batch_state: dict[str, Any]) -> set[str]:
-    urls: set[str] = set()
-    for key in ("search_results", "pages", "facts"):
-        for row in batch_state[key]:
-            for field in ("url", "source_url"):
-                value = str(row.get(field, "")).strip()
-                if value:
-                    urls.add(value)
-    return urls
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    single = str(value or "").strip()
+    return [single] if single else []
 
 
-def covered_entity_refs(facts: list[dict[str, Any]]) -> set[str]:
-    covered: set[str] = set()
-    for row in facts:
-        covered.update(str(item).strip() for item in row.get("entity_refs", []) if str(item).strip())
-    return covered
+def _source_id_from_row(row: dict[str, Any], index: int) -> str:
+    source_id = str(row.get("sourceId") or row.get("source_id") or "").strip()
+    if source_id:
+        return source_id
+    candidate_id = str(row.get("candidateId") or "").strip()
+    if candidate_id:
+        return candidate_id
+    return f"source_{index:03d}"
 
 
-def covered_tag_refs(facts: list[dict[str, Any]]) -> set[str]:
-    covered: set[str] = set()
-    for row in facts:
-        covered.update(str(item).strip() for item in row.get("tag_refs", []) if str(item).strip())
-    return covered
+def _coerce_breakdown(raw: Any, weights: dict[str, int]) -> dict[str, int]:
+    source = dict(raw) if isinstance(raw, dict) else {}
+    result: dict[str, int] = {}
+    for key, maximum in weights.items():
+        score = _int_value(source.get(key))
+        result[key] = max(0, min(score, maximum))
+    return result
 
 
-def compute_batch_status(plan: dict[str, Any], batch_state: dict[str, Any]) -> dict[str, Any]:
-    policy = completion_policy(plan)
-    loop_state = batch_state["loop_state"]
-    retrieval_plan = batch_state["retrieval_plan"]
-    current_round = max(round_list(batch_state), default=0)
-    last_planned_round = max(current_round, int_round(loop_state.get("last_planned_round")))
-    if retrieval_plan:
-        last_planned_round = max(last_planned_round, int_round(retrieval_plan.get("round")))
+def _sum_score(breakdown: dict[str, int]) -> int:
+    return sum(int(value) for value in breakdown.values())
 
-    facts = batch_state["facts"]
-    missing_entities = sorted(set(plan["entity_refs"]) - covered_entity_refs(facts))
-    missing_tags = sorted(set(plan["tag_refs"]) - covered_tag_refs(facts))
-    fact_count = len(facts)
-    evidence_url_count = len(distinct_evidence_urls(batch_state))
-    perspective_count = len(distinct_domains(batch_state["search_results"], facts))
-    required_files_present = all(
-        raw_batch_file(plan["batch_id"], name).exists()
-        for name in ("search_results.ndjson", "pages.ndjson", "assets.ndjson", "facts.ndjson", "loop_state.json")
-    )
 
-    can_finalize = (
-        required_files_present
-        and not missing_entities
-        and not missing_tags
-        and fact_count >= policy["min_fact_count"]
-        and evidence_url_count >= policy["min_evidence_urls"]
-        and perspective_count >= policy["min_perspective_count"]
-    )
-    completed = bool(loop_state.get("completed"))
-    next_queries = []
-    if isinstance(retrieval_plan.get("search_queries"), list):
-        next_queries = [
-            str(item.get("query", "")).strip()
-            for item in retrieval_plan["search_queries"]
-            if isinstance(item, dict) and str(item.get("query", "")).strip()
-        ]
-    awaiting_collection = bool(next_queries) and int_round(retrieval_plan.get("round")) > current_round
-    exhausted = (
-        not can_finalize
-        and not completed
-        and (
-            current_round >= int(plan["expansion_rounds"])
-            or int_round(loop_state.get("rounds_without_new_queries"))
-            >= policy["no_new_query_stop_rounds"]
+def _article_candidate_gate(row: dict[str, Any]) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    if str(row.get("rightsStatus", "")).strip() != "clear":
+        reasons.append("rights_not_clear")
+    if str(row.get("watermarkStatus", "")).strip() != "clean":
+        reasons.append("watermark_not_clean")
+    if _bool_value(row.get("adSignal")):
+        reasons.append("advertorial")
+    if str(row.get("duplicateStatus", "")).strip() == "high_repeat":
+        reasons.append("high_duplicate")
+    if str(row.get("sourceRole", "")).strip() == "discovery_only":
+        reasons.append("discovery_only_source")
+    return not reasons, reasons
+
+
+def _image_candidate_gate(row: dict[str, Any]) -> tuple[bool, list[str]]:
+    reasons: list[str] = []
+    if str(row.get("rightsStatus", "")).strip() != "clear":
+        reasons.append("rights_not_clear")
+    if str(row.get("watermarkStatus", "")).strip() != "clean":
+        reasons.append("watermark_not_clean")
+    if str(row.get("sourceRole", "")).strip() == "discovery_only":
+        reasons.append("discovery_only_source")
+    if "pinterest." in str(row.get("domain", "")).strip() and not _bool_value(
+        row.get("manualRightsClearance")
+    ):
+        reasons.append("pinterest_discovery_only")
+    return not reasons, reasons
+
+
+def _process_source_pool(
+    task_type: str, rows: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    processed: list[dict[str, Any]] = []
+    for index, raw in enumerate(rows, start=1):
+        row = dict(raw)
+        row["candidateId"] = str(row.get("candidateId") or f"candidate_{index:03d}")
+        row["sourceId"] = _source_id_from_row(row, index)
+        row["taskType"] = task_type
+        row["sourceUrl"] = str(row.get("sourceUrl") or row.get("source_url") or "").strip()
+        row["domain"] = _normalize_domain(
+            str(row.get("domain") or urlparse(row["sourceUrl"]).netloc)
         )
-    )
+        row["platform"] = str(row.get("platform") or row["domain"]).strip()
+        row["title"] = str(row.get("title", "")).strip()
+        row["query"] = str(row.get("query", "")).strip()
+        row["rightsStatus"] = str(row.get("rightsStatus", "")).strip() or "unclear"
+        row["watermarkStatus"] = str(row.get("watermarkStatus", "")).strip() or "unknown"
+        row["duplicateStatus"] = str(row.get("duplicateStatus", "")).strip() or "unique"
+        row["sourceRole"] = str(row.get("sourceRole", "")).strip() or "publish_candidate"
+        row["likes"] = _int_value(row.get("likes"))
+        row["shares"] = _int_value(row.get("shares"))
+        row["comments"] = _int_value(row.get("comments"))
+        row["engagementSum"] = row["likes"] + row["shares"] + row["comments"]
+        row["selectionDecision"] = "rejected"
+        row["selectionBucket"] = "candidate_gate_failed"
+        row["selectionReason"] = ""
+        row["retainedRank"] = 0
 
-    if completed:
-        status = "completed"
-    elif can_finalize:
-        status = "ready_for_finalize"
-    elif awaiting_collection:
-        status = "awaiting_collection"
-    elif exhausted:
-        status = "exhausted"
-    else:
-        status = "needs_more_evidence"
-
-    return {
-        "batch_id": plan["batch_id"],
-        "search_provider": plan["search_provider"],
-        "current_round": current_round,
-        "last_planned_round": last_planned_round,
-        "remaining_rounds": max(int(plan["expansion_rounds"]) - current_round, 0),
-        "status": status,
-        "completed": completed,
-        "ready_for_finalize": can_finalize,
-        "can_finalize": can_finalize,
-        "search_result_count": len(batch_state["search_results"]),
-        "page_count": len(batch_state["pages"]),
-        "asset_count": len(batch_state["assets"]),
-        "fact_count": fact_count,
-        "evidence_url_count": evidence_url_count,
-        "perspective_count": perspective_count,
-        "required_entity_count": len(plan["entity_refs"]),
-        "covered_entity_count": len(set(plan["entity_refs"]) - set(missing_entities)),
-        "missing_entity_refs": missing_entities,
-        "required_tag_count": len(plan["tag_refs"]),
-        "covered_tag_count": len(set(plan["tag_refs"]) - set(missing_tags)),
-        "missing_tag_refs": missing_tags,
-        "next_queries_count": len(next_queries),
-        "next_queries": next_queries,
-        "rounds_without_new_queries": int_round(loop_state.get("rounds_without_new_queries")),
-        "stop_reason": str(loop_state.get("stop_reason", "")).strip(),
-        "completion_policy": policy,
-    }
-
-
-def build_search_queries(plan: dict[str, Any], status: dict[str, Any], next_round: int) -> list[dict[str, Any]]:
-    queries: list[dict[str, Any]] = []
-    target_domains = list(plan["allow_domains"])
-    seen: set[str] = set()
-
-    def add_query(
-        *,
-        dimension: str,
-        query: str,
-        purpose: str,
-        entity_refs: list[str] | None = None,
-        tag_refs: list[str] | None = None,
-    ) -> None:
-        normalized = query.strip()
-        if not normalized or normalized in seen:
-            return
-        seen.add(normalized)
-        queries.append(
-            search_query_item(
-                dimension=dimension,
-                query=normalized,
-                purpose=purpose,
-                round_number=next_round,
-                target_domains=target_domains,
-                entity_refs=entity_refs,
-                tag_refs=tag_refs,
-            )
-        )
-
-    add_query(
-        dimension="主检索",
-        query=str(plan["query"]),
-        purpose="围绕批次主主题补齐公开网页证据，并为本轮事实抽取提供总入口。",
-    )
-
-    for ref in status["missing_entity_refs"]:
-        name = entity_name_for_ref(ref)
-        add_query(
-            dimension="实体补齐",
-            query=f"{name} {plan['query']}",
-            purpose=f"补齐缺失实体「{name}」的公开证据与内容上下文。",
-            entity_refs=[ref],
-        )
-
-    for ref in status["missing_tag_refs"]:
-        label = tag_label_for_ref(ref)
-        add_query(
-            dimension="标签视角",
-            query=f"{plan['query']} {label}",
-            purpose=f"补齐缺失标签「{label}」对应的内容视角与叙事线索。",
-            tag_refs=[ref],
-        )
-
-    if status["fact_count"] < status["completion_policy"]["min_fact_count"]:
-        template = content_template_for_ref(plan["content_type_ref"])
-        focus = "游记 攻略" if template["content_type"] == "article" else "打卡 出片"
-        add_query(
-            dimension="内容增量",
-            query=f"{plan['query']} {focus}",
-            purpose="当前事实条数不足，补齐可生成内容的多视角样本。",
-        )
-
-    if status["perspective_count"] < status["completion_policy"]["min_perspective_count"]:
-        add_query(
-            dimension="来源扩展",
-            query=f"{plan['query']} 不同来源 对比",
-            purpose="当前来源视角不足，补齐不同站点或不同写法的可核验证据。",
-        )
-
-    return queries
-
-
-def build_retrieval_plan(plan: dict[str, Any], status: dict[str, Any]) -> dict[str, Any]:
-    next_round = max(status["current_round"] + 1, 1)
-    context = retrieval_context(plan)
-    search_queries: list[dict[str, Any]] = []
-    stop_reason = ""
-
-    if status["completed"]:
-        plan_status = "completed"
-    elif status["can_finalize"]:
-        plan_status = "ready_for_finalize"
-    else:
-        search_queries = build_search_queries(plan, status, next_round)
-        if not search_queries and (
-            status["current_round"] >= int(plan["expansion_rounds"])
-            or status["rounds_without_new_queries"]
-            >= status["completion_policy"]["no_new_query_stop_rounds"]
-        ):
-            plan_status = "exhausted"
-            stop_reason = "no_high_value_query"
+        if task_type == "article":
+            breakdown = _coerce_breakdown(row.get("qualityBreakdown"), ARTICLE_QUALITY_WEIGHTS)
+            row["qualityBreakdown"] = breakdown
+            row["qualityScore"] = _sum_score(breakdown)
+            passed, reasons = _article_candidate_gate(row)
         else:
-            plan_status = "planned"
+            breakdown = _coerce_breakdown(
+                row.get("imageQualityBreakdown"), IMAGE_QUALITY_WEIGHTS
+            )
+            row["imageQualityBreakdown"] = breakdown
+            row["imageQualityScore"] = _sum_score(breakdown)
+            passed, reasons = _image_candidate_gate(row)
 
-    planner_prompt = build_retrieval_prompt(
-        batch_id=plan["batch_id"],
-        main_query=str(plan["query"]),
-        next_round=next_round,
-        location=context["location"],
-        location_search_name=context["location_search_name"],
-        target_domains=list(plan["allow_domains"]),
-        missing_entity_refs=list(status["missing_entity_refs"]),
-        missing_tag_refs=list(status["missing_tag_refs"]),
-        fact_count=int(status["fact_count"]),
-    )
+        row["complianceStatus"] = "approved" if passed else "rejected"
+        row["complianceReasons"] = reasons
+        if not passed:
+            row["selectionReason"] = ",".join(reasons)
+        processed.append(row)
 
-    return {
-        "schemaVersion": RETRIEVAL_PLAN_SCHEMA_VERSION,
-        "generated_at": now_iso(),
-        "batch_id": plan["batch_id"],
-        "round": next_round,
-        "status": plan_status,
-        "query": str(plan["query"]),
-        "search_queries": search_queries,
-        "location": context["location"],
-        "location_search_name": context["location_search_name"],
-        "target_domains": list(plan["allow_domains"]),
-        "missing_entity_refs": list(status["missing_entity_refs"]),
-        "missing_tag_refs": list(status["missing_tag_refs"]),
-        "planner_prompt": planner_prompt,
-        "stop_reason": stop_reason,
+    compliant = [row for row in processed if row["complianceStatus"] == "approved"]
+    retained_order: list[str] = []
+    high_value_count = 0
+    quality_exception_count = 0
+
+    if task_type == "article" and compliant:
+        hot_count = max(1, math.ceil(len(compliant) * 0.10))
+        quality_quota = max(1, math.ceil(len(compliant) * 0.20))
+        hot = sorted(
+            compliant,
+            key=lambda row: (-row["engagementSum"], -row["qualityScore"], row["sourceUrl"]),
+        )[:hot_count]
+        hot_ids = {row["candidateId"] for row in hot}
+        high_value_count = len(hot_ids)
+        remaining = [row for row in compliant if row["candidateId"] not in hot_ids]
+        quality = sorted(
+            remaining,
+            key=lambda row: (-row["qualityScore"], -row["engagementSum"], row["sourceUrl"]),
+        )[:quality_quota]
+        quality_ids = {row["candidateId"] for row in quality}
+
+        for row in processed:
+            if row["candidateId"] in hot_ids:
+                row["selectionDecision"] = "retained"
+                row["selectionBucket"] = "hot_top_10pct"
+                row["selectionReason"] = "engagement_top_10pct"
+                retained_order.append(row["candidateId"])
+            elif row["candidateId"] in quality_ids:
+                row["selectionDecision"] = "retained"
+                row["selectionBucket"] = "quality_top_20pct"
+                row["selectionReason"] = "quality_top_default_quota"
+                retained_order.append(row["candidateId"])
+            elif row["complianceStatus"] == "approved" and row["qualityScore"] >= 85:
+                row["selectionDecision"] = "retained"
+                row["selectionBucket"] = "quality_exception"
+                row["selectionReason"] = "quality_score_ge_85_exception"
+                retained_order.append(row["candidateId"])
+                quality_exception_count += 1
+            elif row["complianceStatus"] == "approved":
+                row["selectionBucket"] = "default_ratio_overflow"
+                row["selectionReason"] = "outside_default_keep_ratio"
+    elif task_type == "image" and compliant:
+        base_limit = max(1, math.ceil(len(compliant) * 0.30))
+        primary = sorted(
+            compliant,
+            key=lambda row: (-row["imageQualityScore"], row["sourceUrl"]),
+        )[:base_limit]
+        primary_ids = {row["candidateId"] for row in primary}
+        for row in processed:
+            if row["candidateId"] in primary_ids:
+                row["selectionDecision"] = "retained"
+                row["selectionBucket"] = "image_top_30pct"
+                row["selectionReason"] = "image_quality_top_default_quota"
+                retained_order.append(row["candidateId"])
+            elif row["complianceStatus"] == "approved" and row["imageQualityScore"] >= 88:
+                row["selectionDecision"] = "retained"
+                row["selectionBucket"] = "image_exception"
+                row["selectionReason"] = "image_quality_ge_88_exception"
+                retained_order.append(row["candidateId"])
+                quality_exception_count += 1
+            elif row["complianceStatus"] == "approved":
+                row["selectionBucket"] = "default_ratio_overflow"
+                row["selectionReason"] = "outside_default_keep_ratio"
+
+    rank_map = {candidate_id: index for index, candidate_id in enumerate(retained_order, start=1)}
+    for row in processed:
+        row["retainedRank"] = rank_map.get(row["candidateId"], 0)
+
+    return processed, {
+        "candidateCount": len(processed),
+        "compliantCount": len(compliant),
+        "retainedCount": len([row for row in processed if row["selectionDecision"] == "retained"]),
+        "highValueCount": high_value_count,
+        "qualityExceptionCount": quality_exception_count,
     }
 
 
-def write_loop_state(
-    plan: dict[str, Any],
-    status: dict[str, Any],
-    retrieval_plan: dict[str, Any],
-) -> dict[str, Any]:
-    previous = load_loop_state(plan["batch_id"])
-    if retrieval_plan["status"] == "completed":
-        loop_status = "completed"
-        stop_reason = "dry_run_passed"
-        rounds_without_new_queries = 0
-    elif retrieval_plan["status"] == "ready_for_finalize":
-        loop_status = "ready_for_finalize"
-        stop_reason = ""
-        rounds_without_new_queries = 0
-    elif retrieval_plan["status"] == "exhausted":
-        loop_status = "exhausted"
-        stop_reason = retrieval_plan.get("stop_reason") or "max_rounds_reached"
-        rounds_without_new_queries = int(previous.get("rounds_without_new_queries", 0)) + 1
-    elif retrieval_plan["search_queries"]:
-        loop_status = "awaiting_collection"
-        stop_reason = ""
-        rounds_without_new_queries = 0
+def _load_topic_context(
+    spec: dict[str, Any],
+    topic_id: str,
+    task_type: str,
+    *,
+    write_source_pool: bool,
+) -> tuple[list[str], dict[str, Any]]:
+    topic_dir, source_pool_path, enrichment_path = _ensure_topic_runtime_files(
+        spec,
+        topic_id,
+        task_type,
+    )
+    errors: list[str] = []
+    pages_root = topic_dir / "pages"
+    raw_pool = read_ndjson(source_pool_path)
+    enrichment_rows = read_ndjson(enrichment_path)
+    if raw_pool:
+        observed_task_type = str(
+            raw_pool[0].get("taskType") or raw_pool[0].get("task_type") or ""
+        ).strip()
+        if observed_task_type and observed_task_type != task_type:
+            errors.append(
+                f"topic {topic_id} 的 taskType 与 lane 不一致: expected={task_type} observed={observed_task_type}"
+            )
+
+    processed_pool, pool_summary = _process_source_pool(task_type, raw_pool)
+    page_snapshots: list[dict[str, Any]] = []
+    assets: list[dict[str, Any]] = []
+    seen_asset_ids: set[str] = set()
+    authenticity_blocking_rows: list[str] = []
+    for index, row in enumerate(processed_pool, start=1):
+        source_id = _source_id_from_row(row, index)
+        row["sourceId"] = source_id
+        hydration_errors = _hydrate_source_artifacts(spec, topic_id, task_type, row)
+        for hydration_error in hydration_errors:
+            errors.append(
+                f"topic {topic_id} source {source_id} 补抓取失败: {hydration_error}"
+            )
+        page_dir = pages_root / source_id
+        page_html_path = page_dir / "page.html"
+        source_md_path = page_dir / "source.md"
+        asset_manifest_path = page_dir / "asset_manifest.json"
+        page_html = page_html_path.read_text(encoding="utf-8") if page_html_path.exists() else ""
+        source_markdown = source_md_path.read_text(encoding="utf-8") if source_md_path.exists() else ""
+        authenticity_reasons, authenticity_payload = _page_authenticity_reasons(
+            task_type,
+            row,
+            page_html,
+            source_markdown,
+        )
+        row["authenticityStatus"] = "verified" if not authenticity_reasons else "rejected"
+        row["authenticityReasons"] = authenticity_reasons
+        row["pageTextLength"] = len(authenticity_payload["pageText"])
+        row["sourceBodyTextLength"] = len(authenticity_payload["sourceBodyText"])
+        row["sourceParagraphCount"] = len(authenticity_payload["sourceParagraphs"])
+        if authenticity_reasons:
+            authenticity_blocking_rows.append(row["candidateId"])
+            row["selectionDecision"] = "rejected"
+            row["selectionBucket"] = "authenticity_failed"
+            row["selectionReason"] = ",".join(authenticity_reasons)
+            row["retainedRank"] = 0
+            row["complianceStatus"] = "rejected"
+            row["complianceReasons"] = _dedupe_strings(
+                list(row.get("complianceReasons", [])) + authenticity_reasons
+            )
+        page_manifest = read_json(asset_manifest_path) if asset_manifest_path.exists() else {}
+        if page_manifest and str(page_manifest.get("schemaVersion", "")).strip() != TOPIC_ASSET_MANIFEST_SCHEMA_VERSION:
+            errors.append(f"topic {topic_id} source {source_id} 的 asset_manifest.json schemaVersion 非法")
+        if page_manifest and str(page_manifest.get("topicId", "")).strip() != topic_id:
+            errors.append(f"topic {topic_id} source {source_id} 的 asset_manifest.json topicId 不匹配")
+        if page_manifest and str(page_manifest.get("sourceId", "")).strip() != source_id:
+            errors.append(f"topic {topic_id} source {source_id} 的 asset_manifest.json sourceId 不匹配")
+        raw_assets = page_manifest.get("assets", [])
+        if raw_assets and not isinstance(raw_assets, list):
+            errors.append(f"topic {topic_id} source {source_id} 的 asset_manifest.json assets 必须是数组")
+            raw_assets = []
+        if task_type == "image" and isinstance(raw_assets, list):
+            breakdown = _image_quality_breakdown(
+                row,
+                [asset for asset in raw_assets if isinstance(asset, dict)],
+                page_text=authenticity_payload["pageText"],
+                source_body=authenticity_payload["sourceBodyText"],
+            )
+            row["imageQualityBreakdown"] = breakdown
+            row["imageQualityScore"] = _sum_score(breakdown)
+            for asset in raw_assets:
+                if not isinstance(asset, dict):
+                    continue
+                asset["imageQualityBreakdown"] = breakdown
+                asset["imageQualityScore"] = row["imageQualityScore"]
+            page_manifest["assets"] = raw_assets
+            write_json(asset_manifest_path, page_manifest)
+        for asset in raw_assets if isinstance(raw_assets, list) else []:
+            if not isinstance(asset, dict):
+                continue
+            asset_row = dict(asset)
+            asset_id = str(asset_row.get("assetId", "")).strip()
+            if not asset_id or asset_id in seen_asset_ids:
+                continue
+            seen_asset_ids.add(asset_id)
+            asset_row.setdefault("sourceId", source_id)
+            asset_row.setdefault("sourceCandidateId", row["candidateId"])
+            assets.append(asset_row)
+        page_snapshots.append(
+            {
+                "sourceId": source_id,
+                "pageDir": page_dir,
+                "pageHtmlPath": page_html_path,
+                "sourceMarkdownPath": source_md_path,
+                "assetManifestPath": asset_manifest_path,
+                "assetManifest": page_manifest,
+                "pageHtml": page_html,
+                "sourceMarkdown": source_markdown,
+                "pageText": authenticity_payload["pageText"],
+                "sourceBodyText": authenticity_payload["sourceBodyText"],
+                "sourceParagraphs": authenticity_payload["sourceParagraphs"],
+                "authenticityStatus": row["authenticityStatus"],
+                "authenticityReasons": authenticity_reasons,
+            }
+        )
+
+    if task_type == "image" and processed_pool:
+        rescored_pool, _ = _process_source_pool(task_type, processed_pool)
+        processed_pool = rescored_pool
+        for row in processed_pool:
+            if row.get("authenticityStatus") == "verified":
+                continue
+            row["selectionDecision"] = "rejected"
+            row["selectionBucket"] = "authenticity_failed"
+            row["selectionReason"] = ",".join(row.get("authenticityReasons", []))
+            row["retainedRank"] = 0
+            row["complianceStatus"] = "rejected"
+            row["complianceReasons"] = _dedupe_strings(
+                list(row.get("complianceReasons", [])) + list(row.get("authenticityReasons", []))
+            )
+
+    retained_rows = sorted(
+        [row for row in processed_pool if row["selectionDecision"] == "retained"],
+        key=lambda item: item.get("retainedRank", 0) or 999,
+    )
+    for rank, row in enumerate(retained_rows, start=1):
+        row["retainedRank"] = rank
+    pool_summary = {
+        "candidateCount": len(processed_pool),
+        "compliantCount": len(
+            [row for row in processed_pool if row["complianceStatus"] == "approved"]
+        ),
+        "retainedCount": len(retained_rows),
+        "highValueCount": len(
+            [
+                row
+                for row in processed_pool
+                if row["selectionDecision"] == "retained" and row["selectionBucket"] == "hot_top_10pct"
+            ]
+        ),
+        "qualityExceptionCount": len(
+            [
+                row
+                for row in processed_pool
+                if row["selectionDecision"] == "retained"
+                and row["selectionBucket"] in {"quality_exception", "image_exception"}
+            ]
+        ),
+        "verifiedSourceCount": len(
+            [row for row in processed_pool if row.get("authenticityStatus") == "verified"]
+        ),
+        "authenticityBlockedCount": len(
+            [row for row in processed_pool if row.get("authenticityStatus") != "verified"]
+        ),
+    }
+    if write_source_pool and source_pool_path.exists():
+        write_ndjson(source_pool_path, processed_pool)
+
+    asset_manifest = {
+        "schemaVersion": TOPIC_ASSET_MANIFEST_SCHEMA_VERSION,
+        "specId": spec["spec_id"],
+        "topicId": topic_id,
+        "taskType": task_type,
+        "assets": assets,
+    }
+    if enrichment_rows:
+        if str(enrichment_rows[0].get("schemaVersion", "")).strip() != TOPIC_ENRICHMENT_SCHEMA_VERSION:
+            errors.append(f"topic {topic_id} 的 enrichment.ndjson schemaVersion 非法")
     else:
-        loop_status = "needs_more_evidence"
-        stop_reason = ""
-        rounds_without_new_queries = int(previous.get("rounds_without_new_queries", 0)) + 1
+        errors.append(f"topic {topic_id} 缺少 enrichment.ndjson 记录")
 
-    payload = {
-        "schemaVersion": BATCH_LOOP_STATE_SCHEMA_VERSION,
-        "batch_id": plan["batch_id"],
-        "current_round": int(status["current_round"]),
-        "last_planned_round": int(retrieval_plan["round"]),
-        "status": loop_status,
-        "completed": loop_status == "completed",
-        "ready_for_finalize": loop_status in {"ready_for_finalize", "completed"},
-        "stop_reason": stop_reason,
-        "rounds_without_new_queries": rounds_without_new_queries,
-        "missing_entity_refs": list(status["missing_entity_refs"]),
-        "missing_tag_refs": list(status["missing_tag_refs"]),
-        "next_queries": [item["query"] for item in retrieval_plan["search_queries"]],
-        "summary": {
-            "search_result_count": int(status["search_result_count"]),
-            "page_count": int(status["page_count"]),
-            "asset_count": int(status["asset_count"]),
-            "fact_count": int(status["fact_count"]),
-            "perspective_count": int(status["perspective_count"]),
-            "evidence_url_count": int(status["evidence_url_count"]),
-        },
+    title = ""
+    if enrichment_rows:
+        title = str(enrichment_rows[0].get("title", "")).strip()
+    if not title and processed_pool:
+        title = str(processed_pool[0].get("topicTitle", "")).strip()
+
+    publish_dir = publish_topic_dir(topic_id)
+    post_count = len(read_ndjson(publish_dir / "posts.ndjson")) if (publish_dir / "posts.ndjson").exists() else 0
+    publish_ready = (
+        bool(enrichment_rows)
+        and _bool_value(enrichment_rows[0].get("publishReady"))
+        and not authenticity_blocking_rows
+        and bool([row for row in processed_pool if row.get("selectionDecision") == "retained"])
+    )
+    status = (
+        "published"
+        if publish_ready and post_count > 0
+        else "ready_for_publish"
+        if publish_ready
+        else "needs_source_discovery"
+        if not processed_pool
+        else "needs_more_evidence"
+    )
+
+    return errors, {
+        "topicId": topic_id,
+        "taskType": task_type,
+        "topicDir": topic_dir,
+        "enrichmentPath": enrichment_path,
+        "sourcePool": processed_pool,
+        "sourcePoolSummary": pool_summary,
+        "enrichmentRows": enrichment_rows,
+        "assetManifest": asset_manifest,
+        "title": title,
+        "publishReady": publish_ready,
+        "status": status,
+        "postCount": post_count,
+        "pageSnapshots": page_snapshots,
+        "authenticityBlocked": bool(authenticity_blocking_rows),
+        "authenticityBlockedCandidateIds": authenticity_blocking_rows,
     }
-    write_json(loop_state_path(plan["batch_id"]), payload)
-    return payload
 
 
-def validate_search_results(batch_id: str, rows: list[dict[str, Any]]) -> list[str]:
+def _selected_source_rows(topic: dict[str, Any]) -> list[dict[str, Any]]:
+    pool = list(topic["sourcePool"])
+    enrichment_rows = list(topic["enrichmentRows"])
+    if not enrichment_rows:
+        return []
+    selected_ids = _string_list(enrichment_rows[0].get("selectedCandidateIds"))
+    if selected_ids:
+        selected = [
+            row
+            for row in pool
+            if row["candidateId"] in set(selected_ids)
+            and row.get("selectionDecision") == "retained"
+            and row.get("authenticityStatus") == "verified"
+        ]
+        if selected:
+            return sorted(selected, key=lambda row: row["retainedRank"] or 999)
+    return [
+        row
+        for row in pool
+        if row["selectionDecision"] == "retained"
+        and row.get("authenticityStatus") == "verified"
+    ]
+
+
+def _page_snapshot_map(topic: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(snapshot.get("sourceId", "")).strip(): snapshot
+        for snapshot in topic.get("pageSnapshots", [])
+        if str(snapshot.get("sourceId", "")).strip()
+    }
+
+
+def _asset_rows_by_id(asset_manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows = asset_manifest.get("assets", [])
+    if not isinstance(rows, list):
+        return {}
+    return {
+        str(row.get("assetId", "")).strip(): dict(row)
+        for row in rows
+        if str(row.get("assetId", "")).strip()
+    }
+
+
+def _referenced_asset_ids(task_type: str, enrichment: dict[str, Any]) -> list[str]:
+    cover_asset_id = str(
+        enrichment.get("coverAssetId") or enrichment.get("cover_asset_id") or ""
+    ).strip()
+    ids = [cover_asset_id] if cover_asset_id else []
+    if task_type == "article":
+        ids.extend(_string_list(enrichment.get("figureAssetIds") or enrichment.get("figure_asset_ids")))
+    else:
+        ids.extend(_string_list(enrichment.get("mediaAssetIds") or enrichment.get("media_asset_ids")))
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for asset_id in ids:
+        if asset_id and asset_id not in seen:
+            seen.add(asset_id)
+            deduped.append(asset_id)
+    return deduped
+
+
+def _approved_publish_assets(
+    topic: dict[str, Any]
+) -> tuple[list[str], dict[str, dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
     errors: list[str] = []
-    if not rows:
-        return [f"raw/{batch_id}/search_results.ndjson 至少需要 1 条 search_result"]
-    for row in rows:
-        ref = row.get("url") or row.get("title") or "<unknown>"
-        for field in ("query", "domain", "url", "title", "snippet", "collector"):
-            if not str(row.get(field, "")).strip():
-                errors.append(f"search_result {ref} 缺少 {field}")
-        if int_round(row.get("round")) < 1:
-            errors.append(f"search_result {ref} 的 round 必须 >= 1")
-    return errors
+    enrichment_rows = list(topic["enrichmentRows"])
+    if not enrichment_rows:
+        return ["缺少 enrichment 记录"], {}, {}, []
+    enrichment = dict(enrichment_rows[0])
+    selected_source_rows = _selected_source_rows(topic)
+    if not selected_source_rows:
+        errors.append(f"topic {topic['topicId']} 没有 retained 的 source_pool 候选")
+    if topic.get("authenticityBlocked"):
+        blocked = ",".join(topic.get("authenticityBlockedCandidateIds", [])[:8])
+        errors.append(f"topic {topic['topicId']} 存在未通过真实性校验的来源: {blocked}")
+
+    assets_by_id = _asset_rows_by_id(topic["assetManifest"])
+    approved_assets: dict[str, dict[str, Any]] = {}
+    for asset_id in _referenced_asset_ids(topic["taskType"], enrichment):
+        asset = assets_by_id.get(asset_id)
+        if asset is None:
+            errors.append(f"topic {topic['topicId']} 缺少被正文引用的资产 {asset_id}")
+            continue
+        if str(asset.get("publishEligibility", "")).strip() != "approved":
+            errors.append(f"topic {topic['topicId']} 资产 {asset_id} 未通过 publishEligibility")
+        if str(asset.get("rightsStatus", "")).strip() != "clear":
+            errors.append(f"topic {topic['topicId']} 资产 {asset_id} rightsStatus 非 clear")
+        if str(asset.get("watermarkStatus", "")).strip() != "clean":
+            errors.append(f"topic {topic['topicId']} 资产 {asset_id} watermarkStatus 非 clean")
+        approved_assets[asset_id] = asset
+    return errors, approved_assets, enrichment, selected_source_rows
 
 
-def validate_pages(batch_id: str, rows: list[dict[str, Any]]) -> list[str]:
-    errors: list[str] = []
-    if not rows:
-        return [f"raw/{batch_id}/pages.ndjson 至少需要 1 条 page"]
-    for row in rows:
-        ref = row.get("url") or row.get("title") or "<unknown>"
-        for field in ("url", "title", "plain_text", "fetched_at", "evidence_hash"):
-            if not str(row.get(field, "")).strip():
-                errors.append(f"page {ref} 缺少 {field}")
-        if int_round(row.get("round")) < 1:
-            errors.append(f"page {ref} 的 round 必须 >= 1")
-    return errors
+def _dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        normalized = " ".join(str(value).split())
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
 
 
-def validate_assets(batch_id: str, rows: list[dict[str, Any]]) -> list[str]:
-    errors: list[str] = []
-    for row in rows:
-        ref = row.get("asset_id") or "<unknown>"
-        for field in ("asset_id", "object_key", "source_url", "caption"):
-            if not str(row.get(field, "")).strip():
-                errors.append(f"asset {ref} 缺少 {field}")
-        if int_round(row.get("round")) < 1:
-            errors.append(f"asset {ref} 的 round 必须 >= 1")
-    return errors
+def _asset_uri(asset_id: str) -> str:
+    return f"asset://{asset_id}"
 
 
-def validate_facts(batch_id: str, rows: list[dict[str, Any]]) -> list[str]:
-    errors: list[str] = []
-    if not rows:
-        return [f"raw/{batch_id}/facts.ndjson 至少需要 1 条 fact"]
-    for row in rows:
-        fact_id = row.get("fact_id") or "<unknown>"
-        if not str(row.get("title", "")).strip():
-            errors.append(f"fact {fact_id} 缺少 title")
-        if not str(row.get("source_url", "")).strip():
-            errors.append(f"fact {fact_id} 缺少 source_url")
-        if not isinstance(row.get("entity_refs"), list) or not row["entity_refs"]:
-            errors.append(f"fact {fact_id} 缺少 entity_refs")
-        if not isinstance(row.get("tag_refs"), list) or not row["tag_refs"]:
-            errors.append(f"fact {fact_id} 缺少 tag_refs")
-        if int_round(row.get("round")) < 1:
-            errors.append(f"fact {fact_id} 的 round 必须 >= 1")
-    return errors
+def _topic_post_id(topic_id: str, task_type: str, sequence: int = 1) -> str:
+    return f"{topic_id}_{task_type}_{sequence:03d}"
 
 
-def validate_loop_state(batch_id: str, payload: dict[str, Any]) -> list[str]:
-    errors: list[str] = []
-    required_fields = (
-        "current_round",
-        "last_planned_round",
-        "status",
-        "completed",
-        "ready_for_finalize",
-        "stop_reason",
-        "rounds_without_new_queries",
-        "missing_entity_refs",
-        "missing_tag_refs",
-        "next_queries",
-    )
-    for field in required_fields:
-        if field not in payload:
-            errors.append(f"raw/{batch_id}/loop_state.json 缺少 {field}")
-    return errors
-
-
-def validate_raw_inputs(plan: dict[str, Any], batch_state: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
-    batch_id = plan["batch_id"]
-    errors: list[str] = []
-    required_files = (
-        "search_results.ndjson",
-        "pages.ndjson",
-        "assets.ndjson",
-        "facts.ndjson",
-        "loop_state.json",
-    )
-    for name in required_files:
-        if not raw_batch_file(batch_id, name).exists():
-            errors.append(f"raw/{batch_id}/{name} 不存在")
-    errors.extend(validate_search_results(batch_id, batch_state["search_results"]))
-    errors.extend(validate_pages(batch_id, batch_state["pages"]))
-    errors.extend(validate_assets(batch_id, batch_state["assets"]))
-    errors.extend(validate_facts(batch_id, batch_state["facts"]))
-    errors.extend(validate_loop_state(batch_id, batch_state["loop_state"]))
-    status = compute_batch_status(plan, batch_state)
-    return errors, status
-
-
-def _asset_map(batch_id: str) -> dict[str, dict[str, Any]]:
-    rows = read_ndjson(raw_batch_file(batch_id, "assets.ndjson"))
-    return {str(row["asset_id"]): row for row in rows if row.get("asset_id")}
-
-
-def _normalize_cover_url(fact: dict[str, Any], assets: dict[str, dict[str, Any]]) -> str:
-    for field in ("cover_asset_id",):
-        asset_id = str(fact.get(field, "")).strip()
-        if asset_id and asset_id in assets:
-            return str(assets[asset_id]["object_key"])
-    for field in ("media_asset_ids", "figure_asset_ids"):
-        for asset_id in fact.get(field, []):
-            asset_key = str(asset_id).strip()
-            if asset_key in assets:
-                return str(assets[asset_key]["object_key"])
-    return ""
+def _string_or_default(payload: dict[str, Any], *keys: str, default: str = "") -> str:
+    for key in keys:
+        value = str(payload.get(key, "")).strip()
+        if value:
+            return value
+    return default
 
 
 def _tag_ids(refs: list[str]) -> list[str]:
@@ -647,343 +1254,1378 @@ def _tag_ids(refs: list[str]) -> list[str]:
     result: list[str] = []
     for ref in refs:
         tag_id = tag_id_for_ref(ref)
-        if tag_id in seen:
-            continue
-        seen.add(tag_id)
-        result.append(tag_id)
+        if tag_id not in seen:
+            seen.add(tag_id)
+            result.append(tag_id)
     return result
 
 
-def build_entities(plan: dict[str, Any], search_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    evidence_urls = [row["url"] for row in search_results if row.get("url")]
-    entities: list[dict[str, Any]] = []
-    for ref in plan["entity_refs"]:
-        payload = entity_payload_for_ref(ref)
-        payload["evidence_refs"] = list(
-            dict.fromkeys(list(payload.get("evidence_refs", [])) + evidence_urls[:5])
+def _topic_entity_refs(spec: dict[str, Any], enrichment: dict[str, Any]) -> list[str]:
+    return _string_list(enrichment.get("entityRefs") or enrichment.get("entity_refs")) or list(
+        spec.get("entity_refs", [])
+    )
+
+
+def _topic_tag_refs(spec: dict[str, Any], enrichment: dict[str, Any]) -> list[str]:
+    return _string_list(enrichment.get("tagRefs") or enrichment.get("tag_refs")) or list(
+        spec.get("tag_refs", [])
+    )
+
+
+def _topic_source_urls(
+    enrichment: dict[str, Any], selected_source_rows: list[dict[str, Any]]
+) -> list[str]:
+    source_urls = _string_list(enrichment.get("sourceUrls") or enrichment.get("source_urls"))
+    if source_urls:
+        return source_urls
+    return [
+        str(row.get("sourceUrl", "")).strip()
+        for row in selected_source_rows
+        if str(row.get("sourceUrl", "")).strip()
+    ]
+
+
+def _entity_anchor_lines(entity_refs: list[str]) -> list[str]:
+    return [f"- {entity_name_for_ref(ref)} ({ref})" for ref in entity_refs if str(ref).strip()]
+
+
+def _source_anchor_lines(selected_source_rows: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for row in selected_source_rows:
+        domain = urlparse(str(row.get("sourceUrl", "")).strip()).netloc or str(
+            row.get("domain", "")
         )
+        title = str(row.get("title", "")).strip() or str(row.get("sourceUrl", "")).strip()
+        lines.append(f"- {title} ({domain})")
+    return _dedupe_strings(lines)
+
+
+def _looks_like_generated_copy(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return True
+    if any(phrase in normalized for phrase in ARTICLE_TEMPLATE_PHRASES):
+        return True
+    return any(
+        phrase in normalized
+        for phrase in ("文章任务", "图片任务", "高价值候选", "端侧可以消费", "publish", "topic_task")
+    )
+
+
+def _topic_display_title(topic: dict[str, Any], enrichment: dict[str, Any], selected_source_rows: list[dict[str, Any]]) -> str:
+    title = _string_or_default(enrichment, "title")
+    if (
+        title
+        and not _looks_like_placeholder_title(title)
+        and not _looks_like_default_topic_title(topic["topicId"], topic["taskType"], title)
+    ):
+        return title
+    if selected_source_rows:
+        selected_title = str(selected_source_rows[0].get("title", "")).strip()
+        if selected_title:
+            return selected_title
+    return str(topic.get("title", "")).strip() or "来源整理"
+
+
+def _topic_display_summary(enrichment: dict[str, Any], article_sections: list[dict[str, Any]]) -> str:
+    summary = _string_or_default(enrichment, "summary")
+    if summary and not _looks_like_generated_copy(summary):
+        return summary
+    for section in article_sections:
+        paragraphs = section.get("paragraphs", [])
+        if paragraphs:
+            return paragraphs[0][:96]
+    return ""
+
+
+def _topic_auto_summary(topic: dict[str, Any], selected_source_rows: list[dict[str, Any]]) -> str:
+    for row in selected_source_rows:
+        snippet = _normalize_text(row.get("snippet", ""))
+        if snippet and not _looks_like_placeholder_snippet(topic["taskType"], snippet):
+            return snippet[:120]
+    snapshots = _page_snapshot_map(topic)
+    for row in selected_source_rows:
+        snapshot = snapshots.get(str(row.get("sourceId", "")).strip(), {})
+        for paragraph in snapshot.get("sourceParagraphs", []):
+            cleaned = _normalize_text(paragraph)
+            if len(cleaned) >= 45:
+                return cleaned[:120]
+    return ""
+
+
+def _source_section_title(row: dict[str, Any], fallback_index: int) -> str:
+    title = _clean_markdown_line(str(row.get("title", "")))
+    if not title:
+        return f"来源整理 {fallback_index}"
+    title = re.split(r"[|｜\-]", title)[0].strip()
+    return title[:30] if len(title) > 30 else title
+
+
+def _source_asset_ids(
+    source_id: str,
+    approved_assets: dict[str, dict[str, Any]],
+    *,
+    exclude: set[str],
+) -> list[str]:
+    result: list[str] = []
+    for asset_id, asset in approved_assets.items():
+        if asset_id in exclude:
+            continue
+        if str(asset.get("sourceId", "")).strip() == source_id:
+            result.append(asset_id)
+    return result
+
+
+def _ordered_approved_asset_ids(
+    topic: dict[str, Any], selected_source_rows: list[dict[str, Any]]
+) -> list[str]:
+    assets_by_id = _asset_rows_by_id(topic["assetManifest"])
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for row in selected_source_rows:
+        source_id = str(row.get("sourceId", "")).strip()
+        source_assets = [
+            (asset_id, asset)
+            for asset_id, asset in assets_by_id.items()
+            if str(asset.get("sourceId", "")).strip() == source_id
+            and str(asset.get("publishEligibility", "")).strip() == "approved"
+            and str(asset.get("rightsStatus", "")).strip() == "clear"
+            and str(asset.get("watermarkStatus", "")).strip() == "clean"
+            and str(asset.get("mimeType", "")).startswith("image/")
+        ]
+        source_assets.sort(
+            key=lambda item: (
+                -((int(item[1].get("width") or 0) * int(item[1].get("height") or 0))),
+                item[0],
+            )
+        )
+        for asset_id, _ in source_assets:
+            if asset_id not in seen:
+                seen.add(asset_id)
+                ordered.append(asset_id)
+    return ordered
+
+
+def _auto_prepare_topic_enrichment(topic: dict[str, Any]) -> bool:
+    enrichment_rows = list(topic.get("enrichmentRows", []))
+    if not enrichment_rows:
+        return False
+    enrichment = dict(enrichment_rows[0])
+    selected_source_rows = _selected_source_rows(topic)
+    if not selected_source_rows:
+        return False
+
+    changed = False
+    expected_candidate_ids = [
+        str(row.get("candidateId", "")).strip()
+        for row in selected_source_rows
+        if str(row.get("candidateId", "")).strip()
+    ]
+    expected_source_urls = [
+        str(row.get("sourceUrl", "")).strip()
+        for row in selected_source_rows
+        if str(row.get("sourceUrl", "")).strip()
+    ]
+    current_candidate_ids = _string_list(enrichment.get("selectedCandidateIds"))
+    current_source_urls = _string_list(enrichment.get("sourceUrls") or enrichment.get("source_urls"))
+    source_context_changed = (
+        current_candidate_ids != expected_candidate_ids
+        or current_source_urls != expected_source_urls
+    )
+    if source_context_changed:
+        enrichment["selectedCandidateIds"] = expected_candidate_ids
+        enrichment["sourceUrls"] = expected_source_urls
+        selected_title = str(selected_source_rows[0].get("title", "")).strip()
+        if selected_title:
+            enrichment["title"] = selected_title
+        auto_summary = _topic_auto_summary(topic, selected_source_rows)
+        if auto_summary:
+            enrichment["summary"] = auto_summary
+        if topic["taskType"] == "image":
+            enrichment["body"] = (
+                auto_summary or "这组图片基于真实来源抓取生成，只保留权利明确且无水印的可发布素材。"
+            )
+        changed = True
+
+    current_title = _string_or_default(enrichment, "title")
+    if (
+        not current_title
+        or _looks_like_placeholder_title(current_title)
+        or _looks_like_default_topic_title(topic["topicId"], topic["taskType"], current_title)
+    ):
+        enrichment["title"] = _topic_display_title(topic, enrichment, selected_source_rows)
+        changed = True
+
+    current_summary = _string_or_default(enrichment, "summary")
+    if not current_summary or _looks_like_generated_copy(current_summary):
+        auto_summary = _topic_auto_summary(topic, selected_source_rows)
+        if auto_summary:
+            enrichment["summary"] = auto_summary
+            changed = True
+
+    if not _string_list(enrichment.get("selectedCandidateIds")):
+        enrichment["selectedCandidateIds"] = expected_candidate_ids
+        changed = True
+
+    if not _string_list(enrichment.get("sourceUrls")):
+        enrichment["sourceUrls"] = expected_source_urls
+        changed = True
+
+    ordered_asset_ids = _ordered_approved_asset_ids(topic, selected_source_rows)
+    if ordered_asset_ids:
+        if not _string_or_default(enrichment, "coverAssetId", "cover_asset_id"):
+            enrichment["coverAssetId"] = ordered_asset_ids[0]
+            changed = True
+        if topic["taskType"] == "article":
+            if not _string_list(
+                enrichment.get("figureAssetIds") or enrichment.get("figure_asset_ids")
+            ):
+                enrichment["figureAssetIds"] = ordered_asset_ids[:1]
+                changed = True
+            if not _string_or_default(enrichment, "articleTemplate", "article_template"):
+                enrichment["articleTemplate"] = "journal"
+                changed = True
+            if not _string_or_default(
+                enrichment, "articleFontPreset", "article_font_preset"
+            ):
+                enrichment["articleFontPreset"] = "clean"
+                changed = True
+        else:
+            if not _string_list(
+                enrichment.get("mediaAssetIds") or enrichment.get("media_asset_ids")
+            ):
+                enrichment["mediaAssetIds"] = ordered_asset_ids[:1]
+                changed = True
+            if not _string_or_default(enrichment, "body"):
+                enrichment["body"] = (
+                    _topic_auto_summary(topic, selected_source_rows)
+                    or "这组图片基于真实来源抓取生成，只保留权利明确且无水印的可发布素材。"
+                )
+                changed = True
+
+    if not _bool_value(enrichment.get("publishReady")) and ordered_asset_ids:
+        enrichment["publishReady"] = True
+        changed = True
+
+    if not changed:
+        return False
+    topic["enrichmentRows"] = [enrichment]
+    topic["publishReady"] = bool(enrichment.get("publishReady"))
+    topic["title"] = str(enrichment.get("title", "")).strip() or topic.get("title", "")
+    write_ndjson(topic["enrichmentPath"], [enrichment])
+    return True
+
+
+def _article_source_sections(
+    topic: dict[str, Any],
+    selected_source_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    snapshots = _page_snapshot_map(topic)
+    seen_paragraphs: set[str] = set()
+    sections: list[dict[str, Any]] = []
+    section_titles = [
+        "先把沿湖范围走明白",
+        "第一次到现场别急着打卡",
+        "把停留节奏慢下来",
+        "把历史线索变成行走线索",
+    ]
+    for index, row in enumerate(selected_source_rows, start=1):
+        source_id = str(row.get("sourceId", "")).strip()
+        snapshot = snapshots.get(source_id, {})
+        paragraphs: list[str] = []
+        for paragraph in snapshot.get("sourceParagraphs", []):
+            normalized = _normalize_text(paragraph)
+            if len(normalized) < MIN_ARTICLE_SOURCE_PARAGRAPH_CHARS:
+                continue
+            if normalized in seen_paragraphs:
+                continue
+            seen_paragraphs.add(normalized)
+            paragraphs.append(normalized)
+            if len(paragraphs) >= 6:
+                break
+        if not paragraphs:
+            continue
+        for chunk_index, start in enumerate(range(0, len(paragraphs), 2)):
+            chunk = paragraphs[start : start + 2]
+            if not chunk:
+                continue
+            title = section_titles[min(len(sections), len(section_titles) - 1)]
+            if index > 1:
+                title = f"{_source_section_title(row, index)} · {title}"
+            sections.append(
+                {
+                    "sourceId": source_id,
+                    "title": title,
+                    "paragraphs": chunk,
+                    "sourceTitle": _source_section_title(row, index),
+                    "chunkIndex": chunk_index,
+                }
+            )
+    return sections
+
+
+def _split_sentences(text: str) -> list[str]:
+    sentences: list[str] = []
+    for chunk in re.split(r"[。！？.!?]", _normalize_text(text)):
+        cleaned = re.sub(r"\[[^\]]+\]", "", chunk).strip(" ，,、；;:：")
+        if len(cleaned) >= 10:
+            sentences.append(cleaned)
+    return sentences
+
+
+def _source_anchor_phrases(text: str, *, limit: int = 3) -> list[str]:
+    phrases: list[str] = []
+    seen: set[str] = set()
+    for sentence in _split_sentences(text):
+        clauses = [
+            part.strip()
+            for part in re.split(r"[，,、；;:：]", sentence)
+            if len(part.strip()) >= 8
+        ]
+        candidate_parts = clauses or [sentence]
+        for part in candidate_parts:
+            snippet = re.sub(r"\s+", " ", part[:32]).strip()
+            if len(snippet) < 8 or snippet in seen:
+                continue
+            seen.add(snippet)
+            phrases.append(snippet)
+            if len(phrases) >= limit:
+                return phrases
+    return phrases
+
+
+def _section_support_sentences(paragraphs: list[str], *, limit: int = 2) -> list[str]:
+    support: list[str] = []
+    seen: set[str] = set()
+    for paragraph in paragraphs:
+        for sentence in _split_sentences(paragraph):
+            candidate = sentence.strip()
+            if len(candidate) < 16 or candidate in seen:
+                continue
+            seen.add(candidate)
+            support.append(candidate)
+            if len(support) >= limit:
+                return support
+    return support
+
+
+def _compose_article_section_paragraphs(section: dict[str, Any], index: int) -> list[str]:
+    phrases: list[str] = []
+    for paragraph in section.get("paragraphs", []):
+        for phrase in _source_anchor_phrases(paragraph):
+            if phrase not in phrases:
+                phrases.append(phrase)
+            if len(phrases) >= 4:
+                break
+        if len(phrases) >= 4:
+            break
+    if not phrases:
+        return []
+    support = _section_support_sentences(list(section.get("paragraphs", [])))
+    opening_templates = [
+        "第一次到西湖，最值得先记住的，是把“{a}”和“{b}”放进同一条行走逻辑里。",
+        "真正决定这段体验感的，往往不是多走几个点，而是先把“{a}”和“{b}”看成一张完整的现场地图。",
+        "如果想把现场走顺，可以先盯住“{a}”和“{b}”这两层信息，再决定自己要不要继续往深处走。",
+        "比起机械打卡，更稳的做法是先把“{a}”和“{b}”连起来理解，脚步自然会慢下来。",
+    ]
+    closing_templates = [
+        "真到现场时，再把“{c}”和“{d}”当成停留判断位，整段路线就不会散。",
+        "继续往里走的时候，把“{c}”和“{d}”记在心里，回头看景就不会只剩下拍照动作。",
+        "如果还想把体验写得更具体，“{c}”和“{d}”这两个细节最能帮你把现场感接起来。",
+        "往下看的时候，不妨顺手留意“{c}”和“{d}”，它们能把这段体验从景点清单变成完整过程。",
+    ]
+    paragraphs: list[str] = []
+    if len(phrases) >= 2:
+        lead = opening_templates[(index - 1) % len(opening_templates)].format(
+            a=phrases[0],
+            b=phrases[1],
+        )
+        if support:
+            paragraphs.append(f"{lead}{support[0]}。")
+        else:
+            paragraphs.append(lead)
+    else:
+        fallback = f"这一段最稳的抓手，其实就是先把“{phrases[0]}”记住。"
+        paragraphs.append(f"{fallback}{support[0]}。" if support else fallback)
+    if len(phrases) >= 4:
+        closing = closing_templates[(index - 1) % len(closing_templates)].format(
+            c=phrases[2],
+            d=phrases[3],
+        )
+        if len(support) >= 2:
+            paragraphs.append(f"{closing}{support[1]}。")
+        else:
+            paragraphs.append(closing)
+    elif len(phrases) == 3:
+        extra = f"如果只留一个补充判断位，“{phrases[2]}”已经足够把停留节奏接起来。"
+        if len(support) >= 2:
+            paragraphs.append(f"{extra}{support[1]}。")
+        else:
+            paragraphs.append(extra)
+    return paragraphs
+
+
+def _gallery_body(
+    enrichment: dict[str, Any],
+    selected_source_rows: list[dict[str, Any]],
+    approved_assets: dict[str, dict[str, Any]],
+    resolved_asset_ids: list[str],
+) -> str:
+    preset = _string_or_default(enrichment, "body")
+    if preset:
+        return preset
+    source_title = str(selected_source_rows[0].get("title", "")).strip() if selected_source_rows else ""
+    captions = [
+        str(approved_assets[asset_id].get("caption", "")).strip()
+        for asset_id in resolved_asset_ids[:2]
+        if asset_id in approved_assets
+    ]
+    caption_text = "；".join(caption for caption in captions if caption)
+    body = (
+        f"这组图片直接从真实来源页下载，本次保留了 {len(resolved_asset_ids)} 张权利明确、无水印的图片，"
+        "先看湖面尺度，再看堤岸、塔影和游线之间的关系。"
+    )
+    if source_title:
+        body += f"来源页是“{source_title}”，因此正文和图像描述都能回溯到同一条真实抓取链路。"
+    if caption_text:
+        body += f"本次保留的画面线索包括：{caption_text}。"
+    return body
+
+
+def _build_article_markdown(
+    spec: dict[str, Any],
+    topic: dict[str, Any],
+    enrichment: dict[str, Any],
+    selected_source_rows: list[dict[str, Any]],
+    approved_assets: dict[str, dict[str, Any]],
+) -> str:
+    article_sections = _article_source_sections(topic, selected_source_rows)
+    if sum(len(section["paragraphs"]) for section in article_sections) < 3:
+        raise ValueError(f"topic {topic['topicId']} 缺少足够真实正文，无法生成 article.md")
+    title = _topic_display_title(topic, enrichment, selected_source_rows)
+    summary = _topic_display_summary(enrichment, article_sections)
+    entity_refs = _topic_entity_refs(spec, enrichment)
+    cover_asset_id = _string_or_default(enrichment, "coverAssetId", "cover_asset_id")
+    figure_asset_ids = _string_list(
+        enrichment.get("figureAssetIds") or enrichment.get("figure_asset_ids")
+    )
+    asset_ids = _dedupe_strings([cover_asset_id, *figure_asset_ids])
+    used_assets: set[str] = set()
+
+    lines = [
+        "---",
+        f"title: {title}",
+        f"summary: {summary}",
+    ]
+    if cover_asset_id:
+        lines.append(f"cover_asset_id: {cover_asset_id}")
+    lines.extend(
+        [
+        f"template: {_string_or_default(enrichment, 'articleTemplate', 'article_template', default='journal')}",
+        f"fontPreset: {_string_or_default(enrichment, 'articleFontPreset', 'article_font_preset', default='clean')}",
+        ]
+    )
+    lines.extend(["---", "", f"# {title}", ""])
+    if summary:
+        lines.extend([summary, ""])
+
+    if cover_asset_id and cover_asset_id in approved_assets:
+        caption = str(approved_assets[cover_asset_id].get("caption", "")).replace('"', '\\"')
+        lines.extend(
+            [
+                f':::figure id="{cover_asset_id}" layout="wrapRight" caption="{caption}"',
+                _asset_uri(cover_asset_id),
+                ":::",
+                "",
+            ]
+        )
+        used_assets.add(cover_asset_id)
+
+    for index, section in enumerate(article_sections, start=1):
+        lines.extend([f"## {section['title']}", ""])
+        section_assets = _source_asset_ids(
+            section["sourceId"],
+            approved_assets,
+            exclude=used_assets,
+        )
+        if section_assets:
+            asset_id = section_assets[0]
+            caption = str(approved_assets[asset_id].get("caption", "")).replace('"', '\\"')
+            lines.extend(
+                [
+                    f':::figure id="{asset_id}" layout="wrapLeft" caption="{caption}"',
+                    _asset_uri(asset_id),
+                    ":::",
+                    "",
+                ]
+            )
+            used_assets.add(asset_id)
+        for paragraph in _compose_article_section_paragraphs(section, index):
+            lines.extend([paragraph, ""])
+
+    lines.extend(["## 实体锚点", ""])
+    for line in _entity_anchor_lines(entity_refs):
+        lines.append(line)
+    lines.append("")
+
+    lines.extend(["## 来源锚点", ""])
+    for line in _source_anchor_lines(selected_source_rows):
+        lines.append(line)
+    lines.append("")
+
+    if asset_ids:
+        gallery_ids = [asset_id for asset_id in asset_ids if asset_id in approved_assets]
+        lines.extend(
+            [
+                f':::gallery ids="{",".join(gallery_ids)}" layout="masonry" caption="{title} 图像锚点"',
+                ":::",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            f'<!-- spec:{spec["spec_id"]} topic:{topic["topicId"]} retained:{len(selected_source_rows)} -->',
+            "",
+        ]
+    )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _build_gallery_markdown(
+    spec: dict[str, Any],
+    topic: dict[str, Any],
+    enrichment: dict[str, Any],
+    approved_assets: dict[str, dict[str, Any]],
+    selected_source_rows: list[dict[str, Any]],
+    *,
+    asset_ids: list[str] | None = None,
+    title_override: str = "",
+    summary_override: str = "",
+    cover_asset_id: str = "",
+) -> str:
+    title = title_override or _string_or_default(enrichment, "title")
+    summary = summary_override or _string_or_default(enrichment, "summary")
+    entity_refs = _topic_entity_refs(spec, enrichment)
+    resolved_asset_ids = asset_ids or list(approved_assets)
+    resolved_cover_asset_id = cover_asset_id or (
+        resolved_asset_ids[0] if resolved_asset_ids else ""
+    )
+
+    lines = [
+        "---",
+        f"title: {title}",
+        f"summary: {summary}",
+    ]
+    if resolved_cover_asset_id:
+        lines.append(f"cover_asset_id: {resolved_cover_asset_id}")
+    lines.extend(
+        [
+            "---",
+            "",
+            f"# {title}",
+            "",
+            _gallery_body(
+                enrichment,
+                selected_source_rows,
+                approved_assets,
+                resolved_asset_ids,
+            ),
+            "",
+        ]
+    )
+    if resolved_asset_ids:
+        lines.extend(
+            [
+                f':::gallery ids="{",".join(resolved_asset_ids)}" layout="masonry" caption="{title}"',
+                ":::",
+                "",
+            ]
+        )
+    lines.extend(["## 实体锚点", ""])
+    for line in _entity_anchor_lines(entity_refs):
+        lines.append(line)
+    lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _topic_compliance(
+    topic: dict[str, Any],
+    selected_source_rows: list[dict[str, Any]],
+    approved_assets: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    blocked_candidates = [
+        row["candidateId"] for row in selected_source_rows if row["complianceStatus"] != "approved"
+    ]
+    blocked_assets = [
+        asset_id
+        for asset_id, asset in approved_assets.items()
+        if str(asset.get("publishEligibility", "")).strip() != "approved"
+        or str(asset.get("rightsStatus", "")).strip() != "clear"
+        or str(asset.get("watermarkStatus", "")).strip() != "clean"
+    ]
+    return {
+        "overallStatus": "approved" if not blocked_candidates and not blocked_assets else "rejected",
+        "blockedCandidateIds": blocked_candidates,
+        "blockedAssetIds": blocked_assets,
+        "retainedCandidateCount": len(selected_source_rows),
+        "approvedAssetCount": len(approved_assets),
+    }
+
+
+def _asset_manifest_row(asset_id: str, asset: dict[str, Any]) -> dict[str, Any]:
+    package_path = _package_asset_path(asset_id, asset)
+    return {
+        "assetId": asset_id,
+        "kind": asset.get("kind", "image"),
+        "scope": "crawl_topic_task",
+        "objectKey": asset.get("objectKey", ""),
+        "localPath": asset.get("localPath", ""),
+        "packagePath": package_path,
+        "downloadStatus": asset.get("downloadStatus", ""),
+        "sourceUrl": asset.get("sourceUrl", ""),
+        "caption": asset.get("caption", ""),
+        "sha256": asset.get("sha256", ""),
+        "mimeType": asset.get("mimeType", ""),
+        "width": asset.get("width"),
+        "height": asset.get("height"),
+        "imageQualityScore": asset.get("imageQualityScore"),
+        "imageQualityBreakdown": asset.get("imageQualityBreakdown", {}),
+        "license": asset.get("license", {}),
+        "rightsStatus": asset.get("rightsStatus", ""),
+        "watermarkStatus": asset.get("watermarkStatus", ""),
+        "publishEligibility": asset.get("publishEligibility", ""),
+        "platform": asset.get("platform", ""),
+        "sourceId": asset.get("sourceId", ""),
+        "sourceCandidateId": asset.get("sourceCandidateId", ""),
+    }
+
+
+def _package_asset_path(asset_id: str, asset: dict[str, Any]) -> str:
+    suffix = Path(str(asset.get("localPath", "")).strip()).suffix
+    if not suffix:
+        mime_type = str(asset.get("mimeType", "")).strip()
+        if mime_type == "image/jpeg":
+            suffix = ".jpg"
+        elif mime_type == "image/png":
+            suffix = ".png"
+        elif mime_type == "image/webp":
+            suffix = ".webp"
+        elif mime_type == "image/gif":
+            suffix = ".gif"
+    return f"images/{asset_id}{suffix}" if suffix else f"images/{asset_id}"
+
+
+def _build_manifest_metadata(
+    spec: dict[str, Any],
+    topic: dict[str, Any],
+    enrichment: dict[str, Any],
+    selected_source_rows: list[dict[str, Any]],
+    *,
+    title: str = "",
+    summary: str = "",
+    cover_asset_id: str = "",
+    template: str = "",
+    font_preset: str = "",
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "title": title or _string_or_default(enrichment, "title"),
+        "summary": summary or _string_or_default(enrichment, "summary"),
+        "coverAssetId": cover_asset_id
+        or _string_or_default(enrichment, "coverAssetId", "cover_asset_id"),
+    }
+    if topic["taskType"] == "article":
+        metadata["template"] = template or _string_or_default(
+            enrichment, "articleTemplate", "article_template", default="journal"
+        )
+        metadata["fontPreset"] = font_preset or _string_or_default(
+            enrichment, "articleFontPreset", "article_font_preset", default="clean"
+        )
+    return {
+        "contentMetadata": metadata,
+        "entityRefs": _topic_entity_refs(spec, enrichment),
+        "tagRefs": _topic_tag_refs(spec, enrichment),
+        "sourceUrls": _topic_source_urls(enrichment, selected_source_rows),
+        "selectedSourceIds": [
+            str(row.get("sourceId", "")).strip()
+            for row in selected_source_rows
+            if str(row.get("sourceId", "")).strip()
+        ],
+    }
+
+
+def _build_publish_manifest(
+    spec: dict[str, Any],
+    topic: dict[str, Any],
+    post_id: str,
+    article_markdown: str,
+    approved_assets: dict[str, dict[str, Any]],
+    compliance: dict[str, Any],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    assets = [_asset_manifest_row(asset_id, asset) for asset_id, asset in approved_assets.items()]
+    payload: dict[str, Any] = {
+        "schemaVersion": PACKAGE_MANIFEST_SCHEMA_VERSION,
+        "specId": spec["spec_id"],
+        "topicId": topic["topicId"],
+        "postId": post_id,
+        "contentType": topic["taskType"],
+        **metadata,
+        "compliance": compliance,
+        "assets": assets,
+    }
+    if topic["taskType"] == "article":
+        payload.update(
+            {
+                "articleMarkdown": "article.md",
+                "galleryMarkdown": "gallery.md",
+                "articleMarkdownVersion": "qwq-rich-md/1",
+                "articleMarkdownDigest": "sha256:"
+                + hashlib.sha256(article_markdown.encode("utf-8")).hexdigest(),
+            }
+        )
+    else:
+        payload["galleryMarkdown"] = "gallery.md"
+    return payload
+
+
+def _write_package_asset_refs(post_dir: Path, manifest: dict[str, Any]) -> None:
+    images_dir = post_dir / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    for row in manifest.get("assets", []):
+        asset_id = str(row.get("assetId", "")).strip()
+        if not asset_id:
+            continue
+        local_path = str(row.get("localPath", "")).strip()
+        package_path = str(row.get("packagePath", "")).strip()
+        if local_path and package_path:
+            source_path = RUNTIME_ROOT / local_path
+            target_path = post_dir / package_path
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            if source_path.exists():
+                shutil.copy2(source_path, target_path)
+        write_text(images_dir / f"{asset_id}.ref", json.dumps(row, ensure_ascii=False, indent=2) + "\n")
+
+
+def _cover_url_from_assets(
+    approved_assets: dict[str, dict[str, Any]], cover_asset_id: str = ""
+) -> str:
+    if cover_asset_id and cover_asset_id in approved_assets:
+        return str(approved_assets[cover_asset_id].get("objectKey", ""))
+    if approved_assets:
+        first = next(iter(approved_assets.values()))
+        return str(first.get("objectKey", ""))
+    return ""
+
+
+def _build_entities(spec: dict[str, Any], selected_source_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    evidence_urls = [
+        str(row.get("sourceUrl", "")).strip()
+        for row in selected_source_rows
+        if str(row.get("sourceUrl", "")).strip()
+    ]
+    entities: list[dict[str, Any]] = []
+    for ref in spec.get("entity_refs", []):
+        payload = entity_payload_for_ref(ref)
+        payload["evidence_refs"] = _dedupe_strings(list(payload.get("evidence_refs", [])) + evidence_urls)
         entities.append(payload)
     return entities
 
 
-def build_image_payload(
-    batch_id: str,
-    index: int,
-    fact: dict[str, Any],
-    template: dict[str, Any],
-    author: dict[str, str],
-    assets: dict[str, dict[str, Any]],
-    all_tag_refs: list[str],
-    policy: dict[str, Any],
-) -> dict[str, Any]:
-    media_urls = [
-        str(assets[asset_id]["object_key"])
-        for asset_id in fact.get("media_asset_ids", [])
-        if asset_id in assets
-    ]
-    cover_url = _normalize_cover_url(fact, assets)
-    return {
-        "post_payload": {
-            "contentType": template["content_type"],
-            "type": template["content_type"],
-            "contentIdentity": template["content_identity"],
-            "title": fact["title"],
-            "summary": fact.get("summary", ""),
-            "body": fact.get("body", ""),
-            "mediaUrls": media_urls,
-            "coverUrl": cover_url,
-            "tags": _tag_ids(all_tag_refs),
-            "locationName": fact.get("location_name", ""),
-            "width": fact.get("width"),
-            "height": fact.get("height"),
-            "visibility": policy.get("visibility", "public"),
-            "assistantUsePolicy": policy.get("assistant_use_policy", "inherit"),
-            "authorId": author["userId"],
-            "authorDisplayNameSnapshot": author["displayName"],
-            "authorAvatarUrlSnapshot": author["avatarObjectKey"],
-            "sourceType": "cold_start_batch",
-            "sourcePostId": f"{batch_id}_image_{index:03d}",
-        },
-        "semantic": {
-            "entity_refs": fact.get("entity_refs", []),
-            "tag_refs": all_tag_refs,
-            "source_urls": [fact["source_url"]],
-        },
-    }
-
-
-def build_article_document(fact: dict[str, Any], assets: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    cover_url = _normalize_cover_url(fact, assets)
-    nodes: list[dict[str, Any]] = [{"id": "title", "type": "documentTitle", "text": fact["title"]}]
-    for index, paragraph in enumerate(fact.get("article_paragraphs", []), start=1):
-        nodes.append({"id": f"paragraph_{index}", "type": "paragraph", "text": paragraph})
-    for index, asset_id in enumerate(fact.get("figure_asset_ids", []), start=1):
-        asset = assets.get(asset_id)
-        if not asset:
-            continue
-        nodes.append(
-            {
-                "id": f"figure_{index}",
-                "type": "figure",
-                "imageUrl": asset["object_key"],
-                "imageLayout": "fullWidth",
-                "caption": asset.get("caption", ""),
-            }
-        )
-    return {
-        "template": fact.get("article_template", "journal"),
-        "fontPreset": fact.get("article_font_preset", "clean"),
-        "coverImageUrl": cover_url,
-        "titleStyle": "major",
-        "nodes": nodes,
-    }
-
-
-def build_article_payload(
-    batch_id: str,
-    index: int,
-    fact: dict[str, Any],
-    template: dict[str, Any],
-    author: dict[str, str],
-    assets: dict[str, dict[str, Any]],
-    all_tag_refs: list[str],
-    policy: dict[str, Any],
-) -> dict[str, Any]:
-    cover_url = _normalize_cover_url(fact, assets)
-    return {
-        "post_payload": {
-            "contentType": template["content_type"],
-            "type": template["content_type"],
-            "contentIdentity": template["content_identity"],
-            "title": fact["title"],
-            "summary": fact.get("summary", ""),
-            "coverUrl": cover_url,
-            "tags": _tag_ids(all_tag_refs),
-            "locationName": fact.get("location_name", ""),
-            "visibility": policy.get("visibility", "public"),
-            "assistantUsePolicy": policy.get("assistant_use_policy", "inherit"),
-            "authorId": author["userId"],
-            "authorDisplayNameSnapshot": author["displayName"],
-            "authorAvatarUrlSnapshot": author["avatarObjectKey"],
-            "sourceType": "cold_start_batch",
-            "sourcePostId": f"{batch_id}_article_{index:03d}",
-            "articleDocument": build_article_document(fact, assets),
-        },
-        "semantic": {
-            "entity_refs": fact.get("entity_refs", []),
-            "tag_refs": all_tag_refs,
-            "source_urls": [fact["source_url"]],
-        },
-    }
-
-
-def build_posts(plan: dict[str, Any], facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    template = content_template_for_ref(plan["content_type_ref"])
-    users = load_user_pool()
-    assets = _asset_map(plan["batch_id"])
-    policy = dict(plan.get("publish_policy", {}))
-    posts: list[dict[str, Any]] = []
-    for index, fact in enumerate(facts, start=1):
-        author_id = plan["creator_refs"][(index - 1) % len(plan["creator_refs"])]
-        author = users[author_id]
-        all_tag_refs = list(dict.fromkeys(plan["tag_refs"] + fact.get("tag_refs", [])))
-        if template["content_type"] == "image":
-            posts.append(
-                build_image_payload(
-                    plan["batch_id"], index, fact, template, author, assets, all_tag_refs, policy
-                )
-            )
-        elif template["content_type"] == "article":
-            posts.append(
-                build_article_payload(
-                    plan["batch_id"], index, fact, template, author, assets, all_tag_refs, policy
-                )
-            )
-    return posts
-
-
-def write_publish_summary(
-    batch_id: str,
-    plan: dict[str, Any],
-    entities: list[dict[str, Any]],
-    posts: list[dict[str, Any]],
+def _write_publish_summary(
+    topic_id: str, spec: dict[str, Any], post_rows: list[dict[str, Any]], selected_source_rows: list[dict[str, Any]]
 ) -> None:
-    target_dir = publish_batch_dir(batch_id)
-    titles = [row["post_payload"].get("title", "") for row in posts]
+    titles = [
+        str(row.get("post_payload", {}).get("title", "")).strip()
+        for row in post_rows
+        if str(row.get("post_payload", {}).get("title", "")).strip()
+    ]
     lines = [
-        f"# 发布摘要：{batch_id}",
+        f"# 发布摘要：{topic_id}",
         "",
-        f"- query: `{plan['query']}`",
-        f"- search_provider: `{plan['search_provider']}`",
-        f"- content_type_ref: `{plan['content_type_ref']}`",
-        f"- entities: {len(entities)}",
-        f"- posts: {len(posts)}",
-        f"- target_envs: {', '.join(plan['target_envs'])}",
+        f"- spec_id: `{spec['spec_id']}`",
+        f"- query: `{spec['query']}`",
+        f"- task_type: `{post_rows[0].get('post_payload', {}).get('contentType', '') if post_rows else ''}`",
+        f"- retained_sources: {len(selected_source_rows)}",
+        f"- post_count: {len(post_rows)}",
+        f"- titles: {', '.join(titles)}",
         "",
     ]
-    if titles:
-        lines.append("## 生成内容")
-        lines.append("")
-        for title in titles:
-            lines.append(f"- {title}")
-        lines.append("")
-    write_text(target_dir / "summary.md", "\n".join(lines).strip() + "\n")
+    write_text(publish_topic_dir(topic_id) / "summary.md", "\n".join(lines).strip() + "\n")
 
 
 def _projection_asset_refs(entities: list[dict[str, Any]], posts: list[dict[str, Any]]) -> list[str]:
     refs: list[str] = []
     for entity in entities:
-        refs.extend(entity.get("media_refs", []))
+        refs.extend(_string_list(entity.get("media_refs")))
     for row in posts:
-        payload = row["post_payload"]
-        refs.extend(payload.get("mediaUrls", []))
-        if payload.get("coverUrl"):
-            refs.append(payload["coverUrl"])
-        article_document = payload.get("articleDocument")
-        if isinstance(article_document, dict):
-            if article_document.get("coverImageUrl"):
-                refs.append(article_document["coverImageUrl"])
-            for node in article_document.get("nodes", []):
-                image_url = node.get("imageUrl")
-                if image_url:
-                    refs.append(image_url)
-    return list(dict.fromkeys(refs))
+        semantic = row.get("semantic", {})
+        if isinstance(semantic, dict):
+            refs.extend(_string_list(semantic.get("asset_refs")))
+        payload = row.get("post_payload", {})
+        refs.extend(_string_list(payload.get("mediaUrls")))
+        cover_url = str(payload.get("coverUrl", "")).strip()
+        if cover_url:
+            refs.append(cover_url)
+    return _dedupe_strings(refs)
 
 
-def write_projection(
-    batch_id: str,
-    target: str,
-    plan: dict[str, Any],
-    entities: list[dict[str, Any]],
-    posts: list[dict[str, Any]],
+def _write_projection(
+    topic_id: str, target: str, spec: dict[str, Any], entities: list[dict[str, Any]], posts: list[dict[str, Any]]
 ) -> None:
-    target_dir = out_batch_dir(batch_id)
     payload = {
-        "schemaVersion": "quwoquan_data.projection.v2",
+        "schemaVersion": "quwoquan_data.crawl_projection.v2",
         "generated_at": now_iso(),
         "environment": target,
-        "batch_id": batch_id,
-        "query": plan["query"],
-        "content_type_ref": plan["content_type_ref"],
-        "entity_ids": [row["entity_id"] for row in entities],
-        "entity_refs": [row["entity_ref"] for row in entities],
-        "post_titles": [row["post_payload"].get("title", "") for row in posts],
-        "post_source_ids": [row["post_payload"].get("sourcePostId", "") for row in posts],
+        "spec_id": spec["spec_id"],
+        "topic_id": topic_id,
+        "query": spec["query"],
+        "task_type": posts[0]["post_payload"]["contentType"] if posts else "",
+        "entity_ids": [row.get("entity_id", "") for row in entities],
+        "entity_refs": [row.get("entity_ref", "") for row in entities],
+        "post_titles": [row.get("post_payload", {}).get("title", "") for row in posts],
+        "post_source_ids": [row.get("post_payload", {}).get("sourcePostId", "") for row in posts],
         "asset_refs": _projection_asset_refs(entities, posts),
         "scope": "dry_run",
         "dry_run_only": True,
     }
-    write_json(target_dir / f"{target}_projection.json", payload)
+    write_json(out_topic_dir(topic_id) / f"{target}_projection.json", payload)
 
 
-def handle_plan_retrieval(args) -> int:
-    plan_path = batch_plan_path_from_arg(args.plan)
-    if not plan_path.exists():
-        print(f"[batch plan-retrieval] FAIL: plan 不存在 {plan_path}", file=sys.stderr)
-        return 1
-    plan = read_yaml(plan_path)
-    errors = validate_batch_plan(plan, list(plan.get("target_envs", [])))
+def _build_article_post(
+    spec: dict[str, Any],
+    topic: dict[str, Any],
+    enrichment: dict[str, Any],
+    selected_source_rows: list[dict[str, Any]],
+    approved_assets: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    topic_id = topic["topicId"]
+    post_id = _topic_post_id(topic_id, "article")
+    post_dir = publish_topic_dir(topic_id) / "posts" / post_id
+    post_dir.mkdir(parents=True, exist_ok=True)
+
+    article_markdown = _build_article_markdown(spec, topic, enrichment, selected_source_rows, approved_assets)
+    gallery_markdown = _build_gallery_markdown(spec, topic, enrichment, approved_assets, selected_source_rows)
+    compliance = _topic_compliance(topic, selected_source_rows, approved_assets)
+    cover_asset_id = _string_or_default(enrichment, "coverAssetId", "cover_asset_id")
+    semantic_entity_refs = _topic_entity_refs(spec, enrichment)
+    semantic_tag_refs = _topic_tag_refs(spec, enrichment)
+    source_urls = _topic_source_urls(enrichment, selected_source_rows)
+    metadata = _build_manifest_metadata(
+        spec,
+        topic,
+        enrichment,
+        selected_source_rows,
+        cover_asset_id=cover_asset_id,
+    )
+    manifest = _build_publish_manifest(
+        spec, topic, post_id, article_markdown, approved_assets, compliance, metadata
+    )
+    write_text(post_dir / "article.md", article_markdown)
+    write_text(post_dir / "gallery.md", gallery_markdown)
+    write_json(post_dir / "manifest.json", manifest)
+    _write_package_asset_refs(post_dir, manifest)
+
+    users = load_user_pool()
+    author = users[_lane_creator_refs(spec, "article")[0]]
+    payload = {
+        "post_payload": {
+            "contentType": "article",
+            "type": "article",
+            "contentIdentity": "work",
+            "title": _string_or_default(enrichment, "title"),
+            "summary": _string_or_default(enrichment, "summary"),
+            "coverUrl": _cover_url_from_assets(approved_assets, cover_asset_id),
+            "tags": _tag_ids(semantic_tag_refs),
+            "locationName": _string_or_default(enrichment, "locationName", "location_name"),
+            "visibility": spec.get("publish_policy", {}).get("visibility", "public"),
+            "assistantUsePolicy": spec.get("publish_policy", {}).get("assistant_use_policy", "inherit"),
+            "authorId": author["userId"],
+            "authorDisplayNameSnapshot": author["displayName"],
+            "authorAvatarUrlSnapshot": author["avatarObjectKey"],
+            "sourceType": "crawl_topic_task",
+            "sourcePostId": post_id,
+            "articleMarkdown": article_markdown,
+            "articleMarkdownVersion": "qwq-rich-md/1",
+            "articleMarkdownDigest": manifest["articleMarkdownDigest"],
+            "articleRenderProfile": {
+                "template": _string_or_default(
+                    enrichment, "articleTemplate", "article_template", default="journal"
+                ),
+                "fontPreset": _string_or_default(
+                    enrichment, "articleFontPreset", "article_font_preset", default="clean"
+                ),
+                "layoutPolicy": {
+                    "wrapDowngrade": "compactWidthToFullWidth",
+                    "galleryDowngrade": "singleColumn",
+                },
+            },
+        },
+        "semantic": {
+            "spec_id": spec["spec_id"],
+            "topic_id": topic_id,
+            "entity_refs": semantic_entity_refs,
+            "tag_refs": semantic_tag_refs,
+            "source_urls": source_urls,
+            "asset_refs": [
+                str(asset.get("objectKey", "")).strip()
+                for asset in approved_assets.values()
+                if str(asset.get("objectKey", "")).strip()
+            ],
+        },
+    }
+    write_json(post_dir / "post.json", payload)
+    return payload
+
+
+def _chunk_asset_ids(asset_ids: list[str], *, chunk_size: int = 3) -> list[list[str]]:
+    if not asset_ids:
+        return []
+    return [asset_ids[index : index + chunk_size] for index in range(0, len(asset_ids), chunk_size)]
+
+
+def _build_image_posts(
+    spec: dict[str, Any],
+    topic: dict[str, Any],
+    enrichment: dict[str, Any],
+    selected_source_rows: list[dict[str, Any]],
+    approved_assets: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    topic_id = topic["topicId"]
+    users = load_user_pool()
+    author = users[_lane_creator_refs(spec, "image")[0]]
+    semantic_entity_refs = _topic_entity_refs(spec, enrichment)
+    semantic_tag_refs = _topic_tag_refs(spec, enrichment)
+    source_urls = _topic_source_urls(enrichment, selected_source_rows)
+    ordered_asset_ids = [
+        asset_id
+        for asset_id in _referenced_asset_ids("image", enrichment)
+        if asset_id in approved_assets
+    ]
+    if not ordered_asset_ids:
+        ordered_asset_ids = list(approved_assets)
+    post_rows: list[dict[str, Any]] = []
+    asset_groups = _chunk_asset_ids(ordered_asset_ids)
+    total_groups = len(asset_groups)
+    base_title = _string_or_default(enrichment, "title")
+    base_summary = _string_or_default(enrichment, "summary")
+    for sequence, asset_ids in enumerate(asset_groups, start=1):
+        post_id = _topic_post_id(topic_id, "image", sequence)
+        post_dir = publish_topic_dir(topic_id) / "posts" / post_id
+        post_dir.mkdir(parents=True, exist_ok=True)
+        group_assets = {
+            asset_id: approved_assets[asset_id]
+            for asset_id in asset_ids
+            if asset_id in approved_assets
+        }
+        post_title = base_title if total_groups == 1 else f"{base_title} · 第{sequence}组"
+        post_summary = (
+            base_summary
+            if total_groups == 1
+            else f"{base_summary}（第{sequence}组）"
+        )
+        cover_asset_id = asset_ids[0] if asset_ids else ""
+        gallery_markdown = _build_gallery_markdown(
+            spec,
+            topic,
+            enrichment,
+            group_assets,
+            selected_source_rows,
+            asset_ids=asset_ids,
+            title_override=post_title,
+            summary_override=post_summary,
+            cover_asset_id=cover_asset_id,
+        )
+        compliance = _topic_compliance(topic, selected_source_rows, group_assets)
+        metadata = _build_manifest_metadata(
+            spec,
+            topic,
+            enrichment,
+            selected_source_rows,
+            title=post_title,
+            summary=post_summary,
+            cover_asset_id=cover_asset_id,
+        )
+        manifest = _build_publish_manifest(
+            spec, topic, post_id, "", group_assets, compliance, metadata
+        )
+        write_text(post_dir / "gallery.md", gallery_markdown)
+        write_json(post_dir / "manifest.json", manifest)
+        _write_package_asset_refs(post_dir, manifest)
+        media_urls = [
+            str(asset.get("objectKey", "")).strip()
+            for asset in group_assets.values()
+            if str(asset.get("objectKey", "")).strip()
+        ]
+        payload = {
+            "post_payload": {
+                "contentType": "image",
+                "type": "image",
+                "contentIdentity": "work",
+                "title": post_title,
+                "summary": post_summary,
+                "body": _string_or_default(enrichment, "body"),
+                "mediaUrls": media_urls,
+                "coverUrl": _cover_url_from_assets(group_assets, cover_asset_id),
+                "tags": _tag_ids(semantic_tag_refs),
+                "locationName": _string_or_default(enrichment, "locationName", "location_name"),
+                "visibility": spec.get("publish_policy", {}).get("visibility", "public"),
+                "assistantUsePolicy": spec.get("publish_policy", {}).get("assistant_use_policy", "inherit"),
+                "authorId": author["userId"],
+                "authorDisplayNameSnapshot": author["displayName"],
+                "authorAvatarUrlSnapshot": author["avatarObjectKey"],
+                "sourceType": "crawl_topic_task",
+                "sourcePostId": post_id,
+            },
+            "semantic": {
+                "spec_id": spec["spec_id"],
+                "topic_id": topic_id,
+                "entity_refs": semantic_entity_refs,
+                "tag_refs": semantic_tag_refs,
+                "source_urls": source_urls,
+                "asset_refs": media_urls,
+            },
+        }
+        write_json(post_dir / "post.json", payload)
+        post_rows.append(payload)
+    return post_rows
+
+
+def _topic_task_row(
+    spec: dict[str, Any], lane: str, topic_id: str, *, write_source_pool: bool
+) -> tuple[list[str], dict[str, Any]]:
+    errors, topic = _load_topic_context(
+        spec,
+        topic_id,
+        lane,
+        write_source_pool=write_source_pool,
+    )
+    selected_rows = _selected_source_rows(topic)
+    discovery_policy = _discovery_policy(spec)
+    approved_asset_count = len(
+        [
+            row
+            for row in _asset_rows_by_id(topic["assetManifest"]).values()
+            if str(row.get("publishEligibility", "")).strip() == "approved"
+        ]
+    )
+    row = {
+        "schemaVersion": TOPIC_TASK_SCHEMA_VERSION,
+        "generated_at": now_iso(),
+        "specId": spec["spec_id"],
+        "topicId": topic_id,
+        "taskType": topic["taskType"],
+        "lane": lane,
+        "title": topic["title"],
+        "status": topic["status"],
+        "publishReady": topic["publishReady"],
+        "candidateCount": topic["sourcePoolSummary"]["candidateCount"],
+        "candidateFloorMet": topic["sourcePoolSummary"]["candidateCount"]
+        >= discovery_policy["min_candidate_sources_per_task"],
+        "retainedCandidateCount": topic["sourcePoolSummary"]["retainedCount"],
+        "highValueCandidateCount": topic["sourcePoolSummary"]["highValueCount"],
+        "qualityExceptionCount": topic["sourcePoolSummary"]["qualityExceptionCount"],
+        "verifiedSourceCount": topic["sourcePoolSummary"].get("verifiedSourceCount", 0),
+        "authenticityBlockedCount": topic["sourcePoolSummary"].get("authenticityBlockedCount", 0),
+        "authenticityBlocked": topic.get("authenticityBlocked", False),
+        "approvedAssetCount": approved_asset_count,
+        "selectedAssetCount": len(_referenced_asset_ids(topic["taskType"], topic["enrichmentRows"][0]))
+        if topic["enrichmentRows"]
+        else 0,
+        "selectedSourceUrls": [str(item.get("sourceUrl", "")).strip() for item in selected_rows],
+        "queries": _dedupe_strings([str(item.get("query", "")).strip() for item in topic["sourcePool"]]),
+        "runtimeTopicDir": str(topic["topicDir"]),
+        "postCount": topic["postCount"],
+        "scoringModel": "article_quality_v1" if topic["taskType"] == "article" else "image_quality_v1",
+    }
+    return errors, row
+
+
+def _collect_topic_tasks(
+    spec: dict[str, Any], *, write_source_pool: bool
+) -> tuple[list[str], list[dict[str, Any]]]:
+    errors: list[str] = []
+    rows: list[dict[str, Any]] = []
+    for lane in ("article", "image"):
+        for topic_id in _sample_topics(spec, lane):
+            topic_errors, row = _topic_task_row(spec, lane, topic_id, write_source_pool=write_source_pool)
+            errors.extend(topic_errors)
+            rows.append(row)
+    return errors, rows
+
+
+def _build_discovery_summary(spec: dict[str, Any], topic_tasks: list[dict[str, Any]]) -> dict[str, Any]:
+    policy = _discovery_policy(spec)
+    article_tasks = [row for row in topic_tasks if row["taskType"] == "article"]
+    image_tasks = [row for row in topic_tasks if row["taskType"] == "image"]
+    article_published = len([row for row in article_tasks if row["status"] == "published"])
+    image_published = len([row for row in image_tasks if row["status"] == "published"])
+    article_ready = len([row for row in article_tasks if row["publishReady"]])
+    image_ready = len([row for row in image_tasks if row["publishReady"]])
+    overall_status = (
+        "ready_for_topic_work"
+        if article_ready or image_ready
+        else "needs_source_discovery"
+        if any(row["status"] == "needs_source_discovery" for row in topic_tasks)
+        else "needs_more_evidence"
+        if topic_tasks
+        else "empty"
+    )
+    return {
+        "schemaVersion": DISCOVERY_SCHEMA_VERSION,
+        "generated_at": now_iso(),
+        "specId": spec["spec_id"],
+        "query": spec["query"],
+        "status": overall_status,
+        "articleTopicCount": len(article_tasks),
+        "imageTopicCount": len(image_tasks),
+        "articleReadyCount": article_ready,
+        "imageReadyCount": image_ready,
+        "articlePublishedCount": article_published,
+        "imagePublishedCount": image_published,
+        "articleAuthenticityBlockedCount": len(
+            [row for row in article_tasks if row.get("authenticityBlocked")]
+        ),
+        "imageAuthenticityBlockedCount": len(
+            [row for row in image_tasks if row.get("authenticityBlocked")]
+        ),
+        "minArticleTopics": policy["min_article_topics"],
+        "minImageTopics": policy["min_image_topics"],
+        "minCandidateSourcesPerTask": policy["min_candidate_sources_per_task"],
+        "minArticlePublishTopics": policy["min_article_publish_topics"],
+        "minImagePublishTopics": policy["min_image_publish_topics"],
+        "articleTopicFloorMet": len(article_tasks) >= policy["min_article_topics"],
+        "imageTopicFloorMet": len(image_tasks) >= policy["min_image_topics"],
+        "articlePublishFloorMet": article_published >= policy["min_article_publish_topics"],
+        "imagePublishFloorMet": image_published >= policy["min_image_publish_topics"],
+    }
+
+
+def _load_spec(spec_arg: str, selected_targets: list[str]) -> tuple[list[str], dict[str, Any], Path]:
+    ensure_runtime_layout()
+    spec_path = crawl_spec_path_from_arg(spec_arg)
+    if not spec_path.exists():
+        return [f"spec 不存在 {spec_path}"], {}, spec_path
+    spec = read_yaml(spec_path)
+    errors = validate_crawl_spec(spec, selected_targets)
+    return errors, spec, spec_path
+
+
+def handle_spec_discovery(args) -> int:
+    ensure_runtime_layout()
+    errors, spec, spec_path = _load_spec(args.spec, [])
     if errors:
         for error in errors:
-            print(f"[batch plan-retrieval] FAIL: {error}", file=sys.stderr)
+            print(f"[crawl spec-discovery] FAIL: {error}", file=sys.stderr)
         return 1
 
-    ensure_raw_skeleton(plan["batch_id"])
-    batch_state = load_raw_state(plan["batch_id"])
-    status = compute_batch_status(plan, batch_state)
-    retrieval_plan = build_retrieval_plan(plan, status)
-    write_json(retrieval_plan_path(plan["batch_id"]), retrieval_plan)
-    loop_state = write_loop_state(plan, status, retrieval_plan)
+    topic_errors, topic_tasks = _collect_topic_tasks(spec, write_source_pool=True)
+    discovery = _build_discovery_summary(spec, topic_tasks)
+    write_ndjson(topic_tasks_path(spec["spec_id"]), topic_tasks)
+    write_json(discovery_path(spec["spec_id"]), discovery)
+
+    for error in topic_errors[:80]:
+        print(f"[crawl spec-discovery] WARN: {error}", file=sys.stderr)
     print(
-        "[batch plan-retrieval] OK: "
-        f"batch={plan['batch_id']} current_round={status['current_round']} "
-        f"planned_round={retrieval_plan['round']} queries={len(retrieval_plan['search_queries'])} "
-        f"status={loop_state['status']}"
+        "[crawl spec-discovery] OK: "
+        f"spec={spec['spec_id']} article_topics={discovery['articleTopicCount']} "
+        f"image_topics={discovery['imageTopicCount']} spec_path={spec_path}"
     )
     return 0
 
 
 def handle_status(args) -> int:
-    plan_path = batch_plan_path_from_arg(args.plan)
-    if not plan_path.exists():
-        print(f"[batch status] FAIL: plan 不存在 {plan_path}", file=sys.stderr)
-        return 1
-    plan = read_yaml(plan_path)
-    errors = validate_batch_plan(plan, list(plan.get("target_envs", [])))
+    ensure_runtime_layout()
+    errors, spec, _ = _load_spec(args.spec, [])
     if errors:
         for error in errors:
-            print(f"[batch status] FAIL: {error}", file=sys.stderr)
+            print(f"[crawl status] FAIL: {error}", file=sys.stderr)
         return 1
-    batch_state = load_raw_state(plan["batch_id"])
-    status = compute_batch_status(plan, batch_state)
-    print(json.dumps(status, ensure_ascii=False, indent=2))
+
+    topic_errors, topic_tasks = _collect_topic_tasks(spec, write_source_pool=False)
+    discovery = _build_discovery_summary(spec, topic_tasks)
+    payload = {
+        **discovery,
+        "topicTasksPath": str(topic_tasks_path(spec["spec_id"])),
+        "discoveryPath": str(discovery_path(spec["spec_id"])),
+        "errors": topic_errors,
+        "topics": [
+            {
+                "topicId": row["topicId"],
+                "taskType": row["taskType"],
+                "status": row["status"],
+                "publishReady": row["publishReady"],
+                "candidateCount": row["candidateCount"],
+                "retainedCandidateCount": row["retainedCandidateCount"],
+                "verifiedSourceCount": row.get("verifiedSourceCount", 0),
+                "authenticityBlocked": row.get("authenticityBlocked", False),
+                "postCount": row["postCount"],
+            }
+            for row in topic_tasks
+        ],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
-def handle_run(args) -> int:
-    if not args.dry_run:
-        print("[batch run] FAIL: 原型阶段只支持 --dry-run", file=sys.stderr)
-        return 1
-    plan_path = batch_plan_path_from_arg(args.plan)
-    if not plan_path.exists():
-        print(f"[batch run] FAIL: plan 不存在 {plan_path}", file=sys.stderr)
-        return 1
-    plan = read_yaml(plan_path)
-    selected_targets = [
-        item.strip() for item in str(args.targets or "").split(",") if item.strip()
-    ] or list(plan.get("target_envs", []))
-    errors = validate_batch_plan(plan, selected_targets)
-    batch_state = load_raw_state(plan.get("batch_id", ""))
-    raw_errors, status = validate_raw_inputs(plan, batch_state)
-    errors.extend(raw_errors)
+def handle_fetch_source(args) -> int:
+    ensure_runtime_layout()
+    errors, spec, _ = _load_spec(args.spec, [])
     if errors:
         for error in errors:
-            print(f"[batch run] FAIL: {error}", file=sys.stderr)
+            print(f"[crawl fetch-source] FAIL: {error}", file=sys.stderr)
         return 1
-    if not status["can_finalize"] and not status["completed"]:
-        print("[batch run] FAIL: 批次尚未满足 finalize 条件，请先补齐证据并执行 batch status", file=sys.stderr)
+    task_type = str(args.task_type).strip()
+    if task_type not in SUPPORTED_CONTENT_TYPES:
+        print(
+            f"[crawl fetch-source] FAIL: task_type 只支持 image/article，收到 {task_type}",
+            file=sys.stderr,
+        )
         return 1
-
-    search_results = batch_state["search_results"]
-    facts = batch_state["facts"]
-    entities = build_entities(plan, search_results)
-    posts = build_posts(plan, facts)
-    publish_dir = publish_batch_dir(plan["batch_id"])
-    write_ndjson(publish_dir / "entities.ndjson", entities)
-    write_ndjson(publish_dir / "posts.ndjson", posts)
-    write_publish_summary(plan["batch_id"], plan, entities, posts)
-    for target in selected_targets:
-        write_projection(plan["batch_id"], target, plan, entities, posts)
-
-    loop_state = {
-        **load_loop_state(plan["batch_id"]),
-        "schemaVersion": BATCH_LOOP_STATE_SCHEMA_VERSION,
-        "batch_id": plan["batch_id"],
-        "current_round": int(status["current_round"]),
-        "last_planned_round": max(
-            int(status["last_planned_round"]), int(load_loop_state(plan["batch_id"]).get("last_planned_round", 0))
-        ),
-        "status": "completed",
-        "completed": True,
-        "ready_for_finalize": True,
-        "stop_reason": "dry_run_passed",
-        "rounds_without_new_queries": 0,
-        "missing_entity_refs": [],
-        "missing_tag_refs": [],
-        "next_queries": [],
-        "summary": {
-            "search_result_count": int(status["search_result_count"]),
-            "page_count": int(status["page_count"]),
-            "asset_count": int(status["asset_count"]),
-            "fact_count": int(status["fact_count"]),
-            "perspective_count": int(status["perspective_count"]),
-            "evidence_url_count": int(status["evidence_url_count"]),
-        },
+    topic_id = str(args.topic).strip()
+    source_id = str(args.source_id).strip()
+    source_url = str(args.url).strip()
+    if not topic_id or not source_id or not source_url:
+        print("[crawl fetch-source] FAIL: topic/source_id/url 不能为空", file=sys.stderr)
+        return 1
+    _, source_pool_path, _ = _ensure_topic_runtime_files(spec, topic_id, task_type)
+    raw_pool = read_ndjson(source_pool_path)
+    row = {
+        "candidateId": source_id,
+        "sourceId": source_id,
+        "taskType": task_type,
+        "topicTitle": str(args.title or _default_topic_title(topic_id, task_type)).strip(),
+        "query": str(args.query or spec.get("query", "")).strip(),
+        "title": str(args.title or source_id).strip(),
+        "sourceUrl": source_url,
+        "domain": _normalize_domain(urlparse(source_url).netloc),
+        "platform": _normalize_domain(urlparse(source_url).netloc),
+        "snippet": str(args.snippet or "").strip(),
+        "sourceRole": str(args.source_role or "publish_candidate").strip(),
+        "rightsStatus": str(args.rights_status or "clear").strip(),
+        "watermarkStatus": str(args.watermark_status or "clean").strip(),
+        "duplicateStatus": "unique",
+        "adSignal": False,
+        "likes": 0,
+        "shares": 0,
+        "comments": 0,
+        "qualityBreakdown": {},
+        "imageQualityBreakdown": {},
     }
-    write_json(loop_state_path(plan["batch_id"]), loop_state)
+    replaced = False
+    for index, existing in enumerate(raw_pool):
+        existing_source_id = str(existing.get("sourceId") or existing.get("candidateId") or "").strip()
+        if existing_source_id == source_id:
+            raw_pool[index] = row
+            replaced = True
+            break
+    if not replaced:
+        raw_pool.append(row)
+    write_ndjson(source_pool_path, raw_pool)
+    hydration_errors = _hydrate_source_artifacts(
+        spec,
+        topic_id,
+        task_type,
+        row,
+        force=True,
+    )
+    if hydration_errors:
+        for error in hydration_errors:
+            print(f"[crawl fetch-source] FAIL: {error}", file=sys.stderr)
+        return 1
+    _load_topic_context(
+        spec,
+        topic_id,
+        task_type,
+        write_source_pool=True,
+    )
+    print(
+        "[crawl fetch-source] OK: "
+        f"spec={spec['spec_id']} topic={topic_id} source_id={source_id} task_type={task_type}"
+    )
+    return 0
+
+
+def handle_run_topic(args) -> int:
+    ensure_runtime_layout()
+    if not args.dry_run:
+        print("[crawl run-topic] FAIL: 原型阶段只支持 --dry-run", file=sys.stderr)
+        return 1
+    selected_targets = [item.strip() for item in str(args.targets or "").split(",") if item.strip()]
+    errors, spec, _ = _load_spec(args.spec, selected_targets)
+    if errors:
+        for error in errors:
+            print(f"[crawl run-topic] FAIL: {error}", file=sys.stderr)
+        return 1
+
+    topic_id = str(args.topic).strip()
+    article_topics = _sample_topics(spec, "article")
+    image_topics = _sample_topics(spec, "image")
+    if topic_id not in (article_topics + image_topics):
+        print(f"[crawl run-topic] FAIL: topic 不属于当前 spec: {topic_id}", file=sys.stderr)
+        return 1
+    task_type = "image" if topic_id in image_topics else "article"
+
+    context_errors, topic = _load_topic_context(
+        spec,
+        topic_id,
+        task_type,
+        write_source_pool=True,
+    )
+    _auto_prepare_topic_enrichment(topic)
+    asset_errors, approved_assets, enrichment, selected_source_rows = _approved_publish_assets(topic)
+    discovery_policy = _discovery_policy(spec)
+    if topic["sourcePoolSummary"]["candidateCount"] < discovery_policy["min_candidate_sources_per_task"]:
+        context_errors.append(
+            f"topic {topic_id} 的 source_pool 候选不足 {discovery_policy['min_candidate_sources_per_task']} 条"
+        )
+    if not topic["publishReady"]:
+        context_errors.append(f"topic {topic_id} 尚未 ready_for_publish")
+
+    all_errors = context_errors + asset_errors
+    if all_errors:
+        for error in all_errors:
+            print(f"[crawl run-topic] FAIL: {error}", file=sys.stderr)
+        return 1
+
+    publish_dir = publish_topic_dir(topic_id)
+    if publish_dir.exists():
+        shutil.rmtree(publish_dir)
+    publish_dir.mkdir(parents=True, exist_ok=True)
+    topic_out_dir = out_topic_dir(topic_id)
+    if topic_out_dir.exists():
+        shutil.rmtree(topic_out_dir)
+    entities = _build_entities(spec, selected_source_rows)
+    try:
+        if topic["taskType"] == "article":
+            post_rows = [_build_article_post(spec, topic, enrichment, selected_source_rows, approved_assets)]
+        else:
+            post_rows = _build_image_posts(spec, topic, enrichment, selected_source_rows, approved_assets)
+    except ValueError as error:
+        if publish_dir.exists():
+            shutil.rmtree(publish_dir)
+        print(f"[crawl run-topic] FAIL: {error}", file=sys.stderr)
+        return 1
+    write_ndjson(publish_dir / "entities.ndjson", entities)
+    write_ndjson(publish_dir / "posts.ndjson", post_rows)
+    _write_publish_summary(topic_id, spec, post_rows, selected_source_rows)
+
+    targets = selected_targets or list(spec.get("target_envs", []))
+    for target in targets:
+        _write_projection(topic_id, target, spec, entities, post_rows)
+
+    topic_errors, topic_tasks = _collect_topic_tasks(spec, write_source_pool=False)
+    discovery = _build_discovery_summary(spec, topic_tasks)
+    write_ndjson(topic_tasks_path(spec["spec_id"]), topic_tasks)
+    write_json(discovery_path(spec["spec_id"]), discovery)
+    for error in topic_errors[:80]:
+        print(f"[crawl run-topic] WARN: {error}", file=sys.stderr)
 
     print(
-        "[batch run] OK: "
-        f"batch={plan['batch_id']} entities={len(entities)} posts={len(posts)} targets={','.join(selected_targets)}"
+        "[crawl run-topic] OK: "
+        f"spec={spec['spec_id']} topic={topic_id} task_type={topic['taskType']} "
+        f"retained_sources={len(selected_source_rows)} assets={len(approved_assets)} "
+        f"posts={len(post_rows)} "
+        f"targets={','.join(targets)}"
     )
     return 0

@@ -102,7 +102,7 @@
 - 产品：冻结来源范围、对象边界、交互不可打折基线、灰度与回滚条件。
 - 架构：冻结 canonical key、Provider 边界、outbox 同步模型、`sys.*` 配置分层。
 - 客户端：落地 viewer / feed / profile 的 provider 同步、outbox、回写与重试。
-- 云端：保证 `ProfileSubjectView`、`RelationshipCapabilityView`、post projections 与 `sys.*` 配置下发契约一致。
+- 云端：保证 `SubAccountProfileView`、`RelationshipCapabilityView`、post projections 与 `sys.*` 配置下发契约一致。
 - 测试：建立 T1~T4 覆盖，重点验证 discovery / circle / viewer / profile 四方闭环。
 
 ## 既有 Story 覆盖矩阵

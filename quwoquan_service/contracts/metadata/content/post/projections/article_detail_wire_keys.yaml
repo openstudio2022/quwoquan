@@ -14,8 +14,16 @@ keys:
     json_key: articleTemplate
   - const_name: articleFontPreset
     json_key: articleFontPreset
-  - const_name: articleDocument
-    json_key: articleDocument
+  - const_name: articleMarkdown
+    json_key: articleMarkdown
+  - const_name: articleMarkdownVersion
+    json_key: articleMarkdownVersion
+  - const_name: articleMarkdownDigest
+    json_key: articleMarkdownDigest
+  - const_name: articleAssetManifest
+    json_key: articleAssetManifest
+  - const_name: articleRenderProfile
+    json_key: articleRenderProfile
   - const_name: articleBlocks
     json_key: articleBlocks
   - const_name: articlePages

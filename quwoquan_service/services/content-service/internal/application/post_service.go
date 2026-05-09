@@ -2,8 +2,11 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -361,13 +364,19 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		IllustrationAssetId: strings.TrimSpace(asString(payload["illustrationAssetId"])),
 		PublishLocation:     asMap(payload["publishLocation"]),
 		DeviceInfo:          asMap(payload["deviceInfo"]),
-		ArticleDocument:     asMap(payload["articleDocument"]),
-		ArticleTemplate:     strings.TrimSpace(asString(payload["articleTemplate"])),
-		ArticleFontPreset:   strings.TrimSpace(asString(payload["articleFontPreset"])),
-		Status:              "draft",
-		ModerationStatus:    "pending",
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		ArticleMarkdown:     strings.TrimSpace(asString(payload["articleMarkdown"])),
+		ArticleMarkdownVersion: defaultString(
+			strings.TrimSpace(asString(payload["articleMarkdownVersion"])),
+			"qwq-rich-md/1",
+		),
+		ArticleAssetManifest: asMap(payload["articleAssetManifest"]),
+		ArticleRenderProfile: asMap(payload["articleRenderProfile"]),
+		ArticleTemplate:      strings.TrimSpace(asString(payload["articleTemplate"])),
+		ArticleFontPreset:    strings.TrimSpace(asString(payload["articleFontPreset"])),
+		Status:               "draft",
+		ModerationStatus:     "pending",
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 	if post.AuthorId == "" {
 		return nil, rterr.NewInvalidArgument(
@@ -379,7 +388,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 	if post.SourceType == "" {
 		post.SourceType = "original"
 	}
-	s.syncArticleDocumentSnapshot(post)
+	s.syncArticleMarkdownSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
 		return nil, err
 	}
@@ -517,11 +526,23 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	if illustrationAssetID, exists := payload["illustrationAssetId"]; exists {
 		post.IllustrationAssetId = strings.TrimSpace(asString(illustrationAssetID))
 	}
-	if articleDocument, exists := payload["articleDocument"]; exists {
-		post.ArticleDocument = asMap(articleDocument)
+	if articleMarkdown, exists := payload["articleMarkdown"]; exists {
+		post.ArticleMarkdown = strings.TrimSpace(asString(articleMarkdown))
+	}
+	if articleMarkdownVersion, exists := payload["articleMarkdownVersion"]; exists {
+		post.ArticleMarkdownVersion = defaultString(
+			strings.TrimSpace(asString(articleMarkdownVersion)),
+			"qwq-rich-md/1",
+		)
+	}
+	if articleAssetManifest, exists := payload["articleAssetManifest"]; exists {
+		post.ArticleAssetManifest = asMap(articleAssetManifest)
+	}
+	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
+		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
 	post.UpdatedAt = time.Now().UTC()
-	s.syncArticleDocumentSnapshot(post)
+	s.syncArticleMarkdownSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
 		return nil, err
 	}
@@ -554,7 +575,6 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 	if err := applyPostSettingsPayload(post, payload); err != nil {
 		return nil, err
 	}
-	s.syncArticleDocumentSnapshot(post)
 	now := time.Now().UTC()
 	post.Status = "published"
 	if post.PublishedAt.IsZero() {
@@ -733,13 +753,25 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if coverURL, exists := payload["coverUrl"]; exists {
 		post.CoverUrl = strings.TrimSpace(asString(coverURL))
 	}
-	if articleDocument, exists := payload["articleDocument"]; exists {
-		post.ArticleDocument = asMap(articleDocument)
+	if articleMarkdown, exists := payload["articleMarkdown"]; exists {
+		post.ArticleMarkdown = strings.TrimSpace(asString(articleMarkdown))
+	}
+	if articleMarkdownVersion, exists := payload["articleMarkdownVersion"]; exists {
+		post.ArticleMarkdownVersion = defaultString(
+			strings.TrimSpace(asString(articleMarkdownVersion)),
+			"qwq-rich-md/1",
+		)
+	}
+	if articleAssetManifest, exists := payload["articleAssetManifest"]; exists {
+		post.ArticleAssetManifest = asMap(articleAssetManifest)
+	}
+	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
+		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
 	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
 		return nil, err
 	}
-	s.syncArticleDocumentSnapshot(post)
+	s.syncArticleMarkdownSnapshot(post)
 	now := time.Now().UTC()
 	post.UpdatedAt = now
 	if !s.store.Update(ctx, post.ID, post) {
@@ -1055,7 +1087,7 @@ func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circle
 	}, nil
 }
 
-func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType string) map[string]any {
+func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType, assetScope, sourceKind string) map[string]any {
 	now := time.Now().UTC()
 	if userID == "" {
 		userID = AnonymousFallbackSubAccountID
@@ -1064,8 +1096,13 @@ func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType strin
 	sessionID := fmt.Sprintf("upload_%d", now.UnixNano())
 	asset := postmodel.MediaAsset{
 		ID:               mediaID,
+		OwnerId:          userID,
+		AssetScope:       defaultString(strings.TrimSpace(assetScope), "draft"),
 		Type:             defaultString(strings.TrimSpace(mediaType), "image"),
 		OriginUrl:        "https://origin.example/media/" + mediaID + "/original.jpg",
+		ObjectKey:        "media/draft/" + mediaID + "/original",
+		Sha256:           "dev-sha256-" + mediaID,
+		SourceKind:       defaultString(strings.TrimSpace(sourceKind), "user_upload"),
 		MimeType:         "image/jpeg",
 		Status:           "uploaded",
 		CoverStrategy:    "first_frame",
@@ -1082,6 +1119,7 @@ func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType strin
 		"mediaId":    mediaID,
 		"uploadUrl":  "https://origin.example/upload/" + mediaID,
 		"uploaderId": userID,
+		"assetScope": asset.AssetScope,
 	}
 }
 
@@ -1107,6 +1145,12 @@ func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (
 	asset.Status = "ready"
 	asset.CdnUrl = "https://cdn.example/media/" + mediaID
 	asset.ThumbnailUrl = "https://cdn.example/media/" + mediaID + "/thumb.jpg"
+	if asset.ObjectKey == "" {
+		asset.ObjectKey = "media/" + defaultString(asset.AssetScope, "draft") + "/" + mediaID + "/original"
+	}
+	if asset.Sha256 == "" {
+		asset.Sha256 = "dev-sha256-" + mediaID
+	}
 	if asset.Type == "video" {
 		asset.DurationMs = 15000
 		asset.Width = 1080
@@ -1127,6 +1171,43 @@ func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (
 	asset.UpdatedAt = time.Now().UTC()
 	s.mediaAssets[mediaID] = asset
 	return &asset, nil
+}
+
+func (s *PostService) BindMediaAssetsToPost(_ context.Context, postID string, assetIDs []string) (map[string]any, error) {
+	postID = strings.TrimSpace(postID)
+	if postID == "" {
+		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "postId 不能为空", "missing postId")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bound := []string{}
+	for _, rawID := range assetIDs {
+		assetID := strings.TrimSpace(rawID)
+		if assetID == "" {
+			continue
+		}
+		asset, ok := s.mediaAssets[assetID]
+		if !ok {
+			return nil, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_found"),
+				"素材不存在",
+				"media asset not found",
+			)
+		}
+		if asset.Status != "" && asset.Status != "ready" {
+			return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "素材尚未就绪", "media asset not ready")
+		}
+		asset.PostId = postID
+		asset.AssetScope = "published"
+		asset.UpdatedAt = time.Now().UTC()
+		s.mediaAssets[assetID] = asset
+		bound = append(bound, assetID)
+	}
+	return map[string]any{
+		"postId":        postID,
+		"boundAssetIds": bound,
+		"boundCount":    len(bound),
+	}, nil
 }
 
 func (s *PostService) AbortMediaUpload(_ context.Context, sessionID string) error {
@@ -1668,6 +1749,9 @@ func (s *PostService) syncArticleDocumentSnapshot(post *postmodel.Post) {
 	if post == nil || strings.TrimSpace(post.ContentType) != "article" {
 		return
 	}
+	if strings.TrimSpace(post.ArticleMarkdown) != "" {
+		return
+	}
 	snapshot := deriveArticleDocumentSnapshot(post.ArticleDocument)
 	post.Title = snapshot.Title
 	post.Body = snapshot.Body
@@ -1851,6 +1935,142 @@ func sortCommentsByHot(comments []map[string]any) {
 			}
 		}
 	}
+}
+
+func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
+	if post == nil || strings.TrimSpace(post.ContentType) != "article" {
+		return
+	}
+	markdown := strings.TrimSpace(post.ArticleMarkdown)
+	if markdown == "" {
+		return
+	}
+	if strings.TrimSpace(post.ArticleMarkdownVersion) == "" {
+		post.ArticleMarkdownVersion = "qwq-rich-md/1"
+	}
+	post.ArticleMarkdownDigest = markdownDigest(markdown)
+	frontMatter, body := splitArticleMarkdownFrontMatter(markdown)
+	if title := strings.TrimSpace(asString(frontMatter["title"])); title != "" {
+		post.Title = title
+	} else if strings.TrimSpace(post.Title) == "" {
+		post.Title = firstMarkdownHeading(body)
+	}
+	if summary := strings.TrimSpace(asString(frontMatter["summary"])); summary != "" {
+		post.Summary = summary
+	}
+	post.Body = markdownPlainText(body)
+	if cover := strings.TrimSpace(asString(frontMatter["coverImage"])); cover != "" {
+		post.CoverUrl = cover
+	}
+	if template := strings.TrimSpace(asString(frontMatter["template"])); template != "" {
+		post.ArticleTemplate = template
+	}
+	if fontPreset := strings.TrimSpace(asString(frontMatter["fontPreset"])); fontPreset != "" {
+		post.ArticleFontPreset = fontPreset
+	}
+	if len(post.ArticleRenderProfile) > 0 {
+		if template := strings.TrimSpace(asString(post.ArticleRenderProfile["template"])); template != "" {
+			post.ArticleTemplate = template
+		}
+		if fontPreset := strings.TrimSpace(asString(post.ArticleRenderProfile["fontPreset"])); fontPreset != "" {
+			post.ArticleFontPreset = fontPreset
+		}
+	}
+	post.MediaUrls = markdownAssetURIs(markdown)
+}
+
+func markdownDigest(markdown string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(markdown)))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func splitArticleMarkdownFrontMatter(markdown string) (map[string]any, string) {
+	normalized := strings.ReplaceAll(markdown, "\r\n", "\n")
+	if !strings.HasPrefix(normalized, "---\n") {
+		return nil, normalized
+	}
+	end := strings.Index(normalized[4:], "\n---")
+	if end < 0 {
+		return nil, normalized
+	}
+	raw := normalized[4 : 4+end]
+	body := strings.TrimLeft(normalized[4+end+len("\n---"):], "\n")
+	return parseSimpleFrontMatter(raw), body
+}
+
+func parseSimpleFrontMatter(raw string) map[string]any {
+	result := map[string]any{}
+	var currentListKey string
+	for _, line := range strings.Split(raw, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "- ") && currentListKey != "" {
+			result[currentListKey] = append(asStringSlice(result[currentListKey]), strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+			continue
+		}
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if value == "" {
+			currentListKey = key
+			result[key] = []string{}
+			continue
+		}
+		currentListKey = ""
+		result[key] = strings.Trim(value, `"'`)
+	}
+	return result
+}
+
+func firstMarkdownHeading(body string) string {
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+		}
+	}
+	return ""
+}
+
+func markdownPlainText(body string) string {
+	lines := []string{}
+	inFence := false
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence || trimmed == "" || strings.HasPrefix(trimmed, ":::") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "asset://") || strings.HasPrefix(trimmed, "![") {
+			continue
+		}
+		lines = append(lines, strings.TrimPrefix(trimmed, "> "))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func markdownAssetURIs(markdown string) []string {
+	matches := regexp.MustCompile(`asset://[A-Za-z0-9_\-./]+`).FindAllString(markdown, -1)
+	seen := map[string]bool{}
+	result := []string{}
+	for _, match := range matches {
+		if !seen[match] {
+			seen[match] = true
+			result = append(result, match)
+		}
+	}
+	return result
 }
 
 func hotScore(c map[string]any) float64 {
@@ -2724,8 +2944,12 @@ func validateCreatePostPayload(post *postmodel.Post) error {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "视频地址不能为空", "video requires videoUrl")
 		}
 	case "article":
-		if len(post.ArticleDocument) == 0 {
-			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章内容不能为空", "article requires articleDocument")
+		hasMarkdown := strings.TrimSpace(post.ArticleMarkdown) != ""
+		if !hasMarkdown {
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章内容不能为空", "article requires articleMarkdown")
+		}
+		if err := validateArticleMarkdownManifest(post); err != nil {
+			return err
 		}
 		hasBody := strings.TrimSpace(post.Body) != ""
 		hasImages := len(asStringSlice(post.MediaUrls)) > 0
@@ -2742,6 +2966,49 @@ func validateCreatePostPayload(post *postmodel.Post) error {
 		)
 	}
 	return nil
+}
+
+func validateArticleMarkdownManifest(post *postmodel.Post) error {
+	refs := markdownAssetIDs(post.ArticleMarkdown)
+	if len(refs) == 0 {
+		return nil
+	}
+	manifestIDs := articleManifestAssetIDs(post.ArticleAssetManifest)
+	for _, ref := range refs {
+		if !manifestIDs[ref] {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"文章素材清单缺少引用资源",
+				"articleAssetManifest missing asset "+ref,
+			)
+		}
+	}
+	return nil
+}
+
+func markdownAssetIDs(markdown string) []string {
+	uris := markdownAssetURIs(markdown)
+	result := []string{}
+	for _, uri := range uris {
+		result = append(result, strings.TrimPrefix(uri, "asset://"))
+	}
+	return result
+}
+
+func articleManifestAssetIDs(manifest map[string]any) map[string]bool {
+	result := map[string]bool{}
+	assets, _ := manifest["assets"].([]any)
+	for _, item := range assets {
+		row, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		id := strings.TrimSpace(asString(row["assetId"]))
+		if id != "" {
+			result[id] = true
+		}
+	}
+	return result
 }
 
 type RequestOriginalImageAccessInput struct {

@@ -13,7 +13,7 @@ class ProfileStatsRow extends StatelessWidget {
   });
 
   final bool isDark;
-  final ProfileSubjectViewData? profile;
+  final SubAccountProfileViewData? profile;
   final void Function(String type)? onStatTap;
 
   String _formatCount(int count) {

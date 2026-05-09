@@ -14,11 +14,7 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
   String previewPostId = 'draft_preview',
 }) {
   final cover = coverAssetPathForPayload(state);
-  final canonicalDocument = state.articleDocument.copyWith(
-    template: state.articleTemplate.name,
-    fontPreset: state.articleFontPreset.name,
-    coverImageUrl: cover,
-  );
+  final markdown = buildArticleMarkdownForPayload(state);
   return <String, dynamic>{
     'postId': previewPostId,
     '_id': previewPostId,
@@ -38,7 +34,12 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
     'favoriteCount': 0,
     'shareCount': 0,
     'coverUrl': cover,
-    ArticleDetailWireKeys.articleDocument: canonicalDocument.toMap(),
+    ArticleDetailWireKeys.articleMarkdown: markdown,
+    ArticleDetailWireKeys.articleMarkdownVersion: 'qwq-rich-md/1',
+    ArticleDetailWireKeys.articleAssetManifest:
+        buildArticleAssetManifestForPayload(state),
+    ArticleDetailWireKeys.articleRenderProfile:
+        buildArticleRenderProfileForPayload(state),
     ArticleDetailWireKeys.articleTemplate: state.articleTemplate.name,
     ArticleDetailWireKeys.articleFontPreset: state.articleFontPreset.name,
   };
@@ -53,10 +54,7 @@ ArticleDetailView projectArticleDetailViewFromCreateEditorState(
     state,
     previewPostId: previewPostId,
   );
-  return projectArticleDetailView(
-    raw,
-    fallbackArticleId: previewPostId,
-  );
+  return projectArticleDetailView(raw, fallbackArticleId: previewPostId);
 }
 
 /// 长文草稿 → [PostReadUiBundle]（[PostReadSurfaceId.draftPreview]），与 [createEditorStateToArticlePreviewWire] 同源 wire。

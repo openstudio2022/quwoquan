@@ -26,7 +26,7 @@ func TestFollow_Success(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_followee_1/follow",
+		"/v1/user/sub-accounts/ps_followee_1/follow",
 		"",
 		authHeadersForPersona("follower_1", "ps_follower_1"),
 	)
@@ -82,14 +82,14 @@ func TestFollow_Idempotent(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_followee_2/follow",
+		"/v1/user/sub-accounts/ps_followee_2/follow",
 		"",
 		authHeadersForPersona("follower_2", "ps_follower_2"),
 	)
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_followee_2/follow",
+		"/v1/user/sub-accounts/ps_followee_2/follow",
 		"",
 		authHeadersForPersona("follower_2", "ps_follower_2"),
 	)
@@ -130,7 +130,7 @@ func TestFollow_ReconcilesDriftedCounters(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_followee_reconcile/follow",
+		"/v1/user/sub-accounts/ps_followee_reconcile/follow",
 		"",
 		authHeadersForPersona("follower_reconcile", "ps_follower_reconcile"),
 	)
@@ -182,7 +182,7 @@ func TestUnfollow_Success(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_followee_3/follow",
+		"/v1/user/sub-accounts/ps_followee_3/follow",
 		"",
 		authHeadersForPersona("follower_3", "ps_follower_3"),
 	)
@@ -194,7 +194,7 @@ func TestUnfollow_Success(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodDelete,
-		"/v1/user/profile-subjects/ps_followee_3/follow",
+		"/v1/user/sub-accounts/ps_followee_3/follow",
 		"",
 		authHeadersForPersona("follower_3", "ps_follower_3"),
 	)
@@ -237,14 +237,14 @@ func TestGetRelationship_Mutual(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_user_b/follow",
+		"/v1/user/sub-accounts/ps_user_b/follow",
 		"",
 		authHeadersForPersona("user_a", "ps_user_a"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_user_a/follow",
+		"/v1/user/sub-accounts/ps_user_a/follow",
 		"",
 		authHeadersForPersona("user_b", "ps_user_b"),
 	)
@@ -252,7 +252,7 @@ func TestGetRelationship_Mutual(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/profile-subjects/ps_user_b/relationship",
+		"/v1/user/sub-accounts/ps_user_b/relationship",
 		"",
 		authHeadersForPersona("user_a", "ps_user_a"),
 	)
@@ -275,12 +275,12 @@ func TestListFollowing_Pagination(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		uid := "target_" + string(rune('a'+i))
 		createTestProfile(t, uid, "target_"+string(rune('a'+i)))
-		profileSubjectID := "ps_" + uid
-		createTestPersonaFull(t, uid+"_persona", uid, profileSubjectID, uid, "default", true)
+		subAccountID := "ps_" + uid
+		createTestPersonaFull(t, uid+"_persona", uid, subAccountID, uid, "default", true)
 		doRequest(
 			t,
 			http.MethodPost,
-			"/v1/user/profile-subjects/"+profileSubjectID+"/follow",
+			"/v1/user/sub-accounts/"+subAccountID+"/follow",
 			"",
 			authHeadersForPersona("paginator", "ps_paginator"),
 		)
@@ -289,7 +289,7 @@ func TestListFollowing_Pagination(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/profile-subjects/ps_paginator/following?limit=3",
+		"/v1/user/sub-accounts/ps_paginator/following?limit=3",
 		"",
 		authHeadersForPersona("paginator", "ps_paginator"),
 	)
@@ -325,7 +325,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 		doRequest(
 			t,
 			http.MethodPost,
-			"/v1/user/profile-subjects/"+subjectID+"/follow",
+			"/v1/user/sub-accounts/"+subjectID+"/follow",
 			"",
 			authHeadersForPersona("paginator_filtered", "ps_paginator_filtered"),
 		)
@@ -340,7 +340,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_paginator_filtered/block",
+		"/v1/user/sub-accounts/ps_paginator_filtered/block",
 		"",
 		authHeadersForPersona("filtered_target_c", "ps_filtered_target_c"),
 	)
@@ -351,7 +351,7 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/profile-subjects/ps_paginator_filtered/following?limit=3",
+		"/v1/user/sub-accounts/ps_paginator_filtered/following?limit=3",
 		"",
 		authHeadersForPersona("paginator_filtered", "ps_paginator_filtered"),
 	)
@@ -406,14 +406,14 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_target_owner_graph/follow",
+		"/v1/user/sub-accounts/ps_target_owner_graph/follow",
 		"",
 		authHeadersForPersona("shared_owner_graph", "ps_shared_owner_graph_1"),
 	)
 	doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_target_owner_graph/follow",
+		"/v1/user/sub-accounts/ps_target_owner_graph/follow",
 		"",
 		authHeadersForPersona("shared_owner_graph", "ps_shared_owner_graph_2"),
 	)
@@ -421,7 +421,7 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/profile-subjects/ps_target_owner_graph/followers?limit=10",
+		"/v1/user/sub-accounts/ps_target_owner_graph/followers?limit=10",
 		"",
 		authHeadersForPersona("viewer_owner_graph", "ps_viewer_owner_graph"),
 	)
@@ -462,7 +462,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	blockRec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_block_owner_b/block",
+		"/v1/user/sub-accounts/ps_block_owner_b/block",
 		"",
 		authHeadersForPersona("block_owner_a", "ps_block_owner_a"),
 	)
@@ -473,7 +473,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_block_owner_b/follow",
+		"/v1/user/sub-accounts/ps_block_owner_b/follow",
 		"",
 		authHeadersForPersona("block_owner_a", "ps_block_owner_a"),
 	)
@@ -483,7 +483,7 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_block_owner_a/follow",
+		"/v1/user/sub-accounts/ps_block_owner_a/follow",
 		"",
 		authHeadersForPersona("block_owner_b", "ps_block_owner_b"),
 	)
@@ -512,7 +512,7 @@ func TestFollow_FlagOffPreservesExistingPersonaEdge(t *testing.T) {
 	rec := doRequest(
 		t,
 		http.MethodPost,
-		"/v1/user/profile-subjects/ps_rollback_target/follow",
+		"/v1/user/sub-accounts/ps_rollback_target/follow",
 		"",
 		authHeadersForPersona("rollback_viewer_owner", "ps_rollback_viewer"),
 	)
@@ -526,7 +526,7 @@ func TestFollow_FlagOffPreservesExistingPersonaEdge(t *testing.T) {
 	rec = doRequest(
 		t,
 		http.MethodGet,
-		"/v1/user/profile-subjects/ps_rollback_target/relationship",
+		"/v1/user/sub-accounts/ps_rollback_target/relationship",
 		"",
 		authHeadersForPersona("rollback_viewer_owner", "ps_rollback_viewer"),
 	)

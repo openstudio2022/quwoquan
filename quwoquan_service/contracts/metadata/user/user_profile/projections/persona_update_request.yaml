@@ -3,10 +3,10 @@ read_model: PersonaUpdateRequest
 
 description: |
   PATCH /v1/user/personas/{subAccountId}（UpdatePersona）请求体 wire。
-  与 user_profile/service.yaml UpdatePersona 的 request_fields 一致（ProfileSubjectMutation 子集）。
+  与 user_profile/service.yaml UpdatePersona 的 request_fields 一致（SubAccountProfileMutation 子集）。
 
 source_entities:
-  - ProfileSubjectMutation
+  - SubAccountProfileMutation
 
 consumers:
   - app

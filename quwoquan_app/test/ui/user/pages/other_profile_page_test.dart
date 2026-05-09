@@ -287,7 +287,7 @@ void main() {
             supportedLocales: AppLocalizations.supportedLocales,
             home: const OtherProfilePage(
               username: 'nature_photographer',
-              subAccountId: 'profile-subject-1',
+              subAccountId: 'sub-account-1',
             ),
           ),
         ),
@@ -295,6 +295,6 @@ void main() {
     );
 
     final shell = tester.widget<ProfileShell>(find.byType(ProfileShell));
-    expect(shell.userId, 'profile-subject-1');
+    expect(shell.userId, 'sub-account-1');
   });
 }

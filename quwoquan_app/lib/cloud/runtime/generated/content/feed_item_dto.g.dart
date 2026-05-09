@@ -34,7 +34,8 @@ class FeedItemDto {
   final String? authorBackgroundUrl;
   final String? articleTemplate;
   final String? articleFontPreset;
-  final Map<String, dynamic>? articleDocument;
+  final String? articleMarkdownDigest;
+  final Map<String, dynamic>? articleRenderProfile;
   final List<Map<String, dynamic>>? cards;
   final int? articlePresentationVersion;
 
@@ -71,7 +72,8 @@ class FeedItemDto {
     this.authorBackgroundUrl,
     this.articleTemplate,
     this.articleFontPreset,
-    this.articleDocument,
+    this.articleMarkdownDigest,
+    this.articleRenderProfile,
     this.cards,
     this.articlePresentationVersion,
   });
@@ -110,7 +112,8 @@ class FeedItemDto {
       authorBackgroundUrl: m['authorBackgroundUrl']?.toString() ?? null,
       articleTemplate: m['articleTemplate']?.toString() ?? null,
       articleFontPreset: m['articleFontPreset']?.toString() ?? null,
-      articleDocument: _parseStringKeyMap(m['articleDocument']) ?? null,
+      articleMarkdownDigest: m['articleMarkdownDigest']?.toString() ?? null,
+      articleRenderProfile: _parseStringKeyMap(m['articleRenderProfile']) ?? null,
       cards: _parseMapList(m['cards']),
       articlePresentationVersion: (m['articlePresentationVersion'] as num?)?.toInt() ?? null,
     );
@@ -150,7 +153,8 @@ class FeedItemDto {
       'authorBackgroundUrl': authorBackgroundUrl,
       'articleTemplate': articleTemplate,
       'articleFontPreset': articleFontPreset,
-      'articleDocument': articleDocument,
+      'articleMarkdownDigest': articleMarkdownDigest,
+      'articleRenderProfile': articleRenderProfile,
       'cards': cards,
       'articlePresentationVersion': articlePresentationVersion,
     };
@@ -189,7 +193,8 @@ class FeedItemDto {
     String? authorBackgroundUrl,
     String? articleTemplate,
     String? articleFontPreset,
-    Map<String, dynamic>? articleDocument,
+    String? articleMarkdownDigest,
+    Map<String, dynamic>? articleRenderProfile,
     List<Map<String, dynamic>>? cards,
     int? articlePresentationVersion,
   }) {
@@ -226,7 +231,8 @@ class FeedItemDto {
       authorBackgroundUrl: authorBackgroundUrl ?? this.authorBackgroundUrl,
       articleTemplate: articleTemplate ?? this.articleTemplate,
       articleFontPreset: articleFontPreset ?? this.articleFontPreset,
-      articleDocument: articleDocument ?? this.articleDocument,
+      articleMarkdownDigest: articleMarkdownDigest ?? this.articleMarkdownDigest,
+      articleRenderProfile: articleRenderProfile ?? this.articleRenderProfile,
       cards: cards ?? this.cards,
       articlePresentationVersion: articlePresentationVersion ?? this.articlePresentationVersion,
     );

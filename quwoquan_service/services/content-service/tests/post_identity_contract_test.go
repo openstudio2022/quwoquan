@@ -177,7 +177,9 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 		strings.NewReader(`{
 			"contentType":"article",
 			"title":"升级后的长文",
-			"articleDocument":{"title":"升级后的长文","body":"升级后正文"}
+			"articleMarkdown":"# 升级后的长文\n\n升级后正文",
+			"articleMarkdownVersion":"qwq-rich-md/1",
+			"articleAssetManifest":{"assets":[]}
 		}`),
 	)
 	promoteReq.Header.Set("Content-Type", "application/json")

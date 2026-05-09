@@ -57,6 +57,8 @@ TERMS = (
 )
 
 ALLOWLIST_PREFIXES = {
+    "quwoquan_app/test/ui/content/markdown/fixtures/",
+    "quwoquan_data/runtime/",
     "quwoquan_service/contracts/metadata/_shared/test_fixtures/",
 }
 
@@ -73,7 +75,7 @@ ALLOWLIST_PATHS = {
     "quwoquan_service/services/user-service/tests/auth_contract_test.go",
     "quwoquan_service/services/user-service/tests/helpers_test.go",
     "quwoquan_service/services/user-service/tests/invite_contract_test.go",
-    "quwoquan_service/services/user-service/tests/profile_subject_view_contract_test.go",
+    "quwoquan_service/services/user-service/tests/sub_account_view_contract_test.go",
     "quwoquan_service/specs/runtime/media/04-object-key-and-url-spec.md",
     "scripts/media_slice_registry.py",
     "scripts/shared_pool_real_asset_pipeline.py",

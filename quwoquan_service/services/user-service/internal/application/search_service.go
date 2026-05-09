@@ -54,7 +54,7 @@ func (s *SearchService) SearchSocialRelations(
 	seen := make(map[string]struct{}, len(profiles))
 	for _, profile := range profiles {
 		persona, _ := s.personas.FindActiveByUserID(ctx, profile.UserID)
-		view := buildProfileSubjectView(&profile, persona)
+		view := buildSubAccountProfileView(&profile, persona)
 		subAccountID := strings.TrimSpace(asString(view["subAccountId"]))
 		if subAccountID == "" {
 			subAccountID = strings.TrimSpace(profile.UserID)

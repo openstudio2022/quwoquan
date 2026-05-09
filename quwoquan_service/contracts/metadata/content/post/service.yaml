@@ -28,7 +28,7 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
 
   - method: GET
     path: /v1/content/sub-accounts/{subAccountId}/posts
@@ -47,7 +47,7 @@ api_routes:
     path: /v1/content/posts/{postId}
     operation: UpdatePost
     description: 更新内容（仅 draft 可改；published 后不可变）
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
 
   - method: POST
     path: /v1/content/posts/{postId}/publish
@@ -77,7 +77,7 @@ api_routes:
     path: /v1/content/posts/{postId}:promoteToWork
     operation: PromotePostToWork
     description: 点滴升级为作品（原地升级，保持 postId 与 deeplink 不变）
-    writable_fields: [contentType, title, summary, tags, coverUrl, articleDocument, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, title, summary, tags, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
     auth: required
 
   - method: GET
@@ -240,6 +240,12 @@ api_routes:
     path: /v1/content/media/{mediaId}/original:access
     operation: RequestOriginalImageAccess
     description: 显式申请查看或保存原图/原视频授权
+    auth: required
+
+  - method: POST
+    path: /v1/content/posts/{postId}/media:bind
+    operation: BindMediaAssetsToPost
+    description: 将 draft/cold_start 素材绑定到帖子，供 Markdown 长文发布和回读使用
     auth: required
 
   - method: POST

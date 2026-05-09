@@ -263,7 +263,7 @@ void main() {
       expect(interactiveState.turningPageIndex, 2);
       expect(interactiveState.underlayPageIndex, 3);
       expect(interactiveState.requestedRectoPageIndex, 2);
-      expect(interactiveState.requestedVersoPageIndex, 3);
+      expect(interactiveState.requestedVersoPageIndex, 2);
       expect(interactiveState.requestedBottomPageIndex, 3);
 
       await gesture.up();
@@ -311,10 +311,10 @@ void main() {
       expect(interactiveState.turningPageIndex, 2);
       expect(interactiveState.underlayPageIndex, 3);
       expect(interactiveState.requestedRectoPageIndex, 2);
-      expect(interactiveState.requestedVersoPageIndex, 3);
+      expect(interactiveState.requestedVersoPageIndex, 2);
       expect(interactiveState.requestedBottomPageIndex, 3);
       expect(interactiveState.activeRectoPageIndex, 2);
-      expect(interactiveState.activeVersoPageIndex, 3);
+      expect(interactiveState.activeVersoPageIndex, 2);
       expect(interactiveState.activeBottomPageIndex, 3);
       expect(interactiveState.frontBounds, isNotNull);
       expect(interactiveState.backBounds, isNotNull);
@@ -786,8 +786,14 @@ void main() {
     expect(interactiveState.flippingAnchor!.dx.isFinite, isTrue);
     expect(interactiveState.flippingAnchor!.dy.isFinite, isTrue);
     expect(interactiveState.backwardSurfaceOrigin, isNotNull);
-    expect(interactiveState.backwardSurfaceOrigin!.dx, closeTo(0, 0.001));
-    expect(interactiveState.backwardSurfaceOrigin!.dy, closeTo(0, 0.001));
+    expect(
+      interactiveState.backwardSurfaceOrigin!.dx,
+      closeTo(interactiveState.flippingAnchor!.dx, 0.001),
+    );
+    expect(
+      interactiveState.backwardSurfaceOrigin!.dy,
+      closeTo(interactiveState.flippingAnchor!.dy, 0.001),
+    );
     expect(interactiveState.backwardSurfaceViewportRect, isNotNull);
     expect(interactiveState.backwardPivotLocal, isNotNull);
     expect(interactiveState.backwardPivotLocal!.dx, closeTo(0, 0.001));
@@ -797,7 +803,7 @@ void main() {
       interactiveState.backwardPivotViewport!.dy,
       closeTo(interactiveState.backwardSurfaceViewportRect!.top, 0.001),
       reason:
-          'the replay surface is spine-locked and no longer pivots around the folded corner',
+          'the display-projected replay surface pivots at its projected origin',
     );
     expect(interactiveState.backwardClipLocalBounds, isNotNull);
     expect(interactiveState.backwardClipLocalBounds!.width, greaterThan(0));
@@ -829,7 +835,7 @@ void main() {
     expect(frontLayerCount, inInclusiveRange(0, 1));
     expect(interactiveState.backwardMainline, equals('paperFoldBackMainline'));
     expect(interactiveState.backwardFlippingSheetCount, equals(1));
-    if ((interactiveState.backwardReplayFrontLayerCount ?? 0) > 0) {
+    if (frontLayerCount > 0) {
       expect(interactiveState.backwardFrontSheetId, equals('mainlineLeaf:2'));
     } else {
       expect(interactiveState.backwardFrontSheetId, isNull);
@@ -844,8 +850,8 @@ void main() {
     expect(interactiveState.backwardBottomLayerPageIndex, equals(3));
     expect(interactiveState.backwardFlippingLayerPageIndex, equals(2));
     expect(interactiveState.backwardDynamicOwnedPages, contains(2));
-    expect(interactiveState.backwardDynamicOwnedPages, contains(3));
-    expect(interactiveState.backwardStaticSuppressedPages, contains(3));
+    expect(interactiveState.backwardDynamicOwnedPages, isNot(contains(3)));
+    expect(interactiveState.backwardStaticSuppressedPages, isNot(contains(3)));
     expect(interactiveState.backwardReplaySlices, isNotNull);
     expect(
       interactiveState.backwardReplayFrontLayerCount,
@@ -865,6 +871,16 @@ void main() {
       interactiveState.backBounds,
       equals(interactiveState.backwardBackPaintBounds),
     );
+    expect(
+      interactiveState.backwardBackPaintBounds!.right,
+      greaterThan(0),
+      reason:
+          'single-page BACK moving sheet must intersect the visible current page; '
+          'a fully negative X bound means the previous page was projected to the '
+          'wrong side of the spine.',
+    );
+    // Native BACK keeps StPageFlip calculation/output direction; diagnostics
+    // follows frame truth source rather than a pre-mirrored forward calc.
     expect(interactiveState.backwardFoldDirection, equals('rightward'));
     expect(
       interactiveState.backwardCompositeMode,
@@ -873,7 +889,7 @@ void main() {
     expect(
       interactiveState.backwardBackPaintBounds!.left,
       isA<double>(),
-      reason: 'back texture bounds come from the shared StPageFlip soft sheet',
+      reason: 'back texture bounds come from the native StPageFlip BACK sheet',
     );
     expect(
       interactiveState.backwardBackPixelSurfaceStrategy,
@@ -966,6 +982,47 @@ void main() {
       ),
       isTrue,
     );
+    final mixedFaceStates = backwardAnimationStates.where(
+      (state) =>
+          (state.backwardRectoCoverage ?? 0) > 0.05 &&
+          (state.backwardRectoWidth ?? 0) > 0.01,
+    );
+    expect(
+      mixedFaceStates,
+      isNotEmpty,
+      reason:
+          'BACK replay must reach a phase where the fold has crossed the midpoint '
+          'and previous-front recto becomes physically visible.',
+    );
+    for (final state in mixedFaceStates) {
+      expect(state.backwardFrontPaintBounds, isNotNull);
+      expect(state.backwardBackPaintBounds, isNotNull);
+      expect(state.backwardCurrentResidualBounds, isNotNull);
+      expect(state.backwardFrontPolygonPoints, isNotNull);
+      expect(state.backwardBackPolygonPoints, isNotNull);
+      expect(
+        state.backwardFrontPaintBounds!.right,
+        greaterThan(0),
+        reason: 'recto/front must not be fully clipped into negative X.',
+      );
+      expect(
+        state.backwardBackPaintBounds!.right,
+        greaterThan(0),
+        reason: 'verso/back must not be fully clipped into negative X.',
+      );
+      expect(
+        state.backwardFrontPaintBounds!.left,
+        lessThanOrEqualTo(state.backwardBackPaintBounds!.right),
+        reason: 'recto/front must be the spine-side segment of the same sheet.',
+      );
+      expect(
+        state.backwardBackPaintBounds!.left,
+        lessThan(state.backwardCurrentResidualBounds!.right),
+        reason:
+            'rotated verso/back may extend over current by bounds, but it must '
+            'remain adjacent to the current-page residual rather than disappear.',
+      );
+    }
     for (final state in backwardAnimationStates.where(
       (state) => state.backwardFoldX != null,
     )) {
@@ -1034,18 +1091,30 @@ void main() {
   });
 
   testWidgets(
-    'PageflipDiagnosticsApp backward dynamic page after forward turn exposes visual regions',
+    'PageflipDiagnosticsApp backward dynamic exposes Route-B three-layer mainline',
     (WidgetTester tester) async {
       final sample = await _renderBackwardCompositeProbeScene(tester);
 
-      expect(sample.earlyBackVisible, isTrue);
-      expect(sample.earlyFrontVisible, isFalse);
-      expect(sample.middleBackVisible, isTrue);
-      expect(sample.middleFrontVisible, isA<bool>());
-      expect(sample.middleCurrentResidualVisible, isA<bool>());
-      expect(sample.middleFoldHasFrontText, isFalse);
-      expect(sample.middleCompositeMode, equals('paperFoldBackwardMainline'));
-      expect(sample.middleBackRight - sample.middleBackLeft, greaterThan(40));
+      expect(sample.compositeMode, equals('paperFoldBackwardMainline'));
+      expect(sample.bottomLayerPageIndex, equals(3));
+      expect(sample.flippingLayerPageIndex, equals(2));
+      expect(
+        sample.baselineKeyVisible,
+        isFalse,
+        reason:
+            'BACK must not expose a full previous-front baseline; previous front '
+            'is only allowed through the moving-sheet recto slice.',
+      );
+      expect(
+        sample.foldXSamples,
+        isNotEmpty,
+        reason: 'BACK 主线必须采集到 backwardFoldX 真相源样本。',
+      );
+      expect(
+        sample.foldXAdvance,
+        greaterThan(1),
+        reason: 'BACK fold X 必须随手势在 viewport space 内推进。',
+      );
     },
   );
 
@@ -1124,7 +1193,6 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
             showFooterPageLabel: false,
             onSceneChanged: scenes.add,
             onDebugStateChanged: debugStates.add,
-            debugPageSurfaceBuilder: _buildProbePageSurface,
           );
         },
       ),
@@ -1152,54 +1220,42 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
     tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
   );
 
-  var debugCursor = debugStates.length;
-  Future<_BackwardProbeFrame> captureFrame({bool preferCurrent = false}) async {
-    await tester.pump(const Duration(milliseconds: 16));
-    final phaseStates = debugStates.skip(debugCursor).toList(growable: false);
-    bool isBackwardComposite(ArticleReadOnlyBookDebugState state) =>
-        state.renderDirection == StPageFlipDirection.back &&
-        state.backwardCompositeMode == 'paperFoldBackwardMainline';
-    final debugState =
-        phaseStates
-            .where(isBackwardComposite)
-            .fold<ArticleReadOnlyBookDebugState?>(null, (best, state) {
-              final hasBack =
-                  state.backwardBackPaintBounds != null ||
-                  (state.backwardBackVertexCount ?? 0) >= 3;
-              final hasCurrent =
-                  state.backwardCurrentResidualBounds != null &&
-                  state.backwardCurrentResidualBounds!.width > 0;
-              if (preferCurrent && hasBack && hasCurrent) {
-                return state;
-              }
-              if (!preferCurrent && hasBack) {
-                return state;
-              }
-              return best ?? state;
-            }) ??
-        debugStates.lastWhere(isBackwardComposite);
-    debugCursor = debugStates.length;
-    return _sampleBackwardFrame(tester: tester, debugState: debugState);
-  }
-
   await gesture.moveBy(const Offset(36, -8));
   for (var i = 0; i < 4; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
-  final early = await captureFrame();
-
   await gesture.moveBy(const Offset(360, -36));
   for (var i = 0; i < 8; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
-  var middle = await captureFrame(preferCurrent: true);
-  if (!middle.currentResidualVisible) {
-    await gesture.moveBy(const Offset(-120, 8));
-    for (var i = 0; i < 6; i += 1) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    middle = await captureFrame(preferCurrent: true);
-  }
+
+  // Full previous-front baseline must not appear in the widget tree.
+  final baselineKeyVisible = find
+      .byKey(const ValueKey<String>('article_backward_previous_front_baseline'))
+      .evaluate()
+      .isNotEmpty;
+
+  final mainlineStates = debugStates
+      .where(
+        (s) =>
+            s.renderDirection == StPageFlipDirection.back &&
+            s.backwardCompositeMode == 'paperFoldBackwardMainline',
+      )
+      .toList(growable: false);
+  expect(mainlineStates, isNotEmpty);
+
+  final compositeMode = mainlineStates.last.backwardCompositeMode ?? '';
+  final bottomLayerPageIndex =
+      mainlineStates.last.backwardBottomLayerPageIndex;
+  final flippingLayerPageIndex =
+      mainlineStates.last.backwardFlippingLayerPageIndex;
+  final foldXSamples = mainlineStates
+      .where((s) => s.backwardFoldX != null)
+      .map((s) => s.backwardFoldX!)
+      .toList(growable: false);
+  final foldXAdvance = foldXSamples.isEmpty
+      ? 0.0
+      : (foldXSamples.last - foldXSamples.first).abs();
 
   await gesture.up();
   for (var i = 0; i < 3; i += 1) {
@@ -1210,19 +1266,12 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
   await tester.pump(const Duration(milliseconds: 16));
 
   return _BackwardCompositeProbeSample(
-    earlyBackVisible: early.backVisible,
-    earlyFrontVisible: early.frontVisible,
-    middleFrontVisible: middle.frontVisible,
-    middleBackVisible: middle.backVisible,
-    middleCurrentResidualVisible: middle.currentResidualVisible,
-    middleFoldHasFrontText: middle.foldHasFrontText,
-    middleCompositeMode: middle.compositeMode,
-    pageLeft: middle.pageLeft,
-    middleFrontLeft: middle.frontLeft,
-    middleFrontRight: middle.frontRight,
-    middleBackLeft: middle.backLeft,
-    middleBackRight: middle.backRight,
-    middleCurrentLeft: middle.currentLeft,
+    compositeMode: compositeMode,
+    bottomLayerPageIndex: bottomLayerPageIndex,
+    flippingLayerPageIndex: flippingLayerPageIndex,
+    baselineKeyVisible: baselineKeyVisible,
+    foldXSamples: foldXSamples,
+    foldXAdvance: foldXAdvance,
   );
 }
 
@@ -1243,74 +1292,6 @@ Widget _buildProbePageSurface(
       alignment: Alignment.centerLeft,
       child: Container(width: pageSize.width * 0.08, color: Colors.black),
     ),
-  );
-}
-
-_BackwardProbeFrame _sampleBackwardFrame({
-  required WidgetTester tester,
-  required ArticleReadOnlyBookDebugState debugState,
-}) {
-  final frontBounds = debugState.backwardFrontPaintBounds;
-  final backBounds = debugState.backwardBackPaintBounds;
-  final currentBounds = debugState.backwardCurrentResidualBounds;
-  final frontFinder = find.byKey(
-    const ValueKey<String>('article_backward_previous_front_region'),
-  );
-  final backFinder = find.byKey(
-    const ValueKey<String>('article_backward_previous_back_region'),
-  );
-  final currentFinder = find.byKey(
-    const ValueKey<String>('article_backward_current_residual_region'),
-  );
-  final frontFinderVisible = frontFinder.evaluate().isNotEmpty;
-  final frontVisible =
-      (frontFinderVisible ||
-      (debugState.backwardFrontPaintBounds?.width ?? 0) > 0);
-  final backFinderVisible = backFinder.evaluate().isNotEmpty;
-  final backVisible =
-      backFinderVisible ||
-      (debugState.backwardPaintedVersoWidth ?? 0) > 0 ||
-      (debugState.backwardBackVertexCount ?? 0) >= 3;
-  final currentFinderVisible = currentFinder.evaluate().isNotEmpty;
-  final currentResidualVisible =
-      currentFinderVisible ||
-      (debugState.backwardCurrentResidualBounds?.width ?? 0) > 0;
-  final foldHasFrontText = false;
-  expect(backBounds ?? debugState.backwardFoldSurfacePaintBounds, isNotNull);
-  final resolvedBackBounds =
-      backBounds ?? debugState.backwardFoldSurfacePaintBounds!;
-  if (frontFinderVisible && frontBounds != null) {
-    expect(frontBounds.width, greaterThan(0));
-    expect(
-      tester.getSize(frontFinder).height,
-      greaterThan(0),
-      reason:
-          'the front page is clipped by a viewport polygon inside the page surface',
-    );
-  }
-  if (backFinderVisible) {
-    expect(tester.getSize(backFinder).width, greaterThan(0));
-  }
-  if (currentFinderVisible && currentBounds != null) {
-    expect(tester.getSize(currentFinder).width, greaterThan(0));
-  }
-  final pageLeft =
-      frontBounds?.left ??
-      (currentBounds != null && debugState.backwardFoldX != null
-          ? currentBounds.left - debugState.backwardFoldX!
-          : resolvedBackBounds.left - (debugState.backwardPageEdgeX ?? 0));
-  return _BackwardProbeFrame(
-    frontVisible: frontVisible,
-    backVisible: backVisible,
-    currentResidualVisible: currentResidualVisible,
-    foldHasFrontText: foldHasFrontText,
-    compositeMode: debugState.backwardCompositeMode ?? '',
-    pageLeft: pageLeft,
-    frontLeft: frontBounds?.left ?? pageLeft,
-    frontRight: frontBounds?.right ?? pageLeft,
-    backLeft: resolvedBackBounds.left,
-    backRight: resolvedBackBounds.right,
-    currentLeft: currentBounds?.left ?? double.infinity,
   );
 }
 
@@ -1473,24 +1454,6 @@ _ScanlineProbeResult _scanForwardLine({
   );
 }
 
-bool _rectCoversNearlyFullSurface(Rect? rect, Rect? surface) {
-  if (rect == null || surface == null || surface.isEmpty) {
-    return false;
-  }
-  final intersection = rect.intersect(surface);
-  if (intersection.isEmpty) {
-    return false;
-  }
-  final surfaceArea = surface.width * surface.height;
-  final intersectionArea = intersection.width * intersection.height;
-  return intersectionArea / surfaceArea >= 0.92;
-}
-
-bool _bothRectsCoverNearlyFullSurface(Rect? a, Rect? b, Rect? surface) {
-  return _rectCoversNearlyFullSurface(a, surface) &&
-      _rectCoversNearlyFullSurface(b, surface);
-}
-
 Future<ui.Image> _captureBoundaryImage(GlobalKey boundaryKey) async {
   final context = boundaryKey.currentContext;
   expect(context, isNotNull);
@@ -1571,62 +1534,20 @@ class _ForwardProbeSample {
 
 class _BackwardCompositeProbeSample {
   const _BackwardCompositeProbeSample({
-    required this.earlyBackVisible,
-    required this.earlyFrontVisible,
-    required this.middleFrontVisible,
-    required this.middleBackVisible,
-    required this.middleCurrentResidualVisible,
-    required this.middleFoldHasFrontText,
-    required this.middleCompositeMode,
-    required this.pageLeft,
-    required this.middleFrontLeft,
-    required this.middleFrontRight,
-    required this.middleBackLeft,
-    required this.middleBackRight,
-    required this.middleCurrentLeft,
-  });
-
-  final bool earlyBackVisible;
-  final bool earlyFrontVisible;
-  final bool middleFrontVisible;
-  final bool middleBackVisible;
-  final bool middleCurrentResidualVisible;
-  final bool middleFoldHasFrontText;
-  final String middleCompositeMode;
-  final double pageLeft;
-  final double middleFrontLeft;
-  final double middleFrontRight;
-  final double middleBackLeft;
-  final double middleBackRight;
-  final double middleCurrentLeft;
-}
-
-class _BackwardProbeFrame {
-  const _BackwardProbeFrame({
-    required this.frontVisible,
-    required this.backVisible,
-    required this.currentResidualVisible,
-    required this.foldHasFrontText,
     required this.compositeMode,
-    required this.pageLeft,
-    required this.frontLeft,
-    required this.frontRight,
-    required this.backLeft,
-    required this.backRight,
-    required this.currentLeft,
+    required this.bottomLayerPageIndex,
+    required this.flippingLayerPageIndex,
+    required this.baselineKeyVisible,
+    required this.foldXSamples,
+    required this.foldXAdvance,
   });
 
-  final bool frontVisible;
-  final bool backVisible;
-  final bool currentResidualVisible;
-  final bool foldHasFrontText;
   final String compositeMode;
-  final double pageLeft;
-  final double frontLeft;
-  final double frontRight;
-  final double backLeft;
-  final double backRight;
-  final double currentLeft;
+  final int? bottomLayerPageIndex;
+  final int? flippingLayerPageIndex;
+  final bool baselineKeyVisible;
+  final List<double> foldXSamples;
+  final double foldXAdvance;
 }
 
 class _ScanlineProbeResult {

@@ -1,38 +1,113 @@
 {
-  "title": "RawEvidence",
-  "type": "object",
-  "required": [
-    "schemaVersion",
-    "evidence_type",
-    "round",
-    "collector"
+  "title": "RawEvidenceRecord",
+  "oneOf": [
+    { "$ref": "#/$defs/search_result" },
+    { "$ref": "#/$defs/page" },
+    { "$ref": "#/$defs/asset" },
+    { "$ref": "#/$defs/fact" }
   ],
-  "properties": {
-    "schemaVersion": { "type": "string" },
-    "evidence_type": {
-      "type": "string",
-      "enum": ["search_result", "page", "asset", "fact"]
+  "$defs": {
+    "search_result": {
+      "type": "object",
+      "required": ["query", "domain", "url", "title", "snippet", "round", "collector"],
+      "properties": {
+        "query": { "type": "string" },
+        "domain": { "type": "string" },
+        "url": { "type": "string" },
+        "title": { "type": "string" },
+        "snippet": { "type": "string" },
+        "round": { "type": "integer", "minimum": 1 },
+        "collector": { "type": "string" }
+      }
     },
-    "round": { "type": "integer", "minimum": 1 },
-    "collector": { "type": "string" },
-    "source_url": { "type": "string" },
-    "title": { "type": "string" },
-    "domain": { "type": "string" },
-    "snippet": { "type": "string" },
-    "plain_text": { "type": "string" },
-    "fetched_at": { "type": "string" },
-    "evidence_hash": { "type": "string" },
-    "asset_id": { "type": "string" },
-    "object_key": { "type": "string" },
-    "caption": { "type": "string" },
-    "fact_id": { "type": "string" },
-    "entity_refs": {
-      "type": "array",
-      "items": { "type": "string" }
+    "page": {
+      "type": "object",
+      "required": ["url", "title", "plain_text", "fetched_at", "round", "evidence_hash"],
+      "properties": {
+        "url": { "type": "string" },
+        "title": { "type": "string" },
+        "plain_text": { "type": "string" },
+        "fetched_at": { "type": "string" },
+        "round": { "type": "integer", "minimum": 1 },
+        "evidence_hash": { "type": "string" }
+      }
     },
-    "tag_refs": {
-      "type": "array",
-      "items": { "type": "string" }
+    "asset": {
+      "type": "object",
+      "required": [
+        "asset_id",
+        "object_key",
+        "source_url",
+        "caption",
+        "local_path",
+        "sha256",
+        "mime_type",
+        "width",
+        "height",
+        "license",
+        "download_status",
+        "round"
+      ],
+      "properties": {
+        "asset_id": { "type": "string" },
+        "kind": { "type": "string" },
+        "object_key": { "type": "string" },
+        "source_url": { "type": "string" },
+        "caption": { "type": "string" },
+        "local_path": { "type": "string" },
+        "sha256": { "type": "string" },
+        "mime_type": { "type": "string" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "license": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "url": { "type": "string" },
+            "usage": { "type": "string" }
+          }
+        },
+        "download_status": {
+          "type": "string",
+          "enum": ["downloaded", "referenced_only"]
+        },
+        "round": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "fact": {
+      "type": "object",
+      "required": ["fact_id", "source_url", "title", "entity_refs", "tag_refs", "round"],
+      "properties": {
+        "fact_id": { "type": "string" },
+        "source_url": { "type": "string" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "location_name": { "type": "string" },
+        "cover_asset_id": { "type": "string" },
+        "figure_asset_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "media_asset_ids": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "article_template": { "type": "string" },
+        "article_font_preset": { "type": "string" },
+        "article_paragraphs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "entity_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "tag_refs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "round": { "type": "integer", "minimum": 1 }
+      }
     }
   }
 }

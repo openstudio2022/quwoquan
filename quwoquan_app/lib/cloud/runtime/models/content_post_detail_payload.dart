@@ -26,21 +26,19 @@ class ContentPostDetailPayload {
   final Map<String, dynamic> _canonicalWire;
 
   /// 与详情页/沉浸式 [projectArticleDetailView] 兼容的 wire：由 [detailWire] + [post]
-  /// 具名字段合并，嵌套 `cards` / `circleSummaries` / `articleDocument` 经 DTO `.toMap()`。
+  /// 具名字段合并，嵌套 `cards` / `circleSummaries` 经 DTO `.toMap()`。
   Map<String, dynamic> get mergedArticleWireMap {
     final out = Map<String, dynamic>.from(_canonicalWire);
     final d = detailWire;
     out['cards'] = d.cards.map((c) => c.toMap()).toList(growable: false);
-    out['circleSummaries'] =
-        d.circleSummaries.map((c) => c.toMap()).toList(growable: false);
-    final doc = d.articleDocument;
-    if (doc != null) {
-      out['articleDocument'] = doc.toMap();
-    }
+    out['circleSummaries'] = d.circleSummaries
+        .map((c) => c.toMap())
+        .toList(growable: false);
     final blocks = d.articleBlocks;
     if (blocks != null) {
-      out['articleBlocks'] =
-          blocks.map((b) => b.toMap()).toList(growable: false);
+      out['articleBlocks'] = blocks
+          .map((b) => b.toMap())
+          .toList(growable: false);
     }
     final pages = d.articlePages;
     if (pages != null) {
@@ -52,5 +50,4 @@ class ContentPostDetailPayload {
   /// 只读投影（字段来自 metadata [PostReadPresentation] + 文章扩展 wire 键）。
   PostReadPresentation get readPresentation =>
       PostReadPresentation.fromPostBase(post, wire: mergedArticleWireMap);
-
 }

@@ -1,126 +1,99 @@
 # quwoquan_data
 
-`quwoquan_data` 现在采用的是一条 **commands-only** 主线：
+`quwoquan_data` 已切到 **代码与运行时分离** 的形态：
 
-`三棵树 -> batch_plan -> retrieval_plan -> raw -> publish -> out`
+- 仓库内只保留 `schema/`、`tools/`、`tests/`、`README.md`、`SPEC.md`
+- 真实运行数据统一写入 ignored 根目录 `quwoquan_data/runtime/`
+- 测试样例统一收敛到 `quwoquan_data/tests/fixtures/`
 
-它不在 Python 代码里接真实搜索 provider，而是把搜索执行层收敛为：
+默认路径解析：
 
-- 模型先生成结构化检索条件
-- Cursor commands 负责执行外部证据采集
-- 所有证据必须显式落到 `raw/{batch_id}`
-- `batch run --dry-run` 负责最终收口到 `publish/` 和 `out/`
+- `QWQ_DATA_ROOT` 默认指向 `quwoquan_data/`
+- `QWQ_RUNTIME_ROOT` 默认指向 `quwoquan_data/runtime/`
 
-## 结构速览
+## 目录治理
 
 ```text
 quwoquan_data/
+├── README.md
 ├── SPEC.md
 ├── schema/
+├── tools/
+├── tests/
+│   └── fixtures/
+└── runtime/          # ignored，仅承载真实运行数据
+```
+
+`runtime/` 下的正式结构：
+
+```text
+runtime/
+├── specs/
 ├── trees/
-│   ├── entities/
-│   ├── content/
-│   └── tags/
-├── batch_plans/
-├── raw/
+├── runs/
 ├── publish/
 ├── out/
-├── tools/
-└── tests/
+└── downloads/
 ```
 
-## 核心原则
+其中：
 
-- `trees/entities/` 定义 `EntityFact`，不再把实体事实层直接投成 `Homepage`
-- `trees/content/` 只定义趣我圈真实可发布内容模板，当前优先 `图片帖` 与 `文章帖`
-- `trees/tags/` 是实体和内容都可复用的标准标签字典
-- `batch_plan` 只描述批次目标与约束，`retrieval_plan` 才是每轮执行计划
-- Python CLI 只做规划、校验、收口，不直接访问公网
-- `publish/` 只放源数据，`out/` 只放环境 dry-run projection
+- `runtime/specs/{spec_id}.yaml` 是运行时 spec 真相源
+- `runtime/trees/**` 是运行时实体/标签/模板树
+- `runtime/runs/{spec_id}/topics/{topic_id}/...` 是 topic 工作区
+- `runtime/downloads/` 存放原生抓取的 HTML 与图片二进制
+- `tests/fixtures/runtime_seed/` 只保留测试种子，不再把样例 runs/publish/raw 跟踪到仓库根
 
-## 当前样例
+唯一有效的 publish 真相源是：
 
-- `batch_plans/west_lake_image_001.yaml`：生成 `image/work` 图片帖
-- `batch_plans/west_lake_article_001.yaml`：生成带 canonical `articleDocument` 的 `article/work` 文章帖
-- `batch_plans/west_lake_loop_001.yaml`：演示两轮证据采集后再 finalize 的循环批次
+- `quwoquan_data/runtime/publish/`
 
-## 命令式流程
+仓库根旧目录 `quwoquan_data/publish/`、`quwoquan_data/runs/`、`quwoquan_data/raw/`、`quwoquan_data/out/`、`quwoquan_data/crawl_specs/`、`quwoquan_data/trees/` 仅作为迁移中的待删除对象，不再参与当前主线读写。
 
-### 1. 规划本轮检索
+## hybrid 主线
+
+`/crawl` 与 `cli.py crawl *` 现在采用 hybrid 结构：
+
+1. 命令编排层：
+   - `crawl spec-discovery`
+   - `crawl status`
+   - `crawl run-topic`
+2. tools 原生能力：
+   - `crawl fetch-source`
+   - HTML 拉取
+   - 正文抽取
+   - 图片 URL 抽取与下载
+   - 元数据提取
+   - 真实性 / 合规门禁
+
+也就是说，command 层负责编排 spec/topic 生命周期，`tools/native_fetch.py` 负责最小真实 I/O。
+
+## 常用命令
 
 ```bash
-python3 quwoquan_data/tools/cli.py batch plan-retrieval \
-  --plan quwoquan_data/batch_plans/west_lake_loop_001.yaml
+python3 quwoquan_data/tools/cli.py tree validate --tree all
+python3 quwoquan_data/tools/cli.py crawl spec-discovery --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml
+python3 quwoquan_data/tools/cli.py crawl fetch-source --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml --topic real_west_lake_article_001 --task-type article --source-id real_west_lake_article_source_001 --url "https://zh.wikivoyage.org/wiki/%E6%9D%AD%E5%B7%9E" --title "第一次逛杭州，先把西湖这条线走顺" --query "杭州 西湖 旅行指南 步行" --snippet "中文 Wikivoyage 杭州词条把西湖、湖滨和城市步行节奏写成了旅行指南，更适合重组为用户可读长文。" --rights-status clear --watermark-status clean
+python3 quwoquan_data/tools/cli.py crawl fetch-source --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml --topic real_west_lake_image_001 --task-type image --source-id real_west_lake_image_source_001 --url "https://commons.wikimedia.org/wiki/File:West_Lake_-_Hangzhou,_China.jpg" --title "雷峰塔视角下的西湖开阔湖面" --query "West Lake Hangzhou Commons image" --snippet "真实来源基于 Wikimedia Commons 文件页，来源页明确写出作者、拍摄时间和 CC BY-SA 3.0 授权。" --rights-status clear --watermark-status clean
+python3 quwoquan_data/tools/cli.py crawl run-topic --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml --topic real_west_lake_article_001 --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl run-topic --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml --topic real_west_lake_image_001 --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl status --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml
 ```
 
-这一步会生成：
+说明：
 
-- `raw/{batch_id}/retrieval_plan.json`
-- `raw/{batch_id}/loop_state.json`
+- `run-topic` 现在会基于 retained 且通过真实性校验的来源，自动补全默认 `enrichment.ndjson` 字段（`selectedCandidateIds`、`sourceUrls`、`coverAssetId`、`figureAssetIds/mediaAssetIds`、`publishReady` 等），不再要求手工改 NDJSON 才能跑通真实样例。
+- 当前本地真实可验证 publish 样例位于：
+  - `quwoquan_data/runtime/publish/real_west_lake_article_001/`
+  - `quwoquan_data/runtime/publish/real_west_lake_image_001/`
 
-`retrieval_plan.json` 会给出：
-
-- 主 query
-- 分维度 `search_queries`
-- 当前缺失的实体和标签
-- 当前轮次的固定 prompt 契约
-
-### 2. 落外部证据到 raw
-
-由 Cursor commands 或手工执行检索，把结果显式写入：
-
-- `raw/{batch_id}/search_results.ndjson`
-- `raw/{batch_id}/pages.ndjson`
-- `raw/{batch_id}/assets.ndjson`
-- `raw/{batch_id}/facts.ndjson`
-
-### 3. 查看批次状态
-
-```bash
-python3 quwoquan_data/tools/cli.py batch status \
-  --plan quwoquan_data/batch_plans/west_lake_loop_001.yaml
-```
-
-状态输出会包含：
-
-- 当前轮次
-- 证据条数
-- 缺失实体/标签
-- 是否 `ready_for_finalize`
-- 下一轮 query 数
-
-### 4. 收口到 publish / out
-
-```bash
-python3 quwoquan_data/tools/cli.py batch run \
-  --plan quwoquan_data/batch_plans/west_lake_article_001.yaml \
-  --targets alpha,gamma \
-  --dry-run
-```
-
-## 本地 smoke
+## 本地验证
 
 ```bash
 bash scripts/verify_quwoquan_data.sh
+python3 scripts/verify_quwoquan_data_source_authenticity.py
+python3 scripts/verify_quwoquan_data_post_packages.py
+python3 -m unittest discover -s quwoquan_data/tests
 ```
 
-## 产物位置
-
-执行 `batch run` 后会生成：
-
-- `publish/{batch_id}/entities.ndjson`
-- `publish/{batch_id}/posts.ndjson`
-- `publish/{batch_id}/summary.md`
-- `out/{batch_id}/alpha_projection.json`
-- `out/{batch_id}/gamma_projection.json`
-
-## Cursor Commands
-
-与这条命令式主线配套的编排文档：
-
-- `.cursor/commands/crawl.md`
-- `.cursor/commands/crawl-topic.md`
-
-它们会围绕 `batch plan-retrieval -> raw 落证据 -> batch status -> batch run` 这一真实链路工作，不再引用旧的 `topics/runs/bundles` 模型。
-
-详细规则见 `[SPEC.md](SPEC.md)`。
+详细约束见 `quwoquan_data/SPEC.md`。

@@ -4,6 +4,8 @@ package generated
 const (
 	RouteAbortMediaUploadMethod                         = "POST"
 	RouteAbortMediaUploadPath                           = "/v1/content/media/uploads/{sessionId}:abort"
+	RouteBindMediaAssetsToPostMethod                    = "POST"
+	RouteBindMediaAssetsToPostPath                      = "/v1/content/posts/{postId}/media:bind"
 	RouteCompleteMediaUploadMethod                      = "POST"
 	RouteCompleteMediaUploadPath                        = "/v1/content/media/uploads/{sessionId}:complete"
 	RouteCreateCommentMethod                            = "POST"

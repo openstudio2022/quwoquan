@@ -38,7 +38,7 @@ Map<String, dynamic>? findDiscoveryWireRowByPostId(
 
 /// Canonical mock 发现区：与 [MockContentRepository] / [MockAppContentRepository] 同源。
 Map<String, dynamic>? lookupCanonicalDiscoveryWireRowByPostId(String postId) {
-  return findDiscoveryWireRowByPostId(
+  final row = findDiscoveryWireRowByPostId(
     postId,
     aggregateDiscoveryWireSlices(
       photo: ContentMockData.discoveryPhotoData,
@@ -47,6 +47,10 @@ Map<String, dynamic>? lookupCanonicalDiscoveryWireRowByPostId(String postId) {
       moment: ContentMockData.discoveryMomentData,
     ),
   );
+  if ((row?['contentType']?.toString() ?? '') == 'article') {
+    return ContentMockData.articleWireByPostId(postId) ?? row;
+  }
+  return row;
 }
 
 /// `true` 表示当前为 Mock 数据源：将 [FeedItemDto] 转为 wire Map；否则返回空列表。

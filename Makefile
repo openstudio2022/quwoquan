@@ -8,6 +8,7 @@
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
 .PHONY: verify-app-pageflip-back-mainline
+.PHONY: verify-app-pageflip-backward-mainline
 .PHONY: verify-app-page-abc-governance
 .PHONY: verify-app-page-abc-governance-enforce-a
 .PHONY: verify-app-page-abc-governance-enforce-b
@@ -24,6 +25,8 @@
 .PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-business-env-data-inventory
 .PHONY: verify-quwoquan-data
+.PHONY: verify-markdown-article-no-article-document
+.PHONY: verify-quwoquan-data-post-packages
 .PHONY: verify-app-env-package
 .PHONY: verify-service-env-package
 .PHONY: verify-env-instance-isolation
@@ -81,6 +84,12 @@ verify-business-env-data-inventory:
 
 verify-quwoquan-data:
 	@bash scripts/verify_quwoquan_data.sh
+
+verify-markdown-article-no-article-document:
+	@python3 scripts/verify_markdown_article_no_article_document.py
+
+verify-quwoquan-data-post-packages:
+	@python3 scripts/verify_quwoquan_data_post_packages.py
 
 verify-app-env-package:
 	@bash scripts/build_app_env_package.sh --env alpha
@@ -153,6 +162,10 @@ verify-app-page-horizontal-quality:
 verify-app-pageflip-back-mainline:
 	@cd quwoquan_app && flutter test test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart
 
+# 后翻路线 B 主线静态门禁（见 .cursor/rules/12-pageflip-backward-mainline.mdc）。
+verify-app-pageflip-backward-mainline:
+	@python3 scripts/verify_pageflip_backward_mainline.py
+
 # 页面 A/B/C 专项扫描（默认仅报告、exit 0；加 --enforce-* 见 specs/gates/page_abc_governance.md）
 verify-app-page-abc-governance:
 	@python3 scripts/verify_page_abc_governance.py
@@ -189,6 +202,7 @@ gate:
 	@$(MAKE) verify-reliable-task-topology
 	@$(MAKE) verify-avatar-user-pool
 	@$(MAKE) probe-avatar-user-pool-gateway
+	@$(MAKE) verify-markdown-article-no-article-document
 	@bash scripts/report_deployment_mapping_impact.sh
 	@bash scripts/gate_repo.sh
 

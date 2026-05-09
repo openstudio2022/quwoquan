@@ -4,7 +4,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
-/// 我的主页入口；`ProfileShell` 经 UserProfileRepository 加载 ProfileSubjectViewData。
+/// 我的主页入口；`ProfileShell` 经 UserProfileRepository 加载 SubAccountProfileViewData。
 ///
 /// 路由：/profile（MainAppShell IndexedStack 第4项）
 /// 也可通过 /user/:username（当前用户）push 进入，此时传入 onBack 显示返回按钮。

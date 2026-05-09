@@ -39,8 +39,6 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
         'articleTemplate': articleTemplate,
       if (articleFontPreset != null && articleFontPreset!.trim().isNotEmpty)
         'articleFontPreset': articleFontPreset,
-      if (articleDocument != null && articleDocument!.isNotEmpty)
-        'articleDocument': articleDocument,
       if (articlePresentationVersion != null)
         'articlePresentationVersion': articlePresentationVersion,
       if (cards != null && cards!.isNotEmpty) 'cards': cards,

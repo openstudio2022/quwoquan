@@ -2,106 +2,125 @@
 name: /crawl-topic
 id: crawl-topic
 category: Workflow
-description: quwoquan_data 单批次命令式证据采集 worker
+description: quwoquan_data 单个 runtime topic worker
 ---
 
 ## 目标
 
-`/crawl-topic` 负责处理单个 `batch_plan` 的一轮或多轮循环。它的输入是：
+`/crawl-topic` 只处理一个 topic_task。它只围绕 `runtime/` 工作，并默认允许在 `run-topic` 前后补执行原生抓取。
 
-- `quwoquan_data/batch_plans/{batch_id}.yaml`
-- `raw/{batch_id}/retrieval_plan.json`
-- `raw/{batch_id}/loop_state.json`
+- `quwoquan_data/runtime/specs/{spec_id}.yaml`
+- `quwoquan_data/runtime/runs/{spec_id}/topic_tasks.ndjson`
+- `quwoquan_data/runtime/runs/{spec_id}/topics/{topic_id}/source_pool.ndjson`
+- `pages/{source_id}/page.html` / `pages/{source_id}/source.md` / `pages/{source_id}/asset_manifest.json` / `enrichment.ndjson`
 
-输出是：
+输出到：
 
-- 更新后的 `raw/{batch_id}` 证据文件
-- 更新后的 `loop_state.json`
-- 如已满足条件，则生成 `publish/{batch_id}` 与 `out/{batch_id}`
+- `quwoquan_data/runtime/publish/{topic_id}/posts/{post_id}`
+- `quwoquan_data/runtime/out/{topic_id}/{alpha|gamma}_projection.json`
 
 ## 输入
 
 ```text
-/crawl-topic --plan=quwoquan_data/batch_plans/west_lake_loop_001.yaml --round=2
+/crawl-topic --spec=quwoquan_data/runtime/specs/real_public_examples_001.yaml --topic=real_west_lake_article_001
 ```
 
-## 单轮循环
+## Worker 主线
 
 ```mermaid
 flowchart LR
-  batchPlan[BatchPlanYaml] --> planRetrieval[BatchPlanRetrieval]
-  planRetrieval --> retrievalPlan[RetrievalPlanJson]
-  retrievalPlan --> webEvidence[WebEvidenceCollection]
-  webEvidence --> rawNdjson[RawNdjsonFiles]
-  rawNdjson --> batchStatus[BatchStatus]
-  batchStatus -->|ready_for_finalize| batchRun[BatchRunDryRun]
-  batchStatus -->|needs_more_evidence| nextRound[NextRound]
+  topicTask[topic_tasks.ndjson row] --> sourcePool[source_pool.ndjson]
+  sourcePool --> hydrate[crawl fetch-source / runtime hydrate]
+  hydrate --> scoring[article/image scoring]
+  scoring --> enrichment[enrichment.ndjson]
+  enrichment --> runTopic[crawl run-topic]
+  runTopic --> publishTopic[runtime/publish/{topic_id}/posts/...]
+  publishTopic --> gate[真实性 gate + package gate]
 ```
 
 ## 本轮必做步骤
 
-1. 执行：
+1. 先执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py batch plan-retrieval --plan <plan>
+python3 quwoquan_data/tools/cli.py crawl spec-discovery --spec <spec>
 ```
 
-2. 读取 `raw/{batch_id}/retrieval_plan.json`
-3. 按 `query` 与 `search_queries` 使用 Cursor 的 WebSearch / WebFetch / 浏览器能力采集公开证据
-4. 把结果显式写回：
-   - `search_results.ndjson`
-   - `pages.ndjson`
-   - `assets.ndjson`
-   - `facts.ndjson`
-5. 执行：
+2. 在 `runtime/runs/{spec_id}/topic_tasks.ndjson` 中定位 `topic_id`
+3. 读取 `topics/{topic_id}/source_pool.ndjson`，确认：
+   - `taskType` 明确为 `article` 或 `image`
+   - `scoringModel` 与任务类型一致
+   - 如果 `candidateCount < 20`，必须诚实保留 `needs_more_evidence`
+4. 若 source 有真实 URL 但缺少 `pages/*` 证据，先执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py batch status --plan <plan>
+python3 quwoquan_data/tools/cli.py crawl fetch-source --spec <spec> --topic <topic_id> --task-type <article|image> --source-id <source_id> --url <url>
 ```
 
-6. 若状态为 `ready_for_finalize`，执行：
+5. article 任务要核对：
+   - 版权 / 水印 / 广告 / 重复门禁
+   - `engagementSum`
+   - `qualityScore`
+   - `hot_top_10pct`、`quality_top_20pct`、`quality_exception` 三类留存
+6. image 任务要核对：
+   - `rightsStatus`
+   - `watermarkStatus`
+   - `imageQualityScore`
+   - Pinterest 只保留 discovery-only，不默认进 publish
+7. 读取 `pages/{source_id}/page.html`、`pages/{source_id}/source.md`、`pages/{source_id}/asset_manifest.json`、`enrichment.ndjson`
+8. 若 `enrichment.ndjson` 仍是默认壳，`run-topic` 会自动补齐 `selectedCandidateIds`、`sourceUrls`、`coverAssetId`、`figureAssetIds/mediaAssetIds` 与 `publishReady`
+9. 执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py batch run --plan <plan> --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl run-topic --spec <spec> --topic <topic_id> --targets alpha,gamma --dry-run
+```
+
+10. 执行真实性 gate 与 package gate：
+
+```bash
+python3 scripts/verify_quwoquan_data_source_authenticity.py
+python3 scripts/verify_quwoquan_data_post_packages.py
 ```
 
 ## 每轮产物
 
-每轮至少要有这些文件处于可追溯状态：
+必须至少能追溯到：
 
-- `raw/{batch_id}/retrieval_plan.json`
-- `raw/{batch_id}/loop_state.json`
-- `raw/{batch_id}/search_results.ndjson`
-- `raw/{batch_id}/pages.ndjson`
-- `raw/{batch_id}/facts.ndjson`
-
-若本轮使用了图片证据，还要补：
-
-- `raw/{batch_id}/assets.ndjson`
-
-## 停止条件
-
-满足任一条件即可停止：
-
-1. `batch status` 为 `completed`
-2. `batch status` 为 `ready_for_finalize`，且本轮已完成 `batch run --dry-run`
-3. `batch status` 为 `exhausted`
+- `runtime/runs/{spec_id}/topic_tasks.ndjson`
+- `runtime/runs/{spec_id}/topics/{topic_id}/source_pool.ndjson`
+- `runtime/runs/{spec_id}/topics/{topic_id}/pages/{source_id}/page.html`
+- `runtime/runs/{spec_id}/topics/{topic_id}/pages/{source_id}/source.md`
+- `runtime/runs/{spec_id}/topics/{topic_id}/pages/{source_id}/asset_manifest.json`
+- `runtime/runs/{spec_id}/topics/{topic_id}/enrichment.ndjson`
+- `runtime/downloads/sources/{spec_id}/{topic_id}/{source_id}/page.html`
+- `runtime/downloads/images/{spec_id}/{topic_id}/{source_id}/*`
+- `runtime/publish/{topic_id}/posts/{post_id}/article.md|gallery.md`
+- `runtime/publish/{topic_id}/posts/{post_id}/manifest.json`
+- `runtime/publish/{topic_id}/posts/{post_id}/post.json`
 
 ## 输出口径
 
 worker 摘要必须包含：
 
-- 当前批次
-- 当前轮次
-- 本轮执行的 `search_queries`
-- 新增证据条数
-- `missing_entity_refs / missing_tag_refs`
-- `next_queries_count`
-- 是否已 `ready_for_finalize`
+- `spec_id`
+- `topic_id`
+- `taskType`
+- `candidateCount / retainedCandidateCount`
+- `verifiedSourceCount / authenticityBlocked`
+- `highValueCandidateCount / qualityExceptionCount`
+- `approvedAssetCount`
+- `manifest.compliance.overallStatus`
+- 生成的 `runtime/publish/{topic_id}/posts/{post_id}` 路径
+- 真实性 gate 是否通过
+- package gate 是否通过
 
 ## 边界
 
-- 不能恢复旧的 `topics/runs/bundles` 写法
-- 不能在未落 `raw/` 证据前直接生成 `facts`
-- 不能把外部网页内容直接复制成最终发布正文
-- 不能绕过公开网页访问边界
+- 不再恢复 `batch/raw/retrieval_plan` 流程
+- 当前唯一有效的 publish 真相源是 `quwoquan_data/runtime/publish/`
+- 不把 Pinterest 默认当作可直接发布来源
+- 不把带平台水印或版权不清图片写入 `images/*`
+- 不把 `publishEligibility != approved` 的资产写入最终 manifest
+- 不在 front matter 重复写 `entity_refs / source_urls`
+- 不把第三方原文整段复制进 `article.md`
+- 不因为数量基线压力，把无真实证据 topic 强行发布

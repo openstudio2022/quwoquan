@@ -9,14 +9,14 @@
 |------|------|
 | HTTP | `CloudHttpClient.getJson` / `postJson` 等仍返回 `Future<dynamic>`，为全仓基座；对象/列表根已在基座侧增加 `getJsonObject`、`getJsonItemList`、`postJsonObject`、`patchJsonObject`（内部 `getJson` + `asObject`）。 |
 | 解码点 | `json.decode` / `getJson` 之后 **第一步** `CloudResponseDecoder.asObject`（接受任意 `Map`）/ `mapList` / `mapListFirstNonEmpty`，再 `*WireDto.fromMap`。 |
-| 业务出口 | `UserProfileRepository` / `UserRepository` 对外保持 `ProfileSubjectViewData` 等 View；内部用 `*WireDto`（metadata `client_projection`）。 |
+| 业务出口 | `UserProfileRepository` / `UserRepository` 对外保持 `SubAccountProfileViewData` 等 View；内部用 `*WireDto`（metadata `client_projection`）。 |
 | 生成物 | 独立 wire 类构造器 **非 const**（避免 `DateTime` / 集合默认值非法）；调用方使用 `fromMap` / `copyWith`。 |
 
 ## 2. UserProfileRepository 方法 → 目标类型
 
 | 方法 | 当前主路径 | OpenAPI / service | Wire DTO（codegen） |
 |------|------------|-------------------|---------------------|
-| `getUserProfile` / `getProfileSubject` | `ProfileSubjectWireDto` → `fromProfileSubjectWire` | profile 路由 | `ProfileSubjectWireDto` |
+| `getUserProfile` / `getSubAccountProfile` | `SubAccountProfileWireDto` → `fromSubAccountProfileWire` | profile 路由 | `SubAccountProfileWireDto` |
 | `getUserStats` | `UserProfileStatsViewData.fromProfile` | 无独立 stats | **N/A** |
 | `listFollowing` / `listFollowers` | `ProfileSocialRelationRowWireDto` → View | follow 列表 | `ProfileSocialRelationRowWireDto` |
 | `listUserLikes` | `ProfileUserLikeRowWireDto` → View | user_profile | `ProfileUserLikeRowWireDto` |

@@ -64,6 +64,15 @@
         "no_new_query_stop_rounds": { "type": "integer", "minimum": 1 }
       }
     },
+    "post_package_policy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "require_source_markdown": { "type": "boolean" },
+        "require_asset_manifest": { "type": "boolean" },
+        "allow_referenced_only_assets": { "type": "boolean" }
+      }
+    },
     "publish_policy": {
       "type": "object",
       "required": ["visibility", "assistant_use_policy"],
