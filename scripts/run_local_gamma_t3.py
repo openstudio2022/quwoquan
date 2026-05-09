@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Run local-gamma T3 checks against the Docker mirror."""
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
