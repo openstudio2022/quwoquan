@@ -76,6 +76,41 @@ func normalizeCreatePostPayloadForTest(t *testing.T, payload string) string {
 	if err := json.Unmarshal([]byte(payload), &body); err != nil {
 		t.Fatalf("normalize create post payload: %v", err)
 	}
+	if strings.TrimSpace(asTestString(body["contentType"])) == "article" &&
+		strings.TrimSpace(asTestString(body["articleMarkdown"])) == "" &&
+		body["articleDocument"] == nil {
+		title := strings.TrimSpace(asTestString(body["title"]))
+		summary := strings.TrimSpace(asTestString(body["summary"]))
+		articleBody := strings.TrimSpace(asTestString(body["body"]))
+		coverURL := strings.TrimSpace(asTestString(body["coverUrl"]))
+		markdown := ""
+		if title != "" {
+			markdown += "# " + title + "\n\n"
+		}
+		if articleBody != "" {
+			markdown += articleBody + "\n\n"
+		} else if summary != "" {
+			markdown += summary + "\n\n"
+		}
+		if coverURL != "" {
+			markdown += "![cover](" + coverURL + ")\n"
+		}
+		body["articleMarkdown"] = strings.TrimSpace(markdown)
+		if strings.TrimSpace(asTestString(body["articleMarkdownVersion"])) == "" {
+			body["articleMarkdownVersion"] = "qwq-rich-md/1"
+		}
+		if body["articleAssetManifest"] == nil {
+			body["articleAssetManifest"] = map[string]any{
+				"assets": []any{},
+			}
+		}
+		if body["articleRenderProfile"] == nil {
+			body["articleRenderProfile"] = map[string]any{
+				"template":   "journal",
+				"fontPreset": "clean",
+			}
+		}
+	}
 	normalized, err := json.Marshal(body)
 	if err != nil {
 		t.Fatalf("marshal normalized create post payload: %v", err)

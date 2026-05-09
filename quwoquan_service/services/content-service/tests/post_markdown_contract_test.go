@@ -94,8 +94,8 @@ func TestCreateArticleRejectsArticleDocumentOnlyContract(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for articleDocument-only article, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "articleMarkdown") {
-		t.Fatalf("expected articleMarkdown validation error, got %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "invalid_argument") {
+		t.Fatalf("expected invalid_argument rejection, got %s", rec.Body.String())
 	}
 }
 

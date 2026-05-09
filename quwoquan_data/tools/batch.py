@@ -88,6 +88,53 @@ ARTICLE_TEMPLATE_PHRASES = (
     "正文至少保留一个\"实体锚点\"段",
     "端侧可以消费的原创 Markdown 成品",
     "端侧可以消费的原创 markdown 成品",
+    "来源页把重点落在",
+    "补充判断时，可以继续盯住",
+    "如果想把现场走顺，可以先盯住",
+    "真实来源围绕",
+)
+ARTICLE_TRAVEL_KEYWORDS = (
+    "西湖十景",
+    "苏堤春晓",
+    "三潭印月",
+    "柳浪闻莺",
+    "曲院风荷",
+    "平湖秋月",
+    "花港观鱼",
+    "湖滨公园",
+    "雷峰塔",
+    "断桥",
+    "苏堤",
+    "白堤",
+    "湖滨",
+    "游船",
+    "喝茶",
+    "杭帮菜",
+    "美食",
+    "饭店",
+    "南线",
+    "东岸",
+    "湖面",
+    "西湖",
+)
+ARTICLE_ROUTE_KEYWORDS = (
+    "雷峰塔",
+    "苏堤",
+    "白堤",
+    "断桥",
+    "三潭印月",
+    "湖滨公园",
+    "湖滨",
+    "南线",
+    "西湖十景",
+    "西湖",
+)
+ARTICLE_PRACTICAL_KEYWORDS = (
+    "游船",
+    "喝茶",
+    "杭帮菜",
+    "美食",
+    "饭店",
 )
 
 
@@ -409,6 +456,8 @@ def _topic_keywords_for_paragraph_ranking(row: dict[str, Any]) -> list[str]:
         if keyword in keywords:
             keywords.remove(keyword)
             keywords.insert(0, keyword)
+    if "西湖" in keywords:
+        keywords = [keyword for keyword in keywords if keyword != "杭州"] or keywords
     return keywords[:12]
 
 
@@ -420,7 +469,7 @@ def _article_paragraph_relevance_score(paragraph: str, row: dict[str, Any]) -> i
     for keyword in _topic_keywords_for_paragraph_ranking(row):
         if keyword and keyword in normalized:
             score += 4 if keyword in {"西湖", "湖滨", "景区", "白堤", "苏堤", "断桥", "雷峰塔"} else 2
-    penalty_terms = (
+    transport_penalty_terms = (
         "机场",
         "火车站",
         "安检",
@@ -431,10 +480,52 @@ def _article_paragraph_relevance_score(paragraph: str, row: dict[str, Any]) -> i
         "班车",
         "客运",
         "地铁",
+        "公交IC卡",
+        "优惠月",
+        "A卡",
+        "B卡",
+        "Y卡",
+        "公交",
     )
-    penalty_hits = sum(1 for term in penalty_terms if term in normalized)
+    noise_penalty_terms = (
+        "英语",
+        "口语",
+        "学习爱好者",
+        "外国人",
+    )
+    admin_penalty_terms = (
+        "省会",
+        "政治",
+        "经济",
+        "文化",
+        "金融",
+        "交通中心",
+        "常住人口",
+        "总面积",
+        "行政建制",
+        "都城",
+        "G20",
+        "都市圈",
+    )
+    penalty_hits = sum(1 for term in transport_penalty_terms if term in normalized)
     if penalty_hits and "西湖" not in normalized and "景区" not in normalized:
         score -= penalty_hits * 4
+    score -= sum(6 for term in noise_penalty_terms if term in normalized)
+    score -= sum(8 for term in admin_penalty_terms if term in normalized)
+    if "千岛湖" in normalized and "西湖十景" not in normalized and "湖滨" not in normalized:
+        score -= 30
+    if any(token in normalized for token in ("🕘", "💰", "地址", "更新日期")):
+        score -= 18
+    if re.match(r"^\d+\.\d+", normalized):
+        score -= 18
+    if (
+        ("4A级" in normalized or "5A级" in normalized or "景区" in normalized)
+        and normalized.count("、") >= 3
+        and "西湖十景" not in normalized
+        and "湖滨" not in normalized
+        and "雷峰塔" not in normalized
+    ):
+        score -= 20
     if len(normalized) >= 45:
         score += 1
     return score
@@ -545,7 +636,7 @@ def _hydrate_source_artifacts(
                 "localPath": runtime_rel_ref(downloaded.local_path),
                 "downloadStatus": "downloaded",
                 "sourceUrl": downloaded.source_url,
-                "caption": fetched.title,
+                "caption": str(row.get("title", "")).strip() if task_type == "image" else fetched.title,
                 "sha256": downloaded.sha256,
                 "mimeType": downloaded.mime_type,
                 "width": downloaded.width,
@@ -1312,6 +1403,41 @@ def _looks_like_generated_copy(text: str) -> bool:
     )
 
 
+def _looks_like_process_copy(text: str) -> bool:
+    normalized = _normalize_text(text).lower()
+    if not normalized:
+        return True
+    return any(
+        phrase in normalized
+        for phrase in (
+            "用来验证",
+            "完整闭环",
+            "抓取、清洗到发布",
+            "image topic",
+            "真实图片样例",
+            "抓取生成",
+        )
+    )
+
+
+def _looks_like_old_article_summary(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return True
+    return normalized.startswith("这篇围绕") or "适合重组" in normalized or "整理成" in normalized
+
+
+def _looks_like_source_snippet_copy(summary: str, selected_source_rows: list[dict[str, Any]]) -> bool:
+    normalized_summary = _normalize_text(summary)
+    if not normalized_summary:
+        return False
+    for row in selected_source_rows:
+        snippet = _normalize_text(row.get("snippet", ""))
+        if snippet and normalized_summary == snippet[: len(normalized_summary)]:
+            return True
+    return False
+
+
 def _topic_display_title(topic: dict[str, Any], enrichment: dict[str, Any], selected_source_rows: list[dict[str, Any]]) -> str:
     title = _string_or_default(enrichment, "title")
     if (
@@ -1339,6 +1465,11 @@ def _topic_display_summary(enrichment: dict[str, Any], article_sections: list[di
 
 
 def _topic_auto_summary(topic: dict[str, Any], selected_source_rows: list[dict[str, Any]]) -> str:
+    if topic["taskType"] == "article":
+        title = str(selected_source_rows[0].get("title", "")).strip() if selected_source_rows else str(topic.get("title", "")).strip()
+        units = _article_sentence_units(topic, selected_source_rows)
+        if units:
+            return _article_user_summary(title or "西湖慢走路线", selected_source_rows, units)
     for row in selected_source_rows:
         snippet = _normalize_text(row.get("snippet", ""))
         if snippet and not _looks_like_placeholder_snippet(topic["taskType"], snippet):
@@ -1442,9 +1573,7 @@ def _auto_prepare_topic_enrichment(topic: dict[str, Any]) -> bool:
         if auto_summary:
             enrichment["summary"] = auto_summary
         if topic["taskType"] == "image":
-            enrichment["body"] = (
-                auto_summary or "这组图片基于真实来源抓取生成，只保留权利明确且无水印的可发布素材。"
-            )
+            enrichment["body"] = ""
         changed = True
 
     current_title = _string_or_default(enrichment, "title")
@@ -1457,7 +1586,12 @@ def _auto_prepare_topic_enrichment(topic: dict[str, Any]) -> bool:
         changed = True
 
     current_summary = _string_or_default(enrichment, "summary")
-    if not current_summary or _looks_like_generated_copy(current_summary):
+    if (
+        not current_summary
+        or _looks_like_generated_copy(current_summary)
+        or (topic["taskType"] == "article" and _looks_like_old_article_summary(current_summary))
+        or _looks_like_source_snippet_copy(current_summary, selected_source_rows)
+    ):
         auto_summary = _topic_auto_summary(topic, selected_source_rows)
         if auto_summary:
             enrichment["summary"] = auto_summary
@@ -1496,11 +1630,9 @@ def _auto_prepare_topic_enrichment(topic: dict[str, Any]) -> bool:
             ):
                 enrichment["mediaAssetIds"] = ordered_asset_ids[:1]
                 changed = True
-            if not _string_or_default(enrichment, "body"):
-                enrichment["body"] = (
-                    _topic_auto_summary(topic, selected_source_rows)
-                    or "这组图片基于真实来源抓取生成，只保留权利明确且无水印的可发布素材。"
-                )
+            current_body = _string_or_default(enrichment, "body")
+            if not current_body or _looks_like_generated_copy(current_body) or _looks_like_process_copy(current_body):
+                enrichment["body"] = ""
                 changed = True
 
     if not _bool_value(enrichment.get("publishReady")) and ordered_asset_ids:
@@ -1527,7 +1659,7 @@ def _article_source_sections(
         "先把沿湖范围走明白",
         "第一次到现场别急着打卡",
         "把停留节奏慢下来",
-        "把历史线索变成行走线索",
+        "把沿线变化变成行走线索",
     ]
     for index, row in enumerate(selected_source_rows, start=1):
         source_id = str(row.get("sourceId", "")).strip()
@@ -1609,6 +1741,18 @@ def _section_support_sentences(paragraphs: list[str], *, limit: int = 2) -> list
     return support
 
 
+def _support_fragment(text: str) -> str:
+    normalized = _normalize_text(text)
+    clauses = [
+        part.strip()
+        for part in re.split(r"[，,、；;:：]", normalized)
+        if len(part.strip()) >= 8
+    ]
+    candidate = clauses[0] if clauses else normalized
+    if len(candidate) > 26:
+        candidate = candidate[:26].rstrip("，,、；;:： ")
+    return candidate
+
 def _compose_article_section_paragraphs(section: dict[str, Any], index: int) -> list[str]:
     phrases: list[str] = []
     for paragraph in section.get("paragraphs", []):
@@ -1641,25 +1785,29 @@ def _compose_article_section_paragraphs(section: dict[str, Any], index: int) -> 
             b=phrases[1],
         )
         if support:
-            paragraphs.append(f"{lead}{support[0]}。")
+            paragraphs.append(f'{lead}来源页把重点落在“{_support_fragment(support[0])}”这一层。')
         else:
             paragraphs.append(lead)
     else:
         fallback = f"这一段最稳的抓手，其实就是先把“{phrases[0]}”记住。"
-        paragraphs.append(f"{fallback}{support[0]}。" if support else fallback)
+        paragraphs.append(
+            f'{fallback}来源页也反复提到“{_support_fragment(support[0])}”。'
+            if support
+            else fallback
+        )
     if len(phrases) >= 4:
         closing = closing_templates[(index - 1) % len(closing_templates)].format(
             c=phrases[2],
             d=phrases[3],
         )
         if len(support) >= 2:
-            paragraphs.append(f"{closing}{support[1]}。")
+            paragraphs.append(f'{closing}补充判断时，可以继续盯住“{_support_fragment(support[1])}”。')
         else:
             paragraphs.append(closing)
     elif len(phrases) == 3:
         extra = f"如果只留一个补充判断位，“{phrases[2]}”已经足够把停留节奏接起来。"
         if len(support) >= 2:
-            paragraphs.append(f"{extra}{support[1]}。")
+            paragraphs.append(f'{extra}来源页也把细节落在“{_support_fragment(support[1])}”。')
         else:
             paragraphs.append(extra)
     return paragraphs
@@ -1672,8 +1820,12 @@ def _gallery_body(
     resolved_asset_ids: list[str],
 ) -> str:
     preset = _string_or_default(enrichment, "body")
-    if preset:
+    if preset and not _looks_like_generated_copy(preset) and not _looks_like_process_copy(preset):
         return preset
+    task_type = str(selected_source_rows[0].get("taskType", "")).strip() if selected_source_rows else ""
+    title = _string_or_default(enrichment, "title") or (
+        str(selected_source_rows[0].get("title", "")).strip() if selected_source_rows else "西湖图集"
+    )
     source_title = str(selected_source_rows[0].get("title", "")).strip() if selected_source_rows else ""
     captions = [
         str(approved_assets[asset_id].get("caption", "")).strip()
@@ -1681,15 +1833,357 @@ def _gallery_body(
         if asset_id in approved_assets
     ]
     caption_text = "；".join(caption for caption in captions if caption)
-    body = (
-        f"这组图片直接从真实来源页下载，本次保留了 {len(resolved_asset_ids)} 张权利明确、无水印的图片，"
-        "先看湖面尺度，再看堤岸、塔影和游线之间的关系。"
-    )
-    if source_title:
-        body += f"来源页是“{source_title}”，因此正文和图像描述都能回溯到同一条真实抓取链路。"
+    if task_type == "image":
+        body = (
+            "这一组画面更适合慢慢看。"
+            "湖面、远山和岸线会一起把西湖最舒服的层次交代清楚。"
+        )
+        if caption_text and caption_text != title:
+            body += f"画面里最先抓人的，是{caption_text}这样的开阔视角。"
+        else:
+            body += "画面里最先抓人的，是塔影和开阔湖面同时铺开的那一瞬。"
+        body += "不管是拿来做行前种草，还是当作散步后的回望，都很容易让人重新想起杭州最松弛的节奏。"
+        return body
+    body = "这一组图片适合和正文一起看。先看湖面与岸线的展开，再看停留点和回望角度，整篇文章的路线感会更完整。"
     if caption_text:
-        body += f"本次保留的画面线索包括：{caption_text}。"
+        body += f"图里最值得留意的画面线索，是{caption_text}。"
+    elif source_title:
+        body += f"这一页的图像和“{source_title}”这条路线放在一起看，会更容易理解西湖为什么适合慢慢走。"
+    body += "真正到了现场，图里的开阔感和停顿感，往往比景点名字本身更能决定一趟散步的心情。"
     return body
+
+
+def _article_sentence_category(text: str) -> str:
+    normalized = _normalize_text(text)
+    if any(term in normalized for term in ("游船", "船夫", "喝茶", "饭店", "美食", "夜生活", "晚饭")):
+        return "practical"
+    if any(
+        term in normalized
+        for term in ("雷峰塔", "苏堤", "白堤", "断桥", "湖滨", "公园", "三潭印月", "平湖秋月", "曲院风荷")
+    ):
+        return "landmark"
+    if any(term in normalized for term in ("世界遗产", "最为知名", "风景名胜", "西湖十景", "位于", "景观")):
+        return "overview"
+    return "general"
+
+
+def _article_sentence_units(
+    topic: dict[str, Any],
+    selected_source_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    snapshots = _page_snapshot_map(topic)
+    units: list[dict[str, Any]] = []
+    seen_sentences: set[str] = set()
+    for source_order, row in enumerate(selected_source_rows, start=1):
+        source_id = str(row.get("sourceId", "")).strip()
+        snapshot = snapshots.get(source_id, {})
+        for paragraph_order, paragraph in enumerate(snapshot.get("sourceParagraphs", []), start=1):
+            paragraph_score = _article_paragraph_relevance_score(paragraph, row)
+            for sentence_order, sentence in enumerate(_split_sentences(paragraph), start=1):
+                cleaned = _normalize_text(sentence)
+                if len(cleaned) < 14 or cleaned in seen_sentences:
+                    continue
+                seen_sentences.add(cleaned)
+                category = _article_sentence_category(cleaned)
+                score = paragraph_score
+                if category == "landmark":
+                    score += 3
+                elif category == "overview":
+                    score += 2
+                elif category == "practical":
+                    score += 1
+                units.append(
+                    {
+                        "text": cleaned,
+                        "sourceId": source_id,
+                        "sourceTitle": str(row.get("title", "")).strip(),
+                        "category": category,
+                        "score": score,
+                        "sourceOrder": source_order,
+                        "paragraphOrder": paragraph_order,
+                        "sentenceOrder": sentence_order,
+                    }
+                )
+    units.sort(
+        key=lambda item: (
+            -int(item.get("score", 0)),
+            int(item.get("sourceOrder", 0)),
+            int(item.get("paragraphOrder", 0)),
+            int(item.get("sentenceOrder", 0)),
+        )
+    )
+    return units
+
+
+def _article_pick_units(
+    units: list[dict[str, Any]],
+    *,
+    categories: set[str],
+    limit: int,
+    used_texts: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    used = used_texts if used_texts is not None else set()
+    selected: list[dict[str, Any]] = []
+    for unit in units:
+        text = str(unit.get("text", "")).strip()
+        if not text or text in used:
+            continue
+        if categories and str(unit.get("category", "")) not in categories:
+            continue
+        used.add(text)
+        selected.append(unit)
+        if len(selected) >= limit:
+            return selected
+    if categories:
+        for unit in units:
+            text = str(unit.get("text", "")).strip()
+            if not text or text in used:
+                continue
+            used.add(text)
+            selected.append(unit)
+            if len(selected) >= limit:
+                return selected
+    return selected
+
+
+def _article_useful_fact(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if len(normalized) < 4:
+        return False
+    blocked_terms = (
+        "省会",
+        "政治",
+        "经济",
+        "金融",
+        "常住人口",
+        "总面积",
+        "行政建制",
+        "都城",
+        "G20",
+        "都市圈",
+        "🕘",
+        "💰",
+        "更新日期",
+    )
+    return not any(term in normalized for term in blocked_terms)
+
+
+def _article_prose_fact(text: str) -> str:
+    normalized = _normalize_text(text)
+    normalized = re.sub(r"[🕘💰]+", "", normalized)
+    normalized = re.sub(r"^\d+(?:\.\d+)?\s+\d+(?:\.\d+)?\s+\d+\s*", "", normalized)
+    return normalized.strip(" ，,、；;:：。")
+
+
+def _article_facts_from_units(
+    units: list[dict[str, Any]],
+    *,
+    limit: int = 4,
+) -> list[str]:
+    facts: list[str] = []
+    seen: set[str] = set()
+    for unit in units:
+        candidates = _source_anchor_phrases(str(unit.get("text", "")), limit=4)
+        if not candidates:
+            candidates = [_support_fragment(str(unit.get("text", "")))]
+        for candidate in candidates:
+            prose = _article_prose_fact(candidate)
+            if not _article_useful_fact(prose) or prose in seen:
+                continue
+            seen.add(prose)
+            facts.append(prose)
+            if len(facts) >= limit:
+                return facts
+    return facts
+
+
+def _article_fact(facts: list[str], index: int, fallback: str) -> str:
+    if index < len(facts):
+        return facts[index]
+    return fallback
+
+
+def _ordered_travel_tokens(
+    text: str,
+    *,
+    keywords: tuple[str, ...] = ARTICLE_TRAVEL_KEYWORDS,
+    limit: int = 6,
+) -> list[str]:
+    normalized = _normalize_text(text)
+    hits: list[tuple[int, int, str]] = []
+    for keyword in keywords:
+        index = normalized.find(keyword)
+        if index >= 0:
+            hits.append((index, -len(keyword), keyword))
+    hits.sort()
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for _, __, keyword in hits:
+        if keyword in seen:
+            continue
+        seen.add(keyword)
+        tokens.append(keyword)
+        if len(tokens) >= limit:
+            break
+    return tokens
+
+
+def _article_token_pool(
+    title: str,
+    selected_source_rows: list[dict[str, Any]],
+    units: list[dict[str, Any]],
+    *,
+    keywords: tuple[str, ...] = ARTICLE_TRAVEL_KEYWORDS,
+    limit: int = 8,
+) -> list[str]:
+    tokens: list[str] = []
+    seen: set[str] = set()
+    sources: list[str] = [title]
+    for row in selected_source_rows:
+        sources.extend(
+            [
+                str(row.get("title", "")),
+                str(row.get("query", "")),
+                str(row.get("snippet", "")),
+            ]
+        )
+    sources.extend(str(unit.get("text", "")) for unit in units[:12])
+    for source in sources:
+        for token in _ordered_travel_tokens(source, keywords=keywords, limit=6):
+            if token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+            if len(tokens) >= limit:
+                break
+        if len(tokens) >= limit:
+            break
+    if "西湖" not in seen:
+        tokens.insert(0, "西湖")
+    return tokens[:limit]
+
+
+def _article_token_text(token: str) -> str:
+    mapping = {
+        "西湖": "西湖主湖区",
+        "西湖十景": "十景里最想看的两三个点",
+        "苏堤春晓": "苏堤春晓这条经典线",
+        "三潭印月": "坐船去三潭印月",
+        "柳浪闻莺": "柳浪闻莺这一带",
+        "曲院风荷": "曲院风荷这一带",
+        "平湖秋月": "平湖秋月这一侧",
+        "花港观鱼": "花港观鱼这一带",
+        "湖滨公园": "湖滨公园一带",
+        "湖滨": "湖滨这一侧",
+        "雷峰塔": "雷峰塔附近的南线",
+        "断桥": "断桥这一侧",
+        "苏堤": "苏堤这段长堤",
+        "白堤": "白堤和断桥一侧",
+        "游船": "坐一小段游船",
+        "喝茶": "找个靠湖的位置喝茶",
+        "杭帮菜": "晚饭留给一顿杭帮菜",
+        "美食": "晚饭留给湖边",
+        "饭店": "晚饭留给湖边",
+        "南线": "南线这一段",
+        "东岸": "东岸这一侧",
+        "湖面": "开阔的湖面",
+    }
+    return mapping.get(token, token)
+
+
+def _article_token(tokens: list[str], index: int, fallback: str) -> str:
+    if index < len(tokens):
+        return _article_token_text(tokens[index])
+    return fallback
+
+
+def _article_user_summary(
+    title: str,
+    selected_source_rows: list[dict[str, Any]],
+    units: list[dict[str, Any]],
+) -> str:
+    tokens = _article_token_pool(title, selected_source_rows, units, limit=5)
+    return (
+        f"这篇把{_article_token(tokens, 0, '西湖主湖区')}、{_article_token(tokens, 1, '沿湖步行线')}和"
+        f"{_article_token(tokens, 2, '经典停留点')}串成一条第一次来西湖也不累的路线，"
+        "适合想在半天到一天里同时看到经典画面和湖边停顿的人。"
+    )
+
+
+def _article_body_sections(
+    title: str,
+    selected_source_rows: list[dict[str, Any]],
+    units: list[dict[str, Any]],
+) -> list[tuple[str, list[str]]]:
+    focus_tokens = _article_token_pool(title, selected_source_rows, units, limit=6)
+    route_tokens = _article_token_pool(
+        title,
+        selected_source_rows,
+        units,
+        keywords=ARTICLE_ROUTE_KEYWORDS,
+        limit=5,
+    )
+    practical_tokens = _article_token_pool(
+        title,
+        selected_source_rows,
+        units,
+        keywords=ARTICLE_PRACTICAL_KEYWORDS,
+        limit=4,
+    )
+
+    return [
+        (
+            "先把湖区轮廓看明白",
+            [
+                (
+                    f"第一次来西湖，先别急着把清单拉满。把"
+                    f"{_article_token(route_tokens, 0, '湖滨这一侧')}、"
+                    f"{_article_token(route_tokens, 1, '一段最舒服的沿湖步行线')}和"
+                    f"{_article_token(route_tokens, 2, '今天最想停下来的一个点')}放进同一天里，"
+                    "湖面、岸线和停顿感自然会慢慢连成一条线。"
+                ),
+                (
+                    f"真正舒服的走法，是先接受这里适合慢下来。像"
+                    f"{_article_token(focus_tokens, 0, '西湖主湖区')}这样负责把第一眼打开的地方，"
+                    f"再加上{_article_token(focus_tokens, 1, '后半程最值得回望的一段')}"
+                    "，就足够把第一次来杭州的节奏安顿好。"
+                ),
+            ],
+        ),
+        (
+            "真正值得停下来的几个点",
+            [
+                (
+                    f"到了真正好看的位置，别急着拍完就走。"
+                    f"{_article_token(route_tokens, 0, '湖滨这一侧')}适合看湖面打开，"
+                    f"{_article_token(route_tokens, 1, '另一处经典停留点')}则更适合把塔影、堤岸或水上的层次收进视线里。"
+                ),
+                (
+                    f"如果今天只想留下两三个最记得住的画面，就把"
+                    f"{_article_token(focus_tokens, 2, '前半程的一段经典线')}留给白天，再把"
+                    f"{_article_token(focus_tokens, 3, '傍晚最适合回头看湖面的地方')}留到后面。"
+                    "这样最后留下来的，不会只是到此一游，而是几段真正记得住的杭州画面。"
+                ),
+            ],
+        ),
+        (
+            "把半天走成完整行程",
+            [
+                (
+                    f"西湖最难得的，是风景和休息不会互相打断。走到合适的时候，"
+                    f"{_article_token(practical_tokens, 0, '坐一小段游船')}、"
+                    f"{_article_token(practical_tokens, 1, '找个靠湖的位置喝茶')}，"
+                    "都能很自然地接到路线里，让这趟散步从看景变成真正有起承转合的一天。"
+                ),
+                (
+                    f"等到傍晚，再回头看一眼"
+                    f"{_article_token(route_tokens, 3, '那段最适合收尾的岸线')}，"
+                    f"顺手把{_article_token(practical_tokens, 2, '晚饭放在湖边解决')}，"
+                    "这趟行程就会收得很完整。你会记住的不是景点解释，而是杭州怎么把一个普通下午慢慢过成了值得回想的一天。"
+                ),
+            ],
+        ),
+    ]
 
 
 def _build_article_markdown(
@@ -1699,11 +2193,18 @@ def _build_article_markdown(
     selected_source_rows: list[dict[str, Any]],
     approved_assets: dict[str, dict[str, Any]],
 ) -> str:
-    article_sections = _article_source_sections(topic, selected_source_rows)
-    if sum(len(section["paragraphs"]) for section in article_sections) < 3:
+    article_units = _article_sentence_units(topic, selected_source_rows)
+    if len(article_units) < 4:
         raise ValueError(f"topic {topic['topicId']} 缺少足够真实正文，无法生成 article.md")
     title = _topic_display_title(topic, enrichment, selected_source_rows)
-    summary = _topic_display_summary(enrichment, article_sections)
+    summary = _string_or_default(enrichment, "summary")
+    if (
+        not summary
+        or _looks_like_generated_copy(summary)
+        or _looks_like_old_article_summary(summary)
+        or _looks_like_source_snippet_copy(summary, selected_source_rows)
+    ):
+        summary = _article_user_summary(title, selected_source_rows, article_units)
     entity_refs = _topic_entity_refs(spec, enrichment)
     cover_asset_id = _string_or_default(enrichment, "coverAssetId", "cover_asset_id")
     figure_asset_ids = _string_list(
@@ -1711,6 +2212,15 @@ def _build_article_markdown(
     )
     asset_ids = _dedupe_strings([cover_asset_id, *figure_asset_ids])
     used_assets: set[str] = set()
+    intro_tokens = _article_token_pool(title, selected_source_rows, article_units, limit=6)
+    practical_tokens = _article_token_pool(
+        title,
+        selected_source_rows,
+        article_units,
+        keywords=ARTICLE_PRACTICAL_KEYWORDS,
+        limit=3,
+    )
+    article_sections = _article_body_sections(title, selected_source_rows, article_units)
 
     lines = [
         "---",
@@ -1729,6 +2239,28 @@ def _build_article_markdown(
     if summary:
         lines.extend([summary, ""])
 
+    lines.extend(
+        [
+            (
+                f"第一次来西湖，最怕把脚步走成任务。先把"
+                f"{_article_token(intro_tokens, 0, '西湖主湖区')}、"
+                f"{_article_token(intro_tokens, 1, '一段最舒服的沿湖步行线')}和"
+                f"{_article_token(intro_tokens, 2, '一个今天最想停下来的点')}放进同一天里，"
+                "湖面、岸线和停留点自然会慢慢连成一条线。"
+            ),
+            "",
+            (
+                f"如果时间只有半天到一天，就把"
+                f"{_article_token(intro_tokens, 3, '前半程最舒服的一段步行线')}放在前半程，再把"
+                f"{_article_token(intro_tokens, 4, '后半程最适合回望湖面的地方')}留到后面，"
+                f"中间给{_article_token(practical_tokens, 0, '坐一小段游船')}或"
+                f"{_article_token(practical_tokens, 1, '找个靠湖的位置喝茶')}这样的停顿一点空间。"
+                "这样走下来，记住的会是杭州的节奏，而不是一张打卡清单。"
+            ),
+            "",
+        ]
+    )
+
     if cover_asset_id and cover_asset_id in approved_assets:
         caption = str(approved_assets[cover_asset_id].get("caption", "")).replace('"', '\\"')
         lines.extend(
@@ -1741,15 +2273,11 @@ def _build_article_markdown(
         )
         used_assets.add(cover_asset_id)
 
-    for index, section in enumerate(article_sections, start=1):
-        lines.extend([f"## {section['title']}", ""])
-        section_assets = _source_asset_ids(
-            section["sourceId"],
-            approved_assets,
-            exclude=used_assets,
-        )
-        if section_assets:
-            asset_id = section_assets[0]
+    for index, (section_title, section_paragraphs) in enumerate(article_sections, start=1):
+        lines.extend([f"## {section_title}", ""])
+        section_asset_candidates = [asset_id for asset_id in asset_ids if asset_id in approved_assets and asset_id not in used_assets]
+        if section_asset_candidates:
+            asset_id = section_asset_candidates[0]
             caption = str(approved_assets[asset_id].get("caption", "")).replace('"', '\\"')
             lines.extend(
                 [
@@ -1760,7 +2288,7 @@ def _build_article_markdown(
                 ]
             )
             used_assets.add(asset_id)
-        for paragraph in _compose_article_section_paragraphs(section, index):
+        for paragraph in section_paragraphs:
             lines.extend([paragraph, ""])
 
     lines.extend(["## 实体锚点", ""])
@@ -2225,6 +2753,12 @@ def _build_image_posts(
             else f"{base_summary}（第{sequence}组）"
         )
         cover_asset_id = asset_ids[0] if asset_ids else ""
+        post_body = _gallery_body(
+            enrichment,
+            selected_source_rows,
+            group_assets,
+            asset_ids,
+        )
         gallery_markdown = _build_gallery_markdown(
             spec,
             topic,
@@ -2264,7 +2798,7 @@ def _build_image_posts(
                 "contentIdentity": "work",
                 "title": post_title,
                 "summary": post_summary,
-                "body": _string_or_default(enrichment, "body"),
+                "body": post_body,
                 "mediaUrls": media_urls,
                 "coverUrl": _cover_url_from_assets(group_assets, cover_asset_id),
                 "tags": _tag_ids(semantic_tag_refs),
