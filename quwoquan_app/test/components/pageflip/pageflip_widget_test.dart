@@ -879,9 +879,9 @@ void main() {
           'a fully negative X bound means the previous page was projected to the '
           'wrong side of the spine.',
     );
-    // Native BACK keeps StPageFlip calculation/output direction; diagnostics
-    // follows frame truth source rather than a pre-mirrored forward calc.
-    expect(interactiveState.backwardFoldDirection, equals('rightward'));
+    // BACK keeps semantic page binding while visual geometry is
+    // forward-isomorphic, so the static fold direction matches forward.
+    expect(interactiveState.backwardFoldDirection, equals('leftward'));
     expect(
       interactiveState.backwardCompositeMode,
       equals('paperFoldBackwardMainline'),
@@ -962,6 +962,14 @@ void main() {
     expect(interactiveState.backwardFoldSurfaceEdgeLineBottom, isNotNull);
     expect(interactiveState.backwardFoldSurfaceEdgeX!.isFinite, isTrue);
     expect(interactiveState.backwardEdgeParallelToFold, isA<bool>());
+    expect(interactiveState.backwardSpineTop, isNotNull);
+    expect(interactiveState.backwardSpineBottom, isNotNull);
+    expect(interactiveState.backwardCurrentResidualBounds, isNotNull);
+    expect(
+      interactiveState.backwardCurrentResidualBounds!.left,
+      greaterThanOrEqualTo(0),
+      reason: 'C/current residual must stay in the visible right-page space.',
+    );
     expect(interactiveState.backwardPaintedVersoWidth, isNotNull);
     expect(interactiveState.backwardPaintedVersoWidth, greaterThan(0));
     expect(find.byType(ArticlePageCurlRenderer), findsNothing);
@@ -982,6 +990,43 @@ void main() {
       ),
       isTrue,
     );
+    final earlyBackStates = backwardAnimationStates.where(
+      (state) =>
+          (state.backwardVersoWidth ?? 0) > 0.05 &&
+          (state.backwardRectoCoverage ?? 0) <= 0.02,
+    );
+    expect(
+      earlyBackStates.any((state) => state.backwardBackPaintBounds != null),
+      isTrue,
+      reason:
+          'BACK early phase may keep recto/front hidden, but verso/back must '
+          'already be visible as the fold enters from the left.',
+    );
+    final midFoldFaceStates = backwardAnimationStates.where(
+      (state) =>
+          state.backwardFrontPaintBounds != null &&
+          state.backwardBackPaintBounds != null &&
+          (state.backwardRectoCoverage ?? 0) > 0.02 &&
+          (state.backwardRectoCoverage ?? 0) < 0.72,
+    );
+    expect(
+      midFoldFaceStates,
+      isNotEmpty,
+      reason:
+          'BACK front/back split must be visible during the middle fold, not '
+          'only in the final recto-dominant phase.',
+    );
+    final lateFrontStates = backwardAnimationStates.where(
+      (state) =>
+          (state.backwardRectoCoverage ?? 0) >= 0.72 &&
+          state.backwardFrontPaintBounds != null,
+    );
+    expect(
+      lateFrontStates,
+      isNotEmpty,
+      reason:
+          'BACK late phase should remain front-dominant after the midpoint.',
+    );
     final mixedFaceStates = backwardAnimationStates.where(
       (state) =>
           (state.backwardRectoCoverage ?? 0) > 0.05 &&
@@ -995,6 +1040,22 @@ void main() {
           'and previous-front recto becomes physically visible.',
     );
     for (final state in mixedFaceStates) {
+      expect(state.backwardSpineTop, isNotNull, reason: 'S/spine is required');
+      expect(
+        state.backwardFoldLineTop,
+        isNotNull,
+        reason: 'F/fold line is required',
+      );
+      expect(
+        state.backwardPageEdgeLineTop,
+        isNotNull,
+        reason: 'E/free edge is required',
+      );
+      expect(
+        state.backwardCurrentResidualBounds,
+        isNotNull,
+        reason: 'C/current residual is required',
+      );
       expect(state.backwardFrontPaintBounds, isNotNull);
       expect(state.backwardBackPaintBounds, isNotNull);
       expect(state.backwardCurrentResidualBounds, isNotNull);
@@ -1013,7 +1074,23 @@ void main() {
       expect(
         state.backwardFrontPaintBounds!.left,
         lessThanOrEqualTo(state.backwardBackPaintBounds!.right),
-        reason: 'recto/front must be the spine-side segment of the same sheet.',
+        reason:
+            'recto/front must be a sheet-local spine-side segment adjacent to '
+            'the rotating back fold band.',
+      );
+      expect(
+        state.backwardFrontPaintBounds!.top,
+        lessThanOrEqualTo(state.backwardCurrentResidualBounds!.top + 1),
+        reason:
+            'sheet-local previous-front must cover the upper spine-side region; '
+            'otherwise the current page leaks through the top-left corner.',
+      );
+      expect(
+        state.backwardBackPaintBounds!.width,
+        lessThan(state.backwardSurfaceViewportRect!.width * 0.92),
+        reason:
+            'previous-back must remain a fold band instead of expanding into a '
+            'full uncreased back page.',
       );
       expect(
         state.backwardBackPaintBounds!.left,
@@ -1113,7 +1190,7 @@ void main() {
       expect(
         sample.foldXAdvance,
         greaterThan(1),
-        reason: 'BACK fold X 必须随手势在 viewport space 内推进。',
+        reason: 'BACK fold X 必须随手势在 viewport space 内从左向右推进。',
       );
     },
   );
@@ -1245,8 +1322,7 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
   expect(mainlineStates, isNotEmpty);
 
   final compositeMode = mainlineStates.last.backwardCompositeMode ?? '';
-  final bottomLayerPageIndex =
-      mainlineStates.last.backwardBottomLayerPageIndex;
+  final bottomLayerPageIndex = mainlineStates.last.backwardBottomLayerPageIndex;
   final flippingLayerPageIndex =
       mainlineStates.last.backwardFlippingLayerPageIndex;
   final foldXSamples = mainlineStates
@@ -1255,7 +1331,7 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
       .toList(growable: false);
   final foldXAdvance = foldXSamples.isEmpty
       ? 0.0
-      : (foldXSamples.last - foldXSamples.first).abs();
+      : foldXSamples.last - foldXSamples.first;
 
   await gesture.up();
   for (var i = 0; i < 3; i += 1) {

@@ -5,6 +5,7 @@ import mimetypes
 import re
 import subprocess
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -87,38 +88,56 @@ def _extract_paragraphs(source: str) -> list[str]:
 
 def _extract_image_urls(base_url: str, source: str, *, limit: int = 8) -> list[str]:
     candidates: list[str] = []
-    patterns = (
-        r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"',
-        r'<meta[^>]+name="twitter:image"[^>]+content="([^"]+)"',
-        r'<img[^>]+src="([^"]+)"',
-        r"<img[^>]+src='([^']+)'",
+    direct_patterns = (
+        r"<meta[^>]+property=['\"]og:image['\"][^>]+content=['\"]([^'\"]+)['\"]",
+        r"<meta[^>]+name=['\"]twitter:image['\"][^>]+content=['\"]([^'\"]+)['\"]",
+        r"<img[^>]+src=['\"]([^'\"]+)['\"]",
+        r"<img[^>]+data-src=['\"]([^'\"]+)['\"]",
+        r"<a[^>]+href=['\"]([^'\"]+\.(?:jpg|jpeg|png|webp)(?:\?[^'\"]*)?)['\"]",
     )
-    for pattern in patterns:
+    srcset_patterns = (
+        r"<img[^>]+srcset=['\"]([^'\"]+)['\"]",
+        r"<source[^>]+srcset=['\"]([^'\"]+)['\"]",
+    )
+
+    def add_candidate(value: str) -> bool:
+        normalized = urllib.parse.urljoin(base_url, unescape(value).strip())
+        if normalized.startswith("data:"):
+            return False
+        lowered = normalized.lower()
+        if any(
+            token in lowered
+            for token in (
+                "wordmark",
+                "logo",
+                "icon",
+                "button",
+                "edit.svg",
+                "wikimedia-button",
+                "poweredby_mediawiki",
+                "/static/images/",
+            )
+        ):
+            return False
+        if lowered.endswith(".svg"):
+            return False
+        if normalized not in candidates:
+            candidates.append(normalized)
+        return len(candidates) >= limit
+
+    for pattern in direct_patterns:
         for value in re.findall(pattern, source, flags=re.I):
-            normalized = urllib.parse.urljoin(base_url, unescape(value).strip())
-            if normalized.startswith("data:"):
-                continue
-            lowered = normalized.lower()
-            if any(
-                token in lowered
-                for token in (
-                    "wordmark",
-                    "logo",
-                    "icon",
-                    "button",
-                    "edit.svg",
-                    "wikimedia-button",
-                    "poweredby_mediawiki",
-                    "/static/images/",
-                )
-            ):
-                continue
-            if lowered.endswith(".svg"):
-                continue
-            if normalized not in candidates:
-                candidates.append(normalized)
-            if len(candidates) >= limit:
+            if add_candidate(value):
                 return candidates
+
+    for pattern in srcset_patterns:
+        for value in re.findall(pattern, source, flags=re.I):
+            for part in value.split(","):
+                url = part.strip().split(" ", 1)[0].strip()
+                if not url:
+                    continue
+                if add_candidate(url):
+                    return candidates
     return candidates
 
 
@@ -157,25 +176,35 @@ def _curl_fetch(url: str) -> tuple[bytes, str, str]:
 
 
 def fetch_html_page(url: str, *, timeout_seconds: int = 20) -> FetchedPage:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": DEFAULT_USER_AGENT,
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-            raw = response.read()
-            charset = response.headers.get_content_charset() or "utf-8"
-            html = raw.decode(charset, errors="ignore")
-            final_url = response.geturl()
-    except urllib.error.URLError as error:
+    last_error: Exception | None = None
+    for attempt in range(3):
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": DEFAULT_USER_AGENT,
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            },
+        )
         try:
-            raw, final_url, _ = _curl_fetch(url)
-            html = raw.decode("utf-8", errors="ignore")
-        except NativeFetchError as curl_error:
-            raise NativeFetchError(f"fetch html 失败: {url} -> {error}; curl fallback -> {curl_error}") from error
+            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+                raw = response.read()
+                charset = response.headers.get_content_charset() or "utf-8"
+                html = raw.decode(charset, errors="ignore")
+                final_url = response.geturl()
+                break
+        except (urllib.error.URLError, TimeoutError) as error:
+            try:
+                raw, final_url, _ = _curl_fetch(url)
+                html = raw.decode("utf-8", errors="ignore")
+                break
+            except NativeFetchError as curl_error:
+                last_error = NativeFetchError(
+                    f"fetch html 失败: {url} -> {error}; curl fallback -> {curl_error}"
+                )
+        if attempt == 2:
+            assert last_error is not None
+            raise last_error
+        time.sleep(0.8 * (attempt + 1))
     title = _extract_title(html) or url
     paragraphs = _extract_paragraphs(html)
     text = "\n\n".join(paragraphs) if paragraphs else _strip_html_tags(html)
@@ -246,23 +275,33 @@ def sniff_image_dimensions(blob: bytes) -> tuple[int | None, int | None]:
 
 
 def download_binary(url: str, target_path: Path, *, timeout_seconds: int = 25) -> DownloadedAsset:
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": DEFAULT_USER_AGENT,
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        },
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-            blob = response.read()
-            mime_type = response.headers.get_content_type() or ""
-            final_url = response.geturl()
-    except urllib.error.URLError as error:
+    last_error: Exception | None = None
+    for attempt in range(3):
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": DEFAULT_USER_AGENT,
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            },
+        )
         try:
-            blob, final_url, mime_type = _curl_fetch(url)
-        except NativeFetchError as curl_error:
-            raise NativeFetchError(f"download asset 失败: {url} -> {error}; curl fallback -> {curl_error}") from error
+            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+                blob = response.read()
+                mime_type = response.headers.get_content_type() or ""
+                final_url = response.geturl()
+                break
+        except (urllib.error.URLError, TimeoutError) as error:
+            try:
+                blob, final_url, mime_type = _curl_fetch(url)
+                break
+            except NativeFetchError as curl_error:
+                last_error = NativeFetchError(
+                    f"download asset 失败: {url} -> {error}; curl fallback -> {curl_error}"
+                )
+        if attempt == 2:
+            assert last_error is not None
+            raise last_error
+        time.sleep(0.8 * (attempt + 1))
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(blob)
     digest = hashlib.sha256(blob).hexdigest()

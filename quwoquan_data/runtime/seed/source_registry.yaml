@@ -1,0 +1,179 @@
+schemaVersion: quwoquan_data.source_registry
+authoritySources:
+  - sourceId: wikipedia_zh
+    domain: zh.wikipedia.org
+    sourceKind: authority
+    fetchPolicy: open_html
+    verticals: [general, travel, auto, image]
+    mediaTypes: [article]
+    urlTemplate: "https://zh.wikipedia.org/wiki/{name_enc}"
+    defaultWeight: 100
+  - sourceId: baidu_baike
+    domain: baike.baidu.com
+    sourceKind: authority
+    fetchPolicy: open_html
+    verticals: [general, travel, auto, image]
+    mediaTypes: [article]
+    urlTemplate: "https://baike.baidu.com/item/{name_enc}"
+    defaultWeight: 100
+  - sourceId: sogou_baike
+    domain: baike.sogou.com
+    sourceKind: authority
+    fetchPolicy: open_html
+    verticals: [general, travel, auto, image]
+    mediaTypes: [article]
+    searchTemplate: "https://baike.sogou.com/Search.e?sp=S{query_enc}"
+    defaultWeight: 92
+  - sourceId: kuaidong_baike
+    domain: www.baike.com
+    sourceKind: authority
+    fetchPolicy: pending_review
+    verticals: [general, travel, auto, image]
+    mediaTypes: [article]
+    searchTemplate: "https://www.baike.com/search?keyword={query_enc}"
+    defaultWeight: 86
+  - sourceId: quark_baike
+    domain: quark.sm.cn
+    sourceKind: authority
+    fetchPolicy: pending_review
+    verticals: [general, travel, auto, image]
+    mediaTypes: [article]
+    searchTemplate: "https://quark.sm.cn/s?q={query_enc}"
+    defaultWeight: 80
+  - sourceId: qiuwen_baike
+    domain: www.qiuwenbaike.cn
+    sourceKind: authority
+    fetchPolicy: pending_review
+    verticals: [general, travel, auto, image]
+    mediaTypes: [article]
+    searchTemplate: "https://www.qiuwenbaike.cn/index.php?search={query_enc}"
+    defaultWeight: 78
+  - sourceId: zgbk
+    domain: www.zgbk.com
+    sourceKind: authority
+    fetchPolicy: open_html
+    verticals: [general, travel, auto, image]
+    mediaTypes: [article]
+    searchTemplate: "https://www.zgbk.com/ecph/words?SiteID=1&query={query_enc}"
+    defaultWeight: 82
+contentSources:
+  - sourceId: toutiao
+    domain: so.toutiao.com
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [general, travel, auto]
+    mediaTypes: [article, image]
+    searchTemplate: "https://so.toutiao.com/search?keyword={query_enc}"
+  - sourceId: xiaohongshu
+    domain: www.xiaohongshu.com
+    sourceKind: content
+    fetchPolicy: manual_seed_only
+    discoveryMode: search_entry
+    verticals: [general, travel, auto, image]
+    mediaTypes: [article, image]
+    searchTemplate: "https://www.xiaohongshu.com/search_result?keyword={query_enc}"
+  - sourceId: weibo
+    domain: s.weibo.com
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [general, travel, auto]
+    mediaTypes: [article, image]
+    searchTemplate: "https://s.weibo.com/weibo?q={query_enc}"
+  - sourceId: zhihu
+    domain: www.zhihu.com
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [general, travel, auto]
+    mediaTypes: [article]
+    searchTemplate: "https://www.zhihu.com/search?type=content&q={query_enc}"
+  - sourceId: ctrip_travel
+    domain: you.ctrip.com
+    sourceKind: content
+    fetchPolicy: open_html
+    discoveryMode: search_entry
+    verticals: [travel]
+    mediaTypes: [article, image]
+    searchTemplate: "https://you.ctrip.com/searchsite/Sight?query={query_enc}"
+  - sourceId: mafengwo
+    domain: www.mafengwo.cn
+    sourceKind: content
+    fetchPolicy: open_html
+    discoveryMode: search_entry
+    verticals: [travel]
+    mediaTypes: [article, image]
+    searchTemplate: "https://www.mafengwo.cn/search/q.php?q={query_enc}"
+  - sourceId: qunar
+    domain: www.qunar.com
+    sourceKind: content
+    fetchPolicy: open_html
+    discoveryMode: search_entry
+    verticals: [travel]
+    mediaTypes: [article, image]
+    searchTemplate: "https://www.qunar.com/ss/search?wd={query_enc}"
+  - sourceId: qyer
+    domain: search.qyer.com
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [travel]
+    mediaTypes: [article, image]
+    searchTemplate: "https://search.qyer.com/index?wd={query_enc}"
+  - sourceId: pinterest
+    domain: www.pinterest.com
+    sourceKind: content
+    fetchPolicy: manual_seed_only
+    discoveryMode: search_entry
+    verticals: [image, travel]
+    mediaTypes: [image]
+    searchTemplate: "https://www.pinterest.com/search/pins/?q={query_enc}"
+  - sourceId: tuchong
+    domain: tuchong.com
+    sourceKind: content
+    fetchPolicy: open_html
+    discoveryMode: search_entry
+    verticals: [image, travel]
+    mediaTypes: [image]
+    searchTemplate: "https://tuchong.com/search?query={query_enc}"
+  - sourceId: five_hundred_px
+    domain: 500px.com
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [image]
+    mediaTypes: [image]
+    searchTemplate: "https://500px.com/search?type=photos&query={query_enc}"
+  - sourceId: lofter
+    domain: www.lofter.com
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [image, general]
+    mediaTypes: [article, image]
+    searchTemplate: "https://www.lofter.com/front/search?q={query_enc}"
+  - sourceId: autohome
+    domain: sou.autohome.com.cn
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [auto]
+    mediaTypes: [article, image]
+    searchTemplate: "https://sou.autohome.com.cn/zonghe?q={query_enc}"
+  - sourceId: dongchedi
+    domain: www.dongchedi.com
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [auto]
+    mediaTypes: [article, image]
+    searchTemplate: "https://www.dongchedi.com/search?keyword={query_enc}"
+  - sourceId: yiche
+    domain: so.yiche.com
+    sourceKind: content
+    fetchPolicy: pending_review
+    discoveryMode: search_entry
+    verticals: [auto]
+    mediaTypes: [article, image]
+    searchTemplate: "https://so.yiche.com/search?keyword={query_enc}"

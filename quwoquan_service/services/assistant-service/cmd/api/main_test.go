@@ -97,8 +97,8 @@ func TestSearchProviderTimeoutKeepsRealtimeBudget(t *testing.T) {
 }
 
 func TestShouldTryWeatherLookupUsesModelLocationAndSearchQueries(t *testing.T) {
-	if !shouldTryWeatherLookup("", "outdoor plan", "", "Shenzhen", nil) {
-		t.Fatal("locationSearchName should route to weather lookup")
+	if !shouldTryWeatherLookup("", "Shenzhen weather", "", "Shenzhen", nil) {
+		t.Fatal("weather intent with locationSearchName should route to weather lookup")
 	}
 	if !shouldTryWeatherLookup("", "outdoor plan", "", "", map[string]any{
 		"searchQueries": []any{
@@ -106,6 +106,22 @@ func TestShouldTryWeatherLookupUsesModelLocationAndSearchQueries(t *testing.T) {
 		},
 	}) {
 		t.Fatal("weather searchQueries should route to weather lookup")
+	}
+}
+
+func TestShouldNotTryWeatherLookupForNonWeatherQuestionEvenWithLocation(t *testing.T) {
+	if shouldTryWeatherLookup(
+		"knowledge_general",
+		"云服务配置推荐",
+		"北京",
+		"Beijing",
+		map[string]any{
+			"searchQueries": []any{
+				map[string]any{"dimension": "规格/价格", "query": "云服务器 ECS 实例规格 价格"},
+			},
+		},
+	) {
+		t.Fatal("non-weather cloud query should not be hijacked by weather lookup")
 	}
 }
 
@@ -142,6 +158,61 @@ func TestWeatherAuthorityReferencesPrioritizeNationalAndRegionalSources(t *testi
 			t.Fatalf("refs[%d].rank=%v, want %d", i, refs[i]["rank"], i+1)
 		}
 	}
+}
+
+func TestExtractDuckDuckGoResultsIncludesURLAndSourceHost(t *testing.T) {
+	raw := `
+<div class="result">
+  <a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fsupport.huaweicloud.com%2Fprice-desc-ecs%2Fecs_01_0001.html">弹性云服务器 ECS 价格详情 - 华为云</a>
+  <div class="result__snippet">官方价格详情页，包含按需和包年包月说明。</div>
+</div>`
+	summary, refs := extractDuckDuckGoResults(raw)
+	if !strings.Contains(summary, "官方价格详情页") {
+		t.Fatalf("summary=%q should include snippet", summary)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("refs len=%d, want 1", len(refs))
+	}
+	if refs[0]["url"] != "https://support.huaweicloud.com/price-desc-ecs/ecs_01_0001.html" {
+		t.Fatalf("url=%v", refs[0]["url"])
+	}
+	if refs[0]["source"] != "support.huaweicloud.com" {
+		t.Fatalf("source=%v", refs[0]["source"])
+	}
+}
+
+func TestPreferredSearchQueriesKeepsStructuredAndFallbackQueries(t *testing.T) {
+	queries := preferredSearchQueries(
+		map[string]any{
+			"query": "云桌面 按需计费 关机 还收费吗",
+			"searchQueries": []any{
+				map[string]any{"dimension": "billing", "query": "云桌面 按需计费 关机 收费"},
+				map[string]any{"dimension": "pricing", "query": "云桌面 按需计费 价格"},
+			},
+		},
+		"云桌面 按需计费 关机 还收费吗",
+	)
+	if len(queries) != 3 {
+		t.Fatalf("queries=%v, want 3 unique queries", queries)
+	}
+	if !containsString(queries, "云桌面 按需计费 关机 收费") {
+		t.Fatalf("queries=%v should include structured billing query", queries)
+	}
+	if !containsString(queries, "云桌面 按需计费 价格") {
+		t.Fatalf("queries=%v should include structured pricing query", queries)
+	}
+	if !containsString(queries, "云桌面 按需计费 关机 还收费吗") {
+		t.Fatalf("queries=%v should include fallback query", queries)
+	}
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func writeConfig(t *testing.T, root, env, content string) {

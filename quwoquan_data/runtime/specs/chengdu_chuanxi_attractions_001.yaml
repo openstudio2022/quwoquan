@@ -1,0 +1,64 @@
+spec_id: chengdu_chuanxi_attractions_001
+query: 成都 川西 景点 攻略 游记 百科 维基
+search_provider: native_fetch
+# 文章 topic 列表由 catalog 展开（避免与千级 POI NDJSON 重复维护 sample_topics）
+article_topic_catalog_ref: seed/chuanxi_attractions_catalog.yaml
+entity_refs:
+  - trees/entities/地点/成都.yaml
+  - trees/entities/地点/川西.yaml
+tag_refs:
+  - trees/tags/主题/旅行攻略.yaml
+  - trees/tags/场景/川西自驾.yaml
+target_envs:
+  - alpha
+  - gamma
+creator_refs:
+  article:
+    - fixture_user_travel
+    - fixture_user_article
+  image:
+    - fixture_user_photo
+publish_policy:
+  visibility: public
+  assistant_use_policy: inherit
+discovery_policy:
+  min_article_topics: 20
+  min_image_topics: 1
+  min_candidate_sources_per_task: 20
+  min_article_publish_topics: 6
+  min_image_publish_topics: 0
+article_lane:
+  allow_domains:
+    - baike.baidu.com
+    - baike.baidu.hk
+    - baike.sogou.com
+    - zh.wikipedia.org
+    - zh.m.wikipedia.org
+    - wikipedia.org
+    - en.wikipedia.org
+    - zh.wikivoyage.org
+    - wikivoyage.org
+    - mafengwo.cn
+    - you.ctrip.com
+    - qunar.com
+    - 163.com
+    - sohu.com
+    - zhuanlan.zhihu.com
+    # 以下站点默认仅建议通过合规 API / 人工 URL 种子写入 source_pool；抓取前须审 robots 与授权
+    - toutiao.com
+    - toutiao.cn
+    - m.toutiao.com
+    - weibo.com
+    - weibo.cn
+    - m.weibo.cn
+    - xiaohongshu.com
+    - m.xiaohongshu.com
+image_lane:
+  allow_domains:
+    - commons.wikimedia.org
+    - zh.wikipedia.org
+    - wikipedia.org
+sample_topics:
+  article: []
+  image:
+    - cdcx_image_commons_sample_001

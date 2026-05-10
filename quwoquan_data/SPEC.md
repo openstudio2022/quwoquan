@@ -42,6 +42,7 @@ runtime/specs -> discovery -> topic_task -> fetch/hydrate -> publish package -> 
 ```text
 runtime/
 ├── specs/
+├── seed/
 ├── trees/
 ├── runs/
 ├── publish/
@@ -52,10 +53,18 @@ runtime/
 其中：
 
 - `runtime/specs/{spec_id}.yaml`：运行时 spec 真相源
+- `runtime/seed/source_registry.yaml`：authority/content 双源平台注册表
+- `runtime/seed/entity_catalog/*.ndjson`：实体目录真相源
+- `runtime/seed/tag_catalog/*.ndjson`：标签目录真相源
+- `runtime/seed/graph/*.ndjson`：entity-tag-post 关系真相源
 - `runtime/trees/**`：运行时树真相源
 - `runtime/runs/{spec_id}/discovery.json`
 - `runtime/runs/{spec_id}/topic_tasks.ndjson`
 - `runtime/runs/{spec_id}/topics/{topic_id}/...`
+- `runtime/runs/{spec_id}/instruction_profile.json`
+- `runtime/runs/{spec_id}/entities/{entity_id}/authority_profile.json`
+- `runtime/runs/{spec_id}/entities/{entity_id}/authority_pool.ndjson`
+- `runtime/runs/{spec_id}/entities/{entity_id}/content_pool.ndjson`
 - `runtime/publish/{topic_id}/posts/{post_id}/...`
 - `runtime/out/{topic_id}/{alpha|gamma}_projection.json`
 - `runtime/downloads/sources/**`：HTML 原始抓取
@@ -95,6 +104,12 @@ runtime/
 - `crawl spec-discovery`
 - `crawl status`
 - `crawl run-topic`
+- `crawl instruction-build`
+- `crawl entities-by-tag`
+- `crawl authority-sync`
+- `crawl content-discover`
+- `crawl compose-post`
+- `crawl feedback-extract`
 
 ### 3.2 tools 原生能力
 
@@ -227,6 +242,20 @@ article / gallery front matter 只保留：
 
 ```bash
 python3 quwoquan_data/tools/cli.py tree validate --tree all
+python3 quwoquan_data/tools/cli.py crawl tag-catalog-build
+python3 quwoquan_data/tools/cli.py crawl entity-catalog-build --catalog quwoquan_data/runtime/seed/chuanxi_attractions_catalog.yaml
+python3 quwoquan_data/tools/cli.py crawl instruction-build --spec-id travel_seed_001 --instruction "成都 川西 旅行攻略与图片" --verticals travel --tag-refs trees/tags/主题/旅行攻略.yaml --content-modes article,image
+python3 quwoquan_data/tools/cli.py crawl entities-by-tag --spec-id travel_seed_001 --tag-refs trees/tags/主题/旅行攻略.yaml
+python3 quwoquan_data/tools/cli.py crawl spec-build --spec-id travel_seed_001
+python3 quwoquan_data/tools/cli.py crawl authority-sync --spec quwoquan_data/runtime/specs/travel_seed_001.yaml
+python3 quwoquan_data/tools/cli.py crawl content-discover --spec quwoquan_data/runtime/specs/travel_seed_001.yaml --seed quwoquan_data/runtime/seed/travel_urls_by_topic.ndjson
+python3 quwoquan_data/tools/cli.py crawl content-hydrate --spec quwoquan_data/runtime/specs/travel_seed_001.yaml
+python3 quwoquan_data/tools/cli.py crawl content-review --spec quwoquan_data/runtime/specs/travel_seed_001.yaml
+python3 quwoquan_data/tools/cli.py crawl compose-post --spec quwoquan_data/runtime/specs/travel_seed_001.yaml
+python3 quwoquan_data/tools/cli.py crawl review-generated --spec quwoquan_data/runtime/specs/travel_seed_001.yaml
+python3 quwoquan_data/tools/cli.py crawl publish-approved --spec quwoquan_data/runtime/specs/travel_seed_001.yaml
+python3 quwoquan_data/tools/cli.py crawl feedback-extract --spec quwoquan_data/runtime/specs/travel_seed_001.yaml
+python3 quwoquan_data/tools/cli.py crawl feedback-verify --spec quwoquan_data/runtime/specs/travel_seed_001.yaml
 python3 quwoquan_data/tools/cli.py crawl spec-discovery --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml
 python3 quwoquan_data/tools/cli.py crawl fetch-source --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml --topic real_west_lake_article_001 --task-type article --source-id real_west_lake_article_source_001 --url "https://zh.wikivoyage.org/wiki/%E6%9D%AD%E5%B7%9E"
 python3 quwoquan_data/tools/cli.py crawl fetch-source --spec quwoquan_data/runtime/specs/real_public_examples_001.yaml --topic real_west_lake_image_001 --task-type image --source-id real_west_lake_image_source_001 --url "https://commons.wikimedia.org/wiki/File:West_Lake_-_Hangzhou,_China.jpg"

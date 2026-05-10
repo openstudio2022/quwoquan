@@ -144,14 +144,12 @@ void main() {
       expect(
         debugMapperSource,
         contains('convertBookPointToViewport('),
-        reason:
-            'mapper 必须使用与 host 同源的 direction-aware 投影。',
+        reason: 'mapper 必须使用与 host 同源的 direction-aware 投影。',
       );
       expect(
         debugMapperSource,
         contains('StPageFlipDirection.back'),
-        reason:
-            'mapper 必须对齐 StPageFlip BACK convertToGlobal，不能强制 forward 投影。',
+        reason: 'mapper 必须对齐 StPageFlip BACK convertToGlobal，不能强制 forward 投影。',
       );
       expect(
         debugMapperSource,
@@ -163,11 +161,11 @@ void main() {
       expect(backwardBuilderSource, isNot(contains('_resolveMovingEdgeLine(')));
       expect(
         backwardBuilderSource,
-        contains("foldLineSource: 'backwardCanonicalFoldLine'"),
+        contains("foldLineSource: 'backwardForwardIsomorphicFoldLine'"),
       );
       expect(
         backwardBuilderSource,
-        contains("edgeLineSource: 'backwardCanonicalFreeEdgeLine'"),
+        contains("edgeLineSource: 'backwardForwardIsomorphicFreeEdgeLine'"),
       );
 
       expect(
@@ -183,11 +181,10 @@ void main() {
     });
 
     test(
-      'article reader soft paint uses native BACK drawSoft and sheet split',
+      'article reader soft paint uses visual geometry direction and sheet split',
       () {
-        // Native StPageFlip BACK 不变量：frame builder 不能预先镜像；host
-        // 必须恢复 `drawSoft` 的 direction-aware local clip，BACK 使用
-        // `(anchor.x - p.x, p.y - anchor.y)`，forward 保持 `(p - anchor)`。
+        // portrait BACK 保留语义方向，但 soft-layer 几何按
+        // `visualGeometryDirection` 消费同构 F/E/clip。
         final hostSource = _readAppSource(
           'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
         );
@@ -205,8 +202,7 @@ void main() {
         expect(
           softLayerSource,
           isNot(contains('resolveBackwardSoftPageGeometry(')),
-          reason:
-              'BACK 专属 soft helper 已废止，host `_buildSoftPageLayer` 不得再调用。',
+          reason: 'BACK 专属 soft helper 已废止，host `_buildSoftPageLayer` 不得再调用。',
         );
         expect(softLayerSource, contains('Transform.rotate('));
         expect(
@@ -225,24 +221,145 @@ void main() {
         );
         expect(
           hostSource,
-          contains('_backwardPageIntervalToClipRect('),
+          contains('_backwardFoldDerivedFacePolygons('),
           reason:
-              'recto/verso page-local widths must be converted through the same '
-              'BACK drawSoft local clip coordinates.',
+              'recto/verso page-local polygons must be derived from the same '
+              'fold line as the BACK sheet, not from a width-only strip.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('_buildBackwardLaidDownFrontLayer(')),
+          reason:
+              'BACK previous-front must not be a standalone pageRect layer; it '
+              'must be integrated into the same moving sheet as previous-back.',
+        );
+        expect(
+          hostSource,
+          contains('backwardSheetRectoPolygon('),
+          reason:
+              'BACK previous-front polygon must be derived in sheet-local F/E geometry.',
+        );
+        expect(
+          hostSource,
+          contains('backwardSheetVersoPolygon('),
+          reason:
+              'BACK previous-back must be constrained to the F/E fold band.',
+        );
+        final splitStart = hostSource.indexOf(
+          '({List<Offset> recto, List<Offset> verso}) _backwardFoldDerivedFacePolygons',
+        );
+        final splitEnd = hostSource.indexOf(
+          'String? _resolveBackwardPhaseLabel',
+          splitStart,
+        );
+        expect(splitStart, isNonNegative);
+        expect(splitEnd, greaterThan(splitStart));
+        final splitSource = hostSource.substring(splitStart, splitEnd);
+        expect(
+          hostSource,
+          isNot(contains('_buildBackwardRectoFacePolygon(')),
+          reason:
+              'BACK recto/front must not return to the regressed reflection '
+              'builder that delayed front visibility to the final phase.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('_reflectionMatrixForLine(')),
+          reason:
+              'previous front must come from the sheet-local F/E polygon; a child '
+              'reflection transform moves the texture out of the visible front slice.',
+        );
+        final backwardSurfaceStart = hostSource.indexOf(
+          'Widget _buildBackwardRectoVersoFlippingPageSurface',
+        );
+        final backwardSurfaceEnd = hostSource.indexOf(
+          'Widget _buildBackwardSheetFacePolygon',
+          backwardSurfaceStart,
+        );
+        expect(backwardSurfaceStart, isNonNegative);
+        expect(backwardSurfaceEnd, greaterThan(backwardSurfaceStart));
+        final backwardSurfaceSource = hostSource.substring(
+          backwardSurfaceStart,
+          backwardSurfaceEnd,
+        );
+        expect(
+          backwardSurfaceSource,
+          contains('ArticlePageSurfaceKind.front'),
+          reason:
+              'previous-front must render as a recto clipped face inside the same BACK sheet.',
+        );
+        expect(
+          backwardSurfaceSource,
+          contains('ArticlePageSurfaceKind.back'),
+          reason:
+              'rotating BACK sheet should keep the previous-back fold band.',
+        );
+        expect(
+          _readAppSource(
+            'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
+          ),
+          contains('keepPositiveSideForBackwardRecto('),
+          reason:
+              'host and diagnostics must share the same recto/verso side helper.',
+        );
+        expect(
+          hostSource,
+          contains('backwardFreeEdgeLine:'),
+          reason:
+              'BACK recto/verso side choice should use the canonical free-edge '
+              'line when it is available.',
         );
         expect(
           hostSource,
           contains('clipBehavior: Clip.none'),
           reason:
-              'BACK face slices can live in negative drawSoft-local X; they must '
+              'BACK face polygons can live in native drawSoft-local space; they must '
               'not be clipped by an inner Stack before the outer paper clip.',
         );
         expect(
-          hostSource,
-          contains('Rect.fromLTWH('),
+          _readAppSource(
+            'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
+          ),
+          contains('clipPolygonByLine('),
           reason:
-              'recto/verso visible slices must stay in positive sheet-local '
-              'coordinates; negative drawSoft-space rects get clipped by Stack.',
+              'Route-B visible faces must be split by F/fold line half planes, '
+              'not by axis-aligned width strips.',
+        );
+        expect(
+          _readAppSource(
+            'lib/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart',
+          ),
+          contains('polygonLooksLikeFullPageFallback('),
+          reason:
+              'BACK verso/back must guard against the full-page uncreased fallback.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('_singlePageBackwardFlippingDisplayOffset')),
+          reason:
+              'BACK render/diagnostics must not use a screen-space display offset; '
+              'early visibility must come from the forward-isomorphic frame.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('rectoCoverage > 0.001')),
+          reason:
+              'BACK sheet projection must not jump when recto becomes visible; '
+              'that makes the back face disappear and the front face pop in.',
+        );
+        expect(
+          splitSource,
+          isNot(contains('totalRectoVisibleWidthNormalized > 0.001')),
+          reason:
+              'BACK front polygon timing must be driven by F/E clipping, not an '
+              'independent recto coverage gate.',
+        );
+        expect(
+          splitSource,
+          isNot(contains('versoRevealWidthNormalized > 0.001')),
+          reason:
+              'BACK back polygon timing must be driven by F/E clipping, not an '
+              'independent verso width gate.',
         );
         expect(
           hostSource,
@@ -345,14 +462,8 @@ void main() {
         backwardLayerSource,
         contains('direction: StPageFlipDirection.back,'),
       );
-      expect(
-        backwardLayerSource,
-        contains('isFlippingPage: false,'),
-      );
-      expect(
-        backwardLayerSource,
-        contains('isFlippingPage: true,'),
-      );
+      expect(backwardLayerSource, contains('isFlippingPage: false,'));
+      expect(backwardLayerSource, contains('isFlippingPage: true,'));
 
       // 已删的旧分支必须不再出现，避免再次诱导回旧路径。
       expect(
@@ -369,7 +480,10 @@ void main() {
       );
       expect(hostSource, isNot(contains('resolveBackwardFoldFrameGeometry(')));
       expect(hostSource, isNot(contains('BackwardFoldSurfaceGeometry')));
-      expect(hostSource, isNot(contains('_buildBackwardGeometryProbeSurface(')));
+      expect(
+        hostSource,
+        isNot(contains('_buildBackwardGeometryProbeSurface(')),
+      );
       expect(hostSource, isNot(contains('_buildBackwardSpineFoldLayer(')));
       expect(hostSource, isNot(contains('resolveBackwardSpineFoldGeometry(')));
       expect(hostSource, isNot(contains('previousFoldSurfacePolygon')));
@@ -403,8 +517,7 @@ void main() {
       expect(
         softGeometrySource,
         isNot(contains('pageViewportRect')),
-        reason:
-            '`pageViewportRect` 仅在已废止的 BACK soft helper 中使用，不得再次出现。',
+        reason: '`pageViewportRect` 仅在已废止的 BACK soft helper 中使用，不得再次出现。',
       );
       expect(
         softGeometrySource,
@@ -415,10 +528,7 @@ void main() {
         softGeometrySource,
         isNot(contains('_resolveBackwardDisplaySheetBand(')),
       );
-      expect(
-        softGeometrySource,
-        isNot(contains('_pageRectBandPolygon(')),
-      );
+      expect(softGeometrySource, isNot(contains('_pageRectBandPolygon(')));
       expect(
         softGeometrySource,
         isNot(contains('_resolveBottomAreaBoundaryLine(')),
@@ -556,8 +666,7 @@ void main() {
         expect(
           backwardLayerSource,
           isNot(contains('_buildBackwardPreviousFrontBaselineLayer(')),
-          reason:
-              'BACK 不允许 full previous-front baseline 替换 current page。',
+          reason: 'BACK 不允许 full previous-front baseline 替换 current page。',
         );
         expect(
           backwardLayerSource,
@@ -685,8 +794,8 @@ void main() {
       expect(scene.underlayPageIndex, 2);
       expect(scene.coveredPageIndex, 2);
       expect(scene.turningPageIndex, isNot(scene.underlayPageIndex));
-      // Backward 主线统一：polygon 直接来自 BACK StPageFlipCalculation，
-      // 不再通过 forward calculation 镜像，也不再走 seam 矩形伪几何。
+      // Backward 主线统一：semantic BACK 绑定不变，portrait visual polygon
+      // 来自 forward-isomorphic calculation，不再走 seam 矩形伪几何。
       expect(
         renderFrame.canonicalFrame.flippingClipArea.length,
         greaterThanOrEqualTo(3),
@@ -697,7 +806,7 @@ void main() {
       );
       expect(renderFrame.canonicalFrame.bottomAnchor.dx.isFinite, isTrue);
       expect(renderFrame.canonicalFrame.angle.isFinite, isTrue);
-      final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
+      final replayLocalPoint = resolveBackwardVisualReplayLocalPagePoint(
         localPagePoint: renderFrame.canonicalFrame.localPagePoint,
         pageSize: const Size(420, 584),
       );
@@ -711,12 +820,91 @@ void main() {
       );
     });
 
+    test('backward portrait frame uses forward-isomorphic visual geometry', () {
+      // 后翻语义仍是 BACK，但某一静态时刻的 F/E/clip/current residual
+      // 必须与 forward 纸张姿态同构，差别只在页面绑定和时间方向。
+      const pageSize = Size(420, 584);
+      const localPagePoint = Offset(-96, 496);
+      final replayPoint = resolveBackwardVisualReplayLocalPagePoint(
+        localPagePoint: localPagePoint,
+        pageSize: pageSize,
+      );
+      final backCalculation = StPageFlipCalculation(
+        direction: StPageFlipDirection.back,
+        corner: StPageFlipCorner.bottom,
+        pageWidth: pageSize.width,
+        pageHeight: pageSize.height,
+      );
+      expect(backCalculation.calc(localPagePoint), isTrue);
+      final canonicalGeometry = backCalculation.getCanonicalFoldGeometry();
+      expect(canonicalGeometry, isNotNull);
+      final forwardCalculation = StPageFlipCalculation(
+        direction: StPageFlipDirection.forward,
+        corner: StPageFlipCorner.bottom,
+        pageWidth: pageSize.width,
+        pageHeight: pageSize.height,
+      );
+      expect(forwardCalculation.calc(replayPoint), isTrue);
+      final forwardGeometry = forwardCalculation.getCanonicalFoldGeometry();
+      expect(forwardGeometry, isNotNull);
+
+      final frame = buildBackwardDynamicRenderFrame(
+        BackwardRenderFrameData(
+          localPagePoint: localPagePoint,
+          progress: 0.42,
+          orientation: StPageFlipOrientation.portrait,
+          corner: StPageFlipCorner.bottom,
+          pageSize: pageSize,
+          flippingClipArea: backCalculation.getFlippingClipArea(),
+          bottomClipArea: backCalculation.getBottomClipArea(),
+          flippingAnchor: backCalculation.getActiveCorner(),
+          bottomAnchor: backCalculation.getBottomPagePosition(),
+          angle: backCalculation.getAngle(),
+          foldLine: canonicalGeometry!.foldLine,
+          freeEdgeLine: canonicalGeometry.freeEdgeLine,
+          maxShadowOpacity: 0.2,
+        ),
+      );
+
+      expect(frame.direction, StPageFlipDirection.back);
+      expect(frame.renderDirection, StPageFlipDirection.back);
+      expect(frame.visualGeometryDirection, StPageFlipDirection.forward);
+      expect(
+        frame.routeBSpineMirroredApplied,
+        isTrue,
+        reason: 'portrait BACK visual geometry must be forward-isomorphic.',
+      );
+      expect(frame.flippingAnchor, forwardCalculation.getActiveCorner());
+      expect(frame.bottomAnchor, forwardCalculation.getBottomPagePosition());
+      expect(frame.angle, closeTo(forwardCalculation.getAngle(), 1e-9));
+      expect(frame.flippingClipArea, forwardCalculation.getFlippingClipArea());
+      expect(frame.bottomClipArea, forwardCalculation.getBottomClipArea());
+
+      final projectedFrame = frame.backwardProjectedFrame;
+      expect(projectedFrame, isNotNull);
+      expect(
+        projectedFrame!.foldLine,
+        orderPageLineTopToBottom(forwardGeometry!.foldLine),
+      );
+      expect(
+        projectedFrame.projectedRightEdgeLine,
+        orderPageLineTopToBottom(forwardGeometry.freeEdgeLine),
+      );
+      expect(
+        projectedFrame.foldLineSource,
+        'backwardForwardIsomorphicFoldLine',
+      );
+      expect(
+        projectedFrame.edgeLineSource,
+        'backwardForwardIsomorphicFreeEdgeLine',
+      );
+      expect(projectedFrame.edgeEnteredPage, isTrue);
+    });
+
     test(
-      'backward portrait frame preserves native BACK calculation geometry',
+      'backward landscape frame leaves geometry untouched (route B M1 scope)',
       () {
-        // StPageFlip 原生 BACK 不变量：calculation 仍是 BACK，frame builder
-        // 不得用 forward calc 重算，也不得做最终 X 镜像。single-page portrait
-        // 的可见投影由 host 的 direction-aware `drawSoft` 公式负责。
+        // landscape 双页 BACK 不在路线 B 范围，frame builder 不应对几何做镜像。
         const pageSize = Size(420, 584);
         const localPagePoint = Offset(-96, 496);
         final backCalculation = StPageFlipCalculation(
@@ -733,7 +921,7 @@ void main() {
           BackwardRenderFrameData(
             localPagePoint: localPagePoint,
             progress: 0.42,
-            orientation: StPageFlipOrientation.portrait,
+            orientation: StPageFlipOrientation.landscape,
             corner: StPageFlipCorner.bottom,
             pageSize: pageSize,
             flippingClipArea: backCalculation.getFlippingClipArea(),
@@ -747,134 +935,108 @@ void main() {
           ),
         );
 
-        expect(frame.direction, StPageFlipDirection.back);
-        expect(frame.renderDirection, StPageFlipDirection.back);
-        expect(
-          frame.routeBSpineMirroredApplied,
-          isFalse,
-          reason: 'BACK frame builder 不得再应用 forward calc 重算 + X 镜像。',
-        );
+        expect(frame.routeBSpineMirroredApplied, isFalse);
+        expect(frame.visualGeometryDirection, StPageFlipDirection.back);
         expect(frame.flippingAnchor, backCalculation.getActiveCorner());
         expect(frame.bottomAnchor, backCalculation.getBottomPagePosition());
         expect(frame.angle, closeTo(backCalculation.getAngle(), 1e-9));
         expect(frame.flippingClipArea, backCalculation.getFlippingClipArea());
         expect(frame.bottomClipArea, backCalculation.getBottomClipArea());
-
-        // projected frame 仍只承载 BACK calc 的 fold/free-edge 诊断线。
-        final projectedFrame = frame.backwardProjectedFrame;
-        expect(projectedFrame, isNotNull);
-        expect(_allXWithinPage(projectedFrame!.foldLine, pageSize.width), isTrue);
-        expect(
-          _allXWithinPage(projectedFrame.projectedRightEdgeLine, pageSize.width),
-          isTrue,
-        );
-        expect(projectedFrame.foldLineSource, 'backwardCanonicalFoldLine');
-        expect(projectedFrame.edgeLineSource, 'backwardCanonicalFreeEdgeLine');
-        expect(projectedFrame.edgeEnteredPage, isTrue);
       },
     );
 
-    test('backward landscape frame leaves geometry untouched (route B M1 scope)',
-        () {
-      // landscape 双页 BACK 不在路线 B 范围，frame builder 不应对几何做镜像。
-      const pageSize = Size(420, 584);
-      const localPagePoint = Offset(-96, 496);
-      final backCalculation = StPageFlipCalculation(
-        direction: StPageFlipDirection.back,
-        corner: StPageFlipCorner.bottom,
-        pageWidth: pageSize.width,
-        pageHeight: pageSize.height,
-      );
-      expect(backCalculation.calc(localPagePoint), isTrue);
-      final canonicalGeometry = backCalculation.getCanonicalFoldGeometry();
-      expect(canonicalGeometry, isNotNull);
+    test(
+      'backward projected frame exposes forward-isomorphic fold/free-edge lines',
+      () {
+        // 路线 B：projected frame 仅承载同构 F/E 诊断线。
+        // F/E 可超出 page rect；真正的可见分段由 host 内的 polygon-by-line
+        // 裁剪负责，projected frame 不应再把同构线强行裁短。
+        const pageSize = Size(420, 584);
+        const localPoints = <Offset>[
+          Offset(-48, 520),
+          Offset(-124, 506),
+          Offset(-220, 492),
+        ];
+        final visualReplayXs = <double>[];
 
-      final frame = buildBackwardDynamicRenderFrame(
-        BackwardRenderFrameData(
-          localPagePoint: localPagePoint,
-          progress: 0.42,
-          orientation: StPageFlipOrientation.landscape,
-          corner: StPageFlipCorner.bottom,
-          pageSize: pageSize,
-          flippingClipArea: backCalculation.getFlippingClipArea(),
-          bottomClipArea: backCalculation.getBottomClipArea(),
-          flippingAnchor: backCalculation.getActiveCorner(),
-          bottomAnchor: backCalculation.getBottomPagePosition(),
-          angle: backCalculation.getAngle(),
-          foldLine: canonicalGeometry!.foldLine,
-          freeEdgeLine: canonicalGeometry.freeEdgeLine,
-          maxShadowOpacity: 0.2,
-        ),
-      );
-
-      expect(frame.routeBSpineMirroredApplied, isFalse);
-      expect(frame.flippingAnchor, backCalculation.getActiveCorner());
-      expect(frame.bottomAnchor, backCalculation.getBottomPagePosition());
-      expect(frame.angle, closeTo(backCalculation.getAngle(), 1e-9));
-      expect(frame.flippingClipArea, backCalculation.getFlippingClipArea());
-      expect(frame.bottomClipArea, backCalculation.getBottomClipArea());
-    });
-
-    test('backward projected frame keeps fold/free-edge lines page-clipped', () {
-      // 路线 B：projected frame 仅承载 fold line 与 free edge line。
-      // 取多个 BACK 拖拽点，断 fold/free-edge X 单调地朝右页边推进且始终
-      // 在 [0, pageWidth] 内；同时 free edge 始终位于 fold 之外侧。
-      const pageSize = Size(420, 584);
-      const localPoints = <Offset>[
-        Offset(-48, 520),
-        Offset(-124, 506),
-        Offset(-220, 492),
-      ];
-      final foldXs = <double>[];
-      final edgeXs = <double>[];
-
-      for (var index = 0; index < localPoints.length; index += 1) {
-        final calculation = StPageFlipCalculation(
-          direction: StPageFlipDirection.back,
-          corner: StPageFlipCorner.bottom,
-          pageWidth: pageSize.width,
-          pageHeight: pageSize.height,
-        );
-        expect(calculation.calc(localPoints[index]), isTrue);
-        final canonicalGeometry = calculation.getCanonicalFoldGeometry();
-        expect(canonicalGeometry, isNotNull);
-        final frame = buildBackwardDynamicRenderFrame(
-          BackwardRenderFrameData(
+        for (var index = 0; index < localPoints.length; index += 1) {
+          final replayPoint = resolveBackwardVisualReplayLocalPagePoint(
             localPagePoint: localPoints[index],
-            progress: 0.18 + index * 0.24,
-            orientation: StPageFlipOrientation.portrait,
-            corner: StPageFlipCorner.bottom,
             pageSize: pageSize,
-            flippingClipArea: calculation.getFlippingClipArea(),
-            bottomClipArea: calculation.getBottomClipArea(),
-            flippingAnchor: calculation.getActiveCorner(),
-            bottomAnchor: calculation.getBottomPagePosition(),
-            angle: calculation.getAngle(),
-            foldLine: canonicalGeometry!.foldLine,
-            freeEdgeLine: canonicalGeometry.freeEdgeLine,
-            maxShadowOpacity: 0.2,
-          ),
-        );
-        final projectedFrame = frame.backwardProjectedFrame;
-        expect(projectedFrame, isNotNull);
+          );
+          visualReplayXs.add(replayPoint.dx);
+          final calculation = StPageFlipCalculation(
+            direction: StPageFlipDirection.back,
+            corner: StPageFlipCorner.bottom,
+            pageWidth: pageSize.width,
+            pageHeight: pageSize.height,
+          );
+          expect(calculation.calc(localPoints[index]), isTrue);
+          final canonicalGeometry = calculation.getCanonicalFoldGeometry();
+          expect(canonicalGeometry, isNotNull);
+          final forwardCalculation = StPageFlipCalculation(
+            direction: StPageFlipDirection.forward,
+            corner: StPageFlipCorner.bottom,
+            pageWidth: pageSize.width,
+            pageHeight: pageSize.height,
+          );
+          expect(forwardCalculation.calc(replayPoint), isTrue);
+          final forwardGeometry = forwardCalculation.getCanonicalFoldGeometry();
+          expect(forwardGeometry, isNotNull);
+          final frame = buildBackwardDynamicRenderFrame(
+            BackwardRenderFrameData(
+              localPagePoint: localPoints[index],
+              progress: 0.18 + index * 0.24,
+              orientation: StPageFlipOrientation.portrait,
+              corner: StPageFlipCorner.bottom,
+              pageSize: pageSize,
+              flippingClipArea: calculation.getFlippingClipArea(),
+              bottomClipArea: calculation.getBottomClipArea(),
+              flippingAnchor: calculation.getActiveCorner(),
+              bottomAnchor: calculation.getBottomPagePosition(),
+              angle: calculation.getAngle(),
+              foldLine: canonicalGeometry!.foldLine,
+              freeEdgeLine: canonicalGeometry.freeEdgeLine,
+              maxShadowOpacity: 0.2,
+            ),
+          );
+          final projectedFrame = frame.backwardProjectedFrame;
+          expect(projectedFrame, isNotNull);
+          expect(projectedFrame!.replayLocalPoint, replayPoint);
+          expect(
+            projectedFrame.foldLine,
+            orderPageLineTopToBottom(forwardGeometry!.foldLine),
+          );
+          expect(
+            projectedFrame.projectedRightEdgeLine,
+            orderPageLineTopToBottom(forwardGeometry.freeEdgeLine),
+          );
+          expect(
+            projectedFrame.edgeLineSource,
+            'backwardForwardIsomorphicFreeEdgeLine',
+          );
+        }
         expect(
-          _allXWithinPage(projectedFrame!.foldLine, pageSize.width),
-          isTrue,
+          visualReplayXs,
+          orderedEquals(visualReplayXs.toList()..sort()),
+          reason:
+              'BACK 向右拖时，同构 forward visual pose 必须从左向右推进，'
+              '不能沿用前翻的右到左输入时间。',
         );
         expect(
-          _allXWithinPage(projectedFrame.projectedRightEdgeLine, pageSize.width),
-          isTrue,
+          visualReplayXs.first,
+          lessThan(0),
+          reason:
+              '刚开始后翻必须映射到 forward 完成态的负 X 区间，'
+              '让 previous 从书脊左侧不可见区进入。',
         );
-        expect(projectedFrame.edgeLineSource, 'backwardCanonicalFreeEdgeLine');
-        foldXs.add(_lineAverageX(projectedFrame.foldLine));
-        edgeXs.add(_lineAverageX(projectedFrame.projectedRightEdgeLine));
-      }
-
-      expect(edgeXs, everyElement(greaterThanOrEqualTo(0)));
-      expect(edgeXs, everyElement(lessThanOrEqualTo(pageSize.width)));
-      expect(foldXs, everyElement(greaterThanOrEqualTo(0)));
-      expect(foldXs, everyElement(lessThanOrEqualTo(pageSize.width)));
-    });
+        expect(
+          visualReplayXs.last,
+          greaterThan(0),
+          reason: '继续后翻时 visual pose 必须越过书脊向右推进。',
+        );
+      },
+    );
 
     test('backward mesh keeps spine and seam vertically aligned', () {
       final engine = PageflipEngine(pageCount: 5, initialPage: 2);
@@ -1057,17 +1219,6 @@ void main() {
       expect(clipPath.getBounds().height, equals(pageRect.height));
     });
   });
-}
-
-bool _allXWithinPage((Offset, Offset) line, double width) {
-  return line.$1.dx >= -0.001 &&
-      line.$1.dx <= width + 0.001 &&
-      line.$2.dx >= -0.001 &&
-      line.$2.dx <= width + 0.001;
-}
-
-double _lineAverageX((Offset, Offset) line) {
-  return (line.$1.dx + line.$2.dx) / 2;
 }
 
 StPageFlipScene _buildInteractiveForwardStScene() {

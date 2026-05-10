@@ -73,6 +73,7 @@ class StPageFlipRenderFrame {
     required this.progress,
     required this.direction,
     required this.renderDirection,
+    required this.visualGeometryDirection,
     required this.corner,
     required this.flippingClipArea,
     required this.bottomClipArea,
@@ -91,6 +92,7 @@ class StPageFlipRenderFrame {
   final double progress;
   final StPageFlipDirection direction;
   final StPageFlipDirection renderDirection;
+  final StPageFlipDirection visualGeometryDirection;
   final StPageFlipCorner corner;
   final List<ui.Offset> flippingClipArea;
   final List<ui.Offset> bottomClipArea;
@@ -272,7 +274,10 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
   // appear before the physical fold has exposed the spine-side segment.
   final rectoCoverage = coveredWidth > 0.5
       ? math
-            .max(math.max(rectoCoverageByFold, rectoCoverageByCurl), settleProgress)
+            .max(
+              math.max(rectoCoverageByFold, rectoCoverageByCurl),
+              settleProgress,
+            )
             .clamp(0.0, 1.0)
             .toDouble()
       : 0.0;
@@ -451,6 +456,17 @@ ui.Offset resolveBackwardReplayLocalPagePoint({
   );
 }
 
+ui.Offset resolveBackwardVisualReplayLocalPagePoint({
+  required ui.Offset localPagePoint,
+  required ui.Size pageSize,
+}) {
+  return resolveBackwardVisualReplayCanonicalPoint(
+    localPagePoint: localPagePoint,
+    pageWidth: pageSize.width,
+    pageHeight: pageSize.height,
+  );
+}
+
 double resolveBackwardReplayProgress(double progress) {
   return (1.0 - progress).clamp(0.0, 1.0).toDouble();
 }
@@ -489,7 +505,7 @@ StPageFlipTimeline _resolveBackwardReplayTimeline({
   required StPageFlipCurlAngleBand angleBand,
 }) {
   final replayProgress = resolveBackwardReplayProgress(progress);
-  final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
+  final replayLocalPoint = resolveBackwardVisualReplayLocalPagePoint(
     localPagePoint: localPagePoint,
     pageSize: pageSize,
   );

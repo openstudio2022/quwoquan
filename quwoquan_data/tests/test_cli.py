@@ -121,6 +121,66 @@ class QwqDataCliTest(unittest.TestCase):
     def topic_dir(self, topic_id: str) -> Path:
         return self.runtime_spec_dir() / 'topics' / topic_id
 
+    def write_entity_catalog_seed(self, spec_id: str = 'dual_source_001') -> Path:
+        path = self.runtime_root / 'seed' / 'entity_seed.ndjson'
+        self.write_ndjson(
+            path,
+            [
+                {
+                    'entityId': 'entity_place_west_lake',
+                    'canonicalName': '西湖',
+                    'entityType': 'scenic_spot',
+                    'aliases': ['杭州西湖'],
+                    'entityRef': 'trees/entities/地点/西湖.yaml',
+                    'tagRefs': ['trees/tags/主题/城市漫游.yaml'],
+                    'topicId': 'west_lake_article_001',
+                    'extensions': {
+                        'coreTokens': ['西湖', '白堤', '断桥'],
+                        'wikiTitle': '西湖',
+                        'baikeItem': '西湖',
+                    },
+                }
+            ],
+        )
+        return path
+
+    def write_manual_content_seed(self, entity_id: str, topic_id: str) -> Path:
+        html_path = self.data_root / 'tests' / 'fixtures' / 'dual_source_page.html'
+        html_path.write_text(
+            '<html><head><title>西湖白堤亲子慢走攻略</title></head><body><article>'
+            '<p>西湖白堤适合亲子慢走，断桥到平湖秋月这段路更容易控制体力，也方便在湖边停下来拍照和休息。</p>'
+            '<p>如果把路线放在清晨或傍晚，湖面光线会更柔和，带孩子出门也不容易太晒。走到苏堤口后再决定要不要继续向曲院风荷延伸，会比一开始拉满路线更舒服。</p>'
+            '<p>从白堤往里走，断桥、平湖秋月和湖滨一带都能作为补给点。想拍照的人可以把停留点放在断桥附近，想吃饭的人则可以回到湖滨餐厅区域。</p>'
+            '<p>这条线最大的好处是节奏稳定，老人和孩子都不容易掉队。带相机的人还可以在断桥、白堤和湖面之间切换取景，形成文章和图片都能用的素材。</p>'
+            '<p>如果只是半天时间，建议把重点放在白堤、断桥、平湖秋月这一小圈，留出喝茶和休息的时间，不必把每个景点都挤进一趟行程里。</p>'
+            '<p>西湖作为杭州城市漫游里最稳定的实体锚点，适合串联白堤、湖滨、游船和晚饭安排，也适合把沿线风景和亲子体验写成一篇更完整的攻略。</p>'
+            '</article></body></html>',
+            encoding='utf-8',
+        )
+        path = self.runtime_root / 'seed' / 'manual_content_seed.ndjson'
+        self.write_ndjson(
+            path,
+            [
+                {
+                    'postId': 'west_lake_manual_article_001',
+                    'entityId': entity_id,
+                    'topicId': topic_id,
+                    'sourceUrl': html_path.as_uri(),
+                    'sourceType': 'manual_seed',
+                    'mediaType': 'article',
+                    'title': '西湖白堤亲子慢走攻略',
+                    'snippet': '围绕西湖白堤、断桥和平湖秋月展开的亲子慢走路线。',
+                    'fetchPolicy': 'open_html',
+                    'likes': 120,
+                    'shares': 18,
+                    'comments': 9,
+                    'rightsStatus': 'clear',
+                    'watermarkStatus': 'clean',
+                }
+            ],
+        )
+        return path
+
     def _png_bytes(self) -> bytes:
         def chunk(tag: bytes, data: bytes) -> bytes:
             return (
@@ -315,7 +375,7 @@ class QwqDataCliTest(unittest.TestCase):
             (page_dir / 'asset_manifest.json').write_text(
                 json.dumps(
                     {
-                        'schemaVersion': 'quwoquan_data.topic_asset_manifest.v1',
+                        'schemaVersion': 'quwoquan_data.topic_asset_manifest',
                         'specId': RUNTIME_SPEC_ID,
                         'topicId': topic_id,
                         'sourceId': source_id,
@@ -333,7 +393,7 @@ class QwqDataCliTest(unittest.TestCase):
             topic_dir / 'enrichment.ndjson',
             [
                 {
-                    'schemaVersion': 'quwoquan_data.topic_enrichment.v1',
+                    'schemaVersion': 'quwoquan_data.topic_enrichment',
                     'specId': RUNTIME_SPEC_ID,
                     'topicId': topic_id,
                     'taskType': 'article',
@@ -403,7 +463,7 @@ class QwqDataCliTest(unittest.TestCase):
             topic_dir / 'enrichment.ndjson',
             [
                 {
-                    'schemaVersion': 'quwoquan_data.topic_enrichment.v1',
+                    'schemaVersion': 'quwoquan_data.topic_enrichment',
                     'specId': RUNTIME_SPEC_ID,
                     'topicId': topic_id,
                     'taskType': 'article',
@@ -419,7 +479,7 @@ class QwqDataCliTest(unittest.TestCase):
         (page_dir / 'asset_manifest.json').write_text(
             json.dumps(
                 {
-                    'schemaVersion': 'quwoquan_data.topic_asset_manifest.v1',
+                    'schemaVersion': 'quwoquan_data.topic_asset_manifest',
                     'specId': RUNTIME_SPEC_ID,
                     'topicId': topic_id,
                     'sourceId': f'{topic_id}_source_001',
@@ -436,7 +496,7 @@ class QwqDataCliTest(unittest.TestCase):
             self.runtime_spec_dir() / 'topic_tasks.ndjson',
             [
                 {
-                    'schemaVersion': 'quwoquan_data.topic_task.v2',
+                    'schemaVersion': 'quwoquan_data.topic_task',
                     'specId': RUNTIME_SPEC_ID,
                     'topicId': topic_id,
                     'taskType': 'article',
@@ -579,9 +639,13 @@ class QwqDataCliTest(unittest.TestCase):
             / 'west_lake_article_001_article_001'
         )
         manifest = self.read_json(post_dir / 'manifest.json')
+        review = self.read_json(post_dir / 'review.json')
         article_text = (post_dir / 'article.md').read_text(encoding='utf-8')
         self.assertEqual(manifest['compliance']['overallStatus'], 'approved')
-        self.assertIn('白堤这段路开始', article_text)
+        self.assertEqual(manifest['qualityAudit']['overallStatus'], 'approved')
+        self.assertEqual(review['overallStatus'], 'approved')
+        self.assertTrue(review['checks']['readerFacingTone']['pass'])
+        self.assertIn('白堤和断桥一侧', article_text)
         self.assertNotIn(
             '杭州春日亲子遛娃的舒适感，往往从白堤这段路开始。断桥往里走，桃柳贴着湖岸铺开，孩子一路都有景可看，大人也不会有赶路的压力。',
             article_text,
@@ -590,7 +654,67 @@ class QwqDataCliTest(unittest.TestCase):
         self.assertTrue(manifest['selectedSourceIds'])
         package_path = manifest['assets'][0]['packagePath']
         self.assertTrue((post_dir / package_path).exists())
+        source_pool = self.read_ndjson(self.topic_dir('west_lake_article_001') / 'source_pool.ndjson')
+        retained_row = next(
+            row for row in source_pool if row.get('selectionDecision') == 'retained'
+        )
+        self.assertGreater(int(retained_row.get('publishabilityScore') or 0), 0)
+        self.assertIn('readerValue', retained_row.get('publishabilityBreakdown') or {})
+        self.assertIn('routeSpecificity', retained_row.get('publishabilityBreakdown') or {})
+        self.assertIn('factDensity', retained_row.get('publishabilityBreakdown') or {})
+        self.assertIn('practicality', retained_row.get('publishabilityBreakdown') or {})
+        self.assertIn('narrativePotential', retained_row.get('publishabilityBreakdown') or {})
+        self.assertIn('encyclopedicPenalty', retained_row.get('publishabilityBreakdown') or {})
         self.assertEqual(self.run_package_gate().returncode, 0)
+
+    def test_compose_and_audit_topic_emit_role_artifacts(self) -> None:
+        self.seed_authentic_article_topic()
+        self.assert_ok(self.run_cli('crawl', 'spec-discovery', '--spec', str(self.spec_path())))
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'compose-topic',
+                '--spec',
+                str(self.spec_path()),
+                '--topic',
+                'west_lake_article_001',
+                '--targets',
+                'alpha,gamma',
+                '--dry-run',
+            )
+        )
+        compose_summary = self.read_json(
+            self.topic_dir('west_lake_article_001') / 'compose_summary.json'
+        )
+        self.assertEqual(compose_summary['role'], 'compose')
+        self.assertEqual(compose_summary['overallStatus'], 'composed')
+        self.assertTrue(compose_summary['postIds'])
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'audit-topic',
+                '--spec',
+                str(self.spec_path()),
+                '--topic',
+                'west_lake_article_001',
+            )
+        )
+        audit_summary = self.read_json(
+            self.topic_dir('west_lake_article_001') / 'audit_summary.json'
+        )
+        review = self.read_json(
+            self.runtime_root
+            / 'publish'
+            / 'west_lake_article_001'
+            / 'posts'
+            / 'west_lake_article_001_article_001'
+            / 'review.json'
+        )
+        self.assertEqual(audit_summary['role'], 'audit')
+        self.assertEqual(audit_summary['overallStatus'], 'approved')
+        self.assertEqual(review['overallStatus'], 'approved')
+        self.assertTrue(review['checks']['factualCoverage']['pass'])
+        self.assertTrue(review['checks']['sourceGrounding']['pass'])
 
     def test_run_topic_auto_prepares_enrichment_for_single_real_source(self) -> None:
         self.seed_authentic_article_topic()
@@ -607,7 +731,7 @@ class QwqDataCliTest(unittest.TestCase):
             topic_dir / 'enrichment.ndjson',
             [
                 {
-                    'schemaVersion': 'quwoquan_data.topic_enrichment.v1',
+                    'schemaVersion': 'quwoquan_data.topic_enrichment',
                     'specId': RUNTIME_SPEC_ID,
                     'topicId': topic_id,
                     'taskType': 'article',
@@ -721,6 +845,163 @@ class QwqDataCliTest(unittest.TestCase):
         gate = self.run_auth_gate()
         self.assertNotEqual(gate.returncode, 0)
         self.assertIn('占位 URL', gate.stdout + gate.stderr)
+
+    def test_crawl_spec_discovery_skip_hydrate(self) -> None:
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'spec-discovery',
+                '--spec',
+                str(self.spec_path()),
+                '--skip-hydrate',
+            )
+        )
+
+    def test_crawl_export_poi_topics_writes_ndjson(self) -> None:
+        overpass = self.runtime_root / 'seed' / 'overpass_test.json'
+        overpass.parent.mkdir(parents=True, exist_ok=True)
+        overpass.write_text(
+            json.dumps(
+                {
+                    'elements': [
+                        {
+                            'type': 'node',
+                            'id': 4242,
+                            'tags': {'name': '西门测试景点', 'tourism': 'attraction'},
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding='utf-8',
+        )
+        out = self.runtime_root / 'seed' / 'poi_topics_out.ndjson'
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'export-poi-topics',
+                '--input',
+                str(overpass),
+                '--output',
+                str(out),
+                '--topic-id-prefix',
+                'tpfx',
+            )
+        )
+        rows = self.read_ndjson(out)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['topic_id'], 'tpfx_node_4242')
+
+    def test_dual_source_instruction_and_catalog_commands(self) -> None:
+        entity_seed = self.write_entity_catalog_seed()
+        self.assert_ok(self.run_cli('crawl', 'tag-catalog-build'))
+        self.assert_ok(self.run_cli('crawl', 'entity-catalog-build', '--catalog', str(entity_seed)))
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'instruction-build',
+                '--spec-id',
+                'dual_source_001',
+                '--instruction',
+                '从旅行攻略标签出发发现西湖实体与图文内容',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+                '--verticals',
+                'travel',
+                '--content-modes',
+                'article,image',
+            )
+        )
+        tag_catalog = self.read_ndjson(self.runtime_root / 'seed' / 'tag_catalog' / 'tags.ndjson')
+        entity_catalog = self.read_ndjson(self.runtime_root / 'seed' / 'entity_catalog' / 'entities.ndjson')
+        instruction_profile = self.read_json(self.runtime_root / 'runs' / 'dual_source_001' / 'instruction_profile.json')
+        self.assertTrue(any(row['label'] == '城市漫游' for row in tag_catalog))
+        self.assertTrue(any(row['canonicalName'] == '西湖' for row in entity_catalog))
+        self.assertEqual(instruction_profile['specId'], 'dual_source_001')
+
+    def test_entities_by_tag_and_spec_build(self) -> None:
+        entity_seed = self.write_entity_catalog_seed()
+        self.assert_ok(self.run_cli('crawl', 'tag-catalog-build'))
+        self.assert_ok(self.run_cli('crawl', 'entity-catalog-build', '--catalog', str(entity_seed)))
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'instruction-build',
+                '--spec-id',
+                'dual_source_002',
+                '--instruction',
+                '从城市漫游标签发现旅行实体',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+            )
+        )
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'entities-by-tag',
+                '--spec-id',
+                'dual_source_002',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+            )
+        )
+        self.assert_ok(self.run_cli('crawl', 'spec-build', '--spec-id', 'dual_source_002'))
+        selected = self.read_ndjson(self.runtime_root / 'runs' / 'dual_source_002' / 'selected_entities.ndjson')
+        built_spec = self.read_yaml(self.runtime_root / 'specs' / 'dual_source_002.yaml')
+        self.assertTrue(selected)
+        self.assertEqual(built_spec['article_topic_catalog_ref'], 'seed/entity_catalog/dual_source_002_topics.ndjson')
+
+    def test_authority_sync_and_content_review_materialize_topic_pool(self) -> None:
+        entity_seed = self.write_entity_catalog_seed()
+        manual_seed = self.write_manual_content_seed('entity_place_west_lake', 'west_lake_article_001')
+        self.assert_ok(self.run_cli('crawl', 'tag-catalog-build'))
+        self.assert_ok(self.run_cli('crawl', 'entity-catalog-build', '--catalog', str(entity_seed)))
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'instruction-build',
+                '--spec-id',
+                'dual_source_003',
+                '--instruction',
+                '从城市漫游标签出发抓取西湖攻略与图片',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+                '--verticals',
+                'travel',
+                '--content-modes',
+                'article,image',
+            )
+        )
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'entities-by-tag',
+                '--spec-id',
+                'dual_source_003',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+            )
+        )
+        self.assert_ok(self.run_cli('crawl', 'spec-build', '--spec-id', 'dual_source_003'))
+        spec_path = self.runtime_root / 'specs' / 'dual_source_003.yaml'
+        self.assert_ok(self.run_cli('crawl', 'authority-sync', '--spec', str(spec_path)))
+        self.assert_ok(self.run_cli('crawl', 'content-discover', '--spec', str(spec_path), '--seed', str(manual_seed)))
+        self.assert_ok(self.run_cli('crawl', 'content-hydrate', '--spec', str(spec_path)))
+        self.assert_ok(self.run_cli('crawl', 'content-review', '--spec', str(spec_path)))
+        authority_pool = self.read_ndjson(
+            self.runtime_root / 'runs' / 'dual_source_003' / 'entities' / 'entity_place_west_lake' / 'authority_pool.ndjson'
+        )
+        content_pool = self.read_ndjson(
+            self.runtime_root / 'runs' / 'dual_source_003' / 'entities' / 'entity_place_west_lake' / 'content_pool.ndjson'
+        )
+        topic_source_pool = self.read_ndjson(
+            self.runtime_root / 'runs' / 'dual_source_003' / 'topics' / 'west_lake_article_001' / 'source_pool.ndjson'
+        )
+        self.assertTrue(any(row['sourceId'] == 'wikipedia_zh' for row in authority_pool))
+        approved_rows = [row for row in content_pool if row.get('reviewStatus') == 'approved']
+        self.assertTrue(approved_rows)
+        self.assertIn(approved_rows[0]['rewritePolicy'], {'light_edit', 'structured_enrich', 'multi_source_rewrite'})
+        self.assertTrue(topic_source_pool)
 
 
 if __name__ == '__main__':

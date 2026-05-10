@@ -33,27 +33,24 @@ class ArticleReaderDebugMapper {
       );
       final anchor = input.renderFrame.flippingAnchor;
       final angle = input.renderFrame.angle;
+      final visualGeometryDirection = input.renderFrame.visualGeometryDirection;
       final pageSize = Size(
         input.scene.layout.bounds.pageWidth,
         input.scene.layout.bounds.height,
       );
-      final settledProgress = input.renderFrame.progress.clamp(0.0, 1.0);
-      final displayFactor = 0.35 - settledProgress * (0.35 - 0.18);
-      final rectoCoverage =
-          input.renderFrame.backwardLeafFrame?.rectoCoverageNormalized ?? 0;
-      final positionViewport =
-          convertBookPointToViewport(
-            anchor,
-            input.scene.layout.bounds,
-            direction: StPageFlipDirection.back,
-          ) +
-          (rectoCoverage > 0.001
-              ? Offset.zero
-              : Offset(pageSize.width * displayFactor, 0));
+      final positionViewport = convertBookPointToViewport(
+        anchor,
+        input.scene.layout.bounds,
+        direction: visualGeometryDirection,
+      );
       sheetLocalPolygon = flippingArea
           .map((p) {
-            final translated = Offset(anchor.dx - p.dx, p.dy - anchor.dy);
-            return rotatePointForCanvasTransform(translated, angle);
+            return toLayerLocal(
+              point: p,
+              anchor: anchor,
+              angle: angle,
+              direction: visualGeometryDirection,
+            );
           })
           .toList(growable: false);
       sheetViewportPolygon = sheetLocalPolygon
@@ -61,23 +58,61 @@ class ArticleReaderDebugMapper {
           .toList(growable: false);
       final leafFrame = input.renderFrame.backwardLeafFrame;
       if (leafFrame != null) {
-        List<Offset> intervalToClipPolygon(double startX, double endX) {
-          if (endX <= startX) {
-            return const <Offset>[];
-          }
-          return <Offset>[
-            Offset(startX, 0),
-            Offset(endX, 0),
-            Offset(endX, pageSize.height),
-            Offset(startX, pageSize.height),
-          ];
+        final foldLine = input.renderFrame.backwardProjectedFrame?.foldLine;
+        final freeEdgeLine =
+            input.renderFrame.backwardProjectedFrame?.projectedRightEdgeLine;
+        final pagePolygon = sheetLocalPolygon.length >= 3
+            ? sheetLocalPolygon
+            : <Offset>[
+                Offset.zero,
+                Offset(pageSize.width, 0),
+                Offset(pageSize.width, pageSize.height),
+                Offset(0, pageSize.height),
+              ];
+        if (foldLine != null) {
+          final localFoldLine = (
+            toLayerLocal(
+              point: foldLine.$1,
+              anchor: anchor,
+              angle: angle,
+              direction: visualGeometryDirection,
+            ),
+            toLayerLocal(
+              point: foldLine.$2,
+              anchor: anchor,
+              angle: angle,
+              direction: visualGeometryDirection,
+            ),
+          );
+          final localFreeEdgeLine = freeEdgeLine == null
+              ? null
+              : (
+                  toLayerLocal(
+                    point: freeEdgeLine.$1,
+                    anchor: anchor,
+                    angle: angle,
+                    direction: visualGeometryDirection,
+                  ),
+                  toLayerLocal(
+                    point: freeEdgeLine.$2,
+                    anchor: anchor,
+                    angle: angle,
+                    direction: visualGeometryDirection,
+                  ),
+                );
+          frontLocalPolygon = backwardSheetRectoPolygon(
+            pageSize: pageSize,
+            sheetLocalPolygon: pagePolygon,
+            foldLine: localFoldLine,
+            freeEdgeLine: localFreeEdgeLine,
+          );
+          backLocalPolygon = backwardSheetVersoPolygon(
+            pageSize: pageSize,
+            sheetLocalPolygon: pagePolygon,
+            foldLine: localFoldLine,
+            freeEdgeLine: localFreeEdgeLine,
+          );
         }
-
-        final rectoWidth =
-            pageSize.width * leafFrame.totalRectoVisibleWidthNormalized;
-        final coveredWidth = pageSize.width * leafFrame.coveredWidthNormalized;
-        frontLocalPolygon = intervalToClipPolygon(0, rectoWidth);
-        backLocalPolygon = intervalToClipPolygon(rectoWidth, coveredWidth);
       } else {
         backLocalPolygon = sheetLocalPolygon;
       }
@@ -129,4 +164,16 @@ class ArticleReaderDebugMapper {
           : null,
     );
   }
+}
+
+Offset toLayerLocal({
+  required Offset point,
+  required Offset anchor,
+  required double angle,
+  required StPageFlipDirection direction,
+}) {
+  final translated = direction == StPageFlipDirection.back
+      ? Offset(anchor.dx - point.dx, point.dy - anchor.dy)
+      : Offset(point.dx - anchor.dx, point.dy - anchor.dy);
+  return rotatePointForCanvasTransform(translated, angle);
 }

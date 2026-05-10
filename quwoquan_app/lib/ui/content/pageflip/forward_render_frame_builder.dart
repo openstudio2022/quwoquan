@@ -42,6 +42,7 @@ StPageFlipRenderFrame buildForwardRenderFrame(ForwardRenderFrameData data) {
     progress: data.progress.clamp(0.0, 1.0).toDouble(),
     direction: StPageFlipDirection.forward,
     renderDirection: StPageFlipDirection.forward,
+    visualGeometryDirection: StPageFlipDirection.forward,
     corner: data.corner,
     flippingClipArea: List<ui.Offset>.unmodifiable(data.flippingClipArea),
     bottomClipArea: List<ui.Offset>.unmodifiable(data.bottomClipArea),

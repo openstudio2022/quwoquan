@@ -12,23 +12,39 @@ description: quwoquan_data 的 runtime / hybrid 总控
 运行时真相源：
 
 - spec：`quwoquan_data/runtime/specs/{spec_id}.yaml`
+- instruction：`quwoquan_data/runtime/runs/{spec_id}/instruction_profile.json`
+- source registry：`quwoquan_data/runtime/seed/source_registry.yaml`
+- entity catalog：`quwoquan_data/runtime/seed/entity_catalog/*.ndjson`
+- tag catalog：`quwoquan_data/runtime/seed/tag_catalog/*.ndjson`
+- graph：`quwoquan_data/runtime/seed/graph/*.ndjson`
 - discovery：`quwoquan_data/runtime/runs/{spec_id}/discovery.json`
 - topic_task：`quwoquan_data/runtime/runs/{spec_id}/topic_tasks.ndjson`
+- entity authority/content 中间态：`quwoquan_data/runtime/runs/{spec_id}/entities/{entity_id}/authority_profile.json|authority_pool.ndjson|content_pool.ndjson`
 - topic 中间态：`quwoquan_data/runtime/runs/{spec_id}/topics/{topic_id}/source_pool.ndjson`、`pages/{source_id}/page.html`、`pages/{source_id}/source.md`、`pages/{source_id}/asset_manifest.json`、`enrichment.ndjson`
+- 创作 / 审核产物：`quwoquan_data/runtime/runs/{spec_id}/topics/{topic_id}/compose_summary.json`、`audit_summary.json`
 - 原生抓取：`quwoquan_data/runtime/downloads/sources/**`、`quwoquan_data/runtime/downloads/images/**`
-- 发布真相源：`quwoquan_data/runtime/publish/{topic_id}/posts/{post_id}/article.md|gallery.md|manifest.json|post.json`
+- 发布真相源：`quwoquan_data/runtime/publish/{topic_id}/posts/{post_id}/article.md|gallery.md|manifest.json|post.json|review.json`
 
-## 主线
+## 三角色主线
 
 ```mermaid
 flowchart LR
   runtimeSpec[runtime/specs/*.yaml] --> discovery[crawl spec-discovery]
   discovery --> topicTasks[topic_tasks.ndjson]
-  topicTasks --> hydrate[crawl fetch-source / run-topic hydrate]
-  hydrate --> topicWorker[/crawl-topic worker/]
-  topicWorker --> publishTopic[runtime/publish/{topic_id}/posts/...]
-  publishTopic --> gates[authenticity gate + package gate]
+  topicTasks --> hydrate[crawl fetch-source]
+  hydrate --> compose[crawl compose-topic]
+  compose --> composeSummary[compose_summary.json]
+  composeSummary --> audit[crawl audit-topic]
+  audit --> reviewArtifacts[audit_summary.json + review.json]
+  reviewArtifacts --> gates[authenticity gate + package gate]
 ```
+
+角色映射：
+
+1. `instruction / entity / authority`：`crawl instruction-build` + `crawl tag-catalog-build` + `crawl entity-catalog-build` + `crawl entities-by-tag` + `crawl authority-sync`
+2. `content discover / hydrate / review`：`crawl content-discover` + `crawl content-hydrate` + `crawl content-review`
+3. `compose / audit / publish`：`crawl compose-post` + `crawl review-generated` + `crawl publish-approved`
+4. `feedback / graph`：`crawl feedback-extract` + `crawl feedback-verify` + `crawl graph-verify`
 
 ## 输入
 
@@ -47,38 +63,65 @@ flowchart LR
 1. 对每个 spec 执行：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl spec-discovery --spec <spec>
+python3 quwoquan_data/tools/cli.py crawl instruction-build --spec <spec>
+python3 quwoquan_data/tools/cli.py crawl entities-by-tag --spec <spec>
+python3 quwoquan_data/tools/cli.py crawl authority-sync --spec <spec>
+python3 quwoquan_data/tools/cli.py crawl content-discover --spec <spec>
 ```
 
-2. 读取 `runtime/runs/{spec_id}/discovery.json` 与 `topic_tasks.ndjson`
-3. 把 command 层与 tools 层分开：
+2. 若内容候选已具备真实 URL，继续执行：
+
+```bash
+python3 quwoquan_data/tools/cli.py crawl content-hydrate --spec <spec>
+python3 quwoquan_data/tools/cli.py crawl content-review --spec <spec>
+```
+
+3. 读取 `runtime/runs/{spec_id}/instruction_profile.json`、`entity catalog`、`authority/content pool`、`discovery.json` 与 `topic_tasks.ndjson`
+4. 把 command 层与 tools 层分开：
    - command 层：topic 初始化、状态汇总、调度
    - tools 层：原生抓取 HTML、抽正文、下载图片、提取元数据
-4. 先检查 discovery 基线：
+5. 先检查 discovery 基线：
    - article topic 数目标 >= 20
    - image topic 数目标 >= 1
    - 每个 topic 的候选目标 >= 20
-5. 对已有真实候选但缺失 `pages/*` 的 topic，可先执行：
+6. 对已有真实候选但缺失 `pages/*` 的 topic，可先执行：
 
 ```bash
 python3 quwoquan_data/tools/cli.py crawl fetch-source --spec <spec> --topic <topic_id> --task-type <article|image> --source-id <source_id> --url <url>
 ```
 
-6. 对 `publishReady=true` 且真实性 gate 通过的 topic，执行：
+7. 对 `publishReady=true` 且真实性 gate 通过的 topic，先执行创作角色：
 
 ```bash
-python3 quwoquan_data/tools/cli.py crawl run-topic --spec <spec> --topic <topic_id> --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl compose-post --spec <spec> --topics <topic_id> --targets alpha,gamma
 ```
 
-7. `run-topic` 会先基于 retained + verified source 自动补全默认 `enrichment.ndjson` 字段（`selectedCandidateIds`、`sourceUrls`、`coverAssetId`、`figureAssetIds/mediaAssetIds`、`publishReady` 等），从而保证：
-   - `spec-discovery -> fetch-source -> run-topic` 可以直接闭环
-   - 无需再手工改 NDJSON 才能把真实样例跑到 publish
-8. 保证 article / image 两条生产线分开推进：
+8. `content-review` 会把通过审核的内容候选桥接回 topic `source_pool.ndjson`，从而保证：
+   - `instruction/entity -> authority -> content -> compose -> audit -> publish` 可以直接闭环
+   - 无需手工复制 URL 到 topic 工作区
+9. 生成完成后必须再执行审核与发布角色：
+
+```bash
+python3 quwoquan_data/tools/cli.py crawl review-generated --spec <spec> --topics <topic_id>
+python3 quwoquan_data/tools/cli.py crawl publish-approved --spec <spec> --topics <topic_id>
+python3 quwoquan_data/tools/cli.py crawl feedback-extract --spec <spec> --topics <topic_id>
+python3 quwoquan_data/tools/cli.py crawl feedback-verify --spec <spec>
+```
+
+审核与反馈必须把以下结果落盘：
+
+- topic 级：`runtime/runs/{spec_id}/topics/{topic_id}/audit_summary.json`
+- post 级：`runtime/publish/{topic_id}/posts/{post_id}/review.json`
+- package manifest：`manifest.json.qualityAudit`
+- feedback：`runtime/runs/{spec_id}/feedback/*.ndjson`
+- graph：`runtime/seed/graph/*.ndjson`
+
+9. 保证 article / image 两条生产线分开推进：
    - article：真实候选目标 >= 20、真实发布目标 >= 6
    - image：优先官方图库/明确授权图库，其次摄影图库
    - Pinterest 只能 discovery-only
    - 若真实性不足，必须降级 `needs_more_evidence`
-9. 每轮完成后执行：
+10. 每轮完成后执行：
 
 ```bash
 python3 scripts/verify_quwoquan_data_source_authenticity.py
@@ -129,6 +172,7 @@ python3 scripts/verify_quwoquan_data_post_packages.py
 - `articleReadyCount / articlePublishedCount / imagePublishedCount`
 - `articlePublishFloorMet / imagePublishFloorMet`
 - `articleAuthenticityBlockedCount / imageAuthenticityBlockedCount`
+- `articleAuditApprovedCount / imageAuditApprovedCount`
 - 每个已执行 topic 的：
   - `topic_id`
   - `taskType`
@@ -136,6 +180,7 @@ python3 scripts/verify_quwoquan_data_post_packages.py
   - `verifiedSourceCount / authenticityBlocked`
   - `highValueCandidateCount / qualityExceptionCount`
   - `approvedAssetCount`
+  - `composeStatus / auditStatus / auditOverallScore`
   - `runtime/publish/{topic_id}/posts/{post_id}`
 - 真实性 gate 结果
 - package gate 结果

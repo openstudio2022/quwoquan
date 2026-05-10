@@ -1,0 +1,26 @@
+template_id: content_template_image_post
+label: 图片帖
+summary: 面向种草与打卡分享的图片帖模板，直接生成 image/work 类型的 Post payload。
+content_type: image
+content_identity: work
+required_post_fields:
+  - contentType
+  - contentIdentity
+  - title
+  - body
+  - mediaUrls
+  - coverUrl
+  - tags
+optional_post_fields:
+  - summary
+  - locationName
+  - width
+  - height
+  - visibility
+  - assistantUsePolicy
+  - authorDisplayNameSnapshot
+  - authorAvatarUrlSnapshot
+semantic_fields:
+  - entity_refs
+  - tag_refs
+  - source_urls

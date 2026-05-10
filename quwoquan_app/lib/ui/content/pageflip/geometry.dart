@@ -123,6 +123,19 @@ Offset resolveBackwardReplayCanonicalPoint({
   );
 }
 
+Offset resolveBackwardVisualReplayCanonicalPoint({
+  required Offset localPagePoint,
+  required double pageWidth,
+  required double pageHeight,
+}) {
+  const edgeEpsilon = 0.001;
+  final maxVisualX = math.max(-pageWidth, pageWidth - edgeEpsilon);
+  final visualX = (-pageWidth - (2 * localPagePoint.dx))
+      .clamp(-pageWidth, maxVisualX)
+      .toDouble();
+  return Offset(visualX, localPagePoint.dy.clamp(0.0, pageHeight).toDouble());
+}
+
 Offset mirrorPagePointHorizontally({
   required Offset point,
   required double pageWidth,

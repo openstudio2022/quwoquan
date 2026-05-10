@@ -1,2 +1,8 @@
 *
 !.gitignore
+!specs/
+!specs/**
+!trees/
+!trees/**
+!seed/
+!seed/**

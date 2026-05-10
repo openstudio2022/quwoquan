@@ -32,6 +32,36 @@ ARTICLE_TEMPLATE_PHRASES = (
     '端侧可以消费的原创 Markdown 成品',
     '文章任务',
     '图片任务',
+    '来源页把重点落在',
+    '补充判断时，可以继续盯住',
+    '如果想把现场走顺，可以先盯住',
+    '真实来源围绕',
+    '这篇把',
+    '适合想在半天到一天里',
+)
+ARTICLE_TRAVEL_KEYWORDS = (
+    '西湖十景',
+    '苏堤春晓',
+    '三潭印月',
+    '柳浪闻莺',
+    '曲院风荷',
+    '平湖秋月',
+    '花港观鱼',
+    '湖滨公园',
+    '雷峰塔',
+    '断桥',
+    '苏堤',
+    '白堤',
+    '湖滨',
+    '游船',
+    '喝茶',
+    '杭帮菜',
+    '美食',
+    '饭店',
+    '南线',
+    '东岸',
+    '湖面',
+    '西湖',
 )
 
 
@@ -108,6 +138,60 @@ def extract_source_paragraphs(source_markdown: str) -> list[str]:
     return paragraphs
 
 
+def extract_article_body_paragraphs(article_markdown: str) -> list[str]:
+    text = article_markdown.strip()
+    if text.startswith('---'):
+        parts = text.split('\n---', 1)
+        if len(parts) == 2:
+            text = parts[1]
+    paragraphs: list[str] = []
+    for chunk in re.split(r'\n\s*\n', text):
+        raw = chunk.strip()
+        if not raw:
+            continue
+        if raw.startswith('#') or raw.startswith(':::') or raw.startswith('asset://') or raw.startswith('<!--'):
+            continue
+        cleaned = clean_markdown_line(raw)
+        if cleaned in {'实体锚点', '来源锚点'}:
+            continue
+        if cleaned.startswith('- '):
+            continue
+        if len(cleaned) >= 32:
+            paragraphs.append(cleaned)
+    return paragraphs
+
+
+def extract_article_sections(article_markdown: str) -> list[tuple[str, str]]:
+    text = article_markdown.strip()
+    if text.startswith('---'):
+        parts = text.split('\n---', 1)
+        if len(parts) == 2:
+            text = parts[1]
+    sections: list[tuple[str, str]] = []
+    current_title = ''
+    current_lines: list[str] = []
+    for raw_line in text.splitlines():
+        if raw_line.startswith('## '):
+            if current_title and current_lines:
+                body = '\n'.join(current_lines).strip()
+                if body:
+                    sections.append((current_title, body))
+            current_title = clean_markdown_line(raw_line)
+            current_lines = []
+            continue
+        if current_title:
+            current_lines.append(raw_line)
+    if current_title and current_lines:
+        body = '\n'.join(current_lines).strip()
+        if body:
+            sections.append((current_title, body))
+    return [
+        (title, body)
+        for title, body in sections
+        if title not in {'实体锚点', '来源锚点'}
+    ]
+
+
 def split_sentences(text: str) -> list[str]:
     sentences: list[str] = []
     for chunk in re.split(r'[。！？!?]', normalize_text(text)):
@@ -136,6 +220,26 @@ def source_anchor_phrases(text: str, *, limit: int = 3) -> list[str]:
             if len(phrases) >= limit:
                 return phrases
     return phrases
+
+
+def travel_tokens(text: str, *, limit: int = 6) -> list[str]:
+    normalized = normalize_text(text)
+    hits: list[tuple[int, int, str]] = []
+    for keyword in ARTICLE_TRAVEL_KEYWORDS:
+        index = normalized.find(keyword)
+        if index >= 0:
+            hits.append((index, -len(keyword), keyword))
+    hits.sort()
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for _, __, keyword in hits:
+        if keyword in seen:
+            continue
+        seen.add(keyword)
+        tokens.append(keyword)
+        if len(tokens) >= limit:
+            break
+    return tokens
 
 
 def looks_like_placeholder_url(url: str) -> bool:
@@ -169,11 +273,11 @@ def article_source_overlap(article_text: str, manifest: dict[str, Any]) -> int:
     return hit_count
 
 
-def article_source_phrase_hits(article_text: str, manifest: dict[str, Any]) -> int:
+def article_source_phrase_hits_by_source(article_text: str, manifest: dict[str, Any]) -> dict[str, int]:
     spec_id = str(manifest.get('specId', '')).strip()
     topic_id = str(manifest.get('topicId', '')).strip()
     if not spec_id or not topic_id:
-        return 0
+        return {}
     runs_topic_dir = RUNS_ROOT / spec_id / 'topics' / topic_id / 'pages'
     selected_source_ids = [
         str(item).strip()
@@ -181,16 +285,49 @@ def article_source_phrase_hits(article_text: str, manifest: dict[str, Any]) -> i
         if str(item).strip()
     ]
     article_normalized = normalize_text(article_text)
-    hits: set[str] = set()
+    hit_map: dict[str, set[str]] = {}
+    for source_id in selected_source_ids:
+        source_hits: set[str] = set()
+        source_md_path = runs_topic_dir / source_id / 'source.md'
+        if not source_md_path.exists():
+            continue
+        for paragraph in extract_source_paragraphs(source_md_path.read_text(encoding='utf-8')):
+            seen: set[str] = set()
+            for phrase in source_anchor_phrases(paragraph, limit=4) + travel_tokens(paragraph, limit=4):
+                if phrase in seen:
+                    continue
+                seen.add(phrase)
+                if phrase in article_normalized:
+                    source_hits.add(phrase)
+        hit_map[source_id] = source_hits
+    return {source_id: len(hits) for source_id, hits in hit_map.items()}
+
+
+def article_source_phrase_hits(article_text: str, manifest: dict[str, Any]) -> int:
+    return sum(article_source_phrase_hits_by_source(article_text, manifest).values())
+
+
+def article_section_has_source_support(section_text: str, manifest: dict[str, Any]) -> bool:
+    spec_id = str(manifest.get('specId', '')).strip()
+    topic_id = str(manifest.get('topicId', '')).strip()
+    if not spec_id or not topic_id:
+        return False
+    runs_topic_dir = RUNS_ROOT / spec_id / 'topics' / topic_id / 'pages'
+    selected_source_ids = [
+        str(item).strip()
+        for item in manifest.get('selectedSourceIds', [])
+        if str(item).strip()
+    ]
+    section_normalized = normalize_text(section_text)
     for source_id in selected_source_ids:
         source_md_path = runs_topic_dir / source_id / 'source.md'
         if not source_md_path.exists():
             continue
         for paragraph in extract_source_paragraphs(source_md_path.read_text(encoding='utf-8')):
-            for phrase in source_anchor_phrases(paragraph, limit=4):
-                if phrase in article_normalized:
-                    hits.add(phrase)
-    return len(hits)
+            for phrase in source_anchor_phrases(paragraph, limit=4) + travel_tokens(paragraph, limit=4):
+                if phrase and phrase in section_normalized:
+                    return True
+    return False
 
 
 def required_article_overlap_hits(manifest: dict[str, Any]) -> int:
@@ -212,7 +349,7 @@ def required_article_phrase_hits(manifest: dict[str, Any]) -> int:
     ]
     if len(selected_source_ids) <= 1:
         return 4
-    return min(6, 3 * len(selected_source_ids))
+    return len(selected_source_ids) + 1
 
 
 def expected_post_rows(topic_dir: Path) -> dict[str, dict[str, Any]]:
@@ -265,17 +402,29 @@ def validate_article_package(post_dir: Path, post: dict[str, Any], manifest: dic
         if phrase in article_text:
             errors.append(f'{post_dir}: article.md 包含模板化固定文案 {phrase}')
             break
+    body_paragraphs = extract_article_body_paragraphs(article_text)
+    if len(body_paragraphs) < 6:
+        errors.append(f'{post_dir}: article.md 正文段落不足，当前 {len(body_paragraphs)} 段，要求至少 6 段')
+    if sum(len(paragraph) for paragraph in body_paragraphs) < 520:
+        errors.append(f'{post_dir}: article.md 正文篇幅不足，要求至少 520 字')
+    unsupported_sections = [
+        title
+        for title, body in extract_article_sections(article_text)
+        if not article_section_has_source_support(body, manifest)
+    ]
+    if unsupported_sections:
+        errors.append(f'{post_dir}: article.md 二级段落缺少来源事实支撑 {unsupported_sections}')
     overlap_hits = article_source_overlap(article_text, manifest)
     required_hits = required_article_overlap_hits(manifest)
-    if overlap_hits < required_hits:
-        errors.append(
-            f'{post_dir}: article.md 与真实来源段落重合不足，命中 {overlap_hits} 个来源，要求至少 {required_hits} 个'
-        )
-    phrase_hits = article_source_phrase_hits(article_text, manifest)
+    phrase_hits_by_source = article_source_phrase_hits_by_source(article_text, manifest)
+    phrase_hits = sum(phrase_hits_by_source.values())
     required_phrase_hits = required_article_phrase_hits(manifest)
-    if phrase_hits < required_phrase_hits:
+    source_without_hits = sorted(source_id for source_id, count in phrase_hits_by_source.items() if count <= 0)
+    if source_without_hits:
+        errors.append(f'{post_dir}: article.md 未覆盖所有 retained 来源锚点，缺失来源 {source_without_hits}')
+    if overlap_hits < required_hits and phrase_hits < required_phrase_hits:
         errors.append(
-            f'{post_dir}: article.md 与 source.md 的真实锚点关联不足，命中短语 {phrase_hits} 个，要求至少 {required_phrase_hits} 个'
+            f'{post_dir}: article.md 与 source.md 的真实锚点关联不足，段落命中 {overlap_hits}/{required_hits}，短语命中 {phrase_hits}/{required_phrase_hits}'
         )
 
 
@@ -308,6 +457,61 @@ def validate_image_package(post_dir: Path, post: dict[str, Any], manifest: dict[
         errors.append(f'{post_dir}: coverUrl {cover_url} 不来自 manifest.objectKey')
 
 
+def validate_review_artifact(post_dir: Path, manifest: dict[str, Any], content_type: str, errors: list[str]) -> None:
+    review_path = post_dir / 'review.json'
+    if not review_path.exists():
+        errors.append(f'{post_dir}: 缺少 review.json')
+        return
+    review = read_json(review_path)
+    audit = manifest.get('qualityAudit')
+    if not isinstance(audit, dict):
+        errors.append(f'{post_dir}: manifest 缺少 qualityAudit')
+    else:
+        if str(audit.get('role', '')).strip() != 'audit':
+            errors.append(f'{post_dir}: manifest.qualityAudit.role 必须是 audit')
+        if str(audit.get('reviewPath', '')).strip() != 'review.json':
+            errors.append(f'{post_dir}: manifest.qualityAudit.reviewPath 必须是 review.json')
+        if str(audit.get('overallStatus', '')).strip() != 'approved':
+            errors.append(f'{post_dir}: manifest.qualityAudit.overallStatus 必须是 approved')
+        if int(audit.get('overallScore') or 0) <= 0:
+            errors.append(f'{post_dir}: manifest.qualityAudit.overallScore 必须是正整数')
+    if str(review.get('role', '')).strip() != 'audit':
+        errors.append(f'{post_dir}: review.role 必须是 audit')
+    if str(review.get('taskType', '')).strip() != content_type:
+        errors.append(f'{post_dir}: review.taskType 必须与 contentType 一致')
+    if str(review.get('overallStatus', '')).strip() != 'approved':
+        errors.append(f'{post_dir}: review.overallStatus 必须是 approved')
+    if int(review.get('overallScore') or 0) < 70:
+        errors.append(f'{post_dir}: review.overallScore 必须至少 70')
+    checks = review.get('checks')
+    if not isinstance(checks, dict):
+        errors.append(f'{post_dir}: review 缺少 checks')
+        return
+    if content_type == 'article':
+        required = (
+            'factualCoverage',
+            'readerFacingTone',
+            'specificity',
+            'redundancy',
+            'sourceGrounding',
+        )
+    else:
+        required = (
+            'imageQualityScore',
+            'downloadVerified',
+            'rightsReview',
+            'watermarkReview',
+            'narrativeFit',
+        )
+    for key in required:
+        item = checks.get(key)
+        if not isinstance(item, dict):
+            errors.append(f'{post_dir}: review.checks 缺少 {key}')
+            continue
+        if not bool(item.get('pass')):
+            errors.append(f'{post_dir}: review.checks.{key} 未通过')
+
+
 def validate_package(post_dir: Path, expected_row: dict[str, Any], errors: list[str]) -> None:
     post_json = post_dir / 'post.json'
     manifest_json = post_dir / 'manifest.json'
@@ -323,8 +527,8 @@ def validate_package(post_dir: Path, expected_row: dict[str, Any], errors: list[
         errors.append(f'{post_dir}: post.json 与 posts.ndjson 对应行不一致')
     payload = post.get('post_payload', {})
     content_type = str(payload.get('contentType') or payload.get('type') or manifest.get('contentType'))
-    if str(manifest.get('schemaVersion', '')) != '2':
-        errors.append(f'{post_dir}: manifest.schemaVersion 必须是 2')
+    if str(manifest.get('schemaVersion', '')) not in {'quwoquan_data.package_manifest', '2'}:
+        errors.append(f"{post_dir}: manifest.schemaVersion 必须是 quwoquan_data.package_manifest（兼容旧值 2）")
     compliance = manifest.get('compliance')
     if not isinstance(compliance, dict):
         errors.append(f'{post_dir}: manifest 缺少 compliance')
@@ -387,6 +591,7 @@ def validate_package(post_dir: Path, expected_row: dict[str, Any], errors: list[
     extras = sorted(image_refs - manifest_ids)
     if extras:
         errors.append(f'{post_dir}: images/ 存在 manifest 未登记素材 {extras}')
+    validate_review_artifact(post_dir, manifest, content_type, errors)
     if content_type == 'article':
         validate_article_package(post_dir, post, manifest, errors)
     elif content_type == 'image':

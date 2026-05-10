@@ -40,15 +40,43 @@ class BackwardRenderFrameData {
   final StPageFlipShadowData? shadow;
 }
 
-/// Builds a backward [StPageFlipRenderFrame] from the native BACK
-/// [StPageFlipCalculation] outputs. Backward is a first-class paper-fold
-/// direction; it must not recreate a forward calculation and mirror it.
+@immutable
+class _BackwardVisualGeometry {
+  const _BackwardVisualGeometry({
+    required this.direction,
+    required this.localPagePoint,
+    required this.flippingClipArea,
+    required this.bottomClipArea,
+    required this.flippingAnchor,
+    required this.bottomAnchor,
+    required this.angle,
+    required this.foldLine,
+    required this.freeEdgeLine,
+    required this.foldLineSource,
+    required this.edgeLineSource,
+  });
+
+  final StPageFlipDirection direction;
+  final ui.Offset localPagePoint;
+  final List<ui.Offset> flippingClipArea;
+  final List<ui.Offset> bottomClipArea;
+  final ui.Offset flippingAnchor;
+  final ui.Offset bottomAnchor;
+  final double angle;
+  final (ui.Offset, ui.Offset)? foldLine;
+  final (ui.Offset, ui.Offset)? freeEdgeLine;
+  final String foldLineSource;
+  final String edgeLineSource;
+}
+
+/// Builds a backward [StPageFlipRenderFrame] with BACK semantic direction and
+/// forward-isomorphic visual geometry in portrait mode.
 ///
 /// 路线 B 主线（参见 `.cursor/rules/12-pageflip-backward-mainline.mdc`）：
 /// builder 不再产出任何派生多边形（previousFoldSurfacePolygon/previousFront
-/// FoldPolygon/previousBackFoldPolygon/currentResidualPolygon 等），sheet 与
-/// current 的真相源直接是 `flippingClipArea / bottomClipArea`。projected frame
-/// 仅承载 fold line 与 free-edge line 用于 diagnostic guide layer。
+/// FoldPolygon/previousBackFoldPolygon/currentResidualPolygon 等）。portrait
+/// BACK 的 sheet/current/F/E 使用 forward-isomorphic calculation，页面绑定和
+/// 翻页提交语义仍由 `direction == back` 决定。
 StPageFlipRenderFrame buildBackwardRenderFrame(BackwardRenderFrameData data) {
   return _buildBackwardRenderFrame(data);
 }
@@ -77,16 +105,7 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
     reversePose: null,
   );
 
-  // Native StPageFlip BACK: frame builder must pass the BACK calculation
-  // outputs through unchanged. The visual projection is direction-aware in the
-  // host (`drawSoft` equivalent), not pre-mirrored here. In single-page
-  // portrait, this keeps the spine at the visible current page's left edge.
-  final flippingClipArea = data.flippingClipArea;
-  final bottomClipArea = data.bottomClipArea;
-  final flippingAnchor = data.flippingAnchor;
-  final bottomAnchor = data.bottomAnchor;
-  final foldLine = data.foldLine;
-  final freeEdgeLine = data.freeEdgeLine;
+  final visualGeometry = _resolveBackwardVisualGeometry(data);
 
   final backwardLeafFrame = resolveArticlePageBackwardLeafFrame(
     direction: StPageFlipDirection.back,
@@ -94,14 +113,16 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
     reversePose: null,
   )!;
   final backwardProjectedFrame = _buildBackwardProjectedFrame(
-    localPagePoint: data.localPagePoint,
-    foldLine: foldLine,
-    freeEdgeLine: freeEdgeLine,
+    localPagePoint: visualGeometry.localPagePoint,
+    foldLine: visualGeometry.foldLine,
+    freeEdgeLine: visualGeometry.freeEdgeLine,
     pageSize: data.pageSize,
+    foldLineSource: visualGeometry.foldLineSource,
+    edgeLineSource: visualGeometry.edgeLineSource,
   );
 
   final angleBand = resolveForwardCurlAngleBand(
-    localPagePoint: resolveBackwardReplayLocalPagePoint(
+    localPagePoint: resolveBackwardVisualReplayLocalPagePoint(
       localPagePoint: data.localPagePoint,
       pageSize: data.pageSize,
     ),
@@ -114,12 +135,15 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
     progress: progress,
     direction: StPageFlipDirection.back,
     renderDirection: renderDirection,
+    visualGeometryDirection: visualGeometry.direction,
     corner: data.corner,
-    flippingClipArea: List<ui.Offset>.unmodifiable(flippingClipArea),
-    bottomClipArea: List<ui.Offset>.unmodifiable(bottomClipArea),
-    flippingAnchor: flippingAnchor,
-    bottomAnchor: bottomAnchor,
-    angle: data.angle,
+    flippingClipArea: List<ui.Offset>.unmodifiable(
+      visualGeometry.flippingClipArea,
+    ),
+    bottomClipArea: List<ui.Offset>.unmodifiable(visualGeometry.bottomClipArea),
+    flippingAnchor: visualGeometry.flippingAnchor,
+    bottomAnchor: visualGeometry.bottomAnchor,
+    angle: visualGeometry.angle,
     shadow: data.shadow,
     timeline: resolvePageCurlTimeline(
       direction: StPageFlipDirection.back,
@@ -134,7 +158,55 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
     reversePose: null,
     backwardLeafFrame: backwardLeafFrame,
     backwardProjectedFrame: backwardProjectedFrame,
-    routeBSpineMirroredApplied: false,
+    routeBSpineMirroredApplied:
+        visualGeometry.direction == StPageFlipDirection.forward,
+  );
+}
+
+_BackwardVisualGeometry _resolveBackwardVisualGeometry(
+  BackwardRenderFrameData data,
+) {
+  if (data.orientation == StPageFlipOrientation.portrait) {
+    final replayPoint = resolveBackwardVisualReplayLocalPagePoint(
+      localPagePoint: data.localPagePoint,
+      pageSize: data.pageSize,
+    );
+    final forwardCalculation = StPageFlipCalculation(
+      direction: StPageFlipDirection.forward,
+      corner: data.corner,
+      pageWidth: data.pageSize.width,
+      pageHeight: data.pageSize.height,
+    );
+    if (forwardCalculation.calc(replayPoint)) {
+      final canonicalGeometry = forwardCalculation.getCanonicalFoldGeometry();
+      return _BackwardVisualGeometry(
+        direction: StPageFlipDirection.forward,
+        localPagePoint: replayPoint,
+        flippingClipArea: forwardCalculation.getFlippingClipArea(),
+        bottomClipArea: forwardCalculation.getBottomClipArea(),
+        flippingAnchor: forwardCalculation.getActiveCorner(),
+        bottomAnchor: forwardCalculation.getBottomPagePosition(),
+        angle: forwardCalculation.getAngle(),
+        foldLine: canonicalGeometry?.foldLine,
+        freeEdgeLine: canonicalGeometry?.freeEdgeLine,
+        foldLineSource: 'backwardForwardIsomorphicFoldLine',
+        edgeLineSource: 'backwardForwardIsomorphicFreeEdgeLine',
+      );
+    }
+  }
+
+  return _BackwardVisualGeometry(
+    direction: StPageFlipDirection.back,
+    localPagePoint: data.localPagePoint,
+    flippingClipArea: data.flippingClipArea,
+    bottomClipArea: data.bottomClipArea,
+    flippingAnchor: data.flippingAnchor,
+    bottomAnchor: data.bottomAnchor,
+    angle: data.angle,
+    foldLine: data.foldLine,
+    freeEdgeLine: data.freeEdgeLine,
+    foldLineSource: 'backwardCanonicalFoldLine',
+    edgeLineSource: 'backwardCanonicalFreeEdgeLine',
   );
 }
 
@@ -143,15 +215,23 @@ ArticlePageBackwardProjectedFrame? _buildBackwardProjectedFrame({
   required (ui.Offset, ui.Offset)? foldLine,
   required (ui.Offset, ui.Offset)? freeEdgeLine,
   required ui.Size pageSize,
+  required String foldLineSource,
+  required String edgeLineSource,
 }) {
   if (pageSize.width <= 0 || pageSize.height <= 0) {
     return null;
   }
+  final preserveForwardIsomorphicLines =
+      foldLineSource == 'backwardForwardIsomorphicFoldLine';
   final canonicalFoldLine = foldLine == null
       ? null
+      : preserveForwardIsomorphicLines
+      ? _orderLineTopToBottom(foldLine)
       : _clipLineToPageRect(_orderLineTopToBottom(foldLine), pageSize);
   final canonicalFreeEdgeLine = freeEdgeLine == null
       ? null
+      : preserveForwardIsomorphicLines
+      ? _orderLineTopToBottom(freeEdgeLine)
       : _clipLineToPageRect(_orderLineTopToBottom(freeEdgeLine), pageSize);
   if (canonicalFoldLine == null || canonicalFreeEdgeLine == null) {
     return null;
@@ -161,8 +241,8 @@ ArticlePageBackwardProjectedFrame? _buildBackwardProjectedFrame({
     projectedRightEdgeLine: canonicalFreeEdgeLine,
     replayLocalPoint: localPagePoint,
     edgeEnteredPage: true,
-    foldLineSource: 'backwardCanonicalFoldLine',
-    edgeLineSource: 'backwardCanonicalFreeEdgeLine',
+    foldLineSource: foldLineSource,
+    edgeLineSource: edgeLineSource,
   );
 }
 

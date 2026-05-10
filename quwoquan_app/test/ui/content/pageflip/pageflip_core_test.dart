@@ -1331,6 +1331,7 @@ void main() {
       progress: baseFrame.progress,
       direction: baseFrame.direction,
       renderDirection: baseFrame.renderDirection,
+      visualGeometryDirection: baseFrame.visualGeometryDirection,
       corner: baseFrame.corner,
       flippingClipArea: baseFrame.flippingClipArea,
       bottomClipArea: baseFrame.bottomClipArea,
@@ -1685,7 +1686,7 @@ StPageFlipRenderFrame _backwardReplayRenderFrame({
   required StPageFlipCorner corner,
 }) {
   const pageSize = Size(398, 553);
-  final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
+  final replayLocalPoint = resolveBackwardVisualReplayLocalPagePoint(
     localPagePoint: localPagePoint,
     pageSize: pageSize,
   );
@@ -1707,6 +1708,7 @@ StPageFlipRenderFrame _backwardReplayRenderFrame({
     progress: progress,
     direction: StPageFlipDirection.back,
     renderDirection: StPageFlipDirection.back,
+    visualGeometryDirection: StPageFlipDirection.back,
     corner: corner,
     flippingClipArea: const <Offset>[
       Offset(148, 0),
@@ -1774,6 +1776,7 @@ StPageFlipRenderFrame _forwardRenderFrame({
     progress: progress,
     direction: StPageFlipDirection.forward,
     renderDirection: StPageFlipDirection.forward,
+    visualGeometryDirection: StPageFlipDirection.forward,
     corner: corner,
     flippingClipArea: const <Offset>[],
     bottomClipArea: const <Offset>[],

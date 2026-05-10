@@ -17,6 +17,9 @@ CHAT_SEED_REFS="${CHAT_SEED_REFS:-chat_core,chat_settings_core,chat_contacts_cor
 CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017}"
 CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
 CHAT_REDIS_ADDR="${CHAT_REDIS_ADDR:-localhost:6379}"
+LOCAL_GAMMA_COMPOSE_FILE="$ROOT_DIR/quwoquan_service/docker-compose.gamma-local.yaml"
+LOCAL_GAMMA_MONGO_PORT="${LOCAL_GAMMA_MONGO_PORT:-37017}"
+LOCAL_GAMMA_REDIS_PORT="${LOCAL_GAMMA_REDIS_PORT:-36379}"
 GATEWAY_BASE_URL_EXPLICIT=0
 if [[ -n "${GATEWAY_BASE_URL:-}" ]]; then
   GATEWAY_BASE_URL_EXPLICIT=1
@@ -140,6 +143,136 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+parse_mongo_host_port() {
+  python3 - "$1" <<'PY'
+import re
+import sys
+from urllib.parse import urlparse
+
+raw = (sys.argv[1] or "").strip()
+if not raw:
+    print("localhost 27017")
+    raise SystemExit(0)
+parsed = urlparse(raw)
+host = parsed.hostname or "localhost"
+port = parsed.port or 27017
+print(f"{host} {port}")
+PY
+}
+
+parse_redis_host_port() {
+  python3 - "$1" <<'PY'
+import sys
+
+raw = (sys.argv[1] or "").strip()
+if not raw:
+    print("localhost 6379")
+    raise SystemExit(0)
+host, _, port = raw.partition(":")
+host = host.strip() or "localhost"
+port = (port.strip() or "6379")
+print(f"{host} {port}")
+PY
+}
+
+beta_manual_check_mongo() {
+  local uri="$1"
+  local host port
+  read -r host port <<< "$(parse_mongo_host_port "$uri")"
+  if command -v mongosh >/dev/null 2>&1; then
+    mongosh --quiet "$uri" --eval "db.adminCommand({ ping: 1 }).ok" >/dev/null 2>&1 && return 0
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    nc -z "$host" "$port" >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
+beta_manual_check_redis() {
+  local addr="$1"
+  local host port
+  read -r host port <<< "$(parse_redis_host_port "$addr")"
+  if command -v redis-cli >/dev/null 2>&1; then
+    redis-cli -h "$host" -p "$port" ping >/dev/null 2>&1 && return 0
+  fi
+  if command -v nc >/dev/null 2>&1; then
+    nc -z "$host" "$port" >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
+beta_manual_wait_mongo_ready() {
+  local uri="$1"
+  local label="$2"
+  local timeout="${3:-60}"
+  local deadline=$((SECONDS + timeout))
+  until beta_manual_check_mongo "$uri"; do
+    if (( SECONDS >= deadline )); then
+      echo "${label} unavailable: $uri" >&2
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+beta_manual_wait_redis_ready() {
+  local addr="$1"
+  local label="$2"
+  local timeout="${3:-60}"
+  local deadline=$((SECONDS + timeout))
+  until beta_manual_check_redis "$addr"; do
+    if (( SECONDS >= deadline )); then
+      echo "${label} unavailable: $addr" >&2
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+beta_manual_compose_up_chat_backing_services() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "chat backing services unavailable and docker is not installed" >&2
+    return 1
+  fi
+  if [[ ! -f "$LOCAL_GAMMA_COMPOSE_FILE" ]]; then
+    echo "local gamma compose file missing: $LOCAL_GAMMA_COMPOSE_FILE" >&2
+    return 1
+  fi
+  echo "[app-beta-manual] starting fallback mongodb/redis via local gamma compose"
+  docker compose -f "$LOCAL_GAMMA_COMPOSE_FILE" up -d mongodb mongo-init redis >/dev/null
+}
+
+beta_manual_ensure_chat_backing_services() {
+  local default_mongo_uri="mongodb://localhost:27017"
+  local default_redis_addr="localhost:6379"
+  local effective_mongo_uri="$CHAT_MONGO_URI"
+  local effective_redis_addr="$CHAT_REDIS_ADDR"
+
+  if beta_manual_check_mongo "$effective_mongo_uri" && beta_manual_check_redis "$effective_redis_addr"; then
+    return 0
+  fi
+
+  if [[ "$CHAT_MONGO_URI" != "$default_mongo_uri" || "$CHAT_REDIS_ADDR" != "$default_redis_addr" ]]; then
+    if ! beta_manual_check_mongo "$effective_mongo_uri"; then
+      echo "chat mongo unavailable: $effective_mongo_uri" >&2
+    fi
+    if ! beta_manual_check_redis "$effective_redis_addr"; then
+      echo "chat redis unavailable: $effective_redis_addr" >&2
+    fi
+    return 1
+  fi
+
+  beta_manual_compose_up_chat_backing_services || return 1
+  effective_mongo_uri="mongodb://127.0.0.1:${LOCAL_GAMMA_MONGO_PORT}/?directConnection=true"
+  effective_redis_addr="127.0.0.1:${LOCAL_GAMMA_REDIS_PORT}"
+  beta_manual_wait_mongo_ready "$effective_mongo_uri" "chat mongo fallback" 90 || return 1
+  beta_manual_wait_redis_ready "$effective_redis_addr" "chat redis fallback" 90 || return 1
+  CHAT_MONGO_URI="$effective_mongo_uri"
+  CHAT_REDIS_ADDR="$effective_redis_addr"
+  echo "[app-beta-manual] chat mongo fallback OK: $CHAT_MONGO_URI"
+  echo "[app-beta-manual] chat redis fallback OK: $CHAT_REDIS_ADDR"
+}
 
 resolve_assistant_model_env() {
   python3 - "$ROOT_DIR" "$ASSISTANT_APP_CONFIG" <<'PY'
@@ -522,6 +655,11 @@ beta_manual_start_process \
 beta_manual_wait_http_ok "http://127.0.0.1:${ASSISTANT_PORT}/healthz" "assistant-service" 60 || {
   echo "assistant log: $ASSISTANT_LOG" >&2
   echo "gateway log: $GATEWAY_LOG" >&2
+  exit 1
+}
+
+beta_manual_ensure_chat_backing_services || {
+  echo "assistant log: $ASSISTANT_LOG" >&2
   exit 1
 }
 

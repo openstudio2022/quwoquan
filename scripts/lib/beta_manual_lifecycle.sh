@@ -88,6 +88,11 @@ log = log_file.open("ab", buffering=0)
 child: subprocess.Popen[bytes] | None = None
 stopping = False
 
+try:
+    os.setsid()
+except Exception:
+    pass
+
 
 def write_record() -> None:
     assert child is not None
@@ -134,6 +139,7 @@ def handle_signal(signum: int, _frame: object) -> None:
 
 signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
+signal.signal(signal.SIGHUP, handle_signal)
 
 try:
     child = subprocess.Popen(

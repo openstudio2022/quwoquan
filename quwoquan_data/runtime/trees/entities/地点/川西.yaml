@@ -1,0 +1,19 @@
+entity_id: entity_region_chuanxi
+name: 川西
+aliases:
+  - 川西高原
+  - 川西地区
+kind: region
+summary: 以阿坝、甘孜等为核心的四川西部高原景观带。
+city: ""
+address_text: 四川省西部（阿坝藏族羌族自治州、甘孜藏族自治州等）
+geo:
+  latitude: 31.0
+  longitude: 102.0
+scene_tag_refs:
+  - trees/tags/场景/川西自驾.yaml
+category_tag_refs:
+  - trees/tags/主题/旅行攻略.yaml
+search_terms:
+  - 川西
+  - 川西 景点

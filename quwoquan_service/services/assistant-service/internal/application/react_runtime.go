@@ -256,7 +256,7 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 		SkillID:      skill.SkillID,
 		Stage:        "final",
 		Prompt:       "结合工具观察生成最终回答",
-		Observation:  finalObservation,
+		Observation:  buildFinalObservationPayload(finalObservation, stepsOut),
 		UserQuestion: turn.Input.Text,
 		ContextTurns: turn.ContextTurns,
 	})
@@ -270,7 +270,7 @@ func (r ReactRuntime) RunWithSinks(ctx context.Context, turn assistant.Assistant
 			SkillID:      skill.SkillID,
 			Stage:        "final",
 			Prompt:       "上一次 final 输出不可用于展示。请基于同一输入证据重新生成非空 userMarkdown，直接回答用户问题；开头不要提内部证据来源或生成过程。",
-			Observation:  finalObservation,
+			Observation:  buildFinalObservationPayload(finalObservation, stepsOut),
 			UserQuestion: turn.Input.Text,
 			ContextTurns: turn.ContextTurns,
 		})
@@ -339,6 +339,22 @@ func collectModelInteraction(resp ModelResponse) []map[string]any {
 		return nil
 	}
 	return []map[string]any{resp.ClientModelInteraction}
+}
+
+func buildFinalObservationPayload(
+	finalObservation map[string]any,
+	steps []ReactStepResult,
+) map[string]any {
+	payload := map[string]any{}
+	for key, value := range finalObservation {
+		payload[key] = value
+	}
+	if len(steps) == 0 {
+		return payload
+	}
+	lastStep := steps[len(steps)-1]
+	payload["retrievalProcessing"] = buildRetrievalProcessingForStep(lastStep)
+	return payload
 }
 
 func replanReason(observation react.Observation, budget react.Budget) string {

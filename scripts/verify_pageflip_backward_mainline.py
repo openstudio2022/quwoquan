@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static gate for the BACK pageflip mainline (native StPageFlip BACK).
+"""Static gate for the BACK pageflip mainline (forward-isomorphic visual geometry).
 
 This script enforces the architectural rules in
 `.cursor/rules/12-pageflip-backward-mainline.mdc`:
@@ -9,15 +9,16 @@ This script enforces the architectural rules in
    `quwoquan_app/lib/ui/content/...`.
 2. The retired full-page previous-front baseline
    `ValueKey('article_backward_previous_front_baseline')` must not exist in lib.
-3. The native BACK invariant must hold:
-   - `backward_render_frame_builder.dart` must not recreate a forward
-     calculation or X-mirror geometry.
-   - `routeBSpineMirroredApplied:` must remain surfaced as a diagnostic flag
-     and be false on the native BACK path.
+3. The portrait BACK invariant must hold:
+   - `backward_render_frame_builder.dart` must construct forward-isomorphic
+     visual geometry while preserving semantic `direction == back`.
+   - `visualGeometryDirection:` and `routeBSpineMirroredApplied:` must remain
+     surfaced as diagnostics.
 4. `_localPolygonFromArea` MUST contain the StPageFlip BACK drawSoft formula
    `anchor.dx - point.dx`, while forward keeps `point.dx - anchor.dx`.
 5. BACK flipping sheet must split recto/front and verso/back inside the same
-   soft surface; diagnostics must expose both polygons from the same geometry.
+   soft surface from StPageFlip F/E/clip geometry; diagnostics must expose
+   both polygons from the same geometry.
 6. `_resolveBackwardDisplayPosition` and the `pageViewportRect` parameter on
    the deprecated soft helper MUST NOT exist anywhere in pageflip code.
 7. `ArticlePageBackwardProjectedFrame` must NOT re-introduce polygon fields.
@@ -69,6 +70,7 @@ SOFT_GEOMETRY_PATH = (
     / "article_reader_soft_page_geometry.dart"
 )
 RENDER_FRAME_PATH = APP_LIB / "ui" / "content" / "pageflip" / "render_frame.dart"
+GEOMETRY_PATH = APP_LIB / "ui" / "content" / "pageflip" / "geometry.dart"
 RENDER_FRAME_BUILDER_PATH = (
     APP_LIB / "ui" / "content" / "pageflip" / "backward_render_frame_builder.dart"
 )
@@ -103,12 +105,15 @@ FORBIDDEN_PROJECTED_FRAME_FIELDS = (
 
 BASELINE_VALUE_KEY = "'article_backward_previous_front_baseline'"
 
-# Required strings inside backward_render_frame_builder.dart. Native BACK must
-# preserve the BACK calculation output and surface the diagnostic flag.
+# Required strings inside backward_render_frame_builder.dart. Portrait BACK must
+# preserve BACK semantics while using forward-isomorphic visual geometry.
 REQUIRED_FRAME_BUILDER_STRINGS = (
-    "flippingClipArea = data.flippingClipArea",
-    "flippingAnchor = data.flippingAnchor",
-    "angle: data.angle",
+    "_resolveBackwardVisualGeometry(",
+    "resolveBackwardVisualReplayLocalPagePoint(",
+    "direction: StPageFlipDirection.forward",
+    "visualGeometryDirection: visualGeometry.direction",
+    "foldLineSource: 'backwardForwardIsomorphicFoldLine'",
+    "edgeLineSource: 'backwardForwardIsomorphicFreeEdgeLine'",
     "routeBSpineMirroredApplied:",
 )
 
@@ -117,7 +122,6 @@ FORBIDDEN_FRAME_BUILDER_STRINGS = (
     "_ForwardEquivalentGeometry",
     "_mirrorAreaX(",
     "_mirrorX(",
-    "StPageFlipCalculation(\n    direction: StPageFlipDirection.forward",
 )
 
 
@@ -179,13 +183,7 @@ def _check_no_previous_front_baseline() -> list[str]:
 
 
 def _check_frame_builder_native_back() -> list[str]:
-    """Frame builder must preserve native BACK calculation outputs.
-
-    The failed frame-mirror path recreated a forward calculation and X-mirrored
-    it, producing negative viewport coordinates in Flutter. Native BACK keeps
-    `data.flippingClipArea / activeCorner / angle` and lets the host apply the
-    StPageFlip direction-aware `drawSoft` formula.
-    """
+    """Frame builder must preserve BACK semantics and use forward-isomorphic visual geometry."""
 
     violations: list[str] = []
     if not RENDER_FRAME_BUILDER_PATH.exists():
@@ -198,13 +196,13 @@ def _check_frame_builder_native_back() -> list[str]:
         if required not in builder:
             violations.append(
                 f"{RENDER_FRAME_BUILDER_PATH.relative_to(ROOT)}: missing required Route-B (M1) marker `{required}`. "
-                "BACK frame builder must preserve native BACK calculation output."
+                "BACK frame builder must preserve semantic BACK while using forward-isomorphic visual geometry."
             )
     for forbidden in FORBIDDEN_FRAME_BUILDER_STRINGS:
         if forbidden in builder:
             violations.append(
                 f"{RENDER_FRAME_BUILDER_PATH.relative_to(ROOT)}: forbidden native-BACK regression marker `{forbidden}`. "
-                "Do not recreate a forward calculation or X-mirror BACK geometry."
+                "Do not restore retired mirror helpers or bypass geometry."
             )
     return violations
 
@@ -256,26 +254,26 @@ def _check_native_back_draw_soft_in_host_helpers() -> list[str]:
 
     poly_body = _extract_method_body(
         text,
-        r"List<Offset>\s+_localPolygonFromArea\([^)]*\)\s*\{",
+        r"Offset\s+_localPointFromAreaPoint\([^)]*\)\s*\{",
     )
     if poly_body is None:
         violations.append(
-            f"{HOST_PATH.relative_to(ROOT)}: failed to parse `_localPolygonFromArea` body"
+            f"{HOST_PATH.relative_to(ROOT)}: failed to parse `_localPointFromAreaPoint` body"
         )
     else:
         if "direction == StPageFlipDirection.back" not in poly_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: `_localPolygonFromArea` must contain the "
+                f"{HOST_PATH.relative_to(ROOT)}: `_localPointFromAreaPoint` must contain the "
                 "native StPageFlip BACK branch."
             )
         if "anchor.dx - point.dx" not in poly_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: `_localPolygonFromArea` must implement "
+                f"{HOST_PATH.relative_to(ROOT)}: `_localPointFromAreaPoint` must implement "
                 "`anchor.dx - point.dx` for BACK drawSoft."
             )
         if "point.dx - anchor.dx" not in poly_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: `_localPolygonFromArea` must keep "
+                f"{HOST_PATH.relative_to(ROOT)}: `_localPointFromAreaPoint` must keep "
                 "`point.dx - anchor.dx` for FORWARD drawSoft."
             )
 
@@ -290,12 +288,16 @@ def _check_recto_verso_split_in_host() -> list[str]:
     text = _strip_comments(HOST_PATH.read_text(encoding="utf-8"))
     required_markers = (
         "_buildBackwardRectoVersoFlippingPageSurface(",
-        "_buildBackwardSheetFaceSlice(",
-        "_backwardPageIntervalToClipRect(",
+        "_buildBackwardSheetFacePolygon(",
+        "_backwardFoldDerivedFacePolygons(",
+        "backwardSheetRectoPolygon(",
+        "backwardSheetVersoPolygon(",
+        "backwardFreeEdgeLine:",
+        "projectedRightEdgeLine",
         "backwardLeafFrame: frame.backwardLeafFrame",
+        "backwardFoldLine: frame.backwardProjectedFrame?.foldLine",
         "ArticlePageSurfaceKind.front",
         "ArticlePageSurfaceKind.back",
-        "Rect.fromLTWH(",
         "clipBehavior: Clip.none",
         "previousFrontLocalPolygon",
         "previousBackLocalPolygon",
@@ -305,8 +307,25 @@ def _check_recto_verso_split_in_host() -> list[str]:
         if marker not in text:
             violations.append(
                 f"{HOST_PATH.relative_to(ROOT)}: missing recto/verso BACK split marker `{marker}`. "
-                "BACK must split previous-front and previous-back inside one moving sheet."
+                "BACK must keep previous-front and previous-back in the same moving sheet."
             )
+
+    if "_singlePageBackwardFlippingDisplayOffset" in text:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: BACK render/diagnostics must not use "
+            "`_singlePageBackwardFlippingDisplayOffset`; use the single native "
+            "BACK drawSoft projection."
+        )
+    if "_reflectionMatrixForLine" in text or "_buildBackwardRectoFacePolygon" in text:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front must not use the "
+            "regressed reflection Transform path; split the existing sheet by F/E geometry."
+        )
+    if "_buildBackwardLaidDownFrontLayer" in text:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: BACK previous-front must not use a standalone "
+            "pageRect layer; integrate it as a recto face in the moving sheet."
+        )
 
     diag_body = _extract_method_body(
         text,
@@ -326,6 +345,89 @@ def _check_recto_verso_split_in_host() -> list[str]:
             violations.append(
                 f"{HOST_PATH.relative_to(ROOT)}: `_resolveBackwardDiagnosticGeometry` must derive "
                 "previousFrontLocalPolygon from the recto split, not hard-code an empty polygon."
+            )
+        if (
+            "backwardSheetRectoPolygon(" not in diag_body
+            or "backwardSheetVersoPolygon(" not in diag_body
+        ):
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: `_resolveBackwardDiagnosticGeometry` must expose "
+                "the same sheet-local front and back polygons used by rendering."
+            )
+
+    split_body = _extract_method_body(
+        text,
+        r"\(\{List<Offset>\s+recto,\s+List<Offset>\s+verso\}\)\s+_backwardFoldDerivedFacePolygons\([^)]*\)\s*\{",
+    )
+    if split_body is None:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: failed to parse `_backwardFoldDerivedFacePolygons` body"
+        )
+    elif (
+        "backwardSheetRectoPolygon(" not in split_body
+        or "backwardSheetVersoPolygon(" not in split_body
+    ):
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: `_backwardFoldDerivedFacePolygons` must derive "
+            "previous-front and previous-back as sheet-local F/E face polygons."
+        )
+    else:
+        if "totalRectoVisibleWidthNormalized > 0.001" in split_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: `_backwardFoldDerivedFacePolygons` must not "
+                "gate recto/front polygon creation on `totalRectoVisibleWidthNormalized`; "
+                "use the actual F/E clip result."
+            )
+        if "versoRevealWidthNormalized > 0.001" in split_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: `_backwardFoldDerivedFacePolygons` must not "
+                "gate verso/back polygon creation on `versoRevealWidthNormalized`; "
+                "use the actual F/E clip result."
+            )
+
+    if not SOFT_GEOMETRY_PATH.exists():
+        violations.append(f"missing soft geometry: {SOFT_GEOMETRY_PATH.relative_to(ROOT)}")
+    else:
+        soft_geometry_text = _strip_comments(
+            SOFT_GEOMETRY_PATH.read_text(encoding="utf-8")
+        )
+        for marker in (
+            "keepPositiveSideForBackwardRecto(",
+            "clipPolygonByLine(",
+            "backwardSheetRectoPolygon(",
+            "backwardSheetVersoPolygon(",
+            "polygonLooksLikeFullPageFallback(",
+        ):
+            if marker not in soft_geometry_text:
+                violations.append(
+                    f"{SOFT_GEOMETRY_PATH.relative_to(ROOT)}: missing Route-B geometry "
+                    f"helper marker `{marker}`."
+                )
+
+    surface_body = _extract_method_body(
+        text,
+        r"Widget\s+_buildBackwardRectoVersoFlippingPageSurface\([^)]*\)\s*\{",
+    )
+    if surface_body is None:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: failed to parse "
+            "`_buildBackwardRectoVersoFlippingPageSurface` body"
+        )
+    else:
+        if "_buildBackwardSheetFacePolygon(" not in surface_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back must render as a clipped "
+                "fold band on the moving sheet."
+            )
+        if "ArticlePageSurfaceKind.front" not in surface_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-front must render as a "
+                "sheet-local recto face inside the rotating sheet."
+            )
+        if "ArticlePageSurfaceKind.back" not in surface_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK moving sheet must remain bound to "
+                "`ArticlePageSurfaceKind.back` for the previous-back fold band."
             )
     return violations
 
@@ -415,7 +517,7 @@ def _check_soft_geometry_helper_clean() -> list[str]:
         if "return direction" not in body:
             violations.append(
                 f"{SOFT_GEOMETRY_PATH.relative_to(ROOT)}: softLayerViewportDirection must always "
-                "return the active direction (native BACK invariant)."
+                "return the active geometry direction."
             )
     return violations
 
@@ -451,6 +553,39 @@ def _check_projected_frame_fields() -> list[str]:
     return violations
 
 
+def _check_backward_visual_replay_mapping() -> list[str]:
+    violations: list[str] = []
+    if not GEOMETRY_PATH.exists():
+        violations.append(f"missing geometry: {GEOMETRY_PATH.relative_to(ROOT)}")
+        return violations
+    geometry = _strip_comments(GEOMETRY_PATH.read_text(encoding="utf-8"))
+    body = _extract_method_body(
+        geometry,
+        r"Offset\s+resolveBackwardVisualReplayCanonicalPoint\([^)]*\)\s*\{",
+    )
+    if body is None:
+        violations.append(
+            f"{GEOMETRY_PATH.relative_to(ROOT)}: missing resolveBackwardVisualReplayCanonicalPoint"
+        )
+        return violations
+    required_markers = (
+        "-pageWidth",
+        "pageWidth - edgeEpsilon",
+        "- (2 * localPagePoint.dx)",
+    )
+    for marker in required_markers:
+        if marker not in body:
+            violations.append(
+                f"{GEOMETRY_PATH.relative_to(ROOT)}: BACK visual replay mapping must keep marker `{marker}` "
+                "so portrait BACK starts from the forward completed negative-X pose."
+            )
+    if "clamp(0.0, pageWidth)" in body:
+        violations.append(
+            f"{GEOMETRY_PATH.relative_to(ROOT)}: BACK visual replay mapping must not clamp visual X to 0..pageWidth."
+        )
+    return violations
+
+
 def main() -> int:
     if not APP_LIB.exists():
         print(f"pageflip_backward_mainline: FAIL missing {APP_LIB}", file=sys.stderr)
@@ -465,6 +600,7 @@ def main() -> int:
     violations.extend(_check_backward_texture_binding())
     violations.extend(_check_soft_geometry_helper_clean())
     violations.extend(_check_projected_frame_fields())
+    violations.extend(_check_backward_visual_replay_mapping())
 
     if violations:
         print("pageflip_backward_mainline: FAIL", file=sys.stderr)
