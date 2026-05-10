@@ -487,6 +487,10 @@ jobs:
           ALLOW_MISSING_PLATFORMS: ${{ needs.discover_devices.outputs.allow_missing_platforms }}
         run: |
           set -euo pipefail
+          if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
+            echo "::notice::self-hosted mobile matrix is disabled for this PR; summary gate passes by default."
+            exit 0
+          fi
           args=()
           if [ "${ALLOW_MISSING_PLATFORMS}" = "true" ]; then
             args+=(--allow-missing-platforms)
