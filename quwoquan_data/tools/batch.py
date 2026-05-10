@@ -13,9 +13,9 @@ from urllib.parse import urlparse
 
 from common import (
     DISCOVERY_SCHEMA_VERSION,
-    LEGACY_PACKAGE_MANIFEST_SCHEMA_VERSIONS,
-    LEGACY_TOPIC_ASSET_MANIFEST_SCHEMA_VERSIONS,
-    LEGACY_TOPIC_ENRICHMENT_SCHEMA_VERSIONS,
+    COMPAT_PACKAGE_MANIFEST_SCHEMA_VERSIONS,
+    COMPAT_TOPIC_ASSET_MANIFEST_SCHEMA_VERSIONS,
+    COMPAT_TOPIC_ENRICHMENT_SCHEMA_VERSIONS,
     PACKAGE_MANIFEST_SCHEMA_VERSION,
     RUNTIME_ROOT,
     SUPPORTED_CONTENT_TYPES,
@@ -158,12 +158,12 @@ def _normalize_text(value: Any) -> str:
     return " ".join(unescape(str(value or "")).replace("\ufeff", "").split())
 
 
-def _schema_matches(value: Any, canonical: Any, legacy: set[Any] | None = None) -> bool:
+def _schema_matches(value: Any, canonical: Any, compat: set[Any] | None = None) -> bool:
     normalized = str(value).strip()
     if normalized == str(canonical).strip():
         return True
-    legacy_values = {str(item).strip() for item in (legacy or set())}
-    return normalized in legacy_values
+    compat_values = {str(item).strip() for item in (compat or set())}
+    return normalized in compat_values
 
 
 def _strip_markdown_links(text: str) -> str:
@@ -1301,7 +1301,7 @@ def _load_topic_context(
         if page_manifest and not _schema_matches(
             page_manifest.get("schemaVersion", ""),
             TOPIC_ASSET_MANIFEST_SCHEMA_VERSION,
-            LEGACY_TOPIC_ASSET_MANIFEST_SCHEMA_VERSIONS,
+            COMPAT_TOPIC_ASSET_MANIFEST_SCHEMA_VERSIONS,
         ):
             errors.append(f"topic {topic_id} source {source_id} 的 asset_manifest.json schemaVersion 非法")
         if page_manifest and str(page_manifest.get("topicId", "")).strip() != topic_id:
@@ -1420,7 +1420,7 @@ def _load_topic_context(
         if not _schema_matches(
             enrichment_rows[0].get("schemaVersion", ""),
             TOPIC_ENRICHMENT_SCHEMA_VERSION,
-            LEGACY_TOPIC_ENRICHMENT_SCHEMA_VERSIONS,
+            COMPAT_TOPIC_ENRICHMENT_SCHEMA_VERSIONS,
         ):
             errors.append(f"topic {topic_id} 的 enrichment.ndjson schemaVersion 非法")
     else:

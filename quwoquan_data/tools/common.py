@@ -58,15 +58,15 @@ SUPPORTED_TARGETS = {"alpha", "beta", "gamma", "prod"}
 SUPPORTED_CONTENT_TYPES = {"image", "article"}
 SUPPORTED_SEARCH_PROVIDERS = {"cursor_commands", "native_fetch"}
 DISCOVERY_SCHEMA_VERSION = "quwoquan_data.crawl_discovery"
-LEGACY_DISCOVERY_SCHEMA_VERSIONS = {"quwoquan_data.crawl_discovery.v2"}
+COMPAT_DISCOVERY_SCHEMA_VERSIONS = {"quwoquan_data.crawl_discovery.v2"}
 TOPIC_TASK_SCHEMA_VERSION = "quwoquan_data.topic_task"
-LEGACY_TOPIC_TASK_SCHEMA_VERSIONS = {"quwoquan_data.topic_task.v2"}
+COMPAT_TOPIC_TASK_SCHEMA_VERSIONS = {"quwoquan_data.topic_task.v2"}
 TOPIC_ASSET_MANIFEST_SCHEMA_VERSION = "quwoquan_data.topic_asset_manifest"
-LEGACY_TOPIC_ASSET_MANIFEST_SCHEMA_VERSIONS = {"quwoquan_data.topic_asset_manifest.v1"}
+COMPAT_TOPIC_ASSET_MANIFEST_SCHEMA_VERSIONS = {"quwoquan_data.topic_asset_manifest.v1"}
 TOPIC_ENRICHMENT_SCHEMA_VERSION = "quwoquan_data.topic_enrichment"
-LEGACY_TOPIC_ENRICHMENT_SCHEMA_VERSIONS = {"quwoquan_data.topic_enrichment.v1"}
+COMPAT_TOPIC_ENRICHMENT_SCHEMA_VERSIONS = {"quwoquan_data.topic_enrichment.v1"}
 PACKAGE_MANIFEST_SCHEMA_VERSION = "quwoquan_data.package_manifest"
-LEGACY_PACKAGE_MANIFEST_SCHEMA_VERSIONS = {"2", 2}
+COMPAT_PACKAGE_MANIFEST_SCHEMA_VERSIONS = {"2", 2}
 
 
 def now_iso() -> str:

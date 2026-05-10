@@ -16,6 +16,8 @@ SKIP_DIRS = {
     ".idea",
     ".vscode",
     ".venv",
+    # 本地可选克隆的 Cursor 侧向仓库；锁文件等含第三方用语，不参与本仓库用语门禁。
+    "cursor-cookbook",
 }
 
 TEXT_SUFFIXES = {
