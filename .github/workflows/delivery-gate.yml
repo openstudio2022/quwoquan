@@ -68,11 +68,7 @@ jobs:
       - name: 设置 Dart
         uses: dart-lang/setup-dart@v1
       - name: 安装 kustomize
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-          GOBIN="$RUNNER_TEMP/bin" go install sigs.k8s.io/kustomize/kustomize/v5@latest
-          "$RUNNER_TEMP/bin/kustomize" version
+        run: bash scripts/install_kustomize.sh
       - name: 安装 Python 依赖 (rec-model-service)
         run: |
           pip install -r quwoquan_service/services/rec-model-service/requirements.txt
