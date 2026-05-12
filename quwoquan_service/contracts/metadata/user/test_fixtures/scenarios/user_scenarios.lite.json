@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "user.scenario-fixtures.v2",
+  "schemaVersion": "user.scenario-fixtures",
   "description": "用户域 alpha/beta/gamma 共享测试场景，覆盖我的主页、作者主页、persona 与关系能力。 [alpha-dev-lite subset]",
   "repositoryExpectations": {
     "alpha": "mock",

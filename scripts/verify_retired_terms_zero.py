@@ -82,6 +82,8 @@ ALLOWLIST_PATHS = {
     "scripts/media_slice_registry.py",
     "scripts/shared_pool_real_asset_pipeline.py",
     "scripts/verify_avatar_user_pool_consistency.py",
+    "quwoquan_data/tools/catalog_iteration.py",
+    "quwoquan_data/tools/semantic_entity_resolution.py",
     "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/design.md",
     "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md",
 }

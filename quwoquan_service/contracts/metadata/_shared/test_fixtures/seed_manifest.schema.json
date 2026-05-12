@@ -6,7 +6,7 @@
   "required": ["schemaVersion", "environment", "seedRefs", "gateway"],
   "properties": {
     "schemaVersion": {
-      "const": "app-seed-manifest.v1"
+      "const": "app-seed-manifest"
     },
     "environment": {
       "enum": ["alpha", "beta", "gamma"]

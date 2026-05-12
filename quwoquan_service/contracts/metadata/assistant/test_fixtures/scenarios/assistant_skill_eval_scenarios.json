@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "assistant.skill-eval-scenarios.v1",
+  "schemaVersion": "assistant.skill-eval-scenarios",
   "description": "21 个私人助理 skill 端侧 alpha 与端云 beta 比拼评测场景。每个场景用于同题对比流式叙事、答案质量、skill/tool 语义一致性、稳定性与端云体验一致性。",
   "repositoryExpectations": {
     "alpha": "mock",

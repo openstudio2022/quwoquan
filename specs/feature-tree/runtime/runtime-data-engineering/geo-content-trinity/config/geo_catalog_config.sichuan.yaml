@@ -1,0 +1,55 @@
+schemaVersion: quwoquan_data.geo_catalog_config
+name: 四川地理目录候选层
+topic_id_prefix: poi
+output_defaults:
+  catalog_ref: seed/sichuan_chuanxi_attractions_catalog.ndjson
+  slice_report_ref: out/reports/sichuan_geo_catalog_slice_report.json
+scope:
+  region_label: 四川
+  province_name: 四川省
+  province_query_name: 四川省
+  province_admin_level: "4"
+  slice_name_key: "name:zh"
+  slice_admin_level: "5"
+  slices:
+    - 成都市
+    - 自贡市
+    - 攀枝花市
+    - 泸州市
+    - 德阳市
+    - 绵阳市
+    - 广元市
+    - 遂宁市
+    - 内江市
+    - 乐山市
+    - 南充市
+    - 眉山市
+    - 宜宾市
+    - 广安市
+    - 达州市
+    - 雅安市
+    - 巴中市
+    - 资阳市
+    - 阿坝藏族羌族自治州
+    - 甘孜藏族自治州
+    - 凉山彝族自治州
+filters:
+  tourism_allowed:
+    - attraction
+    - museum
+    - viewpoint
+    - theme_park
+    - zoo
+    - aquarium
+  amenity_allowed:
+    - museum
+    - arts_centre
+  historic_allowed:
+    - monument
+    - archaeological_site
+    - ruins
+    - building
+    - castle
+    - fort
+naming_rules_path: entity_naming_rules.yaml
+geo_band_rules_path: geo_band_rules.sichuan.yaml

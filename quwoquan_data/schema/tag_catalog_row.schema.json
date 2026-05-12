@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TagCatalogRow",
+  "type": "object",
+  "required": ["schemaVersion", "tagId", "label", "tagType", "extensions"],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "tagId": { "type": "string", "minLength": 1 },
+    "label": { "type": "string", "minLength": 1 },
+    "tagType": { "type": "string", "minLength": 1 },
+    "tagRef": { "type": "string" },
+    "aliases": { "type": "array", "items": { "type": "string" } },
+    "extensions": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "labelEn": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

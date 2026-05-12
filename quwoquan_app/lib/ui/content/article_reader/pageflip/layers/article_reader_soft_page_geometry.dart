@@ -203,6 +203,37 @@ List<Offset> pageRectPolygon(Size pageSize) {
   ];
 }
 
+List<Offset> backwardFrontFlatPolygon({
+  required Size pageSize,
+  required (Offset, Offset)? foldLine,
+  required (Offset, Offset)? freeEdgeLine,
+}) {
+  final safeFreeEdgeLine = freeEdgeLine;
+  final safeFoldLine = foldLine;
+  if (safeFreeEdgeLine == null || safeFoldLine == null) {
+    return const <Offset>[];
+  }
+  var polygon = pageRectPolygon(pageSize);
+  final spineProbe = Offset(0, pageSize.height / 2);
+  polygon = clipPolygonByLine(
+    polygon: polygon,
+    line: safeFreeEdgeLine,
+    keepPositiveSide: lineSide(safeFreeEdgeLine, spineProbe) >= 0,
+  );
+  if (!polygonHasVisibleArea(polygon)) {
+    return const <Offset>[];
+  }
+  polygon = clipPolygonByLine(
+    polygon: polygon,
+    line: safeFoldLine,
+    keepPositiveSide: lineSide(safeFoldLine, spineProbe) >= 0,
+  );
+  if (!polygonHasVisibleArea(polygon)) {
+    return const <Offset>[];
+  }
+  return polygon;
+}
+
 List<Offset> backwardSheetRectoPolygon({
   required Size pageSize,
   required List<Offset> sheetLocalPolygon,
@@ -251,31 +282,61 @@ List<Offset> backwardSheetVersoPolygon({
   }
 
   final safeFreeEdgeLine = freeEdgeLine;
-  if (safeFreeEdgeLine != null &&
-      !linesAreParallel(safeFoldLine, safeFreeEdgeLine)) {
-    final foldProbe = Offset(
-      (safeFoldLine.$1.dx + safeFoldLine.$2.dx) / 2,
-      (safeFoldLine.$1.dy + safeFoldLine.$2.dy) / 2,
-    );
-    final keepSideContainingFold = lineSide(safeFreeEdgeLine, foldProbe) >= 0;
-    final edgeBoundedPolygon = clipPolygonByLine(
-      polygon: foldSidePolygon,
-      line: safeFreeEdgeLine,
-      keepPositiveSide: keepSideContainingFold,
-    );
-    if (polygonHasVisibleArea(edgeBoundedPolygon) &&
-        !polygonLooksLikeFullPageFallback(
-          edgeBoundedPolygon,
-          pageSize: pageSize,
-        )) {
-      return edgeBoundedPolygon;
-    }
-  }
-
-  if (polygonLooksLikeFullPageFallback(foldSidePolygon, pageSize: pageSize)) {
+  if (safeFreeEdgeLine == null) {
     return const <Offset>[];
   }
-  return foldSidePolygon;
+  final foldProbe = Offset(
+    (safeFoldLine.$1.dx + safeFoldLine.$2.dx) / 2,
+    (safeFoldLine.$1.dy + safeFoldLine.$2.dy) / 2,
+  );
+  final keepSideContainingFold = lineSide(safeFreeEdgeLine, foldProbe) >= 0;
+  final edgeBoundedPolygon = clipPolygonByLine(
+    polygon: foldSidePolygon,
+    line: safeFreeEdgeLine,
+    keepPositiveSide: keepSideContainingFold,
+  );
+  if (polygonHasVisibleArea(edgeBoundedPolygon) &&
+      !polygonLooksLikeFullPageFallback(
+        edgeBoundedPolygon,
+        pageSize: pageSize,
+      )) {
+    return edgeBoundedPolygon;
+  }
+
+  return const <Offset>[];
+}
+
+typedef BackwardFoldFaceGeometry = ({
+  List<Offset> sheetLocalPolygon,
+  (Offset, Offset)? foldLine,
+  (Offset, Offset)? freeEdgeLine,
+  List<Offset> recto,
+  List<Offset> verso,
+});
+
+BackwardFoldFaceGeometry backwardFoldFaceGeometry({
+  required Size pageSize,
+  required List<Offset> sheetLocalPolygon,
+  required (Offset, Offset)? foldLine,
+  required (Offset, Offset)? freeEdgeLine,
+}) {
+  return (
+    sheetLocalPolygon: List<Offset>.unmodifiable(sheetLocalPolygon),
+    foldLine: foldLine,
+    freeEdgeLine: freeEdgeLine,
+    recto: backwardSheetRectoPolygon(
+      pageSize: pageSize,
+      sheetLocalPolygon: sheetLocalPolygon,
+      foldLine: foldLine,
+      freeEdgeLine: freeEdgeLine,
+    ),
+    verso: backwardSheetVersoPolygon(
+      pageSize: pageSize,
+      sheetLocalPolygon: sheetLocalPolygon,
+      foldLine: foldLine,
+      freeEdgeLine: freeEdgeLine,
+    ),
+  );
 }
 
 List<Offset> clipPolygonByLine({

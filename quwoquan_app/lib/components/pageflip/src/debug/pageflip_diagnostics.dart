@@ -73,7 +73,7 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
                             initialPage: 2,
                             coverUrl: '',
                             showFooterPageLabel: true,
-                            debugPureBackwardGeometry: true,
+                            debugPureBackwardGeometry: false,
                             onSceneChanged: (scene) {
                               _pendingScene = scene;
                               if (_sceneUpdateScheduled) {
@@ -340,20 +340,9 @@ class _SamplingPointsOverlay extends StatelessWidget {
     final pageRect = resolveBookPageRect(scene.layout, isRightPage: true);
     final foldSample = _foldSamplePoint(pageRect);
     final edgeSample = _edgeSamplePoint(pageRect);
-    final seamGuideX = debugState?.guideX;
     final sampleRadius = AppSpacing.iconSmall / 2;
     return Stack(
       children: [
-        if (seamGuideX != null)
-          Positioned(
-            left: seamGuideX - AppSpacing.xs / 4,
-            top: pageRect.top,
-            child: Container(
-              width: AppSpacing.xs / 2,
-              height: pageRect.height,
-              color: AppColors.error.withValues(alpha: 0.8),
-            ),
-          ),
         if (debugState?.guideX != null)
           Positioned(
             left: foldSample.dx - sampleRadius,

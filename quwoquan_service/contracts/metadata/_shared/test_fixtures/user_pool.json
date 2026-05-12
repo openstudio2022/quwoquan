@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "shared.avatar-user-pool.v2",
+  "schemaVersion": "shared.avatar-user-pool",
   "description": "alpha/beta/gamma 共享身份、真实图片来源与媒体派生真相源。运行时只消费 media objectKey 派生后的 URL。",
   "mediaContract": {
     "urlDerivation": "runtime joins MEDIA_*_CDN_BASE_URL or gateway base with objectKey",

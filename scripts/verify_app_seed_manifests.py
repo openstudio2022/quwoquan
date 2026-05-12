@@ -40,8 +40,8 @@ def rel(path: Path) -> str:
 
 def verify_manifest(env: str, path: Path) -> None:
     manifest = load_json(path)
-    if manifest.get("schemaVersion") != "app-seed-manifest.v1":
-        fail(f"{rel(path)} schemaVersion must be app-seed-manifest.v1")
+    if manifest.get("schemaVersion") != "app-seed-manifest":
+        fail(f"{rel(path)} schemaVersion must be app-seed-manifest")
     if manifest.get("environment") != env:
         fail(f"{rel(path)} environment must be {env}")
 

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "shared-media-composition-rules.v1",
+  "schemaVersion": "shared-media-composition-rules",
   "description": "共享池真实图片扩容的规模、角色、内容和环境一致性规则。",
   "targets": {
     "themeCount": 12,

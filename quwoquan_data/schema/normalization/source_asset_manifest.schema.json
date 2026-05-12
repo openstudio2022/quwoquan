@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceAssetManifest",
+  "type": "object",
+  "required": ["schemaVersion", "sourceRef", "sourceUrl", "finalUrl", "pageTitle", "assets"],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "sourceUrl": { "type": "string", "minLength": 1 },
+    "finalUrl": { "type": "string", "minLength": 1 },
+    "pageTitle": { "type": "string", "minLength": 1 },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "assetId",
+          "assetSourceUrl",
+          "assetLocalPath",
+          "sourcePageUrl",
+          "pageTitle",
+          "sourcePlatform",
+          "mimeType",
+          "width",
+          "height",
+          "sha256",
+          "downloadStatus",
+          "rightsStatus",
+          "watermarkStatus",
+          "assetRoleHint",
+          "imageTypeCandidate",
+          "license"
+        ],
+        "properties": {
+          "assetId": { "type": "string", "minLength": 1 },
+          "assetSourceUrl": { "type": "string", "minLength": 1 },
+          "assetLocalPath": { "type": "string", "minLength": 1 },
+          "sourcePageUrl": { "type": "string", "minLength": 1 },
+          "pageTitle": { "type": "string", "minLength": 1 },
+          "sourcePlatform": { "type": "string", "minLength": 1 },
+          "mimeType": { "type": "string", "minLength": 1 },
+          "width": { "type": "integer", "minimum": 0 },
+          "height": { "type": "integer", "minimum": 0 },
+          "sha256": { "type": "string", "minLength": 1 },
+          "sizeBytes": { "type": "integer", "minimum": 0 },
+          "downloadStatus": { "type": "string", "enum": ["downloaded", "referenced_only"] },
+          "rightsStatus": { "type": "string", "enum": ["clear", "unclear", "restricted", "unknown"] },
+          "watermarkStatus": { "type": "string", "enum": ["clean", "visible", "suspected", "unknown"] },
+          "assetRoleHint": { "type": "string", "minLength": 1 },
+          "imageTypeCandidate": { "type": "string", "enum": ["content_photo", "icon_logo", "map_diagram", "poster_cover", "decorative", "unknown"] },
+          "pageMetadataTitle": { "type": "string" },
+          "pageMetadataSnippet": { "type": "string" },
+          "pageMetadataAuthor": { "type": "string" },
+          "pageMetadataDescription": { "type": "string" },
+          "license": {
+            "type": "object",
+            "required": ["name", "usage"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "url": { "type": "string" },
+              "usage": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

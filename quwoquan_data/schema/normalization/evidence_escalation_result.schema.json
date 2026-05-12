@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvidenceEscalationResult",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sourceRef",
+    "batchLabel",
+    "sourceUrl",
+    "sourceTitle",
+    "resolvedMainEntities",
+    "resolvedMembers",
+    "resolvedAliases",
+    "selectedContentAssets",
+    "rejectedAssets",
+    "additionalEvidenceUrls",
+    "escalationStatus",
+    "escalationSummary"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "batchLabel": { "type": "string", "minLength": 1 },
+    "sourceUrl": { "type": "string", "minLength": 1 },
+    "sourceTitle": { "type": "string", "minLength": 1 },
+    "resolvedMainEntities": { "type": "array", "items": { "type": "object" } },
+    "resolvedMembers": { "type": "array", "items": { "type": "object" } },
+    "resolvedAliases": { "type": "array", "items": { "type": "string" } },
+    "selectedContentAssets": { "type": "array", "items": { "type": "object" } },
+    "rejectedAssets": { "type": "array", "items": { "type": "object" } },
+    "additionalEvidenceUrls": { "type": "array", "items": { "type": "string" } },
+    "escalationStatus": {
+      "type": "string",
+      "enum": ["resolved", "partially_resolved", "needs_manual_review", "failed"]
+    },
+    "escalationSummary": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}

@@ -100,18 +100,18 @@ class ArticleReaderDebugMapper {
                     direction: visualGeometryDirection,
                   ),
                 );
-          frontLocalPolygon = backwardSheetRectoPolygon(
+          frontLocalPolygon = backwardFrontFlatPolygon(
+            pageSize: pageSize,
+            foldLine: foldLine,
+            freeEdgeLine: freeEdgeLine,
+          );
+          final faceGeometry = backwardFoldFaceGeometry(
             pageSize: pageSize,
             sheetLocalPolygon: pagePolygon,
             foldLine: localFoldLine,
             freeEdgeLine: localFreeEdgeLine,
           );
-          backLocalPolygon = backwardSheetVersoPolygon(
-            pageSize: pageSize,
-            sheetLocalPolygon: pagePolygon,
-            foldLine: localFoldLine,
-            freeEdgeLine: localFreeEdgeLine,
-          );
+          backLocalPolygon = faceGeometry.verso;
         }
       } else {
         backLocalPolygon = sheetLocalPolygon;

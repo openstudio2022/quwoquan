@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "content.scenario-fixtures.v2",
+  "schemaVersion": "content.scenario-fixtures",
   "description": "内容域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.posts 初始化 MockContentRepository，beta/gamma 云侧服务 reset+seed 后由端侧 remote 访问。",
   "repositoryExpectations": {
     "alpha": "mock",

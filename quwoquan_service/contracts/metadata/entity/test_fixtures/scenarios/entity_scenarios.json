@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "entity.scenario-fixtures.v1",
+  "schemaVersion": "entity.scenario-fixtures",
   "description": "实体主页 alpha/beta/gamma 共享测试场景，覆盖作者主页、圈子主页、POI/地点主页、认领与选择器。",
   "repositoryExpectations": {
     "alpha": "mock",

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "assistant.scenario-fixtures.v1",
+  "schemaVersion": "assistant.scenario-fixtures",
   "description": "端云 alpha/beta/gamma 共享测试场景。alpha 端侧使用 mock repository 读取 alphaMockStream，beta/gamma 端侧通过 remote repository 访问云侧服务，云侧每次测试前重置并加载 seedRefs。 [alpha-dev-lite subset]",
   "repositoryExpectations": {
     "alpha": "mock",

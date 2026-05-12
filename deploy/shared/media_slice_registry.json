@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "media-slice-registry.v1",
+  "schemaVersion": "media-slice-registry",
   "description": "切片级媒体路由表。优先解析 objectKey 中的 /s/{sliceId}/，未迁移到显式 sliceId 的 legacy fixture 通过 prefix 回落到固定 slice。",
   "allocation": {
     "strategy": "sequential-capacity",

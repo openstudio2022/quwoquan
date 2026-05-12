@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "shared-media-source-catalog.v1",
+  "schemaVersion": "shared-media-source-catalog",
   "description": "共享池真实图片来源目录。优先使用可再分发图片，并把现有 mock/legacy 外链固化为本地原图后再派生到统一 objectKey。",
   "entries": [
     {

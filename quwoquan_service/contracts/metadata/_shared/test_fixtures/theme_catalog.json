@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "shared-media-theme-catalog.v1",
+  "schemaVersion": "shared-media-theme-catalog",
   "description": "共享池主题分类、角色层级和跨域文本种子。",
   "themes": [
     {

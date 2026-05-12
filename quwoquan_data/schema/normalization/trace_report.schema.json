@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TraceReport",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sourceRef",
+    "sourceUrl",
+    "sourceTitle",
+    "extractInputPath",
+    "extractResultPath",
+    "reviewInputPath",
+    "reviewResultPath",
+    "authorityInputPath",
+    "authorityResultPath",
+    "compiledEntityRefs",
+    "compiledImageRefs",
+    "traceStatus"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "sourceUrl": { "type": "string", "minLength": 1 },
+    "sourceTitle": { "type": "string", "minLength": 1 },
+    "catalogTopicId": { "type": "string" },
+    "catalogName": { "type": "string" },
+    "extractInputPath": { "type": "string", "minLength": 1 },
+    "extractResultPath": { "type": "string", "minLength": 1 },
+    "reviewInputPath": { "type": "string", "minLength": 1 },
+    "reviewResultPath": { "type": "string", "minLength": 1 },
+    "authorityInputPath": { "type": "string", "minLength": 1 },
+    "authorityResultPath": { "type": "string", "minLength": 1 },
+    "compiledEntityRefs": { "type": "array", "items": { "type": "object" } },
+    "compiledImageRefs": { "type": "array", "items": { "type": "object" } },
+    "traceStatus": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}

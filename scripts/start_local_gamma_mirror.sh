@@ -783,7 +783,13 @@ else
   # Recreate the local mirror on every gate run so changed host port envs take effect.
   "${compose_cmd[@]}" down --remove-orphans >/dev/null 2>&1 || true
   docker volume rm -f quwoquan_service_local-gamma-postgres >/dev/null 2>&1 || true
-  "${compose_cmd[@]}" "${compose_up_args[@]}"
+  compose_up_failed=0
+  if ! "${compose_cmd[@]}" "${compose_up_args[@]}"; then
+    # Docker compose may return early while health checks are still converging.
+    # Keep the existing readiness probes as the final source of truth.
+    compose_up_failed=1
+    echo "[local-gamma] WARN: compose up reported a startup error; deferring to host readiness probes" >&2
+  fi
 fi
 start_colima_tunnels_if_needed
 
@@ -849,6 +855,10 @@ PY
   return 1
 }
 wait_local_gamma_host_ready
+
+if [[ "${compose_up_failed:-0}" == "1" ]]; then
+  echo "[local-gamma] WARN: host probes recovered after compose startup reported an error" >&2
+fi
 
 python3 - "$stack_report" "$CONFIG_VERSION" "$IMAGE_VERSION" "$GATEWAY_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$restarted_from_previous" <<'PY'
 import json

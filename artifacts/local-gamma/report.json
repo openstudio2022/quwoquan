@@ -1,11 +1,24 @@
 {
   "status": "passed",
   "dryRun": false,
-  "commitSha": "85cf2440",
+  "commitSha": "29711fe6",
   "configVersion": "local-gamma-v1",
   "imageVersion": "0.0.1",
-  "generatedAt": "2026-05-05T03:31:35.213784+00:00",
+  "generatedAt": "2026-05-12T19:23:56.349418+00:00",
   "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
+  "serviceMode": "single-stack",
+  "restartedFromPrevious": true,
+  "stack": {
+    "status": "passed",
+    "serviceMode": "single-stack",
+    "restartedFromPrevious": true,
+    "configVersion": "local-gamma-v1",
+    "imageVersion": "0.0.1",
+    "gatewayBaseUrl": "http://127.0.0.1:18180",
+    "productOpsBaseUrl": "http://127.0.0.1:18186",
+    "mediaBaseUrl": "http://127.0.0.1:18180",
+    "generatedAt": "2026-05-12T19:21:14.858683Z"
+  },
   "tests": {
     "T1": {
       "status": "passed",
@@ -33,8 +46,8 @@
       },
       "seed": {
         "status": "passed",
-        "insertedCount": 10,
-        "output": "time=\"2026-05-05T11:29:30+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-04-29T11:40:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_photo_003',\n    '3': 'fixture_video_001',\n    '4': 'fixture_video_002',\n    '5': 'fixture_article_001',\n    '6': 'fixture_article_002',\n    '7': 'fixture_moment_001',\n    '8': 'fixture_moment_002',\n    '9': 'fixture_moment_003'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 10\n}\n\nrs0 [direct: primary] test> "
+        "insertedCount": 11,
+        "output": "time=\"2026-05-13T03:21:15+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-05-26T00:00:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 11 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 11\n}\n\nrs0 [direct: primary] test> "
       },
       "endpoints": [
         {
@@ -51,14 +64,14 @@
           "domain": "content",
           "path": "/v1/content/feed",
           "httpStatus": 200,
-          "bytes": 4150,
+          "bytes": 5735,
           "status": "passed"
         },
         {
           "domain": "content",
           "path": "/v1/content/posts/fixture_photo_001",
           "httpStatus": 200,
-          "bytes": 1406,
+          "bytes": 1427,
           "status": "passed"
         },
         {
@@ -75,7 +88,7 @@
           "domain": "chat",
           "path": "/v1/chat/inbox",
           "httpStatus": 200,
-          "bytes": 26356,
+          "bytes": 36592,
           "status": "passed"
         },
         {
@@ -116,7 +129,7 @@
           "name": "content_api_contract",
           "status": "passed",
           "exitCode": 0,
-          "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/content/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end 第一页返回 20 条 + cursor 非空\n00:00 +1: feed_cursor_pagination_end_to_end 第二页与第一页无重叠 item\n00:00 +2: feed_cursor_pagination_end_to_end PhotoPostDto fromMap 解析所有字段包含 aspectRatio\n  local gamma content mirror does not yet expose image dimensions\n00:00 +2 ~1: feed_cursor_pagination_end_to_end (tearDownAll)\n00:00 +2 ~1: behavior_batch_report_reaches_service (setUpAll)\n00:00 +2 ~1: behavior_batch_report_reaches_service POST /v1/content/behaviors 返回 204\n00:00 +3 ~1: behavior_batch_report_reaches_service 事件 type 字段与 behaviors.yaml 枚举对齐\n00:00 +4 ~1: behavior_batch_report_reaches_service like type 被 batch 端点拒绝（专属路由）\n00:00 +5 ~1: behavior_batch_report_reaches_service (tearDownAll)\n00:00 +5 ~1: error_state_displayed_correctly 不存在的 postId → 404 + CONTENT.USER.post_not_found\n00:00 +6 ~1: media_not_ready_graceful_error X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry\n00:00 +7 ~1: dedicated_feedback_and_user_block_contract (setUpAll)\n00:00 +7 ~1: dedicated_feedback_and_user_block_contract POST /v1/content/reports 可用\n00:00 +8 ~1: dedicated_feedback_and_user_block_contract POST/DELETE /v1/user/block/{id} 可用\n  local gamma content mirror excludes user routes\n00:00 +8 ~2: dedicated_feedback_and_user_block_contract PATCH /v1/user/settings/privacy 可写 blockedKeywords\n  local gamma content mirror excludes user routes\n00:00 +8 ~3: dedicated_feedback_and_user_block_contract (tearDownAll)\n00:00 +8 ~3: (tearDownAll)\n00:00 +8 ~3: All tests passed!\n"
+          "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/content/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end 第一页返回 20 条 + cursor 非空\n00:00 +1: feed_cursor_pagination_end_to_end 第二页与第一页无重叠 item\n00:00 +2: feed_cursor_pagination_end_to_end PhotoPostDto fromMap 解析所有字段包含 aspectRatio\n  local gamma content mirror does not yet expose image dimensions\n00:00 +2 ~1: feed_cursor_pagination_end_to_end (tearDownAll)\n00:00 +2 ~1: behavior_batch_report_reaches_service (setUpAll)\n00:00 +2 ~1: behavior_batch_report_reaches_service POST /v1/content/behaviors 返回 204\n00:00 +3 ~1: behavior_batch_report_reaches_service 事件 type 字段与 behaviors.yaml 枚举对齐\n00:00 +4 ~1: behavior_batch_report_reaches_service like type 被 batch 端点拒绝（专属路由）\n00:00 +5 ~1: behavior_batch_report_reaches_service (tearDownAll)\n00:00 +5 ~1: error_state_displayed_correctly 不存在的 postId → 404 + CONTENT.USER.post_not_found\n00:00 +6 ~1: media_not_ready_graceful_error X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry\n00:00 +7 ~1: dedicated_feedback_and_user_block_contract (setUpAll)\n00:00 +7 ~1: dedicated_feedback_and_user_block_contract POST /v1/content/reports 可用\n00:00 +8 ~1: dedicated_feedback_and_user_block_contract POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用\n  local gamma content mirror excludes user routes\n00:00 +8 ~2: dedicated_feedback_and_user_block_contract PATCH /v1/user/settings/privacy 可写并回读 blockedKeywords\n  local gamma content mirror excludes user routes\n00:00 +8 ~3: dedicated_feedback_and_user_block_contract (tearDownAll)\n00:00 +8 ~3: (tearDownAll)\n00:00 +8 ~3: All tests passed!\n"
         },
         {
           "name": "chat_api_contract",
@@ -135,22 +148,14 @@
     "T4": {
       "suiteId": "content_feed_patrol",
       "status": "passed",
-      "startedAt": "2026-05-05T03:29:37.873719Z",
-      "endedAt": "2026-05-05T03:31:35.137936Z",
+      "startedAt": "2026-05-12T19:21:29.094494Z",
+      "endedAt": "2026-05-12T19:23:56.233988Z",
       "environmentAlias": "local-gamma",
       "target": "test/patrol/discovery/feed_load_test.dart",
       "platform": "all",
       "gatewayBaseUrl": "http://127.0.0.1:18180",
       "productOpsBaseUrl": "http://127.0.0.1:18186",
       "devices": [
-        {
-          "id": "emulator-5554",
-          "name": "sdk gphone64 arm64",
-          "targetPlatform": "android-arm64",
-          "sdk": "Android 12 (API 31)",
-          "emulator": true,
-          "ephemeral": false
-        },
         {
           "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
           "name": "iPhone 17 Pro",
@@ -161,78 +166,6 @@
         }
       ],
       "runs": [
-        {
-          "command": [
-            "patrol",
-            "test",
-            "-t",
-            "test/patrol/discovery/feed_load_test.dart",
-            "-d",
-            "emulator-5554",
-            "--dart-define=RUN_T4_PATROL=true",
-            "--dart-define=APP_RUNTIME_ENV=gamma",
-            "--dart-define=APP_DATA_SOURCE=remote",
-            "--dart-define=API_CONTRACT_ENV=gamma",
-            "--dart-define=CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:18180",
-            "--dart-define=API_CONTRACT_BASE_URL=http://127.0.0.1:18180",
-            "--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=http://127.0.0.1:18186",
-            "--dart-define=TEST_AUTH_TOKEN=local-gamma-token",
-            "--dart-define=MEDIA_AVATAR_CDN_BASE_URL=http://127.0.0.1:18180",
-            "--dart-define=MEDIA_IMAGE_CDN_BASE_URL=http://127.0.0.1:18180",
-            "--dart-define=MEDIA_VIDEO_CDN_BASE_URL=http://127.0.0.1:18180",
-            "--dart-define=MEDIA_UPLOAD_BASE_URL=http://127.0.0.1:18180"
-          ],
-          "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
-          "exitCode": 0,
-          "timedOut": false,
-          "durationMs": 34584,
-          "outputSummary": "• Building apk with entrypoint test_bundle.dart...\n✓ Completed building apk with entrypoint test_bundle.dart (9.9s)\n• Executing tests of apk with entrypoint test_bundle.dart on emulator-5554...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: file:///Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/app/reports/androidTests/connected/debug/index.html\n⏱️  Duration: 6s\n\n✓ Completed executing apk with entrypoint test_bundle.dart on emulator-5554 (6.5s)\n",
-          "logPath": "artifacts/local-gamma/runs/emulator-5554/patrol.log",
-          "device": {
-            "id": "emulator-5554",
-            "name": "sdk gphone64 arm64",
-            "targetPlatform": "android-arm64",
-            "sdk": "Android 12 (API 31)",
-            "emulator": true,
-            "ephemeral": false
-          },
-          "evidence": {
-            "runDirectory": "artifacts/local-gamma/runs/emulator-5554",
-            "deviceManifestPath": "artifacts/local-gamma/runs/emulator-5554/device.json",
-            "commandPath": "artifacts/local-gamma/runs/emulator-5554/command.json",
-            "rawLogPath": "artifacts/local-gamma/runs/emulator-5554/patrol.log",
-            "beforeScreenshot": {
-              "status": "captured",
-              "path": "artifacts/local-gamma/runs/emulator-5554/before.png",
-              "command": [
-                "adb",
-                "-s",
-                "emulator-5554",
-                "exec-out",
-                "screencap",
-                "-p"
-              ],
-              "stderrSummary": ""
-            },
-            "afterScreenshot": {
-              "status": "captured",
-              "path": "artifacts/local-gamma/runs/emulator-5554/after.png",
-              "command": [
-                "adb",
-                "-s",
-                "emulator-5554",
-                "exec-out",
-                "screencap",
-                "-p"
-              ],
-              "stderrSummary": ""
-            },
-            "failureScreenshot": {
-              "status": "skipped",
-              "reason": "command passed"
-            }
-          }
-        },
         {
           "command": [
             "patrol",
@@ -257,8 +190,8 @@
           "cwd": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app",
           "exitCode": 0,
           "timedOut": false,
-          "durationMs": 74378,
-          "outputSummary": "• Building app with entrypoint test_bundle.dart for iOS simulator (debug)...\n\tBuilding com.example.quwoquanApp for simulator (ios)...\n✓ Completed building app with entrypoint test_bundle.dart for iOS simulator (42.5s)\n• Running app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/ios_results_1777951870163.xcresult\n⏱️  Duration: 24s\n\n✓ Completed executing app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro (24.4s)\n",
+          "durationMs": 132871,
+          "outputSummary": "• Building app with entrypoint test_bundle.dart for iOS simulator (debug)...\n\tBuilding com.example.quwoquanApp for simulator (ios)...\n✓ Completed building app with entrypoint test_bundle.dart for iOS simulator (90.8s)\n• Running app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro...\n\n\u001b[1mTest summary:\u001b[0m\n📝 Total: 0\n✅ Successful: 0\n❌ Failed: 0\n⏩ Skipped: 0\n📊 Report: /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/build/ios_results_1778613802933.xcresult\n⏱️  Duration: 32s\n\n✓ Completed executing app with entrypoint test_bundle.dart for iOS simulator on simulator iPhone 17 Pro (32.5s)\n",
           "logPath": "artifacts/local-gamma/runs/DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB/patrol.log",
           "device": {
             "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",

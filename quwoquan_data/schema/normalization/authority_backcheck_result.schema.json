@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AuthorityBackcheckResult",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sourceRef",
+    "batchLabel",
+    "sourceUrl",
+    "sourceTitle",
+    "checkedEntities",
+    "downgradedItems",
+    "authorityBackcheckStatus"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "batchLabel": { "type": "string", "minLength": 1 },
+    "sourceUrl": { "type": "string", "minLength": 1 },
+    "sourceTitle": { "type": "string", "minLength": 1 },
+    "checkedEntities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["candidateRef", "authorityMatched"],
+        "properties": {
+          "candidateRef": { "type": "string", "minLength": 1 },
+          "authorityMatched": { "type": "boolean" },
+          "authoritySourceType": { "type": "string" },
+          "authorityUrl": { "type": "string" },
+          "confirmedCanonicalZhHans": { "type": "string" },
+          "confirmedAliases": { "type": "array", "items": { "type": "string" } },
+          "membershipConfirmed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["candidateRef", "nameCanonicalZhHans"],
+              "properties": {
+                "candidateRef": { "type": "string", "minLength": 1 },
+                "nameCanonicalZhHans": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": true
+            }
+          },
+          "membershipRejected": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["candidateRef", "nameCanonicalZhHans"],
+              "properties": {
+                "candidateRef": { "type": "string", "minLength": 1 },
+                "nameCanonicalZhHans": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": true
+            }
+          },
+          "authoritySummary": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "downgradedItems": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "authorityBackcheckStatus": {
+      "type": "string",
+      "enum": ["verified", "partially_verified", "needs_escalation", "failed"]
+    }
+  },
+  "additionalProperties": true
+}

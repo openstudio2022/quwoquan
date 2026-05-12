@@ -68,6 +68,12 @@ COMPAT_TOPIC_ENRICHMENT_SCHEMA_VERSIONS = {"quwoquan_data.topic_enrichment.v1"}
 PACKAGE_MANIFEST_SCHEMA_VERSION = "quwoquan_data.package_manifest"
 COMPAT_PACKAGE_MANIFEST_SCHEMA_VERSIONS = {"2", 2}
 
+# 其它 crawl 主线产物（写入侧统一从此处导出，避免字面量散落在各模块）
+TOPIC_COMPOSE_SUMMARY_SCHEMA_VERSION = "quwoquan_data.compose_summary"
+TOPIC_AUDIT_SUMMARY_SCHEMA_VERSION = "quwoquan_data.topic_audit_summary"
+POST_REVIEW_SCHEMA_VERSION = "quwoquan_data.post_review"
+CRAWL_PROJECTION_SCHEMA_VERSION = "quwoquan_data.crawl_projection"
+
 
 def now_iso() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")

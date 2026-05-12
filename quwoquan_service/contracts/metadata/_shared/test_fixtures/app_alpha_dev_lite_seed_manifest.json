@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "app-seed-manifest.v1",
+  "schemaVersion": "app-seed-manifest",
   "environment": "alpha",
   "description": "alpha-dev-lite 默认本地 mock 清单：只保留 App 调试所需核心 seedRef，服务全量 seed 请继续使用 app_alpha_seed_manifest.json。",
   "seedRefs": [

@@ -233,8 +233,8 @@ def verify_pool_assets(errors: list[str], pool: dict[str, Any], rules: dict[str,
     if not allowed_mime_types:
         fail(errors, "user_pool.mediaContract.allowedMimeTypes must not be empty")
         return
-    if pool.get("schemaVersion") != "shared.avatar-user-pool.v2":
-        fail(errors, f"user_pool schemaVersion must be shared.avatar-user-pool.v2, got {pool.get('schemaVersion')!r}")
+    if pool.get("schemaVersion") != "shared.avatar-user-pool":
+        fail(errors, f"user_pool schemaVersion must be shared.avatar-user-pool, got {pool.get('schemaVersion')!r}")
     stats = pool.get("statistics") or {}
     if int(stats.get("mediaAssetCount") or 0) < int((rules.get("targets") or {}).get("mediaAssetCountFloor") or 0):
         fail(errors, "user_pool mediaAssetCount below composition rule floor")
@@ -580,8 +580,8 @@ def verify_gamma_curated_media_bundle(
     bundle: dict[str, Any],
     gamma_docs: dict[str, dict[str, Any]],
 ) -> None:
-    if bundle.get("schemaVersion") != "gamma-curated-media-bundle.v1":
-        fail(errors, "gamma curated media bundle schemaVersion must be gamma-curated-media-bundle.v1")
+    if bundle.get("schemaVersion") != "gamma-curated-media-bundle":
+        fail(errors, "gamma curated media bundle schemaVersion must be gamma-curated-media-bundle")
     if bundle.get("environment") != "gamma":
         fail(errors, "gamma curated media bundle environment must be gamma")
     max_images = int(bundle.get("maxImageObjectCount") or 0)

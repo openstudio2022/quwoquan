@@ -1167,7 +1167,7 @@ def build_user_pool_doc(
         if conversation["conversationType"] != "directConversation"
     }
     return {
-        "schemaVersion": "shared.avatar-user-pool.v2",
+        "schemaVersion": "shared.avatar-user-pool",
         "description": "alpha/beta/gamma 共享身份、真实图片来源与媒体派生真相源。运行时只消费 media objectKey 派生后的 URL。",
         "mediaContract": {
             "urlDerivation": "runtime joins MEDIA_*_CDN_BASE_URL or gateway base with objectKey",
@@ -1380,7 +1380,7 @@ def build_content_doc(posts: list[dict[str, Any]], circles: list[dict[str, Any]]
     for idx, row in enumerate(post_rows[:72]):
         reactions.append({"postId": row["id"], "userId": "fixture_user_current" if idx % 2 == 0 else "fixture_user_friend", "liked": True, "favorited": idx % 3 == 0})
     return {
-        "schemaVersion": "content.scenario-fixtures.v2",
+        "schemaVersion": "content.scenario-fixtures",
         "description": "内容域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.posts 初始化 MockContentRepository，beta/gamma 云侧服务 reset+seed 后由端侧 remote 访问。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
@@ -1420,7 +1420,7 @@ def build_user_doc(users: list[dict[str, Any]], posts: list[dict[str, Any]]) -> 
     my_posts = [post["postId"] for post in posts if post["authorUserId"] == "fixture_user_current"][:12]
     author_posts = [post["postId"] for post in posts if post["authorUserId"] == "fixture_user_photo"][:12]
     return {
-        "schemaVersion": "user.scenario-fixtures.v2",
+        "schemaVersion": "user.scenario-fixtures",
         "description": "用户域 alpha/beta/gamma 共享测试场景，覆盖我的主页、作者主页、persona 与关系能力。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
@@ -1522,7 +1522,7 @@ def build_circle_doc(circles: list[dict[str, Any]], memberships: dict[str, list[
     }]
     photo_posts = [post["postId"] for post in posts if post["circleRef"] == "fixture_circle_photo"][:12]
     return {
-        "schemaVersion": "circle.scenario-fixtures.v2",
+        "schemaVersion": "circle.scenario-fixtures",
         "description": "圈子域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.circles 初始化 MockCircleRepository。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {
@@ -1648,7 +1648,7 @@ def build_chat_doc(conversations: list[dict[str, Any]], conversation_members: di
         user = users_by_id[user_id]
         contacts.append({"userId": user_id, "displayName": user["displayName"], "avatarUrl": user["profile"]["avatar"]["objectKey"], "relationship": "mutual_follow" if "contact" in user["roleTags"] else "circle_member", "isFriend": True, "bio": user["bio"], "avatarObjectKey": user["profile"]["avatar"]["objectKey"]})
     return {
-        "schemaVersion": "chat.scenario-fixtures.v2",
+        "schemaVersion": "chat.scenario-fixtures",
         "description": "聊天域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.conversations/messages/members 初始化 MockChatRepository。",
         "repositoryExpectations": {"alpha": "mock", "beta": "remote", "gamma": "remote"},
         "seedSets": {

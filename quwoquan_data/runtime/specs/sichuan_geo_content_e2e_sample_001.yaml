@@ -1,0 +1,47 @@
+spec_id: sichuan_geo_content_e2e_sample_001
+query: 四川样例 E2E：杜甫草堂、都江堰与乐山大佛
+search_provider: native_fetch
+article_topic_catalog_ref: seed/sichuan_geo_content_e2e_article_topics.ndjson
+entity_refs:
+- trees/entities/地点/成都.yaml
+- trees/entities/地点/川西.yaml
+tag_refs:
+- trees/tags/主题/旅行攻略.yaml
+target_envs:
+- alpha
+- gamma
+creator_refs:
+  article:
+  - fixture_user_travel
+  - fixture_user_article
+  image:
+  - fixture_user_photo
+publish_policy:
+  visibility: public
+  assistant_use_policy: inherit
+discovery_policy:
+  min_article_topics: 2
+  min_image_topics: 1
+  min_candidate_sources_per_task: 1
+  min_article_publish_topics: 2
+  min_image_publish_topics: 1
+article_lane:
+  allow_domains:
+  - zh.wikipedia.org
+  - zh.wikivoyage.org
+  - www.zhihu.com
+  - www.mafengwo.cn
+  - you.ctrip.com
+image_lane:
+  allow_domains:
+  - commons.wikimedia.org
+  - upload.wikimedia.org
+sample_topics:
+  article: []
+  image:
+  - poi_node_620388965
+extensions:
+  topicCount: 3
+  skipHydrateRecommended: false
+  largeTopicMode: false
+  suggestedBatchSize: 3

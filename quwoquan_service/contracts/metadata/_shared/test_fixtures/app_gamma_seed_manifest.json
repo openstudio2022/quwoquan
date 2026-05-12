@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "app-seed-manifest.v1",
+  "schemaVersion": "app-seed-manifest",
   "environment": "gamma",
   "description": "gamma 云侧精简清单：当前 gamma 只装载约 100 图内的 curated 业务子集，alpha/beta 继续保持全量共享池。",
   "seedRefs": [

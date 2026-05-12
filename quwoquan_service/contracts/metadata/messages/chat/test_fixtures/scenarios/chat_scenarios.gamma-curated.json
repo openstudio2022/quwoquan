@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "chat.scenario-fixtures.v2",
+  "schemaVersion": "chat.scenario-fixtures",
   "description": "聊天域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.conversations/messages/members 初始化 MockChatRepository。 [gamma-curated subset]",
   "repositoryExpectations": {
     "alpha": "mock",

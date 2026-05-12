@@ -317,6 +317,18 @@ def upsert_ndjson_rows(path: Path, rows: list[dict[str, Any]], *, key_fields: li
     return result
 
 
+def replace_ndjson_rows(path: Path, rows: list[dict[str, Any]], *, key_fields: list[str]) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, ...], dict[str, Any]] = {}
+    for row in rows:
+        key = tuple(str(row.get(field, "")).strip() for field in key_fields)
+        if not any(key):
+            continue
+        merged[key] = row
+    result = list(merged.values())
+    write_ndjson(path, result)
+    return result
+
+
 def load_instruction_profile(spec_id: str) -> dict[str, Any]:
     path = instruction_profile_path(spec_id)
     return read_json(path) if path.exists() else {}

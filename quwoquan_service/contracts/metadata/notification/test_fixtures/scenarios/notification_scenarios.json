@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "notification.scenario-fixtures.v1",
+  "schemaVersion": "notification.scenario-fixtures",
   "description": "通知域 alpha/beta/gamma 共享测试场景，覆盖 App 壳未读数与助手主动消息。",
   "repositoryExpectations": {
     "alpha": "mock",

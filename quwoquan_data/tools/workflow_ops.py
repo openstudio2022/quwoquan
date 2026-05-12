@@ -56,6 +56,7 @@ from crawl_runtime_contract import (
     publish_status_path,
     selected_entities_path,
     selected_tags_path,
+    replace_ndjson_rows,
     stable_entity_id,
     stable_tag_id,
     tags_catalog_path,
@@ -65,6 +66,12 @@ from crawl_runtime_contract import (
 )
 from crawl_topic_pool import build_article_row, default_enrichment_row
 from native_fetch import NativeFetchError, download_binary, fetch_html_page
+from normalization.compile_entity_resolution import build_entity_catalog_rows
+from semantic_entity_resolution import (
+    looks_like_catalog_candidate,
+    resolve_catalog_semantics,
+    write_semantic_cluster_artifacts,
+)
 from source_registry import (
     authority_source_url,
     authority_sources,
@@ -261,7 +268,10 @@ def handle_tag_catalog_build(args) -> int:
                 tag_type=_tag_type_from_path(path),
                 tag_ref=tag_ref,
                 aliases=_csv(payload.get("aliases")),
-                extensions={"summary": str(payload.get("summary", "")).strip()},
+                extensions={
+                    "summary": str(payload.get("summary", "")).strip(),
+                    "labelEn": str(payload.get("label_en", "")).strip(),
+                },
             )
         )
     path = _default_tag_catalog_path()
@@ -312,9 +322,17 @@ def handle_entity_catalog_build(args) -> int:
             else:
                 payload = read_yaml(cpath)
                 external_rows = payload.get("attractions", []) if isinstance(payload, dict) else []
+            catalog_candidate_rows: list[dict[str, Any]] = []
+            direct_entity_rows: list[dict[str, Any]] = []
             for row in external_rows:
                 if not isinstance(row, dict):
                     continue
+                if looks_like_catalog_candidate(row):
+                    catalog_candidate_rows.append(row)
+                else:
+                    direct_entity_rows.append(row)
+
+            for row in direct_entity_rows:
                 name = str(row.get("canonicalName") or row.get("name") or "").strip()
                 if not name:
                     continue
@@ -327,19 +345,69 @@ def handle_entity_catalog_build(args) -> int:
                         entity_type=entity_type,
                         aliases=_csv(row.get("aliases")),
                         entity_ref=str(row.get("entityRef", "")).strip(),
-                        tag_refs=_csv(row.get("tagRefs")),
+                        tag_refs=_csv(row.get("tagRefs") or row.get("tag_refs")),
                         topic_id=str(row.get("topic_id") or row.get("topicId") or "").strip(),
                         source="catalog",
                         extensions={
                             "coreTokens": _csv(row.get("core_tokens") or row.get("coreTokens")),
                             "wikiTitle": str(row.get("wiki_title") or row.get("wikiTitle") or name).strip(),
                             "baikeItem": str(row.get("baike_item") or row.get("baikeItem") or name).strip(),
+                            "labelZh": str(row.get("label_zh") or row.get("labelZh") or name).strip(),
+                            "labelEn": str(row.get("label_en") or row.get("labelEn") or "").strip(),
+                            "displayLocale": str(row.get("display_locale") or row.get("displayLocale") or "zh").strip(),
+                            "entityTypeLabelZh": str(
+                                row.get("entity_type_label_zh") or row.get("entityTypeLabelZh") or ""
+                            ).strip(),
+                            "rawName": str(row.get("raw_name") or row.get("rawName") or "").strip(),
+                            "normalizedName": str(row.get("normalized_name") or row.get("normalizedName") or name).strip(),
+                            "province": str(row.get("province") or "").strip(),
+                            "prefecture": str(row.get("prefecture") or "").strip(),
+                            "district": str(row.get("district") or "").strip(),
+                            "authorityStatus": str(row.get("authority_status") or row.get("authorityStatus") or "pending_check").strip(),
+                            "admissionTrack": str(
+                                row.get("admission_track_hint")
+                                or row.get("admissionTrackHint")
+                                or "authority"
+                            ).strip() or "authority",
+                            "evidenceArticleUrls": _csv(
+                                row.get("evidence_article_urls") or row.get("evidenceArticleUrls")
+                            ),
+                            "evidenceIndependenceNotes": _csv(
+                                row.get("evidence_independence_notes") or row.get("evidenceIndependenceNotes")
+                            ),
+                            "conflictCheckStatus": str(
+                                row.get("conflict_check_status")
+                                or row.get("conflictCheckStatus")
+                                or "pass"
+                            ).strip() or "pass",
+                            "undevelopedOrWildAccess": bool(
+                                row.get("undeveloped_or_wild_access") or row.get("undevelopedOrWildAccess")
+                            ),
+                            "expectedRegionKeywords": _csv(
+                                row.get("expected_region_keywords") or row.get("expectedRegionKeywords")
+                            ),
                         },
                     )
                 )
+
+            semantic = resolve_catalog_semantics(catalog_candidate_rows) if catalog_candidate_rows else {
+                "candidates": [],
+                "pending": [],
+                "resolutions": [],
+            }
+            write_semantic_cluster_artifacts(
+                candidates=semantic["candidates"],
+                pending=semantic["pending"],
+            )
+            rows.extend(
+                build_entity_catalog_rows(
+                    resolution_rows=semantic["resolutions"],
+                    catalog_rows=catalog_candidate_rows,
+                    source="semantic_resolution",
+                )
+            )
     path = _default_entity_catalog_path()
-    upsert_ndjson_rows(path, rows, key_fields=["entityId"])
-    result = read_ndjson(path)
+    result = replace_ndjson_rows(path, rows, key_fields=["entityId"])
     print(json.dumps({"ok": True, "count": len(result), "path": runtime_rel_ref(path)}, ensure_ascii=False))
     return 0
 
@@ -429,14 +497,30 @@ def handle_spec_build(args) -> int:
                 "topic_id": topic_id,
                 "entityId": str(row.get("entityId", "")).strip(),
                 "name": str(row.get("canonicalName", "")).strip(),
+                "label_zh": str(extensions.get("labelZh") or row.get("canonicalName") or "").strip(),
+                "label_en": str(extensions.get("labelEn") or "").strip(),
+                "display_locale": str(extensions.get("displayLocale") or "zh").strip() or "zh",
+                "entity_type": str(row.get("entityType") or "").strip(),
+                "entity_type_label_zh": str(extensions.get("entityTypeLabelZh") or "").strip(),
                 "aliases": _csv(row.get("aliases")),
                 "wiki_title": str(extensions.get("wikiTitle") or row.get("canonicalName") or "").strip(),
                 "baike_item": str(extensions.get("baikeItem") or row.get("canonicalName") or "").strip(),
                 "core_tokens": core_tokens,
+                "tagRefs": _csv(row.get("tagRefs")),
+                "province": str(extensions.get("province") or "").strip(),
+                "prefecture": str(extensions.get("prefecture") or "").strip(),
+                "district": str(extensions.get("district") or "").strip(),
+                "expected_region_keywords": _csv(extensions.get("expectedRegionKeywords")),
             }
         )
     slice_path = _topic_catalog_slice_path(spec_id)
     write_ndjson(slice_path, slice_rows)
+    topic_count = len(slice_rows)
+    suggested_batch_size = 20
+    if topic_count > 500:
+        suggested_batch_size = 50
+    elif topic_count > 100:
+        suggested_batch_size = 30
     spec_payload = {
         "spec_id": spec_id,
         "query": str(profile.get("rawInstruction", "")).strip() or str(profile.get("intent", "")).strip(),
@@ -460,6 +544,12 @@ def handle_spec_build(args) -> int:
         "article_lane": {"allow_domains": []},
         "image_lane": {"allow_domains": []},
         "sample_topics": {"article": [], "image": [f"{spec_id}_image_sample_001"]},
+        "extensions": {
+            "topicCount": topic_count,
+            "skipHydrateRecommended": topic_count > 50,
+            "largeTopicMode": topic_count > 100,
+            "suggestedBatchSize": suggested_batch_size,
+        },
     }
     registry = load_source_registry()
     spec_payload["article_lane"]["allow_domains"] = [str(row.get("domain", "")).strip() for row in content_sources(registry) if str(row.get("domain", "")).strip()]
@@ -483,6 +573,8 @@ def _selected_entities_for_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
     if spec_id and selected_entities_path(spec_id).exists():
         return read_ndjson(selected_entities_path(spec_id))
     rows = load_entities_catalog()
+    if bool(spec.get("include_all_catalog_entities")):
+        return rows
     entity_refs = set(_csv(spec.get("entity_refs")))
     if entity_refs:
         rows = [row for row in rows if str(row.get("entityRef", "")).strip() in entity_refs]
@@ -537,12 +629,69 @@ def _first_meaningful_paragraph(paragraphs: list[str]) -> str:
     return paragraphs[0].strip() if paragraphs else ""
 
 
+def _normalize_semantic_text(value: str) -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"[\s\u3000·•\-—_()（）【】\[\]<>《》\"'“”‘’:：,，。！？!?.、/]+", "", text)
+    return text
+
+
+def _authority_region_tokens(entity: dict[str, Any]) -> list[str]:
+    ext = entity.get("extensions") or {}
+    if not isinstance(ext, dict):
+        return []
+    values = []
+    values.extend(_csv(ext.get("expectedRegionKeywords")))
+    values.extend(
+        [
+            str(ext.get("province", "")).strip(),
+            str(ext.get("prefecture", "")).strip(),
+            str(ext.get("district", "")).strip(),
+        ]
+    )
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        token = _normalize_semantic_text(item)
+        if len(token) < 2 or token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
+
+
+def _looks_generic_entity_name(name: str) -> bool:
+    normalized = str(name or "").strip()
+    if not normalized:
+        return True
+    if normalized in {"景点", "观景台", "观景点", "别墅", "旧址", "广场", "亭子", "机位"}:
+        return True
+    return bool(re.fullmatch(r"(?:[0-9一二三四五六七八九十]+号)?(?:观景台|观景点|别墅|旧址)", normalized))
+
+
+def _authority_page_matches_entity(entity: dict[str, Any], *, page_title: str, definition: str) -> bool:
+    title_norm = _normalize_semantic_text(page_title)
+    body_norm = _normalize_semantic_text(definition)
+    entity_tokens = [_normalize_semantic_text(item) for item in _entity_tokens(entity)]
+    entity_tokens = [item for item in entity_tokens if len(item) >= 2]
+    if not entity_tokens:
+        return False
+    title_hit = any(token in title_norm for token in entity_tokens)
+    body_hit = any(token in body_norm for token in entity_tokens)
+    region_tokens = _authority_region_tokens(entity)
+    region_hit = any(token in (title_norm + body_norm) for token in region_tokens) if region_tokens else True
+    canonical = str(entity.get("canonicalName", "")).strip()
+    if _looks_generic_entity_name(canonical):
+        return title_hit and region_hit
+    return title_hit or (body_hit and region_hit)
+
+
 def handle_authority_review(args) -> int:
     ensure_runtime_layout()
     spec, _ = _maybe_spec(args)
     spec_id = str(spec.get("spec_id", "")).strip() or _spec_id_from_args(args)
     entities = _selected_entities_for_spec(spec) if spec else load_entities_catalog()
     updated_rows: list[dict[str, Any]] = []
+    missing_count = 0
     for entity in entities:
         entity_id = str(entity.get("entityId", "")).strip()
         pool = read_ndjson(entity_authority_pool_path(spec_id, entity_id))
@@ -560,6 +709,12 @@ def handle_authority_review(args) -> int:
                 continue
             definition = _first_meaningful_paragraph(page.paragraphs)
             if not definition:
+                continue
+            if not _authority_page_matches_entity(
+                entity,
+                page_title=str(page.title or "").strip(),
+                definition=definition,
+            ):
                 continue
             source_id = str(row.get("sourceId", "")).strip()
             weight = 0
@@ -586,11 +741,32 @@ def handle_authority_review(args) -> int:
         if best_profile:
             profile_path = entity_authority_profile_path(spec_id, entity_id)
             write_json(profile_path, best_profile)
-            updated_rows.append(update_entity_authority_profile_ref(entity, profile_path))
+            updated = update_entity_authority_profile_ref(entity, profile_path)
+            ext = dict(updated.get("extensions") or {})
+            ext["authorityStatus"] = "verified"
+            ext["authorityCheckedAt"] = now_iso()
+            updated["extensions"] = ext
+            updated_rows.append(updated)
         else:
-            updated_rows.append(entity)
+            updated = dict(entity)
+            ext = dict(updated.get("extensions") or {})
+            ext["authorityStatus"] = "missing"
+            ext["authorityCheckedAt"] = now_iso()
+            updated["extensions"] = ext
+            updated_rows.append(updated)
+            missing_count += 1
     upsert_ndjson_rows(entities_catalog_path(), updated_rows, key_fields=["entityId"])
-    print(json.dumps({"ok": True, "specId": spec_id, "verified": len([row for row in updated_rows if str(row.get('authorityProfileRef', '')).strip()])}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "specId": spec_id,
+                "verified": len([row for row in updated_rows if str(row.get("authorityProfileRef", "")).strip()]),
+                "authorityMissing": missing_count,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 
@@ -645,36 +821,40 @@ def handle_content_discover(args) -> int:
     for entity in entities:
         entity_id = str(entity.get("entityId", "")).strip()
         topic_id = str(entity.get("topicId", "")).strip()
+        entity_ext = entity.get("extensions") or {}
+        authority_status = str(entity_ext.get("authorityStatus") or "").strip()
         pool_rows: list[dict[str, Any]] = []
-        for source in prioritized:
-            media_types = _csv(source.get("mediaTypes"))
-            for media_type in media_types:
-                query = _discovery_query_for(entity, profile, media_type)
-                url = content_source_url(source, query=query, entity_name=str(entity.get("canonicalName", "")).strip())
-                if not url:
-                    continue
-                fetch_policy = source_fetch_policy(source)
-                pool_rows.append(
-                    build_post_candidate_row(
-                        post_id=f"{entity_id}_{source.get('sourceId', '')}_{media_type}",
-                        entity_id=entity_id,
-                        topic_id=topic_id,
-                        source_url=url,
-                        source_type=str(source.get("sourceId", "")).strip(),
-                        media_type=media_type,
-                        source_role="discovery_only",
-                        fetch_policy=fetch_policy,
-                        title=str(entity.get("canonicalName", "")).strip(),
-                        snippet=f"内容发现入口：{query}",
-                        publish_status="discovered",
-                        platform=str(source.get("domain", "")).strip(),
-                        discovery_query=query,
-                        extensions={
-                            "discoveryMode": str(source.get("discoveryMode", "search_entry")).strip(),
-                            "verticals": _csv(source.get("verticals")),
-                        },
+        if authority_status != "missing":
+            for source in prioritized:
+                media_types = _csv(source.get("mediaTypes"))
+                for media_type in media_types:
+                    query = _discovery_query_for(entity, profile, media_type)
+                    url = content_source_url(source, query=query, entity_name=str(entity.get("canonicalName", "")).strip())
+                    if not url:
+                        continue
+                    fetch_policy = source_fetch_policy(source)
+                    pool_rows.append(
+                        build_post_candidate_row(
+                            post_id=f"{entity_id}_{source.get('sourceId', '')}_{media_type}",
+                            entity_id=entity_id,
+                            topic_id=topic_id,
+                            source_url=url,
+                            source_type=str(source.get("sourceId", "")).strip(),
+                            media_type=media_type,
+                            source_role="discovery_only",
+                            fetch_policy=fetch_policy,
+                            title=str(entity.get("canonicalName", "")).strip(),
+                            snippet=f"内容发现入口：{query}",
+                            publish_status="discovered",
+                            platform=str(source.get("domain", "")).strip(),
+                            discovery_query=query,
+                            extensions={
+                                "discoveryMode": str(source.get("discoveryMode", "search_entry")).strip(),
+                                "verticals": _csv(source.get("verticals")),
+                                "authorityStatus": authority_status or "pending_check",
+                            },
+                        )
                     )
-                )
         for seed_row in seed_rows_by.get(entity_id, []) + seed_rows_by.get(topic_id, []):
             media_type = str(seed_row.get("mediaType", "")).strip() or "article"
             source_url = str(seed_row.get("sourceUrl") or seed_row.get("url") or "").strip()
@@ -702,6 +882,7 @@ def handle_content_discover(args) -> int:
                         "comments": int(seed_row.get("comments") or 0),
                         "rightsStatus": str(seed_row.get("rightsStatus") or "clear").strip(),
                         "watermarkStatus": str(seed_row.get("watermarkStatus") or "clean").strip(),
+                        "authorityStatus": authority_status or "pending_check",
                     },
                 )
             )
@@ -716,8 +897,12 @@ def handle_content_hydrate(args) -> int:
     spec, _ = _maybe_spec(args)
     spec_id = str(spec.get("spec_id", "")).strip() or _spec_id_from_args(args)
     entities = _selected_entities_for_spec(spec) if spec else load_entities_catalog()
+    topics_filter = {t for t in _csv(getattr(args, "topics", "")) if t}
     hydrated = 0
     for entity in entities:
+        topic_id = str(entity.get("topicId", "")).strip()
+        if topics_filter and topic_id not in topics_filter:
+            continue
         entity_id = str(entity.get("entityId", "")).strip()
         pool = read_ndjson(entity_content_pool_path(spec_id, entity_id))
         changed = False
@@ -1237,8 +1422,19 @@ def handle_feedback_verify(args) -> int:
     verified_entity_tag: list[dict[str, Any]] = []
     pending_entities: list[dict[str, Any]] = []
     pending_tags: list[dict[str, Any]] = []
+    change_proposals: list[dict[str, Any]] = []
     post_to_entities: dict[str, set[str]] = {}
     post_to_tags: dict[str, set[str]] = {}
+
+    def proposal_evidence_urls(topic_id: str, post_id: str) -> list[str]:
+        manifest_path = RUNTIME_ROOT / "publish" / topic_id / "posts" / post_id / "manifest.json"
+        if not manifest_path.exists():
+            return []
+        payload = read_json(manifest_path)
+        values = payload.get("sourceUrls") or []
+        if isinstance(values, list):
+            return [str(item).strip() for item in values if str(item).strip()][:16]
+        return []
 
     for row in entity_candidates:
         value = str(row.get("value", "")).strip()
@@ -1259,6 +1455,18 @@ def handle_feedback_verify(args) -> int:
             )
         else:
             pending_entities.append(dict(row))
+            change_proposals.append(
+                {
+                    "schemaVersion": "quwoquan_data.catalog_change_proposal",
+                    "kind": "entity_candidate",
+                    "value": value,
+                    "sourcePostId": source_post_id,
+                    "sourceTopicId": source_topic_id,
+                    "evidenceExcerpt": str(row.get("evidenceExcerpt", "")).strip(),
+                    "evidenceUrls": proposal_evidence_urls(source_topic_id, source_post_id),
+                    "status": "pending_review",
+                }
+            )
 
     for row in tag_candidates:
         value = str(row.get("value", "")).strip()
@@ -1279,6 +1487,18 @@ def handle_feedback_verify(args) -> int:
             )
         else:
             pending_tags.append(dict(row))
+            change_proposals.append(
+                {
+                    "schemaVersion": "quwoquan_data.catalog_change_proposal",
+                    "kind": "tag_candidate",
+                    "value": value,
+                    "sourcePostId": source_post_id,
+                    "sourceTopicId": source_topic_id,
+                    "evidenceExcerpt": str(row.get("evidenceExcerpt", "")).strip(),
+                    "evidenceUrls": proposal_evidence_urls(source_topic_id, source_post_id),
+                    "status": "pending_review",
+                }
+            )
 
     for post_id, entity_ids in post_to_entities.items():
         for entity_id in entity_ids:
@@ -1297,7 +1517,20 @@ def handle_feedback_verify(args) -> int:
     upsert_ndjson_rows(graph_relation_path("entity_tag"), verified_entity_tag, key_fields=["fromId", "toId", "relationType"])
     write_ndjson(feedback_candidate_path(spec_id, "pending_entity"), pending_entities)
     write_ndjson(feedback_candidate_path(spec_id, "pending_tag"), pending_tags)
-    print(json.dumps({"ok": True, "verifiedEntityPost": len(verified_entity_post), "verifiedTagPost": len(verified_tag_post), "pendingEntities": len(pending_entities), "pendingTags": len(pending_tags)}, ensure_ascii=False))
+    write_ndjson(feedback_candidate_path(spec_id, "catalog_change_proposal"), change_proposals)
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "verifiedEntityPost": len(verified_entity_post),
+                "verifiedTagPost": len(verified_tag_post),
+                "pendingEntities": len(pending_entities),
+                "pendingTags": len(pending_tags),
+                "changeProposals": len(change_proposals),
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

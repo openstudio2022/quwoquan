@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "rtc.scenario-fixtures.v1",
+  "schemaVersion": "rtc.scenario-fixtures",
   "description": "RTC 域 alpha/beta/gamma 共享测试场景，覆盖来电、去电、语音/视频会话与参与人选择。",
   "repositoryExpectations": {
     "alpha": "mock",

@@ -55,16 +55,16 @@ runtime/
 `/crawl` 与 `cli.py crawl *` 现在采用 hybrid 结构：
 
 1. 命令编排层：
-   - `crawl spec-discovery`
-   - `crawl status`
-   - `crawl run-topic`
+  - `crawl spec-discovery`
+  - `crawl status`
+  - `crawl run-topic`
 2. tools 原生能力：
-   - `crawl fetch-source`
-   - HTML 拉取
-   - 正文抽取
-   - 图片 URL 抽取与下载
-   - 元数据提取
-   - 真实性 / 合规门禁
+  - `crawl fetch-source`
+  - HTML 拉取
+  - 正文抽取
+  - 图片 URL 抽取与下载
+  - 元数据提取
+  - 真实性 / 合规门禁
 
 也就是说，command 层负责编排 spec/topic 生命周期，`tools/native_fetch.py` 负责最小真实 I/O。
 
@@ -99,6 +99,54 @@ python3 quwoquan_data/tools/cli.py crawl spec-discovery --spec quwoquan_data/run
 python3 quwoquan_data/tools/cli.py crawl export-poi-topics --input /path/to/overpass.json --output quwoquan_data/runtime/seed/poi_topics.ndjson
 ```
 
+## 数据工作流命令（包装层）
+
+对外建议优先使用 `data-*` 阶段命令；内部仍映射到既有 `crawl` 子命令与验证脚本。
+
+```bash
+# 1) 数据规格探索 / 基线（以文档与配置为主）
+python3 quwoquan_data/tools/cli.py data explore --query "四川 川西 旅行攻略" --regions "四川,川西" --entity-types "名胜风景区,人文史迹"
+python3 quwoquan_data/tools/cli.py data baseline --spec-doc "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md" --design-doc "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/design.md" --acceptance-doc "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/acceptance.yaml" --workflow-doc "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/workflow.md" --command-matrix-doc "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/command-matrix.md" --catalog-config "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/config/geo_catalog_config.sichuan.yaml" --naming-rules "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/config/entity_naming_rules.yaml" --geo-band-rules "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/config/geo_band_rules.sichuan.yaml" --schema-files quwoquan_data/schema/geo_catalog_row.schema.json quwoquan_data/schema/entity_catalog_row.schema.json quwoquan_data/schema/tag_catalog_row.schema.json quwoquan_data/schema/authority_pool_row.schema.json quwoquan_data/schema/source_pool_row.schema.json
+
+# 2) 生成地理目录候选层 / 实体 / 标签（需可用的 `quwoquan_data/runtime/trees/**`，若为空请 `git restore quwoquan_data/runtime/trees`）
+python3 quwoquan_data/tools/geo/build_geo_poi_catalog.py --config specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/config/geo_catalog_config.sichuan.yaml --output quwoquan_data/runtime/seed/sichuan_chuanxi_attractions_catalog.ndjson
+# 兼容入口（内部转发到 build_geo_poi_catalog）
+python3 quwoquan_data/tools/geo/build_sichuan_attractions_catalog.py --output quwoquan_data/runtime/seed/sichuan_chuanxi_attractions_catalog.ndjson
+python3 quwoquan_data/tools/cli.py data build-entities-tags --catalog quwoquan_data/runtime/seed/sichuan_chuanxi_attractions_catalog.ndjson
+
+# 3) 下载与来源发现
+python3 quwoquan_data/tools/cli.py data download --spec quwoquan_data/runtime/specs/sichuan_chuanxi_attractions_full.yaml --topics "poi_node_11405204678" --max-sources 40 --skip-content-discover
+
+# 全量（极耗时）：不传 --topics，建议先 --skip-hydrate 做 discovery，再分批 hydrate；`--max-sources` 控制每个实体 article 槽位上限，影像槽位为 min(max-sources, 24)
+# python3 quwoquan_data/tools/cli.py data download --spec quwoquan_data/runtime/specs/sichuan_chuanxi_attractions_full.yaml --max-sources 40 --skip-hydrate --skip-content-discover
+
+# 3.5) 单来源归一化（工具先抓 bundle，编程助手再做提取/自检/权威反查）
+python3 quwoquan_data/tools/cli.py data source-fetch --batch-label "sichuan_catalog_20260512" --source-url "<url>" --page-title "<page title>" --catalog-topic "poi_node_11405204678" --catalog-name "海螺沟景区"
+python3 quwoquan_data/tools/cli.py data normalize-build-extract-input --batch-label "sichuan_catalog_20260512" --source-md "<runtime/runs/.../source.md>" --catalog-topic "poi_node_11405204678" --catalog-name "海螺沟景区"
+python3 quwoquan_data/tools/cli.py data normalize-validate-output --stage extract --result "<extract-result.json>"
+python3 quwoquan_data/tools/cli.py data normalize-build-review-input --extract-result "<extract-result.json>"
+python3 quwoquan_data/tools/cli.py data normalize-validate-output --stage review --result "<review-result.json>"
+python3 quwoquan_data/tools/cli.py data normalize-build-authority-input --review-result "<review-result.json>"
+python3 quwoquan_data/tools/cli.py data normalize-validate-output --stage authority --result "<authority-result.json>"
+python3 quwoquan_data/tools/cli.py data normalize-compile-entities --batch-label "sichuan_catalog_20260512"
+python3 quwoquan_data/tools/cli.py data entity-catalog-materialize --batch-label "sichuan_catalog_20260512" --catalog quwoquan_data/runtime/seed/sichuan_chuanxi_attractions_catalog.ndjson --output-name "normalized_entities.ndjson"
+
+# 4) 图文加工
+python3 quwoquan_data/tools/cli.py data process-content --spec quwoquan_data/runtime/specs/sichuan_chuanxi_attractions_001.yaml --topics "poi_way_299409723" --targets alpha,gamma
+
+# 5) 发布与反馈
+python3 quwoquan_data/tools/cli.py data publish --spec quwoquan_data/runtime/specs/sichuan_chuanxi_attractions_001.yaml --topics "poi_way_299409723"
+
+# helper：清空当前 runtime 后恢复 baseline
+bash scripts/reset_quwoquan_data_runtime_full.sh
+
+# helper：四川样例从 seed 端到端重跑
+bash scripts/run_sichuan_geo_content_trinity_e2e.sh
+
+# helper：四川县级切片全量编排（Overpass + MIN_KEPT 门禁 + 分批深 publish；见脚本环境变量）
+# bash scripts/run_sichuan_province_full_batch_trinity.sh
+```
+
 说明：
 
 - 双源主线现已拆成：
@@ -118,8 +166,13 @@ python3 quwoquan_data/tools/cli.py crawl export-poi-topics --input /path/to/over
 
 ```bash
 bash scripts/verify_quwoquan_data.sh
+python3 scripts/verify_repo_schema_versions.py   # make verify-repo-schema-versions
+python3 scripts/verify_repo_schema_versions.py --prefix quwoquan_data/   # make verify-quwoquan-data-schema-versions
+FORCE=1 bash scripts/clean_quwoquan_data_runtime_generated.sh   # make clean-quwoquan-data-runtime-generated（慎用）
 python3 scripts/verify_quwoquan_data_source_authenticity.py
 python3 scripts/verify_quwoquan_data_post_packages.py
+python3 scripts/verify_geo_catalog_quality.py
+python3 scripts/verify_catalog_entity_consistency.py
 python3 -m unittest discover -s quwoquan_data/tests
 ```
 

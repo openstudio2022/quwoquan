@@ -11,12 +11,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from crawl_topic_pool import GENERIC_SCENE_BIGRAM_BLOCKLIST_FOR_AUTH
+
 from common import (
+    CRAWL_PROJECTION_SCHEMA_VERSION,
     DISCOVERY_SCHEMA_VERSION,
     COMPAT_PACKAGE_MANIFEST_SCHEMA_VERSIONS,
     COMPAT_TOPIC_ASSET_MANIFEST_SCHEMA_VERSIONS,
     COMPAT_TOPIC_ENRICHMENT_SCHEMA_VERSIONS,
     PACKAGE_MANIFEST_SCHEMA_VERSION,
+    POST_REVIEW_SCHEMA_VERSION,
     RUNTIME_ROOT,
     SUPPORTED_CONTENT_TYPES,
     SUPPORTED_SEARCH_PROVIDERS,
@@ -41,6 +45,8 @@ from common import (
     ref_exists,
     run_topic_dir,
     tag_id_for_ref,
+    TOPIC_AUDIT_SUMMARY_SCHEMA_VERSION,
+    TOPIC_COMPOSE_SUMMARY_SCHEMA_VERSION,
     write_json,
     write_ndjson,
     write_text,
@@ -79,9 +85,6 @@ IMAGE_QUALITY_WEIGHTS = {
     "relevance": 10,
     "storytelling": 10,
 }
-TOPIC_COMPOSE_SUMMARY_SCHEMA_VERSION = "quwoquan_data.compose_summary"
-TOPIC_AUDIT_SUMMARY_SCHEMA_VERSION = "quwoquan_data.topic_audit_summary"
-POST_REVIEW_SCHEMA_VERSION = "quwoquan_data.post_review"
 MIN_ARTICLE_SOURCE_BODY_CHARS = 280
 MIN_ARTICLE_SOURCE_PARAGRAPH_CHARS = 45
 MIN_IMAGE_SOURCE_BODY_CHARS = 40
@@ -272,6 +275,57 @@ def _placeholder_reasons(task_type: str, row: dict[str, Any]) -> list[str]:
     return reasons
 
 
+def _article_topic_blob_relevance_accepted(row: dict[str, Any], blob_normalized: str) -> bool:
+    """topic 正文相关性：strong 命中 OR（无 geo 时 medium）（有 geo 时 medium+geo）。"""
+    rel_tokens = row.get("relevanceTokens") or row.get("topicRelevanceTokens") or []
+    if not isinstance(rel_tokens, list) or not rel_tokens:
+        return True
+    strong = row.get("topicStrongTokens")
+    if not isinstance(strong, list):
+        strong = []
+    geo = row.get("expectedRegionKeywords")
+    if not isinstance(geo, list):
+        geo = []
+
+    strong_hit = any(
+        _normalize_text(str(t).strip()) in blob_normalized
+        for t in strong
+        if str(t).strip() and len(_normalize_text(str(t).strip())) >= 2
+    )
+    medium_tokens: list[str] = []
+    for t in rel_tokens:
+        ts = str(t).strip()
+        if not ts:
+            continue
+        nt = _normalize_text(ts)
+        if len(nt) < 2:
+            continue
+        if len(ts) == 2 and ts in GENERIC_SCENE_BIGRAM_BLOCKLIST_FOR_AUTH:
+            continue
+        medium_tokens.append(ts)
+    medium_hit = any(_normalize_text(t) in blob_normalized for t in medium_tokens)
+
+    geo_hit = any(
+        _normalize_text(str(g).strip()) in blob_normalized
+        for g in geo
+        if str(g).strip() and len(_normalize_text(str(g).strip())) >= 2
+    )
+
+    if strong_hit:
+        return True
+    if geo:
+        return bool(medium_hit and geo_hit)
+    if medium_hit:
+        return True
+    if strong:
+        return False
+    return any(
+        _normalize_text(str(tok).strip()) in blob_normalized
+        for tok in rel_tokens
+        if str(tok).strip() and len(_normalize_text(str(tok).strip())) >= 2
+    )
+
+
 def _page_authenticity_reasons(
     task_type: str,
     row: dict[str, Any],
@@ -287,12 +341,7 @@ def _page_authenticity_reasons(
     rel_tokens = row.get("relevanceTokens") or row.get("topicRelevanceTokens")
     if task_type == "article" and isinstance(rel_tokens, list) and rel_tokens:
         blob = _normalize_text(page_text + " " + source_body)
-        hit = any(
-            _normalize_text(str(tok).strip()) in blob
-            for tok in rel_tokens
-            if str(tok).strip() and len(_normalize_text(str(tok).strip())) >= 2
-        )
-        if not hit:
+        if not _article_topic_blob_relevance_accepted(row, blob):
             reasons.append("topic_relevance_miss")
     min_page_chars = MIN_ARTICLE_PAGE_TEXT_CHARS if task_type == "article" else MIN_IMAGE_PAGE_TEXT_CHARS
     if len(page_text) < min_page_chars:
@@ -771,6 +820,11 @@ def _sample_topics(spec: dict[str, Any], lane: str) -> list[str]:
             tid = str(row.get("topic_id") or row.get("topicId") or "").strip()
             if tid:
                 merged.append(tid)
+    if lane == "image":
+        for row in _article_catalog_attraction_rows(spec):
+            tid = str(row.get("topic_id") or row.get("topicId") or "").strip()
+            if tid:
+                merged.append(f"{tid}__img")
     seen: set[str] = set()
     out: list[str] = []
     for item in merged:
@@ -1933,7 +1987,7 @@ def _article_source_sections(
     seen_paragraphs: set[str] = set()
     sections: list[dict[str, Any]] = []
     section_titles = [
-        "先把沿湖范围走明白",
+        "先把现场范围走明白",
         "第一次到现场别急着打卡",
         "把停留节奏慢下来",
         "把沿线变化变成行走线索",
@@ -2044,9 +2098,9 @@ def _compose_article_section_paragraphs(section: dict[str, Any], index: int) -> 
         return []
     support = _section_support_sentences(list(section.get("paragraphs", [])))
     opening_templates = [
-        "第一次到西湖，最值得先记住的，是把“{a}”和“{b}”放进同一条行走逻辑里。",
+        "第一次到这里，最值得先记住的，是把“{a}”和“{b}”放进同一条行走逻辑里。",
         "真正决定这段体验感的，往往不是多走几个点，而是先把“{a}”和“{b}”看成一张完整的现场地图。",
-        "如果想把现场走顺，可以先盯住“{a}”和“{b}”这两层信息，再决定自己要不要继续往深处走。",
+        "如果想把现场走顺，先把“{a}”和“{b}”这两层信息放在心里，再决定自己要不要继续往深处走。",
         "比起机械打卡，更稳的做法是先把“{a}”和“{b}”连起来理解，脚步自然会慢下来。",
     ]
     closing_templates = [
@@ -2062,7 +2116,7 @@ def _compose_article_section_paragraphs(section: dict[str, Any], index: int) -> 
             b=phrases[1],
         )
         if support:
-            paragraphs.append(f'{lead}来源页把重点落在“{_support_fragment(support[0])}”这一层。')
+            paragraphs.append(f'{lead}来源里明确写到“{_support_fragment(support[0])}”。')
         else:
             paragraphs.append(lead)
     else:
@@ -2078,13 +2132,13 @@ def _compose_article_section_paragraphs(section: dict[str, Any], index: int) -> 
             d=phrases[3],
         )
         if len(support) >= 2:
-            paragraphs.append(f'{closing}补充判断时，可以继续盯住“{_support_fragment(support[1])}”。')
+            paragraphs.append(f'{closing}再往下看时，可以留意“{_support_fragment(support[1])}”。')
         else:
             paragraphs.append(closing)
     elif len(phrases) == 3:
         extra = f"如果只留一个补充判断位，“{phrases[2]}”已经足够把停留节奏接起来。"
         if len(support) >= 2:
-            paragraphs.append(f'{extra}来源页也把细节落在“{_support_fragment(support[1])}”。')
+            paragraphs.append(f'{extra}来源里也把细节写在“{_support_fragment(support[1])}”附近。')
         else:
             paragraphs.append(extra)
     return paragraphs
@@ -2113,20 +2167,20 @@ def _gallery_body(
     if task_type == "image":
         body = (
             "这一组画面更适合慢慢看。"
-            "湖面、远山和岸线会一起把西湖最舒服的层次交代清楚。"
+            "主景、空间层次和停留视角会一起把现场最重要的结构交代清楚。"
         )
         if caption_text and caption_text != title:
             body += f"画面里最先抓人的，是{caption_text}这样的开阔视角。"
         else:
-            body += "画面里最先抓人的，是塔影和开阔湖面同时铺开的那一瞬。"
-        body += "不管是拿来做行前种草，还是当作散步后的回望，都很容易让人重新想起杭州最松弛的节奏。"
+            body += "画面里最先抓人的，是主景被完整托出来的那一瞬。"
+        body += "不管是拿来做行前种草，还是当作现场回望，都很容易让人重新把这条线的空间关系记起来。"
         return body
-    body = "这一组图片适合和正文一起看。先看湖面与岸线的展开，再看停留点和回望角度，整篇文章的路线感会更完整。"
+    body = "这一组图片适合和正文一起看。先看主景和外围结构的展开，再看停留点与回望角度，整篇文章的路线感会更完整。"
     if caption_text:
         body += f"图里最值得留意的画面线索，是{caption_text}。"
     elif source_title:
-        body += f"这一页的图像和“{source_title}”这条路线放在一起看，会更容易理解西湖为什么适合慢慢走。"
-    body += "真正到了现场，图里的开阔感和停顿感，往往比景点名字本身更能决定一趟散步的心情。"
+        body += f"这一页的图像和“{source_title}”放在一起看，会更容易理解现场为什么值得慢慢走。"
+    body += "真正到了现场，图里的开阔感和停顿感，往往比景点名字本身更能决定一趟行程的心情。"
     return body
 
 
@@ -2335,8 +2389,6 @@ def _article_token_pool(
                 break
         if len(tokens) >= limit:
             break
-    if "西湖" not in seen:
-        tokens.insert(0, "西湖")
     return tokens[:limit]
 
 
@@ -2386,7 +2438,7 @@ def _article_teaser_lead(title: str) -> str:
         return "清晨的白堤最好慢慢走，不用急着把镜头和脚步都推到最满。"
     if "三潭印月" in normalized or "坐船" in normalized:
         return "想从船上看西湖，最好把时间整块留给三潭印月。"
-    return "第一次逛西湖，不必急着把清单一口气追满。"
+    return "第一次到这里，不必急着把清单一口气追满。"
 
 
 def _article_teaser_followup(
@@ -2394,12 +2446,12 @@ def _article_teaser_followup(
     practical_tokens: list[str],
 ) -> str:
     return (
-        f"先从{_article_token(tokens, 0, '湖滨这一侧')}走进去，再把"
-        f"{_article_token(tokens, 1, '一段最舒服的沿湖步行线')}和"
-        f"{_article_token(tokens, 2, '后半程最值得停下来的点')}留到后面，"
-        f"中间给{_article_token(practical_tokens, 0, '坐一小段游船')}或"
-        f"{_article_token(practical_tokens, 1, '找个靠湖的位置喝茶')}留一点空档，"
-        "整天的节奏就会舒服很多。"
+        f"先从{_article_token(tokens, 0, '现场最先打开视线的一段')}走进去，再把"
+        f"{_article_token(tokens, 1, '真正值得停下来的位置')}和"
+        f"{_article_token(tokens, 2, '后半程最该回看的细节')}留到后面，"
+        f"中间给{_article_token(practical_tokens, 0, '找个适合停留的位置')}或"
+        f"{_article_token(practical_tokens, 1, '把脚步放慢一点')}留出空档，"
+        "整段行程就会顺很多。"
     )
 
 
@@ -2420,10 +2472,21 @@ def _article_user_summary(
 
 
 def _article_body_sections(
+    topic: dict[str, Any],
     title: str,
     selected_source_rows: list[dict[str, Any]],
     units: list[dict[str, Any]],
 ) -> list[tuple[str, list[str]]]:
+    source_sections = _article_source_sections(topic, selected_source_rows)
+    built: list[tuple[str, list[str]]] = []
+    for index, section in enumerate(source_sections[:3], start=1):
+        paragraphs = _compose_article_section_paragraphs(section, index) or list(section.get("paragraphs", []))[:2]
+        if not paragraphs:
+            continue
+        built.append((str(section.get("title", "")).strip() or f"来源片段 {index}", paragraphs))
+    if built:
+        return built
+
     focus_tokens = _article_token_pool(title, selected_source_rows, units, limit=6)
     route_tokens = _article_token_pool(
         title,
@@ -2442,20 +2505,20 @@ def _article_body_sections(
 
     return [
         (
-            "先把湖区轮廓看明白",
+            "先把现场范围走明白",
             [
                 (
-                    f"第一次来西湖，先别急着把清单拉满。把"
-                    f"{_article_token(route_tokens, 0, '湖滨这一侧')}、"
-                    f"{_article_token(route_tokens, 1, '一段最舒服的沿湖步行线')}和"
+                    f"第一次到这里，先别急着把清单拉满。把"
+                    f"{_article_token(route_tokens, 0, '最先打开视线的一段')}、"
+                    f"{_article_token(route_tokens, 1, '一段最舒服的步行线')}和"
                     f"{_article_token(route_tokens, 2, '今天最想停下来的一个点')}放进同一天里，"
-                    "湖面、岸线和停顿感自然会慢慢连成一条线。"
+                    "现场节奏自然会慢慢连成一条线。"
                 ),
                 (
                     f"真正舒服的走法，是先接受这里适合慢下来。像"
-                    f"{_article_token(focus_tokens, 0, '西湖主湖区')}这样负责把第一眼打开的地方，"
+                    f"{_article_token(focus_tokens, 0, '负责把第一眼打开的地方')}这样的位置，"
                     f"再加上{_article_token(focus_tokens, 1, '后半程最值得回望的一段')}"
-                    "，就足够把第一次来杭州的节奏安顿好。"
+                    "，就足够把这趟行程安顿好。"
                 ),
             ],
         ),
@@ -2464,14 +2527,14 @@ def _article_body_sections(
             [
                 (
                     f"到了真正好看的位置，别急着拍完就走。"
-                    f"{_article_token(route_tokens, 0, '湖滨这一侧')}适合看湖面打开，"
-                    f"{_article_token(route_tokens, 1, '另一处经典停留点')}则更适合把塔影、堤岸或水上的层次收进视线里。"
+                    f"{_article_token(route_tokens, 0, '第一处停留点')}适合看整体展开，"
+                    f"{_article_token(route_tokens, 1, '另一处经典停留点')}则更适合把建筑、岸线或高差层次收进视线里。"
                 ),
                 (
                     f"如果今天只想留下两三个最记得住的画面，就把"
                     f"{_article_token(focus_tokens, 2, '前半程的一段经典线')}留给白天，再把"
                     f"{_article_token(focus_tokens, 3, '傍晚最适合回头看湖面的地方')}留到后面。"
-                    "这样最后留下来的，不会只是到此一游，而是几段真正记得住的杭州画面。"
+                    "这样最后留下来的，不会只是到此一游，而是几段真正记得住的现场画面。"
                 ),
             ],
         ),
@@ -2479,16 +2542,16 @@ def _article_body_sections(
             "把半天走成完整行程",
             [
                 (
-                    f"西湖最难得的，是风景和休息不会互相打断。走到合适的时候，"
-                    f"{_article_token(practical_tokens, 0, '坐一小段游船')}、"
-                    f"{_article_token(practical_tokens, 1, '找个靠湖的位置喝茶')}，"
-                    "都能很自然地接到路线里，让这趟散步从看景变成真正有起承转合的一天。"
+                    f"这条线最难得的，是风景和休息不会互相打断。走到合适的时候，"
+                    f"{_article_token(practical_tokens, 0, '安排一个短暂停留')}、"
+                    f"{_article_token(practical_tokens, 1, '找个合适的位置缓一缓')}，"
+                    "都能很自然地接到路线里，让这趟行程从看景变成真正有起承转合的一天。"
                 ),
                 (
                     f"等到傍晚，再回头看一眼"
-                    f"{_article_token(route_tokens, 3, '那段最适合收尾的岸线')}，"
-                    f"顺手把{_article_token(practical_tokens, 2, '晚饭放在湖边解决')}，"
-                    "这趟行程就会收得很完整。你会记住的不是景点解释，而是杭州怎么把一个普通下午慢慢过成了值得回想的一天。"
+                    f"{_article_token(route_tokens, 3, '那段最适合收尾的线路')}，"
+                    f"顺手把{_article_token(practical_tokens, 2, '最后一段停留安排好')}，"
+                    "这趟行程就会收得很完整。你会记住的不是景点解释，而是现场如何把一个普通下午慢慢过成了值得回想的一天。"
                 ),
             ],
         ),
@@ -2529,7 +2592,7 @@ def _build_article_markdown(
         keywords=ARTICLE_PRACTICAL_KEYWORDS,
         limit=3,
     )
-    article_sections = _article_body_sections(title, selected_source_rows, article_units)
+    article_sections = _article_body_sections(topic, title, selected_source_rows, article_units)
 
     lines = [
         "---",
@@ -2546,23 +2609,20 @@ def _build_article_markdown(
     )
     lines.extend(["---", "", f"# {title}", ""])
 
+    intro_facts = _article_facts_from_units(article_units, limit=6)
     lines.extend(
         [
             (
-                f"真正舒服的开场，不是急着把路线踩满，而是先让"
-                f"{_article_token(intro_tokens, 0, '西湖主湖区')}把视线打开。再把"
-                f"{_article_token(intro_tokens, 1, '一段最舒服的沿湖步行线')}和"
-                f"{_article_token(intro_tokens, 2, '一个今天最想停下来的点')}接进同一天里，"
-                "湖面、岸线和停留点自然会慢慢连成一条线。"
+                f"真正舒服的开场，不是急着把路线踩满，而是先把“{_article_fact(intro_facts, 0, _article_token(intro_tokens, 0, '现场第一眼'))}”和"
+                f"“{_article_fact(intro_facts, 1, _article_token(intro_tokens, 1, '最值得停一下的位置'))}”放在一起理解。"
+                "这样一开始就知道这条线为什么值得走。"
             ),
             "",
             (
-                f"如果时间只有半天到一天，就把"
-                f"{_article_token(intro_tokens, 3, '前半程最舒服的一段步行线')}放在前半程，再把"
-                f"{_article_token(intro_tokens, 4, '后半程最适合回望湖面的地方')}留到后面，"
-                f"中间给{_article_token(practical_tokens, 0, '坐一小段游船')}或"
-                f"{_article_token(practical_tokens, 1, '找个靠湖的位置喝茶')}这样的停顿一点空间。"
-                "这样走下来，记住的会是杭州的节奏，而不是一张打卡清单。"
+                f"如果时间只有半天到一天，来源页里反复出现“{_article_fact(intro_facts, 2, _article_token(intro_tokens, 2, '现场节奏'))}”，"
+                f"再结合“{_article_fact(intro_facts, 3, _article_token(intro_tokens, 3, '后半程的收尾点'))}”，"
+                f"中间给{_article_token(practical_tokens, 0, '一次短暂停留')}或"
+                f"{_article_token(practical_tokens, 1, '把脚步放慢一点')}留出空间，整趟行程就会更完整。"
             ),
             "",
         ]
@@ -2909,7 +2969,7 @@ def _write_projection(
     topic_id: str, target: str, spec: dict[str, Any], entities: list[dict[str, Any]], posts: list[dict[str, Any]]
 ) -> None:
     payload = {
-        "schemaVersion": "quwoquan_data.crawl_projection",
+        "schemaVersion": CRAWL_PROJECTION_SCHEMA_VERSION,
         "generated_at": now_iso(),
         "environment": target,
         "spec_id": spec["spec_id"],
@@ -3206,6 +3266,11 @@ def _article_post_review(
         article_units,
         limit=max(4, len(selected_source_rows) + 3),
     )
+    if not core_tokens:
+        core_tokens = _article_facts_from_units(
+            article_units,
+            limit=max(4, len(selected_source_rows) + 3),
+        )
     article_normalized = _normalize_text(article_text)
     covered_tokens = [token for token in core_tokens if token in article_normalized]
     factual_ratio = len(covered_tokens) / max(1, len(core_tokens))
@@ -3217,6 +3282,8 @@ def _article_post_review(
     reader_facing_pass = not blocked_phrases
 
     detail_tokens = sorted({token for token in ARTICLE_TRAVEL_KEYWORDS if token in article_normalized})
+    if not detail_tokens:
+        detail_tokens = _article_facts_from_units(article_units, limit=4)
     specificity_score = min(100, 40 + len(detail_tokens) * 10)
     specificity_pass = len(detail_tokens) >= 4 and len(body_paragraphs) >= 6
 
@@ -3693,13 +3760,36 @@ def _topic_task_row(
     return errors, row
 
 
+IMAGE_TOPIC_ID_SUFFIX = "__img"
+
+
+def _parse_spec_topics_csv(raw: str) -> set[str] | None:
+    """逗号分隔 topic 过滤；自动补齐 article/image 配对（`id` ↔ `id__img`）。"""
+    base = {t.strip() for t in str(raw or "").split(",") if t.strip()}
+    if not base:
+        return None
+    out = set(base)
+    for item in list(base):
+        if item.endswith(IMAGE_TOPIC_ID_SUFFIX):
+            out.add(item[: -len(IMAGE_TOPIC_ID_SUFFIX)])
+        else:
+            out.add(f"{item}{IMAGE_TOPIC_ID_SUFFIX}")
+    return out
+
+
 def _collect_topic_tasks(
-    spec: dict[str, Any], *, write_source_pool: bool, skip_hydration: bool = False
+    spec: dict[str, Any],
+    *,
+    write_source_pool: bool,
+    skip_hydration: bool = False,
+    topics_filter: set[str] | None = None,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     errors: list[str] = []
     rows: list[dict[str, Any]] = []
     for lane in ("article", "image"):
         for topic_id in _sample_topics(spec, lane):
+            if topics_filter is not None and topic_id not in topics_filter:
+                continue
             topic_errors, row = _topic_task_row(
                 spec,
                 lane,
@@ -3781,7 +3871,10 @@ def handle_spec_discovery(args) -> int:
 
     skip_hydration = bool(getattr(args, "skip_hydrate", False))
     topic_errors, topic_tasks = _collect_topic_tasks(
-        spec, write_source_pool=True, skip_hydration=skip_hydration
+        spec,
+        write_source_pool=True,
+        skip_hydration=skip_hydration,
+        topics_filter=_parse_spec_topics_csv(str(getattr(args, "topics", "") or "")),
     )
     discovery = _build_discovery_summary(spec, topic_tasks)
     write_ndjson(topic_tasks_path(spec["spec_id"]), topic_tasks)
@@ -3807,7 +3900,10 @@ def handle_status(args) -> int:
 
     skip_hydration = bool(getattr(args, "skip_hydrate", False))
     topic_errors, topic_tasks = _collect_topic_tasks(
-        spec, write_source_pool=False, skip_hydration=skip_hydration
+        spec,
+        write_source_pool=False,
+        skip_hydration=skip_hydration,
+        topics_filter=_parse_spec_topics_csv(str(getattr(args, "topics", "") or "")),
     )
     discovery = _build_discovery_summary(spec, topic_tasks)
     payload = {
@@ -4208,14 +4304,43 @@ def handle_export_poi_topics(args) -> int:
         if not (tourism or historic or amenity in {"museum", "arts_centre"}):
             continue
         topic_id = f"{prefix}_{el_type}_{el_id}"
-        rows.append(
-            {
-                "topic_id": topic_id,
-                "name": name,
-                "wiki_title": name,
-                "baike_item": name,
-            }
-        )
+        row: dict[str, Any] = {
+            "topic_id": topic_id,
+            "name": name,
+            "wiki_title": name,
+            "baike_item": name,
+        }
+        province = str(
+            tags.get("addr:province")
+            or tags.get("is_in:province")
+            or tags.get("addr:state")
+            or ""
+        ).strip()
+        prefecture = str(
+            tags.get("addr:city")
+            or tags.get("is_in:city")
+            or tags.get("addr:region")
+            or ""
+        ).strip()
+        district = str(
+            tags.get("addr:district")
+            or tags.get("addr:county")
+            or tags.get("is_in:municipality")
+            or ""
+        ).strip()
+        if province:
+            row["province"] = province
+        if prefecture:
+            row["prefecture"] = prefecture
+        if district:
+            row["district"] = district
+        geo_hints: list[str] = []
+        for g in (province, prefecture, district):
+            if g and g not in geo_hints:
+                geo_hints.append(g)
+        if geo_hints:
+            row["expected_region_keywords"] = geo_hints[:8]
+        rows.append(row)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     write_ndjson(out_path, rows)
     print(
@@ -4223,3 +4348,19 @@ def handle_export_poi_topics(args) -> int:
         file=sys.stderr,
     )
     return 0
+
+
+def handle_catalog_iteration(args) -> int:
+    from catalog_iteration import run_catalog_iteration
+
+    spec_path = crawl_spec_path_from_arg(str(getattr(args, "spec", "") or ""))
+    catalog_arg = str(getattr(args, "catalog", "") or "").strip()
+    catalog_path = Path(catalog_arg).resolve() if catalog_arg else None
+    return run_catalog_iteration(
+        spec_path=spec_path,
+        catalog_path=catalog_path,
+        max_rounds=int(getattr(args, "max_rounds", 3) or 3),
+        stability_patience=int(getattr(args, "stability_patience", 2) or 2),
+        dry_run=bool(getattr(args, "dry_run", False)),
+        skip_pool_bootstrap=bool(getattr(args, "skip_pool_bootstrap", False)),
+    )

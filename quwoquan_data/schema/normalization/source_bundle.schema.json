@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceBundle",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "sourceRef",
+    "batchLabel",
+    "sourceType",
+    "sourceUrl",
+    "finalUrl",
+    "pageTitle",
+    "fetchedAt",
+    "fetchMethod",
+    "htmlPath",
+    "markdownPath",
+    "plainTextPath",
+    "sourceBlocksPath",
+    "assetManifestPath",
+    "fetchStatus"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "batchLabel": { "type": "string", "minLength": 1 },
+    "catalogTopicId": { "type": "string" },
+    "catalogName": { "type": "string" },
+    "sourceType": { "type": "string", "enum": ["article", "image"] },
+    "sourceUrl": { "type": "string", "minLength": 1 },
+    "finalUrl": { "type": "string", "minLength": 1 },
+    "pageTitle": { "type": "string", "minLength": 1 },
+    "fetchedAt": { "type": "string", "minLength": 1 },
+    "fetchMethod": { "type": "string", "minLength": 1 },
+    "contentType": { "type": "string" },
+    "htmlPath": { "type": "string", "minLength": 1 },
+    "markdownPath": { "type": "string", "minLength": 1 },
+    "plainTextPath": { "type": "string", "minLength": 1 },
+    "sourceBlocksPath": { "type": "string", "minLength": 1 },
+    "assetManifestPath": { "type": "string", "minLength": 1 },
+    "htmlSha256": { "type": "string" },
+    "textSha256": { "type": "string" },
+    "paragraphCount": { "type": "integer", "minimum": 0 },
+    "assetCount": { "type": "integer", "minimum": 0 },
+    "fetchStatus": { "type": "string", "enum": ["fetched", "failed"] },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "inputs": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

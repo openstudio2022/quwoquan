@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import hashlib
 import mimetypes
 import re
@@ -192,7 +193,7 @@ def fetch_html_page(url: str, *, timeout_seconds: int = 20) -> FetchedPage:
                 html = raw.decode(charset, errors="ignore")
                 final_url = response.geturl()
                 break
-        except (urllib.error.URLError, TimeoutError) as error:
+        except (urllib.error.URLError, TimeoutError, http.client.HTTPException) as error:
             try:
                 raw, final_url, _ = _curl_fetch(url)
                 html = raw.decode("utf-8", errors="ignore")
@@ -324,4 +325,12 @@ def safe_filename_from_url(url: str, *, fallback: str = "download") -> str:
     parsed = urllib.parse.urlparse(url)
     candidate = Path(parsed.path).name or fallback
     candidate = re.sub(r"[^A-Za-z0-9_.-]+", "_", candidate).strip("._")
-    return candidate or fallback
+    candidate = candidate or fallback
+    max_len = 120
+    if len(candidate) <= max_len:
+        return candidate
+    suffix = Path(candidate).suffix[:16]
+    stem = Path(candidate).stem or fallback
+    digest = hashlib.sha1(candidate.encode("utf-8")).hexdigest()[:12]
+    keep = max(16, max_len - len(suffix) - len(digest) - 1)
+    return f"{stem[:keep]}_{digest}{suffix}"

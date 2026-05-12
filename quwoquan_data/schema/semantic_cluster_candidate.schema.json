@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SemanticClusterCandidate",
+  "type": "object",
+  "required": ["schemaVersion", "topicId", "canonicalName", "decision", "clusterId"],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "quwoquan_data.semantic_cluster_candidate" },
+    "topicId": { "type": "string", "minLength": 1 },
+    "canonicalName": { "type": "string", "minLength": 1 },
+    "entityType": { "type": "string" },
+    "province": { "type": "string" },
+    "prefecture": { "type": "string" },
+    "district": { "type": "string" },
+    "decision": {
+      "type": "string",
+      "enum": ["standalone", "member", "alias", "parallel_entity", "pending_review", "reject"]
+    },
+    "clusterId": { "type": "string", "minLength": 1 },
+    "memberRole": { "type": "string" },
+    "ordinal": { "type": "string" },
+    "rootTopicId": { "type": "string" },
+    "rootCanonicalName": { "type": "string" },
+    "sourceType": { "type": "string" },
+    "sourceId": { "type": "string" },
+    "admissionTrackHint": { "type": "string" },
+    "conflictCheckStatus": { "type": "string" },
+    "reasonCodes": { "type": "array", "items": { "type": "string" } },
+    "memberTopicIds": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,405 @@
+version: 2
+feature: geo-content-trinity
+level: L3_scenario
+source_path: runtime/runtime-data-engineering/geo-content-trinity
+parent_journey: runtime-data-engineering
+archived: false
+
+execution:
+  local_gate: >
+    python3 -m unittest discover -s quwoquan_data/tests &&
+    python3 scripts/verify_geo_catalog_quality.py &&
+    python3 scripts/verify_catalog_entity_consistency.py &&
+    make verify-quwoquan-data
+  full_gate: >
+    python3 -m unittest discover -s quwoquan_data/tests &&
+    make verify-quwoquan-data &&
+    bash scripts/run_sichuan_geo_content_trinity_e2e.sh
+
+scope:
+  summary: >
+    冻结应用数据生成工作流的最小闭环：地理目录候选层、实体与标签、来源下载、图文加工、
+    发布与反馈，以及四川旅游出行样例的端到端验证。
+  sichuan_content_scope:
+    region: 四川省
+    entity_categories:
+      - 传统景点与文博（观光 POI、自然/人文、国家公园、风景名胜区、世界遗产境内点等）
+      - 打卡地
+      - 观景台
+      - 小众秘境（含未商业开发、野生可达描述的点位；展示须遵守合规与安全提示策略）
+    naming_authority:
+      primary: [百度百科, 维基百科及 acceptance 批注的白名单延伸（如 Wikivoyage）]
+      post_evidence_required_when: 无可用权威主锚或权威无法唯一绑定实体时
+    post_evidence_rule:
+      min_distinct_articles: 2
+      must_be_non_conflicting: true
+      independence_default: 不同顶级域名；同域须不同稿件且非简单转载（见 design.md）
+      on_fail: 不得进入可发布 entity_catalog；可保留 catalog 候选或待审桶
+    content_targets_per_entity:
+      article_like_goal_min: 20
+      article_like_goal_max: 100
+      article_like_types: [攻略, 游玩, 日记, 摄影向图文]
+      curated_fraction_target: 0.30
+      curated_definition: 规则分 top 比例与/或人工抽检标优，见 A17；允许按批次文档化 ±5% 偏差
+  out_of_scope:
+    - 全球零人工行政区校准
+    - 以英文 label_en 作为与中文对等的默认 Gate0
+    - 绕过第三方站点 robots 或访问限制
+
+semantic_fixture_families:
+  - family: panda_villas
+    samples: [成都大熊猫繁育研究基地, 大熊猫2号别墅, 大熊猫3号别墅]
+    expected: 主实体 + 编号 members
+  - family: liu_estate
+    samples: [刘氏庄园, 刘文彩公馆, 刘文成公馆, 刘文昭公馆, 刘文渊公馆]
+    expected: 庄园主实体 + 建筑 members
+  - family: jianmen_gate
+    samples: [剑门关风景区, 剑门关关楼]
+    expected: 明确 member 或 parallel_entity，禁止无说明平铺
+  - family: tongji_old_sites
+    samples: [同济大学工学院旧址, 同济大学理学院(旧址), 国立同济大学医学院旧址]
+    expected: 缺根实体或证据不足时 pending_review
+  - family: gongga_viewpoints
+    samples: [贡嘎之凤(一号冰川观景台), 贡嘎之恋(二号冰川观景台), 贡嘎之龙(大冰瀑布观景台)]
+    expected: 同簇聚类；缺根实体时 pending_review
+
+scenario_acceptance:
+  A1:
+    title: 地理目录候选层可按声明的地级切片产出统计
+    done_when:
+      - 每个声明的地级 slice 均输出 `raw_count`
+      - "`raw_count=0` 的切片有 Overpass 探测记录或备案说明"
+      - 四川样例中广安市切片异常可被报告而非静默吞掉
+    evidence:
+      primary: [T1]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A2:
+    title: 目录候选层完成元素级去重
+    done_when:
+      - 同一 `type:id` 仅保留一条记录
+      - 名称级合并不破坏元素级可追溯性
+    evidence:
+      primary: [T1]
+      supporting: [T2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A3:
+    title: 县级下钻具备预算与覆盖率合同
+    done_when:
+      - 若启用县级下钻，acceptance 中写明预算上限与覆盖 KPI
+      - 若未启用，文档中明确列为 Phase2
+    evidence:
+      primary: [T1]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A4:
+    title: 国内候选层 `label_zh` 必保
+    done_when:
+      - 国内 catalog 行 `label_zh` 覆盖率达到阈值
+      - 英文/符号主名候选默认被拒绝或隔离
+    evidence:
+      primary: [T1, T2]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    status: planned
+
+  A5:
+    title: 中文业务类型可解析且与命名规则版本一致
+    done_when:
+      - 每条进入实体层的候选都有中文业务类型
+      - 实体类型与 `entity_naming_rules` 版本一致
+      - 抽样错类率低于阈值
+    evidence:
+      primary: [T1, T2]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    status: planned
+
+  A6:
+    title: "`label_en` 为扩展批次而非默认 Gate0"
+    done_when:
+      - 国内链路不因 `label_en` 缺失而阻断
+      - 海外无中文通译场景下 `label_en` 可作为主展示回退
+      - "`label_en_status` 可统计"
+    evidence:
+      primary: [T1]
+      supporting: [T2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A6_1:
+    title: 地理目录候选层与实体层边界明确
+    done_when:
+      - 每条目录候选都有 `standalone / member / alias / parallel_entity / reject / pending_review` 之一
+      - publishable 顶层实体仅允许来自 `standalone` 与显式 `parallel_entity`
+      - 判定规则与字段来源在 design 中冻结
+    evidence:
+      primary: [T1]
+      supporting: [T2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: implemented
+
+  A7:
+    title: entity-catalog 与 catalog / tag_catalog 一致
+    done_when:
+      - 抽样 `topic_id` 在 entity_catalog 与 catalog 中 canonical 一致
+      - "`tagRefs` 可解析到 tag_catalog"
+    evidence:
+      primary: [T1, T2]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    status: planned
+
+  A8:
+    title: 图文标题与实体锚点同源
+    done_when:
+      - 已 hydrate 来源标题 / snippet 命中 canonical 或 `label_zh`
+      - 内容审核输出不引入第二套未回写的展示名
+    evidence:
+      primary: [T1, T2]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    status: planned
+
+  A8_1:
+    title: tag / entity / label 边界字段级可追溯
+    done_when:
+      - design 对 tag 与 label 的字段来源分别定义
+      - 不存在“只改 tag 即视为实体展示更新”的未定义路径
+    evidence:
+      primary: [T1]
+      supporting: [T2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A9:
+    title: 无准入证据的候选不得直接进入可发布种子
+    done_when:
+      - 非权威轨且未满足 post 互证（A16）的候选默认不进入可发布种子池
+      - "`member` / `alias` / `reject` / `pending_review` 候选不得以顶层实体形式进入 publishable entity_catalog"
+      - 权威轨实体不因「缺 post」被拒；仅有百科/维基锚点即可进入实体层（R7）
+      - 若对特殊批次放行无证据候选，acceptance 或批次说明中须有显式豁免
+    evidence:
+      primary: [T1]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: implemented
+
+  A10:
+    title: 内容反向变更具备证据与版本记录
+    done_when:
+      - 任何反向修订都附带 `evidence_urls`
+      - 目录或配置版本有递增记录
+    evidence:
+      primary: [T1]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A11:
+    title: 六阶段数据工程工作流具备阶段自测
+    done_when:
+      - "`data-explore` / `data-baseline` / `data-build-entities-tags` / `data-download` / `data-process-content` / `data-publish` 均有自测要求"
+      - 任一阶段失败不会静默进入下一阶段
+    evidence:
+      primary: [T1, T2]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    status: planned
+
+  A12:
+    title: "`wiki_expand` 行为有固定回归样本"
+    done_when:
+      - "`filtered` / `full` 行为写入 design"
+      - 至少 1 个固定 topic 有候选数基线
+    evidence:
+      primary: [T1]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A12_1:
+    title: "`data-*` 阶段命令具备逐命令 I/O 定义"
+    done_when:
+      - design 中存在逐命令输入 / 输出 / 失败重试 / 准出说明
+      - 不再只保留抽象阶段代号
+    evidence:
+      primary: [T1]
+      supporting: [T2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A12_2:
+    title: 数据工程工作流与研发工作流职责分离
+    done_when:
+      - 专册中明确“研发定义 / 数据运行”关系
+      - 不存在职责重叠未定义区
+    evidence:
+      primary: [T1]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A13:
+    title: 四川真实样例通过真实性与 package gate
+    done_when:
+      - "`verify_quwoquan_data_source_authenticity.py` 通过或文档化例外"
+      - "`verify_quwoquan_data_post_packages.py` 通过或文档化例外"
+    evidence:
+      primary: [T1, T3]
+      supporting: [T2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    status: planned
+
+  A14:
+    title: 全流程遵守 quwoquan_data 合规边界
+    done_when:
+      - 全量操作遵守 `quwoquan_data/SPEC.md` K4
+      - 无绕过 robots / 权限控制的自动化路径
+    evidence:
+      primary: [T1]
+      supporting: [T4]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A15:
+    title: 实体准入双轨（权威轨 vs 图文证据轨）可追溯
+    done_when:
+      - design 与 spec R7 一致：百科/维基主锚存在且有效时可直接进实体层，不要求 post 篇数门槛
+      - 无权威主锚或无法唯一绑定时仅允许 post_evidence_track，且结构化记录准入轨别（如 extensions.admissionTrack）
+      - authority 轨实体保留 authority refs 或等价权威字段；post_evidence 轨实体保留 evidence URLs
+      - 抽样报告可区分 authority / post_evidence 两类实体行
+    evidence:
+      primary: [T1, T2]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    status: implemented
+
+  A16:
+    title: 图文证据轨「≥2 篇互证且无实质冲突」
+    done_when:
+      - post_evidence 实体至少 2 条可引用、独立稿件 URL，写入 evidenceArticleUrls 或等价字段
+      - 冲突判定规则在 design 冻结；冲突行不得进入可发布 entity_catalog
+      - MVP 允许以人工裁决 + conflictCheckStatus 为主，但必须可审计（非静默丢弃）
+    evidence:
+      primary: [T1, T2]
+      supporting: [T3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    status: implemented
+
+  A17:
+    title: 每实体图文目标规模与精品子集口径冻结
+    done_when:
+      - process / publish 侧可按实体统计已 hydrate 篇数；目标区间向 20～100 收敛并文档化未达标原因（可得性/合规）
+      - curated 约 30% 有操作定义（规则分、人工或混合）及按批验收方式
+      - 不以「未达 100 篇」单独阻断 Gate0，但须在批次报告中可量化
+    evidence:
+      primary: [T1]
+      supporting: [T2, T3]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned
+
+  A18:
+    title: 未开发/秘境类点位的数据侧风险提示标
+    done_when:
+      - 对 undevelopedOrWildAccess 或等价扩展有布尔或枚举打标能力
+      - 产品/法务展示策略不归本 acceptance 定义，但数据中禁止缺省隐去「未开发」事实（若来源已明示）
+    evidence:
+      primary: [T1]
+      supporting: [T2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    status: planned

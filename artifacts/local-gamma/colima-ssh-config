@@ -17,5 +17,5 @@ Host colima
   ControlPath "/Users/zhaoyuxi/.colima/_lima/colima/ssh.sock"
   ControlPersist yes
   Hostname 127.0.0.1
-  Port 64232
+  Port 64513
 

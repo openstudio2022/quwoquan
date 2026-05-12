@@ -1,4 +1,4 @@
-schemaVersion: app-runtime-config.v1
+schemaVersion: app-runtime-config
 runtime:
   appRuntimeEnv: prod-gray
   appDataSource: remote

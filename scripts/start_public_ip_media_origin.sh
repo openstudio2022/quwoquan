@@ -119,7 +119,7 @@ for line in gateway_dump.splitlines():
 
 public_base_url = f"{scheme}://{public_ip}:{public_port}"
 payload = {
-    "schemaVersion": "public-ip-media-origin-session.v1",
+    "schemaVersion": "public-ip-media-origin-session",
     "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "publicIp": public_ip,
     "publicBaseUrl": public_base_url,

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "gamma-local-media-origin.v1",
+  "schemaVersion": "gamma-local-media-origin",
   "generatedAt": "2026-05-05T17:31:36.912171Z",
   "bindHost": "0.0.0.0",
   "port": 18199,

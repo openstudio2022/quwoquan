@@ -17,7 +17,7 @@
   "seed": {
     "status": "passed",
     "insertedCount": 11,
-    "output": "time=\"2026-05-06T03:01:58+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-05-26T00:00:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 10 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 11\n}\n\nrs0 [direct: primary] test> "
+    "output": "time=\"2026-05-13T03:21:15+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-05-26T00:00:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 11 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 11\n}\n\nrs0 [direct: primary] test> "
   },
   "endpoints": [
     {
@@ -41,7 +41,7 @@
       "domain": "content",
       "path": "/v1/content/posts/fixture_photo_001",
       "httpStatus": 200,
-      "bytes": 1445,
+      "bytes": 1427,
       "status": "passed"
     },
     {
@@ -58,7 +58,7 @@
       "domain": "chat",
       "path": "/v1/chat/inbox",
       "httpStatus": 200,
-      "bytes": 36595,
+      "bytes": 36592,
       "status": "passed"
     },
     {
@@ -96,8 +96,22 @@
   ],
   "apiContracts": [
     {
-      "name": "flutter_contracts",
-      "status": "skipped"
+      "name": "content_api_contract",
+      "status": "passed",
+      "exitCode": 0,
+      "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/content/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end (setUpAll)\n00:00 +0: feed_cursor_pagination_end_to_end 第一页返回 20 条 + cursor 非空\n00:00 +1: feed_cursor_pagination_end_to_end 第二页与第一页无重叠 item\n00:00 +2: feed_cursor_pagination_end_to_end PhotoPostDto fromMap 解析所有字段包含 aspectRatio\n  local gamma content mirror does not yet expose image dimensions\n00:00 +2 ~1: feed_cursor_pagination_end_to_end (tearDownAll)\n00:00 +2 ~1: behavior_batch_report_reaches_service (setUpAll)\n00:00 +2 ~1: behavior_batch_report_reaches_service POST /v1/content/behaviors 返回 204\n00:00 +3 ~1: behavior_batch_report_reaches_service 事件 type 字段与 behaviors.yaml 枚举对齐\n00:00 +4 ~1: behavior_batch_report_reaches_service like type 被 batch 端点拒绝（专属路由）\n00:00 +5 ~1: behavior_batch_report_reaches_service (tearDownAll)\n00:00 +5 ~1: error_state_displayed_correctly 不存在的 postId → 404 + CONTENT.USER.post_not_found\n00:00 +6 ~1: media_not_ready_graceful_error X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry\n00:00 +7 ~1: dedicated_feedback_and_user_block_contract (setUpAll)\n00:00 +7 ~1: dedicated_feedback_and_user_block_contract POST /v1/content/reports 可用\n00:00 +8 ~1: dedicated_feedback_and_user_block_contract POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用\n  local gamma content mirror excludes user routes\n00:00 +8 ~2: dedicated_feedback_and_user_block_contract PATCH /v1/user/settings/privacy 可写并回读 blockedKeywords\n  local gamma content mirror excludes user routes\n00:00 +8 ~3: dedicated_feedback_and_user_block_contract (tearDownAll)\n00:00 +8 ~3: (tearDownAll)\n00:00 +8 ~3: All tests passed!\n"
+    },
+    {
+      "name": "chat_api_contract",
+      "status": "passed",
+      "exitCode": 0,
+      "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/chat/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: list_conversations_contract (setUpAll)\n00:00 +0: list_conversations_contract GET /v1/chat/conversations 返回 200 + items 数组\n00:00 +1: list_conversations_contract conversation 字段结构完整\n00:00 +2: list_conversations_contract (tearDownAll)\n00:00 +2: send_and_recall_message_contract (setUpAll)\n00:00 +2: send_and_recall_message_contract 发送消息返回 201 + seq + messageId\n00:00 +3: send_and_recall_message_contract 相同 clientMsgId 幂等（dedup）\n00:00 +4: send_and_recall_message_contract 撤回消息返回 200 + status=recalled\n00:00 +5: send_and_recall_message_contract 消息列表包含已发送消息\n00:00 +6: send_and_recall_message_contract (tearDownAll)\n00:00 +6: error_not_found_contract 不存在的 conversationId → 404 + CHAT.USER.conversation_not_found\n00:00 +7: sync_messages_contract (setUpAll)\n00:00 +7: sync_messages_contract POST /sync 返回增量消息\n00:00 +8: sync_messages_contract (tearDownAll)\n00:00 +8: member_operations_contract (setUpAll)\n00:00 +8: member_operations_contract 添加成员 → 成员列表包含新成员\n00:00 +9: member_operations_contract (tearDownAll)\n00:00 +9: (tearDownAll)\n00:00 +9: All tests passed!\n"
+    },
+    {
+      "name": "product_ops_api_contract",
+      "status": "passed",
+      "exitCode": 0,
+      "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/ops/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: ops_event_ingestion_end_to_end POST /v1/ops/events 后 summary / drilldown 可读\n00:00 +1: ops_visit_record_end_to_end POST /v1/ops/visits 后 stats 可读\n00:00 +2: (tearDownAll)\n00:00 +2: All tests passed!\n"
     }
   ]
 }

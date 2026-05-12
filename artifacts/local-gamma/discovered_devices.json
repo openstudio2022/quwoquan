@@ -1,19 +1,11 @@
 {
-  "capturedAt": "2026-05-05T03:29:44.587019Z",
+  "capturedAt": "2026-05-12T19:21:42.174053Z",
   "suite": "gamma-patrol-matrix",
   "requestedEnvironments": [
     "local-gamma"
   ],
-  "deviceCount": 2,
+  "deviceCount": 1,
   "devices": [
-    {
-      "id": "emulator-5554",
-      "name": "sdk gphone64 arm64",
-      "targetPlatform": "android-arm64",
-      "sdk": "Android 12 (API 31)",
-      "emulator": true,
-      "ephemeral": false
-    },
     {
       "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
       "name": "iPhone 17 Pro",

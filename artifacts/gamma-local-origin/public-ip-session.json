@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "public-ip-media-origin-session.v1",
+  "schemaVersion": "public-ip-media-origin-session",
   "generatedAt": "2026-05-05T17:37:23.987909Z",
   "publicIp": "103.142.140.57",
   "publicBaseUrl": "http://103.142.140.57:18200",

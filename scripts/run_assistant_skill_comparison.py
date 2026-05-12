@@ -447,7 +447,7 @@ def build_comparison_report(
         )
     needs_fix = [row for row in rows if row["status"] != "passed"]
     return {
-        "schemaVersion": "assistant.skill-comparison-report.v1",
+        "schemaVersion": "assistant.skill-comparison-report",
         "startedAt": alpha_run.get("startedAt"),
         "endedAt": utc_now(),
         "status": "passed" if not needs_fix and beta_run.get("exitCode") == 0 else "needs_fix",
@@ -561,7 +561,7 @@ def main() -> int:
         return 0 if report["status"] == "passed" else 1
     except Exception as exc:
         failure = {
-            "schemaVersion": "assistant.skill-comparison-report.v1",
+            "schemaVersion": "assistant.skill-comparison-report",
             "startedAt": utc_now(),
             "endedAt": utc_now(),
             "status": "gate_block",

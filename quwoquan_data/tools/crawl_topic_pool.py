@@ -22,15 +22,161 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Literal, cast
 
-from common import RUNTIME_ROOT, ensure_runtime_layout, read_ndjson, read_yaml, write_ndjson
+from common import (
+    RUNTIME_ROOT,
+    TOPIC_ENRICHMENT_SCHEMA_VERSION,
+    ensure_runtime_layout,
+    read_ndjson,
+    read_yaml,
+    write_ndjson,
+)
 from native_fetch import NativeFetchError, fetch_html_page
 
-TOPIC_ENRICHMENT_SCHEMA_VERSION = "quwoquan_data.topic_enrichment"
 DEFAULT_MAX_SOURCES = 22
 BAIKE_ITEM_LINK_RE = re.compile(r'href="(/item/[^"?#]+)"', re.I)
 MW_USER_AGENT = "quwoquan-data-crawl-topic-pool/1.0 (+https://github.com/quwoquan/quwoquan)"
 
 WikiExpandMode = Literal["none", "filtered", "full"]
+
+# 景观类后缀：滑窗前先剥离，否则「风景名胜区」会带来全国同质「XX风景区」假阳性。
+_SCENE_TITLE_SUFFIXES: tuple[str, ...] = (
+    "国家级风景名胜区",
+    "风景名胜区",
+    "风景旅游区",
+    "旅游景区",
+    "旅游区",
+    "风景区",
+    "国家公园",
+    "旅游度假区",
+    "文旅度假区",
+)
+
+# 二元组黑名单：不写入 relevanceTokens，亦用于 authenticity 的 medium 判定过滤。
+GENERIC_SCENE_BIGRAM_BLOCKLIST_FOR_AUTH: frozenset[str] = frozenset(
+    {
+        "风景",
+        "景区",
+        "名胜",
+        "胜区",
+        "旅游",
+        "游区",
+        "遗产",
+        "公园",
+        "地质",
+        "索道",
+        "观景",
+        "度假",
+        "级景",
+    }
+)
+
+
+def _strip_scene_suffixes(title: str) -> str:
+    s = str(title or "").strip()
+    if not s:
+        return ""
+    changed = True
+    while changed:
+        changed = False
+        for suf in _SCENE_TITLE_SUFFIXES:
+            if s.endswith(suf) and len(s) > len(suf):
+                s = s[: -len(suf)].strip()
+                changed = True
+    return s or str(title or "").strip()
+
+
+def _dedupe_preserve(seq: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in seq:
+        t = str(item).strip()
+        if len(t) < 2 or t in seen:
+            continue
+        seen.add(t)
+        out.append(t)
+    return out
+
+
+def derive_strong_tokens(
+    *,
+    name: str,
+    wiki_title: str,
+    baike_item: str,
+    aliases: list[str],
+    core_tokens: list[str],
+) -> list[str]:
+    """外链标题门禁：须命中强 token（地名/别名/核心词/剥离后缀后的主名），杜绝仅凭「风景区」全国撞车。"""
+    chunks: list[str] = []
+    for raw in (_strip_scene_suffixes(name), name, _strip_scene_suffixes(wiki_title), wiki_title, _strip_scene_suffixes(baike_item), baike_item):
+        raw = str(raw or "").strip()
+        if raw:
+            chunks.append(raw)
+    chunks.extend(str(a).strip() for a in aliases if str(a).strip())
+    chunks.extend(str(c).strip() for c in core_tokens if str(c).strip())
+    strong = _dedupe_preserve(chunks)
+    # 剔除过短且无区别的单字二元组已由长度>=2 保证；去掉与黑名单完全一致的二元短语
+    strong = [
+        s
+        for s in strong
+        if s not in GENERIC_SCENE_BIGRAM_BLOCKLIST_FOR_AUTH or len(s) > 2
+    ]
+    return strong[:24]
+
+
+def expected_region_keywords_from_catalog_row(raw: dict[str, Any]) -> list[str]:
+    """从 catalog NDJSON/YAML 行提取地域核验词（province/prefecture/expected_region_keywords 等）。"""
+    acc: list[str] = []
+    for key in ("province", "prefecture", "district", "adm1", "region"):
+        v = raw.get(key)
+        if isinstance(v, str) and v.strip():
+            acc.append(v.strip())
+    er = raw.get("expected_region_keywords")
+    if isinstance(er, list):
+        for x in er:
+            s = str(x).strip()
+            if s:
+                acc.append(s)
+    return _dedupe_preserve(acc)[:32]
+
+
+def _derive_relevance_tokens(name: str, aliases: list[str], core_tokens: list[str]) -> list[str]:
+    """相关性 token：剥离后缀后再拆二元组；屏蔽景观泛词二元组。"""
+    stripped_name = _strip_scene_suffixes(name)
+    tokens: list[str] = []
+    for chunk in [stripped_name, name, *aliases, *core_tokens]:
+        s = str(chunk).strip()
+        if not s:
+            continue
+        if s not in tokens:
+            tokens.append(s)
+        if len(s) >= 2:
+            for i in range(len(s) - 1):
+                bi = s[i : i + 2]
+                if not bi.strip() or bi.isspace() or bi in GENERIC_SCENE_BIGRAM_BLOCKLIST_FOR_AUTH:
+                    continue
+                if bi not in tokens:
+                    tokens.append(bi)
+    return _dedupe_preserve(tokens)[:48]
+
+
+def _title_matches_strong(title: str, strong_tokens: list[str]) -> bool:
+    tnorm = title.strip()
+    if not tnorm:
+        return False
+    for tok in strong_tokens:
+        if tok and tok in tnorm:
+            return True
+    return False
+
+
+def _title_matches_tokens(title: str, tokens: list[str]) -> bool:
+    tnorm = title.strip()
+    if not tnorm:
+        return False
+    for tok in tokens:
+        if tok and tok in tnorm:
+            return True
+    return False
 
 
 def _normalize_wiki_expand(mode: str) -> WikiExpandMode:
@@ -106,56 +252,44 @@ def _wiki_api_links_raw(site: str, wiki_title: str, *, limit: int) -> list[str]:
     return out
 
 
-def _derive_relevance_tokens(name: str, aliases: list[str], core_tokens: list[str]) -> list[str]:
-    tokens: list[str] = []
-    for chunk in [name, *aliases, *core_tokens]:
-        s = str(chunk).strip()
-        if not s:
-            continue
-        if s not in tokens:
-            tokens.append(s)
-        if len(s) >= 2:
-            for i in range(len(s) - 1):
-                bi = s[i : i + 2]
-                if bi.strip() and bi not in tokens and not bi.isspace():
-                    tokens.append(bi)
-    seen: set[str] = set()
-    out: list[str] = []
-    for t in tokens:
-        t = t.strip()
-        if len(t) < 2 or t in seen:
-            continue
-        seen.add(t)
-        out.append(t)
-    return out[:48]
-
-
-def _title_matches_tokens(title: str, tokens: list[str]) -> bool:
-    tnorm = title.strip()
-    if not tnorm:
-        return False
-    for tok in tokens:
-        if tok and tok in tnorm:
-            return True
-    return False
-
-
 def _wiki_links_filtered(
     site: str,
     wiki_title: str,
     *,
     limit: int,
-    tokens: list[str],
+    strong_tokens: list[str],
 ) -> list[str]:
     raw = _wiki_api_links_raw(site, wiki_title, limit=max(limit * 8, 80))
     out: list[str] = []
     for url in raw:
         title = urllib.parse.unquote(url.split("/wiki/", 1)[-1]).replace("_", " ") if "/wiki/" in url else ""
-        if _title_matches_tokens(title, tokens):
+        if _title_matches_strong(title, strong_tokens):
             out.append(url)
         if len(out) >= limit:
             break
     return out
+
+
+def _zh_mw_title_from_url(url: str) -> str:
+    u = url.strip()
+    for host in ("zh.wikipedia.org", "zh.wikivoyage.org", "en.wikipedia.org"):
+        if host in u and "/wiki/" in u:
+            tail = u.split("/wiki/", 1)[-1].split("#")[0].split("?")[0]
+            return urllib.parse.unquote(tail).replace("_", " ")
+    return ""
+
+
+def _outbound_title_allowed_for_travel(
+    title: str, *, strong_tokens: list[str], aliases: list[str], core_tokens: list[str]
+) -> bool:
+    """Wikivoyage 等：强匹配或别名/核心地域词命中标题即保留。"""
+    if _title_matches_strong(title, strong_tokens):
+        return True
+    if _title_matches_tokens(title, aliases):
+        return True
+    if _title_matches_tokens(title, core_tokens):
+        return True
+    return False
 
 
 def _wikivoyage_opensearch_urls(query: str, *, limit: int) -> list[str]:
@@ -181,7 +315,7 @@ def _wikivoyage_opensearch_urls(query: str, *, limit: int) -> list[str]:
 
 
 def _baike_item_links_filtered(
-    baike_path_title: str, *, limit: int, tokens: list[str]
+    baike_path_title: str, *, limit: int, strong_tokens: list[str]
 ) -> list[str]:
     url = "https://baike.baidu.com/item/" + urllib.parse.quote(baike_path_title)
     try:
@@ -194,7 +328,7 @@ def _baike_item_links_filtered(
     for path in found:
         full = "https://baike.baidu.com" + path.split("?")[0]
         tail = urllib.parse.unquote(full.split("/item/", 1)[-1]) if "/item/" in full else ""
-        if not _title_matches_tokens(tail, tokens):
+        if not _title_matches_strong(tail, strong_tokens):
             continue
         if full in seen:
             continue
@@ -218,6 +352,8 @@ def build_article_row(
     snippet: str,
     engagement: int,
     relevance_tokens: list[str],
+    topic_strong_tokens: list[str] | None = None,
+    expected_region_keywords: list[str] | None = None,
 ) -> dict[str, Any]:
     sid = _source_id_for_url(url)
     row: dict[str, Any] = {
@@ -257,7 +393,113 @@ def build_article_row(
     }
     if relevance_tokens:
         row["relevanceTokens"] = relevance_tokens
+    if topic_strong_tokens:
+        row["topicStrongTokens"] = topic_strong_tokens
+    if expected_region_keywords:
+        row["expectedRegionKeywords"] = expected_region_keywords
     return row
+
+
+def build_image_source_row(
+    *,
+    topic_title: str,
+    spec_query: str,
+    url: str,
+    page_title: str,
+    snippet: str,
+    engagement: int,
+    relevance_tokens: list[str],
+    topic_strong_tokens: list[str] | None = None,
+    expected_region_keywords: list[str] | None = None,
+) -> dict[str, Any]:
+    """image lane source_pool 行：taskType 固定为 image，后续由 batch 侧做图像质量门禁。"""
+    sid = _source_id_for_url(url)
+    row: dict[str, Any] = {
+        "candidateId": sid,
+        "sourceId": sid,
+        "taskType": "image",
+        "topicTitle": topic_title,
+        "query": spec_query,
+        "title": page_title[:200] if page_title else sid,
+        "sourceUrl": url,
+        "snippet": snippet[:800] if snippet else "",
+        "sourceRole": "publish_candidate",
+        "rightsStatus": "clear",
+        "watermarkStatus": "clean",
+        "duplicateStatus": "unique",
+        "adSignal": False,
+        "likes": engagement,
+        "shares": max(0, engagement // 4),
+        "comments": max(0, engagement // 5),
+        "qualityBreakdown": {
+            "contentCompleteness": 18,
+            "actionability": 10,
+            "sourceCredibility": 16,
+            "freshness": 8,
+            "richness": 14,
+            "engagementSignal": 10,
+            "cleanliness": 12,
+        },
+        "publishabilityBreakdown": {
+            "readerValue": 12,
+            "routeSpecificity": 10,
+            "factDensity": 10,
+            "practicality": 10,
+            "narrativePotential": 12,
+            "encyclopedicPenalty": 8,
+        },
+    }
+    if relevance_tokens:
+        row["relevanceTokens"] = relevance_tokens
+    if topic_strong_tokens:
+        row["topicStrongTokens"] = topic_strong_tokens
+    if expected_region_keywords:
+        row["expectedRegionKeywords"] = expected_region_keywords
+    return row
+
+
+def commons_file_gallery_urls(display_name: str, *, limit: int = 16) -> list[str]:
+    """检索 Wikimedia Commons（File 命名空间），用于影像 lane 的权威种子页。"""
+    q = f"{display_name} Sichuan"
+    params = {
+        "action": "query",
+        "list": "search",
+        "srsearch": q,
+        "srnamespace": "6",
+        "srlimit": str(min(max(1, limit), 20)),
+        "format": "json",
+    }
+    api = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(
+        api,
+        headers={"User-Agent": "quwoquan-data-pool-bootstrap/1.0 (+https://github.com/quwoquan/quwoquan)"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=40) as resp:
+            payload = json.loads(resp.read().decode("utf-8", "replace"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+        return []
+    items = (payload.get("query") or {}).get("search") or []
+    out: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title.startswith("File:"):
+            continue
+        enc = urllib.parse.quote(title.replace(" ", "_"), safe="/():%")
+        out.append("https://commons.wikimedia.org/wiki/" + enc)
+        if len(out) >= limit:
+            break
+    if not out:
+        search = "https://commons.wikimedia.org/w/index.php?" + urllib.parse.urlencode(
+            {"search": display_name, "title": "Special:Search", "go": "Go"}
+        )
+        out.append(search)
+    return out[:limit]
+
+
+IMAGE_TOPIC_SUFFIX = "__img"
 
 
 def default_enrichment_row(spec: dict[str, Any], topic_id: str, task_type: str, title: str) -> dict[str, Any]:
@@ -309,6 +551,13 @@ def collect_urls_for_attraction(
 ) -> list[str]:
     expand = _normalize_wiki_expand(wiki_expand)
     tokens = _derive_relevance_tokens(name, aliases, core_tokens)
+    strong_tokens = derive_strong_tokens(
+        name=name,
+        wiki_title=wiki_title,
+        baike_item=baike_item,
+        aliases=aliases,
+        core_tokens=core_tokens,
+    )
     urls: list[str] = []
     seen: set[str] = set()
 
@@ -319,16 +568,33 @@ def collect_urls_for_attraction(
         seen.add(u)
         urls.append(u)
 
+    def maybe_add_wikivoyage(u: str) -> None:
+        t = _zh_mw_title_from_url(u)
+        if t and not _outbound_title_allowed_for_travel(
+            t, strong_tokens=strong_tokens, aliases=aliases, core_tokens=core_tokens
+        ):
+            return
+        add(u)
+
     add("https://baike.baidu.com/item/" + urllib.parse.quote(baike_item))
     if _wiki_title_resolves("zh.wikipedia.org", wiki_title):
         add("https://zh.wikipedia.org/wiki/" + urllib.parse.quote(wiki_title.replace(" ", "_")))
 
     for u in _wikivoyage_opensearch_urls(f"{name} 四川", limit=wikivoyage_limit):
-        add(u)
+        maybe_add_wikivoyage(u)
         if len(urls) >= max_sources:
             return urls
     for u in _wikivoyage_opensearch_urls(name, limit=max(1, wikivoyage_limit // 2)):
-        add(u)
+        maybe_add_wikivoyage(u)
+        if len(urls) >= max_sources:
+            return urls
+    gv = max(1, min(8, wikivoyage_limit // 3))
+    for u in _wikivoyage_opensearch_urls(f"{name} 旅游", limit=gv):
+        maybe_add_wikivoyage(u)
+        if len(urls) >= max_sources:
+            return urls
+    for u in _wikivoyage_opensearch_urls(f"{name} 攻略", limit=gv):
+        maybe_add_wikivoyage(u)
         if len(urls) >= max_sources:
             return urls
 
@@ -339,6 +605,9 @@ def collect_urls_for_attraction(
 
     if expand == "full":
         for u in _wiki_api_links_raw("zh.wikipedia.org", wiki_title, limit=wiki_link_budget):
+            wt = urllib.parse.unquote(u.split("/wiki/", 1)[-1]).replace("_", " ") if "/wiki/" in u else ""
+            if wt and not _title_matches_strong(wt, strong_tokens):
+                continue
             add(u)
             if len(urls) >= max_sources:
                 return urls
@@ -347,7 +616,7 @@ def collect_urls_for_attraction(
             "zh.wikipedia.org",
             wiki_title,
             limit=wiki_link_budget,
-            tokens=tokens,
+            strong_tokens=strong_tokens,
         ):
             add(u)
             if len(urls) >= max_sources:
@@ -357,7 +626,7 @@ def collect_urls_for_attraction(
         for u in _baike_item_links_filtered(
             baike_item,
             limit=baike_link_budget,
-            tokens=tokens,
+            strong_tokens=strong_tokens,
         ):
             add(u)
             if len(urls) >= max_sources:
@@ -431,6 +700,14 @@ def bootstrap_from_attractions_yaml(
             continue
 
         seed_rows = list(travel_seed_by_topic.get(topic_id, []))
+        geo_kw = expected_region_keywords_from_catalog_row(raw)
+        strong_list = derive_strong_tokens(
+            name=name,
+            wiki_title=wiki_title,
+            baike_item=baike_item,
+            aliases=aliases_s,
+            core_tokens=core_s,
+        )
         url_list = collect_urls_for_attraction(
             name=name,
             wiki_title=wiki_title,
@@ -468,19 +745,41 @@ def bootstrap_from_attractions_yaml(
                     snippet=snip,
                     engagement=eng,
                     relevance_tokens=tokens,
+                    topic_strong_tokens=strong_list,
+                    expected_region_keywords=geo_kw if geo_kw else None,
                 )
             )
         write_topic_pool(spec, topic_id, "article", name, rows, merge=merge)
         print(f"[pool-bootstrap] topic={topic_id} candidates={len(rows)} merge={merge}", file=sys.stderr)
+
+        img_tid = f"{topic_id}{IMAGE_TOPIC_SUFFIX}"
+        write_img = topic_filter is None or topic_id in topic_filter or img_tid in topic_filter
+        if write_img:
+            cap = max(4, min(int(max_sources), 24))
+            img_urls = commons_file_gallery_urls(name, limit=cap)
+            img_rows: list[dict[str, Any]] = []
+            for j, url in enumerate(img_urls):
+                eng = max(1, 90 - j * 2 + (index % 5) * 2)
+                img_rows.append(
+                    build_image_source_row(
+                        topic_title=name,
+                        spec_query=spec_query,
+                        url=url,
+                        page_title=name if j == 0 else url,
+                        snippet=f"影像候选：{name}（Commons/Wikimedia）",
+                        engagement=eng,
+                        relevance_tokens=tokens,
+                        topic_strong_tokens=strong_list,
+                        expected_region_keywords=geo_kw if geo_kw else None,
+                    )
+                )
+            write_topic_pool(spec, img_tid, "image", name, img_rows, merge=merge)
+            print(
+                f"[pool-bootstrap] topic={img_tid} image_candidates={len(img_rows)} merge={merge}",
+                file=sys.stderr,
+            )
+
         time.sleep(sleep_s)
-
-    image_topics = (spec.get("sample_topics") or {}).get("image") or []
-    image_topic = str(image_topics[0]).strip() if image_topics else "cdcx_image_commons_sample_001"
-    if topic_filter is None or image_topic in topic_filter:
-        write_topic_pool(spec, image_topic, "image", "川西影像样例", [], merge=False)
-
-
-def catalog_topic_ids_from_yaml(catalog: dict[str, Any]) -> list[str]:
     out: list[str] = []
     for raw in catalog.get("attractions") or []:
         if isinstance(raw, dict):

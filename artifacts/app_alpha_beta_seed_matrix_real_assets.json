@@ -1,7 +1,7 @@
 {
   "status": "passed",
   "sharedPool": {
-    "schemaVersion": "shared.avatar-user-pool.v2",
+    "schemaVersion": "shared.avatar-user-pool",
     "statistics": {
       "userCount": 107,
       "postCount": 490,

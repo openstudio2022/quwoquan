@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceFetchInput",
+  "type": "object",
+  "required": ["schemaVersion", "batchLabel", "sourceType", "sourceUrl"],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "batchLabel": { "type": "string", "minLength": 1 },
+    "catalogTopicId": { "type": "string" },
+    "catalogName": { "type": "string" },
+    "sourceType": { "type": "string", "enum": ["article", "image"] },
+    "sourceUrl": { "type": "string", "minLength": 1 },
+    "pageTitle": { "type": "string" },
+    "maxAssets": { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": true
+}

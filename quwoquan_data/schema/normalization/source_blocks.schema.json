@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SourceBlock",
+  "type": "object",
+  "required": ["schemaVersion", "sourceRef", "blockId", "index", "role", "text"],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "blockId": { "type": "string", "minLength": 1 },
+    "index": { "type": "integer", "minimum": 0 },
+    "role": {
+      "type": "string",
+      "enum": ["title", "lead", "paragraph", "caption", "list_item", "quote"]
+    },
+    "text": { "type": "string", "minLength": 1 },
+    "charCount": { "type": "integer", "minimum": 0 },
+    "evidenceHint": { "type": "string" }
+  },
+  "additionalProperties": true
+}

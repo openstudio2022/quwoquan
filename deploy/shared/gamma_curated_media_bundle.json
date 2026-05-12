@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "gamma-curated-media-bundle.v1",
+  "schemaVersion": "gamma-curated-media-bundle",
   "environment": "gamma",
   "selectionProfile": "gamma-curated-core-100",
   "maxImageObjectCount": 100,

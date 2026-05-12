@@ -1,0 +1,220 @@
+{
+  "schemaVersion": "quwoquan_data.geo_catalog_slice_report",
+  "generatedAt": "2026-05-12T16:42:30Z",
+  "configPath": "/Users/zhaoyuxi/Projects/quwoquan/specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/config/geo_catalog_config.sichuan.yaml",
+  "outputPath": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_data/runtime/seed/sichuan_chuanxi_attractions_catalog.ndjson",
+  "scopeName": "四川",
+  "rawCount": 2107,
+  "keptCount": 1270,
+  "nameDedupedCount": 56,
+  "slices": [
+    {
+      "sliceName": "成都市",
+      "rawCount": 637,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "memorial_statue": 1,
+        "empty_name": 185,
+        "non_cjk_name": 8,
+        "slogan_ascii": 1,
+        "rejected_suffix": 2
+      },
+      "keptPreDedupe": 440
+    },
+    {
+      "sliceName": "自贡市",
+      "rawCount": 159,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 1
+      },
+      "keptPreDedupe": 158
+    },
+    {
+      "sliceName": "攀枝花市",
+      "rawCount": 30,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 10
+      },
+      "keptPreDedupe": 20
+    },
+    {
+      "sliceName": "泸州市",
+      "rawCount": 55,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 1
+      },
+      "keptPreDedupe": 54
+    },
+    {
+      "sliceName": "德阳市",
+      "rawCount": 31,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 4
+      },
+      "keptPreDedupe": 27
+    },
+    {
+      "sliceName": "绵阳市",
+      "rawCount": 106,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "non_cjk_name": 2,
+        "empty_name": 33,
+        "rejected_suffix": 1
+      },
+      "keptPreDedupe": 70
+    },
+    {
+      "sliceName": "广元市",
+      "rawCount": 50,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "rejected_suffix": 1,
+        "non_cjk_name": 1,
+        "empty_name": 13
+      },
+      "keptPreDedupe": 35
+    },
+    {
+      "sliceName": "遂宁市",
+      "rawCount": 11,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 3
+      },
+      "keptPreDedupe": 8
+    },
+    {
+      "sliceName": "内江市",
+      "rawCount": 10,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "rejected_suffix": 1
+      },
+      "keptPreDedupe": 9
+    },
+    {
+      "sliceName": "乐山市",
+      "rawCount": 58,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 11,
+        "non_cjk_name": 5
+      },
+      "keptPreDedupe": 42
+    },
+    {
+      "sliceName": "南充市",
+      "rawCount": 28,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "non_cjk_name": 4,
+        "empty_name": 6
+      },
+      "keptPreDedupe": 18
+    },
+    {
+      "sliceName": "眉山市",
+      "rawCount": 14,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "non_cjk_name": 1
+      },
+      "keptPreDedupe": 13
+    },
+    {
+      "sliceName": "宜宾市",
+      "rawCount": 92,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "non_cjk_name": 7,
+        "empty_name": 32
+      },
+      "keptPreDedupe": 53
+    },
+    {
+      "sliceName": "广安市",
+      "rawCount": 10,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "rejected_suffix": 2,
+        "empty_name": 1
+      },
+      "keptPreDedupe": 7
+    },
+    {
+      "sliceName": "达州市",
+      "rawCount": 13,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 3
+      },
+      "keptPreDedupe": 10
+    },
+    {
+      "sliceName": "雅安市",
+      "rawCount": 70,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "non_cjk_name": 4,
+        "empty_name": 10
+      },
+      "keptPreDedupe": 56
+    },
+    {
+      "sliceName": "巴中市",
+      "rawCount": 13,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 5,
+        "non_cjk_name": 1
+      },
+      "keptPreDedupe": 7
+    },
+    {
+      "sliceName": "资阳市",
+      "rawCount": 21,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "rejected_suffix": 2,
+        "empty_name": 4
+      },
+      "keptPreDedupe": 15
+    },
+    {
+      "sliceName": "阿坝藏族羌族自治州",
+      "rawCount": 216,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 98,
+        "non_cjk_name": 17
+      },
+      "keptPreDedupe": 101
+    },
+    {
+      "sliceName": "甘孜藏族自治州",
+      "rawCount": 364,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "empty_name": 159,
+        "non_cjk_name": 57,
+        "short_name": 2
+      },
+      "keptPreDedupe": 146
+    },
+    {
+      "sliceName": "凉山彝族自治州",
+      "rawCount": 119,
+      "areaProbeCount": 1,
+      "rejectCounts": {
+        "non_cjk_name": 3,
+        "empty_name": 79
+      },
+      "keptPreDedupe": 37
+    }
+  ]
+}

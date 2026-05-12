@@ -70,7 +70,7 @@ from pathlib import Path
 
 report_path, bind_host, port, registry_path, public_base_url = sys.argv[1:6]
 payload = {
-    "schemaVersion": "gamma-local-media-origin.v1",
+    "schemaVersion": "gamma-local-media-origin",
     "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "bindHost": bind_host,
     "port": int(port),

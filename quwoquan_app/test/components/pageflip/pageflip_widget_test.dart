@@ -8,7 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/pageflip/pageflip.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/pageflip/backward_leaf_renderer.dart';
 import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_renderer.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
@@ -461,7 +460,6 @@ void main() {
 
       expect(find.byType(PageflipWidget), findsOneWidget);
       expect(find.byType(ArticleReadOnlyBookDeck), findsNothing);
-      expect(find.byType(ArticlePageBackwardLeafRenderer), findsNothing);
       expect(find.byType(ArticlePageCurlRenderer), findsOneWidget);
 
       final renderer = tester.widget<ArticlePageCurlRenderer>(
@@ -973,7 +971,6 @@ void main() {
     expect(interactiveState.backwardPaintedVersoWidth, isNotNull);
     expect(interactiveState.backwardPaintedVersoWidth, greaterThan(0));
     expect(find.byType(ArticlePageCurlRenderer), findsNothing);
-    expect(find.byType(ArticlePageBackwardLeafRenderer), findsNothing);
 
     await gesture.up();
     await tester.pumpAndSettle();
@@ -984,24 +981,69 @@ void main() {
           state.backwardCompositeMode == 'paperFoldBackwardMainline',
     );
     expect(backwardAnimationStates, isNotEmpty);
+    void expectStableBackBand(
+      ArticleReadOnlyBookDebugState state,
+      String phase,
+    ) {
+      final backBounds = state.backwardBackPaintBounds;
+      final surface = state.backwardSurfaceViewportRect;
+      expect(backBounds, isNotNull, reason: '$phase back band must be painted');
+      expect(surface, isNotNull, reason: '$phase surface bounds are required');
+      final minStableWidth = math.max(8.0, surface!.width * 0.02);
+      expect(
+        backBounds!.width,
+        greaterThan(minStableWidth),
+        reason:
+            '$phase back band must not collapse into the near-invisible texture strip.',
+      );
+      expect(
+        backBounds.width,
+        lessThan(surface.width * 0.88),
+        reason:
+            '$phase back band must stay inside the F/E strip instead of expanding into a large flat backface.',
+      );
+    }
+
     expect(
       backwardAnimationStates.any(
         (state) => state.backwardClipViewportBounds != null,
       ),
       isTrue,
     );
+    final activeHorizontalBackStates = backwardAnimationStates
+        .where(
+          (state) =>
+              state.backwardClipViewportBounds != null &&
+              state.backwardCurrentResidualBounds != null,
+        )
+        .toList(growable: false);
+    expect(activeHorizontalBackStates, isNotEmpty);
+    for (final state in activeHorizontalBackStates) {
+      expect(
+        state.backwardFrontPaintBounds != null ||
+            state.backwardBackPaintBounds != null,
+        isTrue,
+        reason:
+            'horizontal BACK drag must never lose both previous-front and '
+            'previous-back faces while currentResidual remains visible.',
+      );
+    }
     final earlyBackStates = backwardAnimationStates.where(
       (state) =>
           (state.backwardVersoWidth ?? 0) > 0.05 &&
           (state.backwardRectoCoverage ?? 0) <= 0.02,
     );
+    final earlyPaintedBackStates = earlyBackStates
+        .where((state) => state.backwardBackPaintBounds != null)
+        .toList(growable: false);
     expect(
-      earlyBackStates.any((state) => state.backwardBackPaintBounds != null),
-      isTrue,
+      earlyPaintedBackStates,
+      isNotEmpty,
       reason:
           'BACK early phase may keep recto/front hidden, but verso/back must '
           'already be visible as the fold enters from the left.',
     );
+    expectStableBackBand(earlyPaintedBackStates.first, 'early');
     final midFoldFaceStates = backwardAnimationStates.where(
       (state) =>
           state.backwardFrontPaintBounds != null &&
@@ -1016,6 +1058,7 @@ void main() {
           'BACK front/back split must be visible during the middle fold, not '
           'only in the final recto-dominant phase.',
     );
+    expectStableBackBand(midFoldFaceStates.first, 'middle');
     final lateFrontStates = backwardAnimationStates.where(
       (state) =>
           (state.backwardRectoCoverage ?? 0) >= 0.72 &&
@@ -1027,6 +1070,18 @@ void main() {
       reason:
           'BACK late phase should remain front-dominant after the midpoint.',
     );
+    final lateBackStates = backwardAnimationStates.where(
+      (state) =>
+          (state.backwardRectoCoverage ?? 0) >= 0.72 &&
+          state.backwardBackPaintBounds != null,
+    );
+    expect(
+      lateBackStates,
+      isNotEmpty,
+      reason:
+          'BACK late phase must keep the E/F back band visible instead of jumping to a front-only state.',
+    );
+    expectStableBackBand(lateBackStates.first, 'late');
     final mixedFaceStates = backwardAnimationStates.where(
       (state) =>
           (state.backwardRectoCoverage ?? 0) > 0.05 &&
@@ -1176,11 +1231,25 @@ void main() {
       expect(sample.bottomLayerPageIndex, equals(3));
       expect(sample.flippingLayerPageIndex, equals(2));
       expect(
+        sample.backSheetId,
+        equals('mainlineLeaf:2'),
+        reason:
+            'BACK visible backface must stay bound to the previous/flipping leaf, '
+            'not the covered current page.',
+      );
+      expect(
+        sample.backPixelSurfaceStrategy,
+        equals('paperFoldBackMainlineSurface'),
+        reason:
+            'Route-B previous-back must stay on the dedicated backside surface '
+            'instead of being painted as a front texture.',
+      );
+      expect(
         sample.baselineKeyVisible,
         isFalse,
         reason:
             'BACK must not expose a full previous-front baseline; previous front '
-            'is only allowed through the moving-sheet recto slice.',
+            'is only allowed through the E/free-edge driven flat segment.',
       );
       expect(
         sample.foldXSamples,
@@ -1192,6 +1261,41 @@ void main() {
         greaterThan(1),
         reason: 'BACK fold X 必须随手势在 viewport space 内从左向右推进。',
       );
+      expect(
+        sample.latePoseCount,
+        greaterThan(0),
+        reason:
+            '图二对应的 late BACK pose 必须同时暴露 previous-front、'
+            'previous-back 与 current residual，不能塌成单条竖带。',
+      );
+      final minStableBackWidth = math.max(
+        8.0,
+        sample.latePoseSurfaceWidth * 0.02,
+      );
+      expect(
+        sample.latePoseBackWidth,
+        greaterThan(minStableBackWidth),
+        reason: 'late BACK previous-back band must not collapse into a strip.',
+      );
+      expect(
+        sample.latePoseBackWidth,
+        lessThan(sample.latePoseSurfaceWidth * 0.88),
+        reason:
+            'late BACK previous-back must stay an E/F fold band, not a full page.',
+      );
+      expect(
+        sample.latePoseFrontWidth,
+        greaterThan(0),
+        reason: 'late BACK still needs the S-E previous-front flat segment.',
+      );
+      expect(
+        sample.latePoseCurrentWidth,
+        greaterThan(0),
+        reason: 'late BACK must keep current residual visible under the fold.',
+      );
+      expect(sample.latePoseBackVertexCount, greaterThanOrEqualTo(3));
+      expect(sample.latePoseFrontSheetId, equals(sample.latePoseBackSheetId));
+      expect(sample.latePoseFrontSheetId, equals('mainlineLeaf:2'));
     },
   );
 
@@ -1325,6 +1429,9 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
   final bottomLayerPageIndex = mainlineStates.last.backwardBottomLayerPageIndex;
   final flippingLayerPageIndex =
       mainlineStates.last.backwardFlippingLayerPageIndex;
+  final backPixelSurfaceStrategy =
+      mainlineStates.last.backwardBackPixelSurfaceStrategy;
+  final backSheetId = mainlineStates.last.backwardBackSheetId;
   final foldXSamples = mainlineStates
       .where((s) => s.backwardFoldX != null)
       .map((s) => s.backwardFoldX!)
@@ -1332,11 +1439,31 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
   final foldXAdvance = foldXSamples.isEmpty
       ? 0.0
       : foldXSamples.last - foldXSamples.first;
-
   await gesture.up();
   for (var i = 0; i < 3; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
+  final animationMainlineStates = debugStates
+      .where(
+        (s) =>
+            s.renderDirection == StPageFlipDirection.back &&
+            s.backwardCompositeMode == 'paperFoldBackwardMainline',
+      )
+      .toList(growable: false);
+  final latePoseStates = animationMainlineStates
+      .where(
+        (s) =>
+            (s.backwardRectoCoverage ?? 0) >= 0.68 &&
+            (s.backwardVersoWidth ?? 0) > 0.01 &&
+            s.backwardFrontPaintBounds != null &&
+            s.backwardBackPaintBounds != null &&
+            s.backwardCurrentResidualBounds != null &&
+            s.backwardSurfaceViewportRect != null,
+      )
+      .toList(growable: false);
+  final latePoseState = latePoseStates.isEmpty
+      ? animationMainlineStates.last
+      : latePoseStates.last;
 
   await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
   await tester.pump(const Duration(milliseconds: 16));
@@ -1345,9 +1472,21 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
     compositeMode: compositeMode,
     bottomLayerPageIndex: bottomLayerPageIndex,
     flippingLayerPageIndex: flippingLayerPageIndex,
+    backPixelSurfaceStrategy: backPixelSurfaceStrategy,
+    backSheetId: backSheetId,
     baselineKeyVisible: baselineKeyVisible,
     foldXSamples: foldXSamples,
     foldXAdvance: foldXAdvance,
+    latePoseCount: latePoseStates.length,
+    latePoseSurfaceWidth:
+        latePoseState.backwardSurfaceViewportRect?.width ?? 0.0,
+    latePoseBackWidth: latePoseState.backwardBackPaintBounds?.width ?? 0.0,
+    latePoseFrontWidth: latePoseState.backwardFrontPaintBounds?.width ?? 0.0,
+    latePoseCurrentWidth:
+        latePoseState.backwardCurrentResidualBounds?.width ?? 0.0,
+    latePoseBackVertexCount: latePoseState.backwardBackVertexCount ?? 0,
+    latePoseFrontSheetId: latePoseState.backwardFrontSheetId,
+    latePoseBackSheetId: latePoseState.backwardBackSheetId,
   );
 }
 
@@ -1613,17 +1752,37 @@ class _BackwardCompositeProbeSample {
     required this.compositeMode,
     required this.bottomLayerPageIndex,
     required this.flippingLayerPageIndex,
+    required this.backPixelSurfaceStrategy,
+    required this.backSheetId,
     required this.baselineKeyVisible,
     required this.foldXSamples,
     required this.foldXAdvance,
+    required this.latePoseCount,
+    required this.latePoseSurfaceWidth,
+    required this.latePoseBackWidth,
+    required this.latePoseFrontWidth,
+    required this.latePoseCurrentWidth,
+    required this.latePoseBackVertexCount,
+    required this.latePoseFrontSheetId,
+    required this.latePoseBackSheetId,
   });
 
   final String compositeMode;
   final int? bottomLayerPageIndex;
   final int? flippingLayerPageIndex;
+  final String? backPixelSurfaceStrategy;
+  final String? backSheetId;
   final bool baselineKeyVisible;
   final List<double> foldXSamples;
   final double foldXAdvance;
+  final int latePoseCount;
+  final double latePoseSurfaceWidth;
+  final double latePoseBackWidth;
+  final double latePoseFrontWidth;
+  final double latePoseCurrentWidth;
+  final int latePoseBackVertexCount;
+  final String? latePoseFrontSheetId;
+  final String? latePoseBackSheetId;
 }
 
 class _ScanlineProbeResult {

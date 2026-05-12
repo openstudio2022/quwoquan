@@ -363,7 +363,7 @@ def build_media_bundle(curated_paths: list[str]) -> dict[str, Any]:
     if image_count > 100:
         raise SystemExit(f"gamma curated image count exceeds 100: {image_count}")
     return {
-        "schemaVersion": "gamma-curated-media-bundle.v1",
+        "schemaVersion": "gamma-curated-media-bundle",
         "environment": "gamma",
         "selectionProfile": "gamma-curated-core-100",
         "maxImageObjectCount": 100,
