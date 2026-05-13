@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Run local-gamma T3 checks against the Docker mirror."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import os
@@ -84,7 +82,7 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def gamma_content_fixture_spec() -> Tuple[Path, list[str]]:
+def gamma_content_fixture_spec() -> Tuple[Path, List[str]]:
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     content_item = next(
         (item for item in manifest.get("seedRefs", []) if item.get("domain") == "content"),
