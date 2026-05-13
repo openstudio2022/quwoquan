@@ -45,6 +45,7 @@ const _apiContractEnv = String.fromEnvironment(
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _localGammaT3Scope = String.fromEnvironment('LOCAL_GAMMA_T3_SCOPE');
+const _currentUserId = 'fixture_user_current';
 
 // ─── Shared client & seeded data ───────────────────────────────────────────
 
@@ -97,11 +98,16 @@ Future<void> _deletePost(String postId) async {
   // 404 可接受（已被其他测试删除或自动清理）
 }
 
-Map<String, String> _authHeaders(String pageId) => {
-  ..._client.headers ?? {},
-  ...CloudRequestHeaders.forPage(pageId),
-  if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
-};
+Map<String, String> _authHeaders(String pageId) =>
+    CloudRequestHeaders.withOwnerSubAccountContext(
+      <String, String>{
+        ..._client.headers ?? {},
+        ...CloudRequestHeaders.forPage(pageId),
+        if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
+      },
+      ownerUserId: _currentUserId,
+      subAccountId: _currentUserId,
+    );
 
 bool get _isLocalGammaContentOnly =>
     _apiContractEnv == 'gamma' && _localGammaT3Scope == 'content';
