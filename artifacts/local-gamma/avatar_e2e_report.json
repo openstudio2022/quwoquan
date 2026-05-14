@@ -13,7 +13,7 @@
     "commandResult": {
       "command": [
         "/opt/homebrew/opt/python@3.13/bin/python3.13",
-        "/Users/zhaoyuxi/Projects/quwoquan/scripts/run_chat_avatar_e2e_probe.py",
+        "/Users/zhaoyuxi/Projects/quwoquan/agent_ops/avatar/run_chat_avatar_e2e_probe.py",
         "--env",
         "local-gamma",
         "--base-url",

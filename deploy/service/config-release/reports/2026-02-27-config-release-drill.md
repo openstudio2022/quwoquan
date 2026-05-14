@@ -33,7 +33,7 @@ make config-rollback SERVICE=content-service TO_CONFIG=v2026.02.28.0
 4. Integrated stage apply (rollout + gate + conditional rollback):
 
 ```bash
-scripts/config_release_apply_stage.sh \
+agent_ops/deploy/prod/config_release_apply_stage.sh \
   --service content-service \
   --step 25 \
   --from-image 1.7.2 --to-image 1.8.0 \

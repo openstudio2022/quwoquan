@@ -276,7 +276,7 @@ lib/ui/content/entry/               # 创作入口，归属 content 域
 | 错误处理必须 fallback | catch 异常 → 降级到 mock 或 UI 提示 |
 | 禁止在 UI 层直接操作 `Map<String, dynamic>` | 必须用 `PostBaseDto` 子类或 ViewModel 包装 |
 | 页面路由与 surface 标识必须来自 metadata codegen | 禁止在 UI / Router 中硬编码业务 path、route_id、surface_id |
-| **横向质量矩阵** | 新增/搬迁页面文件（见 `scripts/verify_page_matrix_scan_complete.py` 扫描基线）须更新 [`specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md`](specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md)，并勾选 [`specs/gates/page_horizontal_quality_pr_checklist.md`](specs/gates/page_horizontal_quality_pr_checklist.md)；`make verify-app-page-horizontal-quality` 与 `make gate` 含对应 `verify_page_*` 脚本（详见 [.cursor/rules/09-page-horizontal-quality.mdc](09-page-horizontal-quality.mdc)） |
+| **横向质量矩阵** | 新增/搬迁页面文件（见 `quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py` 扫描基线）须更新 [`specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md`](specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md)，并勾选 [`specs/gates/page_horizontal_quality_pr_checklist.md`](specs/gates/page_horizontal_quality_pr_checklist.md)；`make verify-app-page-horizontal-quality` 与 `make gate` 含对应 `verify_page_*` 脚本（详见 [.cursor/rules/09-page-horizontal-quality.mdc](09-page-horizontal-quality.mdc)） |
 
 ### 2.5 新增 Repository 端云对齐检查清单
 
@@ -395,3 +395,28 @@ environments:
 - 进程名使用 `*-service` 或 `quwoquan_service`
 
 **扩展入口**：`/qwq-extend <scenario>`，详见 `specs/runtime_extension_catalog.md`。
+
+---
+
+## 5. 脚本目录约束
+
+### 5.1 禁止根目录 `scripts/` 平铺
+
+仓库根目录 **不再保留** `scripts/` 目录。所有脚本必须归入对应的领域项目：
+
+| 脚本归属 | 目录 | 示例 |
+|---|---|---|
+| App 端客户端 | `quwoquan_app/scripts/<domain>/` | `quwoquan_app/scripts/runtime/`、`quwoquan_app/scripts/content/` |
+| 云侧服务 | `quwoquan_service/scripts/<domain>/` | `quwoquan_service/scripts/deploy/`、`quwoquan_service/scripts/runtime/observability/` |
+| 数据工程 | `quwoquan_data/scripts/<domain>/` | `quwoquan_data/scripts/verify/`、`quwoquan_data/scripts/e2e/` |
+| 通用运维/CI/部署 | `agent_ops/<domain>/` | `agent_ops/gate/`、`agent_ops/ci/`、`agent_ops/deploy/` |
+
+**禁止行为**：
+- 禁止在仓库根目录创建 `scripts/` 目录
+- 禁止在 `agent_ops/` 下新增 `scripts/` 子目录（`agent_ops` 本身即脚本顶层）
+- 新增脚本必须归入上表对应领域子目录；不确定归属时先在 PR 中说明
+
+### 5.2 门禁
+
+- `agent_ops/scaffold/verify_engineering_directory.sh` 通过 `engineering_directory_manifest.yaml` 校验必要目录，`scripts` 已从 `required_directories` 中移除、替换为 `agent_ops`。
+- 如需添加仓库级脚本结构检查，在 `agent_ops/gate/gate_repo.sh` 中增加 `[ ! -d scripts ] || { echo "FAIL: scripts/ 禁止平铺"; exit 1; }` 等价校验。

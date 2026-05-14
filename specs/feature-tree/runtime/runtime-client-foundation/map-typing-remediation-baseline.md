@@ -1,6 +1,6 @@
 # Map / 弱类型数据整改 — 基线快照
 
-_Generated: 2026-04-04 14:46 UTC_ (`scripts/report_map_typing_baseline.py`)
+_Generated: 2026-04-04 14:46 UTC_ (`quwoquan_app/scripts/runtime/report_map_typing_baseline.py`)
 
 ## 1. 口径
 
@@ -96,7 +96,7 @@ _Generated: 2026-04-04 14:46 UTC_ (`scripts/report_map_typing_baseline.py`)
 命令:
 
 ```bash
-python3 scripts/verify_page_abc_governance.py --enforce-c
+python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-c
 # 或
 make verify-app-page-abc-governance
 ```

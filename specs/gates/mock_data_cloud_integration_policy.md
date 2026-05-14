@@ -101,7 +101,7 @@
 | **R1** | **默认数据源为云侧**：进程启动后有效模式为 **Remote**（未显式覆盖时）；与 `APP_DATA_SOURCE`、Release 默认策略一致。 | 集成/手测 + 代码审阅 `AppDataSourceModeNotifier` |
 | **R2** | **无「切 Mock」用户入口**：任意面向用户的界面（含「开发者」类设置）**不得**在 Release 下提供 Mock/Remote 切换或等价开关。 | 代码审阅 `kReleaseMode` / flavor；UI 测试可选 |
 | **R3** | **无测试目录进包**：`test/` **不**作为应用入口依赖；发布产物不单独打包测试源码（Flutter 默认即如此）。 | 构建产物检查 |
-| **R4** | **业务壳层不直连 mock 目录**：`lib/ui`、`lib/app`、`lib/core` **不得** `import .../cloud/services/*/mock/`；不得内嵌门禁规则所禁的域名 `prototype*` 行。 | `python3 scripts/verify_ui_mock_isolation.py` |
+| **R4** | **业务壳层不直连 mock 目录**：`lib/ui`、`lib/app`、`lib/core` **不得** `import .../cloud/services/*/mock/`；不得内嵌门禁规则所禁的域名 `prototype*` 行。 | `python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py` |
 | **R5** | **正式构建显式 remote**：CI 上生成上架/交付用二进制时 **必须** 传入 `--dart-define=APP_DATA_SOURCE=remote`（或与策略等价的 flavor/入口约定）。 | CI 配置审阅 |
 | **R6** | **伪 Remote 不得充当线上路径**：`Remote*Repository` 不得将生产路径 **整表委托** Mock 内存数据（P2 退出标准）。 | 代码审阅 + 契约测试 |
 
@@ -134,16 +134,16 @@
 
 ```bash
 # 横向看护（UI/App/Core 不得直连 cloud …/mock/）
-python3 scripts/verify_ui_mock_isolation.py
+python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
 
 # lib 内测试专用符号（createForTest 等，见 lib_test_only_symbols_allowlist.yaml）
-python3 scripts/verify_lib_no_test_only_symbols.py
+python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py
 
 # UI 层 AppDataSourceMode.mock / appDataSourceModeProvider 引用棘轮（只降不升，见 ui_app_data_source_mode_baseline.json）
-python3 scripts/verify_ui_app_data_source_mode_ratchet.py
+python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py
 
 # 与仓库 app gate 一致（含 flutter analyze、上述脚本、flutter test 等）
-bash scripts/gate_repo.sh --scope app
+bash agent_ops/gate/gate_repo.sh --scope app
 ```
 
 **Makefile 等价目标（节选）：** `make verify-app-mock-isolation`、`make verify-app-lib-test-only-symbols`、`make verify-app-ui-app-data-source-mode-ratchet`。
@@ -164,9 +164,9 @@ flutter build ipa --dart-define=APP_DATA_SOURCE=remote
 | 产物 | 说明 |
 |------|------|
 | [`ui_mock_isolation_allowlist.yaml`](./ui_mock_isolation_allowlist.yaml) | 过渡期豁免；**清理后须删行** |
-| [`scripts/verify_ui_mock_isolation.py`](../../scripts/verify_ui_mock_isolation.py) | 门禁实现 |
-| [`scripts/verify_ui_app_data_source_mode_ratchet.py`](../../scripts/verify_ui_app_data_source_mode_ratchet.py) | UI 数据源分支棘轮（[`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)） |
-| [`scripts/verify_lib_no_test_only_symbols.py`](../../scripts/verify_lib_no_test_only_symbols.py) | lib 内测试专用符号 |
+| [`quwoquan_app/scripts/env/verify_ui_mock_isolation.py`](../../quwoquan_app/scripts/env/verify_ui_mock_isolation.py) | 门禁实现 |
+| [`quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py`](../../quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py) | UI 数据源分支棘轮（[`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)） |
+| [`quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py`](../../quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py) | lib 内测试专用符号 |
 | [`.cursor/rules/08-mock-data-isolation.mdc`](../../.cursor/rules/08-mock-data-isolation.mdc) | Agent / 人工规则 |
 | [`page_horizontal_quality_pr_checklist.md`](./page_horizontal_quality_pr_checklist.md) | PR 勾选 **Mock 隔离** |
 | [`CR-20260329-007-mock-data-isolation-gate.yaml`](../changelog/CR-20260329-007-mock-data-isolation-gate.yaml) | 变更登记 |

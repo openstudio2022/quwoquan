@@ -3,6 +3,13 @@ name: 09. Gamma Full Validation
 on:
   workflow_dispatch:
     inputs:
+      validation_profile:
+        description: '验证 profile：nightly_full（默认）或 release_candidate'
+        type: choice
+        default: nightly_full
+        options:
+          - nightly_full
+          - release_candidate
       run_self_hosted_matrix:
         description: 是否执行 gamma self-hosted assistant/chat-avatar 设备矩阵
         type: boolean
@@ -12,7 +19,8 @@ on:
         type: boolean
         default: true
   schedule:
-    - cron: "0 18 * * *"
+    # 每晚 22:00 UTC+8 = 14:00 UTC
+    - cron: "0 14 * * *"
 
 concurrency:
   group: gamma-full-validation-${{ github.ref }}
@@ -86,8 +94,10 @@ jobs:
     if: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_self_hosted_matrix) && vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
+      validation_profile: nightly_full
       env_json: '["gamma"]'
       gamma_base_url: ${{ needs.gamma_hosted_full_validation.outputs.base_url }}
+      matrix_kind: assistant
     secrets: inherit
 
   gamma_chat_avatar_device_matrix:
@@ -96,6 +106,7 @@ jobs:
     if: ${{ (github.event_name != 'workflow_dispatch' || inputs.run_self_hosted_matrix) && vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
+      validation_profile: nightly_full
       env_json: '["gamma"]'
       gamma_base_url: ${{ needs.gamma_hosted_full_validation.outputs.base_url }}
       media_base_url: ${{ needs.gamma_hosted_full_validation.outputs.media_base_url }}
@@ -126,7 +137,7 @@ jobs:
           if [ "${ASSISTANT_SECONDS:-0}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${ASSISTANT_SECONDS:-0}"; fi
           if [ "${CHAT_SECONDS:-0}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${CHAT_SECONDS:-0}"; fi
           CRITICAL_PATH_SECONDS=$(( ${DEPLOY_SECONDS:-0} + ${READY_SECONDS:-0} + FANOUT_SECONDS + ${UI_PROFILE_SECONDS:-0} ))
-          python3 scripts/render_ci_timing_summary.py \
+          python3 agent_ops/ci/render_ci_timing_summary.py \
             --gate-key 09.gamma_full_validation \
             --title "09. Gamma Full Validation" \
             --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \

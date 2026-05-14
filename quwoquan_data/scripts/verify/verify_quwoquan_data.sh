@@ -1,0 +1,319 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+cd "$ROOT"
+DOC_ROOT="$ROOT/specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity"
+SEMANTIC_SAMPLE_SOURCE="$DOC_ROOT/samples/sichuan_geo_content_e2e_catalog.ndjson"
+
+echo "[verify] quwoquan_data"
+
+python3 quwoquan_service/scripts/recommendation/verify_repo_schema_versions.py --prefix quwoquan_data/
+
+TMP_ROOT="$(mktemp -d)"
+trap 'rm -rf "$TMP_ROOT"' EXIT
+
+RUNTIME_ROOT="$TMP_ROOT/runtime"
+export QWQ_DATA_ROOT="$ROOT/quwoquan_data"
+export QWQ_RUNTIME_ROOT="$RUNTIME_ROOT"
+
+retry_cmd() {
+  local attempts=0
+  until "$@"; do
+    attempts=$((attempts + 1))
+    if [[ "$attempts" -ge 3 ]]; then
+      return 1
+    fi
+    sleep "$attempts"
+  done
+}
+
+python3 - <<'PY'
+from pathlib import Path
+import shutil
+import os
+
+fixture_root = Path(os.environ["QWQ_DATA_ROOT"]) / "tests" / "fixtures" / "runtime_seed"
+runtime_root = Path(os.environ["QWQ_RUNTIME_ROOT"])
+for child in ("trees",):
+    source = fixture_root / child
+    target = runtime_root / child
+    if source.exists():
+        shutil.copytree(source, target, dirs_exist_ok=True)
+for child in ("runs", "publish", "out", "downloads"):
+    (runtime_root / child).mkdir(parents=True, exist_ok=True)
+PY
+
+SEMANTIC_CATALOG="$RUNTIME_ROOT/seed/sichuan_geo_content_e2e_catalog.ndjson"
+SEMANTIC_REPORT="$RUNTIME_ROOT/seed/sichuan_geo_content_e2e_catalog.slice_report.json"
+mkdir -p "$(dirname "$SEMANTIC_CATALOG")" "$(dirname "$SEMANTIC_REPORT")"
+cp "$SEMANTIC_SAMPLE_SOURCE" "$SEMANTIC_CATALOG"
+
+SEMANTIC_CATALOG="$SEMANTIC_CATALOG" SEMANTIC_REPORT="$SEMANTIC_REPORT" python3 - <<'PY'
+from pathlib import Path
+import json
+import os
+
+catalog_path = Path(os.environ["SEMANTIC_CATALOG"])
+report_path = Path(os.environ["SEMANTIC_REPORT"])
+rows = [json.loads(line) for line in catalog_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+report = {
+    "schemaVersion": "quwoquan_data.geo_catalog_slice_report",
+    "generatedAt": "fixture-seeded",
+    "configPath": "specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/samples/sichuan_geo_content_e2e_catalog.ndjson",
+    "outputPath": str(catalog_path),
+    "scopeName": "四川语义烟测样例",
+    "rawCount": len(rows),
+    "keptCount": len(rows),
+    "nameDedupedCount": 0,
+    "slices": [
+        {
+            "sliceName": "四川语义烟测样例",
+            "rawCount": len(rows),
+            "areaProbeCount": -1,
+            "rejectCounts": {},
+            "keptPreDedupe": len(rows),
+        }
+    ],
+}
+report_path.parent.mkdir(parents=True, exist_ok=True)
+report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+
+python3 quwoquan_data/tools/cli.py data build-entities-tags --catalog "$SEMANTIC_CATALOG"
+python3 quwoquan_data/scripts/verify/verify_geo_catalog_quality.py --catalog "$SEMANTIC_CATALOG" --report "$SEMANTIC_REPORT"
+python3 quwoquan_data/scripts/verify/verify_catalog_entity_consistency.py --catalog "$SEMANTIC_CATALOG"
+
+VERIFY_BATCH="verify_semantic_materialize_001"
+VERIFY_BATCH="$VERIFY_BATCH" RUNTIME_ROOT="$RUNTIME_ROOT" python3 - <<'PY'
+from pathlib import Path
+import json
+import os
+
+runtime_root = Path(os.environ["RUNTIME_ROOT"])
+batch = os.environ["VERIFY_BATCH"]
+extract_dir = runtime_root / "runs" / batch / "normalization" / "results" / "extract"
+review_dir = runtime_root / "runs" / batch / "normalization" / "results" / "review"
+authority_dir = runtime_root / "runs" / batch / "normalization" / "results" / "authority"
+for directory in (extract_dir, review_dir, authority_dir):
+    directory.mkdir(parents=True, exist_ok=True)
+
+source_ref = "local__verify__panda__001"
+(extract_dir / f"{source_ref}.json").write_text(
+    json.dumps(
+        {
+            "schemaVersion": "quwoquan_data.normalization.source_extraction_result",
+            "sourceRef": source_ref,
+            "batchLabel": batch,
+            "catalogTopicId": "poi_panda_base",
+            "sourceUrl": "https://example.com/panda-villa",
+            "sourceTitle": "基地里的大熊猫2号别墅",
+            "sourceMarkdownPath": "/tmp/panda.md",
+            "language": "zh",
+            "mainEntityCandidates": [
+                {
+                    "nameOriginal": "成都大熊猫繁育研究基地",
+                    "nameCanonicalZhHansCandidate": "成都大熊猫繁育研究基地",
+                    "entityTypeCandidate": "leisure_attraction",
+                    "confidence": 0.95,
+                }
+            ],
+            "memberCandidates": [
+                {
+                    "nameOriginal": "大熊猫2号别墅",
+                    "nameCanonicalZhHansCandidate": "大熊猫2号别墅",
+                    "belongsToMainCandidate": "成都大熊猫繁育研究基地",
+                    "memberRole": "别墅",
+                    "ordinal": "2",
+                    "confidence": 0.91,
+                }
+            ],
+            "aliasCandidates": [],
+            "imageDecisions": [],
+            "uncertainItems": [],
+            "extractionStatus": "ready_for_review",
+        },
+        ensure_ascii=False,
+    ),
+    encoding="utf-8",
+)
+(review_dir / f"{source_ref}.json").write_text(
+    json.dumps(
+        {
+            "schemaVersion": "quwoquan_data.normalization.source_review_result",
+            "sourceRef": source_ref,
+            "batchLabel": batch,
+            "sourceUrl": "https://example.com/panda-villa",
+            "sourceTitle": "基地里的大熊猫2号别墅",
+            "reviewedAt": "2026-05-12T02:20:00Z",
+            "acceptedMainEntities": [
+                {"candidateRef": "main_panda", "canonicalZhHans": "成都大熊猫繁育研究基地", "entityType": "leisure_attraction"}
+            ],
+            "acceptedMembers": [
+                {
+                    "candidateRef": "member_panda_002",
+                    "nameCanonicalZhHans": "大熊猫2号别墅",
+                    "belongsToMainCandidate": "成都大熊猫繁育研究基地",
+                    "memberRole": "别墅",
+                    "ordinal": "2",
+                    "evidenceRefs": ["body"],
+                }
+            ],
+            "acceptedAliases": [],
+            "selectedContentAssets": [],
+            "rejectedAssets": [],
+            "rejectedItems": [],
+            "conflictFlags": {
+                "parallelNotSubordinate": False,
+                "genericNameWithoutProof": False,
+                "articleOnlyListsStops": False,
+                "cannotInferParentFromText": False,
+            },
+            "needsAuthorityBackcheck": False,
+            "reviewSummary": "明确为基地主实体下成员。",
+        },
+        ensure_ascii=False,
+    ),
+    encoding="utf-8",
+)
+(authority_dir / f"{source_ref}.json").write_text(
+    json.dumps(
+        {
+            "schemaVersion": "quwoquan_data.normalization.authority_backcheck_result",
+            "sourceRef": source_ref,
+            "batchLabel": batch,
+            "sourceUrl": "https://example.com/panda-villa",
+            "sourceTitle": "基地里的大熊猫2号别墅",
+            "checkedEntities": [
+                {
+                    "candidateRef": "main_panda",
+                    "authorityMatched": True,
+                    "authoritySourceType": "baidu_baike",
+                    "authorityUrl": "https://baike.baidu.com/item/%E6%88%90%E9%83%BD%E5%A4%A7%E7%86%8A%E7%8C%AB%E7%B9%81%E8%82%B2%E7%A0%94%E7%A9%B6%E5%9F%BA%E5%9C%B0",
+                    "confirmedCanonicalZhHans": "成都大熊猫繁育研究基地",
+                    "confirmedAliases": [],
+                    "membershipConfirmed": [
+                        {"candidateRef": "member_panda_002", "nameCanonicalZhHans": "大熊猫2号别墅"}
+                    ],
+                    "membershipRejected": [],
+                    "authoritySummary": "基地权威页确认其内部设施。",
+                }
+            ],
+            "downgradedItems": [],
+            "authorityBackcheckStatus": "verified",
+        },
+        ensure_ascii=False,
+    ),
+    encoding="utf-8",
+)
+PY
+
+python3 quwoquan_data/tools/cli.py data build-entities-tags --phase compile --batch-label "$VERIFY_BATCH"
+python3 quwoquan_data/tools/cli.py data build-entities-tags --phase materialize \
+  --batch-label "$VERIFY_BATCH" \
+  --catalog "$SEMANTIC_CATALOG" \
+  --output-name "normalized_entities.ndjson"
+
+RUNTIME_ROOT="$RUNTIME_ROOT" python3 - <<'PY'
+from pathlib import Path
+import json
+import os
+
+path = Path(os.environ["RUNTIME_ROOT"]) / "seed" / "entity_catalog" / "normalized_entities.ndjson"
+rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+targets = [row for row in rows if row.get("canonicalName") == "成都大熊猫繁育研究基地"]
+if len(targets) != 1:
+    raise SystemExit("normalized_entities 缺少成都大熊猫繁育研究基地")
+members = {item.get("nameCanonicalZhHans") for item in targets[0].get("extensions", {}).get("members", [])}
+if "大熊猫2号别墅" not in members:
+    raise SystemExit("normalized_entities 未物化大熊猫2号别墅 member")
+PY
+
+SPEC="$RUNTIME_ROOT/specs/real_public_examples_001.yaml"
+mkdir -p "$(dirname "$SPEC")"
+cat > "$SPEC" <<'EOF'
+spec_id: real_public_examples_001
+query: 杭州西湖 真实公开来源 样例
+search_provider: native_fetch
+entity_refs:
+  - trees/entities/地点/西湖.yaml
+  - trees/entities/住宿/西湖亲子友好酒店.yaml
+  - trees/entities/本地生活/龙井路咖啡.yaml
+tag_refs:
+  - trees/tags/主题/城市漫游.yaml
+  - trees/tags/场景/周末一日.yaml
+  - trees/tags/人群/亲子.yaml
+  - trees/tags/质量/高置信.yaml
+  - trees/tags/主题/湖景.yaml
+target_envs:
+  - alpha
+  - gamma
+creator_refs:
+  article:
+    - fixture_user_travel
+  image:
+    - fixture_user_photo
+publish_policy:
+  visibility: public
+  assistant_use_policy: inherit
+discovery_policy:
+  min_article_topics: 5
+  min_image_topics: 1
+  min_candidate_sources_per_task: 1
+  min_article_publish_topics: 5
+  min_image_publish_topics: 0
+article_lane:
+  allow_domains:
+    - zh.wikivoyage.org
+    - zh.wikipedia.org
+    - commons.wikimedia.org
+    - upload.wikimedia.org
+image_lane:
+  allow_domains:
+    - commons.wikimedia.org
+    - upload.wikimedia.org
+sample_topics:
+  article:
+    - real_west_lake_article_001
+    - real_west_lake_article_002
+    - real_west_lake_article_003
+    - real_west_lake_article_004
+    - real_west_lake_article_005
+  image:
+    - real_west_lake_image_001
+EOF
+
+python3 quwoquan_data/tools/cli.py tree validate --tree all
+python3 quwoquan_data/tools/cli.py crawl spec-discovery --spec "$SPEC"
+python3 quwoquan_data/tools/cli.py crawl status --spec "$SPEC"
+
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_001 --task-type article --source-id real_west_lake_article_001_source_001 --url "https://zh.wikivoyage.org/wiki/%E6%9D%AD%E5%B7%9E" --title "第一次逛杭州，先把西湖这条线走顺" --query "杭州 西湖 旅行指南 步行" --snippet "中文 Wikivoyage 杭州词条把西湖、湖滨和步行节奏写成了旅行指南，适合重组为第一次来杭州的西湖长文。" --rights-status clear --watermark-status clean
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_002 --task-type article --source-id real_west_lake_article_002_source_001 --url "https://zh.wikivoyage.org/wiki/%E6%9D%AD%E5%B7%9E" --title "想把雷峰塔和南线湖景留给一下午" --query "杭州 西湖 雷峰塔 南线 散步" --snippet "杭州词条里的西湖南线、湖滨和步行节奏，适合与雷峰塔页面拼成一篇南线长文。" --rights-status clear --watermark-status clean
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_002 --task-type article --source-id real_west_lake_article_002_source_002 --url "https://zh.wikipedia.org/wiki/%E9%9B%B7%E5%B3%B0%E5%A1%94" --title "雷峰塔与南线塔景" --query "雷峰塔 西湖 南线" --snippet "雷峰塔词条补足塔影、旧塔新塔和南线回望湖面的线索，适合和杭州旅行页一起重组。" --rights-status clear --watermark-status clean
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_003 --task-type article --source-id real_west_lake_article_003_source_001 --url "https://zh.wikivoyage.org/wiki/%E6%9D%AD%E5%B7%9E" --title "第一次来西湖，不必一次追完十景" --query "西湖十景 初次游览 路线" --snippet "杭州旅行页里的西湖和湖滨节奏，适合与十景词条一起整理成第一次来西湖的取舍建议。" --rights-status clear --watermark-status clean
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_003 --task-type article --source-id real_west_lake_article_003_source_002 --url "https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%B9%96%E5%8D%81%E6%99%AF" --title "西湖十景与经典看景顺序" --query "西湖十景 经典看景" --snippet "西湖十景词条把最经典的画面线索和名字梳理得很集中，适合支撑一篇第一次来西湖的长文。" --rights-status clear --watermark-status clean
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_004 --task-type article --source-id real_west_lake_article_004_source_001 --url "https://zh.wikivoyage.org/wiki/%E6%9D%AD%E5%B7%9E" --title "想把苏堤走舒服，就把脚步放慢" --query "苏堤 西湖 散步 杭州" --snippet "杭州旅行页适合作为苏堤步行文章的路线底稿，再用苏堤词条补足长堤与湖面的信息。" --rights-status clear --watermark-status clean
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_004 --task-type article --source-id real_west_lake_article_004_source_002 --url "https://zh.wikipedia.org/wiki/%E8%8B%8F%E5%A0%A4" --title "苏堤与湖面步行线" --query "苏堤 西湖 步行线" --snippet "苏堤词条补足长堤、南北贯通和沿线看湖的线索，适合和杭州词条一起重组。" --rights-status clear --watermark-status clean
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_005 --task-type article --source-id real_west_lake_article_005_source_001 --url "https://zh.wikivoyage.org/wiki/%E6%9D%AD%E5%B7%9E" --title "清晨沿着白堤走，西湖会更耐看" --query "白堤 西湖 清晨 散步" --snippet "杭州旅行页里的西湖步行节奏，适合和白堤页面拼成一篇更轻更慢的清晨散步稿。" --rights-status clear --watermark-status clean
+retry_cmd python3 quwoquan_data/tools/cli.py crawl fetch-source --spec "$SPEC" --topic real_west_lake_article_005 --task-type article --source-id real_west_lake_article_005_source_002 --url "https://zh.wikipedia.org/wiki/%E7%99%BD%E5%A0%A4" --title "白堤与断桥一侧的湖面" --query "白堤 断桥 西湖" --snippet "白堤词条更适合补足清晨沿湖、堤岸步行和断桥一侧的看景方式。" --rights-status clear --watermark-status clean
+python3 quwoquan_data/tools/cli.py crawl content-review --spec "$SPEC"
+
+python3 quwoquan_data/tools/cli.py crawl compose-topic --spec "$SPEC" --topic real_west_lake_article_001 --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl compose-topic --spec "$SPEC" --topic real_west_lake_article_002 --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl compose-topic --spec "$SPEC" --topic real_west_lake_article_003 --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl compose-topic --spec "$SPEC" --topic real_west_lake_article_004 --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl compose-topic --spec "$SPEC" --topic real_west_lake_article_005 --targets alpha,gamma --dry-run
+python3 quwoquan_data/tools/cli.py crawl audit-topic --spec "$SPEC" --topic real_west_lake_article_001
+python3 quwoquan_data/tools/cli.py crawl audit-topic --spec "$SPEC" --topic real_west_lake_article_002
+python3 quwoquan_data/tools/cli.py crawl audit-topic --spec "$SPEC" --topic real_west_lake_article_003
+python3 quwoquan_data/tools/cli.py crawl audit-topic --spec "$SPEC" --topic real_west_lake_article_004
+python3 quwoquan_data/tools/cli.py crawl audit-topic --spec "$SPEC" --topic real_west_lake_article_005
+python3 quwoquan_data/tools/cli.py crawl status --spec "$SPEC"
+
+python3 quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py
+python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py
+python3 quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py
+python3 -m unittest discover -s quwoquan_data/tests
+(cd quwoquan_app && flutter test test/ui/content/markdown/qwq_markdown_generated_package_test.dart)
+
+echo "[verify] OK: quwoquan_data"

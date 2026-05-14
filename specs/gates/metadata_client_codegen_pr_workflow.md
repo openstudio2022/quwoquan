@@ -13,7 +13,7 @@
    （等价：`cd quwoquan_service && go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service`）。
 4. **再改手写代码**：Repository 实现、UI、测试等；接口签名优先使用 codegen DTO 或在 metadata `client_projection` 中登记的读模型。
 
-根目录 `bash scripts/verify_contract_metadata.sh` 会在通过目录/YAML 结构校验后，**在已安装 Go 时自动执行** `verify-metadata`，与上述第 2 步对齐。
+根目录 `bash quwoquan_service/scripts/contract/verify_contract_metadata.sh` 会在通过目录/YAML 结构校验后，**在已安装 Go 时自动执行** `verify-metadata`，与上述第 2 步对齐。
 
 ## 2. 不要做的事
 

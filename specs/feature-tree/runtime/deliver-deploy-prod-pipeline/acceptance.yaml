@@ -55,7 +55,7 @@ level_acceptance:
     tests:
     - file: .github/workflows/pre-release-gate.yml
     - file: .github/workflows/app-env-device-matrix-self-hosted.yml
-    - file: scripts/verify_device_matrix_evidence.py
+    - file: agent_ops/avatar/verify_device_matrix_evidence.py
   A4:
     criteria: "gamma 核心旅程通过 `deploy/shared/gamma_validation_suites.json` 统一管理，并预留后续业务对象扩展入口"
     status: implemented
@@ -71,9 +71,9 @@ level_acceptance:
     - V5
     tests:
     - file: deploy/shared/gamma_validation_suites.json
-    - file: scripts/run_assistant_device_matrix.py
-    - file: scripts/run_chat_avatar_device_matrix.py
-    - file: scripts/run_gamma_patrol_matrix_ci.py
+    - file: agent_ops/assistant/run_assistant_device_matrix.py
+    - file: agent_ops/avatar/run_chat_avatar_device_matrix.py
+    - file: agent_ops/deploy/gamma/run_gamma_patrol_matrix_ci.py
   A5:
     criteria: 灰度步进 5→25→50→100 可执行
     status: implemented

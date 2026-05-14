@@ -52,8 +52,10 @@
 ### R2：冻结目录层、实体层、标签层、图文层的边界
 
 - `catalog.ndjson` 是**地理目录候选层**，不是实体类型；候选层允许保留成员点、别名候选、并列实体候选与待审点。
-- 每条 `catalog` 候选必须先获得语义归宿：`standalone` / `member` / `alias` / `parallel_entity` / `reject` / `pending_review`。
-- `entity_catalog` 是规范化实体层，承载 `entityId`、canonical name、类型、权威锚点；仅 `standalone` 与显式 `parallel_entity` 可作为 publishable 顶层实体。
+- 目录/脚本层只允许做**编程助手输入卫生**与结构化准备，例如坏页面、纯符号名、明显噪声对象剔除；不得把目录规则当作页面语义抽取主线。
+- 每条页面来源中的 `main_entity / members / aliases` 提取与归并判断，统一由 **编程助手执行阶段任务后落盘的 normalization 结果**负责。
+- `catalog` 候选在进入最终 publishable 实体层前，必须经由编程助手执行的 extraction → review → authority/escalate → compile/materialize 主线获得语义归宿：`standalone` / `member` / `alias` / `parallel_entity` / `reject` / `pending_review`。
+- `entity_catalog` 是规范化实体层，承载 `entityId`、canonical name、类型、权威锚点；仅编程助手主线确认后的 `standalone` 与显式 `parallel_entity` 可作为 publishable 顶层实体。
 - `tag_catalog` 是共享分类维度，不能代替实体级 `label_zh`。
 - `source_pool / publish` 是图文与包层，必须与实体锚点同源可追溯。
 
@@ -72,7 +74,11 @@
 
 ### R5：建立实体–标签–图文三角一致性
 
-- `entity-catalog-build` 后，抽样 `topic_id` 必须能回链到 catalog。
+- `entity-catalog-build` 产生的是**seed entity / 候选实体层**，不是页面抽取后的最终 publishable topic 真相源。
+- `article_topic_catalog_ref` 仅作为下载 / hydrate / 发现阶段的 **seed topic catalog**。
+- `publishable_topic_catalog_ref` 才是 deep batch `process-content / publish` 可消费的最终 topic 真相源；不得再由 `topic_{entityId}` 之类 synthetic topic 回退生成。
+- publishable topic 必须来自 materialize 后的顶层实体，而不是“所有带旅行攻略 tag 的实体全集”。
+- 抽样 `topic_id` 必须能回链到 catalog 与最终 materialized entity。
 - `semantic_cluster_candidates.ndjson` / `semantic_cluster_pending.ndjson` 必须与 `catalog` 同源，能解释每条候选为何进入顶层实体、成员、并列实体、剔除或待审。
 - `tagRefs` 必须能解析到 `tag_catalog`。
 - 图文标题、snippet、正文锚点必须能命中 canonical name 或 `label_zh`。

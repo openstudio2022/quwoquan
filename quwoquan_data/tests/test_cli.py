@@ -3,6 +3,8 @@ from __future__ import annotations
 import http.client
 import json
 import os
+import socket
+import threading
 from pathlib import Path
 import shutil
 import struct
@@ -10,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest import mock
 import yaml
 import zlib
@@ -22,10 +26,10 @@ SOURCE_DATA_ROOT = REPO_ROOT / 'quwoquan_data'
 CLI_PATH = SOURCE_DATA_ROOT / 'tools' / 'cli.py'
 BUILD_SICHUAN_CATALOG_PATH = SOURCE_DATA_ROOT / 'tools' / 'geo' / 'build_sichuan_attractions_catalog.py'
 BUILD_GEO_CATALOG_PATH = SOURCE_DATA_ROOT / 'tools' / 'geo' / 'build_geo_poi_catalog.py'
-VERIFY_PACKAGES_PATH = REPO_ROOT / 'scripts' / 'verify_quwoquan_data_post_packages.py'
-VERIFY_AUTHENTICITY_PATH = REPO_ROOT / 'scripts' / 'verify_quwoquan_data_source_authenticity.py'
-VERIFY_GEO_CATALOG_QUALITY_PATH = REPO_ROOT / 'scripts' / 'verify_geo_catalog_quality.py'
-VERIFY_CATALOG_ENTITY_CONSISTENCY_PATH = REPO_ROOT / 'scripts' / 'verify_catalog_entity_consistency.py'
+VERIFY_PACKAGES_PATH = REPO_ROOT / 'quwoquan_data' / 'scripts' / 'verify' / 'verify_quwoquan_data_post_packages.py'
+VERIFY_AUTHENTICITY_PATH = REPO_ROOT / 'quwoquan_data' / 'scripts' / 'verify' / 'verify_quwoquan_data_source_authenticity.py'
+VERIFY_GEO_CATALOG_QUALITY_PATH = REPO_ROOT / 'quwoquan_data' / 'scripts' / 'verify' / 'verify_geo_catalog_quality.py'
+VERIFY_CATALOG_ENTITY_CONSISTENCY_PATH = REPO_ROOT / 'quwoquan_data' / 'scripts' / 'verify' / 'verify_catalog_entity_consistency.py'
 SPEC_RELATIVE_PATH = 'runtime/specs/west_lake_discovery_001.yaml'
 RUNTIME_SPEC_ID = 'west_lake_discovery_001'
 GEO_CONFIG_PATH = REPO_ROOT / 'specs' / 'feature-tree' / 'runtime' / 'runtime-data-engineering' / 'geo-content-trinity' / 'config' / 'geo_catalog_config.sichuan.yaml'
@@ -58,6 +62,128 @@ class QwqDataCliTest(unittest.TestCase):
         env['QWQ_RUNTIME_ROOT'] = str(self.runtime_root)
         env['QWQ_REPO_ROOT'] = str(REPO_ROOT)
         return env
+
+    @contextmanager
+    def fake_openai_server(self):
+        responses = {
+            'extract': {
+                'language': 'zh',
+                'mainEntityCandidates': [
+                    {
+                        'nameOriginal': '西湖',
+                        'nameCanonicalZhHansCandidate': '西湖',
+                        'entityTypeCandidate': 'scenic_spot',
+                        'confidence': 0.95,
+                        'evidenceSpans': ['block_0001'],
+                        'reasoningSummary': '正文围绕西湖展开。',
+                    }
+                ],
+                'memberCandidates': [],
+                'aliasCandidates': [],
+                'imageDecisions': [],
+                'uncertainItems': [],
+                'extractionStatus': 'ready_for_review',
+            },
+            'review': {
+                'acceptedMainEntities': [
+                    {
+                        'candidateRef': 'main_001',
+                        'canonicalZhHans': '西湖',
+                        'entityType': 'scenic_spot',
+                        'summary': '西湖主实体。',
+                        'evidenceRefs': ['block_0001'],
+                    }
+                ],
+                'acceptedMembers': [],
+                'acceptedAliases': [],
+                'selectedContentAssets': [],
+                'rejectedAssets': [],
+                'rejectedItems': [],
+                'conflictFlags': {
+                    'parallelNotSubordinate': False,
+                    'genericNameWithoutProof': False,
+                    'articleOnlyListsStops': False,
+                    'cannotInferParentFromText': False,
+                },
+                'needsAuthorityBackcheck': False,
+                'reviewSummary': '抽取结果可接受。',
+            },
+            'authority': {
+                'checkedEntities': [
+                    {
+                        'candidateRef': 'main_001',
+                        'authorityMatched': True,
+                        'authoritySourceType': 'wikipedia_zh',
+                        'authorityUrl': 'https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%B9%96',
+                        'confirmedCanonicalZhHans': '西湖',
+                        'confirmedAliases': ['杭州西湖'],
+                        'membershipConfirmed': [],
+                        'membershipRejected': [],
+                        'authoritySummary': '权威来源确认西湖主名。',
+                    }
+                ],
+                'downgradedItems': [],
+                'authorityBackcheckStatus': 'verified',
+            },
+            'escalate': {
+                'resolvedMainEntities': [
+                    {
+                        'canonicalZhHans': '西湖',
+                        'entityType': 'scenic_spot',
+                        'summary': '升级确认西湖为主实体。',
+                    }
+                ],
+                'resolvedMembers': [],
+                'resolvedAliases': ['杭州西湖'],
+                'selectedContentAssets': [],
+                'rejectedAssets': [],
+                'additionalEvidenceUrls': [],
+                'escalationStatus': 'resolved',
+                'escalationSummary': '无需进一步补证。',
+            },
+        }
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):  # noqa: N802
+                length = int(self.headers.get('Content-Length', '0') or '0')
+                body = self.rfile.read(length).decode('utf-8', 'replace')
+                request = json.loads(body)
+                joined = '\n'.join(str(msg.get('content') or '') for msg in request.get('messages') or [])
+                stage = next((name for name in responses if f'Normalization stage: {name}' in joined), '')
+                payload = {
+                    'id': f'cmpl-{stage or "unknown"}',
+                    'object': 'chat.completion',
+                    'choices': [
+                        {
+                            'index': 0,
+                            'message': {'role': 'assistant', 'content': json.dumps(responses[stage], ensure_ascii=False)},
+                            'finish_reason': 'stop',
+                        }
+                    ],
+                    'usage': {'prompt_tokens': 100, 'completion_tokens': 50, 'total_tokens': 150},
+                }
+                encoded = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(encoded)))
+                self.end_headers()
+                self.wfile.write(encoded)
+
+            def log_message(self, format, *args):  # noqa: A003
+                return
+
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0))
+            port = sock.getsockname()[1]
+        server = HTTPServer(('127.0.0.1', port), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield f'http://127.0.0.1:{port}'
+        finally:
+            server.shutdown()
+            thread.join(timeout=5)
+            server.server_close()
 
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -131,6 +257,110 @@ class QwqDataCliTest(unittest.TestCase):
             yaml.safe_dump(payload, allow_unicode=True, sort_keys=False),
             encoding='utf-8',
         )
+
+    def write_extract_result_for_input(self, input_path: Path) -> Path:
+        input_path = input_path.resolve()
+        input_payload = self.read_json(input_path)
+        source_ref = str(input_payload['sourceRef'])
+        result_path = input_path.parents[2] / 'results' / 'extract' / f'{source_ref}.json'
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result_payload = {
+            'schemaVersion': 'quwoquan_data.normalization.source_extraction_result',
+            'sourceRef': source_ref,
+            'batchLabel': str(input_payload['batchLabel']),
+            'catalogTopicId': str(input_payload.get('catalogTopicId') or ''),
+            'sourceUrl': str(input_payload['sourceUrl']),
+            'sourceTitle': str(input_payload['sourceTitle']),
+            'sourceMarkdownPath': str(input_payload['sourceMarkdownPath']),
+            'language': 'zh',
+            'mainEntityCandidates': [
+                {
+                    'nameOriginal': '西湖',
+                    'nameCanonicalZhHansCandidate': '西湖',
+                    'entityTypeCandidate': 'scenic_spot',
+                    'confidence': 0.95,
+                    'evidenceSpans': ['block_0001'],
+                    'reasoningSummary': '正文围绕西湖展开。',
+                }
+            ],
+            'memberCandidates': [],
+            'aliasCandidates': [],
+            'imageDecisions': [],
+            'uncertainItems': [],
+            'extractionStatus': 'ready_for_review',
+        }
+        result_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding='utf-8')
+        return result_path
+
+    def write_review_result_for_input(self, input_path: Path) -> Path:
+        input_path = input_path.resolve()
+        input_payload = self.read_json(input_path)
+        source_ref = str(input_payload['sourceRef'])
+        result_path = input_path.parents[2] / 'results' / 'review' / f'{source_ref}.json'
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result_payload = {
+            'schemaVersion': 'quwoquan_data.normalization.source_review_result',
+            'sourceRef': source_ref,
+            'batchLabel': str(input_payload['batchLabel']),
+            'sourceUrl': str(input_payload['sourceUrl']),
+            'sourceTitle': str(input_payload['sourceTitle']),
+            'reviewedAt': '2026-05-13T00:00:00Z',
+            'acceptedMainEntities': [
+                {
+                    'candidateRef': 'main_001',
+                    'canonicalZhHans': '西湖',
+                    'entityType': 'scenic_spot',
+                    'summary': '西湖主实体。',
+                    'evidenceRefs': ['block_0001'],
+                }
+            ],
+            'acceptedMembers': [],
+            'acceptedAliases': [],
+            'selectedContentAssets': [],
+            'rejectedAssets': [],
+            'rejectedItems': [],
+            'conflictFlags': {
+                'parallelNotSubordinate': False,
+                'genericNameWithoutProof': False,
+                'articleOnlyListsStops': False,
+                'cannotInferParentFromText': False,
+            },
+            'needsAuthorityBackcheck': False,
+            'reviewSummary': '抽取结果可接受。',
+        }
+        result_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding='utf-8')
+        return result_path
+
+    def write_authority_result_for_input(self, input_path: Path) -> Path:
+        input_path = input_path.resolve()
+        input_payload = self.read_json(input_path)
+        source_ref = str(input_payload['sourceRef'])
+        result_path = input_path.parents[2] / 'results' / 'authority' / f'{source_ref}.json'
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result_payload = {
+            'schemaVersion': 'quwoquan_data.normalization.authority_backcheck_result',
+            'sourceRef': source_ref,
+            'batchLabel': str(input_payload['batchLabel']),
+            'sourceUrl': str(input_payload['sourceUrl']),
+            'sourceTitle': str(input_payload['sourceTitle']),
+            'checkedEntities': [
+                {
+                    'candidateRef': 'main_001',
+                    'authorityMatched': True,
+                    'authoritySourceType': 'wikipedia_zh',
+                    'authorityUrl': 'https://zh.wikipedia.org/wiki/%E8%A5%BF%E6%B9%96',
+                    'confirmedCanonicalZhHans': '西湖',
+                    'confirmedAliases': ['杭州西湖'],
+                    'membershipConfirmed': [],
+                    'membershipRejected': [],
+                    'authoritySummary': '权威来源确认西湖主名。',
+                }
+            ],
+            'downgradedItems': [],
+            'authorityBackcheckStatus': 'verified',
+        }
+        result_path.write_text(json.dumps(result_payload, ensure_ascii=False), encoding='utf-8')
+        return result_path
 
     def spec_path(self) -> Path:
         return self.data_root / SPEC_RELATIVE_PATH
@@ -1995,6 +2225,183 @@ class QwqDataCliTest(unittest.TestCase):
         self.assertTrue(selected)
         self.assertEqual(built_spec['article_topic_catalog_ref'], 'seed/entity_catalog/dual_source_002_topics.ndjson')
 
+    def test_entities_by_tag_require_topic_id_filters_out_synthetic_tree_entities(self) -> None:
+        self.assert_ok(self.run_cli('crawl', 'tag-catalog-build'))
+        entity_catalog = self.runtime_root / 'seed' / 'filtered_entities.ndjson'
+        self.write_ndjson(
+            entity_catalog,
+            [
+                {
+                    'schemaVersion': 'quwoquan_data.entity_catalog',
+                    'entityId': 'entity_place_chengdu',
+                    'canonicalName': '成都',
+                    'entityType': 'city',
+                    'aliases': ['成都市'],
+                    'entityRef': 'trees/entities/地点/成都.yaml',
+                    'tagRefs': ['trees/tags/主题/城市漫游.yaml'],
+                    'source': 'tree',
+                    'extensions': {
+                        'labelZh': '成都',
+                        'displayLocale': 'zh',
+                        'wikiTitle': '成都',
+                        'baikeItem': '成都',
+                    },
+                },
+                {
+                    'schemaVersion': 'quwoquan_data.entity_catalog',
+                    'entityId': 'entity_place_west_lake',
+                    'canonicalName': '西湖',
+                    'entityType': 'scenic_spot',
+                    'aliases': ['杭州西湖'],
+                    'entityRef': 'trees/entities/地点/西湖.yaml',
+                    'tagRefs': ['trees/tags/主题/城市漫游.yaml'],
+                    'topicId': 'west_lake_article_001',
+                    'source': 'normalization',
+                    'extensions': {
+                        'labelZh': '西湖',
+                        'displayLocale': 'zh',
+                        'wikiTitle': '西湖',
+                        'baikeItem': '西湖',
+                    },
+                },
+            ],
+        )
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'instruction-build',
+                '--spec-id',
+                'topic_filter_001',
+                '--instruction',
+                '从城市漫游标签发现旅行实体',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+            )
+        )
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'entities-by-tag',
+                '--spec-id',
+                'topic_filter_001',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+                '--entity-catalog',
+                str(entity_catalog),
+                '--require-topic-id',
+            )
+        )
+        selected = self.read_ndjson(self.runtime_root / 'runs' / 'topic_filter_001' / 'selected_entities.ndjson')
+        self.assertEqual([row['canonicalName'] for row in selected], ['西湖'])
+
+    def test_spec_build_seed_only_splits_seed_and_publishable_topic_catalogs(self) -> None:
+        self.assert_ok(self.run_cli('crawl', 'tag-catalog-build'))
+        self.write_yaml(
+            self.runtime_root / 'trees' / 'entities' / '地点' / '四川省.yaml',
+            {
+                'entity_id': 'entity_region_sichuan',
+                'name': '四川省',
+                'kind': 'region',
+            },
+        )
+        entity_catalog = self.runtime_root / 'seed' / 'seed_only_entities.ndjson'
+        self.write_ndjson(
+            entity_catalog,
+            [
+                {
+                    'schemaVersion': 'quwoquan_data.entity_catalog',
+                    'entityId': 'entity_place_chengdu',
+                    'canonicalName': '成都',
+                    'entityType': 'city',
+                    'aliases': ['成都市'],
+                    'entityRef': 'trees/entities/地点/成都.yaml',
+                    'tagRefs': ['trees/tags/主题/城市漫游.yaml'],
+                    'source': 'tree',
+                    'extensions': {
+                        'labelZh': '成都',
+                        'displayLocale': 'zh',
+                        'wikiTitle': '成都',
+                        'baikeItem': '成都',
+                    },
+                },
+                {
+                    'schemaVersion': 'quwoquan_data.entity_catalog',
+                    'entityId': 'entity_place_west_lake',
+                    'canonicalName': '西湖',
+                    'entityType': 'scenic_spot',
+                    'aliases': ['杭州西湖'],
+                    'entityRef': 'trees/entities/地点/西湖.yaml',
+                    'tagRefs': ['trees/tags/主题/城市漫游.yaml'],
+                    'topicId': 'west_lake_article_001',
+                    'source': 'normalization',
+                    'extensions': {
+                        'labelZh': '西湖',
+                        'displayLocale': 'zh',
+                        'wikiTitle': '西湖',
+                        'baikeItem': '西湖',
+                        'entityTypeLabelZh': '名胜风景区',
+                        'coreTokens': ['西湖', '白堤'],
+                    },
+                },
+            ],
+        )
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'instruction-build',
+                '--spec-id',
+                'seed_only_spec_001',
+                '--instruction',
+                '从城市漫游标签发现旅行实体',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+            )
+        )
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'entities-by-tag',
+                '--spec-id',
+                'seed_only_spec_001',
+                '--tag-refs',
+                'trees/tags/主题/城市漫游.yaml',
+                '--entity-catalog',
+                str(entity_catalog),
+            )
+        )
+        self.assert_ok(
+            self.run_cli(
+                'crawl',
+                'spec-build',
+                '--spec-id',
+                'seed_only_spec_001',
+                '--topic-mode',
+                'seed_only',
+                '--context-entity-refs',
+                'trees/entities/地点/四川省.yaml',
+            )
+        )
+        built_spec = self.read_yaml(self.runtime_root / 'specs' / 'seed_only_spec_001.yaml')
+        self.assertEqual(
+            built_spec['article_topic_catalog_ref'],
+            'seed/entity_catalog/seed_only_spec_001_seed_topics.ndjson',
+        )
+        self.assertEqual(
+            built_spec['publishable_topic_catalog_ref'],
+            'seed/entity_catalog/seed_only_spec_001_topics.ndjson',
+        )
+        self.assertIn('trees/entities/地点/四川省.yaml', built_spec['entity_refs'])
+        self.assertEqual(built_spec['extensions']['seedTopicCount'], 1)
+        self.assertEqual(built_spec['extensions']['publishableTopicCount'], 0)
+        seed_rows = self.read_ndjson(
+            self.runtime_root / 'seed' / 'entity_catalog' / 'seed_only_spec_001_seed_topics.ndjson'
+        )
+        publishable_rows = self.read_ndjson(
+            self.runtime_root / 'seed' / 'entity_catalog' / 'seed_only_spec_001_topics.ndjson'
+        )
+        self.assertEqual([row['topic_id'] for row in seed_rows], ['west_lake_article_001'])
+        self.assertEqual(publishable_rows, [])
+
     def test_authority_sync_and_content_review_materialize_topic_pool(self) -> None:
         entity_seed = self.write_entity_catalog_seed()
         manual_seed = self.write_manual_content_seed('entity_place_west_lake', 'west_lake_article_001')
@@ -2202,6 +2609,171 @@ class QwqDataCliTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('缺少必填字段 extractionStatus', result.stderr)
 
+    def test_normalize_prepare_topic_inputs_imports_hydrated_topic_pages(self) -> None:
+        self.seed_authentic_article_topic('west_lake_article_001')
+        topic_catalog = self.runtime_root / 'seed' / 'entity_catalog' / 'normalize_prepare_topics.ndjson'
+        self.write_ndjson(
+            topic_catalog,
+            [
+                {
+                    'topic_id': 'west_lake_article_001',
+                    'entityId': 'entity_place_west_lake',
+                    'name': '西湖',
+                }
+            ],
+        )
+        spec_path = self.runtime_root / 'specs' / 'normalize_prepare_001.yaml'
+        self.write_yaml(
+            spec_path,
+            {
+                'spec_id': 'west_lake_discovery_001',
+                'article_topic_catalog_ref': 'seed/entity_catalog/normalize_prepare_topics.ndjson',
+            },
+        )
+        result = self.run_cli(
+            'data',
+            'build-entities-tags',
+            '--phase', 'normalize-prepare',
+            '--spec',
+            str(spec_path),
+            '--batch-label',
+            'normalize_prepare_batch',
+            '--topics',
+            'west_lake_article_001',
+        )
+        self.assert_ok(result)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload['stage'], 'data-build-entities-tags')
+        self.assertEqual(payload['phase'], 'normalize-prepare')
+        self.assertGreater(payload['extractInputCount'], 0)
+        manifest_path = Path(payload['assistantTaskManifestPath'])
+        self.assertTrue(manifest_path.exists())
+        manifest = self.read_json(manifest_path)
+        self.assertGreater(len(manifest['tasks']), 0)
+        input_path = Path(manifest['tasks'][0]['inputPath'])
+        self.assertTrue(input_path.exists())
+        input_payload = self.read_json(input_path)
+        self.assertEqual(input_payload['catalogTopicId'], 'west_lake_article_001')
+        self.assertEqual(input_payload['catalogName'], '西湖')
+
+    def test_normalize_run_extract_emits_assistant_task_when_result_missing(self) -> None:
+        input_path = self.runtime_root / 'runs' / 'normalize_missing_provider' / 'normalization' / 'inputs' / 'extract' / 'source.json'
+        input_path.parent.mkdir(parents=True, exist_ok=True)
+        input_path.write_text(
+            json.dumps(
+                {
+                    'schemaVersion': 'quwoquan_data.normalization.source_extraction_input',
+                    'sourceRef': 'missing_provider_source',
+                    'batchLabel': 'normalize_missing_provider',
+                    'sourceType': 'article',
+                    'sourceUrl': 'https://example.com/a',
+                    'sourceTitle': '缺少 provider',
+                    'sourceBodyText': '正文里明确提到西湖。',
+                    'sourceMarkdownPath': '/tmp/source.md',
+                    'imageAssetRefs': [],
+                    'assetLocalPaths': [],
+                    'requiredOutputSchema': 'source_extraction_result.schema.json',
+                },
+                ensure_ascii=False,
+            ),
+            encoding='utf-8',
+        )
+        result = self.run_cli(
+            'data',
+            'build-entities-tags',
+            '--phase', 'normalize-validate',
+            '--batch-label',
+            'normalize_missing_provider',
+            '--stage', 'extract',
+        )
+        self.assertEqual(result.returncode, 2)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload['status'], 'waiting_for_programming_assistant')
+        manifest_path = Path(payload['outputs']['assistantTaskManifestPath'])
+        self.assertTrue(manifest_path.exists())
+        manifest_payload = self.read_json(manifest_path)
+        self.assertEqual(Path(manifest_payload['tasks'][0]['inputPath']).resolve(), input_path.resolve())
+
+    def test_normalize_run_batch_waits_for_assistant_results_then_materializes_entities(self) -> None:
+        self.seed_authentic_article_topic('west_lake_article_001')
+        topic_catalog = self.runtime_root / 'seed' / 'entity_catalog' / 'normalize_run_batch_topics.ndjson'
+        self.write_ndjson(
+            topic_catalog,
+            [
+                {
+                    'topic_id': 'west_lake_article_001',
+                    'entityId': 'entity_place_west_lake',
+                    'name': '西湖',
+                    'entity_type': 'scenic_spot',
+                    'entity_type_label_zh': '名胜风景区',
+                    'tagRefs': ['trees/tags/主题/城市漫游.yaml'],
+                    'province': '浙江省',
+                    'prefecture': '杭州市',
+                    'district': '西湖区',
+                    'raw_name': '西湖',
+                    'normalized_name': '西湖',
+                }
+            ],
+        )
+        spec_path = self.runtime_root / 'specs' / 'normalize_run_batch_001.yaml'
+        self.write_yaml(
+            spec_path,
+            {
+                'spec_id': 'west_lake_discovery_001',
+                'article_topic_catalog_ref': 'seed/entity_catalog/normalize_run_batch_topics.ndjson',
+            },
+        )
+        batch_label = 'normalize_run_batch_001'
+        common_args = ['--spec', str(spec_path), '--batch-label', batch_label, '--topics', 'west_lake_article_001']
+
+        result = self.run_cli('data', 'build-entities-tags', '--phase', 'normalize-prepare', *common_args)
+        self.assert_ok(result)
+        prep_payload = json.loads(result.stdout)
+        manifest_path = Path(prep_payload['assistantTaskManifestPath'])
+        extract_manifest = self.read_json(manifest_path)
+        for task in extract_manifest['tasks']:
+            self.write_extract_result_for_input(Path(task['inputPath']))
+
+        result = self.run_cli('data', 'build-entities-tags', '--phase', 'normalize-validate', '--stage', 'extract', *common_args)
+        self.assert_ok(result)
+
+        result = self.run_cli('data', 'build-entities-tags', '--phase', 'normalize-validate', '--stage', 'review', *common_args)
+        self.assertEqual(result.returncode, 2)
+        payload = json.loads(result.stdout)
+        review_manifest = self.read_json(Path(payload['outputs']['assistantTaskManifestPath']))
+        for task in review_manifest['tasks']:
+            self.write_review_result_for_input(Path(task['inputPath']))
+
+        result = self.run_cli('data', 'build-entities-tags', '--phase', 'normalize-validate', '--stage', 'review', *common_args)
+        self.assert_ok(result)
+
+        result = self.run_cli('data', 'build-entities-tags', '--phase', 'normalize-validate', '--stage', 'authority', *common_args)
+        self.assertEqual(result.returncode, 2)
+        payload = json.loads(result.stdout)
+        authority_manifest = self.read_json(Path(payload['outputs']['assistantTaskManifestPath']))
+        for task in authority_manifest['tasks']:
+            self.write_authority_result_for_input(Path(task['inputPath']))
+
+        result = self.run_cli('data', 'build-entities-tags', '--phase', 'normalize-validate', *common_args)
+        self.assert_ok(result)
+
+        result = self.run_cli('data', 'build-entities-tags', '--phase', 'compile', '--batch-label', batch_label)
+        self.assert_ok(result)
+
+        result = self.run_cli(
+            'data', 'build-entities-tags', '--phase', 'materialize',
+            '--batch-label', batch_label,
+            '--catalog', str(topic_catalog),
+            '--output-name', 'normalized_entities.ndjson',
+        )
+        self.assert_ok(result)
+        compiled = self.read_ndjson(
+            self.runtime_root / 'runs' / batch_label / 'normalization' / 'compiled' / 'entity_resolution.ndjson'
+        )
+        self.assertEqual(compiled[0]['mainEntity']['canonicalZhHans'], '西湖')
+        entities = self.read_ndjson(self.runtime_root / 'seed' / 'entity_catalog' / 'normalized_entities.ndjson')
+        self.assertEqual(entities[0]['canonicalName'], '西湖')
+
     def test_normalize_compile_and_materialize_entities(self) -> None:
         image_url = self.seed_local_image('normalize-materialize-cover.png')
         page_url = self.seed_local_html_page(
@@ -2400,7 +2972,7 @@ class QwqDataCliTest(unittest.TestCase):
         )
 
         compile_result = self.run_cli(
-            'data', 'normalize-compile-entities', '--batch-label', 'normalize_batch_003'
+            'data', 'build-entities-tags', '--phase', 'compile', '--batch-label', 'normalize_batch_003'
         )
         self.assert_ok(compile_result)
         compiled = self.read_ndjson(
@@ -2430,7 +3002,8 @@ class QwqDataCliTest(unittest.TestCase):
         )
         materialize_result = self.run_cli(
             'data',
-            'entity-catalog-materialize',
+            'build-entities-tags',
+            '--phase', 'materialize',
             '--batch-label',
             'normalize_batch_003',
             '--catalog',
@@ -2514,7 +3087,7 @@ class QwqDataCliTest(unittest.TestCase):
             ),
             encoding='utf-8',
         )
-        self.assert_ok(self.run_cli('data', 'normalize-compile-entities', '--batch-label', batch))
+        self.assert_ok(self.run_cli('data', 'build-entities-tags', '--phase', 'compile', '--batch-label', batch))
         rows = self.read_ndjson(self.runtime_root / 'runs' / batch / 'normalization' / 'compiled' / 'entity_resolution.ndjson')
         self.assertEqual(rows[0]['mainEntity']['canonicalZhHans'], '成都大熊猫繁育研究基地')
         self.assertEqual(rows[0]['members'][0]['nameCanonicalZhHans'], '大熊猫2号别墅')
@@ -2589,7 +3162,7 @@ class QwqDataCliTest(unittest.TestCase):
             ),
             encoding='utf-8',
         )
-        self.assert_ok(self.run_cli('data', 'normalize-compile-entities', '--batch-label', batch))
+        self.assert_ok(self.run_cli('data', 'build-entities-tags', '--phase', 'compile', '--batch-label', batch))
         rows = self.read_ndjson(self.runtime_root / 'runs' / batch / 'normalization' / 'compiled' / 'entity_resolution.ndjson')
         self.assertEqual(rows[0]['mainEntity']['canonicalZhHans'], '红三军团驻地旧址')
         self.assertEqual(rows[0]['members'], [])

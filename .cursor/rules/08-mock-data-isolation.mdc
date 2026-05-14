@@ -31,8 +31,8 @@ alwaysApply: true
 
 ## 门禁
 
-- `python3 scripts/verify_ui_mock_isolation.py`（已串联 `make gate` → `scripts/gate_repo.sh --scope app`）。
-- `python3 scripts/verify_lib_no_test_only_symbols.py`（`lib/**` 内 `createForTest` / `createTestAssistantRuntime` 仅 allowlist 豁免）；本地：`make verify-app-lib-test-only-symbols`。
+- `python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py`（已串联 `make gate` → `agent_ops/gate/gate_repo.sh --scope app`）。
+- `python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py`（`lib/**` 内 `createForTest` / `createTestAssistantRuntime` 仅 allowlist 豁免）；本地：`make verify-app-lib-test-only-symbols`。
 - 本地：`make verify-app-mock-isolation`。
 - 本地：`make verify-app-seed-manifest`。
 

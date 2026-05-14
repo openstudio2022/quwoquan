@@ -174,7 +174,7 @@ cd quwoquan_service && make verify
 ## 4) 特性树一致性
 
 ```bash
-cd /path/to/quwoquan && bash scripts/verify_feature_tree_refactor.sh
+cd /path/to/quwoquan && bash agent_ops/scaffold/verify_feature_tree_refactor.sh
 ```
 
 ---

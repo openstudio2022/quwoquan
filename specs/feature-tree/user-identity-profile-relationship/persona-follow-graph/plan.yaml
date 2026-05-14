@@ -136,5 +136,5 @@ slices:
     notes:
       - "M1/M2 已有分身管理与公开身份场景的 verify/codegen/T2/T3 证据，并补齐 sub-account public-profile rollout flag 与 telemetry。"
       - "M4 补全后已补齐 `ops.user.persona_context_v1 / ops.user.persona_graph_v1`、graph/follow 指标最小触发断言与 follow/graph rollback rehearsal。"
-      - "M5 已补齐 `runtime/persona` dry-run/validate 工具、`scripts/persona_migration_dry_run.sh` / `scripts/persona_migration_validate.sh`、`ops.user.persona_model_v2 / persona_sync_v2 / persona_graph_v2` 开关映射，以及 persona sync patch type。"
+      - "M5 已补齐 `runtime/persona` dry-run/validate 工具、`quwoquan_service/scripts/persona/persona_migration_dry_run.sh` / `quwoquan_service/scripts/persona/persona_migration_validate.sh`、`ops.user.persona_model_v2 / persona_sync_v2 / persona_graph_v2` 开关映射，以及 persona sync patch type。"
       - "但完整 Journey 级迁移演练、上下文透传与关注图跨域灰度回滚尚未完成，因此不能宣告 P6 implemented。"

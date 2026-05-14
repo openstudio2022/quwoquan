@@ -1,0 +1,737 @@
+﻿2026-05-13T01:43:08.0602090Z Current runner version: '2.334.0'
+2026-05-13T01:43:08.0626001Z ##[group]Runner Image Provisioner
+2026-05-13T01:43:08.0626711Z Hosted Compute Agent
+2026-05-13T01:43:08.0627258Z Version: 20260213.493
+2026-05-13T01:43:08.0627768Z Commit: 5c115507f6dd24b8de37d8bbe0bb4509d0cc0fa3
+2026-05-13T01:43:08.0628384Z Build Date: 2026-02-13T00:28:41Z
+2026-05-13T01:43:08.0628997Z Worker ID: {5283ae86-7a12-45bb-8ce3-3590f62062a6}
+2026-05-13T01:43:08.0629886Z Azure Region: northcentralus
+2026-05-13T01:43:08.0630412Z ##[endgroup]
+2026-05-13T01:43:08.0631976Z ##[group]Operating System
+2026-05-13T01:43:08.0632493Z Ubuntu
+2026-05-13T01:43:08.0632887Z 24.04.4
+2026-05-13T01:43:08.0633358Z LTS
+2026-05-13T01:43:08.0633763Z ##[endgroup]
+2026-05-13T01:43:08.0634175Z ##[group]Runner Image
+2026-05-13T01:43:08.0634694Z Image: ubuntu-24.04
+2026-05-13T01:43:08.0635145Z Version: 20260413.86.1
+2026-05-13T01:43:08.0636207Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260413.86/images/ubuntu/Ubuntu2404-Readme.md
+2026-05-13T01:43:08.0637458Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260413.86
+2026-05-13T01:43:08.0638253Z ##[endgroup]
+2026-05-13T01:43:08.0641063Z ##[group]GITHUB_TOKEN Permissions
+2026-05-13T01:43:08.0643291Z Actions: write
+2026-05-13T01:43:08.0643859Z ArtifactMetadata: write
+2026-05-13T01:43:08.0644353Z Attestations: write
+2026-05-13T01:43:08.0644780Z Checks: write
+2026-05-13T01:43:08.0645240Z CodeQuality: write
+2026-05-13T01:43:08.0645668Z Contents: write
+2026-05-13T01:43:08.0646131Z Deployments: write
+2026-05-13T01:43:08.0646605Z Discussions: write
+2026-05-13T01:43:08.0647029Z Issues: write
+2026-05-13T01:43:08.0647465Z Metadata: read
+2026-05-13T01:43:08.0647927Z Models: read
+2026-05-13T01:43:08.0648330Z Packages: write
+2026-05-13T01:43:08.0648877Z Pages: write
+2026-05-13T01:43:08.0649614Z PullRequests: write
+2026-05-13T01:43:08.0650073Z RepositoryProjects: write
+2026-05-13T01:43:08.0650590Z SecurityEvents: write
+2026-05-13T01:43:08.0651070Z Statuses: write
+2026-05-13T01:43:08.0651549Z VulnerabilityAlerts: read
+2026-05-13T01:43:08.0652083Z ##[endgroup]
+2026-05-13T01:43:08.0654177Z Secret source: Actions
+2026-05-13T01:43:08.0654842Z Prepare workflow directory
+2026-05-13T01:43:08.1320981Z Prepare all required actions
+2026-05-13T01:43:08.1375740Z Getting action download info
+2026-05-13T01:43:08.4431245Z Download action repository 'actions/checkout@v4' (SHA:34e114876b0b11c390a56381ad16ebd13914f8d5)
+2026-05-13T01:43:08.5826487Z Download action repository 'subosito/flutter-action@v2' (SHA:1a449444c387b1966244ae4d4f8c696479add0b2)
+2026-05-13T01:43:08.8522534Z Getting action download info
+2026-05-13T01:43:08.9721477Z Download action repository 'actions/cache@v5' (SHA:27d5ce7f107fe9357f9df03efb73ab90386fccae)
+2026-05-13T01:43:09.4056085Z Uses: openstudio2022/quwoquan/.github/workflows/gamma-ecs-pre-hosted-core.yml@refs/pull/11/merge (545cfd31ba303c681640387afdc4371a9bc59414)
+2026-05-13T01:43:09.4061388Z ##[group] Inputs
+2026-05-13T01:43:09.4062135Z   assistant_scenario_id: travel_journey_basic
+2026-05-13T01:43:09.4062834Z   assistant_smoke_profile: ui_sanity
+2026-05-13T01:43:09.4063499Z   assistant_smoke_max_ticks: 600
+2026-05-13T01:43:09.4064127Z   assistant_smoke_max_idle_ticks: 120
+2026-05-13T01:43:09.4064718Z ##[endgroup]
+2026-05-13T01:43:09.4065457Z Complete job name: Gamma hosted PR chain / Gamma ECS - T3 API contract (pre)
+2026-05-13T01:43:09.4797704Z ##[group]Run actions/checkout@v4
+2026-05-13T01:43:09.4798545Z with:
+2026-05-13T01:43:09.4799004Z   repository: openstudio2022/quwoquan
+2026-05-13T01:43:09.4799984Z   token: ***
+2026-05-13T01:43:09.4800409Z   ssh-strict: true
+2026-05-13T01:43:09.4800843Z   ssh-user: git
+2026-05-13T01:43:09.4801293Z   persist-credentials: true
+2026-05-13T01:43:09.4801791Z   clean: true
+2026-05-13T01:43:09.4802229Z   sparse-checkout-cone-mode: true
+2026-05-13T01:43:09.4802743Z   fetch-depth: 1
+2026-05-13T01:43:09.4803178Z   fetch-tags: false
+2026-05-13T01:43:09.4803617Z   show-progress: true
+2026-05-13T01:43:09.4804056Z   lfs: false
+2026-05-13T01:43:09.4804702Z   submodules: false
+2026-05-13T01:43:09.4805145Z   set-safe-directory: true
+2026-05-13T01:43:09.4805904Z env:
+2026-05-13T01:43:09.4806308Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:09.4806811Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:09.4807269Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:09.4807792Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:09.4808382Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:09.4808966Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:09.4809707Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:09.4810186Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:09.4810737Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:09.4811391Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:09.4812119Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:09.4812596Z ##[endgroup]
+2026-05-13T01:43:09.5864733Z Syncing repository: openstudio2022/quwoquan
+2026-05-13T01:43:09.5866608Z ##[group]Getting Git version info
+2026-05-13T01:43:09.5867365Z Working directory is '/home/runner/work/quwoquan/quwoquan'
+2026-05-13T01:43:09.5868353Z [command]/usr/bin/git version
+2026-05-13T01:43:09.5893302Z git version 2.53.0
+2026-05-13T01:43:09.5915728Z ##[endgroup]
+2026-05-13T01:43:09.5928611Z Temporarily overriding HOME='/home/runner/work/_temp/242ae92a-1b3b-4b58-8f6e-af5b8a938959' before making global git config changes
+2026-05-13T01:43:09.5930316Z Adding repository directory to the temporary git global config as a safe directory
+2026-05-13T01:43:09.5934471Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/quwoquan/quwoquan
+2026-05-13T01:43:09.5962070Z Deleting the contents of '/home/runner/work/quwoquan/quwoquan'
+2026-05-13T01:43:09.5965183Z ##[group]Initializing the repository
+2026-05-13T01:43:09.5968709Z [command]/usr/bin/git init /home/runner/work/quwoquan/quwoquan
+2026-05-13T01:43:09.6037144Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-05-13T01:43:09.6038987Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-05-13T01:43:09.6040974Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-05-13T01:43:09.6042340Z hint: call:
+2026-05-13T01:43:09.6043074Z hint:
+2026-05-13T01:43:09.6043956Z hint: 	git config --global init.defaultBranch <name>
+2026-05-13T01:43:09.6045049Z hint:
+2026-05-13T01:43:09.6046135Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-05-13T01:43:09.6047886Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-05-13T01:43:09.6049321Z hint:
+2026-05-13T01:43:09.6050068Z hint: 	git branch -m <name>
+2026-05-13T01:43:09.6050964Z hint:
+2026-05-13T01:43:09.6052196Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-05-13T01:43:09.6054035Z Initialized empty Git repository in /home/runner/work/quwoquan/quwoquan/.git/
+2026-05-13T01:43:09.6057202Z [command]/usr/bin/git remote add origin https://github.com/openstudio2022/quwoquan
+2026-05-13T01:43:09.6076083Z ##[endgroup]
+2026-05-13T01:43:09.6077521Z ##[group]Disabling automatic garbage collection
+2026-05-13T01:43:09.6081560Z [command]/usr/bin/git config --local gc.auto 0
+2026-05-13T01:43:09.6104949Z ##[endgroup]
+2026-05-13T01:43:09.6105665Z ##[group]Setting up auth
+2026-05-13T01:43:09.6111729Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-05-13T01:43:09.6135252Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-05-13T01:43:09.6367049Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-05-13T01:43:09.6391211Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-05-13T01:43:09.6567188Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-05-13T01:43:09.6594618Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-05-13T01:43:09.6762870Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-05-13T01:43:09.6790772Z ##[endgroup]
+2026-05-13T01:43:09.6792238Z ##[group]Fetching the repository
+2026-05-13T01:43:09.6800871Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +545cfd31ba303c681640387afdc4371a9bc59414:refs/remotes/pull/11/merge
+2026-05-13T01:43:19.0952302Z From https://github.com/openstudio2022/quwoquan
+2026-05-13T01:43:19.0953469Z  * [new ref]         545cfd31ba303c681640387afdc4371a9bc59414 -> pull/11/merge
+2026-05-13T01:43:19.0978229Z ##[endgroup]
+2026-05-13T01:43:19.0978946Z ##[group]Determining the checkout info
+2026-05-13T01:43:19.0981037Z ##[endgroup]
+2026-05-13T01:43:19.0987194Z [command]/usr/bin/git sparse-checkout disable
+2026-05-13T01:43:19.1017989Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-05-13T01:43:19.1038281Z ##[group]Checking out the ref
+2026-05-13T01:43:19.1042286Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/11/merge
+2026-05-13T01:43:20.1473749Z Updating files:  40% (2833/6984)
+2026-05-13T01:43:20.3324653Z Updating files:  41% (2864/6984)
+2026-05-13T01:43:20.4061227Z Updating files:  42% (2934/6984)
+2026-05-13T01:43:20.4744259Z Updating files:  43% (3004/6984)
+2026-05-13T01:43:20.5612533Z Updating files:  44% (3073/6984)
+2026-05-13T01:43:20.6252814Z Updating files:  45% (3143/6984)
+2026-05-13T01:43:20.7070591Z Updating files:  46% (3213/6984)
+2026-05-13T01:43:20.7977565Z Updating files:  47% (3283/6984)
+2026-05-13T01:43:20.8784168Z Updating files:  48% (3353/6984)
+2026-05-13T01:43:20.9877647Z Updating files:  49% (3423/6984)
+2026-05-13T01:43:21.0651094Z Updating files:  50% (3492/6984)
+2026-05-13T01:43:21.1162454Z Updating files:  51% (3562/6984)
+2026-05-13T01:43:21.1577915Z Updating files:  51% (3602/6984)
+2026-05-13T01:43:21.2115852Z Updating files:  52% (3632/6984)
+2026-05-13T01:43:21.2140110Z Updating files:  53% (3702/6984)
+2026-05-13T01:43:21.2185932Z Updating files:  54% (3772/6984)
+2026-05-13T01:43:21.2259696Z Updating files:  55% (3842/6984)
+2026-05-13T01:43:21.2308033Z Updating files:  56% (3912/6984)
+2026-05-13T01:43:21.2339931Z Updating files:  57% (3981/6984)
+2026-05-13T01:43:21.2364713Z Updating files:  58% (4051/6984)
+2026-05-13T01:43:21.2389039Z Updating files:  59% (4121/6984)
+2026-05-13T01:43:21.2416684Z Updating files:  60% (4191/6984)
+2026-05-13T01:43:21.2448519Z Updating files:  61% (4261/6984)
+2026-05-13T01:43:21.2477849Z Updating files:  62% (4331/6984)
+2026-05-13T01:43:21.2508293Z Updating files:  63% (4400/6984)
+2026-05-13T01:43:21.2539833Z Updating files:  64% (4470/6984)
+2026-05-13T01:43:21.3214674Z Updating files:  65% (4540/6984)
+2026-05-13T01:43:21.3862289Z Updating files:  66% (4610/6984)
+2026-05-13T01:43:21.3889542Z Updating files:  67% (4680/6984)
+2026-05-13T01:43:21.3912324Z Updating files:  68% (4750/6984)
+2026-05-13T01:43:21.3943329Z Updating files:  69% (4819/6984)
+2026-05-13T01:43:21.4105616Z Updating files:  70% (4889/6984)
+2026-05-13T01:43:21.4145062Z Updating files:  71% (4959/6984)
+2026-05-13T01:43:21.4225385Z Updating files:  72% (5029/6984)
+2026-05-13T01:43:21.4251251Z Updating files:  73% (5099/6984)
+2026-05-13T01:43:21.4267989Z Updating files:  74% (5169/6984)
+2026-05-13T01:43:21.4296663Z Updating files:  75% (5238/6984)
+2026-05-13T01:43:21.4316976Z Updating files:  76% (5308/6984)
+2026-05-13T01:43:21.4344519Z Updating files:  77% (5378/6984)
+2026-05-13T01:43:21.4363188Z Updating files:  78% (5448/6984)
+2026-05-13T01:43:21.4385570Z Updating files:  79% (5518/6984)
+2026-05-13T01:43:21.4412143Z Updating files:  80% (5588/6984)
+2026-05-13T01:43:21.4431758Z Updating files:  81% (5658/6984)
+2026-05-13T01:43:21.4451127Z Updating files:  82% (5727/6984)
+2026-05-13T01:43:21.4467339Z Updating files:  83% (5797/6984)
+2026-05-13T01:43:21.4490035Z Updating files:  84% (5867/6984)
+2026-05-13T01:43:21.4507572Z Updating files:  85% (5937/6984)
+2026-05-13T01:43:21.4524001Z Updating files:  86% (6007/6984)
+2026-05-13T01:43:21.4544294Z Updating files:  87% (6077/6984)
+2026-05-13T01:43:21.4569974Z Updating files:  88% (6146/6984)
+2026-05-13T01:43:21.4596205Z Updating files:  89% (6216/6984)
+2026-05-13T01:43:21.4620850Z Updating files:  90% (6286/6984)
+2026-05-13T01:43:21.4640588Z Updating files:  91% (6356/6984)
+2026-05-13T01:43:21.4661987Z Updating files:  92% (6426/6984)
+2026-05-13T01:43:21.4684980Z Updating files:  93% (6496/6984)
+2026-05-13T01:43:21.4703894Z Updating files:  94% (6565/6984)
+2026-05-13T01:43:21.4727752Z Updating files:  95% (6635/6984)
+2026-05-13T01:43:21.4749871Z Updating files:  96% (6705/6984)
+2026-05-13T01:43:21.4772564Z Updating files:  97% (6775/6984)
+2026-05-13T01:43:21.4799430Z Updating files:  98% (6845/6984)
+2026-05-13T01:43:21.4966959Z Updating files:  99% (6915/6984)
+2026-05-13T01:43:21.4967431Z Updating files: 100% (6984/6984)
+2026-05-13T01:43:21.4967663Z Updating files: 100% (6984/6984), done.
+2026-05-13T01:43:21.5075937Z Note: switching to 'refs/remotes/pull/11/merge'.
+2026-05-13T01:43:21.5076417Z 
+2026-05-13T01:43:21.5076830Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-05-13T01:43:21.5077570Z changes and commit them, and you can discard any commits you make in this
+2026-05-13T01:43:21.5078107Z state without impacting any branches by switching back to a branch.
+2026-05-13T01:43:21.5078373Z 
+2026-05-13T01:43:21.5078541Z If you want to create a new branch to retain commits you create, you may
+2026-05-13T01:43:21.5078945Z do so (now or later) by using -c with the switch command. Example:
+2026-05-13T01:43:21.5079406Z 
+2026-05-13T01:43:21.5079501Z   git switch -c <new-branch-name>
+2026-05-13T01:43:21.5079665Z 
+2026-05-13T01:43:21.5079751Z Or undo this operation with:
+2026-05-13T01:43:21.5079887Z 
+2026-05-13T01:43:21.5079972Z   git switch -
+2026-05-13T01:43:21.5080072Z 
+2026-05-13T01:43:21.5080260Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-05-13T01:43:21.5080533Z 
+2026-05-13T01:43:21.5080849Z HEAD is now at 545cfd3 Merge f57b1923fee65df97cfb7caab8b9e71789dad48b into d95b147b9276e57c39b09b1fcf9671aa0367e6e8
+2026-05-13T01:43:21.5126436Z ##[endgroup]
+2026-05-13T01:43:21.5160395Z [command]/usr/bin/git log -1 --format=%H
+2026-05-13T01:43:21.5183734Z 545cfd31ba303c681640387afdc4371a9bc59414
+2026-05-13T01:43:21.5337343Z ##[group]Run echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+2026-05-13T01:43:21.5337883Z [36;1mecho "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"[0m
+2026-05-13T01:43:21.5355422Z shell: /usr/bin/bash -e {0}
+2026-05-13T01:43:21.5355649Z env:
+2026-05-13T01:43:21.5355826Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:21.5356037Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:21.5356287Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:21.5356495Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:21.5356779Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:21.5357038Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:21.5357255Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:21.5357454Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:21.5357711Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:21.5358014Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:21.5358585Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:21.5358821Z ##[endgroup]
+2026-05-13T01:43:21.5471604Z ##[group]Run if [ -d quwoquan_app/personal_assistant ]; then
+2026-05-13T01:43:21.5472012Z [36;1mif [ -d quwoquan_app/personal_assistant ]; then[0m
+2026-05-13T01:43:21.5472334Z [36;1m  mkdir -p quwoquan_app/personal_assistant[0m
+2026-05-13T01:43:21.5472677Z [36;1m  if [ -f quwoquan_app/personal_assistant/.env.example ]; then[0m
+2026-05-13T01:43:21.5473155Z [36;1m    cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env[0m
+2026-05-13T01:43:21.5473671Z [36;1m  else[0m
+2026-05-13T01:43:21.5473878Z [36;1m    : > quwoquan_app/personal_assistant/.env[0m
+2026-05-13T01:43:21.5474136Z [36;1m  fi[0m
+2026-05-13T01:43:21.5474291Z [36;1mfi[0m
+2026-05-13T01:43:21.5487068Z shell: /usr/bin/bash -e {0}
+2026-05-13T01:43:21.5487294Z env:
+2026-05-13T01:43:21.5487459Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:21.5487679Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:21.5487880Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:21.5488123Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:21.5488387Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:21.5488640Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:21.5488851Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:21.5489048Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:21.5489563Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:21.5489862Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:21.5490258Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:21.5490475Z ##[endgroup]
+2026-05-13T01:43:21.5700426Z ##[group]Run subosito/flutter-action@v2
+2026-05-13T01:43:21.5700681Z with:
+2026-05-13T01:43:21.5700855Z   channel: stable
+2026-05-13T01:43:21.5701021Z   cache: true
+2026-05-13T01:43:21.5701191Z   architecture: X64
+2026-05-13T01:43:21.5701374Z   pub-cache-path: default
+2026-05-13T01:43:21.5701575Z   dry-run: false
+2026-05-13T01:43:21.5701809Z   git-source: https://github.com/flutter/flutter.git
+2026-05-13T01:43:21.5702068Z env:
+2026-05-13T01:43:21.5702229Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:21.5702430Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:21.5702612Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:21.5702809Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:21.5703062Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:21.5703310Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:21.5703522Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:21.5703721Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:21.5703962Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:21.5704303Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:21.5704684Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:21.5704882Z ##[endgroup]
+2026-05-13T01:43:21.5803502Z ##[group]Run chmod +x "$GITHUB_ACTION_PATH/setup.sh"
+2026-05-13T01:43:21.5803828Z [36;1mchmod +x "$GITHUB_ACTION_PATH/setup.sh"[0m
+2026-05-13T01:43:21.5818475Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-05-13T01:43:21.5818783Z env:
+2026-05-13T01:43:21.5818952Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:21.5819281Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:21.5819467Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:21.5819691Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:21.5819969Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:21.5820213Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:21.5820438Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:21.5820654Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:21.5820900Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:21.5821217Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:21.5821603Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:21.5821799Z ##[endgroup]
+2026-05-13T01:43:21.5903891Z ##[group]Run $GITHUB_ACTION_PATH/setup.sh -p \
+2026-05-13T01:43:21.5904220Z [36;1m$GITHUB_ACTION_PATH/setup.sh -p \[0m
+2026-05-13T01:43:21.5904477Z [36;1m  -n '' \[0m
+2026-05-13T01:43:21.5904650Z [36;1m  -f '' \[0m
+2026-05-13T01:43:21.5904825Z [36;1m  -a 'X64' \[0m
+2026-05-13T01:43:21.5905003Z [36;1m  -k '' \[0m
+2026-05-13T01:43:21.5905184Z [36;1m  -c '' \[0m
+2026-05-13T01:43:21.5905352Z [36;1m  -l '' \[0m
+2026-05-13T01:43:21.5905523Z [36;1m  -d 'default' \[0m
+2026-05-13T01:43:21.5905795Z [36;1m  -g 'https://github.com/flutter/flutter.git' \[0m
+2026-05-13T01:43:21.5906068Z [36;1m  stable[0m
+2026-05-13T01:43:21.5918656Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-05-13T01:43:21.5918971Z env:
+2026-05-13T01:43:21.5919325Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:21.5919689Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:21.5919877Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:21.5920092Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:21.5920359Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:21.5920601Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:21.5920816Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:21.5921012Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:21.5921256Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:21.5921553Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:21.5921909Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:21.5922112Z ##[endgroup]
+2026-05-13T01:43:21.7387557Z ##[group]Run actions/cache@v5
+2026-05-13T01:43:21.7387786Z with:
+2026-05-13T01:43:21.7388002Z   path: /opt/hostedtoolcache/flutter/stable-3.41.9-x64
+2026-05-13T01:43:21.7388434Z   key: flutter-linux-stable-3.41.9-x64-00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
+2026-05-13T01:43:21.7388832Z   enableCrossOsArchive: false
+2026-05-13T01:43:21.7389554Z   fail-on-cache-miss: false
+2026-05-13T01:43:21.7389778Z   lookup-only: false
+2026-05-13T01:43:21.7389956Z   save-always: false
+2026-05-13T01:43:21.7390130Z env:
+2026-05-13T01:43:21.7390297Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:21.7390503Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:21.7390684Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:21.7390880Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:21.7391137Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:21.7391380Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:21.7391579Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:21.7391781Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:21.7392030Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:21.7392322Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:21.7392738Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:21.7392936Z ##[endgroup]
+2026-05-13T01:43:21.9703683Z Cache hit for: flutter-linux-stable-3.41.9-x64-00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
+2026-05-13T01:43:23.1008899Z Received 104857600 of 1667402470 (6.3%), 100.0 MBs/sec
+2026-05-13T01:43:24.1032425Z Received 268435456 of 1667402470 (16.1%), 127.8 MBs/sec
+2026-05-13T01:43:25.1036699Z Received 448790528 of 1667402470 (26.9%), 142.5 MBs/sec
+2026-05-13T01:43:26.1048244Z Received 658505728 of 1667402470 (39.5%), 156.8 MBs/sec
+2026-05-13T01:43:27.1045950Z Received 838860800 of 1667402470 (50.3%), 159.9 MBs/sec
+2026-05-13T01:43:28.1060295Z Received 1019215872 of 1667402470 (61.1%), 161.9 MBs/sec
+2026-05-13T01:43:29.1070471Z Received 1186988032 of 1667402470 (71.2%), 161.6 MBs/sec
+2026-05-13T01:43:30.1060838Z Received 1346371584 of 1667402470 (80.7%), 160.4 MBs/sec
+2026-05-13T01:43:31.1090208Z Received 1539309568 of 1667402470 (92.3%), 163.0 MBs/sec
+2026-05-13T01:43:31.7754104Z Received 1667402470 of 1667402470 (100.0%), 164.4 MBs/sec
+2026-05-13T01:43:31.7756386Z Cache Size: ~1590 MB (1667402470 B)
+2026-05-13T01:43:31.7825844Z [command]/usr/bin/tar -xf /home/runner/work/_temp/2603857e-a0ff-4c49-b9e3-db8525622cee/cache.tzst -P -C /home/runner/work/quwoquan/quwoquan --use-compress-program unzstd
+2026-05-13T01:43:36.0685524Z Cache restored successfully
+2026-05-13T01:43:36.1296470Z Cache restored from key: flutter-linux-stable-3.41.9-x64-00b0c91f06209d9e4a41f71b7a512d6eb3b9c694
+2026-05-13T01:43:37.2870631Z ##[group]Run actions/cache@v5
+2026-05-13T01:43:37.2871022Z with:
+2026-05-13T01:43:37.2871346Z   path: /home/runner/.pub-cache
+2026-05-13T01:43:37.2872400Z   key: flutter-pub-linux-stable-3.41.9-x64-00b0c91f06209d9e4a41f71b7a512d6eb3b9c694-43119c4915889eed0ae888c7c66884c15fdc3e03e258279095b233deb0848b70
+2026-05-13T01:43:37.2873080Z   enableCrossOsArchive: false
+2026-05-13T01:43:37.2873307Z   fail-on-cache-miss: false
+2026-05-13T01:43:37.2873516Z   lookup-only: false
+2026-05-13T01:43:37.2873704Z   save-always: false
+2026-05-13T01:43:37.2873871Z env:
+2026-05-13T01:43:37.2874036Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:37.2874261Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:37.2874623Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:37.2874826Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:37.2875100Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:37.2875359Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:37.2875584Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:37.2875790Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:37.2876043Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:37.2876347Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:37.2876786Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:37.2876994Z ##[endgroup]
+2026-05-13T01:43:37.5030381Z Cache hit for: flutter-pub-linux-stable-3.41.9-x64-00b0c91f06209d9e4a41f71b7a512d6eb3b9c694-43119c4915889eed0ae888c7c66884c15fdc3e03e258279095b233deb0848b70
+2026-05-13T01:43:38.6360177Z Received 117440512 of 148396263 (79.1%), 111.9 MBs/sec
+2026-05-13T01:43:38.9690879Z Received 148396263 of 148396263 (100.0%), 105.9 MBs/sec
+2026-05-13T01:43:38.9693330Z Cache Size: ~142 MB (148396263 B)
+2026-05-13T01:43:38.9730898Z [command]/usr/bin/tar -xf /home/runner/work/_temp/44fa84e2-c4d8-4d28-9a71-a3e3de0efe49/cache.tzst -P -C /home/runner/work/quwoquan/quwoquan --use-compress-program unzstd
+2026-05-13T01:43:39.9177482Z Cache restored successfully
+2026-05-13T01:43:39.9302858Z Cache restored from key: flutter-pub-linux-stable-3.41.9-x64-00b0c91f06209d9e4a41f71b7a512d6eb3b9c694-43119c4915889eed0ae888c7c66884c15fdc3e03e258279095b233deb0848b70
+2026-05-13T01:43:39.9388290Z ##[group]Run $GITHUB_ACTION_PATH/setup.sh \
+2026-05-13T01:43:39.9388615Z [36;1m$GITHUB_ACTION_PATH/setup.sh \[0m
+2026-05-13T01:43:39.9388869Z [36;1m  -n '3.41.9' \[0m
+2026-05-13T01:43:39.9389064Z [36;1m  -a 'x64' \[0m
+2026-05-13T01:43:39.9389691Z [36;1m  -c '/opt/hostedtoolcache/flutter/stable-3.41.9-x64' \[0m
+2026-05-13T01:43:39.9390024Z [36;1m  -d '/home/runner/.pub-cache' \[0m
+2026-05-13T01:43:39.9390269Z [36;1m  stable[0m
+2026-05-13T01:43:39.9402775Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+2026-05-13T01:43:39.9403119Z env:
+2026-05-13T01:43:39.9403299Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:39.9403526Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:39.9403730Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:39.9403956Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:39.9404232Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:39.9404496Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:39.9404728Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:39.9404947Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:39.9405206Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:39.9405514Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:39.9405940Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:39.9406150Z ##[endgroup]
+2026-05-13T01:43:40.0699481Z ##[group]Run flutter pub get
+2026-05-13T01:43:40.0699781Z [36;1mflutter pub get[0m
+2026-05-13T01:43:40.0715202Z shell: /usr/bin/bash -e {0}
+2026-05-13T01:43:40.0715456Z env:
+2026-05-13T01:43:40.0715634Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:40.0715879Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:40.0716081Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:40.0716303Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:40.0716577Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:40.0716838Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:40.0717061Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:40.0717274Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:40.0717530Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:40.0717839Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:40.0718253Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:40.0718574Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.9-x64/flutter
+2026-05-13T01:43:40.0718968Z   PUB_CACHE: /home/runner/.pub-cache
+2026-05-13T01:43:40.0719389Z ##[endgroup]
+2026-05-13T01:43:40.2876820Z Resolving dependencies...
+2026-05-13T01:43:41.8154231Z Downloading packages...
+2026-05-13T01:43:42.6667408Z * _fe_analyzer_shared 100.0.0 (was 100.0.0)
+2026-05-13T01:43:42.6668269Z * analyzer 13.0.0 (was 13.0.0)
+2026-05-13T01:43:42.6668651Z * args 2.7.0 (was 2.7.0)
+2026-05-13T01:43:42.6668987Z * async 2.13.1 (was 2.13.1)
+2026-05-13T01:43:42.6669544Z * audio_session 0.2.3 (was 0.2.3)
+2026-05-13T01:43:42.6669949Z * boolean_selector 2.1.2 (was 2.1.2)
+2026-05-13T01:43:42.6670339Z * build 4.0.6 (was 4.0.6)
+2026-05-13T01:43:42.6670687Z * build_config 1.3.0 (was 1.3.0)
+2026-05-13T01:43:42.6671069Z * build_daemon 4.1.1 (was 4.1.1)
+2026-05-13T01:43:42.6671451Z * build_runner 2.15.0 (was 2.15.0)
+2026-05-13T01:43:42.6671859Z * built_collection 5.1.1 (was 5.1.1)
+2026-05-13T01:43:42.6672271Z * built_value 8.12.6 (was 8.12.6)
+2026-05-13T01:43:42.6672672Z * cached_network_image 3.4.1 (was 3.4.1)
+2026-05-13T01:43:42.6673210Z * cached_network_image_platform_interface 4.1.1 (was 4.1.1)
+2026-05-13T01:43:42.6673767Z * cached_network_image_web 1.3.1 (was 1.3.1)
+2026-05-13T01:43:42.6674200Z * camera 0.12.0+1 (was 0.12.0+1)
+2026-05-13T01:43:42.6674603Z * camera_android_camerax 0.7.2 (was 0.7.2)
+2026-05-13T01:43:42.6675068Z * camera_avfoundation 0.10.1 (was 0.10.1)
+2026-05-13T01:43:42.6675505Z * camera_platform_interface 2.13.0 (was 2.13.0)
+2026-05-13T01:43:42.6675925Z * camera_web 0.3.5+3 (was 0.3.5+3)
+2026-05-13T01:43:42.6676286Z ! characters 1.4.1 (overridden)
+2026-05-13T01:43:42.6676634Z * checked_yaml 2.0.4 (was 2.0.4)
+2026-05-13T01:43:42.6677011Z * chewie 1.13.1 (was 1.13.1) (1.14.0 available)
+2026-05-13T01:43:42.6677417Z * cli_config 0.2.0 (was 0.2.0)
+2026-05-13T01:43:42.6677808Z * clock 1.1.2 (was 1.1.2)
+2026-05-13T01:43:42.6678111Z * code_assets 1.0.0 (was 1.0.0)
+2026-05-13T01:43:42.6678429Z * collection 1.19.1 (was 1.19.1)
+2026-05-13T01:43:42.6678785Z * connectivity_plus 7.1.1 (was 7.1.1)
+2026-05-13T01:43:42.6679386Z * connectivity_plus_platform_interface 2.1.0 (was 2.1.0)
+2026-05-13T01:43:42.6679842Z * convert 3.1.2 (was 3.1.2)
+2026-05-13T01:43:42.6680154Z * coverage 1.15.0 (was 1.15.0)
+2026-05-13T01:43:42.6680477Z * cross_file 0.3.5+2 (was 0.3.5+2)
+2026-05-13T01:43:42.6680838Z * crypto 3.0.7 (was 3.0.7)
+2026-05-13T01:43:42.6681139Z * csslib 1.0.2 (was 1.0.2)
+2026-05-13T01:43:42.6681486Z * cupertino_icons 1.0.9 (was 1.0.9)
+2026-05-13T01:43:42.6681838Z * dart_jsonwebtoken 3.4.1 (was 3.4.1)
+2026-05-13T01:43:42.6682186Z ! dart_style 3.1.9 (overridden)
+2026-05-13T01:43:42.6682490Z * dart_webrtc 1.8.1 (was 1.8.1)
+2026-05-13T01:43:42.6682800Z * dbus 0.7.12 (was 0.7.12)
+2026-05-13T01:43:42.6683165Z * device_info_plus 12.4.0 (was 12.4.0) (13.1.0 available)
+2026-05-13T01:43:42.6683713Z * device_info_plus_platform_interface 7.0.3 (was 7.0.3) (8.1.0 available)
+2026-05-13T01:43:42.6684208Z * dio 5.9.2 (was 5.9.2)
+2026-05-13T01:43:42.6684500Z * dio_web_adapter 2.1.2 (was 2.1.2)
+2026-05-13T01:43:42.6685123Z * dispose_scope 2.1.0 (was 2.1.0)
+2026-05-13T01:43:42.6685479Z * equatable 2.0.8 (was 2.0.8)
+2026-05-13T01:43:42.6685813Z * fake_async 1.3.3 (was 1.3.3)
+2026-05-13T01:43:42.6686100Z * ffi 2.2.0 (was 2.2.0)
+2026-05-13T01:43:42.6686389Z * file 7.0.1 (was 7.0.1)
+2026-05-13T01:43:42.6686704Z * file_picker 11.0.2 (was 11.0.2)
+2026-05-13T01:43:42.6687044Z * file_selector_linux 0.9.4 (was 0.9.4)
+2026-05-13T01:43:42.6687410Z * file_selector_macos 0.9.5 (was 0.9.5)
+2026-05-13T01:43:42.6687826Z * file_selector_platform_interface 2.7.0 (was 2.7.0)
+2026-05-13T01:43:42.6688259Z * file_selector_windows 0.9.3+5 (was 0.9.3+5)
+2026-05-13T01:43:42.6688627Z * fixnum 1.1.1 (was 1.1.1)
+2026-05-13T01:43:42.6688942Z * flutter_cache_manager 3.4.1 (was 3.4.1)
+2026-05-13T01:43:42.6689476Z * flutter_callkit_incoming 3.0.0 (was 3.0.0)
+2026-05-13T01:43:42.6689860Z * flutter_lints 6.0.0 (was 6.0.0)
+2026-05-13T01:43:42.6690212Z * flutter_markdown_plus 1.0.7 (was 1.0.7)
+2026-05-13T01:43:42.6690661Z * flutter_plugin_android_lifecycle 2.0.34 (was 2.0.34)
+2026-05-13T01:43:42.6691096Z * flutter_riverpod 3.3.1 (was 3.3.1)
+2026-05-13T01:43:42.6691496Z * flutter_screenutil 5.9.3 (was 5.9.3)
+2026-05-13T01:43:42.6691937Z * flutter_staggered_grid_view 0.7.0 (was 0.7.0)
+2026-05-13T01:43:42.6692387Z ! flutter_webrtc 1.4.1 (overridden)
+2026-05-13T01:43:42.6692965Z * frontend_server_client 4.0.0 (was 4.0.0)
+2026-05-13T01:43:42.6693388Z * geoclue 0.1.1 (was 0.1.1)
+2026-05-13T01:43:42.6693716Z * geolocator 14.0.2 (was 14.0.2)
+2026-05-13T01:43:42.6694076Z * geolocator_android 5.0.2 (was 5.0.2)
+2026-05-13T01:43:42.6694449Z * geolocator_apple 2.3.13 (was 2.3.13)
+2026-05-13T01:43:42.6694821Z * geolocator_linux 0.2.4 (was 0.2.4)
+2026-05-13T01:43:42.6695237Z * geolocator_platform_interface 4.2.6 (was 4.2.6)
+2026-05-13T01:43:42.6695666Z * geolocator_web 4.1.3 (was 4.1.3)
+2026-05-13T01:43:42.6696031Z * geolocator_windows 0.2.5 (was 0.2.5)
+2026-05-13T01:43:42.6696394Z * glob 2.1.3 (was 2.1.3)
+2026-05-13T01:43:42.6696707Z * go_router 17.2.3 (was 17.2.3)
+2026-05-13T01:43:42.6697083Z * google_fonts 8.1.0 (was 8.1.0)
+2026-05-13T01:43:42.6697482Z * graphs 2.3.2 (was 2.3.2)
+2026-05-13T01:43:42.6697831Z * gsettings 0.2.8 (was 0.2.8)
+2026-05-13T01:43:42.6698144Z * hive 2.2.3 (was 2.2.3)
+2026-05-13T01:43:42.6698475Z * hive_flutter 1.1.0 (was 1.1.0)
+2026-05-13T01:43:42.6698902Z * hooks 1.0.3 (was 1.0.3)
+2026-05-13T01:43:42.6699425Z * html 0.15.6 (was 0.15.6)
+2026-05-13T01:43:42.6699824Z * http 1.6.0 (was 1.6.0)
+2026-05-13T01:43:42.6700233Z * http_multi_server 3.2.2 (was 3.2.2)
+2026-05-13T01:43:42.6700653Z * http_parser 4.1.2 (was 4.1.2)
+2026-05-13T01:43:42.6701008Z * image_picker 1.2.2 (was 1.2.2)
+2026-05-13T01:43:42.6701486Z * image_picker_android 0.8.13+17 (was 0.8.13+17)
+2026-05-13T01:43:42.6701977Z * image_picker_for_web 3.1.1 (was 3.1.1)
+2026-05-13T01:43:42.6702430Z * image_picker_ios 0.8.13+6 (was 0.8.13+6)
+2026-05-13T01:43:42.6702874Z * image_picker_linux 0.2.2 (was 0.2.2)
+2026-05-13T01:43:42.6703332Z * image_picker_macos 0.2.2+1 (was 0.2.2+1)
+2026-05-13T01:43:42.6703859Z * image_picker_platform_interface 2.11.1 (was 2.11.1)
+2026-05-13T01:43:42.6704381Z * image_picker_windows 0.2.2 (was 0.2.2)
+2026-05-13T01:43:42.6704808Z * intl 0.20.2 (was 0.20.2)
+2026-05-13T01:43:42.6705111Z * io 1.0.5 (was 1.0.5)
+2026-05-13T01:43:42.6705405Z * jni 1.0.0 (was 1.0.0)
+2026-05-13T01:43:42.6705775Z * jni_flutter 1.0.1 (was 1.0.1)
+2026-05-13T01:43:42.6706179Z * js 0.7.2 (was 0.7.2)
+2026-05-13T01:43:42.6706559Z * json_annotation 4.11.0 (was 4.11.0)
+2026-05-13T01:43:42.6707017Z * just_audio 0.10.5 (was 0.10.5)
+2026-05-13T01:43:42.6707503Z * just_audio_platform_interface 4.6.0 (was 4.6.0)
+2026-05-13T01:43:42.6708025Z * just_audio_web 0.4.16 (was 0.4.16)
+2026-05-13T01:43:42.6708482Z * leak_tracker 11.0.2 (was 11.0.2)
+2026-05-13T01:43:42.6708981Z * leak_tracker_flutter_testing 3.0.10 (was 3.0.10)
+2026-05-13T01:43:42.6709668Z * leak_tracker_testing 3.0.2 (was 3.0.2)
+2026-05-13T01:43:42.6710138Z * lints 6.1.0 (was 6.1.0)
+2026-05-13T01:43:42.6710529Z * livekit_client 2.7.0 (was 2.7.0)
+2026-05-13T01:43:42.6711176Z * logger 2.7.0 (was 2.7.0)
+2026-05-13T01:43:42.6711573Z * logging 1.3.0 (was 1.3.0)
+2026-05-13T01:43:42.6711980Z * markdown 7.3.1 (was 7.3.1)
+2026-05-13T01:43:42.6712395Z ! matcher 0.12.20 (overridden)
+2026-05-13T01:43:42.6712861Z ! material_color_utilities 0.13.0 (overridden)
+2026-05-13T01:43:42.6713370Z ! meta 1.18.2 (overridden)
+2026-05-13T01:43:42.6713756Z * mime 2.0.0 (was 2.0.0)
+2026-05-13T01:43:42.6714139Z * mime_type 1.0.1 (was 1.0.1)
+2026-05-13T01:43:42.6714650Z * native_toolchain_c 0.17.6 (was 0.17.6) (0.18.0 available)
+2026-05-13T01:43:42.6715209Z * nested 1.0.0 (was 1.0.0)
+2026-05-13T01:43:42.6715591Z * nm 0.5.0 (was 0.5.0)
+2026-05-13T01:43:42.6715965Z * node_preamble 2.0.2 (was 2.0.2)
+2026-05-13T01:43:42.6716398Z * octo_image 2.1.0 (was 2.1.0)
+2026-05-13T01:43:42.6716826Z * package_config 2.2.0 (was 2.2.0)
+2026-05-13T01:43:42.6717355Z * package_info_plus 9.0.1 (was 9.0.1) (10.1.0 available)
+2026-05-13T01:43:42.6718102Z * package_info_plus_platform_interface 3.2.1 (was 3.2.1) (4.1.0 available)
+2026-05-13T01:43:42.6718772Z * path 1.9.1 (was 1.9.1)
+2026-05-13T01:43:42.6719275Z * path_provider 2.1.5 (was 2.1.5)
+2026-05-13T01:43:42.6719739Z * path_provider_android 2.3.1 (was 2.3.1)
+2026-05-13T01:43:42.6720382Z ! path_provider_foundation 2.5.1 (overridden) (2.6.0 available)
+2026-05-13T01:43:42.6721153Z * path_provider_linux 2.2.1 (was 2.2.1)
+2026-05-13T01:43:42.6721689Z * path_provider_platform_interface 2.1.2 (was 2.1.2)
+2026-05-13T01:43:42.6722261Z * path_provider_windows 2.3.0 (was 2.3.0)
+2026-05-13T01:43:42.6722935Z * patrol 4.5.0 (was 4.5.0)
+2026-05-13T01:43:42.6723319Z * patrol_finders 3.2.0 (was 3.2.0)
+2026-05-13T01:43:42.6723733Z * patrol_log 0.8.0 (was 0.8.0)
+2026-05-13T01:43:42.6724153Z * pedantic 1.11.1 (was 1.11.1)
+2026-05-13T01:43:42.6724592Z * permission_handler 12.0.1 (was 12.0.1)
+2026-05-13T01:43:42.6725125Z * permission_handler_android 13.0.1 (was 13.0.1)
+2026-05-13T01:43:42.6725667Z * permission_handler_apple 9.4.7 (was 9.4.7)
+2026-05-13T01:43:42.6726214Z * permission_handler_html 0.1.3+5 (was 0.1.3+5)
+2026-05-13T01:43:42.6726830Z * permission_handler_platform_interface 4.3.0 (was 4.3.0)
+2026-05-13T01:43:42.6727443Z * permission_handler_windows 0.2.1 (was 0.2.1)
+2026-05-13T01:43:42.6727958Z * petitparser 7.0.2 (was 7.0.2)
+2026-05-13T01:43:42.6728393Z * photo_manager 3.9.0 (was 3.9.0)
+2026-05-13T01:43:42.6728834Z * photo_view 0.15.0 (was 0.15.0)
+2026-05-13T01:43:42.6729385Z * platform 3.1.6 (was 3.1.6)
+2026-05-13T01:43:42.6729848Z * plugin_platform_interface 2.1.8 (was 2.1.8)
+2026-05-13T01:43:42.6730365Z * pointycastle 4.0.0 (was 4.0.0)
+2026-05-13T01:43:42.6730800Z * pool 1.5.2 (was 1.5.2)
+2026-05-13T01:43:42.6731185Z * process 5.0.5 (was 5.0.5)
+2026-05-13T01:43:42.6731579Z * protobuf 6.0.0 (was 6.0.0)
+2026-05-13T01:43:42.6731993Z * provider 6.1.5+1 (was 6.1.5+1)
+2026-05-13T01:43:42.6732419Z * pub_semver 2.2.0 (was 2.2.0)
+2026-05-13T01:43:42.6732845Z * pubspec_parse 1.5.0 (was 1.5.0)
+2026-05-13T01:43:42.6733283Z * record 6.2.0 (was 6.2.0)
+2026-05-13T01:43:42.6733680Z * record_android 1.5.1 (was 1.5.1)
+2026-05-13T01:43:42.6734121Z * record_ios 1.2.0 (was 1.2.0)
+2026-05-13T01:43:42.6734545Z ! record_linux 1.3.0 (overridden)
+2026-05-13T01:43:42.6734982Z * record_macos 1.2.1 (was 1.2.1)
+2026-05-13T01:43:42.6735443Z * record_platform_interface 1.5.0 (was 1.5.0)
+2026-05-13T01:43:42.6735843Z * record_use 0.6.0 (was 0.6.0)
+2026-05-13T01:43:42.6736240Z * record_web 1.3.0 (was 1.3.0)
+2026-05-13T01:43:42.6736633Z * record_windows 1.0.7 (was 1.0.7)
+2026-05-13T01:43:42.6737024Z * riverpod 3.2.1 (was 3.2.1)
+2026-05-13T01:43:42.6737448Z * rxdart 0.28.0 (was 0.28.0)
+2026-05-13T01:43:42.6737868Z * sdp_transform 0.3.2 (was 0.3.2)
+2026-05-13T01:43:42.6738357Z * share_plus 12.0.2 (was 12.0.2) (13.1.0 available)
+2026-05-13T01:43:42.6739044Z * share_plus_platform_interface 6.1.0 (was 6.1.0) (7.1.0 available)
+2026-05-13T01:43:42.6739813Z * shared_preferences 2.5.5 (was 2.5.5)
+2026-05-13T01:43:42.6740327Z * shared_preferences_android 2.4.23 (was 2.4.23)
+2026-05-13T01:43:42.6741077Z * shared_preferences_foundation 2.5.6 (was 2.5.6)
+2026-05-13T01:43:42.6741660Z * shared_preferences_linux 2.4.1 (was 2.4.1)
+2026-05-13T01:43:42.6742278Z * shared_preferences_platform_interface 2.4.2 (was 2.4.2)
+2026-05-13T01:43:42.6742900Z * shared_preferences_web 2.4.3 (was 2.4.3)
+2026-05-13T01:43:42.6743452Z * shared_preferences_windows 2.4.1 (was 2.4.1)
+2026-05-13T01:43:42.6743969Z * shelf 1.4.2 (was 1.4.2)
+2026-05-13T01:43:42.6744394Z * shelf_packages_handler 3.0.2 (was 3.0.2)
+2026-05-13T01:43:42.6744892Z * shelf_static 1.1.3 (was 1.1.3)
+2026-05-13T01:43:42.6745240Z * shelf_web_socket 3.0.0 (was 3.0.0)
+2026-05-13T01:43:42.6745643Z * source_map_stack_trace 2.1.2 (was 2.1.2)
+2026-05-13T01:43:42.6746038Z * source_maps 0.10.13 (was 0.10.13)
+2026-05-13T01:43:42.6746373Z * source_span 1.10.2 (was 1.10.2)
+2026-05-13T01:43:42.6746732Z * speech_to_text 7.3.0 (was 7.3.0)
+2026-05-13T01:43:42.6747229Z * speech_to_text_platform_interface 2.3.0 (was 2.3.0)
+2026-05-13T01:43:42.6747782Z * speech_to_text_windows 1.0.0+beta.8 (was 1.0.0+beta.8)
+2026-05-13T01:43:42.6748258Z * sqflite 2.4.2+1 (was 2.4.2+1)
+2026-05-13T01:43:42.6748669Z * sqflite_android 2.4.2+3 (was 2.4.2+3)
+2026-05-13T01:43:42.6749235Z * sqflite_common 2.5.7 (was 2.5.6+1)
+2026-05-13T01:43:42.6749677Z * sqflite_common_ffi 2.4.0+3 (was 2.4.0+3)
+2026-05-13T01:43:42.6750294Z * sqflite_darwin 2.4.2 (was 2.4.2)
+2026-05-13T01:43:42.6750755Z * sqflite_platform_interface 2.4.0 (was 2.4.0)
+2026-05-13T01:43:42.6751230Z * sqlite3 3.3.1 (was 3.3.1)
+2026-05-13T01:43:42.6751616Z * stack_trace 1.12.1 (was 1.12.1)
+2026-05-13T01:43:42.6752030Z * state_notifier 1.0.0 (was 1.0.0)
+2026-05-13T01:43:42.6752457Z * stream_channel 2.1.4 (was 2.1.4)
+2026-05-13T01:43:42.6752878Z * stream_transform 2.1.1 (was 2.1.1)
+2026-05-13T01:43:42.6753303Z * string_scanner 1.4.1 (was 1.4.1)
+2026-05-13T01:43:42.6753714Z * sync_http 0.3.1 (was 0.3.1)
+2026-05-13T01:43:42.6754095Z * synchronized 3.4.0+1 (was 3.4.0+1)
+2026-05-13T01:43:42.6754524Z * term_glyph 1.2.2 (was 1.2.2)
+2026-05-13T01:43:42.6754918Z ! test 1.31.1 (overridden)
+2026-05-13T01:43:42.6755305Z ! test_api 0.7.12 (overridden)
+2026-05-13T01:43:42.6755701Z ! test_core 0.6.18 (overridden)
+2026-05-13T01:43:42.6756091Z * typed_data 1.4.0 (was 1.4.0)
+2026-05-13T01:43:42.6756484Z * url_launcher 6.3.2 (was 6.3.2)
+2026-05-13T01:43:42.6756907Z * url_launcher_android 6.3.29 (was 6.3.29)
+2026-05-13T01:43:42.6757359Z * url_launcher_ios 6.4.1 (was 6.4.1)
+2026-05-13T01:43:42.6757786Z * url_launcher_linux 3.2.2 (was 3.2.2)
+2026-05-13T01:43:42.6758226Z * url_launcher_macos 3.2.5 (was 3.2.5)
+2026-05-13T01:43:42.6758722Z * url_launcher_platform_interface 2.3.2 (was 2.3.2)
+2026-05-13T01:43:42.6759362Z * url_launcher_web 2.4.3 (was 2.4.2)
+2026-05-13T01:43:42.6759804Z * url_launcher_windows 3.1.5 (was 3.1.5)
+2026-05-13T01:43:42.6760243Z * uuid 4.5.3 (was 4.5.3)
+2026-05-13T01:43:42.6760628Z * vector_math 2.2.0 (was 2.2.0) (2.3.0 available)
+2026-05-13T01:43:42.6761033Z * video_player 2.11.1 (was 2.11.1)
+2026-05-13T01:43:42.6761415Z * video_player_android 2.9.5 (was 2.9.5)
+2026-05-13T01:43:42.6761832Z * video_player_avfoundation 2.9.6 (was 2.9.4)
+2026-05-13T01:43:42.6762396Z * video_player_platform_interface 6.7.0 (was 6.7.0)
+2026-05-13T01:43:42.6762946Z * video_player_web 2.4.0 (was 2.4.0)
+2026-05-13T01:43:42.6763356Z * video_thumbnail 0.5.6 (was 0.5.6)
+2026-05-13T01:43:42.6763768Z * vm_service 15.2.0 (was 15.2.0)
+2026-05-13T01:43:42.6764219Z * wakelock_plus 1.5.2 (was 1.5.2) (1.6.0 available)
+2026-05-13T01:43:42.6764772Z * wakelock_plus_platform_interface 1.5.0 (was 1.5.0)
+2026-05-13T01:43:42.6765283Z * watcher 1.2.1 (was 1.2.1)
+2026-05-13T01:43:42.6765651Z * web 1.1.1 (was 1.1.1)
+2026-05-13T01:43:42.6766016Z * web_socket 1.0.1 (was 1.0.1)
+2026-05-13T01:43:42.6766415Z * web_socket_channel 3.0.3 (was 3.0.3)
+2026-05-13T01:43:42.6766849Z * webdriver 3.1.0 (was 3.1.0)
+2026-05-13T01:43:42.6767288Z * webkit_inspection_protocol 1.2.1 (was 1.2.1)
+2026-05-13T01:43:42.6767774Z * webrtc_interface 1.5.1 (was 1.5.1)
+2026-05-13T01:43:42.6768211Z * webview_flutter 4.13.1 (was 4.13.1)
+2026-05-13T01:43:42.6768837Z * webview_flutter_android 4.12.0 (was 4.12.0)
+2026-05-13T01:43:42.6769558Z * webview_flutter_platform_interface 2.15.1 (was 2.15.1)
+2026-05-13T01:43:42.6770123Z * webview_flutter_wkwebview 3.25.1 (was 3.25.1)
+2026-05-13T01:43:42.6770618Z * win32 5.15.0 (was 5.15.0) (6.2.0 available)
+2026-05-13T01:43:42.6771107Z * win32_registry 2.1.0 (was 2.1.0) (3.0.3 available)
+2026-05-13T01:43:42.6771612Z * xdg_directories 1.1.0 (was 1.1.0)
+2026-05-13T01:43:42.6772043Z * xml 6.6.1 (was 6.6.1) (7.0.1 available)
+2026-05-13T01:43:42.6772470Z * yaml 3.1.3 (was 3.1.3)
+2026-05-13T01:43:42.6772878Z Changed 225 dependencies!
+2026-05-13T01:43:42.6773451Z 14 packages have newer versions incompatible with dependency constraints.
+2026-05-13T01:43:42.6774160Z Try `flutter pub outdated` for more information.
+2026-05-13T01:43:44.0987137Z ##[group]Run cd "$GITHUB_WORKSPACE" && make test-api-contract
+2026-05-13T01:43:44.0987860Z [36;1mcd "$GITHUB_WORKSPACE" && make test-api-contract[0m
+2026-05-13T01:43:44.1002816Z shell: /usr/bin/bash -e {0}
+2026-05-13T01:43:44.1003062Z env:
+2026-05-13T01:43:44.1003279Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:44.1003510Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:44.1003713Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:44.1003920Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:44.1004313Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:44.1004568Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:44.1004794Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:44.1005012Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:44.1005269Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:44.1005578Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:44.1006371Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:44.1006909Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.9-x64/flutter
+2026-05-13T01:43:44.1007255Z   PUB_CACHE: /home/runner/.pub-cache
+2026-05-13T01:43:44.1007499Z ##[endgroup]
+2026-05-13T01:43:46.9551423Z 
+2026-05-13T01:43:55.1086880Z ##[group]❌ feed_cursor_pagination_end_to_end (setUpAll) (failed)
+2026-05-13T01:43:55.1092566Z Exception: _seedPhotoPost failed: 400 {"code":"CONTENT.USER.invalid_argument","origin":"user","nature":"permanent","userMessage":"缺少 X-Client-Sub-Account-Id","debugMessage":"debug_message_redacted","module":"CONTENT","kind":"validation","reason":"invalid_argument","message":"debug_message_redacted","requestId":"APP.content.post.create.hih2e16kla.4rue","traceId":"APP.hih2e16a21.content.post.create.hih2e16kla.4rue","location":{"businessObject":"cloud_request","functionModule":"runtime_errors"},"context":{"attributes":[{"key":"module","value":"CONTENT"},{"key":"reason","value":"invalid_argument"}]}}
+2026-05-13T01:43:55.1096962Z 
+2026-05-13T01:43:55.1102241Z test/cloud/content/api_contract_runner.dart 76:5  _seedPhotoPost
+2026-05-13T01:43:55.1103425Z ##[endgroup]
+2026-05-13T01:43:55.3590843Z ##[group]❌ behavior_batch_report_reaches_service (setUpAll) (failed)
+2026-05-13T01:43:55.3594781Z Exception: _seedPhotoPost failed: 400 {"code":"CONTENT.USER.invalid_argument","origin":"user","nature":"permanent","userMessage":"缺少 X-Client-Sub-Account-Id","debugMessage":"debug_message_redacted","module":"CONTENT","kind":"validation","reason":"invalid_argument","message":"debug_message_redacted","requestId":"APP.content.post.create.hih2e1igma.yajk","traceId":"APP.hih2e16a21.content.post.create.hih2e1igma.yajk","location":{"businessObject":"cloud_request","functionModule":"runtime_errors"},"context":{"attributes":[{"key":"module","value":"CONTENT"},{"key":"reason","value":"invalid_argument"}]}}
+2026-05-13T01:43:55.3597153Z 
+2026-05-13T01:43:55.3597450Z test/cloud/content/api_contract_runner.dart 76:5  _seedPhotoPost
+2026-05-13T01:43:55.3598185Z ##[endgroup]
+2026-05-13T01:43:55.6390665Z ✅ error_state_displayed_correctly 不存在的 postId → 404 + CONTENT.USER.post_not_found
+2026-05-13T01:43:55.8751869Z ✅ media_not_ready_graceful_error X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry
+2026-05-13T01:43:56.1165294Z ##[group]❌ dedicated_feedback_and_user_block_contract (setUpAll) (failed)
+2026-05-13T01:43:56.1170114Z Exception: _seedPhotoPost failed: 400 {"code":"CONTENT.USER.invalid_argument","origin":"user","nature":"permanent","userMessage":"缺少 X-Client-Sub-Account-Id","debugMessage":"debug_message_redacted","module":"CONTENT","kind":"validation","reason":"invalid_argument","message":"debug_message_redacted","requestId":"APP.content.post.create.hih2e1yowl.5r0u","traceId":"APP.hih2e16a21.content.post.create.hih2e1yowl.5r0u","location":{"businessObject":"cloud_request","functionModule":"runtime_errors"},"context":{"attributes":[{"key":"module","value":"CONTENT"},{"key":"reason","value":"invalid_argument"}]}}
+2026-05-13T01:43:56.1173710Z 
+2026-05-13T01:43:56.1174486Z test/cloud/content/api_contract_runner.dart 76:5  _seedPhotoPost
+2026-05-13T01:43:56.1175348Z ##[endgroup]
+2026-05-13T01:43:56.1401405Z 
+2026-05-13T01:43:56.1424446Z ##[error]2 tests passed, 3 failed.
+2026-05-13T01:43:56.1825254Z make: *** [Makefile:341: test-api-contract] Error 1
+2026-05-13T01:43:56.1831958Z ##[error]Process completed with exit code 2.
+2026-05-13T01:43:56.1869709Z ##[group]Run echo "duration_seconds=$(( $(date +%s) - 1778636601 ))" >> "$GITHUB_OUTPUT"
+2026-05-13T01:43:56.1870266Z [36;1mecho "duration_seconds=$(( $(date +%s) - 1778636601 ))" >> "$GITHUB_OUTPUT"[0m
+2026-05-13T01:43:56.1883476Z shell: /usr/bin/bash -e {0}
+2026-05-13T01:43:56.1883713Z env:
+2026-05-13T01:43:56.1883892Z   GAMMA_ECS_HOST: 118.31.239.122
+2026-05-13T01:43:56.1884127Z   GAMMA_ECS_USER: root
+2026-05-13T01:43:56.1884329Z   GAMMA_ECS_PORT: 22
+2026-05-13T01:43:56.1884550Z   GAMMA_ECS_REMOTE_DIR: /opt/quwoquan/gamma
+2026-05-13T01:43:56.1884836Z   ASSISTANT_MODEL_PROVIDER: deterministic
+2026-05-13T01:43:56.1885102Z   ALLOW_DETERMINISTIC_BETA: 1
+2026-05-13T01:43:56.1885333Z   API_CONTRACT_ENV: gamma
+2026-05-13T01:43:56.1885551Z   LOCAL_GAMMA_T3_SCOPE: content
+2026-05-13T01:43:56.1885810Z   GAMMA_BASE_URL: http://118.31.239.122:18000
+2026-05-13T01:43:56.1886119Z   GAMMA_PRODUCT_OPS_BASE_URL: http://118.31.239.122:18086
+2026-05-13T01:43:56.1886613Z   GAMMA_TEST_AUTH_TOKEN: ***
+2026-05-13T01:43:56.1886937Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.9-x64/flutter
+2026-05-13T01:43:56.1887294Z   PUB_CACHE: /home/runner/.pub-cache
+2026-05-13T01:43:56.1887552Z ##[endgroup]
+2026-05-13T01:43:56.2054676Z Post job cleanup.
+2026-05-13T01:43:56.2139374Z Post job cleanup.
+2026-05-13T01:43:56.3040454Z [command]/usr/bin/git version
+2026-05-13T01:43:56.3072697Z git version 2.53.0
+2026-05-13T01:43:56.3119620Z Temporarily overriding HOME='/home/runner/work/_temp/22e6c2db-9cfb-4f8f-8e1f-1cc0358ec1cf' before making global git config changes
+2026-05-13T01:43:56.3120810Z Adding repository directory to the temporary git global config as a safe directory
+2026-05-13T01:43:56.3125748Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/quwoquan/quwoquan
+2026-05-13T01:43:56.3156545Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-05-13T01:43:56.3183969Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-05-13T01:43:56.3361842Z fatal: No url found for submodule path 'tools/cursor-cookbook' in .gitmodules
+2026-05-13T01:43:56.3389004Z ##[warning]The process '/usr/bin/git' failed with exit code 128
+2026-05-13T01:43:56.3470235Z Evaluate and set job outputs
+2026-05-13T01:43:56.3474792Z Set output 'duration_seconds'
+2026-05-13T01:43:56.3477010Z Cleaning up orphan processes
+2026-05-13T01:43:56.3702322Z ##[warning]Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: actions/checkout@v4. Actions will be forced to run with Node.js 24 by default starting June 2nd, 2026. Node.js 20 will be removed from the runner on September 16th, 2026. Please check if updated versions of these actions are available that support Node.js 24. To opt into Node.js 24 now, set the FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true environment variable on the runner or in your workflow file. Once Node.js 24 becomes the default, you can temporarily opt out by setting ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -205,11 +205,58 @@ def _topic_catalog_slice_path(spec_id: str) -> Path:
     return entities_catalog_path(f"{spec_id}_topics.ndjson")
 
 
+def _topic_seed_catalog_slice_path(spec_id: str) -> Path:
+    return entities_catalog_path(f"{spec_id}_seed_topics.ndjson")
+
+
 def _entity_rows_for_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
     spec_id = str(spec.get("spec_id", "")).strip()
     if spec_id and selected_entities_path(spec_id).exists():
         return read_ndjson(selected_entities_path(spec_id))
     return load_entities_catalog()
+
+
+def _entity_topic_id(row: dict[str, Any]) -> str:
+    return str(row.get("topicId", "")).strip()
+
+
+def _has_real_topic_id(row: dict[str, Any]) -> bool:
+    topic_id = _entity_topic_id(row)
+    return bool(topic_id and not topic_id.startswith("topic_"))
+
+
+def _topic_row_from_entity(row: dict[str, Any]) -> dict[str, Any]:
+    extensions = row.get("extensions") or {}
+    core_tokens = _csv(extensions.get("coreTokens"))
+    return {
+        "topic_id": _entity_topic_id(row),
+        "entityId": str(row.get("entityId", "")).strip(),
+        "name": str(row.get("canonicalName", "")).strip(),
+        "label_zh": str(extensions.get("labelZh") or row.get("canonicalName") or "").strip(),
+        "label_en": str(extensions.get("labelEn") or "").strip(),
+        "display_locale": str(extensions.get("displayLocale") or "zh").strip() or "zh",
+        "entity_type": str(row.get("entityType") or "").strip(),
+        "entity_type_label_zh": str(extensions.get("entityTypeLabelZh") or "").strip(),
+        "aliases": _csv(row.get("aliases")),
+        "wiki_title": str(extensions.get("wikiTitle") or row.get("canonicalName") or "").strip(),
+        "baike_item": str(extensions.get("baikeItem") or row.get("canonicalName") or "").strip(),
+        "core_tokens": core_tokens,
+        "tagRefs": _csv(row.get("tagRefs")),
+        "province": str(extensions.get("province") or "").strip(),
+        "prefecture": str(extensions.get("prefecture") or "").strip(),
+        "district": str(extensions.get("district") or "").strip(),
+        "expected_region_keywords": _csv(extensions.get("expectedRegionKeywords")),
+    }
+
+
+def _dedupe_topic_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        topic_id = str(row.get("topic_id", "")).strip()
+        if not topic_id:
+            continue
+        deduped[topic_id] = row
+    return list(deduped.values())
 
 
 def handle_instruction_build(args) -> int:
@@ -416,11 +463,21 @@ def handle_entities_by_tag(args) -> int:
     ensure_runtime_layout()
     spec, _ = _maybe_spec(args)
     spec_id = str(spec.get("spec_id", "")).strip() or str(getattr(args, "spec_id", "") or "").strip()
-    entities = load_entities_catalog()
+    entity_catalog_arg = str(getattr(args, "entity_catalog", "") or "").strip()
+    if entity_catalog_arg:
+        path = Path(entity_catalog_arg)
+        if not path.is_absolute():
+            path = (Path.cwd() / entity_catalog_arg).resolve()
+        else:
+            path = path.resolve()
+        entities = read_ndjson(path)
+    else:
+        entities = load_entities_catalog()
     tags, tag_by_label = _load_tag_catalog_by_label()
     requested_refs = _csv(getattr(args, "tag_refs", "")) or _csv(spec.get("tag_refs", []))
     requested_labels = _csv(getattr(args, "tag_labels", ""))
     requested_ids = _csv(getattr(args, "tag_ids", ""))
+    require_topic_id = bool(getattr(args, "require_topic_id", False))
     if not requested_refs and not requested_labels and not requested_ids:
         print("[crawl entities-by-tag] FAIL: 需要 tag_refs/tag_labels/tag_ids 或 --spec", file=sys.stderr)
         return 1
@@ -435,6 +492,8 @@ def handle_entities_by_tag(args) -> int:
     requested_id_set = {item for item in requested_ids if item}
     selected = []
     for row in entities:
+        if require_topic_id and not _has_real_topic_id(row):
+            continue
         row_tag_refs = set(_csv(row.get("tagRefs")))
         row_tag_ids = {tag_id_for_ref(ref) for ref in row_tag_refs if ref}
         if row_tag_ids & requested_id_set:
@@ -478,44 +537,47 @@ def handle_spec_build(args) -> int:
     if not profile:
         print(f"[crawl spec-build] FAIL: 缺少 instruction_profile {spec_id}", file=sys.stderr)
         return 1
-    selected_entities = read_ndjson(selected_entities_path(spec_id))
+    entity_catalog_arg = str(getattr(args, "entity_catalog", "") or "").strip()
+    if entity_catalog_arg:
+        catalog_path = Path(entity_catalog_arg)
+        if not catalog_path.is_absolute():
+            catalog_path = (Path.cwd() / entity_catalog_arg).resolve()
+        else:
+            catalog_path = catalog_path.resolve()
+        selected_entities = read_ndjson(catalog_path)
+    else:
+        selected_entities = read_ndjson(selected_entities_path(spec_id))
     selected_tags = read_ndjson(selected_tags_path(spec_id))
     if not selected_entities:
         print(f"[crawl spec-build] FAIL: 缺少 selected_entities {spec_id}", file=sys.stderr)
         return 1
-    slice_rows: list[dict[str, Any]] = []
+    topic_mode = str(getattr(args, "topic_mode", "") or "direct").strip() or "direct"
+    context_entity_refs = _csv(getattr(args, "context_entity_refs", ""))
+    if topic_mode not in {"direct", "seed_only"}:
+        print(f"[crawl spec-build] FAIL: topic_mode 仅支持 direct|seed_only，收到 {topic_mode}", file=sys.stderr)
+        return 1
+    seed_rows: list[dict[str, Any]] = []
+    publishable_rows: list[dict[str, Any]] = []
     entity_refs: list[str] = []
     for row in selected_entities:
         entity_ref = str(row.get("entityRef", "")).strip()
         if entity_ref:
             entity_refs.append(entity_ref)
-        extensions = row.get("extensions") or {}
-        core_tokens = _csv(extensions.get("coreTokens"))
-        topic_id = str(row.get("topicId", "")).strip() or f"topic_{str(row.get('entityId', '')).strip()}"
-        slice_rows.append(
-            {
-                "topic_id": topic_id,
-                "entityId": str(row.get("entityId", "")).strip(),
-                "name": str(row.get("canonicalName", "")).strip(),
-                "label_zh": str(extensions.get("labelZh") or row.get("canonicalName") or "").strip(),
-                "label_en": str(extensions.get("labelEn") or "").strip(),
-                "display_locale": str(extensions.get("displayLocale") or "zh").strip() or "zh",
-                "entity_type": str(row.get("entityType") or "").strip(),
-                "entity_type_label_zh": str(extensions.get("entityTypeLabelZh") or "").strip(),
-                "aliases": _csv(row.get("aliases")),
-                "wiki_title": str(extensions.get("wikiTitle") or row.get("canonicalName") or "").strip(),
-                "baike_item": str(extensions.get("baikeItem") or row.get("canonicalName") or "").strip(),
-                "core_tokens": core_tokens,
-                "tagRefs": _csv(row.get("tagRefs")),
-                "province": str(extensions.get("province") or "").strip(),
-                "prefecture": str(extensions.get("prefecture") or "").strip(),
-                "district": str(extensions.get("district") or "").strip(),
-                "expected_region_keywords": _csv(extensions.get("expectedRegionKeywords")),
-            }
-        )
+        if not _has_real_topic_id(row):
+            continue
+        topic_row = _topic_row_from_entity(row)
+        seed_rows.append(topic_row)
+        if topic_mode == "direct":
+            publishable_rows.append(topic_row)
+    seed_rows = _dedupe_topic_rows(seed_rows)
+    publishable_rows = _dedupe_topic_rows(publishable_rows)
+    entity_refs = [ref for ref in dict.fromkeys([*entity_refs, *context_entity_refs]) if ref]
+    seed_slice_path = _topic_seed_catalog_slice_path(spec_id)
     slice_path = _topic_catalog_slice_path(spec_id)
-    write_ndjson(slice_path, slice_rows)
-    topic_count = len(slice_rows)
+    write_ndjson(seed_slice_path, seed_rows)
+    write_ndjson(slice_path, publishable_rows)
+    active_topic_rows = publishable_rows if topic_mode == "direct" else seed_rows
+    topic_count = len(active_topic_rows)
     suggested_batch_size = 20
     if topic_count > 500:
         suggested_batch_size = 50
@@ -525,7 +587,8 @@ def handle_spec_build(args) -> int:
         "spec_id": spec_id,
         "query": str(profile.get("rawInstruction", "")).strip() or str(profile.get("intent", "")).strip(),
         "search_provider": "native_fetch",
-        "article_topic_catalog_ref": runtime_rel_ref(slice_path),
+        "article_topic_catalog_ref": runtime_rel_ref(seed_slice_path if topic_mode == "seed_only" else slice_path),
+        "publishable_topic_catalog_ref": runtime_rel_ref(slice_path),
         "entity_refs": [ref for ref in entity_refs if ref],
         "tag_refs": [str(row.get("tagRef", "")).strip() for row in selected_tags if str(row.get("tagRef", "")).strip()],
         "target_envs": ["alpha", "gamma"],
@@ -535,20 +598,23 @@ def handle_spec_build(args) -> int:
         },
         "publish_policy": {"visibility": "public", "assistant_use_policy": "inherit"},
         "discovery_policy": {
-            "min_article_topics": max(1, min(20, len(slice_rows))),
+            "min_article_topics": max(1, min(20, len(active_topic_rows))),
             "min_image_topics": 1,
             "min_candidate_sources_per_task": 20,
-            "min_article_publish_topics": min(6, max(1, len(slice_rows))),
+            "min_article_publish_topics": min(6, max(1, len(active_topic_rows))),
             "min_image_publish_topics": 0,
         },
         "article_lane": {"allow_domains": []},
         "image_lane": {"allow_domains": []},
         "sample_topics": {"article": [], "image": [f"{spec_id}_image_sample_001"]},
         "extensions": {
+            "seedTopicCount": len(seed_rows),
+            "publishableTopicCount": len(publishable_rows),
             "topicCount": topic_count,
             "skipHydrateRecommended": topic_count > 50,
             "largeTopicMode": topic_count > 100,
             "suggestedBatchSize": suggested_batch_size,
+            "topicMode": topic_mode,
         },
     }
     registry = load_source_registry()
@@ -564,7 +630,17 @@ def handle_spec_build(args) -> int:
     else:
         output_path = CRAWL_SPEC_ROOT / f"{spec_id}.yaml"
     write_yaml(output_path, spec_payload)
-    print(json.dumps({"ok": True, "spec": runtime_rel_ref(output_path), "topicCatalog": runtime_rel_ref(slice_path)}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "spec": runtime_rel_ref(output_path),
+                "topicCatalog": runtime_rel_ref(slice_path),
+                "seedTopicCatalog": runtime_rel_ref(seed_slice_path),
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

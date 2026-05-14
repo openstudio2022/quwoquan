@@ -32,8 +32,8 @@ metadata → codegen → 业务逻辑 → 测试
 | T1 | 创建 `deploy/cloud-providers/aliyun/seed-box/overlays/{integration,prod}`，复用 base，注入阿里云特定 patch | [x] 已完成 |
 | T2 | 创建 `deploy/cloud-providers/volcengine/seed-box/overlays/{integration,prod}`，火山引擎特定 patch | [x] 已完成 |
 | T3 | 创建 `deploy/cloud-providers/huaweicloud/seed-box/overlays/{integration,prod}`，华为云特定 patch | [x] 已完成 |
-| T4 | 编写 `scripts/deploy_to_integration.sh`，支持 `CLOUD_PROVIDER` 参数，调用 kustomize 构建并 apply | [x] 已完成 |
-| T5 | 创建 `.github/workflows/pre-release-gate.yml`：收口为 ECS gamma hosted pre + self-hosted gamma Android/iOS 主门禁，全部通过输出「可灰度」 | [x] 已完成 |
+| T4 | 编写 `agent_ops/deploy/shared/deploy_integration_k8s.sh`，支持 `CLOUD_PROVIDER` 参数，调用 kustomize 构建并 apply | [x] 已完成 |
+| T5 | `.github/workflows/pre-release-gate.yml`：PR 默认 `pr_light`（轻量 gamma readiness 阻断 + smoke 漂移告警）；显式 `manual_full` 触发完整 ECS 链。Full gamma 验证由 09 nightly 承担 | [x] 已完成 |
 | T6 | 串联 daily-api-contract、e2e.yaml 与 pre-release-gate（或合并为统一 pre-release workflow） | [x] 已完成 |
 | T7 | 更新 `deploy/shared/deliver_to_production_runbook.md`，增加多云切换步骤与 `CLOUD_PROVIDER` 说明 | [x] 已完成 |
 | T8 | 更新 Makefile：`deploy-integration CLOUD_PROVIDER=aliyun\|volcengine\|huaweicloud` | [x] 已完成 |

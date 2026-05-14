@@ -58,7 +58,7 @@ level_acceptance:
   - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
 - id: A7
   description: '圈子详情页所有硬编码视觉字面量清零： 字号使用 AppTypography.*、间距使用 AppSpacing.*、颜色使用 AppColors/AppColorsFunctional、
-    圆角使用 AppSpacing.*BorderRadius， python3 scripts/verify_dart_semantic.py 对 ui/circle/
+    圆角使用 AppSpacing.*BorderRadius， python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py 对 ui/circle/
     目录零新增违规。
 
     '

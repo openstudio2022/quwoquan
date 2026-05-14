@@ -45,7 +45,7 @@ level_acceptance:
     linked_tasks:
       - M2
     tests:
-      - file: scripts/verify_dart_semantic.py
+      - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
   A5:
     criteria: |
       S6 baseline 冻结：spec/design/plan/acceptance 含 **S7/S8 正交** 声明；CR-012 登记；
@@ -105,11 +105,11 @@ evidence_matrix:
     - type: command
       note: flutter analyze quwoquan_app/lib/
     - type: script
-      artifact: scripts/verify_dart_semantic.py
+      artifact: quwoquan_app/scripts/runtime/verify_dart_semantic.py
     - type: script
-      artifact: scripts/verify_page_horizontal_quality_matrix.py
+      artifact: quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
     - type: script
-      artifact: scripts/verify_page_matrix_scan_complete.py
+      artifact: quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
   T3:
     - type: manual
       note: 各 plan slice 合并前深浅色抽检（模拟器/真机）

@@ -46,7 +46,7 @@ level_acceptance:
     tests:
       - file: specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/design.md
 execution:
-  local_gate: "python3 scripts/verify_metadata_driven_ui_gate.py"
+  local_gate: "python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py"
   full_gate: make gate
   note: 清单路径存在性 + YAML；QWQ_METADATA_UI_GATE_STRICT=1 时禁止 current_map 行
 

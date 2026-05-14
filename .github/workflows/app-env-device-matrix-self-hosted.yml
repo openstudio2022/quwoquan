@@ -1,6 +1,7 @@
 # Self-hosted：统一设备矩阵入口（PR 主门禁 / workflow_call 复用 / 手动调试）。
 # 固定到本机 macOS self-hosted runner，并通过 flutter devices --machine 动态发现当前可见的 Android/iOS 模拟器与真机。
 # 发现到的每台设备都会执行；只要总设备数 >= 1 即可进入矩阵，不再依赖固定 device id。
+# PR 默认 pr_light profile（alpha/beta, allow_missing）；显式或 nightly 调用时可传 nightly_full / manual_full。
 name: 05. App Env Device Matrix
 
 on:
@@ -9,15 +10,24 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      env_json:
-        description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]'
-        required: true
-        default: '["alpha","beta","gamma"]'
-      allow_missing_platforms:
-        description: '缺席平台是否允许跳过（已发现的平台仍必须成功）'
+      validation_profile:
+        description: '验证 profile：pr_light / manual_full / nightly_full（影响环境集与是否要求全平台）'
         required: false
-        default: false
-        type: boolean
+        default: pr_light
+        type: choice
+        options:
+          - pr_light
+          - manual_full
+          - nightly_full
+      env_json:
+        description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]（留空则按 profile 决定）'
+        required: false
+        default: ''
+      allow_missing_platforms:
+        description: '缺席平台是否允许跳过（留空则按 profile 决定）'
+        required: false
+        default: ''
+        type: string
       gamma_base_url:
         description: 可选覆盖 gamma 网关（默认 secrets.GAMMA_BASE_URL）
         required: false
@@ -27,17 +37,23 @@ on:
         required: false
         default: ''
       matrix_kind:
-        description: assistant 或 chat-avatar
+        description: assistant 或 chat-avatar（留空则按 profile 决定）
         required: false
-        default: assistant
+        default: ''
   workflow_call:
     inputs:
-      env_json:
-        description: 'JSON array of environments'
-        required: true
+      validation_profile:
+        description: 'pr_light / manual_full / nightly_full'
+        required: false
         type: string
+        default: pr_light
+      env_json:
+        description: 'JSON array of environments (overrides profile default)'
+        required: false
+        type: string
+        default: ''
       allow_missing_platforms:
-        description: '是否允许缺席平台跳过'
+        description: '是否允许缺席平台跳过 (overrides profile default)'
         required: false
         type: boolean
         default: false
@@ -52,10 +68,10 @@ on:
         type: string
         default: ''
       matrix_kind:
-        description: 'assistant or chat-avatar'
+        description: 'assistant or chat-avatar (overrides profile default)'
         required: false
         type: string
-        default: assistant
+        default: ''
 
 concurrency:
   group: app-env-device-matrix-${{ github.event.pull_request.number || github.ref }}
@@ -82,29 +98,47 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: 解析当前触发下的矩阵默认值
+      - name: 解析当前触发下的矩阵默认值（按 validation_profile 分层）
         id: defaults
         env:
           EVENT_NAME: ${{ github.event_name }}
+          INPUT_PROFILE: ${{ inputs.validation_profile }}
           INPUT_ENV_JSON: ${{ inputs.env_json }}
           INPUT_ALLOW_MISSING_PLATFORMS: ${{ inputs.allow_missing_platforms }}
           INPUT_MATRIX_KIND: ${{ inputs.matrix_kind }}
           INPUT_GAMMA_BASE_URL: ${{ inputs.gamma_base_url }}
           INPUT_MEDIA_BASE_URL: ${{ inputs.media_base_url }}
         run: |
+          PROFILE="${INPUT_PROFILE:-pr_light}"
           if [ "${EVENT_NAME}" = "pull_request" ]; then
-            echo 'env_json=["alpha","beta"]' >> "$GITHUB_OUTPUT"
-            echo 'allow_missing_platforms=true' >> "$GITHUB_OUTPUT"
-            echo 'matrix_kind=assistant' >> "$GITHUB_OUTPUT"
-            echo 'gamma_base_url=' >> "$GITHUB_OUTPUT"
-            echo 'media_base_url=' >> "$GITHUB_OUTPUT"
-          else
-            echo "env_json=${INPUT_ENV_JSON}" >> "$GITHUB_OUTPUT"
-            echo "allow_missing_platforms=${INPUT_ALLOW_MISSING_PLATFORMS:-false}" >> "$GITHUB_OUTPUT"
-            echo "matrix_kind=${INPUT_MATRIX_KIND:-assistant}" >> "$GITHUB_OUTPUT"
-            echo "gamma_base_url=${INPUT_GAMMA_BASE_URL}" >> "$GITHUB_OUTPUT"
-            echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
+            PROFILE="pr_light"
           fi
+          case "${PROFILE}" in
+            nightly_full)
+              DEFAULT_ENV_JSON='["alpha","beta","gamma"]'
+              DEFAULT_ALLOW_MISSING="false"
+              DEFAULT_MATRIX_KIND="assistant"
+              ;;
+            manual_full)
+              DEFAULT_ENV_JSON='["gamma"]'
+              DEFAULT_ALLOW_MISSING="false"
+              DEFAULT_MATRIX_KIND="assistant"
+              ;;
+            *)
+              DEFAULT_ENV_JSON='["alpha","beta"]'
+              DEFAULT_ALLOW_MISSING="true"
+              DEFAULT_MATRIX_KIND="assistant"
+              ;;
+          esac
+          ENV_JSON="${INPUT_ENV_JSON:-${DEFAULT_ENV_JSON}}"
+          ALLOW_MISSING="${INPUT_ALLOW_MISSING_PLATFORMS:-${DEFAULT_ALLOW_MISSING}}"
+          MATRIX_KIND="${INPUT_MATRIX_KIND:-${DEFAULT_MATRIX_KIND}}"
+          echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
+          echo "env_json=${ENV_JSON}" >> "$GITHUB_OUTPUT"
+          echo "allow_missing_platforms=${ALLOW_MISSING}" >> "$GITHUB_OUTPUT"
+          echo "matrix_kind=${MATRIX_KIND}" >> "$GITHUB_OUTPUT"
+          echo "gamma_base_url=${INPUT_GAMMA_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
       - name: 校验 self-hosted macOS runner
         run: |
           if [ "${{ runner.os }}" != "macOS" ]; then
@@ -373,9 +407,9 @@ jobs:
               echo "::group::Run ${env_name} on ${platform} (self-hosted)"
               export API_CONTRACT_ENV="${env_name}"
               if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
-                python3 scripts/run_chat_avatar_device_matrix_ci.py --platform "${platform}" || step_failures=$((step_failures + 1))
+                python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform "${platform}" || step_failures=$((step_failures + 1))
               else
-                python3 scripts/run_assistant_device_matrix_ci.py --platform "${platform}" || step_failures=$((step_failures + 1))
+                python3 agent_ops/assistant/run_assistant_device_matrix_ci.py --platform "${platform}" || step_failures=$((step_failures + 1))
               fi
               echo "::endgroup::"
             done <<EOF
@@ -458,7 +492,7 @@ jobs:
           MOBILE_SECONDS: ${{ needs.mobile_matrix.outputs.duration_seconds }}
         run: |
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
-            python3 scripts/render_ci_timing_summary.py \
+            python3 agent_ops/ci/render_ci_timing_summary.py \
               --gate-key 05.app_env_device_matrix_pr \
               --title "05. App Env Device Matrix" \
               --critical-path-seconds 0 \
@@ -467,7 +501,7 @@ jobs:
               --write-step-summary
           else
             CRITICAL_PATH_SECONDS=$(( ${DISCOVER_SECONDS:-0} + ${MOBILE_SECONDS:-0} ))
-            python3 scripts/render_ci_timing_summary.py \
+            python3 agent_ops/ci/render_ci_timing_summary.py \
               --gate-key 05.app_env_device_matrix_pr \
               --title "05. App Env Device Matrix" \
               --critical-path-seconds "${CRITICAL_PATH_SECONDS:-0}" \
@@ -495,7 +529,7 @@ jobs:
           if [ "${ALLOW_MISSING_PLATFORMS}" = "true" ]; then
             args+=(--allow-missing-platforms)
           fi
-          python3 scripts/check_device_matrix_gate.py \
+          python3 agent_ops/avatar/check_device_matrix_gate.py \
             --discover-result "${DISCOVER}" \
             --android-result "${ANDROID}" \
             --ios-result "${IOS}" \
@@ -511,7 +545,7 @@ jobs:
       - name: 校验设备矩阵证据产物
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         run: |
-          python3 scripts/verify_device_matrix_evidence.py \
+          python3 agent_ops/avatar/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
             --report-glob "**/*-android.json" \
             --report-glob "**/*-ios.json"

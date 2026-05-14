@@ -124,8 +124,8 @@ python3 quwoquan_data/tools/cli.py crawl feedback-verify --spec <spec>
 10. 每轮完成后执行：
 
 ```bash
-python3 scripts/verify_quwoquan_data_source_authenticity.py
-python3 scripts/verify_quwoquan_data_post_packages.py
+python3 quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py
+python3 quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py
 ```
 
 ### manual

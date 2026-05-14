@@ -19,18 +19,18 @@ level_acceptance:
     linked_tasks:
     - T1
     tests:
-    - file: scripts/gate.sh
+    - file: agent_ops/gate/gate_repo.sh
   A2:
     criteria: config_release_slo_gate.sh 可执行，返回正确 exit code
     status: implemented
     linked_tasks:
     - T2
     tests:
-    - file: scripts/gate.sh
+    - file: agent_ops/gate/gate_repo.sh
   A3:
     criteria: config_release_rollback.sh 可回滚到指定 config 版本
     status: implemented
     linked_tasks:
     - T3
     tests:
-    - file: scripts/gate.sh
+    - file: agent_ops/gate/gate_repo.sh

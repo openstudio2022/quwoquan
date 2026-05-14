@@ -549,7 +549,7 @@ func (s *platformService) handleApplyRelease(w http.ResponseWriter, r *http.Requ
 		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
 		return
 	}
-	output, err := runScript(s.repoRoot, "scripts/config_release_apply_stage.sh",
+	output, err := runScript(s.repoRoot, "agent_ops/deploy/prod/config_release_apply_stage.sh",
 		"--service", body.Service,
 		"--from-image", body.FromImage,
 		"--to-image", body.ToImage,
@@ -590,7 +590,7 @@ func (s *platformService) handleRollbackRelease(w http.ResponseWriter, r *http.R
 		writeRuntimeError(w, r, http.StatusBadRequest, "请求处理失败", err.Error())
 		return
 	}
-	output, err := runScript(s.repoRoot, "scripts/config_release_rollback.sh",
+	output, err := runScript(s.repoRoot, "agent_ops/deploy/prod/config_release_rollback.sh",
 		"--service", body.Service,
 		"--to-config-version", body.TargetConfigVersion,
 	)

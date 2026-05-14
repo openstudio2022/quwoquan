@@ -2,14 +2,19 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/pageflip/pageflip.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_stage_widgets.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_pixel_probe.dart';
 import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_renderer.dart';
+import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
@@ -1300,6 +1305,210 @@ void main() {
   );
 
   testWidgets(
+    'BACK geometry sweep stays stable across horizontal and angled pullbacks',
+    (WidgetTester tester) async {
+      const corners = <ArticlePageCurlCorner>[
+        ArticlePageCurlCorner.topLeft,
+        ArticlePageCurlCorner.bottomLeft,
+      ];
+      const angleDegrees = <double>[0, 5, 10, 20, 30, 45, 60];
+      const depths = <double>[60, 120, 180];
+      final failures = <String>[];
+
+      for (final corner in corners) {
+        for (final angle in angleDegrees) {
+          for (final depth in depths) {
+            final sample = await _renderBackwardGeometrySweepSample(
+              tester,
+              corner: corner,
+              angleDegrees: angle,
+              depth: depth,
+            );
+            if (sample.failureReason != BackwardGeometryFailureReason.none) {
+              failures.add(sample.describe());
+              continue;
+            }
+            expect(
+              sample.backWidth,
+              greaterThan(0),
+              reason: sample.describe(),
+            );
+            expect(
+              sample.currentWidth,
+              greaterThan(0),
+              reason: sample.describe(),
+            );
+          }
+        }
+      }
+
+      expect(
+        failures,
+        isEmpty,
+        reason: failures.isEmpty
+            ? null
+            : 'geometry sweep failures:\n${failures.join('\n')}',
+      );
+    },
+  );
+
+  testWidgets(
+    'PageflipDiagnosticsApp backward verso samples semantic back surface',
+    (WidgetTester tester) async {
+      final sample = await _renderBackwardVersoTextureProbeScene(tester);
+
+      expect(
+        sample.backBandWidth,
+        greaterThan(12),
+        reason: 'probe requires a visible BACK fold band to judge texture source.',
+      );
+      expect(
+        sample.backSurfaceStrategy,
+        equals('paperFoldBackMainlineSurface'),
+        reason:
+            'probe must run on the Route-B previous-back mainline surface.',
+      );
+      expect(
+        sample.activeVersoSurfaceKind,
+        equals('back'),
+        reason:
+            'BACK verso runtime snapshot must be marked as semantic back surface.',
+      );
+      expect(
+        sample.activeVersoPageIndex,
+        equals(2),
+        reason:
+            'BACK verso runtime snapshot must remain bound to the flipping leaf.',
+      );
+      expect(
+        sample.runtimeFailureReason,
+        BackwardVersoFailureReason.none,
+        reason:
+            'runtime probe must not report snapshot/mesh/probe-point failures in '
+            'the accepted BACK mainline pose.',
+      );
+      expect(
+        sample.probePointCount,
+        greaterThanOrEqualTo(1),
+        reason:
+            'runtime probe must expose at least one stable fold-band sample point; '
+            'direction discrimination is enforced by the dedicated pixel test.',
+      );
+    },
+  );
+
+  test('BACK fold band pixels match mirrored semantic back snapshot', () async {
+      const pageSize = Size(400, 600);
+      final snapshotImage = await _createSemanticBackSurfaceProbeImage(
+        pageSize: pageSize,
+        pageIndex: 2,
+      );
+      final snapshot = ArticlePageTextureSnapshot(
+        image: snapshotImage,
+        logicalSize: pageSize,
+        pixelRatio: 1,
+        semanticSurfaceKind: 'back',
+      );
+      const polygon = <Offset>[
+        Offset(44, 92),
+        Offset(332, 124),
+        Offset(306, 520),
+        Offset(72, 492),
+      ];
+      final probe = resolveBackwardVersoPixelProbe(
+        pageSize: pageSize,
+        polygon: polygon,
+      );
+      expect(probe.isEmpty, isFalse);
+
+      final renderedImage = await renderBackwardLeafVersoProbeImage(
+        leafVersoSnapshot: snapshot,
+        pageSize: pageSize,
+        polygon: polygon,
+      );
+      expect(renderedImage, isNotNull);
+      final renderedBytes = await _rawRgbaBytes(renderedImage!);
+      final snapshotBytes = await _rawRgbaBytes(snapshotImage);
+      final actualProbeColors = <_ProbeColor>[];
+      final mirrorExpectedProbeColors = <_ProbeColor>[];
+      final unmirroredExpectedProbeColors = <_ProbeColor>[];
+
+      for (var index = 0; index < probe.localPoints.length; index += 1) {
+        final localPoint = probe.localPoints[index];
+        final mirroredTexturePoint = probe.texturePoints[index];
+        actualProbeColors.add(
+          _classifyProbeColor(
+            _colorAtBytes(
+              renderedImage.width,
+              renderedImage.height,
+              renderedBytes,
+              localPoint,
+            ),
+          ),
+        );
+        mirrorExpectedProbeColors.add(
+          _classifyProbeColor(
+            _colorAtBytes(
+              snapshotImage.width,
+              snapshotImage.height,
+              snapshotBytes,
+              mirroredTexturePoint,
+            ),
+          ),
+        );
+        unmirroredExpectedProbeColors.add(
+          _classifyProbeColor(
+            _colorAtBytes(
+              snapshotImage.width,
+              snapshotImage.height,
+              snapshotBytes,
+              localPoint,
+            ),
+          ),
+        );
+      }
+
+      final mirrorSensitiveSamples = actualProbeColors.asMap().entries.any(
+        (entry) =>
+            entry.value == mirrorExpectedProbeColors[entry.key] &&
+            entry.value != unmirroredExpectedProbeColors[entry.key],
+      );
+      final failureReason = listEquals(
+        actualProbeColors,
+        mirrorExpectedProbeColors,
+      )
+          ? BackwardVersoFailureReason.none
+          : BackwardVersoFailureReason.mirrorDirectionMismatch;
+
+      expect(
+        failureReason,
+        BackwardVersoFailureReason.none,
+        reason:
+            'shared BACK fold-band renderer must match mirrored texture sampling '
+            'from the semantic back snapshot. '
+            'actual=$actualProbeColors '
+            'mirrored=$mirrorExpectedProbeColors '
+            'unmirrored=$unmirroredExpectedProbeColors',
+      );
+      expect(
+        mirrorSensitiveSamples,
+        isTrue,
+        reason:
+            'probe pattern must distinguish mirrored from unmirrored sampling; '
+            'otherwise pixel proof cannot verify direction.',
+      );
+      expect(
+        actualProbeColors,
+        isNot(equals(unmirroredExpectedProbeColors)),
+        reason:
+            'fold-band pixels must not match the unmirrored semantic back snapshot direction.',
+      );
+
+      renderedImage.dispose();
+      snapshot.dispose();
+    });
+
+  testWidgets(
     'a. mesh coverage keeps the fold band continuous across scanlines',
     (WidgetTester tester) async {
       final sample = await _renderForwardProbeScene(tester);
@@ -1510,6 +1719,230 @@ Widget _buildProbePageSurface(
   );
 }
 
+Widget _buildProbeBackPageSurface(
+  BuildContext context,
+  int pageIndex,
+  Size pageSize,
+) {
+  final color = switch (pageIndex) {
+    2 => const Color(0xFF00E5FF),
+    3 => const Color(0xFFFFD600),
+    _ => const Color(0xFF7C4DFF),
+  };
+  return ColoredBox(
+    key: ValueKey<String>('article_probe_back_page_$pageIndex'),
+    color: color,
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: Container(width: pageSize.width * 0.22, color: Colors.black),
+    ),
+  );
+}
+
+Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
+  WidgetTester tester,
+) async {
+  await tester.binding.setSurfaceSize(const Size(900, 1200));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  final debugStates = <ArticleReadOnlyBookDebugState>[];
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: LayoutBuilder(
+        builder: (context, constraints) {
+          final metrics = resolveArticleCanvasMetrics(
+            context,
+            constraints,
+            variant: ArticleCanvasVariant.detail,
+          );
+          return ArticleReadOnlyBookDeck(
+            pages: _diagnosticPages(),
+            template: ArticleTemplatePreset.tech,
+            fontPreset: ArticleFontPreset.mono,
+            metrics: metrics,
+            pagePadding: articleReaderStagePagePadding(),
+            initialPage: 3,
+            coverUrl: '',
+            showFooterPageLabel: false,
+            onDebugStateChanged: debugStates.add,
+            debugPageSurfaceBuilder: _buildProbePageSurface,
+            debugBackPageSurfaceBuilder: _buildProbeBackPageSurface,
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pump();
+  for (var i = 0; i < 12; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final backwardGesture = await tester.startGesture(
+    tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+  );
+  await backwardGesture.moveBy(const Offset(36, -8));
+  for (var i = 0; i < 4; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await backwardGesture.moveBy(const Offset(360, -36));
+  for (var i = 0; i < 10; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final probeState = debugStates.lastWhere(
+    (state) =>
+        state.renderDirection == StPageFlipDirection.back &&
+        state.backwardCompositeMode == 'paperFoldBackwardMainline' &&
+        state.backwardBackPaintBounds != null &&
+        state.backwardBackSheetId == 'mainlineLeaf:2',
+  );
+  expect(probeState.backwardBackLocalPolygonRaw, isNotEmpty);
+  expect(probeState.backwardVersoProbeLocalPoints, isNotEmpty);
+  await backwardGesture.up();
+  for (var i = 0; i < 3; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+  await tester.pump(const Duration(milliseconds: 16));
+
+  return _BackwardVersoTextureProbeSample(
+    backBandWidth: probeState.backwardBackPaintBounds!.width,
+    backSurfaceStrategy: probeState.backwardBackPixelSurfaceStrategy,
+    activeVersoPageIndex: probeState.activeVersoPageIndex,
+    activeVersoSurfaceKind: probeState.activeVersoSurfaceKind,
+    runtimeFailureReason: probeState.backwardVersoFailureReason,
+    probePointCount: probeState.backwardVersoProbeLocalPoints.length,
+  );
+}
+
+Future<_BackwardGeometrySweepSample> _renderBackwardGeometrySweepSample(
+  WidgetTester tester, {
+  required ArticlePageCurlCorner corner,
+  required double angleDegrees,
+  required double depth,
+}) async {
+  await tester.binding.setSurfaceSize(const Size(900, 1200));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  final debugStates = <ArticleReadOnlyBookDebugState>[];
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: LayoutBuilder(
+        builder: (context, constraints) {
+          final metrics = resolveArticleCanvasMetrics(
+            context,
+            constraints,
+            variant: ArticleCanvasVariant.detail,
+          );
+          return ArticleReadOnlyBookDeck(
+            pages: _diagnosticPages(),
+            template: ArticleTemplatePreset.tech,
+            fontPreset: ArticleFontPreset.mono,
+            metrics: metrics,
+            pagePadding: articleReaderStagePagePadding(),
+            initialPage: 3,
+            coverUrl: '',
+            showFooterPageLabel: false,
+            onDebugStateChanged: debugStates.add,
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pump();
+  for (var i = 0; i < 8; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final gesture = await tester.startGesture(
+    tester.getCenter(find.byKey(_cornerHotzoneKey(corner))),
+  );
+  await gesture.moveBy(_backwardSweepDelta(corner: corner, angleDegrees: angleDegrees, depth: depth));
+  for (var i = 0; i < 6; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final backwardState = debugStates.lastWhere(
+    (state) => state.renderDirection == StPageFlipDirection.back,
+  );
+
+  await gesture.up();
+  for (var i = 0; i < 3; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+  await tester.pump(const Duration(milliseconds: 16));
+
+  return _BackwardGeometrySweepSample(
+    corner: corner,
+    angleDegrees: angleDegrees,
+    depth: depth,
+    failureReason: backwardState.backwardGeometryFailureReason,
+    compositeMode: backwardState.backwardCompositeMode,
+    backWidth: backwardState.backwardBackPaintBounds?.width ?? 0,
+    currentWidth: backwardState.backwardCurrentResidualBounds?.width ?? 0,
+  );
+}
+
+Key _cornerHotzoneKey(ArticlePageCurlCorner corner) {
+  return switch (corner) {
+    ArticlePageCurlCorner.topLeft => TestKeys.articlePageCurlHotzoneTopLeft,
+    ArticlePageCurlCorner.bottomLeft =>
+      TestKeys.articlePageCurlHotzoneBottomLeft,
+    ArticlePageCurlCorner.topRight => TestKeys.articlePageCurlHotzoneTopRight,
+    ArticlePageCurlCorner.bottomRight =>
+      TestKeys.articlePageCurlHotzoneBottomRight,
+  };
+}
+
+Offset _backwardSweepDelta({
+  required ArticlePageCurlCorner corner,
+  required double angleDegrees,
+  required double depth,
+}) {
+  final radians = angleDegrees * math.pi / 180;
+  final dyMagnitude = math.tan(radians) * depth;
+  final dy = switch (corner) {
+    ArticlePageCurlCorner.topLeft || ArticlePageCurlCorner.topRight =>
+      dyMagnitude,
+    ArticlePageCurlCorner.bottomLeft || ArticlePageCurlCorner.bottomRight =>
+      -dyMagnitude,
+  };
+  return Offset(depth, dy);
+}
+
+Future<ui.Image> _createSemanticBackSurfaceProbeImage({
+  required Size pageSize,
+  required int pageIndex,
+}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(
+    recorder,
+    Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
+  );
+  final background = switch (pageIndex) {
+    2 => const Color(0xFF00E5FF),
+    3 => const Color(0xFFFFD600),
+    _ => const Color(0xFF7C4DFF),
+  };
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
+    Paint()..color = background,
+  );
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, pageSize.width * 0.22, pageSize.height),
+    Paint()..color = Colors.black,
+  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(
+    pageSize.width.round(),
+    pageSize.height.round(),
+  );
+  picture.dispose();
+  return image;
+}
+
 Future<_ForwardProbeSample> _renderForwardProbeScene(
   WidgetTester tester,
 ) async {
@@ -1701,7 +2134,35 @@ Color _colorAtBytes(
   );
 }
 
-enum _ProbeColor { red, green, white, black, paperBack, other }
+enum _ProbeColor { red, green, cyan, white, black, paperBack, other }
+
+Map<_ProbeColor, int> _scanColorsInRect({
+  required int imageWidth,
+  required int imageHeight,
+  required Uint8List bytes,
+  required Rect rect,
+}) {
+  final counts = <_ProbeColor, int>{};
+  final left = rect.left.round().clamp(0, imageWidth - 1);
+  final right = rect.right.round().clamp(left, imageWidth - 1);
+  final top = rect.top.round().clamp(0, imageHeight - 1);
+  final bottom = rect.bottom.round().clamp(top, imageHeight - 1);
+
+  for (var y = top; y <= bottom; y += 2) {
+    for (var x = left; x <= right; x += 2) {
+      final color = _colorAtBytes(
+        imageWidth,
+        imageHeight,
+        bytes,
+        Offset(x.toDouble(), y.toDouble()),
+      );
+      final probeColor = _classifyProbeColor(color);
+      counts.update(probeColor, (count) => count + 1, ifAbsent: () => 1);
+    }
+  }
+
+  return counts;
+}
 
 int _colorChannelByte(double channel) {
   return (channel * 255.0).round().clamp(0, 255).toInt();
@@ -1716,6 +2177,9 @@ _ProbeColor _classifyProbeColor(Color color) {
   }
   if (red > 235 && green > 235 && blue > 235) {
     return _ProbeColor.white;
+  }
+  if (green > red + 20 && blue > red + 20 && (green - blue).abs() < 70) {
+    return _ProbeColor.cyan;
   }
   if (red > green + 40 && red > blue + 40) {
     return _ProbeColor.red;
@@ -1745,6 +2209,24 @@ class _ForwardProbeSample {
   final int firstRedX;
   final int firstGreenX;
   final int maxWhiteRun;
+}
+
+class _BackwardVersoTextureProbeSample {
+  const _BackwardVersoTextureProbeSample({
+    required this.backBandWidth,
+    required this.backSurfaceStrategy,
+    required this.activeVersoPageIndex,
+    required this.activeVersoSurfaceKind,
+    required this.runtimeFailureReason,
+    required this.probePointCount,
+  });
+
+  final double backBandWidth;
+  final String? backSurfaceStrategy;
+  final int? activeVersoPageIndex;
+  final String? activeVersoSurfaceKind;
+  final BackwardVersoFailureReason runtimeFailureReason;
+  final int probePointCount;
 }
 
 class _BackwardCompositeProbeSample {
@@ -1783,6 +2265,35 @@ class _BackwardCompositeProbeSample {
   final int latePoseBackVertexCount;
   final String? latePoseFrontSheetId;
   final String? latePoseBackSheetId;
+}
+
+class _BackwardGeometrySweepSample {
+  const _BackwardGeometrySweepSample({
+    required this.corner,
+    required this.angleDegrees,
+    required this.depth,
+    required this.failureReason,
+    required this.compositeMode,
+    required this.backWidth,
+    required this.currentWidth,
+  });
+
+  final ArticlePageCurlCorner corner;
+  final double angleDegrees;
+  final double depth;
+  final BackwardGeometryFailureReason failureReason;
+  final String? compositeMode;
+  final double backWidth;
+  final double currentWidth;
+
+  String describe() {
+    return 'corner=${corner.name} angle=${angleDegrees.toStringAsFixed(1)} '
+        'depth=${depth.toStringAsFixed(1)} '
+        'reason=${failureReason.name} '
+        'mode=${compositeMode ?? "-"} '
+        'backWidth=${backWidth.toStringAsFixed(1)} '
+        'currentWidth=${currentWidth.toStringAsFixed(1)}';
+  }
 }
 
 class _ScanlineProbeResult {

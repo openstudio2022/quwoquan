@@ -1,6 +1,6 @@
 {
   "schemaVersion": "quwoquan_data.geo_catalog_slice_report",
-  "generatedAt": "2026-05-12T16:42:30Z",
+  "generatedAt": "2026-05-13T01:47:39Z",
   "configPath": "/Users/zhaoyuxi/Projects/quwoquan/specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/config/geo_catalog_config.sichuan.yaml",
   "outputPath": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_data/runtime/seed/sichuan_chuanxi_attractions_catalog.ndjson",
   "scopeName": "四川",

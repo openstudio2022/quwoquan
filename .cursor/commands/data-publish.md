@@ -26,8 +26,8 @@ python3 quwoquan_data/tools/cli.py data publish --spec "<runtime/spec>" --topics
 - `crawl publish-approved`
 - `crawl feedback-extract`
 - `crawl feedback-verify`
-- `verify_quwoquan_data_source_authenticity.py`
-- `verify_quwoquan_data_post_packages.py`
+- `quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py`
+- `quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py`
 
 ## 门禁
 

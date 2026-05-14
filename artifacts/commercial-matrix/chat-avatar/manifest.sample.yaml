@@ -1,5 +1,5 @@
 # 商用群头像矩阵证据清单（示例）— 复制为 manifest.yaml 并填入真实路径后再运行:
-#   python3 scripts/verify_chat_avatar_commercial_matrix_evidence.py --manifest artifacts/commercial-matrix/chat-avatar/manifest.yaml
+#   python3 agent_ops/avatar/verify_chat_avatar_commercial_matrix_evidence.py --manifest artifacts/commercial-matrix/chat-avatar/manifest.yaml
 #
 # CI artifact 名称参考: .github/workflows/deploy-gamma-ecs.yml
 #   - chat-avatar-api-probe-pre / chat-avatar-api-probe-prod

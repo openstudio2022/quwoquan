@@ -144,13 +144,13 @@
 ### 说明
 
 - **hosted**：`make gate` → **打包 tarball artifact**。
-- **ECS pre**：`scripts/deploy_gamma_ecs.sh`（`GAMMA_ECS_STAGE=pre`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>`），上传 bundle；远端写 `.gamma_deploy_state.json`，并在 `../gamma-backups/` 保留备份 tarball。
+- **ECS pre**：`agent_ops/deploy/gamma/deploy_gamma_ecs.sh`（`GAMMA_ECS_STAGE=pre`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>`），上传 bundle；远端写 `.gamma_deploy_state.json`，并在 `../gamma-backups/` 保留备份 tarball。
 - **T3**：`make test-api-contract`（gamma）。
 - **self-hosted**：调用 `app-env-device-matrix-self-hosted.yml`（alpha/beta/gamma）；统一在本机 macOS runner 上动态发现并逐台执行当前可见移动设备。
 - **ECS prod**：同一 ECS **就地升级**（`GAMMA_ECS_STAGE=prod`，`GAMMA_ECS_SKIP_UPLOAD=1`，`GAMMA_DEPLOY_IMAGE_VERSION=<sha>-prod`），然后再跑 T3 与 **gamma-only** self-hosted 烟测。
 - ECS 上使用 Podman 兼容层拉取镜像时，`GAMMA_ECS_CONTAINER_REGISTRY_MIRROR` 未配置则可能长时间直连 `docker.io`，在大陆网络下易超时；建议配置可用的镜像加速或使用自有镜像仓库前置基础镜像。
 - **Deploy ECS — pre/prod** 单 Job 超时为 **120** 分钟（含首次镜像 build）；请勿在流水线中途手动 Cancel，否则会向 SSH 子进程发送 SIGTERM（常见于 exit 143）。
-- **回滚**：手动触发 **08c `ecs-onebox-rollback.yml`** 或本地执行 `scripts/rollback_gamma_ecs.sh`（恢复最近一次 `backup-*.tgz`）。
+- **回滚**：手动触发 **08c `ecs-onebox-rollback.yml`** 或本地执行 `agent_ops/deploy/gamma/rollback_gamma_ecs.sh`（恢复最近一次 `backup-*.tgz`）。
 - 结构化部署报告：`artifacts/ecs-onebox/deploy-report.json`（成功/失败阶段会上传为 artifact）。
 - ECS 安全组需放行 SSH、`18080`、`18086`（或同步修改 health 探测 URL）。
 

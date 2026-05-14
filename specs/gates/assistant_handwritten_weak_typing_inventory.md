@@ -1,6 +1,6 @@
 # assistant_handwritten 弱类型盘点
 
-**口径**：与 [`verify_assistant_search_weak_typing_ratchet.py`](../../scripts/verify_assistant_search_weak_typing_ratchet.py) 一致——`quwoquan_app/lib/assistant/**/*.dart`，排除 `**/assistant/generated/**` 与 `*.g.dart`。
+**口径**：与 [`verify_assistant_search_weak_typing_ratchet.py`](../../agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py) 一致——`quwoquan_app/lib/assistant/**/*.dart`，排除 `**/assistant/generated/**` 与 `*.g.dart`。
 
 **生成**：脚本一次性扫描（仓库内自跑 `python3` 即可复现）；以下为某次快照汇总。
 

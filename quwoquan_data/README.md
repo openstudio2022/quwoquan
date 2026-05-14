@@ -138,13 +138,13 @@ python3 quwoquan_data/tools/cli.py data process-content --spec quwoquan_data/run
 python3 quwoquan_data/tools/cli.py data publish --spec quwoquan_data/runtime/specs/sichuan_chuanxi_attractions_001.yaml --topics "poi_way_299409723"
 
 # helper：清空当前 runtime 后恢复 baseline
-bash scripts/reset_quwoquan_data_runtime_full.sh
+bash quwoquan_data/scripts/util/reset_quwoquan_data_runtime_full.sh
 
-# helper：四川样例从 seed 端到端重跑
-bash scripts/run_sichuan_geo_content_trinity_e2e.sh
+# helper：省级样例从 seed 端到端重跑（默认四川）
+bash quwoquan_data/scripts/e2e/run_province_e2e.sh
 
-# helper：四川县级切片全量编排（Overpass + MIN_KEPT 门禁 + 分批深 publish；见脚本环境变量）
-# bash scripts/run_sichuan_province_full_batch_trinity.sh
+# helper：省级全量批次编排（默认四川；Overpass + MIN_KEPT 门禁 + 分批深 publish；见脚本环境变量）
+# bash quwoquan_data/scripts/e2e/run_province_full_batch.sh
 ```
 
 说明：
@@ -165,14 +165,14 @@ bash scripts/run_sichuan_geo_content_trinity_e2e.sh
 ## 本地验证
 
 ```bash
-bash scripts/verify_quwoquan_data.sh
+bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh
 python3 scripts/verify_repo_schema_versions.py   # make verify-repo-schema-versions
 python3 scripts/verify_repo_schema_versions.py --prefix quwoquan_data/   # make verify-quwoquan-data-schema-versions
-FORCE=1 bash scripts/clean_quwoquan_data_runtime_generated.sh   # make clean-quwoquan-data-runtime-generated（慎用）
-python3 scripts/verify_quwoquan_data_source_authenticity.py
-python3 scripts/verify_quwoquan_data_post_packages.py
-python3 scripts/verify_geo_catalog_quality.py
-python3 scripts/verify_catalog_entity_consistency.py
+FORCE=1 bash quwoquan_data/scripts/util/clean_quwoquan_data_runtime_generated.sh   # make clean-quwoquan-data-runtime-generated（慎用）
+python3 quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py
+python3 quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py
+python3 quwoquan_data/scripts/verify/verify_geo_catalog_quality.py
+python3 quwoquan_data/scripts/verify/verify_catalog_entity_consistency.py
 python3 -m unittest discover -s quwoquan_data/tests
 ```
 

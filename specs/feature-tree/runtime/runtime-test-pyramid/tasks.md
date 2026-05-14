@@ -7,7 +7,7 @@
 ## P0 — Gate 绑定（解锁最高优先级卡点）
 
 - [x] T01: `quwoquan_service/scripts/gate.sh` 末尾增加 `go test ./services/content-service/... -count=1`
-- [x] T02: `scripts/gate_repo.sh` 的 `run_app()` 移除 `QWQ_GATE_TESTS=1` 跳过条件，flutter test 始终执行（L1 路径已始终执行）
+- [x] T02: `agent_ops/gate/gate_repo.sh` 的 `run_app()` 移除 `QWQ_GATE_TESTS=1` 跳过条件，flutter test 始终执行（L1 路径已始终执行）
 - [ ] T03: `gate.sh` 增加 contract.yaml go_func 存在性检查（对每个 `go_func: TestXxx`，检查对应 Go 测试文件中函数存在）
   - 重启条件：TestBehaviorBatchEmpty / TestCounterFlush / TestPostModerationFlow 对应服务端功能（BatchFlush / Moderation）合入 main 后；届时 3 个 pending 函数补齐，T03 检查可 enable（对应 A4 deferred → implemented）
 - [x] T04: `gate.sh` 增加 e2e.yaml `patrol_flow` 引用文件存在性检查（warn 级别，不 fail）→ 已在 T38 实现
@@ -82,7 +82,7 @@
 
 - [x] T21: 根目录 `Makefile` 新增 `test-api-contract` target
 - [x] T22: 根目录 `Makefile` 新增 `gate-full: gate test-api-contract`
-- [x] T23: `scripts/gate_repo.sh` 新增 `patrol` scope
+- [x] T23: `agent_ops/gate/gate_repo.sh` 新增 `patrol` scope
 
 ### P2-CI：daily API Contract job
 
@@ -124,7 +124,7 @@
 ### P3-CI/FTL：Firebase Test Lab
 
 - [x] T36: 创建 `.github/workflows/e2e.yaml`（Android + iOS 双平台，FTL 4 设备矩阵，pre-release tag 触发）
-- [x] T37: `scripts/gate_repo.sh` 新增 `run_patrol_local()` 函数 + `patrol` scope（本地调试用）
+- [x] T37: `agent_ops/gate/gate_repo.sh` 新增 `run_patrol_local()` 函数 + `patrol` scope（本地调试用）
 
 ---
 

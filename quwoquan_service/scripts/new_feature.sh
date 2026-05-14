@@ -13,6 +13,6 @@ if [[ -z "$slug" ]]; then
   exit 2
 fi
 
-echo "[compat] forwarding to root script: scripts/new_feature_fullstack.sh"
-bash scripts/new_feature_fullstack.sh "$slug"
+echo "[compat] forwarding to root script: agent_ops/scaffold/new_feature_fullstack.sh"
+bash agent_ops/scaffold/new_feature_fullstack.sh "$slug"
 

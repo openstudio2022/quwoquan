@@ -1932,6 +1932,15 @@ def _auto_prepare_topic_enrichment(topic: dict[str, Any]) -> bool:
         changed = True
 
     ordered_asset_ids = _ordered_approved_asset_ids(topic, selected_source_rows)
+    if topic["taskType"] == "article":
+        if not _string_or_default(enrichment, "articleTemplate", "article_template"):
+            enrichment["articleTemplate"] = "journal"
+            changed = True
+        if not _string_or_default(
+            enrichment, "articleFontPreset", "article_font_preset"
+        ):
+            enrichment["articleFontPreset"] = "clean"
+            changed = True
     if ordered_asset_ids:
         current_cover_asset_id = _string_or_default(enrichment, "coverAssetId", "cover_asset_id")
         if not current_cover_asset_id or current_cover_asset_id not in ordered_asset_ids:
@@ -1944,14 +1953,6 @@ def _auto_prepare_topic_enrichment(topic: dict[str, Any]) -> bool:
             valid_figure_ids = [asset_id for asset_id in current_figure_ids if asset_id in ordered_asset_ids]
             if valid_figure_ids != current_figure_ids or not valid_figure_ids:
                 enrichment["figureAssetIds"] = valid_figure_ids[:1] or ordered_asset_ids[:1]
-                changed = True
-            if not _string_or_default(enrichment, "articleTemplate", "article_template"):
-                enrichment["articleTemplate"] = "journal"
-                changed = True
-            if not _string_or_default(
-                enrichment, "articleFontPreset", "article_font_preset"
-            ):
-                enrichment["articleFontPreset"] = "clean"
                 changed = True
         else:
             current_media_ids = _string_list(
@@ -1967,6 +1968,13 @@ def _auto_prepare_topic_enrichment(topic: dict[str, Any]) -> bool:
                 changed = True
 
     if not _bool_value(enrichment.get("publishReady")) and ordered_asset_ids:
+        enrichment["publishReady"] = True
+        changed = True
+    elif (
+        topic["taskType"] == "article"
+        and not _bool_value(enrichment.get("publishReady"))
+        and selected_source_rows
+    ):
         enrichment["publishReady"] = True
         changed = True
 
@@ -3763,12 +3771,14 @@ def _topic_task_row(
 IMAGE_TOPIC_ID_SUFFIX = "__img"
 
 
-def _parse_spec_topics_csv(raw: str) -> set[str] | None:
-    """逗号分隔 topic 过滤；自动补齐 article/image 配对（`id` ↔ `id__img`）。"""
+def _parse_spec_topics_csv(raw: str, *, include_image_pair: bool = True) -> set[str] | None:
+    """逗号分隔 topic 过滤；默认自动补齐 article/image 配对（`id` ↔ `id__img`）。"""
     base = {t.strip() for t in str(raw or "").split(",") if t.strip()}
     if not base:
         return None
     out = set(base)
+    if not include_image_pair:
+        return out
     for item in list(base):
         if item.endswith(IMAGE_TOPIC_ID_SUFFIX):
             out.add(item[: -len(IMAGE_TOPIC_ID_SUFFIX)])
@@ -3870,11 +3880,15 @@ def handle_spec_discovery(args) -> int:
         return 1
 
     skip_hydration = bool(getattr(args, "skip_hydrate", False))
+    include_image_pair = not bool(getattr(args, "no_image_pair", False))
     topic_errors, topic_tasks = _collect_topic_tasks(
         spec,
         write_source_pool=True,
         skip_hydration=skip_hydration,
-        topics_filter=_parse_spec_topics_csv(str(getattr(args, "topics", "") or "")),
+        topics_filter=_parse_spec_topics_csv(
+            str(getattr(args, "topics", "") or ""),
+            include_image_pair=include_image_pair,
+        ),
     )
     discovery = _build_discovery_summary(spec, topic_tasks)
     write_ndjson(topic_tasks_path(spec["spec_id"]), topic_tasks)
@@ -3899,11 +3913,15 @@ def handle_status(args) -> int:
         return 1
 
     skip_hydration = bool(getattr(args, "skip_hydrate", False))
+    include_image_pair = not bool(getattr(args, "no_image_pair", False))
     topic_errors, topic_tasks = _collect_topic_tasks(
         spec,
         write_source_pool=False,
         skip_hydration=skip_hydration,
-        topics_filter=_parse_spec_topics_csv(str(getattr(args, "topics", "") or "")),
+        topics_filter=_parse_spec_topics_csv(
+            str(getattr(args, "topics", "") or ""),
+            include_image_pair=include_image_pair,
+        ),
     )
     discovery = _build_discovery_summary(spec, topic_tasks)
     payload = {

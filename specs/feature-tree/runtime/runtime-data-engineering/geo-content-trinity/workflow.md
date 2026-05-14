@@ -41,9 +41,9 @@ flowchart LR
 
 辅助脚本：
 
-- `bash scripts/reset_quwoquan_data_runtime_full.sh`
-- `bash scripts/run_sichuan_geo_content_trinity_e2e.sh`
-- `bash scripts/run_sichuan_province_full_batch_trinity.sh`（四川县级切片 + 千级门禁 + 分批深链路；见脚本头注释）
+- `bash quwoquan_data/scripts/util/reset_quwoquan_data_runtime_full.sh`
+- `bash quwoquan_data/scripts/e2e/run_province_e2e.sh`（泛化省级 E2E，默认四川）
+- `bash quwoquan_data/scripts/e2e/run_province_full_batch.sh`（泛化省级全量批次，默认四川）
 - `python3 quwoquan_data/tools/geo/list_admin_slices_overpass.py`（自 Overpass 枚举 `scope.slices` 供 `geo_catalog_config` 检入）
 
 
@@ -112,6 +112,7 @@ flowchart LR
 - `member` / `alias` 行不得继续平铺进顶层实体；`pending_review` / `reject` 不得升格
 - **R7 准入**：权威轨与图文证据轨择一或组合须满足 `spec.md` / `design.md`；证据不足不得升格
 - `tagRefs` 可解析到 `tag_catalog`
+- 目录/脚本层只负责噪声抑制与结构化准备；页面内 `main_entity / members / aliases` 提取统一走编程助手 extraction 主线
 
 **辅助回放**
 
@@ -151,7 +152,8 @@ flowchart LR
 
 **一致性要求**
 
-- `article_topic_catalog_ref` 指向当前目录候选层切片
+- `article_topic_catalog_ref` 指向 seed topic catalog，仅服务下载 / hydrate / 发现
+- `publishable_topic_catalog_ref` 指向 normalization/materialize 后的最终 topic 切片，仅服务 deep batch `process-content/publish`
 - authority / content 标题、URL、snippet 与实体锚点同源
 - **post 聚类新点**：仅当满足「≥2 独立文章 + 无实质冲突」时可写入实体层；否则停在候选池或 `evidence_pending`
 
@@ -159,6 +161,23 @@ flowchart LR
 
 - `validate_crawl_spec`
 - hydrate 失败率日志低于阈值
+
+### 3.4A `data build-entities-tags --phase normalize-*`
+
+通过 `--phase` 参数控制归一化的各个阶段：
+
+- `--phase normalize-prepare`：准备编程助手输入 + 生成任务清单
+- `--phase normalize-validate`：校验编程助手结果（支持 `--stage extract|review|authority|escalate`）
+- `--phase compile`：编译归一化结果
+- `--phase materialize`：物化到 entity_catalog
+
+辅助命令（编程助手自检用）：`normalize-build-review-input`、`normalize-build-authority-input`、`normalize-build-escalation-input`、`normalize-validate-output`
+
+**一致性要求**
+
+- CLI 不直接调用模型；只负责校验结果、生成编程助手任务清单，并在结果缺失时 fail-fast
+- 结果未落盘时，省级 deep batch 必须 fail-fast，而不是继续 `process-content`
+- materialize 后，必须重建 `publishable_topic_catalog_ref`，供 deep batch 消费
 
 ### 3.5 `data process-content`
 
@@ -176,6 +195,7 @@ flowchart LR
 
 **一致性要求**
 
+- deep batch 只允许消费 `publishable_topic_catalog_ref` 中的 topics；不得再直接消费 seed topic catalog
 - 图文标题、snippet、正文锚点命中实体 canonical / `label_zh`
 - 不产生未回写的第二套展示名
 - **精品子集**：按 acceptance A17 对约 30% 来源打 `curated` / `contentTier` 或等价标记（可与规则分、人工抽检组合）
@@ -192,8 +212,8 @@ flowchart LR
 - `crawl publish-approved`
 - `crawl feedback-extract`
 - `crawl feedback-verify`
-- `verify_quwoquan_data_source_authenticity.py`
-- `verify_quwoquan_data_post_packages.py`
+- `quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py`
+- `quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py`
 
 **输出**
 
@@ -229,6 +249,6 @@ flowchart LR
 
 1. **脚本准出**
 2. **Schema / lint**
-3. **模型告警**
+3. **编程助手自检告警**
 
-模型自检只作为告警，不替代门禁。
+编程助手自检只作为告警，不替代门禁。

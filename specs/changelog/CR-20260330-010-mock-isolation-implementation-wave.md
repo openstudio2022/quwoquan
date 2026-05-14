@@ -16,7 +16,7 @@
 
 - `specs/gates/mock_data_cloud_integration_policy.md`（含 **§5.1**；基线登记见 **`CR-20260330-011`**）
 - `specs/gates/ui_mock_isolation_allowlist.yaml`
-- `specs/gates/lib_test_only_symbols_allowlist.yaml` + `scripts/verify_lib_no_test_only_symbols.py`
+- `specs/gates/lib_test_only_symbols_allowlist.yaml` + `quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py`
 - `specs/gates/prod_bootstrap_repository_inventory.md`（P4a Mock/Remote Provider 清单）
 - `quwoquan_app/lib/app_bootstrap.dart`、`quwoquan_app/lib/quwoquan_app_shell.dart`、`quwoquan_app/lib/main_prod.dart`（prod 数据源锁定）
 - `quwoquan_app/lib/cloud/services/chat/chat_repository_api.dart`、`remote/chat_repository_remote.dart`、`mock/chat_repository_mock.dart`

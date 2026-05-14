@@ -8,9 +8,9 @@ description: Query Elasticsearch exception telemetry, group fingerprints, produc
 ## Workflow
 
 1. Query recent exceptions with the stable scripts, never by scraping Kibana:
-   - `python3 scripts/observability/es_cli.py daily-report --env alpha --output json`
-   - `python3 scripts/observability/es_cli.py query --request-id <requestId> --output json`
-   - `python3 scripts/observability/es_cli.py trace-samples --trace-id <traceId>`
+   - `python3 quwoquan_service/scripts/runtime/observability/es_cli.py daily-report --env alpha --output json`
+   - `python3 quwoquan_service/scripts/runtime/observability/es_cli.py query --request-id <requestId> --output json`
+   - `python3 quwoquan_service/scripts/runtime/observability/es_cli.py trace-samples --trace-id <traceId>`
 2. Group by the script-provided `fingerprint`. Prioritize `nature=bug`, crashes, panics, contract parsing failures, and repeated `errorCode + failurePoint + stackHash` groups.
 3. Link samples back to code using `traceId/requestId`, `operationId + surfaceId/routeId/pageName`, `businessObject/functionModule`, and `entityType/entityId`.
 4. Before editing code, prove reproduction with a failing test, smoke command, replay request, or deterministic local script.

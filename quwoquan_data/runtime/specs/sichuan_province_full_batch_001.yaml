@@ -1,10 +1,10 @@
 spec_id: sichuan_province_full_batch_001
 query: 四川全量县级切片：地理目录→实体标签→百科与攻略 discovery；分批 hydrate/publish 验收
 search_provider: native_fetch
-article_topic_catalog_ref: seed/entity_catalog/sichuan_province_full_batch_001_topics.ndjson
+article_topic_catalog_ref: seed/entity_catalog/sichuan_province_full_batch_001_seed_topics.ndjson
+publishable_topic_catalog_ref: seed/entity_catalog/sichuan_province_full_batch_001_topics.ndjson
 entity_refs:
-- trees/entities/地点/川西.yaml
-- trees/entities/地点/成都.yaml
+- trees/entities/地点/四川省.yaml
 tag_refs:
 - trees/tags/主题/旅行攻略.yaml
 target_envs:
@@ -63,7 +63,10 @@ sample_topics:
   image:
   - sichuan_province_full_batch_001_image_sample_001
 extensions:
-  topicCount: 1231
+  seedTopicCount: 1229
+  publishableTopicCount: 0
+  topicCount: 1229
   skipHydrateRecommended: true
   largeTopicMode: true
   suggestedBatchSize: 50
+  topicMode: seed_only

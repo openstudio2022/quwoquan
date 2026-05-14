@@ -34,7 +34,7 @@ description: 验证 Scenario / Journey 完成度、plan 覆盖率与 CR 证据
 
 - **发布态（R1–R6）**：Release 默认 Remote、无「切 Mock」用户入口、`Remote*` 不整表委托 `Mock*`、正式构建显式 `APP_DATA_SOURCE=remote`。
 - **开发测试态（D1–D4）**：单一 Provider 一键切换；切换 UI 仅非 Release；Mock 数据仅在 `Mock*Repository` / `cloud/services/*/mock/` / `test/**`。
-- **自动化**：`make verify-app-mock-isolation` 或 `python3 scripts/verify_ui_mock_isolation.py` 无 BLOCKING。
+- **自动化**：`make verify-app-mock-isolation` 或 `python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py` 无 BLOCKING。
 
 ## 助手专项核查
 

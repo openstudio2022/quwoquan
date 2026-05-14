@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "baselineRequiredSuites": [
     "assistant_main_chain",
     "chat_avatar_sync",
@@ -7,20 +7,47 @@
   ],
   "futureExpansionRule": "每个业务对象都要补齐至少一个 gamma 核心用户旅程；PR 只保留高信号抽样验证，full gamma 验证独立日跑/手动触发。",
   "profiles": {
-    "pr_smoke": {
-      "description": "PR 必经 hosted gamma 抽样可用性验证：不做 full deploy，不跑全量 UI 旅程。",
+    "pr_light": {
+      "description": "PR 轻量 gamma preflight：探针已运行的共享 gamma（不部署），readiness 阻断、smoke 探针仅记录漂移。不含设备矩阵和 Patrol UI 旅程。",
+      "deploysGamma": false,
+      "readinessBlocking": true,
       "smokeCases": [
         "assistant_api_protocol_smoke",
         "chat_avatar_api_probe"
       ],
-      "uiJourneys": []
+      "smokeCasesBlocking": false,
+      "uiJourneys": [],
+      "deviceMatrix": {
+        "envs": ["alpha", "beta"],
+        "requireAllPlatforms": false,
+        "matrixKinds": ["assistant"]
+      }
     },
-    "daily_full": {
-      "description": "日跑 full gamma 验证：保留 assistant full semantic smoke，并执行完整 Patrol UI 旅程集合。",
+    "manual_full": {
+      "description": "手动触发的完整 ECS gamma 验证：打包、部署、readiness、API contract、assistant smoke、chat avatar probe、self-hosted 设备矩阵。用于发布前复验（08）。",
+      "deploysGamma": true,
+      "readinessBlocking": true,
       "smokeCases": [
         "assistant_ui_semantic_smoke",
         "chat_avatar_api_probe"
       ],
+      "smokeCasesBlocking": true,
+      "uiJourneys": [],
+      "deviceMatrix": {
+        "envs": ["gamma"],
+        "requireAllPlatforms": false,
+        "matrixKinds": ["assistant", "chat-avatar"]
+      }
+    },
+    "nightly_full": {
+      "description": "每晚 22:00 UTC+8 自动执行：完整 ECS gamma 部署 + full semantic assistant smoke + 全量 Patrol UI 旅程 + 全量设备矩阵。",
+      "deploysGamma": true,
+      "readinessBlocking": true,
+      "smokeCases": [
+        "assistant_ui_semantic_smoke",
+        "chat_avatar_api_probe"
+      ],
+      "smokeCasesBlocking": true,
       "uiJourneys": [
         "content_feed_patrol",
         "content_like_post_patrol",
@@ -33,14 +60,22 @@
         "chat_orientation_stability_patrol",
         "ops_event_ingestion_patrol",
         "ops_event_reliability_replay_patrol"
-      ]
+      ],
+      "deviceMatrix": {
+        "envs": ["gamma"],
+        "requireAllPlatforms": true,
+        "matrixKinds": ["assistant", "chat-avatar"]
+      }
     },
     "release_candidate": {
-      "description": "发布前回归：基于 daily full，再结合 self-hosted gamma 设备矩阵做更高置信度验证。",
+      "description": "发布前回归：基于 nightly_full，再结合 self-hosted gamma 设备矩阵做更高置信度验证。",
+      "deploysGamma": true,
+      "readinessBlocking": true,
       "smokeCases": [
         "assistant_ui_semantic_smoke",
         "chat_avatar_api_probe"
       ],
+      "smokeCasesBlocking": true,
       "uiJourneys": [
         "content_feed_patrol",
         "content_like_post_patrol",
@@ -53,12 +88,17 @@
         "chat_orientation_stability_patrol",
         "ops_event_ingestion_patrol",
         "ops_event_reliability_replay_patrol"
-      ]
+      ],
+      "deviceMatrix": {
+        "envs": ["gamma"],
+        "requireAllPlatforms": true,
+        "matrixKinds": ["assistant", "chat-avatar"]
+      }
     }
   },
   "smokeCases": {
     "assistant_api_protocol_smoke": {
-      "path": "scripts/run_assistant_runtime_smoke.py",
+      "path": "agent_ops/assistant/run_assistant_runtime_smoke.py",
       "runner": "python",
       "tier": "pr",
       "budgetSeconds": 60,
@@ -88,7 +128,7 @@
       "optimizationPlan": "默认不进入 PR；增加 idle fail-fast 与场景级预算，按专项/日跑执行。"
     },
     "chat_avatar_api_probe": {
-      "path": "scripts/run_chat_avatar_e2e_probe.py",
+      "path": "agent_ops/avatar/run_chat_avatar_e2e_probe.py",
       "runner": "python",
       "tier": "pr",
       "budgetSeconds": 90,

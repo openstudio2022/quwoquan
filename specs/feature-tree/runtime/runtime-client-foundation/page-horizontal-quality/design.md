@@ -13,7 +13,7 @@
 
 ## S1 冻结边界（勿与 S6/S7/S8 混谈）
 
-**S1** 在设计与验收上 **仅等于**：[`page-horizontal-quality-matrix.md`](../page-horizontal-quality-matrix.md) 的 **P1 列**全量落实（凡适用页为 **✓** 或 **—**，**—** 须在备注或 `ios_native_surface_allowlist` 等旁路有据可查）以及 **`ios-native-page-enforcement`** 所覆盖的 **iOS 根壳门禁面**（`scripts/verify_ios_native_surface_gate.py`、allowlist；置 ✓ 的最低证据见 [`page_horizontal_quality_pr_checklist.md`](../../../../gates/page_horizontal_quality_pr_checklist.md) §P1 与 `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md` §2.1、§2.8）。**S1 会话完成出口**以 [`nine-session-rollout-plan.md`](./nine-session-rollout-plan.md) **会话 1** 表格列「本会话退出时矩阵状态」为唯一口径（凡适用页 P1 为 **✓** 或 **—**）。**S6/P6**（双色）、**S7/P7**（断点/版式）、**S8/P8**（语义 token）均 **不在 S1 冻结范围内**，S1 的 PR/评审不得将其与 P1 根壳门禁面混为同一必收项。
+**S1** 在设计与验收上 **仅等于**：[`page-horizontal-quality-matrix.md`](../page-horizontal-quality-matrix.md) 的 **P1 列**全量落实（凡适用页为 **✓** 或 **—**，**—** 须在备注或 `ios_native_surface_allowlist` 等旁路有据可查）以及 **`ios-native-page-enforcement`** 所覆盖的 **iOS 根壳门禁面**（`quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py`、allowlist；置 ✓ 的最低证据见 [`page_horizontal_quality_pr_checklist.md`](../../../../gates/page_horizontal_quality_pr_checklist.md) §P1 与 `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md` §2.1、§2.8）。**S1 会话完成出口**以 [`nine-session-rollout-plan.md`](./nine-session-rollout-plan.md) **会话 1** 表格列「本会话退出时矩阵状态」为唯一口径（凡适用页 P1 为 **✓** 或 **—**）。**S6/P6**（双色）、**S7/P7**（断点/版式）、**S8/P8**（语义 token）均 **不在 S1 冻结范围内**，S1 的 PR/评审不得将其与 P1 根壳门禁面混为同一必收项。
 
 ## 方案对比与选型结论
 
@@ -37,7 +37,7 @@
 ## 方案选型（实现要点）
 
 - **沿用** `page-horizontal-quality-spec.md` 中的 T1–T7 页面类型与 **P1–P8** 维度语义（**P7** 断点/版式，**P8** 语义 token，**禁止合并表述**）。  
-- **校验**：`scripts/verify_page_horizontal_quality_matrix.py` + PR 清单；不在此目录重复矩阵正文。  
+- **校验**：`quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py` + PR 清单；不在此目录重复矩阵正文。  
 - **各维置 ✓ 最低证据**：见 [`specs/gates/page_horizontal_quality_pr_checklist.md`](../../../../gates/page_horizontal_quality_pr_checklist.md) §「各维置 ✓ 的最低证据」。
 
 ## 与相关 L3 的关系

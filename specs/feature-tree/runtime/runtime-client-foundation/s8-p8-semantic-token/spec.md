@@ -43,7 +43,7 @@
 ## 约束与对标
 
 - 父规格：[`page-horizontal-quality-spec.md`](../page-horizontal-quality-spec.md) **P8** 行。  
-- 门禁：[`scripts/verify_dart_semantic.py`](../../../../../scripts/verify_dart_semantic.py)、[`page_horizontal_quality_pr_checklist.md`](../../../../../specs/gates/page_horizontal_quality_pr_checklist.md) §P8。  
+- 门禁：[`quwoquan_app/scripts/runtime/verify_dart_semantic.py`](../../../../../quwoquan_app/scripts/runtime/verify_dart_semantic.py)、[`page_horizontal_quality_pr_checklist.md`](../../../../../specs/gates/page_horizontal_quality_pr_checklist.md) §P8。  
 - iOS 体验：`specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`（token 与材质一致，**不替代** P1 根壳门禁）。
 
 ## 既有 Story 覆盖矩阵
@@ -73,7 +73,7 @@
 
 - 各波次 PR：**删除**对应 `.verify_dart_semantic_baseline.txt` 条目或 **`// ignore: verify_dart_semantic`** 仅限 **单行且备注原因**。  
 - `page-horizontal-quality-matrix.md` **P8** 列与 **备注** 与真实代码一致。  
-- `python3 scripts/verify_dart_semantic.py` 通过；矩阵与扫描脚本通过。
+- `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py` 通过；矩阵与扫描脚本通过。
 
 ## L1 / L2 / L3
 

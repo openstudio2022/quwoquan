@@ -7,8 +7,8 @@
 - [x] T3: [层级定义] 重写 `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`，删除 Current L5、兼容映射和四层描述，建立三层唯一权威定义。
 - [x] T4: [测试规则] 重写 `.cursor/rules/03-testing.mdc` 的治理口径，使测试只使用 `T1~T4`，不再用 `L3/L4` 表示测试层。
 - [x] T5: [命令] 逐一改写 `.cursor/commands/explore.md`、`prd.md`、`design.md`、`dev.md`、`verify.md`、`commit.md`、`deliver.md`、`deploy.md`，统一围绕 `L3_story` 交付和 `Task` 执行。
-- [x] T6: [脚手架] 重写 `scripts/new_feature_fullstack.sh`，改为直接生成 `specs/feature-tree/<L1>/<L2_feature>/<L3_story>/` 的三层目录结构。
-- [x] T7: [索引/门禁] 重写 `quwoquan_service/runtime/agentpack/tree_index.go`、`quwoquan_service/tools/gen_tree_index/main.go`、`scripts/verify_feature_traceability.sh`、`scripts/verify_feature_tree_refactor.sh`，使其只接受三层模型并对旧层级直接失败。
+- [x] T6: [脚手架] 重写 `agent_ops/scaffold/new_feature_fullstack.sh`，改为直接生成 `specs/feature-tree/<L1>/<L2_feature>/<L3_story>/` 的三层目录结构。
+- [x] T7: [索引/门禁] 重写 `quwoquan_service/runtime/agentpack/tree_index.go`、`quwoquan_service/tools/gen_tree_index/main.go`、`scripts/verify_feature_traceability.sh`、`agent_ops/scaffold/verify_feature_tree_refactor.sh`，使其只接受三层模型并对旧层级直接失败。
 - [x] T8: [存量迁移] 重建 `specs/feature-tree/tree_index.yaml`、重构 `specs/feature-tree/runtime/tree.yaml`，并批量迁移 `specs/feature-tree/` 下的旧层级节点与 `acceptance.yaml`。
 - [x] T9: [测试] 为三层索引、门禁和迁移增加最小失败测试或校验样例，确保旧层级残留会被稳定拦截。
 - [x] T10: [验证] 执行 tree index 重建、旧层级残留扫描、代表性样例节点抽样验证，并形成切换窗口与回滚检查清单。

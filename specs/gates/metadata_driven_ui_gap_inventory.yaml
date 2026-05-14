@@ -3,7 +3,7 @@
 #   partial：含已用 DTO 但尚未满足 policy.post_projection_spec 中「完成定义」的页面（矩阵 P2 记 ○）
 # 扫描基线对齐：specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
 #   （ui/**/pages/*_page.dart、welcome_screen、components/**/*_page.dart、app/shell）
-# 双向校验：scripts/verify_page_matrix_scan_complete.py（矩阵路径 ⊆ 本清单 ui_pages）
+# 双向校验：quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py（矩阵路径 ⊆ 本清单 ui_pages）
 version: 1
 updated: "2026-04-12"
 policy:
@@ -59,8 +59,8 @@ policy:
     local_chat_search_store 引入 LocalChatSearchContactWire（Map<String,Object?>）及 upsertContacts 强类型；同步侧用 Map<String,Object?>.from(dto.toMap())。
   contract_test_fixture_policy_ref: specs/gates/session_c_page_typing.md（§6 契约测试与 Map 断言）
   gates_baseline_rhythm:
-    map_literal_baseline_script: scripts/report_map_typing_baseline.py
-    page_abc_c_command: python3 scripts/verify_page_abc_governance.py --enforce-c
+    map_literal_baseline_script: quwoquan_app/scripts/runtime/report_map_typing_baseline.py
+    page_abc_c_command: python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-c
     last_verified: "2026-04-12"
     last_page_abc_c: pass
     last_map_baseline_snapshot_note: |
@@ -72,7 +72,7 @@ policy:
   assistant_search_weak_typing_ratchet:
     governance: specs/gates/assistant_search_weak_typing_governance.md
     baseline: specs/gates/assistant_search_weak_typing_baseline.json
-    script: scripts/verify_assistant_search_weak_typing_ratchet.py
+    script: agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py
     make_target: verify-app-assistant-search-weak-typing-ratchet
     buckets:
       - assistant_handwritten
@@ -489,7 +489,7 @@ domains:
         note: 底栏；无云行模型
       - path: quwoquan_app/lib/core/links/app_public_content_links.dart
         status: compliant
-        note: 公网 origin 薄层；路径由 _shared/link_templates.yaml → lib/cloud/runtime/generated/link_templates.g.dart（AppLinkTemplates）；门禁 scripts/verify_link_templates_route_ids.py
+        note: 公网 origin 薄层；路径由 _shared/link_templates.yaml → lib/cloud/runtime/generated/link_templates.g.dart（AppLinkTemplates）；门禁 quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py
 
   - id: components_shell
     metadata_hint: N/A

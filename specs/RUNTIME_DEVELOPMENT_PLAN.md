@@ -54,7 +54,7 @@
 
 - P0-fix-1：修复 `runtime/http` 与 `runtime/observability`（如 `NewHTTPServerMiddleware`）— **若已修复则仅需验证编译**
 - P0-fix-2：spec 中 metadata 引用更新为 v3 目录
-- **P0-fix-2b**：**根目录与 service 的 verify/gate 脚本适配 metadata v3**（当前 `scripts/verify_contract_metadata.sh` 与 `quwoquan_service/scripts/gate.sh` 仍检查旧扁平文件，须改为遍历 v3 聚合/实体目录并校验必需 YAML 及引用关系）
+- **P0-fix-2b**：**根目录与 service 的 verify/gate 脚本适配 metadata v3**（当前 `quwoquan_service/scripts/contract/verify_contract_metadata.sh` 与 `quwoquan_service/scripts/gate.sh` 仍检查旧扁平文件，须改为遍历 v3 聚合/实体目录并校验必需 YAML 及引用关系）
 - P0-fix-3：特性树补全（tree.yaml + 各 L2 的 acceptance/spec/tasks）
 
 **阶段结束必须通过的自动化验证**（用户验收 = 以下全部成功）：

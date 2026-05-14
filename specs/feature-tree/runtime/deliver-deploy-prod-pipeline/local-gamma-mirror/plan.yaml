@@ -30,36 +30,36 @@ slices:
       - quwoquan_service/docker-compose.gamma-local.yaml
       - deploy/local-gamma/README.md
       - deploy/local-gamma/Caddyfile
-      - scripts/start_local_gamma_mirror.sh
+      - quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
       - scripts/print_app_env_dart_defines.py
     acceptance_refs: [A3]
     tests:
-      - scripts/start_local_gamma_mirror.sh --skip-build --skip-up --print-env
+      - quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh --skip-build --skip-up --print-env
 
   - id: LG-4-local-t3-runner
     title: 本地 T3 gamma API contract 与 manifest endpoint runner
     outputs:
-      - scripts/run_local_gamma_t3.py
-      - scripts/verify_local_gamma_mirror.py
+      - quwoquan_app/scripts/gamma/run_local_gamma_t3.py
+      - quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
     acceptance_refs: [A4]
     tests:
-      - python3 scripts/run_local_gamma_t3.py --help
-      - python3 scripts/verify_local_gamma_mirror.py --help
+      - python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --help
+      - python3 quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py --help
 
   - id: LG-5-local-t4-runner
     title: 本地 T4 Patrol/设备 runner
     outputs:
-      - scripts/run_local_gamma_t4.sh
-      - scripts/verify_local_gamma_mirror.py
+      - quwoquan_app/scripts/gamma/run_local_gamma_t4.sh
+      - quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
     acceptance_refs: [A5]
     tests:
-      - bash scripts/run_local_gamma_t4.sh --help
+      - bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh --help
 
   - id: LG-6-gate-local-gamma
     title: 提交前 gate-local-gamma 串联与报告
     outputs:
       - Makefile
-      - scripts/verify_local_gamma_mirror.py
+      - quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
       - artifacts/local-gamma/report.json
     acceptance_refs: [A6]
     tests:

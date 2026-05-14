@@ -70,8 +70,8 @@ flowchart LR
 - 端侧 beta：`APP_DATA_SOURCE=remote`，通过真实 HTTP API 获取 fixture seed 数据。
 - 云侧 beta：服务日志或报告证明数据写入数据库/缓存；关闭 seed 后测试数据不可见。
 - 报告中没有 Dart mock 类名作为数据来源。
-- `scripts/verify_app_seed_manifests.py` 通过，证明 manifest 引用的 seedRefs 均存在。
-- `scripts/run_app_alpha_beta_seed_matrix.py` 通过，证明 alpha seeded mock 与 beta remote smoke 使用同一套 fixture。
+- `quwoquan_app/scripts/env/verify_app_seed_manifests.py` 通过，证明 manifest 引用的 seedRefs 均存在。
+- `quwoquan_app/scripts/env/run_app_alpha_beta_seed_matrix.py` 通过，证明 alpha seeded mock 与 beta remote smoke 使用同一套 fixture。
 
 ## 执行会话提示
 

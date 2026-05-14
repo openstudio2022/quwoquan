@@ -55,7 +55,7 @@ slices:
   - id: slice-4-gate-and-inventory
     title: 可选 verify_link_templates_route_ids.py；登记 metadata_driven 缺口清单「链接单源」
     outputs:
-      - scripts/verify_link_templates_route_ids.py
+      - quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py
       - specs/gates/metadata_driven_ui_gap_inventory.yaml
     tests:
       - make gate

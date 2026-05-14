@@ -9,11 +9,13 @@ class ArticlePageTextureSnapshot {
     required this.image,
     required this.logicalSize,
     required this.pixelRatio,
+    this.semanticSurfaceKind,
   });
 
   final ui.Image image;
   final Size logicalSize;
   final double pixelRatio;
+  final String? semanticSurfaceKind;
 
   double get pixelWidthPerLogical {
     if (logicalSize.width <= 0) {

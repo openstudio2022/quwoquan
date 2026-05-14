@@ -168,7 +168,8 @@
 **门禁**：
 
 - `validate_crawl_spec`
-- `article_topic_catalog_ref` 存在
+- `article_topic_catalog_ref`（seed topic catalog）存在
+- 进入 deep batch 前必须存在 `publishable_topic_catalog_ref` 或等价 publishable topic 产物
 - hydrate 失败率低于阈值
 
 ### 5. `data process-content`
@@ -209,8 +210,8 @@
 - `crawl publish-approved`
 - `crawl feedback-extract`
 - `crawl feedback-verify`
-- `verify_quwoquan_data_source_authenticity.py`
-- `verify_quwoquan_data_post_packages.py`
+- `quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py`
+- `quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py`
 
 **输出**：
 
@@ -252,7 +253,23 @@
 
 ### 目录候选 → 语义归并判定层
 
-`catalog` 不是 publishable entity 的直写源。目录候选在进入 `entity_catalog` 前，必须先经过一层可审计的语义判定：
+`catalog` 不是 publishable entity 的直写源。更严格地说，目录规则层也不是页面语义抽取器。目录候选在进入最终 publishable `entity_catalog` 前，必须先经过 **页面级 extraction / review / authority / escalate / compile / materialize** 主线；目录规则层仅允许做不会改变实体语义的噪声抑制与结构化准备。
+
+### Agent / CLI 边界
+
+| 层 | 职责 | 禁止 |
+|---|---|---|
+| CLI / 数据脚本 | 抓取页面、hydrate、准备 normalization input、校验 output schema、compile/materialize、topic 物化与 gate、生成编程助手任务清单 | 用名称启发式直接替代页面实体抽取与最终主子判定 |
+| 编程助手 | 读取 `source.md` / 阶段 input JSON，提取 `mainEntityCandidates`、`memberCandidates`、`aliasCandidates`、图片语义判定，并把结构化结果写回 `results/<stage>/*.json` | 绕过 schema 直接写 publish package |
+| 目录规则层 | 仅处理会污染编程助手输入的坏样本：纯符号、空白名、损坏页面、明显非内容对象 | 把 `孔雀`、`过厅`、`龙泉山观景台` 这类样本直接在脚本层定死为最终实体结论 |
+
+### Seed topic vs publishable topic
+
+- `article_topic_catalog_ref`：seed topic catalog，仅服务 `download/spec-discovery/content-hydrate`，允许包含“待编程助手判定”的候选 topic。
+- `publishable_topic_catalog_ref`：publishable topic catalog，仅服务 `process-content/publish` 深链路，必须来自 normalization/materialize 后的顶层实体。
+- 任何 `topic_{entityId}` 形式的 synthetic topic 都不得进入 `publishable_topic_catalog_ref`。
+
+`catalog` 进入最终实体层前，必须先经过一层可审计的语义判定：
 
 | 判定 | 含义 | publishable 行为 |
 |------|------|------------------|
@@ -263,7 +280,7 @@
 | `reject` | 名称、类型或来源不成立 | 从 publishable 实体层剔除 |
 | `pending_review` | 存在成员/并列信号，但证据不足或缺根实体 | 仅保留在候选/待审制品，不得静默升格 |
 
-该层的唯一真相源应来自 `semantic_cluster_candidates.ndjson` 与 `semantic_cluster_pending.ndjson`，而不是 UI、脚本或人工说明里的第二套判定表。
+该层的最终真相源应来自 normalization materialize 产物；`semantic_cluster_candidates.ndjson` 与 `semantic_cluster_pending.ndjson` 仅作为候选与追溯制品，不得再直接充当省级全量 publishable topics 的真相源。
 
 ### 聚类线索与最小信号集
 
@@ -413,7 +430,7 @@
 
 - 配置：`config/geo_catalog_config.sichuan.county.yaml`（`slice_admin_level: "6"` + 自 Overpass 导出的 `slices`）
 - 枚举：`quwoquan_data/tools/geo/list_admin_slices_overpass.py`（刷新 `slices` 列表时 diff 后检入）
-- 一键编排：`scripts/run_sichuan_province_full_batch_trinity.sh`
+- 一键编排：`quwoquan_data/scripts/e2e/run_province_full_batch.sh`（泛化省级，默认四川）
 
 设计上仍可：
 

@@ -67,3 +67,7 @@ quwoquan_data/out/
 quwoquan_data/raw/
 quwoquan_data/batch_plans/
 
+# artifacts — runtime/build products (already-tracked declarative files stay)
+artifacts/local-gamma/
+artifacts/ecs-onebox/
+

@@ -60,7 +60,7 @@ python3 scripts/check_public_ip_open_port.py --port 18200
 ```bash
 export GAMMA_ECS_MEDIA_ORIGIN_BASE_URL="https://<your-tunnel-domain>"
 export MEDIA_AVATAR_CDN_BASE_URL="http://<ecs-public-host>:18000"
-scripts/deploy_gamma_ecs.sh
+agent_ops/deploy/gamma/deploy_gamma_ecs.sh
 ```
 
 说明：
@@ -72,7 +72,7 @@ scripts/deploy_gamma_ecs.sh
 
 - ECS 对外仍然暴露自己的 `gamma-avatar / gamma-image / gamma-video` 域名或统一网关入口。
 - `gamma-proxy` 的 `/media/*` 与独立媒体 host 回源到 `GAMMA_ECS_MEDIA_ORIGIN_BASE_URL`。
-- `scripts/deploy_gamma_ecs.sh` 不再上传 `test_fixtures/media` 与 `original_media` 整库。
+- `agent_ops/deploy/gamma/deploy_gamma_ecs.sh` 不再上传 `test_fixtures/media` 与 `original_media` 整库。
 
 ## 风险
 
@@ -84,4 +84,4 @@ scripts/deploy_gamma_ecs.sh
 
 1. 清空 `GAMMA_ECS_MEDIA_ORIGIN_BASE_URL`
 2. 改用云侧共享盘 / 对象存储 / 本地 `/srv/media`
-3. 重新执行 `scripts/deploy_gamma_ecs.sh`
+3. 重新执行 `agent_ops/deploy/gamma/deploy_gamma_ecs.sh`

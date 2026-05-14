@@ -26,50 +26,50 @@ slices:
   - id: MI-3-app-instance-entry
     title: 端侧多模拟器多实例启动入口
     outputs:
-      - scripts/start_app_instance.sh
-      - scripts/stop_app_instance.sh
-      - scripts/list_app_instances.sh
+      - quwoquan_app/scripts/device/start_app_instance.sh
+      - quwoquan_app/scripts/device/stop_app_instance.sh
+      - quwoquan_app/scripts/device/list_app_instances.sh
       - quwoquan_app/lib/cloud/runtime/cloud_runtime_config.dart
     acceptance_refs: [A3]
     tests:
-      - bash scripts/start_app_instance.sh --help
-      - bash scripts/stop_app_instance.sh --help
-      - bash scripts/list_app_instances.sh --help
+      - bash quwoquan_app/scripts/device/start_app_instance.sh --help
+      - bash quwoquan_app/scripts/device/stop_app_instance.sh --help
+      - bash quwoquan_app/scripts/device/list_app_instances.sh --help
 
   - id: MI-4-beta-single-stack
     title: beta 单套 stop then start 生命周期
     outputs:
-      - scripts/start_app_beta_manual.sh
-      - scripts/stop_app_beta_manual.sh
-      - scripts/lib/beta_manual_lifecycle.sh
+      - quwoquan_app/scripts/device/start_app_beta_manual.sh
+      - quwoquan_app/scripts/device/stop_app_beta_manual.sh
+      - agent_ops/lib/beta_manual_lifecycle.sh
     acceptance_refs: [A4]
     tests:
-      - bash scripts/start_app_beta_manual.sh --help
-      - bash scripts/stop_app_beta_manual.sh --help
+      - bash quwoquan_app/scripts/device/start_app_beta_manual.sh --help
+      - bash quwoquan_app/scripts/device/stop_app_beta_manual.sh --help
 
   - id: MI-5-gamma-single-stack
     title: gamma deploy 与 local-gamma mirror 单套切换语义
     outputs:
-      - scripts/start_local_gamma_mirror.sh
+      - quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
       - deploy/shared/deliver_to_production_runbook.md
     acceptance_refs: [A5]
     tests:
-      - bash scripts/start_local_gamma_mirror.sh --help
+      - bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh --help
 
   - id: MI-6-verify-and-report
     title: 端侧多实例与单套切换验证脚本和报告字段
     outputs:
-      - scripts/verify_env_instance_isolation.py
+      - quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
       - artifacts/app-env-packages
       - artifacts/service-env-packages
     acceptance_refs: [A6]
     tests:
-      - python3 scripts/verify_env_instance_isolation.py --help
+      - python3 quwoquan_service/scripts/runtime/verify_env_instance_isolation.py --help
 
 commit_policy:
   required_before_commit:
     - make verify-app-env-package
-    - python3 scripts/verify_env_instance_isolation.py
+    - python3 quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
   gate_block_when:
     - multiple beta service stacks listen on fixed beta ports
     - multiple gamma service stacks run in parallel

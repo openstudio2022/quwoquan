@@ -20,7 +20,7 @@ acceptance_criteria:
     '
   verify: make gate (scope=app) 日志中出现 "All tests passed" 且无 "skip flutter test"
   tests:
-  - file: scripts/gate_repo.sh
+  - file: agent_ops/gate/gate_repo.sh
     note: run_app() 第 32 行始终执行 flutter test test/cloud/ test/components/ test/ui/
 - id: A2
   title: go test 纳入 PR gate
@@ -32,7 +32,7 @@ acceptance_criteria:
     '
   verify: gate.sh 日志中出现 "ok quwoquan_service/services/content-service/..."
   tests:
-  - file: quwoquan_service/scripts/gate.sh
+  - file: agent_ops/gate/gate_repo.sh
     note: 第 621-624 行绑定 go test ./services/content-service/... -count=1 -timeout=120s
 - id: A3
   title: L2 禁止 in-memory store
@@ -118,7 +118,7 @@ acceptance_criteria:
     '
   verify: make gate 输出中 e2e.yaml patrol_flow warn 可见但退出码为 0
   tests:
-  - file: quwoquan_service/scripts/gate.sh
+  - file: agent_ops/gate/gate_repo.sh
     note: T38 实现 patrol_flow 文件存在性检查（warn 级）
 - id: A8
   title: mock.yaml widget/journey 场景声明对应实际测试

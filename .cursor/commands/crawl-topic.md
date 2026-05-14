@@ -86,8 +86,8 @@ python3 quwoquan_data/tools/cli.py crawl audit-topic --spec <spec> --topic <topi
 11. 执行真实性 gate 与 package gate：
 
 ```bash
-python3 scripts/verify_quwoquan_data_source_authenticity.py
-python3 scripts/verify_quwoquan_data_post_packages.py
+python3 quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py
+python3 quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py
 ```
 
 ## 每轮产物

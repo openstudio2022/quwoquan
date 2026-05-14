@@ -33,16 +33,16 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
           HEAD_SHA: ${{ github.sha }}
         run: |
-          python3 scripts/detect_ci_impacted_scopes.py \
+          python3 agent_ops/ci/detect_ci_impacted_scopes.py \
             --base-sha "${BASE_SHA}" \
             --head-sha "${HEAD_SHA}" \
             --github-output "$GITHUB_OUTPUT"
       - name: Environment Topology Regression
         if: ${{ steps.detect.outputs.topology == 'true' }}
         run: |
-          bash scripts/verify_deployment_domain_mapping.sh
-          bash scripts/verify_topology_contract_regression.sh
-          bash scripts/report_deployment_mapping_impact.sh
+          bash quwoquan_service/scripts/deploy/verify_deployment_domain_mapping.sh
+          bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
+          bash quwoquan_service/scripts/deploy/report_deployment_mapping_impact.sh
       - id: finish
         if: always()
         name: Finish timer
@@ -68,13 +68,13 @@ jobs:
       - name: 设置 Dart
         uses: dart-lang/setup-dart@v1
       - name: 安装 kustomize
-        run: bash scripts/install_kustomize.sh
+        run: bash agent_ops/deploy/shared/install_kustomize.sh
       - name: 安装 Python 依赖 (rec-model-service)
         run: |
           pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: Gate (quwoquan_service)
         run: |
-          bash scripts/gate_repo.sh --scope service
+          bash agent_ops/gate/gate_repo.sh --scope service
       - id: finish
         if: always()
         name: Finish timer
@@ -109,7 +109,7 @@ jobs:
           cache: true
       - name: Gate (quwoquan_app)
         run: |
-          bash scripts/gate_repo.sh --scope app
+          bash agent_ops/gate/gate_repo.sh --scope app
       - id: finish
         if: always()
         name: Finish timer
@@ -135,7 +135,7 @@ jobs:
           cache: npm
       - name: Gate (ops-portal)
         run: |
-          bash scripts/gate_repo.sh --scope portal
+          bash agent_ops/gate/gate_repo.sh --scope portal
       - id: finish
         if: always()
         name: Finish timer
@@ -168,7 +168,7 @@ jobs:
           if [ "${APP_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${APP_SECONDS}"; fi
           if [ "${PORTAL_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${PORTAL_SECONDS}"; fi
           CRITICAL_PATH_SECONDS=$(( TOPOLOGY_SECONDS + FANOUT_SECONDS ))
-          python3 scripts/render_ci_timing_summary.py \
+          python3 agent_ops/ci/render_ci_timing_summary.py \
             --gate-key 03.delivery_gate \
             --title "03. Delivery Gate" \
             --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \

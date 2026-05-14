@@ -867,10 +867,10 @@ entries:
       - path: quwoquan_service/tools/persona_rollout/main.go
         sections:
           - dry-run validate cli
-      - path: scripts/persona_migration_dry_run.sh
+      - path: quwoquan_service/scripts/persona/persona_migration_dry_run.sh
         sections:
           - local rehearsal entry
-      - path: scripts/persona_migration_validate.sh
+      - path: quwoquan_service/scripts/persona/persona_migration_validate.sh
         sections:
           - validation entry
     impact:

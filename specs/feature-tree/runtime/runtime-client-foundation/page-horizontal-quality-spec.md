@@ -64,7 +64,7 @@
 | 阶段 | 要求 |
 |------|------|
 | **v1** | 每个涉及页面的 PR **必须** 更新 `page-horizontal-quality-matrix.md` 对应行的 **当前 P 列**；使用 `specs/gates/page_horizontal_quality_pr_checklist.md` 自检 |
-| **v2** | `scripts/verify_page_horizontal_quality_matrix.py`（路径存在性 + **P1–P8** 符号）+ `scripts/verify_page_matrix_scan_complete.py`（磁盘↔矩阵↔缺口清单 **无漏页**）；已接入 `make gate` 的 app 段；本地快检 **`make verify-app-page-horizontal-quality`**；列数扩展时同步改脚本 |
+| **v2** | `quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py`（路径存在性 + **P1–P8** 符号）+ `quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py`（磁盘↔矩阵↔缺口清单 **无漏页**）；已接入 `make gate` 的 app 段；本地快检 **`make verify-app-page-horizontal-quality`**；列数扩展时同步改脚本 |
 
 ## 验收（总会话）
 

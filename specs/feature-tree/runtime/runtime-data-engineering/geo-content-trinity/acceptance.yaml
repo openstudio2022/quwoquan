@@ -8,13 +8,16 @@ archived: false
 execution:
   local_gate: >
     python3 -m unittest discover -s quwoquan_data/tests &&
-    python3 scripts/verify_geo_catalog_quality.py &&
-    python3 scripts/verify_catalog_entity_consistency.py &&
+    python3 quwoquan_data/scripts/verify/verify_geo_catalog_quality.py &&
+    python3 quwoquan_data/scripts/verify/verify_catalog_entity_consistency.py &&
     make verify-quwoquan-data
   full_gate: >
     python3 -m unittest discover -s quwoquan_data/tests &&
     make verify-quwoquan-data &&
-    bash scripts/run_sichuan_geo_content_trinity_e2e.sh
+    bash quwoquan_data/scripts/e2e/run_province_e2e.sh
+  province_full_gate: >
+    python3 -m unittest discover -s quwoquan_data/tests &&
+    PROVINCE_SKIP_CATALOG_BUILD=1 bash quwoquan_data/scripts/e2e/run_province_full_batch.sh
 
 scope:
   summary: >
@@ -67,8 +70,8 @@ scenario_acceptance:
   A1:
     title: 地理目录候选层可按声明的地级切片产出统计
     done_when:
-      - 每个声明的地级 slice 均输出 `raw_count`
-      - "`raw_count=0` 的切片有 Overpass 探测记录或备案说明"
+      - "每个声明的地级 slice 均输出 raw_count"
+      - "raw_count=0 的切片有 Overpass 探测记录或备案说明"
       - 四川样例中广安市切片异常可被报告而非静默吞掉
     evidence:
       primary: [T1]
@@ -83,7 +86,7 @@ scenario_acceptance:
   A2:
     title: 目录候选层完成元素级去重
     done_when:
-      - 同一 `type:id` 仅保留一条记录
+      - "同一 type:id 仅保留一条记录"
       - 名称级合并不破坏元素级可追溯性
     evidence:
       primary: [T1]
@@ -111,9 +114,9 @@ scenario_acceptance:
     status: planned
 
   A4:
-    title: 国内候选层 `label_zh` 必保
+    title: 国内候选层 label_zh 必保
     done_when:
-      - 国内 catalog 行 `label_zh` 覆盖率达到阈值
+      - "国内 catalog 行 label_zh 覆盖率达到阈值"
       - 英文/符号主名候选默认被拒绝或隔离
     evidence:
       primary: [T1, T2]
@@ -129,7 +132,7 @@ scenario_acceptance:
     title: 中文业务类型可解析且与命名规则版本一致
     done_when:
       - 每条进入实体层的候选都有中文业务类型
-      - 实体类型与 `entity_naming_rules` 版本一致
+      - "实体类型与 entity_naming_rules 版本一致"
       - 抽样错类率低于阈值
     evidence:
       primary: [T1, T2]
@@ -142,11 +145,11 @@ scenario_acceptance:
     status: planned
 
   A6:
-    title: "`label_en` 为扩展批次而非默认 Gate0"
+    title: "label_en 为扩展批次而非默认 Gate0"
     done_when:
-      - 国内链路不因 `label_en` 缺失而阻断
-      - 海外无中文通译场景下 `label_en` 可作为主展示回退
-      - "`label_en_status` 可统计"
+      - "国内链路不因 label_en 缺失而阻断"
+      - "海外无中文通译场景下 label_en 可作为主展示回退"
+      - "label_en_status 可统计"
     evidence:
       primary: [T1]
       supporting: [T2]
@@ -160,9 +163,10 @@ scenario_acceptance:
   A6_1:
     title: 地理目录候选层与实体层边界明确
     done_when:
-      - 每条目录候选都有 `standalone / member / alias / parallel_entity / reject / pending_review` 之一
-      - publishable 顶层实体仅允许来自 `standalone` 与显式 `parallel_entity`
+      - "每条目录候选都有 standalone / member / alias / parallel_entity / reject / pending_review 之一"
+      - "publishable 顶层实体仅允许来自 standalone 与显式 parallel_entity"
       - 判定规则与字段来源在 design 中冻结
+      - "article_topic_catalog_ref 仅作为 seed topic catalog；publishable_topic_catalog_ref 才允许进入 deep batch"
     evidence:
       primary: [T1]
       supporting: [T2]
@@ -176,8 +180,8 @@ scenario_acceptance:
   A7:
     title: entity-catalog 与 catalog / tag_catalog 一致
     done_when:
-      - 抽样 `topic_id` 在 entity_catalog 与 catalog 中 canonical 一致
-      - "`tagRefs` 可解析到 tag_catalog"
+      - "抽样 topic_id 在 entity_catalog 与 catalog 中 canonical 一致"
+      - "tagRefs 可解析到 tag_catalog"
     evidence:
       primary: [T1, T2]
       supporting: [T3]
@@ -191,7 +195,7 @@ scenario_acceptance:
   A8:
     title: 图文标题与实体锚点同源
     done_when:
-      - 已 hydrate 来源标题 / snippet 命中 canonical 或 `label_zh`
+      - "已 hydrate 来源标题 / snippet 命中 canonical 或 label_zh"
       - 内容审核输出不引入第二套未回写的展示名
     evidence:
       primary: [T1, T2]
@@ -222,9 +226,10 @@ scenario_acceptance:
     title: 无准入证据的候选不得直接进入可发布种子
     done_when:
       - 非权威轨且未满足 post 互证（A16）的候选默认不进入可发布种子池
-      - "`member` / `alias` / `reject` / `pending_review` 候选不得以顶层实体形式进入 publishable entity_catalog"
+      - "member / alias / reject / pending_review 候选不得以顶层实体形式进入 publishable entity_catalog"
       - 权威轨实体不因「缺 post」被拒；仅有百科/维基锚点即可进入实体层（R7）
       - 若对特殊批次放行无证据候选，acceptance 或批次说明中须有显式豁免
+      - "synthetic topic（如 topic_{entityId}）不得作为可发布 topic 进入省级全量 deep batch"
     evidence:
       primary: [T1]
       supporting: [T3]
@@ -238,7 +243,7 @@ scenario_acceptance:
   A10:
     title: 内容反向变更具备证据与版本记录
     done_when:
-      - 任何反向修订都附带 `evidence_urls`
+      - "任何反向修订都附带 evidence_urls"
       - 目录或配置版本有递增记录
     evidence:
       primary: [T1]
@@ -253,7 +258,7 @@ scenario_acceptance:
   A11:
     title: 六阶段数据工程工作流具备阶段自测
     done_when:
-      - "`data-explore` / `data-baseline` / `data-build-entities-tags` / `data-download` / `data-process-content` / `data-publish` 均有自测要求"
+      - "data-explore / data-baseline / data-build-entities-tags / data-download / data-process-content / data-publish 均有自测要求"
       - 任一阶段失败不会静默进入下一阶段
     evidence:
       primary: [T1, T2]
@@ -266,9 +271,9 @@ scenario_acceptance:
     status: planned
 
   A12:
-    title: "`wiki_expand` 行为有固定回归样本"
+    title: "wiki_expand 行为有固定回归样本"
     done_when:
-      - "`filtered` / `full` 行为写入 design"
+      - "filtered / full 行为写入 design"
       - 至少 1 个固定 topic 有候选数基线
     evidence:
       primary: [T1]
@@ -281,7 +286,7 @@ scenario_acceptance:
     status: planned
 
   A12_1:
-    title: "`data-*` 阶段命令具备逐命令 I/O 定义"
+    title: "data-* 阶段命令具备逐命令 I/O 定义"
     done_when:
       - design 中存在逐命令输入 / 输出 / 失败重试 / 准出说明
       - 不再只保留抽象阶段代号
@@ -313,8 +318,8 @@ scenario_acceptance:
   A13:
     title: 四川真实样例通过真实性与 package gate
     done_when:
-      - "`verify_quwoquan_data_source_authenticity.py` 通过或文档化例外"
-      - "`verify_quwoquan_data_post_packages.py` 通过或文档化例外"
+      - "verify_quwoquan_data_source_authenticity.py 通过或文档化例外"
+      - "verify_quwoquan_data_post_packages.py 通过或文档化例外"
     evidence:
       primary: [T1, T3]
       supporting: [T2]
@@ -328,7 +333,7 @@ scenario_acceptance:
   A14:
     title: 全流程遵守 quwoquan_data 合规边界
     done_when:
-      - 全量操作遵守 `quwoquan_data/SPEC.md` K4
+      - "全量操作遵守 quwoquan_data/SPEC.md K4"
       - 无绕过 robots / 权限控制的自动化路径
     evidence:
       primary: [T1]
@@ -363,6 +368,7 @@ scenario_acceptance:
       - post_evidence 实体至少 2 条可引用、独立稿件 URL，写入 evidenceArticleUrls 或等价字段
       - 冲突判定规则在 design 冻结；冲突行不得进入可发布 entity_catalog
       - MVP 允许以人工裁决 + conflictCheckStatus 为主，但必须可审计（非静默丢弃）
+      - "页面中的 mainEntity / members / aliases 提取统一来自编程助手执行后的 extraction 结果，CLI 仅负责输入/输出/校验/物化"
     evidence:
       primary: [T1, T2]
       supporting: [T3]

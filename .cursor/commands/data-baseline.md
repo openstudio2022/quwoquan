@@ -35,6 +35,13 @@ python3 quwoquan_data/tools/cli.py data baseline \
 
 - 基线文件存在性与 schema/lint 结果
 
+## 工作流位置
+
+`data explore` → **data baseline** → `data build-entities-tags` → ...
+
+baseline 是 explore 之后、build-entities-tags 之前的强制步骤，冻结规格和配置基线。
+
 ## 门禁
 
-- 类型、label、目录候选层/实体层边界、工作流关系写清
+- 所有基线文件必须存在
+- catalog-config 与 geo-band-rules 路径一致性校验通过

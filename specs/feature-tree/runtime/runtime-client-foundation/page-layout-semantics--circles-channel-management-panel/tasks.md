@@ -15,7 +15,7 @@
 - [x] B7（业务）动作色统一蓝色主色，避免橘色
 - [ ] T1（测试）补充/更新圈子页频道管理交互测试（搁置，手动验证通过）
 - [ ] T1.1（测试）补充 tab 稳定性回归（存量，待恢复锚定状态机后补齐）
-- [x] T2（测试）执行 `flutter analyze quwoquan_app/lib/` 与 `python3 scripts/verify_dart_semantic.py`
+- [x] T2（测试）执行 `flutter analyze quwoquan_app/lib/` 与 `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py`
 
 ## 规划任务
 

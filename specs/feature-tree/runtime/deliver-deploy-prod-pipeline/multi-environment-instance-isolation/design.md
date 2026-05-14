@@ -116,7 +116,7 @@ beta / gamma 的报告需额外记录：
 
 ### gamma 单套入口
 
-- `scripts/start_local_gamma_mirror.sh`
+- `quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh`
 - gamma ECS 部署脚本与 runbook
 
 职责：

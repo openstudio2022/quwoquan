@@ -312,6 +312,6 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     notes:
-      - 已实际执行 `python3 scripts/verify_dart_semantic.py --targets quwoquan_app/lib` 并通过。
+      - 已实际执行 `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py --targets quwoquan_app/lib` 并通过。
       - 已实际执行全局搜索相关 widget/journey 回归与 gate 中失败用例回归，并重新跑通整仓 `make gate`。
       - 整仓 gate 仍保留若干 advisory WARN，但不再存在失败项；本 CR 至此进入 deliver 完成态。

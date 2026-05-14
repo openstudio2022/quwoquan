@@ -103,6 +103,6 @@ L1 内部分段是同一张纸的分段，不是新增独立平面：
 
 ## 门禁
 
-- `python3 scripts/verify_pageflip_backward_mainline.py`（静态扫描禁用符号、固定 ValueKey、要求 forward-isomorphic visual geometry、禁止 display offset 与 full baseline 回归）。
+- `python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py`（静态扫描禁用符号、固定 ValueKey、要求 forward-isomorphic visual geometry、禁止 display offset 与 full baseline 回归）。
 - `make verify-app-pageflip-back-mainline`（合约 + 视觉不变量）。
-- 已串联 `make gate` → `scripts/gate_repo.sh`：静态扫描随 `run_app` 执行；测试随 L1 合约/视觉测试执行。
+- 已串联 `make gate` → `agent_ops/gate/gate_repo.sh`：静态扫描随 `run_app` 执行；测试随 L1 合约/视觉测试执行。

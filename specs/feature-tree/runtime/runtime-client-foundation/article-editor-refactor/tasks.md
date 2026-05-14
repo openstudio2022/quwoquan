@@ -15,4 +15,4 @@
 - [x] slice-wysiwyg-layout-and-wrap：落地分页、环绕、卡片侵入式编辑体验
 - [x] slice-toolbar-panels-and-history：收口五项底栏、面板与 undo/redo
 - [x] slice-edit-preview-chrome：编辑/预览顶栏、Word 纵向编辑、沉浸横向预览与翻书动效（见 design §5.4）
-- [ ] slice-tests-and-gates：`acceptance.yaml` tests 列表、`design` §9/§10 已更新；PR 前跑 `make verify-app-page-horizontal-quality` 与 `bash scripts/gate_repo.sh --scope app`
+- [ ] slice-tests-and-gates：`acceptance.yaml` tests 列表、`design` §9/§10 已更新；PR 前跑 `make verify-app-page-horizontal-quality` 与 `bash agent_ops/gate/gate_repo.sh --scope app`

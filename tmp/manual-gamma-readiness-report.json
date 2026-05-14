@@ -1,0 +1,60 @@
+{
+  "status": "running",
+  "failureCategory": "gateway_healthz_not_ready",
+  "blockingReason": "gateway /healthz not ready: Remote end closed connection without response",
+  "startedAt": "2026-05-12T23:54:42.329154Z",
+  "endedAt": "2026-05-12T23:55:23.201191Z",
+  "environment": {
+    "baseUrl": "http://118.31.239.122:18000",
+    "productOpsBaseUrl": "http://118.31.239.122:18086",
+    "commitSha": "",
+    "githubRunId": ""
+  },
+  "attempts": [
+    {
+      "at": "2026-05-12T23:54:42.329448Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "Remote end closed connection without response"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "pen\n    r = h.getresponse()\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 1430, in getresponse\n    response.begin()\n    ~~~~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 331, in begin\n    version, status, reason = self._read_status()\n                              ~~~~~~~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 300, in _read_status\n    raise RemoteDisconnected(\"Remote end closed connection without\"\n                             \" response\")\nhttp.client.RemoteDisconnected: Remote end closed connection without response"
+      }
+    },
+    {
+      "at": "2026-05-12T23:54:55.980723Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "Remote end closed connection without response"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "pen\n    r = h.getresponse()\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 1430, in getresponse\n    response.begin()\n    ~~~~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 331, in begin\n    version, status, reason = self._read_status()\n                              ~~~~~~~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 300, in _read_status\n    raise RemoteDisconnected(\"Remote end closed connection without\"\n                             \" response\")\nhttp.client.RemoteDisconnected: Remote end closed connection without response"
+      }
+    },
+    {
+      "at": "2026-05-12T23:55:14.292004Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "Remote end closed connection without response"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "pen\n    r = h.getresponse()\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 1430, in getresponse\n    response.begin()\n    ~~~~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 331, in begin\n    version, status, reason = self._read_status()\n                              ~~~~~~~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.13/3.13.3_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/http/client.py\", line 300, in _read_status\n    raise RemoteDisconnected(\"Remote end closed connection without\"\n                             \" response\")\nhttp.client.RemoteDisconnected: Remote end closed connection without response"
+      }
+    }
+  ]
+}

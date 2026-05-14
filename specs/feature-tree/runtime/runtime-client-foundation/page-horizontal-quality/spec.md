@@ -8,7 +8,7 @@
 | 横向维度定义、页面类型 T1–T7、强制校验 v1/v2 | [page-horizontal-quality-spec.md](../page-horizontal-quality-spec.md) |
 | 领域 × 类型 × P1–P8 矩阵 | [page-horizontal-quality-matrix.md](../page-horizontal-quality-matrix.md) |
 | PR 自检清单 | [page_horizontal_quality_pr_checklist.md](../../../../gates/page_horizontal_quality_pr_checklist.md) |
-| v1 自动化校验 | 仓库根 `scripts/verify_page_horizontal_quality_matrix.py` + `verify_page_matrix_scan_complete.py`；**`make verify-app-page-horizontal-quality`** |
+| v1 自动化校验 | 仓库根 `quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py` + `verify_page_matrix_scan_complete.py`；**`make verify-app-page-horizontal-quality`** |
 | Cursor 治理规则 | [`.cursor/rules/09-page-horizontal-quality.mdc`](../../../../../.cursor/rules/09-page-horizontal-quality.mdc)（`alwaysApply`） |
 | 变更请求（baseline） | [`CR-20260329-005-page-horizontal-quality-baseline.yaml`](../../../../changelog/CR-20260329-005-page-horizontal-quality-baseline.yaml) |
 | 九会话落实规划（S1–S9） | [nine-session-rollout-plan.md](./nine-session-rollout-plan.md) |

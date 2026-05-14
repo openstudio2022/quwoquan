@@ -1,0 +1,270 @@
+{
+  "status": "running",
+  "failureCategory": "gateway_healthz_not_ready",
+  "blockingReason": "gateway /healthz not ready: <urlopen error [Errno 111] Connection refused>",
+  "startedAt": "2026-05-09T05:52:21.561652Z",
+  "endedAt": "2026-05-09T05:53:56.999242Z",
+  "environment": {
+    "baseUrl": "http://118.31.239.122:18000",
+    "productOpsBaseUrl": "http://118.31.239.122:18086",
+    "commitSha": "4ea95c10399fade63f213198c6640044f0981e40",
+    "githubRunId": "25593386308"
+  },
+  "attempts": [
+    {
+      "at": "2026-05-09T05:52:21.561673Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:52:27.484140Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:52:33.377844Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:52:39.275194Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:52:45.184215Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:52:51.065046Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:52:56.968276Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:02.892611Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:08.784730Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:14.678050Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:20.591100Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:26.474395Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:32.505682Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:38.404130Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:44.302639Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:50.215497Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    },
+    {
+      "at": "2026-05-09T05:53:56.124744Z",
+      "baseHealth": {
+        "status": "failed",
+        "detail": "<urlopen error [Errno 111] Connection refused>"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\"}\n"
+      },
+      "routing": {
+        "status": "failed",
+        "detail": "python3.12/urllib/request.py\", line 515, in open\n    response = self._open(req, data)\n               ^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 532, in _open\n    result = self._call_chain(self.handle_open, protocol, protocol +\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 492, in _call_chain\n    result = func(*args)\n             ^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1373, in http_open\n    return self.do_open(http.client.HTTPConnection, req)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3.12/urllib/request.py\", line 1347, in do_open\n    raise URLError(err)\nurllib.error.URLError: <urlopen error [Errno 111] Connection refused>"
+      }
+    }
+  ]
+}

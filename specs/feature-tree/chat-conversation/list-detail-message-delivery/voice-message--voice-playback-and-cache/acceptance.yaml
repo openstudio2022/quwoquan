@@ -3,7 +3,7 @@ level: "L3_story"
 archived: true
 archived_at: '2026-03-07T18:20:24Z'
 execution:
-  local_gate: flutter test test/cloud/ test/ui/chat/ && python3 scripts/verify_dart_semantic.py
+  local_gate: flutter test test/cloud/ test/ui/chat/ && python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
   full_gate: make gate-full
 level_acceptance:
   A1:

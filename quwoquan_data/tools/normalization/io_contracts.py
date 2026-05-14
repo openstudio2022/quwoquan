@@ -108,6 +108,18 @@ def stage_result_path(batch_label: str, stage: str, source_ref: str) -> Path:
     return stage_results_dir(batch_label, stage) / f"{source_ref}.json"
 
 
+def assistant_tasks_dir(batch_label: str) -> Path:
+    return normalization_root(batch_label) / "assistant_tasks"
+
+
+def assistant_stage_task_manifest_path(batch_label: str, stage: str) -> Path:
+    return assistant_tasks_dir(batch_label) / f"{str(stage).strip()}.json"
+
+
+def assistant_batch_status_path(batch_label: str) -> Path:
+    return assistant_tasks_dir(batch_label) / "batch_status.json"
+
+
 def compiled_dir(batch_label: str) -> Path:
     return normalization_root(batch_label) / "compiled"
 
@@ -162,6 +174,7 @@ def ensure_normalization_layout(batch_label: str) -> None:
         stage_results_dir(batch_label, "review"),
         stage_results_dir(batch_label, "authority"),
         stage_results_dir(batch_label, "escalate"),
+        assistant_tasks_dir(batch_label),
         compiled_dir(batch_label),
         trace_dir(batch_label),
     ):

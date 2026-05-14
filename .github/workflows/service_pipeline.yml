@@ -101,7 +101,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: 安装 kustomize
-        run: bash scripts/install_kustomize.sh
+        run: bash agent_ops/deploy/shared/install_kustomize.sh
 
       - name: Kustomize build 校验
         run: |

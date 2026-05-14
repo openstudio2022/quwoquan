@@ -55,7 +55,7 @@ level_acceptance:
     tests:
       - file: quwoquan_service/docker-compose.gamma-local.yaml
       - file: deploy/local-gamma/Caddyfile
-      - file: scripts/start_local_gamma_mirror.sh
+      - file: quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
   A4:
     criteria: 本地 T3 runner 使用 app_gamma_seed_manifest.json 验证真实 API、真实存储副作用、错误码、响应 schema 与 RemoteRepository 边界。
     status: implemented
@@ -67,8 +67,8 @@ level_acceptance:
       T3: required
       T4: not_applicable
     tests:
-      - file: scripts/run_local_gamma_t3.py
-      - command: python3 scripts/run_local_gamma_t3.py --help
+      - file: quwoquan_app/scripts/gamma/run_local_gamma_t3.py
+      - command: python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --help
   A5:
     criteria: 本地 T4 runner 统一 CLOUD_GATEWAY_BASE_URL、API_CONTRACT_BASE_URL、TEST_AUTH_TOKEN 与 MEDIA_*，复用共享 gamma 巡检脚本与证据字段，在模拟器或真机完成 Patrol 核心旅程。
     status: implemented
@@ -80,8 +80,8 @@ level_acceptance:
       T3: optional
       T4: required
     tests:
-      - file: scripts/run_local_gamma_t4.sh
-      - command: bash scripts/run_local_gamma_t4.sh --help
+      - file: quwoquan_app/scripts/gamma/run_local_gamma_t4.sh
+      - command: bash quwoquan_app/scripts/gamma/run_local_gamma_t4.sh --help
   A6:
     criteria: gate-local-gamma 串联 T1/T2/T3/T4 并输出 artifacts/local-gamma/report.json，作为提交前左移准入，但不再成为 `main` required check。
     status: implemented
@@ -94,7 +94,7 @@ level_acceptance:
       T4: required
     tests:
       - file: Makefile
-      - file: scripts/verify_local_gamma_mirror.py
+      - file: quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
       - command: make gate-local-gamma LOCAL_GAMMA_DRY_RUN=1
 execution:
   local_gate: make gate-local-gamma
@@ -125,7 +125,7 @@ evidence_matrix:
       artifact: artifacts/app-env-packages/gamma/report.json
   T2:
     - type: module_tests
-      artifact: scripts/gate_repo.sh
+      artifact: agent_ops/gate/gate_repo.sh
   T3:
     - type: local_gamma_report
       artifact: artifacts/local-gamma/report.json

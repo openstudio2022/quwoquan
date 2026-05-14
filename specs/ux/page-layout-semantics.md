@@ -112,7 +112,7 @@
 - 内页返回使用 `GlobalTopBarIconButton`（**例外**：主壳/发现等全局顶栏上的搜索等入口，见 `GlobalTopBarIconButton` 文档）。
 - 新建全屏设置页手写「灰内容区 + 白/块顶栏 + 未文档化 token 组合」而不登记 `scripts/settings_canonical_manifest.yaml`。
 
-**门禁**：`scripts/verify_settings_canonical.py`（随 `gate_repo.sh` app 阶段执行）。
+**门禁**：`quwoquan_app/scripts/settings/verify_settings_canonical.py`（随 `gate_repo.sh` app 阶段执行）。
 
 **群聊设置域交叉引用**：`specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md`（§9 全屏表单态）。
 
@@ -132,7 +132,7 @@
 
 **禁止**：业务页新建 `showCupertinoModalPopup` + 自绘 `Container(color: Colors.white…` 等第二套「白卡 + 灰底」且无登记。
 
-**门禁**：`scripts/verify_conversation_sheet_canonical.py` + `scripts/conversation_sheet_manifest.yaml`（随 `gate_repo.sh` app 阶段执行）。
+**门禁**：`quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py` + `scripts/conversation_sheet_manifest.yaml`（随 `gate_repo.sh` app 阶段执行）。
 
 **与 §4.3 选用关系**：全屏设置/表单 → `SettingsInsetFormPageScaffold`；贴底选项/说明 → 本节 + `AppBottomModalSurface`。
 
@@ -223,4 +223,4 @@
 | 聊天选择器 | StartGroupChatPage | 多选选择态改为 iOS 语义图标（替换 Material Checkbox） |
 | 圈子频道管理 | CirclesPage | 一级 tab 下方滑出频道管理面板；我的频道支持拖拽排序；+/- 互转；动作色为蓝色主色 |
 
-> 门禁：`scripts/verify_dart_semantic.py`、`scripts/verify_settings_canonical.py`、`scripts/verify_conversation_sheet_canonical.py` 由 `scripts/gate_repo.sh` 在 app gate 阶段执行。
+> 门禁：`quwoquan_app/scripts/runtime/verify_dart_semantic.py`、`quwoquan_app/scripts/settings/verify_settings_canonical.py`、`quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py` 由 `agent_ops/gate/gate_repo.sh` 在 app gate 阶段执行。

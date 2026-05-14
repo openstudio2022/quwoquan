@@ -11,8 +11,8 @@ summary: |
 artifacts:
   - specs/gates/mock_data_cloud_integration_policy.md
   - specs/gates/ui_mock_isolation_allowlist.yaml
-  - scripts/verify_ui_mock_isolation.py
-  - scripts/gate_repo.sh
+  - quwoquan_app/scripts/env/verify_ui_mock_isolation.py
+  - agent_ops/gate/gate_repo.sh
   - Makefile
   - .cursor/rules/08-mock-data-isolation.mdc
   - specs/gates/page_horizontal_quality_pr_checklist.md

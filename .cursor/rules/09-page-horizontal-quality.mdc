@@ -33,15 +33,15 @@ alwaysApply: true
 
 ```bash
 make verify-app-page-horizontal-quality   # 矩阵符号 + 磁盘/清单无漏页（快）
-bash scripts/gate_repo.sh --scope app     # 全量 app 门禁（含矩阵 + P2 gate + Mock 隔离等）
+bash agent_ops/gate/gate_repo.sh --scope app     # 全量 app 门禁（含矩阵 + P2 gate + Mock 隔离等）
 ```
 
 ## 门禁（已串联 `make gate` → `gate_repo.sh`）
 
-- `scripts/verify_page_horizontal_quality_matrix.py` — 路径存在、P1–P8 符号合法  
-- `scripts/verify_page_matrix_scan_complete.py` — 磁盘扫描集 **=** 矩阵路径集；矩阵 **⊆** `metadata_driven_ui_gap_inventory`  
-- `scripts/verify_metadata_driven_ui_gate.py` — P2 清单与矩阵一致性（与上脚本同向）  
-- 兄弟脚本（横切同 PR 常需绿）：`verify_ios_native_surface_gate.py`、`verify_dart_semantic.py`、`verify_ui_mock_isolation.py` 等见 `scripts/gate_repo.sh` `run_app`
+- `quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py` — 路径存在、P1–P8 符号合法  
+- `quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py` — 磁盘扫描集 **=** 矩阵路径集；矩阵 **⊆** `metadata_driven_ui_gap_inventory`  
+- `quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py` — P2 清单与矩阵一致性（与上脚本同向）  
+- 兄弟脚本（横切同 PR 常需绿）：`verify_ios_native_surface_gate.py`、`verify_dart_semantic.py`、`verify_ui_mock_isolation.py` 等见 `agent_ops/gate/gate_repo.sh` `run_app`
 
 ## 与现有规则关系
 

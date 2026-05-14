@@ -34,7 +34,7 @@ level_acceptance:
     tests:
       - command: rg "route_id:" quwoquan_service/contracts/metadata/_shared/link_templates.yaml
       - command: make -C quwoquan_service verify-metadata
-      - command: python3 scripts/verify_link_templates_route_ids.py
+      - command: python3 quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py
 
   A3:
     criteria: CR 已登记本 L3 产物路径与 metadata 路径。
@@ -69,7 +69,7 @@ execution:
   full_gate: make gate-full
   note: |
     codegen 产物 quwoquan_app/lib/cloud/runtime/generated/link_templates.g.dart；
-    scripts/verify_link_templates_route_ids.py 已挂 verify_contract_metadata.sh。
+    quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py 已挂 verify_contract_metadata.sh。
 
 journey_acceptance:
   - id: A1
@@ -100,7 +100,7 @@ evidence_matrix:
     - type: codegen
       artifact: quwoquan_app/lib/cloud/runtime/generated/link_templates.g.dart
     - type: script
-      artifact: scripts/verify_link_templates_route_ids.py
+      artifact: quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py
   T3:
     - type: test
       artifact: quwoquan_app/test/ui/content/share/share_template_by_identity_widget_test.dart

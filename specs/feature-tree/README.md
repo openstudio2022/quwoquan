@@ -84,7 +84,7 @@ specs/feature-tree/<l1-capability>/
 
 ## 开发入口
 
-- 新增 Scenario：`bash scripts/new_feature_fullstack.sh <l1_capability> <l2_journey> <l3_scenario>`
+- 新增 Scenario：`bash agent_ops/scaffold/new_feature_fullstack.sh <l1_capability> <l2_journey> <l3_scenario>`
 - 重建索引：`go run ./quwoquan_service/tools/gen_tree_index specs/feature-tree specs/feature-tree/tree_index.yaml`
-- 校验：`bash scripts/verify_feature_traceability.sh`、`bash scripts/verify_feature_tree_refactor.sh`
+- 校验：`bash scripts/verify_feature_traceability.sh`、`bash agent_ops/scaffold/verify_feature_tree_refactor.sh`
 

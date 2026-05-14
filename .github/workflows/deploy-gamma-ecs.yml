@@ -129,7 +129,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sshpass
       - name: Deploy to ECS (prod)
-        run: bash scripts/deploy_gamma_ecs.sh
+        run: bash agent_ops/deploy/gamma/deploy_gamma_ecs.sh
         env:
           GAMMA_ECS_STAGE: prod
           GAMMA_ECS_SKIP_UPLOAD: "1"
@@ -196,7 +196,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Chat avatar API probe
         run: |
-          python3 scripts/run_chat_avatar_e2e_probe.py \
+          python3 agent_ops/avatar/run_chat_avatar_e2e_probe.py \
             --env cloud-gamma-prod-smoke \
             --base-url "${GAMMA_BASE_URL}" \
             --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
@@ -216,9 +216,10 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
+      validation_profile: manual_full
       env_json: '["gamma"]'
-      allow_missing_platforms: true
       gamma_base_url: ${{ needs.gamma_pre_validation.outputs.base_url }}
+      matrix_kind: assistant
 
   device_matrix_chat_avatar_self_hosted_prod:
     name: Self-hosted — chat avatar gamma 烟测（prod 后）
@@ -226,8 +227,8 @@ jobs:
     secrets: inherit
     uses: ./.github/workflows/app-env-device-matrix-self-hosted.yml
     with:
+      validation_profile: manual_full
       env_json: '["gamma"]'
-      allow_missing_platforms: true
       gamma_base_url: ${{ needs.gamma_pre_validation.outputs.base_url }}
       media_base_url: ${{ needs.gamma_pre_validation.outputs.media_base_url }}
       matrix_kind: chat-avatar

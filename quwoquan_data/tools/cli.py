@@ -62,6 +62,21 @@ def build_parser() -> argparse.ArgumentParser:
     data_build_entities_tags.add_argument("--catalog-province-wide-query", action="store_true")
     data_build_entities_tags.add_argument("--skip-tag-catalog", action="store_true")
     data_build_entities_tags.add_argument("--skip-entity-catalog", action="store_true")
+    data_build_entities_tags.add_argument(
+        "--phase",
+        default="all",
+        choices=["all", "catalog", "entity-tag", "normalize-prepare", "normalize-validate", "compile", "materialize"],
+        help="执行阶段：all=默认全量, normalize-prepare=准备编程助手输入, normalize-validate=校验结果, compile=编译, materialize=物化",
+    )
+    data_build_entities_tags.add_argument("--batch-label", default="")
+    data_build_entities_tags.add_argument("--topics", default="")
+    data_build_entities_tags.add_argument("--output-name", default="")
+    data_build_entities_tags.add_argument(
+        "--stage",
+        default="",
+        choices=["", "extract", "review", "authority", "escalate"],
+        help="normalize-validate 时指定阶段",
+    )
     data_build_entities_tags.set_defaults(handler=data_workflow_ops.handle_data_build_entities_tags)
 
     data_download = data_sub.add_parser("download")
@@ -90,6 +105,13 @@ def build_parser() -> argparse.ArgumentParser:
     data_process_content.add_argument("--spec", required=True)
     data_process_content.add_argument("--topics", default="")
     data_process_content.add_argument("--targets", default="")
+    data_process_content.add_argument(
+        "--phase",
+        default="all",
+        choices=["all", "review", "compose", "quality-analysis", "generate", "backfill"],
+        help="执行阶段：all=默认全量, quality-analysis/generate/backfill=编程助手内容加工任务清单",
+    )
+    data_process_content.add_argument("--batch-label", default="")
     data_process_content.set_defaults(handler=data_workflow_ops.handle_data_process_content)
 
     # 兼容旧命令名；对外文档统一使用 `data process-content`
@@ -145,16 +167,6 @@ def build_parser() -> argparse.ArgumentParser:
     data_norm_validate_output.add_argument("--result", required=True)
     data_norm_validate_output.set_defaults(handler=data_workflow_ops.handle_data_normalize_validate_output)
 
-    data_norm_compile = data_sub.add_parser("normalize-compile-entities")
-    data_norm_compile.add_argument("--batch-label", required=True)
-    data_norm_compile.set_defaults(handler=data_workflow_ops.handle_data_normalize_compile_entities)
-
-    data_entity_materialize = data_sub.add_parser("entity-catalog-materialize")
-    data_entity_materialize.add_argument("--batch-label", required=True)
-    data_entity_materialize.add_argument("--catalog", required=True)
-    data_entity_materialize.add_argument("--output-name", default="entities.ndjson")
-    data_entity_materialize.set_defaults(handler=data_workflow_ops.handle_data_entity_catalog_materialize)
-
     data_trace_source = data_sub.add_parser("trace-source")
     data_trace_source.add_argument("--batch-label", required=True)
     data_trace_source.add_argument("--source-ref", default="")
@@ -177,12 +189,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="不逐条抓取 HTML，仅刷新 discovery/topic_tasks（大 spec 时建议）",
     )
+    crawl_spec_discovery.add_argument(
+        "--no-image-pair",
+        action="store_true",
+        help="topics 过滤时不自动补齐 __img 配对，适用于仅做 article 级页面抽取",
+    )
     crawl_spec_discovery.set_defaults(handler=batch.handle_spec_discovery)
 
     crawl_status = crawl_sub.add_parser("status")
     crawl_status.add_argument("--spec", required=True)
     crawl_status.add_argument("--topics", default="", help="仅展示过滤后的 topic（逗号分隔，配对规则同 spec-discovery）")
     crawl_status.add_argument("--skip-hydrate", action="store_true")
+    crawl_status.add_argument("--no-image-pair", action="store_true")
     crawl_status.set_defaults(handler=batch.handle_status)
 
     crawl_fetch_source = crawl_sub.add_parser("fetch-source")
@@ -306,12 +324,30 @@ def build_parser() -> argparse.ArgumentParser:
     crawl_entities_by_tag.add_argument("--tag-refs", default="")
     crawl_entities_by_tag.add_argument("--tag-labels", default="")
     crawl_entities_by_tag.add_argument("--tag-ids", default="")
+    crawl_entities_by_tag.add_argument("--entity-catalog", default="", help="显式指定待筛选的 entity catalog NDJSON")
+    crawl_entities_by_tag.add_argument(
+        "--require-topic-id",
+        action="store_true",
+        help="仅保留具有真实 topicId 的实体，禁止 synthetic topic 回退",
+    )
     crawl_entities_by_tag.set_defaults(handler=workflow_ops.handle_entities_by_tag)
 
     crawl_spec_build = crawl_sub.add_parser("spec-build")
     crawl_spec_build.add_argument("--spec", default="")
     crawl_spec_build.add_argument("--spec-id", default="")
     crawl_spec_build.add_argument("--output", default="")
+    crawl_spec_build.add_argument("--entity-catalog", default="", help="显式指定用于构建 topic catalog 的 entity catalog NDJSON")
+    crawl_spec_build.add_argument(
+        "--context-entity-refs",
+        default="",
+        help="显式附加上下文 entity_refs（逗号分隔），仅进入 spec.entity_refs，不参与 topic 生成",
+    )
+    crawl_spec_build.add_argument(
+        "--topic-mode",
+        default="direct",
+        choices=["direct", "seed_only"],
+        help="direct=直接写 publishable topics；seed_only=仅写 seed topics，publishable topics 留待 normalization 物化后重建",
+    )
     crawl_spec_build.set_defaults(handler=workflow_ops.handle_spec_build)
 
     crawl_authority_sync = crawl_sub.add_parser("authority-sync")

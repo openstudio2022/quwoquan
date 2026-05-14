@@ -15,7 +15,7 @@ artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
   - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
   - specs/gates/page_horizontal_quality_pr_checklist.md
-  - scripts/verify_page_horizontal_quality_matrix.py
-  - scripts/verify_page_matrix_scan_complete.py
-  - scripts/gate_repo.sh
+  - quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
+  - quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
+  - agent_ops/gate/gate_repo.sh
   - specs/feature-tree/tree_index.yaml

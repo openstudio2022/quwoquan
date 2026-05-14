@@ -64,7 +64,7 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Verify gamma environment readiness
         run: |
-          python3 scripts/verify_gamma_environment_ready.py \
+          python3 quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py \
             --base-url "${GAMMA_BASE_URL}" \
             --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}" \
             --report artifacts/gamma-readiness/pr/report.json \
@@ -103,7 +103,7 @@ jobs:
         name: Assistant runtime protocol smoke
         continue-on-error: true
         run: |
-          python3 scripts/run_assistant_runtime_smoke.py \
+          python3 agent_ops/assistant/run_assistant_runtime_smoke.py \
             --env gamma-pr \
             --base-url "${GAMMA_BASE_URL}" \
             --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
@@ -148,7 +148,7 @@ jobs:
         name: Chat avatar API probe
         continue-on-error: true
         run: |
-          python3 scripts/run_chat_avatar_e2e_probe.py \
+          python3 agent_ops/avatar/run_chat_avatar_e2e_probe.py \
             --env cloud-gamma-pr \
             --base-url "${GAMMA_BASE_URL}" \
             --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \

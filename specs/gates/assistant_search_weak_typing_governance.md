@@ -25,7 +25,7 @@
 |------|------------|
 | A. 棘轮基线 | **已采用**：[`assistant_search_weak_typing_baseline.json`](assistant_search_weak_typing_baseline.json) |
 | B. 窄路径增量 | 可选后续：对单个子目录加白名单/禁区时再补脚本 |
-| C. Map 字面量 | **并入** bucket 指标 `map_string_dynamic`（与 [`report_map_typing_baseline.py`](../../scripts/report_map_typing_baseline.py) 同一正则口径） |
+| C. Map 字面量 | **并入** bucket 指标 `map_string_dynamic`（与 [`report_map_typing_baseline.py`](../../quwoquan_app/scripts/runtime/report_map_typing_baseline.py) 同一正则口径） |
 
 ## 3. 扫描桶与指标
 
@@ -45,16 +45,16 @@
 
 ```bash
 # 与基线比较（回归则 exit 1）
-python3 scripts/verify_assistant_search_weak_typing_ratchet.py
+python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py
 
 # 当前快照 JSON（含 buckets；可选 informational 辅助计数，见脚本 --json）
-python3 scripts/verify_assistant_search_weak_typing_ratchet.py --json
+python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py --json
 
 # 有意放宽或收口后更新基线（应用专用提交说明）
-python3 scripts/verify_assistant_search_weak_typing_ratchet.py --write-baseline
+python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py --write-baseline
 ```
 
-- **根门禁**：[`scripts/gate_repo.sh`](../../scripts/gate_repo.sh) 的 `run_app` 段在可用 `python3` 时执行本脚本。
+- **根门禁**：[`agent_ops/gate/gate_repo.sh`](../../agent_ops/gate/gate_repo.sh) 的 `run_app` 段在可用 `python3` 时执行本脚本。
 - **Make**：`make verify-app-assistant-search-weak-typing-ratchet`（若已写入 [Makefile](../../Makefile)）。
 
 ## 5. 更新基线约定

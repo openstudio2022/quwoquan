@@ -105,7 +105,7 @@
 - [ ] **U6**：Persona 选择器 — 头像点击弹出 persona 列表，选择后切换 activePersona
 - [ ] **U7**：空态 — "暂无评论，来抢沙发吧" + 引导动画 + 点击聚焦输入框
 - [x] **U8**：相对时间 — 复用 `l10n.justNow` / `hoursAgoTemplate` / `minutesAgoTemplate` / `daysAgoTemplate` / `monthDayTemplate`；排序/作者/展开/回复等中文文案已统一收口至 `UITextConstants` 和 `l10n`
-- [ ] `python3 scripts/verify_dart_semantic.py` 无新增硬编码视觉字面量
+- [ ] `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py` 无新增硬编码视觉字面量
 
 ### Phase 5：入口打通（E1~E8）
 
@@ -138,7 +138,7 @@
 - [ ] **T2**：T2 交互测试 — 8 入口打开弹窗 → 加载 → 提交 → 列表更新 → 点赞 → 删除（Mock 模式）；排序切换；回复折叠/展开；长评论折叠/展开
 - [ ] **T3**：T3 端云联调测试 — Remote Repository 与 Go Handler 路径/参数/响应一致
 - [ ] **T4**：云侧 contract_test — comment_thread（CRUD + 分页 + 热评排序 + 点赞），Go 测试用嵌入式 MongoDB
-- [ ] **T5**：错误码契约测试 — `python3 scripts/verify_error_code_semantic.py` 通过；comment_too_long / comment_rate_limited / comment_like_duplicate 均由 errors.yaml 驱动
+- [ ] **T5**：错误码契约测试 — `python3 quwoquan_app/scripts/runtime/verify_error_code_semantic.py` 通过；comment_too_long / comment_rate_limited / comment_like_duplicate 均由 errors.yaml 驱动
 - [ ] **T6**：CommentProvider 单元测试 — 乐观更新状态机（sending → confirmed / retry / rollback）、分页、排序切换
 - [ ] `make gate` + `make gate-full` 通过
 
