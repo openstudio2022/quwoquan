@@ -7,28 +7,44 @@ import 'dart:convert';
 part 'tag_repository_mock.dart';
 part 'tag_repository_remote.dart';
 
+/// 标签 API 默认分页常量
+class TagApiDefaults {
+  TagApiDefaults._();
+  static const int suggestLimit = 20;
+  static const int searchLimit = 50;
+  static const int relatedLimit = 20;
+  static const int graphLimit = 50;
+  static const int minCooccurCount = 1;
+}
+
 /// 标签体系 Repository（场景2: 内容创作 + 场景3: 推荐搜索 + 场景4: 关系图谱）
 ///
 /// API 定义见 contracts/metadata/tag/service.yaml
 abstract class TagRepository {
   // ── 场景2: 内容创作 ──────────────────────────────────────────
   Future<List<TagDimension>> listDimensions();
-  Future<List<TagSuggestion>> suggest(String query, {String? group, int limit = 20});
+  Future<List<TagSuggestion>> suggest(String query,
+      {String? group, int limit = TagApiDefaults.suggestLimit});
   Future<TagValidationResult> validateRefs(List<String> tagRefs);
 
   // ── 场景3: 推荐搜索 ──────────────────────────────────────────
-  Future<List<TagSearchResult>> search(String query, {String? group, int limit = 50});
-  Future<List<RelatedTag>> related(String tagRef, {int limit = 20});
+  Future<List<TagSearchResult>> search(String query,
+      {String? group, int limit = TagApiDefaults.searchLimit});
+  Future<List<RelatedTag>> related(String tagRef,
+      {int limit = TagApiDefaults.relatedLimit});
   Future<List<TagObjectMatch>> searchByTags(List<String> tagRefs,
-      {String? objectType, int limit = 50});
+      {String? objectType, int limit = TagApiDefaults.searchLimit});
   Future<bool> feedback(String tagRef, String action, {String? context});
 
   // ── 场景4: 关系图谱 ──────────────────────────────────────────
-  Future<List<TagCooccurrence>> cooccurrence({String? tagRef, int minCount = 1, int limit = 50});
+  Future<List<TagCooccurrence>> cooccurrence(
+      {String? tagRef,
+      int minCount = TagApiDefaults.minCooccurCount,
+      int limit = TagApiDefaults.graphLimit});
   Future<TagInvertedResult> invertedIndex(String tagRef,
-      {String? objectType, int limit = 50});
+      {String? objectType, int limit = TagApiDefaults.graphLimit});
   Future<List<RelatedObject>> relatedObjects(String objectId,
-      {String? objectType, int limit = 20});
+      {String? objectType, int limit = TagApiDefaults.relatedLimit});
 }
 
 // ── DTO / Value Objects ──────────────────────────────────────────

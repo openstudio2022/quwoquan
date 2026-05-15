@@ -40,7 +40,7 @@ class RemoteTagRepository implements TagRepository {
 
   @override
   Future<List<TagSuggestion>> suggest(String query,
-      {String? group, int limit = 20}) async {
+      {String? group, int limit = TagApiDefaults.suggestLimit}) async {
     final params = <String, String>{'q': query, 'limit': '$limit'};
     if (group != null) params['group'] = group;
     final data = await _get('/api/v1/tags/suggest', params) as List;
@@ -55,7 +55,7 @@ class RemoteTagRepository implements TagRepository {
 
   @override
   Future<List<TagSearchResult>> search(String query,
-      {String? group, int limit = 50}) async {
+      {String? group, int limit = TagApiDefaults.searchLimit}) async {
     final params = <String, String>{'q': query, 'limit': '$limit'};
     if (group != null) params['group'] = group;
     final data = await _get('/api/v1/tags/search', params) as List;
@@ -63,7 +63,8 @@ class RemoteTagRepository implements TagRepository {
   }
 
   @override
-  Future<List<RelatedTag>> related(String tagRef, {int limit = 20}) async {
+  Future<List<RelatedTag>> related(String tagRef,
+      {int limit = TagApiDefaults.relatedLimit}) async {
     final encoded = Uri.encodeComponent(tagRef);
     final data = await _get('/api/v1/tags/$encoded/related',
         {'limit': '$limit'}) as List;
@@ -72,7 +73,7 @@ class RemoteTagRepository implements TagRepository {
 
   @override
   Future<List<TagObjectMatch>> searchByTags(List<String> tagRefs,
-      {String? objectType, int limit = 50}) async {
+      {String? objectType, int limit = TagApiDefaults.searchLimit}) async {
     final body = <String, dynamic>{'tagRefs': tagRefs, 'limit': limit};
     if (objectType != null) body['objectType'] = objectType;
     final data = await _post('/api/v1/tags/search-by-tags', body) as List;
@@ -89,7 +90,9 @@ class RemoteTagRepository implements TagRepository {
 
   @override
   Future<List<TagCooccurrence>> cooccurrence(
-      {String? tagRef, int minCount = 1, int limit = 50}) async {
+      {String? tagRef,
+      int minCount = TagApiDefaults.minCooccurCount,
+      int limit = TagApiDefaults.graphLimit}) async {
     final params = <String, String>{
       'minCount': '$minCount',
       'limit': '$limit',
@@ -101,7 +104,7 @@ class RemoteTagRepository implements TagRepository {
 
   @override
   Future<TagInvertedResult> invertedIndex(String tagRef,
-      {String? objectType, int limit = 50}) async {
+      {String? objectType, int limit = TagApiDefaults.graphLimit}) async {
     final encoded = Uri.encodeComponent(tagRef);
     final params = <String, String>{'limit': '$limit'};
     if (objectType != null) params['objectType'] = objectType;
@@ -111,7 +114,7 @@ class RemoteTagRepository implements TagRepository {
 
   @override
   Future<List<RelatedObject>> relatedObjects(String objectId,
-      {String? objectType, int limit = 20}) async {
+      {String? objectType, int limit = TagApiDefaults.relatedLimit}) async {
     final encoded = Uri.encodeComponent(objectId);
     final params = <String, String>{'limit': '$limit'};
     if (objectType != null) params['objectType'] = objectType;

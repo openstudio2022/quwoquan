@@ -7,7 +7,7 @@ class MockTagRepository implements TagRepository {
 
   @override
   Future<List<TagSuggestion>> suggest(String query,
-      {String? group, int limit = 20}) async {
+      {String? group, int limit = TagApiDefaults.suggestLimit}) async {
     final lower = query.toLowerCase();
     return kMockTagSuggestions
         .where((s) =>
@@ -34,7 +34,7 @@ class MockTagRepository implements TagRepository {
 
   @override
   Future<List<TagSearchResult>> search(String query,
-      {String? group, int limit = 50}) async {
+      {String? group, int limit = TagApiDefaults.searchLimit}) async {
     final lower = query.toLowerCase();
     return kMockTagSuggestions
         .where((s) =>
@@ -45,13 +45,14 @@ class MockTagRepository implements TagRepository {
   }
 
   @override
-  Future<List<RelatedTag>> related(String tagRef, {int limit = 20}) async {
+  Future<List<RelatedTag>> related(String tagRef,
+      {int limit = TagApiDefaults.relatedLimit}) async {
     return kMockRelatedTags.take(limit).toList();
   }
 
   @override
   Future<List<TagObjectMatch>> searchByTags(List<String> tagRefs,
-      {String? objectType, int limit = 50}) async {
+      {String? objectType, int limit = TagApiDefaults.searchLimit}) async {
     return [];
   }
 
@@ -62,19 +63,21 @@ class MockTagRepository implements TagRepository {
 
   @override
   Future<List<TagCooccurrence>> cooccurrence(
-      {String? tagRef, int minCount = 1, int limit = 50}) async {
+      {String? tagRef,
+      int minCount = TagApiDefaults.minCooccurCount,
+      int limit = TagApiDefaults.graphLimit}) async {
     return kMockCooccurrences.take(limit).toList();
   }
 
   @override
   Future<TagInvertedResult> invertedIndex(String tagRef,
-      {String? objectType, int limit = 50}) async {
+      {String? objectType, int limit = TagApiDefaults.graphLimit}) async {
     return TagInvertedResult(tag: tagRef, objectCount: 0, objects: []);
   }
 
   @override
   Future<List<RelatedObject>> relatedObjects(String objectId,
-      {String? objectType, int limit = 20}) async {
+      {String? objectType, int limit = TagApiDefaults.relatedLimit}) async {
     return [];
   }
 }
