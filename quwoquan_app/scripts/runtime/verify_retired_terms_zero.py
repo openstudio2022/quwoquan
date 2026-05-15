@@ -61,6 +61,11 @@ TERMS = (
 ALLOWLIST_PREFIXES = {
     "quwoquan_app/test/ui/content/markdown/fixtures/",
     "quwoquan_data/runtime/",
+    "quwoquan_data/publish/",
+    "quwoquan_data/sop/",
+    "quwoquan_data/docs/",
+    "quwoquan_data/data/",
+    "quwoquan_data/schema/produce/templates/",
     "quwoquan_service/contracts/metadata/_shared/test_fixtures/",
 }
 
@@ -86,6 +91,18 @@ ALLOWLIST_PATHS = {
     "quwoquan_service/scripts/gamma/verify_gamma_validation_profiles.py",
     "quwoquan_data/tools/catalog_iteration.py",
     "quwoquan_data/tools/semantic_entity_resolution.py",
+    ".cursor/commands/data-explore.md",
+    "quwoquan_app/lib/cloud/services/tag/mock/tag_mock_data.dart",
+    "quwoquan_data/README.md",
+    "quwoquan_data/schema/tag/tag_policy.yaml",
+    "quwoquan_data/scripts/bootstrap_admin_regions.py",
+    "quwoquan_data/scripts/bootstrap_school_entities.py",
+    "quwoquan_data/scripts/bootstrap_sop.py",
+    "quwoquan_data/scripts/bootstrap_tags.py",
+    "quwoquan_data/scripts/e2e_smoke_v4.py",
+    "quwoquan_data/scripts/sample_data/build_all.py",
+    "quwoquan_data/scripts/tag_alias_migrate.py",
+    "quwoquan_data/scripts/verify_tag_tree.py",
     "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/design.md",
     "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md",
 }
