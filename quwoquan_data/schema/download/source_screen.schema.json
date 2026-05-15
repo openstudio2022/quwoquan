@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "sourceId": { "type": "string" },
+    "decision": { "type": "string", "enum": ["retain", "reject"] },
+    "qualityScore": { "type": "number" },
+    "relevanceScore": { "type": "number" },
+    "copyrightStatus": { "type": "string" },
+    "reason": { "type": "string" }
+  },
+  "required": ["sourceId", "decision"]
+}

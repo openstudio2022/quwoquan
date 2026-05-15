@@ -10,6 +10,7 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/internal/application"
 )
 
@@ -39,6 +40,7 @@ func (h *ContentHandler) Routes() http.Handler {
 	mux.HandleFunc("/healthz", h.handleHealthz)
 	mux.HandleFunc("/livez", h.handleHealthz)
 	mux.HandleFunc("/startupz", h.handleHealthz)
+	mux.HandleFunc("/metrics/rec", h.handleRecMetrics)
 	mux.HandleFunc("/v1/content/users/posts", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET"))
@@ -75,6 +77,10 @@ func (h *ContentHandler) Routes() http.Handler {
 
 func (h *ContentHandler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (h *ContentHandler) handleRecMetrics(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, rtrec.SnapshotStats())
 }
 
 func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {

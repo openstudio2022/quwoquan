@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart'
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 
 /// 单类 feed 状态：items + nextCursor
 class DiscoveryFeedState {
@@ -78,6 +79,9 @@ class DiscoveryFeedMapNotifier
     }
     final repo = ref.read(contentRepositoryProvider);
     final query = toDiscoveryFeedQuery(tabId);
+    final feedSession = ref.read(feedSessionProvider.notifier);
+    final sessionId = feedSession.sessionId;
+    final feedRequestId = feedSession.newFeedRequestId();
     state = {...state, tabId: const AsyncLoading()};
     try {
       final page = await repo.listDiscoveryFeedPage(
@@ -87,6 +91,8 @@ class DiscoveryFeedMapNotifier
         sort: kFeedSortRecommend,
         limit: 20,
         cursor: null,
+        sessionId: sessionId,
+        feedRequestId: feedRequestId,
       );
       ref
           .read(postInteractionStateProvider.notifier)
@@ -129,6 +135,9 @@ class DiscoveryFeedMapNotifier
     try {
       final repo = ref.read(contentRepositoryProvider);
       final query = toDiscoveryFeedQuery(tabId);
+      final feedSession = ref.read(feedSessionProvider.notifier);
+      final sessionId = feedSession.sessionId;
+      final feedRequestId = feedSession.newFeedRequestId();
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,
         identity: query.identity,
@@ -136,6 +145,8 @@ class DiscoveryFeedMapNotifier
         sort: kFeedSortRecommend,
         limit: 20,
         cursor: value.nextCursor,
+        sessionId: sessionId,
+        feedRequestId: feedRequestId,
       );
       ref
           .read(postInteractionStateProvider.notifier)

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "patches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string", "enum": ["add_entity", "add_tag", "add_relation", "merge_entity", "update_entity"] },
+          "entity": { "type": "object" },
+          "tag": { "type": "object" },
+          "relation": { "type": "object" },
+          "reason": { "type": "string" }
+        },
+        "required": ["action", "reason"]
+      }
+    }
+  },
+  "required": ["patches"]
+}

@@ -18,22 +18,37 @@ class BehaviorEvent {
     required this.action,
     this.tags,
     this.duration,
+    this.feedRequestId,
+    this.position,
+    this.commentLength,
   });
 
   final String contentId;
 
-  /// One of: impression, click, dwell, like, favorite, share, dislike, report
+  /// One of: impression, click, dwell, like, favorite, share, dislike, report, skip, comment, follow
   final String action;
   final List<String>? tags;
 
-  /// Dwell time in seconds (for dwell action)
+  /// Dwell time in seconds (for dwell/skip action)
   final double? duration;
+
+  /// Feed request UUID for attribution
+  final String? feedRequestId;
+
+  /// Position in feed list (0-based)
+  final int? position;
+
+  /// Comment text length (for comment action)
+  final int? commentLength;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'contentId': contentId,
     'action': action,
     if (tags != null && tags!.isNotEmpty) 'tags': tags,
     if (duration != null && duration! > 0) 'duration': duration,
+    if (feedRequestId != null) 'feedRequestId': feedRequestId,
+    if (position != null) 'position': position,
+    if (commentLength != null) 'commentLength': commentLength,
   };
 }
 
@@ -236,6 +251,9 @@ class RemoteBehaviorRepository extends BehaviorRepository {
       action: (json['action'] ?? '').toString(),
       tags: (json['tags'] as List?)?.map((item) => item.toString()).toList(),
       duration: (json['duration'] as num?)?.toDouble(),
+      feedRequestId: json['feedRequestId'] as String?,
+      position: (json['position'] as num?)?.toInt(),
+      commentLength: (json['commentLength'] as num?)?.toInt(),
     );
   }
 }

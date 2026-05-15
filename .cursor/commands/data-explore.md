@@ -2,38 +2,40 @@
 name: /data-explore
 id: data-explore
 category: Workflow
-description: 应用数据生成工作流 · 数据规格探索阶段
+description: 数据工程 · 区域实体探索阶段
 ---
 
-## 目标
+# data-explore
 
-收敛本轮数据工程的：
+## 命令目的
+从行政区标签树出发，逐维度检索区域内实体，产出标准化 catalog。
 
-- 地理范围
-- 实体类型子集
-- 合规边界
-- 权威源可得性
+## 输入
+- `--task {taskId}` `--scope {tagId}`（行政区标签路径，如 `地理/行政区/四川省`）
+- `--dimensions {dim1,dim2}`（实体类型维度，如 `地点/景区,地点/遗址,地点/博物馆,地点/美食街`）
 
-## 真实实现
+## 实体类型维度
 
-对应 CLI：
+8 大领域，每个领域下有具体类型：
+- **地点**：景区/遗址/打卡地/古镇/温泉/游乐场/博物馆/公园/宗教场所/餐厅/咖啡馆/酒吧/美食街/购物中心/书店/健身房/运动场馆/露营地/民宿
+- **机构**：学校/公司/研究所/医院/社团
+- **交通工具**：汽车/摩托车/自行车/房车/船艇
+- **活动**：赛事/节庆/展会/演出/聚会
+- **作品**：书籍/电影/音乐/游戏/数码产品/软件/艺术品/设计作品
+- **人物**：达人/历史人物/艺术家/运动员/创业者
+- **生物**：宠物/植物/野生动物
+- **品牌**：餐饮品牌/运动品牌/科技品牌/时尚品牌
 
-```bash
-python3 quwoquan_data/tools/cli.py data explore --query "<query>" --regions "<省,市州>" --entity-types "<中文类型列表>"
-```
+## 三段式
 
-## 工作流位置
+### prepare
+读取 `--scope` 对应标签目录，展开到区县级。为每个 `区县 x 维度` 生成 `inputs/region_discovery/*.json`。
 
-`data explore` → **data baseline** → `data build-entities-tags` → ...
+### agent（模型执行）
+逐任务到权威源（wiki/百度百科/搜狗百科）检索实体，跨维度去重 + 语义归并：
+- 每个区县逐维度检索，不要笼统执行
+- 权威源为主要来源，内容平台补充多样性
+- 产出 `results/region_discovery/*.json`
 
-explore 之后**必须**执行 `data baseline` 冻结基线，才能进入后续阶段。
-
-## 输出
-
-- stage JSON 摘要
-- 可进入 `/data-baseline` 的范围与待澄清项
-
-## 边界
-
-- 只做探索与收敛
-- 不生成 runtime 数据
+### validate
+results 非空，汇总写入 `catalog.ndjson`。每条记录含 `domain`/`type`/`name`/`geoTagRef`。

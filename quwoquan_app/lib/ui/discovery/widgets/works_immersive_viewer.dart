@@ -1126,6 +1126,15 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                       final prevPost =
                           posts[_currentPage.clamp(0, posts.length - 1)];
                       _flushDwell(prevPost);
+                      // Track skip: user swiped away from prevPost
+                      final enterTime = _pageEnterTime;
+                      final skipDwell = enterTime != null
+                          ? DateTime.now().difference(enterTime).inMilliseconds / 1000.0
+                          : null;
+                      ref.read(contentBehaviorTrackerProvider).trackSkip(
+                        prevPost.id,
+                        dwellSeconds: skipDwell,
+                      );
 
                       setState(() => _currentPage = index);
                       // Reset + restart the follow-button timer for the new post.

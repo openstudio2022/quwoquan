@@ -43,6 +43,8 @@ class RemoteContentRepository implements ContentRepository {
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
     String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
   }) async {
     final resolvedIdentity = identity ?? _mapCategoryToIdentity(category);
     final resolvedType = _normalizeFeedType(
@@ -72,6 +74,12 @@ class RemoteContentRepository implements ContentRepository {
     }
     if (keys.contains('subCategory') && subCategory?.isNotEmpty == true) {
       query['subCategory'] = subCategory!;
+    }
+    if (sessionId?.isNotEmpty == true) {
+      query['sessionId'] = sessionId!;
+    }
+    if (feedRequestId?.isNotEmpty == true) {
+      query['feedRequestId'] = feedRequestId!;
     }
     final uri = _uri(ContentApiMetadata.getFeedPath, queryParameters: query);
     final decoded = await _httpClient.getJson(

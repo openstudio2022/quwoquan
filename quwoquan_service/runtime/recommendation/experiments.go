@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	ExpRecWeights = "rec_scoring_weights"
+	ExpRecWeights      = "rec_scoring_weights"
+	ExpModelVsRule     = "rec_model_vs_rule"
 )
 
 // WeightPresets defines named weight configurations for AB testing.
@@ -75,4 +76,29 @@ func RegisterRecWeightsExperiment(resolver *experiments.HashResolver) {
 		PolicyVersion: "v1",
 		Enabled:       true,
 	})
+}
+
+// RegisterModelVsRuleExperiment registers the model-vs-rule scoring AB experiment.
+func RegisterModelVsRuleExperiment(resolver *experiments.HashResolver) {
+	resolver.Register(&experiments.Experiment{
+		ID: ExpModelVsRule,
+		Buckets: []experiments.BucketDef{
+			{Name: "rule", WeightPct: 80},
+			{Name: "model", WeightPct: 20},
+		},
+		PolicyVersion: "v1",
+		Enabled:       true,
+	})
+}
+
+// ResolveModelBucket determines whether a user should use rule or model scoring.
+func ResolveModelBucket(ctx context.Context, resolver experiments.Resolver, userID string) string {
+	if resolver == nil {
+		return "rule"
+	}
+	assignment, err := resolver.Resolve(ctx, ExpModelVsRule, userID)
+	if err != nil {
+		return "rule"
+	}
+	return assignment.Bucket
 }

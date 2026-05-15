@@ -1,0 +1,104 @@
+version: 1
+node: discovery-content/feed-orchestration-recommendation/realtime-feed-baseline
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260516-020-realtime-recommendation-feed-baseline.yaml
+
+slices:
+  - id: P0
+    title: freeze baseline specs and CR
+    goal: 冻结规格、验收、设计、计划和 CR
+    depends_on: []
+    acceptance_refs: []
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - spec.md / acceptance.yaml / design.md / plan.yaml / CR 完成
+      - make verify-metadata 通过
+    status: done
+
+  - id: P1
+    title: data engineering import closure
+    goal: 修复 quwoquan_data publish 链路，实现 release -> 服务端 bulk import
+    depends_on: [P0]
+    acceptance_refs: [A7]
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - paths.py 新增 RELEASE_ROOT / release_root / task_entities 等缺失符号
+      - cli.py 的 build/download handler 注册正常
+      - assemble.py 可执行无 ImportError
+      - release_manifest.schema.json 包含 relationCounts
+      - sample_data/build_all.py 可一键生成
+    status: planned
+
+  - id: P2
+    title: app behavior event closure
+    goal: 补齐端上行为事件，统一 sessionId/feedRequestId
+    depends_on: [P0]
+    acceptance_refs: [A3, A4]
+    planned_evidence:
+      - T1_schema
+      - T2_app_mock
+    done_when:
+      - feed_session_provider.dart 管理 feedSessionId
+      - discovery_feed_provider.dart 传入 sessionId / feedRequestId
+      - content_behavior_tracker.dart 新增 trackSkip / trackComment / trackFollow
+      - moment_social_feed.dart 加 trackClick
+      - works_immersive_viewer.dart 加 trackSkip
+    status: planned
+
+  - id: P3
+    title: online recommendation commercial baseline
+    goal: 启用多路召回、PreRanker、FeatureStore、增强 Rerank，无模型稳定个性化
+    depends_on: [P1, P2]
+    acceptance_refs: [A1, A2, A4]
+    planned_evidence:
+      - T2_module_interaction
+      - T3_app_api_integration
+    done_when:
+      - main.go 注入 Tag/Hot/Author/Explore/Mongo 候选源 + QualityPreRanker
+      - ListFeedRequest 扩展 SessionID / FeedRequestID / SurfaceID
+      - BehaviorEventInput 扩展 FeedRequestID / Position / RecallPath 等
+      - recommend_feature.go 增加 authorInteraction 聚合
+      - engine.go rerank 增加同标签去重 / 探索注入 / 冷启动保量
+      - SessionCache 行为写入后 Invalidate
+      - experiments 新增 rec_model_vs_rule 定义
+      - feed P95 < 200ms
+    status: planned
+
+  - id: P4
+    title: model training and inference grayscale
+    goal: 训练管线真实可商用，灰度开启模型打分
+    depends_on: [P3]
+    acceptance_refs: [A5, A6]
+    planned_evidence:
+      - T2_module_interaction
+      - T4_user_journey
+    done_when:
+      - feature_registry.yaml 扩展 user/context features
+      - sample_joiner.py 多目标 + 负样本 + feature snapshot
+      - train.py 15+ 特征 / time-split / AUC > 0.65 / GAUC > 0.55
+      - evaluate.py 真实 metric
+      - model_registry.py 晋级门禁
+      - content_feed.py 从 Registry 加载 LightGBM
+      - config rec_model_service.enabled true (灰度 20%)
+    status: planned
+
+  - id: P5
+    title: advanced competitiveness
+    goal: 向量召回、双塔、多目标排序、自动模型晋级/回滚、OTel 观测
+    depends_on: [P4]
+    acceptance_refs: [A8]
+    planned_evidence:
+      - T3_app_api_integration
+      - T4_user_journey
+    done_when:
+      - VectorRecallWithEmbedding 接入 main.go
+      - OTel metric export 接入
+      - T1-T4 完整测试套件
+    status: planned

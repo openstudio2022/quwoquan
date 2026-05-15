@@ -26,10 +26,12 @@ scope:
   sichuan_content_scope:
     region: 四川省
     entity_categories:
-      - 传统景点与文博（观光 POI、自然/人文、国家公园、风景名胜区、世界遗产境内点等）
-      - 打卡地
-      - 观景台
-      - 小众秘境（含未商业开发、野生可达描述的点位；展示须遵守合规与安全提示策略）
+      - 旅游景区（已定级风景名胜区等 + 未定级但仍作为游览目的地经营的区域；后者无百科锚时宜走图文证据轨）
+      - 史迹与遗址（可对齐 OSM historic=monument/archaeological_site/ruins 等对公众开放的点位）
+      - 传统景点与文博（观光 attraction、国家公园相关对外游览 subset、世界遗产境内点等，与 catalog filters 一致）
+      - 观景台（可对齐 tourism=viewpoint）
+      - 网红打卡地与高热社交 POI（名称/标签/UGC 聚类含打卡、网红、出片、机位等语义）
+      - 秘境与小众游玩点（未商业化、野生可达或未开发描述的点位；须风险提示标与准入轨可追溯）
     naming_authority:
       primary: [百度百科, 维基百科及 acceptance 批注的白名单延伸（如 Wikivoyage）]
       post_evidence_required_when: 无可用权威主锚或权威无法唯一绑定实体时
@@ -43,7 +45,10 @@ scope:
       article_like_goal_max: 100
       article_like_types: [攻略, 游玩, 日记, 摄影向图文]
       curated_fraction_target: 0.30
-      curated_definition: 规则分 top 比例与/或人工抽检标优，见 A17；允许按批次文档化 ±5% 偏差
+      curated_definition: >
+        每实体 hydrate 候选经可复现规则分排序后，取 top 约 30% 标为 curated（允许批次文档 ±5%）；
+        编程助手 / Cursor agent 可在命令会话中依据固定 rubric 产出逐篇 contentScore 与理由并落盘（须记录模型或提示版本）；
+        人工抽检为可选：默认随机抽全量约 1%，并对规则分末段加权抽样；核心纠偏针对低分与边界样本。
   out_of_scope:
     - 全球零人工行政区校准
     - 以英文 label_en 作为与中文对等的默认 Gate0

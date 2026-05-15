@@ -91,6 +91,11 @@ verify-markdown-article-no-article-document:
 verify-quwoquan-data-post-packages:
 	@python3 quwoquan_data/scripts/verify/verify_quwoquan_data_post_packages.py
 
+.PHONY: verify-quwoquan-data-stages
+verify-quwoquan-data-stages:
+	@python3 -c "import sys; sys.path.insert(0,'quwoquan_data/lib'); from normalization.validators import load_schema; print('[schema] All schemas loadable')"
+	@python3 quwoquan_data/scripts/cli.py data explore --query "smoke-test" > /dev/null
+
 verify-app-env-package:
 	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env alpha
 	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env beta

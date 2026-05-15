@@ -11,6 +11,10 @@ scope:
   province_admin_level: "4"
   slice_name_key: "name:zh"
   slice_admin_level: "5"
+  poi_universe_baseline_note: >
+    本省目录候选层的「景点全集」基线与 geo-content-trinity R7 / acceptance sichuan_content_scope 一致：
+    含旅游景区、史迹遗址、观景台、动物园/水族馆等传统 tourism 类目；未定级景区、网红打卡地、秘境小众等多依赖名称启发式 +
+    merge 输入或后续图文证据轨召回，不要求本 Overpass union 预先枚举每一笔。
   slices:
     - 成都市
     - 自贡市

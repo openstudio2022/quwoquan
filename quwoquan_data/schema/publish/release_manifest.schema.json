@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "string" },
+    "releaseId": { "type": "string" },
+    "sourceTaskId": { "type": "string" },
+    "status": { "type": "string", "enum": ["assembled", "verified", "published"] },
+    "entityCount": { "type": "integer" },
+    "tagCount": { "type": "integer" },
+    "postCount": { "type": "integer" },
+    "relationCounts": {
+      "type": "object",
+      "properties": {
+        "postTagRelations": { "type": "integer" },
+        "postEntityRelations": { "type": "integer" },
+        "entityTagRelations": { "type": "integer" },
+        "tagCooccurrences": { "type": "integer" }
+      }
+    }
+  },
+  "required": ["schemaVersion", "releaseId", "sourceTaskId", "status"]
+}

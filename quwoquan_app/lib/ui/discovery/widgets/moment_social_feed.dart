@@ -189,7 +189,10 @@ class MomentSocialFeed extends ConsumerWidget {
           summaryLineLimit:
               _followingArticleDistributionProfile.summaryLineLimit,
           sourceCircleName: _resolveSourceCircleName(ref, dto.id),
-          onTap: () => onPostTap?.call(dto, 0, feedPosts: feedPosts),
+          onTap: () {
+            ref.read(contentBehaviorTrackerProvider).trackClick(dto.id);
+            onPostTap?.call(dto, 0, feedPosts: feedPosts);
+          },
           onMoreTap: () {
             if (onMoreTap != null) {
               onMoreTap!(dto);
@@ -214,8 +217,10 @@ class MomentSocialFeed extends ConsumerWidget {
           displayName: dto.displayName,
           backgroundUrl: dto.authorBackgroundUrl,
         ),
-        onImageTap: (imgIndex) =>
-            onPostTap?.call(dto, imgIndex, feedPosts: feedPosts),
+        onImageTap: (imgIndex) {
+            ref.read(contentBehaviorTrackerProvider).trackClick(dto.id);
+            onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
+          },
         onCommentTap: () {
           CommentViewer.showModal(context: context, postId: dto.id);
         },

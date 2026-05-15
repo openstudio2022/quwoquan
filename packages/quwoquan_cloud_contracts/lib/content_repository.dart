@@ -21,6 +21,8 @@ abstract class ContentRepository {
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
     String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
   });
 
   Future<List<PostBaseDto>> listDiscoveryFeed({

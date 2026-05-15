@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "quwoquan/tag/tag_ref",
+  "title": "标签引用",
+  "description": "用于实体/post/圈子/用户的 tagRefs/geoTagRef 字段中的每一个 tagRef 字符串。必须以四大分组之一开头，后接 / 分隔的路径段，路径段只能使用中英文、数字、下划线和连字符。",
+  "type": "string",
+  "pattern": "^(Topic|Audience|Format|Entity)/[\\w\\u4e00-\\u9fa5\\-\\.]+(/[\\w\\u4e00-\\u9fa5\\-\\.]+)*$",
+  "examples": [
+    "Topic/地理/行政区/中国/四川省/成都市",
+    "Topic/主题/美食餐饮/菜系/中国菜系/川菜",
+    "Audience/用户/兴趣偏好/美食",
+    "Format/内容角度/攻略",
+    "Format/内容载体/视频/短视频",
+    "Entity/地点/景区类型/5A",
+    "Entity/品牌/餐饮品牌/火锅品牌"
+  ]
+}

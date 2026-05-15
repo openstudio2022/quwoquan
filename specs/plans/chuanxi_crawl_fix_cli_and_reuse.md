@@ -16,9 +16,9 @@
 
 ## 2. 务必从命令入手：CLI 为第一入口
 
-现状：[`quwoquan_data/tools/cli.py`](quwoquan_data/tools/cli.py) 仅有 `crawl spec-discovery | status | fetch-source | compose-topic | audit-topic | run-topic`，**没有**「扩池 / POI 导入 / 增量合并 / 跳过 hydrate 发现」等命令，导致川西逻辑落在独立脚本上，与 `/crawl` 总控文档不一致。
+现状：[`quwoquan_data/scripts/cli.py`](quwoquan_data/scripts/cli.py) 仅有 `crawl spec-discovery | status | fetch-source | compose-topic | audit-topic | run-topic`，**没有**「扩池 / POI 导入 / 增量合并 / 跳过 hydrate 发现」等命令，导致川西逻辑落在独立脚本上，与 `/crawl` 总控文档不一致。
 
-**复核要求**：新能力应落在 **`python3 quwoquan_data/tools/cli.py crawl <subcommand>`**（或同级 `qwq-data` 子命令），并在 [`.cursor/commands/crawl.md`](.cursor/commands/crawl.md) / [`quwoquan_data/README.md`](quwoquan_data/README.md) 中写明调用方式。
+**复核要求**：新能力应落在 **`python3 quwoquan_data/scripts/cli.py crawl <subcommand>`**（或同级 `qwq-data` 子命令），并在 [`.cursor/commands/crawl.md`](.cursor/commands/crawl.md) / [`quwoquan_data/README.md`](quwoquan_data/README.md) 中写明调用方式。
 
 ### 2.1 建议新增的 crawl 子命令（命名可微调）
 

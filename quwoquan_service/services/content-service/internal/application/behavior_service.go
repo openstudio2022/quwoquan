@@ -36,11 +36,12 @@ type BehaviorEventInput struct {
 }
 
 type BehaviorService struct {
-	hotPath   rtrec.SignalProcessor
-	store     persistence.PostRepository
-	publisher repository.EventPublisher
-	projector Projector
-	feedback  *rtrec.FeedbackRecorder
+	hotPath        rtrec.SignalProcessor
+	store          persistence.PostRepository
+	publisher      repository.EventPublisher
+	projector      Projector
+	feedback       *rtrec.FeedbackRecorder
+	sessionInvalid func(userID, sessionID string)
 }
 
 type BehaviorServiceOption func(*BehaviorService)
@@ -55,6 +56,10 @@ func WithBehaviorProjector(p Projector) BehaviorServiceOption {
 
 func WithBehaviorFeedbackRecorder(f *rtrec.FeedbackRecorder) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.feedback = f }
+}
+
+func WithSessionCacheInvalidator(fn func(userID, sessionID string)) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.sessionInvalid = fn }
 }
 
 func NewBehaviorService(hotPath rtrec.SignalProcessor, store persistence.PostRepository, opts ...BehaviorServiceOption) *BehaviorService {
@@ -162,6 +167,9 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		}); err != nil {
 			return err
 		}
+	}
+	if s.sessionInvalid != nil && batchUserID != "" && batchSessionID != "" {
+		s.sessionInvalid(batchUserID, batchSessionID)
 	}
 	return nil
 }

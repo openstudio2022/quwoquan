@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "文章 manifest — posts/{type}/{topicId}/manifest.json",
+  "type": "object",
+  "properties": {
+    "topicId": { "type": "string", "description": "如'峨眉山_金顶日出攻略'" },
+    "contentType": { "type": "string", "enum": ["article", "image", "video"] },
+    "entityRefs": { "type": "array", "items": { "type": "string" }, "description": "中文实体名数组" },
+    "tagRefs": { "type": "array", "items": { "type": "string" }, "description": "路径格式标签ID数组" },
+    "sourcePaths": { "type": "array", "items": { "type": "string" }, "description": "实际来源文件路径" },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assetId": { "type": "string" },
+          "fileName": { "type": "string" },
+          "caption": { "type": "string" },
+          "imageLayout": { "type": "string", "enum": ["fullWidth", "wrapLeft", "wrapRight"] }
+        },
+        "required": ["assetId", "fileName"]
+      }
+    },
+    "template": { "type": "string", "description": "使用的模板名称" },
+    "reviewDecision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] }
+  },
+  "required": ["topicId", "contentType", "entityRefs", "tagRefs", "sourcePaths"]
+}

@@ -1,8 +1,2 @@
-*
-!.gitignore
-!specs/
-!specs/**
-!trees/
-!trees/**
-!seed/
-!seed/**
+# runtime 数据不进版本控制（按需本地生成）
+tasks/

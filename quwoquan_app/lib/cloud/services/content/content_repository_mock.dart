@@ -120,9 +120,9 @@ class MockContentRepository implements ContentRepository {
     int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
     String? cursor,
     String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
   }) async {
-    final items = _resolveDiscoveryPosts(
-      category: category,
       identity: identity,
       type: type,
     );

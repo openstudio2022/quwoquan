@@ -40,11 +40,11 @@ quwoquan/
 ```
 
 其中：
+
 - `/dev` 负责按 TDD 实施、完成 `T1~T4` 四层自验证、完成 `gray-release ready` 检查，并自动归档
 - `/commit` 读取 `/dev` 自动归档结果后执行提交
 - `/archive` 仅作兼容补归档入口，标准流通常不单独使用
 - `/try → /land` 保留原型链路与基线化/归档语义
-
 - **创建特性目录（Ask/Plan 输出落盘）**：
 
 ```bash

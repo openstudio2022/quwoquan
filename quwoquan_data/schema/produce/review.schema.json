@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "topicId": { "type": "string" },
+    "decision": { "type": "string", "enum": ["approved", "revision_needed", "rejected"] },
+    "qualityScore": { "type": "number" },
+    "issues": { "type": "array", "items": { "type": "string" } },
+    "suggestions": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["topicId", "decision"]
+}

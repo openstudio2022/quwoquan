@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "topicId": { "type": "string" },
+    "articleMarkdown": { "type": "string", "minLength": 300 },
+    "title": { "type": "string" },
+    "summary": { "type": "string" },
+    "coverAssetRef": { "type": "string" },
+    "entityRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "tagRefs": { "type": "array", "items": { "type": "string" }, "minItems": 2 },
+    "sourceUrls": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["topicId", "articleMarkdown", "title", "entityRefs", "tagRefs"]
+}

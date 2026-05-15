@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "topicId": { "type": "string" },
+    "qualityScore": { "type": "number", "minimum": 0, "maximum": 100 },
+    "breakdown": {
+      "type": "object",
+      "properties": {
+        "depth": { "type": "number" },
+        "originality": { "type": "number" },
+        "practicality": { "type": "number" },
+        "readability": { "type": "number" }
+      }
+    },
+    "recommendation": { "type": "string", "enum": ["proceed", "skip", "needs_improvement"] }
+  },
+  "required": ["topicId", "qualityScore", "recommendation"]
+}

@@ -13,6 +13,7 @@ import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
@@ -1799,6 +1800,15 @@ final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
     remote: RemoteGreetingRepository.new,
     mock: MockGreetingRepository.new,
   );
+});
+
+/// Tag Repository（标签体系查询、建议、校验与关系图谱）
+final tagRepositoryProvider = Provider<TagRepository>((ref) {
+  final mode = ref.watch(appDataSourceModeProvider);
+  if (mode == AppDataSourceMode.remote) {
+    return RemoteTagRepository();
+  }
+  return MockTagRepository();
 });
 
 /// Media Upload Manager（统一媒体上传队列 + 并发 + 重试 + 离线恢复）
