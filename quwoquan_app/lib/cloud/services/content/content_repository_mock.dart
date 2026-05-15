@@ -123,6 +123,8 @@ class MockContentRepository implements ContentRepository {
     String? sessionId,
     String? feedRequestId,
   }) async {
+    final items = _resolveDiscoveryPosts(
+      category: category,
       identity: identity,
       type: type,
     );

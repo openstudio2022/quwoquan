@@ -10,7 +10,7 @@ class RemoteTagRepository implements TagRepository {
       Uri.parse('${CloudRuntimeConfig.gatewayBaseUrl}$path')
           .replace(queryParameters: params);
 
-  Map<String, String> get _headers => CloudRequestHeaders.standard();
+  Map<String, String> get _headers => CloudRequestHeaders.forPage('tag.api');
 
   Future<dynamic> _get(String path, [Map<String, String>? params]) async {
     final resp = await _client.get(_uri(path, params), headers: _headers);

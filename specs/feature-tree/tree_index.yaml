@@ -995,6 +995,13 @@ features:
               domain: ""
               status: in_progress
               tags: []
+            - id: realtime-feed-baseline
+              name: realtime-feed-baseline
+              level: L3_scenario
+              path: discovery-content/feed-orchestration-recommendation/realtime-feed-baseline
+              domain: ""
+              status: in_progress
+              tags: []
         - id: media-processing-helper-read
           name: media-processing-helper-read
           level: L2_feature

@@ -52,6 +52,8 @@ class _ErrorContentRepository extends MockContentRepository {
     int limit = 20,
     String? cursor,
     String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
   }) async => throw Exception(_errorMessage);
 
   @override
