@@ -17,6 +17,21 @@ class TagApiDefaults {
   static const int minCooccurCount = 1;
 }
 
+/// 标签域 request page ids（tag domain 尚未 codegen 时的手写常量）
+class TagRequestPageIds {
+  TagRequestPageIds._();
+  static const String listDimensions = 'tag.list.dimensions';
+  static const String suggest = 'tag.suggest';
+  static const String validate = 'tag.validate';
+  static const String search = 'tag.search';
+  static const String related = 'tag.related';
+  static const String searchByTags = 'tag.search.by.tags';
+  static const String feedback = 'tag.feedback';
+  static const String cooccurrence = 'tag.graph.cooccurrence';
+  static const String invertedIndex = 'tag.graph.inverted.index';
+  static const String relatedObjects = 'tag.graph.related.objects';
+}
+
 /// 标签体系 Repository（场景2: 内容创作 + 场景3: 推荐搜索 + 场景4: 关系图谱）
 ///
 /// API 定义见 contracts/metadata/tag/service.yaml

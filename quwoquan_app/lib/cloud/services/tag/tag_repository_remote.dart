@@ -10,20 +10,24 @@ class RemoteTagRepository implements TagRepository {
       Uri.parse('${CloudRuntimeConfig.gatewayBaseUrl}$path')
           .replace(queryParameters: params);
 
-  Map<String, String> get _headers => CloudRequestHeaders.forPage('tag.api');
-
-  Future<dynamic> _get(String path, [Map<String, String>? params]) async {
-    final resp = await _client.get(_uri(path, params), headers: _headers);
+  Future<dynamic> _get(
+      String path, String pageId, [Map<String, String>? params]) async {
+    final resp = await _client.get(
+      _uri(path, params),
+      headers: CloudRequestHeaders.forPage(pageId),
+    );
     if (resp.statusCode != 200) {
       throw Exception('Tag API error: ${resp.statusCode} ${resp.body}');
     }
     return json.decode(resp.body);
   }
 
-  Future<dynamic> _post(String path, Map<String, dynamic> body) async {
+  Future<dynamic> _post(
+      String path, String pageId, Map<String, dynamic> body) async {
+    final headers = CloudRequestHeaders.forPage(pageId);
     final resp = await _client.post(
       _uri(path),
-      headers: {..._headers, 'Content-Type': 'application/json'},
+      headers: {...headers, 'Content-Type': 'application/json'},
       body: json.encode(body),
     );
     if (resp.statusCode != 200) {
@@ -34,8 +38,11 @@ class RemoteTagRepository implements TagRepository {
 
   @override
   Future<List<TagDimension>> listDimensions() async {
-    final data = await _get('/api/v1/tags/dimensions') as List;
-    return data.map((e) => TagDimension.fromJson(e as Map<String, dynamic>)).toList();
+    final data = await _get(
+        '/api/v1/tags/dimensions', TagRequestPageIds.listDimensions) as List;
+    return data
+        .map((e) => TagDimension.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -43,13 +50,18 @@ class RemoteTagRepository implements TagRepository {
       {String? group, int limit = TagApiDefaults.suggestLimit}) async {
     final params = <String, String>{'q': query, 'limit': '$limit'};
     if (group != null) params['group'] = group;
-    final data = await _get('/api/v1/tags/suggest', params) as List;
-    return data.map((e) => TagSuggestion.fromJson(e as Map<String, dynamic>)).toList();
+    final data =
+        await _get('/api/v1/tags/suggest', TagRequestPageIds.suggest, params)
+            as List;
+    return data
+        .map((e) => TagSuggestion.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
   Future<TagValidationResult> validateRefs(List<String> tagRefs) async {
-    final data = await _post('/api/v1/tags/validate', {'tagRefs': tagRefs});
+    final data = await _post(
+        '/api/v1/tags/validate', TagRequestPageIds.validate, {'tagRefs': tagRefs});
     return TagValidationResult.fromJson(data as Map<String, dynamic>);
   }
 
@@ -58,8 +70,12 @@ class RemoteTagRepository implements TagRepository {
       {String? group, int limit = TagApiDefaults.searchLimit}) async {
     final params = <String, String>{'q': query, 'limit': '$limit'};
     if (group != null) params['group'] = group;
-    final data = await _get('/api/v1/tags/search', params) as List;
-    return data.map((e) => TagSearchResult.fromJson(e as Map<String, dynamic>)).toList();
+    final data =
+        await _get('/api/v1/tags/search', TagRequestPageIds.search, params)
+            as List;
+    return data
+        .map((e) => TagSearchResult.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -67,8 +83,10 @@ class RemoteTagRepository implements TagRepository {
       {int limit = TagApiDefaults.relatedLimit}) async {
     final encoded = Uri.encodeComponent(tagRef);
     final data = await _get('/api/v1/tags/$encoded/related',
-        {'limit': '$limit'}) as List;
-    return data.map((e) => RelatedTag.fromJson(e as Map<String, dynamic>)).toList();
+        TagRequestPageIds.related, {'limit': '$limit'}) as List;
+    return data
+        .map((e) => RelatedTag.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -76,15 +94,20 @@ class RemoteTagRepository implements TagRepository {
       {String? objectType, int limit = TagApiDefaults.searchLimit}) async {
     final body = <String, dynamic>{'tagRefs': tagRefs, 'limit': limit};
     if (objectType != null) body['objectType'] = objectType;
-    final data = await _post('/api/v1/tags/search-by-tags', body) as List;
-    return data.map((e) => TagObjectMatch.fromJson(e as Map<String, dynamic>)).toList();
+    final data = await _post(
+        '/api/v1/tags/search-by-tags', TagRequestPageIds.searchByTags, body) as List;
+    return data
+        .map((e) => TagObjectMatch.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
-  Future<bool> feedback(String tagRef, String action, {String? context}) async {
+  Future<bool> feedback(String tagRef, String action,
+      {String? context}) async {
     final body = <String, dynamic>{'tagRef': tagRef, 'action': action};
     if (context != null) body['context'] = context;
-    final data = await _post('/api/v1/tags/feedback', body);
+    final data =
+        await _post('/api/v1/tags/feedback', TagRequestPageIds.feedback, body);
     return (data as Map<String, dynamic>)['accepted'] == true;
   }
 
@@ -98,8 +121,11 @@ class RemoteTagRepository implements TagRepository {
       'limit': '$limit',
     };
     if (tagRef != null) params['tagRef'] = tagRef;
-    final data = await _get('/api/v1/tags/graph/cooccurrence', params) as List;
-    return data.map((e) => TagCooccurrence.fromJson(e as Map<String, dynamic>)).toList();
+    final data = await _get('/api/v1/tags/graph/cooccurrence',
+        TagRequestPageIds.cooccurrence, params) as List;
+    return data
+        .map((e) => TagCooccurrence.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -108,7 +134,8 @@ class RemoteTagRepository implements TagRepository {
     final encoded = Uri.encodeComponent(tagRef);
     final params = <String, String>{'limit': '$limit'};
     if (objectType != null) params['objectType'] = objectType;
-    final data = await _get('/api/v1/tags/graph/inverted-index/$encoded', params);
+    final data = await _get('/api/v1/tags/graph/inverted-index/$encoded',
+        TagRequestPageIds.invertedIndex, params);
     return TagInvertedResult.fromJson(data as Map<String, dynamic>);
   }
 
@@ -118,7 +145,10 @@ class RemoteTagRepository implements TagRepository {
     final encoded = Uri.encodeComponent(objectId);
     final params = <String, String>{'limit': '$limit'};
     if (objectType != null) params['objectType'] = objectType;
-    final data = await _get('/api/v1/tags/graph/related-objects/$encoded', params) as List;
-    return data.map((e) => RelatedObject.fromJson(e as Map<String, dynamic>)).toList();
+    final data = await _get('/api/v1/tags/graph/related-objects/$encoded',
+        TagRequestPageIds.relatedObjects, params) as List;
+    return data
+        .map((e) => RelatedObject.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }
