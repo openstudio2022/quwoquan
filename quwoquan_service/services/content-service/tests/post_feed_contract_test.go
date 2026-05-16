@@ -14,7 +14,7 @@ import (
 )
 
 // TestGetFeedByType creates image and video posts, then requests feed with
-// type=photo and verifies only image-type items are returned.
+// type=image and verifies only image-type items are returned.
 // contract.yaml: get_feed_by_type / go_func: TestGetFeedByType
 func TestGetFeedByType(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
@@ -22,7 +22,7 @@ func TestGetFeedByType(t *testing.T) {
 	// Create mixed content types
 	for i := range 3 {
 		createPost(t, fmt.Sprintf(
-			`{"contentType":"photo","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"]}`,
+			`{"contentType":"image","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"]}`,
 			i, i,
 		))
 	}
@@ -33,7 +33,7 @@ func TestGetFeedByType(t *testing.T) {
 		))
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=10", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -50,7 +50,7 @@ func TestGetFeedByType(t *testing.T) {
 		t.Error("expected at least one image post in photo feed")
 	}
 	for _, item := range page.Items {
-		if item["type"] != "photo" && item["contentType"] != "photo" {
+		if item["type"] != "image" && item["contentType"] != "image" {
 			t.Errorf("non-photo item in photo feed: %v", item)
 		}
 	}
@@ -62,11 +62,11 @@ func TestGetFeedByIdentity(t *testing.T) {
 
 	createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 1"}`)
 	createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 2"}`)
-	createPost(t, `{"contentType":"photo","contentIdentity":"work","title":"作品 1","mediaUrls":["https://example.com/a.jpg"]}`)
+	createPost(t, `{"contentType":"image","contentIdentity":"work","title":"作品 1","mediaUrls":["https://example.com/a.jpg"]}`)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?identity=moment&type=article&limit=10",
+		"/v1/content/feed?identity=moment&type=image&limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -144,12 +144,12 @@ func TestGetFeedCursorPagination(t *testing.T) {
 	// Create enough posts for two pages
 	for i := range 6 {
 		createPost(t, fmt.Sprintf(
-			`{"contentType":"photo","title":"Pager post %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+			`{"contentType":"image","title":"Pager post %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}
 
 	// First page: limit=3
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&limit=3", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=3", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 
@@ -181,7 +181,7 @@ func TestGetFeedCursorPagination(t *testing.T) {
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?type=photo&limit=3&cursor="+page1.NextCursor, nil,
+		"/v1/content/feed?type=image&limit=3&cursor="+page1.NextCursor, nil,
 	)
 	rec2 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec2, req2)
@@ -215,7 +215,7 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 	for i := range 12 {
 		authorID := fmt.Sprintf("user_rec_%d", i%4)
 		createPostWithAuthor(t, authorID, fmt.Sprintf(
-			`{"contentType":"photo","title":"Recommend Pager %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+			`{"contentType":"image","title":"Recommend Pager %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}
 
@@ -282,7 +282,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 	for i := range 12 {
 		authorID := fmt.Sprintf("user_fw_%d", i%4)
 		createPostWithAuthor(t, authorID, fmt.Sprintf(
-			`{"contentType":"photo","title":"Future Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+			`{"contentType":"image","title":"Future Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}
 
@@ -376,11 +376,11 @@ func TestListFeedWithPagination(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	for i := range 4 {
-		payload := fmt.Sprintf(`{"contentType":"photo","title":"Feed post %d","body":"content %d","mediaUrls":["https://example.com/%d.jpg"]}`, i, i, i)
+		payload := fmt.Sprintf(`{"contentType":"image","title":"Feed post %d","body":"content %d","mediaUrls":["https://example.com/%d.jpg"]}`, i, i, i)
 		createPost(t, payload)
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&limit=3", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=3", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 

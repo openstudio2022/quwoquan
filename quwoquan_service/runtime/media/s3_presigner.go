@@ -64,7 +64,7 @@ func (c *S3PresignClient) HeadObject(ctx context.Context, bucket, key string) (b
 	return true, nil
 }
 
-// StubPresignClient is the legacy URL-concatenation fallback for dev without S3.
+// StubPresignClient is the URL-concatenation fallback for dev without S3.
 type StubPresignClient struct{}
 
 func (StubPresignClient) PresignPutObject(_ context.Context, bucket, key, contentType string, ttl time.Duration) (string, error) {

@@ -527,7 +527,7 @@ def g19_post_angle_dir_match():
         while parts and parts[0] == "posts":
             parts = parts[1:]
         if len(parts) >= 2:
-            # 处理嵌套角度路径：{载体}/内容角度/{角度}/{title}/{seq}/（历史兼容）
+            # 处理嵌套角度路径：{载体}/内容角度/{角度}/{title}/{seq}/（兼容旧路径）
             if len(parts) >= 3 and parts[1] == "内容角度":
                 dir_angle = parts[2]
             else:
