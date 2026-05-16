@@ -11,6 +11,7 @@ import (
 type Event struct {
 	EventID     string
 	EventType   string
+	Scenario    string
 	OccurredAt  string
 	UserID      string
 	PersonaID   string

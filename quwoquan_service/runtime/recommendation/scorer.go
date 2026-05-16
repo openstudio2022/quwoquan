@@ -112,12 +112,17 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		}
 		detail["engagementBonus"] = engagementBonus
 
-		// Social prior: boost if content author is followed or has social endorsement
+		// Social prior: circle tag match + social interest density (author follow handled by authorAffinity)
 		socialPrior := 0.0
-		if user != nil && user.AuthorAffinities != nil {
-			if aff, ok := user.AuthorAffinities[c.AuthorID]; ok && aff > 0 {
-				socialPrior = math.Log1p(aff)
+		if user != nil && len(user.CircleTagAffinities) > 0 {
+			for _, tag := range c.Tags {
+				if aff, ok := user.CircleTagAffinities[tag]; ok {
+					socialPrior += aff * 0.5
+				}
 			}
+		}
+		if user != nil && user.SocialInterestScore > 0 {
+			socialPrior += math.Log1p(user.SocialInterestScore) * 0.3
 		}
 		detail["socialPrior"] = socialPrior
 
@@ -132,24 +137,73 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		}
 		detail["negativePenalty"] = negativePenalty
 
-		// Entity affinity: boost for content matching user's entity interests
+		// Entity affinity: boost for content matching user's entity interests (instance + category)
 		entityAffinity := 0.0
-		if user != nil && user.EntityInstanceAffinities != nil && len(c.EntityRefs) > 0 {
-			for _, ref := range c.EntityRefs {
-				if aff, ok := user.EntityInstanceAffinities[ref]; ok {
-					entityAffinity += aff
+		if user != nil && len(c.EntityRefs) > 0 {
+			if user.EntityInstanceAffinities != nil {
+				for _, ref := range c.EntityRefs {
+					if aff, ok := user.EntityInstanceAffinities[ref]; ok {
+						entityAffinity += aff
+					}
+				}
+			}
+			if user.EntityAffinities != nil {
+				for _, ref := range c.EntityRefs {
+					if aff, ok := user.EntityAffinities[ref]; ok {
+						entityAffinity += aff * 0.4
+					}
 				}
 			}
 		}
 		detail["entityAffinity"] = entityAffinity
+
+		// ENER: type-specific engagement rate de-bias
+		enerBoost := 0.0
+		if user != nil && user.TypeENER != nil {
+			if ener, ok := user.TypeENER[c.ContentType]; ok && ener > 0 {
+				enerBoost = math.Log1p(ener*10) * 0.5
+			}
+		}
+		detail["enerBoost"] = enerBoost
+
+		// Four-dim tag matching: classify candidate tags and match against user affinities
+		topicMatch := 0.0
+		audienceMatch := 0.0
+		formatMatch := 0.0
+		if user != nil && len(c.Tags) > 0 {
+			for _, tag := range c.Tags {
+				dim := ClassifyTagDimension(tag)
+				switch dim {
+				case DimensionTopic:
+					if user.TopicAffinities != nil {
+						topicMatch += user.TopicAffinities[tag]
+					}
+				case DimensionAudience:
+					if user.AudienceAffinities != nil {
+						audienceMatch += user.AudienceAffinities[tag]
+					}
+				case DimensionFormat:
+					if user.FormatAffinities != nil {
+						formatMatch += user.FormatAffinities[tag]
+					}
+				}
+			}
+		}
+		detail["topicMatch"] = topicMatch
+		detail["audienceMatch"] = audienceMatch
+		detail["formatMatch"] = formatMatch
 
 		score := w.TagRelevance*(tagScore+longTermTagBoost*0.3) +
 			w.AuthorAffinity*authorAffinity +
 			w.Popularity*popularity +
 			w.Freshness*freshness +
 			w.ExploreBoost*exploreBoost +
-			w.DwellBonus*engagementBonus +
-			w.SocialPrior*socialPrior -
+			w.DwellBonus*(engagementBonus+enerBoost) +
+			w.SocialPrior*socialPrior +
+			w.EntityAffinity*entityAffinity +
+			w.TopicMatch*topicMatch +
+			w.AudienceMatch*audienceMatch +
+			w.FormatMatch*formatMatch -
 			w.NegativePenalty*negativePenalty
 
 		detail["total"] = score
@@ -173,12 +227,14 @@ type ModelServiceClient interface {
 // ModelPredictRequest is sent to the model service.
 // Aligned with contracts/metadata/rec_model_service/fields.yaml and OpenAPI.
 type ModelPredictRequest struct {
-	Scenario       string             `json:"scenario"`                  // e.g. content_feed / circle_discovery / friend_suggestion
+	Scenario       string             `json:"scenario"`
 	UserID         string             `json:"userId"`
 	SessionID      string             `json:"sessionId"`
+	ModelVersion   string             `json:"modelVersion,omitempty"`
 	UserFeatures   *UserFeatureVector `json:"userFeatures,omitempty"`
 	SessionSignals *SessionState      `json:"sessionSignals,omitempty"`
 	Candidates     []CandidateInput   `json:"candidates"`
+	Context        map[string]any     `json:"context,omitempty"`
 }
 
 // CandidateInput is the candidate feature vector sent to the model.
@@ -187,6 +243,7 @@ type CandidateInput struct {
 	ContentType  string   `json:"contentType"`
 	AuthorID     string   `json:"authorId"`
 	Tags         []string `json:"tags"`
+	EntityRefs   []string `json:"entityRefs,omitempty"`
 	AgeHours     float64  `json:"ageHours"`
 	ViewCount    int64    `json:"viewCount"`
 	LikeCount    int64    `json:"likeCount"`
@@ -209,8 +266,9 @@ type CandidateScore struct {
 
 // RemoteModelScorer delegates scoring to an external ML model service.
 type RemoteModelScorer struct {
-	client   ModelServiceClient
-	Scenario string // scenario sent to model service, e.g. content_feed
+	client       ModelServiceClient
+	Scenario     string // scenario sent to model service, e.g. content_feed
+	ModelVersion string // "champion" or "challenger"; empty means server default
 }
 
 func NewRemoteModelScorer(client ModelServiceClient, scenario string) *RemoteModelScorer {
@@ -218,6 +276,11 @@ func NewRemoteModelScorer(client ModelServiceClient, scenario string) *RemoteMod
 		scenario = "content_feed"
 	}
 	return &RemoteModelScorer{client: client, Scenario: scenario}
+}
+
+// WithModelVersion returns a copy of the scorer that requests a specific model version.
+func (s *RemoteModelScorer) WithModelVersion(v string) *RemoteModelScorer {
+	return &RemoteModelScorer{client: s.client, Scenario: s.Scenario, ModelVersion: v}
 }
 
 func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFeatures, candidates []ContentCandidate) ([]ScoredCandidate, error) {
@@ -233,6 +296,7 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 			ContentType:  c.ContentType,
 			AuthorID:     c.AuthorID,
 			Tags:         c.Tags,
+			EntityRefs:   c.EntityRefs,
 			AgeHours:     ageHours,
 			ViewCount:    c.ViewCount,
 			LikeCount:    c.LikeCount,
@@ -247,13 +311,20 @@ func (s *RemoteModelScorer) ScoreBatch(ctx context.Context, features *ScoringFea
 		session = &SessionState{}
 	}
 
+	var reqCtx map[string]any
+	if s.ModelVersion != "" {
+		reqCtx = map[string]any{"modelVersion": s.ModelVersion}
+	}
+
 	resp, err := s.client.Predict(ctx, &ModelPredictRequest{
 		Scenario:       s.Scenario,
 		UserID:         session.UserID,
 		SessionID:      session.SessionID,
+		ModelVersion:   s.ModelVersion,
 		UserFeatures:   features.User,
 		SessionSignals: session,
 		Candidates:     inputs,
+		Context:        reqCtx,
 	})
 	if err != nil {
 		return nil, err
@@ -319,6 +390,10 @@ func (c *CascadeScorer) ScoreBatch(ctx context.Context, features *ScoringFeature
 		c.Logger.Warn("rec.model.cascade_fallback",
 			slog.String("err", err.Error()),
 			slog.Int("candidates", len(candidates)))
+	}
+	if scoreCtx.Err() != nil {
+		RecordModelTimeout()
+		RecordModelTimeoutMetric()
 	}
 
 	return c.Fallback.ScoreBatch(ctx, features, candidates)
