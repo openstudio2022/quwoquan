@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/content/models/content_behavior_batch_event_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';

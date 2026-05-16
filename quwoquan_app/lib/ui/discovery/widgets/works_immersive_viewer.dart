@@ -26,9 +26,13 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show BehaviorAction, ReferralSource;
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
+    show ContentType;
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
@@ -64,6 +68,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.defaultCircleId,
     this.initialInteractionSnapshot = const MediaViewerInteractionSnapshot(),
     this.onDismissed,
+    this.onPostIndexChanged,
   });
 
   final bool showWorksToolbar;
@@ -91,6 +96,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final String? defaultCircleId;
   final MediaViewerInteractionSnapshot initialInteractionSnapshot;
   final ValueChanged<MediaViewerResult>? onDismissed;
+  final ValueChanged<int>? onPostIndexChanged;
 
   @override
   ConsumerState<WorksImmersiveViewer> createState() =>
@@ -329,7 +335,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         onReport: () {
           ref
               .read(behaviorRepositoryProvider)
-              .reportSingle(contentId: post.id, action: 'report');
+              .reportSingle(contentId: post.id, action: BehaviorAction.report);
           ref
               .read(reportRepositoryProvider)
               .createReport(
@@ -816,6 +822,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void _trackImpressionForPost(PostBaseDto post) {
     final tracker = ref.read(contentBehaviorTrackerProvider);
     tracker.trackImpression(post.id);
+
+    final engTracker = ref.read(contentEngagementTrackerProvider);
+    engTracker.trackContentEnter(
+      post.id,
+      contentType: _mapPostContentType(post),
+      referralSource: ReferralSource.organicFeed,
+      totalImages: post.imageUrls.length,
+      authorId: post.authorId,
+    );
+
     if (!_isArticleLikePost(post)) {
       return;
     }
@@ -997,6 +1013,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final tracker = ref.read(contentBehaviorTrackerProvider);
     tracker.trackDwell(post.id, durationSeconds: durationSec);
     _pageEnterTime = null;
+
+    ref.read(contentEngagementTrackerProvider).trackContentExit(post.id);
+  }
+
+  ContentType _mapPostContentType(PostBaseDto post) {
+    final fmt = post.displayFormat;
+    if (fmt == 'video') return ContentType.video;
+    if (fmt == 'article') return ContentType.article;
+    if (fmt == 'moment') return ContentType.moment;
+    return ContentType.photo;
   }
 
   // ── 互动操作（乐观 UI + 云侧 API 同步）────────────────────────
@@ -1137,7 +1163,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                       );
 
                       setState(() => _currentPage = index);
-                      // Reset + restart the follow-button timer for the new post.
+                      widget.onPostIndexChanged?.call(index);
                       final newPost = posts[index.clamp(0, posts.length - 1)];
                       _startFollowButtonTimer(newPost);
                       _trackImpressionForPost(newPost);

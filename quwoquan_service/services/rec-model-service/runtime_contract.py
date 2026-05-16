@@ -87,7 +87,12 @@ def load_layered_runtime_config_or_die(
 ) -> dict[str, Any]:
     merged: dict[str, Any] = {}
     for path in _runtime_paths(app_env, service_name, config_root, config_version):
-        merged = _deep_merge(merged, _load_yaml_dict(path))
+        if path.exists():
+            merged = _deep_merge(merged, _load_yaml_dict(path))
+        elif app_env in {"alpha", "beta"}:
+            continue
+        else:
+            raise RuntimeError(f"missing config file: {path}")
 
     # env vars are final override layer
     if _env("REC_SERVICE_HTTP_ADDR"):

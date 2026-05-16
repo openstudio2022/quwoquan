@@ -13,12 +13,18 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gopkg.in/yaml.v3"
 
+	rtmongo "quwoquan_service/runtime/mongodb"
+	rtotel "quwoquan_service/runtime/otel"
+
+	rtexp "quwoquan_service/runtime/experiments"
+	rtgov "quwoquan_service/runtime/governance"
+	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	runtimelearning "quwoquan_service/runtime/learning"
+	runtimemedia "quwoquan_service/runtime/media"
+	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
@@ -74,8 +80,9 @@ type config struct {
 	//   rec     — recommendation hot path (session signals, exposed, negative)
 	//   general — entity cache, assistant context, rate limiting (reserved)
 	Redis struct {
-		Rec     redisSceneCfg `yaml:"rec"`
-		General redisSceneCfg `yaml:"general"`
+		Rec      redisSceneCfg `yaml:"rec"`
+		General  redisSceneCfg `yaml:"general"`
+		Realtime redisSceneCfg `yaml:"realtime"`
 	} `yaml:"redis"`
 
 	RecModelService struct {
@@ -90,6 +97,26 @@ type config struct {
 		Model    string `yaml:"model"`
 		Enabled  bool   `yaml:"enabled"`
 	} `yaml:"embedding"`
+
+	OSS struct {
+		Endpoint        string `yaml:"endpoint"`
+		Bucket          string `yaml:"bucket"`
+		Region          string `yaml:"region"`
+		AccessKeyID     string `yaml:"access_key_id"`
+		AccessKeySecret string `yaml:"access_key_secret"`
+		CDNDomain       string `yaml:"cdn_domain"`
+		CDNSignKey      string `yaml:"cdn_sign_key"`
+		PresignTTLMin   int    `yaml:"presign_ttl_minutes"`
+		CDNTTLMin       int    `yaml:"cdn_ttl_minutes"`
+		UseSSL          bool   `yaml:"use_ssl"`
+	} `yaml:"oss"`
+
+	Experiments map[string]experimentConfig `yaml:"experiments"`
+}
+
+type experimentConfig struct {
+	Enabled bool           `yaml:"enabled"`
+	Buckets map[string]int `yaml:"buckets"`
 }
 
 func main() {
@@ -109,6 +136,11 @@ func main() {
 	if err := preflightConfig(cfg, appEnv); err != nil {
 		log.Fatalf("content-service config preflight failed: %v", err)
 	}
+
+	ctx := context.Background()
+
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "content-service", SamplingRatio: 0.1})
+	defer otelShutdown()
 
 	addr := getenvOrDefault("CONTENT_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
@@ -130,6 +162,9 @@ func main() {
 
 	router := buildRedisRouter(cfg)
 	defer router.Close()
+	if err := router.PingAll(ctx); err != nil {
+		log.Printf("WARN: content-service redis ping: %v", err)
+	}
 	hotPath := rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec")))
 	eventPub := messaging.NewRedisEventPublisher(router.Scene("general"), "content-service", logger)
 
@@ -146,28 +181,33 @@ func main() {
 	var postServiceOpts []application.PostServiceOption
 	var sharedProjector application.Projector
 	var mongoCandidateSources []rtrec.CandidateSource
+	var bulkImportService *application.BulkImportService
+	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
+	var dailyMetricsStore *persistence.DailyMetricsStore
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
 		rtrec.WithLogger(logger),
 	}
-	learningRecorder := runtimelearning.NewBufferedRecorder(&runtimelearning.LogSink{Logger: logger}, logger, runtimelearning.WithFlushSize(32), runtimelearning.WithFlushInterval(2*time.Second))
-	defer learningRecorder.Stop()
-	recFeedback := rtrec.NewFeedbackRecorder(learningRecorder)
-	recOpts = append(recOpts, rtrec.WithFeedbackRecorder(recFeedback))
+	var learningSink runtimelearning.Sink = &runtimelearning.LogSink{Logger: logger}
 	postServiceOpts = append(postServiceOpts, application.WithSignalProcessor(bufferedWriter))
 	postServiceOpts = append(postServiceOpts, application.WithLogger(logger))
 	postServiceOpts = append(postServiceOpts, application.WithStoryRuntimeConfig(resolveStoryRuntimeConfig()))
 
+	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("redis", func(hctx context.Context) error {
+		return router.PingAll(hctx)
+	})
+
 	mongoURI := resolveMongoURI(cfg)
 	if mongoURI != "" {
-		mongoClient, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
-		if err != nil {
-			log.Fatalf("content-service mongo connect failed: %v", err)
-		}
+		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: mongoURI}, "content-service")
+		healthChecker.Register("mongodb", func(hctx context.Context) error {
+			return mongoClient.Ping(hctx, nil)
+		})
 		defer func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_ = mongoClient.Disconnect(ctx)
+			_ = mongoClient.Disconnect(shutdownCtx)
 		}()
 		dbName := cfg.Mongo.Database
 		if dbName == "" {
@@ -182,12 +222,18 @@ func main() {
 		store = cache.NewPostCacheRepository(mongoStore, router.Scene("general"), logger)
 		log.Printf("content-service storage=mongodb db=%s collection=%s", dbName, collName)
 
+		learningSink = runtimelearning.NewMongoSink(db, logger)
+
 		// Event publisher: Redis Pub/Sub for cross-service consumption
 		postServiceOpts = append(postServiceOpts, application.WithEventPublisher(eventPub))
 
+		// Entity tag index for entity interest propagation in projector
+		entityTagIndex := recinfra.NewMongoEntityTagIndex(db)
+		entityPropagation := rtrec.NewEntityInterestPropagation(entityTagIndex)
+
 		// In-process projectors: discovery feed + recommendation features.
 		discoveryProjector := recinfra.NewDiscoveryFeedProjector(db)
-		recommendProjector := recinfra.NewRecommendFeatureProjector(db)
+		recommendProjector := recinfra.NewRecommendFeatureProjector(db, recinfra.WithEntityPropagation(entityPropagation), recinfra.WithSignalProcessor(bufferedWriter))
 		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector}
 		postServiceOpts = append(postServiceOpts, application.WithProjector(sharedProjector))
 		recOpts = append(recOpts, rtrec.WithFeatureProvider(recinfra.NewFeatureStore(db)))
@@ -210,7 +256,10 @@ func main() {
 
 		// Vector recall (optional, requires embedding service)
 		if cfg.Embedding.Enabled && cfg.Embedding.Endpoint != "" {
+			embCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
+			embClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 10 * time.Second}, embCB)
 			var embOpts []rtrec.RemoteEmbeddingOption
+			embOpts = append(embOpts, rtrec.WithEmbeddingClient(embClient))
 			if cfg.Embedding.Model != "" {
 				embOpts = append(embOpts, rtrec.WithEmbeddingModel(cfg.Embedding.Model))
 			}
@@ -219,10 +268,27 @@ func main() {
 			mongoCandidateSources = append(mongoCandidateSources, vectorSource)
 			log.Printf("content-service vector recall enabled endpoint=%s", cfg.Embedding.Endpoint)
 		}
+
+		// Social recall source
+		socialProvider := recinfra.NewMongoSocialGraphProvider(db)
+		socialCandidateDB := recinfra.NewMongoSocialCandidateDB(db)
+		socialRecall := rtrec.NewSocialRecallSource(socialProvider, socialCandidateDB, 7*24*time.Hour)
+		mongoCandidateSources = append(mongoCandidateSources, socialRecall)
+		recOpts = append(recOpts, rtrec.WithSocialMiner(rtrec.NewSocialInterestMiner(socialProvider)))
+		log.Printf("content-service social recall + social miner enabled")
+
+		bulkImportService = application.NewBulkImportService(recinfra.NewMongoBulkImportStore(db))
+		behaviorEventStore = persistence.NewMongoBehaviorEventStore(db, logger)
+		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
 	}
+
+	learningRecorder := runtimelearning.NewBufferedRecorder(learningSink, logger, runtimelearning.WithFlushSize(32), runtimelearning.WithFlushInterval(2*time.Second))
+	defer learningRecorder.Stop()
+	recFeedback := rtrec.NewFeedbackRecorder(learningRecorder, rtrec.WithScoreCache(rtredis.NewRecAdapter(router.Scene("rec"))))
+	recOpts = append(recOpts, rtrec.WithFeedbackRecorder(recFeedback))
 
 	reportDSN := resolveReportDSN(cfg)
 	if reportDSN != "" {
@@ -230,17 +296,50 @@ func main() {
 		if err != nil {
 			log.Fatalf("content-service report postgres open failed: %v", err)
 		}
+		db.SetMaxOpenConns(10)
+		db.SetMaxIdleConns(3)
+		db.SetConnMaxLifetime(30 * time.Minute)
 		defer db.Close()
 		pgReportStore, err := persistence.NewPGReportStore(db)
 		if err != nil {
 			log.Fatalf("content-service report postgres init failed: %v", err)
 		}
+		healthChecker.Register("report-postgres", func(hctx context.Context) error {
+			return db.PingContext(hctx)
+		})
 		reportStore = pgReportStore
 		log.Printf("content-service report storage=postgres")
 	} else {
 		reportStore = persistence.NewInMemoryReportStore()
 		log.Printf("content-service report storage=inmemory (no postgres.report_dsn configured)")
 	}
+
+	// OSS / Media storage
+	ossCfg := runtimemedia.OSSConfig{
+		Endpoint:        getenvOrDefault("CONTENT_OSS_ENDPOINT", cfg.OSS.Endpoint),
+		Bucket:          getenvOrDefault("CONTENT_OSS_BUCKET", cfg.OSS.Bucket),
+		Region:          getenvOrDefault("CONTENT_OSS_REGION", cfg.OSS.Region),
+		AccessKeyID:     getenvOrDefault("CONTENT_OSS_ACCESS_KEY_ID", cfg.OSS.AccessKeyID),
+		AccessKeySecret: getenvOrDefault("CONTENT_OSS_ACCESS_KEY_SECRET", cfg.OSS.AccessKeySecret),
+		CDNDomain:       getenvOrDefault("CONTENT_CDN_DOMAIN", cfg.OSS.CDNDomain),
+		CDNSignKey:      getenvOrDefault("CONTENT_CDN_SIGN_KEY", cfg.OSS.CDNSignKey),
+		PresignTTL:      time.Duration(cfg.OSS.PresignTTLMin) * time.Minute,
+		CDNTTL:          time.Duration(cfg.OSS.CDNTTLMin) * time.Minute,
+	}
+	if ossCfg.PresignTTL == 0 {
+		ossCfg.PresignTTL = 15 * time.Minute
+	}
+	if ossCfg.CDNTTL == 0 {
+		ossCfg.CDNTTL = 60 * time.Minute
+	}
+	var ossPresigner runtimemedia.PresignClient
+	if ossCfg.AccessKeyID != "" && ossCfg.Endpoint != "" {
+		ossPresigner = runtimemedia.NewS3PresignClient(ossCfg)
+		log.Printf("content-service oss presigner=s3 endpoint=%s bucket=%s", ossCfg.Endpoint, ossCfg.Bucket)
+	} else {
+		log.Printf("content-service oss presigner=stub (no access_key_id or endpoint)")
+	}
+	_ = ossPresigner // consumed by OSSMediaStore when media upload feature is wired
 
 	source := recinfra.NewPostRepositorySource(store)
 	candidateSources := append(mongoCandidateSources, source)
@@ -258,6 +357,45 @@ func main() {
 		recOpts = append(recOpts, rtrec.WithScorer(cascade))
 		log.Printf("content-service rec-model-service enabled url=%s timeout=%v", cfg.RecModelService.URL, timeout)
 	}
+
+	// AB experiment resolver — reads from config if available, falls back to defaults
+	expResolver := rtexp.NewHashResolver()
+	if expCfg, ok := cfg.Experiments[rtrec.ExpRecWeights]; ok && expCfg.Enabled {
+		buckets := make([]rtexp.BucketDef, 0, len(expCfg.Buckets))
+		for name, pct := range expCfg.Buckets {
+			buckets = append(buckets, rtexp.BucketDef{Name: name, WeightPct: pct})
+		}
+		expResolver.Register(&rtexp.Experiment{
+			ID: rtrec.ExpRecWeights, Buckets: buckets, PolicyVersion: "v1-config", Enabled: true,
+		})
+	} else {
+		rtrec.RegisterRecWeightsExperiment(expResolver)
+	}
+	if expCfg, ok := cfg.Experiments[rtrec.ExpModelVsRule]; ok && expCfg.Enabled {
+		buckets := make([]rtexp.BucketDef, 0, len(expCfg.Buckets))
+		for name, pct := range expCfg.Buckets {
+			buckets = append(buckets, rtexp.BucketDef{Name: name, WeightPct: pct})
+		}
+		expResolver.Register(&rtexp.Experiment{
+			ID: rtrec.ExpModelVsRule, Buckets: buckets, PolicyVersion: "v1-config", Enabled: true,
+		})
+	} else {
+		rtrec.RegisterModelVsRuleExperiment(expResolver)
+	}
+	if expCfg, ok := cfg.Experiments[rtrec.ExpModelVersion]; ok && expCfg.Enabled {
+		buckets := make([]rtexp.BucketDef, 0, len(expCfg.Buckets))
+		for name, pct := range expCfg.Buckets {
+			buckets = append(buckets, rtexp.BucketDef{Name: name, WeightPct: pct})
+		}
+		expResolver.Register(&rtexp.Experiment{
+			ID: rtrec.ExpModelVersion, Buckets: buckets, PolicyVersion: "v1-config", Enabled: true,
+		})
+	} else {
+		rtrec.RegisterModelVersionExperiment(expResolver)
+	}
+	recOpts = append(recOpts, rtrec.WithExperimentResolver(expResolver))
+	log.Printf("content-service experiment resolver registered: %s, %s, %s", rtrec.ExpRecWeights, rtrec.ExpModelVsRule, rtrec.ExpModelVersion)
+
 	engine := rtrec.NewEngine(sessionCache, candidateSources, recOpts...)
 	feedService := application.NewFeedService(engine, source)
 	postService := application.NewPostService(store, postServiceOpts...)
@@ -269,10 +407,23 @@ func main() {
 		application.WithBehaviorProjector(sharedProjector),
 		application.WithBehaviorFeedbackRecorder(recFeedback),
 		application.WithSessionCacheInvalidator(sessionCache.Invalidate),
+		application.WithBehaviorEventStore(behaviorEventStore),
+		application.WithDailyMetricsStore(dailyMetricsStore),
 	)
-	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 
-	observedHandler := rthttp.NewHTTPServerMiddleware(handler, rthttp.HTTPServerMiddlewareConfig{
+	var handlerOpts []httpadapter.ContentHandlerOption
+	handlerOpts = append(handlerOpts, httpadapter.WithHealthChecker(healthChecker))
+	if bulkImportService != nil {
+		handlerOpts = append(handlerOpts, httpadapter.WithBulkImportService(bulkImportService))
+	}
+
+	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService, handlerOpts...).Routes()
+
+	outerMux := http.NewServeMux()
+	outerMux.Handle("/metrics", rtmetrics.Handler())
+	outerMux.Handle("/", handler)
+
+	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "content-service",
 		ServiceName:       "content-service",
 		ServiceInstanceID: instanceID,
@@ -282,16 +433,19 @@ func main() {
 		Src:               "content-service",
 	}, ioLogger, processLogger, exceptionLogger)
 
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           observedHandler,
+		Handler:           rateLimited,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Printf("content-service listening on %s", addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("listen and serve: %v", err)
+	log.Printf("content-service listening on %s (rate_limit=1000/s)", addr)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("content-service: %v", err)
 	}
 }
 
@@ -662,10 +816,10 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 		Scenes: map[string]rtredis.SceneConfig{
 			"rec":      toSceneConfig(cfg.Redis.Rec),
 			"general":  toSceneConfig(cfg.Redis.General),
-			"realtime": {Mode: "memory"},
+			"realtime": toSceneConfig(cfg.Redis.Realtime),
 		},
-		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
-		DefaultScene: "general",
+		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
+		DefaultScene: rtredis.GeneratedDefaultScene,
 	}
 	return rtredis.MustNewRouter(routerCfg)
 }

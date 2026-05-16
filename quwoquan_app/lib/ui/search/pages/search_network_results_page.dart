@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -11,6 +13,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
@@ -711,7 +715,10 @@ class _SearchNetworkResultsPageState
       final dto = detail.post;
       final raw = detail.mergedArticleWireMap;
       if (dto.isArticleLike) {
-        context.push(AppRoutePaths.articleDetail(id: dto.id));
+        context.push(
+          AppRoutePaths.articleDetail(id: dto.id),
+          extra: const ArticleDetailPageRouteExtra(referralSource: ReferralSource.search),
+        );
         return;
       }
       final route = dto.isVideoLike
@@ -724,6 +731,8 @@ class _SearchNetworkResultsPageState
         postInteractionState: ref.read(postInteractionStateProvider),
       );
       primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+      final navFeedRequestId =
+          ref.read(feedSessionProvider.notifier).newFeedRequestId();
       final result = await context.push<Object?>(
         route,
         extra: MediaViewerExtra(
@@ -742,6 +751,8 @@ class _SearchNetworkResultsPageState
           source: 'global-search-network',
           rawPostsById: searchNetworkSinglePostMediaRaws(dto: dto, wire: raw),
           interactionSnapshot: interactionSnapshot,
+          referralSource: ReferralSource.search,
+          feedRequestId: navFeedRequestId,
         ),
       );
       if (result is MediaViewerResult) {
@@ -756,14 +767,20 @@ class _SearchNetworkResultsPageState
     if (homepageId.trim().isEmpty) {
       return;
     }
-    context.push(AppRoutePaths.homepageDetail(id: homepageId));
+    context.push(
+      AppRoutePaths.homepageDetail(id: homepageId),
+      extra: const HomepageDetailPageRouteExtra(referralSource: ReferralSource.search),
+    );
   }
 
   void _openGroup(_GroupResultCardModel group) {
     if (group.circleId.trim().isEmpty) {
       return;
     }
-    context.push(AppRoutePaths.circleDetail(id: group.circleId));
+    context.push(
+      AppRoutePaths.circleDetail(id: group.circleId),
+      extra: const CircleDetailPageRouteExtra(referralSource: ReferralSource.search),
+    );
   }
 
   Future<void> _openAssistantCitation(

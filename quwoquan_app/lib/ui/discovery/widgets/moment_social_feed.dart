@@ -17,7 +17,10 @@ import 'package:quwoquan_app/components/settings_conversation/more_actions_popup
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show BehaviorAction;
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
@@ -180,7 +183,11 @@ class MomentSocialFeed extends ConsumerWidget {
 
     Widget buildCard(PostBaseDto dto, int index) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(contentBehaviorTrackerProvider).trackImpression(dto.id);
+        ref.read(contentBehaviorTrackerProvider).trackImpression(
+          dto.id,
+          contentType: dto.identity,
+          position: index,
+        );
       });
       if (dto.isArticleLike && shouldShowFollowingArticles) {
         return _FollowingArticleCard(
@@ -190,7 +197,13 @@ class MomentSocialFeed extends ConsumerWidget {
               _followingArticleDistributionProfile.summaryLineLimit,
           sourceCircleName: _resolveSourceCircleName(ref, dto.id),
           onTap: () {
-            ref.read(contentBehaviorTrackerProvider).trackClick(dto.id);
+            final feedReqId =
+                ref.read(feedSessionProvider.notifier).newFeedRequestId();
+            ref.read(contentBehaviorTrackerProvider).trackClick(
+              dto.id,
+              contentType: dto.identity,
+              feedRequestId: feedReqId,
+            );
             onPostTap?.call(dto, 0, feedPosts: feedPosts);
           },
           onMoreTap: () {
@@ -218,7 +231,13 @@ class MomentSocialFeed extends ConsumerWidget {
           backgroundUrl: dto.authorBackgroundUrl,
         ),
         onImageTap: (imgIndex) {
-            ref.read(contentBehaviorTrackerProvider).trackClick(dto.id);
+            final feedReqId =
+                ref.read(feedSessionProvider.notifier).newFeedRequestId();
+            ref.read(contentBehaviorTrackerProvider).trackClick(
+              dto.id,
+              contentType: dto.identity,
+              feedRequestId: feedReqId,
+            );
             onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
           },
         onCommentTap: () {
@@ -351,7 +370,7 @@ class MomentSocialFeed extends ConsumerWidget {
         onReport: () {
           ref
               .read(behaviorRepositoryProvider)
-              .reportSingle(contentId: post.id, action: 'report');
+              .reportSingle(contentId: post.id, action: BehaviorAction.report);
           ref
               .read(reportRepositoryProvider)
               .createReport(

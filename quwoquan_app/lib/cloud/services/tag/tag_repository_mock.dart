@@ -6,14 +6,19 @@ class MockTagRepository implements TagRepository {
   Future<List<TagDimension>> listDimensions() async => kMockTagDimensions;
 
   @override
-  Future<List<TagSuggestion>> suggest(String query,
-      {String? group, int limit = TagApiDefaults.suggestLimit}) async {
+  Future<List<TagSuggestion>> suggest(
+    String query, {
+    String? group,
+    int limit = TagApiDefaults.suggestLimit,
+  }) async {
     final lower = query.toLowerCase();
     return kMockTagSuggestions
-        .where((s) =>
-            s.label.contains(lower) ||
-            s.labelEn.toLowerCase().contains(lower) ||
-            s.tagRef.toLowerCase().contains(lower))
+        .where(
+          (s) =>
+              s.label.contains(lower) ||
+              s.labelEn.toLowerCase().contains(lower) ||
+              s.tagRef.toLowerCase().contains(lower),
+        )
         .take(limit)
         .toList();
   }
@@ -33,26 +38,39 @@ class MockTagRepository implements TagRepository {
   }
 
   @override
-  Future<List<TagSearchResult>> search(String query,
-      {String? group, int limit = TagApiDefaults.searchLimit}) async {
+  Future<List<TagSearchResult>> search(
+    String query, {
+    String? group,
+    int limit = TagApiDefaults.searchLimit,
+  }) async {
     final lower = query.toLowerCase();
     return kMockTagSuggestions
-        .where((s) =>
-            s.label.contains(lower) || s.labelEn.toLowerCase().contains(lower))
-        .map((s) => TagSearchResult(tagRef: s.tagRef, label: s.label, score: 1.0))
+        .where(
+          (s) =>
+              s.label.contains(lower) ||
+              s.labelEn.toLowerCase().contains(lower),
+        )
+        .map(
+          (s) => TagSearchResult(tagRef: s.tagRef, label: s.label, score: 1.0),
+        )
         .take(limit)
         .toList();
   }
 
   @override
-  Future<List<RelatedTag>> related(String tagRef,
-      {int limit = TagApiDefaults.relatedLimit}) async {
+  Future<List<RelatedTag>> related(
+    String tagRef, {
+    int limit = TagApiDefaults.relatedLimit,
+  }) async {
     return kMockRelatedTags.take(limit).toList();
   }
 
   @override
-  Future<List<TagObjectMatch>> searchByTags(List<String> tagRefs,
-      {String? objectType, int limit = TagApiDefaults.searchLimit}) async {
+  Future<List<TagObjectMatch>> searchByTags(
+    List<String> tagRefs, {
+    String? objectType,
+    int limit = TagApiDefaults.searchLimit,
+  }) async {
     return [];
   }
 
@@ -62,22 +80,29 @@ class MockTagRepository implements TagRepository {
   }
 
   @override
-  Future<List<TagCooccurrence>> cooccurrence(
-      {String? tagRef,
-      int minCount = TagApiDefaults.minCooccurCount,
-      int limit = TagApiDefaults.graphLimit}) async {
+  Future<List<TagCooccurrence>> cooccurrence({
+    String? tagRef,
+    int minCount = TagApiDefaults.minCooccurCount,
+    int limit = TagApiDefaults.graphLimit,
+  }) async {
     return kMockCooccurrences.take(limit).toList();
   }
 
   @override
-  Future<TagInvertedResult> invertedIndex(String tagRef,
-      {String? objectType, int limit = TagApiDefaults.graphLimit}) async {
+  Future<TagInvertedResult> invertedIndex(
+    String tagRef, {
+    String? objectType,
+    int limit = TagApiDefaults.graphLimit,
+  }) async {
     return TagInvertedResult(tag: tagRef, objectCount: 0, objects: []);
   }
 
   @override
-  Future<List<RelatedObject>> relatedObjects(String objectId,
-      {String? objectType, int limit = TagApiDefaults.relatedLimit}) async {
+  Future<List<RelatedObject>> relatedObjects(
+    String objectId, {
+    String? objectType,
+    int limit = TagApiDefaults.relatedLimit,
+  }) async {
     return [];
   }
 }

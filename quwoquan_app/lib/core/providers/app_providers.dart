@@ -10,11 +10,17 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
+import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart'
+    show AppLogService, AppLogType, AppLogLevel, AppLogContext;
+import 'package:quwoquan_app/assistant/observability/logging/app_log_uploader.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/cloud/services/tag/tag_repository.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -53,6 +59,8 @@ import 'package:quwoquan_app/core/di/cloud_repository_binding.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
+import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
+import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/models/user_models.dart';
 
 /// 主题相关的便捷Provider
@@ -261,10 +269,42 @@ final appearanceSnapshotProvider = Provider<AppearanceSnapshot>((ref) {
   );
 });
 
+/// Shared CloudHttpClient with API latency instrumentation.
+///
+/// All remote repositories should prefer this over constructing their own
+/// CloudHttpClient, ensuring every HTTP call is metered for L1 monitoring.
+final cloudHttpClientProvider = Provider<CloudHttpClient>((ref) {
+  return CloudHttpClient(
+    latencyObserver: (method, path, elapsedMs, statusCode) {
+      AppLogService.instance.writeEvent(
+        logType: AppLogType.perf,
+        level: statusCode >= 0 && statusCode < 400
+            ? AppLogLevel.info
+            : AppLogLevel.warn,
+        context: AppLogContext(
+          sessionId: AppTraceContextStore.instance.sessionId,
+          requestId: AppTraceContextStore.instance.newRequestId(),
+          target: 'cloud_api',
+          action: '$method $path',
+        ),
+        payload: <String, dynamic>{
+          'kind': 'api_latency',
+          'method': method,
+          'path': path,
+          'elapsedMs': elapsedMs,
+          'statusCode': statusCode,
+        },
+      );
+    },
+  );
+});
+
 final opsVisitRepositoryProvider = Provider<OpsVisitRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   if (mode == AppDataSourceMode.remote) {
-    return RemoteOpsVisitRepository();
+    return RemoteOpsVisitRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    );
   }
   return MockOpsVisitRepository();
 });
@@ -272,9 +312,23 @@ final opsVisitRepositoryProvider = Provider<OpsVisitRepository>((ref) {
 final opsEventRepositoryProvider = Provider<OpsEventRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   if (mode == AppDataSourceMode.remote) {
-    return RemoteOpsEventRepository();
+    final repo = RemoteOpsEventRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    );
+    ref.onDispose(repo.dispose);
+    return repo;
   }
   return MockOpsEventRepository();
+});
+
+/// AppLog 上传服务 — 定期将本地 ndjson 日志批量上传到 OpsEvent 后端。
+final appLogUploaderProvider = Provider<AppLogUploader>((ref) {
+  final uploader = AppLogUploader(
+    eventRepository: ref.watch(opsEventRepositoryProvider),
+  );
+  uploader.start();
+  ref.onDispose(uploader.dispose);
+  return uploader;
 });
 
 /// 浏览记录服务 Provider（小趣基线：记录访问用于 experienceLevel）
@@ -693,8 +747,7 @@ class UserRelationshipState {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'followingSubAccountIds':
-          followingSubAccountIds.toList(growable: false),
+      'followingSubAccountIds': followingSubAccountIds.toList(growable: false),
       'knownSubAccountIds': knownSubAccountIds.toList(growable: false),
     };
   }
@@ -723,9 +776,7 @@ class UserRelationshipStateNotifier extends Notifier<UserRelationshipState> {
   }) {
     state = UserRelationshipState(
       followingSubAccountIds: Set<String>.from(subAccountIds),
-      knownSubAccountIds: Set<String>.from(
-        knownSubAccountIds ?? subAccountIds,
-      ),
+      knownSubAccountIds: Set<String>.from(knownSubAccountIds ?? subAccountIds),
     );
     unawaited(_persistState());
   }
@@ -1442,7 +1493,9 @@ final assistantRepositoryProvider = Provider<AssistantRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteAssistantRepository.new,
+    remote: () => RemoteAssistantRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
     mock: MockAssistantRepository.new,
   );
 });
@@ -1451,7 +1504,9 @@ final appMessageRepositoryProvider = Provider<AppMessageRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteAppMessageRepository.new,
+    remote: () => RemoteAppMessageRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
     mock: MockAppMessageRepository.new,
   );
 });
@@ -1480,7 +1535,8 @@ final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteContentRepository.new,
+    remote: () =>
+        RemoteContentRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockContentRepository.new,
   );
 });
@@ -1490,7 +1546,9 @@ final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteHomepageRepository.new,
+    remote: () => RemoteHomepageRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
     mock: MockHomepageRepository.new,
   );
 });
@@ -1500,7 +1558,9 @@ final integrationRepositoryProvider = Provider<IntegrationRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteIntegrationRepository.new,
+    remote: () => RemoteIntegrationRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
     mock: () => const MockIntegrationRepository(),
   );
 });
@@ -1512,6 +1572,7 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   return cloudRepositoryImplForMode(
     mode,
     remote: () => RemoteChatRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
       mergeRequestContext: (base) async {
         final ctx = ref.read(activePersonaContextProvider).asData?.value;
         final resolvedOwnerUserId = ctx?.ownerUserId.trim() ?? '';
@@ -1566,6 +1627,7 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
   return cloudRepositoryImplForMode(
     mode,
     remote: () => RemoteUserRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
       mergeRequestContext: (base) async {
         return CloudRequestHeaders.withOwnerSubAccountContext(
           base,
@@ -1583,6 +1645,7 @@ final userSyncRepositoryProvider = Provider<UserSyncRepository>((ref) {
   return cloudRepositoryImplForMode(
     mode,
     remote: () => RemoteUserSyncRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
       mergeRequestContext: (base) async {
         return CloudRequestHeaders.withOwnerSubAccountContext(
           base,
@@ -1629,7 +1692,8 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteAuthRepository.new,
+    remote: () =>
+        RemoteAuthRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockAuthRepository.new,
   );
 });
@@ -1639,7 +1703,8 @@ final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteInviteRepository.new,
+    remote: () =>
+        RemoteInviteRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockInviteRepository.new,
   );
 });
@@ -1648,15 +1713,38 @@ final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
 final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   if (mode == AppDataSourceMode.remote) {
-    return RemoteBehaviorRepository(
+    final repo = RemoteBehaviorRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
       eventRepository: ref.watch(opsEventRepositoryProvider),
       currentUserId: ref.watch(currentUserIdProvider),
       experimentBucket: ref
           .watch(contentRuntimeConfigProvider)
           .experimentBucket,
+      feedSessionIdProvider: () =>
+          ref.read(feedSessionProvider.notifier).sessionId,
     );
+    ref.onDispose(repo.dispose);
+    return repo;
   }
   return MockBehaviorRepository();
+});
+
+/// Content Engagement Tracker（统一深度行为追踪 SDK）
+final contentEngagementTrackerProvider = Provider<ContentEngagementTracker>((
+  ref,
+) {
+  final tracker = ContentEngagementTracker(
+    repository: ref.watch(behaviorRepositoryProvider),
+  );
+  ref.onDispose(() => tracker.dispose());
+  return tracker;
+});
+
+/// Lightweight OpsEvent journey funnel tracker（无完整 Behavior schema 的页面场景）
+final journeyEventTrackerProvider = Provider<JourneyEventTracker>((ref) {
+  return JourneyEventTracker(
+    eventRepository: ref.watch(opsEventRepositoryProvider),
+  );
 });
 
 /// UserProfile Repository（用户主页：帖子 / 作品集 / 生活记录）
@@ -1664,7 +1752,9 @@ final userProfileRepositoryProvider = Provider<UserProfileRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteUserProfileRepository.new,
+    remote: () => RemoteUserProfileRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
     mock: () => const MockUserProfileRepository(),
   );
 });
@@ -1675,7 +1765,9 @@ final contentInteractionRepositoryProvider =
       final mode = ref.watch(appDataSourceModeProvider);
       return cloudRepositoryImplForMode(
         mode,
-        remote: RemoteContentInteractionRepository.new,
+        remote: () => RemoteContentInteractionRepository(
+          httpClient: ref.watch(cloudHttpClientProvider),
+        ),
         mock: MockContentInteractionRepository.new,
       );
     });
@@ -1685,7 +1777,8 @@ final blockRepositoryProvider = Provider<BlockRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteBlockRepository.new,
+    remote: () =>
+        RemoteBlockRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockBlockRepository.new,
   );
 });
@@ -1695,7 +1788,8 @@ final reportRepositoryProvider = Provider<ReportRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteReportRepository.new,
+    remote: () =>
+        RemoteReportRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockReportRepository.new,
   );
 });
@@ -1705,7 +1799,9 @@ final keywordBlockRepositoryProvider = Provider<KeywordBlockRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteKeywordBlockRepository.new,
+    remote: () => RemoteKeywordBlockRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
     mock: MockKeywordBlockRepository.new,
   );
 });
@@ -1715,7 +1811,8 @@ final circleRepositoryProvider = Provider<CircleRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteCircleRepository.new,
+    remote: () =>
+        RemoteCircleRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockCircleRepository.new,
   );
 });
@@ -1755,7 +1852,8 @@ final rtcRepositoryProvider = Provider<RtcRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteRtcRepository.new,
+    remote: () =>
+        RemoteRtcRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockRtcRepository.new,
   );
 });
@@ -1766,7 +1864,9 @@ final relationshipCapabilityRepositoryProvider =
       final mode = ref.watch(appDataSourceModeProvider);
       return cloudRepositoryImplForMode(
         mode,
-        remote: RemoteRelationshipCapabilityRepository.new,
+        remote: () => RemoteRelationshipCapabilityRepository(
+          httpClient: ref.watch(cloudHttpClientProvider),
+        ),
         mock: MockRelationshipCapabilityRepository.new,
       );
     });
@@ -1776,7 +1876,9 @@ final callSettingsRepositoryProvider = Provider<CallSettingsRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteCallSettingsRepository.new,
+    remote: () => RemoteCallSettingsRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
     mock: MockCallSettingsRepository.new,
   );
 });
@@ -1787,7 +1889,9 @@ final appearanceSettingsRepositoryProvider =
       final mode = ref.watch(appDataSourceModeProvider);
       return cloudRepositoryImplForMode(
         mode,
-        remote: RemoteAppearanceSettingsRepository.new,
+        remote: () => RemoteAppearanceSettingsRepository(
+          httpClient: ref.watch(cloudHttpClientProvider),
+        ),
         mock: MockAppearanceSettingsRepository.new,
       );
     });
@@ -1797,7 +1901,9 @@ final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   return cloudRepositoryImplForMode(
     mode,
-    remote: RemoteGreetingRepository.new,
+    remote: () => RemoteGreetingRepository(
+      httpClient: ref.watch(cloudHttpClientProvider),
+    ),
     mock: MockGreetingRepository.new,
   );
 });
@@ -1806,7 +1912,7 @@ final greetingRepositoryProvider = Provider<GreetingRepository>((ref) {
 final tagRepositoryProvider = Provider<TagRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   if (mode == AppDataSourceMode.remote) {
-    return RemoteTagRepository();
+    return RemoteTagRepository(httpClient: ref.watch(cloudHttpClientProvider));
   }
   return MockTagRepository();
 });

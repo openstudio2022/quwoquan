@@ -2,12 +2,13 @@
 
 G1-G11:  task-level entity/post/publish 完整性
 G12-G15: publish 全局标签体系（已迁移到四分组 Topic/Audience/Format/Entity）
-G16-G27: 新增 schema/tagRef/pathPolicy/post内容角度/关系图/命名/refHint/容量/前缀/旅行强制/geo强制/互斥对 门禁
+G16-G29: 新增 schema/tagRef/pathPolicy/post内容角度/关系图/命名/refHint/容量/前缀/旅行强制/geo强制/索引/校园专项/互斥对 门禁
 """
 from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -101,6 +102,11 @@ def g2_entities():
               f"G2: page.md 不存在: {domain}/{etype}/{name}")
         check(td.entity_manifest(domain, etype, name).exists(),
               f"G2: manifest.json 不存在: {domain}/{etype}/{name}")
+        mf = td.entity_manifest(domain, etype, name)
+        if mf.exists():
+            manifest = json.loads(mf.read_text(encoding="utf-8"))
+            check("tagRefs" not in manifest, f"G2: entity manifest 不应重复 tagRefs: {domain}/{etype}/{name}")
+            check("geoTagRef" not in manifest, f"G2: entity manifest 不应重复 geoTagRef: {domain}/{etype}/{name}")
 
     check(domains_seen >= EXPECTED_DOMAINS,
           f"G2: 缺领域: {EXPECTED_DOMAINS - domains_seen}")
@@ -141,7 +147,7 @@ def g4_posts():
         for angle in expected_angles:
             angles_seen.add(angle)
             title = f"{name}{angle}指南"
-            pdir = td.post_dir("article", f"内容角度/{angle}", title, 1)
+            pdir = td.post_dir("article", angle, title, 1)
             check(pdir.exists(), f"G4: post 目录不存在: {title}")
 
             article = pdir / "article.md"
@@ -187,7 +193,7 @@ def g5_publish_isomorphic():
         angles = TYPE_ANGLES.get((domain, etype), ["攻略", "体验"])
         for angle in angles:
             title = f"{name}{angle}指南"
-            check(pd.post_manifest("article", f"内容角度/{angle}", title, 1).exists(),
+            check(pd.post_manifest("article", angle, title, 1).exists(),
                   f"G5: publish 缺 post: {title}")
 
 
@@ -515,13 +521,13 @@ def g19_post_angle_dir_match():
             data = json.loads(mf.read_text(encoding="utf-8"))
         except Exception:
             continue
-        # post 路径：posts/{载体}/{内容角度}/{title}/{seq}/manifest.json
+        # post 路径：posts/{载体}/{angle}/{title}/{seq}/manifest.json（兼容旧的内容角度中间层）
         parts = list(mf.parent.relative_to(pd.posts_dir()).parts)
         # 误操作 cp 可能产生 posts/posts/...，去掉重复的 posts 前缀段
         while parts and parts[0] == "posts":
             parts = parts[1:]
         if len(parts) >= 2:
-            # 处理嵌套角度路径：{载体}/内容角度/{角度}/{title}/{seq}/
+            # 处理嵌套角度路径：{载体}/内容角度/{角度}/{title}/{seq}/（历史兼容）
             if len(parts) >= 3 and parts[1] == "内容角度":
                 dir_angle = parts[2]
             else:
@@ -728,6 +734,50 @@ def g27_mutex_pairs():
         warnings.append(f"G27: 共检测到 {mutex_count} 处互斥对冲突（warning）")
 
 
+# ─── G28: 实体/帖子 lookup 索引（BLOCKING）─────────────────────────
+def _count_ndjson_records(root: Path) -> int:
+    total = 0
+    for f in root.rglob("*.ndjson"):
+        total += sum(1 for line in f.read_text(encoding="utf-8").splitlines() if line.strip())
+    return total
+
+
+def g28_lookup_indexes():
+    v1_root = PUBLISH_ROOT / "v1"
+    index_root = v1_root / "index"
+    entity_index_root = index_root / "entities"
+    post_index_root = index_root / "posts"
+
+    check(index_root.exists(), "G28: index/ 目录不存在")
+    check(entity_index_root.exists(), "G28: index/entities/ 目录不存在")
+    check(post_index_root.exists(), "G28: index/posts/ 目录不存在")
+
+    entity_files = list(entity_index_root.rglob("*.ndjson")) if entity_index_root.exists() else []
+    post_files = list(post_index_root.rglob("*.ndjson")) if post_index_root.exists() else []
+    check(len(entity_files) >= 1, "G28: index/entities/ 下无 .ndjson 分片")
+    check(len(post_files) >= 1, "G28: index/posts/ 下无 .ndjson 分片")
+
+    entity_records = _count_ndjson_records(entity_index_root) if entity_index_root.exists() else 0
+    post_records = _count_ndjson_records(post_index_root) if post_index_root.exists() else 0
+    entity_count = sum(1 for _ in (v1_root / "entities").rglob("_entity.json"))
+    post_count = sum(1 for mf in (v1_root / "posts").rglob("manifest.json") if "entities" not in mf.parts)
+
+    check(entity_records == entity_count,
+          f"G28: 实体索引条数 {entity_records} != 实体事实源 {entity_count}")
+    check(post_records == post_count,
+          f"G28: post 索引条数 {post_records} != post 事实源 {post_count}")
+
+
+# ─── G29: 校园标签专项（BLOCKING）───────────────────────────────────
+def g29_campus_taxonomy():
+    script = Path(__file__).resolve().parent / "verify_campus_taxonomy.py"
+    check(script.exists(), "G29: verify_campus_taxonomy.py 不存在")
+    if not script.exists():
+        return
+    result = subprocess.run([sys.executable, str(script)], check=False)
+    check(result.returncode == 0, f"G29: 校园标签体系专项门禁失败（exit={result.returncode}）")
+
+
 def main():
     print("=" * 65)
     print("E2E Gate v5: 四分组标签体系 + 全维度统一目录结构验证")
@@ -752,7 +802,7 @@ def main():
     g10_manifest()
     g11_entity_type_taxonomy()
 
-    # ── 新增 schema/语义 门禁 G16-G27 ──────────────────────────────
+    # ── 新增 schema/语义 门禁 G16-G29 ──────────────────────────────
     g16_schema_compliance()
     g17_tagref_resolvable()
     g18_path_policy_hints()   # warning only
@@ -765,6 +815,8 @@ def main():
     g25_travel_post_tag()
     g26_entity_geo_tag()
     g27_mutex_pairs()           # warning only
+    g28_lookup_indexes()
+    g29_campus_taxonomy()
 
     print("-" * 65)
 
@@ -790,7 +842,7 @@ def main():
         post_count = len(list(td.posts_dir().rglob("manifest.json")))
         v = publish_active_version()
 
-        print(f"\n全部 27 项 Gate 通过！（{len(warnings)} 警告）")
+        print(f"\n全部 29 项 Gate 通过！（{len(warnings)} 警告）")
         print(f"  G1:  {tag_count} 标签（4分组），无冗余 tagId/禁止字段")
         print(f"  G2:  {entity_count} 实体，三层路径正确")
         print(f"  G3:  主页质量达标")
@@ -818,6 +870,8 @@ def main():
         print(f"  G25: 旅行类实体 post 均含 Topic/旅行/* tagRef")
         print(f"  G26: entity geoTagRef 均指向 Topic/地理/行政区/")
         print(f"  G27: 已知互斥对检查（warning）")
+        print(f"  G28: 实体/帖子 lookup 索引完整")
+        print(f"  G29: 校园标签体系专项门禁")
         sys.exit(0)
 
 

@@ -119,7 +119,9 @@ class RealtimeConnectionManager extends Notifier<TransportState> {
 
   void _scheduleReconnect() {
     if (_reconnectAttempt >= _config.maxReconnectAttempts) {
-      debugPrint('RealtimeConnectionManager: max reconnect attempts, falling back to long-poll');
+      debugPrint(
+        'RealtimeConnectionManager: max reconnect attempts, falling back to long-poll',
+      );
       _transitionTo(TransportState.idle);
       return;
     }
@@ -176,14 +178,11 @@ class RealtimeConnectionManager extends Notifier<TransportState> {
 
   void _startIdleTimer() {
     _cancelIdleTimer();
-    _idleTimer = Timer(
-      Duration(seconds: _config.wsIdleTimeoutSec),
-      () {
-        if (state == TransportState.active) {
-          _transitionTo(TransportState.idle);
-        }
-      },
-    );
+    _idleTimer = Timer(Duration(seconds: _config.wsIdleTimeoutSec), () {
+      if (state == TransportState.active) {
+        _transitionTo(TransportState.idle);
+      }
+    });
   }
 
   void _cancelIdleTimer() {
@@ -204,5 +203,5 @@ class RealtimeConnectionManager extends Notifier<TransportState> {
 /// Requires userId to be set before use.
 final realtimeConnectionManagerProvider =
     NotifierProvider<RealtimeConnectionManager, TransportState>(
-  RealtimeConnectionManager.new,
-);
+      RealtimeConnectionManager.new,
+    );

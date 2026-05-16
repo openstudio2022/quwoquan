@@ -18,6 +18,9 @@ import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show BehaviorAction, ReferralSource;
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
@@ -311,6 +314,17 @@ class _HomePageState extends ConsumerState<HomePage>
     if (viewerPosts.isEmpty) {
       return;
     }
+
+    final navFeedRequestId =
+        ref.read(feedSessionProvider.notifier).newFeedRequestId();
+    ref.read(behaviorRepositoryProvider).reportSingle(
+      contentId: post.id,
+      action: BehaviorAction.click,
+      authorId: post.authorId,
+      referralSource: ReferralSource.organicFeed,
+      feedRequestId: navFeedRequestId,
+    );
+
     final rawPostsById = homeFollowingMediaViewerRaws(
       content: ref.read(contentRepositoryProvider),
       viewerPosts: viewerPosts,
@@ -349,6 +363,7 @@ class _HomePageState extends ConsumerState<HomePage>
         initialImageIndex: mediaIndex,
         rawPostsById: rawPostsById,
         interactionSnapshot: interactionSnapshot,
+        feedRequestId: navFeedRequestId,
       ),
     );
     if (result is MediaViewerResult) {

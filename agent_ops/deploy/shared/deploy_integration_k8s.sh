@@ -7,6 +7,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 
 DEPLOY_ENV="${DEPLOY_ENV:?DEPLOY_ENV must be set to beta or gamma}"
+export APP_RUNTIME_ENV="${DEPLOY_ENV}"
+bash "$ROOT/agent_ops/deploy/shared/verify_cdn_domain_injection.sh"
 CLOUD_PROVIDER="${CLOUD_PROVIDER:-aliyun}"
 KUSTOMIZATION="deploy/kustomization/${CLOUD_PROVIDER}-integration"
 

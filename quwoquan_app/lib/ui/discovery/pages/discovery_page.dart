@@ -27,11 +27,14 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -162,9 +165,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
-  void _trackBehavior(String action, PostBaseDto post, {double? duration}) {
+  void _trackBehavior(BehaviorAction action, PostBaseDto post, {double? duration, int? position}) {
     final contentId = post.id;
     if (contentId.isEmpty) return;
+    _trackFeedImpression(post, position: position);
+    final feedSession = ref.read(feedSessionProvider.notifier);
     ref
         .read(behaviorRepositoryProvider)
         .reportSingle(
@@ -172,7 +177,30 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           action: action,
           tags: const <String>[],
           duration: duration,
+          authorId: post.authorId,
+          referralSource: ReferralSource.organicFeed,
+          feedRequestId: feedSession.currentFeedRequestId,
+          position: position,
         );
+  }
+
+  final Set<String> _impressedIds = {};
+
+  void _trackFeedImpression(PostBaseDto post, {int? position}) {
+    if (post.id.isEmpty || _impressedIds.contains(post.id)) return;
+    _impressedIds.add(post.id);
+    final feedSession = ref.read(feedSessionProvider.notifier);
+    ref.read(behaviorRepositoryProvider).reportEvents(events: [
+      BehaviorEvent(
+        contentId: post.id,
+        action: BehaviorAction.impression,
+        tags: const <String>[],
+        authorId: post.authorId,
+        referralSource: ReferralSource.organicFeed,
+        feedRequestId: feedSession.currentFeedRequestId,
+        position: position,
+      ),
+    ]);
   }
 
   void _recordDiscoveryVisit(String tabId) {
@@ -499,7 +527,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
               );
             },
         onPostTap: (post, index, {feedPosts}) {
-          _trackBehavior('click', post);
+          _trackBehavior(BehaviorAction.click, post);
           _onPostTap(post, index, feedPosts: feedPosts, category: 'moment');
         },
         onMoreTap: (post) => _onMomentMoreTap(context, post),
@@ -616,7 +644,13 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 onCommentTap: (post) => _onMomentCommentTap(context, post),
                 onShareTap: (post) => _onMomentShareTap(context, post),
                 onMoreTap: (post) => _onMomentMoreTap(context, post),
-                onBehavior: _trackBehavior,
+                onBehavior: (action, post) => _trackBehavior(
+                  BehaviorAction.values.cast<BehaviorAction?>().firstWhere(
+                    (a) => a!.wireValue == action,
+                    orElse: () => null,
+                  ) ?? BehaviorAction.click,
+                  post,
+                ),
               ),
             ),
             if (index < moments.length - 1)
@@ -676,8 +710,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 isDark: isDark,
                 isFirst: isFirst,
                 onTap: () {
-                  _trackBehavior('click', dto);
-                  context.push(AppRoutePaths.articleDetail(id: dto.id));
+                  _trackBehavior(BehaviorAction.click, dto);
+                  context.push(
+                    AppRoutePaths.articleDetail(id: dto.id),
+                    extra: const ArticleDetailPageRouteExtra(referralSource: ReferralSource.organicFeed),
+                  );
                 },
                 onUserTap: () {
                   context.push(
@@ -844,9 +881,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     List<PostBaseDto>? feedPosts,
     String? category,
   }) async {
-    _trackBehavior('click', post);
+    _trackBehavior(BehaviorAction.click, post);
     if (post.identity == 'work' && post.displayFormat == 'note') {
-      context.push(AppRoutePaths.articleDetail(id: post.id));
+      context.push(
+        AppRoutePaths.articleDetail(id: post.id),
+        extra: const ArticleDetailPageRouteExtra(referralSource: ReferralSource.organicFeed),
+      );
       return;
     }
     final postViews = feedPosts
@@ -866,6 +906,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+    final navFeedRequestId = ref.read(feedSessionProvider.notifier).newFeedRequestId();
     // For moment (multi-image per post): initialIndex = post index so viewer shows correct post
     final initialIndex = (feedPosts != null && feedPosts.isNotEmpty)
         ? feedPosts
@@ -881,6 +922,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
             initialIndex: initialIndex,
             category: category ?? 'video',
             interactionSnapshot: interactionSnapshot,
+            feedRequestId: navFeedRequestId,
           ),
         );
       } else {
@@ -898,6 +940,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           category: category ?? post.displayFormat,
           initialImageIndex: isMoment ? mediaIndex : 0,
           interactionSnapshot: interactionSnapshot,
+          feedRequestId: navFeedRequestId,
         ),
       );
     } else {
@@ -1002,7 +1045,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         .read(behaviorRepositoryProvider)
         .reportSingle(
           contentId: post.id,
-          action: 'share',
+          action: BehaviorAction.share,
           tags: <String>[actionId],
         );
   }

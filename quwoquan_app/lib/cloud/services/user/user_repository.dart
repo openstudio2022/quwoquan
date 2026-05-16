@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
@@ -222,11 +221,9 @@ typedef UserRemoteMergeRequestContext =
 class RemoteUserRepository implements UserRepository {
   RemoteUserRepository({
     CloudHttpClient? httpClient,
-    http.Client? client,
     String? baseUrl,
     UserRemoteMergeRequestContext? mergeRequestContext,
-  }) : _httpClient =
-           httpClient ?? CloudHttpClient(client: client ?? http.Client()),
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
        _mergeRequestContext = mergeRequestContext;
 

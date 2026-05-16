@@ -92,6 +92,7 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 				"contentType":  1,
 				"title":        1,
 				"tags":         1,
+				"entityRefs":   1,
 				"publishedAt":  1,
 				"viewCount":    1,
 				"likeCount":    1,
@@ -114,6 +115,7 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 		ContentType  string    `bson:"contentType"`
 		Title        string    `bson:"title"`
 		Tags         []string  `bson:"tags"`
+		EntityRefs   []string  `bson:"entityRefs"`
 		PublishedAt  time.Time `bson:"publishedAt"`
 		ViewCount    int64     `bson:"viewCount"`
 		LikeCount    int64     `bson:"likeCount"`
@@ -135,6 +137,7 @@ func (s *VectorRecallSource) RecallByVector(ctx context.Context, queryVector []f
 			AuthorID:     doc.AuthorID,
 			Title:        doc.Title,
 			Tags:         doc.Tags,
+			EntityRefs:   doc.EntityRefs,
 			PublishedAt:  doc.PublishedAt,
 			ViewCount:    doc.ViewCount,
 			LikeCount:    doc.LikeCount,

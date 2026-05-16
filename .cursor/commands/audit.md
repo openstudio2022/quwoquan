@@ -204,10 +204,90 @@ cd /path/to/quwoquan && bash agent_ops/scaffold/verify_feature_tree_refactor.sh
 
 ---
 
+## 5) 推荐系统合规审计（与 `/rec-audit` D9/D10 对齐）
+
+推荐域代码的 DDD / 强类型 / 存储无关 / 端云一致扫描：
+
+```bash
+cd quwoquan_service && python3 -c "
+import pathlib
+violations = []
+for d in ['runtime/recommendation', 'runtime/observability']:
+    p = pathlib.Path(d)
+    if not p.exists(): continue
+    for f in p.rglob('*.go'):
+        c = f.read_text()
+        for b in ['go.mongodb.org', 'github.com/go-redis', 'database/sql']:
+            if b in c: violations.append(f'DDD: {f} imports {b}')
+for v in violations: print(f'✗ {v}')
+if not violations: print('✓ DDD recommendation/observability layers: PASS')
+"
+```
+
+特征端云一致性：
+
+```bash
+cd quwoquan_service && python3 scripts/ml/verify_feature_consistency.py
+```
+
+---
+
+## 6) 可观测与埋点审计（与 `/obs-audit` D8/D9 对齐）
+
+页面行为埋点覆盖率扫描（内容核心路径是否接入 Tracker）：
+
+```bash
+cd quwoquan_app && python3 -c "
+import pathlib, re
+pages = list(pathlib.Path('lib/ui').rglob('*_page.dart'))
+tracked = 0
+for p in pages:
+    c = p.read_text()
+    if 'ContentEngagementTracker' in c or 'ContentBehaviorTracker' in c or 'TelemetryService' in c:
+        tracked += 1
+print(f'页面埋点覆盖: {tracked}/{len(pages)}')
+if tracked < len(pages) * 0.5:
+    print('⚠ 覆盖率低于 50%，建议执行 /obs-plan')
+"
+```
+
+---
+
+## 输出格式
+
+```
+╔══════════════════════════════════════════╗
+║         全栈审计报告（/audit）            ║
+╠══════════════════════════════════════════╣
+║ 1. 端侧语义审计                          ║
+║    Flutter analyze:     ✓ PASS / ✗ FAIL ║
+║    硬编码字面量:         ✓ PASS / ✗ FAIL ║
+║    cloud/ 生成代码:      ✓ PASS / ✗ FAIL ║
+║ 2. 云侧结构约束                          ║
+║    DDD 层级导入:         ✓ PASS / ✗ FAIL ║
+║    数据库驱动隔离:       ✓ PASS / ✗ FAIL ║
+║    runtime 统一能力:     ✓ PASS / ✗ FAIL ║
+║ 3. metadata↔代码同步                     ║
+║    make verify:          ✓ PASS / ✗ FAIL ║
+║ 4. 特性树一致性                          ║
+║    tree ↔ 目录:          ✓ PASS / ✗ FAIL ║
+║ 5. 推荐系统合规                          ║
+║    DDD/端云/特征一致:    ✓ PASS / ✗ FAIL ║
+║ 6. 可观测与埋点                          ║
+║    页面埋点覆盖:         N/M (xx%)       ║
+╚══════════════════════════════════════════╝
+```
+
+若有 FAIL 项，输出每个违规的 `文件:行号` + 违反规则 + 修复建议。
+
+---
+
 ## 与其他命令的关系
 
 | 命令 | 视角 | 触发时机 |
 |------|------|---------|
 | `/verify` | **特性级**：spec↔实现漂移检测 | dev 完成后、commit 前 |
 | `/audit` | **代码库级**：结构健康度检查 | 任意时刻、周期检查 |
+| `/obs-audit` | **可观测专项**：埋点/存储/性能/指标 | 可观测体系评估时 |
+| `/rec-audit` | **推荐专项**：行为/特征/召回/排序 | 推荐系统评估时 |
 | `/verify --with-audit` | 两者联合运行 | 需要完整质量报告时 |

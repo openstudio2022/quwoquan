@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
@@ -155,6 +156,8 @@ class MediaViewerExtra {
     this.showWorksNavigation = false,
     this.rawPostsById = const <String, MediaViewerPostWireRow>{},
     this.interactionSnapshot = const MediaViewerInteractionSnapshot(),
+    this.referralSource = ReferralSource.organicFeed,
+    this.feedRequestId,
   });
 
   final List<PostSummaryView> posts;
@@ -168,4 +171,6 @@ class MediaViewerExtra {
   final bool showWorksNavigation;
   final Map<String, MediaViewerPostWireRow> rawPostsById;
   final MediaViewerInteractionSnapshot interactionSnapshot;
+  final ReferralSource referralSource;
+  final String? feedRequestId;
 }

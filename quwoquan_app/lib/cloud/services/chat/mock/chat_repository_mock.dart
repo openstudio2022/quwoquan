@@ -235,7 +235,9 @@ class MockChatRepository implements ChatRepository {
       id: record.id,
       type: record.type.isEmpty ? override.type : record.type,
       title: record.title.isEmpty ? override.title : record.title,
-      avatarUrl: record.avatarUrl.isEmpty ? override.avatarUrl : record.avatarUrl,
+      avatarUrl: record.avatarUrl.isEmpty
+          ? override.avatarUrl
+          : record.avatarUrl,
       groupAvatarVersion: record.groupAvatarVersion,
       lastMessagePreview: record.lastMessagePreview.isEmpty
           ? override.lastMessagePreview
@@ -243,7 +245,8 @@ class MockChatRepository implements ChatRepository {
       lastMessageType: record.lastMessageType.isEmpty
           ? override.lastMessageType
           : record.lastMessageType,
-      lastMessageTime: _parseIso(record.lastMessageAt) ?? override.lastMessageTime,
+      lastMessageTime:
+          _parseIso(record.lastMessageAt) ?? override.lastMessageTime,
       lastSeq: record.lastSeq > 0 ? record.lastSeq : override.lastSeq,
       circleId: record.circleId.isEmpty ? override.circleId : record.circleId,
     );
@@ -269,7 +272,8 @@ class MockChatRepository implements ChatRepository {
     if (current.type == 'group') {
       final members = _ensureMembersCache(conversationId);
       final sourceHash = _groupAvatarSourceHash(members);
-      if (sourceHash.isNotEmpty && sourceHash != current.groupAvatarSourceHash) {
+      if (sourceHash.isNotEmpty &&
+          sourceHash != current.groupAvatarSourceHash) {
         final nextVersion = current.groupAvatarVersion + 1;
         next = next.copyWith(
           avatarUrl: _renderedGroupAvatarUrl(
@@ -286,7 +290,9 @@ class MockChatRepository implements ChatRepository {
     _syncInboxFromConversation(next);
   }
 
-  static String _groupAvatarSourceHash(List<ChatConversationMemberDto> members) {
+  static String _groupAvatarSourceHash(
+    List<ChatConversationMemberDto> members,
+  ) {
     return members
         .take(9)
         .map((member) => '${member.userId}:${member.avatarUrl}')
@@ -451,7 +457,10 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<void> updateConversationTitle(String conversationId, String title) async {
+  Future<void> updateConversationTitle(
+    String conversationId,
+    String title,
+  ) async {
     final record = _findConversation(conversationId);
     if (record == null) {
       return;
@@ -469,7 +478,9 @@ class MockChatRepository implements ChatRepository {
   }) async {
     var messages = List<ChatMessageDto>.from(_messagesFor(conversationId));
     if (before != null && before.trim().isNotEmpty) {
-      final pivot = messages.indexWhere((message) => message.id == before.trim());
+      final pivot = messages.indexWhere(
+        (message) => message.id == before.trim(),
+      );
       if (pivot > 0) {
         messages = messages.take(pivot).toList(growable: false);
       }
@@ -574,7 +585,11 @@ class MockChatRepository implements ChatRepository {
       _replaceConversation(next);
       _syncInboxFromConversation(next);
     }
-    return SendMessageResponse(id: message.id, seq: message.seq, timestamp: now);
+    return SendMessageResponse(
+      id: message.id,
+      seq: message.seq,
+      timestamp: now,
+    );
   }
 
   @override
@@ -599,9 +614,9 @@ class MockChatRepository implements ChatRepository {
     required int lastSeq,
     int limit = CloudApiDefaults.syncMessagesLimit,
   }) async {
-    final all = _messagesFor(conversationId)
-        .where((message) => message.seq > lastSeq)
-        .toList(growable: false);
+    final all = _messagesFor(
+      conversationId,
+    ).where((message) => message.seq > lastSeq).toList(growable: false);
     final page = limit > 0 && all.length > limit
         ? all.take(limit).toList(growable: false)
         : all;
@@ -715,10 +730,7 @@ class MockChatRepository implements ChatRepository {
     if (record == null) {
       return;
     }
-    final next = record.copyWith(
-      muted: muted,
-      pinned: pinned,
-    );
+    final next = record.copyWith(muted: muted, pinned: pinned);
     _replaceConversation(next);
     final current = _effectiveInbox(next);
     _inboxOverrides[conversationId] = current.copyWith(
@@ -771,7 +783,10 @@ class MockChatRepository implements ChatRepository {
   }) async {
     if (_contactGroupConversationIds.isNotEmpty) {
       return _conversationCache
-          .where((conversation) => _contactGroupConversationIds.contains(conversation.id))
+          .where(
+            (conversation) =>
+                _contactGroupConversationIds.contains(conversation.id),
+          )
           .take(limit)
           .map(
             (conversation) => ChatContactTabFunGroupRowDto(
@@ -804,7 +819,10 @@ class MockChatRepository implements ChatRepository {
   }) async {
     final normalizedQuery = query.trim().toLowerCase();
     return _contactRows
-        .where((contact) => contact.displayName.toLowerCase().contains(normalizedQuery))
+        .where(
+          (contact) =>
+              contact.displayName.toLowerCase().contains(normalizedQuery),
+        )
         .take(limit)
         .map((contact) {
           final conversationId = _matchDirectConversationId(
@@ -849,7 +867,9 @@ class MockChatRepository implements ChatRepository {
   Future<List<ConversationDto>> batchGetConversations(List<String> ids) async {
     return _conversationCache
         .where((conversation) => ids.contains(conversation.id))
-        .map((conversation) => ConversationDto.fromMap(conversation.toWireMap()))
+        .map(
+          (conversation) => ConversationDto.fromMap(conversation.toWireMap()),
+        )
         .toList(growable: false);
   }
 
@@ -872,7 +892,10 @@ class MockChatRepository implements ChatRepository {
   }
 
   @override
-  Future<void> transferOwnership(String conversationId, String newOwnerId) async {
+  Future<void> transferOwnership(
+    String conversationId,
+    String newOwnerId,
+  ) async {
     final members = _ensureMembersCache(conversationId);
     _membersCache[conversationId] = members
         .map((member) {
@@ -907,7 +930,9 @@ class MockChatRepository implements ChatRepository {
 
   @override
   Future<void> dissolveConversation(String conversationId) async {
-    _conversationCache.removeWhere((conversation) => conversation.id == conversationId);
+    _conversationCache.removeWhere(
+      (conversation) => conversation.id == conversationId,
+    );
     _membersCache.remove(conversationId);
     _messagesCache.remove(conversationId);
     _settingsCache.remove(conversationId);

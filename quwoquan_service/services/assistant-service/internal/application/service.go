@@ -12,7 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	rterr "quwoquan_service/runtime/errors"
+	rtobs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/repository"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
@@ -117,7 +120,11 @@ func (s *AssistantService) ReportInteractionEvent(ctx context.Context, event ass
 	return s.ReportInteractionEvents(ctx, []assistant.InteractionEvent{event})
 }
 
-func (s *AssistantService) ReportInteractionEvents(ctx context.Context, events []assistant.InteractionEvent) (map[string]any, error) {
+func (s *AssistantService) ReportInteractionEvents(ctx context.Context, events []assistant.InteractionEvent) (_ map[string]any, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ReportInteractionEvents",
+		attribute.Int("batch.count", len(events)))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if len(events) == 0 {
 		return nil, rterr.NewInvalidArgument(rterr.ModuleAssistant, "events 不能为空", "empty interaction events")
 	}
@@ -170,7 +177,11 @@ func (s *AssistantService) ReportScorecard(ctx context.Context, score assistant.
 	return s.ReportScorecards(ctx, []assistant.Scorecard{score})
 }
 
-func (s *AssistantService) ReportScorecards(ctx context.Context, scores []assistant.Scorecard) (map[string]any, error) {
+func (s *AssistantService) ReportScorecards(ctx context.Context, scores []assistant.Scorecard) (_ map[string]any, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ReportScorecards",
+		attribute.Int("batch.count", len(scores)))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if len(scores) == 0 {
 		return nil, rterr.NewInvalidArgument(rterr.ModuleAssistant, "scorecards 不能为空", "empty scorecards")
 	}
@@ -610,8 +621,11 @@ func formatFloat(value float64) string {
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
-func (s *AssistantService) GetPolicy(ctx context.Context, userID string) (assistant.AssistantPolicyView, error) {
-	_ = ctx
+func (s *AssistantService) GetPolicy(ctx context.Context, userID string) (_ assistant.AssistantPolicyView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetPolicy",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	now := s.now()
 	return assistant.AssistantPolicyView{
 		Version: "assistant_policy_v1",
@@ -626,7 +640,12 @@ func (s *AssistantService) GetPolicy(ctx context.Context, userID string) (assist
 	}, nil
 }
 
-func (s *AssistantService) ReportPageContext(ctx context.Context, userID string, input assistant.PageContextInput) (assistant.PageContextAck, error) {
+func (s *AssistantService) ReportPageContext(ctx context.Context, userID string, input assistant.PageContextInput) (_ assistant.PageContextAck, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ReportPageContext",
+		attribute.String("user.id", userID),
+		attribute.String("page.type", input.PageType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if strings.TrimSpace(userID) == "" {
 		return assistant.PageContextAck{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
 	}
@@ -661,7 +680,12 @@ func (s *AssistantService) ReportPageContext(ctx context.Context, userID string,
 	return assistant.PageContextAck{Accepted: true, ContextKey: contextKey, ExpiresAt: &expiresAt}, nil
 }
 
-func (s *AssistantService) GetSuggestedActions(ctx context.Context, userID string, pageType string, objectID string) (assistant.SuggestedActionListView, error) {
+func (s *AssistantService) GetSuggestedActions(ctx context.Context, userID string, pageType string, objectID string) (_ assistant.SuggestedActionListView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetSuggestedActions",
+		attribute.String("user.id", userID),
+		attribute.String("page.type", pageType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if strings.TrimSpace(pageType) == "" {
 		return assistant.SuggestedActionListView{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "pageType 不能为空", "missing pageType")
 	}
@@ -692,7 +716,11 @@ func (s *AssistantService) GetSuggestedActions(ctx context.Context, userID strin
 	return assistant.SuggestedActionListView{Items: dedupeSuggestedActions(items)}, nil
 }
 
-func (s *AssistantService) SearchXiaoquResults(ctx context.Context, req assistant.SearchRequest) (assistant.AssistantSearchResultView, error) {
+func (s *AssistantService) SearchXiaoquResults(ctx context.Context, req assistant.SearchRequest) (_ assistant.AssistantSearchResultView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.SearchXiaoquResults",
+		attribute.String("search.intensity", req.SearchIntensity))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	query := strings.TrimSpace(req.UserQuery)
 	if query == "" {
 		return assistant.AssistantSearchResultView{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "query 不能为空", "missing userQuery")
@@ -732,7 +760,12 @@ func (s *AssistantService) SearchXiaoquResults(ctx context.Context, req assistan
 	}, nil
 }
 
-func (s *AssistantService) ListAssistantTasks(ctx context.Context, userID string, limit int, status string) (assistant.AssistantUserTaskListView, error) {
+func (s *AssistantService) ListAssistantTasks(ctx context.Context, userID string, limit int, status string) (_ assistant.AssistantUserTaskListView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListAssistantTasks",
+		attribute.String("user.id", userID),
+		attribute.String("task.status_filter", status))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if limit <= 0 {
 		limit = 32
 	}
@@ -767,7 +800,12 @@ func (s *AssistantService) ListAssistantTasks(ctx context.Context, userID string
 	return assistant.AssistantUserTaskListView{Items: filterTasks(dedupeTasks(items), limit, status)}, nil
 }
 
-func (s *AssistantService) ListAssistantMemories(ctx context.Context, userID string, limit int) (assistant.AssistantUserMemoryListView, error) {
+func (s *AssistantService) ListAssistantMemories(ctx context.Context, userID string, limit int) (_ assistant.AssistantUserMemoryListView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListAssistantMemories",
+		attribute.String("user.id", userID),
+		attribute.Int("list.limit", limit))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if limit <= 0 {
 		limit = 32
 	}
@@ -815,7 +853,11 @@ func (s *AssistantService) ListAssistantMemories(ctx context.Context, userID str
 	return assistant.AssistantUserMemoryListView{Items: items}, nil
 }
 
-func (s *AssistantService) GetLearningOpsSummary(ctx context.Context, userID string) (assistant.AssistantLearningOpsSummaryView, error) {
+func (s *AssistantService) GetLearningOpsSummary(ctx context.Context, userID string) (_ assistant.AssistantLearningOpsSummaryView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetLearningOpsSummary",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if strings.TrimSpace(userID) == "" {
 		return assistant.AssistantLearningOpsSummaryView{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
 	}
@@ -888,7 +930,12 @@ func (s *AssistantService) GetLearningOpsSummary(ctx context.Context, userID str
 	return summary, nil
 }
 
-func (s *AssistantService) ListSkills(ctx context.Context, userID string, limit int) (assistant.AssistantSkillCatalogListView, error) {
+func (s *AssistantService) ListSkills(ctx context.Context, userID string, limit int) (_ assistant.AssistantSkillCatalogListView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListSkills",
+		attribute.String("user.id", userID),
+		attribute.Int("list.limit", limit))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	items, err := assistantDomainSkillCatalogViews()
 	if err != nil {
 		return assistant.AssistantSkillCatalogListView{}, err
@@ -923,7 +970,11 @@ func (s *AssistantService) ListSkills(ctx context.Context, userID string, limit 
 	return assistant.AssistantSkillCatalogListView{Items: items[:limit]}, nil
 }
 
-func (s *AssistantService) ListConsents(ctx context.Context, userID string) ([]assistant.SkillConsent, error) {
+func (s *AssistantService) ListConsents(ctx context.Context, userID string) (_ []assistant.SkillConsent, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListConsents",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if strings.TrimSpace(userID) == "" {
 		return []assistant.SkillConsent{}, nil
 	}
@@ -933,7 +984,12 @@ func (s *AssistantService) ListConsents(ctx context.Context, userID string) ([]a
 	return s.consents.ListActiveConsents(ctx, userID)
 }
 
-func (s *AssistantService) GrantSkillConsent(ctx context.Context, userID string, skillID string, grantedScope string) (assistant.SkillConsent, error) {
+func (s *AssistantService) GrantSkillConsent(ctx context.Context, userID string, skillID string, grantedScope string) (_ assistant.SkillConsent, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GrantSkillConsent",
+		attribute.String("user.id", userID),
+		attribute.String("skill.id", skillID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if strings.TrimSpace(userID) == "" {
 		return assistant.SkillConsent{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
 	}
@@ -951,7 +1007,12 @@ func (s *AssistantService) GrantSkillConsent(ctx context.Context, userID string,
 	return s.consents.UpsertConsent(ctx, consent)
 }
 
-func (s *AssistantService) RevokeSkillConsent(ctx context.Context, userID string, skillID string) error {
+func (s *AssistantService) RevokeSkillConsent(ctx context.Context, userID string, skillID string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.RevokeSkillConsent",
+		attribute.String("user.id", userID),
+		attribute.String("skill.id", skillID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if strings.TrimSpace(userID) == "" {
 		return rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
 	}

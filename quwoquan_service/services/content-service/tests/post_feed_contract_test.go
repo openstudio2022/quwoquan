@@ -22,7 +22,7 @@ func TestGetFeedByType(t *testing.T) {
 	// Create mixed content types
 	for i := range 3 {
 		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"]}`,
+			`{"contentType":"photo","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"]}`,
 			i, i,
 		))
 	}
@@ -50,7 +50,7 @@ func TestGetFeedByType(t *testing.T) {
 		t.Error("expected at least one image post in photo feed")
 	}
 	for _, item := range page.Items {
-		if item["type"] != "photo" && item["contentType"] != "image" {
+		if item["type"] != "photo" && item["contentType"] != "photo" {
 			t.Errorf("non-photo item in photo feed: %v", item)
 		}
 	}
@@ -62,7 +62,7 @@ func TestGetFeedByIdentity(t *testing.T) {
 
 	createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 1"}`)
 	createPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 2"}`)
-	createPost(t, `{"contentType":"image","contentIdentity":"work","title":"作品 1","mediaUrls":["https://example.com/a.jpg"]}`)
+	createPost(t, `{"contentType":"photo","contentIdentity":"work","title":"作品 1","mediaUrls":["https://example.com/a.jpg"]}`)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -144,7 +144,7 @@ func TestGetFeedCursorPagination(t *testing.T) {
 	// Create enough posts for two pages
 	for i := range 6 {
 		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","title":"Pager post %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+			`{"contentType":"photo","title":"Pager post %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}
 
@@ -215,7 +215,7 @@ func TestGetFeedRecommendSortWithCursor(t *testing.T) {
 	for i := range 12 {
 		authorID := fmt.Sprintf("user_rec_%d", i%4)
 		createPostWithAuthor(t, authorID, fmt.Sprintf(
-			`{"contentType":"image","title":"Recommend Pager %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+			`{"contentType":"photo","title":"Recommend Pager %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}
 
@@ -282,7 +282,7 @@ func TestGetFeedFutureWindowChangesOnly(t *testing.T) {
 	for i := range 12 {
 		authorID := fmt.Sprintf("user_fw_%d", i%4)
 		createPostWithAuthor(t, authorID, fmt.Sprintf(
-			`{"contentType":"image","title":"Future Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
+			`{"contentType":"photo","title":"Future Window %d","body":"content %d","mediaUrls":["https://example.com/img%d.jpg"]}`, i, i, i,
 		))
 	}
 
@@ -376,7 +376,7 @@ func TestListFeedWithPagination(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	for i := range 4 {
-		payload := fmt.Sprintf(`{"contentType":"image","title":"Feed post %d","body":"content %d","mediaUrls":["https://example.com/%d.jpg"]}`, i, i, i)
+		payload := fmt.Sprintf(`{"contentType":"photo","title":"Feed post %d","body":"content %d","mediaUrls":["https://example.com/%d.jpg"]}`, i, i, i)
 		createPost(t, payload)
 	}
 

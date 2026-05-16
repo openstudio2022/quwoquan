@@ -134,7 +134,10 @@ def _gen_topic_verticals():
         ("极光", "Aurora", "极光天象景观"),
         ("花海", "Flower Sea", "大面积鲜花景观"),
         ("森林", "Forest", "森林丛林林海景观"),
+        ("湖泊", "Lakes", "高山湖泊与湖区景观"),
         ("云海", "Sea of Clouds", "云海云雾奇观"),
+        ("雪山", "Snow Mountain", "雪山冰川与山岳景观"),
+        ("高原风光", "Plateau Scenery", "高原地貌与开阔风光"),
         ("日出日落", "Sunrise & Sunset", "日出与日落天象景观"),
         ("雾凇", "Rime Ice", "雾凇冰挂等冬季凝结景观"),
         ("雪景", "Snowscape", "降雪与雪景氛围"),
@@ -149,8 +152,11 @@ def _gen_topic_verticals():
         ("考古遗址", "Archaeological Site", "考古发掘与历史遗址"),
         ("红色文化", "Red Culture", "革命历史与红色精神"),
         ("帝王文化", "Imperial Culture", "皇家宫廷与帝制历史"),
+        ("世界遗产", "World Heritage", "联合国教科文世界遗产"),
         ("三国文化", "Three Kingdoms Culture", "三国历史文化专题"),
         ("古蜀文明", "Ancient Shu Civilization", "古蜀国文化遗存"),
+        ("石刻艺术", "Stone Carving Art", "石刻、石窟与雕刻艺术"),
+        ("水利工程", "Water Conservancy Engineering", "古代与现代水利工程遗产"),
         ("丝绸之路", "Silk Road", "丝绸之路历史文化"),
         ("茶文化", "Tea Culture", "茶的历史、产地与文化", ["茶道", "茶艺"]),
         ("酒文化", "Wine & Liquor Culture", "白酒、黄酒、葡萄酒文化", ["白酒", "黄酒"]),
@@ -582,7 +588,7 @@ def _gen_topic_verticals():
         ("手作工坊", "Workshop", "手工艺制作体验活动"),
         ("农场体验", "Farm Experience", "田园采摘与农牧体验"),
         ("研学游学", "Study Tour", "研究性学习与游学旅行"),
-        ("摄影旅拍", "Travel Photography", "以摄影创作为核心的旅行体验，与 Topic/数码科技/摄影摄像（器材技巧）和 Topic/艺术创作/摄影艺术（艺术属性）正交"),
+        ("摄影旅拍", "Travel Photography", "以摄影创作为核心的旅行体验，与 Topic/数码科技/影像（器材技巧）和 Format/表现手法/摄影技法（拍摄方法）正交"),
         ("观鸟观兽", "Wildlife Watching", "野生动物与鸟类观察体验"),
         ("观星", "Stargazing", "暗夜星空观测体验"),
         ("看演出", "Live Performance", "现场演出与表演观赏体验"),
@@ -635,7 +641,7 @@ def _gen_topic_verticals():
         ("跨境多国", "Multi-country", "跨越多个国家的长途旅行"),
     ])
 
-    # 4.6 住宿（内容讲住宿的哪个话题；15 项；与 Entity/地点/住宿 六轴实体骨架正交）
+    # 4.6 住宿（内容讲住宿的哪个话题；15 项；与 Entity/地点/住宿 10 类扁平实体骨架正交）
     dim("Topic/旅行/住宿", "住宿", "Accommodation Topic",
         "内容围绕住宿的话题角度（讲什么）；与 Entity/地点/住宿（实体是什么）、Format/内容角度（怎么讲）正交",
         max_depth=2, expected_size=15)
@@ -1922,6 +1928,8 @@ def _gen_format_内容角度():
         ("小众秘境", "Hidden Gem Guide", "小众目的地发现指引"),
         ("省钱攻略", "Budget Guide", "低价优惠攻略"),
         ("住宿攻略", "Accommodation Guide", "住宿选择与预订攻略"),
+        ("择园攻略", "Kindergarten Selection Guide", "幼儿园择园与入园准备"),
+        ("幼小衔接", "Preschool-Primary Transition", "从幼儿园到小学的衔接准备"),
         ("新生攻略", "Freshman Guide", "大学或学校新生入学攻略"),
         ("选课攻略", "Course Selection Guide", "大学选课策略与避坑指南"),
     ])
@@ -2308,6 +2316,27 @@ def _gen_entity_地点():
     ])
 
     tag("Entity/地点/住宿", "住宿", "Accommodation", "住宿经营业态类型骨架")
+    dim("Entity/地点/住宿/设施服务", "设施服务", "Accommodation Amenities",
+        "住宿实体的设施与服务配置骨架",
+        max_depth=2, expected_size=8)
+    tags_list("Entity/地点/住宿/设施服务", [
+        ("厨房厨具", "Kitchen & Cookware", "提供厨房与厨具，可自炊"),
+        ("接送服务", "Transfer Service", "提供接送或摆渡服务"),
+        ("早餐服务", "Breakfast Service", "提供早餐或餐食服务"),
+        ("洗衣服务", "Laundry Service", "提供洗衣与烘干服务"),
+        ("停车位", "Parking", "提供停车位"),
+        ("无障碍", "Accessible", "提供无障碍设施与服务"),
+    ])
+    dim("Entity/地点/住宿/房源形态", "房源形态", "Accommodation Form",
+        "住宿实体的空间与房源形态骨架",
+        max_depth=2, expected_size=8)
+    tags_list("Entity/地点/住宿/房源形态", [
+        ("树屋", "Treehouse", "树屋住宿形态"),
+        ("合住房间", "Shared Room", "多人合住房间"),
+        ("独立房间", "Private Room", "独立房间"),
+        ("整租房源", "Entire Place", "整租房源"),
+        ("套房", "Suite", "套房形态"),
+    ])
     tags_list("Entity/地点/住宿", [
         ("酒店", "Hotel", "标准酒店业态"),
         ("民宿", "Homestay", "非标个人住宿业态"),

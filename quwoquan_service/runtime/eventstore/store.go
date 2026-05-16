@@ -4,9 +4,25 @@ import (
 	"context"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+)
+
+var (
+	eventstoreAppendTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "eventstore",
+		Name:      "append_total",
+		Help:      "Total events appended by aggregate_type and status.",
+	}, []string{"aggregate_type", "status"})
+
+	eventstorePublishFailures = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "eventstore",
+		Name:      "publish_failures_total",
+		Help:      "Total publisher failures by aggregate_type.",
+	}, []string{"aggregate_type"})
 )
 
 // StoredEvent is the persistent representation of a domain event.
@@ -106,12 +122,14 @@ func (s *Store) Append(ctx context.Context, event StoredEvent) error {
 
 	_, err := s.coll.InsertOne(ctx, event)
 	if err != nil {
+		eventstoreAppendTotal.WithLabelValues(event.AggregateType, "error").Inc()
 		return err
 	}
+	eventstoreAppendTotal.WithLabelValues(event.AggregateType, "ok").Inc()
 
 	for _, p := range s.publishers {
 		if pubErr := p.Publish(ctx, event); pubErr != nil {
-			// Log but don't fail — at-least-once delivery via Change Stream retry.
+			eventstorePublishFailures.WithLabelValues(event.AggregateType).Inc()
 			_ = pubErr
 		}
 	}
@@ -136,12 +154,21 @@ func (s *Store) AppendBatch(ctx context.Context, events []StoredEvent) error {
 
 	_, err := s.coll.InsertMany(ctx, docs)
 	if err != nil {
+		for _, ev := range events {
+			eventstoreAppendTotal.WithLabelValues(ev.AggregateType, "error").Inc()
+		}
 		return err
+	}
+	for _, ev := range events {
+		eventstoreAppendTotal.WithLabelValues(ev.AggregateType, "ok").Inc()
 	}
 
 	for _, event := range events {
 		for _, p := range s.publishers {
-			_ = p.Publish(ctx, event)
+			if pubErr := p.Publish(ctx, event); pubErr != nil {
+				eventstorePublishFailures.WithLabelValues(event.AggregateType).Inc()
+				_ = pubErr
+			}
 		}
 	}
 

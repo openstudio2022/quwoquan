@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
@@ -35,20 +34,17 @@ class MockReportRepository extends ReportRepository {
       'targetId': targetId,
       'targetType': targetType,
       'reason': reason,
-      if (description != null && description.isNotEmpty) 'description': description,
+      if (description != null && description.isNotEmpty)
+        'description': description,
     });
   }
 }
 
 /// Remote 实现：调用云侧 API。
 class RemoteReportRepository extends ReportRepository {
-  RemoteReportRepository({
-    CloudHttpClient? httpClient,
-    http.Client? client,
-    String? baseUrl,
-  }) : _httpClient =
-           httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteReportRepository({CloudHttpClient? httpClient, String? baseUrl})
+    : _httpClient = httpClient ?? CloudHttpClient(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;

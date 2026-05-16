@@ -4,14 +4,16 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const (
-	defaultBufferSize    = 4096
-	defaultFlushInterval = 50 * time.Millisecond
-	defaultFlushBatch    = 64
-	flushTimeout         = 5 * time.Second
+	defaultBufferSize      = 4096
+	defaultFlushInterval   = 50 * time.Millisecond
+	defaultFlushBatch      = 64
+	flushTimeout           = 5 * time.Second
+	defaultEnqueueTimeout  = 100 * time.Millisecond
 )
 
 // BufferedHotPath wraps HotPath with an async write channel.
@@ -24,9 +26,11 @@ type BufferedHotPath struct {
 	wg     sync.WaitGroup
 	stopCh chan struct{}
 
-	bufferSize    int
-	flushInterval time.Duration
-	flushBatch    int
+	bufferSize      int
+	flushInterval   time.Duration
+	flushBatch      int
+	enqueueTimeout  time.Duration
+	droppedCount    int64
 }
 
 // BufferedOption configures BufferedHotPath.
@@ -54,11 +58,12 @@ func WithBufferLogger(l *slog.Logger) BufferedOption {
 
 func NewBufferedHotPath(inner *HotPath, opts ...BufferedOption) *BufferedHotPath {
 	b := &BufferedHotPath{
-		inner:         inner,
-		stopCh:        make(chan struct{}),
-		bufferSize:    defaultBufferSize,
-		flushInterval: defaultFlushInterval,
-		flushBatch:    defaultFlushBatch,
+		inner:          inner,
+		stopCh:         make(chan struct{}),
+		bufferSize:     defaultBufferSize,
+		flushInterval:  defaultFlushInterval,
+		flushBatch:     defaultFlushBatch,
+		enqueueTimeout: defaultEnqueueTimeout,
 	}
 	for _, opt := range opts {
 		opt(b)
@@ -70,36 +75,58 @@ func NewBufferedHotPath(inner *HotPath, opts ...BufferedOption) *BufferedHotPath
 }
 
 // ProcessSignal enqueues a signal for async processing.
-// Returns immediately; drops if buffer is full (back-pressure).
+// Blocks up to enqueueTimeout before dropping.
 func (b *BufferedHotPath) ProcessSignal(_ context.Context, signal BehaviorSignal) error {
 	select {
 	case b.ch <- signal:
 		return nil
 	default:
+	}
+	timer := time.NewTimer(b.enqueueTimeout)
+	defer timer.Stop()
+	select {
+	case b.ch <- signal:
+		return nil
+	case <-timer.C:
+		atomic.AddInt64(&b.droppedCount, 1)
 		if b.logger != nil {
 			b.logger.Warn("rec.hotpath.buffer_full",
 				slog.String("userId", signal.UserID),
-				slog.Int("bufferSize", b.bufferSize))
+				slog.Int("bufferSize", b.bufferSize),
+				slog.Int64("totalDropped", atomic.LoadInt64(&b.droppedCount)))
 		}
 		return nil
 	}
 }
 
 // ProcessSignalBatch enqueues all signals for async processing.
+// Each signal gets the full enqueueTimeout allowance.
 func (b *BufferedHotPath) ProcessSignalBatch(_ context.Context, signals []BehaviorSignal) error {
 	for _, s := range signals {
 		select {
 		case b.ch <- s:
+			continue
 		default:
+		}
+		timer := time.NewTimer(b.enqueueTimeout)
+		select {
+		case b.ch <- s:
+			timer.Stop()
+		case <-timer.C:
+			atomic.AddInt64(&b.droppedCount, 1)
 			if b.logger != nil {
 				b.logger.Warn("rec.hotpath.buffer_full",
 					slog.String("userId", s.UserID),
-					slog.Int("dropped", len(signals)))
+					slog.Int64("totalDropped", atomic.LoadInt64(&b.droppedCount)))
 			}
-			return nil
 		}
 	}
 	return nil
+}
+
+// DroppedCount returns the total number of dropped signals since start.
+func (b *BufferedHotPath) DroppedCount() int64 {
+	return atomic.LoadInt64(&b.droppedCount)
 }
 
 // GetSessionState delegates to the inner HotPath (reads are not buffered).

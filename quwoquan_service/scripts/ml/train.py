@@ -34,21 +34,24 @@ except ImportError:
     np = None
     roc_auc_score = None
 
+from diversity_metrics import compute_diversity_metrics
+
 ITEM_NUMERIC_FEATURES = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
-    "bodyLength", "tagCount", "qualityScore", "publishHour",
+    "bodyLength", "tagCount", "qualityScore", "publishHour", "aspectRatio",
 ]
+RECALL_PATH_MAP = {"tag_recall": 0, "hot_recall": 1, "social_friend": 2, "social_circle": 3, "explore_recall": 4}
 USER_NUMERIC_FEATURES = [
     "engagementRate", "totalLikes", "totalFavorites", "totalShares", "totalEvents",
 ]
 CONTEXT_NUMERIC_FEATURES = [
     "requestHour", "requestDayOfWeek",
 ]
-CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "moment": 3}
+CONTENT_TYPE_MAP = {"photo": 0, "video": 1, "article": 2, "moment": 3}
 
 
 def _extract_features(sample: dict) -> list[float]:
-    """Extract 15+ features from a training sample."""
+    """Extract features from a training sample."""
     item = sample.get("itemFeatures") or {}
     user = sample.get("userFeatures") or {}
     ctx = sample.get("contextFeatures") or {}
@@ -63,6 +66,7 @@ def _extract_features(sample: dict) -> list[float]:
 
     features.append(float(CONTENT_TYPE_MAP.get(item.get("contentType", ""), -1)))
     features.append(1.0 if item.get("hasCover") else 0.0)
+    features.append(float(RECALL_PATH_MAP.get(item.get("recallPath", ""), -1)))
 
     tag_affinities = user.get("tagAffinities", {})
     item_tags = item.get("tags", [])
@@ -72,6 +76,41 @@ def _extract_features(sample: dict) -> list[float]:
     author_affinities = user.get("authorAffinities", {})
     author_id = item.get("authorId", "")
     features.append(author_affinities.get(author_id, 0.0))
+
+    # Four-dim affinity match (Phase 4)
+    topic_affinities = user.get("topicAffinities", {})
+    audience_affinities = user.get("audienceAffinities", {})
+    format_affinities = user.get("formatAffinities", {})
+    entity_affinities = user.get("entityAffinities", {})
+    entity_instance_affinities = user.get("entityInstanceAffinities", {})
+
+    topic_match = sum(topic_affinities.get(t, 0) for t in item_tags[:10])
+    audience_match = sum(audience_affinities.get(t, 0) for t in item_tags[:10])
+    format_match = sum(format_affinities.get(t, 0) for t in item_tags[:10])
+    entity_match = sum(entity_affinities.get(t, 0) for t in item_tags[:10])
+    features.extend([topic_match, audience_match, format_match, entity_match])
+
+    # Entity instance affinity (specific places/brands)
+    entity_refs = item.get("entityRefs", [])
+    entity_instance_match = sum(entity_instance_affinities.get(r, 0) for r in entity_refs[:10])
+    features.append(entity_instance_match)
+
+    # Depth engagement (Phase 4)
+    features.append(float(user.get("avgEngagementDepth", 0)))
+    depth_dist = user.get("depthDistribution", {})
+    for level in ["L0", "L1", "L2", "L3", "L4"]:
+        features.append(float(depth_dist.get(level, 0)))
+
+    # Social features (Phase 4)
+    features.append(float(user.get("socialInterestScore", 0)))
+    circle_aff = user.get("circleTagAffinities", {})
+    circle_match = sum(circle_aff.get(t, 0) for t in item_tags[:10])
+    features.append(circle_match)
+
+    # ENER: type-specific engagement rate (Phase 4)
+    type_ener = user.get("typeENER", {})
+    content_type = item.get("contentType", "")
+    features.append(float(type_ener.get(content_type, 0)))
 
     return features
 
@@ -102,11 +141,12 @@ def _gauc(y_true, y_pred, user_ids):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--scenario", default="content_feed")
-    p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://localhost:27017"))
+    p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
     p.add_argument("--db", default="quwoquan_content")
     p.add_argument("--out-dir", default=os.environ.get("MODEL_OUT_DIR", "/tmp/rec_models"))
     p.add_argument("--production", action="store_true", help="Mark this version as production")
     p.add_argument("--num-boost-round", type=int, default=100)
+    p.add_argument("--min-samples", type=int, default=100, help="Minimum samples required to train")
     args = p.parse_args()
 
     if np is None or roc_auc_score is None:
@@ -118,8 +158,8 @@ def main():
     samples_coll = db["rec_training_samples"]
 
     rows = list(samples_coll.find({"scenario": args.scenario}).sort("ts", 1))
-    if len(rows) < 100:
-        print(f"Only {len(rows)} samples; need at least 100", file=sys.stderr)
+    if len(rows) < args.min_samples:
+        print(f"Only {len(rows)} samples; need at least {args.min_samples}", file=sys.stderr)
         return 1
 
     # Time-split: 70% train, 15% val, 15% test (sorted by ts)
@@ -180,6 +220,8 @@ def main():
         except ValueError:
             test_ndcg = 0.0
 
+        diversity_metrics = compute_diversity_metrics(test_rows, list(y_pred), top_k=20)
+
         metrics = {
             "auc": round(test_auc, 4),
             "gauc": round(test_gauc, 4),
@@ -188,19 +230,35 @@ def main():
             "train_size": len(train_rows),
             "test_size": len(test_rows),
         }
+        metrics.update(diversity_metrics)
     else:
-        model_path.write_text("placeholder\n")
-        metrics = {"auc": 0.0, "gauc": 0.0, "ndcg_20": 0.0, "logloss": 999}
+        print("LightGBM not available — skipping training and registry write", file=sys.stderr)
+        return 1
 
     print(f"Test metrics: {json.dumps(metrics)}", file=sys.stderr)
 
     import model_registry as mr
+    artifact_uri = ""
+    try:
+        import artifact_store
+        artifact_uri = artifact_store.upload(str(model_path), args.scenario, version)
+    except Exception as e:
+        print(f"[train] artifact upload skipped: {e}", file=sys.stderr)
+    if args.production and not artifact_uri:
+        print(
+            f"[train] production registry write requires artifact upload for scenario={args.scenario}",
+            file=sys.stderr,
+        )
+        return 1
+
     mr.write_registry(
         db,
         scenario=args.scenario,
         version=version,
         metrics=metrics,
         artifact_path=str(model_path),
+        artifact_uri=artifact_uri,
+        model_type="lgb",
         production=args.production,
     )
     print(f"Saved model to {model_path}; registered for scenario={args.scenario}", file=sys.stderr)

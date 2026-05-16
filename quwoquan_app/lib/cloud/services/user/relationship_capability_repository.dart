@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/user/mock/user_profile_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
@@ -261,11 +261,13 @@ class MockRelationshipCapabilityRepository
 /// Remote 实现：调用云侧 API
 class RemoteRelationshipCapabilityRepository
     extends RelationshipCapabilityRepository {
-  RemoteRelationshipCapabilityRepository({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
-      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteRelationshipCapabilityRepository({
+    CloudHttpClient? httpClient,
+    String? baseUrl,
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
-  final http.Client _client;
+  final CloudHttpClient _httpClient;
   final String _baseUrl;
 
   @override
@@ -277,7 +279,7 @@ class RemoteRelationshipCapabilityRepository
       subAccountId: targetUserId,
     );
     final uri = Uri.parse('$_baseUrl$path');
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.getRelationshipCapability,

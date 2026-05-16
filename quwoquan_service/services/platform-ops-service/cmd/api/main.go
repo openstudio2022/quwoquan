@@ -14,6 +14,11 @@ import (
 
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
+	rtgov "quwoquan_service/runtime/governance"
+	rthttp "quwoquan_service/runtime/http"
+	rtmetrics "quwoquan_service/runtime/metrics"
+	robs "quwoquan_service/runtime/observability"
+	rtotel "quwoquan_service/runtime/otel"
 
 	"gopkg.in/yaml.v3"
 )
@@ -24,6 +29,9 @@ type platformService struct {
 }
 
 func main() {
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "platform-ops-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
 	addr := strings.TrimSpace(os.Getenv("PLATFORM_OPS_SERVICE_ADDR"))
 	if addr == "" {
 		addr = ":18087"
@@ -37,15 +45,51 @@ func main() {
 		log.Fatalf("seed platform ops service: %v", err)
 	}
 	mux := newServerMux(service)
-	log.Printf("platform-ops-service listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+
+	instanceID, _ := os.Hostname()
+	ioLogger := robs.NewIOAccessLogger(os.Stdout)
+	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	if err != nil {
+		log.Fatalf("platform-ops-service process logger init failed: %v", err)
+	}
+	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	if err != nil {
+		log.Fatalf("platform-ops-service exception logger init failed: %v", err)
+	}
+	observedHandler := rthttp.NewHTTPServerMiddleware(mux, rthttp.HTTPServerMiddlewareConfig{
+		Service:           "platform-ops-service",
+		ServiceName:       "platform-ops-service",
+		ServiceInstanceID: instanceID,
+	}, ioLogger, processLogger, exceptionLogger)
+
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           rateLimited,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	log.Printf("platform-ops-service listening on %s (rate_limit=1000/s)", addr)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("platform-ops-service: %v", err)
+	}
 }
 
 func newServerMux(service *platformService) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := os.Stat(service.repoRoot); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"status": "degraded",
+				"error":  "repo root inaccessible",
+			})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
+	mux.Handle("/metrics", rtmetrics.Handler())
 	mux.HandleFunc("/v1/control-plane/platform/catalog/services", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)

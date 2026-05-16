@@ -53,6 +53,29 @@ description: 设计基线（面向 Journey / Scenario，落实商用方案与 pl
 - `plan slice` 与 `T1~T4` 证据矩阵映射
 - 未来演进
 
+### 工程合规设计 Checklist（design.md 必须逐项说明）
+
+```
+☐ DDD 分层：新增代码的域层归属图（domain/application/adapters/infrastructure）
+☐ 强类型：新增数据结构列表（Go struct + Dart DTO），确认无 interface{} / Map<String, dynamic>
+☐ 存储无关：Repository / Store interface 定义位置，implementation 放 infrastructure
+☐ 存储选型：引擎选型 + TTL + 归档 + 弹性策略 + 成本估算
+☐ 端云一致：Dart DTO ↔ Go struct ↔ metadata YAML 字段对照表
+☐ 元数据驱动：需要变更的 metadata YAML 文件列表（service.yaml / errors.yaml / fields.yaml 等）
+☐ codegen 影响：codegen 产物列表（*.g.dart / *.g.go），确认不手改
+```
+
+### 可观测与推荐设计 Checklist
+
+```
+☐ 埋点方案：涉及页面的行为/体验/异常/性能事件定义
+☐ 指标方案：黄金/二层指标采集、计算和切分维度
+☐ 推荐回流：新行为信号 → HotPath → 投影器 → 特征库路径设计
+☐ 性能设计：关键路径性能目标（TTI/P99/帧率），降级和缓存策略
+☐ AB 设计：实验层（recall/rank/rerank）、指标、统计显著性方案
+☐ 存储生命周期：热/温/冷分层、TTL、归档、清理策略
+```
+
 若涉及助手，还必须包含：
 
 - 对三类核心文档的引用与符合性说明

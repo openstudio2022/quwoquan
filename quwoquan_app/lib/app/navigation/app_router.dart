@@ -12,6 +12,9 @@ import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
+import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/ui/content/pages/article_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/photo_detail_page.dart';
 import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
@@ -306,6 +309,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             homepageId: id,
             selectionMode: extra?.selectionMode ?? false,
             initialSummary: extra?.initialSummary,
+            referralSource: extra?.referralSource ?? ReferralSource.entityPage,
           );
         },
       ),
@@ -440,8 +444,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.circleDetailPathTemplate.replaceAll('{id}', ':id'),
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
+          final circleExtra = state.extra is CircleDetailPageRouteExtra
+              ? state.extra! as CircleDetailPageRouteExtra
+              : null;
           return CircleDetailPage(
             circleId: id,
+            referralSource: circleExtra?.referralSource ?? ReferralSource.organicFeed,
             onBack: () {
               if (context.canPop()) {
                 context.pop();
@@ -466,7 +474,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.articleDetailPathTemplate.replaceAll('{id}', ':id'),
         builder: (context, state) {
           final id = state.pathParameters['id'] ?? '0';
-          return ArticleDetailPage(articleId: id);
+          final extra = state.extra is ArticleDetailPageRouteExtra
+              ? state.extra! as ArticleDetailPageRouteExtra
+              : null;
+          return ArticleDetailPage(
+            articleId: id,
+            referralSource: extra?.referralSource ?? ReferralSource.organicFeed,
+            feedRequestId: extra?.feedRequestId,
+          );
         },
       ),
       GoRoute(
@@ -494,7 +509,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             return MyProfilePage(onBack: onBack);
           }
           UserProfileRouteExtra? extra;
-          if (state.extra is UserProfileRouteExtra) {
+          ReferralSource profileReferralSource = ReferralSource.authorProfile;
+          if (state.extra is OtherProfilePageRouteExtra) {
+            final profileExtra = state.extra! as OtherProfilePageRouteExtra;
+            profileReferralSource = profileExtra.referralSource ?? ReferralSource.authorProfile;
+            extra = UserProfileRouteExtra(
+              subAccountId: profileExtra.subAccountId,
+              avatar: profileExtra.avatar,
+              displayName: profileExtra.displayName,
+              backgroundImage: profileExtra.backgroundImage,
+            );
+          } else if (state.extra is UserProfileRouteExtra) {
             extra = state.extra! as UserProfileRouteExtra;
           } else if (state.extra is Map) {
             final m = state.extra! as Map;
@@ -512,6 +537,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             initialAvatarUrl: extra?.safeAvatar,
             initialDisplayName: extra?.safeDisplayName,
             initialBackgroundImageUrl: extra?.safeBackgroundImage,
+            referralSource: profileReferralSource,
             onBack: onBack,
           );
         },

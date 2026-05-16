@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/media/image/viewer/immersive_image_viewer.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
@@ -8,6 +9,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
@@ -34,6 +36,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
   bool _isOpen = true;
   List<PostSummaryView> _posts = [];
   bool _isLoading = true;
+  String? _trackedContentId;
 
   @override
   void initState() {
@@ -42,17 +45,53 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
       _posts = widget.initialExtra!.posts;
       _isLoading = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
         primeMediaViewerInteractionSnapshot(
           ref,
           widget.initialExtra!.interactionSnapshot,
         );
+        _startEngagementTracking();
       });
     } else {
       _loadData();
     }
+  }
+
+  ContentType get _resolvedContentType {
+    final cat = widget.initialExtra?.category;
+    if (cat == 'moment' || cat == 'profile_moment') return ContentType.moment;
+    if (_posts.isNotEmpty) {
+      final idx = _safeInitialIndex;
+      final post = _posts[idx];
+      final postType = post.contentType;
+      if (postType == 'moment') return ContentType.moment;
+    }
+    return ContentType.photo;
+  }
+
+  void _startEngagementTracking() {
+    if (_posts.isEmpty) return;
+    final idx = _safeInitialIndex;
+    final post = _posts[idx];
+    _trackedContentId = post.id;
+    ref.read(contentEngagementTrackerProvider).trackContentEnter(
+      post.id,
+      contentType: _resolvedContentType,
+      referralSource: widget.initialExtra?.referralSource ?? ReferralSource.organicFeed,
+      totalImages: post.images?.length ?? 1,
+      authorId: post.authorId,
+      tags: post.tags,
+      position: idx,
+      feedRequestId: widget.initialExtra?.feedRequestId,
+    );
+  }
+
+  @override
+  void dispose() {
+    if (_trackedContentId != null) {
+      ref.read(contentEngagementTrackerProvider).trackContentExit(_trackedContentId!);
+    }
+    super.dispose();
   }
 
   int get _safeInitialIndex =>
@@ -77,7 +116,10 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
           )
           .toList(growable: false);
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _startEngagementTracking();
+      }
     }
   }
 
@@ -242,6 +284,33 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
                 .read(discoveryFeedMapProvider.notifier)
                 .appendNextPage(feedCategory)
           : null,
+      onPostIndexChanged: (newIndex) {
+        if (_trackedContentId != null) {
+          ref.read(contentEngagementTrackerProvider).trackContentExit(_trackedContentId!);
+        }
+        if (newIndex >= 0 && newIndex < _posts.length) {
+          final post = _posts[newIndex];
+          _trackedContentId = post.id;
+          ref.read(contentEngagementTrackerProvider).trackContentEnter(
+            post.id,
+            contentType: _resolvedContentType,
+            referralSource: widget.initialExtra?.referralSource ?? ReferralSource.organicFeed,
+            totalImages: post.images?.length ?? 1,
+            authorId: post.authorId,
+            tags: post.tags,
+            position: newIndex,
+            feedRequestId: widget.initialExtra?.feedRequestId,
+          );
+        }
+      },
+      onImageIndexChanged: (imageIndex) {
+        if (_trackedContentId != null) {
+          ref.read(contentEngagementTrackerProvider).trackContentProgress(
+            _trackedContentId!,
+            currentImageIndex: imageIndex,
+          );
+        }
+      },
     );
   }
 }

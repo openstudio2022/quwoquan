@@ -3,6 +3,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
@@ -209,6 +211,8 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                   postInteractionState: ref.read(postInteractionStateProvider),
                 );
                 primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+                final navFeedRequestId =
+                    ref.read(feedSessionProvider.notifier).newFeedRequestId();
 
                 context
                     .push(
@@ -221,6 +225,8 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                         initialImageIndex: 0,
                         source: 'profile_moment',
                         interactionSnapshot: interactionSnapshot,
+                        referralSource: ReferralSource.authorProfile,
+                        feedRequestId: navFeedRequestId,
                       ),
                     )
                     .then((result) {
@@ -261,6 +267,8 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                   postInteractionState: ref.read(postInteractionStateProvider),
                 );
                 primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+                final navVideoFeedRequestId =
+                    ref.read(feedSessionProvider.notifier).newFeedRequestId();
 
                 context
                     .push(
@@ -272,6 +280,8 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                         category: 'moment',
                         source: 'profile_moment',
                         interactionSnapshot: interactionSnapshot,
+                        referralSource: ReferralSource.authorProfile,
+                        feedRequestId: navVideoFeedRequestId,
                       ),
                     )
                     .then((result) {

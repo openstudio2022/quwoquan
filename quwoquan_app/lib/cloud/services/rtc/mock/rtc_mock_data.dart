@@ -112,14 +112,13 @@ final List<CallSessionDto> kMockCallSessions = [
   }),
 ];
 
-final RtcJoinCredentialsDto kMockRtcJoinCredentials = RtcJoinCredentialsDto.fromMap(
-  <String, dynamic>{
-    'token':
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzAwMSIsInJvb20iOiJyb29tX2FiYzEyMyJ9.mock_signature',
-    'roomId': 'room_abc123',
-    'callId': 'call_001',
-  },
-);
+final RtcJoinCredentialsDto
+kMockRtcJoinCredentials = RtcJoinCredentialsDto.fromMap(<String, dynamic>{
+  'token':
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzAwMSIsInJvb20iOiJyb29tX2FiYzEyMyJ9.mock_signature',
+  'roomId': 'room_abc123',
+  'callId': 'call_001',
+});
 
 final List<CallSessionDto> kMockCallHistory = [
   CallSessionDto.fromMap(<String, dynamic>{

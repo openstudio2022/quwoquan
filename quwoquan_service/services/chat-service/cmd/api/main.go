@@ -12,13 +12,17 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gopkg.in/yaml.v3"
 
+	rthealth "quwoquan_service/runtime/health"
+	rtmongo "quwoquan_service/runtime/mongodb"
+	rtotel "quwoquan_service/runtime/otel"
+
 	rterr "quwoquan_service/runtime/errors"
+	rtgov "quwoquan_service/runtime/governance"
 	rthttp "quwoquan_service/runtime/http"
 	runtimemedia "quwoquan_service/runtime/media"
+	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
@@ -37,6 +41,10 @@ type redisSceneCfg struct {
 	Password string   `yaml:"password"`
 	DB       int      `yaml:"db"`
 	TLS      bool     `yaml:"tls"`
+	Pool     struct {
+		Size    int `yaml:"size"`
+		MinIdle int `yaml:"min_idle"`
+	} `yaml:"pool"`
 }
 
 type config struct {
@@ -128,10 +136,14 @@ func main() {
 	defer router.Close()
 
 	ctx := context.Background()
-	mongoClient, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoDB.URI))
-	if err != nil {
-		log.Fatalf("chat-service mongo connect failed: %v", err)
+
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "chat-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
+	if err := router.PingAll(ctx); err != nil {
+		log.Printf("WARN: chat-service redis ping: %v", err)
 	}
+	mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "chat-service")
 	defer func() { _ = mongoClient.Disconnect(ctx) }()
 
 	mongoDB := mongoClient.Database(cfg.MongoDB.Database)
@@ -215,7 +227,9 @@ func main() {
 			logger.Error("chat-service group avatar backfill failed", "err", err)
 		}
 	}()
-	profileResolver := httpadapter.NewUserProfileResolver(userServiceBaseURL, nil)
+	profileCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
+	profileClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 2 * time.Second}, profileCB)
+	profileResolver := httpadapter.NewUserProfileResolver(userServiceBaseURL, profileClient)
 
 	conversationSvc := application.NewConversationService(
 		chatStore,
@@ -253,8 +267,18 @@ func main() {
 		logger.Warn("chat-service user profile resolver base URL is empty; create/add member snapshot hydration will be skipped")
 	}
 
+	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("redis", func(hctx context.Context) error {
+		return router.PingAll(hctx)
+	})
+	healthChecker.Register("mongodb", func(hctx context.Context) error {
+		return mongoClient.Ping(hctx, nil)
+	})
+
 	baseHandler := httpadapter.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc, userSyncService).Routes()
 	rootMux := http.NewServeMux()
+	rootMux.HandleFunc("/healthz", healthChecker.Handler())
+	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle("/media/", newDerivedMediaFileServer(localMediaRoot))
 	rootMux.Handle("/metrics/runtime-media", application.NewRuntimeMediaMetricsHandler(
 		groupAvatarScheduler,
@@ -277,17 +301,20 @@ func main() {
 		Src:               "chat-service",
 	}, ioLogger, processLogger, exceptionLogger)
 
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           observedHandler,
+		Handler:           rateLimited,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
 	logger.Info("chat-service starting", "addr", addr, "env", appEnv)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("chat-service listen failed: %v", err)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("chat-service: %v", err)
 	}
 }
 
@@ -669,11 +696,13 @@ func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
 		mode = "memory"
 	}
 	return rtredis.SceneConfig{
-		Mode:     mode,
-		Addr:     r.Addr,
-		Addrs:    r.Addrs,
-		Password: r.Password,
-		DB:       r.DB,
-		TLS:      r.TLS,
+		Mode:         mode,
+		Addr:         r.Addr,
+		Addrs:        r.Addrs,
+		Password:     r.Password,
+		DB:           r.DB,
+		TLS:          r.TLS,
+		PoolSize:     r.Pool.Size,
+		MinIdleConns: r.Pool.MinIdle,
 	}
 }

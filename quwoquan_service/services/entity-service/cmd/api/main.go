@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,8 +12,11 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-	rhttp "quwoquan_service/runtime/http"
+	rtgov "quwoquan_service/runtime/governance"
+	rthttp "quwoquan_service/runtime/http"
+	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
+	rtotel "quwoquan_service/runtime/otel"
 	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
 	"quwoquan_service/services/entity-service/internal/application"
 )
@@ -32,6 +37,11 @@ func main() {
 	}
 	normalizeDefaults(&cfg)
 
+	ctx := context.Background()
+
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "entity-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
 	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, robs.TraceLogLevelInfo, nil)
 	if err != nil {
@@ -43,7 +53,15 @@ func main() {
 	}
 
 	handler := httpadapter.NewHandler(application.NewHomepageService()).Routes()
-	serverCfg := rhttp.HTTPServerMiddlewareConfig{
+	rootMux := http.NewServeMux()
+	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	rootMux.Handle("/metrics", rtmetrics.Handler())
+	rootMux.Handle("/", handler)
+	serverCfg := rthttp.HTTPServerMiddlewareConfig{
 		Service:           "entity-service",
 		Origin:            "cloud",
 		Direction:         "inbound",
@@ -52,16 +70,22 @@ func main() {
 		ServiceName:       "entity-service",
 		ServiceInstanceID: hostname(),
 	}
-	withObs := rhttp.NewHTTPServerMiddleware(handler, serverCfg, ioLogger, processLogger, exceptionLogger)
+	withObs := rthttp.NewHTTPServerMiddleware(rootMux, serverCfg, ioLogger, processLogger, exceptionLogger)
+
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(withObs)
 
 	server := &http.Server{
 		Addr:              cfg.Service.HTTP.Addr,
-		Handler:           withObs,
+		Handler:           rateLimited,
+		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf("entity-service listening on %s", cfg.Service.HTTP.Addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("entity-service listen and serve: %v", err)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("entity-service: %v", err)
 	}
 }
 

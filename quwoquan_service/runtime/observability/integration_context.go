@@ -4,7 +4,10 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -85,4 +88,15 @@ func CorrelationMetaFromContext(ctx context.Context) (CorrelationMeta, bool) {
 	}
 	meta, ok := v.(CorrelationMeta)
 	return meta, ok
+}
+
+func EnrichCorrelationMetaFromSpan(meta *CorrelationMeta, ctx context.Context) {
+	span := trace.SpanFromContext(ctx)
+	if !span.SpanContext().HasTraceID() {
+		return
+	}
+	otelTraceID := span.SpanContext().TraceID().String()
+	if meta.TraceID == "" || strings.HasPrefix(meta.TraceID, "SVC.default") {
+		meta.TraceID = otelTraceID
+	}
 }

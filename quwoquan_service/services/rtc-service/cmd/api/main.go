@@ -12,11 +12,15 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gopkg.in/yaml.v3"
 
+	rthealth "quwoquan_service/runtime/health"
+	rtgov "quwoquan_service/runtime/governance"
+	rtmongo "quwoquan_service/runtime/mongodb"
+	rtotel "quwoquan_service/runtime/otel"
+
 	rthttp "quwoquan_service/runtime/http"
+	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/rtc-service/internal/adapters/http"
@@ -36,6 +40,10 @@ type redisSceneCfg struct {
 	Password string   `yaml:"password"`
 	DB       int      `yaml:"db"`
 	TLS      bool     `yaml:"tls"`
+	Pool     struct {
+		Size    int `yaml:"size"`
+		MinIdle int `yaml:"min_idle"`
+	} `yaml:"pool"`
 }
 
 type config struct {
@@ -105,10 +113,14 @@ func main() {
 	defer router.Close()
 
 	ctx := context.Background()
-	mongoClient, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoDB.URI))
-	if err != nil {
-		log.Fatalf("rtc-service mongo connect failed: %v", err)
+
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "rtc-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
+	if err := router.PingAll(ctx); err != nil {
+		log.Printf("WARN: rtc-service redis ping: %v", err)
 	}
+	mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "rtc-service")
 	defer func() { _ = mongoClient.Disconnect(ctx) }()
 
 	mongoDB := mongoClient.Database(cfg.MongoDB.Database)
@@ -116,7 +128,9 @@ func main() {
 	callCache := rtccache.NewCallStateCache(router.Scene("general"))
 	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"))
 
-	roomAdapter := livekit.NewLiveKitRoomAdapter(cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret)
+	livekitCB := rtgov.NewCircuitBreaker(5, 15*time.Second, logger)
+	livekitClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 10 * time.Second}, livekitCB)
+	roomAdapter := livekit.NewLiveKitRoomAdapter(cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, livekit.WithHTTPClient(livekitClient))
 	domainSvc := callsession.NewCallSessionService()
 	roomSvc := application.NewRoomService(roomAdapter)
 	tokenSvc := application.NewTokenService(cfg.LiveKit.APIKey, cfg.LiveKit.APISecret)
@@ -125,7 +139,19 @@ func main() {
 	orchestrator := application.NewCallOrchestrator(callStore, callCache, domainSvc, roomSvc, tokenSvc, eventPublisher, signalHandler)
 	handler := httpadapter.NewCallHandler(orchestrator, signalHandler).Routes()
 
-	observedHandler := rthttp.NewHTTPServerMiddleware(handler, rthttp.HTTPServerMiddlewareConfig{
+	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("redis", func(hctx context.Context) error {
+		return router.PingAll(hctx)
+	})
+	healthChecker.Register("mongodb", func(hctx context.Context) error {
+		return mongoClient.Ping(hctx, nil)
+	})
+	outerMux := http.NewServeMux()
+	outerMux.HandleFunc("/healthz", healthChecker.Handler())
+	outerMux.Handle("/metrics", rtmetrics.Handler())
+	outerMux.Handle("/", handler)
+
+	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "rtc-service",
 		ServiceName:       "rtc-service",
 		ServiceInstanceID: instanceID,
@@ -135,17 +161,19 @@ func main() {
 		Src:               "rtc-service",
 	}, ioLogger, processLogger, exceptionLogger)
 
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           observedHandler,
+		Handler:           rateLimited,
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
 	logger.Info("rtc-service starting", "addr", addr, "env", appEnv)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("rtc-service listen failed: %v", err)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("rtc-service: %v", err)
 	}
 }
 
@@ -349,13 +377,15 @@ func applyRedisSceneEnv(prefix string, cfg *redisSceneCfg) {
 }
 
 func buildRedisRouter(cfg config) *rtredis.Router {
+	generalScene := toSceneConfig(cfg.Redis.General)
 	routerCfg := rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"realtime": toSceneConfig(cfg.Redis.Realtime),
-			"general":  toSceneConfig(cfg.Redis.General),
+			"general":  generalScene,
+			"rec":      generalScene,
 		},
-		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
-		DefaultScene: "general",
+		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
+		DefaultScene: rtredis.GeneratedDefaultScene,
 	}
 	return rtredis.MustNewRouter(routerCfg)
 }
@@ -372,11 +402,13 @@ func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
 		mode = "memory"
 	}
 	return rtredis.SceneConfig{
-		Mode:     mode,
-		Addr:     r.Addr,
-		Addrs:    r.Addrs,
-		Password: r.Password,
-		DB:       r.DB,
-		TLS:      r.TLS,
+		Mode:         mode,
+		Addr:         r.Addr,
+		Addrs:        r.Addrs,
+		Password:     r.Password,
+		DB:           r.DB,
+		TLS:          r.TLS,
+		PoolSize:     r.Pool.Size,
+		MinIdleConns: r.Pool.MinIdle,
 	}
 }

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
@@ -45,8 +45,7 @@ class GreetingRequestDto {
   factory GreetingRequestDto.fromMap(Map<String, dynamic> map) {
     return GreetingRequestDto(
       id: (map['id'] as String?) ?? '',
-      requesterSubAccountId:
-          (map['requesterSubAccountId'] as String?) ?? '',
+      requesterSubAccountId: (map['requesterSubAccountId'] as String?) ?? '',
       targetSubAccountId: (map['targetSubAccountId'] as String?) ?? '',
       requestMessage: map['requestMessage'] as String?,
       status: (map['status'] as String?) ?? 'pending',
@@ -58,9 +57,11 @@ class GreetingRequestDto {
       decisionAt: map['decisionAt'] != null
           ? DateTime.tryParse(map['decisionAt'] as String)
           : null,
-      createdAt: DateTime.tryParse((map['createdAt'] ?? '') as String) ??
+      createdAt:
+          DateTime.tryParse((map['createdAt'] ?? '') as String) ??
           DateTime.now(),
-      updatedAt: DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
+      updatedAt:
+          DateTime.tryParse((map['updatedAt'] ?? '') as String) ??
           DateTime.now(),
     );
   }
@@ -182,11 +183,11 @@ class MockGreetingRepository extends GreetingRepository {
 
 /// Remote 实现
 class RemoteGreetingRepository extends GreetingRepository {
-  RemoteGreetingRepository({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteGreetingRepository({CloudHttpClient? httpClient, String? baseUrl})
+    : _httpClient = httpClient ?? CloudHttpClient(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
-  final http.Client _client;
+  final CloudHttpClient _httpClient;
   final String _baseUrl;
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
@@ -208,12 +209,9 @@ class RemoteGreetingRepository extends GreetingRepository {
     if (requestMessage != null) {
       body['requestMessage'] = requestMessage;
     }
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
-      headers: {
-        ..._headers,
-        'Content-Type': 'application/json',
-      },
+      headers: {..._headers, 'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
     if (resp.statusCode == 200 || resp.statusCode == 201) {
@@ -242,21 +240,22 @@ class RemoteGreetingRepository extends GreetingRepository {
     }
     final uri = Uri.parse(
       '$_baseUrl${UserApiMetadata.listGreetingInboxPath}',
-    ).replace(
-      queryParameters: queryParameters,
-    );
-    final resp = await _client.get(
+    ).replace(queryParameters: queryParameters);
+    final resp = await _httpClient.get(
       uri,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listGreetingInbox),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.listGreetingInbox,
+      ),
     );
     if (resp.statusCode == 200) {
       final body = CloudResponseDecoder.asObject(
         jsonDecode(resp.body),
         context: UserRequestPageIds.listGreetingInbox,
       );
-      return CloudResponseDecoder.mapList(body, 'items')
-          .map(GreetingRequestDto.fromMap)
-          .toList(growable: false);
+      return CloudResponseDecoder.mapList(
+        body,
+        'items',
+      ).map(GreetingRequestDto.fromMap).toList(growable: false);
     }
     return [];
   }
@@ -276,21 +275,22 @@ class RemoteGreetingRepository extends GreetingRepository {
     }
     final uri = Uri.parse(
       '$_baseUrl${UserApiMetadata.listGreetingOutboxPath}',
-    ).replace(
-      queryParameters: queryParameters,
-    );
-    final resp = await _client.get(
+    ).replace(queryParameters: queryParameters);
+    final resp = await _httpClient.get(
       uri,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.listGreetingOutbox),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.listGreetingOutbox,
+      ),
     );
     if (resp.statusCode == 200) {
       final body = CloudResponseDecoder.asObject(
         jsonDecode(resp.body),
         context: UserRequestPageIds.listGreetingOutbox,
       );
-      return CloudResponseDecoder.mapList(body, 'items')
-          .map(GreetingRequestDto.fromMap)
-          .toList(growable: false);
+      return CloudResponseDecoder.mapList(
+        body,
+        'items',
+      ).map(GreetingRequestDto.fromMap).toList(growable: false);
     }
     return [];
   }
@@ -300,7 +300,7 @@ class RemoteGreetingRepository extends GreetingRepository {
     final uri = _uri(
       UserApiMetadata.replyGreetingRequestPath(requestId: requestId),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.replyGreetingRequest,
@@ -322,7 +322,7 @@ class RemoteGreetingRepository extends GreetingRepository {
     final uri = _uri(
       UserApiMetadata.ignoreGreetingRequestPath(requestId: requestId),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.ignoreGreetingRequest,
@@ -344,7 +344,7 @@ class RemoteGreetingRepository extends GreetingRepository {
     final uri = _uri(
       UserApiMetadata.cancelGreetingRequestPath(requestId: requestId),
     );
-    final resp = await _client.delete(
+    final resp = await _httpClient.delete(
       uri,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.cancelGreetingRequest,

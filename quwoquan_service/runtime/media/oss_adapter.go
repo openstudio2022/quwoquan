@@ -45,21 +45,28 @@ type OSSMediaStore struct {
 	config       OSSConfig
 	sessions     SessionStore
 	assets       AssetStore
+	presigner    PresignClient
 	logger       *runtimeobservability.IOAccessLogger
 	circuitBreak *runtimegovernance.CircuitBreaker
 }
 
 // NewOSSMediaStore creates a production-ready MediaStore.
+// If presigner is nil, falls back to StubPresignClient (dev-only).
 func NewOSSMediaStore(
 	config OSSConfig,
 	sessions SessionStore,
 	assets AssetStore,
 	logger *runtimeobservability.IOAccessLogger,
+	presigner PresignClient,
 ) *OSSMediaStore {
+	if presigner == nil {
+		presigner = StubPresignClient{}
+	}
 	return &OSSMediaStore{
 		config:       config,
 		sessions:     sessions,
 		assets:       assets,
+		presigner:    presigner,
 		logger:       logger,
 		circuitBreak: runtimegovernance.NewCircuitBreaker(5, 30*time.Second, slog.Default()),
 	}
@@ -115,6 +122,14 @@ func (s *OSSMediaStore) CompleteUpload(ctx context.Context, sessionID string, op
 			rterr.ModuleContent,
 			"上传会话状态无效",
 			fmt.Sprintf("session %s status is %s, expected pending", sessionID, session.Status),
+		)
+	}
+
+	exists, _ := s.presigner.HeadObject(ctx, s.config.Bucket, session.OSSKey)
+	if !exists {
+		return nil, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "object_not_uploaded"),
+			"文件尚未上传完成", fmt.Sprintf("object %s not found in bucket", session.OSSKey),
 		)
 	}
 
@@ -187,14 +202,16 @@ func (s *OSSMediaStore) SignURL(_ context.Context, ossKey string, ttl time.Durat
 	return SignCDNURL(s.config.CDNDomain, ossKey, s.config.CDNSignKey, ttl), nil
 }
 
-func (s *OSSMediaStore) generatePresignURL(_ context.Context, ossKey, contentType string) (string, error) {
+func (s *OSSMediaStore) generatePresignURL(ctx context.Context, ossKey, contentType string) (string, error) {
 	if !s.circuitBreak.Allow() {
 		return "", rterr.NewUnavailable(rterr.ModuleContent, "OSS 服务暂时不可用", "circuit breaker open for OSS")
 	}
 
-	expires := time.Now().Add(s.config.PresignTTL).Unix()
-	url := fmt.Sprintf("https://%s.%s/%s?X-Amz-Expires=%d&X-Amz-ContentType=%s",
-		s.config.Bucket, s.config.Endpoint, ossKey, expires, contentType)
+	url, err := s.presigner.PresignPutObject(ctx, s.config.Bucket, ossKey, contentType, s.config.PresignTTL)
+	if err != nil {
+		s.circuitBreak.RecordFailure()
+		return "", rterr.NewUnavailable(rterr.ModuleContent, "生成上传链接失败", fmt.Sprintf("presign failed: %v", err))
+	}
 
 	s.circuitBreak.RecordSuccess()
 	return url, nil

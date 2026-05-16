@@ -112,10 +112,12 @@ func (s *ExploreRecallSource) Recall(ctx context.Context, req rtrec.RecallReques
 			AuthorID:     doc.AuthorID,
 			Title:        doc.Title,
 			Tags:         doc.Tags,
+			EntityRefs:   doc.EntityRefs,
 			PublishedAt:  doc.PublishedAt,
 			ViewCount:    doc.ViewCount,
 			LikeCount:    doc.LikeCount,
 			CommentCount: doc.CommentCount,
+			ShareCount:   doc.ShareCount,
 			RecallPath:   "explore_recall",
 		})
 	}
@@ -204,10 +206,12 @@ func queryDiscoveryFeed(
 			AuthorID:     doc.AuthorID,
 			Title:        doc.Title,
 			Tags:         doc.Tags,
+			EntityRefs:   doc.EntityRefs,
 			PublishedAt:  doc.PublishedAt,
 			ViewCount:    doc.ViewCount,
 			LikeCount:    doc.LikeCount,
 			CommentCount: doc.CommentCount,
+			ShareCount:   doc.ShareCount,
 			RecallPath:   recallPath,
 		})
 	}

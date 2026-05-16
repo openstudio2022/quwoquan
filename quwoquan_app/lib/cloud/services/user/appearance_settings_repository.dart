@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
@@ -120,15 +120,15 @@ class AppearanceSettingsSnapshot {
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'themeMode': themeMode.wireValue,
-        'fontSizePreset': fontSizePreset.wireValue,
-        'source': source.wireValue,
-        'ownerDefaultThemeMode': ownerDefaultThemeMode.wireValue,
-        'ownerDefaultFontSizePreset': ownerDefaultFontSizePreset.wireValue,
-        'hasSubAccountOverride': hasSubAccountOverride,
-        'version': version,
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'themeMode': themeMode.wireValue,
+    'fontSizePreset': fontSizePreset.wireValue,
+    'source': source.wireValue,
+    'ownerDefaultThemeMode': ownerDefaultThemeMode.wireValue,
+    'ownerDefaultFontSizePreset': ownerDefaultFontSizePreset.wireValue,
+    'hasSubAccountOverride': hasSubAccountOverride,
+    'version': version,
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   AppearanceSettingsSnapshot copyWith({
     AppearanceThemeMode? themeMode,
@@ -170,10 +170,10 @@ class AppearanceSettingsMutation {
   final AppearanceApplyScope applyScope;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'themeMode': themeMode.wireValue,
-        'fontSizePreset': fontSizePreset.wireValue,
-        'applyScope': applyScope.wireValue,
-      };
+    'themeMode': themeMode.wireValue,
+    'fontSizePreset': fontSizePreset.wireValue,
+    'applyScope': applyScope.wireValue,
+  };
 }
 
 abstract class AppearanceSettingsRepository {
@@ -243,11 +243,13 @@ class MockAppearanceSettingsRepository implements AppearanceSettingsRepository {
 
 class RemoteAppearanceSettingsRepository
     implements AppearanceSettingsRepository {
-  RemoteAppearanceSettingsRepository({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteAppearanceSettingsRepository({
+    CloudHttpClient? httpClient,
+    String? baseUrl,
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
-  final http.Client _client;
+  final CloudHttpClient _httpClient;
   final String _baseUrl;
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
@@ -256,15 +258,13 @@ class RemoteAppearanceSettingsRepository
       CloudRequestHeaders.forPage(UserRequestPageIds.getAppearanceSettings);
 
   Map<String, String> get _patchHeaders => <String, String>{
-        ...CloudRequestHeaders.forPage(
-          UserRequestPageIds.updateAppearanceSettings,
-        ),
-        'Content-Type': 'application/json',
-      };
+    ...CloudRequestHeaders.forPage(UserRequestPageIds.updateAppearanceSettings),
+    'Content-Type': 'application/json',
+  };
 
   @override
   Future<AppearanceSettingsSnapshot> getAppearanceSettings() async {
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       _uri(UserApiMetadata.getAppearanceSettingsPath),
       headers: _getHeaders,
     );
@@ -283,7 +283,7 @@ class RemoteAppearanceSettingsRepository
   Future<AppearanceSettingsSnapshot> updateAppearanceSettings(
     AppearanceSettingsMutation mutation,
   ) async {
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       _uri(UserApiMetadata.updateAppearanceSettingsPath),
       headers: _patchHeaders,
       body: jsonEncode(mutation.toJson()),

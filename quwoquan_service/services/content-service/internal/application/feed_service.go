@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
+	rtobs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
@@ -68,7 +71,13 @@ type ListFeedResponse struct {
 	Cursor     string         `json:"cursor,omitempty"`
 }
 
-func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListFeedResponse, error) {
+func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *ListFeedResponse, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "rec.ListFeed",
+		attribute.String("feed.type", req.Type),
+		attribute.String("feed.sort", req.Sort),
+		attribute.Int("feed.limit", req.Limit))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 20

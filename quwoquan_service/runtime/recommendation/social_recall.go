@@ -54,8 +54,12 @@ func (s *SocialRecallSource) Recall(ctx context.Context, req RecallRequest) ([]C
 		limit = 20
 	}
 
-	// Get content that friends interacted with
-	friendContent, err := s.socialProvider.GetFriendInteractedContent(ctx, req.UserID, limit)
+	friendLimit := limit / 2
+	if friendLimit < 5 {
+		friendLimit = 5
+	}
+
+	friendContent, err := s.socialProvider.GetFriendInteractedContent(ctx, req.UserID, friendLimit)
 	if err != nil {
 		friendContent = nil
 	}
@@ -72,9 +76,29 @@ func (s *SocialRecallSource) Recall(ctx context.Context, req RecallRequest) ([]C
 		}
 	}
 
-	// Cap at requested limit
-	if len(candidates) >= limit {
-		return candidates[:limit], nil
+	if len(candidates) < limit {
+		circleIDs, _ := s.socialProvider.GetUserCircleIDs(ctx, req.UserID)
+		if len(circleIDs) > 0 {
+			remaining := limit - len(candidates)
+			circleCandidates, err := s.candidateDB.GetCircleHotContent(ctx, circleIDs, remaining, s.maxAge)
+			if err == nil {
+				seen := make(map[string]bool, len(candidates))
+				for _, c := range candidates {
+					seen[c.ContentID] = true
+				}
+				for i := range circleCandidates {
+					if seen[circleCandidates[i].ContentID] {
+						continue
+					}
+					circleCandidates[i].RecallPath = "social_circle"
+					candidates = append(candidates, circleCandidates[i])
+				}
+			}
+		}
+	}
+
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
 	}
 
 	return candidates, nil

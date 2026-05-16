@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.opentelemetry.io/otel/attribute"
 
 	rterr "quwoquan_service/runtime/errors"
+	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/repository"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
@@ -50,7 +52,12 @@ type CreateFileRequest struct {
 	UploaderID     string
 }
 
-func (s *FileService) CreateFile(ctx context.Context, req CreateFileRequest) (*model.CircleFile, error) {
+func (s *FileService) CreateFile(ctx context.Context, req CreateFileRequest) (f *model.CircleFile, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.CreateFile",
+		attribute.String("circle.id", req.CircleID),
+		attribute.String("file.type", req.FileType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if req.Name == "" {
 		return nil, rterr.NewInvalidArgument(rterr.ModuleCircle, "文件名不能为空", "missing file name")
 	}
@@ -84,7 +91,7 @@ func (s *FileService) CreateFile(ctx context.Context, req CreateFileRequest) (*m
 	}
 
 	now := time.Now()
-	file := &model.CircleFile{
+	f = &model.CircleFile{
 		ID:             bson.NewObjectID().Hex(),
 		CircleID:       req.CircleID,
 		ParentFolderID: req.ParentFolderID,
@@ -100,29 +107,36 @@ func (s *FileService) CreateFile(ctx context.Context, req CreateFileRequest) (*m
 	}
 
 	if fileType == model.CircleFileTypeFolder {
-		file.Status = model.CircleFileStatusActive
-		file.ObjectKey = ""
+		f.Status = model.CircleFileStatusActive
+		f.ObjectKey = ""
 	}
 
-	if err := s.files.Create(ctx, file); err != nil {
+	if err := s.files.Create(ctx, f); err != nil {
 		return nil, fmt.Errorf("create file: %w", err)
 	}
 
 	if fileType == model.CircleFileTypeFolder {
-		return file, nil
+		return f, nil
 	}
 
 	// For files, return presigned URL info (stub — production uses S3 SDK)
-	return file, nil
+	return f, nil
 }
 
 func (s *FileService) GetFile(ctx context.Context, circleID, fileID string) (*model.CircleFile, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetFile",
+		attribute.String("circle.id", circleID),
+		attribute.String("file.id", fileID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	f, ok := s.files.FindByID(ctx, circleID, fileID)
 	if !ok {
-		return nil, rterr.NewAppError(
+		err = rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
 			"文件不存在", "file not found",
 		)
+		return nil, err
 	}
 	return f, nil
 }
@@ -132,13 +146,19 @@ type UpdateFileRequest struct {
 	Status string `json:"status"`
 }
 
-func (s *FileService) UpdateFile(ctx context.Context, circleID, fileID string, req UpdateFileRequest) (*model.CircleFile, error) {
+func (s *FileService) UpdateFile(ctx context.Context, circleID, fileID string, req UpdateFileRequest) (f *model.CircleFile, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.UpdateFile",
+		attribute.String("circle.id", circleID),
+		attribute.String("file.id", fileID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	f, ok := s.files.FindByID(ctx, circleID, fileID)
 	if !ok {
-		return nil, rterr.NewAppError(
+		err = rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
 			"文件不存在", "file not found",
 		)
+		return nil, err
 	}
 
 	if req.Name != "" {
@@ -146,7 +166,7 @@ func (s *FileService) UpdateFile(ctx context.Context, circleID, fileID string, r
 	}
 	if req.Status == "active" && f.Status == model.CircleFileStatusUploading {
 		f.Status = model.CircleFileStatusActive
-		if err := s.circles.UpdateStorageUsed(ctx, circleID, f.SizeBytes); err != nil {
+		if err = s.circles.UpdateStorageUsed(ctx, circleID, f.SizeBytes); err != nil {
 			return nil, fmt.Errorf("update storage used: %w", err)
 		}
 		s.publishEvent(ctx, "CircleFileUploaded", fileID, map[string]any{
@@ -156,22 +176,30 @@ func (s *FileService) UpdateFile(ctx context.Context, circleID, fileID string, r
 	}
 
 	if !s.files.Update(ctx, circleID, fileID, f) {
-		return nil, fmt.Errorf("update file failed")
+		err = fmt.Errorf("update file failed")
+		return nil, err
 	}
 	return f, nil
 }
 
-func (s *FileService) DeleteFile(ctx context.Context, circleID, fileID string) error {
+func (s *FileService) DeleteFile(ctx context.Context, circleID, fileID string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.DeleteFile",
+		attribute.String("circle.id", circleID),
+		attribute.String("file.id", fileID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	f, ok := s.files.FindByID(ctx, circleID, fileID)
 	if !ok {
-		return rterr.NewAppError(
+		err = rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
 			"文件不存在", "file not found",
 		)
+		return err
 	}
 
 	if !s.files.Delete(ctx, circleID, fileID) {
-		return fmt.Errorf("delete file failed")
+		err = fmt.Errorf("delete file failed")
+		return err
 	}
 
 	if f.FileType == model.CircleFileTypeFile && f.Status == model.CircleFileStatusActive {
@@ -185,5 +213,10 @@ func (s *FileService) DeleteFile(ctx context.Context, circleID, fileID string) e
 }
 
 func (s *FileService) ListFiles(ctx context.Context, circleID string, opts persistence.ListFilesOpts) ([]model.CircleFile, string) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListFiles",
+		attribute.String("circle.id", circleID),
+		attribute.String("list.parent_id", opts.ParentID))
+	defer func() { rtobs.EndSpan(span, nil) }()
+
 	return s.files.ListByCircle(ctx, circleID, opts)
 }

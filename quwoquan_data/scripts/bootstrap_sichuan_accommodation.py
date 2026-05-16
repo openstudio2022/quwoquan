@@ -1,7 +1,7 @@
 """批量生成四川住宿实体与住宿 posts（满足 H-A10/H-A11/H-A12）
 
 生成目标：
-- 15 个四川住宿实体（覆盖酒店/民宿/青旅/客栈/度假村/农家乐/胶囊旅馆）
+- 15 个四川住宿实体（覆盖酒店/民宿/青旅/客栈/度假村/农家乐/胶囊酒店）
 - 10 篇住宿相关 posts（每篇含 entityRef + Topic/旅行/住宿/* + Format/内容角度/*）
 
 用法:
@@ -13,9 +13,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
+from build_publish_lookup_indexes import build_publish_lookup_indexes
 
 ENTITIES_ROOT = PUBLISH_ROOT / "v1" / "entities" / "地点" / "住宿"
-POSTS_ROOT = PUBLISH_ROOT / "v1" / "posts" / "article" / "内容角度"
+POSTS_ROOT = PUBLISH_ROOT / "v1" / "posts" / "article"
 
 
 def write_json(path: Path, data: dict):
@@ -34,13 +35,12 @@ ENTITIES = [
         "labelEn": "Shangri-La Chengdu",
         "geo": "Topic/地理/行政区/中国/四川省/成都市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/档次等级/五星级",
-            "Entity/地点/住宿/功能定位/商务住宿",
-            "Entity/地点/住宿/功能定位/会议会展住宿",
-            "Entity/地点/住宿/设施服务/游泳池",
-            "Entity/地点/住宿/设施服务/行政酒廊",
-            "Entity/地点/住宿/设施服务/免费停车",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/业态/星级酒店/五星酒店",
+            "Topic/住宿/主题/商务主题",
+            "Topic/住宿/设施服务/泳池",
+            "Topic/住宿/设施服务/行政酒廊",
+            "Topic/住宿/设施服务/停车场",
         ],
         "sourceRefs": ["https://www.shangri-la.com/chengdu/shangrila/"],
         "desc": "位于成都锦江区滨江东路的国际五星级商务酒店，紧邻IFS与春熙路商圈，拥有593间客房与2000平方米无柱式宴会厅。",
@@ -50,12 +50,12 @@ ENTITIES = [
         "labelEn": "The St. Regis Chengdu",
         "geo": "Topic/地理/行政区/中国/四川省/成都市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/档次等级/豪华型",
-            "Entity/地点/住宿/功能定位/商务住宿",
-            "Entity/地点/住宿/设施服务/SPA水疗",
-            "Entity/地点/住宿/设施服务/行政酒廊",
-            "Entity/地点/住宿/设施服务/游泳池",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/价位档次/奢华型",
+            "Topic/住宿/主题/商务主题",
+            "Topic/住宿/设施服务/SPA",
+            "Topic/住宿/设施服务/行政酒廊",
+            "Topic/住宿/设施服务/泳池",
         ],
         "sourceRefs": ["https://www.marriott.com/hotels/travel/ctust-the-st-regis-chengdu/"],
         "desc": "万豪旗下顶级奢华品牌瑞吉在成都的旗舰物业，提供管家服务与瑞吉酒吧经典体验，定位城市奢华商务住宿。",
@@ -65,11 +65,11 @@ ENTITIES = [
         "labelEn": "The Temple House Chengdu",
         "geo": "Topic/地理/行政区/中国/四川省/成都市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/档次等级/高端型",
-            "Entity/地点/住宿/功能定位/设计精品住宿",
-            "Entity/地点/住宿/设施服务/游泳池",
-            "Entity/地点/住宿/设施服务/健身房",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/价位档次/高端型",
+            "Topic/住宿/业态/精品酒店",
+            "Topic/住宿/设施服务/泳池",
+            "Topic/住宿/设施服务/健身房",
         ],
         "sourceRefs": ["https://www.thehousecollective.com/the-temple-house/"],
         "desc": "太古集团居舍系列在成都的设计精品酒店，由百年大慈寺古建筑群改建而成，毗邻太古里，融合古蜀文化与当代设计。",
@@ -79,14 +79,14 @@ ENTITIES = [
         "labelEn": "Six Senses Qingcheng Mountain",
         "geo": "Topic/地理/行政区/中国/四川省/成都市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/度假村",
-            "Entity/地点/住宿/档次等级/豪华型",
-            "Entity/地点/住宿/功能定位/度假住宿",
-            "Entity/地点/住宿/功能定位/温泉住宿",
-            "Entity/地点/住宿/设施服务/SPA水疗",
-            "Entity/地点/住宿/设施服务/游泳池",
-            "Entity/地点/住宿/设施服务/免费停车",
-            "Entity/地点/住宿/房源形态/独栋别墅",
+            "Entity/地点/住宿/度假村",
+            "Topic/住宿/价位档次/奢华型",
+            "Topic/住宿/业态/度假酒店",
+            "Topic/住宿/主题/温泉主题",
+            "Topic/住宿/设施服务/SPA",
+            "Topic/住宿/设施服务/泳池",
+            "Topic/住宿/设施服务/停车场",
+            "Topic/住宿/业态/度假短租/整租别墅",
         ],
         "sourceRefs": ["https://www.sixsenses.com/en/resorts/qing-cheng-mountain/"],
         "desc": "六善品牌在中国的首家度假酒店，坐落于世界遗产青城山脚，以道教养生哲学为设计灵感，独栋别墅散布在竹林溪谷间。",
@@ -96,15 +96,15 @@ ENTITIES = [
         "labelEn": "Blulight Yizhuang Emei Hot Spring Resort",
         "geo": "Topic/地理/行政区/中国/四川省/乐山市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/度假村",
-            "Entity/地点/住宿/档次等级/高端型",
-            "Entity/地点/住宿/功能定位/温泉住宿",
-            "Entity/地点/住宿/功能定位/度假住宿",
-            "Entity/地点/住宿/功能定位/亲子友好住宿",
-            "Entity/地点/住宿/设施服务/温泉汤池",
-            "Entity/地点/住宿/设施服务/儿童乐园",
-            "Entity/地点/住宿/设施服务/免费停车",
-            "Entity/地点/住宿/房源形态/独栋别墅",
+            "Entity/地点/住宿/度假村",
+            "Topic/住宿/价位档次/高端型",
+            "Topic/住宿/主题/温泉主题",
+            "Topic/住宿/业态/度假酒店",
+            "Topic/住宿/主题/亲子主题",
+            "Topic/住宿/主题/温泉主题",
+            "Topic/住宿/设施服务/儿童设施",
+            "Topic/住宿/设施服务/停车场",
+            "Topic/住宿/业态/度假短租/整租别墅",
         ],
         "sourceRefs": ["https://www.trip.com/hotels/emeishan-hotel-detail-5145370/"],
         "desc": "位于峨眉山黄湾镇的森林温泉度假综合体，52个室内外温泉汤池与亲子乐园并重，是成都2小时度假圈的热门亲子目的地。",
@@ -114,11 +114,10 @@ ENTITIES = [
         "labelEn": "Hailuogou Gongga Shentang Hot Spring Hotel",
         "geo": "Topic/地理/行政区/中国/四川省/甘孜州",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/档次等级/舒适型",
-            "Entity/地点/住宿/功能定位/温泉住宿",
-            "Entity/地点/住宿/设施服务/温泉汤池",
-            "Entity/地点/住宿/设施服务/免费停车",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/价位档次/中端型",
+            "Topic/住宿/主题/温泉主题",
+            "Topic/住宿/设施服务/停车场",
         ],
         "sourceRefs": ["https://www.trip.com/hotels/hailuogou-hotel-detail-436628/"],
         "desc": "位于海螺沟景区磨西镇的温泉酒店，天然碳酸氢钠温泉水质优良，是观赏贡嘎山冰川日照金山后的理想住宿选择。",
@@ -128,9 +127,9 @@ ENTITIES = [
         "labelEn": "Danba Jiaju Tibetan Village Homestay",
         "geo": "Topic/地理/行政区/中国/四川省/甘孜州",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/民宿",
-            "Entity/地点/住宿/档次等级/舒适型",
-            "Entity/地点/住宿/房源形态/藏式民居",
+            "Entity/地点/住宿/民宿",
+            "Topic/住宿/价位档次/中端型",
+            "Topic/住宿/业态/民宿",
         ],
         "sourceRefs": ["https://baike.baidu.com/item/甲居藏寨"],
         "desc": "丹巴甲居藏寨是中国最美乡村之一，藏式碉楼民居改造为民宿，提供藏族家庭式住宿体验与田园风光。",
@@ -140,10 +139,10 @@ ENTITIES = [
         "labelEn": "Hilton Garden Inn Daocheng Aden",
         "geo": "Topic/地理/行政区/中国/四川省/甘孜州",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/档次等级/舒适型",
-            "Entity/地点/住宿/房型空间/大床房",
-            "Entity/地点/住宿/设施服务/免费停车",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/价位档次/中端型",
+            "Topic/住宿/房型/大床房",
+            "Topic/住宿/设施服务/停车场",
         ],
         "sourceRefs": ["https://www.hilton.com/en/hotels/dcjgigi-hilton-garden-inn-daocheng-aden/"],
         "desc": "希尔顿花园酒店品牌在稻城亚丁的物业，海拔约3700米，配备供氧系统与弥散式制氧设备，是高原住宿的代表。",
@@ -153,8 +152,8 @@ ENTITIES = [
         "labelEn": "Lazybones Hostel Chengdu",
         "geo": "Topic/地理/行政区/中国/四川省/成都市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/青年旅舍",
-            "Entity/地点/住宿/档次等级/经济型",
+            "Entity/地点/住宿/青旅",
+            "Topic/住宿/价位档次/经济型",
             "Entity/地点/住宿/房源形态/合住房间",
         ],
         "sourceRefs": ["https://www.hostelworld.com/st/hostels/p/47283/lazybones-hostel/"],
@@ -165,11 +164,11 @@ ENTITIES = [
         "labelEn": "Hilton Jiuzhaigou Resort",
         "geo": "Topic/地理/行政区/中国/四川省/阿坝州",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/档次等级/高端型",
-            "Entity/地点/住宿/功能定位/度假住宿",
-            "Entity/地点/住宿/设施服务/游泳池",
-            "Entity/地点/住宿/设施服务/免费停车",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/价位档次/高端型",
+            "Topic/住宿/业态/度假酒店",
+            "Topic/住宿/设施服务/泳池",
+            "Topic/住宿/设施服务/停车场",
             "Entity/地点/住宿/设施服务/接送服务",
         ],
         "sourceRefs": ["https://www.hilton.com/en/hotels/jzhchhi-hilton-jiuzhaigou-resort/"],
@@ -180,10 +179,10 @@ ENTITIES = [
         "labelEn": "Blossom Hill Inn Langzhong",
         "geo": "Topic/地理/行政区/中国/四川省/南充市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/客栈",
-            "Entity/地点/住宿/档次等级/高端型",
-            "Entity/地点/住宿/功能定位/设计精品住宿",
-            "Entity/地点/住宿/房源形态/庭院客栈",
+            "Entity/地点/住宿/客栈",
+            "Topic/住宿/价位档次/高端型",
+            "Topic/住宿/业态/精品酒店",
+            "Entity/地点/住宿/客栈",
         ],
         "sourceRefs": ["https://www.trip.com/hotels/langzhong-hotel-detail-5826095/"],
         "desc": "花间堂品牌在阆中古城内的精品客栈，由清代院落修缮而来，保留川北传统穿斗木结构，是古城沉浸式住宿体验代表。",
@@ -193,12 +192,12 @@ ENTITIES = [
         "labelEn": "Antimán Dujiangyan Resort",
         "geo": "Topic/地理/行政区/中国/四川省/成都市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/度假村",
-            "Entity/地点/住宿/档次等级/高端型",
-            "Entity/地点/住宿/功能定位/亲子友好住宿",
-            "Entity/地点/住宿/功能定位/度假住宿",
-            "Entity/地点/住宿/设施服务/儿童乐园",
-            "Entity/地点/住宿/设施服务/免费停车",
+            "Entity/地点/住宿/度假村",
+            "Topic/住宿/价位档次/高端型",
+            "Topic/住宿/主题/亲子主题",
+            "Topic/住宿/业态/度假酒店",
+            "Topic/住宿/设施服务/儿童设施",
+            "Topic/住宿/设施服务/停车场",
             "Entity/地点/住宿/房源形态/树屋",
         ],
         "sourceRefs": ["https://www.trip.com/hotels/dujiangyan-hotel-detail-10614741/"],
@@ -209,10 +208,10 @@ ENTITIES = [
         "labelEn": "Pengzhou Baoshan Taiyangwan Farmstay",
         "geo": "Topic/地理/行政区/中国/四川省/成都市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/农家乐",
-            "Entity/地点/住宿/档次等级/经济型",
-            "Entity/地点/住宿/功能定位/亲子友好住宿",
-            "Entity/地点/住宿/设施服务/免费停车",
+            "Entity/地点/住宿/农家乐",
+            "Topic/住宿/价位档次/经济型",
+            "Topic/住宿/主题/亲子主题",
+            "Topic/住宿/设施服务/停车场",
             "Entity/地点/住宿/设施服务/厨房厨具",
         ],
         "sourceRefs": ["https://map.baidu.com/poi/彭州宝山村"],
@@ -223,9 +222,9 @@ ENTITIES = [
         "labelEn": "Chengdu Beehive Capsule Hotel",
         "geo": "Topic/地理/行政区/中国/四川省/成都市",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/胶囊旅馆",
-            "Entity/地点/住宿/档次等级/经济型",
-            "Entity/地点/住宿/功能定位/机场高铁住宿",
+            "Entity/地点/住宿/胶囊酒店",
+            "Topic/住宿/价位档次/经济型",
+            "Topic/住宿/区位/高铁近",
         ],
         "sourceRefs": ["https://www.trip.com/hotels/chengdu-hotel-detail-46529760/"],
         "desc": "成都火车南站附近的太空舱式胶囊旅馆，单人舱位配独立电视与USB充电，适合转机转车旅客短暂休息。",
@@ -235,9 +234,9 @@ ENTITIES = [
         "labelEn": "Litang Renkang Ancient House",
         "geo": "Topic/地理/行政区/中国/四川省/甘孜州",
         "tagRefs": [
-            "Entity/地点/住宿/住宿业态/客栈",
-            "Entity/地点/住宿/档次等级/舒适型",
-            "Entity/地点/住宿/房源形态/藏式民居",
+            "Entity/地点/住宿/客栈",
+            "Topic/住宿/价位档次/中端型",
+            "Topic/住宿/业态/民宿",
         ],
         "sourceRefs": ["https://baike.baidu.com/item/仁康古屋"],
         "desc": "理塘古城内的七世达赖仓央嘉措故居改建客栈，是川藏线自驾客的热门打卡住宿点，海拔4014米，全国最高县城标志建筑之一。",
@@ -254,8 +253,8 @@ POSTS = [
             "Topic/旅行/住宿/酒店体验",
             "Topic/旅行/旅行主题/城市漫步",
             "Format/内容角度/探店",
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/功能定位/设计精品住宿",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/业态/精品酒店",
         ],
     },
     {
@@ -266,8 +265,8 @@ POSTS = [
             "Topic/旅行/住宿/度假住宿",
             "Topic/旅行/旅行主题/乡村田园",
             "Format/内容角度/探店",
-            "Entity/地点/住宿/住宿业态/度假村",
-            "Entity/地点/住宿/功能定位/度假住宿",
+            "Entity/地点/住宿/度假村",
+            "Topic/住宿/业态/度假酒店",
         ],
     },
     {
@@ -279,7 +278,7 @@ POSTS = [
             "Topic/旅行/住宿/高原住宿",
             "Topic/旅行/出行方式/自驾",
             "Format/内容角度/攻略",
-            "Entity/地点/住宿/住宿业态/民宿",
+            "Entity/地点/住宿/民宿",
         ],
     },
     {
@@ -290,8 +289,8 @@ POSTS = [
             "Topic/旅行/住宿/出差住宿",
             "Topic/旅行/住宿/商旅住宿",
             "Format/内容角度/攻略",
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/功能定位/商务住宿",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/主题/商务主题",
         ],
     },
     {
@@ -303,8 +302,8 @@ POSTS = [
             "Topic/旅行/住宿/亲子住宿",
             "Topic/旅行/旅行时长/3-5日中线",
             "Format/内容角度/体验",
-            "Entity/地点/住宿/住宿业态/度假村",
-            "Entity/地点/住宿/功能定位/亲子友好住宿",
+            "Entity/地点/住宿/度假村",
+            "Topic/住宿/主题/亲子主题",
         ],
     },
     {
@@ -314,8 +313,8 @@ POSTS = [
         "tagRefs": [
             "Topic/旅行/住宿/酒店体验",
             "Format/内容角度/测评",
-            "Entity/地点/住宿/住宿业态/酒店",
-            "Entity/地点/住宿/档次等级/豪华型",
+            "Entity/地点/住宿/酒店",
+            "Topic/住宿/价位档次/奢华型",
         ],
     },
     {
@@ -326,7 +325,7 @@ POSTS = [
             "Topic/旅行/住宿/住宿避雷",
             "Topic/旅行/住宿/高原住宿",
             "Format/内容角度/避雷",
-            "Entity/地点/住宿/住宿业态/酒店",
+            "Entity/地点/住宿/酒店",
         ],
     },
     {
@@ -337,8 +336,8 @@ POSTS = [
             "Topic/旅行/住宿/青旅住宿",
             "Topic/旅行/旅行主题/城市漫步",
             "Format/内容角度/体验",
-            "Entity/地点/住宿/住宿业态/青年旅舍",
-            "Entity/地点/住宿/档次等级/经济型",
+            "Entity/地点/住宿/青旅",
+            "Topic/住宿/价位档次/经济型",
         ],
     },
     {
@@ -349,8 +348,8 @@ POSTS = [
             "Topic/旅行/住宿/民宿体验",
             "Topic/旅行/住宿/特色住宿",
             "Format/内容角度/体验",
-            "Entity/地点/住宿/住宿业态/客栈",
-            "Entity/地点/住宿/房源形态/庭院客栈",
+            "Entity/地点/住宿/客栈",
+            "Entity/地点/住宿/客栈",
         ],
     },
     {
@@ -361,8 +360,8 @@ POSTS = [
             "Topic/旅行/住宿/住宿攻略",
             "Topic/旅行/旅行时长/周末短途",
             "Format/内容角度/攻略",
-            "Entity/地点/住宿/住宿业态/农家乐",
-            "Entity/地点/住宿/功能定位/亲子友好住宿",
+            "Entity/地点/住宿/农家乐",
+            "Topic/住宿/主题/亲子主题",
         ],
     },
 ]
@@ -370,12 +369,13 @@ POSTS = [
 
 def gen_entity(e: dict):
     edir = ENTITIES_ROOT / e["name"]
+    tag_refs = list(dict.fromkeys(e["tagRefs"]))
     entity_json = {
         "label": e["name"],
         "labelEn": e["labelEn"],
         "description": e["desc"],
         "geoTagRef": e["geo"],
-        "tagRefs": e["tagRefs"],
+        "tagRefs": tag_refs,
         "sourceRefs": e["sourceRefs"],
         "createdAt": NOW_ISO,
         "updatedAt": NOW_ISO,
@@ -383,9 +383,8 @@ def gen_entity(e: dict):
     write_json(edir / "_entity.json", entity_json)
 
     manifest_json = {
-        "tagRefs": e["tagRefs"],
         "entityRefs": [],
-        "sourceRefs": e["sourceRefs"],
+        "assets": [f'{e["name"]}_cover.jpg'],
         "createdAt": NOW_ISO,
         "updatedAt": NOW_ISO,
     }
@@ -418,11 +417,12 @@ def gen_entity(e: dict):
 
 def gen_post(p: dict):
     pdir = POSTS_ROOT / p["angle"] / p["title"] / "1"
+    tag_refs = list(dict.fromkeys(p["tagRefs"]))
 
     manifest_json = {
         "contentType": "article",
         "entityRefs": [p["entityRef"]],
-        "tagRefs": p["tagRefs"],
+        "tagRefs": tag_refs,
         "createdAt": NOW_ISO,
         "updatedAt": NOW_ISO,
     }
@@ -465,6 +465,10 @@ def main():
     for p in POSTS:
         gen_post(p)
         print(f"  ✓ {p['title']}")
+
+    print("\n重建 publish/v1 lookup 索引...")
+    counts = build_publish_lookup_indexes()
+    print(f"  lookup 索引: entities={counts['entities']}, posts={counts['posts']}")
 
     print(f"\n完成！实体 {len(ENTITIES)} 个，posts {len(POSTS)} 篇。")
 

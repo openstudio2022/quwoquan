@@ -6,6 +6,8 @@ FROM ${PYTHON_BASE_IMAGE}
 ARG PIP_INDEX_URL
 ARG PIP_TRUSTED_HOST
 
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -15,7 +17,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_INDEX_URL=${PIP_INDEX_URL} \
     PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST}
 
-COPY requirements.txt .
+COPY quwoquan_service/services/rec-model-service/requirements.txt .
 RUN if [ -n "${PIP_TRUSTED_HOST}" ]; then \
       python -m pip install --no-cache-dir \
         --index-url "${PIP_INDEX_URL}" \
@@ -27,19 +29,24 @@ RUN if [ -n "${PIP_TRUSTED_HOST}" ]; then \
         -r requirements.txt; \
     fi
 
-COPY generated/ ./generated/
-COPY app/ ./app/
-COPY api/ ./api/
-COPY features/ ./features/
-COPY models/ ./models/
-COPY configs/ ./configs/
-COPY runtime_contract.py ./
-COPY main.py ./
+COPY quwoquan_service/services/rec-model-service/generated/ ./generated/
+COPY quwoquan_service/services/rec-model-service/app/ ./app/
+COPY quwoquan_service/services/rec-model-service/api/ ./api/
+COPY quwoquan_service/services/rec-model-service/features/ ./features/
+COPY quwoquan_service/services/rec-model-service/models/ ./models/
+COPY quwoquan_service/services/rec-model-service/configs/ ./configs/
+COPY releases/config/recommendation-service/ ./releases/config/recommendation-service/
+COPY quwoquan_service/services/rec-model-service/runtime_contract.py ./
+COPY quwoquan_service/services/rec-model-service/main.py ./
+
+COPY quwoquan_service/scripts/ml/artifact_store.py ./ml/artifact_store.py
+COPY quwoquan_service/scripts/ml/model_registry.py ./ml/model_registry.py
 
 ENV PYTHONPATH=.
 ENV PYTHONUNBUFFERED=1
 
-RUN useradd -m app && chown -R app:app /app
+RUN useradd -m app && mkdir -p /app/cache && chown -R app:app /app
+ENV MODEL_CACHE_DIR=/app/cache
 USER app
 
 EXPOSE 8000
