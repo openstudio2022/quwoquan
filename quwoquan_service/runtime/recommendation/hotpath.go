@@ -86,8 +86,10 @@ const (
 type BehaviorSignal struct {
 	UserID          string    `json:"userId"`
 	SessionID       string    `json:"sessionId"`
+	FeedSessionID   string    `json:"feedSessionId,omitempty"`
 	ContentID       string    `json:"contentId"`
 	Action          string    `json:"action"`
+	ContentType     string    `json:"contentType,omitempty"`
 	Tags            []string  `json:"tags,omitempty"`
 	Duration        float64   `json:"duration,omitempty"`
 	Timestamp       time.Time `json:"timestamp"`
@@ -97,25 +99,40 @@ type BehaviorSignal struct {
 	ConsumedRatio   float64   `json:"consumedRatio,omitempty"`
 	TotalUnits      int       `json:"totalUnits,omitempty"`
 	EntityRefs      []string  `json:"entityRefs,omitempty"`
+	FeedRequestID   string    `json:"feedRequestId,omitempty"`
+	Position        int       `json:"position,omitempty"`
+	CommentLength   int       `json:"commentLength,omitempty"`
 }
 
-// Signal weights per action type — tunable via runtime/experiments.
+// EffectiveSessionID returns the feed-scoped session ID for recommendation
+// attribution. Falls back to the trace-level SessionID if FeedSessionID is empty.
+func (s BehaviorSignal) EffectiveSessionID() string {
+	if s.FeedSessionID != "" {
+		return s.FeedSessionID
+	}
+	return s.SessionID
+}
+
+// SignalWeights is the single source of truth for supported actions and their
+// base tag-weight contribution, aligned with behaviors.yaml signal_weight.
+// An action absent from this map is rejected by BehaviorService.ProcessBatch.
 var SignalWeights = map[string]float64{
-	"impression":    0.1,
-	"click":         0.5,
-	"dwell":         1.0,
-	"like":          2.0,
-	"favorite":      3.0,
-	"share":         3.0,
-	"dislike":       -5.0,
-	"report":        -10.0,
-	"skip":          -0.3,
-	"comment":       2.5,
-	"follow":        4.0,
-	"author_view":   1.5,
-	"tag_click":     1.8,
-	"play_progress": 1.0,
-	"content_depth": 1.0,
+	"impression":       0.1,
+	"click":            0.5,
+	"dwell":            1.0,
+	"like":             2.0,
+	"favorite":         3.0,
+	"share":            3.0,
+	"dislike":          -5.0,
+	"report":           -10.0,
+	"skip":             -0.3,
+	"comment":          2.5,
+	"follow":           4.0,
+	"author_view":      1.5,
+	"entity_page_view": 1.2,
+	"tag_click":        1.8,
+	"play_progress":    1.0,
+	"content_depth":    1.0,
 }
 
 // ReferralSourceMultiplier maps referral sources to tag weight multipliers.
@@ -160,7 +177,7 @@ func sessionKey(userID, sessionID string) string {
 // ProcessSignal updates session-level state from a behavior signal.
 // Tag weight is computed as: baseWeight × depthCoefficient × referralMultiplier
 func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) error {
-	sk := sessionKey(signal.UserID, signal.SessionID)
+	sk := sessionKey(signal.UserID, signal.EffectiveSessionID())
 
 	if err := h.addExposed(ctx, sk, signal.ContentID); err != nil {
 		return err
@@ -222,7 +239,7 @@ func (h *HotPath) ProcessSignalBatch(ctx context.Context, signals []BehaviorSign
 
 	groups := make(map[string][]BehaviorSignal, len(signals)/2+1)
 	for _, s := range signals {
-		sk := sessionKey(s.UserID, s.SessionID)
+		sk := sessionKey(s.UserID, s.EffectiveSessionID())
 		groups[sk] = append(groups[sk], s)
 	}
 
@@ -348,11 +365,11 @@ func (h *HotPath) IsExposed(ctx context.Context, userID, sessionID, contentID st
 
 // SessionState holds the real-time session context for recommendations.
 type SessionState struct {
-	UserID      string
-	SessionID   string
-	TagWeights  map[string]float64
-	ExposedIDs  []string
-	NegativeIDs []string
+	UserID      string             `json:"userId"`
+	SessionID   string             `json:"sessionId"`
+	TagWeights  map[string]float64 `json:"tagWeights"`
+	ExposedIDs  []string           `json:"exposedIds"`
+	NegativeIDs []string           `json:"negativeIds"`
 }
 
 func (h *HotPath) addExposed(ctx context.Context, sk, contentID string) error {
