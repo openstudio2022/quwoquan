@@ -72,6 +72,7 @@ void main() {
         'comment',
         'follow',
         'author_view',
+        'entity_page_view',
         'tag_click',
         'play_progress',
         'content_depth',

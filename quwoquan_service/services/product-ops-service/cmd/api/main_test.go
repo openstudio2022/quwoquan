@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"quwoquan_service/runtime/controlplane"
+	rthealth "quwoquan_service/runtime/health"
 	"quwoquan_service/services/product-ops-service/internal/application"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
 )
@@ -21,12 +22,16 @@ func newTestProductService(t *testing.T) *productService {
 	)
 }
 
+func newTestServerMux(service *productService) *http.ServeMux {
+	return newServerMux(service, rthealth.NewChecker())
+}
+
 func TestExperimentEndpoints(t *testing.T) {
 	service := newTestProductService(t)
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed service: %v", err)
 	}
-	server := newServerMux(service)
+	server := newTestServerMux(service)
 
 	assignReq := httptest.NewRequest(http.MethodPost, "/v1/ops/experiments/discovery_feed_v3/assign", bytes.NewBufferString(`{"subjectKey":"user-1"}`))
 	assignReq.Header.Set("Content-Type", "application/json")
@@ -68,7 +73,7 @@ func TestVisitEndpoints(t *testing.T) {
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed service: %v", err)
 	}
-	server := newServerMux(service)
+	server := newTestServerMux(service)
 
 	for range 2 {
 		recordReq := httptest.NewRequest(http.MethodPost, "/v1/ops/visits", bytes.NewBufferString(`{"targetType":"page","targetKey":"platform-onboarding","userId":"user-1"}`))
@@ -110,7 +115,7 @@ func TestEventEndpoints(t *testing.T) {
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed service: %v", err)
 	}
-	server := newServerMux(service)
+	server := newTestServerMux(service)
 
 	body := bytes.NewBufferString(`{"events":[{"eventId":"evt-1","eventType":"experience","eventName":"page_open","eventVersion":"v1","priority":"P0","producer":"app","pageName":"home","surfaceId":"homeFeed","routeId":"home","occurredAt":"2026-04-01T00:00:00Z","payload":{"location":"/home"}},{"eventId":"evt-2","eventType":"analytics","eventName":"bottom_nav_tap","eventVersion":"v1","priority":"P1","producer":"app","pageName":"home","surfaceId":"homeFeed","routeId":"home","experimentBucket":"control","occurredAt":"2026-04-01T00:00:05Z"}]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/ops/events", body)
@@ -167,7 +172,7 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	if err := service.seed(); err != nil {
 		t.Fatalf("seed service: %v", err)
 	}
-	server := newServerMux(service)
+	server := newTestServerMux(service)
 
 	reviewReq := httptest.NewRequest(http.MethodPost, "/v1/control-plane/product/moderation/cases/case_post_901:startReview", nil)
 	reviewReq.Header.Set("X-Actor", "reviewer-1")

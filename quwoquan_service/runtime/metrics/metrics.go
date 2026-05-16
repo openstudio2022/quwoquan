@@ -16,10 +16,18 @@ var registerOnce sync.Once
 // Safe to call multiple times; subsequent calls are no-ops.
 func MustRegisterRuntimeCollectors() {
 	registerOnce.Do(func() {
-		prometheus.MustRegister(
+		collectorsToRegister := []prometheus.Collector{
 			collectors.NewGoCollector(),
 			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
-		)
+		}
+		for _, collector := range collectorsToRegister {
+			if err := prometheus.Register(collector); err != nil {
+				if _, ok := err.(prometheus.AlreadyRegisteredError); ok {
+					continue
+				}
+				panic(err)
+			}
+		}
 	})
 }
 
