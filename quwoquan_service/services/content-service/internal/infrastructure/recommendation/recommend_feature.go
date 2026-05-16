@@ -208,5 +208,9 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 		TotalShares:      raw.TotalShares,
 		TotalEvents:      raw.TotalEvents,
 		EngagementRate:   engagementRate,
+		LikeLevel:        rtrec.MapCountToLevel(raw.TotalLikes),
+		FavoriteLevel:    rtrec.MapCountToLevel(raw.TotalFavorites),
+		ShareLevel:       rtrec.MapCountToLevel(raw.TotalShares),
+		EventLevel:       rtrec.MapCountToLevel(raw.TotalEvents),
 	}, nil
 }

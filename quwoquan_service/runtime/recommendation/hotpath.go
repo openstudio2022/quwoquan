@@ -158,6 +158,7 @@ func sessionKey(userID, sessionID string) string {
 }
 
 // ProcessSignal updates session-level state from a behavior signal.
+// Tag weight is computed as: baseWeight × depthCoefficient × referralMultiplier
 func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) error {
 	sk := sessionKey(signal.UserID, signal.SessionID)
 
@@ -165,20 +166,46 @@ func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) erro
 		return err
 	}
 
-	weight := SignalWeights[signal.Action]
-	if weight < 0 {
+	baseWeight := SignalWeights[signal.Action]
+	if baseWeight < 0 {
 		if err := h.addNegative(ctx, sk, signal.ContentID); err != nil {
 			return err
 		}
 	}
 
+	effectiveWeight := computeEffectiveTagWeight(baseWeight, signal.EngagementDepth, signal.ReferralSource)
+
 	if len(signal.Tags) > 0 {
-		if err := h.updateTagWeights(ctx, sk, signal.Tags, weight); err != nil {
+		if err := h.updateTagWeights(ctx, sk, signal.Tags, effectiveWeight); err != nil {
 			return err
 		}
 	}
 
 	return h.updateInterest(ctx, sk, signal)
+}
+
+// computeEffectiveTagWeight applies depth and referral source multipliers.
+// Formula: baseWeight × depthCoefficient[depth] × referralMultiplier[source]
+// When depth is 0 (unset/legacy), coefficient defaults to 1.0 (no suppression).
+// Only depth > 0 applies the DepthLevelCoefficient lookup.
+func computeEffectiveTagWeight(baseWeight float64, depth int, referralSource string) float64 {
+	if baseWeight <= 0 {
+		return baseWeight
+	}
+
+	depthCoeff := 1.0
+	if depth > 0 && depth < len(DepthLevelCoefficient) {
+		depthCoeff = DepthLevelCoefficient[depth]
+	}
+
+	sourceMultiplier := 1.0
+	if referralSource != "" {
+		if m, ok := ReferralSourceMultiplier[referralSource]; ok {
+			sourceMultiplier = m
+		}
+	}
+
+	return baseWeight * depthCoeff * sourceMultiplier
 }
 
 // ProcessSignalBatch processes multiple signals concurrently.

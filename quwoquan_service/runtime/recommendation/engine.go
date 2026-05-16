@@ -70,6 +70,7 @@ type ContentCandidate struct {
 	AuthorID     string
 	Title        string
 	Tags         []string
+	EntityRefs   []string
 	PublishedAt  time.Time
 	ViewCount    int64
 	LikeCount    int64
