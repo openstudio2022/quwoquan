@@ -1713,6 +1713,7 @@ final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
 final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   if (mode == AppDataSourceMode.remote) {
+    final feedSessionNotifier = ref.read(feedSessionProvider.notifier);
     final repo = RemoteBehaviorRepository(
       httpClient: ref.watch(cloudHttpClientProvider),
       eventRepository: ref.watch(opsEventRepositoryProvider),
@@ -1720,8 +1721,7 @@ final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
       experimentBucket: ref
           .watch(contentRuntimeConfigProvider)
           .experimentBucket,
-      feedSessionIdProvider: () =>
-          ref.read(feedSessionProvider.notifier).sessionId,
+      feedSessionIdProvider: () => feedSessionNotifier.sessionId,
     );
     ref.onDispose(repo.dispose);
     return repo;

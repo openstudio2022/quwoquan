@@ -23,10 +23,12 @@ class UnifiedMediaViewerPage extends ConsumerStatefulWidget {
 class _UnifiedMediaViewerPageState
     extends ConsumerState<UnifiedMediaViewerPage> {
   String? _trackedContentId;
+  late final ContentEngagementTracker _tracker;
 
   @override
   void initState() {
     super.initState();
+    _tracker = ref.read(contentEngagementTrackerProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _startTrackingInitialPost();
@@ -36,9 +38,7 @@ class _UnifiedMediaViewerPageState
   @override
   void dispose() {
     if (_trackedContentId != null) {
-      ref
-          .read(contentEngagementTrackerProvider)
-          .trackContentExit(_trackedContentId!);
+      _tracker.trackContentExit(_trackedContentId!);
     }
     super.dispose();
   }
@@ -75,9 +75,8 @@ class _UnifiedMediaViewerPageState
   void _trackPostAtIndex(int index) {
     if (index < 0) return;
 
-    final tracker = ref.read(contentEngagementTrackerProvider);
     if (_trackedContentId != null) {
-      tracker.trackContentExit(_trackedContentId!);
+      _tracker.trackContentExit(_trackedContentId!);
     }
 
     String postId;
@@ -104,7 +103,7 @@ class _UnifiedMediaViewerPageState
     }
 
     _trackedContentId = postId;
-    tracker.trackContentEnter(
+    _tracker.trackContentEnter(
       postId,
       contentType: contentType,
       referralSource: widget.extra.referralSource,
