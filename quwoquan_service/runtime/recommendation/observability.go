@@ -11,19 +11,25 @@ import (
 
 // PipelineMetrics captures per-request recommendation pipeline timing.
 type PipelineMetrics struct {
-	UserID           string         `json:"userId"`
-	SessionID        string         `json:"sessionId"`
-	RecallLatency    time.Duration  `json:"recallLatencyMs"`
-	ScoreLatency     time.Duration  `json:"scoreLatencyMs"`
-	RerankLatency    time.Duration  `json:"rerankLatencyMs"`
-	TotalLatency     time.Duration  `json:"totalLatencyMs"`
-	CandidateCount   int            `json:"candidateCount"`
-	FilteredCount    int            `json:"filteredCount"`
-	ResultCount      int            `json:"resultCount"`
-	SourceBreakdown  map[string]int `json:"sourceBreakdown,omitempty"`
-	ModelUsed        string         `json:"modelUsed,omitempty"`
-	ExperimentBucket string         `json:"experimentBucket,omitempty"`
-	TopicEntropy     float64        `json:"topicEntropy,omitempty"`
+	UserID             string         `json:"userId"`
+	SessionID          string         `json:"sessionId"`
+	RecallLatency      time.Duration  `json:"recallLatencyMs"`
+	ScoreLatency       time.Duration  `json:"scoreLatencyMs"`
+	RerankLatency      time.Duration  `json:"rerankLatencyMs"`
+	TotalLatency       time.Duration  `json:"totalLatencyMs"`
+	CandidateCount     int            `json:"candidateCount"`
+	FilteredCount      int            `json:"filteredCount"`
+	ResultCount        int            `json:"resultCount"`
+	SourceBreakdown    map[string]int `json:"sourceBreakdown,omitempty"`
+	ModelUsed          string         `json:"modelUsed,omitempty"`
+	ExperimentBucket   string         `json:"experimentBucket,omitempty"`
+	TopicEntropy       float64        `json:"topicEntropy,omitempty"`
+	AuthorRepeatRate   float64        `json:"authorRepeatRate,omitempty"`
+	AuthorHHI          float64        `json:"authorHhi,omitempty"`
+	GeoCoverage        float64        `json:"geoCoverage,omitempty"`
+	DistinctAuthors    int            `json:"distinctAuthors,omitempty"`
+	DistinctTopics     int            `json:"distinctTopics,omitempty"`
+	DistinctGeoBuckets int            `json:"distinctGeoBuckets,omitempty"`
 }
 
 var (
@@ -162,6 +168,27 @@ func LogMetrics(logger *slog.Logger, m PipelineMetrics) {
 	}
 	if m.ExperimentBucket != "" {
 		attrs = append(attrs, slog.String("bucket", m.ExperimentBucket))
+	}
+	if m.TopicEntropy > 0 {
+		attrs = append(attrs, slog.Float64("topicEntropy", m.TopicEntropy))
+	}
+	if m.AuthorRepeatRate > 0 {
+		attrs = append(attrs, slog.Float64("authorRepeatRate", m.AuthorRepeatRate))
+	}
+	if m.AuthorHHI > 0 {
+		attrs = append(attrs, slog.Float64("authorHhi", m.AuthorHHI))
+	}
+	if m.GeoCoverage > 0 {
+		attrs = append(attrs, slog.Float64("geoCoverage", m.GeoCoverage))
+	}
+	if m.DistinctAuthors > 0 {
+		attrs = append(attrs, slog.Int("distinctAuthors", m.DistinctAuthors))
+	}
+	if m.DistinctTopics > 0 {
+		attrs = append(attrs, slog.Int("distinctTopics", m.DistinctTopics))
+	}
+	if m.DistinctGeoBuckets > 0 {
+		attrs = append(attrs, slog.Int("distinctGeoBuckets", m.DistinctGeoBuckets))
 	}
 
 	if m.TotalLatency > 200*time.Millisecond {

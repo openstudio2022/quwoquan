@@ -336,10 +336,10 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	scoringFeatures := &ScoringFeatures{
-		Session:      session,
-		User:         userFeatures,
-		Weights:      weights,
-		ExploreRate:  e.exploreFraction,
+		Session:       session,
+		User:          userFeatures,
+		Weights:       weights,
+		ExploreRate:   e.exploreFraction,
 		Deterministic: req.Sort == FeedSortRecommend, // stable ordering for recommend + cursor pagination (no random explore boost)
 	}
 
@@ -412,6 +412,9 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	rerankLatency := time.Since(rerankStart)
 
 	topicEntropy := computeTopicEntropy(reranked)
+	authorRepeatRate, authorHHI, distinctAuthors := computeAuthorDiversity(reranked)
+	geoCoverage, distinctGeoBuckets := computeGeoCoverage(reranked)
+	distinctTopics := computeDistinctTopicCount(reranked)
 
 	allItems := make([]FeedItem, 0, len(reranked))
 	for _, s := range reranked {
@@ -465,19 +468,25 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			sourceBreakdown[c.RecallPath]++
 		}
 		LogMetrics(e.logger, PipelineMetrics{
-			UserID:           req.UserID,
-			SessionID:        req.SessionID,
-			RecallLatency:    recallLatency,
-			ScoreLatency:     scoreLatency,
-			RerankLatency:    rerankLatency,
-			TotalLatency:     totalLatency,
-			CandidateCount:   len(allCandidates),
-			FilteredCount:    len(filtered),
-			ResultCount:      len(items),
-			SourceBreakdown:  sourceBreakdown,
-			ModelUsed:        modelBucket,
-			ExperimentBucket: modelBucket,
-			TopicEntropy:     topicEntropy,
+			UserID:             req.UserID,
+			SessionID:          req.SessionID,
+			RecallLatency:      recallLatency,
+			ScoreLatency:       scoreLatency,
+			RerankLatency:      rerankLatency,
+			TotalLatency:       totalLatency,
+			CandidateCount:     len(allCandidates),
+			FilteredCount:      len(filtered),
+			ResultCount:        len(items),
+			SourceBreakdown:    sourceBreakdown,
+			ModelUsed:          modelBucket,
+			ExperimentBucket:   modelBucket,
+			TopicEntropy:       topicEntropy,
+			AuthorRepeatRate:   authorRepeatRate,
+			AuthorHHI:          authorHHI,
+			GeoCoverage:        geoCoverage,
+			DistinctAuthors:    distinctAuthors,
+			DistinctTopics:     distinctTopics,
+			DistinctGeoBuckets: distinctGeoBuckets,
 		})
 		if topicEntropy < 1.5 && topicEntropy > 0 && len(items) >= 5 {
 			e.logger.Warn("rec.diversity.low_entropy",
@@ -780,6 +789,71 @@ func computeTopicEntropy(items []ScoredCandidate) float64 {
 		}
 	}
 	return entropy
+}
+
+func computeAuthorDiversity(items []ScoredCandidate) (repeatRate float64, hhi float64, distinctAuthors int) {
+	authorCounts := make(map[string]int)
+	total := 0
+	for _, item := range items {
+		author := strings.TrimSpace(item.Candidate.AuthorID)
+		if author == "" {
+			continue
+		}
+		authorCounts[author]++
+		total++
+	}
+	if total == 0 {
+		return 0, 0, 0
+	}
+	distinctAuthors = len(authorCounts)
+	repeatRate = 1 - float64(distinctAuthors)/float64(total)
+	for _, count := range authorCounts {
+		p := float64(count) / float64(total)
+		hhi += p * p
+	}
+	return repeatRate, hhi, distinctAuthors
+}
+
+func computeGeoCoverage(items []ScoredCandidate) (coverage float64, distinctGeoBuckets int) {
+	geoCounts := make(map[string]int)
+	total := 0
+	for _, item := range items {
+		bucket := primaryGeoBucket(item.Candidate.Tags)
+		if bucket == "" {
+			continue
+		}
+		geoCounts[bucket]++
+		total++
+	}
+	if total == 0 {
+		return 0, 0
+	}
+	distinctGeoBuckets = len(geoCounts)
+	return float64(distinctGeoBuckets) / float64(len(items)), distinctGeoBuckets
+}
+
+func computeDistinctTopicCount(items []ScoredCandidate) int {
+	topics := make(map[string]struct{})
+	for _, item := range items {
+		for _, tag := range item.Candidate.Tags {
+			if ClassifyTagDimension(tag) == DimensionTopic {
+				topics[tag] = struct{}{}
+			}
+		}
+	}
+	return len(topics)
+}
+
+func primaryGeoBucket(tags []string) string {
+	for _, tag := range tags {
+		if strings.HasPrefix(tag, "Topic/地理/行政区/") {
+			parts := strings.Split(tag, "/")
+			if len(parts) >= 5 {
+				return parts[4]
+			}
+		}
+	}
+	return ""
 }
 
 func topNTags(weights map[string]float64, n int) []string {
