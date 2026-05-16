@@ -193,7 +193,7 @@ func (h *CircleHandler) handleJoinCircle(w http.ResponseWriter, r *http.Request,
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
 		return
 	}
-	if err := h.circleService.JoinCircle(r.Context(), circleID, resolveActorProfileSubjectID(r)); err != nil {
+	if err := h.circleService.JoinCircle(r.Context(), circleID, resolveActorSubAccountID(r)); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
@@ -205,7 +205,7 @@ func (h *CircleHandler) handleLeaveCircle(w http.ResponseWriter, r *http.Request
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleCircle, "方法不支持", "only POST"))
 		return
 	}
-	if err := h.circleService.LeaveCircle(r.Context(), circleID, resolveActorProfileSubjectID(r)); err != nil {
+	if err := h.circleService.LeaveCircle(r.Context(), circleID, resolveActorSubAccountID(r)); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
@@ -496,18 +496,12 @@ func resolveUserID(r *http.Request) string {
 	if uid := r.Header.Get("X-Client-User-Id"); uid != "" {
 		return uid
 	}
-	if uid := r.Header.Get("X-User-Id"); uid != "" {
-		return uid
-	}
 	return "anonymous"
 }
 
-func resolveActorProfileSubjectID(r *http.Request) string {
-	if actorID := r.Header.Get("X-Profile-Subject-Id"); actorID != "" {
+func resolveActorSubAccountID(r *http.Request) string {
+	if actorID := r.Header.Get("X-Client-Sub-Account-Id"); actorID != "" {
 		return actorID
-	}
-	if personaID := r.Header.Get("X-Persona-Id"); personaID != "" {
-		return personaID
 	}
 	return resolveUserID(r)
 }

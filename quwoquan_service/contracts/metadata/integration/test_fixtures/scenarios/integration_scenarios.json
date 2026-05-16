@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "integration.scenario-fixtures.v1",
+  "schemaVersion": "integration.scenario-fixtures",
   "description": "集成域 alpha/beta/gamma 共享测试场景，首批覆盖发布位置选择。",
   "repositoryExpectations": {
     "alpha": "mock",

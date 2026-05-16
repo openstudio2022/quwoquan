@@ -6,7 +6,7 @@ package main
 func renderCommentDtoDart() string {
 	return `// GENERATED FILE — DO NOT EDIT BY HAND.
 // Source: contracts/metadata/content/post/fields.yaml (entities.Comment)
-// plus wire aliases for API/Mock payloads (profileSubjectId, displayName, etc.).
+// plus wire aliases for API/Mock payloads (displayName, avatar snapshots, etc.).
 // Regenerate: make codegen-app
 
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
@@ -16,7 +16,6 @@ class CommentDto {
     required this.id,
     required this.postId,
     required this.authorId,
-    this.personaId,
     this.displayName,
     this.avatarUrl,
     required this.content,
@@ -34,7 +33,6 @@ class CommentDto {
   final String id;
   final String postId;
   final String authorId;
-  final String? personaId;
   final String? displayName;
   final String? avatarUrl;
   final String content;
@@ -52,8 +50,7 @@ class CommentDto {
     return CommentDto(
       id: (m['_id'] ?? m['id'] ?? '').toString(),
       postId: (m['postId'] ?? '').toString(),
-      authorId: (m['profileSubjectId'] ?? m['authorId'] ?? '').toString(),
-      personaId: (m['personaId'] ?? m['subAccountId'])?.toString(),
+      authorId: (m['authorId'] ?? m['subAccountId'] ?? '').toString(),
       displayName: (m['authorDisplayNameSnapshot'] ?? m['displayName'])
           ?.toString(),
       avatarUrl: (m['authorAvatarUrlSnapshot'] ?? m['avatarUrl'])?.toString(),
@@ -75,8 +72,6 @@ class CommentDto {
         'id': id,
         'postId': postId,
         'authorId': authorId,
-        'profileSubjectId': authorId,
-        'personaId': personaId,
         'displayName': displayName,
         'authorDisplayNameSnapshot': displayName,
         'avatarUrl': avatarUrl,
@@ -99,7 +94,6 @@ class CommentDto {
       id: id,
       postId: postId,
       authorId: authorId,
-      personaId: personaId,
       displayName: displayName,
       avatarUrl: avatarUrl,
       content: content,
@@ -134,7 +128,7 @@ class PostSearchItemView {
     this.title,
     this.summary,
     this.coverUrl,
-    this.authorProfileSubjectId,
+    this.authorId,
     this.authorDisplayName,
     this.authorAvatarUrl,
     this.circleId,
@@ -153,7 +147,7 @@ class PostSearchItemView {
   final String? title;
   final String? summary;
   final String? coverUrl;
-  final String? authorProfileSubjectId;
+  final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
   final String? circleId;
@@ -178,9 +172,7 @@ class PostSearchItemView {
       summary: (map['summary'] ?? map['body'] ?? map['highlightText'])
           ?.toString(),
       coverUrl: (map['coverUrl'] ?? map['thumbnailUrl'])?.toString(),
-      authorProfileSubjectId:
-          (map['authorProfileSubjectId'] ?? map['profileSubjectId'])
-              ?.toString(),
+      authorId: (map['authorId'] ?? map['subAccountId'])?.toString(),
       authorDisplayName:
           (map['authorDisplayName'] ??
                   map['authorDisplayNameSnapshot'] ??

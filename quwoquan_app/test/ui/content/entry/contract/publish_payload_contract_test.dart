@@ -26,7 +26,11 @@ void main() {
     );
 
     test('文章发布 payload 可写字段包含封面与展示真相源', () {
-      expect(writable, contains('articleDocument'));
+      expect(writable, contains('articleMarkdown'));
+      expect(writable, contains('articleMarkdownVersion'));
+      expect(writable, contains('articleAssetManifest'));
+      expect(writable, contains('articleRenderProfile'));
+      expect(writable, isNot(contains('articleDocument')));
       expect(writable, isNot(contains('articleTemplate')));
       expect(writable, isNot(contains('articleFontPreset')));
       expect(writable, isNot(contains('articlePresentationVersion')));

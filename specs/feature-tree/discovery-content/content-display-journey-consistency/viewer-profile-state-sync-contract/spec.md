@@ -28,7 +28,7 @@
 ### F2：对象级真相源统一
 
 - 用户资料与关系态：
-  - `ProfileSubjectView`
+  - `SubAccountProfileView`
   - `RelationshipCapabilityView`
   - `UserRelationshipStateProvider`
 - post 互动态：

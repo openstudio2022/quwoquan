@@ -163,19 +163,15 @@ func TestInvite_ListByInviter(t *testing.T) {
 	}
 }
 
-func TestInvite_PersonaIdAliasAccepted(t *testing.T) {
+func TestInvite_LegacyIdentityFieldRejected(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "alias_owner", "alias_user")
 	createTestPersonaFull(t, "alias_persona", "alias_owner", "sa_alias", "AliasSub", "open", true)
 
 	rec := doRequest(t, http.MethodPost, "/v1/user/invites",
-		`{"personaId":"sa_alias","channel":"direct"}`,
+		`{"legacyIdentityId":"sa_alias","channel":"direct"}`,
 		authHeaders("alias_owner"))
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("generate with personaId alias: expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	if result["inviterSubAccountId"] != "sa_alias" {
-		t.Fatalf("expected inviterSubAccountId=sa_alias, got %v", result["inviterSubAccountId"])
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("generate with legacy identity field: expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

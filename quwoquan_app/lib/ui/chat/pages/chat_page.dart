@@ -18,6 +18,7 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
@@ -25,6 +26,7 @@ import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_app/ui/chat/widgets/chat_conversation_avatar_tokens.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 
 /// 趣信页
@@ -760,7 +762,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
                             row.displayName,
                             style: TextStyle(
                               fontSize: AppTypography.iosBody,
-                              fontWeight: AppTypography.semiBold,
+                              fontWeight: AppTypography.regular,
                               color: fgPrimary,
                             ),
                           ),
@@ -785,12 +787,44 @@ class _ChatPageState extends ConsumerState<ChatPage>
         );
       },
       loading: () => const Center(child: CupertinoActivityIndicator()),
-      error: (_, __) => Center(
-        child: Text(
-          UITextConstants.noData,
-          style: TextStyle(
-            fontSize: AppTypography.iosTitle3,
-            color: fgSecondary,
+      error: (error, _) => Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                CupertinoIcons.exclamationmark_circle,
+                size: AppSpacing.iconButtonMinSizeMd,
+                color: fgSecondary,
+              ),
+              SizedBox(height: AppSpacing.md),
+              Text(
+                runtimeErrorDisplayMessage(error),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: AppTypography.iosTitle3,
+                  color: fgSecondary,
+                ),
+              ),
+              SizedBox(height: AppSpacing.sm),
+              CupertinoButton(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.xs,
+                ),
+                onPressed: () {
+                  ref.invalidate(chatContactsRowsForSubTabProvider(sub));
+                },
+                child: Text(
+                  UITextConstants.retry,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosBody,
+                    color: fgPrimary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1074,7 +1108,7 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                               title,
                               style: TextStyle(
                                 fontSize: AppTypography.iosBody,
-                                fontWeight: AppTypography.semiBold,
+                                fontWeight: AppTypography.regular,
                                 color: widget.fgPrimary,
                               ),
                             ),
@@ -1216,7 +1250,7 @@ class _ConversationTile extends StatelessWidget {
     this.showEncryptedBadge = false,
   });
 
-  static const double _avatarSize = 48;
+  static const double _avatarSize = ChatConversationAvatarTokens.listSize;
 
   String _formatConversationTime(ChatInboxDto conv) {
     final t = conv.lastMessageTime;
@@ -1228,7 +1262,7 @@ class _ConversationTile extends StatelessWidget {
     final url = conversation.avatarUrl.trim();
     assert(() {
       final t = conversation.type.trim().toLowerCase();
-      if ((t == 'group' || t == 'circle') && url.isEmpty) {
+      if (t == 'group' && url.isEmpty) {
         debugPrint(
           '会话头像契约：群/圈子会话 avatarUrl 为空 conversationId=${conversation.id}',
         );
@@ -1325,7 +1359,7 @@ class _ConversationTile extends StatelessWidget {
                   ),
               ],
             ),
-            SizedBox(width: AppSpacing.sm + AppSpacing.xs),
+            SizedBox(width: ChatConversationAvatarTokens.leadingGap),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1433,7 +1467,7 @@ class _InboxConversationTile extends StatelessWidget {
   final Color fgPrimary;
   final Color fgSecondary;
 
-  static const double _avatarSize = 52.0;
+  static const double _avatarSize = ChatConversationAvatarTokens.listSize;
 
   Widget _buildAvatar(BuildContext context) {
     final url = item.avatarUrl.trim();
@@ -1523,7 +1557,7 @@ class _InboxConversationTile extends StatelessWidget {
                         ),
                     ],
                   ),
-                  SizedBox(width: AppSpacing.sm + AppSpacing.xs),
+                  SizedBox(width: ChatConversationAvatarTokens.leadingGap),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1539,7 +1573,7 @@ class _InboxConversationTile extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: AppTypography.iosBody,
-                                  fontWeight: AppTypography.semiBold,
+                                  fontWeight: AppTypography.regular,
                                   color: fgPrimary,
                                   height: AppTypography.lineHeightTight,
                                 ),
@@ -1595,7 +1629,7 @@ class _InboxConversationTile extends StatelessWidget {
             ),
             Padding(
               padding: EdgeInsets.only(
-                left: _avatarSize + AppSpacing.sm + AppSpacing.xs,
+                left: ChatConversationAvatarTokens.dividerInset(_avatarSize),
               ),
               child: Divider(
                 height: AppSpacing.one,

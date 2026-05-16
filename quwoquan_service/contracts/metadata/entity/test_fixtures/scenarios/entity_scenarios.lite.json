@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "entity.scenario-fixtures",
+  "description": "实体主页 alpha/beta/gamma 共享测试场景，覆盖作者主页、圈子主页、POI/地点主页、认领与选择器。 [alpha-dev-lite subset]",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "entity_homepage_core": {
+      "description": "作者主页、圈子主页、POI/地点主页、品牌/作品主页。",
+      "homepages": [
+        {
+          "homepageId": "fixture_homepage_author",
+          "type": "author",
+          "title": "契约摄影师主页",
+          "ownerId": "fixture_user_photo",
+          "summary": "作者主页契约数据",
+          "relatedPostIds": [
+            "fixture_photo_001",
+            "fixture_article_001"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_circle",
+          "type": "circle",
+          "title": "契约摄影社主页",
+          "ownerId": "fixture_circle_photo",
+          "summary": "圈子主页契约数据",
+          "relatedCircleIds": [
+            "fixture_circle_photo"
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_poi",
+          "type": "poi",
+          "title": "杭州西湖契约主页",
+          "summary": "地点主页契约数据",
+          "geo": {
+            "lat": 30.2431,
+            "lng": 120.1505
+          }
+        }
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "entity_homepage_basic",
+      "title": "实体主页详情与选择器契约种子",
+      "type": "entity_homepage",
+      "domainId": "entity",
+      "seedRefs": [
+        "entity_homepage_core",
+        "entity_claim_core",
+        "entity_picker_core"
+      ],
+      "uiExpectations": {
+        "homepageIds": [
+          "fixture_homepage_author",
+          "fixture_homepage_circle",
+          "fixture_homepage_poi"
+        ],
+        "textFragments": [
+          "契约摄影师主页",
+          "杭州西湖契约主页"
+        ]
+      },
+      "remoteExpectations": {
+        "homepageIds": [
+          "fixture_homepage_author",
+          "fixture_homepage_circle",
+          "fixture_homepage_poi"
+        ],
+        "claimIds": [
+          "fixture_claim_author"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    }
+  ]
+}

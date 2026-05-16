@@ -17,21 +17,21 @@ level_acceptance:
     linked_tasks:
       - M1
     tests:
-      - file: scripts/verify_ios_native_surface_gate.py
+      - file: quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
   A2:
     criteria: make gate（quwoquan_app 段）调用 verify_ios_native_surface_gate.py，失败时非零退出
     status: implemented
     linked_tasks:
       - M2
     tests:
-      - file: scripts/gate_repo.sh
+      - file: agent_ops/gate/gate_repo.sh
   A3:
     criteria: lib/ui/**/pages/**/*.dart、components 约定路径与 design 一致；其内禁止未豁免的 return Scaffold(
     status: implemented
     linked_tasks:
       - M3
     tests:
-      - file: scripts/verify_ios_native_surface_gate.py
+      - file: quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
   A4:
     criteria: allowlist 仅登记已知存量；新增业务页不得依赖扩大豁免
     status: implemented
@@ -47,7 +47,7 @@ level_acceptance:
     tests:
       - file: specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/spec.md
 execution:
-  local_gate: python3 scripts/verify_ios_native_surface_gate.py
+  local_gate: python3 quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
   full_gate: make gate
 
 # 以下为 T1~T4 叙事映射（供 CR / 评审引用，门禁以 level_acceptance 为准）
@@ -79,11 +79,11 @@ scenario_acceptance:
 evidence_matrix:
   T1:
     - type: script
-      artifact: scripts/verify_ios_native_surface_gate.py
+      artifact: quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
     - type: config
       artifact: specs/gates/ios_native_surface_allowlist.yaml
     - type: ci
-      artifact: scripts/gate_repo.sh run_app 调用链
+      artifact: agent_ops/gate/gate_repo.sh run_app 调用链
   T2:
     - type: manual
       note: 故意引入违规一行后 gate 失败再还原

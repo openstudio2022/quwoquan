@@ -2,13 +2,13 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class ProfileSocialRelationRowWireDto {
-  final String profileSubjectId;
+  final String subAccountId;
   final String displayName;
   final String avatarUrl;
   final bool isFollowing;
 
   ProfileSocialRelationRowWireDto({
-    this.profileSubjectId = '',
+    this.subAccountId = '',
     this.displayName = '',
     this.avatarUrl = '',
     this.isFollowing = false,
@@ -16,7 +16,7 @@ class ProfileSocialRelationRowWireDto {
 
   factory ProfileSocialRelationRowWireDto.fromMap(Map<String, dynamic> m) {
     return ProfileSocialRelationRowWireDto(
-      profileSubjectId: m['profileSubjectId']?.toString() ?? m['userId']?.toString() ?? '',
+      subAccountId: m['subAccountId']?.toString() ?? m['userId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       avatarUrl: m['avatarUrl']?.toString() ?? '',
       isFollowing: m['isFollowing'] as bool? ?? false,
@@ -25,7 +25,7 @@ class ProfileSocialRelationRowWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'profileSubjectId': profileSubjectId,
+      'subAccountId': subAccountId,
       'displayName': displayName,
       'avatarUrl': avatarUrl,
       'isFollowing': isFollowing,
@@ -33,13 +33,13 @@ class ProfileSocialRelationRowWireDto {
   }
 
   ProfileSocialRelationRowWireDto copyWith({
-    String? profileSubjectId,
+    String? subAccountId,
     String? displayName,
     String? avatarUrl,
     bool? isFollowing,
   }) {
     return ProfileSocialRelationRowWireDto(
-      profileSubjectId: profileSubjectId ?? this.profileSubjectId,
+      subAccountId: subAccountId ?? this.subAccountId,
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isFollowing: isFollowing ?? this.isFollowing,

@@ -2,7 +2,7 @@
 
 ## 1. 适用范围（规范性）
 
-扫描路径集合与 [`scripts/verify_page_matrix_scan_complete.py`](../../scripts/verify_page_matrix_scan_complete.py) **磁盘集完全一致**，由 [`scripts/page_disk_scan_paths.py`](../../scripts/page_disk_scan_paths.py) 唯一枚举（修改规则时只改该模块，避免与矩阵脚本漂移）。
+扫描路径集合与 [`quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py`](../../quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py) **磁盘集完全一致**，由 [`quwoquan_app/scripts/runtime/page_disk_scan_paths.py`](../../quwoquan_app/scripts/runtime/page_disk_scan_paths.py) 唯一枚举（修改规则时只改该模块，避免与矩阵脚本漂移）。
 
 **包含**（`quwoquan_app/` 相对路径）：
 
@@ -57,14 +57,14 @@ exemptions:
 - 未知键 → 打印 `WARN` 到 stderr，不失败。
 - **禁止**无跟踪信息的长期豁免；收口后应删除对应条目。
 
-自定义路径：`python3 scripts/verify_page_abc_governance.py --allowlist /path/to.yaml`。
+自定义路径：`python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --allowlist /path/to.yaml`。
 
 ## 5. 与横向矩阵门禁的关系
 
 本脚本 **不替代**：
 
-- `python3 scripts/verify_page_horizontal_quality_matrix.py`
-- `python3 scripts/verify_page_matrix_scan_complete.py`
+- `python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py`
+- `python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py`
 
 **建议顺序**：矩阵与漏扫通过后，再执行页面 A/B/C 扫描（`gate_repo.sh` 中物理顺序一致）。
 
@@ -72,18 +72,18 @@ exemptions:
 
 ```bash
 # 详细报告（成功退出，即使有未豁免项）
-python3 scripts/verify_page_abc_governance.py
+python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py
 
 # 单行汇总（适合 CI 日志）
-python3 scripts/verify_page_abc_governance.py --quiet
+python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --quiet
 
 # Markdown / JSON
-python3 scripts/verify_page_abc_governance.py --markdown
-python3 scripts/verify_page_abc_governance.py --json
+python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --markdown
+python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --json
 
 # 收口（按阶段打开；须配合代码清理或白名单）
-python3 scripts/verify_page_abc_governance.py --enforce-a --enforce-b
-python3 scripts/verify_page_abc_governance.py --enforce-a --enforce-b --enforce-c
+python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-a --enforce-b
+python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-a --enforce-b --enforce-c
 ```
 
 **Make**：
@@ -102,10 +102,10 @@ python3 scripts/verify_page_abc_governance.py --enforce-a --enforce-b --enforce-
 
 ```bash
 export GATE_PAGE_ABC_ENFORCE=a
-bash scripts/gate_repo.sh --scope app
+bash agent_ops/gate/gate_repo.sh --scope app
 
 export GATE_PAGE_ABC_ENFORCE=abc
-bash scripts/gate_repo.sh --scope app
+bash agent_ops/gate/gate_repo.sh --scope app
 ```
 
 **注意**：当前仓库在 **C** 维度上多有页面未清零，**勿**在全员 gate 上默认 `GATE_PAGE_ABC_ENFORCE=c` 或 `abc`，除非已清债或已填白名单。

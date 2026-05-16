@@ -16,7 +16,7 @@
 |------|----------|
 | `persona-profile-subject-and-visibility/spec.md` | 公开身份、继承/覆写、同步范围、可见性与记录归因边界清晰 |
 | `persona-profile-subject-and-visibility/acceptance.yaml` | `A1/A2/A3/S1` 可直接映射到 `P1~P4` |
-| Journey `persona-follow-graph/design.md` | 已冻结 `ProfileSubjectView` 与 `ActivePersonaContextView` 双轨 contract |
+| Journey `persona-follow-graph/design.md` | 已冻结 `SubAccountProfileView` 与 `ActivePersonaContextView` 双轨 contract |
 | `owner-subaccount-homepage-unification/design.md` | 主页是本场景 contract 的消费方，不再主定义 persona 公开身份 |
 | 现有 user/content/chat 契约 | 已有 persona 相关字段预埋，但尚未统一到 `profileSubjectId` 主键 |
 
@@ -39,7 +39,7 @@
 
 | 文档 / 能力 | 可复用点 |
 |-------------|----------|
-| Journey 设计 | `ProfileSubjectView` 是公开读模型，不暴露 owner 映射 |
+| Journey 设计 | `SubAccountProfileView` 是公开读模型，不暴露 owner 映射 |
 | `owner-subaccount-homepage-unification` | 主页首屏、按钮矩阵、资料编辑都应消费 user 域 contract |
 | `content-display-journey-consistency` | canonical key 与读模型消费优先级 |
 
@@ -63,13 +63,13 @@
 - owner 基线、persona override 需要长期双写。
 - 与当前产品语义“作者分身仍是 user 域 Persona 的产品化表面”冲突。
 
-### 方案 B：user 域合成 `ProfileSubjectView` 读模型，owner 只提供基线，persona 只保存覆写
+### 方案 B：user 域合成 `SubAccountProfileView` 读模型，owner 只提供基线，persona 只保存覆写
 
 核心思路：
 
 - `UserProfile` 保存 owner 基线。
 - `Persona` 只保存 override 字段和可见性。
-- 对外统一合成 `ProfileSubjectView`。
+- 对外统一合成 `SubAccountProfileView`。
 
 优点：
 
@@ -112,9 +112,9 @@
 
 ## 关键设计决策
 
-### KD1：`ProfileSubjectView` 是唯一公开身份真相源
+### KD1：`SubAccountProfileView` 是唯一公开身份真相源
 
-所有公开读取统一消费 `ProfileSubjectView`，至少包含：
+所有公开读取统一消费 `SubAccountProfileView`，至少包含：
 
 - `profileSubjectId`
 - `subjectType`
@@ -166,7 +166,7 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 
 ### KD3：写入 contract 必须显式携带同步范围
 
-建议冻结 `ProfileSubjectMutation`：
+建议冻结 `SubAccountProfileMutation`：
 
 - `displayName`
 - `userHandle`
@@ -214,7 +214,7 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 对内：
 
 - Repository / provider / graph / context 一律使用 `personaId`
-- `ProfileSubjectView.profileSubjectId` 仅作为公开读取与兼容投影字段
+- `SubAccountProfileView.profileSubjectId` 仅作为公开读取与兼容投影字段
 - `userHandle` 承担公开句柄职责；`username` 仅保留为兼容别名
 
 这可以避免 `userHandle` 变更时内部引用漂移。
@@ -223,7 +223,7 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 
 消费方只允许使用以下 contract：
 
-- 主页：`ProfileSubjectView`
+- 主页：`SubAccountProfileView`
 - 内容/评论：`profileSubjectId + author snapshot`
 - 聊天：`profileSubjectId + sender snapshot`
 - assistant：只读取公开允许字段与 typed persona context
@@ -237,8 +237,8 @@ owner 基线保存在 `UserProfile`，persona 只保存覆写字段：
 
 主目录固定为 `contracts/metadata/user/user_profile/`，建议补齐：
 
-- `ProfileSubjectView`
-- `ProfileSubjectMutation`
+- `SubAccountProfileView`
+- `SubAccountProfileMutation`
 - `ProfileInheritanceStateView`
 - `ListProfileSubjects`
 - `GetProfileSubject`
@@ -260,8 +260,8 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
 - 新写链路统一补齐 `personaId`，并同步生成公开 `profileSubjectId`
 - `PersonaDto` 保留为管理视角兼容模型，不再作为公开首屏模型
 - 旧字段优先级：
-  - 新对象读 `ProfileSubjectView`
-  - 兼容对象读 `PersonaDto`，再映射成 `ProfileSubjectView`
+  - 新对象读 `SubAccountProfileView`
+  - 兼容对象读 `PersonaDto`，再映射成 `SubAccountProfileView`
 
 ### 回填
 
@@ -271,7 +271,7 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
 
 ### 兼容退出条件
 
-- 主页、内容卡、评论、聊天、graph list 全部以 `ProfileSubjectView` 为主
+- 主页、内容卡、评论、聊天、graph list 全部以 `SubAccountProfileView` 为主
 - 端侧不再直接拿 `PersonaDto` 渲染公开作者身份
 
 ## feature flag、观测、SLO 验证与回滚方案
@@ -296,7 +296,7 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
 ## TDD / ATDD 策略
 
 - `T1_schema`
-  - `ProfileSubjectView / Mutation / InheritanceState` schema
+  - `SubAccountProfileView / Mutation / InheritanceState` schema
   - visibility 枚举与错误码
 - `T2_module_interaction`
   - 主页、资料编辑、同步范围提示、consumer adapter
@@ -317,5 +317,5 @@ App、service、cloud client 全部改为消费生成 DTO 和 path builder。
 
 ## 未来演进
 
-- 当所有公开消费端都切到 `ProfileSubjectView` 后，再单开 Story 清理旧 `PersonaDto` 公共消费路径。
+- 当所有公开消费端都切到 `SubAccountProfileView` 后，再单开 Story 清理旧 `PersonaDto` 公共消费路径。
 - 若后续扩展更多可覆写字段，仍沿用 owner 基线 + persona override，不新增 `PublicProfile` 物化实体。

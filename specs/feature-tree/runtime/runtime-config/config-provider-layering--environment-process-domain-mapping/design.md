@@ -30,7 +30,7 @@
    - 校验同一环境内 domain 唯一归属
    - 校验 process 名称规范（`*-service` 或 `seed-box`）
    - 校验 `beta == gamma == prod-gray == prod` 映射
-   - 接入 `make verify` 与 `scripts/gate_repo.sh`
+   - 接入 `make verify` 与 `agent_ops/gate/gate_repo.sh`
    - `make gate-full` 必须包含并通过 `recommendation-service` Python 测试
    - recommendation-service 启动前执行配置分层与版本兼容校验；失败即 fail-fast
 

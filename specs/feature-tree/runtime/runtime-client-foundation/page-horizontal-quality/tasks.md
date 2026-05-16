@@ -5,7 +5,7 @@
 ### M1：索引与门禁可追溯
 
 - [x] `spec.md` / `design.md` / `acceptance.yaml` / `plan.yaml` 与本目录并列
-- [x] 指向父目录 `page-horizontal-quality-spec.md`、`page-horizontal-quality-matrix.md` 与 `scripts/verify_page_horizontal_quality_matrix.py`
+- [x] 指向父目录 `page-horizontal-quality-spec.md`、`page-horizontal-quality-matrix.md` 与 `quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py`
 
 ### M2：/baseline 冻结（2026-03-29）
 
@@ -17,8 +17,8 @@
 
 ### M3：/dev 无漏页门禁（2026-03-29）
 
-- [x] `scripts/verify_page_matrix_scan_complete.py`（磁盘 = 矩阵 ⊆ 缺口清单）
-- [x] `scripts/gate_repo.sh` 串联调用
+- [x] `quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py`（磁盘 = 矩阵 ⊆ 缺口清单）
+- [x] `agent_ops/gate/gate_repo.sh` 串联调用
 - [x] 矩阵挂靠面补 `_AssistantConversationHistoryPage`
 
 ### M4：九会话横向落实规划（2026-03-29）
@@ -88,7 +88,7 @@
 
 **B2 测试与编译隔离（P0b）**
 
-- [x] `scripts/verify_lib_no_test_only_symbols.py` + [`lib_test_only_symbols_allowlist.yaml`](../../../../gates/lib_test_only_symbols_allowlist.yaml) + `gate_repo.sh --scope app`
+- [x] `quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py` + [`lib_test_only_symbols_allowlist.yaml`](../../../../gates/lib_test_only_symbols_allowlist.yaml) + `gate_repo.sh --scope app`
 - [ ] 将 `AssistantRuntime.createForTest` 等迁出 `lib/`（当前 allowlist 登记；清债时删行）
 
 **B4 正式发行（运行时门控 + CI；P4 物理拆链另列）**

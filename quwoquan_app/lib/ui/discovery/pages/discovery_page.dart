@@ -19,6 +19,7 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
@@ -430,9 +431,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       onAssistantTap: _openAssistantHalfSheet,
       onCommentTap: _onMomentCommentTap,
       onShareTap: _onMomentShareTap,
-      followingUsers: ref.watch(discoveryStateProvider).followingUsers,
-      onFollowClick: (authorId, _) =>
-          ref.read(discoveryStateProvider.notifier).toggleFollow(authorId),
+      followingUsers: ref
+          .watch(userRelationshipStateProvider)
+          .followingSubAccountIds,
+      onFollowClick: (subAccountId, _) => syncProfileFollowIntent(
+        ref,
+        subAccountId: subAccountId,
+        isFollowing: !effectiveProfileFollowing(ref, subAccountId),
+      ),
       onVideoTap: (post, index) {
         _onPostTap(post, index, feedPosts: videos.toList(), category: tabId);
       },
@@ -728,23 +734,23 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return cardWidth / ratio;
   }
 
-  static int? _displayLikesCount(DiscoveryUiState homeState, PostBaseDto post) {
-    final n = homeState.getPostLikesCount(post.id);
+  int? _displayLikesCount(PostBaseDto post) {
+    final n = effectivePostLikeCount(ref, post.id, fallback: post.likeCount);
     if (n > 0) return n;
     return post.likeCount > 0 ? post.likeCount : null;
   }
 
-  static int? _displayBookmarksCount(
-    DiscoveryUiState homeState,
-    PostBaseDto post,
-  ) {
-    final n = homeState.getPostBookmarksCount(post.id);
+  int? _displayBookmarksCount(PostBaseDto post) {
+    final n = effectivePostBookmarkCount(
+      ref,
+      post.id,
+      fallback: post.favoriteCount,
+    );
     if (n > 0) return n;
     return post.favoriteCount > 0 ? post.favoriteCount : null;
   }
 
   Widget _buildPhotoContent(bool isDark, {String tabId = 'photo'}) {
-    final homeState = ref.watch(discoveryStateProvider);
     final feedMap = ref.watch(discoveryFeedMapProvider);
     final feedAsync = ref.watch(discoveryFeedProvider(tabId));
     final dtos = feedAsync.value?.items ?? const <PostBaseDto>[];
@@ -792,8 +798,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
             itemBuilder: (context, index) {
               final post = photos[index];
               final height = _photoItemHeight(cardWidth, post, index);
-              final likesDisplay = _displayLikesCount(homeState, post);
-              final bookmarksDisplay = _displayBookmarksCount(homeState, post);
+              final likesDisplay = _displayLikesCount(post);
+              final bookmarksDisplay = _displayBookmarksCount(post);
               return SizedBox(
                 height: height,
                 // Use TestKeys.photoPostCard only on first item to avoid
@@ -809,8 +815,8 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                     feedPosts: photos,
                     category: tabId,
                   ),
-                  isLiked: homeState.likedPosts.contains(post.id),
-                  isSaved: homeState.savedPosts.contains(post.id),
+                  isLiked: effectivePostLiked(ref, post.id),
+                  isSaved: effectivePostSaved(ref, post.id),
                   likesCount: likesDisplay,
                   bookmarksCount: bookmarksDisplay,
                 ),
@@ -832,12 +838,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
-  void _onPostTap(
+  Future<void> _onPostTap(
     PostBaseDto post,
     int mediaIndex, {
     List<PostBaseDto>? feedPosts,
     String? category,
-  }) {
+  }) async {
     _trackBehavior('click', post);
     if (post.identity == 'work' && post.displayFormat == 'note') {
       context.push(AppRoutePaths.articleDetail(id: post.id));
@@ -852,6 +858,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
           ),
         )
         .toList();
+    final viewerPosts = feedPosts ?? <PostBaseDto>[post];
+    final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+      posts: viewerPosts,
+      discoveryState: ref.read(discoveryStateProvider),
+      relationshipState: ref.read(userRelationshipStateProvider),
+      postInteractionState: ref.read(postInteractionStateProvider),
+    );
+    primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
     // For moment (multi-image per post): initialIndex = post index so viewer shows correct post
     final initialIndex = (feedPosts != null && feedPosts.isNotEmpty)
         ? feedPosts
@@ -860,12 +874,13 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         : mediaIndex;
     if (post.isVideoLike) {
       if (postViews != null && postViews.isNotEmpty) {
-        context.push(
+        await context.push<Object?>(
           '/video-viewer/$initialIndex',
           extra: MediaViewerExtra(
             posts: postViews,
             initialIndex: initialIndex,
             category: category ?? 'video',
+            interactionSnapshot: interactionSnapshot,
           ),
         );
       } else {
@@ -875,13 +890,14 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
     if (postViews != null && postViews.isNotEmpty) {
       final isMoment = category == 'moment';
-      context.push(
+      await context.push<Object?>(
         '/media-viewer/photo/$initialIndex',
         extra: MediaViewerExtra(
           posts: postViews,
           initialIndex: initialIndex,
           category: category ?? post.displayFormat,
           initialImageIndex: isMoment ? mediaIndex : 0,
+          interactionSnapshot: interactionSnapshot,
         ),
       );
     } else {
@@ -910,7 +926,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       context,
       template: template,
       onActionCompleted: (result) async {
-        _trackShareAction(post.id, result.actionId);
+        await _trackShareAction(post, result.actionId);
       },
     );
   }
@@ -925,10 +941,7 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     );
   }
 
-  Future<void> _copyLinkFromMore(
-    BuildContext context,
-    PostBaseDto dto,
-  ) async {
+  Future<void> _copyLinkFromMore(BuildContext context, PostBaseDto dto) async {
     final result = await const DefaultContentShareActionHandler().execute(
       context,
       _buildShareTemplate(dto),
@@ -938,16 +951,16 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       ),
     );
     if (result.success) {
-      _trackShareAction(dto.id, result.actionId);
+      await _trackShareAction(dto, result.actionId);
     }
   }
 
   ContentShareTemplate _buildShareTemplate(PostBaseDto post) {
     final raw =
-        ref.read(contentRepositoryProvider).discoveryPresentationWireForPost(
-              post.id,
-            ) ??
-            post.toMap();
+        ref
+            .read(contentRepositoryProvider)
+            .discoveryPresentationWireForPost(post.id) ??
+        post.toMap();
     final tags =
         (raw['tags'] as List?)
             ?.map((item) => item.toString().trim())
@@ -974,11 +987,21 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     return raw?['circleName']?.toString().trim() ?? '';
   }
 
-  void _trackShareAction(String postId, String actionId) {
+  Future<void> _trackShareAction(PostBaseDto post, String actionId) async {
+    final baselineShareCount = effectivePostShareCount(
+      ref,
+      post.id,
+      fallback: post.shareCount,
+    );
+    await syncPostShareIntent(
+      ref,
+      postId: post.id,
+      baselineShareCount: baselineShareCount,
+    );
     ref
         .read(behaviorRepositoryProvider)
         .reportSingle(
-          contentId: postId,
+          contentId: post.id,
           action: 'share',
           tags: <String>[actionId],
         );
@@ -1577,9 +1600,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                   Icon(
                     isLiked ? Icons.favorite : Icons.favorite_border,
                     size: AppSpacing.iconSmall,
-                    color: isLiked
-                        ? AppColors.error
-                        : overlayFgMuted,
+                    color: isLiked ? AppColors.error : overlayFgMuted,
                   ),
                   if (likesCount != null && likesCount! > 0) ...[
                     SizedBox(width: AppSpacing.xs),
@@ -1595,9 +1616,7 @@ class _DiscoveryItemCard extends StatelessWidget {
                   Icon(
                     isSaved ? Icons.bookmark : Icons.bookmark_border,
                     size: AppSpacing.iconSmall,
-                    color: isSaved
-                        ? AppColors.primaryColor
-                        : overlayFgMuted,
+                    color: isSaved ? AppColors.primaryColor : overlayFgMuted,
                   ),
                   if (bookmarksCount != null && bookmarksCount! > 0) ...[
                     SizedBox(width: AppSpacing.xs),
@@ -1626,7 +1645,7 @@ class _DiscoveryItemCard extends StatelessWidget {
 ///   宿主可在此回调中联动底部导航等；适用于独立全屏剧场/播放器场景。
 /// - **false**（频道流模式）：overlay 常显，点击不触发切换；底部导航仅由宿主按「是否在视频」控制。
 ///   适用于发现页视频频道等列表流场景。
-class _VideoImmersionView extends StatefulWidget {
+class _VideoImmersionView extends ConsumerStatefulWidget {
   const _VideoImmersionView({
     required this.categories,
     required this.activeTab,
@@ -1668,14 +1687,13 @@ class _VideoImmersionView extends StatefulWidget {
   final void Function(String authorId, bool isFollowing)? onFollowClick;
 
   @override
-  State<_VideoImmersionView> createState() => _VideoImmersionViewState();
+  ConsumerState<_VideoImmersionView> createState() =>
+      _VideoImmersionViewState();
 }
 
-class _VideoImmersionViewState extends State<_VideoImmersionView>
+class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
     with TickerProviderStateMixin {
   late PageController _pageController;
-  final Set<int> _likedIndexes = {};
-  final Set<int> _savedIndexes = {};
   late AnimationController _likeAnimationController;
   late AnimationController _bookmarkAnimationController;
   late Animation<double> _likeScaleAnimation;
@@ -1765,8 +1783,9 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
 
   @override
   Widget build(BuildContext context) {
-    final themeDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    ref.watch(postInteractionStateProvider);
+    ref.watch(userRelationshipStateProvider);
+    final themeDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final videoGradientEnd = AppColorsFunctional.getColor(
       themeDark,
       ColorType.videoImmersionBottomGradientEnd,
@@ -1815,12 +1834,28 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                 onPageChanged: (_) {},
                 itemBuilder: (context, index) {
                   final post = widget.videos[index];
-                  final authorId = post.authorId;
+                  final authorId = post.subAccountId;
                   final authorAvatar = post.avatarUrl;
                   final authorName = post.displayName;
                   final authorBg = post.authorBackgroundUrl;
                   final thumbnail = post.primaryVisualUrl;
-                  final isLiked = _likedIndexes.contains(index);
+                  final isLiked = effectivePostLiked(ref, post.id);
+                  final isSaved = effectivePostSaved(ref, post.id);
+                  final likeCount = effectivePostLikeCount(
+                    ref,
+                    post.id,
+                    fallback: post.likeCount,
+                  );
+                  final commentCount = effectivePostCommentCount(
+                    ref,
+                    post.id,
+                    fallback: post.commentCount,
+                  );
+                  final shareCount = effectivePostShareCount(
+                    ref,
+                    post.id,
+                    fallback: post.shareCount,
+                  );
                   return GestureDetector(
                     onTap: () {
                       if (widget.onVideoTap != null) {
@@ -1847,10 +1882,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [
-                                AppColors.transparent,
-                                videoGradientEnd,
-                              ],
+                              colors: [AppColors.transparent, videoGradientEnd],
                             ),
                           ),
                         ),
@@ -1938,9 +1970,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                                             fontWeight:
                                                                 AppTypography
                                                                     .medium,
-                                                            color:
-                                                                AppColorsFunctional
-                                                                    .getColor(
+                                                            color: AppColorsFunctional.getColor(
                                                               themeDark,
                                                               ColorType
                                                                   .foregroundInverse,
@@ -1965,15 +1995,18 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     context,
                                     CupertinoIcons.heart,
                                     isLiked,
-                                    '${post.likeCount + (isLiked ? 1 : 0)}',
+                                    '$likeCount',
                                     () {
-                                      setState(() {
-                                        if (_likedIndexes.contains(index)) {
-                                          _likedIndexes.remove(index);
-                                        } else {
-                                          _likedIndexes.add(index);
-                                        }
-                                      });
+                                      syncPostLikeIntent(
+                                        ref,
+                                        postId: post.id,
+                                        isLiked: !isLiked,
+                                        likeCount: isLiked
+                                            ? (likeCount - 1)
+                                                  .clamp(0, 1 << 31)
+                                                  .toInt()
+                                            : likeCount + 1,
+                                      );
                                       _likeAnimationController.forward(from: 0);
                                     },
                                     scaleAnimation: _likeScaleAnimation,
@@ -1982,20 +2015,29 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                     context,
                                     AppStarIcon(
                                       size: AppSpacing.iconMedium,
-                                      filled: _savedIndexes.contains(index),
-                                      color: _savedIndexes.contains(index)
+                                      filled: isSaved,
+                                      color: isSaved
                                           ? AppColors.warning
                                           : videoFgQuaternary,
                                     ),
                                     UITextConstants.bookmarks,
                                     () {
-                                      setState(() {
-                                        if (_savedIndexes.contains(index)) {
-                                          _savedIndexes.remove(index);
-                                        } else {
-                                          _savedIndexes.add(index);
-                                        }
-                                      });
+                                      final bookmarkCount =
+                                          effectivePostBookmarkCount(
+                                            ref,
+                                            post.id,
+                                            fallback: post.favoriteCount,
+                                          );
+                                      syncPostSaveIntent(
+                                        ref,
+                                        postId: post.id,
+                                        isSaved: !isSaved,
+                                        bookmarkCount: isSaved
+                                            ? (bookmarkCount - 1)
+                                                  .clamp(0, 1 << 31)
+                                                  .toInt()
+                                            : bookmarkCount + 1,
+                                      );
                                       _bookmarkAnimationController.forward(
                                         from: 0,
                                       );
@@ -2008,7 +2050,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                       size: AppSpacing.iconMedium,
                                       color: videoFgQuaternary,
                                     ),
-                                    '${post.commentCount}',
+                                    '$commentCount',
                                     () => widget.onCommentTap?.call(
                                       context,
                                       post,
@@ -2021,7 +2063,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                                       size: AppSpacing.iconMedium,
                                       color: videoFgQuaternary,
                                     ),
-                                    UITextConstants.share,
+                                    '$shareCount',
                                     () =>
                                         widget.onShareTap?.call(context, post),
                                   ),
@@ -2126,9 +2168,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
                   trailingActions: [
                     CupertinoButton(
                       padding: EdgeInsets.zero,
-                      minimumSize: Size.square(
-                        AppSpacing.iconButtonMinSizeSm,
-                      ),
+                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
                       onPressed: widget.onAssistantTap,
                       child: AssistantAvatar(radius: AppSpacing.iconMedium / 2),
                     ),
@@ -2150,8 +2190,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
     VoidCallback onTap, {
     Animation<double>? scaleAnimation,
   }) {
-    final themeDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final themeDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final videoFg = AppColorsFunctional.getColor(
       themeDark,
       ColorType.videoImmersionOverlayForeground,
@@ -2211,8 +2250,7 @@ class _VideoImmersionViewState extends State<_VideoImmersionView>
     final child = scaleAnimation != null
         ? ScaleTransition(scale: scaleAnimation, child: iconWidget)
         : iconWidget;
-    final themeDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final themeDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final videoFg = AppColorsFunctional.getColor(
       themeDark,
       ColorType.videoImmersionOverlayForeground,

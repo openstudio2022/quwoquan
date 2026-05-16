@@ -68,5 +68,13 @@ rec_model_service:
   timeout_ms: 50
   enabled: false
 
+# Embedding service: optional vector embedding for semantic recall.
+# When enabled, VectorRecallWithEmbedding is added to multi-channel recall.
+embedding:
+  endpoint: ""      # e.g. https://api.openai.com/v1/embeddings
+  api_key: ""       # env: CONTENT_EMBEDDING_API_KEY
+  model: "text-embedding-3-small"
+  enabled: false
+
 metadata:
   dir: "../../../contracts/metadata"

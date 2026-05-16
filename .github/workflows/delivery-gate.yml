@@ -16,18 +16,33 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+      service: ${{ steps.detect.outputs.service }}
+      app: ${{ steps.detect.outputs.app }}
+      portal: ${{ steps.detect.outputs.portal }}
+      topology: ${{ steps.detect.outputs.topology }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: Environment Topology Regression
+      - id: detect
+        name: Detect impacted scopes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
-          bash scripts/verify_deployment_domain_mapping.sh
-          bash scripts/verify_topology_contract_regression.sh
-          bash scripts/report_deployment_mapping_impact.sh
+          python3 agent_ops/ci/detect_ci_impacted_scopes.py \
+            --base-sha "${BASE_SHA}" \
+            --head-sha "${HEAD_SHA}" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Environment Topology Regression
+        if: ${{ steps.detect.outputs.topology == 'true' }}
+        run: |
+          bash quwoquan_service/scripts/deploy/verify_deployment_domain_mapping.sh
+          bash quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh
+          bash quwoquan_service/scripts/deploy/report_deployment_mapping_impact.sh
       - id: finish
         if: always()
         name: Finish timer
@@ -38,6 +53,7 @@ jobs:
     name: Delivery Gate — Service (L2)
     runs-on: ubuntu-latest
     needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.service == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -52,13 +68,13 @@ jobs:
       - name: 设置 Dart
         uses: dart-lang/setup-dart@v1
       - name: 安装 kustomize
-        run: bash scripts/install_kustomize.sh
+        run: bash agent_ops/deploy/shared/install_kustomize.sh
       - name: 安装 Python 依赖 (rec-model-service)
         run: |
           pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: Gate (quwoquan_service)
         run: |
-          bash scripts/gate_repo.sh --scope service
+          bash agent_ops/gate/gate_repo.sh --scope service
       - id: finish
         if: always()
         name: Finish timer
@@ -69,6 +85,7 @@ jobs:
     name: Delivery Gate — App (L1)
     runs-on: ubuntu-latest
     needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.app == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -92,7 +109,7 @@ jobs:
           cache: true
       - name: Gate (quwoquan_app)
         run: |
-          bash scripts/gate_repo.sh --scope app
+          bash agent_ops/gate/gate_repo.sh --scope app
       - id: finish
         if: always()
         name: Finish timer
@@ -103,6 +120,7 @@ jobs:
     name: Delivery Gate — Ops Portal
     runs-on: ubuntu-latest
     needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.portal == 'true' }}
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
     steps:
@@ -117,7 +135,7 @@ jobs:
           cache: npm
       - name: Gate (ops-portal)
         run: |
-          bash scripts/gate_repo.sh --scope portal
+          bash agent_ops/gate/gate_repo.sh --scope portal
       - id: finish
         if: always()
         name: Finish timer
@@ -150,7 +168,7 @@ jobs:
           if [ "${APP_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${APP_SECONDS}"; fi
           if [ "${PORTAL_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${PORTAL_SECONDS}"; fi
           CRITICAL_PATH_SECONDS=$(( TOPOLOGY_SECONDS + FANOUT_SECONDS ))
-          python3 scripts/render_ci_timing_summary.py \
+          python3 agent_ops/ci/render_ci_timing_summary.py \
             --gate-key 03.delivery_gate \
             --title "03. Delivery Gate" \
             --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
@@ -175,10 +193,17 @@ jobs:
               fail=1
             fi
           }
+          expect_success_or_skipped() {
+            local name="$1" val="$2" hint="$3"
+            if [ "${val}" != "success" ] && [ "${val}" != "skipped" ]; then
+              echo "::error::${name} expected success/skipped, got ${val}. ${hint}"
+              fail=1
+            fi
+          }
           expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
-          expect_success "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
-          expect_success "quwoquan_app" "${APP}" "检查 app scope gate 输出"
-          expect_success "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
+          expect_success_or_skipped "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
+          expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope gate 输出"
+          expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
           if [ "${fail}" -ne 0 ]; then
             echo "::error::Delivery Gate 未全部成功；请按上列分项修复后重跑。"
             exit 1

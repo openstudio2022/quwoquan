@@ -2,15 +2,19 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/pageflip/pageflip.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/pageflip/backward_leaf_renderer.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_stage_widgets.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_pixel_probe.dart';
 import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_renderer.dart';
+import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
@@ -263,7 +267,7 @@ void main() {
       expect(interactiveState.turningPageIndex, 2);
       expect(interactiveState.underlayPageIndex, 3);
       expect(interactiveState.requestedRectoPageIndex, 2);
-      expect(interactiveState.requestedVersoPageIndex, 3);
+      expect(interactiveState.requestedVersoPageIndex, 2);
       expect(interactiveState.requestedBottomPageIndex, 3);
 
       await gesture.up();
@@ -311,10 +315,10 @@ void main() {
       expect(interactiveState.turningPageIndex, 2);
       expect(interactiveState.underlayPageIndex, 3);
       expect(interactiveState.requestedRectoPageIndex, 2);
-      expect(interactiveState.requestedVersoPageIndex, 3);
+      expect(interactiveState.requestedVersoPageIndex, 2);
       expect(interactiveState.requestedBottomPageIndex, 3);
       expect(interactiveState.activeRectoPageIndex, 2);
-      expect(interactiveState.activeVersoPageIndex, 3);
+      expect(interactiveState.activeVersoPageIndex, 2);
       expect(interactiveState.activeBottomPageIndex, 3);
       expect(interactiveState.frontBounds, isNotNull);
       expect(interactiveState.backBounds, isNotNull);
@@ -461,7 +465,6 @@ void main() {
 
       expect(find.byType(PageflipWidget), findsOneWidget);
       expect(find.byType(ArticleReadOnlyBookDeck), findsNothing);
-      expect(find.byType(ArticlePageBackwardLeafRenderer), findsNothing);
       expect(find.byType(ArticlePageCurlRenderer), findsOneWidget);
 
       final renderer = tester.widget<ArticlePageCurlRenderer>(
@@ -786,8 +789,14 @@ void main() {
     expect(interactiveState.flippingAnchor!.dx.isFinite, isTrue);
     expect(interactiveState.flippingAnchor!.dy.isFinite, isTrue);
     expect(interactiveState.backwardSurfaceOrigin, isNotNull);
-    expect(interactiveState.backwardSurfaceOrigin!.dx, closeTo(0, 0.001));
-    expect(interactiveState.backwardSurfaceOrigin!.dy, closeTo(0, 0.001));
+    expect(
+      interactiveState.backwardSurfaceOrigin!.dx,
+      closeTo(interactiveState.flippingAnchor!.dx, 0.001),
+    );
+    expect(
+      interactiveState.backwardSurfaceOrigin!.dy,
+      closeTo(interactiveState.flippingAnchor!.dy, 0.001),
+    );
     expect(interactiveState.backwardSurfaceViewportRect, isNotNull);
     expect(interactiveState.backwardPivotLocal, isNotNull);
     expect(interactiveState.backwardPivotLocal!.dx, closeTo(0, 0.001));
@@ -797,7 +806,7 @@ void main() {
       interactiveState.backwardPivotViewport!.dy,
       closeTo(interactiveState.backwardSurfaceViewportRect!.top, 0.001),
       reason:
-          'the replay surface is spine-locked and no longer pivots around the folded corner',
+          'the display-projected replay surface pivots at its projected origin',
     );
     expect(interactiveState.backwardClipLocalBounds, isNotNull);
     expect(interactiveState.backwardClipLocalBounds!.width, greaterThan(0));
@@ -825,51 +834,75 @@ void main() {
     expect(interactiveState.backwardBottomStart, greaterThan(0));
     expect(interactiveState.backwardPhase, isNotNull);
     expect(interactiveState.backwardPhase, isNot(equals('recto')));
-    expect(interactiveState.backwardReplayFrontLayerCount, equals(0));
-    expect(interactiveState.backwardMainline, equals('paperFoldBackThreeFace'));
+    final frontLayerCount = interactiveState.backwardReplayFrontLayerCount ?? 0;
+    expect(frontLayerCount, inInclusiveRange(0, 1));
+    expect(interactiveState.backwardMainline, equals('paperFoldBackMainline'));
     expect(interactiveState.backwardFlippingSheetCount, equals(1));
-    expect(interactiveState.backwardFrontSheetId, equals('threeFaceFront:2'));
-    expect(interactiveState.backwardBackSheetId, equals('threeFaceBack:2'));
+    if (frontLayerCount > 0) {
+      expect(interactiveState.backwardFrontSheetId, equals('mainlineLeaf:2'));
+    } else {
+      expect(interactiveState.backwardFrontSheetId, isNull);
+    }
+    expect(interactiveState.backwardBackSheetId, equals('mainlineLeaf:2'));
     expect(interactiveState.backwardCurrentLayerPresent, isTrue);
     expect(interactiveState.backwardMultiSliceViolation, isFalse);
     expect(
       interactiveState.backwardReplayBackSurfaceStrategy,
-      equals('paperFoldThreeFaceBackSurface'),
+      equals('paperFoldBackMainlineSurface'),
     );
     expect(interactiveState.backwardBottomLayerPageIndex, equals(3));
     expect(interactiveState.backwardFlippingLayerPageIndex, equals(2));
     expect(interactiveState.backwardDynamicOwnedPages, contains(2));
-    expect(interactiveState.backwardDynamicOwnedPages, contains(3));
-    expect(interactiveState.backwardStaticSuppressedPages, contains(3));
+    expect(interactiveState.backwardDynamicOwnedPages, isNot(contains(3)));
+    expect(interactiveState.backwardStaticSuppressedPages, isNot(contains(3)));
     expect(interactiveState.backwardReplaySlices, isNotNull);
-    expect(interactiveState.backwardReplayFrontLayerCount, equals(0));
+    expect(
+      interactiveState.backwardReplayFrontLayerCount,
+      inInclusiveRange(0, 1),
+    );
     final hasPaintedBackwardSheet =
         interactiveState.backwardBackPaintBounds != null ||
         interactiveState.backwardFrontPaintBounds != null ||
         interactiveState.backwardFoldSurfacePaintBounds != null;
     expect(hasPaintedBackwardSheet, isTrue);
-    if (interactiveState.backwardFrontPaintBounds == null) {
-      expect(interactiveState.backwardBackPaintBounds, isNotNull);
-    }
-    expect(interactiveState.backwardFoldDirection, equals('rightward'));
+    expect(interactiveState.backwardBackPaintBounds, isNotNull);
+    expect(
+      interactiveState.frontBounds,
+      equals(interactiveState.backwardFrontPaintBounds),
+    );
+    expect(
+      interactiveState.backBounds,
+      equals(interactiveState.backwardBackPaintBounds),
+    );
+    expect(
+      interactiveState.backwardBackPaintBounds!.right,
+      greaterThan(0),
+      reason:
+          'single-page BACK moving sheet must intersect the visible current page; '
+          'a fully negative X bound means the previous page was projected to the '
+          'wrong side of the spine.',
+    );
+    // BACK keeps semantic page binding while visual geometry is
+    // forward-isomorphic, so the static fold direction matches forward.
+    expect(interactiveState.backwardFoldDirection, equals('leftward'));
     expect(
       interactiveState.backwardCompositeMode,
-      equals('paperFoldBackwardThreeFace'),
+      equals('paperFoldBackwardMainline'),
     );
-    if (interactiveState.backwardFrontPaintBounds == null) {
-      expect(interactiveState.backwardBackPaintBounds, isNotNull);
-      expect(
-        interactiveState.backwardBackPaintBounds!.left,
-        isA<double>(),
-        reason:
-            'back texture bounds come from the shared StPageFlip soft sheet',
-      );
-    }
+    expect(
+      interactiveState.backwardBackPaintBounds!.left,
+      isA<double>(),
+      reason: 'back texture bounds come from the native StPageFlip BACK sheet',
+    );
     expect(
       interactiveState.backwardBackPixelSurfaceStrategy,
-      equals('paperFoldThreeFaceBackSurface'),
+      equals('paperFoldBackMainlineSurface'),
     );
     expect(interactiveState.backwardFrontCoverageRatio, isNotNull);
+    expect(
+      interactiveState.backwardFrontCoverageRatio,
+      greaterThanOrEqualTo(0),
+    );
     expect(interactiveState.backwardLeftSpineLocked, isNotNull);
     expect(interactiveState.backwardSimulatorVisualPhase, isNotNull);
     expect(interactiveState.backwardEdgeEnteredPage, isNotNull);
@@ -877,9 +910,10 @@ void main() {
     expect(interactiveState.backwardBackVertexCount, greaterThanOrEqualTo(3));
     expect(interactiveState.backwardBackPolygonPoints, isNotNull);
     expect(interactiveState.backwardCurrentPolygonPoints, isNotNull);
-    if (interactiveState.backwardFrontPaintBounds == null) {
-      expect(interactiveState.backwardBackPaintBounds!.width, greaterThan(0));
+    if (interactiveState.backwardFrontPaintBounds != null) {
+      expect(interactiveState.backwardFrontPaintBounds!.width, greaterThan(0));
     }
+    expect(interactiveState.backwardBackPaintBounds!.width, greaterThan(0));
     expect(interactiveState.backwardFoldX, isNotNull);
     expect(interactiveState.backwardPageEdgeX, isNotNull);
     expect(interactiveState.backwardFoldSurfaceEdgeX, isNotNull);
@@ -931,10 +965,17 @@ void main() {
     expect(interactiveState.backwardFoldSurfaceEdgeLineBottom, isNotNull);
     expect(interactiveState.backwardFoldSurfaceEdgeX!.isFinite, isTrue);
     expect(interactiveState.backwardEdgeParallelToFold, isA<bool>());
+    expect(interactiveState.backwardSpineTop, isNotNull);
+    expect(interactiveState.backwardSpineBottom, isNotNull);
+    expect(interactiveState.backwardCurrentResidualBounds, isNotNull);
+    expect(
+      interactiveState.backwardCurrentResidualBounds!.left,
+      greaterThanOrEqualTo(0),
+      reason: 'C/current residual must stay in the visible right-page space.',
+    );
     expect(interactiveState.backwardPaintedVersoWidth, isNotNull);
     expect(interactiveState.backwardPaintedVersoWidth, greaterThan(0));
     expect(find.byType(ArticlePageCurlRenderer), findsNothing);
-    expect(find.byType(ArticlePageBackwardLeafRenderer), findsNothing);
 
     await gesture.up();
     await tester.pumpAndSettle();
@@ -942,15 +983,183 @@ void main() {
     final backwardAnimationStates = debugStates.where(
       (state) =>
           state.renderDirection == StPageFlipDirection.back &&
-          state.backwardCompositeMode == 'paperFoldBackwardThreeFace',
+          state.backwardCompositeMode == 'paperFoldBackwardMainline',
     );
     expect(backwardAnimationStates, isNotEmpty);
+    void expectStableBackBand(
+      ArticleReadOnlyBookDebugState state,
+      String phase,
+    ) {
+      final backBounds = state.backwardBackPaintBounds;
+      final surface = state.backwardSurfaceViewportRect;
+      expect(backBounds, isNotNull, reason: '$phase back band must be painted');
+      expect(surface, isNotNull, reason: '$phase surface bounds are required');
+      final minStableWidth = math.max(8.0, surface!.width * 0.02);
+      expect(
+        backBounds!.width,
+        greaterThan(minStableWidth),
+        reason:
+            '$phase back band must not collapse into the near-invisible texture strip.',
+      );
+      expect(
+        backBounds.width,
+        lessThan(surface.width * 0.88),
+        reason:
+            '$phase back band must stay inside the F/E strip instead of expanding into a large flat backface.',
+      );
+    }
+
     expect(
       backwardAnimationStates.any(
         (state) => state.backwardClipViewportBounds != null,
       ),
       isTrue,
     );
+    final activeHorizontalBackStates = backwardAnimationStates
+        .where(
+          (state) =>
+              state.backwardClipViewportBounds != null &&
+              state.backwardCurrentResidualBounds != null,
+        )
+        .toList(growable: false);
+    expect(activeHorizontalBackStates, isNotEmpty);
+    for (final state in activeHorizontalBackStates) {
+      expect(
+        state.backwardFrontPaintBounds != null ||
+            state.backwardBackPaintBounds != null,
+        isTrue,
+        reason:
+            'horizontal BACK drag must never lose both previous-front and '
+            'previous-back faces while currentResidual remains visible.',
+      );
+    }
+    final earlyBackStates = backwardAnimationStates.where(
+      (state) =>
+          (state.backwardVersoWidth ?? 0) > 0.05 &&
+          (state.backwardRectoCoverage ?? 0) <= 0.02,
+    );
+    final earlyPaintedBackStates = earlyBackStates
+        .where((state) => state.backwardBackPaintBounds != null)
+        .toList(growable: false);
+    expect(
+      earlyPaintedBackStates,
+      isNotEmpty,
+      reason:
+          'BACK early phase may keep recto/front hidden, but verso/back must '
+          'already be visible as the fold enters from the left.',
+    );
+    expectStableBackBand(earlyPaintedBackStates.first, 'early');
+    final midFoldFaceStates = backwardAnimationStates.where(
+      (state) =>
+          state.backwardFrontPaintBounds != null &&
+          state.backwardBackPaintBounds != null &&
+          (state.backwardRectoCoverage ?? 0) > 0.02 &&
+          (state.backwardRectoCoverage ?? 0) < 0.72,
+    );
+    expect(
+      midFoldFaceStates,
+      isNotEmpty,
+      reason:
+          'BACK front/back split must be visible during the middle fold, not '
+          'only in the final recto-dominant phase.',
+    );
+    expectStableBackBand(midFoldFaceStates.first, 'middle');
+    final lateFrontStates = backwardAnimationStates.where(
+      (state) =>
+          (state.backwardRectoCoverage ?? 0) >= 0.72 &&
+          state.backwardFrontPaintBounds != null,
+    );
+    expect(
+      lateFrontStates,
+      isNotEmpty,
+      reason:
+          'BACK late phase should remain front-dominant after the midpoint.',
+    );
+    final lateBackStates = backwardAnimationStates.where(
+      (state) =>
+          (state.backwardRectoCoverage ?? 0) >= 0.72 &&
+          state.backwardBackPaintBounds != null,
+    );
+    expect(
+      lateBackStates,
+      isNotEmpty,
+      reason:
+          'BACK late phase must keep the E/F back band visible instead of jumping to a front-only state.',
+    );
+    expectStableBackBand(lateBackStates.first, 'late');
+    final mixedFaceStates = backwardAnimationStates.where(
+      (state) =>
+          (state.backwardRectoCoverage ?? 0) > 0.05 &&
+          (state.backwardRectoWidth ?? 0) > 0.01,
+    );
+    expect(
+      mixedFaceStates,
+      isNotEmpty,
+      reason:
+          'BACK replay must reach a phase where the fold has crossed the midpoint '
+          'and previous-front recto becomes physically visible.',
+    );
+    for (final state in mixedFaceStates) {
+      expect(state.backwardSpineTop, isNotNull, reason: 'S/spine is required');
+      expect(
+        state.backwardFoldLineTop,
+        isNotNull,
+        reason: 'F/fold line is required',
+      );
+      expect(
+        state.backwardPageEdgeLineTop,
+        isNotNull,
+        reason: 'E/free edge is required',
+      );
+      expect(
+        state.backwardCurrentResidualBounds,
+        isNotNull,
+        reason: 'C/current residual is required',
+      );
+      expect(state.backwardFrontPaintBounds, isNotNull);
+      expect(state.backwardBackPaintBounds, isNotNull);
+      expect(state.backwardCurrentResidualBounds, isNotNull);
+      expect(state.backwardFrontPolygonPoints, isNotNull);
+      expect(state.backwardBackPolygonPoints, isNotNull);
+      expect(
+        state.backwardFrontPaintBounds!.right,
+        greaterThan(0),
+        reason: 'recto/front must not be fully clipped into negative X.',
+      );
+      expect(
+        state.backwardBackPaintBounds!.right,
+        greaterThan(0),
+        reason: 'verso/back must not be fully clipped into negative X.',
+      );
+      expect(
+        state.backwardFrontPaintBounds!.left,
+        lessThanOrEqualTo(state.backwardBackPaintBounds!.right),
+        reason:
+            'recto/front must be a sheet-local spine-side segment adjacent to '
+            'the rotating back fold band.',
+      );
+      expect(
+        state.backwardFrontPaintBounds!.top,
+        lessThanOrEqualTo(state.backwardCurrentResidualBounds!.top + 1),
+        reason:
+            'sheet-local previous-front must cover the upper spine-side region; '
+            'otherwise the current page leaks through the top-left corner.',
+      );
+      expect(
+        state.backwardBackPaintBounds!.width,
+        lessThan(state.backwardSurfaceViewportRect!.width * 0.92),
+        reason:
+            'previous-back must remain a fold band instead of expanding into a '
+            'full uncreased back page.',
+      );
+      expect(
+        state.backwardBackPaintBounds!.left,
+        lessThan(state.backwardCurrentResidualBounds!.right),
+        reason:
+            'rotated verso/back may extend over current by bounds, but it must '
+            'remain adjacent to the current-page residual rather than disappear.',
+      );
+    }
     for (final state in backwardAnimationStates.where(
       (state) => state.backwardFoldX != null,
     )) {
@@ -971,38 +1180,28 @@ void main() {
         );
       }
       expect(state.backwardClipViewportBounds, isNotNull);
-      final surfaceShowsFront = state.backwardFrontPaintBounds != null;
-      expect(state.backwardMainline, equals('paperFoldBackThreeFace'));
+      expect(state.backwardMainline, equals('paperFoldBackMainline'));
       expect(state.backwardFlippingSheetCount, equals(1));
-      expect(state.backwardFrontSheetId, startsWith('threeFaceFront:'));
-      expect(state.backwardBackSheetId, startsWith('threeFaceBack:'));
+      if (state.backwardFrontPaintBounds != null) {
+        expect(state.backwardFrontSheetId, startsWith('mainlineLeaf:'));
+        expect(state.backwardBackSheetId, equals(state.backwardFrontSheetId));
+        expect(state.frontBounds, equals(state.backwardFrontPaintBounds));
+      } else {
+        expect(state.backwardBackSheetId, startsWith('mainlineLeaf:'));
+      }
+      if (state.backwardBackPaintBounds != null) {
+        expect(state.backBounds, equals(state.backwardBackPaintBounds));
+      }
       expect(state.backwardCurrentLayerPresent, isTrue);
       expect(state.backwardMultiSliceViolation, isFalse);
-      expect(
-        _bothRectsCoverNearlyFullSurface(
-              state.backwardFrontPaintBounds,
-              state.backwardBackPaintBounds,
-              state.backwardSurfaceViewportRect,
-            ) &&
-            state.backwardBackPolygonPoints == state.backwardFrontPolygonPoints,
-        isFalse,
-        reason:
-            'front and back may have large angled AABBs, but they must not share the same full-page polygon',
-      );
-      if (surfaceShowsFront) {
-        expect(
-          state.backwardFrontPaintBounds,
-          isNotNull,
-          reason:
-              'recto/front-facing backward frames must paint the previous front page',
-        );
-      } else {
-        expect(
-          state.backwardBackPaintBounds != null ||
-              (state.backwardBackVertexCount ?? 0) >= 3,
-          isTrue,
-        );
+      if (state.backwardFrontPaintBounds != null) {
+        expect(state.backwardFrontPolygonPoints, isNotNull);
       }
+      expect(
+        state.backwardBackPaintBounds != null ||
+            (state.backwardBackVertexCount ?? 0) >= 3,
+        isTrue,
+      );
     }
 
     expect(
@@ -1029,20 +1228,285 @@ void main() {
   });
 
   testWidgets(
-    'PageflipDiagnosticsApp backward dynamic page after forward turn exposes visual regions',
+    'PageflipDiagnosticsApp backward dynamic exposes Route-B three-layer mainline',
     (WidgetTester tester) async {
       final sample = await _renderBackwardCompositeProbeScene(tester);
 
-      expect(sample.earlyBackVisible, isTrue);
-      expect(sample.earlyFrontVisible, isA<bool>());
-      expect(sample.middleBackVisible, isTrue);
-      expect(sample.middleFrontVisible, isTrue);
-      expect(sample.middleCurrentResidualVisible, isA<bool>());
-      expect(sample.middleFoldHasFrontText, isFalse);
-      expect(sample.middleCompositeMode, equals('paperFoldBackwardThreeFace'));
-      expect(sample.middleBackRight - sample.middleBackLeft, greaterThan(40));
+      expect(sample.compositeMode, equals('paperFoldBackwardMainline'));
+      expect(sample.bottomLayerPageIndex, equals(3));
+      expect(sample.flippingLayerPageIndex, equals(2));
+      expect(
+        sample.backSheetId,
+        equals('mainlineLeaf:2'),
+        reason:
+            'BACK visible backface must stay bound to the previous/flipping leaf, '
+            'not the covered current page.',
+      );
+      expect(
+        sample.backPixelSurfaceStrategy,
+        equals('paperFoldBackMainlineSurface'),
+        reason:
+            'Route-B previous-back must stay on the dedicated backside surface '
+            'instead of being painted as a front texture.',
+      );
+      expect(
+        sample.baselineKeyVisible,
+        isFalse,
+        reason:
+            'BACK must not expose a full previous-front baseline; previous front '
+            'is only allowed through the E/free-edge driven flat segment.',
+      );
+      expect(
+        sample.foldXSamples,
+        isNotEmpty,
+        reason: 'BACK 主线必须采集到 backwardFoldX 真相源样本。',
+      );
+      expect(
+        sample.foldXAdvance,
+        greaterThan(1),
+        reason: 'BACK fold X 必须随手势在 viewport space 内从左向右推进。',
+      );
+      expect(
+        sample.latePoseCount,
+        greaterThan(0),
+        reason:
+            '图二对应的 late BACK pose 必须同时暴露 previous-front、'
+            'previous-back 与 current residual，不能塌成单条竖带。',
+      );
+      final minStableBackWidth = math.max(
+        8.0,
+        sample.latePoseSurfaceWidth * 0.02,
+      );
+      expect(
+        sample.latePoseBackWidth,
+        greaterThan(minStableBackWidth),
+        reason: 'late BACK previous-back band must not collapse into a strip.',
+      );
+      expect(
+        sample.latePoseBackWidth,
+        lessThan(sample.latePoseSurfaceWidth * 0.88),
+        reason:
+            'late BACK previous-back must stay an E/F fold band, not a full page.',
+      );
+      expect(
+        sample.latePoseFrontWidth,
+        greaterThan(0),
+        reason: 'late BACK still needs the S-E previous-front flat segment.',
+      );
+      expect(
+        sample.latePoseCurrentWidth,
+        greaterThan(0),
+        reason: 'late BACK must keep current residual visible under the fold.',
+      );
+      expect(sample.latePoseBackVertexCount, greaterThanOrEqualTo(3));
+      expect(sample.latePoseFrontSheetId, equals(sample.latePoseBackSheetId));
+      expect(sample.latePoseFrontSheetId, equals('mainlineLeaf:2'));
     },
   );
+
+  testWidgets(
+    'BACK geometry sweep stays stable across horizontal and angled pullbacks',
+    (WidgetTester tester) async {
+      const corners = <ArticlePageCurlCorner>[
+        ArticlePageCurlCorner.topLeft,
+        ArticlePageCurlCorner.bottomLeft,
+      ];
+      const angleDegrees = <double>[0, 5, 10, 20, 30, 45, 60];
+      const depths = <double>[60, 120, 180];
+      final failures = <String>[];
+
+      for (final corner in corners) {
+        for (final angle in angleDegrees) {
+          for (final depth in depths) {
+            final sample = await _renderBackwardGeometrySweepSample(
+              tester,
+              corner: corner,
+              angleDegrees: angle,
+              depth: depth,
+            );
+            if (sample.failureReason != BackwardGeometryFailureReason.none) {
+              failures.add(sample.describe());
+              continue;
+            }
+            expect(
+              sample.backWidth,
+              greaterThan(0),
+              reason: sample.describe(),
+            );
+            expect(
+              sample.currentWidth,
+              greaterThan(0),
+              reason: sample.describe(),
+            );
+          }
+        }
+      }
+
+      expect(
+        failures,
+        isEmpty,
+        reason: failures.isEmpty
+            ? null
+            : 'geometry sweep failures:\n${failures.join('\n')}',
+      );
+    },
+  );
+
+  testWidgets(
+    'PageflipDiagnosticsApp backward verso samples semantic back surface',
+    (WidgetTester tester) async {
+      final sample = await _renderBackwardVersoTextureProbeScene(tester);
+
+      expect(
+        sample.backBandWidth,
+        greaterThan(12),
+        reason: 'probe requires a visible BACK fold band to judge texture source.',
+      );
+      expect(
+        sample.backSurfaceStrategy,
+        equals('paperFoldBackMainlineSurface'),
+        reason:
+            'probe must run on the Route-B previous-back mainline surface.',
+      );
+      expect(
+        sample.activeVersoSurfaceKind,
+        equals('back'),
+        reason:
+            'BACK verso runtime snapshot must be marked as semantic back surface.',
+      );
+      expect(
+        sample.activeVersoPageIndex,
+        equals(2),
+        reason:
+            'BACK verso runtime snapshot must remain bound to the flipping leaf.',
+      );
+      expect(
+        sample.runtimeFailureReason,
+        BackwardVersoFailureReason.none,
+        reason:
+            'runtime probe must not report snapshot/mesh/probe-point failures in '
+            'the accepted BACK mainline pose.',
+      );
+      expect(
+        sample.probePointCount,
+        greaterThanOrEqualTo(1),
+        reason:
+            'runtime probe must expose at least one stable fold-band sample point; '
+            'direction discrimination is enforced by the dedicated pixel test.',
+      );
+    },
+  );
+
+  test('BACK fold band pixels match mirrored semantic back snapshot', () async {
+      const pageSize = Size(400, 600);
+      final snapshotImage = await _createSemanticBackSurfaceProbeImage(
+        pageSize: pageSize,
+        pageIndex: 2,
+      );
+      final snapshot = ArticlePageTextureSnapshot(
+        image: snapshotImage,
+        logicalSize: pageSize,
+        pixelRatio: 1,
+        semanticSurfaceKind: 'back',
+      );
+      const polygon = <Offset>[
+        Offset(44, 92),
+        Offset(332, 124),
+        Offset(306, 520),
+        Offset(72, 492),
+      ];
+      final probe = resolveBackwardVersoPixelProbe(
+        pageSize: pageSize,
+        polygon: polygon,
+      );
+      expect(probe.isEmpty, isFalse);
+
+      final renderedImage = await renderBackwardLeafVersoProbeImage(
+        leafVersoSnapshot: snapshot,
+        pageSize: pageSize,
+        polygon: polygon,
+      );
+      expect(renderedImage, isNotNull);
+      final renderedBytes = await _rawRgbaBytes(renderedImage!);
+      final snapshotBytes = await _rawRgbaBytes(snapshotImage);
+      final actualProbeColors = <_ProbeColor>[];
+      final mirrorExpectedProbeColors = <_ProbeColor>[];
+      final unmirroredExpectedProbeColors = <_ProbeColor>[];
+
+      for (var index = 0; index < probe.localPoints.length; index += 1) {
+        final localPoint = probe.localPoints[index];
+        final mirroredTexturePoint = probe.texturePoints[index];
+        actualProbeColors.add(
+          _classifyProbeColor(
+            _colorAtBytes(
+              renderedImage.width,
+              renderedImage.height,
+              renderedBytes,
+              localPoint,
+            ),
+          ),
+        );
+        mirrorExpectedProbeColors.add(
+          _classifyProbeColor(
+            _colorAtBytes(
+              snapshotImage.width,
+              snapshotImage.height,
+              snapshotBytes,
+              mirroredTexturePoint,
+            ),
+          ),
+        );
+        unmirroredExpectedProbeColors.add(
+          _classifyProbeColor(
+            _colorAtBytes(
+              snapshotImage.width,
+              snapshotImage.height,
+              snapshotBytes,
+              localPoint,
+            ),
+          ),
+        );
+      }
+
+      final mirrorSensitiveSamples = actualProbeColors.asMap().entries.any(
+        (entry) =>
+            entry.value == mirrorExpectedProbeColors[entry.key] &&
+            entry.value != unmirroredExpectedProbeColors[entry.key],
+      );
+      final failureReason = listEquals(
+        actualProbeColors,
+        mirrorExpectedProbeColors,
+      )
+          ? BackwardVersoFailureReason.none
+          : BackwardVersoFailureReason.mirrorDirectionMismatch;
+
+      expect(
+        failureReason,
+        BackwardVersoFailureReason.none,
+        reason:
+            'shared BACK fold-band renderer must match mirrored texture sampling '
+            'from the semantic back snapshot. '
+            'actual=$actualProbeColors '
+            'mirrored=$mirrorExpectedProbeColors '
+            'unmirrored=$unmirroredExpectedProbeColors',
+      );
+      expect(
+        mirrorSensitiveSamples,
+        isTrue,
+        reason:
+            'probe pattern must distinguish mirrored from unmirrored sampling; '
+            'otherwise pixel proof cannot verify direction.',
+      );
+      expect(
+        actualProbeColors,
+        isNot(equals(unmirroredExpectedProbeColors)),
+        reason:
+            'fold-band pixels must not match the unmirrored semantic back snapshot direction.',
+      );
+
+      renderedImage.dispose();
+      snapshot.dispose();
+    });
 
   testWidgets(
     'a. mesh coverage keeps the fold band continuous across scanlines',
@@ -1119,7 +1583,6 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
             showFooterPageLabel: false,
             onSceneChanged: scenes.add,
             onDebugStateChanged: debugStates.add,
-            debugPageSurfaceBuilder: _buildProbePageSurface,
           );
         },
       ),
@@ -1147,90 +1610,92 @@ Future<_BackwardCompositeProbeSample> _renderBackwardCompositeProbeScene(
     tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
   );
 
-  var debugCursor = debugStates.length;
-  Future<_BackwardProbeFrame> captureFrame({bool preferCurrent = false}) async {
-    await tester.pump(const Duration(milliseconds: 16));
-    final phaseStates = debugStates.skip(debugCursor).toList(growable: false);
-    bool isBackwardComposite(ArticleReadOnlyBookDebugState state) =>
-        state.renderDirection == StPageFlipDirection.back &&
-        state.backwardCompositeMode == 'paperFoldBackwardThreeFace';
-    final debugState =
-        phaseStates
-            .where(isBackwardComposite)
-            .fold<ArticleReadOnlyBookDebugState?>(null, (best, state) {
-              final hasBack =
-                  state.backwardBackPaintBounds != null ||
-                  (state.backwardBackVertexCount ?? 0) >= 3;
-              final hasCurrent =
-                  state.backwardCurrentResidualBounds != null &&
-                  state.backwardCurrentResidualBounds!.width > 0;
-              final hasFront =
-                  state.backwardFrontPaintBounds != null &&
-                  state.backwardFrontPaintBounds!.width > 0;
-              if (preferCurrent && hasBack && hasCurrent && hasFront) {
-                return state;
-              }
-              if (preferCurrent && hasBack && hasCurrent) {
-                return state;
-              }
-              if (!preferCurrent && hasBack) {
-                return state;
-              }
-              return best ?? state;
-            }) ??
-        debugStates.lastWhere(isBackwardComposite);
-    debugCursor = debugStates.length;
-    return _sampleBackwardFrame(tester: tester, debugState: debugState);
-  }
-
   await gesture.moveBy(const Offset(36, -8));
   for (var i = 0; i < 4; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
-  final early = await captureFrame();
-
   await gesture.moveBy(const Offset(360, -36));
   for (var i = 0; i < 8; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
-  var middle = await captureFrame(preferCurrent: true);
-  for (var retry = 0; retry < 4 && !middle.frontVisible; retry += 1) {
-    await gesture.moveBy(const Offset(180, -12));
-    for (var i = 0; i < 6; i += 1) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    middle = await captureFrame(preferCurrent: true);
-  }
-  if (!middle.currentResidualVisible) {
-    await gesture.moveBy(const Offset(-120, 8));
-    for (var i = 0; i < 6; i += 1) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    middle = await captureFrame(preferCurrent: true);
-  }
 
+  // Full previous-front baseline must not appear in the widget tree.
+  final baselineKeyVisible = find
+      .byKey(const ValueKey<String>('article_backward_previous_front_baseline'))
+      .evaluate()
+      .isNotEmpty;
+
+  final mainlineStates = debugStates
+      .where(
+        (s) =>
+            s.renderDirection == StPageFlipDirection.back &&
+            s.backwardCompositeMode == 'paperFoldBackwardMainline',
+      )
+      .toList(growable: false);
+  expect(mainlineStates, isNotEmpty);
+
+  final compositeMode = mainlineStates.last.backwardCompositeMode ?? '';
+  final bottomLayerPageIndex = mainlineStates.last.backwardBottomLayerPageIndex;
+  final flippingLayerPageIndex =
+      mainlineStates.last.backwardFlippingLayerPageIndex;
+  final backPixelSurfaceStrategy =
+      mainlineStates.last.backwardBackPixelSurfaceStrategy;
+  final backSheetId = mainlineStates.last.backwardBackSheetId;
+  final foldXSamples = mainlineStates
+      .where((s) => s.backwardFoldX != null)
+      .map((s) => s.backwardFoldX!)
+      .toList(growable: false);
+  final foldXAdvance = foldXSamples.isEmpty
+      ? 0.0
+      : foldXSamples.last - foldXSamples.first;
   await gesture.up();
   for (var i = 0; i < 3; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
+  final animationMainlineStates = debugStates
+      .where(
+        (s) =>
+            s.renderDirection == StPageFlipDirection.back &&
+            s.backwardCompositeMode == 'paperFoldBackwardMainline',
+      )
+      .toList(growable: false);
+  final latePoseStates = animationMainlineStates
+      .where(
+        (s) =>
+            (s.backwardRectoCoverage ?? 0) >= 0.68 &&
+            (s.backwardVersoWidth ?? 0) > 0.01 &&
+            s.backwardFrontPaintBounds != null &&
+            s.backwardBackPaintBounds != null &&
+            s.backwardCurrentResidualBounds != null &&
+            s.backwardSurfaceViewportRect != null,
+      )
+      .toList(growable: false);
+  final latePoseState = latePoseStates.isEmpty
+      ? animationMainlineStates.last
+      : latePoseStates.last;
 
   await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
   await tester.pump(const Duration(milliseconds: 16));
 
   return _BackwardCompositeProbeSample(
-    earlyBackVisible: early.backVisible,
-    earlyFrontVisible: early.frontVisible,
-    middleFrontVisible: middle.frontVisible,
-    middleBackVisible: middle.backVisible,
-    middleCurrentResidualVisible: middle.currentResidualVisible,
-    middleFoldHasFrontText: middle.foldHasFrontText,
-    middleCompositeMode: middle.compositeMode,
-    pageLeft: middle.pageLeft,
-    middleFrontLeft: middle.frontLeft,
-    middleFrontRight: middle.frontRight,
-    middleBackLeft: middle.backLeft,
-    middleBackRight: middle.backRight,
-    middleCurrentLeft: middle.currentLeft,
+    compositeMode: compositeMode,
+    bottomLayerPageIndex: bottomLayerPageIndex,
+    flippingLayerPageIndex: flippingLayerPageIndex,
+    backPixelSurfaceStrategy: backPixelSurfaceStrategy,
+    backSheetId: backSheetId,
+    baselineKeyVisible: baselineKeyVisible,
+    foldXSamples: foldXSamples,
+    foldXAdvance: foldXAdvance,
+    latePoseCount: latePoseStates.length,
+    latePoseSurfaceWidth:
+        latePoseState.backwardSurfaceViewportRect?.width ?? 0.0,
+    latePoseBackWidth: latePoseState.backwardBackPaintBounds?.width ?? 0.0,
+    latePoseFrontWidth: latePoseState.backwardFrontPaintBounds?.width ?? 0.0,
+    latePoseCurrentWidth:
+        latePoseState.backwardCurrentResidualBounds?.width ?? 0.0,
+    latePoseBackVertexCount: latePoseState.backwardBackVertexCount ?? 0,
+    latePoseFrontSheetId: latePoseState.backwardFrontSheetId,
+    latePoseBackSheetId: latePoseState.backwardBackSheetId,
   );
 }
 
@@ -1254,72 +1719,228 @@ Widget _buildProbePageSurface(
   );
 }
 
-_BackwardProbeFrame _sampleBackwardFrame({
-  required WidgetTester tester,
-  required ArticleReadOnlyBookDebugState debugState,
+Widget _buildProbeBackPageSurface(
+  BuildContext context,
+  int pageIndex,
+  Size pageSize,
+) {
+  final color = switch (pageIndex) {
+    2 => const Color(0xFF00E5FF),
+    3 => const Color(0xFFFFD600),
+    _ => const Color(0xFF7C4DFF),
+  };
+  return ColoredBox(
+    key: ValueKey<String>('article_probe_back_page_$pageIndex'),
+    color: color,
+    child: Align(
+      alignment: Alignment.centerRight,
+      child: Container(width: pageSize.width * 0.22, color: Colors.black),
+    ),
+  );
+}
+
+Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
+  WidgetTester tester,
+) async {
+  await tester.binding.setSurfaceSize(const Size(900, 1200));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  final debugStates = <ArticleReadOnlyBookDebugState>[];
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: LayoutBuilder(
+        builder: (context, constraints) {
+          final metrics = resolveArticleCanvasMetrics(
+            context,
+            constraints,
+            variant: ArticleCanvasVariant.detail,
+          );
+          return ArticleReadOnlyBookDeck(
+            pages: _diagnosticPages(),
+            template: ArticleTemplatePreset.tech,
+            fontPreset: ArticleFontPreset.mono,
+            metrics: metrics,
+            pagePadding: articleReaderStagePagePadding(),
+            initialPage: 3,
+            coverUrl: '',
+            showFooterPageLabel: false,
+            onDebugStateChanged: debugStates.add,
+            debugPageSurfaceBuilder: _buildProbePageSurface,
+            debugBackPageSurfaceBuilder: _buildProbeBackPageSurface,
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pump();
+  for (var i = 0; i < 12; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final backwardGesture = await tester.startGesture(
+    tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+  );
+  await backwardGesture.moveBy(const Offset(36, -8));
+  for (var i = 0; i < 4; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await backwardGesture.moveBy(const Offset(360, -36));
+  for (var i = 0; i < 10; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final probeState = debugStates.lastWhere(
+    (state) =>
+        state.renderDirection == StPageFlipDirection.back &&
+        state.backwardCompositeMode == 'paperFoldBackwardMainline' &&
+        state.backwardBackPaintBounds != null &&
+        state.backwardBackSheetId == 'mainlineLeaf:2',
+  );
+  expect(probeState.backwardBackLocalPolygonRaw, isNotEmpty);
+  expect(probeState.backwardVersoProbeLocalPoints, isNotEmpty);
+  await backwardGesture.up();
+  for (var i = 0; i < 3; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+  await tester.pump(const Duration(milliseconds: 16));
+
+  return _BackwardVersoTextureProbeSample(
+    backBandWidth: probeState.backwardBackPaintBounds!.width,
+    backSurfaceStrategy: probeState.backwardBackPixelSurfaceStrategy,
+    activeVersoPageIndex: probeState.activeVersoPageIndex,
+    activeVersoSurfaceKind: probeState.activeVersoSurfaceKind,
+    runtimeFailureReason: probeState.backwardVersoFailureReason,
+    probePointCount: probeState.backwardVersoProbeLocalPoints.length,
+  );
+}
+
+Future<_BackwardGeometrySweepSample> _renderBackwardGeometrySweepSample(
+  WidgetTester tester, {
+  required ArticlePageCurlCorner corner,
+  required double angleDegrees,
+  required double depth,
+}) async {
+  await tester.binding.setSurfaceSize(const Size(900, 1200));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  final debugStates = <ArticleReadOnlyBookDebugState>[];
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: LayoutBuilder(
+        builder: (context, constraints) {
+          final metrics = resolveArticleCanvasMetrics(
+            context,
+            constraints,
+            variant: ArticleCanvasVariant.detail,
+          );
+          return ArticleReadOnlyBookDeck(
+            pages: _diagnosticPages(),
+            template: ArticleTemplatePreset.tech,
+            fontPreset: ArticleFontPreset.mono,
+            metrics: metrics,
+            pagePadding: articleReaderStagePagePadding(),
+            initialPage: 3,
+            coverUrl: '',
+            showFooterPageLabel: false,
+            onDebugStateChanged: debugStates.add,
+          );
+        },
+      ),
+    ),
+  );
+  await tester.pump();
+  for (var i = 0; i < 8; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final gesture = await tester.startGesture(
+    tester.getCenter(find.byKey(_cornerHotzoneKey(corner))),
+  );
+  await gesture.moveBy(_backwardSweepDelta(corner: corner, angleDegrees: angleDegrees, depth: depth));
+  for (var i = 0; i < 6; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final backwardState = debugStates.lastWhere(
+    (state) => state.renderDirection == StPageFlipDirection.back,
+  );
+
+  await gesture.up();
+  for (var i = 0; i < 3; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+  await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+  await tester.pump(const Duration(milliseconds: 16));
+
+  return _BackwardGeometrySweepSample(
+    corner: corner,
+    angleDegrees: angleDegrees,
+    depth: depth,
+    failureReason: backwardState.backwardGeometryFailureReason,
+    compositeMode: backwardState.backwardCompositeMode,
+    backWidth: backwardState.backwardBackPaintBounds?.width ?? 0,
+    currentWidth: backwardState.backwardCurrentResidualBounds?.width ?? 0,
+  );
+}
+
+Key _cornerHotzoneKey(ArticlePageCurlCorner corner) {
+  return switch (corner) {
+    ArticlePageCurlCorner.topLeft => TestKeys.articlePageCurlHotzoneTopLeft,
+    ArticlePageCurlCorner.bottomLeft =>
+      TestKeys.articlePageCurlHotzoneBottomLeft,
+    ArticlePageCurlCorner.topRight => TestKeys.articlePageCurlHotzoneTopRight,
+    ArticlePageCurlCorner.bottomRight =>
+      TestKeys.articlePageCurlHotzoneBottomRight,
+  };
+}
+
+Offset _backwardSweepDelta({
+  required ArticlePageCurlCorner corner,
+  required double angleDegrees,
+  required double depth,
 }) {
-  final frontBounds = debugState.backwardFrontPaintBounds;
-  final backBounds = debugState.backwardBackPaintBounds;
-  final currentBounds = debugState.backwardCurrentResidualBounds;
-  final frontFinder = find.byKey(
-    const ValueKey<String>('article_backward_previous_front_region'),
+  final radians = angleDegrees * math.pi / 180;
+  final dyMagnitude = math.tan(radians) * depth;
+  final dy = switch (corner) {
+    ArticlePageCurlCorner.topLeft || ArticlePageCurlCorner.topRight =>
+      dyMagnitude,
+    ArticlePageCurlCorner.bottomLeft || ArticlePageCurlCorner.bottomRight =>
+      -dyMagnitude,
+  };
+  return Offset(depth, dy);
+}
+
+Future<ui.Image> _createSemanticBackSurfaceProbeImage({
+  required Size pageSize,
+  required int pageIndex,
+}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(
+    recorder,
+    Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
   );
-  final backFinder = find.byKey(
-    const ValueKey<String>('article_backward_previous_back_region'),
+  final background = switch (pageIndex) {
+    2 => const Color(0xFF00E5FF),
+    3 => const Color(0xFFFFD600),
+    _ => const Color(0xFF7C4DFF),
+  };
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
+    Paint()..color = background,
   );
-  final currentFinder = find.byKey(
-    const ValueKey<String>('article_backward_current_residual_region'),
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, pageSize.width * 0.22, pageSize.height),
+    Paint()..color = Colors.black,
   );
-  final frontFinderVisible = frontFinder.evaluate().isNotEmpty;
-  final frontVisible =
-      (frontFinderVisible ||
-      (debugState.backwardFrontPaintBounds?.width ?? 0) > 0);
-  final backFinderVisible = backFinder.evaluate().isNotEmpty;
-  final backVisible =
-      backFinderVisible ||
-      (debugState.backwardPaintedVersoWidth ?? 0) > 0 ||
-      (debugState.backwardBackVertexCount ?? 0) >= 3;
-  final currentFinderVisible = currentFinder.evaluate().isNotEmpty;
-  final currentResidualVisible =
-      currentFinderVisible ||
-      (debugState.backwardCurrentResidualBounds?.width ?? 0) > 0;
-  final foldHasFrontText = false;
-  expect(backBounds ?? debugState.backwardFoldSurfacePaintBounds, isNotNull);
-  final resolvedBackBounds =
-      backBounds ?? debugState.backwardFoldSurfacePaintBounds!;
-  if (frontFinderVisible && frontBounds != null) {
-    expect(frontBounds.width, greaterThan(0));
-    expect(
-      tester.getSize(frontFinder).height,
-      greaterThan(0),
-      reason:
-          'the front page is clipped by a viewport polygon inside the page surface',
-    );
-  }
-  if (backFinderVisible) {
-    expect(tester.getSize(backFinder).width, greaterThan(0));
-  }
-  if (currentFinderVisible && currentBounds != null) {
-    expect(tester.getSize(currentFinder).width, greaterThan(0));
-  }
-  final pageLeft =
-      frontBounds?.left ??
-      (currentBounds != null && debugState.backwardFoldX != null
-          ? currentBounds.left - debugState.backwardFoldX!
-          : resolvedBackBounds.left - (debugState.backwardPageEdgeX ?? 0));
-  return _BackwardProbeFrame(
-    frontVisible: frontVisible,
-    backVisible: backVisible,
-    currentResidualVisible: currentResidualVisible,
-    foldHasFrontText: foldHasFrontText,
-    compositeMode: debugState.backwardCompositeMode ?? '',
-    pageLeft: pageLeft,
-    frontLeft: frontBounds?.left ?? pageLeft,
-    frontRight: frontBounds?.right ?? pageLeft,
-    backLeft: resolvedBackBounds.left,
-    backRight: resolvedBackBounds.right,
-    currentLeft: currentBounds?.left ?? double.infinity,
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(
+    pageSize.width.round(),
+    pageSize.height.round(),
   );
+  picture.dispose();
+  return image;
 }
 
 Future<_ForwardProbeSample> _renderForwardProbeScene(
@@ -1481,24 +2102,6 @@ _ScanlineProbeResult _scanForwardLine({
   );
 }
 
-bool _rectCoversNearlyFullSurface(Rect? rect, Rect? surface) {
-  if (rect == null || surface == null || surface.isEmpty) {
-    return false;
-  }
-  final intersection = rect.intersect(surface);
-  if (intersection.isEmpty) {
-    return false;
-  }
-  final surfaceArea = surface.width * surface.height;
-  final intersectionArea = intersection.width * intersection.height;
-  return intersectionArea / surfaceArea >= 0.92;
-}
-
-bool _bothRectsCoverNearlyFullSurface(Rect? a, Rect? b, Rect? surface) {
-  return _rectCoversNearlyFullSurface(a, surface) &&
-      _rectCoversNearlyFullSurface(b, surface);
-}
-
 Future<ui.Image> _captureBoundaryImage(GlobalKey boundaryKey) async {
   final context = boundaryKey.currentContext;
   expect(context, isNotNull);
@@ -1531,7 +2134,35 @@ Color _colorAtBytes(
   );
 }
 
-enum _ProbeColor { red, green, white, black, paperBack, other }
+enum _ProbeColor { red, green, cyan, white, black, paperBack, other }
+
+Map<_ProbeColor, int> _scanColorsInRect({
+  required int imageWidth,
+  required int imageHeight,
+  required Uint8List bytes,
+  required Rect rect,
+}) {
+  final counts = <_ProbeColor, int>{};
+  final left = rect.left.round().clamp(0, imageWidth - 1);
+  final right = rect.right.round().clamp(left, imageWidth - 1);
+  final top = rect.top.round().clamp(0, imageHeight - 1);
+  final bottom = rect.bottom.round().clamp(top, imageHeight - 1);
+
+  for (var y = top; y <= bottom; y += 2) {
+    for (var x = left; x <= right; x += 2) {
+      final color = _colorAtBytes(
+        imageWidth,
+        imageHeight,
+        bytes,
+        Offset(x.toDouble(), y.toDouble()),
+      );
+      final probeColor = _classifyProbeColor(color);
+      counts.update(probeColor, (count) => count + 1, ifAbsent: () => 1);
+    }
+  }
+
+  return counts;
+}
 
 int _colorChannelByte(double channel) {
   return (channel * 255.0).round().clamp(0, 255).toInt();
@@ -1546,6 +2177,9 @@ _ProbeColor _classifyProbeColor(Color color) {
   }
   if (red > 235 && green > 235 && blue > 235) {
     return _ProbeColor.white;
+  }
+  if (green > red + 20 && blue > red + 20 && (green - blue).abs() < 70) {
+    return _ProbeColor.cyan;
   }
   if (red > green + 40 && red > blue + 40) {
     return _ProbeColor.red;
@@ -1577,64 +2211,89 @@ class _ForwardProbeSample {
   final int maxWhiteRun;
 }
 
-class _BackwardCompositeProbeSample {
-  const _BackwardCompositeProbeSample({
-    required this.earlyBackVisible,
-    required this.earlyFrontVisible,
-    required this.middleFrontVisible,
-    required this.middleBackVisible,
-    required this.middleCurrentResidualVisible,
-    required this.middleFoldHasFrontText,
-    required this.middleCompositeMode,
-    required this.pageLeft,
-    required this.middleFrontLeft,
-    required this.middleFrontRight,
-    required this.middleBackLeft,
-    required this.middleBackRight,
-    required this.middleCurrentLeft,
+class _BackwardVersoTextureProbeSample {
+  const _BackwardVersoTextureProbeSample({
+    required this.backBandWidth,
+    required this.backSurfaceStrategy,
+    required this.activeVersoPageIndex,
+    required this.activeVersoSurfaceKind,
+    required this.runtimeFailureReason,
+    required this.probePointCount,
   });
 
-  final bool earlyBackVisible;
-  final bool earlyFrontVisible;
-  final bool middleFrontVisible;
-  final bool middleBackVisible;
-  final bool middleCurrentResidualVisible;
-  final bool middleFoldHasFrontText;
-  final String middleCompositeMode;
-  final double pageLeft;
-  final double middleFrontLeft;
-  final double middleFrontRight;
-  final double middleBackLeft;
-  final double middleBackRight;
-  final double middleCurrentLeft;
+  final double backBandWidth;
+  final String? backSurfaceStrategy;
+  final int? activeVersoPageIndex;
+  final String? activeVersoSurfaceKind;
+  final BackwardVersoFailureReason runtimeFailureReason;
+  final int probePointCount;
 }
 
-class _BackwardProbeFrame {
-  const _BackwardProbeFrame({
-    required this.frontVisible,
-    required this.backVisible,
-    required this.currentResidualVisible,
-    required this.foldHasFrontText,
+class _BackwardCompositeProbeSample {
+  const _BackwardCompositeProbeSample({
     required this.compositeMode,
-    required this.pageLeft,
-    required this.frontLeft,
-    required this.frontRight,
-    required this.backLeft,
-    required this.backRight,
-    required this.currentLeft,
+    required this.bottomLayerPageIndex,
+    required this.flippingLayerPageIndex,
+    required this.backPixelSurfaceStrategy,
+    required this.backSheetId,
+    required this.baselineKeyVisible,
+    required this.foldXSamples,
+    required this.foldXAdvance,
+    required this.latePoseCount,
+    required this.latePoseSurfaceWidth,
+    required this.latePoseBackWidth,
+    required this.latePoseFrontWidth,
+    required this.latePoseCurrentWidth,
+    required this.latePoseBackVertexCount,
+    required this.latePoseFrontSheetId,
+    required this.latePoseBackSheetId,
   });
 
-  final bool frontVisible;
-  final bool backVisible;
-  final bool currentResidualVisible;
-  final bool foldHasFrontText;
   final String compositeMode;
-  final double pageLeft;
-  final double frontLeft;
-  final double frontRight;
-  final double backLeft;
-  final double backRight;
-  final double currentLeft;
+  final int? bottomLayerPageIndex;
+  final int? flippingLayerPageIndex;
+  final String? backPixelSurfaceStrategy;
+  final String? backSheetId;
+  final bool baselineKeyVisible;
+  final List<double> foldXSamples;
+  final double foldXAdvance;
+  final int latePoseCount;
+  final double latePoseSurfaceWidth;
+  final double latePoseBackWidth;
+  final double latePoseFrontWidth;
+  final double latePoseCurrentWidth;
+  final int latePoseBackVertexCount;
+  final String? latePoseFrontSheetId;
+  final String? latePoseBackSheetId;
+}
+
+class _BackwardGeometrySweepSample {
+  const _BackwardGeometrySweepSample({
+    required this.corner,
+    required this.angleDegrees,
+    required this.depth,
+    required this.failureReason,
+    required this.compositeMode,
+    required this.backWidth,
+    required this.currentWidth,
+  });
+
+  final ArticlePageCurlCorner corner;
+  final double angleDegrees;
+  final double depth;
+  final BackwardGeometryFailureReason failureReason;
+  final String? compositeMode;
+  final double backWidth;
+  final double currentWidth;
+
+  String describe() {
+    return 'corner=${corner.name} angle=${angleDegrees.toStringAsFixed(1)} '
+        'depth=${depth.toStringAsFixed(1)} '
+        'reason=${failureReason.name} '
+        'mode=${compositeMode ?? "-"} '
+        'backWidth=${backWidth.toStringAsFixed(1)} '
+        'currentWidth=${currentWidth.toStringAsFixed(1)}';
+  }
 }
 
 class _ScanlineProbeResult {

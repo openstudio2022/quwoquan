@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"quwoquan_service/services/content-service/internal/application"
 )
 
 // createPost is a shared test helper: create draft then publish it, returning
@@ -45,15 +47,17 @@ func createDraftPost(t *testing.T, payload string) map[string]any {
 }
 
 // createDraftPostWithAuthor creates a draft as the given author
-// (sets X-Client-User-Id) and returns the draft payload.
+// (sets X-Client-User-Id and X-Client-Sub-Account-Id) and returns the draft payload.
 func createDraftPostWithAuthor(t *testing.T, authorID string, payload string) map[string]any {
 	t.Helper()
 	payload = normalizeCreatePostPayloadForTest(t, payload)
+	if strings.TrimSpace(authorID) == "" {
+		authorID = application.AnonymousFallbackSubAccountID
+	}
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
-	if authorID != "" {
-		req.Header.Set("X-Client-User-Id", authorID)
-	}
+	req.Header.Set("X-Client-User-Id", authorID)
+	req.Header.Set("X-Client-Sub-Account-Id", authorID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -72,10 +76,39 @@ func normalizeCreatePostPayloadForTest(t *testing.T, payload string) string {
 	if err := json.Unmarshal([]byte(payload), &body); err != nil {
 		t.Fatalf("normalize create post payload: %v", err)
 	}
-	if strings.TrimSpace(asTestString(body["contentType"])) == "article" && body["articleDocument"] == nil {
-		body["articleDocument"] = map[string]any{
-			"title": asTestString(body["title"]),
-			"body":  asTestString(body["body"]),
+	if strings.TrimSpace(asTestString(body["contentType"])) == "article" &&
+		strings.TrimSpace(asTestString(body["articleMarkdown"])) == "" &&
+		body["articleDocument"] == nil {
+		title := strings.TrimSpace(asTestString(body["title"]))
+		summary := strings.TrimSpace(asTestString(body["summary"]))
+		articleBody := strings.TrimSpace(asTestString(body["body"]))
+		coverURL := strings.TrimSpace(asTestString(body["coverUrl"]))
+		markdown := ""
+		if title != "" {
+			markdown += "# " + title + "\n\n"
+		}
+		if articleBody != "" {
+			markdown += articleBody + "\n\n"
+		} else if summary != "" {
+			markdown += summary + "\n\n"
+		}
+		if coverURL != "" {
+			markdown += "![cover](" + coverURL + ")\n"
+		}
+		body["articleMarkdown"] = strings.TrimSpace(markdown)
+		if strings.TrimSpace(asTestString(body["articleMarkdownVersion"])) == "" {
+			body["articleMarkdownVersion"] = "qwq-rich-md/1"
+		}
+		if body["articleAssetManifest"] == nil {
+			body["articleAssetManifest"] = map[string]any{
+				"assets": []any{},
+			}
+		}
+		if body["articleRenderProfile"] == nil {
+			body["articleRenderProfile"] = map[string]any{
+				"template":   "journal",
+				"fontPreset": "clean",
+			}
 		}
 	}
 	normalized, err := json.Marshal(body)
@@ -99,15 +132,17 @@ func publishPostWithAuthor(
 	payload string,
 ) map[string]any {
 	t.Helper()
+	if strings.TrimSpace(authorID) == "" {
+		authorID = application.AnonymousFallbackSubAccountID
+	}
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/v1/content/posts/"+postID+"/publish",
 		strings.NewReader(payload),
 	)
 	req.Header.Set("Content-Type", "application/json")
-	if authorID != "" {
-		req.Header.Set("X-Client-User-Id", authorID)
-	}
+	req.Header.Set("X-Client-User-Id", authorID)
+	req.Header.Set("X-Client-Sub-Account-Id", authorID)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_sync_repository.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
@@ -69,16 +70,18 @@ class ConversationSyncService {
       var hasChanges = false;
 
       for (final ts in timestamps) {
-        final m = ts.toMap();
-        final id = m['id'] as String? ?? '';
+        final id = ts.conversationId.trim();
         if (id.isEmpty) continue;
         cloudIds.add(id);
 
-        final cloudSettingsUpdatedAt =
-            m['settingsUpdatedAt'] as String? ??
-            m['updatedAt'] as String? ??
-            '';
-        final cloudLastMessageAt = m['lastMessageAt'] as String? ?? '';
+        final cloudSettingsUpdatedAt = _firstNonEmpty(<Object?>[
+          ts.settingsUpdatedAt,
+          ts.updatedAt,
+        ]);
+        final cloudLastMessageAt = _firstNonEmpty(<Object?>[
+          ts.lastMessageAt,
+          ts.lastMessageTime,
+        ]);
         final localSettingsTs = cache.getSettingsTimestamp(id);
         final localMessageTs = cache.getMessageTimestamp(id);
 
@@ -87,11 +90,13 @@ class ConversationSyncService {
           needFetchIds.add(id);
           hasChanges = true;
         } else if (localMessageTs != cloudLastMessageAt) {
-          cache.updateListFields(
+          cache.applyListPatch(
             id,
-            lastMessagePreview: m['lastMessagePreview'] as String?,
-            lastMessageAt: cloudLastMessageAt,
-            unreadCount: m['unreadCount'] as int?,
+            ConversationListPatch(
+              lastMessagePreview: ts.lastMessagePreview,
+              lastMessageAt: cloudLastMessageAt,
+              unreadCount: ts.unreadCount,
+            ),
           );
           hasChanges = true;
         }
@@ -99,7 +104,7 @@ class ConversationSyncService {
 
       final localAll = cache.getAll();
       for (final local in localAll) {
-        final localId = local['_id'] as String? ?? local['id'] as String? ?? '';
+        final localId = local.id;
         if (localId.isNotEmpty && !cloudIds.contains(localId)) {
           cache.remove(localId);
           hasChanges = true;
@@ -117,7 +122,7 @@ class ConversationSyncService {
           );
           final conversations = await repo.batchGetConversations(batch);
           cache.putAll(
-            conversations.map((c) => c.toMap()).toList(growable: false),
+            conversations.map(ConversationCacheRecord.fromConversationDto),
           );
         }
       }
@@ -228,11 +233,13 @@ class ConversationSyncService {
         if (avatarUrl.isEmpty) {
           throw StateError('conversation avatar patch missing avatarUrl');
         }
-        cache.updateConversationAvatar(
+        cache.applyAvatarPatch(
           conversationId,
-          avatarUrl: avatarUrl,
-          groupAvatarVersion: groupAvatarVersion,
-          groupAvatarSourceHash: groupAvatarSourceHash,
+          ConversationAvatarPatch(
+            avatarUrl: avatarUrl,
+            groupAvatarVersion: groupAvatarVersion,
+            groupAvatarSourceHash: groupAvatarSourceHash,
+          ),
         );
         await store.updateConversationAvatar(
           namespace: namespace,
@@ -297,5 +304,15 @@ class ConversationSyncService {
     _lastAvatarPatchSyncStackTrace = null;
     _lastAvatarPatchSyncFailedAt = null;
     _lastAvatarPatchSyncFailedAfterSeq = null;
+  }
+
+  String _firstNonEmpty(List<Object?> values) {
+    for (final value in values) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
   }
 }

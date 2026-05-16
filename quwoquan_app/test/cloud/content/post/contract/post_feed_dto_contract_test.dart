@@ -23,7 +23,6 @@ void main() {
       expect(dto.id, equals('d1'));
       expect(dto.type, equals('image'));
       expect(dto.authorId, equals('nature_photographer'));
-      expect(dto.authorProfileSubjectId, equals('nature_photographer'));
       expect(dto.displayName, equals('自然摄影师'));
       expect(dto.avatarUrl, contains('unsplash.com'));
       expect(dto.coverUrl, contains('unsplash.com'));
@@ -45,7 +44,6 @@ void main() {
       expect(dto.id, equals('v1'));
       expect(dto.type, equals('video'));
       expect(dto.authorId, equals('a1'));
-      expect(dto.authorProfileSubjectId, equals('a1'));
       expect(dto.displayName, equals('楹语小筑'));
       expect(dto.coverUrl, contains('unsplash.com'));
       expect(dto.body, contains('东京'));
@@ -62,7 +60,6 @@ void main() {
       expect(dto.id, equals('m4'));
       expect(dto.type, equals('micro'));
       expect(dto.authorId, equals('u4'));
-      expect(dto.authorProfileSubjectId, equals('u4'));
       expect(dto.displayName, equals('李想'));
       expect(dto.likeCount, equals(1581));
       expect(dto.commentCount, equals(301));
@@ -76,7 +73,6 @@ void main() {
       expect(dto.id, equals('web-dev'));
       expect(dto.type, equals('article'));
       expect(dto.authorId, equals('tech_daily'));
-      expect(dto.authorProfileSubjectId, equals('tech_daily'));
       expect(dto.displayName, equals('TechDaily'));
       expect(dto.title, contains('Web开发'));
       expect(dto.likeCount, equals(1240));
@@ -101,11 +97,6 @@ void main() {
           reason: 'authorId must be set for ${item.id}',
         );
         expect(
-          dto.authorProfileSubjectId,
-          isNotEmpty,
-          reason: 'authorProfileSubjectId must be set for ${item.id}',
-        );
-        expect(
           dto.displayName,
           isNotEmpty,
           reason: 'displayName must be set for ${item.id}',
@@ -113,12 +104,12 @@ void main() {
       }
     });
 
-    test('authorProfileSubjectId 优先消费 canonical profileSubjectId', () {
+    test('subAccount alias 不再覆盖 authorId 真相源', () {
       const serverRaw = <String, dynamic>{
         'postId': 'v_subject',
         'contentType': 'video',
         'authorId': 'current_author',
-        'profileSubjectId': 'persona_author',
+        'subAccountId': 'persona_author',
         'authorNickname': 'Server Author',
         'authorAvatarUrl': 'https://example.com/avatar.jpg',
         'thumbnailUrl': 'https://example.com/thumb.jpg',
@@ -126,7 +117,7 @@ void main() {
       };
       final dto = FeedItemDto.fromMap(serverRaw);
       expect(dto.authorId, equals('current_author'));
-      expect(dto.authorProfileSubjectId, equals('persona_author'));
+      expect(dto.authorId, isNot(equals(serverRaw['subAccountId'])));
     });
   });
 
@@ -166,7 +157,6 @@ void main() {
       expect(map['id'], equals(dto.id));
       expect(map['type'], equals(dto.type));
       expect(map['authorId'], equals(dto.authorId));
-      expect(map['authorProfileSubjectId'], equals(dto.authorProfileSubjectId));
       expect(map['displayName'], equals(dto.displayName));
       expect(map['likeCount'], equals(dto.likeCount));
       expect(map['imageUrls'], equals(dto.imageUrls));

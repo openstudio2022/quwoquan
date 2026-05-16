@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	xxhash "github.com/cespare/xxhash/v2"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
@@ -40,33 +41,43 @@ func parseJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 
 func createTestProfile(t *testing.T, userID, nickname string) {
 	t.Helper()
-	// phone must fit VARCHAR(20); use hash of userID for uniqueness
+	// Phone stays unique in tests; truncate to keep fixture data compact.
 	phone := userID
 	if len(phone) > 16 {
 		phone = phone[:16]
 	}
 	phone = "t_" + phone
+	logicalShard := fixtureLogicalShard(userID)
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO user_profiles (user_id, phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, gender, region, owner_display_name, status, profile_version, created_at, updated_at)
-		VALUES ($1, $2, $3, '', '', 0, '', '', '', '', 'active', 1, NOW(), NOW())
+		INSERT INTO user_profiles (user_id, account_state, identity_origin, logical_shard, anonymous_retention_policy, phone, nickname, avatar_url, avatar_asset_id, avatar_version, bio, gender, region, owner_display_name, status, profile_version, created_at, updated_at)
+		VALUES ($1, 'active', 'migrated_seed', $2, 'preserve', $3, $4, '', '', 0, '', '', '', '', 'active', 1, NOW(), NOW())
 		ON CONFLICT (user_id) DO NOTHING`,
-		userID, phone, nickname)
+		userID, logicalShard, phone, nickname)
 	if err != nil {
 		t.Fatalf("create test profile: %v", err)
 	}
 }
 
-func createTestPersona(t *testing.T, id, userID, displayName string, isPrimary bool, isActiveOverride ...bool) {
+func fixtureLogicalShard(userID string) int {
+	const (
+		ruleVersion = "01"
+		originCode  = "mg"
+		slotCount   = 16384
+	)
+	return int(xxhash.Sum64String(ruleVersion+"|"+originCode+"|"+strings.TrimSpace(userID)) % slotCount)
+}
+
+func createTestPersona(t *testing.T, legacyID, userID, displayName string, isPrimary bool, isActiveOverride ...bool) {
 	t.Helper()
-	isActive := true
+	isActive := isPrimary
 	if len(isActiveOverride) > 0 {
 		isActive = isActiveOverride[0]
 	}
-	subAccountID := id + "_sa"
+	subAccountID := legacyID + "_sa"
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO personas (id, user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, '', '', '', '', '', true, '{}', $5, false, $6, 0, NOW(), NOW())`,
-		id, userID, subAccountID, displayName, isPrimary, isActive)
+		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
+		VALUES ($1, $2, $3, '', '', '', '', '', true, '{}', $4, false, $5, 0, NOW(), NOW())`,
+		userID, subAccountID, displayName, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("create test persona: %v", err)
 	}
@@ -76,7 +87,7 @@ func cleanAll(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
 	_, _ = pgPool.Exec(ctx, `TRUNCATE user_profiles, personas, user_settings, block_edges,
-		user_works, user_life_items, credential_bindings,
+		user_works, user_life_items, credential_bindings, anonymous_device_bindings,
 		contact_discovery_records, invite_records CASCADE`)
 	if mongoDB != nil {
 		for _, name := range []string{"follow_edges", "posts", "comments", "messages", "notifications"} {
@@ -88,17 +99,17 @@ func cleanAll(t *testing.T) {
 	mr.FlushAll()
 }
 
-// createTestPersonaFull creates a persona with sub_account_id and isolation_level.
-func createTestPersonaFull(t *testing.T, id, userID, subAccountID, displayName, isolationLevel string, isPrimary bool, isActiveOverride ...bool) {
+// createTestPersonaFull creates a persona fixture keyed by sub_account_id.
+func createTestPersonaFull(t *testing.T, _ string, userID, subAccountID, displayName, isolationLevel string, isPrimary bool, isActiveOverride ...bool) {
 	t.Helper()
-	isActive := true
+	isActive := isPrimary
 	if len(isActiveOverride) > 0 {
 		isActive = isActiveOverride[0]
 	}
 	_, err := pgPool.Exec(context.Background(), `
-		INSERT INTO personas (id, user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, isolation_level, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, '', '', '', '', '', $5, true, '{}', $6, false, $7, 0, NOW(), NOW())`,
-		id, userID, subAccountID, displayName, isolationLevel, isPrimary, isActive)
+		INSERT INTO personas (user_id, sub_account_id, display_name, user_handle, phone, email, avatar_url, purpose_hint, isolation_level, inherits_profile_from_owner, overridden_profile_fields, is_primary, is_private, is_active, invite_count, created_at, updated_at)
+		VALUES ($1, $2, $3, '', '', '', '', '', $4, true, '{}', $5, false, $6, 0, NOW(), NOW())`,
+		userID, subAccountID, displayName, isolationLevel, isPrimary, isActive)
 	if err != nil {
 		t.Fatalf("createTestPersonaFull: %v", err)
 	}
@@ -120,24 +131,22 @@ func authHeaders(userID string) map[string]string {
 	return map[string]string{"X-Client-User-Id": userID}
 }
 
-func authHeadersForPersona(userID, profileSubjectID string) map[string]string {
+func authHeadersForPersona(userID, subAccountID string) map[string]string {
 	headers := authHeaders(userID)
-	if profileSubjectID != "" {
-		headers["X-Profile-Subject-Id"] = profileSubjectID
-		headers["X-Persona-Id"] = profileSubjectID
+	if subAccountID != "" {
+		headers["X-Client-Sub-Account-Id"] = subAccountID
 	}
 	return headers
 }
 
-func seedPersonaPostHistory(t *testing.T, profileSubjectID string) {
+func seedPersonaPostHistory(t *testing.T, subAccountID string) {
 	t.Helper()
 	if mongoDB == nil {
 		t.Skip("mongo unavailable")
 	}
 	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), bson.M{
-		"_id":                       "post_" + profileSubjectID,
-		"authorId":                  "current_" + profileSubjectID,
-		"profileSubjectId":          profileSubjectID,
+		"_id":                       "post_" + subAccountID,
+		"authorId":                  subAccountID,
 		"authorDisplayNameSnapshot": "Post Persona",
 		"authorAvatarUrlSnapshot":   "https://example.com/post.jpg",
 		"status":                    "published",
@@ -148,16 +157,15 @@ func seedPersonaPostHistory(t *testing.T, profileSubjectID string) {
 	}
 }
 
-func seedPersonaCommentHistory(t *testing.T, profileSubjectID string) {
+func seedPersonaCommentHistory(t *testing.T, subAccountID string) {
 	t.Helper()
 	if mongoDB == nil {
 		t.Skip("mongo unavailable")
 	}
 	_, err := mongoDB.Collection("comments").InsertOne(context.Background(), bson.M{
-		"_id":                       "comment_" + profileSubjectID,
-		"postId":                    "post_for_" + profileSubjectID,
-		"authorId":                  "current_" + profileSubjectID,
-		"profileSubjectId":          profileSubjectID,
+		"_id":                       "comment_" + subAccountID,
+		"postId":                    "post_for_" + subAccountID,
+		"authorId":                  subAccountID,
 		"authorDisplayNameSnapshot": "Comment Persona",
 		"authorAvatarUrlSnapshot":   "https://example.com/comment.jpg",
 		"content":                   "记录评论",
@@ -168,17 +176,17 @@ func seedPersonaCommentHistory(t *testing.T, profileSubjectID string) {
 	}
 }
 
-func seedPersonaChatHistory(t *testing.T, profileSubjectID string) {
+func seedPersonaChatHistory(t *testing.T, subAccountID string) {
 	t.Helper()
 	if mongoDB == nil {
 		t.Skip("mongo unavailable")
 	}
 	_, err := mongoDB.Collection("messages").InsertOne(context.Background(), bson.M{
-		"_id":                       "message_" + profileSubjectID,
-		"conversationId":            "conv_" + profileSubjectID,
+		"_id":                       "message_" + subAccountID,
+		"conversationId":            "conv_" + subAccountID,
 		"seq":                       1,
-		"senderId":                  "current_" + profileSubjectID,
-		"senderProfileSubjectId":    profileSubjectID,
+		"senderId":                  subAccountID,
+		"senderSubAccountId":        subAccountID,
 		"senderDisplayNameSnapshot": "Chat Persona",
 		"senderAvatarUrlSnapshot":   "https://example.com/chat.jpg",
 		"content":                   "记录聊天",
@@ -189,20 +197,20 @@ func seedPersonaChatHistory(t *testing.T, profileSubjectID string) {
 	}
 }
 
-func seedPersonaNotificationHistory(t *testing.T, profileSubjectID string) {
+func seedPersonaNotificationHistory(t *testing.T, subAccountID string) {
 	t.Helper()
 	if mongoDB == nil {
 		t.Skip("mongo unavailable")
 	}
 	_, err := mongoDB.Collection("notifications").InsertOne(context.Background(), bson.M{
-		"_id":          "notification_" + profileSubjectID,
-		"userId":       "viewer_" + profileSubjectID,
+		"_id":          "notification_" + subAccountID,
+		"userId":       "viewer_" + subAccountID,
 		"type":         "social",
 		"title":        "记录通知",
 		"body":         "由分身触发的通知",
-		"senderUserId": profileSubjectID,
+		"senderUserId": subAccountID,
 		"targetType":   "post",
-		"targetId":     "post_" + profileSubjectID,
+		"targetId":     "post_" + subAccountID,
 		"createdAt":    time.Now().UTC(),
 	})
 	if err != nil {

@@ -23,11 +23,7 @@ abstract class PostBaseDto {
   String get identity;
   String get displayFormat;
   String get authorId;
-
-  /// Canonical author profile subject key.
-  /// Must be sourced from `authorProfileSubjectId` / `profileSubjectId`,
-  /// and must not silently fall back to current `authorId`.
-  String get authorProfileSubjectId;
+  String get subAccountId => authorId;
   String get displayName;
   String get avatarUrl;
 

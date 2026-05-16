@@ -2,8 +2,6 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class ActivePersonaContextWireDto {
-  final String personaId;
-  final String profileSubjectId;
   final String ownerUserId;
   final String subAccountId;
   final String subjectType;
@@ -16,8 +14,6 @@ class ActivePersonaContextWireDto {
   final bool isPrimary;
 
   ActivePersonaContextWireDto({
-    this.personaId = '',
-    this.profileSubjectId = '',
     this.ownerUserId = '',
     this.subAccountId = '',
     this.subjectType = '',
@@ -32,8 +28,6 @@ class ActivePersonaContextWireDto {
 
   factory ActivePersonaContextWireDto.fromMap(Map<String, dynamic> m) {
     return ActivePersonaContextWireDto(
-      personaId: _firstNonEmptyWireString(m, <String>['personaId', 'subAccountId', 'profileSubjectId']) ?? '',
-      profileSubjectId: _firstNonEmptyWireString(m, <String>['profileSubjectId', 'subAccountId', 'userId']) ?? '',
       ownerUserId: _firstNonEmptyWireString(m, <String>['ownerUserId', 'userId']) ?? '',
       subAccountId: m['subAccountId']?.toString() ?? '',
       subjectType: m['subjectType']?.toString() ?? '',
@@ -49,8 +43,6 @@ class ActivePersonaContextWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'personaId': personaId,
-      'profileSubjectId': profileSubjectId,
       'ownerUserId': ownerUserId,
       'subAccountId': subAccountId,
       'subjectType': subjectType,
@@ -65,8 +57,6 @@ class ActivePersonaContextWireDto {
   }
 
   ActivePersonaContextWireDto copyWith({
-    String? personaId,
-    String? profileSubjectId,
     String? ownerUserId,
     String? subAccountId,
     String? subjectType,
@@ -79,8 +69,6 @@ class ActivePersonaContextWireDto {
     bool? isPrimary,
   }) {
     return ActivePersonaContextWireDto(
-      personaId: personaId ?? this.personaId,
-      profileSubjectId: profileSubjectId ?? this.profileSubjectId,
       ownerUserId: ownerUserId ?? this.ownerUserId,
       subAccountId: subAccountId ?? this.subAccountId,
       subjectType: subjectType ?? this.subjectType,

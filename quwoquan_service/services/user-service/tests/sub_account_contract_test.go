@@ -62,12 +62,12 @@ func TestSubAccount_ActivateSwitchesExclusively(t *testing.T) {
 		t.Errorf("expected exactly 1 active sub-account, got %d", activeCount)
 	}
 
-	var activePersonaID string
+	var activeSubAccountID string
 	_ = pgPool.QueryRow(context.Background(),
-		`SELECT id FROM personas WHERE user_id = $1 AND is_active = true`,
-		"sub_owner_2").Scan(&activePersonaID)
-	if activePersonaID != "sub_b" {
-		t.Errorf("expected sub_b to be active, got %s", activePersonaID)
+		`SELECT sub_account_id FROM personas WHERE user_id = $1 AND is_active = true`,
+		"sub_owner_2").Scan(&activeSubAccountID)
+	if activeSubAccountID != "sa_id_b" {
+		t.Errorf("expected sa_id_b to be active, got %s", activeSubAccountID)
 	}
 }
 

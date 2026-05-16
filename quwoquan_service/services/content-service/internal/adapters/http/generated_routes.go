@@ -35,6 +35,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	switch operation {
 	case "AbortMediaUpload":
 		h.handleNotImplemented(w, r, operation)
+	case "BindMediaAssetsToPost":
+		h.handleNotImplemented(w, r, operation)
 	case "CompleteMediaUpload":
 		h.handleNotImplemented(w, r, operation)
 	case "CreateComment":
@@ -101,11 +103,15 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleNotImplemented(w, r, operation)
 	case "SelectManualVideoCover":
 		h.handleNotImplemented(w, r, operation)
+	case "SharePost":
+		h.handleNotImplemented(w, r, operation)
 	case "UnfavoritePost":
 		h.handleNotImplemented(w, r, operation)
 	case "UnlikeComment":
 		h.handleNotImplemented(w, r, operation)
 	case "UnlikePost":
+		h.handleNotImplemented(w, r, operation)
+	case "UnsharePost":
 		h.handleNotImplemented(w, r, operation)
 	case "UpdatePost":
 		h.handleUpdatePost(w, r)
@@ -147,16 +153,19 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/favorite", operation: "FavoritePost"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/like", operation: "UnlikePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/like", operation: "LikePost"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/media:bind", operation: "BindMediaAssetsToPost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/publish", operation: "PublishPost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/quote", operation: "QuoteToCircle"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetReactionState"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/repost", operation: "RepostToCircle"},
 	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
+	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/share", operation: "UnsharePost"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/share", operation: "SharePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
-	{method: "GET", pathTemplate: "/v1/content/profile-subjects/{profileSubjectId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
-	{method: "GET", pathTemplate: "/v1/content/profile-subjects/{profileSubjectId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
-	{method: "GET", pathTemplate: "/v1/content/profile-subjects/{profileSubjectId}/posts", operation: "ListUserPosts"},
 	{method: "POST", pathTemplate: "/v1/content/recommend", operation: "GetRecommendation"},
+	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
+	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
+	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/comments", operation: "ListCommentsByAuthor"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},
 	{method: "GET", pathTemplate: "/v1/orch/discovery/feed", operation: "GetFeed"},
@@ -255,8 +264,6 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 	"CreateComment": {
 		"content":                   {},
 		"replyToCommentId":          {},
-		"personaId":                 {},
-		"profileSubjectId":          {},
 		"authorDisplayNameSnapshot": {},
 		"authorAvatarUrlSnapshot":   {},
 		"personaContextVersion":     {},
@@ -270,7 +277,10 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"tags":                      {},
 		"mediaUrls":                 {},
 		"coverUrl":                  {},
-		"articleDocument":           {},
+		"articleMarkdown":           {},
+		"articleMarkdownVersion":    {},
+		"articleAssetManifest":      {},
+		"articleRenderProfile":      {},
 		"videoUrl":                  {},
 		"illustrationAssetId":       {},
 		"location":                  {},
@@ -287,8 +297,6 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"sourceType":                {},
 		"deviceInfo":                {},
 		"publishLocation":           {},
-		"personaId":                 {},
-		"profileSubjectId":          {},
 		"authorDisplayNameSnapshot": {},
 		"authorAvatarUrlSnapshot":   {},
 		"personaContextVersion":     {},
@@ -299,7 +307,10 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"summary":                 {},
 		"tags":                    {},
 		"coverUrl":                {},
-		"articleDocument":         {},
+		"articleMarkdown":         {},
+		"articleMarkdownVersion":  {},
+		"articleAssetManifest":    {},
+		"articleRenderProfile":    {},
 		"primaryHomepageId":       {},
 		"primaryHomepageType":     {},
 		"primaryHomepageSnapshot": {},
@@ -329,7 +340,10 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"tags":                    {},
 		"mediaUrls":               {},
 		"coverUrl":                {},
-		"articleDocument":         {},
+		"articleMarkdown":         {},
+		"articleMarkdownVersion":  {},
+		"articleAssetManifest":    {},
+		"articleRenderProfile":    {},
 		"videoUrl":                {},
 		"illustrationAssetId":     {},
 		"location":                {},

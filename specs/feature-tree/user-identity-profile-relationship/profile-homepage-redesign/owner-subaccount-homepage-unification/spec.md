@@ -11,7 +11,7 @@
 
 补充冻结：
 
-- user 域关于 `ProfileSubjectView / ProfileSubjectMutation / 分身可见性 / 记录归因` 的真相源归 `persona-follow-graph/persona-profile-subject-and-visibility`。
+- user 域关于 `SubAccountProfileView / SubAccountProfileMutation / 分身可见性 / 记录归因` 的真相源归 `persona-follow-graph/persona-profile-subject-and-visibility`。
 - 本场景消费这些 user 域契约来构建主页与资料编辑体验，不再拥有分身生命周期与公开身份模型的主定义权。
 
 ## 目标用户
@@ -82,7 +82,7 @@
 
 ### F8: metadata / codegen / 端云同步
 
-- 用户域需要正式定义 `ProfileSubjectView`、`ProfileInheritanceStateView`、`RelationshipCapabilityView`。
+- 用户域需要正式定义 `SubAccountProfileView`、`ProfileInheritanceStateView`、`RelationshipCapabilityView`。
 - 内容域需要正式定义 `ProfileInteractionActivityView`，统一 `赞 / 评论 / 转发` 的互动活动语义。
 - `_shared` 需要补齐 route、request_context，以及个人主页 tab/filter 的 UI 配置真相源。
 - `user_profile/ui_config.yaml` 需要补齐头图几何参数与滚动/吸顶策略真相源，至少可表达：

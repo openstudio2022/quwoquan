@@ -16,6 +16,8 @@ class BackwardDebugState {
     this.edgeEnteredPage,
     this.backPolygonPoints,
     this.frontPolygonPoints,
+    this.sheetPolygonPoints,
+    this.bottomClipPolygonPoints,
     this.currentPolygonPoints,
   });
 
@@ -32,6 +34,8 @@ class BackwardDebugState {
   final bool? edgeEnteredPage;
   final String? backPolygonPoints;
   final String? frontPolygonPoints;
+  final String? sheetPolygonPoints;
+  final String? bottomClipPolygonPoints;
   final String? currentPolygonPoints;
 }
 

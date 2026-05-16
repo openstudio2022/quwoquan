@@ -55,7 +55,7 @@ func TestProfileInteractionActivitiesReceived(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/profile-subjects/author_profile_subject/interactions/received?limit=10",
+		"/v1/content/sub-accounts/author_profile_subject/interactions/received?limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -116,7 +116,7 @@ func TestProfileInteractionActivitiesSent(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/profile-subjects/actor_sent_comment/interactions/sent?limit=10",
+		"/v1/content/sub-accounts/actor_sent_comment/interactions/sent?limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -140,7 +140,7 @@ func TestProfileInteractionActivitiesSent(t *testing.T) {
 	if item["activityType"] != "comment" {
 		t.Fatalf("expected activityType=comment, got %v", item["activityType"])
 	}
-	if item["actorProfileSubjectId"] != "actor_sent_comment" {
-		t.Fatalf("expected actorProfileSubjectId=actor_sent_comment, got %v", item["actorProfileSubjectId"])
+	if item["actorSubAccountId"] != "actor_sent_comment" {
+		t.Fatalf("expected actorSubAccountId=actor_sent_comment, got %v", item["actorSubAccountId"])
 	}
 }

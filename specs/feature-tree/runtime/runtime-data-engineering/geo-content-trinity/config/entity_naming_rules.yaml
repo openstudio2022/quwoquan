@@ -1,0 +1,135 @@
+schemaVersion: quwoquan_data.entity_naming_rules
+version: 2
+display:
+  labelZhRequiredByDefault: true
+  labelEnExpansionOnly: true
+  overseasEnglishFallback: true
+naming:
+  prefer_name_zh: true
+  require_cjk: true
+  allow_english_fallback: false
+  strip_wrappers:
+    - '"'
+    - "'"
+    - "「"
+    - "」"
+    - "『"
+    - "』"
+  banned_exact:
+    - 卐
+    - 卍
+  banned_regex:
+    slogan_ascii: "\\bI\\s*LOVE\\b"
+    military_exhibit: "^(歼|轰|运|米格|强击|战斗机|教练机|F|B|J|Y|H)[A-Za-z0-9\\-]*\\d+[A-Za-z0-9\\-]*$"
+  rejected_suffixes:
+    - 像
+    - 雕像
+    - 纪念墙
+    - 宣传墙
+  allow_statue_name_hints:
+    - 大佛
+  generic_scenic_suffix_hints:
+    - 景区
+    - 风景区
+    - 名胜区
+    - 国家公园
+    - 古城
+    - 古镇
+    - 故居
+    - 遗址
+    - 博物馆
+    - 纪念馆
+    - 寺
+    - 庙
+    - 宫
+    - 塔
+    - 阁
+    - 关
+    - 桥
+    - 山
+    - 湖
+    - 沟
+    - 谷
+    - 草原
+    - 冰川
+    - 海子
+    - 湿地
+    - 竹海
+    - 石林
+    - 大佛
+    - 佛学院
+    - 基地
+    - 园
+    - 寨
+entity_type_rules:
+  - entity_type: viewpoint
+    entity_type_label_zh: 观景台
+    any_match:
+      tourism:
+        - viewpoint
+  - entity_type: museum_gallery
+    entity_type_label_zh: 博物馆美术馆
+    any_match:
+      tourism:
+        - museum
+      amenity:
+        - museum
+        - arts_centre
+  - entity_type: leisure_attraction
+    entity_type_label_zh: 休闲景点
+    any_match:
+      tourism:
+        - theme_park
+        - zoo
+        - aquarium
+fallback_name_rules:
+  - entity_type: heritage_site
+    entity_type_label_zh: 人文史迹
+    hint_substrings:
+      - 古城
+      - 古镇
+      - 故居
+      - 遗址
+      - 寺
+      - 庙
+      - 宫
+      - 塔
+      - 阁
+      - 关
+      - 桥
+      - 大佛
+      - 纪念馆
+      - 佛学院
+      - 堂
+      - 祠
+      - 院
+  - entity_type: natural_scenery
+    entity_type_label_zh: 自然景观
+    hint_substrings:
+      - 山
+      - 湖
+      - 沟
+      - 谷
+      - 草原
+      - 冰川
+      - 海子
+      - 湿地
+      - 竹海
+      - 石林
+      - 森林公园
+  - entity_type: check_in_hotspot
+    entity_type_label_zh: 打卡地
+    hint_substrings:
+      - 打卡
+      - 网红
+      - 出片
+      - 机位
+  - entity_type: hidden_gem
+    entity_type_label_zh: 小众秘境
+    hint_substrings:
+      - 秘境
+      - 野景点 # 需配合 post 双证准入，见 geo-content-trinity R7
+      - 未开发
+default_entity_type:
+  entity_type: scenic_spot
+  entity_type_label_zh: 名胜风景区

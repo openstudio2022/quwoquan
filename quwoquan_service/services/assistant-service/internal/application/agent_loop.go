@@ -751,11 +751,8 @@ func buildRetrievalProcessingForStep(step ReactStepResult) map[string]any {
 		}
 	}
 	acceptedRefs := []map[string]any{}
-	if reliable && len(modelRefs) > 0 {
-		acceptedRefs = mergeReferences(modelRefs, nil)
-	}
-	if reliable && len(acceptedRefs) == 0 && searchedCount > 0 && len(toolRefs) > 0 {
-		acceptedRefs = []map[string]any{toolRefs[0]}
+	if reliable {
+		acceptedRefs = mergeReferences(modelRefs, toolRefs)
 	}
 	return map[string]any{
 		"searchedDocumentCount":  searchedCount,

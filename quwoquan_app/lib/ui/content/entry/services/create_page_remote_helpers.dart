@@ -4,6 +4,7 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
+import 'package:quwoquan_app/ui/content/markdown/qwq_markdown.dart';
 
 int paragraphCountForPayload(String text) {
   return text
@@ -49,6 +50,154 @@ String coverAssetPathForPayload(CreateEditorState state) {
   return state.imagePaths.first;
 }
 
+String buildArticleMarkdownForPayload(CreateEditorState state) {
+  final buffer = StringBuffer()
+    ..writeln('---')
+    ..writeln('title: ${_escapeFrontMatterValue(state.title.trim())}')
+    ..writeln(
+      'summary: ${_escapeFrontMatterValue(articleSummaryForPayload(state))}',
+    )
+    ..writeln('template: ${state.articleTemplate.name}')
+    ..writeln('fontPreset: ${state.articleFontPreset.name}');
+  final cover = coverAssetPathForPayload(state);
+  if (cover.trim().isNotEmpty) {
+    buffer.writeln('coverImage: asset://cover');
+  }
+  buffer
+    ..writeln("visibility: ${state.settings.isPublic ? 'public' : 'private'}")
+    ..writeln('assistantUsePolicy: inherit')
+    ..writeln('---')
+    ..writeln();
+  if (state.title.trim().isNotEmpty) {
+    buffer
+      ..write('# ')
+      ..writeln(state.title.trim())
+      ..writeln();
+  }
+  if (cover.trim().isNotEmpty) {
+    buffer
+      ..writeln(':::figure id="cover" layout="fullWidth" caption=""')
+      ..writeln('asset://cover')
+      ..writeln(':::')
+      ..writeln();
+  }
+  for (final block in state.articleBlocks) {
+    final text = block.text.trim();
+    switch (block.type) {
+      case CreateTextBlockType.heading2:
+      case CreateTextBlockType.sectionTitle:
+        if (text.isNotEmpty) {
+          buffer
+            ..write('## ')
+            ..writeln(text)
+            ..writeln();
+        }
+      case CreateTextBlockType.heading3:
+        if (text.isNotEmpty) {
+          buffer
+            ..write('### ')
+            ..writeln(text)
+            ..writeln();
+        }
+      case CreateTextBlockType.orderedItem:
+        if (text.isNotEmpty) {
+          buffer
+            ..write('1. ')
+            ..writeln(text)
+            ..writeln();
+        }
+      case CreateTextBlockType.bulletItem:
+        if (text.isNotEmpty) {
+          buffer
+            ..write('- ')
+            ..writeln(text)
+            ..writeln();
+        }
+      case CreateTextBlockType.image:
+        final imagePath = block.imagePath.trim();
+        if (imagePath.isNotEmpty) {
+          final assetId = _assetIdForPath(imagePath, 'inline');
+          buffer
+            ..writeln(
+              ':::figure id="$assetId" layout="${block.imageLayout.name}" caption=""',
+            )
+            ..writeln('asset://$assetId')
+            ..writeln(':::')
+            ..writeln();
+        }
+      case CreateTextBlockType.paragraph:
+        if (text.isNotEmpty) {
+          buffer
+            ..writeln(text)
+            ..writeln();
+        }
+    }
+  }
+  return buffer.toString().trimRight();
+}
+
+Map<String, dynamic> buildArticleAssetManifestForPayload(
+  CreateEditorState state,
+) {
+  final assets = <Map<String, Object?>>[];
+  final cover = coverAssetPathForPayload(state);
+  if (cover.trim().isNotEmpty) {
+    assets.add(_assetManifestRow('cover', cover.trim(), role: 'cover'));
+  }
+  for (final path in extractArticleImagePaths(state.articleBlocks)) {
+    final assetId = _assetIdForPath(path, 'inline');
+    assets.add(_assetManifestRow(assetId, path, role: 'figure'));
+  }
+  return <String, dynamic>{
+    'schemaVersion': 1,
+    'markdownVersion': qwqRichMarkdownVersion,
+    'assets': assets,
+  };
+}
+
+Map<String, dynamic> buildArticleRenderProfileForPayload(
+  CreateEditorState state,
+) {
+  return <String, dynamic>{
+    'template': state.articleTemplate.name,
+    'fontPreset': state.articleFontPreset.name,
+    'layoutPolicy': <String, Object?>{
+      'wrapDowngrade': 'compactWidthToFullWidth',
+      'galleryDowngrade': 'singleColumn',
+    },
+  };
+}
+
+String _escapeFrontMatterValue(String value) {
+  return value.replaceAll('"', '\\"');
+}
+
+String _assetIdForPath(String path, String prefix) {
+  final normalized = path.trim().replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_');
+  final suffix = normalized.length > 40
+      ? normalized.substring(normalized.length - 40)
+      : normalized;
+  return '${prefix}_${suffix.isEmpty ? 'asset' : suffix}';
+}
+
+Map<String, Object?> _assetManifestRow(
+  String assetId,
+  String path, {
+  required String role,
+}) {
+  return <String, Object?>{
+    'assetId': assetId,
+    'kind': 'image',
+    'role': role,
+    'scope': 'draft',
+    'localPath': path,
+    'objectKey': path.startsWith('asset://')
+        ? path.substring('asset://'.length)
+        : path,
+    'sha256': '',
+  };
+}
+
 /// 创作编辑器 → 云端发帖的**唯一 wire 出口**：先 [buildCreatePostPayloadMap]，
 /// 再 [attachActivePersonaToCreatePayload]，最后 [repositoryCreatePost] 内 [CreatePostRequestWire.fromMap]。
 Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
@@ -79,15 +228,16 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
   }
   final asArticle = shouldPublishAsArticleForPayload(state);
   if (asArticle) {
-    final canonicalDocument = state.articleDocument.copyWith(
-      template: state.articleTemplate.name,
-      fontPreset: state.articleFontPreset.name,
-      coverImageUrl: coverAssetPath,
-    );
     return <String, Object?>{
       'type': 'article',
       'contentType': 'article',
-      'articleDocument': canonicalDocument.toMap(),
+      'title': state.title.trim(),
+      'summary': articleSummaryForPayload(state),
+      'coverUrl': coverAssetPath,
+      'articleMarkdown': buildArticleMarkdownForPayload(state),
+      'articleMarkdownVersion': qwqRichMarkdownVersion,
+      'articleAssetManifest': buildArticleAssetManifestForPayload(state),
+      'articleRenderProfile': buildArticleRenderProfileForPayload(state),
       ...settings,
     };
   }

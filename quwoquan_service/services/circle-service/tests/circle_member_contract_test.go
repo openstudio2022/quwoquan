@@ -61,10 +61,9 @@ func TestJoinCircle_UsesPersonaSubjectHeader(t *testing.T) {
 		"/v1/circles/"+circleID+"/join",
 		"user_joiner_owner",
 		map[string]string{
-			"X-Client-User-Id":          "user_joiner_owner",
-			"X-Profile-Subject-Id":      "persona_joiner_01",
-			"X-Persona-Id":              "persona_joiner_01",
-			"X-Persona-Context-Version": "ctx_v1",
+			"X-Client-User-Id":                     "user_joiner_owner",
+			"X-Client-Sub-Account-Id":              "persona_joiner_01",
+			"X-Client-Sub-Account-Context-Version": "ctx_v1",
 		},
 		nil,
 	)

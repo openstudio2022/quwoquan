@@ -16,15 +16,15 @@ class _StubUserRepository implements UserRepository {
   int deleteCount = 0;
 
   @override
-  Future<void> activatePersona(String personaId) async {
+  Future<void> activatePersona(String subAccountId) async {
     for (final item in _items) {
-      item['isActive'] = item['subAccountId'] == personaId;
+      item['isActive'] = item['subAccountId'] == subAccountId;
     }
   }
 
   @override
   Future<int> applyPersonaProfileSync(
-    String personaId, {
+    String subAccountId, {
     required List<String> fieldsMask,
     String applyScope = 'all_sub_accounts',
     List<String> syncTargetIds = const <String>[],
@@ -42,7 +42,6 @@ class _StubUserRepository implements UserRepository {
   }) async {
     final created = <String, dynamic>{
       'subAccountId': 'created_persona',
-      'profileSubjectId': 'created_persona',
       'displayName': displayName,
       'userHandle': userHandle ?? '',
       'phone': '13800000000',
@@ -60,9 +59,9 @@ class _StubUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> deleteEmptyPersona(String personaId) async {
+  Future<void> deleteEmptyPersona(String subAccountId) async {
     deleteCount++;
-    _items.removeWhere((item) => item['subAccountId'] == personaId);
+    _items.removeWhere((item) => item['subAccountId'] == subAccountId);
   }
 
   @override
@@ -73,12 +72,12 @@ class _StubUserRepository implements UserRepository {
 
   @override
   Future<PersonaLifecycleGuardViewData> getPersonaLifecycleGuard(
-    String personaId,
+    String subAccountId,
   ) async {
     return PersonaLifecycleGuardViewData(
-      subAccountId: personaId,
-      canDelete: personaId != 'persona_primary',
-      canRetire: personaId != 'persona_primary',
+      subAccountId: subAccountId,
+      canDelete: subAccountId != 'persona_primary',
+      canRetire: subAccountId != 'persona_primary',
       requiredAction: '',
       reasonCode: '',
       message: '',
@@ -125,9 +124,9 @@ class _StubUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> retirePersona(String personaId) async {
+  Future<void> retirePersona(String subAccountId) async {
     final index = _items.indexWhere(
-      (item) => item['subAccountId'] == personaId,
+      (item) => item['subAccountId'] == subAccountId,
     );
     if (index == -1) return;
     _items[index] = <String, dynamic>{
@@ -140,7 +139,7 @@ class _StubUserRepository implements UserRepository {
 
   @override
   Future<PersonaManagementItemViewData> updatePersona(
-    String personaId, {
+    String subAccountId, {
     String? displayName,
     String? userHandle,
     String? phone,
@@ -153,7 +152,7 @@ class _StubUserRepository implements UserRepository {
     List<String>? fieldsMask,
   }) async {
     final index = _items.indexWhere(
-      (item) => item['subAccountId'] == personaId,
+      (item) => item['subAccountId'] == subAccountId,
     );
     final updated = Map<String, dynamic>.from(_items[index]);
     if (displayName != null) updated['displayName'] = displayName;
@@ -185,7 +184,6 @@ List<Map<String, dynamic>> _seed() {
   return <Map<String, dynamic>>[
     <String, dynamic>{
       'subAccountId': 'persona_primary',
-      'profileSubjectId': 'persona_primary',
       'displayName': '主分身',
       'userHandle': 'main_handle',
       'phone': '13800000000',
@@ -200,7 +198,6 @@ List<Map<String, dynamic>> _seed() {
     },
     <String, dynamic>{
       'subAccountId': 'persona_photo',
-      'profileSubjectId': 'persona_photo',
       'displayName': '摄影分身',
       'userHandle': 'photo_handle',
       'phone': '13800000000',

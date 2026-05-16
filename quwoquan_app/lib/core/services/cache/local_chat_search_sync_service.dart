@@ -1,4 +1,7 @@
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
@@ -54,44 +57,38 @@ class LocalChatSearchSyncService {
 
       final timestamps = await _chatRepository.getConversationTimestamps();
       final cloudIds = <String>{};
-      final localConversations = await _store.listConversationPayloads(
+      final localConversations = await _store.listConversationRecords(
         namespace: namespace,
         limit: null,
       );
       final localConversationIds = await _store.listConversationIds(
         namespace: namespace,
       );
-      final localById = <String, Map<String, dynamic>>{
-        for (final item in localConversations) _conversationId(item): item,
+      final localById = <String, ConversationCacheRecord>{
+        for (final item in localConversations) item.id: item,
       };
       final needFetchIds = <String>[];
       final needIncrementalMessageSyncIds = <String>[];
 
       for (final timestamp in timestamps) {
-        final conversationId = _conversationId(timestamp.toMap());
+        final conversationId = timestamp.conversationId.trim();
         if (conversationId.isEmpty) {
           continue;
         }
         cloudIds.add(conversationId);
         final localConversation =
             _conversationCache.get(conversationId) ?? localById[conversationId];
-        final tsMap = timestamp.toMap();
         final cloudSettingsUpdatedAt = _firstNonEmpty(<Object?>[
-          tsMap['settingsUpdatedAt'],
-          tsMap['updatedAt'],
+          timestamp.settingsUpdatedAt,
+          timestamp.updatedAt,
         ]);
         final cloudLastMessageAt = _firstNonEmpty(<Object?>[
-          tsMap['lastMessageAt'],
-          tsMap['lastMessageTime'],
+          timestamp.lastMessageAt,
+          timestamp.lastMessageTime,
         ]);
-        final localSettingsUpdatedAt = _firstNonEmpty(<Object?>[
-          localConversation?['settingsUpdatedAt'],
-          localConversation?['updatedAt'],
-        ]);
-        final localLastMessageAt = _firstNonEmpty(<Object?>[
-          localConversation?['lastMessageAt'],
-          localConversation?['lastMessageTime'],
-        ]);
+        final localSettingsUpdatedAt =
+            localConversation?.settingsTimestamp ?? '';
+        final localLastMessageAt = localConversation?.messageTimestamp ?? '';
         final missingConversation = localConversation == null;
         final settingsChanged =
             cloudSettingsUpdatedAt.isNotEmpty &&
@@ -102,11 +99,13 @@ class LocalChatSearchSyncService {
         if (missingConversation || settingsChanged) {
           needFetchIds.add(conversationId);
         } else if (messageChanged) {
-          _conversationCache.updateListFields(
+          _conversationCache.applyListPatch(
             conversationId,
-            lastMessagePreview: tsMap['lastMessagePreview']?.toString(),
-            lastMessageAt: cloudLastMessageAt,
-            unreadCount: (tsMap['unreadCount'] as num?)?.toInt(),
+            ConversationListPatch(
+              lastMessagePreview: timestamp.lastMessagePreview,
+              lastMessageAt: cloudLastMessageAt,
+              unreadCount: timestamp.unreadCount,
+            ),
           );
           needIncrementalMessageSyncIds.add(conversationId);
         } else {
@@ -130,15 +129,15 @@ class LocalChatSearchSyncService {
           final conversations = await _chatRepository.batchGetConversations(
             batchIds,
           );
-          final convMaps = conversations
-              .map((c) => c.toMap())
+          final records = conversations
+              .map(ConversationCacheRecord.fromConversationDto)
               .toList(growable: false);
-          _conversationCache.putAll(convMaps);
-          await _store.upsertConversations(
+          _conversationCache.putAll(records);
+          await _store.upsertConversationRecords(
             namespace: namespace,
-            conversations: convMaps,
+            conversations: records,
           );
-          for (final conversation in convMaps) {
+          for (final conversation in records) {
             await _syncConversationMessages(
               namespace: namespace,
               conversation: conversation,
@@ -193,11 +192,13 @@ class LocalChatSearchSyncService {
       final conversationDto = await _chatRepository.getConversation(
         conversationId,
       );
-      final conversation = conversationDto.toMap();
-      _conversationCache.put(conversationId, conversation);
-      await _store.upsertConversations(
+      final conversation = ConversationCacheRecord.fromConversationDto(
+        conversationDto,
+      );
+      _conversationCache.put(conversation);
+      await _store.upsertConversationRecords(
         namespace: namespace,
-        conversations: <Map<String, dynamic>>[conversation],
+        conversations: <ConversationCacheRecord>[conversation],
       );
       await _syncConversationMessages(
         namespace: namespace,
@@ -209,7 +210,7 @@ class LocalChatSearchSyncService {
 
   Future<void> ingestRealtimeMessage({
     required String conversationId,
-    required Map<String, dynamic> payload,
+    required MessageDto message,
   }) async {
     try {
       final namespace = await _resolveNamespace();
@@ -217,52 +218,44 @@ class LocalChatSearchSyncService {
         return;
       }
       _activateNamespace(namespace);
-      Map<String, dynamic>? conversation = _conversationCache.get(
+      ConversationCacheRecord? conversation = _conversationCache.get(
         conversationId,
       );
       if (conversation == null) {
         try {
           final dto = await _chatRepository.getConversation(conversationId);
-          conversation = dto.toMap();
-          _conversationCache.put(conversationId, conversation);
-          await _store.upsertConversations(
+          conversation = ConversationCacheRecord.fromConversationDto(dto);
+          _conversationCache.put(conversation);
+          await _store.upsertConversationRecords(
             namespace: namespace,
-            conversations: <Map<String, dynamic>>[conversation],
+            conversations: <ConversationCacheRecord>[conversation],
           );
         } catch (_) {}
       }
-      final mergedMessage = <String, dynamic>{
-        ...payload,
-        'conversationId': conversationId,
-      };
+      final messageRecord = LocalChatSearchMessageRecord.fromMessageDto(
+        message,
+        conversation: conversation,
+      );
       await _store.upsertMessages(
         namespace: namespace,
-        messages: <Map<String, dynamic>>[mergedMessage],
+        messages: <LocalChatSearchMessageRecord>[messageRecord],
         conversation: conversation,
       );
       if (conversation != null) {
-        final updatedConversation = <String, dynamic>{
-          ...conversation,
-          'lastMessagePreview': _firstNonEmpty(<Object?>[
-            payload['content'],
-            payload['contentPreview'],
-            conversation['lastMessagePreview'],
+        final updatedConversation = conversation.copyWith(
+          lastMessagePreview: _firstNonEmpty(<Object?>[
+            message.content,
+            conversation.lastMessagePreview,
           ]),
-          'lastMessageAt': _firstNonEmpty(<Object?>[
-            payload['timestamp'],
-            conversation['lastMessageAt'],
-            conversation['lastMessageTime'],
+          lastMessageAt: _firstNonEmpty(<Object?>[
+            message.timestamp?.toIso8601String(),
+            conversation.lastMessageAt,
           ]),
-          'lastMessageTime': _firstNonEmpty(<Object?>[
-            payload['timestamp'],
-            conversation['lastMessageAt'],
-            conversation['lastMessageTime'],
-          ]),
-        };
-        _conversationCache.put(conversationId, updatedConversation);
-        await _store.upsertConversations(
+        );
+        _conversationCache.put(updatedConversation);
+        await _store.upsertConversationRecords(
           namespace: namespace,
-          conversations: <Map<String, dynamic>>[updatedConversation],
+          conversations: <ConversationCacheRecord>[updatedConversation],
         );
       }
     } catch (_) {}
@@ -319,10 +312,10 @@ class LocalChatSearchSyncService {
 
   Future<void> _syncConversationMessages({
     required LocalSearchNamespace namespace,
-    required Map<String, dynamic> conversation,
+    required ConversationCacheRecord conversation,
     required bool forceFull,
   }) async {
-    final conversationId = _conversationId(conversation);
+    final conversationId = conversation.id;
     if (conversationId.isEmpty) {
       return;
     }
@@ -332,7 +325,7 @@ class LocalChatSearchSyncService {
             namespace: namespace,
             conversationId: conversationId,
           );
-    final aggregatedMessages = <Map<String, dynamic>>[];
+    final aggregatedMessages = <LocalChatSearchMessageRecord>[];
     var hasMore = true;
     var guard = 0;
     while (hasMore && guard < 20) {
@@ -342,7 +335,14 @@ class LocalChatSearchSyncService {
         lastSeq: lastSeq,
         limit: 200,
       );
-      final messages = _extractMessages(delta.toMap());
+      final messages = delta.messages
+          .map(
+            (message) => LocalChatSearchMessageRecord.fromMessageDto(
+              message,
+              conversation: conversation,
+            ),
+          )
+          .toList(growable: false);
       if (messages.isEmpty) {
         hasMore = false;
         break;
@@ -362,7 +362,12 @@ class LocalChatSearchSyncService {
         limit: 200,
       );
       aggregatedMessages.addAll(
-        fallbackMessages.map((m) => m.toMap()).toList(growable: false),
+        fallbackMessages.map(
+          (message) => LocalChatSearchMessageRecord.fromMessageDto(
+            message,
+            conversation: conversation,
+          ),
+        ),
       );
     }
     if (aggregatedMessages.isEmpty) {
@@ -375,42 +380,15 @@ class LocalChatSearchSyncService {
     );
   }
 
-  List<Map<String, dynamic>> _extractMessages(Map<String, dynamic> delta) {
-    final candidates = <dynamic>[
-      delta['messages'],
-      delta['items'],
-      delta['data'],
-    ];
-    for (final candidate in candidates) {
-      if (candidate is List) {
-        return candidate
-            .whereType<Map>()
-            .map((item) {
-              return item.cast<String, dynamic>();
-            })
-            .toList(growable: false);
-      }
-    }
-    return const <Map<String, dynamic>>[];
-  }
-
-  int _maxSeq(List<Map<String, dynamic>> messages) {
+  int _maxSeq(List<LocalChatSearchMessageRecord> messages) {
     var maxSeq = 0;
     for (final message in messages) {
-      final seq = (message['seq'] as num?)?.toInt() ?? 0;
+      final seq = message.seq;
       if (seq > maxSeq) {
         maxSeq = seq;
       }
     }
     return maxSeq;
-  }
-
-  String _conversationId(Map<String, dynamic>? conversation) {
-    return _string(
-      conversation?['conversationId'] ??
-          conversation?['id'] ??
-          conversation?['_id'],
-    );
   }
 
   String _firstNonEmpty(List<Object?> values) {

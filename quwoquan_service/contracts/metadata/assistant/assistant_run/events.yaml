@@ -8,7 +8,7 @@ events:
     consumers: []
     channel: event_store
     payload_entity: AssistantRun
-    payload_fields: [_id, userId, profileSubjectId, personaContextVersion, sessionId, skillId, triggerType, pageType]
+    payload_fields: [_id, userId, subAccountId, personaContextVersion, sessionId, skillId, triggerType, pageType]
 
   - name: AssistantRunCompleted
     description: 助手执行完成
@@ -16,7 +16,7 @@ events:
     consumers: [recommendation-engine]
     channel: event_store
     payload_entity: AssistantRun
-    payload_fields: [_id, userId, profileSubjectId, personaContextVersion, status, toolsCalled, llmModel, llmTokensUsed, latencyMs, satisfactionScore]
+    payload_fields: [_id, userId, subAccountId, personaContextVersion, status, toolsCalled, llmModel, llmTokensUsed, latencyMs, satisfactionScore]
     recommend_impact: assistant_quality_signal
 
   - name: AssistantFeedbackReceived

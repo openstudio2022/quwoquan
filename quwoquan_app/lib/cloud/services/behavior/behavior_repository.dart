@@ -11,6 +11,44 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadat
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 
+/// Referral source indicating how the user arrived at the content.
+enum ReferralSource {
+  organicFeed,
+  friendShare,
+  chatLink,
+  circlePost,
+  authorProfile,
+  entityPage,
+  search,
+  pushNotification,
+  deepLink,
+}
+
+extension ReferralSourceExt on ReferralSource {
+  String get value {
+    switch (this) {
+      case ReferralSource.organicFeed:
+        return 'organic_feed';
+      case ReferralSource.friendShare:
+        return 'friend_share';
+      case ReferralSource.chatLink:
+        return 'chat_link';
+      case ReferralSource.circlePost:
+        return 'circle_post';
+      case ReferralSource.authorProfile:
+        return 'author_profile';
+      case ReferralSource.entityPage:
+        return 'entity_page';
+      case ReferralSource.search:
+        return 'search';
+      case ReferralSource.pushNotification:
+        return 'push_notification';
+      case ReferralSource.deepLink:
+        return 'deep_link';
+    }
+  }
+}
+
 /// Behavior event for recommendation pipeline.
 class BehaviorEvent {
   const BehaviorEvent({
@@ -18,22 +56,68 @@ class BehaviorEvent {
     required this.action,
     this.tags,
     this.duration,
+    this.feedRequestId,
+    this.position,
+    this.commentLength,
+    this.authorId,
+    this.referralSource,
+    this.engagementDepth,
+    this.consumedRatio,
+    this.totalUnits,
+    this.entityRefs,
   });
 
   final String contentId;
 
-  /// One of: impression, click, dwell, like, favorite, share, dislike, report
+  /// One of: impression, click, dwell, like, favorite, share, dislike, report,
+  /// skip, comment, follow, author_view, tag_click, play_progress, content_depth
   final String action;
   final List<String>? tags;
 
-  /// Dwell time in seconds (for dwell action)
+  /// Dwell time in seconds (for dwell/skip action)
   final double? duration;
+
+  /// Feed request UUID for attribution
+  final String? feedRequestId;
+
+  /// Position in feed list (0-based)
+  final int? position;
+
+  /// Comment text length (for comment action)
+  final int? commentLength;
+
+  /// Author of the content being interacted with
+  final String? authorId;
+
+  /// How the user arrived at this content
+  final ReferralSource? referralSource;
+
+  /// Normalized engagement depth level (0=L0 glance, 4=L4 full consumption)
+  final int? engagementDepth;
+
+  /// Raw consumed ratio (0.0-1.0+): pages/total, images/total, playPos/duration
+  final double? consumedRatio;
+
+  /// Total units of content (pages, images, duration in seconds)
+  final int? totalUnits;
+
+  /// Entity references from the content (for interest propagation)
+  final List<String>? entityRefs;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'contentId': contentId,
     'action': action,
     if (tags != null && tags!.isNotEmpty) 'tags': tags,
     if (duration != null && duration! > 0) 'duration': duration,
+    if (feedRequestId != null) 'feedRequestId': feedRequestId,
+    if (position != null) 'position': position,
+    if (commentLength != null) 'commentLength': commentLength,
+    if (authorId != null && authorId!.isNotEmpty) 'authorId': authorId,
+    if (referralSource != null) 'referralSource': referralSource!.value,
+    if (engagementDepth != null) 'engagementDepth': engagementDepth,
+    if (consumedRatio != null) 'consumedRatio': consumedRatio,
+    if (totalUnits != null) 'totalUnits': totalUnits,
+    if (entityRefs != null && entityRefs!.isNotEmpty) 'entityRefs': entityRefs,
   };
 }
 
@@ -236,6 +320,25 @@ class RemoteBehaviorRepository extends BehaviorRepository {
       action: (json['action'] ?? '').toString(),
       tags: (json['tags'] as List?)?.map((item) => item.toString()).toList(),
       duration: (json['duration'] as num?)?.toDouble(),
+      feedRequestId: json['feedRequestId'] as String?,
+      position: (json['position'] as num?)?.toInt(),
+      commentLength: (json['commentLength'] as num?)?.toInt(),
+      authorId: json['authorId'] as String?,
+      referralSource: _parseReferralSource(json['referralSource'] as String?),
+      engagementDepth: (json['engagementDepth'] as num?)?.toInt(),
+      consumedRatio: (json['consumedRatio'] as num?)?.toDouble(),
+      totalUnits: (json['totalUnits'] as num?)?.toInt(),
+      entityRefs: (json['entityRefs'] as List?)
+          ?.map((item) => item.toString())
+          .toList(),
     );
+  }
+
+  static ReferralSource? _parseReferralSource(String? value) {
+    if (value == null || value.isEmpty) return null;
+    for (final source in ReferralSource.values) {
+      if (source.value == value) return source;
+    }
+    return null;
   }
 }

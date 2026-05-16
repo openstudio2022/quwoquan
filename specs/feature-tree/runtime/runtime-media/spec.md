@@ -33,13 +33,13 @@
 ### In Scope
 
 1. **统一媒体对象模型**：冻结 `AssetRef / MediaAsset`、`assetKind / ownerType / ownerId / version / variants`
-2. **统一 URL 与 objectKey 规范**：冻结 CDN URL、版本参数、objectKey 命名规则与 vendor adapter 责任边界
+2. **统一 URL 与 objectKey 规范**：冻结 CDN URL、版本参数、显式 `sliceId` objectKey 命名规则与 vendor adapter 责任边界
 3. **用户头像归属**：用户头像业务归 `user-service`，运行时只承载上传/存储/URL 构建能力
 4. **群头像归属**：群头像业务归 `chat-service`，由服务端预合成并通过 runtime media 存储与分发
 5. **群头像更新触发合同**：前 9 成员加入/离开必重算，前 9 成员头像变更异步重算
 6. **群头像失败策略**：客户端不做端侧拼图兜底；服务端失败时保留上一版，首次生成失败不得下发空 `avatarUrl`
 7. **统一同步基线接口**：runtime media 相关变化必须能进入统一 `UserSyncStream`，支持 realtime hint + cursor 增量拉取
-8. **云厂商适配**：冻结 OSS / COS 适配接口、bucket/prefix 组织与 CDN 域名对外暴露规则
+8. **云厂商适配**：冻结 OSS / COS / 文件根目录 / tunnel origin 适配接口、bucket/prefix/slice 组织与 CDN 域名对外暴露规则
 9. **观测与治理基线**：冻结上传、重算、同步、签名 URL、回源失败等关键指标与降级原则
 
 ### Out of Scope
@@ -152,6 +152,7 @@
 - 弱网下允许 avatar patch 延迟可见，但最终一致必须由 gap fill 或显式 `requiresResync` 补偿保障
 - 多个成员短时间连续变更时，群头像重算应允许去重/合并
 - object storage 与 CDN 厂商切换必须通过 adapter 层屏蔽
+- 切片路由必须以 `sliceId -> origin` 为最小单位，不允许退化成逐图片路由表
 - 群头像任务调度不得依赖全量任务扫描作为主消费路径，必须使用 ready queue / score queue 等可扩展结构
 - sync pull 读取必须支持批量化，避免长离线追赶时按 seq 单 key RTT 线性放大
 - 客户端会话缓存必须按 persona / namespace 隔离，不能通过全局 `cache.clear()` 作为主切换策略

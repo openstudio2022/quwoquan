@@ -220,7 +220,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                 SizedBox(height: AppSpacing.sm),
             itemBuilder: (context, i) {
               final item = _items![i];
-              final userId = item.actorProfileSubjectId;
+              final userId = item.actorSubAccountId;
               final nickname = item.actorDisplayName;
               final avatarUrl = item.actorAvatarUrl;
               final targetTitle = item.targetContentSummary;
@@ -231,7 +231,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab> {
                     context.push(
                       AppRoutePaths.userProfile(username: userId),
                       extra: UserProfileRouteExtra(
-                        profileSubjectId: userId,
+                        subAccountId: userId,
                         avatar: avatarUrl.isNotEmpty ? avatarUrl : null,
                         displayName: nickname.isNotEmpty ? nickname : null,
                       ),

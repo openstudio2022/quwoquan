@@ -34,36 +34,126 @@ class ContentBehaviorTracker {
   }
 
   /// 记录一次曝光（impression）。同一 contentId 在本 session 内去重。
-  void trackImpression(String contentId, {List<String>? tags}) {
+  void trackImpression(String contentId, {
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+  }) {
     if (_impressionSeen.contains(contentId)) return;
     _impressionSeen.add(contentId);
-    _add(BehaviorEvent(contentId: contentId, action: 'impression', tags: tags));
+    _add(BehaviorEvent(
+      contentId: contentId,
+      action: 'impression',
+      tags: tags,
+      feedRequestId: feedRequestId,
+      position: position,
+    ));
   }
 
   /// 记录停留时长（dwell）。
-  void trackDwell(String contentId, {required double durationSeconds, List<String>? tags}) {
+  void trackDwell(String contentId, {
+    required double durationSeconds,
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+  }) {
     if (durationSeconds < 1) return;
     _add(BehaviorEvent(
       contentId: contentId,
       action: 'dwell',
       tags: tags,
       duration: durationSeconds,
+      feedRequestId: feedRequestId,
+      position: position,
     ));
   }
 
   /// 记录点击（click）。
-  void trackClick(String contentId, {List<String>? tags}) {
-    _add(BehaviorEvent(contentId: contentId, action: 'click', tags: tags));
+  void trackClick(String contentId, {
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+  }) {
+    _add(BehaviorEvent(
+      contentId: contentId,
+      action: 'click',
+      tags: tags,
+      feedRequestId: feedRequestId,
+      position: position,
+    ));
   }
 
   /// 记录「不感兴趣」（dislike）。
-  void trackDislike(String contentId, {List<String>? tags}) {
-    _add(BehaviorEvent(contentId: contentId, action: 'dislike', tags: tags));
+  void trackDislike(String contentId, {
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+  }) {
+    _add(BehaviorEvent(
+      contentId: contentId,
+      action: 'dislike',
+      tags: tags,
+      feedRequestId: feedRequestId,
+      position: position,
+    ));
   }
 
   /// 记录分享（share）。
-  void trackShare(String contentId, {List<String>? tags}) {
-    _add(BehaviorEvent(contentId: contentId, action: 'share', tags: tags));
+  void trackShare(String contentId, {
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+  }) {
+    _add(BehaviorEvent(
+      contentId: contentId,
+      action: 'share',
+      tags: tags,
+      feedRequestId: feedRequestId,
+      position: position,
+    ));
+  }
+
+  /// 记录翻页跳过（skip）——沉浸式流翻到下一帖时上报前帖。
+  void trackSkip(String contentId, {
+    double? dwellSeconds,
+    List<String>? tags,
+    String? feedRequestId,
+    int? position,
+  }) {
+    _add(BehaviorEvent(
+      contentId: contentId,
+      action: 'skip',
+      tags: tags,
+      duration: dwellSeconds,
+      feedRequestId: feedRequestId,
+      position: position,
+    ));
+  }
+
+  /// 记录评论完成（comment）。
+  void trackComment(String contentId, {
+    int? commentLength,
+    List<String>? tags,
+    String? feedRequestId,
+  }) {
+    _add(BehaviorEvent(
+      contentId: contentId,
+      action: 'comment',
+      tags: tags,
+      feedRequestId: feedRequestId,
+      commentLength: commentLength,
+    ));
+  }
+
+  /// 记录关注完成（follow）。
+  void trackFollow(String authorId, {
+    String? feedRequestId,
+  }) {
+    _add(BehaviorEvent(
+      contentId: authorId,
+      action: 'follow',
+      feedRequestId: feedRequestId,
+    ));
   }
 
   void _add(BehaviorEvent event) {

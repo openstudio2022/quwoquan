@@ -14,6 +14,7 @@ class ContentApiMetadata {
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'AbortMediaUpload': '/v1/content/media/uploads/{sessionId}:abort',
+    'BindMediaAssetsToPost': '/v1/content/posts/{postId}/media:bind',
     'CompleteMediaUpload': '/v1/content/media/uploads/{sessionId}:complete',
     'CreateComment': '/v1/content/posts/{postId}/comments',
     'CreatePost': '/v1/content/posts',
@@ -37,9 +38,9 @@ class ContentApiMetadata {
     'ListComments': '/v1/content/posts/{postId}/comments',
     'ListCommentsByAuthor': '/v1/content/users/me/comments',
     'ListCommentsForPostAuthor': '/v1/content/users/me/received-comments',
-    'ListProfileInteractionActivitiesReceived': '/v1/content/profile-subjects/{profileSubjectId}/interactions/received',
-    'ListProfileInteractionActivitiesSent': '/v1/content/profile-subjects/{profileSubjectId}/interactions/sent',
-    'ListUserPosts': '/v1/content/profile-subjects/{profileSubjectId}/posts',
+    'ListProfileInteractionActivitiesReceived': '/v1/content/sub-accounts/{subAccountId}/interactions/received',
+    'ListProfileInteractionActivitiesSent': '/v1/content/sub-accounts/{subAccountId}/interactions/sent',
+    'ListUserPosts': '/v1/content/sub-accounts/{subAccountId}/posts',
     'PromotePostToWork': '/v1/content/posts/{postId}:promoteToWork',
     'PublishPost': '/v1/content/posts/{postId}/publish',
     'QuoteToCircle': '/v1/content/posts/{postId}/quote',
@@ -50,9 +51,11 @@ class ContentApiMetadata {
     'SearchPosts': '/v1/content/posts/search',
     'SelectAutoVideoCover': '/v1/content/media/{mediaId}/cover:auto',
     'SelectManualVideoCover': '/v1/content/media/{mediaId}/cover:manual',
+    'SharePost': '/v1/content/posts/{postId}/share',
     'UnfavoritePost': '/v1/content/posts/{postId}/favorite',
     'UnlikeComment': '/v1/content/comments/{commentId}/like',
     'UnlikePost': '/v1/content/posts/{postId}/like',
+    'UnsharePost': '/v1/content/posts/{postId}/share',
     'UpdatePost': '/v1/content/posts/{postId}',
     'UpdatePostCircles': '/v1/content/posts/{postId}/circles',
     'UpdatePostSettings': '/v1/content/posts/{postId}/settings',
@@ -60,6 +63,7 @@ class ContentApiMetadata {
 
   static const Map<String, String> operationToMethod = <String, String>{
     'AbortMediaUpload': 'POST',
+    'BindMediaAssetsToPost': 'POST',
     'CompleteMediaUpload': 'POST',
     'CreateComment': 'POST',
     'CreatePost': 'POST',
@@ -96,15 +100,18 @@ class ContentApiMetadata {
     'SearchPosts': 'GET',
     'SelectAutoVideoCover': 'POST',
     'SelectManualVideoCover': 'POST',
+    'SharePost': 'POST',
     'UnfavoritePost': 'DELETE',
     'UnlikeComment': 'DELETE',
     'UnlikePost': 'DELETE',
+    'UnsharePost': 'DELETE',
     'UpdatePost': 'PATCH',
     'UpdatePostCircles': 'PATCH',
     'UpdatePostSettings': 'PATCH',
   };
 
   static const String abortMediaUploadOperation = 'AbortMediaUpload';
+  static const String bindMediaAssetsToPostOperation = 'BindMediaAssetsToPost';
   static const String completeMediaUploadOperation = 'CompleteMediaUpload';
   static const String createCommentOperation = 'CreateComment';
   static const String createPostOperation = 'CreatePost';
@@ -141,9 +148,11 @@ class ContentApiMetadata {
   static const String searchPostsOperation = 'SearchPosts';
   static const String selectAutoVideoCoverOperation = 'SelectAutoVideoCover';
   static const String selectManualVideoCoverOperation = 'SelectManualVideoCover';
+  static const String sharePostOperation = 'SharePost';
   static const String unfavoritePostOperation = 'UnfavoritePost';
   static const String unlikeCommentOperation = 'UnlikeComment';
   static const String unlikePostOperation = 'UnlikePost';
+  static const String unsharePostOperation = 'UnsharePost';
   static const String updatePostOperation = 'UpdatePost';
   static const String updatePostCirclesOperation = 'UpdatePostCircles';
   static const String updatePostSettingsOperation = 'UpdatePostSettings';
@@ -152,6 +161,12 @@ class ContentApiMetadata {
   static String abortMediaUploadPath({required String sessionId}) {
     return _fillPath(abortMediaUploadPathTemplate, <String, String>{
       'sessionId': sessionId,
+    });
+  }
+  static const String bindMediaAssetsToPostPathTemplate = '/v1/content/posts/{postId}/media:bind';
+  static String bindMediaAssetsToPostPath({required String postId}) {
+    return _fillPath(bindMediaAssetsToPostPathTemplate, <String, String>{
+      'postId': postId,
     });
   }
   static const String completeMediaUploadPathTemplate = '/v1/content/media/uploads/{sessionId}:complete';
@@ -248,22 +263,22 @@ class ContentApiMetadata {
   }
   static const String listCommentsByAuthorPath = '/v1/content/users/me/comments';
   static const String listCommentsForPostAuthorPath = '/v1/content/users/me/received-comments';
-  static const String listProfileInteractionActivitiesReceivedPathTemplate = '/v1/content/profile-subjects/{profileSubjectId}/interactions/received';
-  static String listProfileInteractionActivitiesReceivedPath({required String profileSubjectId}) {
+  static const String listProfileInteractionActivitiesReceivedPathTemplate = '/v1/content/sub-accounts/{subAccountId}/interactions/received';
+  static String listProfileInteractionActivitiesReceivedPath({required String subAccountId}) {
     return _fillPath(listProfileInteractionActivitiesReceivedPathTemplate, <String, String>{
-      'profileSubjectId': profileSubjectId,
+      'subAccountId': subAccountId,
     });
   }
-  static const String listProfileInteractionActivitiesSentPathTemplate = '/v1/content/profile-subjects/{profileSubjectId}/interactions/sent';
-  static String listProfileInteractionActivitiesSentPath({required String profileSubjectId}) {
+  static const String listProfileInteractionActivitiesSentPathTemplate = '/v1/content/sub-accounts/{subAccountId}/interactions/sent';
+  static String listProfileInteractionActivitiesSentPath({required String subAccountId}) {
     return _fillPath(listProfileInteractionActivitiesSentPathTemplate, <String, String>{
-      'profileSubjectId': profileSubjectId,
+      'subAccountId': subAccountId,
     });
   }
-  static const String listUserPostsPathTemplate = '/v1/content/profile-subjects/{profileSubjectId}/posts';
-  static String listUserPostsPath({required String profileSubjectId}) {
+  static const String listUserPostsPathTemplate = '/v1/content/sub-accounts/{subAccountId}/posts';
+  static String listUserPostsPath({required String subAccountId}) {
     return _fillPath(listUserPostsPathTemplate, <String, String>{
-      'profileSubjectId': profileSubjectId,
+      'subAccountId': subAccountId,
     });
   }
   static const String promotePostToWorkPathTemplate = '/v1/content/posts/{postId}:promoteToWork';
@@ -316,6 +331,12 @@ class ContentApiMetadata {
       'mediaId': mediaId,
     });
   }
+  static const String sharePostPathTemplate = '/v1/content/posts/{postId}/share';
+  static String sharePostPath({required String postId}) {
+    return _fillPath(sharePostPathTemplate, <String, String>{
+      'postId': postId,
+    });
+  }
   static const String unfavoritePostPathTemplate = '/v1/content/posts/{postId}/favorite';
   static String unfavoritePostPath({required String postId}) {
     return _fillPath(unfavoritePostPathTemplate, <String, String>{
@@ -331,6 +352,12 @@ class ContentApiMetadata {
   static const String unlikePostPathTemplate = '/v1/content/posts/{postId}/like';
   static String unlikePostPath({required String postId}) {
     return _fillPath(unlikePostPathTemplate, <String, String>{
+      'postId': postId,
+    });
+  }
+  static const String unsharePostPathTemplate = '/v1/content/posts/{postId}/share';
+  static String unsharePostPath({required String postId}) {
+    return _fillPath(unsharePostPathTemplate, <String, String>{
       'postId': postId,
     });
   }

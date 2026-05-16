@@ -8,6 +8,7 @@ import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 
@@ -56,8 +57,10 @@ class ProfileMomentsTab extends ConsumerWidget {
       );
     }
 
-    final dividerColor =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary);
+    final dividerColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundTertiary,
+    );
 
     return ListView.builder(
       padding: EdgeInsets.only(
@@ -75,7 +78,11 @@ class ProfileMomentsTab extends ConsumerWidget {
               padding: EdgeInsets.symmetric(
                 horizontal: AppSpacing.feedContentHorizontal(context),
               ),
-              child: _ProfileMomentCard(item: dto, isDark: isDark, userId: userId),
+              child: _ProfileMomentCard(
+                item: dto,
+                isDark: isDark,
+                userId: userId,
+              ),
             ),
             if (index < moments.length - 1)
               Container(height: AppSpacing.sm, color: dividerColor),
@@ -109,12 +116,18 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
   Widget build(BuildContext context) {
     final item = widget.item;
     final isDark = widget.isDark;
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final muted =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final bg =
-        AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final bg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     final userId = widget.userId;
 
     return Container(
@@ -177,7 +190,9 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                 final moments = state.creations
                     .where((post) => post.identity == 'moment')
                     .toList();
-                final initialIndex = moments.indexWhere((p) => p.id == item.id).clamp(0, moments.length - 1);
+                final initialIndex = moments
+                    .indexWhere((p) => p.id == item.id)
+                    .clamp(0, moments.length - 1);
                 final postViews = moments
                     .map(
                       (dto) => PostSummaryView.fromDto(
@@ -187,20 +202,36 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                       ),
                     )
                     .toList();
-                
-                context.push(
-                  '/media-viewer/photo/$initialIndex',
-                  extra: MediaViewerExtra(
-                    posts: postViews,
-                    dtoPosts: moments,
-                    initialIndex: initialIndex,
-                    category: 'moment',
-                    initialImageIndex: 0,
-                    source: 'profile_moment',
-                  ),
+                final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+                  posts: moments,
+                  discoveryState: ref.read(discoveryStateProvider),
+                  relationshipState: ref.read(userRelationshipStateProvider),
+                  postInteractionState: ref.read(postInteractionStateProvider),
                 );
+                primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+
+                context
+                    .push(
+                      '/media-viewer/photo/$initialIndex',
+                      extra: MediaViewerExtra(
+                        posts: postViews,
+                        dtoPosts: moments,
+                        initialIndex: initialIndex,
+                        category: 'moment',
+                        initialImageIndex: 0,
+                        source: 'profile_moment',
+                        interactionSnapshot: interactionSnapshot,
+                      ),
+                    )
+                    .then((result) {
+                      if (result is MediaViewerResult) {
+                        applyMediaViewerResultToInteractionState(ref, result);
+                      }
+                    });
               },
-              child: AbsorbPointer(child: _MomentImageGrid(urls: item.mediaImageUrls)),
+              child: AbsorbPointer(
+                child: _MomentImageGrid(urls: item.mediaImageUrls),
+              ),
             ),
           ],
           if (item.hasVideo && !item.hasImages) ...[
@@ -211,7 +242,9 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                 final moments = state.creations
                     .where((post) => post.identity == 'moment')
                     .toList();
-                final initialIndex = moments.indexWhere((p) => p.id == item.id).clamp(0, moments.length - 1);
+                final initialIndex = moments
+                    .indexWhere((p) => p.id == item.id)
+                    .clamp(0, moments.length - 1);
                 final postViews = moments
                     .map(
                       (dto) => PostSummaryView.fromDto(
@@ -221,19 +254,35 @@ class _ProfileMomentCardState extends ConsumerState<_ProfileMomentCard> {
                       ),
                     )
                     .toList();
-                
-                context.push(
-                  '/video-viewer/$initialIndex',
-                  extra: MediaViewerExtra(
-                    posts: postViews,
-                    dtoPosts: moments,
-                    initialIndex: initialIndex,
-                    category: 'moment',
-                    source: 'profile_moment',
-                  ),
+                final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+                  posts: moments,
+                  discoveryState: ref.read(discoveryStateProvider),
+                  relationshipState: ref.read(userRelationshipStateProvider),
+                  postInteractionState: ref.read(postInteractionStateProvider),
                 );
+                primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+
+                context
+                    .push(
+                      '/video-viewer/$initialIndex',
+                      extra: MediaViewerExtra(
+                        posts: postViews,
+                        dtoPosts: moments,
+                        initialIndex: initialIndex,
+                        category: 'moment',
+                        source: 'profile_moment',
+                        interactionSnapshot: interactionSnapshot,
+                      ),
+                    )
+                    .then((result) {
+                      if (result is MediaViewerResult) {
+                        applyMediaViewerResultToInteractionState(ref, result);
+                      }
+                    });
               },
-              child: AbsorbPointer(child: _MomentVideoCard(dto: item, isDark: isDark)),
+              child: AbsorbPointer(
+                child: _MomentVideoCard(dto: item, isDark: isDark),
+              ),
             ),
           ],
           SizedBox(height: AppSpacing.interGroupSm),
@@ -270,50 +319,54 @@ class _ExpandableText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
     final textStyle = TextStyle(
       fontSize: AppTypography.lg,
       color: fg,
       height: AppTypography.lineHeightRelaxed,
     );
 
-    return LayoutBuilder(builder: (context, constraints) {
-      final tp = TextPainter(
-        text: TextSpan(text: text, style: textStyle),
-        maxLines: maxLines,
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: constraints.maxWidth);
-      final isOverflow = tp.didExceedMaxLines;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: text, style: textStyle),
+          maxLines: maxLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final isOverflow = tp.didExceedMaxLines;
 
-      if (!isOverflow) {
-        return Text(text, style: textStyle);
-      }
+        if (!isOverflow) {
+          return Text(text, style: textStyle);
+        }
 
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            text,
-            style: textStyle,
-            maxLines: expanded ? null : maxLines,
-            overflow: expanded ? null : TextOverflow.ellipsis,
-          ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          GestureDetector(
-            onTap: onToggle,
-            child: Text(
-              expanded ? '收起' : '展开',
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                color: AppColors.primaryColor,
-                fontWeight: AppTypography.medium,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              text,
+              style: textStyle,
+              maxLines: expanded ? null : maxLines,
+              overflow: expanded ? null : TextOverflow.ellipsis,
+            ),
+            SizedBox(height: AppSpacing.intraGroupXs),
+            GestureDetector(
+              onTap: onToggle,
+              child: Text(
+                expanded ? '收起' : '展开',
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  color: AppColors.primaryColor,
+                  fontWeight: AppTypography.medium,
+                ),
               ),
             ),
-          ),
-        ],
-      );
-    });
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -384,13 +437,16 @@ class _MomentImageGrid extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.only(left: col == 0 ? 0 : gap),
                   child: ClipRRect(
-                    borderRadius:
-                        BorderRadius.circular(AppSpacing.smallBorderRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.smallBorderRadius,
+                    ),
                     child: AspectRatio(
                       aspectRatio: 1,
                       child: idx < urls.length
                           ? _img(urls[idx])
-                          : Container(color: AppColors.gridImagePlaceholderLight),
+                          : Container(
+                              color: AppColors.gridImagePlaceholderLight,
+                            ),
                     ),
                   ),
                 ),
@@ -465,11 +521,12 @@ class _MomentVideoCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppColors.black.withValues(alpha: 0.6),
-                    borderRadius:
-                        BorderRadius.circular(AppSpacing.smallBorderRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.smallBorderRadius,
+                    ),
                   ),
                   child: Text(
-                      _formatDuration(dto.durationMs!),
+                    _formatDuration(dto.durationMs!),
                     style: TextStyle(
                       fontSize: AppTypography.xs,
                       color: AppColors.white,
@@ -494,7 +551,7 @@ class _MomentVideoCard extends StatelessWidget {
 
 // ── 互动操作行 ──────────────────────────────────────────────────────────────
 
-class _ActionRow extends StatelessWidget {
+class _ActionRow extends ConsumerWidget {
   const _ActionRow({required this.item, required this.isDark});
 
   final PostBaseDto item;
@@ -505,35 +562,70 @@ class _ActionRow extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final muted =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(postInteractionStateProvider);
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final likeCount = effectivePostLikeCount(
+      ref,
+      item.id,
+      fallback: item.likeCount,
+    );
+    final shareCount = effectivePostShareCount(
+      ref,
+      item.id,
+      fallback: item.shareCount,
+    );
+    final bookmarkCount = effectivePostBookmarkCount(
+      ref,
+      item.id,
+      fallback: item.favoriteCount,
+    );
+    final commentCount = effectivePostCommentCount(
+      ref,
+      item.id,
+      fallback: item.commentCount,
+    );
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         _chip(
-          child: Icon(CupertinoIcons.heart,
-              size: AppSpacing.iconMedium, color: muted),
-          label: _fmt(item.likeCount),
+          child: Icon(
+            CupertinoIcons.heart,
+            size: AppSpacing.iconMedium,
+            color: muted,
+          ),
+          label: _fmt(likeCount),
           muted: muted,
         ),
         _chip(
-          child: Icon(CupertinoIcons.arrowshape_turn_up_right,
-              size: AppSpacing.iconMedium, color: muted),
-          label: _fmt(item.shareCount),
+          child: Icon(
+            CupertinoIcons.arrowshape_turn_up_right,
+            size: AppSpacing.iconMedium,
+            color: muted,
+          ),
+          label: _fmt(shareCount),
           muted: muted,
         ),
         _chip(
-          child: Icon(CupertinoIcons.star,
-              size: AppSpacing.iconMedium, color: muted),
-          label: _fmt(item.favoriteCount),
+          child: Icon(
+            CupertinoIcons.star,
+            size: AppSpacing.iconMedium,
+            color: muted,
+          ),
+          label: _fmt(bookmarkCount),
           muted: muted,
         ),
         _chip(
-          child: Icon(CupertinoIcons.chat_bubble,
-              size: AppSpacing.iconMedium, color: muted),
-          label: _fmt(item.commentCount),
+          child: Icon(
+            CupertinoIcons.chat_bubble,
+            size: AppSpacing.iconMedium,
+            color: muted,
+          ),
+          label: _fmt(commentCount),
           muted: muted,
         ),
       ],

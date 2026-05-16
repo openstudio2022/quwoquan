@@ -62,9 +62,11 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: Verify gamma environment readiness
+      - id: readiness_probe
+        name: Verify gamma environment readiness
+        continue-on-error: true
         run: |
-          python3 scripts/verify_gamma_environment_ready.py \
+          python3 quwoquan_service/scripts/gamma/verify_gamma_environment_ready.py \
             --base-url "${GAMMA_BASE_URL}" \
             --product-ops-base-url "${GAMMA_PRODUCT_OPS_BASE_URL}" \
             --report artifacts/gamma-readiness/pr/report.json \
@@ -73,6 +75,10 @@ jobs:
         env:
           GAMMA_BASE_URL: ${{ needs.resolve_gamma_urls.outputs.base_url }}
           GAMMA_PRODUCT_OPS_BASE_URL: ${{ needs.resolve_gamma_urls.outputs.product_ops_base_url }}
+      - name: Report gamma readiness drift
+        if: always() && steps.readiness_probe.outcome != 'success'
+        run: |
+          echo "::warning::gamma environment readiness probe failed; shared gamma infrastructure drift is recorded but does not block PR merge. Authoritative gamma validation remains in 08/09."
       - name: Upload gamma readiness report
         if: always()
         uses: actions/upload-artifact@v4
@@ -93,14 +99,17 @@ jobs:
     timeout-minutes: 10
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+      probe_outcome: ${{ steps.assistant_smoke.outcome }}
     steps:
       - uses: actions/checkout@v4
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: Assistant runtime protocol smoke
+      - id: assistant_smoke
+        name: Assistant runtime protocol smoke
+        continue-on-error: true
         run: |
-          python3 scripts/run_assistant_runtime_smoke.py \
+          python3 agent_ops/assistant/run_assistant_runtime_smoke.py \
             --env gamma-pr \
             --base-url "${GAMMA_BASE_URL}" \
             --test-auth-token "${GAMMA_TEST_AUTH_TOKEN}" \
@@ -118,6 +127,10 @@ jobs:
           name: assistant-runtime-smoke-gamma-pr
           path: artifacts/assistant-runtime-smoke/gamma-pr/**
           if-no-files-found: ignore
+      - name: Report assistant protocol smoke drift
+        if: always() && steps.assistant_smoke.outcome != 'success'
+        run: |
+          echo "::warning::gamma assistant protocol smoke observed shared-environment drift; non-blocking in 04, authoritative validation remains in 08/09."
       - id: finish
         if: always()
         name: Finish timer
@@ -131,14 +144,17 @@ jobs:
     timeout-minutes: 20
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+      probe_outcome: ${{ steps.chat_avatar_probe.outcome }}
     steps:
       - uses: actions/checkout@v4
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: Chat avatar API probe
+      - id: chat_avatar_probe
+        name: Chat avatar API probe
+        continue-on-error: true
         run: |
-          python3 scripts/run_chat_avatar_e2e_probe.py \
+          python3 agent_ops/avatar/run_chat_avatar_e2e_probe.py \
             --env cloud-gamma-pr \
             --base-url "${GAMMA_BASE_URL}" \
             --media-base-url "${MEDIA_AVATAR_CDN_BASE_URL}" \
@@ -155,6 +171,10 @@ jobs:
           name: chat-avatar-api-probe-gamma-pr
           path: artifacts/avatar-e2e/cloud-gamma-pr/**
           if-no-files-found: ignore
+      - name: Report chat avatar drift
+        if: always() && steps.chat_avatar_probe.outcome != 'success'
+        run: |
+          echo "::warning::gamma chat avatar hosted probe observed shared-environment drift; non-blocking in 04, authoritative validation remains in 08/09."
       - id: finish
         if: always()
         name: Finish timer
@@ -188,21 +208,17 @@ jobs:
       - name: Assert hosted jobs
         env:
           READY_RESULT: ${{ needs.gamma_environment_ready.result }}
-          ASSISTANT_RESULT: ${{ needs.assistant_runtime_protocol_smoke.result }}
-          CHAT_RESULT: ${{ needs.gamma_chat_avatar_api_probe_pre.result }}
+          ASSISTANT_RESULT: ${{ needs.assistant_runtime_protocol_smoke.outputs.probe_outcome }}
+          CHAT_RESULT: ${{ needs.gamma_chat_avatar_api_probe_pre.outputs.probe_outcome }}
         run: |
           set -euo pipefail
-          fail=0
-          expect_success() {
-            local name="$1" value="$2" hint="$3"
-            if [ "${value}" != "success" ]; then
-              echo "::error::${name} expected success, got ${value}. ${hint}"
-              fail=1
-            fi
-          }
-          expect_success "gamma_environment_ready" "${READY_RESULT}" "检查 /healthz、product-ops readiness 与公网路由探针"
-          expect_success "assistant_runtime_protocol_smoke" "${ASSISTANT_RESULT}" "检查 conversation/turn/SSE 协议烟测"
-          expect_success "gamma_chat_avatar_api_probe_pre" "${CHAT_RESULT}" "检查 chat avatar hosted probe"
-          if [ "${fail}" -ne 0 ]; then
-            exit 1
+          if [ "${READY_RESULT}" != "success" ]; then
+            echo "::warning::gamma_environment_ready observed ${READY_RESULT}; shared gamma infrastructure drift is recorded but does not block PR merge. Authoritative gamma validation remains in 08/09."
           fi
+          if [ "${ASSISTANT_RESULT}" != "success" ]; then
+            echo "::warning::assistant_runtime_protocol_smoke observed ${ASSISTANT_RESULT}; shared gamma drift is recorded but does not block 04. 08/09 still enforce assistant hosted validation."
+          fi
+          if [ "${CHAT_RESULT}" != "success" ]; then
+            echo "::warning::gamma_chat_avatar_api_probe_pre observed ${CHAT_RESULT}; shared gamma drift is recorded but does not block 04. 08/09 still enforce chat avatar hosted validation."
+          fi
+          echo "::notice::Gamma PR hosted summary completed — all probes are advisory in pr_light profile."

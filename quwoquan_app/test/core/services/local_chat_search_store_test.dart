@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 
@@ -19,9 +21,8 @@ void main() {
       );
       namespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'user_001',
+          subAccountId: 'user_001',
           ownerUserId: 'user_001',
-          subAccountId: '',
           subjectType: 'owner',
           displayName: '测试用户',
           avatarUrl: '',
@@ -30,9 +31,8 @@ void main() {
       );
       subNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'subject_sub_001',
-          ownerUserId: 'user_001',
           subAccountId: 'sub_001',
+          ownerUserId: 'user_001',
           subjectType: 'sub_account',
           displayName: '子账号',
           avatarUrl: '',
@@ -61,22 +61,24 @@ void main() {
       );
       await store.upsertMessages(
         namespace: namespace,
-        conversation: const <String, dynamic>{
-          'conversationId': 'conv_1',
-          'title': '摄影讨论组',
-          'type': 'group',
-        },
-        messages: <Map<String, dynamic>>[
-          <String, dynamic>{
+        conversation: ConversationCacheRecord.fromWireMap(
+          const <String, dynamic>{
+            'conversationId': 'conv_1',
+            'title': '摄影讨论组',
+            'type': 'group',
+          },
+        ),
+        messages: <LocalChatSearchMessageRecord>[
+          LocalChatSearchMessageRecord.fromWireMap(const <String, dynamic>{
             'messageId': 'msg_1',
             'conversationId': 'conv_1',
             'content': '今晚讨论摄影布光技巧',
             'senderDisplayName': '小趣',
-            'senderProfileSubjectId': 'u_1',
+            'senderSubAccountId': 'u_1',
             'type': 'text',
             'seq': 1,
             'timestamp': '2026-03-27T10:00:00.000Z',
-          },
+          }),
         ],
       );
 
@@ -138,22 +140,24 @@ void main() {
       );
       await store.upsertMessages(
         namespace: namespace,
-        conversation: const <String, dynamic>{
-          'conversationId': 'conv_owner',
-          'title': '摄影讨论组',
-          'type': 'group',
-        },
-        messages: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'messageId': 'msg_owner_1',
+        conversation: ConversationCacheRecord.fromWireMap(
+          const <String, dynamic>{
             'conversationId': 'conv_owner',
-            'content': '今晚讨论摄影布光技巧',
-            'senderDisplayName': '小趣',
-            'senderProfileSubjectId': 'u_1',
-            'type': 'text',
-            'seq': 1,
-            'timestamp': '2026-03-27T10:00:00.000Z',
+            'title': '摄影讨论组',
+            'type': 'group',
           },
+        ),
+        messages: const <LocalChatSearchMessageRecord>[
+          LocalChatSearchMessageRecord(
+            messageId: 'msg_owner_1',
+            conversationId: 'conv_owner',
+            contentPreview: '今晚讨论摄影布光技巧',
+            senderDisplayName: '小趣',
+            senderSubAccountId: 'u_1',
+            messageType: 'text',
+            seq: 1,
+            timestamp: '2026-03-27T10:00:00.000Z',
+          ),
         ],
       );
       await store.upsertConversations(
@@ -168,22 +172,24 @@ void main() {
       );
       await store.upsertMessages(
         namespace: subNamespace,
-        conversation: const <String, dynamic>{
-          'conversationId': 'conv_sub',
-          'title': '旅行手账',
-          'type': 'group',
-        },
-        messages: const <Map<String, dynamic>>[
-          <String, dynamic>{
-            'messageId': 'msg_sub_1',
+        conversation: ConversationCacheRecord.fromWireMap(
+          const <String, dynamic>{
             'conversationId': 'conv_sub',
-            'content': '本周末去西湖拍照',
-            'senderDisplayName': '小趣',
-            'senderProfileSubjectId': 'u_1',
-            'type': 'text',
-            'seq': 1,
-            'timestamp': '2026-03-27T11:00:00.000Z',
+            'title': '旅行手账',
+            'type': 'group',
           },
+        ),
+        messages: const <LocalChatSearchMessageRecord>[
+          LocalChatSearchMessageRecord(
+            messageId: 'msg_sub_1',
+            conversationId: 'conv_sub',
+            contentPreview: '本周末去西湖拍照',
+            senderDisplayName: '小趣',
+            senderSubAccountId: 'u_1',
+            messageType: 'text',
+            seq: 1,
+            timestamp: '2026-03-27T11:00:00.000Z',
+          ),
         ],
       );
 

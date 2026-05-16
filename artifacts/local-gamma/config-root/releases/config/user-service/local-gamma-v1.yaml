@@ -1,0 +1,20 @@
+config:
+  version: "local-gamma-v1"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+service:
+  http:
+    addr: ":18082"
+postgres:
+  dsn: "postgres://quwoquan:quwoquan@postgres:5432/quwoquan?sslmode=disable"
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime_minutes: 30
+mongodb:
+  uri: "mongodb://mongodb:27017"
+  database: "quwoquan_user"
+redis:
+  general:
+    mode: standalone
+    addr: "redis:6379"
+    db: 0

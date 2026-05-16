@@ -9,11 +9,13 @@ class ArticlePageTextureSnapshot {
     required this.image,
     required this.logicalSize,
     required this.pixelRatio,
+    this.semanticSurfaceKind,
   });
 
   final ui.Image image;
   final Size logicalSize;
   final double pixelRatio;
+  final String? semanticSurfaceKind;
 
   double get pixelWidthPerLogical {
     if (logicalSize.width <= 0) {
@@ -106,7 +108,7 @@ class ArticleBackwardPageSurfaceBinding {
 
   int get leafRectoPageIndex => leafPageIndex;
 
-  int get leafVersoPageIndex => coveredPageIndex;
+  int get leafVersoPageIndex => leafPageIndex;
 
   List<int> get prioritizedPageIndices {
     final indices = <int>[coveredPageIndex];
@@ -258,7 +260,7 @@ ArticlePageTextureBinding? resolveArticlePageTextureBinding({
   return ArticlePageTextureBinding(
     direction: direction,
     rectoPageIndex: flippingPageIndex,
-    versoPageIndex: currentPageIndex,
+    versoPageIndex: flippingPageIndex,
     bottomPageIndex: currentPageIndex,
   );
 }

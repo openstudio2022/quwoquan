@@ -1,0 +1,177 @@
+schemaVersion: "1"
+description: >
+  标签路径策略声明。severity=blocking 的策略会阻断 gate；severity=warning 仅给出提示，不阻断流程。
+  原则：只有 2 条全局 blocking，其余路径策略默认 warning。
+
+policies:
+  # ─────────────────────────────────────────────
+  # 全局 BLOCKING（共 2 条）
+  # ─────────────────────────────────────────────
+  - id: tagref_resolvable
+    description: >
+      所有实体/post/圈子/用户的 tagRefs 字段中每一个 tagRef 必须能在
+      publish/v1/tags 下找到对应的 _definition.json 节点。
+      防止死引用导致搜索/推荐无法命中。
+    severity: blocking
+    appliesTo: [entity, post, circle, user]
+
+  - id: post_angle_dir_match
+    description: >
+      post 目录结构为 posts/{载体}/{内容角度路径段}/{title}/{seq}/，
+      其中 {内容角度路径段} 必须与该 post 的 manifest.json.tagRefs 中
+      某个 Format/内容角度/* 路径的最后一个路径段完全相等。
+      例：目录段为 "攻略"，则 tagRefs 必须含 "Format/内容角度/攻略" 或其子路径。
+    severity: blocking
+    appliesTo: [post]
+
+  # ─────────────────────────────────────────────
+  # WARNING 路径策略（不阻断，用于 suggest/verify 提示）
+  # ─────────────────────────────────────────────
+  - id: audience_country_leaf_only
+    description: >
+      Audience/用户/国籍 下引用建议到叶子节点（具体国家名），
+      同时建议与 Topic/地理/行政区 下对应节点保持一致。
+    path: Audience/用户/国籍
+    pathPolicy: leaf-only
+    refHint: Topic/地理/行政区
+    severity: warning
+
+  - id: audience_ethnicity_leaf_only
+    description: Audience/用户/族群 建议引用到叶子节点（具体族裔名），纯客观分类，不做推断。
+    path: Audience/用户/族群
+    pathPolicy: leaf-only
+    severity: warning
+
+  - id: audience_language_leaf_only
+    description: Audience/用户/语言 建议引用到叶子节点（具体语言名）。
+    path: Audience/用户/语言
+    pathPolicy: leaf-only
+    severity: warning
+
+  - id: audience_gender_leaf_only
+    description: Audience/用户/性别 建议引用到叶子节点。
+    path: Audience/用户/性别
+    pathPolicy: leaf-only
+    severity: warning
+
+  - id: audience_generation_leaf_only
+    description: Audience/用户/代际 建议引用到叶子节点，如 00后/90后。
+    path: Audience/用户/代际
+    pathPolicy: leaf-only
+    severity: warning
+
+  - id: audience_education_leaf_only
+    description: Audience/用户/教育/学历 建议引用到叶子节点。
+    path: Audience/用户/教育/学历
+    pathPolicy: leaf-only
+    severity: warning
+
+  - id: creator_fanscale_leaf_only
+    description: Audience/创作者/粉丝量级 建议引用到叶子节点。
+    path: Audience/创作者/粉丝量级
+    pathPolicy: leaf-only
+    severity: warning
+
+  - id: topic_mbti_leaf_only
+    description: Topic/健康养生/心理健康/MBTI 建议引用到具体类型（如INTJ）。
+    path: Topic/健康养生/心理健康/MBTI
+    pathPolicy: leaf-only
+    severity: warning
+
+  - id: topic_zodiac_leaf_only
+    description: Topic/命理玄学/星座 建议引用到具体星座。
+    path: Topic/命理玄学/星座
+    pathPolicy: leaf-only
+    severity: warning
+
+  - id: topic_time_prefer_leaf
+    description: Topic/时间 建议引用到具体时间节点（季节/节日/节气）。
+    path: Topic/时间
+    pathPolicy: prefer-leaf
+    severity: warning
+
+  - id: entity_brand_prefer_leaf
+    description: >
+      Entity/品牌 下建议引用到最具体的品牌类型（如 餐饮品牌/火锅品牌），
+      而具体品牌实例（如海底捞）进入 entities/ 目录，通过 tagRefs 引用此处类型标签。
+    path: Entity/品牌
+    pathPolicy: prefer-leaf
+    severity: warning
+
+  - id: entity_person_prefer_leaf
+    description: >
+      Entity/人物 建议引用到具体人物类型（如 历史人物类型/文人），
+      具体人物实例进入 entities/人物/ 不进 tags。
+    path: Entity/人物
+    pathPolicy: prefer-leaf
+    severity: warning
+
+  - id: entity_product_prefer_leaf
+    description: >
+      Entity/商品 建议引用到具体商品类型（如 美妆类型/护肤），
+      具体商品实例进入 entities/商品/ 不进 tags。
+    path: Entity/商品
+    pathPolicy: prefer-leaf
+    severity: warning
+
+  - id: entity_stay_type_prefer_leaf
+    description: >
+      Entity/地点/住宿/住宿业态 建议引用到具体业态（如 酒店/民宿/度假村），
+      具体住宿实体进入 entities/地点/{业态}/{名称}/ 不进 tags。
+    path: Entity/地点/住宿/住宿业态
+    pathPolicy: prefer-leaf
+    severity: warning
+
+  - id: entity_stay_grade_prefer_leaf
+    description: >
+      Entity/地点/住宿/档次等级 建议引用到具体等级（如 五星级/经济型），
+      避免只标到"档次等级"中间节点。
+    path: Entity/地点/住宿/档次等级
+    pathPolicy: prefer-leaf
+    severity: warning
+
+  - id: entity_stay_purpose_prefer_leaf
+    description: >
+      Entity/地点/住宿/功能定位 建议引用到具体定位（如 商务住宿/亲子友好住宿），
+      避免只标到"功能定位"中间节点。
+    path: Entity/地点/住宿/功能定位
+    pathPolicy: prefer-leaf
+    severity: warning
+
+  # ─────────────────────────────────────────────
+  # 容量平衡（warning，超出阈值提示）
+  # ─────────────────────────────────────────────
+  - id: group_capacity_balance
+    description: >
+      每分组下一级维度数建议 4-12 个；每维度第一层节点建议 4-30 个；
+      每节点子节点建议 4-100 个。超出阈值输出 WARNING 不阻断。
+      Topic/事件话题 及 Topic/时间 不参与容量上限限制（时效性节点特殊）。
+    severity: warning
+    thresholds:
+      groupDimMin: 4
+      groupDimMax: 12
+      dimFirstLayerMin: 4
+      dimFirstLayerMax: 30
+      nodeChildrenMin: 2
+      nodeChildrenMax: 100
+    excludePaths:
+      - Topic/事件话题
+      - Topic/时间
+
+# ─────────────────────────────────────────────
+# 已知互斥对（warning，标注 G27 检查的依据）
+# ─────────────────────────────────────────────
+
+mutex_pairs:
+  description: >
+    语义互斥标签对，同一个 post/entity 的 tagRefs 不应同时出现。
+    severity=warning，门禁 G27 检查时输出警告但不阻断。
+  pairs:
+    - ["Topic/旅行/旅行主题/海岛度假", "Topic/旅行/旅行主题/雪山探险"]
+    - ["Topic/旅行/旅行主题/避暑游", "Topic/旅行/旅行主题/避寒游"]
+    - ["Topic/旅行/出行方式/自驾", "Topic/旅行/出行方式/跟团巴士"]
+    - ["Topic/旅行/出行方式/飞机航班", "Topic/旅行/出行方式/高铁铁路"]
+    - ["Topic/旅行/行程形态/跟团游", "Topic/旅行/行程形态/自由行"]
+    - ["Topic/旅行/旅行时长/当日往返", "Topic/旅行/旅行时长/10日以上深度"]
+    - ["Topic/旅行/住宿/酒店体验", "Topic/旅行/住宿/青旅住宿"]
+    - ["Entity/地点/住宿/档次等级/豪华型", "Entity/地点/住宿/档次等级/经济型"]

@@ -35,7 +35,10 @@ class CreatePostRequestWire {
     this.tags,
     this.mediaUrls,
     this.coverUrl,
-    this.articleDocument,
+    this.articleMarkdown,
+    this.articleMarkdownVersion,
+    this.articleAssetManifest,
+    this.articleRenderProfile,
     this.videoUrl,
     this.illustrationAssetId,
     this.location,
@@ -52,8 +55,6 @@ class CreatePostRequestWire {
     this.sourceType,
     this.deviceInfo,
     this.publishLocation,
-    this.personaId,
-    this.profileSubjectId,
     this.authorDisplayNameSnapshot,
     this.authorAvatarUrlSnapshot,
     this.personaContextVersion,
@@ -68,7 +69,10 @@ class CreatePostRequestWire {
   final List<String>? tags;
   final List<String>? mediaUrls;
   final String? coverUrl;
-  final CloudJsonMap? articleDocument;
+  final String? articleMarkdown;
+  final String? articleMarkdownVersion;
+  final CloudJsonMap? articleAssetManifest;
+  final CloudJsonMap? articleRenderProfile;
   final String? videoUrl;
   final String? illustrationAssetId;
   final CloudJsonMap? location;
@@ -85,8 +89,6 @@ class CreatePostRequestWire {
   final String? sourceType;
   final CloudJsonMap? deviceInfo;
   final CloudJsonMap? publishLocation;
-  final String? personaId;
-  final String? profileSubjectId;
   final String? authorDisplayNameSnapshot;
   final String? authorAvatarUrlSnapshot;
   final String? personaContextVersion;
@@ -102,7 +104,10 @@ class CreatePostRequestWire {
     if (tags != null) m['tags'] = tags!;
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
-    if (articleDocument != null) m['articleDocument'] = articleDocument!;
+    _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
+    _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
+    if (articleAssetManifest != null) m['articleAssetManifest'] = articleAssetManifest!;
+    if (articleRenderProfile != null) m['articleRenderProfile'] = articleRenderProfile!;
     _mutationPutOpt(m, 'videoUrl', videoUrl);
     _mutationPutOpt(m, 'illustrationAssetId', illustrationAssetId);
     if (location != null) m['location'] = location!;
@@ -119,8 +124,6 @@ class CreatePostRequestWire {
     _mutationPutOpt(m, 'sourceType', sourceType);
     if (deviceInfo != null) m['deviceInfo'] = deviceInfo!;
     if (publishLocation != null) m['publishLocation'] = publishLocation!;
-    _mutationPutOpt(m, 'personaId', personaId);
-    _mutationPutOpt(m, 'profileSubjectId', profileSubjectId);
     _mutationPutOpt(m, 'authorDisplayNameSnapshot', authorDisplayNameSnapshot);
     _mutationPutOpt(m, 'authorAvatarUrlSnapshot', authorAvatarUrlSnapshot);
     _mutationPutOpt(m, 'personaContextVersion', personaContextVersion);
@@ -138,7 +141,10 @@ class CreatePostRequestWire {
       tags: _mutationStringList(m['tags']),
       mediaUrls: _mutationStringList(m['mediaUrls']),
       coverUrl: m['coverUrl']?.toString(),
-      articleDocument: _mutationStringKeyedMap(m['articleDocument']),
+      articleMarkdown: m['articleMarkdown']?.toString(),
+      articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),
+      articleAssetManifest: _mutationStringKeyedMap(m['articleAssetManifest']),
+      articleRenderProfile: _mutationStringKeyedMap(m['articleRenderProfile']),
       videoUrl: m['videoUrl']?.toString(),
       illustrationAssetId: m['illustrationAssetId']?.toString(),
       location: _mutationStringKeyedMap(m['location']),
@@ -155,8 +161,6 @@ class CreatePostRequestWire {
       sourceType: m['sourceType']?.toString(),
       deviceInfo: _mutationStringKeyedMap(m['deviceInfo']),
       publishLocation: _mutationStringKeyedMap(m['publishLocation']),
-      personaId: m['personaId']?.toString(),
-      profileSubjectId: m['profileSubjectId']?.toString(),
       authorDisplayNameSnapshot: m['authorDisplayNameSnapshot']?.toString(),
       authorAvatarUrlSnapshot: m['authorAvatarUrlSnapshot']?.toString(),
       personaContextVersion: m['personaContextVersion']?.toString(),
@@ -175,7 +179,10 @@ class UpdatePostRequestWire {
     this.tags,
     this.mediaUrls,
     this.coverUrl,
-    this.articleDocument,
+    this.articleMarkdown,
+    this.articleMarkdownVersion,
+    this.articleAssetManifest,
+    this.articleRenderProfile,
     this.videoUrl,
     this.illustrationAssetId,
     this.location,
@@ -198,7 +205,10 @@ class UpdatePostRequestWire {
   final List<String>? tags;
   final List<String>? mediaUrls;
   final String? coverUrl;
-  final CloudJsonMap? articleDocument;
+  final String? articleMarkdown;
+  final String? articleMarkdownVersion;
+  final CloudJsonMap? articleAssetManifest;
+  final CloudJsonMap? articleRenderProfile;
   final String? videoUrl;
   final String? illustrationAssetId;
   final CloudJsonMap? location;
@@ -222,7 +232,10 @@ class UpdatePostRequestWire {
     if (tags != null) m['tags'] = tags!;
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
-    if (articleDocument != null) m['articleDocument'] = articleDocument!;
+    _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
+    _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
+    if (articleAssetManifest != null) m['articleAssetManifest'] = articleAssetManifest!;
+    if (articleRenderProfile != null) m['articleRenderProfile'] = articleRenderProfile!;
     _mutationPutOpt(m, 'videoUrl', videoUrl);
     _mutationPutOpt(m, 'illustrationAssetId', illustrationAssetId);
     if (location != null) m['location'] = location!;
@@ -248,7 +261,10 @@ class UpdatePostRequestWire {
       tags: _mutationStringList(m['tags']),
       mediaUrls: _mutationStringList(m['mediaUrls']),
       coverUrl: m['coverUrl']?.toString(),
-      articleDocument: _mutationStringKeyedMap(m['articleDocument']),
+      articleMarkdown: m['articleMarkdown']?.toString(),
+      articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),
+      articleAssetManifest: _mutationStringKeyedMap(m['articleAssetManifest']),
+      articleRenderProfile: _mutationStringKeyedMap(m['articleRenderProfile']),
       videoUrl: m['videoUrl']?.toString(),
       illustrationAssetId: m['illustrationAssetId']?.toString(),
       location: _mutationStringKeyedMap(m['location']),
@@ -375,7 +391,10 @@ class PromotePostToWorkRequestWire {
     this.summary,
     this.tags,
     this.coverUrl,
-    this.articleDocument,
+    this.articleMarkdown,
+    this.articleMarkdownVersion,
+    this.articleAssetManifest,
+    this.articleRenderProfile,
     this.primaryHomepageId,
     this.primaryHomepageType,
     this.primaryHomepageSnapshot,
@@ -391,7 +410,10 @@ class PromotePostToWorkRequestWire {
   final String? summary;
   final List<String>? tags;
   final String? coverUrl;
-  final CloudJsonMap? articleDocument;
+  final String? articleMarkdown;
+  final String? articleMarkdownVersion;
+  final CloudJsonMap? articleAssetManifest;
+  final CloudJsonMap? articleRenderProfile;
   final String? primaryHomepageId;
   final String? primaryHomepageType;
   final CloudJsonMap? primaryHomepageSnapshot;
@@ -408,7 +430,10 @@ class PromotePostToWorkRequestWire {
     _mutationPutOpt(m, 'summary', summary);
     if (tags != null) m['tags'] = tags!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
-    if (articleDocument != null) m['articleDocument'] = articleDocument!;
+    _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
+    _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
+    if (articleAssetManifest != null) m['articleAssetManifest'] = articleAssetManifest!;
+    if (articleRenderProfile != null) m['articleRenderProfile'] = articleRenderProfile!;
     _mutationPutOpt(m, 'primaryHomepageId', primaryHomepageId);
     _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
     if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
@@ -427,7 +452,10 @@ class PromotePostToWorkRequestWire {
       summary: m['summary']?.toString(),
       tags: _mutationStringList(m['tags']),
       coverUrl: m['coverUrl']?.toString(),
-      articleDocument: _mutationStringKeyedMap(m['articleDocument']),
+      articleMarkdown: m['articleMarkdown']?.toString(),
+      articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),
+      articleAssetManifest: _mutationStringKeyedMap(m['articleAssetManifest']),
+      articleRenderProfile: _mutationStringKeyedMap(m['articleRenderProfile']),
       primaryHomepageId: m['primaryHomepageId']?.toString(),
       primaryHomepageType: m['primaryHomepageType']?.toString(),
       primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),

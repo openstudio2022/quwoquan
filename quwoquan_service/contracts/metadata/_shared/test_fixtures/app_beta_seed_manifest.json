@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "app-seed-manifest.v1",
+  "schemaVersion": "app-seed-manifest",
   "environment": "beta",
   "description": "本地端云 beta 联调 seed manifest，供自动化与人工 beta 共用。",
   "seedRefs": [

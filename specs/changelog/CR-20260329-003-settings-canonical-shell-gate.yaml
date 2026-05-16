@@ -6,9 +6,9 @@ status: baseline_complete
 
 affected_nodes:
   - specs/ux/page-layout-semantics.md
-  - scripts/settings_canonical_manifest.yaml
-  - scripts/verify_settings_canonical.py
-  - scripts/gate_repo.sh
+  - quwoquan_app/scripts/settings/settings_canonical_manifest.yaml
+  - quwoquan_app/scripts/settings/verify_settings_canonical.py
+  - agent_ops/gate/gate_repo.sh
   - quwoquan_app/lib/components/settings_form
   - quwoquan_app/lib/ui/settings/pages
   - quwoquan_app/lib/ui/chat/pages

@@ -17,11 +17,12 @@ collections:
       - { name: idx_posts_location, keys: { location: "2dsphere" }, sparse: true }
       - { name: idx_posts_moderation, keys: { moderationStatus: 1, createdAt: -1 } }
       - { name: idx_posts_source, keys: { sourceType: 1, sourcePostId: 1 }, sparse: true }
+      - { name: idx_posts_article_markdown_digest, keys: { articleMarkdownDigest: 1 }, sparse: true }
     search_indexes:
       - name: search_posts_text
         type: text
-        fields: [title, body, locationName, tags]
-        weights: { title: 10, tags: 5, locationName: 3, body: 1 }
+        fields: [title, body, locationName, tags, articleMarkdown]
+        weights: { title: 10, tags: 5, locationName: 3, body: 1, articleMarkdown: 1 }
     vector_indexes:
       - name: vector_posts_embedding
         field: embedding

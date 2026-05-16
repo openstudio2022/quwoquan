@@ -17,8 +17,8 @@
 | 阶段 | 命令/动作 | 门禁 | 输出 |
 |------|-----------|------|------|
 | 1. 开发+入库 | `/dev` → `/commit`（或 `/deliver`） | G2 → G3 → G4 | `/dev` 完成四层自验证、gray-release ready 与自动归档；`/commit` 前本地 `gate-local-gamma` 通过并完成入库 |
-| 2. PR 主门禁 / ECS gamma | `03` / `04` / `05` | G5a | ECS gamma pre 与本地 Android/iOS 设备证据通过 |
-| 3. 集成验证收口 | hosted + self-hosted gamma 旅程 | G5b | assistant/avatar gamma 基线通过 |
+| 2. PR 主门禁 | `03` / `04`（pr_light）/ `05`（pr_light） | G5a | gamma readiness 通过 + alpha/beta 设备矩阵通过 |
+| 3. 集成验证收口 | `09`（nightly_full）或 `08`（manual_full） | G5b | 完整 ECS deploy + full semantic smoke + Patrol UI + 全设备矩阵通过 |
 | 4. 灰度到 prod | `config-gray-rollout` | G5c | prod 灰度完成，SLO 通过 |
 
 ---
@@ -98,7 +98,7 @@ gh workflow run "08. Deploy Gamma ECS"
 2) hosted pre core 执行：
 
 - 打包 gamma ECS bundle
-- `scripts/deploy_gamma_ecs.sh` 部署 ECS pre
+- `agent_ops/deploy/gamma/deploy_gamma_ecs.sh` 部署 ECS pre
 - assistant gamma smoke
 - gamma API contract
 - chat-avatar API probe
@@ -130,8 +130,8 @@ make test-api-contract
 ```bash
 python3 scripts/run_assistant_device_matrix_ci.py --platform android
 python3 scripts/run_assistant_device_matrix_ci.py --platform ios
-python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android
-python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
+python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform android
+python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform ios
 ```
 
 CI 使用 `.github/workflows/pre-release-gate.yml` 与 `.github/workflows/app-env-device-matrix-self-hosted.yml` 在本机 macOS self-hosted runner 上动态发现当前可见的 Android/iOS 设备，并要求两个平台都通过。artifact 必须包含设备清单、原始日志、命令清单与截图证据。

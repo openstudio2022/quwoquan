@@ -3,7 +3,7 @@
   "personas": [
     {
       "userId": "user_001",
-      "personaId": "pa_primary",
+      "subAccountId": "pa_primary",
       "username": "main",
       "nickname": "主分身",
       "phone": "13800000000",
@@ -15,7 +15,7 @@
     },
     {
       "userId": "user_001",
-      "personaId": "pa_sidecar",
+      "subAccountId": "pa_sidecar",
       "username": "main",
       "nickname": "副分身",
       "contentSubjectIds": ["pa_sidecar"],
@@ -27,7 +27,7 @@
     {
       "surface": "graph_followers",
       "payload": {
-        "profileSubjectId": "pa_sidecar"
+        "subAccountId": "pa_sidecar"
       }
     }
   ]

@@ -1,0 +1,25 @@
+{
+  "capturedAt": "2026-05-05T02:05:09.542483Z",
+  "target": "test/patrol/discovery/feed_load_test.dart",
+  "deviceId": "4426EB5F-ED62-4078-B491-DCAFACB34AC3",
+  "command": [
+    "patrol",
+    "test",
+    "-t",
+    "test/patrol/discovery/feed_load_test.dart",
+    "-d",
+    "4426EB5F-ED62-4078-B491-DCAFACB34AC3",
+    "--dart-define=RUN_T4_PATROL=true",
+    "--dart-define=APP_RUNTIME_ENV=gamma",
+    "--dart-define=APP_DATA_SOURCE=remote",
+    "--dart-define=API_CONTRACT_ENV=gamma",
+    "--dart-define=CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:18180",
+    "--dart-define=API_CONTRACT_BASE_URL=http://127.0.0.1:18180",
+    "--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=http://127.0.0.1:18186",
+    "--dart-define=TEST_AUTH_TOKEN=local-gamma-token",
+    "--dart-define=MEDIA_AVATAR_CDN_BASE_URL=http://127.0.0.1:18180",
+    "--dart-define=MEDIA_IMAGE_CDN_BASE_URL=http://127.0.0.1:18180",
+    "--dart-define=MEDIA_VIDEO_CDN_BASE_URL=http://127.0.0.1:18180",
+    "--dart-define=MEDIA_UPLOAD_BASE_URL=http://127.0.0.1:18180"
+  ]
+}

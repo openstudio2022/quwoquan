@@ -112,7 +112,7 @@ scenario_acceptance:
         - graph isolation leakage regression test
         - owner mapping hidden contract test
       recorded:
-        - "T3: `go test ./services/user-service/tests -run 'Test(ProfileSubjectView_|SearchSocialRelations_|ListFollowers_)'`"
+        - "T3: `go test ./services/user-service/tests -run 'Test(SubAccountView_|SearchSocialRelations_|ListFollowers_)'`"
         - "公开 graph 列表、搜索结果与 capability 响应已不再透传 `ownerUserId`，并补齐同 owner 多分身粉丝列表的隐藏映射回归；共同粉丝 / mutual 反推同 owner 的跨域 T4 旅程仍待补齐"
     status: partial
 

@@ -1,0 +1,69 @@
+id: CR-20260508-019
+title: freeze markdown article kernel baseline
+slug: markdown-article-kernel
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-type-framework
+  - specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel
+  - specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+  - specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update--create-entry-location-visibility-circle
+
+entries:
+  - timestamp: "2026-05-08T18:14:00+08:00"
+    summary: 冻结 Markdown 长文内核基线，将长文唯一持久化真相源从 `articleDocument` 切换为 `articleMarkdown + articleAssetManifest`。
+    reason: AI 生成、用户编辑、冷启动生产、云端存储与端侧渲染需要共享同一内容真相；继续以 `articleDocument` 作为持久化主链会导致编辑、分页、模板和数据工程长期分叉。
+    change_type:
+      - baseline
+      - redesign
+      - metadata_first
+      - breaking_contract
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/spec.md
+        sections:
+          - 目标
+          - QWQ Rich Markdown v1
+          - 核心业务对象
+          - 端云一致性
+          - 冷启动数据要求
+      - path: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/design.md
+        sections:
+          - 设计决策
+          - Markdown 规范设计
+          - AST 模型设计
+          - 分页设计
+          - 云端契约设计
+          - quwoquan_data 设计
+      - path: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - A4
+          - A5
+          - A6
+          - A7
+          - A8
+      - path: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/metadata-change-draft.yaml
+        sections:
+          - content_post
+          - media_asset
+          - codegen
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 应用尚未正式上线，存量 `articleDocument` 预制长文数据全部重生成，不做兼容保留。
+      - 新写入路径禁止同时保存 Markdown 与 `articleDocument` 两套长文真相源。
+      - 后续开发必须按 metadata -> codegen -> 业务逻辑 -> 测试顺序推进。

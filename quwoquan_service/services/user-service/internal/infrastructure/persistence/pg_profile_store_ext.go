@@ -114,6 +114,10 @@ func scanUserProfileRow(rows pgx.Rows) (*model.UserProfile, error) {
 	e := &model.UserProfile{}
 	err := rows.Scan(
 		&e.UserID,
+		&e.AccountState,
+		&e.IdentityOrigin,
+		&e.LogicalShard,
+		&e.AnonymousRetentionPolicy,
 		&e.Phone,
 		&e.Nickname,
 		&e.AvatarURL,

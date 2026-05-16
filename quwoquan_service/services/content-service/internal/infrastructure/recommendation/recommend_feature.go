@@ -53,6 +53,7 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 	}
 
 	tagCounts := map[string]int{}
+	authorCounts := map[string]int{}
 	for _, raw := range events {
 		ev, ok := raw.(map[string]any)
 		if !ok {
@@ -62,11 +63,17 @@ func (p *RecommendFeatureProjector) onBehaviorBatch(ctx context.Context, event P
 		for _, t := range tags {
 			tagCounts[t]++
 		}
+		if authorID := strVal(ev, "authorId"); authorID != "" {
+			authorCounts[authorID]++
+		}
 	}
 
 	inc := bson.M{}
 	for tag, count := range tagCounts {
 		inc["userFeatures.tagInteraction."+tag] = count
+	}
+	for author, count := range authorCounts {
+		inc["userFeatures.authorInteraction."+author] = count
 	}
 	inc["userFeatures.totalEvents"] = len(events)
 
@@ -129,23 +136,25 @@ func NewFeatureStore(db *mongo.Database) *FeatureStore {
 
 // UserFeatures holds aggregated user-level features for scoring.
 type UserFeatures struct {
-	UserID          string            `bson:"userId"`
-	TagInteraction  map[string]int    `bson:"tagInteraction"`
-	TotalEvents     int               `bson:"totalEvents"`
-	TotalLikes      int               `bson:"totalLikes"`
-	TotalFavorites  int               `bson:"totalFavorites"`
-	TotalShares     int               `bson:"totalShares"`
+	UserID            string            `bson:"userId"`
+	TagInteraction    map[string]int    `bson:"tagInteraction"`
+	AuthorInteraction map[string]int    `bson:"authorInteraction"`
+	TotalEvents       int               `bson:"totalEvents"`
+	TotalLikes        int               `bson:"totalLikes"`
+	TotalFavorites    int               `bson:"totalFavorites"`
+	TotalShares       int               `bson:"totalShares"`
 }
 
 func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*UserFeatures, error) {
 	var doc struct {
 		UserID       string `bson:"userId"`
 		UserFeatures struct {
-			TagInteraction map[string]int `bson:"tagInteraction"`
-			TotalEvents    int            `bson:"totalEvents"`
-			TotalLikes     int            `bson:"totalLikes"`
-			TotalFavorites int            `bson:"totalFavorites"`
-			TotalShares    int            `bson:"totalShares"`
+			TagInteraction    map[string]int `bson:"tagInteraction"`
+			AuthorInteraction map[string]int `bson:"authorInteraction"`
+			TotalEvents       int            `bson:"totalEvents"`
+			TotalLikes        int            `bson:"totalLikes"`
+			TotalFavorites    int            `bson:"totalFavorites"`
+			TotalShares       int            `bson:"totalShares"`
 		} `bson:"userFeatures"`
 	}
 
@@ -158,12 +167,13 @@ func (s *FeatureStore) GetUserFeatures(ctx context.Context, userID string) (*Use
 	}
 
 	return &UserFeatures{
-		UserID:         doc.UserID,
-		TagInteraction: doc.UserFeatures.TagInteraction,
-		TotalEvents:    doc.UserFeatures.TotalEvents,
-		TotalLikes:     doc.UserFeatures.TotalLikes,
-		TotalFavorites: doc.UserFeatures.TotalFavorites,
-		TotalShares:    doc.UserFeatures.TotalShares,
+		UserID:            doc.UserID,
+		TagInteraction:    doc.UserFeatures.TagInteraction,
+		AuthorInteraction: doc.UserFeatures.AuthorInteraction,
+		TotalEvents:       doc.UserFeatures.TotalEvents,
+		TotalLikes:        doc.UserFeatures.TotalLikes,
+		TotalFavorites:    doc.UserFeatures.TotalFavorites,
+		TotalShares:       doc.UserFeatures.TotalShares,
 	}, nil
 }
 
@@ -180,17 +190,27 @@ func (s *FeatureStore) GetFeatures(ctx context.Context, userID string) (*rtrec.U
 		tagAffinities[tag] = float64(count)
 	}
 
+	authorAffinities := make(map[string]float64, len(raw.AuthorInteraction))
+	for author, count := range raw.AuthorInteraction {
+		authorAffinities[author] = float64(count)
+	}
+
 	var engagementRate float64
 	if raw.TotalEvents > 0 {
 		engagementRate = float64(raw.TotalLikes+raw.TotalFavorites+raw.TotalShares) / float64(raw.TotalEvents)
 	}
 
 	return &rtrec.UserFeatureVector{
-		TagAffinities:  tagAffinities,
-		TotalLikes:     raw.TotalLikes,
-		TotalFavorites: raw.TotalFavorites,
-		TotalShares:    raw.TotalShares,
-		TotalEvents:    raw.TotalEvents,
-		EngagementRate: engagementRate,
+		TagAffinities:    tagAffinities,
+		AuthorAffinities: authorAffinities,
+		TotalLikes:       raw.TotalLikes,
+		TotalFavorites:   raw.TotalFavorites,
+		TotalShares:      raw.TotalShares,
+		TotalEvents:      raw.TotalEvents,
+		EngagementRate:   engagementRate,
+		LikeLevel:        rtrec.MapCountToLevel(raw.TotalLikes),
+		FavoriteLevel:    rtrec.MapCountToLevel(raw.TotalFavorites),
+		ShareLevel:       rtrec.MapCountToLevel(raw.TotalShares),
+		EventLevel:       rtrec.MapCountToLevel(raw.TotalEvents),
 	}, nil
 }

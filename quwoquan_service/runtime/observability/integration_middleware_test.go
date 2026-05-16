@@ -73,7 +73,7 @@ func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
 	req.Header.Set("X-Trace-Id", "APP.sess.chat.message.create.t1.r1")
 	req.Header.Set("X-Request-Id", "APP.chat.message.create.t1.r1")
 	req.Header.Set("X-Client-Session-Id", "sess-001")
-	req.Header.Set("X-User-Id", "u-1")
+	req.Header.Set("X-Client-User-Id", "u-1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -269,7 +269,7 @@ func TestUAT_CorrelationAcrossThreeLogs(t *testing.T) {
 	req.Header.Set("X-Trace-Id", traceID)
 	req.Header.Set("X-Request-Id", requestID)
 	req.Header.Set("X-Client-Session-Id", sessionID)
-	req.Header.Set("X-User-Id", "u-1")
+	req.Header.Set("X-Client-User-Id", "u-1")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

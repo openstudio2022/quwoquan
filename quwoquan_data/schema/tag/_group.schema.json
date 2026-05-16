@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "quwoquan/tag/_group",
+  "title": "标签分组元数据",
+  "description": "定义 Topic/Audience/Format/Entity 四大顶级分组的语义边界",
+  "type": "object",
+  "required": ["id", "label", "labelEn", "semantics", "createdAt", "updatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "enum": ["Topic", "Audience", "Format", "Entity"],
+      "description": "分组唯一标识，固定 4 个值"
+    },
+    "label": { "type": "string", "description": "中文名称" },
+    "labelEn": { "type": "string", "description": "英文名称" },
+    "semantics": {
+      "type": "string",
+      "description": "分组语义边界说明，说明本分组覆盖什么、不覆盖什么"
+    },
+    "coverage": {
+      "type": "string",
+      "description": "覆盖范围示例"
+    },
+    "expectedDimensions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "本分组下预期的维度 id 列表"
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

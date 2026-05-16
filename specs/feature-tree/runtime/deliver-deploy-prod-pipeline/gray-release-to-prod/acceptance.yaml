@@ -47,7 +47,7 @@ level_acceptance:
     - M1
     - T3
     tests:
-    - file: scripts/verify_gray_rollout_stages.sh
+    - file: quwoquan_service/scripts/deploy/verify_gray_rollout_stages.sh
       functions:
       - parse
     - file: .github/workflows/deploy-prod-auto.yml

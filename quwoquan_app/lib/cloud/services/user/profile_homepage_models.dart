@@ -6,18 +6,17 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_quo
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_summary_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_subject_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_profile_stats_wire_dto.g.dart';
 
 @immutable
-class ProfileSubjectViewData {
-  const ProfileSubjectViewData({
-    required this.profileSubjectId,
+class SubAccountProfileViewData {
+  const SubAccountProfileViewData({
+    required this.subAccountId,
     required this.ownerUserId,
     required this.subjectType,
-    required this.subAccountId,
     required this.userHandle,
     required this.username,
     required this.displayName,
@@ -36,10 +35,9 @@ class ProfileSubjectViewData {
     required this.updatedAt,
   });
 
-  final String profileSubjectId;
+  final String subAccountId;
   final String ownerUserId;
   final String subjectType;
-  final String subAccountId;
   final String userHandle;
   final String username;
   final String displayName;
@@ -57,28 +55,24 @@ class ProfileSubjectViewData {
   final List<String> overriddenFields;
   final DateTime? updatedAt;
 
-  /// Wire DTO 解码在 [ProfileSubjectWireDto]（含 `skip_empty_string_aliases`）；此处仅做展示层回退。
-  factory ProfileSubjectViewData.fromProfileSubjectWire(
-    ProfileSubjectWireDto w,
+  /// Wire DTO 解码在 [SubAccountProfileWireDto]（含 `skip_empty_string_aliases`）；此处仅做展示层回退。
+  factory SubAccountProfileViewData.fromSubAccountProfileWire(
+    SubAccountProfileWireDto w,
   ) {
-    final subjectId = w.profileSubjectId;
+    final subAccountId = w.subAccountId;
     final nickname = w.nickname;
     final displayName = w.displayName.isNotEmpty
         ? w.displayName
-        : (nickname.isNotEmpty ? nickname : subjectId);
-    final subAccountId = w.subAccountId;
+        : (nickname.isNotEmpty ? nickname : subAccountId);
     final userHandle = w.userHandle.isNotEmpty
         ? w.userHandle
-        : (w.username.isNotEmpty ? w.username : subjectId);
-    final subjectType = w.subjectType.isNotEmpty
-        ? w.subjectType
-        : (subAccountId.isNotEmpty ? 'persona' : 'user');
+        : (w.username.isNotEmpty ? w.username : subAccountId);
+    final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'user';
     final username = w.username.isNotEmpty ? w.username : userHandle;
-    return ProfileSubjectViewData(
-      profileSubjectId: subjectId,
+    return SubAccountProfileViewData(
+      subAccountId: subAccountId,
       ownerUserId: w.ownerUserId,
       subjectType: subjectType,
-      subAccountId: subAccountId,
       userHandle: userHandle,
       username: username,
       displayName: displayName,
@@ -99,19 +93,18 @@ class ProfileSubjectViewData {
   }
 
   /// 仅用于 Repository / 契约解码边界；页面与业务层请使用 [fromProfileSubjectWire]。
-  @Deprecated('Use fromProfileSubjectWire(ProfileSubjectWireDto)')
-  factory ProfileSubjectViewData.fromMap(Map<String, dynamic> map) {
-    return ProfileSubjectViewData.fromProfileSubjectWire(
-      ProfileSubjectWireDto.fromMap(map),
+  @Deprecated('Use fromSubAccountProfileWire(SubAccountProfileWireDto)')
+  factory SubAccountProfileViewData.fromMap(Map<String, dynamic> map) {
+    return SubAccountProfileViewData.fromSubAccountProfileWire(
+      SubAccountProfileWireDto.fromMap(map),
     );
   }
 
-  ProfileSubjectViewData mergeStats(UserProfileStatsViewData stats) {
-    return ProfileSubjectViewData(
-      profileSubjectId: profileSubjectId,
+  SubAccountProfileViewData mergeStats(UserProfileStatsViewData stats) {
+    return SubAccountProfileViewData(
+      subAccountId: subAccountId,
       ownerUserId: ownerUserId,
       subjectType: subjectType,
-      subAccountId: subAccountId,
       userHandle: userHandle,
       username: username,
       displayName: displayName,
@@ -168,7 +161,7 @@ class UserProfileStatsViewData {
     );
   }
 
-  factory UserProfileStatsViewData.fromProfile(ProfileSubjectViewData p) {
+  factory UserProfileStatsViewData.fromProfile(SubAccountProfileViewData p) {
     return UserProfileStatsViewData(
       followingCount: p.followingCount,
       circleCount: p.circleCount,
@@ -259,13 +252,13 @@ class ProfileUserLikeRowViewData {
 @immutable
 class ProfileSocialRelationRowViewData {
   const ProfileSocialRelationRowViewData({
-    required this.profileSubjectId,
+    required this.subAccountId,
     required this.displayName,
     required this.avatarUrl,
     this.isFollowing = false,
   });
 
-  final String profileSubjectId;
+  final String subAccountId;
   final String displayName;
   final String avatarUrl;
   final bool isFollowing;
@@ -273,10 +266,10 @@ class ProfileSocialRelationRowViewData {
   factory ProfileSocialRelationRowViewData.fromProfileSocialRelationRowWire(
     ProfileSocialRelationRowWireDto w,
   ) {
-    final id = w.profileSubjectId;
+    final id = w.subAccountId;
     final name = w.displayName.isNotEmpty ? w.displayName : id;
     return ProfileSocialRelationRowViewData(
-      profileSubjectId: id,
+      subAccountId: id,
       displayName: name,
       avatarUrl: w.avatarUrl,
       isFollowing: w.isFollowing,
@@ -293,8 +286,8 @@ class ProfileSocialRelationRowViewData {
   }
 }
 
-/// 清单用户档案展示面别名：端侧统一 [ProfileSubjectViewData]（与 codegen UserProfileDto wire 对齐由 Repository 负责）。
-typedef UserProfileViewData = ProfileSubjectViewData;
+/// 清单用户档案展示面别名：端侧统一 [SubAccountProfileViewData]（与 codegen UserProfileDto wire 对齐由 Repository 负责）。
+typedef UserProfileViewData = SubAccountProfileViewData;
 
 /// 清单 PersonaDto：端侧管理行统一 [PersonaManagementItemViewData]。
 typedef PersonaDtoSurface = PersonaManagementItemViewData;
@@ -305,10 +298,10 @@ class ProfileInteractionActivityViewData {
     required this.activityId,
     required this.activityType,
     required this.direction,
-    required this.actorProfileSubjectId,
+    required this.actorSubAccountId,
     required this.actorDisplayName,
     required this.actorAvatarUrl,
-    required this.targetProfileSubjectId,
+    required this.targetSubAccountId,
     required this.targetContentId,
     required this.targetContentType,
     required this.targetContentSummary,
@@ -318,10 +311,10 @@ class ProfileInteractionActivityViewData {
   final String activityId;
   final String activityType;
   final String direction;
-  final String actorProfileSubjectId;
+  final String actorSubAccountId;
   final String actorDisplayName;
   final String actorAvatarUrl;
-  final String targetProfileSubjectId;
+  final String targetSubAccountId;
   final String targetContentId;
   final String targetContentType;
   final String targetContentSummary;
@@ -333,19 +326,19 @@ class ProfileInteractionActivityViewData {
     var activityId = w.activityId;
     if (activityId.isEmpty) {
       final prefix = w.activityType.isEmpty ? 'activity' : w.activityType;
-      activityId = '$prefix:${w.actorProfileSubjectId}';
+      activityId = '$prefix:${w.actorSubAccountId}';
     }
     final actorDisplayName = w.actorDisplayName.isNotEmpty
         ? w.actorDisplayName
-        : w.actorProfileSubjectId;
+        : w.actorSubAccountId;
     return ProfileInteractionActivityViewData(
       activityId: activityId,
       activityType: w.activityType,
       direction: w.direction,
-      actorProfileSubjectId: w.actorProfileSubjectId,
+      actorSubAccountId: w.actorSubAccountId,
       actorDisplayName: actorDisplayName,
       actorAvatarUrl: w.actorAvatarUrl,
-      targetProfileSubjectId: w.targetProfileSubjectId,
+      targetSubAccountId: w.targetSubAccountId,
       targetContentId: w.targetContentId,
       targetContentType: w.targetContentType,
       targetContentSummary: w.targetContentSummary,
@@ -366,9 +359,8 @@ class ProfileInteractionActivityViewData {
 @immutable
 class ActivePersonaContextViewData {
   const ActivePersonaContextViewData({
-    required this.profileSubjectId,
-    required this.ownerUserId,
     required this.subAccountId,
+    required this.ownerUserId,
     required this.subjectType,
     required this.displayName,
     required this.avatarUrl,
@@ -377,18 +369,14 @@ class ActivePersonaContextViewData {
     this.isFallback = false,
   });
 
-  final String profileSubjectId;
-  final String ownerUserId;
   final String subAccountId;
+  final String ownerUserId;
   final String subjectType;
   final String displayName;
   final String avatarUrl;
   final String personaContextVersion;
   final bool isPrimary;
   final bool isFallback;
-
-  String get personaId =>
-      subAccountId.isNotEmpty ? subAccountId : profileSubjectId;
 
   String get contextVersion => personaContextVersion;
 
@@ -401,8 +389,6 @@ class ActivePersonaContextViewData {
     bool explicitOverride = false,
   }) {
     return <String, Object?>{
-      'personaId': personaId,
-      'profileSubjectId': profileSubjectId,
       'subAccountId': subAccountId,
       if (contextVersion.isNotEmpty) 'contextVersion': contextVersion,
       if (personaContextVersion.isNotEmpty)
@@ -417,22 +403,20 @@ class ActivePersonaContextViewData {
   factory ActivePersonaContextViewData.fromActivePersonaContextWire(
     ActivePersonaContextWireDto w,
   ) {
-    final profileSubjectId = w.profileSubjectId;
+    final subAccountId = w.subAccountId;
     var ownerUserId = w.ownerUserId;
     if (ownerUserId.isEmpty) {
-      ownerUserId = profileSubjectId;
+      ownerUserId = subAccountId;
     }
-    final subAccountId = w.subAccountId;
     final displayName = w.displayName.isNotEmpty
         ? w.displayName
-        : profileSubjectId;
+        : subAccountId;
     final subjectType = w.subjectType.isNotEmpty
         ? w.subjectType
-        : (subAccountId.isNotEmpty ? 'persona' : 'user');
+        : 'subAccount';
     return ActivePersonaContextViewData(
-      profileSubjectId: profileSubjectId,
-      ownerUserId: ownerUserId,
       subAccountId: subAccountId,
+      ownerUserId: ownerUserId,
       subjectType: subjectType,
       displayName: displayName,
       avatarUrl: w.avatarUrl,
@@ -449,18 +433,16 @@ class ActivePersonaContextViewData {
   }
 
   factory ActivePersonaContextViewData.fallback({
-    required String profileSubjectId,
+    required String subAccountId,
     required String ownerUserId,
     required String displayName,
     required String avatarUrl,
-    String subAccountId = '',
-    String subjectType = 'user',
+    String subjectType = 'subAccount',
     String personaContextVersion = '',
   }) {
     return ActivePersonaContextViewData(
-      profileSubjectId: profileSubjectId,
-      ownerUserId: ownerUserId,
       subAccountId: subAccountId,
+      ownerUserId: ownerUserId,
       subjectType: subjectType,
       displayName: displayName,
       avatarUrl: avatarUrl,
@@ -474,7 +456,6 @@ class ActivePersonaContextViewData {
 class PersonaManagementItemViewData {
   const PersonaManagementItemViewData({
     required this.subAccountId,
-    required this.profileSubjectId,
     required this.displayName,
     required this.userHandle,
     required this.phone,
@@ -497,7 +478,6 @@ class PersonaManagementItemViewData {
   });
 
   final String subAccountId;
-  final String profileSubjectId;
   final String displayName;
   final String userHandle;
   final String phone;
@@ -525,12 +505,9 @@ class PersonaManagementItemViewData {
   factory PersonaManagementItemViewData.fromPersonaManagementItemWire(
     PersonaManagementItemWireDto w,
   ) {
-    final profileSubjectId = w.profileSubjectId.isNotEmpty
-        ? w.profileSubjectId
-        : w.subAccountId;
     final displayName = w.displayName.isNotEmpty
         ? w.displayName
-        : profileSubjectId;
+        : w.subAccountId;
     final subjectType = w.subAccountId.isEmpty
         ? (w.subjectType.isEmpty || w.subjectType == 'persona'
               ? 'user'
@@ -538,7 +515,6 @@ class PersonaManagementItemViewData {
         : (w.subjectType.isNotEmpty ? w.subjectType : 'persona');
     return PersonaManagementItemViewData(
       subAccountId: w.subAccountId,
-      profileSubjectId: profileSubjectId,
       displayName: displayName,
       userHandle: w.userHandle,
       phone: w.phone,

@@ -177,7 +177,9 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 		strings.NewReader(`{
 			"contentType":"article",
 			"title":"升级后的长文",
-			"articleDocument":{"title":"升级后的长文","body":"升级后正文"}
+			"articleMarkdown":"# 升级后的长文\n\n升级后正文",
+			"articleMarkdownVersion":"qwq-rich-md/1",
+			"articleAssetManifest":{"assets":[]}
 		}`),
 	)
 	promoteReq.Header.Set("Content-Type", "application/json")
@@ -347,7 +349,7 @@ func TestCircleVisiblePostAllowsCircleMemberViewer(t *testing.T) {
 
 	outsiderReq := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/profile-subjects/circle_author/posts?identity=work&type=article",
+		"/v1/content/sub-accounts/circle_author/posts?identity=work&type=article",
 		nil,
 	)
 	outsiderReq.Header.Set("X-Client-User-Id", "outsider")
@@ -368,7 +370,7 @@ func TestCircleVisiblePostAllowsCircleMemberViewer(t *testing.T) {
 
 	memberListReq := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/profile-subjects/circle_author/posts?identity=work&type=article",
+		"/v1/content/sub-accounts/circle_author/posts?identity=work&type=article",
 		nil,
 	)
 	memberListReq.Header.Set("X-Client-User-Id", "circle_member")
@@ -468,14 +470,13 @@ func TestProjectionRebuildDryRunBackfillsCurrentFields(t *testing.T) {
 	}
 }
 
-func TestDiscoveryProjectionPersistsProfileSubjectID(t *testing.T) {
+func TestDiscoveryProjectionPersistsAuthorSubAccountID(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := createPostWithAuthor(t, "projection_author", `{
 		"contentType":"article",
 		"title":"作者主键投影",
-		"body":"发现流必须保留 canonical profileSubjectId",
-		"profileSubjectId":"persona_projection_author"
+		"body":"发现流必须保留 canonical subAccountId"
 	}`)
 	postID, _ := created["_id"].(string)
 	if postID == "" {
@@ -488,8 +489,8 @@ func TestDiscoveryProjectionPersistsProfileSubjectID(t *testing.T) {
 		Decode(&projected); err != nil {
 		t.Fatalf("expected discovery projection, got %v", err)
 	}
-	if projected["profileSubjectId"] != "persona_projection_author" {
-		t.Fatalf("expected profileSubjectId=persona_projection_author, got %v", projected["profileSubjectId"])
+	if projected["authorId"] != "projection_author" {
+		t.Fatalf("expected authorId=projection_author, got %v", projected["authorId"])
 	}
 }
 
@@ -510,7 +511,7 @@ func TestListUserPostsByIdentity(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/profile-subjects/identity_feed_author/posts?identity=work&type=article&limit=20",
+		"/v1/content/sub-accounts/identity_feed_author/posts?identity=work&type=article&limit=20",
 		nil,
 	)
 	rec := httptest.NewRecorder()

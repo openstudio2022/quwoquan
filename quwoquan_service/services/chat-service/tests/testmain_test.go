@@ -203,7 +203,7 @@ func TestMain(m *testing.M) {
 		panic("failed to start user avatar consumer: " + err.Error())
 	}
 
-	chatRoutes := chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()
+	chatRoutes := chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc, userSyncService).Routes()
 	mux := http.NewServeMux()
 	mux.Handle("/media/", testDerivedMediaFileServer(testChatMediaRoot))
 	mux.Handle("/", chatRoutes)

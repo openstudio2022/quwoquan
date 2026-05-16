@@ -1,0 +1,121 @@
+feature: markdown-article-kernel
+level: L3_scenario
+source_path: discovery-content/content-type-framework/markdown-article-kernel
+archived: false
+status: pending
+execution:
+  local_gate: python3 -m unittest discover -s quwoquan_data/tests && flutter test quwoquan_app/test/ui/content/markdown
+  metadata_gate: make -C quwoquan_service verify-metadata && make codegen && make codegen-app
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: "标准 Markdown 输入可被端侧 parser 接收，发布为 `articleMarkdown` 后可从云端读取，并在详情页与侵入式媒体浏览器中动态分页渲染。"
+    status: implemented
+    linked_tasks: [D1, D2, D3, D4]
+    test_layers:
+      T1: required
+      T2: required
+      T3: required
+      T4: required
+    tests:
+      - qwq_markdown_parser_standard_markdown_test
+      - immersive_markdown_reader_standard_widget_test
+      - content_post_markdown_contract_test
+      - beta_gamma_markdown_article_readback_journey
+
+  A2:
+    criteria: "富布局 Markdown 支持 front matter、figure、gallery、callout、card、section、spacer 与 `wrapLeft/wrapRight`；AST 保留布局意图，大屏环绕，小屏降级通栏且不丢图、不丢 caption、不乱序。"
+    status: implemented
+    linked_tasks: [D1, D2]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - qwq_rich_markdown_ast_snapshot_test
+      - markdown_pagination_wrap_downgrade_test
+      - immersive_markdown_reader_layout_widget_test
+
+  A3:
+    criteria: "全局创作入口的新建长文、Markdown 导入和可视化编辑会话最终都回写同一份 Markdown；发布 payload 使用 `articleMarkdown/articleAssetManifest/articleRenderProfile`，不再写入 `articleDocument`。"
+    status: implemented
+    linked_tasks: [D5]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: required
+      T4: required
+    tests:
+      - create_markdown_session_roundtrip_test
+      - create_post_payload_markdown_contract_test
+      - create_markdown_publish_readback_journey
+
+  A4:
+    criteria: "用户导入本地 `.md` 与图片目录后，正文中的图片引用被归一化为 `asset://`，素材进入 draft scope manifest，用户可继续编辑、预览并发布。"
+    status: implemented
+    linked_tasks: [D5]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - markdown_import_asset_rewrite_test
+      - markdown_import_preview_widget_test
+
+  A5:
+    criteria: "`quwoquan_data` 至少一个两轮采集 batch 能产出 `raw/source.md`、`publish/article.md`、`gallery.md`、`manifest.json` 和图片包，dry-run payload 可直接映射到 CreatePost Markdown 字段。"
+    status: implemented
+    linked_tasks: [D6]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - quwoquan_data_markdown_package_test
+      - scripts_verify_quwoquan_data
+      - markdown_create_payload_projection_test
+
+  A6:
+    criteria: "`articleAssetManifest` 与素材库一致；每个正文 asset id 都有 hash、mime、尺寸、scope、object key、来源与授权信息；缺失、hash 不匹配或 scope 非法时不可发布。"
+    status: implemented
+    linked_tasks: [D3, D4, D6]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: optional
+    tests:
+      - article_asset_manifest_schema_test
+      - content_media_asset_bind_contract_test
+      - markdown_publish_missing_asset_rejection_test
+
+  A7:
+    criteria: 同一 Markdown 在小屏手机、大屏手机、平板横屏和竖屏中可自适应分页；页数可以不同，但内容顺序、资源引用、caption、callout、gallery 和语义标签保持一致。
+    status: implemented
+    linked_tasks: [D2, D8]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: required
+    tests:
+      - markdown_pagination_multi_viewport_snapshot_test
+      - immersive_markdown_reader_visual_regression
+      - pageflip_markdown_reader_smoke_test
+
+  A8:
+    criteria: "旧 `articleDocument` 不再出现在新写入、冷启动 seed、Markdown 长文 fixture 和主断言中；全部预制长文按 Markdown 重生成，门禁能阻止新增 `articleDocument` 长文真相源。"
+    status: implemented
+    linked_tasks: [D7, D8]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: required
+      T4: required
+    tests:
+      - article_document_fixture_scan_test
+      - content_post_metadata_no_article_document_write_test
+      - seed_manifest_markdown_truth_source_gate

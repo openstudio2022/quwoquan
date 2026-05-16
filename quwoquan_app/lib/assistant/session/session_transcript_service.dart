@@ -22,7 +22,7 @@ class AssistantSessionHistoryLoadResult {
 Future<AssistantSessionHistoryLoadResult> loadTranscriptRowsFromSessionDetail({
   required AssistantSessionWireDetail detail,
   required int pageSize,
-  required String profileSubjectId,
+  required String subAccountId,
   required String Function(Map<String, dynamic> wire)
   normalizeAssistantContentForModel,
 }) async {
@@ -52,7 +52,7 @@ Future<AssistantSessionHistoryLoadResult> loadTranscriptRowsFromSessionDetail({
           'type': 'text',
           'content': normalizedContent,
           'senderId': isUser
-              ? profileSubjectId
+              ? subAccountId
               : AppConceptConstants.assistantSenderId,
           'senderName': isUser ? '我' : AppConceptConstants.assistantLabel,
           'senderAvatar': '',

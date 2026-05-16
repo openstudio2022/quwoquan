@@ -1,0 +1,911 @@
+{
+  "schemaVersion": "chat.scenario-fixtures",
+  "description": "聊天域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.conversations/messages/members 初始化 MockChatRepository。 [alpha-dev-lite subset]",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "chat_core": {
+      "description": "聊天 inbox、详情、成员与消息共享真实图片种子。",
+      "currentUserId": "fixture_user_current",
+      "conversations": [
+        {
+          "_id": "fixture_conv_direct",
+          "id": "fixture_conv_direct",
+          "conversationId": "fixture_conv_direct",
+          "type": "direct",
+          "conversationType": "directConversation",
+          "title": "契约好友",
+          "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "creatorId": "fixture_user_current",
+          "maxSeq": 6,
+          "memberCount": 2,
+          "maxGroupSize": 2,
+          "receiptEnabled": true,
+          "lastMessagePreview": "契约好友 在 契约好友 中发送的共享池消息 #6。",
+          "lastMessageTime": "2026-06-10T05:00:00Z",
+          "messageCount": 6,
+          "status": "active",
+          "createdAt": "2026-06-10T00:00:00Z",
+          "updatedAt": "2026-06-10T05:00:00Z",
+          "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "primaryTheme": "lifestyle",
+          "secondaryThemes": [
+            "coffee",
+            "parenting"
+          ],
+          "themeTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ],
+          "groupPersonaMix": [],
+          "targetUserId": "fixture_user_friend"
+        },
+        {
+          "_id": "fixture_conv_group",
+          "id": "fixture_conv_group",
+          "conversationId": "fixture_conv_group",
+          "type": "group",
+          "conversationType": "interestGroupConversation",
+          "title": "契约周末群",
+          "avatarUrl": "media/avatar/group/fixture_conv_group/v1/composite.png",
+          "creatorId": "fixture_user_current",
+          "maxSeq": 8,
+          "memberCount": 3,
+          "maxGroupSize": 500,
+          "receiptEnabled": true,
+          "lastMessagePreview": "契约同伴一 在 契约周末群 中发送的共享池消息 #8。",
+          "lastMessageTime": "2026-06-10T09:00:00Z",
+          "messageCount": 8,
+          "status": "active",
+          "createdAt": "2026-06-10T02:00:00Z",
+          "updatedAt": "2026-06-10T09:00:00Z",
+          "avatarObjectKey": "media/avatar/group/fixture_conv_group/v1/composite.png",
+          "primaryTheme": "lifestyle",
+          "secondaryThemes": [
+            "coffee",
+            "parenting"
+          ],
+          "themeTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "currentUserVariant",
+              "count": 1,
+              "userIds": [
+                "fixture_user_current"
+              ]
+            },
+            {
+              "role": "groupOrganizer",
+              "count": 1,
+              "userIds": [
+                "fixture_user_weekend_1"
+              ]
+            },
+            {
+              "role": "circleOwner",
+              "count": 1,
+              "userIds": [
+                "fixture_user_weekend_2"
+              ]
+            }
+          ],
+          "circleId": null,
+          "groupAvatarVersion": 1,
+          "groupAvatarSourceUserIds": [
+            "fixture_user_current",
+            "fixture_user_weekend_1",
+            "fixture_user_weekend_2"
+          ]
+        },
+        {
+          "_id": "fixture_conv_photo_group",
+          "id": "fixture_conv_photo_group",
+          "conversationId": "fixture_conv_photo_group",
+          "type": "group",
+          "conversationType": "interestGroupConversation",
+          "title": "契约摄影交流群",
+          "avatarUrl": "media/avatar/group/fixture_conv_photo_group/v1/composite.png",
+          "creatorId": "fixture_user_photo",
+          "maxSeq": 8,
+          "memberCount": 3,
+          "maxGroupSize": 500,
+          "receiptEnabled": true,
+          "lastMessagePreview": "契约摄影师 在 契约摄影交流群 中发送的共享池消息 #8。",
+          "lastMessageTime": "2026-06-10T11:00:00Z",
+          "messageCount": 8,
+          "status": "active",
+          "createdAt": "2026-06-10T04:00:00Z",
+          "updatedAt": "2026-06-10T11:00:00Z",
+          "avatarObjectKey": "media/avatar/group/fixture_conv_photo_group/v1/composite.png",
+          "primaryTheme": "photography",
+          "secondaryThemes": [
+            "travel"
+          ],
+          "themeTags": [
+            "photography",
+            "travel"
+          ],
+          "groupPersonaMix": [
+            {
+              "role": "currentUserVariant",
+              "count": 1,
+              "userIds": [
+                "fixture_user_current"
+              ]
+            },
+            {
+              "role": "leadAuthor",
+              "count": 1,
+              "userIds": [
+                "fixture_user_photo"
+              ]
+            },
+            {
+              "role": "friendContact",
+              "count": 1,
+              "userIds": [
+                "fixture_user_friend"
+              ]
+            }
+          ],
+          "circleId": "fixture_circle_photo",
+          "groupAvatarVersion": 1,
+          "groupAvatarSourceUserIds": [
+            "fixture_user_current",
+            "fixture_user_photo",
+            "fixture_user_friend"
+          ]
+        },
+        {
+          "_id": "fixture_conv_article_direct",
+          "id": "fixture_conv_article_direct",
+          "conversationId": "fixture_conv_article_direct",
+          "type": "direct",
+          "conversationType": "directConversation",
+          "title": "契约撰稿人",
+          "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "creatorId": "fixture_user_current",
+          "maxSeq": 6,
+          "memberCount": 2,
+          "maxGroupSize": 2,
+          "receiptEnabled": true,
+          "lastMessagePreview": "契约撰稿人 在 契约撰稿人 中发送的共享池消息 #6。",
+          "lastMessageTime": "2026-06-10T13:00:00Z",
+          "messageCount": 6,
+          "status": "active",
+          "createdAt": "2026-06-10T08:00:00Z",
+          "updatedAt": "2026-06-10T13:00:00Z",
+          "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "primaryTheme": "lifestyle",
+          "secondaryThemes": [
+            "coffee",
+            "parenting"
+          ],
+          "themeTags": [
+            "lifestyle",
+            "coffee",
+            "parenting"
+          ],
+          "groupPersonaMix": [],
+          "targetUserId": "fixture_user_article"
+        }
+      ],
+      "messages": {
+        "fixture_conv_direct": [
+          {
+            "messageId": "fixture_msg_direct_1",
+            "_id": "fixture_msg_direct_1",
+            "conversationId": "fixture_conv_direct",
+            "senderId": "fixture_user_current",
+            "content": "这是一条契约聊天消息。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 1,
+            "createdAt": "2026-06-10T00:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_msg_direct_2",
+            "_id": "fixture_msg_direct_2",
+            "conversationId": "fixture_conv_direct",
+            "senderId": "fixture_user_friend",
+            "content": "契约消息已送达",
+            "type": "text",
+            "messageType": "text",
+            "seq": 2,
+            "createdAt": "2026-06-10T01:00:00Z",
+            "senderDisplayNameSnapshot": "契约好友",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_direct_msg_03",
+            "_id": "fixture_conv_direct_msg_03",
+            "conversationId": "fixture_conv_direct",
+            "senderId": "fixture_user_current",
+            "content": "契约当前用户 在 契约好友 中发送的共享池消息 #3。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 3,
+            "createdAt": "2026-06-10T02:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": "fixture_photo_003"
+          },
+          {
+            "messageId": "fixture_conv_direct_msg_04",
+            "_id": "fixture_conv_direct_msg_04",
+            "conversationId": "fixture_conv_direct",
+            "senderId": "fixture_user_friend",
+            "content": "契约好友 在 契约好友 中发送的共享池消息 #4。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 4,
+            "createdAt": "2026-06-10T03:00:00Z",
+            "senderDisplayNameSnapshot": "契约好友",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_direct_msg_05",
+            "_id": "fixture_conv_direct_msg_05",
+            "conversationId": "fixture_conv_direct",
+            "senderId": "fixture_user_current",
+            "content": "契约当前用户 在 契约好友 中发送的共享池消息 #5。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 5,
+            "createdAt": "2026-06-10T04:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_direct_msg_06",
+            "_id": "fixture_conv_direct_msg_06",
+            "conversationId": "fixture_conv_direct",
+            "senderId": "fixture_user_friend",
+            "content": "契约好友 在 契约好友 中发送的共享池消息 #6。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 6,
+            "createdAt": "2026-06-10T05:00:00Z",
+            "senderDisplayNameSnapshot": "契约好友",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "sharedPostId": "fixture_article_001"
+          }
+        ],
+        "fixture_conv_group": [
+          {
+            "messageId": "fixture_msg_group_1",
+            "_id": "fixture_msg_group_1",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_current",
+            "content": "周末集合时间已确认",
+            "type": "text",
+            "messageType": "text",
+            "seq": 1,
+            "createdAt": "2026-06-10T02:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_msg_group_2",
+            "_id": "fixture_msg_group_2",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_weekend_1",
+            "content": "契约同伴一 在 契约周末群 中发送的共享池消息 #2。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 2,
+            "createdAt": "2026-06-10T03:00:00Z",
+            "senderDisplayNameSnapshot": "契约同伴一",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_msg_group_3",
+            "_id": "fixture_msg_group_3",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_weekend_2",
+            "content": "契约同伴二 在 契约周末群 中发送的共享池消息 #3。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 3,
+            "createdAt": "2026-06-10T04:00:00Z",
+            "senderDisplayNameSnapshot": "契约同伴二",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "sharedPostId": "fixture_moment_001"
+          },
+          {
+            "messageId": "fixture_conv_group_msg_04",
+            "_id": "fixture_conv_group_msg_04",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_current",
+            "content": "契约当前用户 在 契约周末群 中发送的共享池消息 #4。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 4,
+            "createdAt": "2026-06-10T05:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_group_msg_05",
+            "_id": "fixture_conv_group_msg_05",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_weekend_1",
+            "content": "契约同伴一 在 契约周末群 中发送的共享池消息 #5。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 5,
+            "createdAt": "2026-06-10T06:00:00Z",
+            "senderDisplayNameSnapshot": "契约同伴一",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_group_msg_06",
+            "_id": "fixture_conv_group_msg_06",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_weekend_2",
+            "content": "契约同伴二 在 契约周末群 中发送的共享池消息 #6。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 6,
+            "createdAt": "2026-06-10T07:00:00Z",
+            "senderDisplayNameSnapshot": "契约同伴二",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "sharedPostId": "fixture_post_photography_001"
+          },
+          {
+            "messageId": "fixture_conv_group_msg_07",
+            "_id": "fixture_conv_group_msg_07",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_current",
+            "content": "契约当前用户 在 契约周末群 中发送的共享池消息 #7。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 7,
+            "createdAt": "2026-06-10T08:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_group_msg_08",
+            "_id": "fixture_conv_group_msg_08",
+            "conversationId": "fixture_conv_group",
+            "senderId": "fixture_user_weekend_1",
+            "content": "契约同伴一 在 契约周末群 中发送的共享池消息 #8。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 8,
+            "createdAt": "2026-06-10T09:00:00Z",
+            "senderDisplayNameSnapshot": "契约同伴一",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "sharedPostId": null
+          }
+        ],
+        "fixture_conv_photo_group": [
+          {
+            "messageId": "fixture_msg_photo_group_1",
+            "_id": "fixture_msg_photo_group_1",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_current",
+            "content": "今晚整理照片墙和路线。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 1,
+            "createdAt": "2026-06-10T04:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_msg_photo_group_2",
+            "_id": "fixture_msg_photo_group_2",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_photo",
+            "content": "契约摄影师 在 契约摄影交流群 中发送的共享池消息 #2。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 2,
+            "createdAt": "2026-06-10T05:00:00Z",
+            "senderDisplayNameSnapshot": "契约摄影师",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_photo_group_msg_03",
+            "_id": "fixture_conv_photo_group_msg_03",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_friend",
+            "content": "契约好友 在 契约摄影交流群 中发送的共享池消息 #3。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 3,
+            "createdAt": "2026-06-10T06:00:00Z",
+            "senderDisplayNameSnapshot": "契约好友",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "sharedPostId": "fixture_post_photography_003"
+          },
+          {
+            "messageId": "fixture_conv_photo_group_msg_04",
+            "_id": "fixture_conv_photo_group_msg_04",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_current",
+            "content": "契约当前用户 在 契约摄影交流群 中发送的共享池消息 #4。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 4,
+            "createdAt": "2026-06-10T07:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_photo_group_msg_05",
+            "_id": "fixture_conv_photo_group_msg_05",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_photo",
+            "content": "契约摄影师 在 契约摄影交流群 中发送的共享池消息 #5。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 5,
+            "createdAt": "2026-06-10T08:00:00Z",
+            "senderDisplayNameSnapshot": "契约摄影师",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_photo_group_msg_06",
+            "_id": "fixture_conv_photo_group_msg_06",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_friend",
+            "content": "契约好友 在 契约摄影交流群 中发送的共享池消息 #6。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 6,
+            "createdAt": "2026-06-10T09:00:00Z",
+            "senderDisplayNameSnapshot": "契约好友",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "sharedPostId": "fixture_post_photography_006"
+          },
+          {
+            "messageId": "fixture_conv_photo_group_msg_07",
+            "_id": "fixture_conv_photo_group_msg_07",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_current",
+            "content": "契约当前用户 在 契约摄影交流群 中发送的共享池消息 #7。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 7,
+            "createdAt": "2026-06-10T10:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_photo_group_msg_08",
+            "_id": "fixture_conv_photo_group_msg_08",
+            "conversationId": "fixture_conv_photo_group",
+            "senderId": "fixture_user_photo",
+            "content": "契约摄影师 在 契约摄影交流群 中发送的共享池消息 #8。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 8,
+            "createdAt": "2026-06-10T11:00:00Z",
+            "senderDisplayNameSnapshot": "契约摄影师",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "sharedPostId": null
+          }
+        ],
+        "fixture_conv_article_direct": [
+          {
+            "messageId": "fixture_msg_article_direct_1",
+            "_id": "fixture_msg_article_direct_1",
+            "conversationId": "fixture_conv_article_direct",
+            "senderId": "fixture_user_current",
+            "content": "文章配图已经补齐。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 1,
+            "createdAt": "2026-06-10T08:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_article_direct_msg_02",
+            "_id": "fixture_conv_article_direct_msg_02",
+            "conversationId": "fixture_conv_article_direct",
+            "senderId": "fixture_user_article",
+            "content": "契约撰稿人 在 契约撰稿人 中发送的共享池消息 #2。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 2,
+            "createdAt": "2026-06-10T09:00:00Z",
+            "senderDisplayNameSnapshot": "契约撰稿人",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_article_direct_msg_03",
+            "_id": "fixture_conv_article_direct_msg_03",
+            "conversationId": "fixture_conv_article_direct",
+            "senderId": "fixture_user_current",
+            "content": "契约当前用户 在 契约撰稿人 中发送的共享池消息 #3。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 3,
+            "createdAt": "2026-06-10T10:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": "fixture_post_photography_013"
+          },
+          {
+            "messageId": "fixture_conv_article_direct_msg_04",
+            "_id": "fixture_conv_article_direct_msg_04",
+            "conversationId": "fixture_conv_article_direct",
+            "senderId": "fixture_user_article",
+            "content": "契约撰稿人 在 契约撰稿人 中发送的共享池消息 #4。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 4,
+            "createdAt": "2026-06-10T11:00:00Z",
+            "senderDisplayNameSnapshot": "契约撰稿人",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_article_direct_msg_05",
+            "_id": "fixture_conv_article_direct_msg_05",
+            "conversationId": "fixture_conv_article_direct",
+            "senderId": "fixture_user_current",
+            "content": "契约当前用户 在 契约撰稿人 中发送的共享池消息 #5。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 5,
+            "createdAt": "2026-06-10T12:00:00Z",
+            "senderDisplayNameSnapshot": "契约当前用户",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "sharedPostId": null
+          },
+          {
+            "messageId": "fixture_conv_article_direct_msg_06",
+            "_id": "fixture_conv_article_direct_msg_06",
+            "conversationId": "fixture_conv_article_direct",
+            "senderId": "fixture_user_article",
+            "content": "契约撰稿人 在 契约撰稿人 中发送的共享池消息 #6。",
+            "type": "text",
+            "messageType": "text",
+            "seq": 6,
+            "createdAt": "2026-06-10T13:00:00Z",
+            "senderDisplayNameSnapshot": "契约撰稿人",
+            "senderAvatarObjectKeySnapshot": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "senderAvatarUrlSnapshot": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "senderAvatar": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "sharedPostId": "fixture_post_photography_016"
+          }
+        ]
+      },
+      "members": {
+        "fixture_conv_direct": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "role": "owner",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_friend",
+            "displayName": "契约好友",
+            "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "role": "member",
+            "isCurrentUser": false
+          }
+        ],
+        "fixture_conv_group": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "role": "owner",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_weekend_1",
+            "displayName": "契约同伴一",
+            "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "role": "member",
+            "isCurrentUser": false
+          },
+          {
+            "userId": "fixture_user_weekend_2",
+            "displayName": "契约同伴二",
+            "avatarUrl": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+            "role": "member",
+            "isCurrentUser": false
+          }
+        ],
+        "fixture_conv_photo_group": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "role": "member",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_photo",
+            "displayName": "契约摄影师",
+            "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+            "role": "owner",
+            "isCurrentUser": false
+          },
+          {
+            "userId": "fixture_user_friend",
+            "displayName": "契约好友",
+            "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+            "role": "member",
+            "isCurrentUser": false
+          }
+        ],
+        "fixture_conv_article_direct": [
+          {
+            "userId": "fixture_user_current",
+            "displayName": "契约当前用户",
+            "avatarUrl": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+            "role": "owner",
+            "isCurrentUser": true
+          },
+          {
+            "userId": "fixture_user_article",
+            "displayName": "契约撰稿人",
+            "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png",
+            "role": "member",
+            "isCurrentUser": false
+          }
+        ]
+      },
+      "userStates": [
+        {
+          "_id": "fixture_state_fixture_conv_direct_current",
+          "userId": "fixture_user_current",
+          "conversationId": "fixture_conv_direct",
+          "readSeq": 5,
+          "unreadCount": 1,
+          "muted": false,
+          "pinned": true,
+          "updatedAt": "2026-06-10T05:00:00Z"
+        },
+        {
+          "_id": "fixture_state_fixture_conv_group_current",
+          "userId": "fixture_user_current",
+          "conversationId": "fixture_conv_group",
+          "readSeq": 7,
+          "unreadCount": 0,
+          "muted": false,
+          "pinned": true,
+          "updatedAt": "2026-06-10T09:00:00Z"
+        },
+        {
+          "_id": "fixture_state_fixture_conv_photo_group_current",
+          "userId": "fixture_user_current",
+          "conversationId": "fixture_conv_photo_group",
+          "readSeq": 7,
+          "unreadCount": 0,
+          "muted": false,
+          "pinned": false,
+          "updatedAt": "2026-06-10T11:00:00Z"
+        },
+        {
+          "_id": "fixture_state_fixture_conv_article_direct_current",
+          "userId": "fixture_user_current",
+          "conversationId": "fixture_conv_article_direct",
+          "readSeq": 5,
+          "unreadCount": 0,
+          "muted": false,
+          "pinned": false,
+          "updatedAt": "2026-06-10T13:00:00Z"
+        }
+      ]
+    },
+    "chat_contacts_core": {
+      "description": "联系人 tab、圈子联系人与趣群联系人。",
+      "contacts": [
+        {
+          "userId": "fixture_user_friend",
+          "displayName": "契约好友",
+          "avatarUrl": "media/avatar/user/fixture_user_friend/v1/avatar.png",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "与当前用户互关的同好。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_friend/v1/avatar.png"
+        },
+        {
+          "userId": "fixture_user_weekend_1",
+          "displayName": "契约同伴一",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "周末群成员，也是联系人同好。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_1/v1/avatar.png"
+        },
+        {
+          "userId": "fixture_user_weekend_2",
+          "displayName": "契约同伴二",
+          "avatarUrl": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "周末群成员，提供路线建议。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_weekend_2/v1/avatar.png"
+        },
+        {
+          "userId": "fixture_user_photo",
+          "displayName": "契约摄影师",
+          "avatarUrl": "media/avatar/user/fixture_user_photo/v1/avatar.png",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "作者主页契约数据。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_photo/v1/avatar.png"
+        },
+        {
+          "userId": "fixture_user_travel",
+          "displayName": "契约旅行家",
+          "avatarUrl": "media/avatar/user/fixture_user_travel/v1/avatar.png",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "旅行、天气和行程记录作者。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_travel/v1/avatar.png"
+        },
+        {
+          "userId": "fixture_user_article",
+          "displayName": "契约撰稿人",
+          "avatarUrl": "media/avatar/user/fixture_user_article/v1/avatar.png",
+          "relationship": "mutual_follow",
+          "isFriend": true,
+          "bio": "文章、攻略与长图文作者。",
+          "avatarObjectKey": "media/avatar/user/fixture_user_article/v1/avatar.png"
+        }
+      ],
+      "circleIds": [
+        "fixture_circle_photo",
+        "fixture_circle_travel",
+        "fixture_circle_life"
+      ],
+      "groupConversationIds": [
+        "fixture_conv_group",
+        "fixture_conv_photo_group"
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "chat_inbox_detail_basic",
+      "title": "聊天 inbox 与详情契约种子",
+      "type": "chat_inbox_detail",
+      "domainId": "chat",
+      "seedRefs": [
+        "chat_core",
+        "chat_settings_core",
+        "chat_contacts_core",
+        "chat_group_flow_core"
+      ],
+      "uiExpectations": {
+        "conversationIds": [
+          "fixture_conv_direct",
+          "fixture_conv_group"
+        ],
+        "textFragments": [
+          "契约好友",
+          "契约周末群"
+        ]
+      },
+      "remoteExpectations": {
+        "conversationIds": [
+          "fixture_conv_direct",
+          "fixture_conv_group"
+        ],
+        "contactUserIds": [
+          "fixture_user_friend",
+          "fixture_user_photo"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    }
+  ]
+}

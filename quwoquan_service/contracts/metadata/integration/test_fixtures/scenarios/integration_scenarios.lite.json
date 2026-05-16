@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "integration.scenario-fixtures",
+  "description": "集成域 alpha/beta/gamma 共享测试场景，首批覆盖发布位置选择。 [alpha-dev-lite subset]",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "location_poi_core": {
+      "description": "附近地点与搜索地点。",
+      "pois": [
+        {
+          "poiId": "fixture_poi_west_lake",
+          "name": "杭州西湖",
+          "address": "浙江省杭州市西湖区",
+          "city": "杭州",
+          "province": "浙江",
+          "lat": 30.2431,
+          "lng": 120.1505
+        },
+        {
+          "poiId": "fixture_poi_coffee",
+          "name": "契约咖啡馆",
+          "address": "杭州市测试路 1 号",
+          "city": "杭州",
+          "province": "浙江",
+          "lat": 30.25,
+          "lng": 120.16
+        }
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "integration_location_poi_basic",
+      "title": "发布位置选择契约种子",
+      "type": "location_poi",
+      "domainId": "integration",
+      "seedRefs": [
+        "location_poi_core"
+      ],
+      "uiExpectations": {
+        "poiIds": [
+          "fixture_poi_west_lake",
+          "fixture_poi_coffee"
+        ],
+        "textFragments": [
+          "杭州西湖",
+          "契约咖啡馆"
+        ]
+      },
+      "remoteExpectations": {
+        "poiIds": [
+          "fixture_poi_west_lake",
+          "fixture_poi_coffee"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    }
+  ]
+}

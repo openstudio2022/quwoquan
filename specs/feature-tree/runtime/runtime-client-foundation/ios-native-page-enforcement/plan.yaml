@@ -7,15 +7,15 @@ slices:
   - id: slice-1-gate-script-allowlist
     title: 新增 verify_ios_native_surface_gate.py 与 ios_native_surface_allowlist.yaml
     outputs:
-      - scripts/verify_ios_native_surface_gate.py
+      - quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
       - specs/gates/ios_native_surface_allowlist.yaml
     tests:
-      - python3 scripts/verify_ios_native_surface_gate.py（干净树通过）
+      - python3 quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py（干净树通过）
 
   - id: slice-2-wire-gate-repo
-    title: 接入 scripts/gate_repo.sh run_app
+    title: 接入 agent_ops/gate/gate_repo.sh run_app
     outputs:
-      - scripts/gate_repo.sh
+      - agent_ops/gate/gate_repo.sh
     tests:
       - make gate 中 quwoquan_app 段执行新脚本
 

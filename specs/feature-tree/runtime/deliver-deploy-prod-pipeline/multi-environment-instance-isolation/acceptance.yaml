@@ -30,27 +30,27 @@ level_acceptance:
     criteria: 端侧启动入口支持按 env 与 device-id 启动、停止、列举实例，并记录诊断信息
     status: proposed
     tests:
-      - file: scripts/start_app_instance.sh
+      - file: quwoquan_app/scripts/device/start_app_instance.sh
         functions: [start_app_instance]
-      - file: scripts/stop_app_instance.sh
+      - file: quwoquan_app/scripts/device/stop_app_instance.sh
         functions: [stop_app_instance]
-      - file: scripts/list_app_instances.sh
+      - file: quwoquan_app/scripts/device/list_app_instances.sh
         functions: [list_app_instances]
   A4:
     criteria: beta 启动新栈前会停止旧栈、回收固定端口并清理残留子进程
     status: proposed
     tests:
-      - file: scripts/start_app_beta_manual.sh
+      - file: quwoquan_app/scripts/device/start_app_beta_manual.sh
         functions: [start_app_beta_manual]
-      - file: scripts/stop_app_beta_manual.sh
+      - file: quwoquan_app/scripts/device/stop_app_beta_manual.sh
         functions: [stop_app_beta_manual]
-      - file: scripts/lib/beta_manual_lifecycle.sh
+      - file: agent_ops/lib/beta_manual_lifecycle.sh
         functions: [beta_manual_lifecycle]
   A5:
     criteria: gamma 部署或 local-gamma mirror 切换遵循单套清理后重启语义
     status: proposed
     tests:
-      - file: scripts/start_local_gamma_mirror.sh
+      - file: quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
         functions: [start_local_gamma_mirror]
       - file: deploy/shared/deliver_to_production_runbook.md
         functions: [deliver_to_production_runbook]
@@ -58,7 +58,7 @@ level_acceptance:
     criteria: T4 至少覆盖 alpha beta gamma 三个端侧实例分别运行在不同模拟器
     status: proposed
     tests:
-      - file: scripts/verify_env_instance_isolation.py
+      - file: quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
         functions: [verify_env_instance_isolation]
       - file: artifacts
         functions: [app_instance_reports]

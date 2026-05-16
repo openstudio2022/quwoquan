@@ -483,6 +483,7 @@ func realSearchHandler(cfg providerCfg) tool.Handler {
 		location := inputString(req.Input, "location")
 		locationSearchName := inputString(req.Input, "locationSearchName")
 		skillID := inputString(req.Input, "skillId")
+		queries := preferredSearchQueries(req.Input, query)
 		log.Printf("assistant search requested provider=%s tool=%s query=%q", provider, req.ToolName, query)
 		switch provider {
 		case "duckduckgo_html":
@@ -501,12 +502,11 @@ func realSearchHandler(cfg providerCfg) tool.Handler {
 					return searchToolResult(req.ToolName, "yahoo_finance", summary, refs, true), nil
 				}
 			}
-			summary, refs, err := duckDuckGoHTMLSearch(ctx, client, query)
-			reliable := true
+			summary, refs, reliable, err := executeDuckDuckGoQueries(ctx, client, queries)
 			if err != nil {
 				log.Printf("assistant search failed provider=%s tool=%s query=%q err=%v", provider, req.ToolName, query, err)
 				if bingSummary, bingRefs, ok := bingRSSSearch(ctx, client, query); ok {
-					summary, refs = bingSummary, bingRefs
+					summary, refs, reliable = rebuildSearchOutcomeFromRefs(bingSummary, bingRefs), bingRefs, true
 				} else {
 					summary, refs = deterministicSearchFallbackResult(query, err.Error())
 					reliable = false
@@ -518,6 +518,146 @@ func realSearchHandler(cfg providerCfg) tool.Handler {
 			return tool.Result{}, fmt.Errorf("unsupported search_provider.provider %q", provider)
 		}
 	}
+}
+
+func preferredSearchQueries(input map[string]any, fallbackQuery string) []string {
+	queries := []string{}
+	seen := map[string]bool{}
+	appendOne := func(query string) {
+		if query == "" || seen[query] {
+			return
+		}
+		seen[query] = true
+		queries = append(queries, query)
+	}
+	appendQueryCandidates := func(raw string) {
+		base := strings.TrimSpace(raw)
+		if base == "" {
+			return
+		}
+		appendOne(base)
+	}
+	appendStructuredSearchQueries(input["searchQueries"], appendQueryCandidates)
+	appendStructuredSearchQueries(input["queries"], appendQueryCandidates)
+	appendQueryCandidates(fallbackQuery)
+	return queries
+}
+
+func appendStructuredSearchQueries(raw any, appendOne func(string)) {
+	switch items := raw.(type) {
+	case []any:
+		for _, item := range items {
+			appendOne(searchQueryText(item))
+		}
+	case []map[string]any:
+		for _, item := range items {
+			appendOne(searchQueryText(item))
+		}
+	case []string:
+		for _, item := range items {
+			appendOne(searchQueryText(item))
+		}
+	}
+}
+
+func searchQueryText(raw any) string {
+	switch item := raw.(type) {
+	case map[string]any:
+		for _, key := range []string{"query", "text", "keyword"} {
+			if value := strings.TrimSpace(fmt.Sprint(item[key])); value != "" && value != "<nil>" {
+				return value
+			}
+		}
+		return ""
+	case string:
+		return strings.TrimSpace(item)
+	default:
+		value := strings.TrimSpace(fmt.Sprint(raw))
+		if value == "<nil>" {
+			return ""
+		}
+		return value
+	}
+}
+
+func executeDuckDuckGoQueries(ctx context.Context, client *http.Client, queries []string) (string, []map[string]any, bool, error) {
+	if len(queries) == 0 {
+		return "", nil, false, fmt.Errorf("search query is required")
+	}
+	allRefs := []map[string]any{}
+	lastErr := error(nil)
+	for _, query := range queries {
+		if strings.TrimSpace(query) == "" {
+			continue
+		}
+		summary, refs, err := duckDuckGoHTMLSearch(ctx, client, query)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		allRefs = mergeSearchReferences(allRefs, refs)
+		if len(allRefs) >= 5 {
+			break
+		}
+		_ = summary
+	}
+	if len(allRefs) == 0 {
+		if lastErr == nil {
+			lastErr = fmt.Errorf("empty_summary")
+		}
+		return "", nil, false, lastErr
+	}
+	return rebuildSearchOutcomeFromRefs("", allRefs), allRefs, true, nil
+}
+
+func rebuildSearchOutcomeFromRefs(fallbackSummary string, refs []map[string]any) string {
+	parts := []string{}
+	for _, ref := range refs {
+		snippet := strings.TrimSpace(fmt.Sprint(ref["snippet"]))
+		if snippet == "" || snippet == "<nil>" {
+			snippet = strings.TrimSpace(fmt.Sprint(ref["title"]))
+		}
+		if snippet == "" || snippet == "<nil>" {
+			continue
+		}
+		parts = append(parts, snippet)
+		if len(parts) >= 5 {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return truncateRunes(strings.TrimSpace(fallbackSummary), 500)
+	}
+	return truncateRunes(strings.Join(parts, "；"), 500)
+}
+
+func mergeSearchReferences(existing []map[string]any, incoming []map[string]any) []map[string]any {
+	merged := append([]map[string]any{}, existing...)
+	seen := map[string]bool{}
+	for _, ref := range merged {
+		key := strings.TrimSpace(fmt.Sprint(ref["url"]))
+		if key == "" || key == "<nil>" {
+			key = strings.TrimSpace(fmt.Sprint(ref["title"])) + "|" + strings.TrimSpace(fmt.Sprint(ref["source"]))
+		}
+		if key != "" && key != "|" {
+			seen[key] = true
+		}
+	}
+	for _, ref := range incoming {
+		if len(merged) >= 5 {
+			break
+		}
+		key := strings.TrimSpace(fmt.Sprint(ref["url"]))
+		if key == "" || key == "<nil>" {
+			key = strings.TrimSpace(fmt.Sprint(ref["title"])) + "|" + strings.TrimSpace(fmt.Sprint(ref["source"]))
+		}
+		if key == "" || key == "|" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		merged = append(merged, ref)
+	}
+	return merged
 }
 
 func searchToolResult(toolName string, provider string, summary string, refs []map[string]any, reliable bool) tool.Result {
@@ -590,17 +730,22 @@ func stripHTML(raw string) string {
 }
 
 var (
-	duckDuckGoTitlePattern   = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__a[^"]*"[^>]*>(.*?)</a>`)
+	duckDuckGoResultPattern  = regexp.MustCompile(`(?is)<a([^>]*class="[^"]*result__a[^"]*"[^>]*)>(.*?)</a>`)
+	duckDuckGoHrefPattern    = regexp.MustCompile(`(?is)href="([^"]+)"`)
 	duckDuckGoSnippetPattern = regexp.MustCompile(`(?is)<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>|<div[^>]*class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</div>`)
 )
 
 func extractDuckDuckGoResults(raw string) (string, []map[string]any) {
-	titles := duckDuckGoTitlePattern.FindAllStringSubmatch(raw, 3)
+	results := duckDuckGoResultPattern.FindAllStringSubmatch(raw, 5)
 	snippets := duckDuckGoSnippetPattern.FindAllStringSubmatch(raw, 3)
 	refs := []map[string]any{}
 	parts := []string{}
-	for i, titleMatch := range titles {
-		title := cleanSearchText(titleMatch[1])
+	for i, resultMatch := range results {
+		title := cleanSearchText(resultMatch[2])
+		href := ""
+		if hrefMatch := duckDuckGoHrefPattern.FindStringSubmatch(resultMatch[1]); len(hrefMatch) > 1 {
+			href = normalizeDuckDuckGoHref(hrefMatch[1])
+		}
 		snippet := ""
 		if i < len(snippets) {
 			for _, candidate := range snippets[i][1:] {
@@ -617,9 +762,14 @@ func extractDuckDuckGoResults(raw string) (string, []map[string]any) {
 			snippet = title
 		}
 		parts = append(parts, snippet)
+		source := "duckduckgo_html"
+		if host := sourceHostFromURL(href); host != "" {
+			source = host
+		}
 		refs = append(refs, map[string]any{
 			"title":   title,
-			"source":  "duckduckgo_html",
+			"url":     href,
+			"source":  source,
 			"snippet": snippet,
 		})
 	}
@@ -640,6 +790,107 @@ func cleanSearchText(raw string) string {
 	text := htmlpkg.UnescapeString(stripHTML(raw))
 	text = strings.Join(strings.Fields(text), " ")
 	return strings.TrimSpace(text)
+}
+
+func acceptedReferencesFromObservation(observation map[string]any) []map[string]any {
+	if observation == nil {
+		return nil
+	}
+	retrievalProcessing, ok := observation["retrievalProcessing"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	switch items := retrievalProcessing["acceptedReferences"].(type) {
+	case []map[string]any:
+		return items
+	case []any:
+		refs := []map[string]any{}
+		for _, item := range items {
+			entry, ok := item.(map[string]any)
+			if ok {
+				refs = append(refs, entry)
+			}
+		}
+		return refs
+	default:
+		return nil
+	}
+}
+
+func ensureKnowledgeSourcesSection(markdown string, refs []map[string]any) string {
+	trimmed := strings.TrimSpace(markdown)
+	if trimmed == "" || len(refs) == 0 || strings.Contains(trimmed, "知识来源") {
+		return trimmed
+	}
+	lines := []string{trimmed, "", "## 知识来源"}
+	for _, ref := range refs {
+		title := strings.TrimSpace(fmt.Sprint(ref["title"]))
+		urlValue := strings.TrimSpace(fmt.Sprint(ref["url"]))
+		source := strings.TrimSpace(fmt.Sprint(ref["source"]))
+		if title == "" && source == "" {
+			continue
+		}
+		label := title
+		if label == "" {
+			label = source
+		}
+		if urlValue != "" && urlValue != "<nil>" {
+			lines = append(lines, fmt.Sprintf("- [%s](%s)", label, urlValue))
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- %s", label))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func stripKnowledgeSourcesSection(markdown string) string {
+	trimmed := strings.TrimSpace(markdown)
+	if trimmed == "" {
+		return trimmed
+	}
+	marker := "\n## 知识来源"
+	if index := strings.Index(trimmed, marker); index >= 0 {
+		return strings.TrimSpace(trimmed[:index])
+	}
+	if strings.HasPrefix(trimmed, "## 知识来源") {
+		return ""
+	}
+	return trimmed
+}
+
+func normalizeDuckDuckGoHref(raw string) string {
+	href := strings.TrimSpace(htmlpkg.UnescapeString(raw))
+	if href == "" {
+		return ""
+	}
+	if strings.HasPrefix(href, "//") {
+		href = "https:" + href
+	}
+	if strings.HasPrefix(href, "/") {
+		href = "https://duckduckgo.com" + href
+	}
+	parsed, err := url.Parse(href)
+	if err != nil {
+		return href
+	}
+	if uddg := strings.TrimSpace(parsed.Query().Get("uddg")); uddg != "" {
+		if decoded, err := url.QueryUnescape(uddg); err == nil {
+			return decoded
+		}
+		return uddg
+	}
+	return href
+}
+
+func sourceHostFromURL(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(parsed.Hostname()))
 }
 
 func deterministicSearchFallback(query string) string {
@@ -913,24 +1164,25 @@ func firstSearchToken(query string) string {
 }
 
 func shouldTryWeatherLookup(skillID, query, location, locationSearchName string, input map[string]any) bool {
+	normalized := strings.ToLower(strings.TrimSpace(query))
+	weatherIntent := skillID == "weather" ||
+		searchQueriesMentionWeather(input["searchQueries"]) ||
+		searchQueriesMentionWeather(input["queries"]) ||
+		strings.Contains(normalized, "天气") ||
+		strings.Contains(normalized, "气温") ||
+		strings.Contains(normalized, "降雨") ||
+		strings.Contains(normalized, "weather") ||
+		strings.Contains(normalized, "forecast")
+	if !weatherIntent {
+		return false
+	}
 	if strings.TrimSpace(location) != "" {
 		return true
 	}
 	if strings.TrimSpace(locationSearchName) != "" {
 		return true
 	}
-	normalized := strings.ToLower(strings.TrimSpace(query))
-	if skillID == "weather" {
-		return true
-	}
-	if searchQueriesMentionWeather(input["searchQueries"]) || searchQueriesMentionWeather(input["queries"]) {
-		return true
-	}
-	return strings.Contains(normalized, "天气") ||
-		strings.Contains(normalized, "气温") ||
-		strings.Contains(normalized, "降雨") ||
-		strings.Contains(normalized, "weather") ||
-		strings.Contains(normalized, "forecast")
+	return true
 }
 
 func searchQueriesMentionWeather(raw any) bool {
@@ -1460,9 +1712,11 @@ func (p openAICompatibleModelProvider) Complete(ctx context.Context, req applica
 		}
 	}
 	if req.Stage == "reasoning" {
+		reasoningSystemPrompt := "输出唯一 JSON：nextAction（call_tool）、toolName（web_search 或 app_search）、toolInput（含 query；可含 searchQueries:[{dimension,query}]、location、locationSearchName、symbol 或 symbols）、stageNarrative（唯一面向用户叙事字段，180-320字）。stageNarrative 必须使用第二人称“你/你的”，禁止写“用户/该用户/客户/提问者”；先用 2-4 句深入说明你真正要解决的问题，覆盖地点、时间、人数/对象、出行或决策约束、已知上下文和缺失信息；检索设计只占最后 1 句，简要说明会核验哪些事实，不要让检索词占据主体。toolInput.query 是主检索短词；如有天气、交通、景点、人流、股票、新闻等多个维度，在 toolInput.searchQueries 中每个维度一行列出结构化检索词。如问题涉及天气、出行地点或本地实时信息，toolInput.location 填你识别出的地点，toolInput.locationSearchName 填适合地理检索的英文/拉丁写法（例如杭州用 Hangzhou、深圳用 Shenzhen）；如问题涉及证券/股票，toolInput.symbol 或 symbols 填你能识别的交易代码。拼音/缩写须自行理解为可用检索词。禁止输出 JSON 外文字。"
+		reasoningSystemPrompt += " 检索时优先规划权威来源、官方文档、产品页、标准组织或一手机构资料；若用户问题本身包含‘对比’、‘怎么选’、‘差异’、‘竞品’等意图，应主动把 searchQueries 拆成多家官方来源或多个权威机构的对比查询，而不是只盯单一站点。"
 		body["response_format"] = map[string]string{"type": "json_object"}
 		body["messages"] = []map[string]string{
-			{"role": "system", "content": "输出唯一 JSON：nextAction（call_tool）、toolName（web_search 或 app_search）、toolInput（含 query；可含 searchQueries:[{dimension,query}]、location、locationSearchName、symbol 或 symbols）、stageNarrative（唯一面向用户叙事字段，180-320字）。stageNarrative 必须使用第二人称“你/你的”，禁止写“用户/该用户/客户/提问者”；先用 2-4 句深入说明你真正要解决的问题，覆盖地点、时间、人数/对象、出行或决策约束、已知上下文和缺失信息；检索设计只占最后 1 句，简要说明会核验哪些事实，不要让检索词占据主体。toolInput.query 是主检索短词；如有天气、交通、景点、人流、股票、新闻等多个维度，在 toolInput.searchQueries 中每个维度一行列出结构化检索词。如问题涉及天气、出行地点或本地实时信息，toolInput.location 填你识别出的地点，toolInput.locationSearchName 填适合地理检索的英文/拉丁写法（例如杭州用 Hangzhou、深圳用 Shenzhen）；如问题涉及证券/股票，toolInput.symbol 或 symbols 填你能识别的交易代码。拼音/缩写须自行理解为可用检索词。禁止输出 JSON 外文字。"},
+			{"role": "system", "content": reasoningSystemPrompt},
 			{"role": "user", "content": prompt},
 		}
 	}
@@ -1474,9 +1728,11 @@ func (p openAICompatibleModelProvider) Complete(ctx context.Context, req applica
 		}
 	}
 	if req.Stage == "final" {
+		finalSystemPrompt := "输出唯一 JSON：{\"userMarkdown\":\"...\"}。userMarkdown 为面向用户的完整回答，可用 Markdown，必须非空，必须使用第二人称“你/你的”，禁止写“用户/该用户/客户/提问者”。开头直接给结论或建议，不要用内部证据来源作为开场，不要出现“工具、观察、检索、证据标记、协议、JSON、reliable”等内部过程或调试表述；也不要复述同一会话前文里的生硬模板口吻。若输入证据可靠，请把事实自然融入回答并给可执行建议；若输入证据不足，才说明不确定性与下一步核验办法。Markdown 结构必须清晰：优先使用 2-4 个短小段落、项目符号或小标题；每个要点单独成行，避免把天气、原因、行动建议挤成一个长段。遵守法律法规；勿编造实时事实；不确定处提示用户自行核实；仅当用户问题确实涉及金融、股票、证券、基金、买卖或投资决策时才加注非投资建议声明；天气、出行、行程规划等非金融问题禁止出现投资建议声明。若 observation.retrievalProcessing.acceptedReferences 非空，在正文结尾追加“## 知识来源”小节，列出 1-4 条来源；只能使用输入里的 title/url/source，不得编造链接或来源。禁止输出 JSON 外文字。"
+		finalSystemPrompt += " 若用户问题涉及选型、价格、计费、购买或跨平台对比，请优先引用 acceptedReferences 中的权威/官方来源来支撑关键结论；当 acceptedReferences 为空时，不得编造来源或把未经证据支撑的细节写成确定事实。"
 		body["response_format"] = map[string]string{"type": "json_object"}
 		body["messages"] = []map[string]string{
-			{"role": "system", "content": "输出唯一 JSON：{\"userMarkdown\":\"...\"}。userMarkdown 为面向用户的完整回答，可用 Markdown，必须非空，必须使用第二人称“你/你的”，禁止写“用户/该用户/客户/提问者”。开头直接给结论或建议，不要用内部证据来源作为开场，不要出现“工具、观察、检索、证据标记、协议、JSON、reliable”等内部过程或调试表述；也不要复述同一会话前文里的生硬模板口吻。若输入证据可靠，请把事实自然融入回答并给可执行建议；若输入证据不足，才说明不确定性与下一步核验办法。Markdown 结构必须清晰：优先使用 2-4 个短小段落、项目符号或小标题；每个要点单独成行，避免把天气、原因、行动建议挤成一个长段。遵守法律法规；勿编造实时事实；不确定处提示用户自行核实；仅当用户问题确实涉及金融、股票、证券、基金、买卖或投资决策时才加注非投资建议声明；天气、出行、行程规划等非金融问题禁止出现投资建议声明。禁止输出 JSON 外文字。"},
+			{"role": "system", "content": finalSystemPrompt},
 			{"role": "user", "content": prompt},
 		}
 	}
@@ -1542,6 +1798,14 @@ func (p openAICompatibleModelProvider) Complete(ctx context.Context, req applica
 		}
 		if strings.TrimSpace(outText) == "" {
 			outText = rawText
+		}
+		acceptedRefs := acceptedReferencesFromObservation(req.Observation)
+		if len(acceptedRefs) == 0 {
+			outText = stripKnowledgeSourcesSection(outText)
+			delta["userMarkdown"] = outText
+		} else {
+			outText = ensureKnowledgeSourcesSection(outText, acceptedRefs)
+			delta["userMarkdown"] = outText
 		}
 	}
 	if decoded.Usage == nil {

@@ -1,0 +1,510 @@
+{
+  "schemaVersion": "shared-media-theme-catalog",
+  "description": "共享池主题分类、角色层级和跨域文本种子。",
+  "themes": [
+    {
+      "themeId": "photography",
+      "displayName": "摄影",
+      "accent": "光影",
+      "adjacentThemes": [
+        "travel",
+        "cityWalk"
+      ],
+      "portraitSourceIds": [
+        "portrait_legacy_photography_01",
+        "portrait_curated_design_02"
+      ],
+      "backgroundSourceIds": [
+        "scene_photo_architecture_01",
+        "scene_article_beach_01"
+      ],
+      "postSourceIds": [
+        "scene_photo_architecture_01",
+        "scene_article_beach_01",
+        "object_camera_01"
+      ],
+      "circleSourceIds": [
+        "scene_photo_architecture_01",
+        "scene_article_beach_01"
+      ],
+      "titleSeeds": [
+        "晨光",
+        "留白",
+        "桥下",
+        "反射"
+      ],
+      "momentSeeds": [
+        "今天把底片送洗了。",
+        "在天桥下等到一束刚好的光。",
+        "把曝光减了一档，画面终于安静下来。"
+      ],
+      "circleNames": [
+        "契约摄影社",
+        "留白镜头会",
+        "胶片观察站"
+      ]
+    },
+    {
+      "themeId": "travel",
+      "displayName": "旅行",
+      "accent": "远行",
+      "adjacentThemes": [
+        "photography",
+        "outdoor"
+      ],
+      "portraitSourceIds": [
+        "portrait_legacy_travel_01",
+        "portrait_curated_outdoor_01"
+      ],
+      "backgroundSourceIds": [
+        "landscape_travel_01",
+        "landscape_travel_02"
+      ],
+      "postSourceIds": [
+        "landscape_travel_01",
+        "landscape_travel_02",
+        "scene_outdoor_peak_01"
+      ],
+      "circleSourceIds": [
+        "landscape_travel_01",
+        "landscape_travel_02"
+      ],
+      "titleSeeds": [
+        "山口",
+        "落日",
+        "湖边",
+        "归途"
+      ],
+      "momentSeeds": [
+        "把下一站写进了备忘录。",
+        "天气和路况都比预期更温柔。",
+        "这段路值得为了清晨再走一遍。"
+      ],
+      "circleNames": [
+        "契约旅行手账",
+        "周末路线复盘局",
+        "远行地图站"
+      ]
+    },
+    {
+      "themeId": "cityWalk",
+      "displayName": "城市漫步",
+      "accent": "街角",
+      "adjacentThemes": [
+        "photography",
+        "coffee"
+      ],
+      "portraitSourceIds": [
+        "portrait_legacy_city_01",
+        "portrait_legacy_photography_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_city_01",
+        "scene_city_02"
+      ],
+      "postSourceIds": [
+        "scene_city_01",
+        "scene_city_02",
+        "scene_photo_architecture_01"
+      ],
+      "circleSourceIds": [
+        "scene_city_01",
+        "scene_city_02"
+      ],
+      "titleSeeds": [
+        "天桥",
+        "霓虹",
+        "街口",
+        "橱窗"
+      ],
+      "momentSeeds": [
+        "下班后绕了一圈老街。",
+        "今晚的风把城市吹得很轻。",
+        "走到这条路尽头时，刚好碰见蓝调时刻。"
+      ],
+      "circleNames": [
+        "契约城市漫步",
+        "夜色散步局",
+        "街头采样社"
+      ]
+    },
+    {
+      "themeId": "food",
+      "displayName": "美食",
+      "accent": "风味",
+      "adjacentThemes": [
+        "coffee",
+        "lifestyle"
+      ],
+      "portraitSourceIds": [
+        "portrait_legacy_food_01",
+        "portrait_curated_family_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_food_01",
+        "object_coffee_01"
+      ],
+      "postSourceIds": [
+        "scene_food_01",
+        "object_coffee_01",
+        "scene_coffee_night_01"
+      ],
+      "circleSourceIds": [
+        "scene_food_01",
+        "object_coffee_01"
+      ],
+      "titleSeeds": [
+        "热汤",
+        "街边",
+        "早午餐",
+        "夜宵"
+      ],
+      "momentSeeds": [
+        "这家店的第一口就值回排队时间。",
+        "把今日份好吃的记下来。",
+        "风味比预想更有层次。"
+      ],
+      "circleNames": [
+        "契约美食探店",
+        "风味记录会",
+        "城市饭桌局"
+      ]
+    },
+    {
+      "themeId": "coffee",
+      "displayName": "咖啡",
+      "accent": "豆香",
+      "adjacentThemes": [
+        "food",
+        "designWriting"
+      ],
+      "portraitSourceIds": [
+        "portrait_curated_writing_01",
+        "portrait_legacy_lifestyle_01"
+      ],
+      "backgroundSourceIds": [
+        "object_coffee_01",
+        "scene_coffee_night_01"
+      ],
+      "postSourceIds": [
+        "object_coffee_01",
+        "scene_coffee_night_01",
+        "scene_lifestyle_home_01"
+      ],
+      "circleSourceIds": [
+        "object_coffee_01",
+        "scene_coffee_night_01"
+      ],
+      "titleSeeds": [
+        "手冲",
+        "吧台",
+        "奶泡",
+        "豆单"
+      ],
+      "momentSeeds": [
+        "今天换了新的豆子。",
+        "吧台边的位置适合发呆和记事。",
+        "这一杯把情绪重新校准了。"
+      ],
+      "circleNames": [
+        "契约咖啡地图",
+        "豆香观察站",
+        "手冲交换所"
+      ]
+    },
+    {
+      "themeId": "lifestyle",
+      "displayName": "生活方式",
+      "accent": "日常",
+      "adjacentThemes": [
+        "coffee",
+        "parenting"
+      ],
+      "portraitSourceIds": [
+        "portrait_legacy_lifestyle_01",
+        "portrait_legacy_design_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_lifestyle_home_01",
+        "scene_coffee_night_01"
+      ],
+      "postSourceIds": [
+        "scene_lifestyle_home_01",
+        "scene_coffee_night_01",
+        "object_book_photography_01"
+      ],
+      "circleSourceIds": [
+        "scene_lifestyle_home_01",
+        "scene_coffee_night_01"
+      ],
+      "titleSeeds": [
+        "窗边",
+        "周末",
+        "收纳",
+        "餐桌"
+      ],
+      "momentSeeds": [
+        "把桌面重新整理了一遍。",
+        "今天适合慢一点。",
+        "日常里也能留下一点仪式感。"
+      ],
+      "circleNames": [
+        "契约生活方式",
+        "慢日常俱乐部",
+        "家居灵感局"
+      ]
+    },
+    {
+      "themeId": "fitness",
+      "displayName": "运动",
+      "accent": "体能",
+      "adjacentThemes": [
+        "outdoor",
+        "lifestyle"
+      ],
+      "portraitSourceIds": [
+        "portrait_curated_outdoor_01",
+        "portrait_curated_parenting_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_fitness_01",
+        "scene_outdoor_peak_01"
+      ],
+      "postSourceIds": [
+        "scene_fitness_01",
+        "scene_outdoor_peak_01",
+        "scene_city_01"
+      ],
+      "circleSourceIds": [
+        "scene_fitness_01",
+        "scene_outdoor_peak_01"
+      ],
+      "titleSeeds": [
+        "晨跑",
+        "训练",
+        "节奏",
+        "恢复"
+      ],
+      "momentSeeds": [
+        "今天的配速比上周稳。",
+        "训练完的空气很清透。",
+        "把恢复和强度都记进计划里。"
+      ],
+      "circleNames": [
+        "契约运动搭子",
+        "配速复盘会",
+        "训练计划站"
+      ]
+    },
+    {
+      "themeId": "pet",
+      "displayName": "宠物",
+      "accent": "陪伴",
+      "adjacentThemes": [
+        "lifestyle",
+        "outdoor"
+      ],
+      "portraitSourceIds": [
+        "portrait_curated_family_01",
+        "portrait_legacy_food_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_pet_01",
+        "scene_pet_02"
+      ],
+      "postSourceIds": [
+        "scene_pet_01",
+        "scene_pet_02",
+        "scene_lifestyle_home_01"
+      ],
+      "circleSourceIds": [
+        "scene_pet_01",
+        "scene_pet_02"
+      ],
+      "titleSeeds": [
+        "散步",
+        "尾巴",
+        "晒太阳",
+        "窝边"
+      ],
+      "momentSeeds": [
+        "今天又被尾巴治愈了一次。",
+        "晒太阳的样子实在太安静。",
+        "散步路线被它重新定义了。"
+      ],
+      "circleNames": [
+        "契约宠物陪伴局",
+        "毛孩子日记会",
+        "散步搭档群"
+      ]
+    },
+    {
+      "themeId": "parenting",
+      "displayName": "亲子",
+      "accent": "成长",
+      "adjacentThemes": [
+        "lifestyle",
+        "outdoor"
+      ],
+      "portraitSourceIds": [
+        "portrait_curated_family_01",
+        "portrait_curated_parenting_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_parenting_01",
+        "scene_parenting_02"
+      ],
+      "postSourceIds": [
+        "scene_parenting_01",
+        "scene_parenting_02",
+        "scene_lifestyle_home_01"
+      ],
+      "circleSourceIds": [
+        "scene_parenting_01",
+        "scene_parenting_02"
+      ],
+      "titleSeeds": [
+        "手作",
+        "放学",
+        "周末",
+        "成长"
+      ],
+      "momentSeeds": [
+        "今天一起做了新的手工。",
+        "把小小的进步认真记下来。",
+        "周末的节奏因为陪伴而变慢。"
+      ],
+      "circleNames": [
+        "契约亲子陪伴局",
+        "成长记录社",
+        "周末亲子会"
+      ]
+    },
+    {
+      "themeId": "outdoor",
+      "displayName": "户外",
+      "accent": "山野",
+      "adjacentThemes": [
+        "travel",
+        "fitness"
+      ],
+      "portraitSourceIds": [
+        "portrait_curated_outdoor_01",
+        "portrait_legacy_travel_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_outdoor_peak_01",
+        "landscape_travel_01"
+      ],
+      "postSourceIds": [
+        "scene_outdoor_peak_01",
+        "landscape_travel_01",
+        "scene_pet_01"
+      ],
+      "circleSourceIds": [
+        "scene_outdoor_peak_01",
+        "landscape_travel_01"
+      ],
+      "titleSeeds": [
+        "山脊",
+        "营地",
+        "溪谷",
+        "日出"
+      ],
+      "momentSeeds": [
+        "今天的风把山脊吹得很干净。",
+        "营地刚搭好就等到晚霞。",
+        "这条线比地图上更值得走。"
+      ],
+      "circleNames": [
+        "契约户外营地",
+        "山野观察站",
+        "周末出发局"
+      ]
+    },
+    {
+      "themeId": "tech",
+      "displayName": "科技",
+      "accent": "效率",
+      "adjacentThemes": [
+        "designWriting",
+        "cityWalk"
+      ],
+      "portraitSourceIds": [
+        "portrait_curated_tech_01",
+        "portrait_legacy_city_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_tech_01",
+        "scene_workspace_01"
+      ],
+      "postSourceIds": [
+        "scene_tech_01",
+        "scene_workspace_01",
+        "scene_design_office_01"
+      ],
+      "circleSourceIds": [
+        "scene_tech_01",
+        "scene_workspace_01"
+      ],
+      "titleSeeds": [
+        "工作流",
+        "自动化",
+        "面板",
+        "脚本"
+      ],
+      "momentSeeds": [
+        "今天把一条重复动作自动化了。",
+        "新工具终于接进现有流程。",
+        "效率不是更快，而是更少切换。"
+      ],
+      "circleNames": [
+        "契约科技前沿",
+        "效率工具局",
+        "自动化复盘站"
+      ]
+    },
+    {
+      "themeId": "designWriting",
+      "displayName": "设计与写作",
+      "accent": "表达",
+      "adjacentThemes": [
+        "tech",
+        "coffee"
+      ],
+      "portraitSourceIds": [
+        "portrait_curated_writing_01",
+        "portrait_legacy_design_01"
+      ],
+      "backgroundSourceIds": [
+        "scene_design_office_01",
+        "object_book_photography_01"
+      ],
+      "postSourceIds": [
+        "scene_design_office_01",
+        "object_book_photography_01",
+        "scene_workspace_01"
+      ],
+      "circleSourceIds": [
+        "scene_design_office_01",
+        "object_book_photography_01"
+      ],
+      "titleSeeds": [
+        "版式",
+        "草图",
+        "注释",
+        "章节"
+      ],
+      "momentSeeds": [
+        "今天把一段文字写顺了。",
+        "草图终于找到该留白的位置。",
+        "表达清楚比堆砌信息更重要。"
+      ],
+      "circleNames": [
+        "契约设计写作局",
+        "版式与表达会",
+        "长文编辑站"
+      ]
+    }
+  ]
+}

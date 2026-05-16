@@ -23,9 +23,8 @@ void main() {
       );
       ownerNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'user_owner',
+          subAccountId: 'user_owner',
           ownerUserId: 'user_owner',
-          subAccountId: '',
           subjectType: 'owner',
           displayName: '主账号',
           avatarUrl: '',
@@ -34,9 +33,8 @@ void main() {
       );
       subNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'subject_sub_001',
-          ownerUserId: 'user_owner',
           subAccountId: 'sub_001',
+          ownerUserId: 'user_owner',
           subjectType: 'sub_account',
           displayName: '子账号',
           avatarUrl: '',

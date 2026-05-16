@@ -46,7 +46,7 @@ child: Material(
 
 ## 3. Automated Enforcement
 
-We use `scripts/verify_dart_semantic.py` to enforce these rules.
+We use `quwoquan_app/scripts/runtime/verify_dart_semantic.py` to enforce these rules.
 *   **Global Bans:** `Scaffold`, `AppBar`, `SnackBar`, etc. are banned globally.
 *   **Visual Constants:** Hardcoded `Color(0x...)`, `width: 10`, etc. are banned in favor of `AppSpacing`, `AppColors`.
 

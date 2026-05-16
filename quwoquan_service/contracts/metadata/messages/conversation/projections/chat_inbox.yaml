@@ -32,7 +32,7 @@ fields:
   - { name: conversationId, type: ObjectId }
   - { name: type, type: enum }
   - { name: title, type: string }
-  - { name: avatarUrl, type: string, description: "会话主头像 URL：单聊为对方用户头像；群聊为 chat-service 服务端预合成 CDN URL（须非空可访问）" }
+  - { name: avatarUrl, type: string, description: "会话主头像 URL：单聊为对方用户头像；群聊（含圈子绑定默认群）为 chat-service 服务端预合成 CDN URL（须非空可访问）" }
   - { name: groupAvatarVersion, type: int64, description: "群头像版本号（服务端内部一致性）；用于端侧缓存失效与 patch 幂等" }
   - { name: lastMessagePreview, type: string }
   - { name: lastMessageType, type: string, description: "最近一条消息类型，用于列表副标题 icon" }
@@ -42,7 +42,7 @@ fields:
   - { name: mentionUnreadCount, type: int, description: "@我且未读的消息数" }
   - { name: muted, type: bool }
   - { name: pinned, type: bool }
-  - { name: circleId, type: string, description: "type=circle 时关联圈子 id；其他类型可为空" }
+  - { name: circleId, type: string, description: "关联圈子 id；有值表示该会话为圈子绑定默认群，其他会话可为空" }
 
 indexes:
   - { name: idx_ci_user_pinned_time, keys: { userId: 1, pinned: -1, lastMessageTime: -1 } }

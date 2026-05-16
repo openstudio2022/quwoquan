@@ -69,8 +69,11 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	if req.Header.Get("X-Client-Session-Id") == "" {
 		req.Header.Set("X-Client-Session-Id", meta.SessionID)
 	}
-	if req.Header.Get("X-Persona-Id") == "" && meta.PersonaID != "" {
-		req.Header.Set("X-Persona-Id", meta.PersonaID)
+	if req.Header.Get("X-Client-User-Id") == "" && meta.UserID != "" {
+		req.Header.Set("X-Client-User-Id", meta.UserID)
+	}
+	if req.Header.Get("X-Client-Sub-Account-Id") == "" && meta.SubAccountID != "" {
+		req.Header.Set("X-Client-Sub-Account-Id", meta.SubAccountID)
 	}
 	if req.Header.Get("X-Client-Page-Id") == "" && meta.PageID != "" {
 		req.Header.Set("X-Client-Page-Id", meta.PageID)
@@ -89,7 +92,7 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		SessionID:         meta.SessionID,
 		Src:               rt.cfg.Src,
 		UserID:            meta.UserID,
-		PersonaID:         meta.PersonaID,
+		SubAccountID:      meta.SubAccountID,
 		PageID:            meta.PageID,
 		DevicePlatform:    meta.DevicePlatform,
 		AppVersion:        meta.AppVersion,
@@ -129,7 +132,7 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			SessionID:         meta.SessionID,
 			Src:               rt.cfg.Src,
 			UserID:            meta.UserID,
-			PersonaID:         meta.PersonaID,
+			SubAccountID:      meta.SubAccountID,
 			PageID:            meta.PageID,
 			DevicePlatform:    meta.DevicePlatform,
 			AppVersion:        meta.AppVersion,
@@ -159,7 +162,7 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			SessionID:         meta.SessionID,
 			Src:               rt.cfg.Src,
 			UserID:            meta.UserID,
-			PersonaID:         meta.PersonaID,
+			SubAccountID:      meta.SubAccountID,
 			PageID:            meta.PageID,
 			DevicePlatform:    meta.DevicePlatform,
 			AppVersion:        meta.AppVersion,
@@ -188,7 +191,7 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		SessionID:         meta.SessionID,
 		Src:               rt.cfg.Src,
 		UserID:            meta.UserID,
-		PersonaID:         meta.PersonaID,
+		SubAccountID:      meta.SubAccountID,
 		PageID:            meta.PageID,
 		DevicePlatform:    meta.DevicePlatform,
 		AppVersion:        meta.AppVersion,
@@ -213,7 +216,7 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		SessionID:         meta.SessionID,
 		Src:               rt.cfg.Src,
 		UserID:            meta.UserID,
-		PersonaID:         meta.PersonaID,
+		SubAccountID:      meta.SubAccountID,
 		PageID:            meta.PageID,
 		DevicePlatform:    meta.DevicePlatform,
 		AppVersion:        meta.AppVersion,
@@ -227,4 +230,3 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 
 	return resp, err
 }
-

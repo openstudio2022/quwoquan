@@ -21,7 +21,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ConversationPage" }
     post:
-      summary: Create conversation (direct/group/circle)
+      summary: Create conversation (direct/group/encrypted; circle-bound groups use group + circleId)
       parameters:
         - $ref: ../_shared/openapi_common.yaml#/components/parameters/IdempotencyKey
       requestBody:
@@ -326,7 +326,7 @@ components:
         ]
       properties:
         conversationId: { type: string }
-        type: { type: string, enum: [direct, group, circle, encrypted] }
+        type: { type: string, enum: [direct, group, encrypted] }
         title: { type: string }
         avatarUrl: { type: string }
         groupAvatarVersion: { type: integer, format: int64 }
@@ -353,7 +353,7 @@ components:
       required: [id, type, avatarUrl, maxSeq, memberCount]
       properties:
         id: { type: string }
-        type: { type: string, enum: [direct, group, circle, encrypted] }
+        type: { type: string, enum: [direct, group, encrypted] }
         title: { type: string }
         avatarUrl: { type: string }
         groupAvatarVersion: { type: integer, format: int64 }
@@ -387,7 +387,7 @@ components:
       type: object
       required: [type, memberUserIds]
       properties:
-        type: { type: string, enum: [direct, group, circle, encrypted] }
+        type: { type: string, enum: [direct, group, encrypted] }
         memberUserIds:
           type: array
           items: { type: string }

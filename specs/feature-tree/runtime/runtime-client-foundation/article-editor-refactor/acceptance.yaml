@@ -102,4 +102,4 @@ acceptance:
   - id: A-cross-cutting-gates
     criteria: >
       相关页面满足 page-horizontal-quality 矩阵与 P2 清单；`make verify-app-page-horizontal-quality` 与
-      `scripts/gate_repo.sh --scope app` 在 PR 前通过；UI 不 import mock 目录；语义与 iOS 规范符合 design 引用。
+      `agent_ops/gate/gate_repo.sh --scope app` 在 PR 前通过；UI 不 import mock 目录；语义与 iOS 规范符合 design 引用。

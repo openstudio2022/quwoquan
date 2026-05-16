@@ -4,14 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
-/// 他人主页入口；壳内档案为 ProfileSubjectViewData（UserProfileViewData 别名）。
+/// 他人主页入口；壳内档案统一为子账号资料视图（`UserProfileViewData` 别名）。
 ///
 /// 路由：/user/:username
 class OtherProfilePage extends ConsumerWidget {
   const OtherProfilePage({
     super.key,
     required this.username,
-    this.profileSubjectId,
+    this.subAccountId,
     this.initialAvatarUrl,
     this.initialDisplayName,
     this.initialBackgroundImageUrl,
@@ -19,7 +19,7 @@ class OtherProfilePage extends ConsumerWidget {
   });
 
   final String username;
-  final String? profileSubjectId;
+  final String? subAccountId;
   final String? initialAvatarUrl;
   final String? initialDisplayName;
   final String? initialBackgroundImageUrl;
@@ -29,8 +29,8 @@ class OtherProfilePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return ProfileShell(
       mode: ProfileMode.other,
-      userId: profileSubjectId?.isNotEmpty == true
-          ? profileSubjectId!
+      userId: subAccountId?.isNotEmpty == true
+          ? subAccountId!
           : username,
       initialAvatarUrl: initialAvatarUrl,
       initialDisplayName: initialDisplayName,

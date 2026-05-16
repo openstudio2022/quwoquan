@@ -1,0 +1,59 @@
+schemaVersion: quwoquan_data.geo_catalog_config
+name: 四川地理目录候选层
+topic_id_prefix: poi
+output_defaults:
+  catalog_ref: seed/sichuan_chuanxi_attractions_catalog.ndjson
+  slice_report_ref: out/reports/sichuan_geo_catalog_slice_report.json
+scope:
+  region_label: 四川
+  province_name: 四川省
+  province_query_name: 四川省
+  province_admin_level: "4"
+  slice_name_key: "name:zh"
+  slice_admin_level: "5"
+  poi_universe_baseline_note: >
+    本省目录候选层的「景点全集」基线与 geo-content-trinity R7 / acceptance sichuan_content_scope 一致：
+    含旅游景区、史迹遗址、观景台、动物园/水族馆等传统 tourism 类目；未定级景区、网红打卡地、秘境小众等多依赖名称启发式 +
+    merge 输入或后续图文证据轨召回，不要求本 Overpass union 预先枚举每一笔。
+  slices:
+    - 成都市
+    - 自贡市
+    - 攀枝花市
+    - 泸州市
+    - 德阳市
+    - 绵阳市
+    - 广元市
+    - 遂宁市
+    - 内江市
+    - 乐山市
+    - 南充市
+    - 眉山市
+    - 宜宾市
+    - 广安市
+    - 达州市
+    - 雅安市
+    - 巴中市
+    - 资阳市
+    - 阿坝藏族羌族自治州
+    - 甘孜藏族自治州
+    - 凉山彝族自治州
+filters:
+  tourism_allowed:
+    - attraction
+    - museum
+    - viewpoint
+    - theme_park
+    - zoo
+    - aquarium
+  amenity_allowed:
+    - museum
+    - arts_centre
+  historic_allowed:
+    - monument
+    - archaeological_site
+    - ruins
+    - building
+    - castle
+    - fort
+naming_rules_path: entity_naming_rules.yaml
+geo_band_rules_path: geo_band_rules.sichuan.yaml

@@ -14,7 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/persona_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_interaction_activity_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_social_relation_row_wire_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/profile_subject_wire_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_user_like_row_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/relationship_normalized_wire_dto.g.dart';
@@ -55,7 +55,7 @@ abstract class UserProfileRepository {
   const UserProfileRepository();
 
   // ── 档案 ──────────────────────────────────────────────────────────────────
-  Future<ProfileSubjectViewData> getUserProfile(String userId);
+  Future<SubAccountProfileViewData> getUserProfile(String userId);
   Future<void> updateProfile(ProfileEditUpdatePayload data);
 
   // ── 主页 Tab 数据 ─────────────────────────────────────────────────────────
@@ -92,16 +92,14 @@ abstract class UserProfileRepository {
   Future<void> followUser(
     String targetUserId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   });
   Future<void> unfollowUser(
     String targetUserId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   });
   Future<List<ProfileSocialRelationRowViewData>> listFollowing(
     String userId, {
@@ -135,11 +133,14 @@ abstract class UserProfileRepository {
   // ── 分身 ──────────────────────────────────────────────────────────────────
   Future<List<PersonaDto>> listPersonas();
   Future<PersonaDto> createPersona(PersonaCreateRequestDto request);
-  Future<void> updatePersona(String personaId, PersonaUpdateRequestDto request);
-  Future<void> deletePersona(String personaId);
-  Future<void> activatePersona(String personaId);
+  Future<void> updatePersona(
+    String subAccountId,
+    PersonaUpdateRequestDto request,
+  );
+  Future<void> deletePersona(String subAccountId);
+  Future<void> activatePersona(String subAccountId);
 
-  Future<ProfileSubjectViewData> getProfileSubject(String userId) async {
+  Future<SubAccountProfileViewData> getSubAccountProfile(String userId) async {
     final profile = await getUserProfile(userId);
     final stats = await getUserStats(userId);
     return profile.mergeStats(stats);
@@ -174,7 +175,7 @@ abstract class UserProfileRepository {
   List<Map<String, dynamic>> resonanceBuddyPreviewWireRows();
 }
 
-/// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [ProfileSubjectWireDto]。
+/// 预置用户档案 JSON：`jsonDecode` 后与远程 `getUserProfile` 同形进入 [SubAccountProfileWireDto]。
 const String _kBundledMockUserProfilesJson = r'''
 {
   "user_001": {
@@ -297,15 +298,15 @@ class MockUserProfileRepository extends UserProfileRepository {
       <RecentSearchEntryWireDto>[];
 
   @override
-  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
     final contractWire = _contractProfileWireByUserId[userId];
     if (contractWire != null) {
-      return ProfileSubjectViewData.fromProfileSubjectWire(contractWire);
+      return SubAccountProfileViewData.fromSubAccountProfileWire(contractWire);
     }
     final wire =
         _mockProfileWireByUserId[userId] ??
-        ProfileSubjectWireDto.fromMap(_defaultProfile(userId));
-    return ProfileSubjectViewData.fromProfileSubjectWire(wire);
+        SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
+    return SubAccountProfileViewData.fromSubAccountProfileWire(wire);
   }
 
   @override
@@ -415,18 +416,18 @@ class MockUserProfileRepository extends UserProfileRepository {
         })
         .take(limit)
         .map((user) {
-          final profileSubjectId =
-              user['profileSubjectId']?.toString() ??
+          final subAccountId =
+              user['subAccountId']?.toString() ??
               user['userId']?.toString() ??
               '';
           final relationState = UserProfileMockData.relationStateValueFor(
-            profileSubjectId,
+            subAccountId,
           );
           final isFollowing = UserProfileMockData.viewerFollowsTarget(
-            profileSubjectId,
+            subAccountId,
           );
           final wire = SocialRelationSearchItemWireDto(
-            profileSubjectId: profileSubjectId,
+            subAccountId: subAccountId,
             username: (user['username'] ?? user['nickname'] ?? '').toString(),
             displayName: (user['displayName'] ?? user['nickname'] ?? '')
                 .toString(),
@@ -490,18 +491,16 @@ class MockUserProfileRepository extends UserProfileRepository {
   Future<void> followUser(
     String targetUserId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {}
 
   @override
   Future<void> unfollowUser(
     String targetUserId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {}
 
   @override
@@ -513,7 +512,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     return _mockRelationUsers
         .where(
           (user) => UserProfileMockData.viewerFollowsTarget(
-            _profileSubjectIdOf(user),
+            _subAccountIdOf(user),
           ),
         )
         .map(_withMockRelationship)
@@ -536,7 +535,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     return _mockRelationUsers
         .where(
           (user) => UserProfileMockData.targetFollowsViewer(
-            _profileSubjectIdOf(user),
+            _subAccountIdOf(user),
           ),
         )
         .map(_withMockRelationship)
@@ -642,15 +641,15 @@ class MockUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<void> updatePersona(
-    String personaId,
+    String subAccountId,
     PersonaUpdateRequestDto request,
   ) async {}
 
   @override
-  Future<void> deletePersona(String personaId) async {}
+  Future<void> deletePersona(String subAccountId) async {}
 
   @override
-  Future<void> activatePersona(String personaId) async {}
+  Future<void> activatePersona(String subAccountId) async {}
 
   // ── Mock 数据 ─────────────────────────────────────────────────────────────
 
@@ -759,10 +758,9 @@ class MockUserProfileRepository extends UserProfileRepository {
         const <String, dynamic>{};
     final userId = item['userId'].toString();
     return <String, dynamic>{
-      'profileSubjectId': userId,
+      'subAccountId': userId,
       'ownerUserId': userId,
       'subjectType': 'user',
-      'subAccountId': '',
       'userHandle': userId,
       'username': userId,
       'displayName': item['displayName']?.toString() ?? userId,
@@ -782,17 +780,17 @@ class MockUserProfileRepository extends UserProfileRepository {
     };
   }
 
-  static final Map<String, ProfileSubjectWireDto> _mockProfileWireByUserId = {
+  static final Map<String, SubAccountProfileWireDto> _mockProfileWireByUserId = {
     for (final e in _decodeBundledMockUserProfiles(
       _kBundledMockUserProfilesJson,
     ).entries)
-      e.key: ProfileSubjectWireDto.fromMap(e.value),
+      e.key: SubAccountProfileWireDto.fromMap(e.value),
   };
 
-  static final Map<String, ProfileSubjectWireDto> _contractProfileWireByUserId =
+  static final Map<String, SubAccountProfileWireDto> _contractProfileWireByUserId =
       {
         for (final item in _contractProfileRows())
-          item['userId'].toString(): ProfileSubjectWireDto.fromMap(
+          item['userId'].toString(): SubAccountProfileWireDto.fromMap(
             _contractProfileWire(item),
           ),
       };
@@ -853,23 +851,23 @@ class MockUserProfileRepository extends UserProfileRepository {
     },
   ];
 
-  static String _profileSubjectIdOf(Map<String, dynamic> user) {
-    return user['profileSubjectId']?.toString() ??
+  static String _subAccountIdOf(Map<String, dynamic> user) {
+    return user['subAccountId']?.toString() ??
         user['userId']?.toString() ??
         '';
   }
 
   static Map<String, dynamic> _withMockRelationship(Map<String, dynamic> user) {
-    final profileSubjectId = _profileSubjectIdOf(user);
+    final subAccountId = _subAccountIdOf(user);
     final relationState = UserProfileMockData.relationStateValueFor(
-      profileSubjectId,
+      subAccountId,
     );
     return <String, dynamic>{
       ...user,
-      'profileSubjectId': profileSubjectId,
+      'subAccountId': subAccountId,
       'relationState': relationState,
-      'isFollowing': UserProfileMockData.viewerFollowsTarget(profileSubjectId),
-      'isFollowedBy': UserProfileMockData.targetFollowsViewer(profileSubjectId),
+      'isFollowing': UserProfileMockData.viewerFollowsTarget(subAccountId),
+      'isFollowedBy': UserProfileMockData.targetFollowsViewer(subAccountId),
       'isMutual': relationState == 'mutual',
     };
   }
@@ -955,23 +953,23 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   static Map<String, dynamic> _normalizeRelationshipItem(
     Map<String, dynamic> raw,
   ) {
-    final profileSubjectId =
-        raw['profileSubjectId']?.toString() ??
-        raw['targetProfileSubjectId']?.toString() ??
+    final subAccountId =
+        raw['subAccountId']?.toString() ??
+        raw['targetSubAccountId']?.toString() ??
         raw['userId']?.toString() ??
         '';
     final displayName =
         raw['displayName']?.toString() ??
         raw['nickname']?.toString() ??
-        profileSubjectId;
+        subAccountId;
     final avatarUrl =
         raw['avatarUrl']?.toString() ??
         raw['avatarUrlSnapshot']?.toString() ??
         '';
     return <String, dynamic>{
       ...raw,
-      'profileSubjectId': profileSubjectId,
-      'userId': profileSubjectId,
+      'subAccountId': subAccountId,
+      'userId': subAccountId,
       'displayName': displayName,
       'nickname': displayName,
       'avatarUrl': avatarUrl,
@@ -996,7 +994,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   // ── 档案 ──────────────────────────────────────────────────────────────────
 
   @override
-  Future<ProfileSubjectViewData> getUserProfile(String userId) async {
+  Future<SubAccountProfileViewData> getUserProfile(String userId) async {
     if (userId == 'me') {
       final meUrl = _uri(UserApiMetadata.getMeProfilePath);
       final meResp = await _client.get(
@@ -1008,8 +1006,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
           json.decode(meResp.body),
           context: UserRequestPageIds.getMeProfile,
         );
-        return ProfileSubjectViewData.fromProfileSubjectWire(
-          ProfileSubjectWireDto.fromMap(map),
+        return SubAccountProfileViewData.fromSubAccountProfileWire(
+          SubAccountProfileWireDto.fromMap(map),
         );
       }
     }
@@ -1028,8 +1026,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
         json.decode(subjectResp.body),
         context: UserRequestPageIds.getSubAccountProfile,
       );
-      return ProfileSubjectViewData.fromProfileSubjectWire(
-        ProfileSubjectWireDto.fromMap(map),
+      return SubAccountProfileViewData.fromSubAccountProfileWire(
+        SubAccountProfileWireDto.fromMap(map),
       );
     }
 
@@ -1060,7 +1058,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     int limit = CloudApiDefaults.pageLimit,
   }) async {
     final url = _uri(
-      ContentApiMetadata.listUserPostsPath(profileSubjectId: userId),
+      ContentApiMetadata.listUserPostsPath(subAccountId: userId),
       queryParameters: <String, String>{'limit': '$limit'},
     );
     final resp = await _client.get(
@@ -1263,21 +1261,19 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   Future<void> followUser(
     String targetUserId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {
     final url = _uri(
-      UserApiMetadata.followUserPath(targetProfileSubjectId: targetUserId),
+      UserApiMetadata.followUserPath(targetSubAccountId: targetUserId),
     );
     final resp = await _client.post(
       url,
-      headers: CloudRequestHeaders.withPersonaContext(
+      headers: CloudRequestHeaders.withOwnerSubAccountContext(
         CloudRequestHeaders.forPage(UserRequestPageIds.followUser),
         ownerUserId: ownerUserId,
-        actorProfileSubjectId: actorProfileSubjectId,
-        personaId: personaId,
-        personaContextVersion: personaContextVersion,
+        subAccountId: subAccountId,
+        subAccountContextVersion: subAccountContextVersion,
       ),
     );
     if (resp.statusCode != 200 && resp.statusCode != 201) {
@@ -1289,21 +1285,19 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   Future<void> unfollowUser(
     String targetUserId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {
     final url = _uri(
-      UserApiMetadata.unfollowUserPath(targetProfileSubjectId: targetUserId),
+      UserApiMetadata.unfollowUserPath(targetSubAccountId: targetUserId),
     );
     final resp = await _client.delete(
       url,
-      headers: CloudRequestHeaders.withPersonaContext(
+      headers: CloudRequestHeaders.withOwnerSubAccountContext(
         CloudRequestHeaders.forPage(UserRequestPageIds.unfollowUser),
         ownerUserId: ownerUserId,
-        actorProfileSubjectId: actorProfileSubjectId,
-        personaId: personaId,
-        personaContextVersion: personaContextVersion,
+        subAccountId: subAccountId,
+        subAccountContextVersion: subAccountContextVersion,
       ),
     );
     if (resp.statusCode != 200 && resp.statusCode != 204) {
@@ -1320,7 +1314,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final params = <String, String>{'limit': '$limit'};
     if (cursor != null) params['cursor'] = cursor;
     final url = _uri(
-      UserApiMetadata.listFollowingPath(profileSubjectId: userId),
+      UserApiMetadata.listFollowingPath(subAccountId: userId),
       queryParameters: params,
     );
     final resp = await _client.get(
@@ -1350,7 +1344,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final params = <String, String>{'limit': '$limit'};
     if (cursor != null) params['cursor'] = cursor;
     final url = _uri(
-      UserApiMetadata.listFollowersPath(profileSubjectId: userId),
+      UserApiMetadata.listFollowersPath(subAccountId: userId),
       queryParameters: params,
     );
     final resp = await _client.get(
@@ -1374,7 +1368,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<RelationshipViewData> getRelationship(String userId) async {
     final url = _uri(
-      UserApiMetadata.getRelationshipPath(profileSubjectId: userId),
+      UserApiMetadata.getRelationshipPath(subAccountId: userId),
     );
     final resp = await _client.get(
       url,
@@ -1435,7 +1429,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (cursor != null) params['cursor'] = cursor;
     final url = _uri(
       ContentApiMetadata.listProfileInteractionActivitiesReceivedPath(
-        profileSubjectId: userId,
+        subAccountId: userId,
       ),
       queryParameters: params,
     );
@@ -1473,7 +1467,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     if (cursor != null) params['cursor'] = cursor;
     final url = _uri(
       ContentApiMetadata.listProfileInteractionActivitiesSentPath(
-        profileSubjectId: userId,
+        subAccountId: userId,
       ),
       queryParameters: params,
     );
@@ -1546,10 +1540,12 @@ class RemoteUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<void> updatePersona(
-    String personaId,
+    String subAccountId,
     PersonaUpdateRequestDto request,
   ) async {
-    final url = _uri(UserApiMetadata.updatePersonaPath(personaId: personaId));
+    final url = _uri(
+      UserApiMetadata.updatePersonaPath(subAccountId: subAccountId),
+    );
     final bodyMap = _omitNullMapValues(request.toMap());
     final resp = await _client.patch(
       url,
@@ -1565,9 +1561,9 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<void> deletePersona(String personaId) async {
+  Future<void> deletePersona(String subAccountId) async {
     final url = _uri(
-      UserApiMetadata.deleteEmptyPersonaPath(personaId: personaId),
+      UserApiMetadata.deleteEmptyPersonaPath(subAccountId: subAccountId),
     );
     final resp = await _client.delete(
       url,
@@ -1581,8 +1577,10 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<void> activatePersona(String personaId) async {
-    final url = _uri(UserApiMetadata.activatePersonaPath(personaId: personaId));
+  Future<void> activatePersona(String subAccountId) async {
+    final url = _uri(
+      UserApiMetadata.activatePersonaPath(subAccountId: subAccountId),
+    );
     final resp = await _client.post(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),

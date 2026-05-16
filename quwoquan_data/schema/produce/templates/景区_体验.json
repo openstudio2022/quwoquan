@@ -1,0 +1,12 @@
+{
+  "templateId": "景区_体验",
+  "entityType": "景区",
+  "angle": "沉浸体验",
+  "description": "以第一人称视角描写的沉浸式体验文章，突出感官细节和情感共鸣",
+  "requiredSections": ["初见印象", "核心体验", "意外收获", "离开时的感受"],
+  "optionalSections": ["同行者故事", "再次来访的理由"],
+  "minWordCount": 600,
+  "maxWordCount": 1500,
+  "imageMinCount": 3,
+  "tone": "生动、感性、有画面感"
+}

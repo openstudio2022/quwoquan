@@ -16,7 +16,7 @@ artifacts:
   - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
   - quwoquan_service/tools/codegen_app_metadata/link_templates_codegen.go
   - quwoquan_app/lib/cloud/runtime/generated/link_templates.g.dart
-  - scripts/verify_link_templates_route_ids.py
+  - quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py
   - specs/feature-tree/tree_index.yaml
 related_cr:
   - CR-20260329-004-metadata-driven-client-data-contract
@@ -24,7 +24,7 @@ dev_log:
   - date: "2026-03-29"
     change: /dev 闭环 codegen（link_templates.g.dart）、origin 薄层、分享深链改 AppLinkTemplates、verify_link_templates_route_ids.py 挂 contract metadata 校验。
     verify:
-      - python3 scripts/verify_link_templates_route_ids.py
+      - python3 quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py
       - make -C quwoquan_service codegen-app
       - flutter test quwoquan_app/test/ui/content/share/share_template_by_identity_widget_test.dart
   - date: "2026-03-30"

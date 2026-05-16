@@ -38,7 +38,7 @@
 - circle_detail_page.dart 所有硬编码字面量替换为语义标签。
 - 所有圈子页面 import 改为绝对路径 `package:quwoquan_app/ui/circle/...`。
 - 操作文案硬编码（'分享圈子'、'保存封面'、'举报圈子'）替换为 UITextConstants。
-- 运行 `python3 scripts/verify_dart_semantic.py` 对 ui/circle/ 零新增违规。
+- 运行 `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py` 对 ui/circle/ 零新增违规。
 
 ## 不做什么（Out of Scope）
 

@@ -70,6 +70,7 @@ type ContentCandidate struct {
 	AuthorID     string
 	Title        string
 	Tags         []string
+	EntityRefs   []string
 	PublishedAt  time.Time
 	ViewCount    int64
 	LikeCount    int64
@@ -496,7 +497,8 @@ func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, ses
 	}
 }
 
-// rerank applies diversity constraints: content type variety, author dedup, exploration injection.
+// rerank applies diversity constraints: content type variety, author dedup, tag dedup,
+// explore injection, and cold-start minimum guarantee.
 func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 	if len(scored) == 0 {
 		return scored
@@ -513,11 +515,20 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 		maxPerAuthor = 3
 	}
 
-	var result []ScoredCandidate
-	for _, s := range scored {
-		if len(result) >= limit {
-			break
+	// Tag dedup: track recent top tags to avoid consecutive same-tag content
+	recentTopTags := make([]string, 0, 3)
+	topTagOf := func(c ContentCandidate) string {
+		if len(c.Tags) > 0 {
+			return c.Tags[0]
 		}
+		return ""
+	}
+
+	var result []ScoredCandidate
+	var exploreBuffer []ScoredCandidate
+	var coldStartBuffer []ScoredCandidate
+
+	for _, s := range scored {
 		ct := s.Candidate.ContentType
 		author := s.Candidate.AuthorID
 
@@ -528,21 +539,81 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 			continue
 		}
 
+		// Same top-tag dedup: no 3 consecutive items sharing the same top tag
+		topTag := topTagOf(s.Candidate)
+		if topTag != "" && len(recentTopTags) >= 2 &&
+			recentTopTags[len(recentTopTags)-1] == topTag &&
+			recentTopTags[len(recentTopTags)-2] == topTag {
+			continue
+		}
+
+		// Separate explore and cold-start candidates for injection
+		if s.Candidate.RecallPath == "explore_recall" {
+			exploreBuffer = append(exploreBuffer, s)
+			continue
+		}
+		ageHours := time.Since(s.Candidate.PublishedAt).Hours()
+		if ageHours < 24 && s.Candidate.ViewCount < 100 {
+			coldStartBuffer = append(coldStartBuffer, s)
+			continue
+		}
+
 		result = append(result, s)
 		typeCount[ct]++
 		if author != "" {
 			authorCount[author]++
 		}
+		recentTopTags = append(recentTopTags, topTag)
+
+		if len(result) >= limit {
+			break
+		}
 	}
 
-	// Fill remaining slots (relax type constraint but keep author dedup)
-	if len(result) < limit {
-		existing := make(map[string]bool)
-		for _, r := range result {
-			existing[r.Candidate.ContentID] = true
+	// Explore injection: at least 1 per 5 items
+	exploreTarget := limit / 5
+	if exploreTarget < 1 && len(exploreBuffer) > 0 {
+		exploreTarget = 1
+	}
+
+	// Cold-start guarantee: new content (<24h) at least 10% of results
+	coldStartTarget := limit / 10
+	if coldStartTarget < 1 && len(coldStartBuffer) > 0 {
+		coldStartTarget = 1
+	}
+
+	// Inject explore items at even intervals
+	final := make([]ScoredCandidate, 0, limit)
+	exploreIdx := 0
+	coldIdx := 0
+	resultIdx := 0
+	for i := 0; i < limit; i++ {
+		if (i+1)%5 == 0 && exploreIdx < len(exploreBuffer) && exploreIdx < exploreTarget {
+			final = append(final, exploreBuffer[exploreIdx])
+			exploreIdx++
+		} else if (i+1)%10 == 0 && coldIdx < len(coldStartBuffer) && coldIdx < coldStartTarget {
+			final = append(final, coldStartBuffer[coldIdx])
+			coldIdx++
+		} else if resultIdx < len(result) {
+			final = append(final, result[resultIdx])
+			resultIdx++
+		} else if exploreIdx < len(exploreBuffer) {
+			final = append(final, exploreBuffer[exploreIdx])
+			exploreIdx++
+		} else if coldIdx < len(coldStartBuffer) {
+			final = append(final, coldStartBuffer[coldIdx])
+			coldIdx++
+		}
+	}
+
+	// Fill remaining slots from any source
+	if len(final) < limit {
+		existing := make(map[string]bool, len(final))
+		for _, f := range final {
+			existing[f.Candidate.ContentID] = true
 		}
 		for _, s := range scored {
-			if len(result) >= limit {
+			if len(final) >= limit {
 				break
 			}
 			if existing[s.Candidate.ContentID] {
@@ -552,14 +623,14 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 			if author != "" && authorCount[author] >= maxPerAuthor {
 				continue
 			}
-			result = append(result, s)
+			final = append(final, s)
 			if author != "" {
 				authorCount[author]++
 			}
 		}
 	}
 
-	return result
+	return final
 }
 
 func topNTags(weights map[string]float64, n int) []string {

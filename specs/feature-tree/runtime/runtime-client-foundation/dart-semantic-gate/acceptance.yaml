@@ -16,7 +16,7 @@ level_acceptance:
     linked_tasks:
     - M1
     tests:
-    - file: scripts/verify_dart_semantic.py
+    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
       functions:
       - main
       - scan_file
@@ -26,28 +26,28 @@ level_acceptance:
     linked_tasks:
     - M2
     tests:
-    - file: scripts/verify_dart_semantic.py
+    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
   A3:
     criteria: 02-dart-coding 含 width/height/leadingSize 禁止示例与触控尺寸 API 表
     status: implemented
     linked_tasks:
     - M3
     tests:
-    - file: scripts/verify_dart_semantic.py
+    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
   A4:
     criteria: FF 模板含编码规范小节；opsx-apply 对 Dart 变更执行语义检查
     status: implemented
     linked_tasks:
     - M4
     tests:
-    - file: scripts/verify_dart_semantic.py
+    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
   A7:
     criteria: 06-semantic-consistency-audit、00_MASTER_DEVELOPMENT_FLOW 与特性树一致
     status: implemented
     linked_tasks:
     - M3
     tests:
-    - file: scripts/verify_dart_semantic.py
+    - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
 execution:
-  local_gate: python3 scripts/verify_dart_semantic.py && flutter analyze quwoquan_app/lib/
+  local_gate: python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py && flutter analyze quwoquan_app/lib/
   full_gate: make gate

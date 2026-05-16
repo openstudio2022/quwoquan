@@ -38,7 +38,7 @@
 - T21: [硬编码清理] circle_stats_page.dart 硬编码字面量替换
 - T22: [硬编码清理] circles_page.dart 检查并修复残留硬编码（当前整体规范，逐一确认）
 - T23: [import] 所有圈子文件 import 改为绝对路径 `package:quwoquan_app/ui/circle/...`
-- T24: [验证] 运行 `python3 scripts/verify_dart_semantic.py` 对 ui/circle/ 零新增违规
+- T24: [验证] 运行 `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py` 对 ui/circle/ 零新增违规
 - T25: [验证] 运行 `flutter analyze` 无新增错误
 
 ### 跨切任务

@@ -7,48 +7,48 @@ service:
 
 api_routes:
   - method: POST
-    path: /v1/user/profile-subjects/{targetProfileSubjectId}/follow
+    path: /v1/user/sub-accounts/{targetSubAccountId}/follow
     operation: FollowUser
-    description: 关注公开主体（profileSubject 级别）
+    description: 关注公开主体（subAccount 级别）
     request_entity: FollowCommandRequest
-    request_fields: [actorProfileSubjectId, source, clientRequestId]
+    request_fields: [actorSubAccountId, source, clientRequestId]
     response_entity: FollowCommandResult
-    response_fields: [actorProfileSubjectId, targetProfileSubjectId, relationState, idempotentReplay, updatedAt]
+    response_fields: [actorSubAccountId, targetSubAccountId, relationState, idempotentReplay, updatedAt]
 
   - method: DELETE
-    path: /v1/user/profile-subjects/{targetProfileSubjectId}/follow
+    path: /v1/user/sub-accounts/{targetSubAccountId}/follow
     operation: UnfollowUser
-    description: 取消关注公开主体（profileSubject 级别）
+    description: 取消关注公开主体（subAccount 级别）
 
   - method: GET
-    path: /v1/user/profile-subjects/{profileSubjectId}/following
+    path: /v1/user/sub-accounts/{subAccountId}/following
     operation: ListFollowing
-    description: 关注列表（按 profileSubject 读取）
+    description: 关注列表（按 subAccount 读取）
     query_params: [cursor, limit]
     response_entity: FollowingListItemView
-    response_fields: [profileSubjectId, subAccountId, username, displayName, avatarUrl, profileVisibility, relationState, followedAt]
+    response_fields: [subAccountId, username, displayName, avatarUrl, profileVisibility, relationState, followedAt]
 
   - method: GET
-    path: /v1/user/profile-subjects/{profileSubjectId}/followers
+    path: /v1/user/sub-accounts/{subAccountId}/followers
     operation: ListFollowers
-    description: 粉丝列表（按 profileSubject 读取）
+    description: 粉丝列表（按 subAccount 读取）
     query_params: [cursor, limit]
     response_entity: FollowerListItemView
-    response_fields: [profileSubjectId, subAccountId, username, displayName, avatarUrl, profileVisibility, relationState, followedAt]
+    response_fields: [subAccountId, username, displayName, avatarUrl, profileVisibility, relationState, followedAt]
 
   - method: GET
-    path: /v1/user/profile-subjects/{profileSubjectId}/relationship
+    path: /v1/user/sub-accounts/{subAccountId}/relationship
     operation: GetRelationship
-    description: 关系查询（profileSubject 级别的基础关系态）
+    description: 关系查询（subAccount 级别的基础关系态）
     response_entity: RelationshipView
-    response_fields: [viewerProfileSubjectId, targetProfileSubjectId, relationState, isBlocked, isBlockedBy]
+    response_fields: [viewerSubAccountId, targetSubAccountId, relationState, isBlocked, isBlockedBy]
 
   - method: GET
-    path: /v1/user/profile-subjects/{profileSubjectId}/relationship/capability
+    path: /v1/user/sub-accounts/{subAccountId}/relationship/capability
     operation: GetRelationshipCapability
     description: "关系能力位投影（统一真相源）。基于 FollowEdge + BlockEdge + ProfileSubject 计算 relationState 与消息/通话能力。端侧用户主页按钮矩阵和 RTC 门禁直接消费。"
     response_entity: RelationshipCapabilityView
-    response_fields: [viewerProfileSubjectId, targetProfileSubjectId, relationState, canFollow, canUnfollow, canMessage, canFollowBack, canStartVoiceCall, canStartVideoCall, isBlocked, isBlockedBy]
+    response_fields: [viewerSubAccountId, targetSubAccountId, relationState, canFollow, canUnfollow, canMessage, canFollowBack, canStartVoiceCall, canStartVideoCall, isBlocked, isBlockedBy]
 
 consumers:
   - name: app
@@ -66,16 +66,16 @@ contract_test:
       scenarios:
         - name: follow_unfollow_toggle
           routes:
-            - POST /v1/user/profile-subjects/{targetProfileSubjectId}/follow
-            - DELETE /v1/user/profile-subjects/{targetProfileSubjectId}/follow
+            - POST /v1/user/sub-accounts/{targetSubAccountId}/follow
+            - DELETE /v1/user/sub-accounts/{targetSubAccountId}/follow
           assertions: [follow_created, follow_removed, idempotent]
 
         - name: mutual_follow_detection
-          route: GET /v1/user/profile-subjects/{profileSubjectId}/relationship
+          route: GET /v1/user/sub-accounts/{subAccountId}/relationship
           assertions: [status_200, mutual_flag_correct]
 
         - name: follower_list_pagination
-          route: GET /v1/user/profile-subjects/{profileSubjectId}/followers
+          route: GET /v1/user/sub-accounts/{subAccountId}/followers
           assertions: [status_200, cursor_pagination_works]
 
     service_side:

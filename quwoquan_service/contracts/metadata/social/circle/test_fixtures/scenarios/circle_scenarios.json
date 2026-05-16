@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "circle.scenario-fixtures.v2",
+  "schemaVersion": "circle.scenario-fixtures",
   "description": "圈子域 alpha/beta/gamma 共享测试场景。alpha 端侧从 seedSets.circles 初始化 MockCircleRepository。",
   "repositoryExpectations": {
     "alpha": "mock",

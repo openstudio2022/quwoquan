@@ -5,7 +5,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
@@ -20,6 +19,7 @@ import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
+import '../../common/chat/chat_mock_seed_refs.dart';
 
 void main() {
   group('AppSearchRepository', () {
@@ -33,9 +33,8 @@ void main() {
       tempDir = await Directory.systemTemp.createTemp('search_repo_test_');
       namespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'user_001',
+          subAccountId: 'user_001',
           ownerUserId: 'user_001',
-          subAccountId: '',
           subjectType: 'owner',
           displayName: '测试用户',
           avatarUrl: '',
@@ -54,9 +53,8 @@ void main() {
         store: chatStore,
         personaContextLoader: () async {
           return ActivePersonaContextViewData.fallback(
-            profileSubjectId: namespace.profileSubjectId,
-            ownerUserId: namespace.ownerUserId,
             subAccountId: namespace.subAccountId,
+            ownerUserId: namespace.ownerUserId,
             subjectType: namespace.subjectType,
             displayName: '测试用户',
             avatarUrl: '',
@@ -83,9 +81,8 @@ void main() {
         localCircleGroupSnapshotStore: circleStore,
         personaContextLoader: () async {
           return ActivePersonaContextViewData.fallback(
-            profileSubjectId: namespace.profileSubjectId,
-            ownerUserId: namespace.ownerUserId,
             subAccountId: namespace.subAccountId,
+            ownerUserId: namespace.ownerUserId,
             subjectType: namespace.subjectType,
             displayName: '测试用户',
             avatarUrl: '',
@@ -93,8 +90,7 @@ void main() {
           );
         },
       );
-      final query = (ChatMockData.contacts.first['displayName'] as String)
-          .substring(0, 1);
+      final query = chatDisplayNameFor('user_002').substring(0, 1);
 
       final response = await repo.search(
         SearchRequest(
@@ -143,9 +139,8 @@ void main() {
           localCircleGroupSnapshotStore: circleStore,
           personaContextLoader: () async {
             return ActivePersonaContextViewData.fallback(
-              profileSubjectId: namespace.profileSubjectId,
-              ownerUserId: namespace.ownerUserId,
               subAccountId: namespace.subAccountId,
+              ownerUserId: namespace.ownerUserId,
               subjectType: namespace.subjectType,
               displayName: '测试用户',
               avatarUrl: '',
@@ -206,9 +201,8 @@ void main() {
           localCircleGroupSnapshotStore: circleStore,
           personaContextLoader: () async {
             return ActivePersonaContextViewData.fallback(
-              profileSubjectId: namespace.profileSubjectId,
-              ownerUserId: namespace.ownerUserId,
               subAccountId: namespace.subAccountId,
+              ownerUserId: namespace.ownerUserId,
               subjectType: namespace.subjectType,
               displayName: '测试用户',
               avatarUrl: '',
@@ -253,9 +247,8 @@ void main() {
           localCircleGroupSnapshotStore: circleStore,
           personaContextLoader: () async {
             return ActivePersonaContextViewData.fallback(
-              profileSubjectId: namespace.profileSubjectId,
-              ownerUserId: namespace.ownerUserId,
               subAccountId: namespace.subAccountId,
+              ownerUserId: namespace.ownerUserId,
               subjectType: namespace.subjectType,
               displayName: '测试用户',
               avatarUrl: '',
@@ -301,9 +294,8 @@ void main() {
           localCircleGroupSnapshotStore: circleStore,
           personaContextLoader: () async {
             return ActivePersonaContextViewData.fallback(
-              profileSubjectId: namespace.profileSubjectId,
-              ownerUserId: namespace.ownerUserId,
               subAccountId: namespace.subAccountId,
+              ownerUserId: namespace.ownerUserId,
               subjectType: namespace.subjectType,
               displayName: '测试用户',
               avatarUrl: '',
@@ -356,9 +348,8 @@ void main() {
         localCircleGroupSnapshotStore: circleStore,
         personaContextLoader: () async {
           return ActivePersonaContextViewData.fallback(
-            profileSubjectId: namespace.profileSubjectId,
-            ownerUserId: namespace.ownerUserId,
             subAccountId: namespace.subAccountId,
+            ownerUserId: namespace.ownerUserId,
             subjectType: namespace.subjectType,
             displayName: '测试用户',
             avatarUrl: '',
@@ -398,9 +389,8 @@ void main() {
           localCircleGroupSnapshotStore: circleStore,
           personaContextLoader: () async {
             return ActivePersonaContextViewData.fallback(
-              profileSubjectId: namespace.profileSubjectId,
-              ownerUserId: namespace.ownerUserId,
               subAccountId: namespace.subAccountId,
+              ownerUserId: namespace.ownerUserId,
               subjectType: namespace.subjectType,
               displayName: '测试用户',
               avatarUrl: '',
@@ -439,9 +429,8 @@ void main() {
           localCircleGroupSnapshotStore: circleStore,
           personaContextLoader: () async {
             return ActivePersonaContextViewData.fallback(
-              profileSubjectId: namespace.profileSubjectId,
-              ownerUserId: namespace.ownerUserId,
               subAccountId: namespace.subAccountId,
+              ownerUserId: namespace.ownerUserId,
               subjectType: namespace.subjectType,
               displayName: '测试用户',
               avatarUrl: '',
@@ -481,9 +470,8 @@ void main() {
         localCircleGroupSnapshotStore: circleStore,
         personaContextLoader: () async {
           return ActivePersonaContextViewData.fallback(
-            profileSubjectId: namespace.profileSubjectId,
-            ownerUserId: namespace.ownerUserId,
             subAccountId: namespace.subAccountId,
+            ownerUserId: namespace.ownerUserId,
             subjectType: namespace.subjectType,
             displayName: '测试用户',
             avatarUrl: '',
@@ -493,9 +481,8 @@ void main() {
       );
       final otherNamespace = LocalSearchNamespace.fromActivePersonaContext(
         ActivePersonaContextViewData.fallback(
-          profileSubjectId: 'sub_002',
-          ownerUserId: 'user_001',
           subAccountId: 'sub_002',
+          ownerUserId: 'user_001',
           subjectType: 'sub_account',
           displayName: '子账号',
           avatarUrl: '',

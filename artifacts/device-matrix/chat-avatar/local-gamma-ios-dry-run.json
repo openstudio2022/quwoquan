@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "scenario": "chat.group_avatar.sync_display_e2e.matrix",
+  "status": "passed",
+  "failureCategory": "",
+  "blockingReason": "",
+  "retryable": false,
+  "startedAt": "2026-05-03T09:29:50.427304Z",
+  "endedAt": "2026-05-03T09:29:50.478635Z",
+  "requestedEnvironments": [
+    "local-gamma"
+  ],
+  "platform": "ios",
+  "devices": [
+    {
+      "id": "dry-run-device",
+      "name": "Dry Run Device",
+      "targetPlatform": "ios",
+      "sdk": "dry-run",
+      "emulator": true,
+      "screenClass": "phone"
+    }
+  ],
+  "runs": [
+    {
+      "env": "local-gamma",
+      "device": {
+        "id": "dry-run-device",
+        "name": "Dry Run Device",
+        "targetPlatform": "ios",
+        "sdk": "dry-run",
+        "emulator": true,
+        "screenClass": "phone"
+      },
+      "gatewayBaseUrl": "http://127.0.0.1:18080",
+      "mediaBaseUrl": "http://127.0.0.1:18080",
+      "adbReverse": [],
+      "probe": {
+        "commandResult": {
+          "command": [
+            "/opt/homebrew/opt/python@3.13/bin/python3.13",
+            "/Users/zhaoyuxi/Projects/quwoquan/agent_ops/avatar/run_chat_avatar_e2e_probe.py",
+            "--env",
+            "local-gamma",
+            "--base-url",
+            "http://127.0.0.1:18080",
+            "--report",
+            "/Users/zhaoyuxi/Projects/quwoquan/artifacts/device-matrix/chat-avatar/local-gamma/dry-run-device/probe.json",
+            "--timeout-seconds",
+            "180",
+            "--media-base-url",
+            "http://127.0.0.1:18080",
+            "--compose-mongo",
+            "--dry-run"
+          ],
+          "cwd": "/Users/zhaoyuxi/Projects/quwoquan",
+          "exitCode": 0,
+          "durationMs": 49,
+          "timedOut": false,
+          "outputSummary": "[chat-avatar-e2e] report: /Users/zhaoyuxi/Projects/quwoquan/artifacts/device-matrix/chat-avatar/local-gamma/dry-run-device/probe.json\n[chat-avatar-e2e] status: passed\n"
+        },
+        "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/artifacts/device-matrix/chat-avatar/local-gamma/dry-run-device/probe.json",
+        "report": {
+          "schemaVersion": 1,
+          "scenario": "chat.group_avatar.sync_display_e2e",
+          "status": "passed",
+          "failureCategory": "",
+          "blockingReason": "",
+          "retryable": false,
+          "startedAt": "2026-05-03T09:29:50.472527Z",
+          "endedAt": "2026-05-03T09:29:50.472655Z",
+          "environment": {
+            "env": "local-gamma",
+            "runtimeKind": "local-gamma-mirror",
+            "gatewayBaseUrl": "http://127.0.0.1:18080",
+            "mediaBaseUrl": "http://127.0.0.1:18080",
+            "commitSha": "",
+            "githubRunId": ""
+          },
+          "device": {},
+          "conversation": {
+            "conversationId": "",
+            "creatorUserId": "user_test_001",
+            "memberIds": [
+              "user_test_001",
+              "user_test_002",
+              "user_test_003"
+            ],
+            "addedMemberId": "user_test_004",
+            "removedMemberId": "user_test_004",
+            "initialAvatarUrl": "",
+            "finalAvatarUrl": "",
+            "groupAvatarVersionBefore": 0,
+            "groupAvatarVersionAfterAdd": 0,
+            "groupAvatarVersionAfterRemove": 0
+          },
+          "serviceEvidence": {
+            "taskOutbox": {
+              "status": "not_collected",
+              "records": []
+            },
+            "asyncTask": {
+              "status": "not_collected",
+              "records": []
+            },
+            "notificationOutbox": {
+              "status": "not_collected",
+              "records": []
+            },
+            "deliveryLedger": {
+              "status": "not_collected",
+              "deliveredRecipients": []
+            },
+            "syncPatches": []
+          },
+          "serviceEndpointEvidence": {
+            "healthz": "",
+            "chatConversations": "/v1/chat/conversations",
+            "userSync": "/v1/user/sync",
+            "media": ""
+          },
+          "uiEvidence": {
+            "conversationListAvatarVisible": false,
+            "conversationDetailAvatarVisible": false,
+            "avatarImageLoaded": false,
+            "senderAvatarPreserved": false,
+            "screenshots": []
+          },
+          "steps": [
+            {
+              "name": "dry_run",
+              "status": "passed",
+              "at": "2026-05-03T09:29:50.472653Z"
+            }
+          ]
+        }
+      },
+      "patrol": {
+        "command": [
+          "/Users/zhaoyuxi/.pub-cache/bin/patrol",
+          "test",
+          "-t",
+          "test/patrol/chat/group_avatar_sync_e2e_test.dart",
+          "-d",
+          "dry-run-device",
+          "--dart-define=RUN_T4_PATROL=true",
+          "--dart-define=APP_RUNTIME_ENV=gamma",
+          "--dart-define=APP_DATA_SOURCE=remote",
+          "--dart-define=API_CONTRACT_ENV=gamma",
+          "--dart-define=CLOUD_GATEWAY_BASE_URL=http://127.0.0.1:18080",
+          "--dart-define=API_CONTRACT_BASE_URL=http://127.0.0.1:18080",
+          "--dart-define=TEST_AUTH_TOKEN=",
+          "--dart-define=CHAT_AVATAR_E2E_CONVERSATION_ID=",
+          "--dart-define=CHAT_AVATAR_E2E_FINAL_AVATAR_URL=",
+          "--dart-define=CHAT_AVATAR_UI_REPORT=/Users/zhaoyuxi/Projects/quwoquan/artifacts/device-matrix/chat-avatar/local-gamma/dry-run-device/ui.json",
+          "--dart-define=MEDIA_AVATAR_CDN_BASE_URL=http://127.0.0.1:18080",
+          "--dart-define=MEDIA_IMAGE_CDN_BASE_URL=http://127.0.0.1:18080",
+          "--dart-define=MEDIA_VIDEO_CDN_BASE_URL=http://127.0.0.1:18080",
+          "--dart-define=MEDIA_UPLOAD_BASE_URL=http://127.0.0.1:18080"
+        ],
+        "exitCode": 0,
+        "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/artifacts/device-matrix/chat-avatar/local-gamma/dry-run-device/ui.json",
+        "report": {
+          "status": "passed",
+          "dryRun": true
+        }
+      },
+      "status": "passed"
+    }
+  ]
+}

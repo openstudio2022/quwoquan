@@ -16,6 +16,8 @@ import (
 	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 )
 
+const StableEmbeddedPostgresVersion = embeddedpostgres.PostgresVersion("16.2.0")
+
 // Suite holds all test database instances.
 type Suite struct {
 	PG      *sql.DB
@@ -77,7 +79,7 @@ func NewSuite(t *testing.T, opts ...SuiteOption) *Suite {
 		pgPort := cfg.pgPort
 		pg := embeddedpostgres.NewDatabase(
 			embeddedpostgres.DefaultConfig().
-				Version(embeddedpostgres.V16).
+				Version(StableEmbeddedPostgresVersion).
 				Port(pgPort).
 				DataPath(os.TempDir() + "/embedded-pg-data").
 				RuntimePath(os.TempDir() + "/embedded-pg-runtime"),

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/conversation/message_bubble_frame.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -33,7 +34,7 @@ class ChatMessageBubble extends StatelessWidget {
     this.messageStatus,
   });
 
-  final Map<String, dynamic> message;
+  final ChatMessageDisplayItem message;
   final bool isRight;
   final Color bubbleColor;
   final Color textColor;
@@ -68,24 +69,26 @@ class ChatMessageBubble extends StatelessWidget {
     final effectiveMaxWidth = useFullWidth
         ? viewportWidth - 2 * horizontalPadding
         : math.max(chatBubbleMaxWidth, viewportWidth * chatBubbleWidthFactor);
-    final type = message['type'] as String? ?? 'text';
-    final content = message['content'] as String? ?? '';
-    final senderName = message['senderName'] as String? ?? '';
-    final avatar = (message['senderAvatar'] as String?)?.trim();
+    final type = message.type;
+    final content = message.content;
+    final senderName = message.senderName;
+    final avatar = message.senderAvatar.trim().isEmpty
+        ? null
+        : message.senderAvatar.trim();
     assert(() {
       if (!hideAvatarAndName && (avatar == null || avatar.isEmpty)) {
         debugPrint('消息头像契约：senderAvatar 为空 senderName=$senderName');
       }
       return true;
     }());
-    final isRead = message['isRead'] == true;
+    final isRead = message.isRead;
     final renderPlainSelfText =
         renderSelfTextWithoutBubble && isRight && type == 'text';
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     Widget contentWidget;
     if (type == 'task_card') {
-      final tasks = message['tasks'] as List<dynamic>? ?? [];
+      final tasks = message.tasks;
       contentWidget = Container(
         constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
         decoration: BoxDecoration(
@@ -106,13 +109,10 @@ class ChatMessageBubble extends StatelessWidget {
               ),
             ),
             SizedBox(height: AppSpacing.sm),
-            ...tasks.map<Widget>((t) {
-              final map = t is Map
-                  ? t as Map<String, dynamic>
-                  : <String, dynamic>{};
-              final title = map['title'] as String? ?? '';
-              final time = map['time'] as String? ?? '';
-              final status = map['status'] as String? ?? 'pending';
+            ...tasks.map<Widget>((task) {
+              final title = task.title;
+              final time = task.time;
+              final status = task.status;
               return Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.xs),
                 child: Row(
@@ -142,10 +142,9 @@ class ChatMessageBubble extends StatelessWidget {
         ),
       );
     } else if (type == 'image') {
-      final imageUrl =
-          message['imageUrl'] as String? ??
-          message['thumbnailUrl'] as String? ??
-          '';
+      final imageUrl = message.imageUrl.isNotEmpty
+          ? message.imageUrl
+          : message.thumbnailUrl;
       contentWidget = ClipRRect(
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         child: Image.network(
@@ -162,27 +161,14 @@ class ChatMessageBubble extends StatelessWidget {
         ),
       );
     } else if (type == 'audio') {
-      final media = message['media'] is Map
-          ? (message['media'] as Map).cast<String, dynamic>()
-          : <String, dynamic>{};
-      final mediaUrl =
-          (media['url'] as String?) ?? (message['mediaUrl'] as String?) ?? '';
-      final durationMs = (media['durationMs'] as num?)?.toInt() ?? 0;
-      final waveformRaw = media['waveform'];
-      final waveform = waveformRaw is List
-          ? waveformRaw.map((e) => (e as num).toDouble()).toList()
-          : <double>[];
-      final msgId = (message['_id'] ?? message['id'] ?? '') as String;
-      final msgStatus =
-          (message['messageStatus'] ?? message['status'] ?? 'sent') as String;
       contentWidget = VoiceMessageBubble(
-        messageId: msgId,
-        mediaUrl: mediaUrl,
-        durationMs: durationMs,
-        waveform: waveform,
+        messageId: message.id,
+        mediaUrl: message.mediaUrl,
+        durationMs: message.audioDurationMs,
+        waveform: message.audioWaveform,
         isOutgoing: isRight,
         isRead: isRead,
-        messageStatus: msgStatus,
+        messageStatus: message.status,
       );
     } else if (renderPlainSelfText) {
       contentWidget = Align(
@@ -288,7 +274,7 @@ class ChatMessageBubble extends StatelessWidget {
                 isRead: isRead,
                 receiptEnabled: receiptEnabled,
                 memberCount: memberCount,
-                messageStatus: messageStatus,
+                messageStatus: message.status,
                 textColor: textColor,
               ),
             Flexible(fit: FlexFit.loose, child: contentWidget),

@@ -1,0 +1,32 @@
+# 商用群头像矩阵证据清单（示例）— 复制为 manifest.yaml 并填入真实路径后再运行:
+#   python3 agent_ops/avatar/verify_chat_avatar_commercial_matrix_evidence.py --manifest artifacts/commercial-matrix/chat-avatar/manifest.yaml
+#
+# CI artifact 名称参考: .github/workflows/deploy-gamma-ecs.yml
+#   - chat-avatar-api-probe-pre / chat-avatar-api-probe-prod
+#   - app-env-device-matrix-selfhosted-chat-avatar-gamma-{android,ios}
+matrix_version: 1
+
+e1_beta:
+  probe: artifacts/avatar-e2e/beta/avatar_e2e_report.json
+  android: artifacts/device-matrix/chat-avatar/beta-android.json
+  ios: artifacts/device-matrix/chat-avatar/beta-ios.json
+
+# 方式 A：run_local_gamma_avatar_e2e.py 聚合报告（推荐 Phase L）
+e2_local_gamma:
+  aggregate: artifacts/local-gamma/avatar_e2e_report.json
+
+# 方式 B：分拆路径（与 e1 同构）
+# e2_local_gamma:
+#   probe: artifacts/local-gamma/avatar_probe_report.json
+#   android: artifacts/device-matrix/chat-avatar/local-gamma-android.json
+#   ios: artifacts/device-matrix/chat-avatar/local-gamma-ios.json
+
+e3_cloud_gamma_pre:
+  probe: artifacts/avatar-e2e/cloud-gamma-pre/avatar_e2e_report.json
+  android: artifacts/device-matrix/chat-avatar/gamma-android.json
+  ios: artifacts/device-matrix/chat-avatar/gamma-ios.json
+
+e4_cloud_gamma_prod_smoke:
+  probe: artifacts/avatar-e2e/cloud-gamma-prod-smoke/avatar_e2e_report.json
+  android: artifacts/device-matrix/chat-avatar/gamma-android.json
+  ios: artifacts/device-matrix/chat-avatar/gamma-ios.json

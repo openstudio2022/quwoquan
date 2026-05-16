@@ -33,7 +33,7 @@
 - [x] C7.1 增加部署拓扑门禁
   - `deploy/shared/process_domain_mapping.yaml` 声明三态映射
   - `scripts/verify_deployment_domain_mapping.sh` 校验 domain 唯一归属与 integration/prod 一致
-  - 接入 `make verify` 与 `scripts/gate_repo.sh`
+  - 接入 `make verify` 与 `agent_ops/gate/gate_repo.sh`
 - [x] C7.2 recommendation-service（python）与 recommendation domain 命名和映射对齐
 - [x] C7.3 gate-full 纳入 recommendation-service Python 测试必过
 

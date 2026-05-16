@@ -1,0 +1,187 @@
+# Tag Service — 标签体系四大应用场景 API 定义
+#
+# 场景2：内容创作（list_dimensions / suggest / validate_refs）
+# 场景3：推荐搜索（search / related / search_by_tags / feedback）
+# 场景4：关系图谱（cooccurrence / inverted_index / related_objects）
+
+domain: tag
+version: "1.0"
+description: "标签体系四分组 (Topic/Audience/Format/Entity) 的查询、建议、校验与关系图谱 API"
+
+# ────────────────────────────────────────────────────────────────
+# 场景2: 内容创作
+# ────────────────────────────────────────────────────────────────
+apis:
+  list_dimensions:
+    method: GET
+    path: /api/v1/tags/dimensions
+    description: "列出全部维度及其分组信息（用于创作时的标签面板）"
+    response:
+      type: array
+      items:
+        type: object
+        properties:
+          group: { type: string, description: "Topic/Audience/Format/Entity" }
+          dimensionId: { type: string, description: "相对路径，如 Topic/主题" }
+          label: { type: string }
+          labelEn: { type: string }
+          maxDepth: { type: integer }
+          pathPolicy: { type: string }
+
+  suggest:
+    method: GET
+    path: /api/v1/tags/suggest
+    description: "根据输入文本模糊匹配标签（支持 label / aliases / labelEn）"
+    params:
+      q: { type: string, required: true, description: "搜索关键词" }
+      group: { type: string, description: "限定分组" }
+      limit: { type: integer, default: 20 }
+    response:
+      type: array
+      items:
+        type: object
+        properties:
+          tagRef: { type: string }
+          label: { type: string }
+          labelEn: { type: string }
+          matchField: { type: string, description: "匹配的字段名" }
+
+  validate_refs:
+    method: POST
+    path: /api/v1/tags/validate
+    description: "批量校验 tagRefs 有效性（创作提交前调用）"
+    body:
+      tagRefs: { type: array, items: { type: string }, required: true }
+    response:
+      type: object
+      properties:
+        valid: { type: array, items: { type: string } }
+        invalid: { type: array, items: { type: string } }
+        suggestions:
+          type: array
+          items:
+            type: object
+            properties:
+              invalid: { type: string }
+              suggestedRef: { type: string }
+              reason: { type: string }
+
+  # ────────────────────────────────────────────────────────────────
+  # 场景3: 推荐搜索
+  # ────────────────────────────────────────────────────────────────
+  search:
+    method: GET
+    path: /api/v1/tags/search
+    description: "标签全文搜索（支持中英文、别名）"
+    params:
+      q: { type: string, required: true }
+      group: { type: string }
+      limit: { type: integer, default: 50 }
+    response:
+      type: array
+      items:
+        type: object
+        properties:
+          tagRef: { type: string }
+          label: { type: string }
+          score: { type: number }
+
+  related:
+    method: GET
+    path: /api/v1/tags/{tagRef}/related
+    description: "获取与指定标签共现度最高的相关标签"
+    params:
+      tagRef: { type: string, required: true }
+      limit: { type: integer, default: 20 }
+    response:
+      type: array
+      items:
+        type: object
+        properties:
+          tagRef: { type: string }
+          label: { type: string }
+          cooccurCount: { type: integer }
+
+  search_by_tags:
+    method: POST
+    path: /api/v1/tags/search-by-tags
+    description: "多标签联合搜索对象（实体/post/圈子）"
+    body:
+      tagRefs: { type: array, items: { type: string }, required: true }
+      objectType: { type: string, description: "entity/post/circle/user" }
+      limit: { type: integer, default: 50 }
+    response:
+      type: array
+      items:
+        type: object
+        properties:
+          objectId: { type: string }
+          objectType: { type: string }
+          matchedTags: { type: array, items: { type: string } }
+          score: { type: number }
+
+  feedback:
+    method: POST
+    path: /api/v1/tags/feedback
+    description: "用户对标签推荐的反馈（点击/忽略/修正），写入 tag_runtime/tag_metrics.ndjson"
+    body:
+      tagRef: { type: string, required: true }
+      action: { type: string, enum: ["click", "ignore", "correct"] }
+      context: { type: string, description: "触发场景标识" }
+    response:
+      type: object
+      properties:
+        accepted: { type: boolean }
+
+  # ────────────────────────────────────────────────────────────────
+  # 场景4: 关系图谱
+  # ────────────────────────────────────────────────────────────────
+  cooccurrence:
+    method: GET
+    path: /api/v1/tags/graph/cooccurrence
+    description: "查询标签对共现关系"
+    params:
+      tagRef: { type: string, description: "指定标签，返回其共现对" }
+      minCount: { type: integer, default: 1 }
+      limit: { type: integer, default: 50 }
+    response:
+      type: array
+      items:
+        type: object
+        properties:
+          tagA: { type: string }
+          tagB: { type: string }
+          cooccurCount: { type: integer }
+
+  inverted_index:
+    method: GET
+    path: /api/v1/tags/graph/inverted-index/{tagRef}
+    description: "查询引用了该标签的所有对象"
+    params:
+      tagRef: { type: string, required: true }
+      objectType: { type: string }
+      limit: { type: integer, default: 50 }
+    response:
+      type: object
+      properties:
+        tag: { type: string }
+        objectCount: { type: integer }
+        objects: { type: array, items: { type: string } }
+
+  related_objects:
+    method: GET
+    path: /api/v1/tags/graph/related-objects/{objectId}
+    description: "通过共享标签查找相关对象"
+    params:
+      objectId: { type: string, required: true }
+      objectType: { type: string }
+      limit: { type: integer, default: 20 }
+    response:
+      type: array
+      items:
+        type: object
+        properties:
+          objectId: { type: string }
+          objectType: { type: string }
+          sharedTags: { type: array, items: { type: string } }
+          sharedCount: { type: integer }

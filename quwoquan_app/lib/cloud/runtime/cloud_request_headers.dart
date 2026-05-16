@@ -60,29 +60,24 @@ class CloudRequestHeaders {
     };
   }
 
-  static Map<String, String> withPersonaContext(
+  static Map<String, String> withOwnerSubAccountContext(
     Map<String, String> headers, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) {
     final next = Map<String, String>.from(headers);
     final resolvedOwnerUserId = (ownerUserId ?? '').trim();
-    final resolvedActorProfileSubjectId = (actorProfileSubjectId ?? '').trim();
-    final resolvedPersonaId = (personaId ?? '').trim();
-    final resolvedContextVersion = (personaContextVersion ?? '').trim();
+    final resolvedSubAccountId = (subAccountId ?? '').trim();
+    final resolvedContextVersion = (subAccountContextVersion ?? '').trim();
     if (resolvedOwnerUserId.isNotEmpty) {
       next['X-Client-User-Id'] = resolvedOwnerUserId;
     }
-    if (resolvedActorProfileSubjectId.isNotEmpty) {
-      next['X-Profile-Subject-Id'] = resolvedActorProfileSubjectId;
-    }
-    if (resolvedPersonaId.isNotEmpty) {
-      next['X-Persona-Id'] = resolvedPersonaId;
+    if (resolvedSubAccountId.isNotEmpty) {
+      next['X-Client-Sub-Account-Id'] = resolvedSubAccountId;
     }
     if (resolvedContextVersion.isNotEmpty) {
-      next['X-Persona-Context-Version'] = resolvedContextVersion;
+      next['X-Client-Sub-Account-Context-Version'] = resolvedContextVersion;
     }
     return next;
   }

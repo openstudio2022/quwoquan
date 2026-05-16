@@ -4,7 +4,7 @@ source_path: discovery-content/content-type-framework/creation-mode-and-surface-
 archived: false
 status: pending
 execution:
-  local_gate: flutter analyze quwoquan_app/lib && python3 scripts/verify_dart_semantic.py
+  local_gate: flutter analyze quwoquan_app/lib && python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
   full_gate: make gate-full
 level_acceptance:
   A1:

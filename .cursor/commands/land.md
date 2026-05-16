@@ -121,7 +121,7 @@ acceptance.yaml 草稿：
 1. 在 `specs/feature-tree/tree_index.yaml` 注册节点（status: `in_progress`）
 2. 创建节点目录（若不存在）：
    ```bash
-   bash scripts/new_feature_fullstack.sh "<slug>"
+   bash agent_ops/scaffold/new_feature_fullstack.sh "<slug>"
    ```
 3. 写入 spec.md、design.md、plan.yaml、acceptance.yaml（使用步骤 2 的草稿）
 4. 若原型中已产生元数据 YAML，确认其完整性（所有必填字段已填，无 TODO 遗漏关键项）

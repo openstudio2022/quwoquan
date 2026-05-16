@@ -1,0 +1,12 @@
+{
+  "templateId": "景区_攻略",
+  "entityType": "景区",
+  "angle": "实用攻略",
+  "description": "以实用信息为主的旅行攻略，涵盖交通、门票、路线、最佳时间等",
+  "requiredSections": ["交通方式", "门票信息", "推荐路线", "最佳季节", "注意事项"],
+  "optionalSections": ["住宿推荐", "周边美食", "摄影建议"],
+  "minWordCount": 800,
+  "maxWordCount": 2000,
+  "imageMinCount": 2,
+  "tone": "实用、亲切、有温度"
+}

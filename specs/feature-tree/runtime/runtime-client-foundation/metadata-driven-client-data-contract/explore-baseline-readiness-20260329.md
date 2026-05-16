@@ -1,7 +1,7 @@
 # Explore：元数据驱动客户端数据契约 — baseline 就绪度与全页缺口（2026-03-29）
 
 > **L1 / L2 / L3**：`runtime` → `runtime-client-foundation` → `metadata-driven-client-data-contract`  
-> **对照源**：`spec.md` / `design.md` / `acceptance.yaml` / `plan.yaml`、`specs/gates/metadata_driven_ui_gap_inventory.yaml`、`page-horizontal-quality-matrix.md`（P2 列）、`scripts/verify_metadata_driven_ui_gate.py`、`CR-20260329-004-metadata-driven-client-data-contract.yaml`
+> **对照源**：`spec.md` / `design.md` / `acceptance.yaml` / `plan.yaml`、`specs/gates/metadata_driven_ui_gap_inventory.yaml`、`page-horizontal-quality-matrix.md`（P2 列）、`quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py`、`CR-20260329-004-metadata-driven-client-data-contract.yaml`
 
 ---
 

@@ -81,8 +81,8 @@ python3 scripts/check_image_commercial_matrix_prereqs.py --strict
 
 **环境定义（与仓库对齐）**：
 
-- **云端**：阿里云 ECS onebox 由 `scripts/deploy_gamma_ecs.sh` 与 [`.github/workflows/deploy-gamma-ecs.yml`](../../../../.github/workflows/deploy-gamma-ecs.yml) 驱动；默认公网宿主参见 `deploy_gamma_ecs.sh` 中的 `GAMMA_ECS_HOST`。
+- **云端**：阿里云 ECS onebox 由 `agent_ops/deploy/gamma/deploy_gamma_ecs.sh` 与 [`.github/workflows/deploy-gamma-ecs.yml`](../../../../.github/workflows/deploy-gamma-ecs.yml) 驱动；默认公网宿主参见 `agent_ops/deploy/gamma/deploy_gamma_ecs.sh` 中的 `GAMMA_ECS_HOST`。
 - **self-hosted 端侧**：可为 **开发者本机**（`flutter devices` 含 Android/iOS）或注册为 `self-hosted` 的 GitHub Runner，与手册 [`commercial-e2e-matrix-runbook.md`](../runtime-messaging/reliable-async-task-channel/commercial-e2e-matrix-runbook.md) 一致。
-- **关键**：`GAMMA_BASE_URL` 必须指向 **gamma-proxy（Caddy）** 端口（compose 中 `LOCAL_GAMMA_HTTP_PORT`，ECS 常见 `18000`），并先用 `scripts/verify_gamma_public_gateway_routing.py` 验证 `/v1/chat`、`/v1/content` 已反代；误用 content 直出端口会得到 `route_not_found` 或 Caddy 占位明文，**不能**作为矩阵 passed 依据。
+- **关键**：`GAMMA_BASE_URL` 必须指向 **gamma-proxy（Caddy）** 端口（compose 中 `LOCAL_GAMMA_HTTP_PORT`，ECS 常见 `18000`），并先用 `quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py` 验证 `/v1/chat`、`/v1/content` 已反代；误用 content 直出端口会得到 `route_not_found` 或 Caddy 占位明文，**不能**作为矩阵 passed 依据。
 
 **诚实结论**：本节不宣称「全矩阵已完成」——须按 Q1–Q4 归档四条环境 **非 dry-run** JSON+UI 证据后方得解除 `GATE_BLOCK`。此前结论若写「仅因无 ECS 即无法矩阵」为**表述过时**，应以 **URL/路由是否正确 + 证据是否齐备** 为准。

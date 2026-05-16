@@ -40,4 +40,4 @@ jobs:
           GAMMA_ECS_PASSWORD: ${{ secrets.GAMMA_ECS_PASSWORD }}
           GAMMA_ECS_SSH_KEY: ${{ secrets.GAMMA_ECS_SSH_KEY }}
           GAMMA_ECS_ROLLBACK_BACKUP: ${{ github.event.inputs.backup_path }}
-        run: bash scripts/rollback_gamma_ecs.sh
+        run: bash agent_ops/deploy/gamma/rollback_gamma_ecs.sh

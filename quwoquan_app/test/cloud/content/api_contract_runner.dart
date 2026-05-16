@@ -45,6 +45,7 @@ const _apiContractEnv = String.fromEnvironment(
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _localGammaT3Scope = String.fromEnvironment('LOCAL_GAMMA_T3_SCOPE');
+const _currentUserId = 'fixture_user_current';
 
 // ─── Shared client & seeded data ───────────────────────────────────────────
 
@@ -97,11 +98,16 @@ Future<void> _deletePost(String postId) async {
   // 404 可接受（已被其他测试删除或自动清理）
 }
 
-Map<String, String> _authHeaders(String pageId) => {
-  ..._client.headers ?? {},
-  ...CloudRequestHeaders.forPage(pageId),
-  if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
-};
+Map<String, String> _authHeaders(String pageId) =>
+    CloudRequestHeaders.withOwnerSubAccountContext(
+      <String, String>{
+        ..._client.headers ?? {},
+        ...CloudRequestHeaders.forPage(pageId),
+        if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
+      },
+      ownerUserId: _currentUserId,
+      subAccountId: _currentUserId,
+    );
 
 bool get _isLocalGammaContentOnly =>
     _apiContractEnv == 'gamma' && _localGammaT3Scope == 'content';
@@ -241,16 +247,26 @@ void main() {
           .toList();
 
       for (final item in items) {
-        expect(
-          item.aspectRatio,
-          isNotNull,
-          reason: 'PhotoPostDto.aspectRatio must be computable',
-        );
-        expect(
-          item.aspectRatio,
-          greaterThan(0),
-          reason: 'aspectRatio must be positive',
-        );
+        final hasDimensions =
+            item.width != null && item.height != null && item.height! > 0;
+        if (hasDimensions) {
+          expect(
+            item.aspectRatio,
+            isNotNull,
+            reason: 'aspectRatio must be computable when width/height exist',
+          );
+          expect(
+            item.aspectRatio,
+            greaterThan(0),
+            reason: 'aspectRatio must be positive when dimensions exist',
+          );
+        } else {
+          expect(
+            item.aspectRatio,
+            isNull,
+            reason: 'aspectRatio must stay null when dimensions are absent',
+          );
+        }
       }
     });
   });
@@ -481,7 +497,7 @@ void main() {
       );
     });
 
-    test('POST/DELETE /v1/user/block/{id} 可用', () async {
+    test('POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用', () async {
       if (!_apiAvailable)
         return markTestSkipped('$_apiContractEnv unavailable');
       if (_isLocalGammaContentOnly) {
@@ -492,7 +508,7 @@ void main() {
       const targetUserId = 'contract_block_target_001';
       final blockResp = await _client
           .post(
-            Uri.parse('$_apiBase/v1/user/block/$targetUserId'),
+            Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
             headers: _authHeaders('user.block.create'),
           )
           .timeout(const Duration(seconds: 10));
@@ -504,7 +520,7 @@ void main() {
 
       final unblockResp = await _client
           .delete(
-            Uri.parse('$_apiBase/v1/user/block/$targetUserId'),
+            Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
             headers: _authHeaders('user.block.delete'),
           )
           .timeout(const Duration(seconds: 10));
@@ -515,7 +531,7 @@ void main() {
       );
     });
 
-    test('PATCH /v1/user/settings/privacy 可写 blockedKeywords', () async {
+    test('PATCH /v1/user/settings/privacy 可写并回读 blockedKeywords', () async {
       if (!_apiAvailable)
         return markTestSkipped('$_apiContractEnv unavailable');
       if (_isLocalGammaContentOnly) {
@@ -539,6 +555,20 @@ void main() {
         [200, 204].contains(patchResp.statusCode),
         isTrue,
         reason: 'privacy patch should accept blockedKeywords',
+      );
+
+      final getResp = await _client
+          .get(
+            Uri.parse('$_apiBase/v1/user/settings/privacy'),
+            headers: _authHeaders('user.settings.privacy.get'),
+          )
+          .timeout(const Duration(seconds: 10));
+      expect(getResp.statusCode, 200);
+      final body = jsonDecode(getResp.body) as Map<String, dynamic>;
+      expect(
+        body['blockedKeywords'],
+        contains('api_contract_kw'),
+        reason: 'blockedKeywords should round-trip through privacy settings',
       );
     });
   });

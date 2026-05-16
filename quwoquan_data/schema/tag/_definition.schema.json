@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "quwoquan/tag/_definition",
+  "title": "标签节点定义",
+  "description": "标签本体保持轻量：只含稳定语义字段。tagId 由目录路径推导，不写入文件。动态字段（热点热度/推荐权重/迁移别名/生命周期）全部外置到 tag_runtime/。",
+  "type": "object",
+  "required": ["label", "labelEn", "createdAt", "updatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "label": {
+      "type": "string",
+      "description": "中文标签名，与目录名一致"
+    },
+    "labelEn": {
+      "type": "string",
+      "description": "英文标签名，用于国际化与搜索扩展"
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "同义词/口语化别名，用于 suggest 搜索召回扩展"
+    },
+    "description": {
+      "type": "string",
+      "description": "稳定语义说明，不放热点/时间窗/生命周期等动态属性"
+    },
+    "sourceRefs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "来源记录，格式：manual:YYYY-MM 或 baike:词条名"
+    },
+    "notes": {
+      "type": "string",
+      "description": "维护备注，不参与线上消费"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

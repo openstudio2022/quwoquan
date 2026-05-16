@@ -16,7 +16,7 @@ api_routes:
     description: 手机号 + OTP 登录，创建或恢复 OwnerAccount
     auth_required: false
     request_fields: [phone, otpCode, deviceId, platform]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy]
 
   - method: POST
     path: /v1/auth/login/wechat
@@ -24,7 +24,7 @@ api_routes:
     description: 微信授权码登录
     auth_required: false
     request_fields: [wechatCode, deviceId, platform]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy]
 
   - method: POST
     path: /v1/auth/login/apple
@@ -32,7 +32,15 @@ api_routes:
     description: Apple ID token 登录
     auth_required: false
     request_fields: [appleIdToken, deviceId, platform]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy]
+
+  - method: POST
+    path: /v1/auth/login/anonymous
+    operation: LoginAnonymous
+    description: 基于 installId + deviceFingerprintHash 匿名引导，复用同设备稳定 owner/subAccount
+    auth_required: false
+    request_fields: [installId, deviceFingerprintHash, platform, appVersion]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy]
 
   - method: POST
     path: /v1/auth/token/refresh
@@ -75,21 +83,21 @@ api_routes:
     operation: ListPersonas
     description: 查看自己所有分身列表
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
+    response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: GET
     path: /v1/user/personas/summary
     operation: GetPersonaManagementSummary
     description: 获取分身管理台摘要（数量、配额、主分身与当前激活分身）
     response_entity: PersonaManagementQuotaView
-    response_fields: [ownerUserId, totalCount, quotaLimit, remainingCount, activeProfileSubjectId, primaryProfileSubjectId]
+    response_fields: [ownerUserId, totalCount, quotaLimit, remainingCount, activeSubAccountId, primarySubAccountId]
 
   - method: GET
     path: /v1/user/personas/active
     operation: GetActivePersonaContext
     description: 获取当前激活分身上下文快照（供跨域动作主体透传）
     response_entity: ActivePersonaContextView
-    response_fields: [personaId, ownerUserId, profileSubjectId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
+    response_fields: [ownerUserId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
 
   - method: POST
     path: /v1/user/personas
@@ -98,49 +106,49 @@ api_routes:
     request_entity: Persona
     request_fields: [displayName, userHandle, avatarUrl, isolationLevel, purposeHint]
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
+    response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: PATCH
-    path: /v1/user/personas/{personaId}
+    path: /v1/user/personas/{subAccountId}
     operation: UpdatePersona
     description: 更新分身资料或隔离等级
-    request_entity: ProfileSubjectMutation
+    request_entity: SubAccountProfileMutation
     request_fields: [displayName, userHandle, phone, email, avatarUrl, isolationLevel, purposeHint, applyScope, syncTargetIds, fieldsMask]
     response_entity: PersonaManagementItemView
-    response_fields: [profileSubjectId, subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
+    response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
   - method: POST
-    path: /v1/user/personas/{personaId}/profile-sync
+    path: /v1/user/personas/{subAccountId}/profile-sync
     operation: ApplyPersonaProfileSync
     description: 将某个分身的资料字段同步到全部或指定其它分身
-    request_entity: ProfileSubjectMutation
+    request_entity: SubAccountProfileMutation
     request_fields: [applyScope, syncTargetIds, fieldsMask]
 
   - method: GET
-    path: /v1/user/personas/{personaId}/lifecycle-guard
+    path: /v1/user/personas/{subAccountId}/lifecycle-guard
     operation: GetPersonaLifecycleGuard
     description: 获取该分身当前可否删除/退役的保护状态
     response_entity: PersonaLifecycleGuardView
-    response_fields: [profileSubjectId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
+    response_fields: [subAccountId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
 
   - method: POST
-    path: /v1/user/personas/{personaId}/retire
+    path: /v1/user/personas/{subAccountId}/retire
     operation: RetirePersona
     description: 退役已有记录归因的分身，保留记录对象作者归因
     response_entity: PersonaLifecycleGuardView
-    response_fields: [profileSubjectId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
+    response_fields: [subAccountId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
 
   - method: DELETE
-    path: /v1/user/personas/{personaId}/delete-empty
+    path: /v1/user/personas/{subAccountId}/delete-empty
     operation: DeleteEmptyPersona
     description: 删除无记录归因的空白分身
 
   - method: POST
-    path: /v1/user/personas/{personaId}/activate
+    path: /v1/user/personas/{subAccountId}/activate
     operation: ActivatePersona
     description: 切换激活分身（强一致，排他写）
     response_entity: ActivePersonaContextView
-    response_fields: [personaId, ownerUserId, profileSubjectId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
+    response_fields: [ownerUserId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
 
   # ── 用户主页（公开身份视图） ─────────────────────────────────────────────
 
@@ -148,16 +156,16 @@ api_routes:
     path: /v1/user/{subAccountId}
     operation: GetSubAccountProfile
     description: 公开用户主页（按 userHandle 读取，兼容既有分身 ID 引用）
-    response_entity: ProfileSubjectView
-    response_fields: [profileSubjectId, subjectType, subAccountId, userHandle, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
+    response_entity: SubAccountProfileView
+    response_fields: [subAccountId, subjectType, userHandle, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
     note: 不暴露 owner 映射字段；IsolationLevel 是公开访问真相源，strict 时返回 404
 
   - method: GET
     path: /v1/me
     operation: GetMeProfile
     description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
-    response_entity: ProfileSubjectView
-    response_fields: [profileSubjectId, ownerUserId, subjectType, subAccountId, userHandle, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
+    response_entity: SubAccountProfileView
+    response_fields: [subAccountId, ownerUserId, subjectType, userHandle, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
 
   - method: GET
     path: /v1/user/search/social-relations
@@ -217,7 +225,7 @@ api_routes:
     path: /v1/user/profile
     operation: UpdateUserProfile
     description: "[已有] 更新主控账号资料"
-    request_entity: ProfileSubjectMutation
+    request_entity: SubAccountProfileMutation
     request_fields: [nickname, displayName, avatarUrl, backgroundUrl, bio, gender, birthDate, region, profileVisibility, applyScope, syncTargetIds, fieldsMask]
 
   - method: GET
@@ -345,7 +353,7 @@ contract_test:
           assertions: [status_200, updated_fields_reflected]
 
         - name: persona_activate
-          route: POST /v1/user/personas/{personaId}/activate
+          route: POST /v1/user/personas/{subAccountId}/activate
           assertions: [status_200, only_one_active]
 
         - name: login_flow

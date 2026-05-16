@@ -67,11 +67,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CreatePersonaResponse" }
-  /v1/user/personas/{personaId}:
+  /v1/user/personas/{subAccountId}:
     patch:
       summary: Update persona
       parameters:
-        - name: personaId
+        - name: subAccountId
           in: path
           required: true
           schema: { type: string }
@@ -89,17 +89,17 @@ paths:
     delete:
       summary: Delete persona
       parameters:
-        - name: personaId
+        - name: subAccountId
           in: path
           required: true
           schema: { type: string }
       responses:
         "204": { description: No Content }
-  /v1/user/personas/{personaId}/activate:
+  /v1/user/personas/{subAccountId}/activate:
     post:
       summary: Activate persona
       parameters:
-        - name: personaId
+        - name: subAccountId
           in: path
           required: true
           schema: { type: string }
@@ -213,11 +213,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CallSettings" }
-  /v1/user/profile-subjects/{profileSubjectId}/relationship/capability:
+  /v1/user/sub-accounts/{subAccountId}/relationship/capability:
     get:
-      summary: Get relationship capability for target profile subject
+      summary: Get relationship capability for target sub account
       parameters:
-        - name: profileSubjectId
+        - name: subAccountId
           in: path
           required: true
           schema: { type: string }
@@ -280,9 +280,9 @@ components:
           additionalProperties: true
     Persona:
       type: object
-      required: [id, displayName]
+      required: [subAccountId, displayName]
       properties:
-        id: { type: string }
+        subAccountId: { type: string }
         displayName: { type: string }
         avatarUrl: { type: string }
         isPrimary: { type: boolean }
@@ -297,9 +297,9 @@ components:
         isPrivate: { type: boolean }
     CreatePersonaResponse:
       type: object
-      required: [personaId]
+      required: [subAccountId]
       properties:
-        personaId: { type: string }
+        subAccountId: { type: string }
     UpdatePersonaRequest:
       type: object
       properties:
@@ -393,8 +393,8 @@ components:
       type: object
       required:
         [
-          viewerProfileSubjectId,
-          targetProfileSubjectId,
+          viewerSubAccountId,
+          targetSubAccountId,
           relationState,
           canFollow,
           canUnfollow,
@@ -406,8 +406,8 @@ components:
           isBlockedBy,
         ]
       properties:
-        viewerProfileSubjectId: { type: string }
-        targetProfileSubjectId: { type: string }
+        viewerSubAccountId: { type: string }
+        targetSubAccountId: { type: string }
         relationState: { type: string }
         relationTier: { type: string, nullable: true }
         canFollow: { type: boolean }

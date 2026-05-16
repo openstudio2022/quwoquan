@@ -237,10 +237,10 @@ class PersonalAssistantStreamController
     }
     state = state.copyWith(historyLoading: true);
     try {
-      final profileSubjectId = await _historyProfileSubjectId();
+      final subAccountId = await _historySubAccountId();
       final snapshot = await ref
           .read(assistantHistoryLoaderProvider)
-          .load(profileSubjectId: profileSubjectId);
+          .load(subAccountId: subAccountId);
       if (snapshot == null || snapshot.transcript.isEmpty) {
         state = state.copyWith(historyInitialized: true, historyLoading: false);
         return;
@@ -265,12 +265,12 @@ class PersonalAssistantStreamController
     }
   }
 
-  Future<String> _historyProfileSubjectId() async {
+  Future<String> _historySubAccountId() async {
     try {
       final activeContext = await ref.read(activePersonaContextProvider.future);
-      final profileSubjectId = activeContext.profileSubjectId.trim();
-      if (profileSubjectId.isNotEmpty) {
-        return profileSubjectId;
+      final subAccountId = activeContext.subAccountId.trim();
+      if (subAccountId.isNotEmpty) {
+        return subAccountId;
       }
     } catch (_) {}
     return ref.read(currentUserIdProvider).trim();

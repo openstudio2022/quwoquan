@@ -69,4 +69,4 @@ level_acceptance:
     linked_tasks:
     - T4
     tests:
-    - file: scripts/gate.sh
+    - file: agent_ops/gate/gate_repo.sh

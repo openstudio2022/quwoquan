@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
@@ -821,26 +822,13 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     final route = _isVideoPost(tappedDto)
         ? AppRoutePaths.videoViewer(index: '$initialIndex')
         : AppRoutePaths.mediaViewer(category: 'circle', index: '$initialIndex');
-    final relationshipState = ref.read(userRelationshipStateProvider);
-    final postInteractionState = ref.read(postInteractionStateProvider);
-    final postLikesCount = <String, int>{};
-    final postBookmarksCount = <String, int>{};
-    final postSharesCount = <String, int>{};
-    for (final e in viewerEntries) {
-      final id = _tryParsePost(e)!.id;
-      postLikesCount[id] = postInteractionState.likeCountFor(
-        id,
-        fallback: e.wireLikeCount,
-      );
-      postBookmarksCount[id] = postInteractionState.bookmarkCountFor(
-        id,
-        fallback: e.wireBookmarkCount,
-      );
-      postSharesCount[id] = postInteractionState.shareCountFor(
-        id,
-        fallback: e.wireShareCount,
-      );
-    }
+    final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+      posts: viewerDtos,
+      discoveryState: ref.read(discoveryStateProvider),
+      relationshipState: ref.read(userRelationshipStateProvider),
+      postInteractionState: ref.read(postInteractionStateProvider),
+    );
+    primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
     final result = await context.push<Object?>(
       route,
       extra: MediaViewerExtra(
@@ -853,16 +841,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         source: 'circle',
         circleId: widget.circleId,
         rawPostsById: rawPostsById,
-        interactionSnapshot: MediaViewerInteractionSnapshot(
-          followingUsers: Set<String>.from(
-            relationshipState.followingProfileIds,
-          ),
-          likedPosts: Set<String>.from(postInteractionState.likedPostIds),
-          savedPosts: Set<String>.from(postInteractionState.savedPostIds),
-          postLikesCount: postLikesCount,
-          postBookmarksCount: postBookmarksCount,
-          postSharesCount: postSharesCount,
-        ),
+        interactionSnapshot: interactionSnapshot,
       ),
     );
     if (result is MediaViewerResult) {
@@ -882,8 +861,7 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   void _applyViewerResult(MediaViewerResult result) {
-    ref.read(userRelationshipStateProvider.notifier).applyViewerResult(result);
-    ref.read(postInteractionStateProvider.notifier).applyViewerResult(result);
+    applyMediaViewerResultToInteractionState(ref, result);
     setState(() {
       CircleHubFeedPostEntry.applyResultToList(_feedEntries, result);
     });

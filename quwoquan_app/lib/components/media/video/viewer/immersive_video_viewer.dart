@@ -50,6 +50,8 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   final Set<String>? likedPosts;
   final Function(PostSummaryView)? getPostLikesCount;
   final Function(PostSummaryView)? getPostBookmarksCount;
+  final Function(PostSummaryView)? getPostCommentsCount;
+  final Function(PostSummaryView)? getPostSharesCount;
   final bool isBlocked;
   final String? source; // 'feed' | 'userProfile'
   final Map<String, dynamic>? userProfileData;
@@ -88,6 +90,8 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
     this.likedPosts,
     this.getPostLikesCount,
     this.getPostBookmarksCount,
+    this.getPostCommentsCount,
+    this.getPostSharesCount,
     this.isBlocked = false,
     this.source,
     this.userProfileData,
@@ -177,7 +181,9 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
         oldWidget.savedPosts != widget.savedPosts ||
         oldWidget.followingUsers != widget.followingUsers ||
         oldWidget.getPostLikesCount != widget.getPostLikesCount ||
-        oldWidget.getPostBookmarksCount != widget.getPostBookmarksCount) {
+        oldWidget.getPostBookmarksCount != widget.getPostBookmarksCount ||
+        oldWidget.getPostCommentsCount != widget.getPostCommentsCount ||
+        oldWidget.getPostSharesCount != widget.getPostSharesCount) {
       _initializePostState();
     }
   }
@@ -193,8 +199,11 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
           : false;
       _likesCount = widget.getPostLikesCount?.call(currentPost) ?? 0;
       _savesCount = widget.getPostBookmarksCount?.call(currentPost) ?? 0;
-      _commentsCount = currentPost.commentsCount;
-      _sharesCount = currentPost.sharesCount;
+      _commentsCount =
+          widget.getPostCommentsCount?.call(currentPost) ??
+          currentPost.commentsCount;
+      _sharesCount =
+          widget.getPostSharesCount?.call(currentPost) ?? currentPost.sharesCount;
       _startFollowDelay();
     }
   }

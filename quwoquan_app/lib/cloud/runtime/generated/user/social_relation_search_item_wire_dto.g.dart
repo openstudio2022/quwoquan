@@ -2,7 +2,7 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class SocialRelationSearchItemWireDto {
-  final String profileSubjectId;
+  final String subAccountId;
   final String username;
   final String userHandle;
   final String displayName;
@@ -12,7 +12,7 @@ class SocialRelationSearchItemWireDto {
   final Map<String, dynamic>? relationshipCapability;
 
   SocialRelationSearchItemWireDto({
-    this.profileSubjectId = '',
+    this.subAccountId = '',
     this.username = '',
     this.userHandle = '',
     this.displayName = '',
@@ -24,7 +24,7 @@ class SocialRelationSearchItemWireDto {
 
   factory SocialRelationSearchItemWireDto.fromMap(Map<String, dynamic> m) {
     return SocialRelationSearchItemWireDto(
-      profileSubjectId: _firstNonEmptyWireString(m, <String>['profileSubjectId', 'userId']) ?? '',
+      subAccountId: _firstNonEmptyWireString(m, <String>['subAccountId', 'userId']) ?? '',
       username: m['username']?.toString() ?? m['userHandle']?.toString() ?? m['subAccountId']?.toString() ?? '',
       userHandle: m['userHandle']?.toString() ?? m['username']?.toString() ?? m['subAccountId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
@@ -37,7 +37,7 @@ class SocialRelationSearchItemWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'profileSubjectId': profileSubjectId,
+      'subAccountId': subAccountId,
       'username': username,
       'userHandle': userHandle,
       'displayName': displayName,
@@ -49,7 +49,7 @@ class SocialRelationSearchItemWireDto {
   }
 
   SocialRelationSearchItemWireDto copyWith({
-    String? profileSubjectId,
+    String? subAccountId,
     String? username,
     String? userHandle,
     String? displayName,
@@ -59,7 +59,7 @@ class SocialRelationSearchItemWireDto {
     Map<String, dynamic>? relationshipCapability,
   }) {
     return SocialRelationSearchItemWireDto(
-      profileSubjectId: profileSubjectId ?? this.profileSubjectId,
+      subAccountId: subAccountId ?? this.subAccountId,
       username: username ?? this.username,
       userHandle: userHandle ?? this.userHandle,
       displayName: displayName ?? this.displayName,

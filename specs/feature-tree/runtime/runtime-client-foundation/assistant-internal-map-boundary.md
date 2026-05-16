@@ -20,6 +20,6 @@
 ## 复核命令
 
 ```bash
-python3 scripts/report_map_typing_baseline.py
+python3 quwoquan_app/scripts/runtime/report_map_typing_baseline.py
 make verify-app-page-abc-governance-enforce-c
 ```

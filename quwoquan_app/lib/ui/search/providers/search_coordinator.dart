@@ -377,7 +377,7 @@ class SearchCoordinator extends Notifier<SearchSessionState> {
     final allConversations = ref
         .read(conversationCacheProvider)
         .getAll()
-        .map(ConversationSearchItemView.fromMap)
+        .map((item) => item.toConversationSearchItemView())
         .toList(growable: false);
     final seededConversations = <String, ConversationSearchItemView>{
       for (final item in allConversations) item.conversationId: item,

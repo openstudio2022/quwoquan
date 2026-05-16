@@ -15,7 +15,7 @@
 ## 功能范围（In Scope）
 
 1. **页面根壳策略**：`lib/ui/**/pages/` 下业务页及约定的 `components` 全屏页，根 `build` **必须**以 `CupertinoPageScaffold` 或 `AppScaffold`（及项目内等价的 iOS 壳封装）作为最外层可导航壳，**禁止** `return Scaffold(` 作为页面根（Material 全屏壳）。
-2. **门禁**：仓库 `scripts/verify_ios_native_surface_gate.py` + `specs/gates/ios_native_surface_allowlist.yaml`；**默认阻断** 新增 `return Scaffold(`；存量例外仅经 allowlist 登记，且 **allowlist 仅允许收缩**（新违规不得加入长期豁免，除非同步记为技术债任务）。
+2. **门禁**：仓库 `quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py` + `specs/gates/ios_native_surface_allowlist.yaml`；**默认阻断** 新增 `return Scaffold(`；存量例外仅经 allowlist 登记，且 **allowlist 仅允许收缩**（新违规不得加入长期豁免，除非同步记为技术债任务）。
 3. **规范对齐**：本 L3 与 `page-layout-semantics`、`07-ios-native-ux` 规则、`SettingsInsetFormPageScaffold` 等已落地模式一致；不重复定义 token，仅约束 **根壳选型** 与 **CI 阻断面**。
 
 ## Out of Scope

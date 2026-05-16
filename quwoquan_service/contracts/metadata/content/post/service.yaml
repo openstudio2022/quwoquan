@@ -28,10 +28,10 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, personaId, profileSubjectId, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
 
   - method: GET
-    path: /v1/content/profile-subjects/{profileSubjectId}/posts
+    path: /v1/content/sub-accounts/{subAccountId}/posts
     operation: ListUserPosts
     description: 公开主体发布的帖子列表（个人主页-创作 Tab）
     query_params: [identity, type, visibility, cursor, limit]
@@ -47,7 +47,7 @@ api_routes:
     path: /v1/content/posts/{postId}
     operation: UpdatePost
     description: 更新内容（仅 draft 可改；published 后不可变）
-    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleDocument, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, contentIdentity, title, body, summary, tags, mediaUrls, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
 
   - method: POST
     path: /v1/content/posts/{postId}/publish
@@ -77,7 +77,7 @@ api_routes:
     path: /v1/content/posts/{postId}:promoteToWork
     operation: PromotePostToWork
     description: 点滴升级为作品（原地升级，保持 postId 与 deeplink 不变）
-    writable_fields: [contentType, title, summary, tags, coverUrl, articleDocument, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, title, summary, tags, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
     auth: required
 
   - method: GET
@@ -92,7 +92,7 @@ api_routes:
     operation: CreateComment
     description: 发表评论
     request_entity: Comment
-    writable_fields: [content, replyToCommentId, personaId, profileSubjectId, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [content, replyToCommentId, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
 
   - method: DELETE
     path: /v1/content/posts/{postId}/comments/{commentId}
@@ -128,7 +128,7 @@ api_routes:
     auth: required
 
   - method: GET
-    path: /v1/content/profile-subjects/{profileSubjectId}/interactions/received
+    path: /v1/content/sub-accounts/{subAccountId}/interactions/received
     operation: ListProfileInteractionActivitiesReceived
     description: 个人主页收到的互动活动（赞/评论/转发）
     query_params: [cursor, limit]
@@ -136,7 +136,7 @@ api_routes:
     auth: required
 
   - method: GET
-    path: /v1/content/profile-subjects/{profileSubjectId}/interactions/sent
+    path: /v1/content/sub-accounts/{subAccountId}/interactions/sent
     operation: ListProfileInteractionActivitiesSent
     description: 个人主页发出的互动活动（赞/评论/转发）
     query_params: [cursor, limit]
@@ -151,7 +151,7 @@ api_routes:
   - method: GET
     path: /v1/content/posts/{postId}/reactions
     operation: GetReactionState
-    description: 当前用户互动状态（liked/favorited 字段）
+    description: 当前用户互动状态（liked/favorited/shared；shared 来自权威分享记录）
     response_entity: ContentReaction
 
   - method: POST
@@ -178,6 +178,18 @@ api_routes:
     description: 取消收藏（幂等，立即更新 ContentReaction.favorited + favoriteCount）
     auth: required
 
+  - method: POST
+    path: /v1/content/posts/{postId}/share
+    operation: SharePost
+    description: 成功分享记录写入（幂等；更新 ContentReaction.shared + shareCount；用于通用分享成功落库，不等同于 telemetry）
+    auth: required
+
+  - method: DELETE
+    path: /v1/content/posts/{postId}/share
+    operation: UnsharePost
+    description: 取消分享记录（幂等；对称更新 ContentReaction.shared + shareCount）
+    auth: required
+
   - method: GET
     path: /v1/content/posts/{postId}/counters
     operation: GetCounters
@@ -186,18 +198,18 @@ api_routes:
   - method: POST
     path: /v1/content/behaviors
     operation: ReportBehaviors
-    description: 行为批量上报（impression/click/dwell/dislike/report/share；like/favorite 用专用路由）
+    description: 行为批量上报（impression/click/dwell/dislike/report/shareIntent/shareClick；like/favorite/shareCount 用专用路由，不驱动 post.shareCount）
 
   - method: POST
     path: /v1/content/posts/{postId}/repost
     operation: RepostToCircle
-    description: 转发内容到圈子（独立于作者主动分发关系）
+    description: 转发内容到圈子（独立于作者主动分发关系；成功后同步写入权威分享记录并更新 shareCount）
     auth: required
 
   - method: POST
     path: /v1/content/posts/{postId}/quote
     operation: QuoteToCircle
-    description: 引用内容后重新发布（按 moment 落库）
+    description: 引用内容后重新发布（按 moment 落库；成功后同步写入权威分享记录并更新 shareCount）
     auth: required
 
   - method: POST
@@ -228,6 +240,12 @@ api_routes:
     path: /v1/content/media/{mediaId}/original:access
     operation: RequestOriginalImageAccess
     description: 显式申请查看或保存原图/原视频授权
+    auth: required
+
+  - method: POST
+    path: /v1/content/posts/{postId}/media:bind
+    operation: BindMediaAssetsToPost
+    description: 将 draft/cold_start 素材绑定到帖子，供 Markdown 长文发布和回读使用
     auth: required
 
   - method: POST

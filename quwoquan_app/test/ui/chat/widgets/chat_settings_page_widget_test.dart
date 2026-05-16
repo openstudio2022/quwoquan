@@ -5,15 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
-import 'package:quwoquan_app/cloud/services/chat/mock/chat_mock_data.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_settings_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import '../../../common/chat/chat_mock_seed_refs.dart';
 
 List<Override> _chatTestOverrides(ChatRepository repo) => [
   chatRepositoryProvider.overrideWithValue(repo),
-  currentUserIdProvider.overrideWithValue(ChatMockData.currentUserProfileId),
+  currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
 ];
 
 Widget _scopedApp({ChatRepository? mock}) {

@@ -20,7 +20,7 @@ class PersonaLifecycleGuardWireDto {
 
   factory PersonaLifecycleGuardWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaLifecycleGuardWireDto(
-      subAccountId: m['subAccountId']?.toString() ?? m['personaId']?.toString() ?? m['id']?.toString() ?? '',
+      subAccountId: m['subAccountId']?.toString() ?? m['id']?.toString() ?? '',
       canDelete: m['canDelete'] as bool? ?? false,
       canRetire: m['canRetire'] as bool? ?? false,
       requiredAction: m['requiredAction']?.toString() ?? m['lifecycleAction']?.toString() ?? '',

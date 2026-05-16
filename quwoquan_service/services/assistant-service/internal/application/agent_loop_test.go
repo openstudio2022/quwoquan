@@ -195,7 +195,7 @@ func TestAgentLoop_RunTurnStream_ToolFailureReturnsRuntimeFailure(t *testing.T) 
 	}
 }
 
-func TestBuildRetrievalProcessing_SeparatesSearchedAndAcceptedCounts(t *testing.T) {
+func TestBuildRetrievalProcessing_MergesModelAndToolAcceptedReferences(t *testing.T) {
 	step := ReactStepResult{
 		Observation: structObservation(false),
 		Tool: ToolExecution{Completed: assistant.ToolUse{Result: map[string]any{
@@ -216,12 +216,77 @@ func TestBuildRetrievalProcessing_SeparatesSearchedAndAcceptedCounts(t *testing.
 		},
 	}
 	result := buildRetrievalProcessingForStep(step)
-	if result["searchedDocumentCount"] != 3 || result["processedDocumentCount"] != 3 || result["acceptedDocumentCount"] != 1 {
+	if result["searchedDocumentCount"] != 3 || result["processedDocumentCount"] != 3 || result["acceptedDocumentCount"] != 2 {
 		t.Fatalf("counts=%#v", result)
 	}
 	refs, ok := result["acceptedReferences"].([]map[string]any)
-	if !ok || len(refs) != 1 {
+	if !ok || len(refs) != 2 {
 		t.Fatalf("accepted refs=%#v", result["acceptedReferences"])
+	}
+}
+
+func TestBuildRetrievalProcessing_PreservesModelAcceptedReferences(t *testing.T) {
+	step := ReactStepResult{
+		Observation: structObservation(false),
+		Tool: ToolExecution{Completed: assistant.ToolUse{Result: map[string]any{
+			"reliable": true,
+			"references": []map[string]any{
+				{
+					"title":  "无影云电脑按量付费 - 阿里云",
+					"url":    "https://www.alibabacloud.com/help/zh/wuying-workspace/product-overview/pay-as-you-go",
+					"source": "www.alibabacloud.com",
+				},
+				{
+					"title":  "阿里云无影云桌面按量付费关机不收费 - 知乎专栏",
+					"url":    "https://zhuanlan.zhihu.com/p/530569284",
+					"source": "zhuanlan.zhihu.com",
+				},
+				{
+					"title":  "Vertex AI 定價 | Google Cloud - googleing.ltd",
+					"url":    "http://www.googleing.ltd/vertex-ai/generative-ai/pricing?hl=zh-tw",
+					"source": "www.googleing.ltd",
+				},
+			},
+		}}},
+		EvidenceStructuredDelta: map[string]any{
+			"retrievalProcessing": map[string]any{
+				"processingSummary": "模型初步挑了 3 条来源，其中包含非权威来源。",
+				"acceptedReferences": []map[string]any{
+					{
+						"title":  "无影云电脑按量付费 - 阿里云",
+						"url":    "https://www.alibabacloud.com/help/zh/wuying-workspace/product-overview/pay-as-you-go",
+						"source": "www.alibabacloud.com",
+					},
+					{
+						"title":  "阿里云无影云桌面按量付费关机不收费 - 知乎专栏",
+						"url":    "https://zhuanlan.zhihu.com/p/530569284",
+						"source": "zhuanlan.zhihu.com",
+					},
+					{
+						"title":  "Vertex AI 定價 | Google Cloud - googleing.ltd",
+						"url":    "http://www.googleing.ltd/vertex-ai/generative-ai/pricing?hl=zh-tw",
+						"source": "www.googleing.ltd",
+					},
+				},
+			},
+		},
+	}
+	result := buildRetrievalProcessingForStep(step)
+	refs, ok := result["acceptedReferences"].([]map[string]any)
+	if !ok {
+		t.Fatalf("accepted refs=%#v", result["acceptedReferences"])
+	}
+	if len(refs) != 3 {
+		t.Fatalf("accepted refs len=%d refs=%#v", len(refs), refs)
+	}
+	if refs[0]["source"] != "www.alibabacloud.com" {
+		t.Fatalf("refs[0].source=%v", refs[0]["source"])
+	}
+	if refs[1]["source"] != "zhuanlan.zhihu.com" {
+		t.Fatalf("refs[1].source=%v", refs[1]["source"])
+	}
+	if refs[2]["source"] != "www.googleing.ltd" {
+		t.Fatalf("refs[2].source=%v", refs[2]["source"])
 	}
 }
 

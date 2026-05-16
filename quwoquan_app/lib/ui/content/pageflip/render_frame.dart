@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
 import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
@@ -72,6 +73,7 @@ class StPageFlipRenderFrame {
     required this.progress,
     required this.direction,
     required this.renderDirection,
+    required this.visualGeometryDirection,
     required this.corner,
     required this.flippingClipArea,
     required this.bottomClipArea,
@@ -83,12 +85,14 @@ class StPageFlipRenderFrame {
     this.reversePose,
     this.backwardLeafFrame,
     this.backwardProjectedFrame,
+    this.routeBSpineMirroredApplied = false,
   });
 
   final ui.Offset localPagePoint;
   final double progress;
   final StPageFlipDirection direction;
   final StPageFlipDirection renderDirection;
+  final StPageFlipDirection visualGeometryDirection;
   final StPageFlipCorner corner;
   final List<ui.Offset> flippingClipArea;
   final List<ui.Offset> bottomClipArea;
@@ -101,27 +105,28 @@ class StPageFlipRenderFrame {
   final ArticlePageBackwardLeafFrame? backwardLeafFrame;
   final ArticlePageBackwardProjectedFrame? backwardProjectedFrame;
 
+  /// True iff this frame's BACK geometry has been X-mirrored to align with
+  /// the forward rendering pipeline (route B M1 invariant). Only set on
+  /// portrait single-page BACK frames.
+  final bool routeBSpineMirroredApplied;
+
   bool get usesThreeStageBackflow =>
       direction == StPageFlipDirection.back &&
       renderDirection == StPageFlipDirection.forward &&
       reversePose != null;
 }
 
+/// 后翻 projected frame：路线 B 主线下仅承载 fold line 与 free-edge line，
+/// 用于 diagnostic guide layer。所有派生多边形（previousFoldSurfacePolygon /
+/// previousFrontFoldPolygon / previousBackFoldPolygon / currentResidualPolygon
+/// 等）已被废弃；sheet 与 current 的真相源是 `flippingClipArea` 与
+/// `bottomClipArea`，渲染层直接消费、不得再在此处派生。
 @immutable
 class ArticlePageBackwardProjectedFrame {
   const ArticlePageBackwardProjectedFrame({
     required this.foldLine,
     required this.projectedRightEdgeLine,
-    required this.foldSurfaceMovingEdgeLine,
     required this.replayLocalPoint,
-    required this.previousBackPagePolygon,
-    required this.previousLaidFrontPolygon,
-    required this.previousFoldSurfacePolygon,
-    required this.previousBackFoldPolygon,
-    required this.previousFrontFoldPolygon,
-    required this.previousBackPolygon,
-    required this.previousFrontPolygon,
-    required this.currentResidualPolygon,
     required this.edgeEnteredPage,
     required this.foldLineSource,
     required this.edgeLineSource,
@@ -129,22 +134,10 @@ class ArticlePageBackwardProjectedFrame {
 
   final (ui.Offset, ui.Offset) foldLine;
   final (ui.Offset, ui.Offset) projectedRightEdgeLine;
-  final (ui.Offset, ui.Offset) foldSurfaceMovingEdgeLine;
   final ui.Offset replayLocalPoint;
-  final List<ui.Offset> previousBackPagePolygon;
-  final List<ui.Offset> previousLaidFrontPolygon;
-  final List<ui.Offset> previousFoldSurfacePolygon;
-  final List<ui.Offset> previousBackFoldPolygon;
-  final List<ui.Offset> previousFrontFoldPolygon;
-  final List<ui.Offset> previousBackPolygon;
-  final List<ui.Offset> previousFrontPolygon;
-  final List<ui.Offset> currentResidualPolygon;
   final bool edgeEnteredPage;
   final String foldLineSource;
   final String edgeLineSource;
-
-  int get previousBackVertexCount => previousBackPolygon.length;
-  int get previousFrontVertexCount => previousFrontPolygon.length;
 }
 
 enum ArticlePageBackwardLeafPhase { emerge, unroll, settle }
@@ -276,10 +269,18 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
               0.72)
           .clamp(0.0, 1.0)
           .toDouble();
-  final rectoCoverage = math
-      .max(math.max(rectoCoverageByFold, rectoCoverageByCurl), settleProgress)
-      .clamp(0.0, 1.0)
-      .toDouble();
+  // Recto ownership must stay locked until the fold crosses the page midpoint.
+  // Curl timing may change appearance, but it must not make the front face
+  // appear before the physical fold has exposed the spine-side segment.
+  final rectoCoverage = coveredWidth > 0.5
+      ? math
+            .max(
+              math.max(rectoCoverageByFold, rectoCoverageByCurl),
+              settleProgress,
+            )
+            .clamp(0.0, 1.0)
+            .toDouble()
+      : 0.0;
   final versoOverlayStart = (coveredWidth * rectoCoverage)
       .clamp(0.0, coveredWidth)
       .toDouble();
@@ -448,9 +449,21 @@ ui.Offset resolveBackwardReplayLocalPagePoint({
   required ui.Offset localPagePoint,
   required ui.Size pageSize,
 }) {
-  return ui.Offset(
-    (pageSize.width + localPagePoint.dx).clamp(0.0, pageSize.width).toDouble(),
-    localPagePoint.dy.clamp(0.0, pageSize.height),
+  return resolveBackwardReplayCanonicalPoint(
+    localPagePoint: localPagePoint,
+    pageWidth: pageSize.width,
+    pageHeight: pageSize.height,
+  );
+}
+
+ui.Offset resolveBackwardVisualReplayLocalPagePoint({
+  required ui.Offset localPagePoint,
+  required ui.Size pageSize,
+}) {
+  return resolveBackwardVisualReplayCanonicalPoint(
+    localPagePoint: localPagePoint,
+    pageWidth: pageSize.width,
+    pageHeight: pageSize.height,
   );
 }
 
@@ -492,7 +505,7 @@ StPageFlipTimeline _resolveBackwardReplayTimeline({
   required StPageFlipCurlAngleBand angleBand,
 }) {
   final replayProgress = resolveBackwardReplayProgress(progress);
-  final replayLocalPoint = resolveBackwardReplayLocalPagePoint(
+  final replayLocalPoint = resolveBackwardVisualReplayLocalPagePoint(
     localPagePoint: localPagePoint,
     pageSize: pageSize,
   );

@@ -243,7 +243,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                             onTap: () => context.push(
                               AppRoutePaths.userProfile(username: username),
                               extra: UserProfileRouteExtra(
-                                profileSubjectId: username,
+                                subAccountId: username,
                                 avatar: m.avatarUrl,
                                 displayName: m.displayName,
                               ),

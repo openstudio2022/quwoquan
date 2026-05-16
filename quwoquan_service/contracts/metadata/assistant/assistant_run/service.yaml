@@ -12,7 +12,7 @@ api_routes:
     path: /v1/assistant/search/xiaoqu
     operation: SearchXiaoquResults
     description: 小趣搜网络结果 tab 查询（返回 AI 总结与引用，不直接创建完整对话页 UI）
-    request_fields: [userQuery, searchIntensity, profileSubjectId, subAccountId, personaContextVersion, sourceSurfaceId, fromGlobalSearch]
+    request_fields: [userQuery, searchIntensity, subAccountId, personaContextVersion, sourceSurfaceId, fromGlobalSearch]
     response_entity: AssistantSearchResultView
 
   - method: POST
@@ -51,7 +51,7 @@ api_routes:
     path: /v1/assistant/page-context
     operation: ReportPageContext
     description: 页面上下文上报
-    request_fields: [pageType, businessObjects, userAction, userActions, profileSubjectId, subAccountId, personaContextVersion]
+    request_fields: [pageType, businessObjects, userAction, userActions, subAccountId, personaContextVersion]
     response_entity: PageContextAck
 
   - method: GET

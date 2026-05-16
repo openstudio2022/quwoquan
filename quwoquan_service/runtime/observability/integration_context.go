@@ -18,7 +18,7 @@ type CorrelationMeta struct {
 	RequestID      string
 	SessionID      string
 	UserID         string
-	PersonaID      string
+	SubAccountID   string
 	PageID         string
 	DevicePlatform string
 	AppVersion     string
@@ -57,13 +57,13 @@ func buildCorrelationMetaFromHeaders(h http.Header) CorrelationMeta {
 	if sessionID == "" {
 		sessionID = "sess-" + nowSeed
 	}
-	userID := h.Get("X-User-Id")
+	userID := h.Get("X-Client-User-Id")
 	return CorrelationMeta{
 		TraceID:        traceID,
 		RequestID:      requestID,
 		SessionID:      sessionID,
 		UserID:         userID,
-		PersonaID:      h.Get("X-Persona-Id"),
+		SubAccountID:   h.Get("X-Client-Sub-Account-Id"),
 		PageID:         h.Get("X-Client-Page-Id"),
 		DevicePlatform: h.Get("X-Client-Device-Platform"),
 		AppVersion:     h.Get("X-Client-App-Version"),
@@ -86,4 +86,3 @@ func CorrelationMetaFromContext(ctx context.Context) (CorrelationMeta, bool) {
 	meta, ok := v.(CorrelationMeta)
 	return meta, ok
 }
-

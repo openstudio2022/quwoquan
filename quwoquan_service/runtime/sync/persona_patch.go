@@ -36,8 +36,8 @@ func (s *Service) AppendPersonaPatch(
 	if !IsPersonaPatchType(patchType) {
 		return Patch{}, fmt.Errorf("unsupported persona patch type: %s", patchType)
 	}
-	if strings.TrimSpace(anyPayloadString(payload["personaId"])) == "" {
-		return Patch{}, fmt.Errorf("personaId is required for persona patch")
+	if strings.TrimSpace(anyPayloadString(payload["subAccountId"])) == "" {
+		return Patch{}, fmt.Errorf("subAccountId is required for persona patch")
 	}
 	return s.AppendPatch(ctx, userID, patchType, payload)
 }

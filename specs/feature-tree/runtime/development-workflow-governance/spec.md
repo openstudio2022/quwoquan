@@ -75,8 +75,8 @@
 ### R5：重构脚本、索引和门禁
 
 - R5.1：`tree_index.yaml`、`runtime/tree.yaml`、tree index 生成器与相关校验脚本必须统一到三层模型。
-- R5.2：`scripts/new_feature_fullstack.sh` 必须退出旧 `changes/` 五层脚手架模式，改为直接生成新的三层特性节点。
-- R5.3：`scripts/verify_feature_traceability.sh`、`scripts/verify_feature_tree_refactor.sh` 等脚本必须改为零容忍旧层级。
+- R5.2：`agent_ops/scaffold/new_feature_fullstack.sh` 必须退出旧 `changes/` 五层脚手架模式，改为直接生成新的三层特性节点。
+- R5.3：`scripts/verify_feature_traceability.sh`、`agent_ops/scaffold/verify_feature_tree_refactor.sh` 等脚本必须改为零容忍旧层级。
 - R5.4：一旦发现旧 level、旧目录深度、旧兼容字段，门禁必须直接失败，而不是容忍读取。
 
 ### R6：重构存量特性树

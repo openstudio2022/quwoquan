@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "entityId": { "type": "string" },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "platform": { "type": "string" },
+          "url": { "type": "string" },
+          "expectedContentType": { "type": "string" },
+          "priority": { "type": "integer" }
+        },
+        "required": ["platform", "url"]
+      },
+      "minItems": 2
+    }
+  },
+  "required": ["entityId", "sources"]
+}

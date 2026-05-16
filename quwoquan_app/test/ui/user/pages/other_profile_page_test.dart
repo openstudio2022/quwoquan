@@ -263,7 +263,7 @@ void main() {
     expect(find.byType(ProfileShell), findsOneWidget);
   });
 
-  testWidgets('OtherProfilePage 优先使用 profileSubjectId 作为 canonical key', (
+  testWidgets('OtherProfilePage 优先使用 subAccountId 作为 canonical key', (
     tester,
   ) async {
     setPhoneSize(tester);
@@ -287,7 +287,7 @@ void main() {
             supportedLocales: AppLocalizations.supportedLocales,
             home: const OtherProfilePage(
               username: 'nature_photographer',
-              profileSubjectId: 'profile-subject-1',
+              subAccountId: 'sub-account-1',
             ),
           ),
         ),
@@ -295,6 +295,6 @@ void main() {
     );
 
     final shell = tester.widget<ProfileShell>(find.byType(ProfileShell));
-    expect(shell.userId, 'profile-subject-1');
+    expect(shell.userId, 'sub-account-1');
   });
 }

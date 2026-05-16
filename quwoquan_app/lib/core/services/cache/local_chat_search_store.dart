@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:quwoquan_app/core/services/cache/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:quwoquan_app/core/services/cache/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -213,10 +216,22 @@ class LocalChatSearchStore {
     await batch.commit(noResult: true);
   }
 
+  Future<void> upsertConversationRecords({
+    required LocalSearchNamespace namespace,
+    required List<ConversationCacheRecord> conversations,
+  }) async {
+    await upsertConversations(
+      namespace: namespace,
+      conversations: conversations
+          .map((conversation) => conversation.toWireMap())
+          .toList(growable: false),
+    );
+  }
+
   Future<void> upsertMessages({
     required LocalSearchNamespace namespace,
-    required List<Map<String, dynamic>> messages,
-    Map<String, dynamic>? conversation,
+    required List<LocalChatSearchMessageRecord> messages,
+    ConversationCacheRecord? conversation,
   }) async {
     if (messages.isEmpty) {
       return;
@@ -225,31 +240,19 @@ class LocalChatSearchStore {
     final batch = database.batch();
     final now = DateTime.now().toIso8601String();
     _upsertNamespace(batch, namespace, updatedAt: now);
-    final fallbackConversationId = _conversationId(
-      conversation == null ? null : Map<String, Object?>.from(conversation),
-    );
-    final fallbackConversationType = _string(conversation?['type']);
-    final fallbackConversationTitle = _firstNonEmpty(<Object?>[
-      conversation?['title'],
-      conversation?['conversationTitle'],
-    ]);
-    final fallbackConversationAvatar = _string(conversation?['avatarUrl']);
+    final fallbackConversationId = conversation?.id ?? '';
+    final fallbackConversationType = conversation?.type ?? '';
+    final fallbackConversationTitle = conversation?.title ?? '';
+    final fallbackConversationAvatar = conversation?.avatarUrl ?? '';
     var maxSeq = 0;
     for (final message in messages) {
-      final messageId = _string(
-        message['messageId'] ?? message['id'] ?? message['_id'],
-      );
+      final messageId = message.messageId.trim();
       if (messageId.isEmpty) {
         continue;
       }
-      final recalledAt = _string(message['recalledAt']);
-      final status = _string(message['status']);
-      final deleted =
-          recalledAt.isNotEmpty ||
-          status == 'recalled' ||
-          status == 'deleted' ||
-          message['deleted'] == true ||
-          message['isDeleted'] == true;
+      final recalledAt = message.recalledAt.trim();
+      final status = message.status.trim();
+      final deleted = message.deleted;
       if (deleted) {
         _deleteMessageInBatch(
           batch,
@@ -259,71 +262,60 @@ class LocalChatSearchStore {
         continue;
       }
       final conversationId = _firstNonEmpty(<Object?>[
-        message['conversationId'],
+        message.conversationId,
         fallbackConversationId,
       ]);
       if (conversationId.isEmpty) {
         continue;
       }
-      final seq = (message['seq'] as num?)?.toInt() ?? 0;
+      final seq = message.seq;
       if (seq > maxSeq) {
         maxSeq = seq;
       }
       final conversationType = _firstNonEmpty(<Object?>[
-        message['conversationType'],
+        message.conversationType,
         fallbackConversationType,
       ]);
       final conversationTitle = _firstNonEmpty(<Object?>[
-        message['conversationTitle'],
+        message.conversationTitle,
         fallbackConversationTitle,
       ]);
       final conversationAvatarUrl = _firstNonEmpty(<Object?>[
-        message['conversationAvatarUrl'],
+        message.conversationAvatarUrl,
         fallbackConversationAvatar,
       ]);
-      final senderProfileSubjectId = _firstNonEmpty(<Object?>[
-        message['senderProfileSubjectId'],
-        message['senderId'],
+      final senderSubAccountId = _firstNonEmpty(<Object?>[
+        message.senderSubAccountId,
       ]);
       final senderDisplayName = _firstNonEmpty(<Object?>[
-        message['senderDisplayName'],
-        message['senderDisplayNameSnapshot'],
-        message['senderName'],
+        message.senderDisplayName,
       ]);
       final senderAvatarUrl = _firstNonEmpty(<Object?>[
-        message['senderAvatarUrl'],
-        message['senderAvatarUrlSnapshot'],
+        message.senderAvatarUrl,
       ]);
       final messageType = _firstNonEmpty(<Object?>[
-        message['messageType'],
-        message['type'],
+        message.messageType,
         'text',
       ]);
-      final contentPreview = _firstNonEmpty(<Object?>[
-        message['contentPreview'],
-        message['content'],
-      ]);
-      final timestamp = _firstNonEmpty(<Object?>[
-        message['timestamp'],
-        message['createdAt'],
-        now,
-      ]);
-      final payload = <String, dynamic>{
-        ...message,
-        'messageId': messageId,
-        'id': messageId,
-        '_id': messageId,
-        'conversationId': conversationId,
-        'conversationType': conversationType,
-        'conversationTitle': conversationTitle,
-        'conversationAvatarUrl': conversationAvatarUrl,
-        'senderProfileSubjectId': senderProfileSubjectId,
-        'senderDisplayName': senderDisplayName,
-        'senderAvatarUrl': senderAvatarUrl,
-        'messageType': messageType,
-        'contentPreview': contentPreview,
-        'timestamp': timestamp,
-      };
+      final contentPreview = _firstNonEmpty(<Object?>[message.contentPreview]);
+      final timestamp = _firstNonEmpty(<Object?>[message.timestamp, now]);
+      final payload = message
+          .copyWith(
+            conversationId: conversationId,
+            conversationType: conversationType,
+            conversationTitle: conversationTitle,
+            conversationAvatarUrl: conversationAvatarUrl,
+            senderSubAccountId: senderSubAccountId,
+            senderDisplayName: senderDisplayName,
+            senderAvatarUrl: senderAvatarUrl,
+            messageType: messageType,
+            contentPreview: contentPreview,
+            timestamp: timestamp,
+            status: status.isEmpty ? 'sent' : status,
+            recalledAt: recalledAt,
+            deleted: deleted,
+          )
+          .toWireMap();
       final searchableText = _searchableText(<Object?>[
         contentPreview,
         senderDisplayName,
@@ -336,7 +328,7 @@ class LocalChatSearchStore {
         'conversation_type': conversationType,
         'conversation_title': conversationTitle,
         'conversation_avatar_url': conversationAvatarUrl,
-        'sender_profile_subject_id': senderProfileSubjectId,
+        'sender_sub_account_id': senderSubAccountId,
         'sender_display_name': senderDisplayName,
         'sender_avatar_url': senderAvatarUrl,
         'message_type': messageType,
@@ -377,7 +369,7 @@ class LocalChatSearchStore {
     await batch.commit(noResult: true);
   }
 
-  Future<List<Map<String, dynamic>>> searchContacts({
+  Future<List<LocalChatSearchContactRecord>> searchContacts({
     required LocalSearchNamespace namespace,
     required String query,
     int limit = 20,
@@ -410,16 +402,31 @@ class LocalChatSearchStore {
             'headline': _string(row['headline']),
             'remark': _string(row['remark']),
           });
-          return <String, dynamic>{
-            ...payload,
-            'matchedField': matchedField,
-            'highlightText': _highlightText(payload, matchedField),
-          };
+          final record = LocalChatSearchContactRecord.fromWireMap(payload);
+          return record.copyWith(
+            matchedField: matchedField,
+            highlightText: _highlightText(payload, matchedField),
+          );
         })
+        .where((item) => item.contactId.isNotEmpty)
         .toList(growable: false);
   }
 
-  Future<List<Map<String, dynamic>>> listConversationPayloads({
+  Future<List<ConversationSearchItemView>> listConversationViews({
+    required LocalSearchNamespace namespace,
+    int limit = 200,
+  }) async {
+    final records = await listConversationRecords(
+      namespace: namespace,
+      limit: limit,
+    );
+    return records
+        .map((record) => record.toConversationSearchItemView())
+        .where((item) => item.conversationId.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Future<List<ConversationCacheRecord>> listConversationRecords({
     required LocalSearchNamespace namespace,
     int? limit = 200,
   }) async {
@@ -432,22 +439,12 @@ class LocalChatSearchStore {
       limit: limit,
     );
     return rows
-        .map((row) => _decodePayload(row['payload_json']))
-        .where((row) => row.isNotEmpty)
-        .toList(growable: false);
-  }
-
-  Future<List<ConversationSearchItemView>> listConversationViews({
-    required LocalSearchNamespace namespace,
-    int limit = 200,
-  }) async {
-    final payloads = await listConversationPayloads(
-      namespace: namespace,
-      limit: limit,
-    );
-    return payloads
-        .map(ConversationSearchItemView.fromMap)
-        .where((item) => item.conversationId.isNotEmpty)
+        .map(
+          (row) => _conversationRecordFromPayload(
+            _decodePayload(row['payload_json']),
+          ),
+        )
+        .where((item) => item.id.isNotEmpty)
         .toList(growable: false);
   }
 
@@ -478,15 +475,16 @@ class LocalChatSearchStore {
     return rows
         .map((row) {
           final payload = _decodePayload(row['payload_json']);
-          payload['matchedField'] = _matchedField(query, <String, String>{
+          final matchedField = _matchedField(query, <String, String>{
             'title': _string(row['title']),
             'lastMessagePreview': _string(row['last_message_preview']),
           });
-          payload['highlightText'] = _highlightText(
-            payload,
-            payload['matchedField']?.toString(),
-          );
-          return ConversationSearchItemView.fromMap(payload);
+          final record = _conversationRecordFromPayload(payload);
+          return ConversationSearchItemView.fromMap(<String, dynamic>{
+            ...record.toWireMap(),
+            'matchedField': matchedField,
+            'highlightText': _highlightText(payload, matchedField),
+          });
         })
         .where((item) {
           if (item.conversationId.isEmpty) {
@@ -534,16 +532,17 @@ class LocalChatSearchStore {
         continue;
       }
       final payload = _decodePayload(row['payload_json']);
-      payload['matchedField'] = _matchedField(query, <String, String>{
+      final matchedField = _matchedField(query, <String, String>{
         'content': _string(row['content_preview']),
         'senderDisplayName': _string(row['sender_display_name']),
         'conversationTitle': _string(row['conversation_title']),
       });
-      payload['highlightText'] = _highlightText(
-        payload,
-        payload['matchedField']?.toString(),
-      );
-      final item = MessageSearchItemView.fromMap(payload);
+      final item = LocalChatSearchMessageRecord.fromWireMap(payload)
+          .copyWith(
+            matchedField: matchedField,
+            highlightText: _highlightText(payload, matchedField),
+          )
+          .toMessageSearchItemView();
       if (item.messageId.isEmpty) {
         continue;
       }
@@ -617,19 +616,18 @@ class LocalChatSearchStore {
     );
     if (rows.isNotEmpty) {
       final payload = _decodePayload(rows.first['payload_json']);
-      payload['avatarUrl'] = avatarUrl;
-      payload['conversationAvatarUrl'] = avatarUrl;
-      if (groupAvatarVersion != null) {
-        payload['groupAvatarVersion'] = groupAvatarVersion;
-      }
-      if (groupAvatarSourceHash != null) {
-        payload['groupAvatarSourceHash'] = groupAvatarSourceHash;
-      }
+      final updatedPayload = _conversationRecordFromPayload(payload)
+          .copyWith(
+            avatarUrl: avatarUrl,
+            groupAvatarVersion: groupAvatarVersion,
+            groupAvatarSourceHash: groupAvatarSourceHash,
+          )
+          .toWireMap();
       await database.update(
         'chat_conversations',
         <String, Object?>{
           'avatar_url': avatarUrl,
-          'payload_json': jsonEncode(payload),
+          'payload_json': jsonEncode(updatedPayload),
           'updated_at': DateTime.now().toIso8601String(),
         },
         where: 'namespace_key = ? AND conversation_id = ?',
@@ -683,11 +681,13 @@ class LocalChatSearchStore {
       return;
     }
     final payload = _decodePayload(rows.first['payload_json']);
-    payload['avatarUrl'] = avatarUrl;
+    final updatedPayload = LocalChatSearchContactRecord.fromWireMap(payload)
+        .copyWith(avatarUrl: avatarUrl)
+        .toWireMap();
     await database.update(
       'chat_contacts',
       <String, Object?>{
-        'payload_json': jsonEncode(payload),
+        'payload_json': jsonEncode(updatedPayload),
         'updated_at': DateTime.now().toIso8601String(),
       },
       where: 'namespace_key = ? AND contact_id = ?',
@@ -895,7 +895,6 @@ class LocalChatSearchStore {
     batch.insert('search_namespaces', <String, Object?>{
       'namespace_key': namespace.key,
       'owner_user_id': namespace.ownerUserId,
-      'profile_subject_id': namespace.profileSubjectId,
       'sub_account_id': namespace.subAccountId,
       'subject_type': namespace.subjectType,
       'persona_context_version': namespace.personaContextVersion,
@@ -934,6 +933,12 @@ class LocalChatSearchStore {
     return const <String, dynamic>{};
   }
 
+  ConversationCacheRecord _conversationRecordFromPayload(
+    Map<String, dynamic> payload,
+  ) {
+    return ConversationCacheRecord.fromWireMap(payload);
+  }
+
   Future<Database> get _database async {
     return _databaseFuture ??= _openDatabase();
   }
@@ -945,10 +950,37 @@ class LocalChatSearchStore {
     if (factory != null) {
       return factory.openDatabase(
         path,
-        options: OpenDatabaseOptions(version: 1, onCreate: _onCreate),
+        options: OpenDatabaseOptions(
+          version: 2,
+          onCreate: _onCreate,
+          onUpgrade: _onUpgrade,
+        ),
       );
     }
-    return openDatabase(path, version: 1, onCreate: _onCreate);
+    return openDatabase(path, version: 2, onCreate: _onCreate, onUpgrade: _onUpgrade);
+  }
+
+  Future<void> _onUpgrade(
+    Database database,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion >= 2) {
+      return;
+    }
+    await _dropAllTables(database);
+    await _onCreate(database, newVersion);
+  }
+
+  Future<void> _dropAllTables(Database database) async {
+    await database.execute('DROP TABLE IF EXISTS chat_sync_state');
+    await database.execute('DROP TABLE IF EXISTS chat_messages_fts');
+    await database.execute('DROP TABLE IF EXISTS chat_messages');
+    await database.execute('DROP TABLE IF EXISTS chat_conversations_fts');
+    await database.execute('DROP TABLE IF EXISTS chat_conversations');
+    await database.execute('DROP TABLE IF EXISTS chat_contacts_fts');
+    await database.execute('DROP TABLE IF EXISTS chat_contacts');
+    await database.execute('DROP TABLE IF EXISTS search_namespaces');
   }
 
   Future<String> _resolveDatabasePath() async {
@@ -988,7 +1020,6 @@ class LocalChatSearchStore {
       CREATE TABLE search_namespaces (
         namespace_key TEXT PRIMARY KEY,
         owner_user_id TEXT NOT NULL,
-        profile_subject_id TEXT NOT NULL,
         sub_account_id TEXT NOT NULL,
         subject_type TEXT NOT NULL,
         persona_context_version TEXT NOT NULL,
@@ -1058,7 +1089,7 @@ class LocalChatSearchStore {
         conversation_type TEXT NOT NULL,
         conversation_title TEXT NOT NULL,
         conversation_avatar_url TEXT NOT NULL,
-        sender_profile_subject_id TEXT NOT NULL,
+        sender_sub_account_id TEXT NOT NULL,
         sender_display_name TEXT NOT NULL,
         sender_avatar_url TEXT NOT NULL,
         message_type TEXT NOT NULL,
@@ -1195,6 +1226,7 @@ class LocalChatSearchStore {
   String _contactId(Map<String, Object?>? contact) {
     return _string(
       contact?['contactId'] ??
+          contact?['subAccountId'] ??
           contact?['userId'] ??
           contact?['profileSubjectId'] ??
           '',

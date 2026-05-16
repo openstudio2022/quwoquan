@@ -26,17 +26,24 @@ import 'package:quwoquan_app/cloud/services/chat/chat_group_settings_extensions.
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
 
+/// 在 surface/operation 基础头之上合并当前用户与分身上下文（如 [CloudRequestHeaders.withPersonaContext]）。
+typedef ChatRemoteMergeRequestContext =
+    Future<Map<String, String>> Function(Map<String, String> baseHeaders);
+
 class RemoteChatRepository implements ChatRepository {
   RemoteChatRepository({
     CloudHttpClient? httpClient,
     http.Client? client,
     String? baseUrl,
+    ChatRemoteMergeRequestContext? mergeRequestContext,
   }) : _httpClient =
            httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+       _mergeRequestContext = mergeRequestContext;
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
+  final ChatRemoteMergeRequestContext? _mergeRequestContext;
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
     return Uri.parse(
@@ -44,17 +51,22 @@ class RemoteChatRepository implements ChatRepository {
     ).replace(queryParameters: queryParameters);
   }
 
-  Map<String, String> _headersForSurface(
+  Future<Map<String, String>> _resolveHeaders(
     AppUiSurface surface, {
     required String operationId,
     required String clientPageId,
-  }) {
-    return CloudRequestHeaders.forSurfaceOperation(
+  }) async {
+    final base = CloudRequestHeaders.forSurfaceOperation(
       surfaceId: surface.id,
       routeId: surface.routeId,
       operationId: operationId,
       clientPageId: clientPageId,
     );
+    final merger = _mergeRequestContext;
+    if (merger == null) {
+      return base;
+    }
+    return merger(base);
   }
 
   String _contextForSurface(
@@ -83,7 +95,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listInboxOperation,
         clientPageId: ChatRequestPageIds.listInbox,
@@ -113,7 +125,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listConversationsOperation,
         clientPageId: ChatRequestPageIds.listConversations,
@@ -140,7 +152,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchConversationsOperation,
         clientPageId: ChatRequestPageIds.searchConversations,
@@ -182,7 +194,7 @@ class RemoteChatRepository implements ChatRepository {
     }
     final decoded = await _httpClient.postJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.startGroupChat,
         operationId: ChatApiMetadata.createConversationOperation,
         clientPageId: ChatRequestPageIds.createConversation,
@@ -203,7 +215,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.getConversationOperation,
         clientPageId: ChatRequestPageIds.getConversation,
@@ -227,7 +239,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.patchJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.getConversationOperation,
         clientPageId: ChatRequestPageIds.getConversation,
@@ -253,7 +265,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.listMessagesOperation,
         clientPageId: ChatRequestPageIds.listMessages,
@@ -280,7 +292,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchMessagesOperation,
         clientPageId: ChatRequestPageIds.searchMessages,
@@ -308,8 +320,7 @@ class RemoteChatRepository implements ChatRepository {
     CloudJsonMap? cardPayload,
     String? replyToMessageId,
     List<String>? mentions,
-    String? senderPersonaId,
-    String? senderProfileSubjectId,
+    String? senderSubAccountId,
     String? personaContextVersion,
     String? senderDisplayNameSnapshot,
     String? senderAvatarUrlSnapshot,
@@ -320,7 +331,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.postJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.sendMessageOperation,
         clientPageId: ChatRequestPageIds.sendMessage,
@@ -335,10 +346,8 @@ class RemoteChatRepository implements ChatRepository {
         if (replyToMessageId != null && replyToMessageId.isNotEmpty)
           'replyToMessageId': replyToMessageId,
         if (mentions != null && mentions.isNotEmpty) 'mentions': mentions,
-        if (senderPersonaId != null && senderPersonaId.isNotEmpty)
-          'senderPersonaId': senderPersonaId,
-        if (senderProfileSubjectId != null && senderProfileSubjectId.isNotEmpty)
-          'senderProfileSubjectId': senderProfileSubjectId,
+        if (senderSubAccountId != null && senderSubAccountId.isNotEmpty)
+          'senderSubAccountId': senderSubAccountId,
         if (personaContextVersion != null && personaContextVersion.isNotEmpty)
           'personaContextVersion': personaContextVersion,
         if (senderDisplayNameSnapshot != null &&
@@ -370,7 +379,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.postJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.recallMessageOperation,
         clientPageId: ChatRequestPageIds.recallMessage,
@@ -390,7 +399,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.postJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.syncMessagesOperation,
         clientPageId: ChatRequestPageIds.syncMessages,
@@ -420,7 +429,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.postJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.markAsReadOperation,
         clientPageId: ChatRequestPageIds.markAsRead,
@@ -442,7 +451,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.getReceiptsOperation,
         clientPageId: ChatRequestPageIds.getReceipts,
@@ -485,7 +494,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatManage,
         operationId: ChatApiMetadata.listMembersOperation,
         clientPageId: ChatRequestPageIds.listMembers,
@@ -515,7 +524,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.postJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatAddMembers,
         operationId: ChatApiMetadata.addMembersOperation,
         clientPageId: ChatRequestPageIds.addMembers,
@@ -537,7 +546,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.deleteJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatManage,
         operationId: ChatApiMetadata.removeMemberOperation,
         clientPageId: ChatRequestPageIds.removeMember,
@@ -557,7 +566,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.postJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.inviteAssistantOperation,
         clientPageId: ChatRequestPageIds.inviteAssistant,
@@ -573,7 +582,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.deleteJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatDetail,
         operationId: ChatApiMetadata.removeAssistantOperation,
         clientPageId: ChatRequestPageIds.removeAssistant,
@@ -596,7 +605,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.patchJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.updateConversationSettingsOperation,
         clientPageId: ChatRequestPageIds.updateConversationSettings,
@@ -624,7 +633,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listContactsOperation,
         clientPageId: ChatRequestPageIds.listContacts,
@@ -634,13 +643,13 @@ class RemoteChatRepository implements ChatRepository {
       decoded,
       context: ChatRequestPageIds.listContacts,
     );
-    final items = obj['items'];
-    if (items is! List) {
-      return [];
-    }
+    final items = CloudResponseDecoder.mapList(obj, 'items');
     return items
-        .whereType<Map<String, dynamic>>()
-        .map(ChatContactRowDto.fromMap)
+        .map((item) {
+          final normalized = Map<String, dynamic>.from(item);
+          normalized.putIfAbsent('isFriend', () => true);
+          return ChatContactRowDto.fromMap(normalized);
+        })
         .toList(growable: false);
   }
 
@@ -654,7 +663,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listContactsOperation,
         clientPageId: ChatRequestPageIds.listContacts,
@@ -724,7 +733,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.globalSearchSuggestions,
         operationId: ChatApiMetadata.searchContactsOperation,
         clientPageId: ChatRequestPageIds.searchContacts,
@@ -751,7 +760,7 @@ class RemoteChatRepository implements ChatRepository {
     final uri = _uri(ChatApiMetadata.listConversationTimestampsPath);
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.listConversationTimestampsOperation,
         clientPageId: ChatRequestPageIds.listConversationTimestamps,
@@ -780,7 +789,7 @@ class RemoteChatRepository implements ChatRepository {
     final uri = _uri(ChatApiMetadata.batchGetConversationsPath);
     final decoded = await _httpClient.postJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatList,
         operationId: ChatApiMetadata.batchGetConversationsOperation,
         clientPageId: ChatRequestPageIds.batchGetConversations,
@@ -810,7 +819,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     final decoded = await _httpClient.getJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.getConversationOperation,
         clientPageId: ChatRequestPageIds.getConversation,
@@ -836,7 +845,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.patchJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatSettings,
         operationId: ChatApiMetadata.updateConversationSettingsOperation,
         clientPageId: ChatRequestPageIds.updateConversationSettings,
@@ -855,7 +864,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.patchJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatTransferOwnership,
         operationId: ChatApiMetadata.transferOwnershipOperation,
         clientPageId: ChatRequestPageIds.transferOwnership,
@@ -874,7 +883,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.putJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatAdmins,
         operationId: ChatApiMetadata.updateGroupAdminsOperation,
         clientPageId: ChatRequestPageIds.updateGroupAdmins,
@@ -890,7 +899,7 @@ class RemoteChatRepository implements ChatRepository {
     );
     await _httpClient.deleteJson(
       uri,
-      headers: _headersForSurface(
+      headers: await _resolveHeaders(
         AppUiSurfaces.chatManage,
         operationId: ChatApiMetadata.dissolveConversationOperation,
         clientPageId: ChatRequestPageIds.dissolveConversation,

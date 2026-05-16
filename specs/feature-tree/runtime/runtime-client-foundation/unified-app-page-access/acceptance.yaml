@@ -47,7 +47,7 @@ level_acceptance:
     tests:
       - file: specs/changelog/CR-20260330-013-unified-app-page-access-baseline.yaml
 execution:
-  local_gate: "python3 scripts/verify_page_horizontal_quality_matrix.py"
+  local_gate: "python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py"
   full_gate: make gate
 journey_acceptance:
   - id: J1

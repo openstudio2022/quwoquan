@@ -22,7 +22,7 @@ slices:
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-spec.md
     tests:
-      - python3 scripts/verify_page_horizontal_quality_matrix.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
     dev_status: implemented
 
   - id: slice-3-nine-session-rollout
@@ -35,8 +35,8 @@ slices:
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
     tests:
-      - python3 scripts/verify_page_horizontal_quality_matrix.py
-      - python3 scripts/verify_page_matrix_scan_complete.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
     dev_status: implemented
 
   - id: slice-4-s2-p2-metadata-inventory-baseline
@@ -49,8 +49,8 @@ slices:
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
     tests:
-      - python3 scripts/verify_page_horizontal_quality_matrix.py
-      - python3 scripts/verify_page_matrix_scan_complete.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
     dev_status: implemented
 
   - id: slice-5-s3-s9-rollout-dev
@@ -62,7 +62,7 @@ slices:
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
     tests:
-      - bash scripts/gate_repo.sh --scope app
+      - bash agent_ops/gate/gate_repo.sh --scope app
     dev_status: implemented
 
   - id: slice-6-mock-release-functional-spec-baseline
@@ -83,7 +83,7 @@ slices:
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md
     tests:
-      - python3 scripts/verify_ui_mock_isolation.py
+      - python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
       - make verify-app-mock-isolation
     dev_status: implemented
 
@@ -100,9 +100,9 @@ slices:
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
     tests:
-      - python3 scripts/verify_dart_semantic.py
-      - python3 scripts/verify_page_horizontal_quality_matrix.py
-      - python3 scripts/verify_page_matrix_scan_complete.py
+      - python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
     dev_status: implemented
 
   - id: slice-8-s9-governance-closure
@@ -114,6 +114,6 @@ slices:
       - specs/gates/page_horizontal_quality_pr_checklist.md
     tests:
       - make verify-app-page-horizontal-quality
-      - python3 scripts/verify_metadata_driven_ui_gate.py
-      - python3 scripts/verify_ui_mock_isolation.py
+      - python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
+      - python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
     dev_status: implemented

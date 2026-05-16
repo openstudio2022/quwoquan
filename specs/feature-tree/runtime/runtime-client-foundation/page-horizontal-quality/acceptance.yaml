@@ -24,7 +24,7 @@ level_acceptance:
     linked_tasks:
       - M1
     tests:
-      - file: scripts/verify_page_horizontal_quality_matrix.py
+      - file: quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
   A3:
     criteria: CR 已登记本 L3 与矩阵、清单、脚本产物
     status: implemented
@@ -68,7 +68,7 @@ level_acceptance:
     tests:
       - file: specs/gates/mock_data_cloud_integration_policy.md
       - file: .cursor/rules/08-mock-data-isolation.mdc
-      - file: scripts/verify_ui_mock_isolation.py
+      - file: quwoquan_app/scripts/env/verify_ui_mock_isolation.py
       - file: specs/gates/ui_mock_isolation_allowlist.yaml
       - file: specs/changelog/CR-20260330-011-mock-release-functional-spec-baseline.yaml
   A9:
@@ -89,7 +89,7 @@ level_acceptance:
       - file: .cursor/rules/09-page-horizontal-quality.mdc
       - file: specs/changelog/CR-20260330-014-page-horizontal-quality-s9-governance-closure.yaml
 execution:
-  local_gate: "python3 scripts/verify_page_horizontal_quality_matrix.py && python3 scripts/verify_page_matrix_scan_complete.py && python3 scripts/verify_metadata_driven_ui_gate.py && python3 scripts/verify_ui_mock_isolation.py"
+  local_gate: "python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py && python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py && python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py && python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py"
   full_gate: make gate
 
 journey_acceptance:
@@ -143,13 +143,13 @@ evidence_matrix:
       artifact: .cursor/rules/09-page-horizontal-quality.mdc
   T2:
     - type: script
-      artifact: scripts/verify_page_horizontal_quality_matrix.py
+      artifact: quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
     - type: script
-      artifact: scripts/verify_page_matrix_scan_complete.py
+      artifact: quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
     - type: script
-      artifact: scripts/verify_metadata_driven_ui_gate.py
+      artifact: quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
     - type: script
-      artifact: scripts/verify_ui_mock_isolation.py
+      artifact: quwoquan_app/scripts/env/verify_ui_mock_isolation.py
     - type: doc
       artifact: specs/gates/page_horizontal_quality_pr_checklist.md
     - type: doc

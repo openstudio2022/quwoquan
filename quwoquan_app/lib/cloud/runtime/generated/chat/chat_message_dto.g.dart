@@ -9,7 +9,7 @@ class ChatMessageDto {
   final String senderId;
   final String? senderName;
   final String? senderAvatar;
-  final String? senderPersonaId;
+  final String? senderSubAccountId;
   final String type;
   final String? content;
   final String? mediaUrl;
@@ -30,7 +30,7 @@ class ChatMessageDto {
     this.senderId = '',
     this.senderName,
     this.senderAvatar,
-    this.senderPersonaId,
+    this.senderSubAccountId,
     this.type = 'text',
     this.content,
     this.mediaUrl,
@@ -50,10 +50,10 @@ class ChatMessageDto {
       conversationId: m['conversationId']?.toString() ?? '',
       seq: (m['seq'] as num?)?.toInt() ?? 0,
       clientMsgId: m['clientMsgId']?.toString() ?? '',
-      senderId: m['senderProfileSubjectId']?.toString() ?? m['senderId']?.toString() ?? '',
+      senderId: m['senderSubAccountId']?.toString() ?? m['senderId']?.toString() ?? '',
       senderName: m['senderDisplayNameSnapshot']?.toString() ?? m['senderName']?.toString() ?? null,
       senderAvatar: m['senderAvatarUrlSnapshot']?.toString() ?? m['senderAvatar']?.toString() ?? null,
-      senderPersonaId: m['senderPersonaId']?.toString() ?? m['senderSubAccountId']?.toString() ?? null,
+      senderSubAccountId: m['senderSubAccountId']?.toString() ?? null,
       type: m['type']?.toString() ?? 'text',
       content: m['content']?.toString() ?? null,
       mediaUrl: m['mediaUrl']?.toString() ?? null,
@@ -77,7 +77,7 @@ class ChatMessageDto {
       'senderId': senderId,
       'senderName': senderName,
       'senderAvatar': senderAvatar,
-      'senderPersonaId': senderPersonaId,
+      'senderSubAccountId': senderSubAccountId,
       'type': type,
       'content': content,
       'mediaUrl': mediaUrl,
@@ -100,7 +100,7 @@ class ChatMessageDto {
     String? senderId,
     String? senderName,
     String? senderAvatar,
-    String? senderPersonaId,
+    String? senderSubAccountId,
     String? type,
     String? content,
     String? mediaUrl,
@@ -121,7 +121,7 @@ class ChatMessageDto {
       senderId: senderId ?? this.senderId,
       senderName: senderName ?? this.senderName,
       senderAvatar: senderAvatar ?? this.senderAvatar,
-      senderPersonaId: senderPersonaId ?? this.senderPersonaId,
+      senderSubAccountId: senderSubAccountId ?? this.senderSubAccountId,
       type: type ?? this.type,
       content: content ?? this.content,
       mediaUrl: mediaUrl ?? this.mediaUrl,

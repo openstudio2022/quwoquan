@@ -20,7 +20,7 @@ type PgPersonaStore struct {
 
 var _ repository.PersonaRepository = (*PgPersonaStore)(nil)
 
-const personaNullableSafeCols = `id, user_id, display_name, COALESCE(user_handle, ''), COALESCE(phone, ''), COALESCE(email, ''), COALESCE(avatar_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(status, 'active'), retired_at, COALESCE(sub_account_id, ''), COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), COALESCE(inherits_profile_from_owner), COALESCE(array_to_string(overridden_profile_fields, ','), ''), last_profile_sync_at, COALESCE(last_profile_sync_source, ''), last_activated_at, invite_count, created_at, updated_at`
+const personaNullableSafeCols = `user_id, display_name, COALESCE(user_handle, ''), COALESCE(phone, ''), COALESCE(email, ''), COALESCE(avatar_url, ''), COALESCE(caller_ringtone_id, ''), COALESCE(theme_mode_override, ''), COALESCE(font_size_preset_override, ''), appearance_override_updated_at, is_primary, is_private, is_active, COALESCE(status, 'active'), retired_at, COALESCE(sub_account_id, ''), COALESCE(isolation_level, ''), COALESCE(purpose_hint, ''), COALESCE(inherits_profile_from_owner, false), COALESCE(array_to_string(overridden_profile_fields, ','), ''), last_profile_sync_at, COALESCE(last_profile_sync_source, ''), last_activated_at, invite_count, created_at, updated_at`
 
 func NewPgPersonaStore(pool *pgxpool.Pool) *PgPersonaStore {
 	return &PgPersonaStore{pgPersonaStoreBase: pgPersonaStoreBase{pool: pool}}
@@ -33,7 +33,7 @@ func (s *PgPersonaStore) WithMongoDatabase(db *mongo.Database) *PgPersonaStore {
 
 func (s *PgPersonaStore) FindByID(ctx context.Context, id string) (*model.Persona, error) {
 	return scanPersona(s.pool.QueryRow(ctx,
-		`SELECT `+personaNullableSafeCols+` FROM personas WHERE id = $1`, id))
+		`SELECT `+personaNullableSafeCols+` FROM personas WHERE sub_account_id = $1`, id))
 }
 
 // FindByUserID delegates to the generated ListByUserID (FK-based list).
@@ -49,7 +49,6 @@ func (s *PgPersonaStore) FindByUserID(ctx context.Context, userID string) ([]mod
 	for rows.Next() {
 		var e model.Persona
 		if err := rows.Scan(
-			&e.ID,
 			&e.UserID,
 			&e.DisplayName,
 			&e.UserHandle,
@@ -107,7 +106,7 @@ func (s *PgPersonaStore) DeactivateAll(ctx context.Context, userID string) error
 
 func (s *PgPersonaStore) ActivateOne(ctx context.Context, id string) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE personas SET is_active = true, updated_at = NOW() WHERE id = $1 AND COALESCE(status, 'active') <> 'retired'`, id)
+		`UPDATE personas SET is_active = true, updated_at = NOW() WHERE sub_account_id = $1 AND COALESCE(status, 'active') <> 'retired'`, id)
 	return err
 }
 
@@ -168,19 +167,19 @@ func (s *PgPersonaStore) hasMongoAttributedHistory(ctx context.Context, subAccou
 		{
 			collection: "posts",
 			filter: bson.M{
-				"profileSubjectId": subAccountID,
+				"authorId": subAccountID,
 			},
 		},
 		{
 			collection: "comments",
 			filter: bson.M{
-				"profileSubjectId": subAccountID,
+				"authorId": subAccountID,
 			},
 		},
 		{
 			collection: "messages",
 			filter: bson.M{
-				"senderProfileSubjectId": subAccountID,
+				"senderSubAccountId": subAccountID,
 			},
 		},
 		{

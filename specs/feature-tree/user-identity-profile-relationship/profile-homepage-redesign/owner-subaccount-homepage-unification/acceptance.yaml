@@ -17,8 +17,8 @@ level_acceptance:
       T4: optional
     tests:
       - verify-metadata
-      - codegen-app generated profile subject dto check
-      - user-service ProfileSubjectView contract test
+      - codegen-app generated sub-account profile dto check
+      - user-service SubAccountProfileView contract test
   A2:
     criteria: '资料编辑写入契约已显式支持同步范围：修改 owner 或 subAccount 后，可选择同步到 owner、当前 subAccount、其它 subAccount 或保持仅当前主体生效。兼容场景下保留旧更新接口，但新写入链路以同步范围字段为准。'
     status: pending
@@ -29,7 +29,7 @@ level_acceptance:
       T3: required
       T4: required
     tests:
-      - ProfileSubjectMutation schema contract
+      - SubAccountProfileMutation schema contract
       - profile sync prompt widget test
       - user-service profile sync write contract test
       - owner subAccount sync journey test
@@ -73,7 +73,7 @@ level_acceptance:
       - user profile ui config generation test
       - app repository constant consumption test
   A6:
-    criteria: '用户域与内容域的 codegen 基线可用：verify-metadata、codegen、codegen-app 可通过；App 侧已具备消费 ProfileSubjectView、RelationshipCapabilityView、ProfileInteractionActivityView 对应生成物的条件。'
+    criteria: '用户域与内容域的 codegen 基线可用：verify-metadata、codegen、codegen-app 可通过；App 侧已具备消费 SubAccountProfileView、RelationshipCapabilityView、ProfileInteractionActivityView 对应生成物的条件。'
     status: pending
     linked_tasks: [T08, T09, T10, T11, T11a, T20]
     test_layers:

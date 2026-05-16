@@ -124,7 +124,7 @@ slices:
     order: 60
     steps:
       - 核对 page-dual-theme-matrix 与 page-horizontal-quality-matrix P6
-      - python3 scripts/verify_page_horizontal_quality_matrix.py
-      - python3 scripts/verify_page_matrix_scan_complete.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
     tests:
       - 上列脚本

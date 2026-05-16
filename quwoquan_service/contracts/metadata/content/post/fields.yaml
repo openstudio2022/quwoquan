@@ -21,24 +21,7 @@ entities:
         api_exposure: read
         ops_exposure: read
         recommend_feature: true
-
-      - name: personaId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 发布时使用的分身
-
-      - name: profileSubjectId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 稳定公开主体 ID；优先于 current personaId / authorId 作为作者身份主键
+        description: 作者稳定公开主体 ID（subAccountId）
 
       - name: authorDisplayNameSnapshot
         type: string
@@ -65,7 +48,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 写入时绑定的 persona 上下文版本
+        description: 写入时绑定的 subAccount 上下文版本
 
       - name: contentType
         type: enum
@@ -139,11 +122,57 @@ entities:
         constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
+        api_exposure: internal
+        ops_exposure: internal
+        description: |
+          已废弃的旧文章显示快照。当前应用尚未正式上线，不提供兼容读取、
+          兼容转换、双写或回滚语义；新长文唯一持久化真相源是 articleMarkdown。
+
+      - name: articleMarkdown
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
         api_exposure: read_write
         ops_exposure: read
-        description: |
-          文章最终显示快照 canonical payload。
-          JSON 形状见同目录 article_document_schema.yaml（根：template/fontPreset/coverImageUrl/titleStyle/nodes[]）。
+        search_field: true
+        description: QWQ Rich Markdown v1 原文，文章长文唯一持久化真相源
+
+      - name: articleMarkdownVersion
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: Markdown 规范版本，当前为 qwq-rich-md/1
+
+      - name: articleMarkdownDigest
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 规范化 articleMarkdown 的 sha256 digest，用于幂等、缓存与审计
+
+      - name: articleAssetManifest
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 文章素材清单，正文 asset:// 引用必须存在于该 manifest
+
+      - name: articleRenderProfile
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 模板、字体、版心能力与 wrap/gallery 小屏降级策略
 
       - name: articleTemplate
         type: enum
@@ -153,7 +182,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 从 articleDocument.template 派生的文章模板只读快照
+        description: 从 articleRenderProfile.template 派生的文章模板只读快照
 
       - name: articleFontPreset
         type: enum
@@ -163,7 +192,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 从 articleDocument.fontPreset 派生的文章字体预设只读快照
+        description: 从 articleRenderProfile.fontPreset 派生的文章字体预设只读快照
 
       - name: videoUrl
         type: string
@@ -483,23 +512,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
-      - name: personaId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: profileSubjectId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-        description: 稳定公开主体 ID；优先于 current personaId 作为评论作者主键
+        description: 评论作者稳定公开主体 ID（subAccountId）
 
       - name: authorDisplayNameSnapshot
         type: string
@@ -526,7 +539,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-        description: 发表评论时绑定的 persona 上下文版本
+        description: 发表评论时绑定的 subAccount 上下文版本
 
       - name: content
         type: string
@@ -601,11 +614,31 @@ entities:
 
       - name: postId
         type: ObjectId
-        constraints: [NOT_NULL]
+        constraints: [NULLABLE]
         classification: PUBLIC
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        description: 绑定的帖子 ID；draft/cold_start 素材允许先于帖子存在，发布时再绑定
+
+      - name: ownerId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 素材所有者，用户或系统运营账号
+
+      - name: assetScope
+        type: enum
+        enum_ref: MediaAssetScope
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: draft/published/cold_start 生命周期 scope
 
       - name: type
         type: enum
@@ -623,6 +656,52 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+
+      - name: objectKey
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 对象存储 key
+
+      - name: sha256
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 原始文件 sha256
+
+      - name: sourceKind
+        type: enum
+        enum_ref: MediaAssetSourceKind
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: user_upload/ai_generated/cold_start_crawl/remote_import
+
+      - name: sourceUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 冷启动或导入素材来源 URL
+
+      - name: license
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 授权和审计信息
 
       - name: cdnUrl
         type: string
@@ -1129,7 +1208,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: actorProfileSubjectId
+      - name: actorSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1150,7 +1229,7 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: targetProfileSubjectId
+      - name: targetSubAccountId
         type: string
         constraints: [NOT_NULL]
         classification: PUBLIC
@@ -1240,7 +1319,7 @@ entities:
         api_exposure: read
         ops_exposure: read
 
-      - name: authorProfileSubjectId
+      - name: authorId
         type: string
         constraints: [NULLABLE]
         classification: PUBLIC

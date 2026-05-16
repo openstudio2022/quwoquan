@@ -22,11 +22,11 @@ type pgPersonaStoreBase struct {
 	pool *pgxpool.Pool
 }
 
-const personaCols = `id, user_id, display_name, user_handle, phone, email, avatar_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, status, retired_at, sub_account_id, isolation_level, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, invite_count, created_at, updated_at`
+const personaCols = `user_id, display_name, user_handle, phone, email, avatar_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, status, retired_at, sub_account_id, isolation_level, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, invite_count, created_at, updated_at`
 
 func scanPersona(row pgx.Row) (*model.Persona, error) {
 	e := &model.Persona{}
-	err := row.Scan(&e.ID, &e.UserID, &e.DisplayName, &e.UserHandle, &e.Phone, &e.Email, &e.AvatarURL, &e.CallerRingtoneID, &e.ThemeModeOverride, &e.FontSizePresetOverride, &e.AppearanceOverrideUpdatedAt, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.Status, &e.RetiredAt, &e.SubAccountID, &e.IsolationLevel, &e.PurposeHint, &e.InheritsProfileFromOwner, &e.OverriddenProfileFields, &e.LastProfileSyncAt, &e.LastProfileSyncSource, &e.LastActivatedAt, &e.InviteCount, &e.CreatedAt, &e.UpdatedAt)
+	err := row.Scan(&e.UserID, &e.DisplayName, &e.UserHandle, &e.Phone, &e.Email, &e.AvatarURL, &e.CallerRingtoneID, &e.ThemeModeOverride, &e.FontSizePresetOverride, &e.AppearanceOverrideUpdatedAt, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.Status, &e.RetiredAt, &e.SubAccountID, &e.IsolationLevel, &e.PurposeHint, &e.InheritsProfileFromOwner, &e.OverriddenProfileFields, &e.LastProfileSyncAt, &e.LastProfileSyncSource, &e.LastActivatedAt, &e.InviteCount, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -38,7 +38,7 @@ func scanPersona(row pgx.Row) (*model.Persona, error) {
 
 // FindByID retrieves a Persona by primary key.
 func (s *pgPersonaStoreBase) FindByID(ctx context.Context, id string) (*model.Persona, error) {
-	row := s.pool.QueryRow(ctx, `SELECT `+personaCols+` FROM personas WHERE id = $1`, id)
+	row := s.pool.QueryRow(ctx, `SELECT `+personaCols+` FROM personas WHERE sub_account_id = $1`, id)
 	return scanPersona(row)
 }
 
@@ -48,8 +48,8 @@ func (s *pgPersonaStoreBase) Create(ctx context.Context, e *model.Persona) error
 	e.CreatedAt = now
 	e.UpdatedAt = now
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO personas (id, user_id, display_name, user_handle, phone, email, avatar_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, status, retired_at, sub_account_id, isolation_level, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, invite_count, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)`,
-		e.ID, e.UserID, e.DisplayName, e.UserHandle, e.Phone, e.Email, e.AvatarURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.Status, e.RetiredAt, e.SubAccountID, e.IsolationLevel, e.PurposeHint, e.InheritsProfileFromOwner, e.OverriddenProfileFields, e.LastProfileSyncAt, e.LastProfileSyncSource, e.LastActivatedAt, e.InviteCount, e.CreatedAt, e.UpdatedAt)
+		`INSERT INTO personas (user_id, display_name, user_handle, phone, email, avatar_url, caller_ringtone_id, theme_mode_override, font_size_preset_override, appearance_override_updated_at, is_primary, is_private, is_active, status, retired_at, sub_account_id, isolation_level, purpose_hint, inherits_profile_from_owner, overridden_profile_fields, last_profile_sync_at, last_profile_sync_source, last_activated_at, invite_count, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)`,
+		e.UserID, e.DisplayName, e.UserHandle, e.Phone, e.Email, e.AvatarURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.Status, e.RetiredAt, e.SubAccountID, e.IsolationLevel, e.PurposeHint, e.InheritsProfileFromOwner, e.OverriddenProfileFields, e.LastProfileSyncAt, e.LastProfileSyncSource, e.LastActivatedAt, e.InviteCount, e.CreatedAt, e.UpdatedAt)
 	return err
 }
 
@@ -57,20 +57,20 @@ func (s *pgPersonaStoreBase) Create(ctx context.Context, e *model.Persona) error
 func (s *pgPersonaStoreBase) Update(ctx context.Context, e *model.Persona) error {
 	e.UpdatedAt = time.Now().UTC()
 	tag, err := s.pool.Exec(ctx,
-		`UPDATE personas SET user_id=$2, display_name=$3, user_handle=$4, phone=$5, email=$6, avatar_url=$7, caller_ringtone_id=$8, theme_mode_override=$9, font_size_preset_override=$10, appearance_override_updated_at=$11, is_primary=$12, is_private=$13, is_active=$14, status=$15, retired_at=$16, sub_account_id=$17, isolation_level=$18, purpose_hint=$19, inherits_profile_from_owner=$20, overridden_profile_fields=$21, last_profile_sync_at=$22, last_profile_sync_source=$23, last_activated_at=$24, invite_count=$25, created_at=$26, updated_at=$27 WHERE id = $1`,
-		e.ID, e.UserID, e.DisplayName, e.UserHandle, e.Phone, e.Email, e.AvatarURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.Status, e.RetiredAt, e.SubAccountID, e.IsolationLevel, e.PurposeHint, e.InheritsProfileFromOwner, e.OverriddenProfileFields, e.LastProfileSyncAt, e.LastProfileSyncSource, e.LastActivatedAt, e.InviteCount, e.CreatedAt, e.UpdatedAt)
+		`UPDATE personas SET user_id=$2, display_name=$3, user_handle=$4, phone=$5, email=$6, avatar_url=$7, caller_ringtone_id=$8, theme_mode_override=$9, font_size_preset_override=$10, appearance_override_updated_at=$11, is_primary=$12, is_private=$13, is_active=$14, status=$15, retired_at=$16, isolation_level=$17, purpose_hint=$18, inherits_profile_from_owner=$19, overridden_profile_fields=$20, last_profile_sync_at=$21, last_profile_sync_source=$22, last_activated_at=$23, invite_count=$24, created_at=$25, updated_at=$26 WHERE sub_account_id = $1`,
+		e.SubAccountID, e.UserID, e.DisplayName, e.UserHandle, e.Phone, e.Email, e.AvatarURL, e.CallerRingtoneID, e.ThemeModeOverride, e.FontSizePresetOverride, e.AppearanceOverrideUpdatedAt, e.IsPrimary, e.IsPrivate, e.IsActive, e.Status, e.RetiredAt, e.IsolationLevel, e.PurposeHint, e.InheritsProfileFromOwner, e.OverriddenProfileFields, e.LastProfileSyncAt, e.LastProfileSyncSource, e.LastActivatedAt, e.InviteCount, e.CreatedAt, e.UpdatedAt)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("Persona not found: %s", e.ID)
+		return fmt.Errorf("Persona not found: %s", e.SubAccountID)
 	}
 	return nil
 }
 
 // Delete removes a Persona by primary key.
 func (s *pgPersonaStoreBase) Delete(ctx context.Context, id string) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM personas WHERE id = $1`, id)
+	_, err := s.pool.Exec(ctx, `DELETE FROM personas WHERE sub_account_id = $1`, id)
 	return err
 }
 
@@ -86,7 +86,7 @@ func (s *pgPersonaStoreBase) ListByUserID(ctx context.Context, fkID string) ([]m
 	var result []model.Persona
 	for rows.Next() {
 		var e model.Persona
-		if err := rows.Scan(&e.ID, &e.UserID, &e.DisplayName, &e.UserHandle, &e.Phone, &e.Email, &e.AvatarURL, &e.CallerRingtoneID, &e.ThemeModeOverride, &e.FontSizePresetOverride, &e.AppearanceOverrideUpdatedAt, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.Status, &e.RetiredAt, &e.SubAccountID, &e.IsolationLevel, &e.PurposeHint, &e.InheritsProfileFromOwner, &e.OverriddenProfileFields, &e.LastProfileSyncAt, &e.LastProfileSyncSource, &e.LastActivatedAt, &e.InviteCount, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err := rows.Scan(&e.UserID, &e.DisplayName, &e.UserHandle, &e.Phone, &e.Email, &e.AvatarURL, &e.CallerRingtoneID, &e.ThemeModeOverride, &e.FontSizePresetOverride, &e.AppearanceOverrideUpdatedAt, &e.IsPrimary, &e.IsPrivate, &e.IsActive, &e.Status, &e.RetiredAt, &e.SubAccountID, &e.IsolationLevel, &e.PurposeHint, &e.InheritsProfileFromOwner, &e.OverriddenProfileFields, &e.LastProfileSyncAt, &e.LastProfileSyncSource, &e.LastActivatedAt, &e.InviteCount, &e.CreatedAt, &e.UpdatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, e)

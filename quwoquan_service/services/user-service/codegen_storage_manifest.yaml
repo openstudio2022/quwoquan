@@ -13,6 +13,7 @@ sources:
       - user_settings
       - profile_update_proposals
       - credential_bindings
+      - anonymous_device_bindings
     name_overrides:
       UserProfile: Profile
       UserSetting: Setting

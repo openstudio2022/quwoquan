@@ -1,0 +1,975 @@
+{
+  "schemaVersion": "shared-media-source-catalog",
+  "description": "共享池真实图片来源目录。优先使用可再分发图片，并把现有 mock/legacy 外链固化为本地原图后再派生到统一 objectKey。",
+  "entries": [
+    {
+      "sourceId": "portrait_legacy_photography_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "photography",
+        "cityWalk",
+        "tech"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "clean",
+        "bright"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_legacy_photography_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 306908,
+        "originalSha256": "sha256:bc2d83aa8492946ba1973f88d1068dcb89b88d93fbba29f74b4a4e741dbac0f7",
+        "originalWidth": 1200,
+        "originalHeight": 1800
+      }
+    },
+    {
+      "sourceId": "portrait_legacy_travel_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "travel",
+        "outdoor",
+        "fitness"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "energetic",
+        "clean"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_legacy_travel_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 193246,
+        "originalSha256": "sha256:7d3cd1dc9a923ef07e46f86bbd372f76198cf27dbfc3b5d353f77de76cf8bb7a",
+        "originalWidth": 1200,
+        "originalHeight": 1800
+      }
+    },
+    {
+      "sourceId": "portrait_legacy_city_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "cityWalk",
+        "tech",
+        "designWriting"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "clean",
+        "calm"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_legacy_city_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 57014,
+        "originalSha256": "sha256:a01017b78f663e3339ecade91da8ee11abecc2c9fb6c83e4ab35a30eaf603e0f",
+        "originalWidth": 1200,
+        "originalHeight": 800
+      }
+    },
+    {
+      "sourceId": "portrait_legacy_lifestyle_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "lifestyle",
+        "coffee",
+        "parenting"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "bright",
+        "calm"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_legacy_lifestyle_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 143701,
+        "originalSha256": "sha256:7d350d7a656fd311f1b7c01a88b1fb4f2beae211494de17d8b0ea762f107cb9e",
+        "originalWidth": 1200,
+        "originalHeight": 1800
+      }
+    },
+    {
+      "sourceId": "portrait_legacy_food_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1599566150163-29194dcaad36?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "food",
+        "coffee",
+        "pet"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "warm",
+        "bright"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/user_profile_repository.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_legacy_food_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 283598,
+        "originalSha256": "sha256:1d77535fcdf233613e43641c993cd31b788f86dae2d48fbca52a77b961852aa7",
+        "originalWidth": 1200,
+        "originalHeight": 1800
+      }
+    },
+    {
+      "sourceId": "portrait_legacy_design_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "designWriting",
+        "lifestyle",
+        "coffee"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "clean",
+        "vintage"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/user_profile_repository.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_legacy_design_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 74276,
+        "originalSha256": "sha256:f167456fbe46f3b6b128726ce6a3270479eeb971e723c5dbb6e67c806b1b0019",
+        "originalWidth": 1200,
+        "originalHeight": 800
+      }
+    },
+    {
+      "sourceId": "portrait_curated_tech_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "tech",
+        "designWriting",
+        "cityWalk"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "clean",
+        "calm"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_curated_tech_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 425041,
+        "originalSha256": "sha256:e8b8a7d2770488f0a200b95c5940bcaea6719a0cf5c62bb30ad92453bde19e94",
+        "originalWidth": 1200,
+        "originalHeight": 1800
+      }
+    },
+    {
+      "sourceId": "portrait_curated_outdoor_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "outdoor",
+        "travel",
+        "fitness"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "energetic",
+        "bright"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_curated_outdoor_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 362191,
+        "originalSha256": "sha256:64959d6c61df36b386c9fef6921867bf3d9dd68d96484c106671e1296211c39f",
+        "originalWidth": 1200,
+        "originalHeight": 1800
+      }
+    },
+    {
+      "sourceId": "portrait_curated_writing_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "designWriting",
+        "coffee",
+        "lifestyle"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "clean",
+        "warm"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_curated_writing_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 408945,
+        "originalSha256": "sha256:357979439611f5bf578698f0ae85f9f4d53775cd57367cd19d60e1e4169d5182",
+        "originalWidth": 1200,
+        "originalHeight": 1798
+      }
+    },
+    {
+      "sourceId": "portrait_curated_design_02",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "photography",
+        "designWriting",
+        "lifestyle"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "bright",
+        "clean"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_curated_design_02.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 148080,
+        "originalSha256": "sha256:eaf2dd7755c0c2e09efc1d4774498d8b7468b62b18d920adb12c799d8ee62321",
+        "originalWidth": 1200,
+        "originalHeight": 1500
+      }
+    },
+    {
+      "sourceId": "portrait_curated_family_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "parenting",
+        "pet",
+        "lifestyle"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "warm",
+        "bright"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_curated_family_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 177338,
+        "originalSha256": "sha256:7b9eec119a398404ea588eeca25bad5b4870562e748e57af24af636516260211",
+        "originalWidth": 1200,
+        "originalHeight": 800
+      }
+    },
+    {
+      "sourceId": "portrait_curated_parenting_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?q=80&w=1200&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "parenting",
+        "fitness",
+        "lifestyle"
+      ],
+      "ownerHint": "user",
+      "subjectType": "portrait",
+      "toneTags": [
+        "warm",
+        "energetic"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/portrait_curated_parenting_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 218117,
+        "originalSha256": "sha256:13673b5b26f308d3a99743ef642e67d4cbc2561e767542eaa1c61e9a18ef578d",
+        "originalWidth": 1200,
+        "originalHeight": 1800
+      }
+    },
+    {
+      "sourceId": "scene_photo_architecture_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1647956450271-2ff54205bebf?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "photography",
+        "cityWalk"
+      ],
+      "ownerHint": "post",
+      "subjectType": "scene",
+      "toneTags": [
+        "clean",
+        "bright"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_photo_architecture_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 840248,
+        "originalSha256": "sha256:8aa7aba38015c8eee8c4f9ec7ef968ccc17d07d911730676b427cc3b982deceb",
+        "originalWidth": 1800,
+        "originalHeight": 1200
+      }
+    },
+    {
+      "sourceId": "scene_forest_video_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1646034296147-d8ed3aace9a4?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "outdoor",
+        "travel",
+        "video"
+      ],
+      "ownerHint": "post",
+      "subjectType": "scene",
+      "toneTags": [
+        "calm",
+        "energetic"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_forest_video_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 239339,
+        "originalSha256": "sha256:091476d2c572d693a75aed9b713467416dbcca5984cb4ef1f18065f059a67ebe",
+        "originalWidth": 1800,
+        "originalHeight": 1013
+      }
+    },
+    {
+      "sourceId": "scene_article_beach_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1627216661750-c59a4cea849c?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "photography",
+        "travel",
+        "designWriting"
+      ],
+      "ownerHint": "post",
+      "subjectType": "scene",
+      "toneTags": [
+        "calm",
+        "vintage"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_article_beach_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 471923,
+        "originalSha256": "sha256:afc27991e45e261d832501f382aa10eebb4727a780af535ec9103c57e4f3a33a",
+        "originalWidth": 1800,
+        "originalHeight": 2400
+      }
+    },
+    {
+      "sourceId": "scene_coffee_night_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1650211573412-9d36d0cbbf00?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "coffee",
+        "lifestyle",
+        "food"
+      ],
+      "ownerHint": "post",
+      "subjectType": "scene",
+      "toneTags": [
+        "warm",
+        "calm"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_coffee_night_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 245116,
+        "originalSha256": "sha256:ba940c0dab08914fc0786ccde8b46c882892875e738895b78ba96e978c5530fe",
+        "originalWidth": 1800,
+        "originalHeight": 2400
+      }
+    },
+    {
+      "sourceId": "object_book_photography_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "designWriting",
+        "photography",
+        "lifestyle"
+      ],
+      "ownerHint": "background",
+      "subjectType": "object",
+      "toneTags": [
+        "clean",
+        "vintage"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/object_book_photography_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 210164,
+        "originalSha256": "sha256:75b6203d4ca6b5773f5d74762fbb6393c111b9d94d5fc99c83b8da0032fa196e",
+        "originalWidth": 1800,
+        "originalHeight": 1350
+      }
+    },
+    {
+      "sourceId": "object_coffee_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "coffee",
+        "food",
+        "lifestyle"
+      ],
+      "ownerHint": "post",
+      "subjectType": "food",
+      "toneTags": [
+        "warm",
+        "clean"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/object_coffee_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 274128,
+        "originalSha256": "sha256:91e77262050220185d4e408562db303b284c887a046e4665d200d78a20780cfc",
+        "originalWidth": 1800,
+        "originalHeight": 1200
+      }
+    },
+    {
+      "sourceId": "object_camera_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1648049003029-3b3b32cb9a1f?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "photography",
+        "tech"
+      ],
+      "ownerHint": "post",
+      "subjectType": "object",
+      "toneTags": [
+        "clean",
+        "dark"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/object_camera_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 849201,
+        "originalSha256": "sha256:eae7e4d6156555b37d5cd6d5dcf968e94e2563d9d1c627adbffed7e17738fbb4",
+        "originalWidth": 1800,
+        "originalHeight": 2520
+      }
+    },
+    {
+      "sourceId": "landscape_travel_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "travel",
+        "outdoor"
+      ],
+      "ownerHint": "background",
+      "subjectType": "landscape",
+      "toneTags": [
+        "bright",
+        "energetic"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/landscape_travel_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 681014,
+        "originalSha256": "sha256:20f995189be15b38c7652b025aa3159ebdc7bfd284ed49303dc2b6e7dac489dd",
+        "originalWidth": 2000,
+        "originalHeight": 1333
+      }
+    },
+    {
+      "sourceId": "landscape_travel_02",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1539635278303-d4002c07eae3?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "travel",
+        "outdoor",
+        "cityWalk"
+      ],
+      "ownerHint": "background",
+      "subjectType": "landscape",
+      "toneTags": [
+        "calm",
+        "bright"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/user/mock/user_profile_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/landscape_travel_02.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 452680,
+        "originalSha256": "sha256:44dcb4bf66c72fff18145e129dccc18ce9b3c9cb7bd90d414878c7d3b59d6fdd",
+        "originalWidth": 2000,
+        "originalHeight": 1333
+      }
+    },
+    {
+      "sourceId": "scene_city_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "cityWalk",
+        "tech"
+      ],
+      "ownerHint": "background",
+      "subjectType": "city",
+      "toneTags": [
+        "clean",
+        "energetic"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_city_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 776965,
+        "originalSha256": "sha256:5fc735aad705b50b037230fbc1cb31e495b0dd9602d3d71814f98718ad89ff1a",
+        "originalWidth": 2000,
+        "originalHeight": 1230
+      }
+    },
+    {
+      "sourceId": "scene_city_02",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "cityWalk",
+        "designWriting"
+      ],
+      "ownerHint": "post",
+      "subjectType": "city",
+      "toneTags": [
+        "calm",
+        "vintage"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_city_02.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 331573,
+        "originalSha256": "sha256:262e42be1f6b317f488e7a29c287f83f24ba3b29904443a5bbe77f86f632eb14",
+        "originalWidth": 2000,
+        "originalHeight": 1333
+      }
+    },
+    {
+      "sourceId": "scene_tech_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "tech"
+      ],
+      "ownerHint": "background",
+      "subjectType": "object",
+      "toneTags": [
+        "clean",
+        "dark"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_tech_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 468210,
+        "originalSha256": "sha256:13e93f47510919504952ea02dd3c9e11dfee248adc1ee95638fe271b2d6815ec",
+        "originalWidth": 2000,
+        "originalHeight": 1333
+      }
+    },
+    {
+      "sourceId": "scene_workspace_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1498050108023-c5249f4df085?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "tech",
+        "designWriting"
+      ],
+      "ownerHint": "background",
+      "subjectType": "workspace",
+      "toneTags": [
+        "clean",
+        "bright"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_workspace_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 281429,
+        "originalSha256": "sha256:6f339d133b8dd7a65c5a0defde9254f2c9b354641f150e74aa7302e4d2713066",
+        "originalWidth": 2000,
+        "originalHeight": 1331
+      }
+    },
+    {
+      "sourceId": "scene_lifestyle_home_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "lifestyle",
+        "coffee",
+        "parenting"
+      ],
+      "ownerHint": "background",
+      "subjectType": "scene",
+      "toneTags": [
+        "warm",
+        "clean"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_lifestyle_home_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 778029,
+        "originalSha256": "sha256:368db18c762951669a8d633772c823617cf82615382e535767f5068452398e32",
+        "originalWidth": 2000,
+        "originalHeight": 1333
+      }
+    },
+    {
+      "sourceId": "scene_design_office_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1497366754035-f200968a6e72?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "designWriting",
+        "tech"
+      ],
+      "ownerHint": "background",
+      "subjectType": "workspace",
+      "toneTags": [
+        "clean",
+        "bright"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_design_office_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 369022,
+        "originalSha256": "sha256:e5661e569e7f7fe17bce41e0328f9b4372349809383612ee5e9b317e014426f4",
+        "originalWidth": 2000,
+        "originalHeight": 1335
+      }
+    },
+    {
+      "sourceId": "scene_outdoor_peak_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?q=80&w=2000&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "outdoor",
+        "travel",
+        "fitness"
+      ],
+      "ownerHint": "post",
+      "subjectType": "landscape",
+      "toneTags": [
+        "energetic",
+        "bright"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_outdoor_peak_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 620516,
+        "originalSha256": "sha256:94b802dc6353639693bb1f906d03fb677d7142d2b412db1f868145d15323fefb",
+        "originalWidth": 2000,
+        "originalHeight": 1333
+      }
+    },
+    {
+      "sourceId": "scene_pet_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1518717758536-85ae29035b6d?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "pet",
+        "outdoor"
+      ],
+      "ownerHint": "post",
+      "subjectType": "pet",
+      "toneTags": [
+        "warm",
+        "energetic"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_pet_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 342845,
+        "originalSha256": "sha256:7d521ca6e56f8ea5d3e22c4c48110cc15d69f21c2382406837ea566816e0a245",
+        "originalWidth": 1800,
+        "originalHeight": 1201
+      }
+    },
+    {
+      "sourceId": "scene_pet_02",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1543466835-00a7907e9de1?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "pet",
+        "lifestyle"
+      ],
+      "ownerHint": "post",
+      "subjectType": "pet",
+      "toneTags": [
+        "bright",
+        "calm"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_pet_02.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 191631,
+        "originalSha256": "sha256:190e05c1b671b8344f8d587dd93bdedf820177681153b9dc83bc0b2ea1f27dc3",
+        "originalWidth": 1800,
+        "originalHeight": 1350
+      }
+    },
+    {
+      "sourceId": "scene_parenting_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1516627145497-ae6968895b74?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "parenting",
+        "lifestyle"
+      ],
+      "ownerHint": "post",
+      "subjectType": "family",
+      "toneTags": [
+        "warm",
+        "bright"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_parenting_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 223983,
+        "originalSha256": "sha256:7af313bb6683657132502a59caa65ebf8758ee768fa60baa818231ab655810bb",
+        "originalWidth": 1800,
+        "originalHeight": 1243
+      }
+    },
+    {
+      "sourceId": "scene_parenting_02",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "parenting",
+        "fitness"
+      ],
+      "ownerHint": "background",
+      "subjectType": "family",
+      "toneTags": [
+        "bright",
+        "energetic"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_parenting_02.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 1292123,
+        "originalSha256": "sha256:4b4b2228c1e834fbabf4b7b138df347803d35abcdea9c1b63371c13caecc9bc2",
+        "originalWidth": 1800,
+        "originalHeight": 2700
+      }
+    },
+    {
+      "sourceId": "scene_fitness_01",
+      "sourceClass": "licensedCurated",
+      "sourceUrl": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "fitness",
+        "lifestyle"
+      ],
+      "ownerHint": "post",
+      "subjectType": "fitness",
+      "toneTags": [
+        "energetic",
+        "clean"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_fitness_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 507327,
+        "originalSha256": "sha256:a32303f7dc8590cfdc2ceb08fa7e599fa7c64d660c6907a8497d7d5e63520f80",
+        "originalWidth": 1800,
+        "originalHeight": 1200
+      }
+    },
+    {
+      "sourceId": "scene_food_01",
+      "sourceClass": "approvedLegacyExternal",
+      "sourceUrl": "https://images.unsplash.com/photo-1466637574441-749b8f19452f?q=80&w=1800&fit=crop",
+      "licenseType": "unsplash-license",
+      "allowedForFixture": true,
+      "attribution": "Unsplash",
+      "themeTags": [
+        "food",
+        "lifestyle"
+      ],
+      "ownerHint": "post",
+      "subjectType": "food",
+      "toneTags": [
+        "bright",
+        "clean"
+      ],
+      "legacySourceRefs": [
+        "quwoquan_app/lib/cloud/services/content/mock/content_mock_data.dart"
+      ],
+      "download": {
+        "storedRelativePath": "original_media/scene_food_01.jpg",
+        "contentType": "image/jpeg",
+        "bytes": 507461,
+        "originalSha256": "sha256:7ccdb1c863245ace7f7215f506443a655d3ef714531f20420189fee82013bdf9",
+        "originalWidth": 1800,
+        "originalHeight": 1800
+      }
+    }
+  ]
+}

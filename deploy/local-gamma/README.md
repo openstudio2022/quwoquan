@@ -5,7 +5,7 @@
 ## 一键启动
 
 ```bash
-scripts/start_local_gamma_mirror.sh
+quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
 ```
 
 默认会生成：

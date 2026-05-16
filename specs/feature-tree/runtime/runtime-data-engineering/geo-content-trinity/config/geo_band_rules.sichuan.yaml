@@ -1,0 +1,44 @@
+schemaVersion: quwoquan_data.geo_band_rules
+version: 1
+default_tag_refs:
+  - trees/tags/主题/旅行攻略.yaml
+bands:
+  川西:
+    prefecture_substrings:
+      - 阿坝藏族
+      - 甘孜藏族
+      - 雅安
+      - 凉山彝族自治
+      - 攀枝花
+    place_substrings:
+      - 九寨沟
+      - 稻城
+      - 亚丁
+      - 康定
+      - 泸定
+      - 理县
+      - 小金
+      - 汶川
+      - 马尔康
+      - 色达
+      - 丹巴
+      - 新都桥
+      - 海螺沟
+      - 黑水
+      - 松潘
+      - 茂县
+      - 若尔盖
+      - 红原
+      - 金川
+      - 炉霍
+      - 甘孜县
+      - 德格
+      - 石渠
+      - 雅江
+      - 巴塘
+      - 乡城
+      - 得荣
+    expected_keywords:
+      - 川西
+    tag_refs:
+      - trees/tags/主题/旅行攻略.yaml

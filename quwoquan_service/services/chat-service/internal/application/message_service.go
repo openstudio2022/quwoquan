@@ -30,7 +30,6 @@ func NewMessageService(repo persistence.ChatRepository, cache *cache.Conversatio
 type SendMessageRequest struct {
 	ConversationId            string
 	SenderId                  string
-	SenderPersonaId           string
 	PersonaContextVersion     int64
 	SenderDisplayNameSnapshot string
 	SenderAvatarUrlSnapshot   string
@@ -79,7 +78,6 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 		Seq:              seq,
 		ClientMsgId:      req.ClientMsgId,
 		SenderId:         req.SenderId,
-		SenderPersonaId:  req.SenderPersonaId,
 		Type:             req.Type,
 		Content:          req.Content,
 		MediaUrl:         req.MediaUrl,
@@ -124,8 +122,7 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 			"mentions":               msg.Mentions,
 			"clientMsgId":            req.ClientMsgId,
 			"timestamp":              msg.Timestamp,
-			"senderProfileSubjectId": req.SenderId,
-			"senderPersonaId":        req.SenderPersonaId,
+			"senderSubAccountId":     req.SenderId,
 			"personaContextVersion":  req.PersonaContextVersion,
 		}); err != nil {
 			slog.Error("publish MessageSent failed", "err", err, "conversationId", req.ConversationId)

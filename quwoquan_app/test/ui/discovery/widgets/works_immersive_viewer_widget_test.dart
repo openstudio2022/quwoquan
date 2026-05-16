@@ -17,6 +17,7 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
@@ -285,7 +286,6 @@ PhotoPostDto _photoPost({
     identity: 'work',
     assistantUsePolicy: 'inherit',
     authorId: 'author-1',
-    authorProfileSubjectId: 'author-1',
     displayName: '摄影师',
     avatarUrl: 'https://example.com/avatar.jpg',
     body: 'dto body',
@@ -306,7 +306,6 @@ ArticlePostDto _articlePost() {
     identity: 'work',
     assistantUsePolicy: 'inherit',
     authorId: 'author-3',
-    authorProfileSubjectId: 'author-3',
     displayName: '写作者',
     avatarUrl: 'https://example.com/avatar-3.jpg',
     title: '图文翻页',
@@ -330,7 +329,6 @@ MomentPostDto _textMoment() {
     identity: 'moment',
     assistantUsePolicy: 'inherit',
     authorId: 'author-2',
-    authorProfileSubjectId: 'author-2',
     displayName: '圈友',
     avatarUrl: 'https://example.com/avatar-2.jpg',
     body: '今天风有点大，大家从南门集合。',
@@ -374,6 +372,77 @@ void _consumeImageLoadExceptions(WidgetTester tester) {
 void main() {
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
+  });
+
+  testWidgets('UnifiedMediaViewerPage 首帧后灌入互动快照且不抛 provider 生命周期异常', (
+    tester,
+  ) async {
+    final post = _photoPost(
+      imageUrls: const ['https://example.com/photo-regression.jpg'],
+    );
+    final container = ProviderContainer();
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) => MaterialApp(
+            theme: ThemeData.dark(),
+            home: UnifiedMediaViewerPage(
+              extra: MediaViewerExtra(
+                posts: <PostSummaryView>[PostSummaryView.fromDto(post)],
+                dtoPosts: <PostBaseDto>[post],
+                initialIndex: 0,
+                category: 'photo',
+                rawPostsById: _viewerRawByPostId({
+                  post.id: <String, dynamic>{
+                    'postId': post.id,
+                    'type': 'photo',
+                    'contentType': 'image',
+                    'authorId': post.authorId,
+                    'authorNickname': post.displayName,
+                    'authorAvatarUrl': post.avatarUrl,
+                    'title': '回归标题',
+                    'body': '回归正文',
+                    'coverUrl': post.coverUrl,
+                    'imageUrls': post.imageUrls,
+                  },
+                }),
+                interactionSnapshot: MediaViewerInteractionSnapshot(
+                  scopePostIds: <String>{post.id},
+                  scopeProfileIds: <String>{post.subAccountId},
+                  followingUsers: <String>{post.subAccountId},
+                  likedPosts: <String>{post.id},
+                  postLikesCount: <String, int>{post.id: 7},
+                  postCommentCount: <String, int>{post.id: 4},
+                  postSharesCount: <String, int>{post.id: 3},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    expect(find.byType(WorksImmersiveViewer), findsOneWidget);
+    final relationshipState = container.read(userRelationshipStateProvider);
+    final postInteractionState = container.read(postInteractionStateProvider);
+    expect(relationshipState.isFollowing(post.subAccountId), isTrue);
+    expect(postInteractionState.isLiked(post.id), isTrue);
+    expect(postInteractionState.commentCountFor(post.id), 4);
+    expect(postInteractionState.shareCountFor(post.id), 3);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    container.dispose();
   });
 
   testWidgets('photo post 在 unified viewer 中展示 raw title/body', (tester) async {
@@ -758,17 +827,25 @@ void main() {
               'coverUrl': post.coverUrl,
               'articleTemplate': post.articleTemplate,
               'articleFontPreset': post.articleFontPreset,
-              'articleDocument': <String, dynamic>{
+              'articleMarkdown':
+                  '---\n'
+                  'title: ${post.title}\n'
+                  'template: ${post.articleTemplate}\n'
+                  'fontPreset: ${post.articleFontPreset}\n'
+                  '---\n\n'
+                  '第一页前言。\n\n'
+                  '第二段落继续展开说明。\n\n'
+                  '第三段落把正文推到下一页。\n',
+              'articleMarkdownVersion': 'qwq-rich-md/1',
+              'articleAssetManifest': const <String, dynamic>{
+                'schemaVersion': 1,
+                'articleMarkdownVersion': 'qwq-rich-md/1',
+                'articleMarkdownDigest': 'fixture:test',
+                'assets': <Map<String, dynamic>>[],
+              },
+              'articleRenderProfile': <String, dynamic>{
                 'template': post.articleTemplate,
                 'fontPreset': post.articleFontPreset,
-                'coverImageUrl': post.coverUrl,
-                'titleStyle': 'major',
-                'nodes': <Map<String, dynamic>>[
-                  {'id': 'title', 'type': 'documentTitle', 'text': post.title},
-                  {'id': 'p0', 'type': 'paragraph', 'text': '第一页前言。'},
-                  {'id': 'p1', 'type': 'paragraph', 'text': '第二段落继续展开说明。'},
-                  {'id': 'p2', 'type': 'paragraph', 'text': '第三段落把正文推到下一页。'},
-                ],
               },
             },
           }),
@@ -986,17 +1063,25 @@ void main() {
           'coverUrl': post.coverUrl,
           'articleTemplate': post.articleTemplate,
           'articleFontPreset': post.articleFontPreset,
-          'articleDocument': <String, dynamic>{
+          'articleMarkdown':
+              '---\n'
+              'title: 水合后的标题\n'
+              'template: ${post.articleTemplate}\n'
+              'fontPreset: ${post.articleFontPreset}\n'
+              '---\n\n'
+              '## 水合章节\n\n'
+              '水合后的正文第一段。\n\n'
+              '水合后的正文第二段。\n',
+          'articleMarkdownVersion': 'qwq-rich-md/1',
+          'articleAssetManifest': const <String, dynamic>{
+            'schemaVersion': 1,
+            'articleMarkdownVersion': 'qwq-rich-md/1',
+            'articleMarkdownDigest': 'fixture:hydrated',
+            'assets': <Map<String, dynamic>>[],
+          },
+          'articleRenderProfile': <String, dynamic>{
             'template': post.articleTemplate,
             'fontPreset': post.articleFontPreset,
-            'coverImageUrl': post.coverUrl,
-            'titleStyle': 'major',
-            'nodes': <Map<String, dynamic>>[
-              {'id': 'title', 'type': 'documentTitle', 'text': '水合后的标题'},
-              {'id': 'h2', 'type': 'headingMajor', 'text': '水合章节'},
-              {'id': 'p1', 'type': 'paragraph', 'text': '水合后的正文第一段。'},
-              {'id': 'p2', 'type': 'paragraph', 'text': '水合后的正文第二段。'},
-            ],
           },
         },
       },

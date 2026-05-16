@@ -231,5 +231,5 @@ v*-rc* tag push / main merge
 
 - `deploy/shared/deliver_to_production_runbook.md` — 端到端 runbook
 - `deploy/shared/ci_cd_end_to_end_design.md` — G5c 现状与建议
-- `scripts/config_release_apply_stage.sh` — 单步 state + SLO + 回滚
+- `agent_ops/deploy/prod/config_release_apply_stage.sh` — 单步 state + SLO + 回滚
 - `deploy/service/config-release/slo_thresholds.yaml` — SLO 阈值

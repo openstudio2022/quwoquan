@@ -116,7 +116,7 @@
 
 ### S8: 视觉审计 + 测试覆盖
 
-- [ ] T42: [审计] 执行 `python3 scripts/verify_dart_semantic.py` 确认零新增硬编码违规
+- [ ] T42: [审计] 执行 `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py` 确认零新增硬编码违规
 - [ ] T43: [文案] 在 `UITextConstants` 新增所有 profile 相关文案常量
 - [ ] T44: [测试-L1a] 创建 `test/cloud/user/user_profile_dto_contract_test.dart`：DTO schema 断言（含 circleCount, likeCount）
 - [ ] T45: [测试-L1b] 创建 `test/ui/user/widgets/profile_shell_test.dart`：mine/other 模式渲染差异

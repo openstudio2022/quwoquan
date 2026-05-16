@@ -1,0 +1,108 @@
+---
+description: 后翻 BACK 渲染主线硬约束：单页 portrait 下书脊是当前页左边线，BACK 必须对齐 StPageFlip 原生 BACK calc + direction-aware drawSoft，并在同一 moving sheet 内做 recto/verso 分段。
+alwaysApply: true
+---
+
+# Pageflip Backward Mainline (Native BACK)
+
+当任务触及 `quwoquan_app/lib/ui/content/pageflip/**`、`quwoquan_app/lib/ui/content/article_reader/pageflip/**`、`quwoquan_app/test/**/pageflip/**` 时，必须遵守本规则。本规则是 [11-pageflip-geometry-guardrails.mdc](11-pageflip-geometry-guardrails.mdc) 在 BACK 方向上的强收紧版，凡两者冲突以本规则为准。
+
+## 几何真相源（与业界 page-flip / 当前前翻代码逐点对齐）
+
+### 共享 page-local 与 spread 投影
+
+- spread 中线（spine line）：`bounds.left + bounds.width / 2`。在 portrait 单页下 `bounds.width = 2 * pageWidth`、`viewport.width < 2 * pageWidth`，所以 `bounds.left` 是负值，`bounds.left + pageWidth` 才是 visible page 的左边缘。
+- `convertBookPointToViewport(point, bounds, direction)`：
+  - forward：`viewport_x = bounds.left + bounds.width/2 + point.dx`
+  - back：`viewport_x = bounds.left + bounds.width/2 - point.dx`
+- forward / BACK 在 calculation 内部用同一套 `_rect`，唯一差异是
+  - `getActiveCorner()`：forward = `_rect.topLeft = pos`，BACK = `_rect.topRight ≠ pos`
+  - `getAngle()`：forward = `-_angle`，BACK = `+_angle`
+  - `getBottomPagePosition()`：forward = `(0, 0)`，BACK = `(pageWidth, 0)`
+
+### portrait 单页 BACK 几何契约
+
+- 当前页可见在 right page，书脊是 `bounds.left + pageWidth`，也就是当前页左边线。
+- 前一页在书脊左侧不可见对称面；BACK 时把前一页从左侧围绕该书脊翻到当前页区域。
+- 业界 `HTMLPage.drawSoft()` 对 BACK 使用 direction-aware 局部裁剪：
+  - forward：`x = p.x - position.x`
+  - back：`x = -p.x + position.x`
+- 本地 portrait 单页 BACK 的视觉目标是与 forward 某一静态姿态同构：`direction == back` 保留页面绑定/提交语义，`visualGeometryDirection == forward` 负责 S/F/E/C 的视觉几何。
+- portrait BACK 的 forward-isomorphic visual input 必须使用反向时间：刚开始后翻对应前翻结束态，随后 previous leaf 从书脊左侧不可见区向右翻入可见区；禁止继续使用 semantic BACK replay point 作为 visual input。
+- portrait BACK visual input 必须允许 forward 完成态负 X 区间（`-pageWidth..pageWidth`）；禁止把同构输入 clamp 到 `0..pageWidth`，否则刚后翻会错误映射成前翻刚开始/中段。
+
+## 禁止的错误路线
+
+- 禁止 `_runForwardEquivalentCalc` / `_ForwardEquivalentGeometry` / `_mirrorAreaX` / `_mirrorX` 重新成为 BACK 视觉真相源。
+- 禁止把 `scene.direction` / `StPageFlipRenderFrame.direction` 直接改成 `forward` 来绕过 BACK 页面绑定。
+- 禁止在 `_localPolygonFromArea` 中删除 BACK 原生 `anchor.dx - point.dx` 公式；landscape / fallback BACK 仍需要该分支。
+
+## 主线定义（Route B 三层组合）
+
+后翻 BACK 主线只允许如下层级（最底层 → 最顶层）：
+
+1. **L0 current/right underlay**：当前页保持完整可见；若保留 `bottomClipArea` 诊断，必须与真实 BACK sheet 同源，不能制造左侧小竖条。
+2. **L1 flipping sheet**：`pages[flippingPageIndex]` 的 moving sheet，按 BACK calc 原始 `flippingClipArea / activeCorner / angle` 走 StPageFlip 原生 BACK soft transform，并在同一个 soft surface 内裁出 recto/front 与 verso/back。
+
+L1 内部分段是同一张纸的分段，不是新增独立平面：
+
+- **recto/front**：来自 `ArticlePageBackwardLeafFrame.totalRectoVisibleWidthNormalized`，在 spine side 显示 `pages[flippingPageIndex]` front。
+- **verso/back**：来自 `ArticlePageBackwardLeafFrame.coveredWidthNormalized - totalRectoVisibleWidthNormalized`，显示 `pages[flippingPageIndex]` back。
+- 两者必须共享同一个外层 `Positioned + Transform.rotate + ClipPath(frame.flippingClipArea)`；内部 slice 使用正向 sheet-local 区间 `[0, rectoW]` / `[rectoW, coveredW]`，禁止把 BACK `anchor.dx - p.dx` 的负 X 结果直接当作 `Positioned` 子块裁掉。
+
+`bottomLayerPageIndex == currentPageIndex`，`flippingLayerPageIndex == currentPageIndex - 1`。
+
+## 视觉契约（M1 必须满足）
+
+- spine line 视觉锚定 visible page 左边缘（由 staticReadingPage underlay + sheet/bottom 楔形互不重叠保证，与 forward 同机制）。
+- free edge 视觉起点贴 spine、随 angle 增大向 visible page 右侧 sweep。
+- sheet 楔形位置在 visible page 左半内（从 spine 朝中部 / 顶 / 底扩展）。
+- bottom 楔形在 spine 旁的小三角（朝顶或朝底，取决于 corner），不再出现在 visible page 右半。
+- previous front 只能通过 moving sheet 内 recto slice 出现；禁止 full previous-front baseline 铺满 visible page 替换 current。
+- 不出现「书脊在右」「折纸方向反」「不规则四边形」「黑屏」「previous front / back 错乱」等既往异常现象。
+
+## 真相源（不可绕过）
+
+| 数据 | 唯一真相源 | 消费者 |
+|---|---|---|
+| `flippingClipArea` / `bottomClipArea` | `StPageFlipCalculation(BACK).getFlippingClipArea()` / `getBottomClipArea()` | `renderFrame.flippingClipArea` / `bottomClipArea` |
+| `anchor` / `angle` | `StPageFlipCalculation(BACK).getActiveCorner()` / `getAngle()` | `renderFrame.flippingAnchor` / `angle` |
+| BACK viewport position | `convertBookPointToViewport(anchor, bounds, direction: back)` | `_buildSoftPageLayer` / diagnostics |
+| BACK local clip | `Offset(anchor.dx - point.dx, point.dy - anchor.dy)` | `_localPolygonFromArea` / diagnostics |
+| `foldLine` / `projectedRightEdgeLine` | BACK calc `canonicalFoldGeometry` | `ArticlePageBackwardProjectedFrame`（诊断） |
+| recto/verso 分段宽度 | `ArticlePageBackwardLeafFrame` | `_buildSoftFlippingPageSurface` / `_resolveBackwardDiagnosticGeometry` |
+
+## 禁止（一旦违反，门禁 BLOCK）
+
+- 禁止重新引入 `BackwardFoldSurfaceGeometry` / `resolveBackwardFoldFrameGeometry` / `_BackwardDisplaySheetBand` / `_resolveBackwardDisplaySheetBand` / `_pageRectBandPolygon` 任意一个符号。
+- 禁止重新引入 host 旁路渲染分支 `_buildBackwardCurrentResidualLayer` / `_buildBackwardPreviousLeafSoftLayer` / `_buildBackwardGeometryProbeSurface` / `_resolveBackwardFoldSurfaceGeometry`。
+- 禁止重新引入 `_resolveBackwardDisplayPosition`、`pageViewportRect`（在 `article_reader_soft_page_geometry.dart` 中），以及 `resolveBackwardSoftPageGeometry`。
+- 禁止在 `_buildSoftPageLayer` 中引入独立 BACK helper 或自造 polygon；只允许通过共享 pipeline 传入 `direction`。
+- 禁止删除 `_localPolygonFromArea` 中受控的 BACK `anchor.dx - point.dx` 分支；这是 StPageFlip 原生 `drawSoft` 语义，不是既往旁路。
+- 禁止在 `ArticlePageBackwardProjectedFrame` 上恢复 `previousFoldSurfacePolygon` / `previousBackFoldPolygon` / `currentResidualPolygon` 等多边形字段；只允许 `foldLine` / `projectedRightEdgeLine` / `replayLocalPoint` / `edgeEnteredPage` / `foldLineSource` / `edgeLineSource` 这一组诊断字段。
+- 禁止 `_buildSoftFlippingPageSurface` 在 BACK 方向上按 `progress` 切换 face；BACK 必须用 `visualAngle`。
+- 禁止 BACK 方向整张 flipping sheet 只显示单一 face；一旦 `rectoCoverageNormalized > 0.001`，必须同一 sheet 内同时有 previous front 与 previous back 分段。
+- 禁止 BACK flipping sheet 的投影位置根据 `rectoCoverageNormalized` 或 recto 是否出现发生离散切换；否则会出现背面消失、正面跳出的非折纸效果。
+- 禁止 `_singlePageBackwardFlippingDisplayOffset` 或等价 screen-space display offset 参与 BACK 真实渲染/diagnostics；刚开始后翻的可见性必须来自 BACK calculation 输入点和 clip area。
+- 禁止 `article_backward_previous_front_baseline` / `_buildBackwardPreviousFrontBaselineLayer` 回归；它会在后翻开始阶段用前一页正面替换当前页。
+- 禁止用独立 `Positioned` 平面铺 front/back 两块；front/back 必须在同一个 moving sheet surface 内通过 clip 分段。
+- 禁止把任何旁路推导出来的 polygon / rect / line 当作 BACK 视觉的"真相源"用于诊断或测试断言。
+
+## 必须
+
+- `backward_render_frame_builder.dart` 在 portrait BACK 下必须构造 forward-isomorphic visual geometry：`direction == back`、`renderDirection == back`、`visualGeometryDirection == forward`。
+- portrait BACK visual calculation 必须消费 `resolveBackwardVisualReplayLocalPagePoint`，不得直接消费 `resolveBackwardReplayLocalPagePoint`。
+- `resolveBackwardVisualReplayCanonicalPoint` 必须以 `-pageWidth` 作为 BACK start 的 visual X 起点，并随 BACK 拖拽向 `pageWidth` 单调推进。
+- `routeBSpineMirroredApplied` 必须保留为诊断字段：portrait BACK 同构视觉几何为 `true`，landscape/fallback native BACK 为 `false`。
+- BACK 方向的 `backwardFoldX` 推进、layer 角色稳定（`bottomLayer = current`、`flippingLayer = current-1`）必须由 `ArticleReadOnlyBookDebugState.backward*` 字段承载；contract / widget / visual 测试必须断言这些字段。
+- host soft layer 必须按 `visualGeometryDirection` 消费 `clip/anchor/angle`，但页面绑定、suppression 和 texture binding 必须按 semantic `direction == back`。
+- `_localPolygonFromArea` 必须同时包含 `anchor.dx - point.dx`（BACK）与 `point.dx - anchor.dx`（forward）。
+- `_buildSoftFlippingPageSurface` 的 BACK 分支必须接收 `ArticlePageBackwardLeafFrame` 并调用同一 sheet 内 recto/verso split；diagnostics 的 `previousFrontLocalPolygon` / `previousBackLocalPolygon` 必须同源输出。
+- BACK texture binding 必须为 `recto=flippingPageIndex`、`verso=flippingPageIndex`、`bottom=currentPageIndex`；current page 不得进入 BACK static suppression。
+- 新增 BACK 测试必须断言：single-page portrait 的 previous moving sheet 与 visible current page 有正面积交集，且不能整体落在当前页左边界外；后段还必须同时观测到 front/back/current 三段。
+
+## 门禁
+
+- `python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py`（静态扫描禁用符号、固定 ValueKey、要求 forward-isomorphic visual geometry、禁止 display offset 与 full baseline 回归）。
+- `make verify-app-pageflip-back-mainline`（合约 + 视觉不变量）。
+- 已串联 `make gate` → `agent_ops/gate/gate_repo.sh`：静态扫描随 `run_app` 执行；测试随 L1 合约/视觉测试执行。

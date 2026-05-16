@@ -253,7 +253,7 @@ func main() {
 		logger.Warn("chat-service user profile resolver base URL is empty; create/add member snapshot hydration will be skipped")
 	}
 
-	baseHandler := httpadapter.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes()
+	baseHandler := httpadapter.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc, userSyncService).Routes()
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/media/", newDerivedMediaFileServer(localMediaRoot))
 	rootMux.Handle("/metrics/runtime-media", application.NewRuntimeMediaMetricsHandler(

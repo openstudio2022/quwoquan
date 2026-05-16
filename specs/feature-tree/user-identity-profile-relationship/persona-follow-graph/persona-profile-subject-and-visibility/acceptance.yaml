@@ -16,7 +16,7 @@ scope:
     - J1
     - J3
   in_scope:
-    - "`ProfileSubjectView / ProfileSubjectMutation`"
+    - "`SubAccountProfileView / SubAccountProfileMutation`"
     - owner 基线、分身覆写与同步范围
     - strict isolation 与公开读取规则
     - 停用分身后的记录归因与作者快照合同
@@ -48,7 +48,7 @@ scenario_acceptance:
         - T2_module_interaction
     tests:
       planned:
-        - profile subject contract test
+        - sub-account profile contract test
         - public read model regression test
       recorded:
         - "T1: `make -C quwoquan_service verify-metadata && make codegen && make codegen-app`"
@@ -81,7 +81,7 @@ scenario_acceptance:
         - T3_cross_service_integration
     tests:
       planned:
-        - profile subject mutation schema test
+        - sub-account profile mutation schema test
         - sync prompt widget test
         - owner to persona sync contract test
       recorded:
@@ -89,7 +89,7 @@ scenario_acceptance:
         - "T2: `flutter test test/cloud/user/contract/user_repository_contract_test.dart test/ui/user/journeys/edit_profile_journey_test.dart`"
         - "T2: `flutter test test/cloud/user/contract/user_profile_wire_dto_contract_test.dart`"
     notes:
-      - "`ProfileSubjectMutation` 已显式承载 `applyScope / syncTargetIds / fieldsMask`，资料同步不再依赖 UI 私有状态。"
+      - "`SubAccountProfileMutation` 已显式承载 `applyScope / syncTargetIds / fieldsMask`，资料同步不再依赖 UI 私有状态。"
       - "A2 首批真实支持字段已收口为 `displayName / userHandle / phone / email / avatarUrl`；`isolationLevel / purposeHint` 为当前分身局部管理字段。"
       - "`backgroundUrl / bio` 继续作为 owner 基线公开读字段返回，`profileVisibility` 继续由 `isolationLevel` 派生，不再伪装成 persona 可写字段。"
     status: implemented
@@ -147,7 +147,7 @@ story_readiness:
         - "T1: `make -C quwoquan_service verify-metadata && make codegen && make codegen-app`"
         - "T2: `flutter test test/cloud/integration/remote_api_path_contract_test.dart test/ui/content/post_read_projection_facade_test.dart test/ui/user/providers/profile_state_provider_test.dart`"
         - "T2: `flutter test test/cloud/user/contract/user_repository_contract_test.dart test/cloud/chat/chat_message_snapshot_contract_test.dart test/cloud/content/post/contract/post_feed_dto_contract_test.dart`"
-        - "T3: `go test ./services/user-service/tests -run 'Test(ProfileSubjectView_|UpdatePersona_|ApplyPersonaProfileSync_|GetPersonaLifecycleGuard_)'`"
+        - "T3: `go test ./services/user-service/tests -run 'Test(SubAccountView_|UpdatePersona_|ApplyPersonaProfileSync_|GetPersonaLifecycleGuard_)'`"
         - "T3: `go test ./services/content-service/tests -run 'TestDiscoveryProjectionPersistsProfileSubjectID'`"
     notes:
       - "主页、内容、聊天消费入口已统一切到 `ProfileSubject` / snapshot contract，旧 `authorId` fallback 已退出主链路。"

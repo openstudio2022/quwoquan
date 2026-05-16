@@ -40,17 +40,17 @@ void main() {
     });
 
     test('message display maps expose loadable sender avatars', () {
-      final map = ChatMessageDto(
+      final item = ChatMessageDto(
         id: 'msg_1',
         conversationId: 'conv_1',
         senderId: 'user_2',
         senderName: '契约同好',
         senderAvatar: '/media/avatar/user/user_2/v3/profile.png?v=3',
         content: '你好',
-      ).toDisplayMap(currentUserId: 'user_me');
+      ).toDisplayItem(currentUserId: 'user_me');
 
       expect(
-        map['senderAvatar'],
+        item.senderAvatar,
         'http://127.0.0.1:18088/media/avatar/user/user_2/v3/profile.png?v=3',
       );
     });

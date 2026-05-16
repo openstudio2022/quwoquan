@@ -14,7 +14,7 @@
 
 当前“作者分身”在公开表面的语义仍不稳定：
 
-1. **公开主体混用**：`profileSubjectId`、`subAccountId`、`userHandle`、`username`、`PersonaDto`、`ProfileSubjectView` 在不同页面和 Repository 中并行存在。
+1. **公开主体混用**：`profileSubjectId`、`subAccountId`、`userHandle`、`username`、`PersonaDto`、`SubAccountProfileView` 在不同页面和 Repository 中并行存在。
 2. **资料继承未形成统一合同**：owner 基线、分身覆写、同步范围、公开可见性已有零散字段，但缺少对“作者分身如何编辑和展示”的统一规格。
 3. **停用后的记录归因缺失基线**：如果分身退出使用，记录内容、评论、聊天消息、通知如何保留作者快照，目前没有冻结的产品合同。
 
@@ -56,7 +56,7 @@
 - owner 提供资料基线。
 - 分身默认继承 owner 的公开资料基线。
 - 分身只保存覆写字段，不复制一整份 public profile。
-- 读路径由 user 域合成 `ProfileSubjectView`。
+- 读路径由 user 域合成 `SubAccountProfileView`。
 
 支持覆写的首批字段：
 
@@ -119,7 +119,7 @@
 
 ### 本场景负责
 
-- `user` 域 `ProfileSubjectView / ProfileSubjectMutation`
+- `user` 域 `SubAccountProfileView / SubAccountProfileMutation`
 - owner 基线与 persona 覆写语义
 - 公开可见性与记录归因规则
 

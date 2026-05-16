@@ -3,7 +3,7 @@ title: iOS 原生页面根壳门禁与 allowlist 基线
 status: baseline_complete
 feature_path: runtime/runtime-client-foundation/ios-native-page-enforcement
 summary: |
-  引入静态门禁 scripts/verify_ios_native_surface_gate.py，禁止 lib/ui/**/pages 与约定 components 全屏页
+  引入静态门禁 quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py，禁止 lib/ui/**/pages 与约定 components 全屏页
   使用 return Scaffold( 作为根壳（Material）；allowlist 用于存量收缩政策（当前树可为空），
   后续切片迁移至 AppScaffold/CupertinoPageScaffold 并保持 allowlist 仅缩不胀。
 artifacts:
@@ -12,5 +12,5 @@ artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/design.md
   - specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/plan.yaml
   - specs/gates/ios_native_surface_allowlist.yaml
-  - scripts/verify_ios_native_surface_gate.py
-  - scripts/gate_repo.sh
+  - quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
+  - agent_ops/gate/gate_repo.sh

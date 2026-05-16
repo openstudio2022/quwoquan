@@ -431,18 +431,16 @@ class MockCircleRepository implements CircleRepository {
   Future<void> joinCircle(
     String circleId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {}
 
   @override
   Future<void> leaveCircle(
     String circleId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   }) async {}
 
   @override

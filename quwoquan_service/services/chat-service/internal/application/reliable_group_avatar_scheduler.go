@@ -471,6 +471,12 @@ func (s *ReliableGroupAvatarTaskScheduler) handleNotification(ctx context.Contex
 	if s.syncPublisher == nil {
 		return s.store.CompleteNotification(ctx, notification.NotificationID, notification.LeaseToken)
 	}
+	if s.repo != nil {
+		conv, err := s.repo.FindConversationByID(ctx, notification.AggregateID)
+		if err == nil && conv != nil && strings.TrimSpace(conv.Status) != "active" {
+			return s.store.CompleteNotification(ctx, notification.NotificationID, notification.LeaseToken)
+		}
+	}
 	if err := s.store.EnsureRecipientLedgers(ctx, notification.NotificationID, notification.EventType, notification.RecipientIDs); err != nil {
 		return s.retryNotification(ctx, notification, err)
 	}

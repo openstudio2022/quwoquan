@@ -63,7 +63,10 @@ class PersistedTimelineTurnCodec {
         senderId: (m['senderId'] as String?) ?? '',
         senderName: (m['senderName'] as String?) ?? '',
         senderAvatar: (m['senderAvatar'] as String?) ?? '',
-        senderPersonaId: (m['senderPersonaId'] as String?) ?? '',
+        senderSubAccountId:
+            (m['senderSubAccountId'] as String?) ??
+            (m['senderPersonaId'] as String?) ??
+            '',
         timestamp: (m['timestamp'] as String?) ?? '',
         status: (m['status'] as String?) ?? '',
         isRead: m['isRead'] as bool? ?? true,
@@ -134,7 +137,8 @@ class PersistedTimelineTurnCodec {
           'senderId': r.senderId,
           'senderName': r.senderName,
           'senderAvatar': r.senderAvatar,
-          if (r.senderPersonaId.isNotEmpty) 'senderPersonaId': r.senderPersonaId,
+          if (r.senderSubAccountId.isNotEmpty)
+            'senderSubAccountId': r.senderSubAccountId,
           'timestamp': r.timestamp,
           if (r.status.isNotEmpty) 'status': r.status,
           'isRead': r.isRead,

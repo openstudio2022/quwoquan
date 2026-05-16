@@ -84,7 +84,7 @@
 - 任何人都可以发起群聊
 - 只允许选择互关联系人，或群/圈中与当前用户互关的成员
 - 圈子来源必须来自“消息列表可达且我的圈子中存在、并已有 `conversationId` 绑定”的真实圈子
-- 私建群使用 `group` 类型；圈子群使用 `circle` 类型
+- 所有群会话统一使用 `group` 类型；圈子发起/绑定的默认群通过 `circleId` 标识，而不是独立 `circle` 会话类型
 - 私建群允许解散；圈子群禁止解散，危险操作入口必须隐藏
 - `route / surface / operation / request context` 必须来自 metadata，禁止继续复用 `chatAddMembers` 旧语义
 - 不做兼容迁移，不保留记录交互分支，按新模型一把升级

@@ -266,7 +266,7 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 	)
 	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher)
 	inboxSvc := application.NewInboxService(chatStore)
-	return chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc).Routes(), userSyncService, scheduler
+	return chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc, userSyncService).Routes(), userSyncService, scheduler
 }
 
 func doHandlerJSON(
@@ -311,8 +311,8 @@ func TestGroupAvatar_CreateConversationReturnsDefaultBeforeAsyncAvatarReady(t *t
 	if elapsed := time.Since(start); elapsed >= 200*time.Millisecond {
 		t.Fatalf("expected create conversation to return before async recompute, elapsed=%s", elapsed)
 	}
-	if got := strings.TrimSpace(created["avatarUrl"].(string)); got != "https://test.avatar/user_test_001" {
-		t.Fatalf("expected creator avatar url on create, got %q", got)
+	if got := strings.TrimSpace(created["avatarUrl"].(string)); got != application.DefaultGroupAvatarURL() {
+		t.Fatalf("expected default group avatar url on create, got %q", got)
 	}
 	if got := int(created["groupAvatarVersion"].(float64)); got != 0 {
 		t.Fatalf("expected groupAvatarVersion 0 before async recompute, got %d", got)
@@ -689,6 +689,72 @@ func TestGroupAvatar_NotificationAckFailureReplaysLedgerWithoutDuplicatePatch(t 
 		}
 		if patchCount != 1 {
 			t.Fatalf("expected one avatar patch for %s after notification ack replay, got %d", userID, patchCount)
+		}
+	}
+}
+
+func TestGroupAvatar_DissolveConversationStopsPendingAvatarNotificationFanout(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	delegateSync := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
+	flakySync := &flakyUserSyncPublisher{
+		failuresLeft: map[string]int{
+			"user_test_002": 100,
+		},
+		delegate: delegateSync,
+	}
+	handler, _, _ := newGroupAvatarTestHandlerWithStoreAndScheduler(
+		t,
+		runtimemedia.NewGroupAvatarService(
+			redisRouter.Scene("general"),
+			"http://127.0.0.1:18081",
+			testChatMediaRoot,
+		),
+		flakySync,
+		reliabletask.NewMongoStore(mongoDB),
+		application.WithReliableGroupAvatarLeaseTTL(80*time.Millisecond),
+	)
+	created := doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations",
+		`{"type":"group","title":"dissolve stops avatar fanout","initialMemberIds":["user_test_002"]}`,
+		"user_test_001",
+		http.StatusCreated,
+	)
+	convID := created["_id"].(string)
+	waitForConversationAvatarVersion(t, convID, 1)
+	doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations/"+convID+"/members",
+		`{"userIds":["user_test_003"]}`,
+		"user_test_001",
+		http.StatusOK,
+	)
+	waitForCollectionCount(t, "notification_outbox", bson.M{
+		"eventType":   "conversation.avatar.updated",
+		"aggregateId": convID,
+		"status":      reliabletask.NotificationStatusRetryWait,
+	}, 1)
+	if code, _ := doDelete(t, "/v1/chat/conversations/"+convID, "user_test_001"); code != http.StatusOK {
+		t.Fatalf("expected dissolve status 200, got %d", code)
+	}
+	waitForCollectionCount(t, "notification_outbox", bson.M{
+		"eventType":   "conversation.avatar.updated",
+		"aggregateId": convID,
+		"status":      reliabletask.NotificationStatusSucceeded,
+	}, 1)
+
+	resp, err := delegateSync.Pull(context.Background(), "user_test_002", 0, 20)
+	if err != nil {
+		t.Fatalf("Pull user_test_002: %v", err)
+	}
+	for _, patch := range resp.Patches {
+		if patch.Type == "conversation.avatar.updated" && patch.Payload["conversationId"] == convID {
+			t.Fatalf("expected dissolved conversation %s to stop pending avatar fanout", convID)
 		}
 	}
 }

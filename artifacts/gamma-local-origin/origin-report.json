@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "gamma-local-media-origin",
+  "generatedAt": "2026-05-05T17:37:24.057282Z",
+  "bindHost": "0.0.0.0",
+  "port": 18200,
+  "registryPath": "/Users/zhaoyuxi/Projects/quwoquan/deploy/shared/media_slice_registry.json",
+  "publicBaseUrl": "http://103.142.140.57:18200",
+  "recommendedEnv": {
+    "GAMMA_ECS_MEDIA_ORIGIN_BASE_URL": "http://103.142.140.57:18200"
+  }
+}

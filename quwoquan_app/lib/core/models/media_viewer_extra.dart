@@ -45,49 +45,101 @@ class MediaViewerPostWireRow {
 
 class MediaViewerInteractionSnapshot {
   const MediaViewerInteractionSnapshot({
+    this.scopePostIds = const <String>{},
+    this.scopeProfileIds = const <String>{},
     this.followingUsers = const <String>{},
     this.savedPosts = const <String>{},
     this.likedPosts = const <String>{},
     this.postLikesCount = const <String, int>{},
     this.postBookmarksCount = const <String, int>{},
     this.postSharesCount = const <String, int>{},
+    this.postCommentCount = const <String, int>{},
   });
 
+  final Set<String> scopePostIds;
+  final Set<String> scopeProfileIds;
   final Set<String> followingUsers;
   final Set<String> savedPosts;
   final Set<String> likedPosts;
   final Map<String, int> postLikesCount;
   final Map<String, int> postBookmarksCount;
   final Map<String, int> postSharesCount;
+  final Map<String, int> postCommentCount;
+
+  Set<String> get effectiveScopePostIds {
+    if (scopePostIds.isNotEmpty) {
+      return scopePostIds;
+    }
+    return <String>{
+      ...likedPosts,
+      ...savedPosts,
+      ...postLikesCount.keys,
+      ...postBookmarksCount.keys,
+      ...postSharesCount.keys,
+      ...postCommentCount.keys,
+    };
+  }
+
+  Set<String> get effectiveScopeProfileIds {
+    if (scopeProfileIds.isNotEmpty) {
+      return scopeProfileIds;
+    }
+    return followingUsers;
+  }
 
   MediaViewerInteractionSnapshot copyWith({
+    Set<String>? scopePostIds,
+    Set<String>? scopeProfileIds,
     Set<String>? followingUsers,
     Set<String>? savedPosts,
     Set<String>? likedPosts,
     Map<String, int>? postLikesCount,
     Map<String, int>? postBookmarksCount,
     Map<String, int>? postSharesCount,
+    Map<String, int>? postCommentCount,
   }) {
     return MediaViewerInteractionSnapshot(
+      scopePostIds: scopePostIds ?? this.scopePostIds,
+      scopeProfileIds: scopeProfileIds ?? this.scopeProfileIds,
       followingUsers: followingUsers ?? this.followingUsers,
       savedPosts: savedPosts ?? this.savedPosts,
       likedPosts: likedPosts ?? this.likedPosts,
       postLikesCount: postLikesCount ?? this.postLikesCount,
       postBookmarksCount: postBookmarksCount ?? this.postBookmarksCount,
       postSharesCount: postSharesCount ?? this.postSharesCount,
+      postCommentCount: postCommentCount ?? this.postCommentCount,
     );
   }
 }
 
 class MediaViewerResult extends MediaViewerInteractionSnapshot {
   const MediaViewerResult({
+    super.scopePostIds = const <String>{},
+    super.scopeProfileIds = const <String>{},
     super.followingUsers = const <String>{},
     super.savedPosts = const <String>{},
     super.likedPosts = const <String>{},
     super.postLikesCount = const <String, int>{},
     super.postBookmarksCount = const <String, int>{},
     super.postSharesCount = const <String, int>{},
+    super.postCommentCount = const <String, int>{},
   });
+
+  factory MediaViewerResult.fromSnapshot(
+    MediaViewerInteractionSnapshot snapshot,
+  ) {
+    return MediaViewerResult(
+      scopePostIds: Set<String>.from(snapshot.effectiveScopePostIds),
+      scopeProfileIds: Set<String>.from(snapshot.effectiveScopeProfileIds),
+      followingUsers: Set<String>.from(snapshot.followingUsers),
+      savedPosts: Set<String>.from(snapshot.savedPosts),
+      likedPosts: Set<String>.from(snapshot.likedPosts),
+      postLikesCount: Map<String, int>.from(snapshot.postLikesCount),
+      postBookmarksCount: Map<String, int>.from(snapshot.postBookmarksCount),
+      postSharesCount: Map<String, int>.from(snapshot.postSharesCount),
+      postCommentCount: Map<String, int>.from(snapshot.postCommentCount),
+    );
+  }
 }
 
 /// 媒体查看器路由传参：列表、浏览器、作者详情共享同一 feed

@@ -38,6 +38,7 @@ import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
@@ -105,13 +106,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   String? _filterType;
   bool _isFilterExpanded = false;
   int _currentPage = 0;
-
-  final Set<String> _likedPosts = <String>{};
-  final Set<String> _savedPosts = <String>{};
-  final Set<String> _followingUsers = <String>{};
-  final Map<String, int> _postLikesCount = <String, int>{};
-  final Map<String, int> _postBookmarksCount = <String, int>{};
-  final Map<String, int> _postSharesCount = <String, int>{};
   final Map<String, int> _photoInnerIndex = <String, int>{};
   final Map<String, int> _articleInnerIndex = <String, int>{};
   final Map<String, int> _videoInnerIndex = <String, int>{};
@@ -137,8 +131,13 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final initialPage = _safeInitialPage;
     _currentPage = initialPage;
     _pageController = PageController(initialPage: initialPage);
-    _hydrateInteractionSnapshot();
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      if (mounted) {
+        primeMediaViewerInteractionSnapshot(
+          ref,
+          widget.initialInteractionSnapshot,
+        );
+      }
       if (!_usesExternalFeed) {
         for (final tabId in <String>['photo', 'video', 'article']) {
           final feedMap = ref.read(discoveryFeedMapProvider);
@@ -180,35 +179,60 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return 0;
   }
 
-  void _hydrateInteractionSnapshot() {
-    _likedPosts
-      ..clear()
-      ..addAll(widget.initialInteractionSnapshot.likedPosts);
-    _savedPosts
-      ..clear()
-      ..addAll(widget.initialInteractionSnapshot.savedPosts);
-    _followingUsers
-      ..clear()
-      ..addAll(widget.initialInteractionSnapshot.followingUsers);
-    _postLikesCount
-      ..clear()
-      ..addAll(widget.initialInteractionSnapshot.postLikesCount);
-    _postBookmarksCount
-      ..clear()
-      ..addAll(widget.initialInteractionSnapshot.postBookmarksCount);
-    _postSharesCount
-      ..clear()
-      ..addAll(widget.initialInteractionSnapshot.postSharesCount);
-  }
-
   MediaViewerResult _buildResult() {
+    final posts = _buildFeed();
+    final postsById = <String, PostBaseDto>{
+      for (final post in posts) post.id: post,
+    };
+    final scopePostIds =
+        widget.initialInteractionSnapshot.effectiveScopePostIds;
+    final scopeProfileIds =
+        widget.initialInteractionSnapshot.effectiveScopeProfileIds;
+    final postInteractionState = ref.read(postInteractionStateProvider);
+    final relationshipState = ref.read(userRelationshipStateProvider);
     return MediaViewerResult(
-      followingUsers: Set<String>.from(_followingUsers),
-      savedPosts: Set<String>.from(_savedPosts),
-      likedPosts: Set<String>.from(_likedPosts),
-      postLikesCount: Map<String, int>.from(_postLikesCount),
-      postBookmarksCount: Map<String, int>.from(_postBookmarksCount),
-      postSharesCount: Map<String, int>.from(_postSharesCount),
+      scopePostIds: Set<String>.from(scopePostIds),
+      scopeProfileIds: Set<String>.from(scopeProfileIds),
+      followingUsers: {
+        for (final profileId in scopeProfileIds)
+          if (relationshipState.isFollowing(profileId)) profileId,
+      },
+      savedPosts: {
+        for (final postId in scopePostIds)
+          if (postInteractionState.isSaved(postId)) postId,
+      },
+      likedPosts: {
+        for (final postId in scopePostIds)
+          if (postInteractionState.isLiked(postId)) postId,
+      },
+      postLikesCount: {
+        for (final postId in scopePostIds)
+          postId: postInteractionState.likeCountFor(
+            postId,
+            fallback: postsById[postId]?.likeCount ?? 0,
+          ),
+      },
+      postBookmarksCount: {
+        for (final postId in scopePostIds)
+          postId: postInteractionState.bookmarkCountFor(
+            postId,
+            fallback: postsById[postId]?.favoriteCount ?? 0,
+          ),
+      },
+      postSharesCount: {
+        for (final postId in scopePostIds)
+          postId: postInteractionState.shareCountFor(
+            postId,
+            fallback: postsById[postId]?.shareCount ?? 0,
+          ),
+      },
+      postCommentCount: {
+        for (final postId in scopePostIds)
+          postId: postInteractionState.commentCountFor(
+            postId,
+            fallback: postsById[postId]?.commentCount ?? 0,
+          ),
+      },
     );
   }
 
@@ -226,7 +250,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   /// - Not following: delayed reveal — 3 s for photos, 5 s for video / article.
   void _startFollowButtonTimer(PostBaseDto post) {
     _followButtonTimer?.cancel();
-    if (_followingUsers.contains(post.authorProfileSubjectId)) {
+    if (effectiveProfileFollowing(ref, post.subAccountId)) {
       // Already following → show right away, no animation delay.
       if (!_showFollowButton) setState(() => _showFollowButton = true);
       return;
@@ -359,8 +383,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     if (raw == null) {
       return false;
     }
-    if (raw[ArticleDetailWireKeys.articleDocument] is Map &&
-        (raw[ArticleDetailWireKeys.articleDocument] as Map).isNotEmpty) {
+    if ((raw[ArticleDetailWireKeys.articleMarkdown]?.toString().trim() ?? '')
+        .isNotEmpty) {
       return true;
     }
     if (raw[ArticleDetailWireKeys.articleBlocks] is List &&
@@ -829,7 +853,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   String _documentSourceName(ArticleDetailDocumentSource source) {
     return switch (source) {
-      ArticleDetailDocumentSource.articleDocument => 'article_document',
+      ArticleDetailDocumentSource.markdown => 'markdown',
       ArticleDetailDocumentSource.articleBlocks => 'article_blocks',
       ArticleDetailDocumentSource.cards => 'cards',
       ArticleDetailDocumentSource.body => 'body',
@@ -842,7 +866,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     required ArticleDetailView article,
     required bool hydrated,
   }) {
-    if (article.documentSource == ArticleDetailDocumentSource.articleDocument) {
+    if (article.documentSource == ArticleDetailDocumentSource.markdown) {
       return;
     }
     final bookReaderEnabled = ref.read(
@@ -870,6 +894,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       final detail = await ref
           .read(contentRepositoryProvider)
           .getPost(postId: post.id);
+      applyConfirmedInteractionPost(ref, detail.post);
       if (!mounted) {
         return;
       }
@@ -977,84 +1002,51 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   // ── 互动操作（乐观 UI + 云侧 API 同步）────────────────────────
 
   void _onLike(PostBaseDto post) {
-    final isLiked = _likedPosts.contains(post.id);
-    final currentCount = _postLikesCount[post.id] ?? post.likeCount;
+    final isLiked = effectivePostLiked(ref, post.id);
+    final currentCount = effectivePostLikeCount(
+      ref,
+      post.id,
+      fallback: post.likeCount,
+    );
     final nextLiked = !isLiked;
     final nextLikeCount = nextLiked
         ? currentCount + 1
         : (currentCount - 1).clamp(0, 1 << 31).toInt();
-    setState(() {
-      if (isLiked) {
-        _likedPosts.remove(post.id);
-        _postLikesCount[post.id] = nextLikeCount;
-      } else {
-        _likedPosts.add(post.id);
-        _postLikesCount[post.id] = nextLikeCount;
-      }
-    });
-    ref
-        .read(postInteractionStateProvider.notifier)
-        .setLiked(post.id, nextLiked, likeCount: nextLikeCount);
-    ref
-        .read(clientStateSyncOutboxProvider.notifier)
-        .enqueuePostLike(postId: post.id, isLiked: nextLiked);
-    final repo = ref.read(contentInteractionRepositoryProvider);
-    if (isLiked) {
-      repo.unlike(post.id);
-    } else {
-      repo.like(post.id);
-    }
+    syncPostLikeIntent(
+      ref,
+      postId: post.id,
+      isLiked: nextLiked,
+      likeCount: nextLikeCount,
+    );
   }
 
   void _onFavorite(PostBaseDto post) {
-    final isSaved = _savedPosts.contains(post.id);
-    final currentCount = _postBookmarksCount[post.id] ?? post.favoriteCount;
+    final isSaved = effectivePostSaved(ref, post.id);
+    final currentCount = effectivePostBookmarkCount(
+      ref,
+      post.id,
+      fallback: post.favoriteCount,
+    );
     final nextSaved = !isSaved;
     final nextBookmarkCount = nextSaved
         ? currentCount + 1
         : (currentCount - 1).clamp(0, 1 << 31).toInt();
-    setState(() {
-      if (isSaved) {
-        _savedPosts.remove(post.id);
-        _postBookmarksCount[post.id] = nextBookmarkCount;
-      } else {
-        _savedPosts.add(post.id);
-        _postBookmarksCount[post.id] = nextBookmarkCount;
-      }
-    });
-    ref
-        .read(postInteractionStateProvider.notifier)
-        .setSaved(post.id, nextSaved, bookmarkCount: nextBookmarkCount);
-    ref
-        .read(clientStateSyncOutboxProvider.notifier)
-        .enqueuePostSave(postId: post.id, isSaved: nextSaved);
-    final repo = ref.read(contentInteractionRepositoryProvider);
-    if (isSaved) {
-      repo.unfavorite(post.id);
-    } else {
-      repo.favorite(post.id);
-    }
+    syncPostSaveIntent(
+      ref,
+      postId: post.id,
+      isSaved: nextSaved,
+      bookmarkCount: nextBookmarkCount,
+    );
   }
 
   void _onFollow(PostBaseDto post) {
-    final subjectId = post.authorProfileSubjectId;
-    final nextFollowing = !_followingUsers.contains(subjectId);
-    setState(() {
-      if (_followingUsers.contains(subjectId)) {
-        _followingUsers.remove(subjectId);
-      } else {
-        _followingUsers.add(subjectId);
-      }
-    });
-    ref
-        .read(userRelationshipStateProvider.notifier)
-        .setFollowing(subjectId, nextFollowing);
-    ref
-        .read(clientStateSyncOutboxProvider.notifier)
-        .enqueueFollow(
-          profileSubjectId: subjectId,
-          shouldFollow: nextFollowing,
-        );
+    final subjectId = post.subAccountId;
+    final nextFollowing = !effectiveProfileFollowing(ref, subjectId);
+    syncProfileFollowIntent(
+      ref,
+      subAccountId: subjectId,
+      isFollowing: nextFollowing,
+    );
   }
 
   String _keywordForPost(PostBaseDto post) {
@@ -1073,6 +1065,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(postInteractionStateProvider);
+    ref.watch(userRelationshipStateProvider);
     final posts = _buildFeed();
     final currentPost = posts.isEmpty
         ? null
@@ -1132,6 +1126,15 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                       final prevPost =
                           posts[_currentPage.clamp(0, posts.length - 1)];
                       _flushDwell(prevPost);
+                      // Track skip: user swiped away from prevPost
+                      final enterTime = _pageEnterTime;
+                      final skipDwell = enterTime != null
+                          ? DateTime.now().difference(enterTime).inMilliseconds / 1000.0
+                          : null;
+                      ref.read(contentBehaviorTrackerProvider).trackSkip(
+                        prevPost.id,
+                        dwellSeconds: skipDwell,
+                      );
 
                       setState(() => _currentPage = index);
                       // Reset + restart the follow-button timer for the new post.
@@ -1240,20 +1243,29 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                     avatarUrl: currentPost.avatarUrl,
                     displayName: currentPost.displayName,
                     circleName: '',
-                    likeCount:
-                        _postLikesCount[currentPost.id] ??
-                        currentPost.likeCount,
-                    shareCount:
-                        _postSharesCount[currentPost.id] ??
-                        currentPost.shareCount,
-                    commentCount: currentPost.commentCount,
-                    isLiked: _likedPosts.contains(currentPost.id),
-                    isFollowing: _followingUsers.contains(
-                      currentPost.authorProfileSubjectId,
+                    likeCount: effectivePostLikeCount(
+                      ref,
+                      currentPost.id,
+                      fallback: currentPost.likeCount,
+                    ),
+                    shareCount: effectivePostShareCount(
+                      ref,
+                      currentPost.id,
+                      fallback: currentPost.shareCount,
+                    ),
+                    commentCount: effectivePostCommentCount(
+                      ref,
+                      currentPost.id,
+                      fallback: currentPost.commentCount,
+                    ),
+                    isLiked: effectivePostLiked(ref, currentPost.id),
+                    isFollowing: effectiveProfileFollowing(
+                      ref,
+                      currentPost.subAccountId,
                     ),
                     showFollowButton: _showFollowButton,
                     onUserTap: () => widget.onUserTap(
-                      currentPost.authorProfileSubjectId,
+                      currentPost.subAccountId,
                       avatarUrl: currentPost.avatarUrl,
                       displayName: currentPost.displayName,
                       backgroundUrl: currentPost.authorBackgroundUrl,
@@ -1376,7 +1388,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       ctx,
       template: template,
       onActionCompleted: (result) async {
-        _recordShare(post.id, result.actionId);
+        await _recordShare(post.id, result.actionId);
       },
     );
   }
@@ -1398,7 +1410,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       ),
     );
     if (result.success) {
-      _recordShare(post.id, result.actionId);
+      await _recordShare(post.id, result.actionId);
     }
   }
 
@@ -1426,16 +1438,21 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     );
   }
 
-  void _recordShare(String postId, String actionId) {
-    setState(() {
-      final rawShareCount =
-          (_rawPostById(postId)?[ContentPostImmersiveWireKeys.shareCount]
-                  as num?)
-              ?.toInt() ??
-          0;
-      final current = _postSharesCount[postId] ?? rawShareCount;
-      _postSharesCount[postId] = current + 1;
-    });
+  Future<void> _recordShare(String postId, String actionId) async {
+    final rawShareCount =
+        (_rawPostById(postId)?[ContentPostImmersiveWireKeys.shareCount] as num?)
+            ?.toInt() ??
+        0;
+    final baselineShareCount = effectivePostShareCount(
+      ref,
+      postId,
+      fallback: rawShareCount,
+    );
+    await syncPostShareIntent(
+      ref,
+      postId: postId,
+      baselineShareCount: baselineShareCount,
+    );
     ref
         .read(contentBehaviorTrackerProvider)
         .trackShare(postId, tags: <String>[actionId]);

@@ -30,7 +30,7 @@ func seedPersonaInviteHistory(t *testing.T, recordID, subAccountID, ownerID stri
 func TestGetPersonaLifecycleGuard_HistoryCoverageBySource(t *testing.T) {
 	cases := []struct {
 		name string
-		seed func(t *testing.T, profileSubjectID string)
+		seed func(t *testing.T, subAccountID string)
 	}{
 		{
 			name: "content_post",
@@ -118,10 +118,10 @@ func TestActivatePersona_Transaction(t *testing.T) {
 
 	var activeID string
 	_ = pgPool.QueryRow(context.Background(),
-		"SELECT id FROM personas WHERE user_id = $1 AND is_active = true",
+		"SELECT sub_account_id FROM personas WHERE user_id = $1 AND is_active = true",
 		"persona_user_2").Scan(&activeID)
-	if activeID != "pa_2" {
-		t.Errorf("expected active persona pa_2, got %s", activeID)
+	if activeID != "pa_2_sa" {
+		t.Errorf("expected active persona pa_2_sa, got %s", activeID)
 	}
 }
 

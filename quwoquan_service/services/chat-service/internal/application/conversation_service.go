@@ -63,17 +63,18 @@ type CreateConversationRequest struct {
 
 func (s *ConversationService) CreateConversation(ctx context.Context, req CreateConversationRequest) (*model.Conversation, error) {
 	now := time.Now()
+	req.Type = NormalizeConversationType(req.Type, req.CircleId)
 	maxGroupSize := req.MaxGroupSize
 	if maxGroupSize <= 0 {
 		switch req.Type {
-		case "direct", "encrypted":
+		case conversationTypeDirect, conversationTypeEncrypted:
 			maxGroupSize = 2
 		default:
 			maxGroupSize = 500
 		}
 	}
 	initialMemberIds := dedupeUserIDs(req.InitialMemberIds, req.CreatorId)
-	if req.Type == "group" && len(initialMemberIds)+1 > maxGroupSize {
+	if req.Type == conversationTypeGroup && len(initialMemberIds)+1 > maxGroupSize {
 		return nil, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
 			"群成员数量超过上限",
@@ -94,7 +95,7 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
-	if conv.Type == "group" || conv.Type == "circle" {
+	if IsGroupConversation(*conv) {
 		defaultAvatarURL := DefaultGroupAvatarURL()
 		if strings.TrimSpace(defaultAvatarURL) == "" {
 			return nil, rterr.NewAppError(
@@ -116,9 +117,6 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	}
 
 	creatorDN, creatorAV, creatorAssetID, creatorAvatarVersion := lookup(req.CreatorId)
-	if (conv.Type == "group" || conv.Type == "circle") && strings.TrimSpace(creatorAV) != "" {
-		conv.AvatarUrl = strings.TrimSpace(creatorAV)
-	}
 	creator := &model.ConversationMember{
 		ID:             generateID(),
 		ConversationId: conv.ID,
@@ -148,7 +146,6 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 			JoinedAt:       now.Add(time.Duration(i+1) * time.Millisecond),
 		})
 	}
-
 	creatorState := &model.ConversationUserState{
 		ID:             generateID(),
 		UserId:         req.CreatorId,
@@ -191,7 +188,7 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 				return err
 			}
 		}
-		if conv.Type == "group" || conv.Type == "circle" {
+		if IsGroupConversation(*conv) {
 			return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
 				ConversationID: conv.ID,
 				ActorID:        req.CreatorId,
@@ -248,7 +245,7 @@ func (s *ConversationService) DissolveConversation(ctx context.Context, req Diss
 	if err != nil {
 		return err
 	}
-	if conv.Type == "circle" {
+	if IsCircleBoundConversation(*conv) {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
 			"圈子群不可解散",

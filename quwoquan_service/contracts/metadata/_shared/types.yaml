@@ -32,6 +32,8 @@ enums:
   MediaStatus: [uploaded, processing, ready, failed]
   MediaType: [image, video, audio]
   MediaCoverStrategy: [first_frame, manual]
+  MediaAssetScope: [draft, published, cold_start]
+  MediaAssetSourceKind: [user_upload, ai_generated, cold_start_crawl, remote_import]
   UserStatus: [active, suspended, deleted]
   Gender: [male, female, other, unspecified]
   ConversationType: [direct, group, circle, encrypted]

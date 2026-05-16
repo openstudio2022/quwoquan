@@ -20,7 +20,7 @@ alwaysApply: false
 - 作者主页必须遵循 `iosProfileSurface`、`feedMaxContentWidth`、`profileHeaderBaseHeightRatio`、`profileHeaderMaxStretchHeightRatio` 这组资料页语义，不允许再做第二套白色层级。
 - 沉浸式浏览器规则固定：指示器在文字之上、最多 `6` 个点、当前点与其它点共线；文章不显示媒体页码；“我的 post” 底栏隐藏作者/关注并使用三等分同行操作。
 - 全局浮层分型固定：全局搜索是唯一允许的全屏全局浮层；创作、更多功能、评论、联系人选择等必须是贴底非全屏面板，保留上半屏上下文，并统一复用 `ColorType.modalScrim`、`createEntrySheetHandle*`、`modalSheetMaxHeightRatio` 语义。
-- **贴底对话态 Sheet**（选项表、说明列表、更多菜单）：`MUST` 使用 `AppBottomModalSurface` + `SettingsSemanticConstants.conversationSheet*`；标准互斥选择优先 `showAppActionSheet` 或 `ConversationSheet*` 积木（`lib/core/widgets/conversation_sheet.dart`）。**禁止**新建裸 `showCupertinoModalPopup` 自绘第二套白卡灰底；新调用须在 `scripts/conversation_sheet_manifest.yaml` 登记。全屏设置页仍走 `SettingsInsetFormPageScaffold`（`specs/ux/page-layout-semantics.md` §4.3 vs §4.4）。
+- **贴底对话态 Sheet**（选项表、说明列表、更多菜单）：`MUST` 使用 `AppBottomModalSurface` + `SettingsSemanticConstants.conversationSheet*`；标准互斥选择优先 `showAppActionSheet` 或 `ConversationSheet*` 积木（`lib/core/widgets/conversation_sheet.dart`）。**禁止**新建裸 `showCupertinoModalPopup` 自绘第二套白卡灰底；新调用须在 `quwoquan_app/scripts/chat/conversation_sheet_manifest.yaml` 登记。全屏设置页仍走 `SettingsInsetFormPageScaffold`（`specs/ux/page-layout-semantics.md` §4.3 vs §4.4）。
 - 自适应边界：大屏只允许放大留白、节奏、芯片宽度和内容最大宽度，不允许新造一套视觉语言；小屏只允许收紧密度，不允许破坏 44x44 触控热区和文字可读性。
 - 流程门禁：涉及视觉、导航、断点、surface 的改动时，`/prd` 必须补双模式矩阵与组件级响应式 token 表，`/design` 必须补 token 映射并执行 `make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app`，`/dev` 与 `/verify` 至少执行 `cd quwoquan_app && flutter analyze`、相关 `flutter test`，提交前通过 `make gate`，全量交付通过 `make gate-full`。
 - 如功能需求与本规则冲突，先更新 `specs/02_IOS_NATIVE_FRONTEND_UX_SPEC.md`，再更新代码。

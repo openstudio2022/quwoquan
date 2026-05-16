@@ -84,26 +84,55 @@ const (
 
 // BehaviorSignal represents a user behavior event for hot path processing.
 type BehaviorSignal struct {
-	UserID    string    `json:"userId"`
-	SessionID string    `json:"sessionId"`
-	ContentID string    `json:"contentId"`
-	Action    string    `json:"action"`
-	Tags      []string  `json:"tags,omitempty"`
-	Duration  float64   `json:"duration,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	UserID          string    `json:"userId"`
+	SessionID       string    `json:"sessionId"`
+	ContentID       string    `json:"contentId"`
+	Action          string    `json:"action"`
+	Tags            []string  `json:"tags,omitempty"`
+	Duration        float64   `json:"duration,omitempty"`
+	Timestamp       time.Time `json:"timestamp"`
+	AuthorID        string    `json:"authorId,omitempty"`
+	ReferralSource  string    `json:"referralSource,omitempty"`
+	EngagementDepth int       `json:"engagementDepth,omitempty"`
+	ConsumedRatio   float64   `json:"consumedRatio,omitempty"`
+	TotalUnits      int       `json:"totalUnits,omitempty"`
+	EntityRefs      []string  `json:"entityRefs,omitempty"`
 }
 
 // Signal weights per action type — tunable via runtime/experiments.
 var SignalWeights = map[string]float64{
-	"impression": 0.1,
-	"click":      0.5,
-	"dwell":      1.0,
-	"like":       2.0,
-	"favorite":   3.0,
-	"share":      3.0,
-	"dislike":    -5.0,
-	"report":     -10.0,
+	"impression":    0.1,
+	"click":         0.5,
+	"dwell":         1.0,
+	"like":          2.0,
+	"favorite":      3.0,
+	"share":         3.0,
+	"dislike":       -5.0,
+	"report":        -10.0,
+	"skip":          -0.3,
+	"comment":       2.5,
+	"follow":        4.0,
+	"author_view":   1.5,
+	"tag_click":     1.8,
+	"play_progress": 1.0,
+	"content_depth": 1.0,
 }
+
+// ReferralSourceMultiplier maps referral sources to tag weight multipliers.
+var ReferralSourceMultiplier = map[string]float64{
+	"organic_feed":      1.0,
+	"friend_share":      1.5,
+	"chat_link":         1.8,
+	"circle_post":       1.3,
+	"author_profile":    1.2,
+	"entity_page":       1.2,
+	"search":            2.0,
+	"push_notification": 0.8,
+	"deep_link":         0.5,
+}
+
+// DepthLevelCoefficient maps engagementDepth level (0-4) to tag weight coefficient.
+var DepthLevelCoefficient = [5]float64{0.0, 0.3, 0.7, 1.2, 2.0}
 
 // HotPath manages session-level recommendation state in Redis.
 type HotPath struct {
@@ -129,6 +158,7 @@ func sessionKey(userID, sessionID string) string {
 }
 
 // ProcessSignal updates session-level state from a behavior signal.
+// Tag weight is computed as: baseWeight × depthCoefficient × referralMultiplier
 func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) error {
 	sk := sessionKey(signal.UserID, signal.SessionID)
 
@@ -136,20 +166,46 @@ func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) erro
 		return err
 	}
 
-	weight := SignalWeights[signal.Action]
-	if weight < 0 {
+	baseWeight := SignalWeights[signal.Action]
+	if baseWeight < 0 {
 		if err := h.addNegative(ctx, sk, signal.ContentID); err != nil {
 			return err
 		}
 	}
 
+	effectiveWeight := computeEffectiveTagWeight(baseWeight, signal.EngagementDepth, signal.ReferralSource)
+
 	if len(signal.Tags) > 0 {
-		if err := h.updateTagWeights(ctx, sk, signal.Tags, weight); err != nil {
+		if err := h.updateTagWeights(ctx, sk, signal.Tags, effectiveWeight); err != nil {
 			return err
 		}
 	}
 
 	return h.updateInterest(ctx, sk, signal)
+}
+
+// computeEffectiveTagWeight applies depth and referral source multipliers.
+// Formula: baseWeight × depthCoefficient[depth] × referralMultiplier[source]
+// When depth is 0 (unset / pre-existing), coefficient defaults to 1.0 (no suppression).
+// Only depth > 0 applies the DepthLevelCoefficient lookup.
+func computeEffectiveTagWeight(baseWeight float64, depth int, referralSource string) float64 {
+	if baseWeight <= 0 {
+		return baseWeight
+	}
+
+	depthCoeff := 1.0
+	if depth > 0 && depth < len(DepthLevelCoefficient) {
+		depthCoeff = DepthLevelCoefficient[depth]
+	}
+
+	sourceMultiplier := 1.0
+	if referralSource != "" {
+		if m, ok := ReferralSourceMultiplier[referralSource]; ok {
+			sourceMultiplier = m
+		}
+	}
+
+	return baseWeight * depthCoeff * sourceMultiplier
 }
 
 // ProcessSignalBatch processes multiple signals concurrently.

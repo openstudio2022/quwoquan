@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -38,21 +39,32 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
     if (widget.initialExtra != null) {
       _posts = widget.initialExtra!.posts;
       _isLoading = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        primeMediaViewerInteractionSnapshot(
+          ref,
+          widget.initialExtra!.interactionSnapshot,
+        );
+      });
     } else {
       _loadData();
     }
   }
 
   int get _safeInitialIndex =>
-      (widget.initialExtra?.initialIndex ?? widget.initialIndex)
-          .clamp(0, _posts.isNotEmpty ? _posts.length - 1 : 0);
+      (widget.initialExtra?.initialIndex ?? widget.initialIndex).clamp(
+        0,
+        _posts.isNotEmpty ? _posts.length - 1 : 0,
+      );
 
   Future<void> _loadData() async {
     try {
-      final dtos = await ref.read(contentRepositoryProvider).listDiscoveryFeed(
-            category: 'video',
-            limit: 50,
-          );
+      final dtos = await ref
+          .read(contentRepositoryProvider)
+          .listDiscoveryFeed(category: 'video', limit: 50);
+      applyConfirmedInteractionPosts(ref, dtos);
       _posts = dtos
           .map(
             (dto) => PostSummaryView.fromDto(
@@ -68,16 +80,24 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(postInteractionStateProvider);
+    ref.watch(userRelationshipStateProvider);
     final isDark = ref.watch(isDarkProvider);
     if (_isLoading) {
       return AppScaffold(
-        backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        backgroundColor: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundPrimary,
+        ),
         child: const Center(child: CupertinoActivityIndicator()),
       );
     }
     if (!_isOpen || _posts.isEmpty) {
       return AppScaffold(
-        backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        backgroundColor: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundPrimary,
+        ),
         child: Center(
           child: CupertinoButton(
             onPressed: () => context.pop(),
@@ -87,37 +107,43 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
       );
     }
 
-    final discoveryState = ref.watch(discoveryStateProvider);
     final feedCategory = widget.initialExtra?.category;
-    final isMoment = widget.initialExtra?.category == 'moment' || widget.initialExtra?.category == 'profile_moment';
+    final isMoment =
+        widget.initialExtra?.category == 'moment' ||
+        widget.initialExtra?.category == 'profile_moment';
     if (feedCategory != null && feedCategory.isNotEmpty) {
-      ref.listen<AsyncValue<DiscoveryFeedState>>(discoveryFeedProvider(feedCategory), (prev, next) {
-        final value = next.value;
-        if (value != null && value.items.length > _posts.length && mounted) {
-          setState(() {
-            _posts = value.items
-                .map(
-                  (dto) => PostSummaryView.fromDto(
-                    dto,
-                    surfaceId: PostReadSurfaceId.detailVideo,
-                  ),
-                )
-                .toList(growable: false);
-          });
-        }
-      });
+      ref.listen<AsyncValue<DiscoveryFeedState>>(
+        discoveryFeedProvider(feedCategory),
+        (prev, next) {
+          final value = next.value;
+          if (value != null && value.items.length > _posts.length && mounted) {
+            setState(() {
+              _posts = value.items
+                  .map(
+                    (dto) => PostSummaryView.fromDto(
+                      dto,
+                      surfaceId: PostReadSurfaceId.detailVideo,
+                    ),
+                  )
+                  .toList(growable: false);
+            });
+          }
+        },
+      );
     }
 
-    final mediaItems = _posts.map<MediaItem>((post) {
-      final videoUrl = post.videoUrl ?? '';
-      return MediaItem(
-        type: 'video',
-        url: videoUrl.isNotEmpty
-            ? videoUrl
-            : 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
-        aspectRatio: post.videoType == 'vertical' ? 9 / 16 : 16 / 9,
-      );
-    }).toList(growable: false);
+    final mediaItems = _posts
+        .map<MediaItem>((post) {
+          final videoUrl = post.videoUrl ?? '';
+          return MediaItem(
+            type: 'video',
+            url: videoUrl.isNotEmpty
+                ? videoUrl
+                : 'https://flutter.github.io/assets-for-api-docs/assets/videos/butterfly.mp4',
+            aspectRatio: post.videoType == 'vertical' ? 9 / 16 : 16 / 9,
+          );
+        })
+        .toList(growable: false);
 
     return ImmersiveVideoViewer(
       isOpen: _isOpen,
@@ -140,28 +166,71 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
           ),
         );
       },
-      followingUsers: discoveryState.followingUsers,
-      onFollowClick: (username, _) =>
-          ref.read(discoveryStateProvider.notifier).toggleFollow(username),
-      likedPosts: discoveryState.likedPosts,
-      savedPosts: discoveryState.savedPosts,
+      followingUsers: ref
+          .watch(userRelationshipStateProvider)
+          .followingSubAccountIds,
+      onFollowClick: (subAccountId, _) => syncProfileFollowIntent(
+        ref,
+        subAccountId: subAccountId,
+        isFollowing: !effectiveProfileFollowing(ref, subAccountId),
+      ),
+      likedPosts: ref.watch(postInteractionStateProvider).likedPostIds,
+      savedPosts: ref.watch(postInteractionStateProvider).savedPostIds,
       getPostLikesCount: (post) {
-        final n = discoveryState.getPostLikesCount(post.id);
-        return n > 0 ? n : post.likesCount;
+        return effectivePostLikeCount(ref, post.id, fallback: post.likesCount);
       },
       getPostBookmarksCount: (post) {
-        final n = discoveryState.getPostBookmarksCount(post.id);
-        return n > 0 ? n : post.savesCount;
+        return effectivePostBookmarkCount(
+          ref,
+          post.id,
+          fallback: post.savesCount,
+        );
+      },
+      getPostCommentsCount: (post) {
+        return effectivePostCommentCount(
+          ref,
+          post.id,
+          fallback: post.commentsCount,
+        );
+      },
+      getPostSharesCount: (post) {
+        return effectivePostShareCount(
+          ref,
+          post.id,
+          fallback: post.sharesCount,
+        );
       },
       onLikeClick: (post) {
-        ref
-            .read(discoveryStateProvider.notifier)
-            .toggleLike(post.id, baseLikesCount: post.likesCount);
+        final wasLiked = effectivePostLiked(ref, post.id);
+        final currentLikeCount = effectivePostLikeCount(
+          ref,
+          post.id,
+          fallback: post.likesCount,
+        );
+        syncPostLikeIntent(
+          ref,
+          postId: post.id,
+          isLiked: !wasLiked,
+          likeCount: wasLiked
+              ? (currentLikeCount - 1).clamp(0, 1 << 31).toInt()
+              : currentLikeCount + 1,
+        );
       },
       onSaveClick: (post) {
-        ref
-            .read(discoveryStateProvider.notifier)
-            .toggleSave(post.id, baseBookmarksCount: post.savesCount);
+        final wasSaved = effectivePostSaved(ref, post.id);
+        final currentBookmarkCount = effectivePostBookmarkCount(
+          ref,
+          post.id,
+          fallback: post.savesCount,
+        );
+        syncPostSaveIntent(
+          ref,
+          postId: post.id,
+          isSaved: !wasSaved,
+          bookmarkCount: wasSaved
+              ? (currentBookmarkCount - 1).clamp(0, 1 << 31).toInt()
+              : currentBookmarkCount + 1,
+        );
       },
       onAssistantClick: () {
         final target = VisitTarget.page('discovery_video');
@@ -177,7 +246,9 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
         );
       },
       onNearEnd: feedCategory != null && feedCategory.isNotEmpty
-          ? () => ref.read(discoveryFeedMapProvider.notifier).appendNextPage(feedCategory)
+          ? () => ref
+                .read(discoveryFeedMapProvider.notifier)
+                .appendNextPage(feedCategory)
           : null,
     );
   }

@@ -81,5 +81,5 @@ test_automation:
       - "UAT-CHAT-REMOTE-SWITCH-001"
       - "UAT-DISCOVERY-ORCH-FEED-001"
     automation:
-      - "scripts/gate_repo.sh --scope app"
-      - "scripts/gate_repo.sh --scope service"
+      - "agent_ops/gate/gate_repo.sh --scope app"
+      - "agent_ops/gate/gate_repo.sh --scope service"

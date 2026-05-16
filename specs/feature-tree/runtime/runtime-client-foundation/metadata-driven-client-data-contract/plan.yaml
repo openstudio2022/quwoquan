@@ -57,16 +57,16 @@ slices:
     outputs:
       - specs/gates/metadata_driven_ui_gap_inventory.yaml
     tests:
-      - python3 scripts/verify_metadata_driven_ui_gate.py
+      - python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
     dev_status: partial
     dev_note: 本切片完成「全页面路径 ⊆ 清单」登记；各页 DTO 化仍分域迭代
 
   - id: slice-5-optional-static-gate
     title: verify_metadata_driven_ui_gate.py — 清单路径存在性 + 可选 STRICT current_map
     outputs:
-      - scripts/verify_metadata_driven_ui_gate.py
-      - scripts/gate_repo.sh
+      - quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
+      - agent_ops/gate/gate_repo.sh
     tests:
-      - python3 scripts/verify_metadata_driven_ui_gate.py
+      - python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
       - make gate
     dev_status: implemented

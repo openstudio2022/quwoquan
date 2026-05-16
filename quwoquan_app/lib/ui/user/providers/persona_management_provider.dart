@@ -97,7 +97,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
       );
       await _reloadAfterMutation();
       await _track('create_succeeded', <String, dynamic>{
-        'personaId': created.subAccountId,
+        'subAccountId': created.subAccountId,
       });
       return created;
     } catch (e) {
@@ -112,13 +112,13 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     }
   }
 
-  Future<void> activatePersona(String personaId) async {
+  Future<void> activatePersona(String subAccountId) async {
     state = state.copyWith(isMutating: true, error: () => null);
     try {
-      await _repo.activatePersona(personaId);
+      await _repo.activatePersona(subAccountId);
       await _reloadAfterMutation();
       await _track('activate_succeeded', <String, dynamic>{
-        'personaId': personaId,
+        'subAccountId': subAccountId,
       });
     } catch (e) {
       await _track('activate_failed', <String, dynamic>{
@@ -133,7 +133,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
   }
 
   Future<PersonaManagementItemViewData?> updatePersona(
-    String personaId, {
+    String subAccountId, {
     String? displayName,
     String? userHandle,
     String? phone,
@@ -150,7 +150,7 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     ];
     try {
       final updated = await _repo.updatePersona(
-        personaId,
+        subAccountId,
         displayName: displayName,
         userHandle: userHandle,
         phone: phone,
@@ -172,14 +172,14 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     }
   }
 
-  Future<PersonaLifecycleGuardViewData> getLifecycleGuard(String personaId) {
-    return _repo.getPersonaLifecycleGuard(personaId);
+  Future<PersonaLifecycleGuardViewData> getLifecycleGuard(String subAccountId) {
+    return _repo.getPersonaLifecycleGuard(subAccountId);
   }
 
-  Future<void> deletePersona(String personaId) async {
+  Future<void> deletePersona(String subAccountId) async {
     state = state.copyWith(isMutating: true, error: () => null);
     try {
-      await _repo.deleteEmptyPersona(personaId);
+      await _repo.deleteEmptyPersona(subAccountId);
       await _reloadAfterMutation();
     } catch (e) {
       await _track('delete_blocked', <String, dynamic>{
@@ -193,14 +193,14 @@ class PersonaManagementNotifier extends Notifier<PersonaManagementState> {
     }
   }
 
-  Future<void> retirePersona(String personaId) async {
+  Future<void> retirePersona(String subAccountId) async {
     state = state.copyWith(isMutating: true, error: () => null);
     try {
-      await _repo.retirePersona(personaId);
+      await _repo.retirePersona(subAccountId);
       await _track('retired_count', <String, dynamic>{'retiredCount': 1});
       await _reloadAfterMutation();
       await _track('retire_succeeded', <String, dynamic>{
-        'personaId': personaId,
+        'subAccountId': subAccountId,
       });
     } catch (e) {
       state = state.copyWith(

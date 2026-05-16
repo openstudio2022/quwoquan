@@ -41,10 +41,10 @@ abstract class AuthRepository {
   });
 
   /// 激活指定分身（自动停用其他）。
-  Future<void> activatePersona(String personaId);
+  Future<void> activatePersona(String subAccountId);
 
   /// 删除分身（最后一个禁止删除）。
-  Future<void> deletePersona(String personaId);
+  Future<void> deletePersona(String subAccountId);
 }
 
 class MockAuthRepository implements AuthRepository {
@@ -60,7 +60,6 @@ class MockAuthRepository implements AuthRepository {
       'refreshToken': 'mock_refresh',
       'ownerId': 'mock_owner_id',
       'activeSub': <String, dynamic>{
-        'profileSubjectId': 'mock_sub_id',
         'subAccountId': 'mock_sub_id',
       },
       'subAccountCount': 1,
@@ -95,7 +94,6 @@ class MockAuthRepository implements AuthRepository {
     return [
       PersonaManagementItemViewData.fromMap(<String, dynamic>{
         'id': 'mock_persona_1',
-        'personaId': 'mock_persona_1',
         'subAccountId': 'mock_persona_1',
         'displayName': '默认分身',
         'isolationLevel': 'open',
@@ -112,7 +110,6 @@ class MockAuthRepository implements AuthRepository {
   }) async {
     return PersonaManagementItemViewData.fromMap(<String, dynamic>{
       'id': 'mock_persona_new',
-      'personaId': 'mock_persona_new',
       'subAccountId': 'mock_persona_new',
       'displayName': displayName,
       'isolationLevel': isolationLevel,
@@ -122,10 +119,10 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> activatePersona(String personaId) async {}
+  Future<void> activatePersona(String subAccountId) async {}
 
   @override
-  Future<void> deletePersona(String personaId) async {}
+  Future<void> deletePersona(String subAccountId) async {}
 }
 
 class RemoteAuthRepository implements AuthRepository {
@@ -277,18 +274,18 @@ class RemoteAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<void> activatePersona(String personaId) async {
+  Future<void> activatePersona(String subAccountId) async {
     await _client.postJson(
-      _uri(UserApiMetadata.activatePersonaPath(personaId: personaId)),
+      _uri(UserApiMetadata.activatePersonaPath(subAccountId: subAccountId)),
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),
       body: {},
     );
   }
 
   @override
-  Future<void> deletePersona(String personaId) async {
+  Future<void> deletePersona(String subAccountId) async {
     await _client.deleteJson(
-      _uri(UserApiMetadata.deleteEmptyPersonaPath(personaId: personaId)),
+      _uri(UserApiMetadata.deleteEmptyPersonaPath(subAccountId: subAccountId)),
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.deleteEmptyPersona),
     );
   }

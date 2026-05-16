@@ -21,7 +21,6 @@ void main() {
     'postId': 'ph1',
     'contentType': 'image',
     'authorId': 'auth1',
-    'authorProfileSubjectId': 'auth1',
     'displayName': '摄影师',
     'authorAvatarUrl': 'https://example.com/avatar.jpg',
     'coverUrl': 'https://example.com/cover.jpg',
@@ -42,7 +41,6 @@ void main() {
     'postId': 'vd1',
     'contentType': 'video',
     'authorId': 'vauth1',
-    'authorProfileSubjectId': 'vauth1',
     'displayName': '视频创作者',
     'authorAvatarUrl': 'https://example.com/vavatar.jpg',
     'videoUrl': 'https://example.com/video.mp4',
@@ -61,7 +59,6 @@ void main() {
     'postId': 'art1',
     'contentType': 'article',
     'authorId': 'writer1',
-    'authorProfileSubjectId': 'writer1',
     'displayName': '技术作者',
     'authorAvatarUrl': 'https://example.com/wavatar.jpg',
     'title': '2026年技术趋势',
@@ -334,11 +331,7 @@ void main() {
       for (final item in ContentMockData.discoveryPhotoData) {
         final raw = item.toDiscoveryWireMap();
         final r = projectPostMap(raw);
-        expect(
-          r.id,
-          isNotEmpty,
-          reason: 'photo postId=${item.id} 的 id 不得为空',
-        );
+        expect(r.id, isNotEmpty, reason: 'photo postId=${item.id} 的 id 不得为空');
         expect(
           r.authorId,
           isNotEmpty,
@@ -353,8 +346,7 @@ void main() {
         expect(
           r.likesCount,
           equals(rawLikes),
-          reason:
-              'photo postId=${item.id} 的 likesCount 与原始数据不一致（0→1 bug）',
+          reason: 'photo postId=${item.id} 的 likesCount 与原始数据不一致（0→1 bug）',
         );
       }
     });
@@ -377,8 +369,7 @@ void main() {
         expect(
           r.likesCount,
           equals(rawLikes),
-          reason:
-              'video postId=${item.id} 的 likesCount 与原始数据不一致（0→1 bug）',
+          reason: 'video postId=${item.id} 的 likesCount 与原始数据不一致（0→1 bug）',
         );
       }
     });
@@ -612,7 +603,10 @@ void main() {
             ArticleCardWireKeys.imageUrl: 'https://example.com/ssot-card.jpg',
           },
         ];
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_cards_keys');
+      final r = projectArticleDetailView(
+        raw,
+        fallbackArticleId: 'fb_cards_keys',
+      );
       expect(r.contentBlocks, hasLength(1));
       expect(r.contentBlocks.first.type, equals('section'));
       expect(r.contentBlocks.first.title, equals('SSOT 小节'));
@@ -622,39 +616,26 @@ void main() {
       );
     });
 
-    test('articleDocument canonical 优先投射为连续内容块与分页首页', () {
+    test('articleMarkdown canonical 优先投射为连续内容块与分页首页', () {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['title'] = '旧标题'
         ..['body'] = '分发摘要正文'
         ..['cards'] = <Map<String, dynamic>>[]
         ..['articleBlocks'] = <Map<String, dynamic>>[]
-        ..['articleDocument'] = <String, dynamic>{
-          'title': '连续文档标题',
-          'body': '前言段落\n结尾段落',
+        ..['articleMarkdown'] =
+            '---\ntitle: 连续文档标题\ntemplate: journal\nfontPreset: clean\n---\n\n# 连续文档标题\n\n## 章节一\n\n图旁正文\n\n:::figure id="hero" layout="wrapRight" caption="文档配图"\nasset://hero\n:::\n'
+        ..['articleAssetManifest'] = <String, dynamic>{
           'assets': <Map<String, dynamic>>[
-            {
-              'id': 'asset_1',
-              'offset': 4,
-              'imageUrl': 'https://example.com/doc.jpg',
-              'imageLayout': 'wrapRight',
-              'caption': '文档配图',
-            },
+            {'assetId': 'hero', 'objectKey': 'https://example.com/doc.jpg'},
           ],
-          'blocks': <Map<String, dynamic>>[
-            {'id': 'h2_1', 'type': 'heading2', 'offset': 0, 'text': '章节一'},
-            {
-              'id': 'img_1',
-              'type': 'image',
-              'offset': 5,
-              'imageUrl': 'https://example.com/doc.jpg',
-              'imageLayout': 'wrapRight',
-            },
-            {'id': 'p_1', 'type': 'paragraph', 'offset': 6, 'text': '图旁正文'},
-          ],
+        }
+        ..['articleRenderProfile'] = <String, dynamic>{
+          'template': 'journal',
+          'fontPreset': 'clean',
         };
       final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_document');
       expect(r.document.title, equals('连续文档标题'));
-      expect(r.documentSource, ArticleDetailDocumentSource.articleDocument);
+      expect(r.documentSource, ArticleDetailDocumentSource.markdown);
       expect(r.contentBlocks, isNotEmpty);
       expect(r.contentBlocks.first.type, equals('heading_2'));
       expect(r.title, equals('连续文档标题'));
@@ -663,7 +644,7 @@ void main() {
         r.contentBlocks.any(
           (block) =>
               block.type == 'wrapped_paragraph' &&
-              block.imageUrl == 'https://example.com/doc.jpg',
+              block.imageUrl == 'asset://hero',
         ),
         isTrue,
       );
@@ -672,14 +653,14 @@ void main() {
     });
 
     test(
-      'article canonical fallback fixtures 覆盖 articleDocument/articleBlocks/cards/body 四条链路',
+      'article canonical fallback fixtures 覆盖 markdown/articleBlocks/cards/body 四条链路',
       () {
         final fixtures = ContentMockData.articleCanonicalFallbackFixtures;
         expect(fixtures, hasLength(4));
         final expectedSources = <String, ArticleDetailDocumentSource>{
-          'article_document_only_fixture':
-              ArticleDetailDocumentSource.articleDocument,
-          'article_blocks_only_fixture': ArticleDetailDocumentSource.articleBlocks,
+          'article_markdown_only_fixture': ArticleDetailDocumentSource.markdown,
+          'article_blocks_only_fixture':
+              ArticleDetailDocumentSource.articleBlocks,
           'article_cards_only_fixture': ArticleDetailDocumentSource.cards,
           'article_body_only_fixture': ArticleDetailDocumentSource.body,
         };

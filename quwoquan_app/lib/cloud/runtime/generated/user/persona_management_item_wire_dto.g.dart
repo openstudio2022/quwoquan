@@ -3,7 +3,6 @@
 
 class PersonaManagementItemWireDto {
   final String subAccountId;
-  final String profileSubjectId;
   final String displayName;
   final String userHandle;
   final String phone;
@@ -26,7 +25,6 @@ class PersonaManagementItemWireDto {
 
   PersonaManagementItemWireDto({
     this.subAccountId = '',
-    this.profileSubjectId = '',
     this.displayName = '',
     this.userHandle = '',
     this.phone = '',
@@ -50,8 +48,7 @@ class PersonaManagementItemWireDto {
 
   factory PersonaManagementItemWireDto.fromMap(Map<String, dynamic> m) {
     return PersonaManagementItemWireDto(
-      subAccountId: m['subAccountId']?.toString() ?? m['personaId']?.toString() ?? m['id']?.toString() ?? '',
-      profileSubjectId: m['profileSubjectId']?.toString() ?? m['subAccountId']?.toString() ?? '',
+      subAccountId: m['subAccountId']?.toString() ?? m['id']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['nickname']?.toString() ?? '',
       userHandle: m['userHandle']?.toString() ?? '',
       phone: m['phone']?.toString() ?? '',
@@ -77,7 +74,6 @@ class PersonaManagementItemWireDto {
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'subAccountId': subAccountId,
-      'profileSubjectId': profileSubjectId,
       'displayName': displayName,
       'userHandle': userHandle,
       'phone': phone,
@@ -102,7 +98,6 @@ class PersonaManagementItemWireDto {
 
   PersonaManagementItemWireDto copyWith({
     String? subAccountId,
-    String? profileSubjectId,
     String? displayName,
     String? userHandle,
     String? phone,
@@ -125,7 +120,6 @@ class PersonaManagementItemWireDto {
   }) {
     return PersonaManagementItemWireDto(
       subAccountId: subAccountId ?? this.subAccountId,
-      profileSubjectId: profileSubjectId ?? this.profileSubjectId,
       displayName: displayName ?? this.displayName,
       userHandle: userHandle ?? this.userHandle,
       phone: phone ?? this.phone,

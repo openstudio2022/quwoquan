@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "topic_id": { "type": "string" },
+    "canonicalName": { "type": "string" },
+    "entityType": { "type": "string" },
+    "lat": { "type": "number" },
+    "lon": { "type": "number" },
+    "region": { "type": "string" },
+    "source": { "type": "string" }
+  },
+  "required": ["topic_id", "canonicalName", "entityType"]
+}

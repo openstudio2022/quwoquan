@@ -16,8 +16,8 @@ artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/metadata-driven-client-data-contract/explore-baseline-readiness-20260329.md
   - specs/gates/metadata_driven_ui_gap_inventory.yaml
   - specs/feature-tree/tree_index.yaml
-  - scripts/verify_metadata_driven_ui_gate.py
-  - scripts/gate_repo.sh
+  - quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
+  - agent_ops/gate/gate_repo.sh
   - quwoquan_app/lib/cloud/services/chat/chat_repository.dart
   - quwoquan_app/lib/components/content/media_post_card.dart
 dev_log:
@@ -45,17 +45,17 @@ dev_log:
     date: "2026-03-29"
     change: metadata_driven_ui_gap_inventory.yaml 扩展至矩阵基线全路径登记。
     verify:
-      - python3 scripts/verify_metadata_driven_ui_gate.py
+      - python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
   - slice: slice-5-gate
     date: "2026-03-29"
     change: gate_repo.sh 调用 verify_metadata_driven_ui_gate.py。
     verify:
-      - python3 scripts/verify_metadata_driven_ui_gate.py
+      - python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
   - slice: slice-6-explore-archive
     date: "2026-03-29"
     change: |
       explore-baseline-readiness-20260329.md；spec 覆盖矩阵交叉引用 page-horizontal-quality；
       page-horizontal-quality-spec P2 与清单映射；矩阵 P2 列按 inventory 回写。
     verify:
-      - python3 scripts/verify_metadata_driven_ui_gate.py
-      - python3 scripts/verify_page_horizontal_quality_matrix.py
+      - python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
+      - python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py

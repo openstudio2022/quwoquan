@@ -16,7 +16,7 @@
   - `scripts/verify_topology_contract_regression.sh`
 - [x] 回滚演练记录
   - `deploy/service/config-release/reports/2026-02-27-config-release-drill.md`
-  - `scripts/config_release_rollback.sh` idempotent rollback
+  - `agent_ops/deploy/prod/config_release_rollback.sh` idempotent rollback
 - [x] 拓扑影响报告
   - `scripts/report_deployment_mapping_impact.sh` (base-aware impact diff)
 

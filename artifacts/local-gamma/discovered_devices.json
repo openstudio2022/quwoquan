@@ -1,0 +1,23 @@
+{
+  "capturedAt": "2026-05-12T19:21:42.174053Z",
+  "suite": "gamma-patrol-matrix",
+  "requestedEnvironments": [
+    "local-gamma"
+  ],
+  "deviceCount": 1,
+  "devices": [
+    {
+      "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+      "name": "iPhone 17 Pro",
+      "targetPlatform": "ios",
+      "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
+      "emulator": true,
+      "ephemeral": false
+    }
+  ],
+  "extra": {
+    "target": "test/patrol/discovery/feed_load_test.dart",
+    "platform": "all",
+    "reportPath": "artifacts/local-gamma/t4_report.json"
+  }
+}

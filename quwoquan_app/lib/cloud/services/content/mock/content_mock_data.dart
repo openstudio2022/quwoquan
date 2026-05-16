@@ -18,7 +18,8 @@ class ContentMockData {
 
   static final Map<String, String> _circleNameById = {
     CircleMockData.primaryCircleDto.id: CircleMockData.primaryCircleDto.name,
-    for (final circle in CircleMockData.catalogCircleDtos) circle.id: circle.name,
+    for (final circle in CircleMockData.catalogCircleDtos)
+      circle.id: circle.name,
   };
 
   static const Map<String, List<String>> _circleIdsByPostId = {
@@ -88,7 +89,7 @@ class ContentMockData {
         .toList(growable: false);
   }
 
-  static Map<String, dynamic> _buildArticleDocument({
+  static Map<String, dynamic> _buildArticleMarkdownSource({
     required String title,
     required String intro,
     required String heading,
@@ -142,10 +143,21 @@ class ContentMockData {
     if (trimmed.isEmpty) return null;
     try {
       final row = discoveryArticleData.firstWhere((a) => a.id == trimmed);
+      final title = row.title ?? '';
+      final summary = row.summary ?? row.body ?? '';
+      final markdown =
+          '---\ntitle: $title\nsummary: $summary\ntemplate: ${row.articleTemplate ?? 'journal'}\nfontPreset: ${row.articleFontPreset ?? 'clean'}\n---\n\n# $title\n\n$summary\n';
       return <String, dynamic>{
         ...row.toDiscoveryWireMap(),
         'id': row.id,
         'type': 'article',
+        'articleMarkdown': markdown,
+        'articleMarkdownVersion': 'qwq-rich-md/1',
+        'articleAssetManifest': const <String, dynamic>{'assets': []},
+        'articleRenderProfile': <String, dynamic>{
+          'template': row.articleTemplate ?? 'journal',
+          'fontPreset': row.articleFontPreset ?? 'clean',
+        },
       };
     } catch (_) {
       return null;
@@ -162,7 +174,7 @@ class ContentMockData {
     required String summary,
     required String articleTemplate,
     required String articleFontPreset,
-    required Map<String, dynamic> articleDocument,
+    required Map<String, dynamic> articleMarkdownSource,
     required int likeCount,
     required int commentCount,
     required int favoriteCount,
@@ -189,7 +201,15 @@ class ContentMockData {
       'articleTemplate': articleTemplate,
       'articleFontPreset': articleFontPreset,
       'articlePresentationVersion': 1,
-      'articleDocument': articleDocument,
+      'articleMarkdownDigest': 'mock-md:$postId',
+      'articleRenderProfile': <String, dynamic>{
+        'template': articleTemplate,
+        'fontPreset': articleFontPreset,
+        'layoutPolicy': const <String, Object?>{
+          'wrapDowngrade': 'compactWidthToFullWidth',
+          'galleryDowngrade': 'singleColumn',
+        },
+      },
       'likeCount': likeCount,
       'commentCount': commentCount,
       'favoriteCount': favoriteCount,
@@ -631,7 +651,7 @@ class ContentMockData {
       summary: '服务端组件把获取数据前移，Edge Runtime 让首屏和交互都更轻更快。',
       articleTemplate: 'tech',
       articleFontPreset: 'mono',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '2024年现代Web开发趋势：从服务端组件到边缘计算',
         intro: '服务端组件正在把前端从“先拿数据再渲染”改写成“边生成边送达”。',
         heading: '范式切换',
@@ -662,7 +682,7 @@ class ContentMockData {
       summary: '在黑与白的克制之间，真正被书写出来的是节奏、呼吸与精神张力。',
       articleTemplate: 'ritual',
       articleFontPreset: 'classic',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '墨韵流芳：汉字书法中的空间美学与精神寄托',
         intro: '书法之美，从来不只是线条本身，而是线条与留白共同构成的秩序。',
         heading: '起笔与呼吸',
@@ -693,7 +713,7 @@ class ContentMockData {
       summary: '从红酱到白酱，决定一盘面条记忆点的，是火候与节奏的控制。',
       articleTemplate: 'gentle',
       articleFontPreset: 'rounded',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '意式风情：三种经典酱汁的制作秘籍',
         intro: '一盘看似简单的意面，真正的层次往往藏在酱汁的时间管理里。',
         heading: '火候与浓度',
@@ -724,7 +744,7 @@ class ContentMockData {
       summary: '视觉系统不是装饰，色彩和留白本质上都在影响用户的决策速度。',
       articleTemplate: 'diffuse',
       articleFontPreset: 'clean',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: 'UI设计的心理学原理：色彩、布局与用户认知',
         intro: '用户对界面的第一判断，往往在阅读前就已经开始。',
         heading: '色彩心理',
@@ -755,7 +775,7 @@ class ContentMockData {
       summary: '旅行不是景点清单，而是一连串被光线、气味和脚步慢慢浸透的感受。',
       articleTemplate: 'journal',
       articleFontPreset: 'handwritten',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '一座山的晨雾：把徒步记成一本可以翻页的手账',
         intro: '凌晨出发时，山路还裹着湿气，鞋底踩下去像踩进一页没晒干的纸。',
         heading: '边走边贴',
@@ -786,7 +806,7 @@ class ContentMockData {
       summary: '真正有效的观测不是面板越多越好，而是每个角色都能找到自己的判断入口。',
       articleTemplate: 'tech',
       articleFontPreset: 'clean',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '从日志到观测：团队如何为真实故障建立共同语言',
         intro: '故障发生时最昂贵的不是恢复时间，而是团队对“问题正在发生什么”没有共同理解。',
         heading: '事件对齐',
@@ -815,7 +835,7 @@ class ContentMockData {
       summary: '慢不是效率的反义词，而是一种把注意力重新还给阅读对象的方式。',
       articleTemplate: 'ritual',
       articleFontPreset: 'classic',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '雨夜读帖：为什么东方手卷总能让人慢下来',
         intro: '展开手卷时，视线被主动限制在一小段距离里，速度因此自然被放缓。',
         heading: '节奏控制',
@@ -844,7 +864,7 @@ class ContentMockData {
       summary: '家并不需要每天焕新，真正改变气氛的是一些安静但持续的微调。',
       articleTemplate: 'gentle',
       articleFontPreset: 'clean',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '把周末过成一页柔软的家居笔记',
         intro: '窗帘被换成更透光的材质后，客厅在下午会像一张慢慢被晒暖的纸。',
         heading: '轻调整',
@@ -873,7 +893,7 @@ class ContentMockData {
       summary: '所谓高级感并不是更空，而是让信息的停顿和推进都变得可预测。',
       articleTemplate: 'diffuse',
       articleFontPreset: 'clean',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '把留白做成节奏：信息界面里的“呼吸设计”',
         intro: '当内容变多，留白真正承担的职责是让用户愿意继续往下看。',
         heading: '节奏设计',
@@ -902,7 +922,7 @@ class ContentMockData {
       summary: '真正让人想保存下来的，不是完整纪实，而是那些被贴在边角里的细小瞬间。',
       articleTemplate: 'journal',
       articleFontPreset: 'rounded',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '城市散步的边角料，如何变成一本值得反复翻的小册子',
         intro: '一张收据、一段路名和一处树影，就足够撑起一页有情绪的散步记录。',
         heading: '贴纸与证据',
@@ -931,7 +951,7 @@ class ContentMockData {
       summary: '把路线、风向和停留时间直接写进正文里，封面负责情绪，正文负责把人带回现场。',
       articleTemplate: 'diffuse',
       articleFontPreset: 'clean',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '',
         intro: '傍晚进站前，我把最后一段光线记在票根背面。',
         heading: '把信息写进气氛',
@@ -962,7 +982,7 @@ class ContentMockData {
       summary: '没有标题也没有封面，只留下一段完整正文，让内容自己决定这一页该从哪里开始。',
       articleTemplate: 'journal',
       articleFontPreset: 'rounded',
-      articleDocument: _buildArticleDocument(
+      articleMarkdownSource: _buildArticleMarkdownSource(
         title: '',
         intro: '路口那家旧文具店快打烊时，灯还像一张温吞的便签纸。',
         heading: '从正文开始',
@@ -979,36 +999,40 @@ class ContentMockData {
 
   static List<Map<String, dynamic>>
   get articleCanonicalFallbackFixtures => <Map<String, dynamic>>[
-    _buildArticlePost(
-      postId: 'article_document_only_fixture',
-      authorId: 'article_fixture_writer',
-      displayName: '旧稿修复',
-      authorAvatarUrl:
+    <String, dynamic>{
+      'postId': 'article_markdown_only_fixture',
+      'contentType': 'article',
+      'contentIdentity': 'work',
+      'authorId': 'article_fixture_writer',
+      'displayName': 'Markdown 样本',
+      'authorAvatarUrl':
           'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100',
-      authorBackgroundUrl:
-          'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200',
-      title: '连续文档优先',
-      summary: '只保留 articleDocument 的旧稿，用于验证 canonical 优先级。',
-      articleTemplate: 'journal',
-      articleFontPreset: 'handwritten',
-      articleDocument: _buildArticleDocument(
-        title: '连续文档优先',
-        intro: '旧稿只剩下一份连续文档，但阅读链路仍应完整恢复。',
-        heading: '恢复顺序',
-        sectionBody:
-            '当 blocks、cards 与 body 缺席时，reader 应优先从 articleDocument 恢复内容。',
-        conclusion: '只要 canonical 还在，旧数据就不该失去阅读能力。',
-        imageUrl:
-            'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800',
-        imageLayout: 'wrapRight',
-        caption: '恢复样本',
-      ),
-      likeCount: 40,
-      commentCount: 4,
-      favoriteCount: 0,
-      shareCount: 2,
-      createdAt: '2026-01-05T10:00:00Z',
-    ),
+      'title': 'Markdown 连续文档优先',
+      'summary': '只保留 Markdown 的样本，用于验证 canonical 优先级。',
+      'articleTemplate': 'journal',
+      'articleFontPreset': 'handwritten',
+      'articlePresentationVersion': 1,
+      'articleMarkdown':
+          '---\ntitle: Markdown 连续文档优先\ntemplate: journal\nfontPreset: handwritten\n---\n\n# Markdown 连续文档优先\n\n## 恢复顺序\n\nMarkdown 是长文唯一真相源。\n\n:::figure id="fixture_image" layout="wrapRight" caption="恢复样本"\nasset://fixture_image\n:::\n',
+      'articleAssetManifest': const <String, dynamic>{
+        'assets': <Map<String, dynamic>>[
+          {
+            'assetId': 'fixture_image',
+            'objectKey':
+                'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800',
+          },
+        ],
+      },
+      'articleRenderProfile': const <String, dynamic>{
+        'template': 'journal',
+        'fontPreset': 'handwritten',
+      },
+      'createdAt': '2026-01-05T10:00:00Z',
+      'likeCount': 40,
+      'commentCount': 4,
+      'favoriteCount': 0,
+      'shareCount': 2,
+    },
     <String, dynamic>{
       'postId': 'article_blocks_only_fixture',
       'contentType': 'article',

@@ -20,18 +20,18 @@
 
 ## 每会话标准工作流（复制到会话开场）
 
-1. **拉齐枚举**：以 `page-horizontal-quality-matrix.md` 为工单，按领域分段；**不得漏行**（依赖 `scripts/verify_page_matrix_scan_complete.py` 与磁盘扫描一致）。  
+1. **拉齐枚举**：以 `page-horizontal-quality-matrix.md` 为工单，按领域分段；**不得漏行**（依赖 `quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py` 与磁盘扫描一致）。  
 2. **逐页**：打开对应 `lib/...` 文件 → 对照该维「置 ✓ 最低证据」→ 改代码或改 `metadata_driven_ui_gap_inventory` 等旁路真相源；**同步**按 [`mock_data_cloud_integration_policy.md`](../../../../gates/mock_data_cloud_integration_policy.md) **§4.1** 检查 **业务与测试/夹具是否同文件混写**（有则迁出至 `test/`）。  
 3. **回写矩阵**：只改 **当前会话负责的那一列**（收口会话 S9 可批量扫尾）。  
 4. **本会话验证**（至少）：  
    ```bash
-   python3 scripts/verify_page_horizontal_quality_matrix.py
-   python3 scripts/verify_page_matrix_scan_complete.py
-   python3 scripts/verify_ui_mock_isolation.py
+   python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
+   python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
+   python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
    ```  
-5. **涉及 P1**：额外 `python3 scripts/verify_ios_native_surface_gate.py`。  
-6. **涉及 P5**：额外 `python3 scripts/verify_settings_canonical.py`、`python3 scripts/verify_conversation_sheet_canonical.py`（与变更相关则跑）。  
-7. **涉及 P8**：关注 `python3 scripts/verify_dart_semantic.py`（在 `make gate` app 段中已串联）。
+5. **涉及 P1**：额外 `python3 quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py`。  
+6. **涉及 P5**：额外 `python3 quwoquan_app/scripts/settings/verify_settings_canonical.py`、`python3 quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py`（与变更相关则跑）。  
+7. **涉及 P8**：关注 `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py`（在 `make gate` app 段中已串联）。
 
 ## 各会话范围与推荐顺序说明
 
@@ -40,7 +40,7 @@
 - **S4**：Tab 根可依托 `MainAppShell` pageAccess；独立路由页按统一观测方案补齐或标 **○** 并指向后续 Story。  
 - **S9**：  
   - 全表扫描 **○**：须变为 **✓** 或 **—**，或在矩阵「备注」/ 兄弟 L3 中登记 **技术债 ID**；  
-  - 执行 `make verify-app-page-horizontal-quality`（快检）与 `bash scripts/gate_repo.sh --scope app`（或完整 `make gate`，视 PR 范围）；  
+  - 执行 `make verify-app-page-horizontal-quality`（快检）与 `bash agent_ops/gate/gate_repo.sh --scope app`（或完整 `make gate`，视 PR 范围）；  
   - **治理落盘**：Cursor 规则 `.cursor/rules/09-page-horizontal-quality.mdc`、`01-arch-constraints.mdc` §2.4、`page_horizontal_quality_pr_checklist.md` §S9；  
   - 更新 `specs/changelog/CR-*.yaml` 或在本 L3 `tasks.md` 勾选完成。
 
@@ -89,10 +89,10 @@
 ### B2 每批验证（实施会话末尾必跑）
 
 ```bash
-python3 scripts/verify_ui_mock_isolation.py
-python3 scripts/verify_page_horizontal_quality_matrix.py
-python3 scripts/verify_page_matrix_scan_complete.py
-bash scripts/gate_repo.sh --scope app
+python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
+python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
+python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
+bash agent_ops/gate/gate_repo.sh --scope app
 ```
 
 ### B3 矩阵 P3 与波次 B 的关系
@@ -128,8 +128,8 @@ bash scripts/gate_repo.sh --scope app
       - quwoquan_app/test/support/README.md
       - quwoquan_app/lib/core/data_source/
     tests:
-      - python3 scripts/verify_ui_mock_isolation.py
-      - bash scripts/gate_repo.sh --scope app
+      - python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
+      - bash agent_ops/gate/gate_repo.sh --scope app
     dev_status: specified
 ```
 

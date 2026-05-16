@@ -1,0 +1,92 @@
+{
+  "status": "passed",
+  "baseUrl": "http://127.0.0.1:18180",
+  "bundle": "deploy/shared/gamma_curated_media_bundle.json",
+  "sampleSize": 12,
+  "checks": [
+    {
+      "objectKey": "media/avatar/user/fixture_user_current/v1/avatar.png",
+      "url": "http://127.0.0.1:18180/media/avatar/user/fixture_user_current/v1/avatar.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 314652
+    },
+    {
+      "objectKey": "media/avatar/group/fixture_conv_group/v1/composite.png",
+      "url": "http://127.0.0.1:18180/media/avatar/group/fixture_conv_group/v1/composite.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 33940
+    },
+    {
+      "objectKey": "media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+      "url": "http://127.0.0.1:18180/media/avatar/circle/fixture_circle_photo/v1/avatar.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 331991
+    },
+    {
+      "objectKey": "media/image/circle/fixture_circle_photo/v1/cover.png",
+      "url": "http://127.0.0.1:18180/media/image/circle/fixture_circle_photo/v1/cover.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 1615223
+    },
+    {
+      "objectKey": "media/image/post/fixture_photo_001/v1/cover.png",
+      "url": "http://127.0.0.1:18180/media/image/post/fixture_photo_001/v1/cover.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 1594628
+    },
+    {
+      "objectKey": "media/image/post/fixture_article_001/v1/cover.png",
+      "url": "http://127.0.0.1:18180/media/image/post/fixture_article_001/v1/cover.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 1210083
+    },
+    {
+      "objectKey": "media/image/post/fixture_video_001/v1/cover.png",
+      "url": "http://127.0.0.1:18180/media/image/post/fixture_video_001/v1/cover.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 1440813
+    },
+    {
+      "objectKey": "media/background/user/fixture_user_weekend_1/v1/background.png",
+      "url": "http://127.0.0.1:18180/media/background/user/fixture_user_weekend_1/v1/background.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 2570495
+    },
+    {
+      "objectKey": "media/image/post/fixture_post_citywalk_001/v1/cover.jpg",
+      "url": "http://127.0.0.1:18180/media/image/post/fixture_post_citywalk_001/v1/cover.jpg",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 449758
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_outdoor_02/v1/avatar.jpg",
+      "url": "http://127.0.0.1:18180/media/avatar/user/fixture_user_outdoor_02/v1/avatar.jpg",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 55331
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_photography_04/v1/avatar.png",
+      "url": "http://127.0.0.1:18180/media/avatar/user/fixture_user_photography_04/v1/avatar.png",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 301039
+    },
+    {
+      "objectKey": "media/avatar/user/fixture_user_tech_02/v1/avatar.jpg",
+      "url": "http://127.0.0.1:18180/media/avatar/user/fixture_user_tech_02/v1/avatar.jpg",
+      "status": "passed",
+      "httpStatus": 200,
+      "bytes": 41646
+    }
+  ]
+}

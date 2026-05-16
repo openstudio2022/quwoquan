@@ -1,0 +1,350 @@
+{
+  "schemaVersion": "assistant.scenario-fixtures",
+  "description": "端云 alpha/beta/gamma 共享测试场景。alpha 端侧使用 mock repository 读取 alphaMockStream，beta/gamma 端侧通过 remote repository 访问云侧服务，云侧每次测试前重置并加载 seedRefs。 [alpha-dev-lite subset]",
+  "repositoryExpectations": {
+    "alpha": "mock",
+    "beta": "remote",
+    "gamma": "remote"
+  },
+  "seedSets": {
+    "assistant_p0_core": {
+      "description": "找私助 P0 股票、天气、出行场景使用的最小云侧 seed。",
+      "users": [
+        {
+          "userId": "user_m11_scenario"
+        }
+      ],
+      "skills": [
+        {
+          "skillId": "stock_sentinel",
+          "domainId": "finance",
+          "displayName": "股票哨兵"
+        },
+        {
+          "skillId": "travel_journey_manager",
+          "domainId": "travel",
+          "displayName": "出行旅程管家"
+        }
+      ],
+      "subscriptions": [
+        {
+          "subscriptionId": "sub_stock_sentinel_fixture",
+          "skillId": "stock_sentinel",
+          "domainId": "finance",
+          "status": "active"
+        },
+        {
+          "subscriptionId": "sub_travel_journey_fixture",
+          "skillId": "travel_journey_manager",
+          "domainId": "travel",
+          "status": "active"
+        }
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "id": "stock_sentinel_basic",
+      "title": "股票哨兵基础问答",
+      "type": "assistant_turn",
+      "skillId": "stock_sentinel",
+      "domainId": "finance",
+      "question": "帮我看一下比亚迪今天有哪些重大消息，会不会影响我关注的股票？",
+      "seedRefs": [
+        "assistant_p0_core"
+      ],
+      "expectedAnswerFragments": [
+        "股票哨兵",
+        "重大消息",
+        "非投资建议"
+      ],
+      "expectedEvents": [
+        "turn_started",
+        "tool_use_requested",
+        "tool_result_received",
+        "final_answer"
+      ],
+      "alphaMockStream": {
+        "finalAnswer": "股票哨兵已生成信息摘要：模拟消息显示关注公司出现重大信息变化；本提醒仅作信息摘要，非投资建议。",
+        "toolName": "web_search",
+        "toolSummary": "alpha mock 已返回股票哨兵消息面摘要。"
+      },
+      "remoteExpectations": {
+        "answerFragments": [
+          "比亚迪",
+          "重大消息",
+          "投资建议"
+        ],
+        "eventTypes": [
+          "turn_started",
+          "plan_updated",
+          "search_query_generated",
+          "tool_use_requested",
+          "tool_result_received",
+          "observation_assessed",
+          "assistant.model.interaction",
+          "final_answer"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": false,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    },
+    {
+      "id": "weather_shenzhen_pinyin",
+      "title": "深圳拼音天气真实验收",
+      "type": "assistant_turn",
+      "skillId": "weather",
+      "domainId": "weather",
+      "question": "shenzhen tian qi",
+      "seedRefs": [
+        "assistant_p0_core"
+      ],
+      "expectedAnswerFragments": [
+        "深圳",
+        "天气"
+      ],
+      "expectedEvents": [
+        "turn_started",
+        "tool_use_requested",
+        "tool_result_received",
+        "final_answer"
+      ],
+      "alphaMockStream": {
+        "finalAnswer": "天气助手已生成深圳天气提醒：模拟天气显示需要关注温度、降雨与出行建议。",
+        "toolName": "web_search",
+        "toolSummary": "alpha mock 已返回深圳天气提示。"
+      },
+      "remoteExpectations": {
+        "answerFragments": [
+          "Shenzhen",
+          "深圳",
+          "天气"
+        ],
+        "eventTypes": [
+          "turn_started",
+          "plan_updated",
+          "search_query_generated",
+          "tool_use_requested",
+          "tool_result_received",
+          "observation_assessed",
+          "assistant.model.interaction",
+          "final_answer"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": false,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    },
+    {
+      "id": "weather_trip_basic",
+      "title": "出行前天气问答",
+      "type": "assistant_turn",
+      "skillId": "travel_journey_manager",
+      "domainId": "travel",
+      "question": "下午去西湖，天气和出行有什么要注意？",
+      "seedRefs": [
+        "assistant_p0_core"
+      ],
+      "expectedAnswerFragments": [
+        "出行管家",
+        "天气",
+        "建议"
+      ],
+      "expectedEvents": [
+        "turn_started",
+        "plan_updated",
+        "tool_use_requested",
+        "tool_result_received",
+        "observation_assessed",
+        "final_answer"
+      ],
+      "alphaMockStream": {
+        "finalAnswer": "出行管家已生成行程提醒：模拟天气显示午后可能有阵雨，建议携带雨具并预留缓冲时间。",
+        "toolName": "web_search",
+        "toolSummary": "alpha mock 已返回西湖天气与出行提示。"
+      },
+      "remoteExpectations": {
+        "answerFragments": [
+          "天气",
+          "建议"
+        ],
+        "eventTypes": [
+          "turn_started",
+          "plan_updated",
+          "search_query_generated",
+          "tool_use_requested",
+          "tool_result_received",
+          "observation_assessed",
+          "assistant.model.interaction",
+          "final_answer"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    },
+    {
+      "id": "travel_journey_basic",
+      "title": "出行旅程管家规划问答",
+      "type": "assistant_turn",
+      "skillId": "travel_journey_manager",
+      "domainId": "travel",
+      "question": "明天杭州一日游，帮我结合天气、路况和景点拥堵规划一下。",
+      "seedRefs": [
+        "assistant_p0_core"
+      ],
+      "expectedAnswerFragments": [
+        "出行管家",
+        "路况",
+        "拥堵"
+      ],
+      "expectedEvents": [
+        "turn_started",
+        "plan_updated",
+        "tool_use_requested",
+        "tool_result_received",
+        "observation_assessed",
+        "final_answer"
+      ],
+      "alphaMockStream": {
+        "finalAnswer": "出行管家已生成行程提醒：模拟天气、路况和景点拥堵显示出发前需要调整时间。",
+        "toolName": "web_search",
+        "toolSummary": "alpha mock 已返回杭州行程、路况与景点拥堵提示。"
+      },
+      "remoteExpectations": {
+        "answerFragments": [
+          "天气",
+          "拥堵"
+        ],
+        "eventTypes": [
+          "turn_started",
+          "plan_updated",
+          "search_query_generated",
+          "tool_use_requested",
+          "tool_result_received",
+          "observation_assessed",
+          "assistant.model.interaction",
+          "final_answer"
+        ]
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    },
+    {
+      "id": "skill_subscription_management_basic",
+      "title": "技能订阅管理基础链路",
+      "type": "skill_management",
+      "skillId": "stock_sentinel",
+      "domainId": "finance",
+      "seedRefs": [
+        "skill_management_core"
+      ],
+      "operations": [
+        {
+          "operation": "list_skills",
+          "expectedSkillIds": [
+            "daily_assistant",
+            "news_briefing",
+            "stock_sentinel",
+            "travel_journey_manager"
+          ]
+        },
+        {
+          "operation": "create_subscription",
+          "skillId": "stock_sentinel",
+          "domainId": "finance",
+          "expectedStatus": "active"
+        },
+        {
+          "operation": "pause_subscription",
+          "expectedStatus": "paused"
+        },
+        {
+          "operation": "resume_subscription",
+          "expectedStatus": "active"
+        }
+      ],
+      "expectedAnswerFragments": [],
+      "expectedEvents": [],
+      "alphaMockStream": {
+        "finalAnswer": "",
+        "toolName": "",
+        "toolSummary": ""
+      },
+      "remoteExpectations": {
+        "answerFragments": [],
+        "eventTypes": []
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      }
+    }
+  ]
+}

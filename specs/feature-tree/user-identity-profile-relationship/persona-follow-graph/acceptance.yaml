@@ -108,13 +108,13 @@ journey_acceptance:
         - T4_user_journey
     tests:
       planned:
-        - profile subject visibility contract test
+        - sub-account visibility contract test
         - isolation leakage regression test
         - audit mapping verification
       recorded:
         - "T1: `make -C quwoquan_service verify-metadata && make codegen && make codegen-app`"
         - "T2: `flutter test test/cloud/integration/remote_api_path_contract_test.dart test/cloud/content/post/contract/post_feed_dto_contract_test.dart test/ui/content/post_read_projection_facade_test.dart test/ui/user/providers/profile_state_provider_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/cloud/user/contract/relationship_capability_repository_contract_test.dart`"
-        - "T3: `go test ./services/user-service/tests -run 'Test(ProfileSubjectView_|RelationshipCapabilityView_|Follow_|Block_|ListFollowing_|ListFollowers_|SearchSocialRelations_)'`"
+        - "T3: `go test ./services/user-service/tests -run 'Test(SubAccountView_|RelationshipCapabilityView_|Follow_|Block_|ListFollowing_|ListFollowers_|SearchSocialRelations_)'`"
         - "T3: `go test ./services/content-service/tests -run 'TestDiscoveryProjectionPersistsProfileSubjectID'`"
     notes:
       - "`persona-profile-subject-and-visibility` 已把公开 `ProfileSubject`、strict/retired 不可见、记录快照与 discovery canonical subject 收口完成。"

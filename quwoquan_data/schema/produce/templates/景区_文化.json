@@ -1,0 +1,12 @@
+{
+  "templateId": "景区_文化",
+  "entityType": "景区",
+  "angle": "文化探索",
+  "description": "深入挖掘景区的历史文化背景、传说故事和人文内涵",
+  "requiredSections": ["历史渊源", "文化特色", "代表性故事", "当代意义"],
+  "optionalSections": ["民俗活动", "文化名人关联", "建筑美学"],
+  "minWordCount": 800,
+  "maxWordCount": 2000,
+  "imageMinCount": 2,
+  "tone": "知性、深度、有底蕴"
+}

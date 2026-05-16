@@ -229,28 +229,36 @@ void main() {
       isFalse,
     );
     expect(
-      repository.lastCreatePayload?['articleDocument'],
+      repository.lastCreatePayload?['articleMarkdown'],
+      isA<String>(),
+    );
+    expect(repository.lastCreatePayload?['articleMarkdownVersion'], 'qwq-rich-md/1');
+    expect(
+      repository.lastCreatePayload?['articleAssetManifest'],
       isA<Map<String, dynamic>>(),
     );
-    final articleDocument =
-        repository.lastCreatePayload?['articleDocument']
-            as Map<String, dynamic>;
-    expect(articleDocument['titleStyle'], isNotNull);
-    expect(articleDocument['template'], isNotNull);
-    expect(articleDocument['fontPreset'], isNotNull);
-    final nodes = (articleDocument['nodes'] as List)
-        .cast<Map<String, dynamic>>();
     expect(
-      nodes.any(
-        (node) =>
-            node['type'] == 'paragraph' &&
-            (node['text'] as String).replaceAll('\n', '') == longText,
-      ),
+      repository.lastCreatePayload?['articleRenderProfile'],
+      isA<Map<String, dynamic>>(),
+    );
+    final articleMarkdown =
+        repository.lastCreatePayload?['articleMarkdown'] as String;
+    expect(
+      articleMarkdown.contains(longText),
       isTrue,
     );
+    final renderProfile =
+        repository.lastCreatePayload?['articleRenderProfile']
+            as Map<String, dynamic>;
+    expect(renderProfile['template'], isNotNull);
+    expect(renderProfile['fontPreset'], isNotNull);
     expect(repository.lastCreatePayload?.containsKey('articlePages'), isFalse);
     expect(repository.lastCreatePayload?.containsKey('articleBlocks'), isFalse);
     expect(repository.lastCreatePayload?.containsKey('cards'), isFalse);
+    expect(
+      repository.lastCreatePayload?.containsKey('articleDocument'),
+      isFalse,
+    );
     expect(
       repository.lastCreatePayload?.containsKey('contentIdentity'),
       isFalse,

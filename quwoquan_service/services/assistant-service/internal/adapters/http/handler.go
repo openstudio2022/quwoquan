@@ -646,9 +646,6 @@ func parseLimit(r *http.Request, fallback int) int {
 }
 
 func resolveUserID(r *http.Request) string {
-	if uid := strings.TrimSpace(r.Header.Get("X-User-Id")); uid != "" {
-		return uid
-	}
 	if uid := strings.TrimSpace(r.Header.Get("X-Client-User-Id")); uid != "" {
 		return uid
 	}

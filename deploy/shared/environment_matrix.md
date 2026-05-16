@@ -50,7 +50,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 
 #### 2.1.1 `make gate-local-gamma` 常见失败与缓解（Docker / 磁盘）
 
-- **Docker Hub 429（未认证限流）**：`scripts/start_local_gamma_mirror.sh` 默认将基础镜像指向 `docker.m.daocloud.io/library`；ECS 侧对应变量为 `GAMMA_ECS_CONTAINER_REGISTRY_MIRROR`。
+- **Docker Hub 429（未认证限流）**：`quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh` 默认将基础镜像指向 `docker.m.daocloud.io/library`；ECS 侧对应变量为 `GAMMA_ECS_CONTAINER_REGISTRY_MIRROR`。
 - **Colima / Docker VM 磁盘满**：执行 `docker builder prune -af`；避免将本地 `**/.venv/` 打进构建上下文。
 - **本地 beta / local-gamma 端口冲突**：`gate-local-gamma` 默认使用 `18180/18186`，避免与 beta 常用 `18080` 冲突。
 
@@ -58,8 +58,8 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 
 | Secret / Variable | 04 Pre-Release | 05 App Env Matrix | 07 Deploy Prod Auto | 08 Deploy Gamma ECS | 说明 |
 |-------------------|:---:|:---:|:---:|:---:|------|
-| `GAMMA_TEST_AUTH_TOKEN` | **必** | 建议 | — | **必** | gamma hosted/self-hosted 鉴权 |
-| `GAMMA_ECS_PASSWORD` 或 `GAMMA_ECS_SSH_KEY` | **必其一** | — | — | **必其一** | ECS gamma SSH 认证 |
+| `GAMMA_TEST_AUTH_TOKEN` | 建议 | 建议 | — | **必** | gamma hosted/self-hosted 鉴权（04 pr_light 非强制） |
+| `GAMMA_ECS_PASSWORD` 或 `GAMMA_ECS_SSH_KEY` | — | — | — | **必其一** | ECS gamma SSH 认证（04 pr_light 不部署，无需此项） |
 | `vars.GAMMA_ECS_HOST` / `vars.GAMMA_ECS_PUBLIC_HOST` | 建议 | — | — | 建议 | ECS 主机与公网入口 |
 | `vars.GAMMA_BASE_URL` / `vars.GAMMA_PRODUCT_OPS_BASE_URL` | 可选 | 可选 | — | 可选 | 公网网关 / product ops 覆盖 |
 | `vars.MEDIA_AVATAR_CDN_BASE_URL` | 可选 | 可选 | — | 可选 | chat-avatar 对外媒体基址 |
@@ -71,7 +71,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 | GitHub Environment `production` | — | — | **必**（Stage 2） | — | `deploy-prod-auto.yml` 中 `gray-carry-on` 使用 |
 
 **路由自检**：部署或调矩阵前运行  
-`python3 scripts/verify_gamma_public_gateway_routing.py --base-url "$GAMMA_BASE_URL"`。  
+`python3 quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py --base-url "$GAMMA_BASE_URL"`。  
 若报 `route_not_found` 或 plain-text catch-all，说明入口指向错误端口，需要重新执行 ECS 部署或校验远端 Caddy/compose。
 
 当前 gamma 默认走 ECS 本地 curated 媒体目录：部署前先生成 `deploy/shared/gamma_curated_media_bundle.json` 与 `artifacts/local-gamma/media`，再单独同步到远端 `/srv/media`。`GAMMA_ECS_MEDIA_ORIGIN_BASE_URL` 只作为应急兜底，且需显式允许后才会生效；默认不会依赖本机公网回源。
@@ -82,7 +82,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 |------|-------------|----------|
 | `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
 | `beta` | 本地启动单套网关与服务，App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
-| `gamma` | `04` 触发 ECS gamma hosted pre 链 + 本地 gamma Android/iOS assistant/avatar/feed 旅程 | hosted/self-hosted 全绿并带证据，媒体抽样 URL 可达，且部署 / mirror 切换遵循单套重启 |
+| `gamma` | `04` PR 轻量 preflight 探针共享 gamma（readiness 阻断、smoke 告警）；`09` nightly 完整 ECS deploy + full semantic + Patrol UI + 全设备矩阵 | PR gate：readiness 绿；nightly/manual_full：hosted + self-hosted 全绿并带证据 |
 | `prod-gray` | 生产灰度流水线与 runbook 审批 | 灰度指标与回滚条件达标 |
 | `prod` | 全量发布流水线 | 生产观测稳定 |
 

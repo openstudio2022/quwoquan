@@ -242,7 +242,7 @@
 | **语义与无障碍** | 文案 `UITextConstants`/arb；触控 ≥44pt；关键按钮 `Semantics`/TestKeys。 |
 | **Page horizontal quality** | `create_page` 等路径在矩阵内；更新 `page-horizontal-quality-matrix.md`、P2 清单、`page_horizontal_quality_pr_checklist.md`。 |
 | **Mock 隔离** | UI 不 `import .../mock/`；Repository 经 Provider + `appDataSourceModeProvider`。 |
-| **验证命令** | `make verify-app-page-horizontal-quality`、`bash scripts/gate_repo.sh --scope app`（PR 前）。 |
+| **验证命令** | `make verify-app-page-horizontal-quality`、`bash agent_ops/gate/gate_repo.sh --scope app`（PR 前）。 |
 
 ---
 

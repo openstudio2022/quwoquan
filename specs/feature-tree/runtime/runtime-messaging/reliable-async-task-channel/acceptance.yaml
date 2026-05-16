@@ -62,7 +62,7 @@ tests:
   contract:
   - quwoquan_service/runtime/reliabletask/tests/reliabletask_schema_contract_test.go
   - quwoquan_service/runtime/reliabletask/tests/task_catalog_contract_test.go
-  - scripts/verify_module_package_mapping.py
+  - quwoquan_app/scripts/runtime/verify_module_package_mapping.py
   - scripts/verify_reliable_task_catalog.py
   - scripts/verify_reliable_task_retention_policy.py
   integration:

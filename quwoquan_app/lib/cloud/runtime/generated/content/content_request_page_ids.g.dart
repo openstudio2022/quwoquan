@@ -6,6 +6,7 @@ class ContentRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'AbortMediaUpload': 'content.media.abort',
+    'BindMediaAssetsToPost': 'content.bind.media.assets.to.post',
     'CompleteMediaUpload': 'content.media.complete',
     'CreateComment': 'content.comment.create',
     'CreatePost': 'content.post.create',
@@ -42,15 +43,18 @@ class ContentRequestPageIds {
     'SearchPosts': 'content.search',
     'SelectAutoVideoCover': 'content.media.cover.auto',
     'SelectManualVideoCover': 'content.media.cover.manual',
+    'SharePost': 'content.share.post',
     'UnfavoritePost': 'content.post.unfavorite',
     'UnlikeComment': 'content.unlike.comment',
     'UnlikePost': 'content.post.unlike',
+    'UnsharePost': 'content.unshare.post',
     'UpdatePost': 'content.post.update',
     'UpdatePostCircles': 'content.post.circles',
     'UpdatePostSettings': 'content.post.settings',
   };
 
   static const String abortMediaUpload = 'content.media.abort';
+  static const String bindMediaAssetsToPost = 'content.bind.media.assets.to.post';
   static const String completeMediaUpload = 'content.media.complete';
   static const String createComment = 'content.comment.create';
   static const String createPost = 'content.post.create';
@@ -87,9 +91,11 @@ class ContentRequestPageIds {
   static const String searchPosts = 'content.search';
   static const String selectAutoVideoCover = 'content.media.cover.auto';
   static const String selectManualVideoCover = 'content.media.cover.manual';
+  static const String sharePost = 'content.share.post';
   static const String unfavoritePost = 'content.post.unfavorite';
   static const String unlikeComment = 'content.unlike.comment';
   static const String unlikePost = 'content.post.unlike';
+  static const String unsharePost = 'content.unshare.post';
   static const String updatePost = 'content.post.update';
   static const String updatePostCircles = 'content.post.circles';
   static const String updatePostSettings = 'content.post.settings';

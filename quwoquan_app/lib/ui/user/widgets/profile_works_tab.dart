@@ -12,6 +12,7 @@ import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 
 /// 创作 Tab：统一承载 `全部 / 图片 / 视频 / 文字` 的内容筛选。
@@ -129,7 +130,9 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                         AppSpacing.interGroupLg,
                       ),
                       sliver: SliverMasonryGrid.count(
-                        crossAxisCount: AppSpacing.responsiveGridColumns(context),
+                        crossAxisCount: AppSpacing.responsiveGridColumns(
+                          context,
+                        ),
                         mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
                         crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                         childCount: filtered.length,
@@ -259,7 +262,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     }
   }
 
-  void _onPostTap(BuildContext context, PostBaseDto post) {
+  Future<void> _onPostTap(BuildContext context, PostBaseDto post) async {
     if (post.identity == 'work' && post.displayFormat == 'note') {
       context.push(AppRoutePaths.articleDetail(id: post.id));
       return;
@@ -283,9 +286,16 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         )
         .toList();
     final isMoment = post.identity == 'moment';
+    final interactionSnapshot = buildMediaViewerInteractionSnapshot(
+      posts: filtered,
+      discoveryState: ref.read(discoveryStateProvider),
+      relationshipState: ref.read(userRelationshipStateProvider),
+      postInteractionState: ref.read(postInteractionStateProvider),
+    );
+    primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
 
     if (post.displayFormat == 'video') {
-      context.push(
+      final result = await context.push<Object?>(
         '/video-viewer/$initialIndex',
         extra: MediaViewerExtra(
           posts: postViews,
@@ -293,12 +303,16 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
           initialIndex: initialIndex,
           category: isMoment ? 'profile_moment' : 'profile',
           source: isMoment ? 'profile_moment' : 'profile',
+          interactionSnapshot: interactionSnapshot,
         ),
       );
+      if (result is MediaViewerResult) {
+        applyMediaViewerResultToInteractionState(ref, result);
+      }
       return;
     }
 
-    context.push(
+    final result = await context.push<Object?>(
       '/media-viewer/photo/$initialIndex',
       extra: MediaViewerExtra(
         posts: postViews,
@@ -307,14 +321,18 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         category: isMoment ? 'profile_moment' : 'profile',
         initialImageIndex: 0,
         source: isMoment ? 'profile_moment' : 'profile',
+        interactionSnapshot: interactionSnapshot,
       ),
     );
+    if (result is MediaViewerResult) {
+      applyMediaViewerResultToInteractionState(ref, result);
+    }
   }
 }
 
 /// 瀑布流卡片：与圈子 post 保持同一结构，
 /// 仅底部元信息改为「赞 + 转 + 评」。
-class _WorksPostCard extends StatelessWidget {
+class _WorksPostCard extends ConsumerWidget {
   const _WorksPostCard({
     required this.post,
     required this.isDark,
@@ -361,10 +379,26 @@ class _WorksPostCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(postInteractionStateProvider);
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
+    );
+    final likeCount = effectivePostLikeCount(
+      ref,
+      post.id,
+      fallback: post.likeCount,
+    );
+    final shareCount = effectivePostShareCount(
+      ref,
+      post.id,
+      fallback: post.shareCount,
+    );
+    final commentCount = effectivePostCommentCount(
+      ref,
+      post.id,
+      fallback: post.commentCount,
     );
     final metaTextStyle = TextStyle(
       fontSize: AppTypography.iosCaption1,
@@ -385,7 +419,7 @@ class _WorksPostCard extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: PostCardMetric(
                 icon: CupertinoIcons.heart,
-                label: '${post.likeCount}',
+                label: '$likeCount',
                 color: fgSecondary,
                 textStyle: metaTextStyle,
               ),
@@ -396,7 +430,7 @@ class _WorksPostCard extends StatelessWidget {
               alignment: Alignment.center,
               child: PostCardMetric(
                 icon: CupertinoIcons.arrowshape_turn_up_right,
-                label: '${post.shareCount}',
+                label: '$shareCount',
                 color: fgSecondary,
                 textStyle: metaTextStyle,
               ),
@@ -407,7 +441,7 @@ class _WorksPostCard extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: PostCardMetric(
                 icon: CupertinoIcons.chat_bubble,
-                label: '${post.commentCount}',
+                label: '$commentCount',
                 color: fgSecondary,
                 textStyle: metaTextStyle,
               ),

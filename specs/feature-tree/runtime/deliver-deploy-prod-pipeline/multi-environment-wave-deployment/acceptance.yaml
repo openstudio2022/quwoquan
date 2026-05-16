@@ -18,13 +18,13 @@ level_acceptance:
     tests:
       - file: .github/workflows/pre-release-gate.yml
         functions: [pre_release_gate]
-      - file: scripts/verify_config_gray_parallel_binding.sh
+      - file: quwoquan_service/scripts/deploy/verify_config_gray_parallel_binding.sh
         functions: [verify_config_gray_parallel_binding]
   A3:
     criteria: gray_rollout 注释与 environment_matrix 的 D/E 说明一致
     status: implemented
     tests:
-      - file: scripts/verify_gray_rollout_stages.sh
+      - file: quwoquan_service/scripts/deploy/verify_gray_rollout_stages.sh
         functions: [verify_gray_rollout_stages]
       - file: deploy/shared/gray_rollout_stages.yaml
         functions: [gray_rollout_stages]

@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dt
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/core/models/search_models.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
@@ -443,34 +444,28 @@ class AppSearchRepository implements SearchRepository {
       );
       final hits = contacts
           .map((contact) {
-            final userId = (contact['contactId'] ?? contact['userId'] ?? '')
-                .toString()
-                .trim();
-            final displayName =
-                (contact['displayName'] ?? contact['nickname'] ?? userId)
-                    .toString()
-                    .trim();
+            final userId = contact.contactId.trim();
+            final displayName = contact.displayName.trim();
             final conversationId = _firstNonEmpty(<Object?>[
-              contact['conversationId'],
+              contact.conversationId,
               _resolveContactConversationId(
                 displayName: displayName,
                 allConversations: conversations,
               ),
             ]);
-            final payload = <String, dynamic>{
-              ...contact,
-              'contactId': userId,
-              'displayName': displayName,
-              if (conversationId.isNotEmpty) 'conversationId': conversationId,
-            };
+            final payload = contact.toSearchItemDto().copyWith(
+              contactId: userId,
+              displayName: displayName,
+              conversationId: conversationId.isNotEmpty ? conversationId : null,
+            );
             return SearchHit(
               objectType: SearchObjectType.chatContact,
               objectId: userId,
               title: displayName,
-              subtitle: payload['subtitle']?.toString() ?? '联系人',
+              subtitle: payload.subtitle ?? '联系人',
               resolvedFrom: SearchResolvedFrom.local,
-              matchedField: payload['matchedField']?.toString(),
-              payload: SearchHitPayloadWireMap(payload),
+              matchedField: payload.matchedField,
+              payload: SearchHitPayloadChatContact(payload),
             );
           })
           .where((item) => item.objectId.isNotEmpty && item.title.isNotEmpty)
@@ -655,7 +650,8 @@ class AppSearchRepository implements SearchRepository {
 
     if (includeCircleGroups) {
       SearchResolvedFrom groupResolvedFrom = SearchResolvedFrom.remote;
-      List<Map<String, dynamic>> remoteGroups = const <Map<String, dynamic>>[];
+      List<LocalCircleGroupSnapshotRecord> remoteGroups =
+          const <LocalCircleGroupSnapshotRecord>[];
       var remoteSearchFailed = false;
       try {
         remoteGroups = await _searchRemoteCircleGroups(request);
@@ -673,7 +669,7 @@ class AppSearchRepository implements SearchRepository {
         try {
           await _localCircleGroupSnapshotStore.upsertGroups(
             namespace: namespace,
-            groups: remoteGroups,
+            groups: remoteGroups.map((item) => item.toWireMap()),
           );
         } catch (_) {
           degradeSignals.add(
@@ -1018,11 +1014,11 @@ class AppSearchRepository implements SearchRepository {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _searchRemoteCircleGroups(
+  Future<List<LocalCircleGroupSnapshotRecord>> _searchRemoteCircleGroups(
     SearchRequest request,
   ) async {
     final candidateCircles = await _circleRepository.listCircles(limit: 12);
-    final merged = <String, Map<String, dynamic>>{};
+    final merged = <String, LocalCircleGroupSnapshotRecord>{};
     for (final circle in candidateCircles) {
       final circleId = circle.id.trim();
       if (circleId.isEmpty) {
@@ -1040,15 +1036,14 @@ class AppSearchRepository implements SearchRepository {
         continue;
       }
       for (final g in groups) {
-        final payload = normalizeCircleGroupWireMap(<String, dynamic>{
-          ...g.toMap(),
-          'circleId': circleId,
-          if (circleName.isNotEmpty) 'circleName': circleName,
-        }, shape: CircleGroupWireShape.searchHit);
-        final groupId = _firstNonEmpty(<Object?>[
-          payload['groupId'],
-          payload['circleGroupId'],
-        ]);
+        final payload = LocalCircleGroupSnapshotRecord.fromWireMap(
+          normalizeCircleGroupWireMap(<String, dynamic>{
+            ...g.toMap(),
+            'circleId': circleId,
+            if (circleName.isNotEmpty) 'circleName': circleName,
+          }, shape: CircleGroupWireShape.searchHit),
+        );
+        final groupId = payload.groupId;
         if (groupId.isEmpty) {
           continue;
         }
@@ -1074,12 +1069,12 @@ class AppSearchRepository implements SearchRepository {
   }
 
   SearchHit _circleGroupHit(
-    Map<String, dynamic> payload,
+    LocalCircleGroupSnapshotRecord payload,
     SearchResolvedFrom resolvedFrom,
     String query,
   ) {
     final normalizedPayload = normalizeCircleGroupWireMap(
-      Map<String, dynamic>.from(payload),
+      payload.toWireMap(),
       shape: CircleGroupWireShape.searchHit,
     );
     return SearchHit(
@@ -1214,7 +1209,7 @@ class AppSearchRepository implements SearchRepository {
       'conversationId': message.conversationId,
       'conversationTitle': message.conversationTitle,
       'conversationAvatarUrl': message.conversationAvatarUrl,
-      'senderProfileSubjectId': message.senderProfileSubjectId,
+      'senderSubAccountId': message.senderSubAccountId,
       'senderDisplayName': message.senderDisplayName,
       'senderAvatarUrl': message.senderAvatarUrl,
       'messageType': message.messageType,

@@ -478,7 +478,7 @@ func (s *MemberService) SearchContacts(
 			DisplayName:      displayName,
 			AvatarURL:        avatarURL,
 			ConversationID:   conversation.ID,
-			ConversationType: conversation.Type,
+			ConversationType: PublicConversationType(conversation.Type, conversation.CircleId),
 			Subtitle:         conversation.LastMessagePreview,
 			HighlightText:    displayName,
 			MatchedField:     "displayName",

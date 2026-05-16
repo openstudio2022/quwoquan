@@ -53,7 +53,7 @@
 ### 全链质量与发布收口
 
 - [ ] T34: [测试] 建立 `A1~A13 ↔ T1~T4` 证据映射回填，补齐缺失的测试入口与函数引用。
-- [ ] T35: [测试] 执行 `python3 scripts/verify_dart_semantic.py`，确保助理 UI 无新增硬编码视觉字面量。
+- [ ] T35: [测试] 执行 `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py`，确保助理 UI 无新增硬编码视觉字面量。
 - [ ] T36: [测试] 执行 `make gate` 与 `make gate-full` 所需最小闭环，确认 metadata、codegen、契约、UI 回归可复跑。
 - [ ] T37: [发布] 配置灰度开关：`skill_shell_v2_enabled`、`markdown_first_rendering_enabled`、`session_preference_facts_enabled`、`fallback_general_skill_enabled`、`problem_class_routing_enabled`。
 - [ ] T38: [发布] 按 5% / 25% / 50% / 100% 规划天气试点到统一主线的放量步骤，并定义回滚阈值。

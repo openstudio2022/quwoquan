@@ -1,0 +1,64 @@
+id: CR-20260516-020
+title: freeze realtime recommendation feed baseline
+slug: realtime-recommendation-feed-baseline
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation
+  - specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline
+  - specs/feature-tree/recommendation-platform/rec-model-service
+  - specs/feature-tree/recommendation-platform/rec-model-training
+
+entries:
+  - timestamp: "2026-05-16T00:30:00+08:00"
+    summary: 冻结实时推荐流商用基线，覆盖端云全链路——多路召回、行为闭环、特征分层、训练管线、模型灰度和回滚。
+    reason: 当前推荐链路存在多个工程断点（main.go 只注入单一候选源、端上缺 sessionId/click/skip 事件、训练脚本占位），需系统性补齐以达到商用初始能力。
+    change_type:
+      - baseline
+      - metadata_first
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline/spec.md
+        sections:
+          - 功能说明
+          - 约束
+          - 范围
+          - 验收重点
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline/design.md
+        sections:
+          - 设计决策
+          - metadata 变更
+          - 灰度与回滚
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline/acceptance.yaml
+        sections:
+          - A1_multi_recall
+          - A2_rule_scorer_personalization
+          - A3_behavior_event_closure
+          - A4_realtime_session_response
+          - A5_training_pipeline_e2e
+          - A6_model_grayscale_quality
+          - A7_data_import_closure
+          - A8_rollback_drill
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline/plan.yaml
+        sections:
+          - slices
+      - path: quwoquan_service/contracts/metadata/content/post/behaviors.yaml
+        sections:
+          - behavior_events
+      - path: quwoquan_service/contracts/metadata/content/post/service.yaml
+        sections:
+          - api_routes
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+        - T3
+        - T4
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - 端侧行为事件新增字段为向后兼容扩展，不破坏现有契约。
+      - 多路召回注入为 main.go 初始化代码变更，不改 Engine 接口。
+      - 模型灰度通过 experiments 分桶控制，默认 control 桶走规则，无用户可见变更。

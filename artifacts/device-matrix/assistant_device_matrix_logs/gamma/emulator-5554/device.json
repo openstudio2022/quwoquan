@@ -1,0 +1,18 @@
+{
+  "capturedAt": "2026-05-04T18:37:45.094552Z",
+  "suite": "assistant-device-matrix",
+  "environment": "gamma",
+  "device": {
+    "id": "emulator-5554",
+    "name": "sdk gphone64 arm64",
+    "targetPlatform": "android-arm64",
+    "sdk": "Android 12 (API 31)",
+    "emulator": true,
+    "ephemeral": false,
+    "screenClass": "phone",
+    "gatewayBaseUrl": "http://118.31.239.122:18000"
+  },
+  "extra": {
+    "screenClass": "phone"
+  }
+}

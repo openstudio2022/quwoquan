@@ -8,12 +8,12 @@ policy:
     root_commands: ".cursor/commands/"
 
 verification_rules:
-  feature_traceability: { script: "scripts/verify_feature_traceability.sh" }
-  contract_metadata: { script: "scripts/verify_contract_metadata.sh" }
-  specs_l1: { script: "scripts/verify_specs_l1_hierarchy.sh" }
-  feature_tree: { script: "scripts/verify_feature_tree_refactor.sh" }
-  engineering: { script: "scripts/verify_engineering_directory.sh" }
-  opsx_8services: { script: "scripts/verify_opsx_ff_8services_consistency.sh" }
+  feature_traceability: { script: "agent_ops/scaffold/verify_feature_traceability.sh" }
+  contract_metadata: { script: "quwoquan_service/scripts/contract/verify_contract_metadata.sh" }
+  specs_l1: { script: "agent_ops/scaffold/verify_specs_l1_hierarchy.sh" }
+  feature_tree: { script: "agent_ops/scaffold/verify_feature_tree_refactor.sh" }
+  engineering: { script: "agent_ops/scaffold/verify_engineering_directory.sh" }
+  opsx_8services: { script: "quwoquan_service/scripts/deploy/verify_opsx_ff_8services_consistency.sh" }
   opsx_8services_scope:
     services: [gateway-service, orchestrator-service, content-service, circle-service, user-service, chat-service, assistant-service, product-ops]
     required: [design.md, tasks.md, specs/*/spec.md, services/*/]
@@ -23,7 +23,7 @@ required_directories:
   - "specs"
   - "specs/changelog"
   - "specs/feature-tree"
-  - "scripts"
+  - "agent_ops"
   - ".cursor/rules"
   - ".cursor/commands"
   - "quwoquan_app"
@@ -35,21 +35,21 @@ required_directories:
 required_files:
   - "README.md"
   - "Makefile"
-  - "scripts/gate_repo.sh"
-  - "scripts/new_feature_fullstack.sh"
-  - "scripts/new_service_fullstack.sh"
-  - "scripts/bootstrap_service_config_layout.sh"
-  - "scripts/verify_feature_traceability.sh"
-  - "scripts/verify_contract_metadata.sh"
-  - "scripts/verify_acceptance_standard.sh"
-  - "scripts/verify_specs_l1_hierarchy.sh"
-  - "scripts/verify_feature_tree_refactor.sh"
-  - "scripts/verify_service_config_layout.sh"
-  - "scripts/verify_service_env_contract.sh"
-  - "scripts/verify_config_release_version_mapping.sh"
-  - "scripts/verify_config_image_compat.sh"
-  - "scripts/verify_quwoquan_data.sh"
-  - "scripts/scaffold_feature_tree_from_yaml.sh"
+  - "agent_ops/gate/gate_repo.sh"
+  - "agent_ops/scaffold/new_feature_fullstack.sh"
+  - "agent_ops/scaffold/new_service_fullstack.sh"
+  - "quwoquan_service/scripts/runtime/bootstrap_service_config_layout.sh"
+  - "agent_ops/scaffold/verify_feature_traceability.sh"
+  - "quwoquan_service/scripts/contract/verify_contract_metadata.sh"
+  - "agent_ops/scaffold/verify_acceptance_standard.sh"
+  - "agent_ops/scaffold/verify_specs_l1_hierarchy.sh"
+  - "agent_ops/scaffold/verify_feature_tree_refactor.sh"
+  - "quwoquan_service/scripts/runtime/verify_service_config_layout.sh"
+  - "quwoquan_service/scripts/runtime/verify_service_env_contract.sh"
+  - "quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh"
+  - "quwoquan_service/scripts/deploy/verify_config_image_compat.sh"
+  - "quwoquan_data/scripts/gate_e2e.py"
+  - "agent_ops/scaffold/scaffold_feature_tree_from_yaml.sh"
   - "changes/README.md"
   - "changes/feature_catalog.yaml"
   - "specs/00_AGENT_MASTER_SPEC.md"

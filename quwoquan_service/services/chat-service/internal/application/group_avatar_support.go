@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -58,20 +59,51 @@ func ResolveGroupAvatarURL(conv model.Conversation) string {
 }
 
 func ResolveConversationAvatarURL(conv model.Conversation) string {
-	t := strings.TrimSpace(conv.Type)
-	if t == "direct" {
-		return strings.TrimSpace(conv.AvatarUrl)
+	t := PublicConversationType(conv.Type, conv.CircleId)
+	if t == conversationTypeDirect {
+		return resolveConversationAvatarURLValue(conv.AvatarUrl, 0)
 	}
-	if t == "group" || t == "circle" {
-		if u := strings.TrimSpace(conv.AvatarUrl); u != "" {
+	if t == conversationTypeGroup {
+		if u := ResolveGroupAvatarURL(conv); u != "" {
 			return u
 		}
-		if u := ResolveGroupAvatarURL(conv); u != "" {
+		if u := resolveConversationAvatarURLValue(conv.AvatarUrl, conv.GroupAvatarVersion); u != "" {
 			return u
 		}
 		return DefaultGroupAvatarURL()
 	}
-	return strings.TrimSpace(conv.AvatarUrl)
+	return resolveConversationAvatarURLValue(conv.AvatarUrl, 0)
+}
+
+func RegisterGroupAvatarAsset(
+	ctx context.Context,
+	media GroupAvatarAssetizer,
+	conversationID string,
+	members []model.ConversationMember,
+) (runtimemedia.DerivedAvatarAsset, string, error) {
+	if media == nil {
+		return runtimemedia.DerivedAvatarAsset{}, "", fmt.Errorf("group avatar assetizer is required")
+	}
+	top9 := selectTopAvatarMembers(members)
+	if len(top9) == 0 {
+		return runtimemedia.DerivedAvatarAsset{}, "", fmt.Errorf("group avatar render requires at least one member")
+	}
+	sourceHash := BuildGroupAvatarSourceHash(top9)
+	memberAvatarURLs := make([]string, 0, len(top9))
+	for _, member := range top9 {
+		memberAvatarURLs = append(memberAvatarURLs, resolveGroupAvatarSourceURL(member.AvatarUrl))
+	}
+	asset, err := media.Register(ctx, runtimemedia.RegisterGroupAvatarRequest{
+		ConversationID:   conversationID,
+		SourceHash:       sourceHash,
+		LayoutVersion:    groupAvatarLayoutVersion,
+		Contributors:     buildAvatarSources(top9),
+		MemberAvatarURLs: memberAvatarURLs,
+	})
+	if err != nil {
+		return runtimemedia.DerivedAvatarAsset{}, "", err
+	}
+	return asset, sourceHash, nil
 }
 
 func RecomputeGroupAvatar(
@@ -91,7 +123,7 @@ func RecomputeGroupAvatar(
 	if err != nil {
 		return err
 	}
-	if conv.Type != "group" && conv.Type != "circle" {
+	if !IsGroupConversation(*conv) {
 		return nil
 	}
 	if strings.TrimSpace(conv.Status) != "active" {
@@ -130,17 +162,7 @@ func RecomputeGroupAvatar(
 	if media == nil {
 		return nil
 	}
-	memberAvatarURLs := make([]string, 0, len(top9))
-	for _, m := range top9 {
-		memberAvatarURLs = append(memberAvatarURLs, strings.TrimSpace(m.AvatarUrl))
-	}
-	asset, err := media.Register(ctx, runtimemedia.RegisterGroupAvatarRequest{
-		ConversationID:   conversationID,
-		SourceHash:       sourceHash,
-		LayoutVersion:    groupAvatarLayoutVersion,
-		Contributors:     buildAvatarSources(top9),
-		MemberAvatarURLs: memberAvatarURLs,
-	})
+	asset, sourceHash, err := RegisterGroupAvatarAsset(ctx, media, conversationID, top9)
 	if err != nil {
 		return err
 	}
@@ -230,7 +252,7 @@ func ensureConversationAvatarNotification(
 	}
 	payload := map[string]any{
 		"conversationId":        conv.ID,
-		"avatarUrl":             strings.TrimSpace(conv.AvatarUrl),
+		"avatarUrl":             ResolveConversationAvatarURL(*conv),
 		"groupAvatarAssetId":    conv.GroupAvatarAssetId,
 		"groupAvatarVersion":    conv.GroupAvatarVersion,
 		"groupAvatarSourceHash": conv.GroupAvatarSourceHash,
@@ -353,6 +375,31 @@ func buildAvatarSources(members []model.ConversationMember) []runtimemedia.Avata
 		})
 	}
 	return sources
+}
+
+func resolveGroupAvatarSourceURL(raw string) string {
+	source := strings.TrimSpace(raw)
+	if source == "" {
+		return ""
+	}
+	if strings.Contains(source, "://") {
+		return source
+	}
+	return runtimemedia.BuildPublicMediaURL(groupAvatarCDNBase(), source, 0)
+}
+
+func resolveConversationAvatarURLValue(raw string, version int64) string {
+	source := strings.TrimSpace(raw)
+	if source == "" {
+		return ""
+	}
+	if strings.Contains(source, "://") {
+		return source
+	}
+	if publicURL := runtimemedia.BuildPublicMediaURL(groupAvatarCDNBase(), source, version); publicURL != "" {
+		return publicURL
+	}
+	return source
 }
 
 func int64String(value int64) string {

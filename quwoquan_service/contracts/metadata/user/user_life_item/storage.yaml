@@ -8,8 +8,8 @@ tables:
     pk: id
     fk: { column: user_id, references: user_profiles.user_id, on_delete: CASCADE }
     columns:
-      - { name: id,          type: VARCHAR(36),  constraints: [PK] }
-      - { name: user_id,     type: VARCHAR(36),  constraints: [NOT_NULL] }
+      - { name: id,          type: VARCHAR(64),  constraints: [PK] }
+      - { name: user_id,     type: VARCHAR(96),  constraints: [NOT_NULL] }
       - { name: category,    type: VARCHAR(32),  constraints: [NOT_NULL] }
       - { name: title,       type: VARCHAR(128), constraints: [NOT_NULL] }
       - { name: subtitle,    type: VARCHAR(256) }

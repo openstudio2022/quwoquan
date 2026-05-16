@@ -9,7 +9,7 @@
 | **契约包** | [`packages/quwoquan_cloud_contracts`](../../packages/quwoquan_cloud_contracts/)：`CircleRepository`、`ContentRepository`（含 `CommentPage`、`kFeedSortRecommend`） |
 | **组合根** | [`cloud_repository_binding.dart`](../../quwoquan_app/lib/core/di/cloud_repository_binding.dart) + [`app_providers.dart`](../../quwoquan_app/lib/core/providers/app_providers.dart) 使用 `cloudRepositoryImplForMode` |
 | **正式入口** | 已有 [`main_prod.dart`](../../quwoquan_app/lib/main_prod.dart) 锁定 Remote |
-| **门禁** | [`verify_lib_no_import_test_tree.py`](../../scripts/verify_lib_no_import_test_tree.py)，`make verify-app-lib-no-test-import`，已接入 [`gate_repo.sh`](../../scripts/gate_repo.sh) |
+| **门禁** | [`verify_lib_no_import_test_tree.py`](../../quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py)，`make verify-app-lib-no-test-import`，已接入 [`gate_repo.sh`](../../agent_ops/gate/gate_repo.sh) |
 | **Analytics** | [`AnalyticsService.forTesting`](../../quwoquan_app/lib/analytics/analytics.dart) 按 `mode` 默认 Remote/Mock `OpsEventRepository` |
 
 ## 后续波次

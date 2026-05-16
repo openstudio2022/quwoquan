@@ -5,22 +5,22 @@ import 'package:quwoquan_app/assistant/transcript/user_utterance/utterance_send_
 class UserUtterance {
   const UserUtterance({
     required this.text,
-    this.personaId = '',
+    this.subAccountId = '',
     this.sendState = UtteranceSendState.sent,
   });
 
   final String text;
-  final String personaId;
+  final String subAccountId;
   final UtteranceSendState sendState;
 
   UserUtterance copyWith({
     String? text,
-    String? personaId,
+    String? subAccountId,
     UtteranceSendState? sendState,
   }) {
     return UserUtterance(
       text: text ?? this.text,
-      personaId: personaId ?? this.personaId,
+      subAccountId: subAccountId ?? this.subAccountId,
       sendState: sendState ?? this.sendState,
     );
   }

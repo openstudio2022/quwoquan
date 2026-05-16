@@ -104,7 +104,6 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 	set := bson.M{
 		"postId":             postID,
 		"authorId":           strVal(event.Payload, "authorId"),
-		"profileSubjectId":   strVal(event.Payload, "profileSubjectId"),
 		"contentType":        strVal(event.Payload, "contentType"),
 		"contentIdentity":    strVal(event.Payload, "contentIdentity"),
 		"title":              strVal(event.Payload, "title"),

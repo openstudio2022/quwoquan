@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "quwoquan/tag/_taxonomy",
+  "title": "标签分类体系快照",
+  "description": "_taxonomy.json 全局快照，记录版本、分组、维度汇总与统计",
+  "type": "object",
+  "required": ["version", "schemaVersion", "groups", "dimensions", "generatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "内容版本号，如 v4"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "description": "schema 版本，如 1.0"
+    },
+    "groups": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["Topic", "Audience", "Format", "Entity"] },
+      "description": "顶级分组列表，固定为 4 个"
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "group", "label", "count"],
+        "properties": {
+          "id": { "type": "string", "description": "相对于 tags/ 的路径，如 Topic/主题" },
+          "group": { "type": "string", "enum": ["Topic", "Audience", "Format", "Entity"] },
+          "label": { "type": "string" },
+          "count": { "type": "integer", "description": "该维度下标签总数" },
+          "maxDepth": { "type": "integer" }
+        }
+      }
+    },
+    "totalCount": {
+      "type": "integer",
+      "description": "全量标签总数（不含 _dimension.json / _group.json）"
+    },
+    "stats": {
+      "type": "object",
+      "description": "按分组/维度的统计摘要",
+      "properties": {
+        "byGroup": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "geoCount": { "type": "integer" },
+        "nonGeoCount": { "type": "integer" }
+      }
+    },
+    "generatedAt": { "type": "string", "format": "date-time" }
+  }
+}

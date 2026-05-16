@@ -101,6 +101,6 @@
 | 层 | 证据 |
 |----|------|
 | **T1** | `spec.md`、`design.md`、`acceptance.yaml`、`page-dual-theme-matrix.md`、`CR-20260330-012-s6-dual-theme-baseline.yaml` |
-| **T2** | `flutter analyze quwoquan_app/lib`、`scripts/verify_dart_semantic.py`、涉及页 PR 更新矩阵 |
+| **T2** | `flutter analyze quwoquan_app/lib`、`quwoquan_app/scripts/runtime/verify_dart_semantic.py`、涉及页 PR 更新矩阵 |
 | **T3** | 各 **slice** 合并前深浅色手动抽检（列表见 `plan.yaml`） |
 | **T4** | 预留：Golden / 截图脚本（`plan` P2 阶段） |

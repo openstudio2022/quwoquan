@@ -7,7 +7,7 @@
 > **关联**：双色矩阵 `dual-theme-page-coverage/page-dual-theme-matrix.md`（P6 可与本表交叉引用，避免双写结论）
 
 **扫描基线**：`quwoquan_app/lib/ui/**/pages/*_page.dart`、`lib/components/**/*_page.dart`、`lib/ui/welcome/pages/welcome_screen.dart`（无 `_page` 后缀的入口屏）、**`lib/app/shell/*.dart`**（主壳 / 底栏，P1+P6 强相关）。  
-**门禁**：`scripts/verify_page_matrix_scan_complete.py` — 磁盘扫描集 **=** 矩阵路径集，且矩阵路径 **⊆** `metadata_driven_ui_gap_inventory.yaml` 的 `ui_pages`（防漏页、漏清单）。  
+**门禁**：`quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py` — 磁盘扫描集 **=** 矩阵路径集，且矩阵路径 **⊆** `metadata_driven_ui_gap_inventory.yaml` 的 `ui_pages`（防漏页、漏清单）。  
 **帖子全链路 P2**：`post-projection-pipeline-inventory.md`；2026-04-11 已收口为清单 `compliant` + 矩阵 **P2=✓**（`unified_media_viewer` 的 P6 仍 exempt）。  
 **排除**：`lib/ui/chat/pages/chat_display_fallbacks.dart` 仅为 `export`，不占行（见 `dual-theme-page-coverage/page-dual-theme-matrix.md`）。  
 **P6 口径**：与 `page-dual-theme-matrix.md` 一致 — `✓`=full，`○`=partial（待按 S6 收敛），`—`=exempt。
@@ -58,11 +58,11 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Tab 根；P2 联系人 `ChatContactsRow`+`listContacts` DTO；P6 on-accent 字色走 `badgeForeground`；群头像优先预渲染 URL，组合头像仅兜底 |
+| `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Tab 根；P2 联系人 `ChatContactsRow`+`listContacts` DTO；P6 on-accent 字色走 `badgeForeground`；会话列表头像统一走共享 token，群头像优先预渲染 URL，组合头像仅兜底 |
 | `lib/ui/chat/pages/chat_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 委托 `ChatConversationPage`；P2 消息链 `ChatMessageDto` + Repository 强类型 |
-| `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 codegen DTO |
+| `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 `ChatMessageDto` + `ChatMessageDisplayItem` 强类型展示链 |
 | `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatGroupSettingsDto`；聊天信息；`AppScaffold`；P7 成员网格按头像与文字高度计算 |
-| `lib/ui/chat/pages/start_group_chat_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `ChatInboxDto`/`CircleDto`/`ChatConversationCreatedDto` + 向导 ViewModel；模态建群 |
+| `lib/ui/chat/pages/start_group_chat_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `ChatInboxDto`/`CircleDto`/`ChatConversationCreatedDto` + 向导 ViewModel；模态建群；选择群聊页与主列表共享会话头像 token / 占位视觉 |
 | `lib/ui/chat/pages/transfer_ownership_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 成员 DTO 过滤/展示；`SettingsInsetMemberPickerPageScaffold` |
 | `lib/ui/chat/pages/group_member_search_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatConversationMemberDto`；**P5** `shell=search_embedded`（`settings_canonical_manifest`）；**P7** 按默认 B 验收 |
 | `lib/ui/chat/pages/group_manage_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatGroupSettingsDto`；`SettingsInsetFormPageScaffold` |
@@ -221,6 +221,7 @@
 | 2026-03-30 | **Phase7–9**：rtc 选人 `CallPickerParticipantRow`+`ChatInboxDto`；路由 `CallParticipantPickerRouteExtra`；assistant 设置/技能中心 `AssistantLocalSessionSummaryView`/`AssistantSessionDetailView`；清单 rtc 全 compliant、assistant 非对话页 compliant；矩阵 P2 统计 51/1 |
 | 2026-03-30 | **Assistant 对话时间轴 DTO**：`AssistantTranscriptTimelineRow`/`PersistedTimelineTurnCodec`/`AssistantFeedbackTarget`；`assistant_conversation_page` 与 bubble/answer 对外 API 用 transcript row；清单 assistant 对话页 compliant；矩阵 P2 余量清零（52/0） |
 | 2026-04-11 | **帖子 ReadPresentation + Surface 全量收口**：`PostReadProjectionFacade`/`PostReadUiBundle`；发现/圈子/资料/详情/搜索/创作链/分享模板接表面枚举与 wire；清单 content/circle/user/search 帖子相关行 compliant；矩阵上述 17 行 P2 ✓；见 `post-projection-pipeline-inventory.md` §4 |
+| 2026-05-07 | **chat 强类型收口**：`LocalChatSearchStore` 联系人/会话快照改具名记录；`SearchHitPayloadChatContact` 收口 chat contact payload；`MockChatRepository` 内部缓存转 typed state；`chat_conversation_page` / `ChatMessageBubble` / `ConversationMessageActionMenuOverlay` 改消费 `ChatMessageDisplayItem` |
 | 2026-03-29 | **P3 Mock/Remote 收口**：`ui_mock_isolation_allowlist` 清零；聊天/圈子/搜索/global_surface 数据经 `ChatRepository`/`CircleRepository`/`AppContentRepository`；`RemoteAppContentRepository` 不再委托 Mock（空态/最小 Map）；`APP_DATA_SOURCE` + Release 隐藏开发者数据源开关；`main_prod.dart` + CI `flutter build macos` 带 `dart-define` |
 | 2026-03-30 | **S7/P7 默认 B** + **`search_embedded`**：`GroupMemberSearchPage` 纳入 `settings_canonical_manifest`；`verify_settings_canonical` 校验 `EmbeddedMemberSearchPageShell`；§4.3 增 C 类；`page-horizontal-quality-spec` / `nine-session-rollout-plan` 写明 P7 默认策略 B |
 | 2026-03-30 | **S8/P8**：`verify_dart_semantic` 全仓无命中；`.verify_dart_semantic_baseline.txt` 清空（仅注释）；增补 `AppSpacing.zero`/`textLineHeightSingle`、`AppColors.networkCallQualityWeak`、HSL 八色 token；见 `s8-p8-semantic-token/plan.yaml` 各 slice 已实施 |

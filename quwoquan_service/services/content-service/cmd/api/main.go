@@ -83,6 +83,13 @@ type config struct {
 		TimeoutMs int    `yaml:"timeout_ms"`
 		Enabled   bool   `yaml:"enabled"`
 	} `yaml:"rec_model_service"`
+
+	Embedding struct {
+		Endpoint string `yaml:"endpoint"`
+		APIKey   string `yaml:"api_key"`
+		Model    string `yaml:"model"`
+		Enabled  bool   `yaml:"enabled"`
+	} `yaml:"embedding"`
 }
 
 func main() {
@@ -138,6 +145,7 @@ func main() {
 	var reportStore persistence.ReportRepository
 	var postServiceOpts []application.PostServiceOption
 	var sharedProjector application.Projector
+	var mongoCandidateSources []rtrec.CandidateSource
 	recOpts := []rtrec.EngineOption{
 		rtrec.WithRecallTimeout(150 * time.Millisecond),
 		rtrec.WithLogger(logger),
@@ -183,6 +191,34 @@ func main() {
 		sharedProjector = &projectorAdapter{discovery: discoveryProjector, recommend: recommendProjector}
 		postServiceOpts = append(postServiceOpts, application.WithProjector(sharedProjector))
 		recOpts = append(recOpts, rtrec.WithFeatureProvider(recinfra.NewFeatureStore(db)))
+
+		// Multi-channel recall sources
+		tagSource := recinfra.NewTagRecallSource(db)
+		hotSource := recinfra.NewHotRecallSource(db, 48*time.Hour)
+		authorSource := recinfra.NewAuthorRecallSource(db)
+		exploreSource := recinfra.NewExploreRecallSource(db)
+		mongoSource := recinfra.NewMongoCandidateSource(db)
+		mongoCandidateSources = []rtrec.CandidateSource{
+			tagSource,
+			hotSource,
+			authorSource,
+			exploreSource,
+			mongoSource,
+		}
+		recOpts = append(recOpts, rtrec.WithPreRanker(rtrec.NewQualityPreRanker(72*time.Hour)))
+		log.Printf("content-service multi-channel recall enabled: tag/hot/author/explore/mongo/postRepo")
+
+		// Vector recall (optional, requires embedding service)
+		if cfg.Embedding.Enabled && cfg.Embedding.Endpoint != "" {
+			var embOpts []rtrec.RemoteEmbeddingOption
+			if cfg.Embedding.Model != "" {
+				embOpts = append(embOpts, rtrec.WithEmbeddingModel(cfg.Embedding.Model))
+			}
+			embedder := rtrec.NewRemoteEmbeddingService(cfg.Embedding.Endpoint, cfg.Embedding.APIKey, embOpts...)
+			vectorSource := recinfra.NewVectorRecallWithEmbedding(db, embedder)
+			mongoCandidateSources = append(mongoCandidateSources, vectorSource)
+			log.Printf("content-service vector recall enabled endpoint=%s", cfg.Embedding.Endpoint)
+		}
 	} else {
 		store = persistence.NewPostStore(recinfra.DefaultSeedPosts())
 		log.Printf("content-service storage=inmemory (no mongo.uri configured)")
@@ -207,6 +243,7 @@ func main() {
 	}
 
 	source := recinfra.NewPostRepositorySource(store)
+	candidateSources := append(mongoCandidateSources, source)
 
 	if cfg.RecModelService.Enabled && cfg.RecModelService.URL != "" {
 		timeout := time.Duration(cfg.RecModelService.TimeoutMs) * time.Millisecond
@@ -221,7 +258,7 @@ func main() {
 		recOpts = append(recOpts, rtrec.WithScorer(cascade))
 		log.Printf("content-service rec-model-service enabled url=%s timeout=%v", cfg.RecModelService.URL, timeout)
 	}
-	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source}, recOpts...)
+	engine := rtrec.NewEngine(sessionCache, candidateSources, recOpts...)
 	feedService := application.NewFeedService(engine, source)
 	postService := application.NewPostService(store, postServiceOpts...)
 	reportService := application.NewReportService(reportStore, eventPub)
@@ -231,6 +268,7 @@ func main() {
 		application.WithBehaviorEventPublisher(eventPub),
 		application.WithBehaviorProjector(sharedProjector),
 		application.WithBehaviorFeedbackRecorder(recFeedback),
+		application.WithSessionCacheInvalidator(sessionCache.Invalidate),
 	)
 	handler := httpadapter.NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
 

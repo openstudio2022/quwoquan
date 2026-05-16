@@ -4,13 +4,13 @@
 
 ### M1：静态门禁脚本与 allowlist
 
-- [x] 新增 `scripts/verify_ios_native_surface_gate.py`
+- [x] 新增 `quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py`
 - [x] 新增 `specs/gates/ios_native_surface_allowlist.yaml` 登记存量例外
 - [x] 违规输出 path:line 与规则引用，失败 exit 1
 
 ### M2：gate 集成
 
-- [x] `scripts/gate_repo.sh` 在 quwoquan_app 段调用 `verify_ios_native_surface_gate.py`
+- [x] `agent_ops/gate/gate_repo.sh` 在 quwoquan_app 段调用 `verify_ios_native_surface_gate.py`
 
 ### M3：规范与页面根壳收敛
 

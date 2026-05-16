@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "quwoquan/tag/_dimension",
+  "title": "标签维度元数据",
+  "description": "描述一个维度的语义边界、深度规格与路径策略建议（pathPolicy 仅为 warning 级别提示，不默认强制）",
+  "type": "object",
+  "required": ["label", "labelEn", "maxDepth", "createdAt", "updatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "label": { "type": "string", "description": "中文维度名" },
+    "labelEn": { "type": "string", "description": "英文维度名" },
+    "description": { "type": "string", "description": "维度语义说明" },
+    "maxDepth": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "建议最大深度；行政区 5 层，其余通常 3-4 层"
+    },
+    "expectedSize": {
+      "type": "integer",
+      "description": "预期标签数量（规划参考，非强制）"
+    },
+    "pathPolicy": {
+      "type": "string",
+      "enum": ["any-depth", "prefer-leaf", "leaf-only"],
+      "default": "any-depth",
+      "description": "路径引用建议（仅 warning 级别，不默认阻断）：any-depth=任意层均可引用；prefer-leaf=建议引用到叶子类型；leaf-only=应引用到叶子（警告但不阻断）"
+    },
+    "refHint": {
+      "type": "string",
+      "description": "可选交叉引用提示，如 Audience/用户/国籍 建议引用 Entity/地点/国家 的叶子节点"
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

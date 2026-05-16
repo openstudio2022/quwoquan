@@ -251,10 +251,14 @@ void main() {
           expect(
             items.every(
               (it) =>
-                  it.articleDocument != null && it.articleDocument!.isNotEmpty,
+                  it.articleMarkdownDigest != null &&
+                  it.articleMarkdownDigest!.isNotEmpty &&
+                  it.articleRenderProfile != null &&
+                  it.articleRenderProfile!.isNotEmpty,
             ),
             isTrue,
-            reason: 'template=$template 的 canonical 样本必须带 articleDocument',
+            reason:
+                'template=$template 的 canonical 样本必须带 Markdown digest 与 render profile',
           );
         }
       });

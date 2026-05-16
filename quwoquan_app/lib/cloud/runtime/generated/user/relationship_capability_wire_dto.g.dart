@@ -2,8 +2,8 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class RelationshipCapabilityWireDto {
-  final String viewerProfileSubjectId;
-  final String targetProfileSubjectId;
+  final String viewerSubAccountId;
+  final String targetSubAccountId;
   final String? relationState;
   final String? relationTier;
   final bool? canFollow;
@@ -20,8 +20,8 @@ class RelationshipCapabilityWireDto {
   final bool isBlockedBy;
 
   RelationshipCapabilityWireDto({
-    this.viewerProfileSubjectId = '',
-    this.targetProfileSubjectId = '',
+    this.viewerSubAccountId = '',
+    this.targetSubAccountId = '',
     this.relationState,
     this.relationTier,
     this.canFollow,
@@ -40,8 +40,8 @@ class RelationshipCapabilityWireDto {
 
   factory RelationshipCapabilityWireDto.fromMap(Map<String, dynamic> m) {
     return RelationshipCapabilityWireDto(
-      viewerProfileSubjectId: m['viewerProfileSubjectId']?.toString() ?? m['viewerSubAccountId']?.toString() ?? '',
-      targetProfileSubjectId: m['targetProfileSubjectId']?.toString() ?? m['targetSubAccountId']?.toString() ?? '',
+      viewerSubAccountId: m['viewerSubAccountId']?.toString() ?? '',
+      targetSubAccountId: m['targetSubAccountId']?.toString() ?? '',
       relationState: m['relationState']?.toString() ?? null,
       relationTier: m['relationTier']?.toString() ?? null,
       canFollow: m['canFollow'] as bool? ?? null,
@@ -61,8 +61,8 @@ class RelationshipCapabilityWireDto {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
-      'viewerProfileSubjectId': viewerProfileSubjectId,
-      'targetProfileSubjectId': targetProfileSubjectId,
+      'viewerSubAccountId': viewerSubAccountId,
+      'targetSubAccountId': targetSubAccountId,
       'relationState': relationState,
       'relationTier': relationTier,
       'canFollow': canFollow,
@@ -81,8 +81,8 @@ class RelationshipCapabilityWireDto {
   }
 
   RelationshipCapabilityWireDto copyWith({
-    String? viewerProfileSubjectId,
-    String? targetProfileSubjectId,
+    String? viewerSubAccountId,
+    String? targetSubAccountId,
     String? relationState,
     String? relationTier,
     bool? canFollow,
@@ -99,8 +99,8 @@ class RelationshipCapabilityWireDto {
     bool? isBlockedBy,
   }) {
     return RelationshipCapabilityWireDto(
-      viewerProfileSubjectId: viewerProfileSubjectId ?? this.viewerProfileSubjectId,
-      targetProfileSubjectId: targetProfileSubjectId ?? this.targetProfileSubjectId,
+      viewerSubAccountId: viewerSubAccountId ?? this.viewerSubAccountId,
+      targetSubAccountId: targetSubAccountId ?? this.targetSubAccountId,
       relationState: relationState ?? this.relationState,
       relationTier: relationTier ?? this.relationTier,
       canFollow: canFollow ?? this.canFollow,

@@ -62,11 +62,11 @@ entries:
       - "user-service graph 读侧已改为 overfetch+fill，列表过滤不会因 strict/block/drift 直接缩页；搜索结果与公开 graph 列表不再暴露 `ownerUserId`。"
       - "App 主页关系能力已收紧为“服务端 capability 真相 + 显式 optimistic follow overlay”，不再直接把本地 `fromFollowFlags()` 结果当成最终投影。"
       - "graph/follow 关键指标现已具备最小触发断言：`follow_command_latency_ms`、`follow_duplicate_request_count`、`follow_block_rejection_count`、`follow_counter_mismatch_count`、`graph_list_latency_ms`、`graph_filter_mismatch_count`、`relationship_capability_mismatch_count`、`graph_current_edge_read_count`。"
-      - "本轮实测命令：`go test ./runtime/governance ./services/user-service/tests -run 'Test(FeatureEnabled|Persona|Follow_|GetRelationship_Mutual|ListFollowing_|ListFollowers_|ProfileSubjectView_|SearchSocialRelations_|RelationshipCapabilityView_)'`、`flutter test test/ui/user/providers/profile_state_provider_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart`。"
+      - "本轮实测命令：`go test ./runtime/governance ./services/user-service/tests -run 'Test(FeatureEnabled|Persona|Follow_|GetRelationship_Mutual|ListFollowing_|ListFollowers_|SubAccountView_|SearchSocialRelations_|RelationshipCapabilityView_)'`、`flutter test test/ui/user/providers/profile_state_provider_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart`。"
   - timestamp: "2026-04-24T10:40:00+08:00"
     summary: >
       完成 M4 graph 写读闭环第一轮收口：补齐 circle persona 显式透传与 notification replay
-      指标证据，把 user-service follow/block/list/capability 单轨切到 `profile-subject` 路由，
+      指标证据，把 user-service follow/block/list/capability 单轨切到 `sub-accounts` 路由，
       并回写 follow/social-graph/Journey 的真实验收状态。
     reason: >
       M3 结束后仍有三个影响 graph 可信度的缺口：circle join/leave 仅“先读 active persona provider”
@@ -125,7 +125,7 @@ entries:
     notes:
       - "App 已新增显式 persona request headers helper，circle join/leave 从 UI 调用点开始传递 `ownerUserId / actorProfileSubjectId / personaId / personaContextVersion`，circle-service 以 `X-Profile-Subject-Id` 作为成员写入主体。"
       - "assistant conversation controller 已新增 notification replay persona mismatch 回归测试；`persona_context_mismatch_count / assistant_persona_drift_count / notification_wrong_persona_open_count / persona_context_stale_count` 均有 T2 证据。"
-      - "user-service follow/block/list/capability 统一切到 `/v1/user/profile-subjects/...`，写侧主体优先取显式 persona，其次取 active persona，flag-off 时回退单 user 基线。"
+      - "user-service follow/block/list/capability 统一切到 `/v1/user/sub-accounts/...`，写侧主体优先取显式 persona，其次取 active persona，flag-off 时回退单 user 基线。"
       - "follow graph 当前阶段把计数副作用收口为 owner profile 同步更新 + `follow_counter_mismatch_count` 指标，可支撑幂等与回退，但尚未升级为独立异步 projector，因此 A3/S1 保持 partial。"
       - "本轮实测命令：`go test ./runtime/governance ./services/user-service/tests/... ./services/circle-service/tests/...`、`flutter test test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart test/cloud/user/contract/user_profile_repository_contract_test.dart test/cloud/user/contract/block_repository_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart test/ui/user/providers/profile_state_provider_test.dart test/cloud/user/contract/relationship_capability_repository_contract_test.dart`。"
   - timestamp: "2026-04-24T03:20:00+08:00"
@@ -259,7 +259,7 @@ entries:
           - F6. 路由与引用合同
       - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/design.md
         sections:
-          - KD1：`ProfileSubjectView` 是唯一公开身份真相源
+          - KD1：`SubAccountProfileView` 是唯一公开身份真相源
           - KD4：可见性与 retired attribution 分层
           - KD5：路由使用 `userHandle`
           - feature flag、观测、SLO 验证与回滚方案
@@ -285,7 +285,7 @@ entries:
       rollout_impact: medium
       breaking_contract: true
     notes:
-      - "metadata 已统一：`ProfileSubjectType=user|persona`，公开 `ProfileSubjectView` 新增 `userHandle / isolationLevel`，公开 response 不再暴露 `ownerUserId`。"
+      - "metadata 已统一：`ProfileSubjectType=user|persona`，公开 `SubAccountProfileView` 新增 `userHandle / isolationLevel`，公开 response 不再暴露 `ownerUserId`。"
       - "user-service 公开读改为按 `userHandle` 优先解析，strict/retired persona 返回 404；`profileVisibility` 由 `isolationLevel` 派生。"
       - "App 公开消费入口已切到 canonical `profileSubjectId` 与 snapshot 字段，`PostBaseDto.authorProfileSubjectId` 不再回退 `authorId`。"
       - "`HasAttributedHistory` 已扩展到 `invite/greeting + posts/comments/messages/notifications`，retired persona 生命周期 guard 与记录快照证据已补齐。"
@@ -569,8 +569,8 @@ entries:
       启动 `/dev` 第一组切片，先完成 persona-aware metadata 真相源收口，并同步刷新 user/content/chat/assistant
       相关 codegen 生成物。
     reason: >
-      `plan.yaml` 的首个实施顺序要求先落 `metadata -> codegen`。现有仓库虽然已经有 `ProfileSubjectView`、
-      `ProfileSubjectMutation`、`RelationshipCapabilityView` 等半成品契约，但 owner plane、active persona
+      `plan.yaml` 的首个实施顺序要求先落 `metadata -> codegen`。现有仓库虽然已经有 `SubAccountProfileView`、
+      `SubAccountProfileMutation`、`RelationshipCapabilityView` 等半成品契约，但 owner plane、active persona
       context、follow/block 的 profileSubject 路由、content/chat/assistant 的 persona-aware 上下文与快照字段
       仍未统一，不能直接进入应用逻辑层实现。
     change_type:
@@ -867,10 +867,10 @@ entries:
       - path: quwoquan_service/tools/persona_rollout/main.go
         sections:
           - dry-run validate cli
-      - path: scripts/persona_migration_dry_run.sh
+      - path: quwoquan_service/scripts/persona/persona_migration_dry_run.sh
         sections:
           - local rehearsal entry
-      - path: scripts/persona_migration_validate.sh
+      - path: quwoquan_service/scripts/persona/persona_migration_validate.sh
         sections:
           - validation entry
     impact:

@@ -5,6 +5,7 @@
 //
 //	TestBehaviorBatchReport — behavior_batch_report
 //	TestBehaviorBatchEmpty  — behavior_batch_empty
+//	TestBehaviorBatchAcceptsLike — behavior_batch_accepts_like
 //	TestLikePost, TestFavoritePost, TestReportPost — 其他行为场景
 package tests
 
@@ -157,9 +158,9 @@ func TestBehaviorBatchWireAliases(t *testing.T) {
 	}
 }
 
-// TestBehaviorBatchRejectsDedicatedLike verifies like remains on its dedicated
-// reaction route instead of the generic behavior batch.
-func TestBehaviorBatchRejectsDedicatedLike(t *testing.T) {
+// TestBehaviorBatchAcceptsLike verifies that like is accepted as a supported
+// behavior action through the generic behavior batch endpoint.
+func TestBehaviorBatchAcceptsLike(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := createPost(t, `{"contentType":"image","title":"Like batch target","mediaUrls":["https://example.com/img.jpg"]}`)
 	postID, _ := created["_id"].(string)
@@ -173,14 +174,7 @@ func TestBehaviorBatchRejectsDedicatedLike(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var errResp map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &errResp); err != nil {
-		t.Fatalf("decode error response: %v", err)
-	}
-	if errResp["code"] == nil {
-		t.Error("expected structured error response with code field")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

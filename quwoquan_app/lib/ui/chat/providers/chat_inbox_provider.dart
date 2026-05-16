@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
@@ -80,15 +81,8 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
         if (!ref.mounted) {
           return;
         }
-        if (remote.isNotEmpty) {
-          _cache.putAll(
-            remote.map((item) => item.toMap()).toList(growable: false),
-          );
-        }
-        state = state.copyWith(
-          items: remote.isNotEmpty ? remote : cached,
-          isLoading: false,
-        );
+        _cache.replaceAll(remote.map(ConversationCacheRecord.fromInboxDto));
+        state = state.copyWith(items: remote, isLoading: false, error: null);
       } catch (error) {
         if (!ref.mounted) {
           return;
@@ -147,18 +141,17 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
           })
           .toList(growable: false),
     );
-    _cache.updateListFields(
+    _cache.applyListPatch(
       conversationId,
-      unreadCount: 0,
-      mentionUnreadCount: 0,
+      const ConversationListPatch(unreadCount: 0, mentionUnreadCount: 0),
     );
     state = state.copyWith(items: next);
   }
 
   List<ChatInboxDto> _readCache() {
     final cached = <ChatInboxDto>[];
-    for (final row in _cache.getAll()) {
-      final dto = ChatInboxDto.fromMap(row);
+    for (final record in _cache.getAll()) {
+      final dto = record.toChatInboxDto();
       if (dto.id.isEmpty) {
         continue;
       }

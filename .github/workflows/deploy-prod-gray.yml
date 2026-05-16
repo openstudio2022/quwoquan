@@ -116,7 +116,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 安装 kustomize
-        run: bash scripts/install_kustomize.sh
+        run: bash agent_ops/deploy/shared/install_kustomize.sh
       - name: Install kubectl
         run: |
           curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -133,7 +133,7 @@ jobs:
           REPLICAS=$replicas \
           DRY_RUN=false \
           PROD_KUBECONFIG="$PROD_KUBECONFIG" \
-          bash scripts/deploy_to_prod.sh
+          bash agent_ops/deploy/prod/deploy_to_prod.sh
       - name: Wait rollout
         run: kubectl rollout status deployment/seed-box -n seed-box-prod --timeout=5m
 

@@ -16,7 +16,7 @@ viewer 与 author profile 当前存在三类结构性问题：
 |------|------|
 | `viewer-profile-state-sync-contract/spec.md` | 范围与验收已明确，可直接进入细化设计 |
 | `content-display-journey-consistency/design.md` | 已选定“shared provider 为主、handoff/result 为补强、outbox 负责延迟批同步”的 Journey 方案 |
-| `owner-subaccount-homepage-unification/design.md` | `ProfileSubjectView` 与 `RelationshipCapabilityView` 已可直接复用 |
+| `owner-subaccount-homepage-unification/design.md` | `SubAccountProfileView` 与 `RelationshipCapabilityView` 已可直接复用 |
 | `content-action-intent-contract/design.md` | 可复用乐观更新与失败回滚边界，但要扩展到 outbox 聚合同步 |
 | 现状代码 | `profile_state_provider.dart` 仍以局部 `isFollowing` 触发远端写入；`UserProfileRouteExtra` 仍偏展示型，不承载 canonical key |
 

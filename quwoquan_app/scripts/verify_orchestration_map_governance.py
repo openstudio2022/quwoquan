@@ -46,7 +46,7 @@ DOC_COMMENT = re.compile(r"^\s*///?")
 
 BASE_DIR = os.path.join(os.path.dirname(__file__), os.pardir, "quwoquan_app")
 if not os.path.isdir(BASE_DIR):
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def scan():

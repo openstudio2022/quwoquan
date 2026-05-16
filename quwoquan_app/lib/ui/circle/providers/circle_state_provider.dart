@@ -156,9 +156,8 @@ class CircleStateNotifier extends Notifier<CircleState> {
       await repo.joinCircle(
         _circleId,
         ownerUserId: activeContext.ownerUserId,
-        actorProfileSubjectId: activeContext.profileSubjectId,
-        personaId: activeContext.personaId,
-        personaContextVersion: activeContext.contextVersion,
+        subAccountId: activeContext.subAccountId,
+        subAccountContextVersion: activeContext.contextVersion,
       );
     } catch (_) {
       state = state.copyWith(
@@ -178,9 +177,8 @@ class CircleStateNotifier extends Notifier<CircleState> {
       await repo.leaveCircle(
         _circleId,
         ownerUserId: activeContext.ownerUserId,
-        actorProfileSubjectId: activeContext.profileSubjectId,
-        personaId: activeContext.personaId,
-        personaContextVersion: activeContext.contextVersion,
+        subAccountId: activeContext.subAccountId,
+        subAccountContextVersion: activeContext.contextVersion,
       );
     } catch (_) {
       state = state.copyWith(
@@ -200,17 +198,15 @@ class CircleStateNotifier extends Notifier<CircleState> {
         await repo.leaveCircle(
           _circleId,
           ownerUserId: activeContext.ownerUserId,
-          actorProfileSubjectId: activeContext.profileSubjectId,
-          personaId: activeContext.personaId,
-          personaContextVersion: activeContext.contextVersion,
+          subAccountId: activeContext.subAccountId,
+          subAccountContextVersion: activeContext.contextVersion,
         );
       } else {
         await repo.joinCircle(
           _circleId,
           ownerUserId: activeContext.ownerUserId,
-          actorProfileSubjectId: activeContext.profileSubjectId,
-          personaId: activeContext.personaId,
-          personaContextVersion: activeContext.contextVersion,
+          subAccountId: activeContext.subAccountId,
+          subAccountContextVersion: activeContext.contextVersion,
         );
       }
     } catch (_) {

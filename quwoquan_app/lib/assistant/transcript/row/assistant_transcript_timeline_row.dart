@@ -14,7 +14,7 @@ const Set<String> kTranscriptEnvelopeKeys = {
   'senderId',
   'senderName',
   'senderAvatar',
-  'senderPersonaId',
+  'senderSubAccountId',
   'timestamp',
   'status',
   'isRead',
@@ -60,7 +60,7 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
     required this.senderId,
     required this.senderName,
     this.senderAvatar = '',
-    this.senderPersonaId = '',
+    this.senderSubAccountId = '',
     this.timestamp = '',
     this.status = '',
     this.isRead = true,
@@ -79,7 +79,7 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
   final String senderId;
   final String senderName;
   final String senderAvatar;
-  final String senderPersonaId;
+  final String senderSubAccountId;
   final String timestamp;
   final String status;
   final bool isRead;
@@ -88,7 +88,7 @@ final class UserTranscriptTimelineRow extends AssistantTranscriptTimelineRow {
 
   UserUtterance get utterance => UserUtterance(
         text: content,
-        personaId: senderPersonaId,
+        subAccountId: senderSubAccountId,
         sendState: sendState,
       );
 }

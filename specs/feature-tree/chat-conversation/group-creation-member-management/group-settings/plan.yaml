@@ -30,7 +30,7 @@ slices:
     order: 3
     commands:
       - cd quwoquan_app && flutter analyze
-      - python3 scripts/verify_dart_semantic.py
+      - python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
     test_layers:
       T1: required
       T2: required

@@ -2,8 +2,11 @@ package application
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -111,6 +114,26 @@ func NewPostService(store persistence.PostRepository, opts ...PostServiceOption)
 type contentReactionState struct {
 	Liked     bool
 	Favorited bool
+}
+
+func directShareKey(userID string) string {
+	return "direct:" + strings.TrimSpace(userID)
+}
+
+func hasActiveShareForUser(shares map[string]bool, userID string) bool {
+	normalizedUserID := strings.TrimSpace(userID)
+	if normalizedUserID == "" {
+		return false
+	}
+	for shareKey, active := range shares {
+		if !active {
+			continue
+		}
+		if shareActorID(shareKey) == normalizedUserID {
+			return true
+		}
+	}
+	return false
 }
 
 type PostServiceOption func(*PostService)
@@ -310,10 +333,8 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		strings.TrimSpace(asString(payload["assistantUsePolicy"])),
 	)
 	post := &postmodel.Post{
-		ID:               fmt.Sprintf("post_%d", now.UnixNano()),
-		AuthorId:         strings.TrimSpace(asString(payload["authorId"])),
-		PersonaId:        strings.TrimSpace(asString(payload["personaId"])),
-		ProfileSubjectId: strings.TrimSpace(asString(payload["profileSubjectId"])),
+		ID:       fmt.Sprintf("post_%d", now.UnixNano()),
+		AuthorId: strings.TrimSpace(asString(payload["authorId"])),
 		PersonaContextVersion: asInt64Flexible(
 			payload["personaContextVersion"],
 		),
@@ -343,24 +364,31 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		IllustrationAssetId: strings.TrimSpace(asString(payload["illustrationAssetId"])),
 		PublishLocation:     asMap(payload["publishLocation"]),
 		DeviceInfo:          asMap(payload["deviceInfo"]),
-		ArticleDocument:     asMap(payload["articleDocument"]),
-		ArticleTemplate:     strings.TrimSpace(asString(payload["articleTemplate"])),
-		ArticleFontPreset:   strings.TrimSpace(asString(payload["articleFontPreset"])),
-		Status:              "draft",
-		ModerationStatus:    "pending",
-		CreatedAt:           now,
-		UpdatedAt:           now,
-	}
-	if post.ProfileSubjectId == "" {
-		post.ProfileSubjectId = defaultString(post.PersonaId, post.AuthorId)
+		ArticleMarkdown:     strings.TrimSpace(asString(payload["articleMarkdown"])),
+		ArticleMarkdownVersion: defaultString(
+			strings.TrimSpace(asString(payload["articleMarkdownVersion"])),
+			"qwq-rich-md/1",
+		),
+		ArticleAssetManifest: asMap(payload["articleAssetManifest"]),
+		ArticleRenderProfile: asMap(payload["articleRenderProfile"]),
+		ArticleTemplate:      strings.TrimSpace(asString(payload["articleTemplate"])),
+		ArticleFontPreset:    strings.TrimSpace(asString(payload["articleFontPreset"])),
+		Status:               "draft",
+		ModerationStatus:     "pending",
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 	if post.AuthorId == "" {
-		post.AuthorId = defaultString(post.ProfileSubjectId, "user_guest")
+		return nil, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"authorId 不能为空",
+			"missing authorId/subAccountId",
+		)
 	}
 	if post.SourceType == "" {
 		post.SourceType = "original"
 	}
-	s.syncArticleDocumentSnapshot(post)
+	s.syncArticleMarkdownSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
 		return nil, err
 	}
@@ -412,7 +440,6 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 			Payload: map[string]any{
 				"_id":                post.ID,
 				"authorId":           post.AuthorId,
-				"profileSubjectId":   post.ProfileSubjectId,
 				"contentType":        post.ContentType,
 				"contentIdentity":    post.ContentIdentity,
 				"status":             post.Status,
@@ -499,11 +526,23 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	if illustrationAssetID, exists := payload["illustrationAssetId"]; exists {
 		post.IllustrationAssetId = strings.TrimSpace(asString(illustrationAssetID))
 	}
-	if articleDocument, exists := payload["articleDocument"]; exists {
-		post.ArticleDocument = asMap(articleDocument)
+	if articleMarkdown, exists := payload["articleMarkdown"]; exists {
+		post.ArticleMarkdown = strings.TrimSpace(asString(articleMarkdown))
+	}
+	if articleMarkdownVersion, exists := payload["articleMarkdownVersion"]; exists {
+		post.ArticleMarkdownVersion = defaultString(
+			strings.TrimSpace(asString(articleMarkdownVersion)),
+			"qwq-rich-md/1",
+		)
+	}
+	if articleAssetManifest, exists := payload["articleAssetManifest"]; exists {
+		post.ArticleAssetManifest = asMap(articleAssetManifest)
+	}
+	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
+		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
 	post.UpdatedAt = time.Now().UTC()
-	s.syncArticleDocumentSnapshot(post)
+	s.syncArticleMarkdownSnapshot(post)
 	if err := validateCreatePostPayload(post); err != nil {
 		return nil, err
 	}
@@ -536,7 +575,6 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 	if err := applyPostSettingsPayload(post, payload); err != nil {
 		return nil, err
 	}
-	s.syncArticleDocumentSnapshot(post)
 	now := time.Now().UTC()
 	post.Status = "published"
 	if post.PublishedAt.IsZero() {
@@ -569,7 +607,6 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 			Payload: map[string]any{
 				"_id":                post.ID,
 				"authorId":           post.AuthorId,
-				"profileSubjectId":   post.ProfileSubjectId,
 				"contentType":        post.ContentType,
 				"contentIdentity":    post.ContentIdentity,
 				"status":             post.Status,
@@ -589,7 +626,6 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 			Payload: map[string]any{
 				"_id":                post.ID,
 				"authorId":           post.AuthorId,
-				"profileSubjectId":   post.ProfileSubjectId,
 				"contentType":        post.ContentType,
 				"contentIdentity":    post.ContentIdentity,
 				"status":             post.Status,
@@ -655,7 +691,6 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 	s.publishPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
 		"_id":                post.ID,
 		"authorId":           post.AuthorId,
-		"profileSubjectId":   post.ProfileSubjectId,
 		"contentType":        post.ContentType,
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
@@ -670,7 +705,6 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 	s.projectPostEvent(ctx, "PostSettingsUpdated", post, map[string]any{
 		"_id":                post.ID,
 		"authorId":           post.AuthorId,
-		"profileSubjectId":   post.ProfileSubjectId,
 		"contentType":        post.ContentType,
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
@@ -719,13 +753,25 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	if coverURL, exists := payload["coverUrl"]; exists {
 		post.CoverUrl = strings.TrimSpace(asString(coverURL))
 	}
-	if articleDocument, exists := payload["articleDocument"]; exists {
-		post.ArticleDocument = asMap(articleDocument)
+	if articleMarkdown, exists := payload["articleMarkdown"]; exists {
+		post.ArticleMarkdown = strings.TrimSpace(asString(articleMarkdown))
+	}
+	if articleMarkdownVersion, exists := payload["articleMarkdownVersion"]; exists {
+		post.ArticleMarkdownVersion = defaultString(
+			strings.TrimSpace(asString(articleMarkdownVersion)),
+			"qwq-rich-md/1",
+		)
+	}
+	if articleAssetManifest, exists := payload["articleAssetManifest"]; exists {
+		post.ArticleAssetManifest = asMap(articleAssetManifest)
+	}
+	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
+		post.ArticleRenderProfile = asMap(articleRenderProfile)
 	}
 	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
 		return nil, err
 	}
-	s.syncArticleDocumentSnapshot(post)
+	s.syncArticleMarkdownSnapshot(post)
 	now := time.Now().UTC()
 	post.UpdatedAt = now
 	if !s.store.Update(ctx, post.ID, post) {
@@ -739,7 +785,6 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	s.publishPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
 		"_id":                post.ID,
 		"authorId":           post.AuthorId,
-		"profileSubjectId":   post.ProfileSubjectId,
 		"contentType":        post.ContentType,
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
@@ -755,7 +800,6 @@ func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID stri
 	s.projectPostEvent(ctx, "PostPromotedToWork", post, map[string]any{
 		"_id":                post.ID,
 		"authorId":           post.AuthorId,
-		"profileSubjectId":   post.ProfileSubjectId,
 		"contentType":        post.ContentType,
 		"contentIdentity":    post.ContentIdentity,
 		"status":             post.Status,
@@ -902,6 +946,96 @@ func (s *PostService) UpdatePostCircles(ctx context.Context, postID, userID stri
 	}, nil
 }
 
+func (s *PostService) applyShareRecordLocked(
+	ctx context.Context,
+	post *postmodel.Post,
+	shareKey string,
+	userID string,
+	active bool,
+) (int64, bool, bool) {
+	if post == nil {
+		return 0, false, false
+	}
+	shares, ok := s.reshares[post.ID]
+	if !ok {
+		shares = map[string]bool{}
+		s.reshares[post.ID] = shares
+	}
+	wasActive := shares[shareKey]
+	changed := wasActive != active
+	if changed {
+		if active {
+			shares[shareKey] = true
+			post.ShareCount++
+		} else {
+			delete(shares, shareKey)
+			if post.ShareCount > 0 {
+				post.ShareCount--
+			}
+		}
+		post.UpdatedAt = time.Now().UTC()
+		_ = s.store.Update(ctx, post.ID, post)
+	}
+	return post.ShareCount, changed, hasActiveShareForUser(shares, userID)
+}
+
+func (s *PostService) SharePost(ctx context.Context, postID, userID string) (int64, bool, bool, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return 0, false, false, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+		)
+	}
+	if strings.EqualFold(post.Status, "deleted") {
+		return 0, false, false, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict"),
+			"内容已删除",
+			"post deleted",
+		)
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = AnonymousFallbackSubAccountID
+	}
+
+	s.mu.Lock()
+	shareCount, changed, shared := s.applyShareRecordLocked(
+		ctx,
+		post,
+		directShareKey(userID),
+		userID,
+		true)
+	s.mu.Unlock()
+	return shareCount, changed, shared, nil
+}
+
+func (s *PostService) UnsharePost(ctx context.Context, postID, userID string) (int64, bool, bool, error) {
+	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
+	if !ok {
+		return 0, false, false, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
+			"内容不存在",
+			"post not found",
+		)
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		userID = AnonymousFallbackSubAccountID
+	}
+
+	s.mu.Lock()
+	shareCount, changed, shared := s.applyShareRecordLocked(
+		ctx,
+		post,
+		directShareKey(userID),
+		userID,
+		false)
+	s.mu.Unlock()
+	return shareCount, changed, shared, nil
+}
+
 func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circleID, quote string) (map[string]any, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
@@ -930,14 +1064,16 @@ func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circle
 		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "圈子不能为空", "missing circleId")
 	}
 	if userID == "" {
-		userID = "guest"
+		userID = AnonymousFallbackSubAccountID
 	}
 	key := circleID + ":" + userID
 	s.mu.Lock()
-	if _, ok := s.reshares[post.ID]; !ok {
-		s.reshares[post.ID] = map[string]bool{}
-	}
-	s.reshares[post.ID][key] = true
+	shareCount, changed, _ := s.applyShareRecordLocked(
+		ctx,
+		post,
+		key,
+		userID,
+		true)
 	s.mu.Unlock()
 	return map[string]any{
 		"postId":         post.ID,
@@ -946,20 +1082,27 @@ func (s *PostService) RepostToCircle(ctx context.Context, postID, userID, circle
 		"circleId":       circleID,
 		"quoteText":      strings.TrimSpace(quote),
 		"type":           "moment",
+		"shareCount":     shareCount,
+		"changed":        changed,
 	}, nil
 }
 
-func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType string) map[string]any {
+func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType, assetScope, sourceKind string) map[string]any {
 	now := time.Now().UTC()
 	if userID == "" {
-		userID = "guest"
+		userID = AnonymousFallbackSubAccountID
 	}
 	mediaID := fmt.Sprintf("media_%d", now.UnixNano())
 	sessionID := fmt.Sprintf("upload_%d", now.UnixNano())
 	asset := postmodel.MediaAsset{
 		ID:               mediaID,
+		OwnerId:          userID,
+		AssetScope:       defaultString(strings.TrimSpace(assetScope), "draft"),
 		Type:             defaultString(strings.TrimSpace(mediaType), "image"),
 		OriginUrl:        "https://origin.example/media/" + mediaID + "/original.jpg",
+		ObjectKey:        "media/draft/" + mediaID + "/original",
+		Sha256:           "dev-sha256-" + mediaID,
+		SourceKind:       defaultString(strings.TrimSpace(sourceKind), "user_upload"),
 		MimeType:         "image/jpeg",
 		Status:           "uploaded",
 		CoverStrategy:    "first_frame",
@@ -976,6 +1119,7 @@ func (s *PostService) InitMediaUpload(_ context.Context, userID, mediaType strin
 		"mediaId":    mediaID,
 		"uploadUrl":  "https://origin.example/upload/" + mediaID,
 		"uploaderId": userID,
+		"assetScope": asset.AssetScope,
 	}
 }
 
@@ -1001,6 +1145,12 @@ func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (
 	asset.Status = "ready"
 	asset.CdnUrl = "https://cdn.example/media/" + mediaID
 	asset.ThumbnailUrl = "https://cdn.example/media/" + mediaID + "/thumb.jpg"
+	if asset.ObjectKey == "" {
+		asset.ObjectKey = "media/" + defaultString(asset.AssetScope, "draft") + "/" + mediaID + "/original"
+	}
+	if asset.Sha256 == "" {
+		asset.Sha256 = "dev-sha256-" + mediaID
+	}
 	if asset.Type == "video" {
 		asset.DurationMs = 15000
 		asset.Width = 1080
@@ -1021,6 +1171,43 @@ func (s *PostService) CompleteMediaUpload(_ context.Context, sessionID string) (
 	asset.UpdatedAt = time.Now().UTC()
 	s.mediaAssets[mediaID] = asset
 	return &asset, nil
+}
+
+func (s *PostService) BindMediaAssetsToPost(_ context.Context, postID string, assetIDs []string) (map[string]any, error) {
+	postID = strings.TrimSpace(postID)
+	if postID == "" {
+		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "postId 不能为空", "missing postId")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bound := []string{}
+	for _, rawID := range assetIDs {
+		assetID := strings.TrimSpace(rawID)
+		if assetID == "" {
+			continue
+		}
+		asset, ok := s.mediaAssets[assetID]
+		if !ok {
+			return nil, rterr.NewAppError(
+				rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_found"),
+				"素材不存在",
+				"media asset not found",
+			)
+		}
+		if asset.Status != "" && asset.Status != "ready" {
+			return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "素材尚未就绪", "media asset not ready")
+		}
+		asset.PostId = postID
+		asset.AssetScope = "published"
+		asset.UpdatedAt = time.Now().UTC()
+		s.mediaAssets[assetID] = asset
+		bound = append(bound, assetID)
+	}
+	return map[string]any{
+		"postId":        postID,
+		"boundAssetIds": bound,
+		"boundCount":    len(bound),
+	}, nil
 }
 
 func (s *PostService) AbortMediaUpload(_ context.Context, sessionID string) error {
@@ -1135,7 +1322,7 @@ func (s *PostService) LikePost(ctx context.Context, postID, userID string) (int6
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		userID = "guest"
+		userID = AnonymousFallbackSubAccountID
 	}
 
 	s.mu.Lock()
@@ -1168,7 +1355,7 @@ func (s *PostService) UnlikePost(ctx context.Context, postID, userID string) (in
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		userID = "guest"
+		userID = AnonymousFallbackSubAccountID
 	}
 
 	s.mu.Lock()
@@ -1203,7 +1390,7 @@ func (s *PostService) FavoritePost(ctx context.Context, postID, userID string) (
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		userID = "guest"
+		userID = AnonymousFallbackSubAccountID
 	}
 
 	s.mu.Lock()
@@ -1236,7 +1423,7 @@ func (s *PostService) UnfavoritePost(ctx context.Context, postID, userID string)
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		userID = "guest"
+		userID = AnonymousFallbackSubAccountID
 	}
 
 	s.mu.Lock()
@@ -1260,18 +1447,21 @@ func (s *PostService) UnfavoritePost(ctx context.Context, postID, userID string)
 	return post.FavoriteCount, changed, nil
 }
 
-func (s *PostService) GetReactionState(postID, userID string) (liked, favorited bool) {
+func (s *PostService) GetReactionState(postID, userID string) (liked, favorited, shared bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	byPost, ok := s.reactions[strings.TrimSpace(postID)]
+	normalizedPostID := strings.TrimSpace(postID)
+	normalizedUserID := strings.TrimSpace(userID)
+	shared = hasActiveShareForUser(s.reshares[normalizedPostID], normalizedUserID)
+	byPost, ok := s.reactions[normalizedPostID]
 	if !ok {
-		return false, false
+		return false, false, shared
 	}
-	state, ok := byPost[strings.TrimSpace(userID)]
+	state, ok := byPost[normalizedUserID]
 	if !ok {
-		return false, false
+		return false, false, shared
 	}
-	return state.Liked, state.Favorited
+	return state.Liked, state.Favorited, shared
 }
 
 func (s *PostService) ListProfileInteractionActivities(
@@ -1399,7 +1589,7 @@ func buildProfileInteractionActivityView(
 	activityType string,
 	direction string,
 	actorID string,
-	targetProfileSubjectID string,
+	targetSubAccountID string,
 	post *postmodel.Post,
 	createdAt time.Time,
 ) postmodel.ProfileInteractionActivityView {
@@ -1415,17 +1605,17 @@ func buildProfileInteractionActivityView(
 		createdAt = time.Now().UTC()
 	}
 	return postmodel.ProfileInteractionActivityView{
-		ActivityId:             activityID,
-		ActivityType:           activityType,
-		Direction:              direction,
-		ActorProfileSubjectId:  actorID,
-		ActorDisplayName:       actorID,
-		ActorAvatarUrl:         "",
-		TargetProfileSubjectId: targetProfileSubjectID,
-		TargetContentId:        targetContentID,
-		TargetContentType:      contentType,
-		TargetContentSummary:   summary,
-		CreatedAt:              createdAt,
+		ActivityId:           activityID,
+		ActivityType:         activityType,
+		Direction:            direction,
+		ActorSubAccountId:    actorID,
+		ActorDisplayName:     actorID,
+		ActorAvatarUrl:       "",
+		TargetSubAccountId:   targetSubAccountID,
+		TargetContentId:      targetContentID,
+		TargetContentType:    contentType,
+		TargetContentSummary: summary,
+		CreatedAt:            createdAt,
 	}
 }
 
@@ -1559,6 +1749,9 @@ func (s *PostService) syncArticleDocumentSnapshot(post *postmodel.Post) {
 	if post == nil || strings.TrimSpace(post.ContentType) != "article" {
 		return
 	}
+	if strings.TrimSpace(post.ArticleMarkdown) != "" {
+		return
+	}
 	snapshot := deriveArticleDocumentSnapshot(post.ArticleDocument)
 	post.Title = snapshot.Title
 	post.Body = snapshot.Body
@@ -1590,8 +1783,7 @@ func (s *PostService) AddComment(
 	userID string,
 	content string,
 	replyToCommentID string,
-	personaId string,
-	profileSubjectID string,
+	authorID string,
 	personaContextVersion string,
 ) (map[string]any, int64, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
@@ -1603,12 +1795,16 @@ func (s *PostService) AddComment(
 		)
 	}
 	userID = strings.TrimSpace(userID)
-	if userID == "" {
-		userID = "guest"
+	authorID = strings.TrimSpace(authorID)
+	if authorID == "" {
+		authorID = userID
 	}
-	profileSubjectID = strings.TrimSpace(profileSubjectID)
-	if profileSubjectID == "" {
-		profileSubjectID = defaultString(strings.TrimSpace(personaId), userID)
+	if authorID == "" {
+		return nil, 0, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"authorId 不能为空",
+			"missing comment authorId/subAccountId",
+		)
 	}
 	content = strings.TrimSpace(content)
 	if content == "" {
@@ -1641,13 +1837,11 @@ func (s *PostService) AddComment(
 	post.UpdatedAt = now
 	_ = s.store.Update(ctx, post.ID, post)
 
-	isAuthor := userID == post.AuthorId
+	isAuthor := authorID == post.AuthorId
 	comment := map[string]any{
-		"_id":              fmt.Sprintf("comment_%d", now.UnixNano()),
-		"postId":           post.ID,
-		"authorId":         profileSubjectID,
-		"profileSubjectId": profileSubjectID,
-		"personaId":        strings.TrimSpace(personaId),
+		"_id":      fmt.Sprintf("comment_%d", now.UnixNano()),
+		"postId":   post.ID,
+		"authorId": authorID,
 		"personaContextVersion": asInt64Flexible(
 			personaContextVersion,
 		),
@@ -1669,13 +1863,11 @@ func (s *PostService) AddComment(
 			AggregateType: "Post",
 			AggregateID:   post.ID,
 			Payload: map[string]any{
-				"commentId":        comment["_id"],
-				"postId":           post.ID,
-				"authorId":         profileSubjectID,
-				"profileSubjectId": profileSubjectID,
-				"personaId":        strings.TrimSpace(personaId),
-				"content":          content,
-				"replyToUserId":    replyToUserId,
+				"commentId":     comment["_id"],
+				"postId":        post.ID,
+				"authorId":      authorID,
+				"content":       content,
+				"replyToUserId": replyToUserId,
 			},
 			OccurredAt: now.Format(time.RFC3339),
 		})
@@ -1743,6 +1935,142 @@ func sortCommentsByHot(comments []map[string]any) {
 			}
 		}
 	}
+}
+
+func (s *PostService) syncArticleMarkdownSnapshot(post *postmodel.Post) {
+	if post == nil || strings.TrimSpace(post.ContentType) != "article" {
+		return
+	}
+	markdown := strings.TrimSpace(post.ArticleMarkdown)
+	if markdown == "" {
+		return
+	}
+	if strings.TrimSpace(post.ArticleMarkdownVersion) == "" {
+		post.ArticleMarkdownVersion = "qwq-rich-md/1"
+	}
+	post.ArticleMarkdownDigest = markdownDigest(markdown)
+	frontMatter, body := splitArticleMarkdownFrontMatter(markdown)
+	if title := strings.TrimSpace(asString(frontMatter["title"])); title != "" {
+		post.Title = title
+	} else if strings.TrimSpace(post.Title) == "" {
+		post.Title = firstMarkdownHeading(body)
+	}
+	if summary := strings.TrimSpace(asString(frontMatter["summary"])); summary != "" {
+		post.Summary = summary
+	}
+	post.Body = markdownPlainText(body)
+	if cover := strings.TrimSpace(asString(frontMatter["coverImage"])); cover != "" {
+		post.CoverUrl = cover
+	}
+	if template := strings.TrimSpace(asString(frontMatter["template"])); template != "" {
+		post.ArticleTemplate = template
+	}
+	if fontPreset := strings.TrimSpace(asString(frontMatter["fontPreset"])); fontPreset != "" {
+		post.ArticleFontPreset = fontPreset
+	}
+	if len(post.ArticleRenderProfile) > 0 {
+		if template := strings.TrimSpace(asString(post.ArticleRenderProfile["template"])); template != "" {
+			post.ArticleTemplate = template
+		}
+		if fontPreset := strings.TrimSpace(asString(post.ArticleRenderProfile["fontPreset"])); fontPreset != "" {
+			post.ArticleFontPreset = fontPreset
+		}
+	}
+	post.MediaUrls = markdownAssetURIs(markdown)
+}
+
+func markdownDigest(markdown string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(markdown)))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func splitArticleMarkdownFrontMatter(markdown string) (map[string]any, string) {
+	normalized := strings.ReplaceAll(markdown, "\r\n", "\n")
+	if !strings.HasPrefix(normalized, "---\n") {
+		return nil, normalized
+	}
+	end := strings.Index(normalized[4:], "\n---")
+	if end < 0 {
+		return nil, normalized
+	}
+	raw := normalized[4 : 4+end]
+	body := strings.TrimLeft(normalized[4+end+len("\n---"):], "\n")
+	return parseSimpleFrontMatter(raw), body
+}
+
+func parseSimpleFrontMatter(raw string) map[string]any {
+	result := map[string]any{}
+	var currentListKey string
+	for _, line := range strings.Split(raw, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "- ") && currentListKey != "" {
+			result[currentListKey] = append(asStringSlice(result[currentListKey]), strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+			continue
+		}
+		parts := strings.SplitN(trimmed, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if value == "" {
+			currentListKey = key
+			result[key] = []string{}
+			continue
+		}
+		currentListKey = ""
+		result[key] = strings.Trim(value, `"'`)
+	}
+	return result
+}
+
+func firstMarkdownHeading(body string) string {
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+		}
+	}
+	return ""
+}
+
+func markdownPlainText(body string) string {
+	lines := []string{}
+	inFence := false
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence || trimmed == "" || strings.HasPrefix(trimmed, ":::") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "asset://") || strings.HasPrefix(trimmed, "![") {
+			continue
+		}
+		lines = append(lines, strings.TrimPrefix(trimmed, "> "))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func markdownAssetURIs(markdown string) []string {
+	matches := regexp.MustCompile(`asset://[A-Za-z0-9_\-./]+`).FindAllString(markdown, -1)
+	seen := map[string]bool{}
+	result := []string{}
+	for _, match := range matches {
+		if !seen[match] {
+			seen[match] = true
+			result = append(result, match)
+		}
+	}
+	return result
 }
 
 func hotScore(c map[string]any) float64 {
@@ -1820,7 +2148,7 @@ func (s *PostService) DeleteComment(ctx context.Context, postID, commentID, user
 func (s *PostService) LikeComment(ctx context.Context, commentID, userID string) (int64, bool, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		userID = "guest"
+		userID = AnonymousFallbackSubAccountID
 	}
 	commentID = strings.TrimSpace(commentID)
 
@@ -1869,7 +2197,7 @@ func (s *PostService) LikeComment(ctx context.Context, commentID, userID string)
 func (s *PostService) UnlikeComment(_ context.Context, commentID, userID string) (int64, bool, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		userID = "guest"
+		userID = AnonymousFallbackSubAccountID
 	}
 	commentID = strings.TrimSpace(commentID)
 
@@ -2175,23 +2503,23 @@ func (s *PostService) SearchPosts(
 			coverURL = strings.TrimSpace(post.VideoUrl)
 		}
 		results = append(results, postmodel.PostSearchItemView{
-			PostId:                 post.ID,
-			ContentType:            post.ContentType,
-			ContentIdentity:        post.ContentIdentity,
-			Title:                  post.Title,
-			Summary:                summary,
-			CoverUrl:               coverURL,
-			AuthorProfileSubjectId: post.ProfileSubjectId,
-			AuthorDisplayName:      post.AuthorDisplayNameSnapshot,
-			AuthorAvatarUrl:        post.AuthorAvatarUrlSnapshot,
-			CircleId:               primaryCircleID,
-			CircleName:             "",
-			CategoryId:             strings.TrimSpace(req.CategoryID),
-			SubCategory:            strings.TrimSpace(req.SubCategory),
-			LikeCount:              post.LikeCount,
-			HighlightText:          highlight,
-			MatchedField:           matchedField,
-			PublishedAt:            post.PublishedAt,
+			PostId:            post.ID,
+			ContentType:       post.ContentType,
+			ContentIdentity:   post.ContentIdentity,
+			Title:             post.Title,
+			Summary:           summary,
+			CoverUrl:          coverURL,
+			AuthorId:          post.AuthorId,
+			AuthorDisplayName: post.AuthorDisplayNameSnapshot,
+			AuthorAvatarUrl:   post.AuthorAvatarUrlSnapshot,
+			CircleId:          primaryCircleID,
+			CircleName:        "",
+			CategoryId:        strings.TrimSpace(req.CategoryID),
+			SubCategory:       strings.TrimSpace(req.SubCategory),
+			LikeCount:         post.LikeCount,
+			HighlightText:     highlight,
+			MatchedField:      matchedField,
+			PublishedAt:       post.PublishedAt,
 		})
 		if len(results) >= limit {
 			break
@@ -2616,8 +2944,12 @@ func validateCreatePostPayload(post *postmodel.Post) error {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "视频地址不能为空", "video requires videoUrl")
 		}
 	case "article":
-		if len(post.ArticleDocument) == 0 {
-			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章内容不能为空", "article requires articleDocument")
+		hasMarkdown := strings.TrimSpace(post.ArticleMarkdown) != ""
+		if !hasMarkdown {
+			return rterr.NewInvalidArgument(rterr.ModuleContent, "文章内容不能为空", "article requires articleMarkdown")
+		}
+		if err := validateArticleMarkdownManifest(post); err != nil {
+			return err
 		}
 		hasBody := strings.TrimSpace(post.Body) != ""
 		hasImages := len(asStringSlice(post.MediaUrls)) > 0
@@ -2634,6 +2966,49 @@ func validateCreatePostPayload(post *postmodel.Post) error {
 		)
 	}
 	return nil
+}
+
+func validateArticleMarkdownManifest(post *postmodel.Post) error {
+	refs := markdownAssetIDs(post.ArticleMarkdown)
+	if len(refs) == 0 {
+		return nil
+	}
+	manifestIDs := articleManifestAssetIDs(post.ArticleAssetManifest)
+	for _, ref := range refs {
+		if !manifestIDs[ref] {
+			return rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"文章素材清单缺少引用资源",
+				"articleAssetManifest missing asset "+ref,
+			)
+		}
+	}
+	return nil
+}
+
+func markdownAssetIDs(markdown string) []string {
+	uris := markdownAssetURIs(markdown)
+	result := []string{}
+	for _, uri := range uris {
+		result = append(result, strings.TrimPrefix(uri, "asset://"))
+	}
+	return result
+}
+
+func articleManifestAssetIDs(manifest map[string]any) map[string]bool {
+	result := map[string]bool{}
+	assets, _ := manifest["assets"].([]any)
+	for _, item := range assets {
+		row, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		id := strings.TrimSpace(asString(row["assetId"]))
+		if id != "" {
+			result[id] = true
+		}
+	}
+	return result
 }
 
 type RequestOriginalImageAccessInput struct {

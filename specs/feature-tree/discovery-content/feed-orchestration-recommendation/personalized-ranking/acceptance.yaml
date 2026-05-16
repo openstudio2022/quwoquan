@@ -53,7 +53,7 @@ level_acceptance:
     - T3
     - T9
     tests:
-    - file: quwoquan_service/scripts/gate.sh
+    - file: agent_ops/gate/gate_repo.sh
       functions: []
   A8:
     criteria: 端云自动化测试映射完整（contract + provider/journey）

@@ -4,14 +4,14 @@
 
 | 任务 | 对应 L4 | 顺序 |
 |------|---------|------|
-| M1 新建 scripts/verify_dart_semantic.py | verify-script-and-gate-integration | 1 |
+| M1 新建 quwoquan_app/scripts/runtime/verify_dart_semantic.py | verify-script-and-gate-integration | 1 |
 | M2 修改 gate_repo.sh 调用脚本 | verify-script-and-gate-integration | 2 |
 | M3 更新 02-dart-coding、06 规则、00_MASTER_DEVELOPMENT_FLOW | rules-and-flow-enhancement | 3 |
 | M4 更新 FF 模板（design/tasks）与 opsx-apply 逻辑 | ff-deliver-semantic-checklist | 4 |
 
 ### M1：verify_dart_semantic.py
 
-- [x] 新建 `scripts/verify_dart_semantic.py`
+- [x] 新建 `quwoquan_app/scripts/runtime/verify_dart_semantic.py`
 - [x] 正则：width、height、leadingSize、fontSize、size、EdgeInsets、BorderRadius、Color(0x)
 - [x] 新增 iOS 语义规则：`Icons.chevron_right`、`CupertinoPageScaffold` 混用 Material 交互、selector leading back
 - [x] 白名单：lib/core/design_system/、lib/core/constants/
@@ -21,7 +21,7 @@
 ### M2：gate 集成
 
 - [x] 在 gate_repo.sh run_app 中，flutter analyze 之后追加调用
-- [x] `python3 scripts/verify_dart_semantic.py || exit 1`
+- [x] `python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py || exit 1`
 - [x] gate 文案明确包含 iOS 语义门禁说明
 
 ### M3：规则与流程

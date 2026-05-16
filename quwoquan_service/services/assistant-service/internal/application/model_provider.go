@@ -255,7 +255,7 @@ func domainSkillFinalAnswer(skillID, question, summary string) string {
 	case "astrology_constellation":
 		return fmt.Sprintf("占星星盘助手已解释上升星座与太阳星座：%s。针对“%s”，可把太阳星座看作核心自我，上升星座看作外在呈现。", summary, question)
 	case "huawei_cloud_qa":
-		return fmt.Sprintf("华为云问答助手已生成昇腾、容器和对象存储选型建议：%s。针对“%s”，建议按算力、编排、存储和运维成本拆分评估。", summary, question)
+		return fmt.Sprintf("云服务问答助手已整理云服务选型线索：%s。针对“%s”，建议按算力、编排、存储、计费和运维成本拆分评估，并结合权威来源做对比。", summary, question)
 	case "fallback_general_search":
 		return fmt.Sprintf("通用搜索助手已生成 AI 产品搜索摘要：%s。针对“%s”，建议按模型能力、应用场景和商业化进展分组跟踪。", summary, question)
 	default:

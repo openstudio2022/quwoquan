@@ -1,6 +1,7 @@
 # Self-hosted：统一设备矩阵入口（PR 主门禁 / workflow_call 复用 / 手动调试）。
 # 固定到本机 macOS self-hosted runner，并通过 flutter devices --machine 动态发现当前可见的 Android/iOS 模拟器与真机。
 # 发现到的每台设备都会执行；只要总设备数 >= 1 即可进入矩阵，不再依赖固定 device id。
+# PR 默认 pr_light profile（alpha/beta, allow_missing）；显式或 nightly 调用时可传 nightly_full / manual_full。
 name: 05. App Env Device Matrix
 
 on:
@@ -9,10 +10,24 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      validation_profile:
+        description: '验证 profile：pr_light / manual_full / nightly_full（影响环境集与是否要求全平台）'
+        required: false
+        default: pr_light
+        type: choice
+        options:
+          - pr_light
+          - manual_full
+          - nightly_full
       env_json:
-        description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]'
-        required: true
-        default: '["alpha","beta","gamma"]'
+        description: '矩阵环境 JSON 数组，例如 ["alpha","beta","gamma"] 或 ["gamma"]（留空则按 profile 决定）'
+        required: false
+        default: ''
+      allow_missing_platforms:
+        description: '缺席平台是否允许跳过（留空则按 profile 决定）'
+        required: false
+        default: ''
+        type: string
       gamma_base_url:
         description: 可选覆盖 gamma 网关（默认 secrets.GAMMA_BASE_URL）
         required: false
@@ -22,15 +37,26 @@ on:
         required: false
         default: ''
       matrix_kind:
-        description: assistant 或 chat-avatar
+        description: assistant 或 chat-avatar（留空则按 profile 决定）
         required: false
-        default: assistant
+        default: ''
   workflow_call:
     inputs:
-      env_json:
-        description: 'JSON array of environments'
-        required: true
+      validation_profile:
+        description: 'pr_light / manual_full / nightly_full'
+        required: false
         type: string
+        default: pr_light
+      env_json:
+        description: 'JSON array of environments (overrides profile default)'
+        required: false
+        type: string
+        default: ''
+      allow_missing_platforms:
+        description: '是否允许缺席平台跳过 (overrides profile default)'
+        required: false
+        type: boolean
+        default: false
       gamma_base_url:
         description: '可选覆盖 gamma 网关（默认走 secrets.GAMMA_BASE_URL）'
         required: false
@@ -42,10 +68,10 @@ on:
         type: string
         default: ''
       matrix_kind:
-        description: 'assistant or chat-avatar'
+        description: 'assistant or chat-avatar (overrides profile default)'
         required: false
         type: string
-        default: assistant
+        default: ''
 
 concurrency:
   group: app-env-device-matrix-${{ github.event.pull_request.number || github.ref }}
@@ -59,6 +85,7 @@ jobs:
     outputs:
       duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
       env_json: ${{ steps.discover.outputs.env_json }}
+      allow_missing_platforms: ${{ steps.discover.outputs.allow_missing_platforms }}
       matrix_kind: ${{ steps.discover.outputs.matrix_kind }}
       gamma_base_url: ${{ steps.discover.outputs.gamma_base_url }}
       media_base_url: ${{ steps.discover.outputs.media_base_url }}
@@ -68,30 +95,50 @@ jobs:
       ios_count: ${{ steps.discover.outputs.ios_count }}
       device_summary: ${{ steps.discover.outputs.device_summary }}
     steps:
-      - uses: actions/checkout@v4
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: 解析当前触发下的矩阵默认值
+      - name: 解析当前触发下的矩阵默认值（按 validation_profile 分层）
         id: defaults
         env:
           EVENT_NAME: ${{ github.event_name }}
+          INPUT_PROFILE: ${{ inputs.validation_profile }}
           INPUT_ENV_JSON: ${{ inputs.env_json }}
+          INPUT_ALLOW_MISSING_PLATFORMS: ${{ inputs.allow_missing_platforms }}
           INPUT_MATRIX_KIND: ${{ inputs.matrix_kind }}
           INPUT_GAMMA_BASE_URL: ${{ inputs.gamma_base_url }}
           INPUT_MEDIA_BASE_URL: ${{ inputs.media_base_url }}
         run: |
+          PROFILE="${INPUT_PROFILE:-pr_light}"
           if [ "${EVENT_NAME}" = "pull_request" ]; then
-            echo 'env_json=["alpha","beta"]' >> "$GITHUB_OUTPUT"
-            echo 'matrix_kind=assistant' >> "$GITHUB_OUTPUT"
-            echo 'gamma_base_url=' >> "$GITHUB_OUTPUT"
-            echo 'media_base_url=' >> "$GITHUB_OUTPUT"
-          else
-            echo "env_json=${INPUT_ENV_JSON}" >> "$GITHUB_OUTPUT"
-            echo "matrix_kind=${INPUT_MATRIX_KIND:-assistant}" >> "$GITHUB_OUTPUT"
-            echo "gamma_base_url=${INPUT_GAMMA_BASE_URL}" >> "$GITHUB_OUTPUT"
-            echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
+            PROFILE="pr_light"
           fi
+          case "${PROFILE}" in
+            nightly_full)
+              DEFAULT_ENV_JSON='["alpha","beta","gamma"]'
+              DEFAULT_ALLOW_MISSING="false"
+              DEFAULT_MATRIX_KIND="assistant"
+              ;;
+            manual_full)
+              DEFAULT_ENV_JSON='["gamma"]'
+              DEFAULT_ALLOW_MISSING="false"
+              DEFAULT_MATRIX_KIND="assistant"
+              ;;
+            *)
+              DEFAULT_ENV_JSON='["alpha","beta"]'
+              DEFAULT_ALLOW_MISSING="true"
+              DEFAULT_MATRIX_KIND="assistant"
+              ;;
+          esac
+          ENV_JSON="${INPUT_ENV_JSON:-${DEFAULT_ENV_JSON}}"
+          ALLOW_MISSING="${INPUT_ALLOW_MISSING_PLATFORMS:-${DEFAULT_ALLOW_MISSING}}"
+          MATRIX_KIND="${INPUT_MATRIX_KIND:-${DEFAULT_MATRIX_KIND}}"
+          echo "profile=${PROFILE}" >> "$GITHUB_OUTPUT"
+          echo "env_json=${ENV_JSON}" >> "$GITHUB_OUTPUT"
+          echo "allow_missing_platforms=${ALLOW_MISSING}" >> "$GITHUB_OUTPUT"
+          echo "matrix_kind=${MATRIX_KIND}" >> "$GITHUB_OUTPUT"
+          echo "gamma_base_url=${INPUT_GAMMA_BASE_URL}" >> "$GITHUB_OUTPUT"
+          echo "media_base_url=${INPUT_MEDIA_BASE_URL}" >> "$GITHUB_OUTPUT"
       - name: 校验 self-hosted macOS runner
         run: |
           if [ "${{ runner.os }}" != "macOS" ]; then
@@ -105,15 +152,67 @@ jobs:
       - name: 发现当前 Mac 可见移动设备
         id: discover
         run: |
-          python3 scripts/discover_flutter_mobile_devices.py \
-            --output "$RUNNER_TEMP/mobile-devices.json" \
-            --require-mobile
           python3 - "$RUNNER_TEMP/mobile-devices.json" "$GITHUB_OUTPUT" <<'PY'
           import json
+          import subprocess
           import sys
+          from pathlib import Path
 
-          path, output_path = sys.argv[1], sys.argv[2]
-          data = json.load(open(path, encoding="utf-8"))
+          output_json, output_path = sys.argv[1], sys.argv[2]
+          result = subprocess.run(
+              ["flutter", "devices", "--machine"],
+              cwd=str(Path.home()),
+              text=True,
+              capture_output=True,
+              check=False,
+          )
+          if result.returncode != 0:
+              sys.stderr.write("flutter devices --machine failed:\n")
+              sys.stderr.write((result.stdout or "") + (result.stderr or ""))
+              raise SystemExit(result.returncode)
+          raw = result.stdout or ""
+          start = raw.find("[")
+          end = raw.rfind("]")
+          if start < 0 or end < start:
+              sys.stderr.write("flutter devices output missing JSON array\n")
+              raise SystemExit(2)
+          devices = json.loads(raw[start : end + 1])
+          filtered = []
+          for device in devices:
+              target = str(device.get("targetPlatform", "")).lower()
+              if target != "ios" and not target.startswith("android"):
+                  continue
+              device_id = str(device.get("id", "")).strip()
+              if not device_id:
+                  continue
+              filtered.append(
+                  {
+                      "id": device_id,
+                      "name": str(device.get("name", "")),
+                      "targetPlatform": str(device.get("targetPlatform", "")),
+                      "sdk": str(device.get("sdk", "")),
+                      "emulator": bool(device.get("emulator", False)),
+                      "ephemeral": bool(device.get("ephemeral", False)),
+                  }
+              )
+          data = {
+              "deviceCount": len(filtered),
+              "android": [
+                  item
+                  for item in filtered
+                  if str(item.get("targetPlatform", "")).lower().startswith("android")
+              ],
+              "ios": [
+                  item
+                  for item in filtered
+                  if str(item.get("targetPlatform", "")).lower() == "ios"
+              ],
+              "devices": filtered,
+          }
+          Path(output_json).write_text(
+              json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
           android = data.get("android") or []
           ios = data.get("ios") or []
           env_json = """${{ steps.defaults.outputs.env_json }}"""
@@ -133,6 +232,10 @@ jobs:
 
           with open(output_path, "a", encoding="utf-8") as fh:
               print(f'env_json={env_json}', file=fh)
+              print(
+                  'allow_missing_platforms=${{ steps.defaults.outputs.allow_missing_platforms }}',
+                  file=fh,
+              )
               print(f'matrix_kind={matrix_kind}', file=fh)
               print(f'gamma_base_url={gamma_base_url}', file=fh)
               print(f'media_base_url={media_base_url}', file=fh)
@@ -146,24 +249,35 @@ jobs:
 
           print(f"::notice::self-hosted mobile devices => {summary}")
           PY
+          python3 - "$RUNNER_TEMP/mobile-devices.json" <<'PY'
+          import json
+          import sys
+          data = json.load(open(sys.argv[1], encoding="utf-8"))
+          if int(data.get("deviceCount", 0)) == 0:
+              raise SystemExit(2)
+          PY
       - id: finish
         if: always()
         name: Finish timer
         run: |
-          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+          started_at="${{ steps.start.outputs.started_at }}"
+          if [ -n "${started_at}" ]; then
+            echo "duration_seconds=$(( $(date +%s) - started_at ))" >> "$GITHUB_OUTPUT"
+          else
+            echo "duration_seconds=0" >> "$GITHUB_OUTPUT"
+          fi
 
-  android:
-    name: ${{ matrix.env }} / Android (self-hosted)
+  mobile_matrix:
+    name: Mobile matrix (self-hosted)
     needs: [discover_devices]
-    if: ${{ needs.discover_devices.outputs.has_android == 'true' }}
+    if: ${{ needs.discover_devices.outputs.has_android == 'true' || needs.discover_devices.outputs.has_ios == 'true' }}
     runs-on: [self-hosted, macOS]
     timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        env: ${{ fromJson(needs.discover_devices.outputs.env_json) }}
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+      android_result: ${{ steps.run_matrix.outputs.android_result }}
+      ios_result: ${{ steps.run_matrix.outputs.ios_result }}
     env:
-      API_CONTRACT_ENV: ${{ matrix.env }}
       GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
       MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
       GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
@@ -172,18 +286,53 @@ jobs:
       ASSISTANT_MATRIX_ALL_DEVICES: "1"
       CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
     steps:
-      - uses: actions/checkout@v4
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: 准备缓存工作树
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CACHE_ROOT="${HOME}/.cache/quwoquan-mobile-matrix"
+          REPO_DIR="${CACHE_ROOT}/repo"
+          AUTH_HEADER="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64)"
+          sync_repo() {
+            mkdir -p "${REPO_DIR}"
+            if [ ! -d "${REPO_DIR}/.git" ]; then
+              rm -rf "${REPO_DIR}"
+              git init "${REPO_DIR}"
+              git -C "${REPO_DIR}" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+            fi
+            git -C "${REPO_DIR}" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+            git -C "${REPO_DIR}" config --local gc.auto 0
+            git -C "${REPO_DIR}" sparse-checkout init --cone
+            git -C "${REPO_DIR}" sparse-checkout set .gitmodules scripts packages quwoquan_app quwoquan_service
+            git -C "${REPO_DIR}" -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" fetch --depth=1 --filter=blob:none origin "${GITHUB_SHA}"
+            git -C "${REPO_DIR}" checkout --force --detach FETCH_HEAD
+            git -C "${REPO_DIR}" clean -ffd
+          }
+          mkdir -p "${CACHE_ROOT}"
+          if ! sync_repo; then
+            echo "::warning::cached repo sync failed, rebuilding local repo cache"
+            rm -rf "${REPO_DIR}"
+            sync_repo
+          fi
+          rm -rf "${GITHUB_WORKSPACE}/repo"
+          ln -s "${REPO_DIR}" "${GITHUB_WORKSPACE}/repo"
       - name: 记录发现结果
         run: |
           echo "Android devices: ${{ needs.discover_devices.outputs.android_count }}"
+          echo "iOS devices: ${{ needs.discover_devices.outputs.ios_count }}"
           echo "${{ needs.discover_devices.outputs.device_summary }}"
       - name: 校验 self-hosted macOS runner
         run: |
           if [ "${{ runner.os }}" != "macOS" ]; then
-            echo "::error::Android 端侧矩阵已统一到本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
+            echo "::error::05 已统一要求运行在本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
             exit 2
           fi
       - name: 准备 personal_assistant/.env
+        working-directory: ${{ github.workspace }}/repo
         run: |
           if [ -d quwoquan_app/personal_assistant ]; then
             mkdir -p quwoquan_app/personal_assistant
@@ -204,134 +353,134 @@ jobs:
         run: |
           command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
           command -v adb >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 adb 并在 PATH 中"; exit 2; }
-          flutter --version
-      - name: 安装 Flutter 依赖
-        working-directory: quwoquan_app
-        run: flutter pub get
-      - name: Run ${{ matrix.env }} on Android (self-hosted)
-        run: |
-          if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
-            python3 scripts/run_chat_avatar_device_matrix_ci.py --platform android
-          else
-            python3 scripts/run_assistant_device_matrix_ci.py --platform android
-          fi
-      - name: Upload Android matrix report
-        id: upload_android_matrix_report
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
-          path: |
-            artifacts/device-matrix/${{ matrix.env }}-android.json
-            artifacts/device-matrix/assistant_device_matrix_logs/**
-            artifacts/device-matrix/chat-avatar/**
-          if-no-files-found: ignore
-          compression-level: 0
-      - name: Retry Android matrix report upload
-        if: always() && steps.upload_android_matrix_report.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-android
-          path: |
-            artifacts/device-matrix/${{ matrix.env }}-android.json
-            artifacts/device-matrix/assistant_device_matrix_logs/**
-            artifacts/device-matrix/chat-avatar/**
-          if-no-files-found: ignore
-          compression-level: 0
-          overwrite: true
-
-  ios:
-    name: ${{ matrix.env }} / iOS (self-hosted)
-    needs: [discover_devices]
-    if: ${{ needs.discover_devices.outputs.has_ios == 'true' }}
-    runs-on: [self-hosted, macOS]
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        env: ${{ fromJson(needs.discover_devices.outputs.env_json) }}
-    env:
-      API_CONTRACT_ENV: ${{ matrix.env }}
-      GAMMA_BASE_URL: ${{ needs.discover_devices.outputs.gamma_base_url || secrets.GAMMA_BASE_URL }}
-      MEDIA_AVATAR_CDN_BASE_URL: ${{ needs.discover_devices.outputs.media_base_url || vars.MEDIA_AVATAR_CDN_BASE_URL }}
-      GAMMA_TEST_AUTH_TOKEN: ${{ secrets.GAMMA_TEST_AUTH_TOKEN }}
-      ASSISTANT_MODEL_PROVIDER: deterministic
-      ALLOW_DETERMINISTIC_BETA: "1"
-      ASSISTANT_MATRIX_ALL_DEVICES: "1"
-      CHAT_AVATAR_MATRIX_ALL_DEVICES: "1"
-    steps:
-      - uses: actions/checkout@v4
-      - name: 记录发现结果
-        run: |
-          echo "iOS devices: ${{ needs.discover_devices.outputs.ios_count }}"
-          echo "${{ needs.discover_devices.outputs.device_summary }}"
-      - name: 校验 self-hosted macOS runner
-        run: |
-          if [ "${{ runner.os }}" != "macOS" ]; then
-            echo "::error::iOS 端侧矩阵已统一到本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
-            exit 2
-          fi
-      - name: 准备 personal_assistant/.env
-        run: |
-          if [ -d quwoquan_app/personal_assistant ]; then
-            mkdir -p quwoquan_app/personal_assistant
-            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-            else
-              : > quwoquan_app/personal_assistant/.env
-            fi
-          fi
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: quwoquan_service/go.mod
-      - name: Install Flutter (PATH)
-        run: |
-          command -v flutter >/dev/null 2>&1 || { echo "::error::self-hosted runner 需预装 flutter 并在 PATH 中"; exit 2; }
           command -v xcrun >/dev/null 2>&1 || { echo "::error::self-hosted runner 需具备 Xcode / xcrun"; exit 2; }
           flutter --version
       - name: 安装 Flutter 依赖
-        working-directory: quwoquan_app
+        working-directory: ${{ github.workspace }}/repo/quwoquan_app
         run: flutter pub get
-      - name: Run ${{ matrix.env }} on iOS (self-hosted)
+      - name: 预热 sqlite3 macOS native asset
+        working-directory: ${{ github.workspace }}/repo/quwoquan_app
         run: |
-          if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
-            python3 scripts/run_chat_avatar_device_matrix_ci.py --platform ios
+          set -euo pipefail
+          warmup_script="$(mktemp "${PWD}/.dart_tool/sqlite3-prewarm.XXXXXX.dart")"
+          cat > "${warmup_script}" <<'DART'
+          import 'package:sqlite3/sqlite3.dart';
+
+          void main() {
+            final db = sqlite3.openInMemory();
+            db.execute('select 1;');
+            db.dispose();
+            print('sqlite3-prewarm-ok ${sqlite3.version}');
+          }
+          DART
+          cleanup() {
+            rm -f "${warmup_script}"
+          }
+          trap cleanup EXIT
+          attempts=0
+          until dart run "${warmup_script}"; do
+            attempts=$((attempts + 1))
+            if [ "${attempts}" -ge 5 ]; then
+              echo "::error::sqlite3 native asset prewarm failed after ${attempts} attempts"
+              exit 1
+            fi
+            sleep $((attempts * 5))
+          done
+      - id: run_matrix
+        name: Run mobile matrix environments
+        working-directory: ${{ github.workspace }}/repo
+        run: |
+          ENV_NAMES="$(python3 - <<'PY'
+          import json
+          print("\n".join(json.loads("""${{ needs.discover_devices.outputs.env_json }}""")))
+          PY
+          )"
+          failures=0
+          android_result="skipped"
+          ios_result="skipped"
+          run_platform_envs() {
+            local platform="$1"
+            local result_var="$2"
+            local step_failures=0
+            while IFS= read -r env_name; do
+              [ -n "${env_name}" ] || continue
+              echo "::group::Run ${env_name} on ${platform} (self-hosted)"
+              export API_CONTRACT_ENV="${env_name}"
+              if [ "${{ needs.discover_devices.outputs.matrix_kind }}" = "chat-avatar" ]; then
+                python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform "${platform}" || step_failures=$((step_failures + 1))
+              else
+                python3 agent_ops/assistant/run_assistant_device_matrix_ci.py --platform "${platform}" || step_failures=$((step_failures + 1))
+              fi
+              echo "::endgroup::"
+            done <<EOF
+          ${ENV_NAMES}
+          EOF
+            if [ "${step_failures}" -ne 0 ]; then
+              printf -v "${result_var}" '%s' "failure"
+              failures=$((failures + step_failures))
+            else
+              printf -v "${result_var}" '%s' "success"
+            fi
+          }
+          if [ "${{ needs.discover_devices.outputs.has_android }}" = "true" ]; then
+            run_platform_envs android android_result
           else
-            python3 scripts/run_assistant_device_matrix_ci.py --platform ios
+            echo "::notice::No Android device discovered for this run; Android matrix skipped."
           fi
-      - name: Upload iOS matrix report
-        id: upload_ios_matrix_report
+          if [ "${{ needs.discover_devices.outputs.has_ios }}" = "true" ]; then
+            run_platform_envs ios ios_result
+          else
+            echo "::notice::No iOS device discovered for this run; iOS matrix skipped."
+          fi
+          echo "android_result=${android_result}" >> "$GITHUB_OUTPUT"
+          echo "ios_result=${ios_result}" >> "$GITHUB_OUTPUT"
+          if [ "${failures}" -ne 0 ]; then
+            echo "::error::Mobile matrix encountered ${failures} failing environment(s)"
+            exit 1
+          fi
+      - name: Upload mobile matrix report
+        id: upload_mobile_matrix_report
         if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-mobile
           path: |
-            artifacts/device-matrix/${{ matrix.env }}-ios.json
-            artifacts/device-matrix/assistant_device_matrix_logs/**
-            artifacts/device-matrix/chat-avatar/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/*-android.json
+            ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
+            ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
           compression-level: 0
-      - name: Retry iOS matrix report upload
-        if: always() && steps.upload_ios_matrix_report.outcome == 'failure'
+      - name: Retry mobile matrix report upload
+        if: always() && steps.upload_mobile_matrix_report.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-${{ matrix.env }}-ios
+          name: app-env-device-matrix-${{ needs.discover_devices.outputs.matrix_kind }}-mobile
           path: |
-            artifacts/device-matrix/${{ matrix.env }}-ios.json
-            artifacts/device-matrix/assistant_device_matrix_logs/**
-            artifacts/device-matrix/chat-avatar/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/*-android.json
+            ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
+            ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
+            ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
           if-no-files-found: ignore
           compression-level: 0
           overwrite: true
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          started_at="${{ steps.start.outputs.started_at }}"
+          if [ -n "${started_at}" ]; then
+            echo "duration_seconds=$(( $(date +%s) - started_at ))" >> "$GITHUB_OUTPUT"
+          else
+            echo "duration_seconds=0" >> "$GITHUB_OUTPUT"
+          fi
 
   app_env_device_matrix_summary:
     name: 05. App Env Device Matrix
     needs:
       - discover_devices
-      - android
-      - ios
+      - mobile_matrix
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -340,9 +489,10 @@ jobs:
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           DISCOVER_SECONDS: ${{ needs.discover_devices.outputs.duration_seconds }}
+          MOBILE_SECONDS: ${{ needs.mobile_matrix.outputs.duration_seconds }}
         run: |
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
-            python3 scripts/render_ci_timing_summary.py \
+            python3 agent_ops/ci/render_ci_timing_summary.py \
               --gate-key 05.app_env_device_matrix_pr \
               --title "05. App Env Device Matrix" \
               --critical-path-seconds 0 \
@@ -350,53 +500,42 @@ jobs:
               --note "PR 默认跳过 self-hosted mobile matrix；启用后以 discover + 设备矩阵 artifacts 为准。" \
               --write-step-summary
           else
-            python3 scripts/render_ci_timing_summary.py \
+            CRITICAL_PATH_SECONDS=$(( ${DISCOVER_SECONDS:-0} + ${MOBILE_SECONDS:-0} ))
+            python3 agent_ops/ci/render_ci_timing_summary.py \
               --gate-key 05.app_env_device_matrix_pr \
               --title "05. App Env Device Matrix" \
-              --critical-path-seconds "${DISCOVER_SECONDS:-0}" \
-              --phase "pr_default_skip=${DISCOVER_SECONDS:-0}" \
-              --note "self-hosted matrix 已启用；每个环境/平台的详细耗时保存在 device-matrix artifacts。" \
+              --critical-path-seconds "${CRITICAL_PATH_SECONDS:-0}" \
+              --phase "discover_devices=${DISCOVER_SECONDS:-0}" \
+              --phase "mobile_matrix=${MOBILE_SECONDS:-0}" \
+              --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；PR 默认允许缺席平台跳过，已发现的平台必须成功，详细耗时保存在 device-matrix artifacts。" \
               --write-step-summary
           fi
       - name: 汇总并阻断失败项
         env:
           SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           DISCOVER: ${{ needs.discover_devices.result }}
-          ANDROID: ${{ needs.android.result }}
-          IOS: ${{ needs.ios.result }}
+          ANDROID: ${{ needs.mobile_matrix.outputs.android_result }}
+          IOS: ${{ needs.mobile_matrix.outputs.ios_result }}
           HAS_ANDROID: ${{ needs.discover_devices.outputs.has_android }}
           HAS_IOS: ${{ needs.discover_devices.outputs.has_ios }}
+          ALLOW_MISSING_PLATFORMS: ${{ needs.discover_devices.outputs.allow_missing_platforms }}
         run: |
           set -euo pipefail
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
-            echo "::notice::self-hosted mobile matrix is disabled for this run; skip device evidence enforcement."
+            echo "::notice::self-hosted mobile matrix is disabled for this PR; summary gate passes by default."
             exit 0
           fi
-          fail=0
-          expect_success() {
-            local name="$1" val="$2" hint="$3"
-            if [ "${val}" != "success" ]; then
-              echo "::error::${name} expected success, got ${val}. ${hint}"
-              fail=1
-            fi
-          }
-          expect_success "discover_devices" "${DISCOVER}" "检查 self-hosted runner、flutter devices --machine 与可见移动设备数量"
-          if [ "${HAS_ANDROID}" != "true" ]; then
-            echo "::error::android device environment is required before merge, but no Android device was discovered"
-            fail=1
-          else
-            expect_success "android" "${ANDROID}" "检查 Android 设备矩阵执行与 beta/gamma 网关链路"
+          args=()
+          if [ "${ALLOW_MISSING_PLATFORMS}" = "true" ]; then
+            args+=(--allow-missing-platforms)
           fi
-          if [ "${HAS_IOS}" != "true" ]; then
-            echo "::error::ios device environment is required before merge, but no iOS device was discovered"
-            fail=1
-          else
-            expect_success "ios" "${IOS}" "检查 iOS 设备矩阵执行与 beta/gamma 网关链路"
-          fi
-          if [ "${fail}" -ne 0 ]; then
-            echo "::error::App Env Device Matrix 未全部成功；请按上列分项修复后重跑。"
-            exit 1
-          fi
+          python3 agent_ops/avatar/check_device_matrix_gate.py \
+            --discover-result "${DISCOVER}" \
+            --android-result "${ANDROID}" \
+            --ios-result "${IOS}" \
+            --has-android "${HAS_ANDROID}" \
+            --has-ios "${HAS_IOS}" \
+            "${args[@]}"
       - name: 下载设备矩阵 artifacts
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         uses: actions/download-artifact@v4
@@ -406,7 +545,7 @@ jobs:
       - name: 校验设备矩阵证据产物
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         run: |
-          python3 scripts/verify_device_matrix_evidence.py \
+          python3 agent_ops/avatar/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
             --report-glob "**/*-android.json" \
             --report-glob "**/*-ios.json"

@@ -1,6 +1,6 @@
 # 群头像同步与显示 E2E 验证规格
 
-**商用全矩阵执行顺序与清单**：[`commercial-e2e-matrix-runbook.md`](./commercial-e2e-matrix-runbook.md)。本地前置自检：`python3 scripts/check_avatar_commercial_matrix_prereqs.py --strict`（`strict_local_prereqs_met` 仅表示 flutter/patrol/双端设备/网关 healthz 等就绪；脚本始终输出 `commercial_declaration_allowed=false`，**不**替代四条环境的非 dry-run JSON）。
+**商用全矩阵执行顺序与清单**：[`commercial-e2e-matrix-runbook.md`](./commercial-e2e-matrix-runbook.md)。本地前置自检：`python3 agent_ops/avatar/check_avatar_commercial_matrix_prereqs.py --strict`（`strict_local_prereqs_met` 仅表示 flutter/patrol/双端设备/网关 healthz 等就绪；脚本始终输出 `commercial_declaration_allowed=false`，**不**替代四条环境的非 dry-run JSON）。
 
 ## 目标
 
@@ -153,14 +153,14 @@
 - `go test ./runtime/reliabletask`
 - `go test ./services/chat-service/tests -run TestGroupAvatar`
 - `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`
-- `python3 -m py_compile scripts/run_chat_avatar_e2e_probe.py scripts/run_chat_avatar_device_matrix.py scripts/run_chat_avatar_device_matrix_ci.py scripts/run_local_gamma_avatar_e2e.py scripts/run_local_gamma_t3.py scripts/verify_chat_avatar_commercial_matrix_evidence.py`
-- `bash -n scripts/start_local_gamma_mirror.sh`
-- `bash -n scripts/run_chat_avatar_commercial_matrix_orchestrator.sh`
-- `python3 scripts/run_chat_avatar_e2e_probe.py --dry-run --env beta --report artifacts/avatar-e2e/beta/avatar_e2e_report.json`
-- `python3 scripts/run_local_gamma_avatar_e2e.py --dry-run --skip-device-matrix --report artifacts/local-gamma/avatar_e2e_report.json`
-- `python3 scripts/run_chat_avatar_device_matrix.py --dry-run --env local-gamma --platform ios --device-id dry-run-device --report artifacts/device-matrix/chat-avatar/local-gamma-ios-dry-run.json`
+- `python3 -m py_compile agent_ops/avatar/run_chat_avatar_e2e_probe.py agent_ops/avatar/run_chat_avatar_device_matrix.py agent_ops/avatar/run_chat_avatar_device_matrix_ci.py agent_ops/deploy/gamma/run_local_gamma_avatar_e2e.py quwoquan_app/scripts/gamma/run_local_gamma_t3.py agent_ops/avatar/verify_chat_avatar_commercial_matrix_evidence.py`
+- `bash -n quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh`
+- `bash -n agent_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh`
+- `python3 agent_ops/avatar/run_chat_avatar_e2e_probe.py --dry-run --env beta --report artifacts/avatar-e2e/beta/avatar_e2e_report.json`
+- `python3 agent_ops/deploy/gamma/run_local_gamma_avatar_e2e.py --dry-run --skip-device-matrix --report artifacts/local-gamma/avatar_e2e_report.json`
+- `python3 agent_ops/avatar/run_chat_avatar_device_matrix.py --dry-run --env local-gamma --platform ios --device-id dry-run-device --report artifacts/device-matrix/chat-avatar/local-gamma-ios-dry-run.json`
 
 上述含 `dry-run` 的项**不得**作为商用矩阵 passed 依据；正式准出须填 manifest 并通过 `verify_chat_avatar_commercial_matrix_evidence.py`。
 
-**商用矩阵前提（修订）**：矩阵可在 **阿里云 ECS onebox**（`scripts/deploy_gamma_ecs.sh` / `deploy-gamma-ecs.yml`）+ **本机或已注册 self-hosted Runner**（Flutter/Patrol）上完成。`GAMMA_BASE_URL` 必须指向 **Caddy gamma-proxy** 端口（见 [`environment_matrix.md`](../../../../../deploy/shared/environment_matrix.md)），否则探针会误连 content 直出端口导致 `route_not_found` 或落入 Caddy 占位响应。部署后先跑 `python3 scripts/verify_gamma_public_gateway_routing.py --base-url "$GAMMA_BASE_URL"` 再执行 `run_chat_avatar_e2e_probe.py` / device-matrix。  
+**商用矩阵前提（修订）**：矩阵可在 **阿里云 ECS onebox**（`agent_ops/deploy/gamma/deploy_gamma_ecs.sh` / `deploy-gamma-ecs.yml`）+ **本机或已注册 self-hosted Runner**（Flutter/Patrol）上完成。`GAMMA_BASE_URL` 必须指向 **Caddy gamma-proxy** 端口（见 [`environment_matrix.md`](../../../../../deploy/shared/environment_matrix.md)），否则探针会误连 content 直出端口导致 `route_not_found` 或落入 Caddy 占位响应。部署后先跑 `python3 quwoquan_service/scripts/gamma/verify_gamma_public_gateway_routing.py --base-url "$GAMMA_BASE_URL"` 再执行 `run_chat_avatar_e2e_probe.py` / device-matrix。  
 在四项环境均未产出 **非 dry-run、可追溯 JSON** 前，结论仍须保持 `GATE_BLOCK`，不得宣称群头像端到端显示验证商用完成。

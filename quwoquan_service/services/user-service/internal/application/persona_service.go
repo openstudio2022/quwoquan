@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
@@ -27,9 +26,14 @@ func (s *PersonaService) List(ctx context.Context, userID string) ([]model.Perso
 }
 
 func (s *PersonaService) Create(ctx context.Context, userID string, data map[string]any) (*model.Persona, error) {
+	subAccountID, err := buildSubAccountIdentity(extractOwnerRootPrefix(userID))
+	if err != nil {
+		return nil, err
+	}
 	p := &model.Persona{
-		ID:     uuid.New().String(),
-		UserID: userID,
+		UserID:       userID,
+		SubAccountID: subAccountID,
+		Status:       "active",
 	}
 	if v, ok := data["displayName"].(string); ok {
 		p.DisplayName = v
@@ -109,7 +113,7 @@ func (s *PersonaService) Activate(ctx context.Context, personaID string) error {
 		return err
 	}
 	if _, err := tx.Exec(ctx,
-		`UPDATE personas SET is_active = true, updated_at = NOW() WHERE id = $1`, personaID); err != nil {
+		`UPDATE personas SET is_active = true, updated_at = NOW() WHERE sub_account_id = $1`, personaID); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

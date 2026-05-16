@@ -60,7 +60,7 @@ func TestCreatePostAllTypes(t *testing.T) {
 		{"image", `"mediaUrls":["https://example.com/img.jpg"]`},
 		{"video", `"videoUrl":"https://example.com/vid.mp4"`},
 		{"micro", `"body":"quick thought"`},
-		{"article", `"title":"Deep work tips","body":"Focus is a skill","articleDocument":{"title":"Deep work tips","body":"Focus is a skill"}`},
+		{"article", `"title":"Deep work tips","articleMarkdown":"# Deep work tips\n\nFocus is a skill","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.contentType, func(t *testing.T) {

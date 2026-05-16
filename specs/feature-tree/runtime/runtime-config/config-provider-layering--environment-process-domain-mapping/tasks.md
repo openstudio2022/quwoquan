@@ -14,7 +14,7 @@
 
 - [x] D1 新增部署进程映射文件 `deploy/shared/process_domain_mapping.yaml`
 - [x] D2 新增门禁脚本 `scripts/verify_deployment_domain_mapping.sh`
-- [x] D3 将门禁接入 `Makefile verify` 与 `scripts/gate_repo.sh`
+- [x] D3 将门禁接入 `Makefile verify` 与 `agent_ops/gate/gate_repo.sh`
 - [x] D4 将设计约束写入特性树文档（spec/design/tasks/acceptance）
 - [x] D5 将流程与架构规范补充到 `.cursor/rules` 与主线文档
 - [x] D5.1 产出最小运行手册 `deploy/shared/process_domain_mapping_runbook.md`

@@ -2,6 +2,7 @@ package tests
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +26,34 @@ func TestContractFixtureSeed_ChatAlphaReadsViaHandler(t *testing.T) {
 	}
 	if detail["_id"] != "fixture_conv_direct" && detail["id"] != "fixture_conv_direct" {
 		t.Fatalf("unexpected conversation detail: %+v", detail)
+	}
+	if avatarURL, _ := detail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/user/") {
+		t.Fatalf("expected direct conversation avatar to resolve to public media url, got %+v", detail)
+	}
+
+	code, groupDetail := doGet(t, "/v1/chat/conversations/fixture_conv_group", "fixture_user_current")
+	if code != http.StatusOK {
+		t.Fatalf("group detail expected 200, got %d: %+v", code, groupDetail)
+	}
+	if got := int(groupDetail["groupAvatarVersion"].(float64)); got <= 0 {
+		t.Fatalf("expected seeded group avatar backfill to populate version, got %+v", groupDetail)
+	}
+	if avatarURL, _ := groupDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/conversation/fixture_conv_group/") {
+		t.Fatalf("expected group conversation avatar to resolve via derived media url, got %+v", groupDetail)
+	}
+
+	code, circleBoundDetail := doGet(t, "/v1/chat/conversations/fixture_conv_photo_group", "fixture_user_current")
+	if code != http.StatusOK {
+		t.Fatalf("circle-bound group detail expected 200, got %d: %+v", code, circleBoundDetail)
+	}
+	if circleBoundDetail["type"] != "group" {
+		t.Fatalf("expected circle-bound conversation to expose type=group, got %+v", circleBoundDetail)
+	}
+	if circleBoundDetail["circleId"] != "fixture_circle_photo" {
+		t.Fatalf("expected fixture circle id to survive seeding, got %+v", circleBoundDetail)
+	}
+	if avatarURL, _ := circleBoundDetail["avatarUrl"].(string); !strings.HasPrefix(avatarURL, "http://127.0.0.1:18081/media/avatar/conversation/fixture_conv_photo_group/") {
+		t.Fatalf("expected circle-bound group avatar to resolve via derived media url, got %+v", circleBoundDetail)
 	}
 
 	code, messages := doGet(t, "/v1/chat/conversations/fixture_conv_direct/messages?limit=20", "fixture_user_current")

@@ -51,7 +51,7 @@ class RemoteBlockRepository extends BlockRepository {
   Future<void> blockUser(String targetUserId) async {
     final uri = _uri(
       UserApiMetadata.blockUserPath(
-        targetProfileSubjectId: targetUserId,
+        targetSubAccountId: targetUserId,
       ),
     );
     try {
@@ -72,7 +72,7 @@ class RemoteBlockRepository extends BlockRepository {
   Future<void> unblockUser(String targetUserId) async {
     final uri = _uri(
       UserApiMetadata.unblockUserPath(
-        targetProfileSubjectId: targetUserId,
+        targetSubAccountId: targetUserId,
       ),
     );
     try {

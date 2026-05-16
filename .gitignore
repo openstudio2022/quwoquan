@@ -11,6 +11,7 @@
 *~
 
 # Temporary files
+tmp/
 *.tmp
 *.bak
 *.log
@@ -51,4 +52,23 @@ logs/
 
 # Assistant reference implementations (synced from upstream, do not commit)
 ref/
+
+# quwoquan_data runtime roots
+quwoquan_data/runtime/**
+!quwoquan_data/runtime/
+!quwoquan_data/runtime/.gitignore
+
+# Deprecated quwoquan_data root-level runtime data directories.
+# New sample data must live under quwoquan_data/tests/fixtures/.
+quwoquan_data/crawl_specs/
+quwoquan_data/trees/
+quwoquan_data/runs/
+quwoquan_data/publish/
+quwoquan_data/out/
+quwoquan_data/raw/
+quwoquan_data/batch_plans/
+
+# artifacts — runtime/build products (already-tracked declarative files stay)
+artifacts/local-gamma/
+artifacts/ecs-onebox/
 

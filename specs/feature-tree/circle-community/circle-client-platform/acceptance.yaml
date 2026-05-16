@@ -42,7 +42,7 @@ level_acceptance:
   - path: quwoquan_app/lib/ui/circle/widgets/
 - id: A5
   description: '硬编码清零：circle_detail_page.dart 中所有字号使用 AppTypography.*、 间距使用 AppSpacing.*、颜色使用
-    AppColors/AppColorsFunctional、 圆角使用 AppSpacing.*BorderRadius。 python3 scripts/verify_dart_semantic.py
+    AppColors/AppColorsFunctional、 圆角使用 AppSpacing.*BorderRadius。 python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
     对 ui/circle/ 零新增违规。
 
     '

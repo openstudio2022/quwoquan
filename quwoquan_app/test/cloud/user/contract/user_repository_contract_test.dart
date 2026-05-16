@@ -23,7 +23,7 @@ void main() {
 
     test('getActivePersonaContext 返回活动身份上下文', () async {
       final context = await repo.getActivePersonaContext();
-      expect(context.profileSubjectId, isNotEmpty);
+      expect(context.subAccountId, isNotEmpty);
     });
 
     test('activatePersona 不崩溃', () async {

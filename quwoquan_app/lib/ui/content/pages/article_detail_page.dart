@@ -15,6 +15,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
@@ -35,10 +36,6 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   PostReadUiBundle? _postReadBundle;
   bool _isLoading = true;
   Object? _loadError;
-  bool _isLiked = false;
-  bool _isSaved = false;
-  int _likesCount = 0;
-  int _commentsCount = 0;
   late final DateTime _enterTime = DateTime.now();
 
   @override
@@ -68,6 +65,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       final detail = await ref
           .read(contentRepositoryProvider)
           .getPost(postId: widget.articleId);
+      applyConfirmedInteractionPost(ref, detail.post);
       final article = projectArticleDetailViewFromPayload(
         detail,
         fallbackArticleId: widget.articleId,
@@ -78,11 +76,21 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         wire: detail.mergedArticleWireMap,
       );
       if (!mounted) return;
+      final snapshot = buildMediaViewerInteractionSnapshot(
+        posts: <PostBaseDto>[detail.post],
+        discoveryState: ref.read(discoveryStateProvider),
+        relationshipState: ref.read(userRelationshipStateProvider),
+        postInteractionState: ref.read(postInteractionStateProvider),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        primeMediaViewerInteractionSnapshot(ref, snapshot);
+      });
       setState(() {
         _article = article;
         _postReadBundle = readBundle;
-        _likesCount = article.stats.likes;
-        _commentsCount = article.stats.comments;
         _isLoading = false;
         _loadError = null;
       });
@@ -124,6 +132,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(postInteractionStateProvider);
     final background = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
@@ -163,6 +172,24 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
     }
 
     final article = _article!;
+    final postId = widget.articleId;
+    final isLiked = effectivePostLiked(ref, postId);
+    final isSaved = effectivePostSaved(ref, postId);
+    final likesCount = effectivePostLikeCount(
+      ref,
+      postId,
+      fallback: article.stats.likes,
+    );
+    final commentsCount = effectivePostCommentCount(
+      ref,
+      postId,
+      fallback: article.stats.comments,
+    );
+    final bookmarksCount = effectivePostBookmarkCount(
+      ref,
+      postId,
+      fallback: article.stats.bookmarks,
+    );
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     return AppScaffold(
       backgroundColor: background,
@@ -230,7 +257,10 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                         allowLandscapeSpread: true,
                       );
                       final stageHeight =
-                          metrics.frameSpecForStageWidth(stageWidth).paperSize.height +
+                          metrics
+                              .frameSpecForStageWidth(stageWidth)
+                              .paperSize
+                              .height +
                           pagePadding.vertical;
                       return UnconstrainedBox(
                         alignment: Alignment.topCenter,
@@ -276,34 +306,46 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _BottomAction(
-                    icon: _isLiked
+                    icon: isLiked
                         ? CupertinoIcons.hand_thumbsup_fill
                         : CupertinoIcons.hand_thumbsup,
-                    label: _formatCount(_likesCount),
-                    color: _isLiked
+                    label: _formatCount(likesCount),
+                    color: isLiked
                         ? CupertinoColors.activeBlue.resolveFrom(context)
                         : CupertinoColors.label.resolveFrom(context),
                     onTap: () {
-                      setState(() {
-                        _isLiked = !_isLiked;
-                        _likesCount += _isLiked ? 1 : -1;
-                        if (_likesCount < 0) _likesCount = 0;
-                      });
+                      syncPostLikeIntent(
+                        ref,
+                        postId: postId,
+                        isLiked: !isLiked,
+                        likeCount: isLiked
+                            ? (likesCount - 1).clamp(0, 1 << 31).toInt()
+                            : likesCount + 1,
+                      );
                     },
                   ),
                   _BottomAction(
-                    icon: _isSaved
+                    icon: isSaved
                         ? CupertinoIcons.bookmark_fill
                         : CupertinoIcons.bookmark,
-                    label: _formatCount(article.stats.bookmarks),
-                    color: _isSaved
+                    label: _formatCount(bookmarksCount),
+                    color: isSaved
                         ? CupertinoColors.systemYellow.resolveFrom(context)
                         : CupertinoColors.label.resolveFrom(context),
-                    onTap: () => setState(() => _isSaved = !_isSaved),
+                    onTap: () {
+                      syncPostSaveIntent(
+                        ref,
+                        postId: postId,
+                        isSaved: !isSaved,
+                        bookmarkCount: isSaved
+                            ? (bookmarksCount - 1).clamp(0, 1 << 31).toInt()
+                            : bookmarksCount + 1,
+                      );
+                    },
                   ),
                   _BottomAction(
                     icon: CupertinoIcons.chat_bubble,
-                    label: _formatCount(_commentsCount),
+                    label: _formatCount(commentsCount),
                     color: CupertinoColors.label.resolveFrom(context),
                     onTap: () {
                       CommentViewer.showModal(

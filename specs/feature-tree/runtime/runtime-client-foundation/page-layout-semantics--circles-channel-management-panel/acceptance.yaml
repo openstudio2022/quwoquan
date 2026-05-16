@@ -10,7 +10,7 @@ focus_groups:
 - local_persistence
 - ios_semantics
 execution:
-  local_gate: flutter analyze quwoquan_app/lib/ && python3 scripts/verify_dart_semantic.py
+  local_gate: flutter analyze quwoquan_app/lib/ && python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
   full_gate: make gate
 level_acceptance:
   A1:

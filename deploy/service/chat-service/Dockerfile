@@ -3,8 +3,10 @@
 
 ARG GO_BASE_IMAGE=golang:1.24-bookworm
 ARG ALPINE_BASE_IMAGE=alpine:3.19
+ARG GO_BUILD_FLAGS=-p=1
 
 FROM ${GO_BASE_IMAGE} AS builder
+ARG GO_BUILD_FLAGS
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 ENV GOPROXY=${GOPROXY}
@@ -13,7 +15,8 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o /chat-service ./services/chat-service/cmd/api/
+RUN CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build ${GO_BUILD_FLAGS} -o /chat-service ./services/chat-service/cmd/api/
 
 FROM ${ALPINE_BASE_IMAGE}
 RUN apk add --no-cache ca-certificates tzdata

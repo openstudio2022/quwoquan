@@ -112,12 +112,45 @@ func (s *RuleScorer) ScoreBatch(_ context.Context, features *ScoringFeatures, ca
 		}
 		detail["engagementBonus"] = engagementBonus
 
+		// Social prior: boost if content author is followed or has social endorsement
+		socialPrior := 0.0
+		if user != nil && user.AuthorAffinities != nil {
+			if aff, ok := user.AuthorAffinities[c.AuthorID]; ok && aff > 0 {
+				socialPrior = math.Log1p(aff)
+			}
+		}
+		detail["socialPrior"] = socialPrior
+
+		// Negative penalty: suppress content with same author/tags as disliked items
+		negativePenalty := 0.0
+		if session != nil && len(session.NegativeIDs) > 0 {
+			for _, tag := range c.Tags {
+				if tw, ok := session.TagWeights[tag]; ok && tw < 0 {
+					negativePenalty += math.Abs(tw) * 0.1
+				}
+			}
+		}
+		detail["negativePenalty"] = negativePenalty
+
+		// Entity affinity: boost for content matching user's entity interests
+		entityAffinity := 0.0
+		if user != nil && user.EntityInstanceAffinities != nil && len(c.EntityRefs) > 0 {
+			for _, ref := range c.EntityRefs {
+				if aff, ok := user.EntityInstanceAffinities[ref]; ok {
+					entityAffinity += aff
+				}
+			}
+		}
+		detail["entityAffinity"] = entityAffinity
+
 		score := w.TagRelevance*(tagScore+longTermTagBoost*0.3) +
 			w.AuthorAffinity*authorAffinity +
 			w.Popularity*popularity +
 			w.Freshness*freshness +
 			w.ExploreBoost*exploreBoost +
-			w.DwellBonus*engagementBonus
+			w.DwellBonus*engagementBonus +
+			w.SocialPrior*socialPrior -
+			w.NegativePenalty*negativePenalty
 
 		detail["total"] = score
 

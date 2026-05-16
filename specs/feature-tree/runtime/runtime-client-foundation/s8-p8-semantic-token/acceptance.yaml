@@ -25,11 +25,11 @@ level_acceptance:
       - slice-s8-w1-twelve-pages
       - slice-s8-w2-w5-waves
     tests:
-      - file: scripts/verify_dart_semantic.py
-      - file: scripts/.verify_dart_semantic_baseline.txt
+      - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
+      - file: quwoquan_app/scripts/runtime/.verify_dart_semantic_baseline.txt
 
 execution:
-  local_gate: "python3 scripts/verify_dart_semantic.py && python3 scripts/verify_page_horizontal_quality_matrix.py && python3 scripts/verify_page_matrix_scan_complete.py"
+  local_gate: "python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py && python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py && python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py"
   full_gate: make gate
 
 journey_acceptance:
@@ -55,9 +55,9 @@ evidence_matrix:
       artifact: specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
   T2:
     - type: script
-      artifact: scripts/verify_dart_semantic.py
+      artifact: quwoquan_app/scripts/runtime/verify_dart_semantic.py
     - type: file
-      artifact: scripts/.verify_dart_semantic_baseline.txt
+      artifact: quwoquan_app/scripts/runtime/.verify_dart_semantic_baseline.txt
   T3:
     - type: process
       note: PR 含 baseline 行删除 + page-horizontal-quality-matrix.md P8 列

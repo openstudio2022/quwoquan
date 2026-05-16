@@ -4,9 +4,9 @@
 
 ### 组 1：metadata
 
-- [ ] T01: 在 `quwoquan_service/contracts/metadata/user/user_profile/fields.yaml` 新增 `ProfileSubjectView`、`ProfileInheritanceStateView`、`ProfileSubjectMutation`
+- [ ] T01: 在 `quwoquan_service/contracts/metadata/user/user_profile/fields.yaml` 新增 `SubAccountProfileView`、`ProfileInheritanceStateView`、`SubAccountProfileMutation`
 - [ ] T02: 在 `quwoquan_service/contracts/metadata/user/user_profile/fields.yaml` 为 `Persona` 补齐 `backgroundUrl`、继承/覆写相关字段
-- [ ] T03: 在 `quwoquan_service/contracts/metadata/user/user_profile/service.yaml` 将 `GetSubAccountProfile`、`GetMeProfile` 收敛到 `ProfileSubjectView`，并让 `UpdateUserProfile`、`UpdateSubAccount` 统一消费 `ProfileSubjectMutation`
+- [ ] T03: 在 `quwoquan_service/contracts/metadata/user/user_profile/service.yaml` 将 `GetSubAccountProfile`、`GetMeProfile` 收敛到 `SubAccountProfileView`，并让 `UpdateUserProfile`、`UpdateSubAccount` 统一消费 `SubAccountProfileMutation`
 - [ ] T04: 新建 `quwoquan_service/contracts/metadata/user/user_profile/ui_config.yaml`，定义个人主页 route/surface、一级 Tab、创作/互动二级过滤、方向过滤，以及头图高度比例、头像侵入比例、拉伸上限与吸顶策略
 - [ ] T05: 在 `quwoquan_service/contracts/metadata/user/follow_edge/*` 正式定义 `RelationshipCapabilityView` 与关系态枚举
 - [ ] T06: 在 `quwoquan_service/contracts/metadata/content/post/*` 新增 `ProfileInteractionActivityView` 与 received/sent 两条互动活动读路由，互动类型仅保留 `like/comment/share`
@@ -23,7 +23,7 @@
 
 ### 组 3：业务逻辑
 
-- [ ] T12: `user-service` 实现 `ProfileSubjectView` 读模型与 owner/subAccount 继承合成逻辑
+- [ ] T12: `user-service` 实现 `SubAccountProfileView` 读模型与 owner/subAccount 继承合成逻辑
 - [ ] T13: `user-service` 实现资料编辑同步写入链路，包括 `applyScope` 与选定同步目标
 - [ ] T14: `user-service` 实现新的 `RelationshipCapabilityView` 计算和关注/粉丝卡片读模型
 - [ ] T15: `content-service` 实现个人主页互动活动 received/sent 查询，打通赞/评论/转发三类活动

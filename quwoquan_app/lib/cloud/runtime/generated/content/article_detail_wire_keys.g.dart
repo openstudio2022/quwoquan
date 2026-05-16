@@ -16,7 +16,15 @@ abstract final class ArticleDetailWireKeys {
 
   static const String articleFontPreset = 'articleFontPreset';
 
-  static const String articleDocument = 'articleDocument';
+  static const String articleMarkdown = 'articleMarkdown';
+
+  static const String articleMarkdownVersion = 'articleMarkdownVersion';
+
+  static const String articleMarkdownDigest = 'articleMarkdownDigest';
+
+  static const String articleAssetManifest = 'articleAssetManifest';
+
+  static const String articleRenderProfile = 'articleRenderProfile';
 
   static const String articleBlocks = 'articleBlocks';
 

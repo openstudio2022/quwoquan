@@ -321,11 +321,11 @@ func TestEngine_Rerank_AuthorDedup(t *testing.T) {
 	now := time.Now()
 	source := &mockCandidateSource{
 		candidates: []ContentCandidate{
-			{ContentID: "p1", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 100},
-			{ContentID: "p2", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 90},
-			{ContentID: "p3", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 80},
-			{ContentID: "p4", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 70},
-			{ContentID: "p5", ContentType: "video", AuthorID: "a2", PublishedAt: now, LikeCount: 50},
+			{ContentID: "p1", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 100, ViewCount: 500},
+			{ContentID: "p2", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 90, ViewCount: 400},
+			{ContentID: "p3", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 80, ViewCount: 300},
+			{ContentID: "p4", ContentType: "image", AuthorID: "a1", PublishedAt: now, LikeCount: 70, ViewCount: 200},
+			{ContentID: "p5", ContentType: "video", AuthorID: "a2", PublishedAt: now, LikeCount: 50, ViewCount: 150},
 		},
 	}
 
@@ -1238,4 +1238,225 @@ func TestEngine_ConcurrentFeedRequests(t *testing.T) {
 			t.Fatalf("concurrent feed failed: %v", err)
 		}
 	}
+}
+
+// --- Phase 5+ tests: rerank diversity, explore injection, cold-start, observability ---
+
+func TestRerank_TagDedup_NoThreeConsecutiveSameTag(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	candidates := []ContentCandidate{
+		{ContentID: "c1", ContentType: "image", Tags: []string{"travel"}, PublishedAt: now, LikeCount: 100, ViewCount: 1000},
+		{ContentID: "c2", ContentType: "video", Tags: []string{"travel"}, PublishedAt: now, LikeCount: 90, ViewCount: 900},
+		{ContentID: "c3", ContentType: "article", Tags: []string{"travel"}, PublishedAt: now, LikeCount: 80, ViewCount: 800},
+		{ContentID: "c4", ContentType: "image", Tags: []string{"food"}, PublishedAt: now, LikeCount: 70, ViewCount: 700},
+		{ContentID: "c5", ContentType: "video", Tags: []string{"travel"}, PublishedAt: now, LikeCount: 60, ViewCount: 600},
+	}
+	source := &mockCandidateSource{candidates: candidates}
+
+	engine := NewEngine(hp, []CandidateSource{source}, WithExploreFraction(0))
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 2; i < len(resp.Items); i++ {
+		tag0 := firstTag(resp.Items[i-2].Tags)
+		tag1 := firstTag(resp.Items[i-1].Tags)
+		tag2 := firstTag(resp.Items[i].Tags)
+		if tag0 != "" && tag0 == tag1 && tag1 == tag2 {
+			t.Errorf("3 consecutive items at [%d-%d] share tag %q", i-2, i, tag0)
+		}
+	}
+}
+
+func TestRerank_ExploreInjection(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	var candidates []ContentCandidate
+	for i := 0; i < 30; i++ {
+		c := ContentCandidate{
+			ContentID:   fmt.Sprintf("c%d", i),
+			ContentType: "image",
+			Tags:        []string{fmt.Sprintf("tag%d", i%5)},
+			PublishedAt:  now,
+			LikeCount:    int64(100 - i),
+			ViewCount:    int64(1000 - i*10),
+		}
+		if i%5 == 0 {
+			c.RecallPath = "explore_recall"
+		}
+		candidates = append(candidates, c)
+	}
+	source := &mockCandidateSource{candidates: candidates}
+
+	engine := NewEngine(hp, []CandidateSource{source})
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	exploreCount := 0
+	for _, item := range resp.Items {
+		if item.RecallPath == "explore_recall" {
+			exploreCount++
+		}
+	}
+	minExpected := len(resp.Items) / 5
+	if minExpected < 1 {
+		minExpected = 1
+	}
+	if exploreCount < minExpected {
+		t.Errorf("expected at least %d explore items in %d results, got %d",
+			minExpected, len(resp.Items), exploreCount)
+	}
+}
+
+func TestRerank_ColdStartGuarantee(t *testing.T) {
+	redis := newMockRedis()
+	hp := NewHotPath(redis)
+	ctx := context.Background()
+
+	now := time.Now()
+	var candidates []ContentCandidate
+	for i := 0; i < 30; i++ {
+		c := ContentCandidate{
+			ContentID:   fmt.Sprintf("c%d", i),
+			ContentType: "image",
+			Tags:        []string{fmt.Sprintf("tag%d", i%3)},
+			PublishedAt:  now.Add(-time.Duration(i*10) * time.Hour),
+			LikeCount:    int64(100 - i),
+			ViewCount:    int64(500 + i*50),
+		}
+		if i < 5 {
+			c.PublishedAt = now.Add(-time.Duration(i) * time.Hour)
+			c.ViewCount = int64(10 + i*5)
+		}
+		candidates = append(candidates, c)
+	}
+	source := &mockCandidateSource{candidates: candidates}
+
+	engine := NewEngine(hp, []CandidateSource{source})
+	resp, err := engine.GetFeed(ctx, GetFeedRequest{UserID: "u1", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	coldStartCount := 0
+	for _, item := range resp.Items {
+		for _, c := range candidates {
+			if c.ContentID == item.ContentID {
+				ageHours := now.Sub(c.PublishedAt).Hours()
+				if ageHours < 24 && c.ViewCount < 100 {
+					coldStartCount++
+				}
+				break
+			}
+		}
+	}
+	minColdStart := len(resp.Items) / 10
+	if minColdStart < 1 {
+		minColdStart = 1
+	}
+	if coldStartCount < minColdStart {
+		t.Errorf("expected at least %d cold-start items in %d results, got %d",
+			minColdStart, len(resp.Items), coldStartCount)
+	}
+}
+
+func TestObservability_RecordMetrics(t *testing.T) {
+	old := GlobalPipelineStats.TotalRequests.Load()
+
+	RecordMetrics(PipelineMetrics{
+		UserID:       "u1",
+		TotalLatency: 100 * time.Millisecond,
+		ResultCount:  10,
+	})
+
+	newTotal := GlobalPipelineStats.TotalRequests.Load()
+	if newTotal != old+1 {
+		t.Errorf("expected total requests to increment, old=%d new=%d", old, newTotal)
+	}
+}
+
+func TestObservability_SlowRequestCounter(t *testing.T) {
+	old := GlobalPipelineStats.SlowRequests.Load()
+
+	RecordMetrics(PipelineMetrics{
+		UserID:       "u1",
+		TotalLatency: 300 * time.Millisecond,
+		ResultCount:  10,
+	})
+
+	newSlow := GlobalPipelineStats.SlowRequests.Load()
+	if newSlow != old+1 {
+		t.Errorf("expected slow requests to increment for >200ms, old=%d new=%d", old, newSlow)
+	}
+}
+
+func TestObservability_EmptyResultCounter(t *testing.T) {
+	old := GlobalPipelineStats.EmptyResults.Load()
+
+	RecordMetrics(PipelineMetrics{
+		UserID:      "u1",
+		ResultCount: 0,
+	})
+
+	newEmpty := GlobalPipelineStats.EmptyResults.Load()
+	if newEmpty != old+1 {
+		t.Errorf("expected empty results to increment, old=%d new=%d", old, newEmpty)
+	}
+}
+
+func TestObservability_ModelTimeoutCounter(t *testing.T) {
+	old := GlobalPipelineStats.ModelTimeouts.Load()
+	RecordModelTimeout()
+	newVal := GlobalPipelineStats.ModelTimeouts.Load()
+	if newVal != old+1 {
+		t.Errorf("expected model timeouts to increment, old=%d new=%d", old, newVal)
+	}
+}
+
+func TestObservability_SnapshotStats(t *testing.T) {
+	snap := SnapshotStats()
+	if _, ok := snap["total_requests"]; !ok {
+		t.Error("snapshot should contain total_requests")
+	}
+	if _, ok := snap["empty_results"]; !ok {
+		t.Error("snapshot should contain empty_results")
+	}
+	if _, ok := snap["model_timeouts"]; !ok {
+		t.Error("snapshot should contain model_timeouts")
+	}
+}
+
+func TestModelVsRuleExperiment(t *testing.T) {
+	ctx := context.Background()
+	resolver := experiments.NewHashResolver()
+	RegisterModelVsRuleExperiment(resolver)
+
+	bucket := ResolveModelBucket(ctx, resolver, "testuser")
+	if bucket != "rule" && bucket != "model" {
+		t.Errorf("unexpected bucket %q, expected 'rule' or 'model'", bucket)
+	}
+}
+
+func TestResolveModelBucket_NilResolver(t *testing.T) {
+	bucket := ResolveModelBucket(context.Background(), nil, "u1")
+	if bucket != "rule" {
+		t.Errorf("nil resolver should return 'rule', got %q", bucket)
+	}
+}
+
+func firstTag(tags []string) string {
+	if len(tags) > 0 {
+		return tags[0]
+	}
+	return ""
 }

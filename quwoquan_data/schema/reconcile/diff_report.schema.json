@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "totalEntities": { "type": "integer" },
+    "totalTags": { "type": "integer" },
+    "totalDrifts": { "type": "integer" },
+    "drifts": { "type": "array" },
+    "pendingEntities": { "type": "array" },
+    "pendingTags": { "type": "array" }
+  },
+  "required": ["totalDrifts", "drifts"]
+}

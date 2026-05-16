@@ -1,0 +1,101 @@
+{
+	admin 0.0.0.0:2019
+	local_certs
+}
+
+(local_gamma_tls) {
+	tls internal
+}
+
+gamma-api.quwoquan-env.test {
+	import local_gamma_tls
+	handle /healthz {
+		reverse_proxy content-service:18080
+	}
+	handle /livez {
+		reverse_proxy content-service:18080
+	}
+	handle /startupz {
+		reverse_proxy content-service:18080
+	}
+	@api_content path /v1/content*
+	handle @api_content {
+		reverse_proxy content-service:18080
+	}
+	@api_chat path /v1/chat*
+	handle @api_chat {
+		reverse_proxy chat-service:18081
+	}
+	@api_user path /v1/user*
+	handle @api_user {
+		reverse_proxy user-service:18082
+	}
+	@api_assistant path /v1/assistant*
+	handle @api_assistant {
+		reverse_proxy assistant-service:18087
+	}
+	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /media/* {
+		root * /srv/media
+		file_server
+	}
+	handle {
+		respond "local-gamma mirror route is not ready for this path" 404
+	}
+}
+
+gamma-product-ops.quwoquan-env.test {
+	import local_gamma_tls
+	handle /healthz {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle {
+		respond "local-gamma product-ops route is not ready for this path" 404
+	}
+}
+
+gamma-avatar.quwoquan-env.test,
+gamma-image.quwoquan-env.test,
+gamma-video.quwoquan-env.test,
+gamma-upload.quwoquan-env.test {
+	import local_gamma_tls
+	root * /srv/media
+	file_server
+}
+
+:80 {
+	handle /healthz {
+		reverse_proxy content-service:18080
+	}
+	@pub_content path /v1/content*
+	handle @pub_content {
+		reverse_proxy content-service:18080
+	}
+	@pub_chat path /v1/chat*
+	handle @pub_chat {
+		reverse_proxy chat-service:18081
+	}
+	@pub_user path /v1/user*
+	handle @pub_user {
+		reverse_proxy user-service:18082
+	}
+	@pub_assistant path /v1/assistant*
+	handle @pub_assistant {
+		reverse_proxy assistant-service:18087
+	}
+	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /media/* {
+		root * /srv/media
+		file_server
+	}
+	handle {
+		respond "local-gamma mirror route is not ready for this path" 404
+	}
+}

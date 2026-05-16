@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:riverpod/misc.dart' show ProviderListenable;
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
@@ -39,10 +40,9 @@ class RealtimeMessageHandler {
 
         _updateConversationCacheForNewMessage(conversationId, payload);
         unawaited(
-          _read(localChatSearchSyncProvider).ingestRealtimeMessage(
-            conversationId: conversationId,
-            payload: payload,
-          ),
+          _read(
+            localChatSearchSyncProvider,
+          ).ingestRealtimeMessage(conversationId: conversationId, message: msg),
         );
         return;
 
@@ -139,13 +139,15 @@ class RealtimeMessageHandler {
       final preview = payload['content'] as String? ?? '';
       final timestamp = payload['timestamp'] as String? ?? '';
       final existing = cache.get(conversationId);
-      final currentUnread = existing?['unreadCount'] as int? ?? 0;
+      final currentUnread = existing?.unreadCount ?? 0;
 
-      cache.updateListFields(
+      cache.applyListPatch(
         conversationId,
-        lastMessagePreview: preview,
-        lastMessageAt: timestamp,
-        unreadCount: currentUnread + 1,
+        ConversationListPatch(
+          lastMessagePreview: preview,
+          lastMessageAt: timestamp,
+          unreadCount: currentUnread + 1,
+        ),
       );
     } catch (_) {}
   }

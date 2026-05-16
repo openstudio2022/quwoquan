@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "assistant.skill-eval-scenarios.v1",
+  "schemaVersion": "assistant.skill-eval-scenarios",
   "description": "21 个私人助理 skill 端侧 alpha 与端云 beta 比拼评测场景。每个场景用于同题对比流式叙事、答案质量、skill/tool 语义一致性、稳定性与端云体验一致性。",
   "repositoryExpectations": {
     "alpha": "mock",
@@ -1147,7 +1147,7 @@
     },
     {
       "id": "skill_eval_huawei_cloud_qa",
-      "title": "华为云问答助手端云评测",
+      "title": "云服务问答助手端云评测",
       "type": "assistant_turn",
       "skillId": "huawei_cloud_qa",
       "domainId": "huawei_cloud_qa",
@@ -1156,7 +1156,7 @@
         "assistant_21_skill_eval"
       ],
       "expectedAnswerFragments": [
-        "华为云问答助手",
+        "云服务问答助手",
         "昇腾",
         "对象存储"
       ],
@@ -1170,13 +1170,13 @@
         "web_search"
       ],
       "alphaMockStream": {
-        "finalAnswer": "华为云问答助手已生成选型建议：大模型推理可优先看昇腾算力，容器承载服务编排，对象存储保存模型和数据资产。",
+        "finalAnswer": "云服务问答助手已生成选型建议：大模型推理可优先看昇腾算力，容器承载服务编排，对象存储保存模型和数据资产。",
         "toolName": "web_search",
         "toolSummary": "alpha mock 已返回华为云昇腾、容器和对象存储选型线索。"
       },
       "remoteExpectations": {
         "answerFragments": [
-          "华为云问答助手",
+          "云服务问答助手",
           "昇腾",
           "对象存储"
         ],

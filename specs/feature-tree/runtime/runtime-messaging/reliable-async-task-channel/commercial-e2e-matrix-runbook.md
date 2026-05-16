@@ -30,7 +30,7 @@
 本地自检（不替代云上证据；脚本 `warnings` 会提示 E3/E4 无法在离线会话核验）：
 
 ```bash
-python3 scripts/check_avatar_commercial_matrix_prereqs.py --strict
+python3 agent_ops/avatar/check_avatar_commercial_matrix_prereqs.py --strict
 ```
 
 ## 3. 执行顺序（推荐）
@@ -43,7 +43,7 @@ python3 scripts/check_avatar_commercial_matrix_prereqs.py --strict
    COMMERCIAL_MATRIX_MANIFEST=artifacts/commercial-matrix/chat-avatar/manifest.yaml \
      make verify-chat-avatar-commercial-matrix
    ```
-   或 `python3 scripts/verify_chat_avatar_commercial_matrix_evidence.py --manifest PATH`。退出码 **0** 才允许在 T9/本文档勾选「四条齐全」；**2** 表示 `GATE_BLOCK`（含 dry-run 混入、`status!=passed`、缺 Android/iOS 之一等）。
+   或 `python3 agent_ops/avatar/verify_chat_avatar_commercial_matrix_evidence.py --manifest PATH`。退出码 **0** 才允许在 T9/本文档勾选「四条齐全」；**2** 表示 `GATE_BLOCK`（含 dry-run 混入、`status!=passed`、缺 Android/iOS 之一等）。
 5. **归档**：将 manifest 路径、校验命令、CI `run_id` 写入 [`tasks.md`](./tasks.md) T9 与 [`avatar-e2e-validation.md`](./avatar-e2e-validation.md)「当前执行证据」。
 
 ### 3.1 一键编排（Phase L + 可选 Phase B）
@@ -52,18 +52,18 @@ python3 scripts/check_avatar_commercial_matrix_prereqs.py --strict
 
 ```bash
 # 仅本机 Phase L：prereqs → 路由自检 → T3 → run_local_gamma_avatar_e2e（非 dry-run）
-bash scripts/run_chat_avatar_commercial_matrix_orchestrator.sh
+bash agent_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
 
 # 先起 Docker 镜像栈
-COMMERCIAL_MATRIX_START_MIRROR=1 bash scripts/run_chat_avatar_commercial_matrix_orchestrator.sh
+COMMERCIAL_MATRIX_START_MIRROR=1 bash agent_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
 
 # 追加 beta（需 BETA_GATEWAY_BASE_URL + token）
 BETA_GATEWAY_BASE_URL=http://127.0.0.1:18080 BETA_TEST_AUTH_TOKEN=... \
-  bash scripts/run_chat_avatar_commercial_matrix_orchestrator.sh
+  bash agent_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
 
 # 仅对已填 manifest 做校验（不跑 Patrol）
 COMMERCIAL_MATRIX_MANIFEST=artifacts/commercial-matrix/chat-avatar/manifest.yaml \
-  bash scripts/run_chat_avatar_commercial_matrix_orchestrator.sh
+  bash agent_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh
 
 # Makefile
 make run-chat-avatar-commercial-matrix-local
@@ -77,17 +77,17 @@ E3/E4 探针与矩阵 JSON 由 [`deploy-gamma-ecs.yml`](../../../../../.github/w
 
 ```bash
 # Local gamma：镜像（示例）
-bash scripts/start_local_gamma_mirror.sh
+bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
 
 # Probe（非 dry-run 需可达 gateway）
-python3 scripts/run_chat_avatar_e2e_probe.py --help
+python3 agent_ops/avatar/run_chat_avatar_e2e_probe.py --help
 
 # T3（含 chat）
-python3 scripts/run_local_gamma_t3.py
+python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py
 
 # Device 矩阵（商用必须去掉 dry-run，且具备双端设备）
-python3 scripts/run_chat_avatar_device_matrix.py --help
-python3 scripts/run_chat_avatar_device_matrix_ci.py --help
+python3 agent_ops/avatar/run_chat_avatar_device_matrix.py --help
+python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --help
 ```
 
 ## 5. 声明检查清单（PR / 发布前）

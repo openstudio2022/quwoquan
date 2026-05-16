@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "app-seed-manifest.v1",
+  "schemaVersion": "app-seed-manifest",
   "environment": "alpha",
   "description": "alpha 共享池双通道装载清单：默认 flutter run 走本地 mock fixture，同时同一 seedRef 也必须可写入服务测试存储。",
   "seedRefs": [

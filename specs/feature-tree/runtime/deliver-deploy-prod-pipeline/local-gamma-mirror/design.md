@@ -89,8 +89,8 @@ artifacts/local-gamma/config-root/
 |---|---|---|
 | T1 | `make gate`、`make verify-app-env-package`、`make verify-app-seed-manifest` | 静态、metadata、拓扑、环境包、seed 清单通过 |
 | T2 | `gate_repo.sh` 内 Flutter/Go/Ops 模块测试 | Widget/Provider/Journey/模块测试通过 |
-| T3 | `scripts/run_local_gamma_t3.py` | health、manifest endpoints、真实存储副作用、错误响应、RemoteRepository smoke 通过 |
-| T4 | `scripts/run_local_gamma_t4.sh`（内部复用共享 `run_gamma_patrol_matrix_ci.py`） | 当前可见设备进入共享 gamma 巡检脚本并生成审计证据 |
+| T3 | `quwoquan_app/scripts/gamma/run_local_gamma_t3.py` | health、manifest endpoints、真实存储副作用、错误响应、RemoteRepository smoke 通过 |
+| T4 | `quwoquan_app/scripts/gamma/run_local_gamma_t4.sh`（内部复用共享 `run_gamma_patrol_matrix_ci.py`） | 当前可见设备进入共享 gamma 巡检脚本并生成审计证据 |
 
 ## 报告模型
 

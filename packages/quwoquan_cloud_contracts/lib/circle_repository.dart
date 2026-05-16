@@ -40,17 +40,15 @@ abstract class CircleRepository {
   Future<void> joinCircle(
     String circleId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   });
 
   Future<void> leaveCircle(
     String circleId, {
     String? ownerUserId,
-    String? actorProfileSubjectId,
-    String? personaId,
-    String? personaContextVersion,
+    String? subAccountId,
+    String? subAccountContextVersion,
   });
 
   Future<List<CircleMemberRosterItemDto>> listMembers(

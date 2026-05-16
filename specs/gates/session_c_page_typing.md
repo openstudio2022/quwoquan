@@ -5,7 +5,7 @@
 ## 1. 门禁
 
 - 扫描集与 `verify_page_matrix_scan_complete.py` 一致（64 路径）。
-- 验收：`python3 scripts/verify_page_abc_governance.py --enforce-c`。
+- 验收：`python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-c`。
 
 ### 1.1 门禁 C 与架构目标的关系（勿混用）
 
@@ -42,7 +42,7 @@
 
 ```bash
 make verify-app-page-abc-governance
-python3 scripts/verify_page_abc_governance.py --enforce-c
+python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-c
 ```
 
 ## 6. 契约测试与 Map 断言（非助手域）

@@ -19,7 +19,7 @@
 | `viewer-profile-state-sync-contract/spec.md` | 已明确 canonical key、shared provider、outbox 聚合同步是本次核心 Scenario |
 | `circle-feed-viewer-handoff-contract/spec.md` | 已明确 circle 正式纳入范围，且只作为来源上下文，不自持第二套状态真相 |
 | `content-action-intent-contract/spec.md` / `design.md` | 已冻结 like/favorite/share/comment/report/block 的 intent 边界，可复用为 viewer/feed/profile 的写入基础 |
-| `owner-subaccount-homepage-unification` | 已冻结 `ProfileSubjectView` 与 `RelationshipCapabilityView`，本次不再重定义 profile 关系矩阵 |
+| `owner-subaccount-homepage-unification` | 已冻结 `SubAccountProfileView` 与 `RelationshipCapabilityView`，本次不再重定义 profile 关系矩阵 |
 | 现状代码 | `MediaViewerExtra` / `MediaViewerResult` 已存在；`section_creations.dart` 的圈子 handoff 仍不完整；`profile_state_provider.dart` 仍以 `isFollowing` 为主；`discovery_state.dart` 仍是旧的页面内状态容器 |
 
 结论：
@@ -43,7 +43,7 @@
 | 文档 / 能力 | 可复用点 |
 |-------------|----------|
 | `content-action-intent-contract` | 乐观更新、专用路由与批量行为边界、失败回滚基础 |
-| `owner-subaccount-homepage-unification` | `ProfileSubjectView` / `RelationshipCapabilityView` 与 profile 按钮矩阵 |
+| `owner-subaccount-homepage-unification` | `SubAccountProfileView` / `RelationshipCapabilityView` 与 profile 按钮矩阵 |
 | `feed-item-dto-contract` | content projection codegen 与 DTO 统一出口 |
 | `contentRuntimeConfigProvider` | 现有 app config 拉取与 feature flag 合并机制，可扩到 sync 参数 |
 
@@ -122,7 +122,7 @@
 ### KD1：对象级唯一真相源
 
 - `user` 对象负责：
-  - `ProfileSubjectView`
+  - `SubAccountProfileView`
   - `RelationshipCapabilityView`
   - follow / unfollow 的当前意图与最终收敛
 - `post` 对象负责：

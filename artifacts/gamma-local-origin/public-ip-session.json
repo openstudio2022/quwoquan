@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "public-ip-media-origin-session",
+  "generatedAt": "2026-05-05T17:37:23.987909Z",
+  "publicIp": "103.142.140.57",
+  "publicBaseUrl": "http://103.142.140.57:18200",
+  "localBindHost": "0.0.0.0",
+  "localPort": 18200,
+  "publicPort": 18200,
+  "localIp": "192.168.43.124",
+  "gateway": "192.168.43.1",
+  "notes": [
+    "If gateway/localIp are private addresses, inbound access still depends on router hotspot port forwarding or direct public routability.",
+    "This script only resolves the dynamic public IP and starts the local server; it cannot force ISP/router to open inbound traffic."
+  ]
+}

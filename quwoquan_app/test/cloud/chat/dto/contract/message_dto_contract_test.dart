@@ -13,7 +13,7 @@ void main() {
         'seq': 42,
         'clientMsgId': 'client-uuid-001',
         'senderId': 'user_001',
-        'senderPersonaId': 'persona_a',
+        'senderSubAccountId': 'persona_a',
         'type': 'text',
         'content': '你好世界',
         'mediaUrl': 'https://example.com/media.jpg',
@@ -31,8 +31,8 @@ void main() {
       expect(dto.conversationId, equals('conv_001'));
       expect(dto.seq, equals(42));
       expect(dto.clientMsgId, equals('client-uuid-001'));
-      expect(dto.senderId, equals('user_001'));
-      expect(dto.senderPersonaId, equals('persona_a'));
+      expect(dto.senderId, equals('persona_a'));
+      expect(dto.senderSubAccountId, equals('persona_a'));
       expect(dto.type, equals('text'));
       expect(dto.content, equals('你好世界'));
       expect(dto.mediaUrl, equals('https://example.com/media.jpg'));
@@ -71,7 +71,7 @@ void main() {
         'seq': 10,
         'clientMsgId': 'cid_rt',
         'senderId': 'u1',
-        'senderPersonaId': 'p1',
+        'senderSubAccountId': 'p1',
         'type': 'image',
         'content': '图片',
         'mediaUrl': 'https://example.com/img.jpg',
@@ -86,7 +86,7 @@ void main() {
 
       expect(map['id'], equals('msg_rt'));
       expect(map['seq'], equals(10));
-      expect(map['senderPersonaId'], equals('p1'));
+      expect(map['senderSubAccountId'], equals('p1'));
       expect(map['mediaUrl'], equals('https://example.com/img.jpg'));
       expect(map['mentions'], equals(['u2']));
     });
@@ -180,7 +180,7 @@ void main() {
         'seq': null,
         'clientMsgId': null,
         'senderId': null,
-        'senderPersonaId': null,
+        'senderSubAccountId': null,
         'type': null,
         'content': null,
         'mediaUrl': null,
@@ -196,7 +196,7 @@ void main() {
       final dto = MessageDto.fromMap(raw);
       expect(dto.id, isEmpty);
       expect(dto.seq, equals(0));
-      expect(dto.senderPersonaId, isNull);
+      expect(dto.senderSubAccountId, isNull);
       expect(dto.content, isNull);
       expect(dto.mediaUrl, isNull);
       expect(dto.cardPayload, isNull);

@@ -15,11 +15,11 @@ client_projection:
   base_class: ""
   output_path: cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart
   fields:
-    - name: profileSubjectId
+    - name: subAccountId
       dart_type: String
       nullable: false
-      source: profileSubjectId
-      aliases: [profileSubjectId, userId]
+      source: subAccountId
+      aliases: [subAccountId, userId]
       default: "''"
       skip_empty_string_aliases: true
 

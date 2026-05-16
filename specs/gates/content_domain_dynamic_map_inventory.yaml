@@ -2,10 +2,10 @@
 # 归类：intentional（HTTP/JSON 或诚实边界）| migrate（应收口到 DTO/WireKeys/ReadPresentation）
 #      | adjacent（邻域 UI）| out_of_scope（非帖子主链，仅列明排除）
 #
-# 辅助：python3 scripts/scan_content_dynamic_surfaces.py
-# 门禁：python3 scripts/verify_post_view_projection_wire_keys.py
-#        python3 scripts/verify_ui_content_no_dynamic_parameters.py
-#        python3 scripts/verify_content_wire_dto_fields.py
+# 辅助：python3 quwoquan_app/scripts/content/scan_content_dynamic_surfaces.py
+# 门禁：python3 quwoquan_app/scripts/content/verify_post_view_projection_wire_keys.py
+#        python3 quwoquan_app/scripts/content/verify_ui_content_no_dynamic_parameters.py
+#        python3 quwoquan_app/scripts/content/verify_content_wire_dto_fields.py
 version: 1
 updated: "2026-04-11"
 

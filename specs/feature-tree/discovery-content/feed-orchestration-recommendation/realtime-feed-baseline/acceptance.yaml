@@ -1,0 +1,75 @@
+feature: feed-orchestration-recommendation/realtime-feed-baseline
+level: "L3_scenario"
+archived: false
+
+execution:
+  local_gate: make gate
+  full_gate: make gate-full
+
+level_acceptance:
+  A1_multi_recall:
+    description: 多路召回按配额混排，无单源故障导致空结果
+    test_layers: [T2, T3]
+    evidence:
+      - Engine 集成测试(miniredis) 验证 Tag/Hot/Author/Explore/Mongo 均产出候选
+      - PostRepositorySource 保底，任一 Mongo 召回源超时仍有结果
+
+  A2_rule_scorer_personalization:
+    description: RuleScorer 增强后无模型也能产出个性化 feed
+    test_layers: [T2, T3]
+    evidence:
+      - T2 单元测试验证 entityAffinity + coldStartBoost 加入评分
+      - T3 集成测试验证新用户首屏 >= 20 条非空内容
+
+  A3_behavior_event_closure:
+    description: 端上所有行为事件带 sessionId/feedRequestId/position 闭环到 HotPath
+    test_layers: [T1, T2, T3]
+    evidence:
+      - T1 契约测试验证 BehaviorEventInput 包含 feedRequestId/position/recallPath/surfaceId
+      - T2 Dart 单元测试验证 ContentBehaviorTracker 的 trackSkip/trackComment/trackFollow
+      - T3 集成测试验证 App 上报后 Redis session_signals 更新
+
+  A4_realtime_session_response:
+    description: dislike 后不再出现，dwell 高标签下次排前
+    test_layers: [T3]
+    evidence:
+      - T3 集成测试 dislike postA -> GetFeed 不含 postA
+      - T3 集成测试 dwell 10s on tagX -> 下次 GetFeed tagX 内容排前
+
+  A5_training_pipeline_e2e:
+    description: 训练管线可端到端跑通，模型晋级有 AUC/GAUC 门禁
+    test_layers: [T2, T4]
+    evidence:
+      - T2 sample_joiner/train/evaluate 可重复跑通
+      - T4 晋级门禁 AUC > baseline + 0.005
+
+  A6_model_grayscale_quality:
+    description: CascadeScorer 灰度开启后 feed 质量不降
+    test_layers: [T3, T4]
+    evidence:
+      - T3 model 桶 CTR 不低于 rule 桶
+      - T4 负反馈率不升
+
+  A7_data_import_closure:
+    description: 数据工程 release 可导入服务端，标签/实体进入召回和特征
+    test_layers: [T2, T3]
+    evidence:
+      - T2 import 脚本测试验证 release -> rm_discovery_feed
+      - T3 导入后 TagRecallSource 能按导入标签召回内容
+
+  A8_rollback_drill:
+    description: 灰度回滚演练通过
+    test_layers: [T4]
+    evidence:
+      - T4 model 回退到 rule 可在 1min 内完成
+      - T4 离线指标 dashboard 可查
+
+slo:
+  feed_p95_ms: 200
+  feed_p99_ms: 400
+  empty_feed_rate_max: 0.001
+  duplicate_rate_max: 0.01
+  model_timeout_fallback_rate_max: 0.05
+  behavior_hotpath_latency_ms: 100
+  cold_start_min_items: 20
+  training_sample_freshness_hours: 4
