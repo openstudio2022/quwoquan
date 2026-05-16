@@ -113,7 +113,7 @@ void main() {
     setUp(() {
       log = [];
       repo = RemoteCircleRepository(
-        httpClient: CloudHttpClient(client: _captureClient(log)),
+        client: _captureClient(log),
         baseUrl: _baseUrl,
       );
     });
@@ -784,7 +784,7 @@ void main() {
     setUp(() {
       log = [];
       repo = RemoteUserProfileRepository(
-        httpClient: CloudHttpClient(client: _captureClient(log)),
+        client: _captureClient(log),
       );
     });
 

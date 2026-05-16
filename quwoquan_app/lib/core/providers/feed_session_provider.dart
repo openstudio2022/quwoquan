@@ -23,6 +23,7 @@ class _FeedSessionState {
 
 class FeedSessionNotifier extends Notifier<String> {
   _FeedSessionState _state = _FeedSessionState();
+  String _currentFeedRequestId = _uuid.v4();
 
   @override
   String build() {
@@ -39,7 +40,13 @@ class FeedSessionNotifier extends Notifier<String> {
     return _state.sessionId;
   }
 
-  String newFeedRequestId() => _uuid.v4();
+  /// Most recently generated feedRequestId (stable within a feed load cycle).
+  String get currentFeedRequestId => _currentFeedRequestId;
+
+  String newFeedRequestId() {
+    _currentFeedRequestId = _uuid.v4();
+    return _currentFeedRequestId;
+  }
 
   void invalidate() {
     _state = _FeedSessionState();

@@ -1,11 +1,11 @@
 part of 'circle_repository.dart';
 
 class RemoteCircleRepository implements CircleRepository {
-  RemoteCircleRepository({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
+  RemoteCircleRepository({CloudHttpClient? httpClient, String? baseUrl})
+    : _httpClient = httpClient ?? CloudHttpClient(),
       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
-  final http.Client _client;
+  final CloudHttpClient _httpClient;
   final String _baseUrl;
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
@@ -35,7 +35,7 @@ class RemoteCircleRepository implements CircleRepository {
     if (sort != null) query['sort'] = sort;
 
     final uri = _uri(CircleApiMetadata.listCirclesPath, queryParameters: query);
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.listCircles),
     );
@@ -49,7 +49,7 @@ class RemoteCircleRepository implements CircleRepository {
     String? subCategory,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       _uri(
         CircleApiMetadata.searchCirclesPath,
         queryParameters: <String, String>{
@@ -69,7 +69,7 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<CircleDetailPayload> getCircle(String circleId) async {
     final uri = _uri(CircleApiMetadata.getCirclePath(circleId: circleId));
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircle),
     );
@@ -79,7 +79,7 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<CircleDto> createCircle(CircleCreateWireDto data) async {
     final uri = _uri(CircleApiMetadata.createCirclePath);
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.createCircle),
@@ -96,7 +96,7 @@ class RemoteCircleRepository implements CircleRepository {
     CircleUpdateWireDto data,
   ) async {
     final uri = _uri(CircleApiMetadata.updateCirclePath(circleId: circleId));
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircle),
@@ -110,7 +110,7 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<void> archiveCircle(String circleId) async {
     final uri = _uri(CircleApiMetadata.archiveCirclePath(circleId: circleId));
-    final resp = await _client.delete(
+    final resp = await _httpClient.delete(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.archiveCircle),
     );
@@ -127,7 +127,7 @@ class RemoteCircleRepository implements CircleRepository {
     String? subAccountContextVersion,
   }) async {
     final uri = _uri(CircleApiMetadata.joinCirclePath(circleId: circleId));
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: CloudRequestHeaders.withOwnerSubAccountContext(
         CloudRequestHeaders.forPage(CircleRequestPageIds.joinCircle),
@@ -147,7 +147,7 @@ class RemoteCircleRepository implements CircleRepository {
     String? subAccountContextVersion,
   }) async {
     final uri = _uri(CircleApiMetadata.leaveCirclePath(circleId: circleId));
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: CloudRequestHeaders.withOwnerSubAccountContext(
         CloudRequestHeaders.forPage(CircleRequestPageIds.leaveCircle),
@@ -172,7 +172,7 @@ class RemoteCircleRepository implements CircleRepository {
       CircleApiMetadata.listCircleMembersPath(circleId: circleId),
       queryParameters: query,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.listCircleMembers,
@@ -195,7 +195,7 @@ class RemoteCircleRepository implements CircleRepository {
         userId: userId,
       ),
     );
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateMemberRole),
@@ -234,7 +234,7 @@ class RemoteCircleRepository implements CircleRepository {
       CircleApiMetadata.listCircleGroupsPath(circleId: circleId),
       queryParameters: query,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.listCircleGroups,
@@ -263,7 +263,7 @@ class RemoteCircleRepository implements CircleRepository {
         'limit': '$limit',
       },
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.searchCircleGroups,
@@ -282,7 +282,7 @@ class RemoteCircleRepository implements CircleRepository {
         groupId: groupId,
       ),
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleGroup),
     );
@@ -297,7 +297,7 @@ class RemoteCircleRepository implements CircleRepository {
     final uri = _uri(
       CircleApiMetadata.createCircleGroupPath(circleId: circleId),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.createCircleGroup),
@@ -320,7 +320,7 @@ class RemoteCircleRepository implements CircleRepository {
         groupId: groupId,
       ),
     );
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircleGroup),
@@ -339,7 +339,7 @@ class RemoteCircleRepository implements CircleRepository {
         groupId: groupId,
       ),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.applyJoinCircleGroup,
@@ -366,7 +366,7 @@ class RemoteCircleRepository implements CircleRepository {
       ),
       queryParameters: query,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.listCircleGroupMembers,
@@ -390,7 +390,7 @@ class RemoteCircleRepository implements CircleRepository {
         userId: userId,
       ),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.approveCircleGroupMember,
@@ -412,7 +412,7 @@ class RemoteCircleRepository implements CircleRepository {
         userId: userId,
       ),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.rejectCircleGroupMember,
@@ -444,7 +444,7 @@ class RemoteCircleRepository implements CircleRepository {
       CircleApiMetadata.getCircleFeedPath(circleId: circleId),
       queryParameters: query,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleFeed),
     );
@@ -460,7 +460,7 @@ class RemoteCircleRepository implements CircleRepository {
     final uri = _uri(
       CircleApiMetadata.pinCirclePostPath(circleId: circleId, postId: postId),
     );
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.pinCirclePost),
@@ -483,7 +483,7 @@ class RemoteCircleRepository implements CircleRepository {
         postId: postId,
       ),
     );
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.featureCirclePost),
@@ -499,7 +499,7 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<CircleStatsWireDto> getCircleStats(String circleId) async {
     final uri = _uri(CircleApiMetadata.getCircleStatsPath(circleId: circleId));
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleStats),
     );
@@ -525,7 +525,7 @@ class RemoteCircleRepository implements CircleRepository {
       CircleApiMetadata.listCircleFilesPath(circleId: circleId),
       queryParameters: query,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.listCircleFiles,
@@ -544,7 +544,7 @@ class RemoteCircleRepository implements CircleRepository {
     final uri = _uri(
       CircleApiMetadata.createCircleFilePath(circleId: circleId),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.createCircleFile),
@@ -563,7 +563,7 @@ class RemoteCircleRepository implements CircleRepository {
     final uri = _uri(
       CircleApiMetadata.getCircleFilePath(circleId: circleId, fileId: fileId),
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleFile),
     );
@@ -585,7 +585,7 @@ class RemoteCircleRepository implements CircleRepository {
         fileId: fileId,
       ),
     );
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircleFile),
@@ -607,7 +607,7 @@ class RemoteCircleRepository implements CircleRepository {
         fileId: fileId,
       ),
     );
-    final resp = await _client.delete(
+    final resp = await _httpClient.delete(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.deleteCircleFile,
@@ -627,7 +627,7 @@ class RemoteCircleRepository implements CircleRepository {
       CircleApiMetadata.updateCircleSectionsPath(circleId: circleId),
     );
     final payload = sections.map((s) => s.toMap()).toList(growable: false);
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(
@@ -645,7 +645,7 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<void> reportBehavior(CircleBehaviorReportWireDto report) async {
     final uri = _uri(CircleApiMetadata.reportCircleBehaviorPath);
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       uri,
       headers: {
         ...CloudRequestHeaders.forPage(
@@ -697,7 +697,7 @@ class RemoteCircleRepository implements CircleRepository {
       CircleApiMetadata.listUserCirclesPath(userId: userId),
       queryParameters: query,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.listUserCircles,
