@@ -186,7 +186,7 @@ func (h *HotPath) ProcessSignal(ctx context.Context, signal BehaviorSignal) erro
 
 // computeEffectiveTagWeight applies depth and referral source multipliers.
 // Formula: baseWeight × depthCoefficient[depth] × referralMultiplier[source]
-// When depth is 0 (unset/legacy), coefficient defaults to 1.0 (no suppression).
+// When depth is 0 (unset / pre-existing), coefficient defaults to 1.0 (no suppression).
 // Only depth > 0 applies the DepthLevelCoefficient lookup.
 func computeEffectiveTagWeight(baseWeight float64, depth int, referralSource string) float64 {
 	if baseWeight <= 0 {
