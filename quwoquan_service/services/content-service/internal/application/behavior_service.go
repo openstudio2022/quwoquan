@@ -13,26 +13,41 @@ import (
 )
 
 var supportedBehaviorActions = map[string]struct{}{
-	"impression": {},
-	"click":      {},
-	"dwell":      {},
-	"favorite":   {},
-	"share":      {},
-	"dislike":    {},
-	"report":     {},
+	"impression":    {},
+	"click":         {},
+	"dwell":         {},
+	"like":          {},
+	"favorite":      {},
+	"share":         {},
+	"dislike":       {},
+	"report":        {},
+	"skip":          {},
+	"comment":       {},
+	"follow":        {},
+	"author_view":   {},
+	"tag_click":     {},
+	"play_progress": {},
+	"content_depth": {},
 }
 
 type BehaviorEventInput struct {
-	UserID       string   `json:"userId"`
-	SessionID    string   `json:"sessionId"`
-	ContentID    string   `json:"contentId"`
-	PostID       string   `json:"postId"`
-	Action       string   `json:"action"`
-	Type         string   `json:"type"`
-	Tags         []string `json:"tags"`
-	Duration     float64  `json:"duration"`
-	DwellMs      float64  `json:"dwellMs"`
-	FeedPosition int      `json:"feedPosition"`
+	UserID          string   `json:"userId"`
+	SessionID       string   `json:"sessionId"`
+	ContentID       string   `json:"contentId"`
+	PostID          string   `json:"postId"`
+	Action          string   `json:"action"`
+	Type            string   `json:"type"`
+	Tags            []string `json:"tags"`
+	Duration        float64  `json:"duration"`
+	DwellMs         float64  `json:"dwellMs"`
+	FeedPosition    int      `json:"feedPosition"`
+	AuthorID        string   `json:"authorId"`
+	ReferralSource  string   `json:"referralSource"`
+	EngagementDepth int      `json:"engagementDepth"`
+	ConsumedRatio   float64  `json:"consumedRatio"`
+	TotalUnits      int      `json:"totalUnits"`
+	EntityRefs      []string `json:"entityRefs"`
+	FeedRequestID   string   `json:"feedRequestId"`
 }
 
 type BehaviorService struct {
@@ -105,23 +120,36 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			}
 		}
 		signal := rtrec.BehaviorSignal{
-			UserID:    userID,
-			SessionID: strings.TrimSpace(eventInput.SessionID),
-			ContentID: contentID,
-			Action:    action,
-			Tags:      tags,
-			Duration:  duration,
-			Timestamp: occurredAt,
+			UserID:          userID,
+			SessionID:       strings.TrimSpace(eventInput.SessionID),
+			ContentID:       contentID,
+			Action:          action,
+			Tags:            tags,
+			Duration:        duration,
+			Timestamp:       occurredAt,
+			AuthorID:        strings.TrimSpace(eventInput.AuthorID),
+			ReferralSource:  strings.TrimSpace(eventInput.ReferralSource),
+			EngagementDepth: eventInput.EngagementDepth,
+			ConsumedRatio:   eventInput.ConsumedRatio,
+			TotalUnits:      eventInput.TotalUnits,
+			EntityRefs:      eventInput.EntityRefs,
 		}
 		signals = append(signals, signal)
 		projectedEvents = append(projectedEvents, map[string]any{
-			"userId":    userID,
-			"sessionId": signal.SessionID,
-			"contentId": contentID,
-			"action":    action,
-			"tags":      append([]string(nil), tags...),
-			"duration":  duration,
-			"timestamp": occurredAt.Format(time.RFC3339),
+			"userId":          userID,
+			"sessionId":       signal.SessionID,
+			"contentId":       contentID,
+			"action":          action,
+			"tags":            append([]string(nil), tags...),
+			"duration":        duration,
+			"timestamp":       occurredAt.Format(time.RFC3339),
+			"authorId":        signal.AuthorID,
+			"referralSource":  signal.ReferralSource,
+			"engagementDepth": signal.EngagementDepth,
+			"consumedRatio":   signal.ConsumedRatio,
+			"totalUnits":      signal.TotalUnits,
+			"entityRefs":      signal.EntityRefs,
+			"feedRequestId":   strings.TrimSpace(eventInput.FeedRequestID),
 		})
 		if batchUserID == "" {
 			batchUserID = userID
