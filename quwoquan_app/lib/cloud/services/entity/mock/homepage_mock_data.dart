@@ -24,8 +24,7 @@ class HomepageMockData {
     homepageType: 'sight',
     title: '西湖景区',
     subtitle: '杭州西湖核心游览区',
-    coverUrl:
-        'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
+    coverUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
     status: 'published',
     sourceType: 'official_seed',
     claimStatus: 'unclaimed',
@@ -89,8 +88,7 @@ class HomepageMockData {
     homepageType: 'hotel',
     title: '竹隐民宿',
     subtitle: '近景区山景庭院房',
-    coverUrl:
-        'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85',
+    coverUrl: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85',
     status: 'published',
     sourceType: 'owner_created',
     claimStatus: 'claimed',
@@ -147,8 +145,7 @@ class HomepageMockData {
     homepageType: 'restaurant',
     title: '夜巷小馆',
     subtitle: '本地人常去的深夜小馆',
-    coverUrl:
-        'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4',
+    coverUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4',
     status: 'published',
     sourceType: 'imported',
     claimStatus: 'unclaimed',
@@ -204,8 +201,7 @@ class HomepageMockData {
     homepageType: 'vehicle',
     title: 'Model X 2026 款',
     subtitle: '纯电中大型 SUV 候选主页',
-    coverUrl:
-        'https://images.unsplash.com/photo-1494976388531-d1058494cdd8',
+    coverUrl: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8',
     status: 'candidate',
     sourceType: 'user_suggested',
     claimStatus: 'unclaimed',
@@ -228,12 +224,12 @@ HomepageDetail _deepCloneHomepageDetail(HomepageDetail h) {
             averageRating: rs.averageRating,
             ratingCount: rs.ratingCount,
             highlightTags: List<String>.from(rs.highlightTags),
-            dimensionScores:
-                List<HomepageReviewDimensionScore>.from(rs.dimensionScores),
+            dimensionScores: List<HomepageReviewDimensionScore>.from(
+              rs.dimensionScores,
+            ),
           ),
     contentPreview: List<HomepageContentPreview>.from(h.contentPreview),
     questionPreview: List<HomepageQuestionPreview>.from(h.questionPreview),
-    relatedGroups:
-        List<HomepageRelatedGroupSummary>.from(h.relatedGroups),
+    relatedGroups: List<HomepageRelatedGroupSummary>.from(h.relatedGroups),
   );
 }

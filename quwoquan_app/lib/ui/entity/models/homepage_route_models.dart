@@ -1,4 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show ReferralSource;
 
 class HomepagePickerPageRouteExtra {
   const HomepagePickerPageRouteExtra({this.initialSelection});
@@ -27,8 +29,10 @@ class HomepageDetailPageRouteExtra {
   const HomepageDetailPageRouteExtra({
     this.selectionMode = false,
     this.initialSummary,
+    this.referralSource,
   });
 
   final bool selectionMode;
   final HomepageSummary? initialSummary;
+  final ReferralSource? referralSource;
 }

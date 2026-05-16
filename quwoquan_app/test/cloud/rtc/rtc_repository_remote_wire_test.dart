@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/rtc/rtc_repository.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -24,7 +25,9 @@ void main() {
         return http.Response('not found', 404);
       });
 
-      final repo = RemoteRtcRepository(client: client);
+      final repo = RemoteRtcRepository(
+        httpClient: CloudHttpClient(client: client),
+      );
       final list = await repo.listCallHistory(limit: 10);
       expect(list, hasLength(1));
       expect(list.single.id, equals('call_x'));
@@ -43,7 +46,9 @@ void main() {
           );
         });
 
-        final repo = RemoteRtcRepository(client: client);
+        final repo = RemoteRtcRepository(
+          httpClient: CloudHttpClient(client: client),
+        );
         await repo.initiateCall(
           callType: 'audio',
           inviteeIds: const ['u1'],
@@ -66,7 +71,9 @@ void main() {
         return http.Response('{"unexpected":[]}', 200);
       });
 
-      final repo = RemoteRtcRepository(client: client);
+      final repo = RemoteRtcRepository(
+        httpClient: CloudHttpClient(client: client),
+      );
 
       await expectLater(
         repo.listCallHistory(),
@@ -93,7 +100,9 @@ void main() {
         return http.Response('{}', 200);
       });
 
-      final repo = RemoteRtcRepository(client: client);
+      final repo = RemoteRtcRepository(
+        httpClient: CloudHttpClient(client: client),
+      );
       await repo.inviteToCall(callId: 'c1', inviteeIds: ['u9']);
 
       expect(captured, isNotNull);
@@ -111,7 +120,9 @@ void main() {
         return http.Response('{}', 200);
       });
 
-      final repo = RemoteRtcRepository(client: client);
+      final repo = RemoteRtcRepository(
+        httpClient: CloudHttpClient(client: client),
+      );
       await repo.cameraToggle(callId: 'c1', cameraOn: true);
 
       expect(captured!.method, equals('POST'));

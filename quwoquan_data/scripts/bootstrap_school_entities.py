@@ -1,7 +1,7 @@
 """学校实体批量生成
 
 从 runtime/seed/school_catalog/ 的 ndjson 读取学校数据，
-按实体三件套（_entity.json + page.md + manifest.json）模式写入 publish/v1/entities/机构/学校/{name}/。
+按实体事实源（_entity.json）+ page.md + publish manifest 的模式写入 publish/v1/entities/机构/学校/{name}/。
 
 用法:
   python3 bootstrap_school_entities.py                          # 全量生成
@@ -21,6 +21,8 @@ from _common.paths import PUBLISH_ROOT, RUNTIME_ROOT, NOW_ISO
 
 CATALOG_DIR = RUNTIME_ROOT / "seed" / "school_catalog"
 ENTITIES_ROOT = PUBLISH_ROOT / "v1" / "entities" / "机构" / "学校"
+ADMIN_REGIONS_PCA_FILE = Path(__file__).resolve().parent.parent / "data" / "admin_regions" / "pca.json"
+MUNICIPALITIES = {"北京市", "天津市", "上海市", "重庆市"}
 
 UNIVERSITY_LEVEL_MAP = {
     "985": "985高校", "211": "211高校", "双一流": "双一流",
@@ -43,11 +45,79 @@ ETYPE_TAG_MAP = {
 stats = {"created": 0, "skipped": 0, "errors": 0, "conflict": 0}
 error_log: list[dict] = []
 
+CITY_TO_PROVINCE: dict[str, str] = {}
+REGION_PATHS_BY_LABEL: dict[str, list[str]] = {}
+REGION_ALIAS_TO_CANONICAL = {
+    "临夏州": "临夏回族自治州",
+}
+if ADMIN_REGIONS_PCA_FILE.exists():
+    pca_data = json.loads(ADMIN_REGIONS_PCA_FILE.read_text(encoding="utf-8"))
+    for province, cities_data in pca_data.items():
+        REGION_PATHS_BY_LABEL.setdefault(province, []).append(f"中国/{province}")
+        if province in MUNICIPALITIES:
+            CITY_TO_PROVINCE[province] = province
+            if isinstance(cities_data, dict):
+                for _group_name, districts in cities_data.items():
+                    if isinstance(districts, list):
+                        for district in districts:
+                            REGION_PATHS_BY_LABEL.setdefault(district, []).append(
+                                f"中国/{province}/{district}"
+                            )
+                    elif isinstance(districts, dict):
+                        for district in districts:
+                            REGION_PATHS_BY_LABEL.setdefault(district, []).append(
+                                f"中国/{province}/{district}"
+                            )
+            continue
+        if isinstance(cities_data, dict):
+            for city in cities_data.keys():
+                CITY_TO_PROVINCE[city] = province
+            for city, districts in cities_data.items():
+                if city in {"省直辖县级行政区划", "自治区直辖县级行政区划"}:
+                    if isinstance(districts, list):
+                        for county_city in districts:
+                            REGION_PATHS_BY_LABEL.setdefault(county_city, []).append(
+                                f"中国/{province}/{county_city}"
+                            )
+                    elif isinstance(districts, dict):
+                        for county_city in districts:
+                            REGION_PATHS_BY_LABEL.setdefault(county_city, []).append(
+                                f"中国/{province}/{county_city}"
+                            )
+                    continue
+                REGION_PATHS_BY_LABEL.setdefault(city, []).append(f"中国/{province}/{city}")
+                if isinstance(districts, list):
+                    for district in districts:
+                        REGION_PATHS_BY_LABEL.setdefault(district, []).append(
+                            f"中国/{province}/{city}/{district}"
+                        )
+                elif isinstance(districts, dict):
+                    for district in districts:
+                        REGION_PATHS_BY_LABEL.setdefault(district, []).append(
+                            f"中国/{province}/{city}/{district}"
+                        )
+
 
 def resolve_geo_tag_ref(row: dict, source_type: str) -> str:
     if source_type == "university":
         province = row.get("province", "")
         city = row.get("city", "")
+        canonical_city = REGION_ALIAS_TO_CANONICAL.get(city, city)
+        candidate_paths = REGION_PATHS_BY_LABEL.get(canonical_city, [])
+        for path in candidate_paths:
+            if province and path.startswith(f"中国/{province}/"):
+                return f"Topic/地理/行政区/{path}"
+            if province and path == f"中国/{province}":
+                return f"Topic/地理/行政区/{path}"
+        if candidate_paths:
+            return f"Topic/地理/行政区/{candidate_paths[0]}"
+        mapped_province = CITY_TO_PROVINCE.get(city, "")
+        if mapped_province:
+            if mapped_province in MUNICIPALITIES:
+                return f"Topic/地理/行政区/中国/{mapped_province}"
+            return f"Topic/地理/行政区/中国/{mapped_province}/{city}"
+        if province in MUNICIPALITIES and city == province:
+            return f"Topic/地理/行政区/中国/{province}"
         if province and city:
             return f"Topic/地理/行政区/中国/{province}/{city}"
         elif province:
@@ -55,9 +125,9 @@ def resolve_geo_tag_ref(row: dict, source_type: str) -> str:
     else:
         district = row.get("district", "")
         if source_type == "beijing":
-            return f"Topic/地理/行政区/中国/北京市/北京市/{district}" if district else "Topic/地理/行政区/中国/北京市/北京市"
+                return f"Topic/地理/行政区/中国/北京市/{district}" if district else "Topic/地理/行政区/中国/北京市"
         elif source_type == "shanghai":
-            return f"Topic/地理/行政区/中国/上海市/上海市/{district}" if district else "Topic/地理/行政区/中国/上海市/上海市"
+                return f"Topic/地理/行政区/中国/上海市/{district}" if district else "Topic/地理/行政区/中国/上海市"
     return "Topic/地理/行政区/中国"
 
 
@@ -211,7 +281,7 @@ def process_row(row: dict, source_type: str, args, seen_names: dict) -> bool:
 
     if entity_dir.exists() and not args.resume:
         stats["conflict"] += 1
-        return False
+        # 既有目录视为可重写的历史输出，继续写入新版本以便回填。
 
     geo_ref = resolve_geo_tag_ref(row, source_type)
     tag_refs = resolve_tag_refs(row, source_type)
@@ -229,8 +299,8 @@ def process_row(row: dict, source_type: str, args, seen_names: dict) -> bool:
 
     page_md = make_school_page(name, row, source_type)
     manifest_json = {
-        "tagRefs": tag_refs + [geo_ref],
         "entityRefs": [],
+        "assets": [f"{name}_cover.jpg"],
         "createdAt": NOW_ISO,
         "updatedAt": NOW_ISO,
     }

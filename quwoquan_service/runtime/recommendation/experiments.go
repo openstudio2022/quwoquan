@@ -9,6 +9,7 @@ import (
 const (
 	ExpRecWeights      = "rec_scoring_weights"
 	ExpModelVsRule     = "rec_model_vs_rule"
+	ExpModelVersion    = "rec_model_version"
 )
 
 // WeightPresets defines named weight configurations for AB testing.
@@ -23,6 +24,10 @@ var WeightPresets = map[string]ScoringWeights{
 		ExploreBoost:    0.3,
 		NegativePenalty: 5.0,
 		DwellBonus:      1.5,
+		EntityAffinity:  1.0,
+		TopicMatch:      1.2,
+		AudienceMatch:   1.0,
+		FormatMatch:     0.8,
 	},
 	"freshness_heavy": {
 		TagRelevance:    2.5,
@@ -33,6 +38,10 @@ var WeightPresets = map[string]ScoringWeights{
 		ExploreBoost:    0.8,
 		NegativePenalty: 5.0,
 		DwellBonus:      0.5,
+		EntityAffinity:  1.2,
+		TopicMatch:      0.8,
+		AudienceMatch:   0.6,
+		FormatMatch:     0.4,
 	},
 	"explore_heavy": {
 		TagRelevance:    2.0,
@@ -43,6 +52,10 @@ var WeightPresets = map[string]ScoringWeights{
 		ExploreBoost:    2.0,
 		NegativePenalty: 5.0,
 		DwellBonus:      0.5,
+		EntityAffinity:  1.0,
+		TopicMatch:      0.6,
+		AudienceMatch:   0.5,
+		FormatMatch:     0.4,
 	},
 }
 
@@ -99,6 +112,32 @@ func ResolveModelBucket(ctx context.Context, resolver experiments.Resolver, user
 	assignment, err := resolver.Resolve(ctx, ExpModelVsRule, userID)
 	if err != nil {
 		return "rule"
+	}
+	return assignment.Bucket
+}
+
+// RegisterModelVersionExperiment registers the champion-vs-challenger model version AB experiment.
+func RegisterModelVersionExperiment(resolver *experiments.HashResolver) {
+	resolver.Register(&experiments.Experiment{
+		ID: ExpModelVersion,
+		Buckets: []experiments.BucketDef{
+			{Name: "champion", WeightPct: 90},
+			{Name: "challenger", WeightPct: 10},
+		},
+		PolicyVersion: "v1",
+		Enabled:       true,
+	})
+}
+
+// ResolveModelVersion determines which model version (champion/challenger) to use.
+// Returns "champion" (production) or "challenger" (canary).
+func ResolveModelVersion(ctx context.Context, resolver experiments.Resolver, userID string) string {
+	if resolver == nil {
+		return "champion"
+	}
+	assignment, err := resolver.Resolve(ctx, ExpModelVersion, userID)
+	if err != nil {
+		return "champion"
 	}
 	return assignment.Bucket
 }

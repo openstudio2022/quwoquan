@@ -1,4 +1,16 @@
-.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-rec-model-python codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean
+.PHONY: gate build test test-unit test-contract test-contract-local test-integration test-chat-ready-index-alpha-beta lint verify-metadata codegen codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-content-service codegen-circle-service codegen-rec-model-python codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests
+
+SCENARIO ?= content_feed
+DB ?= quwoquan_content
+MONGODB_URI ?= mongodb://127.0.0.1:27017/?directConnection=true
+ML_DRY_RUN ?= false
+ML_GUARDRAIL_ENV ?= gamma
+ML_GUARDRAIL_WINDOW_HOURS ?= 4
+ML_GUARDRAIL_DRY_RUN ?= true
+ML_GUARDRAIL_OUT ?=
+ML_DRIFT_BASELINE_DATE ?=
+ML_DRIFT_OUT ?=
+ML_PYTHON ?= $(if $(wildcard services/rec-model-service/.venv/bin/python),services/rec-model-service/.venv/bin/python,python3)
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -102,3 +114,27 @@ dev-reliable-task-local-down: dev-redis-down
 clean:
 	go clean -testcache
 	rm -rf tmp/
+
+# ─── ML Verification ────────────────────────────────────────────────
+verify-ml-features:
+	$(ML_PYTHON) scripts/ml/verify_feature_consistency.py
+
+verify-ml-tests:
+	$(ML_PYTHON) -m pytest services/rec-model-service/tests -q
+
+verify-ml-model-quality:
+	$(ML_PYTHON) scripts/ml/evaluate_gate.py --scenario "$(SCENARIO)" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO).json"
+	$(ML_PYTHON) scripts/ml/evaluate_gate.py --scenario "$(SCENARIO)_multiobjective" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO)_multiobjective.json"
+
+verify-ml-e2e:
+	$(ML_PYTHON) scripts/ml/e2e_learning_loop_verify.py --scenario "$(SCENARIO)" --full-pipeline $(if $(strip $(REC_MODEL_URL)),--rec-model $(REC_MODEL_URL),--skip-service)
+
+verify-ml-e2e-live:
+	@test -n "$(strip $(REC_MODEL_URL))" || (echo "REC_MODEL_URL is required for verify-ml-e2e-live" >&2; exit 1)
+	$(ML_PYTHON) scripts/ml/e2e_learning_loop_verify.py --scenario "$(SCENARIO)" --mongodb-uri "$(MONGODB_URI)" --db "$(DB)" --rec-model "$(REC_MODEL_URL)"
+
+verify-ml-guardrail:
+	$(ML_PYTHON) scripts/ml/online_guardrail.py --scenario "$(SCENARIO)" --window-hours "$(ML_GUARDRAIL_WINDOW_HOURS)" --env "$(ML_GUARDRAIL_ENV)" $(if $(filter 1 true yes,$(ML_GUARDRAIL_DRY_RUN)),--dry-run,) $(if $(strip $(ML_GUARDRAIL_OUT)),--out "$(ML_GUARDRAIL_OUT)",)
+
+verify-ml-drift:
+	$(ML_PYTHON) scripts/ml/feature_drift_monitor.py --scenario "$(SCENARIO)" --baseline-date "$(ML_DRIFT_BASELINE_DATE)" $(if $(strip $(ML_DRIFT_OUT)),--out "$(ML_DRIFT_OUT)",)

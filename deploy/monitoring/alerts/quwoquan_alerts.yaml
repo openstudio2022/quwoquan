@@ -1,0 +1,238 @@
+# L1 — ClientAPILatencyHigh（占位，非 Prom 直采）
+# 端侧 API 延迟来自 AppLog → OpsEvent（参见 L1 大盘 histogram app_api_latency_ms / ops pipeline），
+# 不在此文件用 expr 实现 stable 阈值告警。生产建议：在日志平台（Loki / Elasticsearch）对 api_latency
+# 或结构化 OpsEvent 做 log-based alerting，或将聚合写入 Prometheus recording rule 后再挂 Alertmanager。
+
+groups:
+  - name: quwoquan_l2_mq
+    rules:
+      - alert: MQConsumeLagHigh
+        expr: sum(rate(mq_publish_total[5m])) by (topic) - sum(rate(mq_consume_total[5m])) by (topic) > 100
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "MQ consume lag high for topic {{ $labels.topic }}"
+          description: "Publish rate exceeds consume rate by {{ $value }} msg/s"
+
+  - name: quwoquan_l1_ops_pipeline
+    rules:
+      - alert: OpsEventUploadDrop
+        expr: sum(rate(http_server_requests_total{route=~".*(/v1/ops/events|/api/v1/ops/events).*",method="POST"}[10m])) < 0.1
+        for: 15m
+        labels:
+          severity: warning
+          layer: l1
+        annotations:
+          summary: "OpsEvent upload rate dropped to near-zero"
+          description: "Client app_log uploads have stopped, indicating AppLogUploader or OpsEvent pipeline failure"
+
+  - name: quwoquan_l3_mongo
+    rules:
+      - alert: MongoSlowCommandRate
+        expr: sum(rate(mongo_command_total{status="error"}[5m])) by (database) > 5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l3
+        annotations:
+          summary: "MongoDB error command rate high for {{ $labels.database }}"
+
+      - alert: MongoCommandLatencyHigh
+        expr: histogram_quantile(0.95, sum(rate(mongo_command_duration_seconds_bucket[5m])) by (le, database)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l3
+        annotations:
+          summary: "MongoDB P95 latency > 500ms for {{ $labels.database }}"
+
+  - name: quwoquan_l3_mq_publish
+    rules:
+      - alert: MQPublishFailureRate
+        expr: sum(rate(mq_publish_total{status="error"}[5m])) / sum(rate(mq_publish_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          layer: l3
+        annotations:
+          summary: "MQ publish error rate > 5%"
+
+  - name: quwoquan_l3_service
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_server_requests_total{status=~"5.."}[5m])) by (service)
+          / sum(rate(http_server_requests_total[5m])) by (service) > 0.01
+        for: 3m
+        labels:
+          severity: critical
+          layer: l3
+        annotations:
+          summary: "服务 {{ $labels.service }} 5xx 错误率 > 1%"
+          description: "当前错误率 {{ $value | humanizePercentage }}，持续 3 分钟。"
+
+      - alert: HighP95Latency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket[5m])) by (le, service)
+          ) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          layer: l3
+        annotations:
+          summary: "服务 {{ $labels.service }} P95 延迟 > 200ms"
+          description: "当前 P95 = {{ $value | humanizeDuration }}，持续 5 分钟。"
+
+      - alert: HighInflight
+        expr: |
+          sum(http_server_inflight_requests) by (service) > 100
+        for: 2m
+        labels:
+          severity: warning
+          layer: l3
+        annotations:
+          summary: "服务 {{ $labels.service }} 并发请求 > 100"
+
+  - name: quwoquan_l3_redis
+    rules:
+      - alert: RedisHighErrorRate
+        expr: |
+          sum(rate(redis_operations_total{status="error"}[5m])) by (scene)
+          / sum(rate(redis_operations_total[5m])) by (scene) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+          layer: l3
+        annotations:
+          summary: "Redis 场景 {{ $labels.scene }} 错误率 > 5%"
+
+      - alert: RedisHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(redis_duration_seconds_bucket[5m])) by (le, scene)
+          ) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          layer: l3
+        annotations:
+          summary: "Redis 场景 {{ $labels.scene }} P95 > 50ms"
+
+  - name: quwoquan_l3_projector
+    rules:
+      - alert: ProjectorFailures
+        expr: |
+          sum(rate(projector_events_total{status="error"}[5m])) by (projector) > 0
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "Projector {{ $labels.projector }} 持续失败"
+
+      - alert: EventStorePublishFailures
+        expr: |
+          sum(rate(eventstore_publish_failures_total[5m])) by (aggregate_type) > 0
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "EventStore publish 失败: {{ $labels.aggregate_type }}"
+
+  - name: quwoquan_rec_model
+    rules:
+      - alert: RecModelFallbackRateHigh
+        expr: |
+          sum(rate(rec_pipeline_rule_hits_total[5m]))
+          / (sum(rate(rec_pipeline_model_hits_total[5m])) + sum(rate(rec_pipeline_rule_hits_total[5m])) + 0.001) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          layer: l2
+        annotations:
+          summary: "推荐模型 fallback 率 > 50%（rule 打分占比过高）"
+          description: "模型服务可能不可用，当前 {{ $value | humanizePercentage }} 请求走 rule fallback"
+
+      - alert: RecPipelineLatencyHigh
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(rec_pipeline_total_latency_seconds_bucket[5m])) by (le)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐管线 P99 延迟 > 500ms"
+          description: "当前 P99 = {{ $value | humanizeDuration }}，可能影响 feed 加载速度"
+
+      - alert: RecModelTimeoutRateHigh
+        expr: |
+          sum(rate(rec_pipeline_model_timeouts_total[5m]))
+          / (sum(rate(rec_pipeline_model_hits_total[5m])) + sum(rate(rec_pipeline_model_timeouts_total[5m])) + 0.001) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐模型超时率 > 10%"
+          description: "rec-model-service 响应超时 {{ $value | humanizePercentage }}"
+
+      - alert: RecEmptyFeedRateHigh
+        expr: |
+          sum(rate(rec_pipeline_empty_results_total[5m]))
+          / (sum(rate(rec_pipeline_requests_total[5m])) + 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐空 Feed 率 > 5%"
+          description: "用户收到空 feed 比例过高，当前 {{ $value | humanizePercentage }}"
+
+      - alert: RecScoreDistributionAnomaly
+        expr: |
+          abs(
+            histogram_quantile(0.50, sum(rate(rec_score_value_bucket[5m])) by (le))
+            - histogram_quantile(0.50, sum(rate(rec_score_value_bucket[5m] offset 1d)) by (le))
+          ) > 0.15
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+        annotations:
+          summary: "推荐分数分布异常（中位数偏移 > 0.15）"
+          description: "rec-model-service 打分分布发生显著变化，可能存在特征漂移、模型退化或切流异常"
+
+  - name: quwoquan_l4_infrastructure
+    rules:
+      - alert: HighGoroutineCount
+        expr: go_goroutines > 5000
+        for: 5m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "实例 {{ $labels.instance }} goroutine 数 > 5000"
+
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 > 512
+        for: 5m
+        labels:
+          severity: warning
+          layer: l4
+        annotations:
+          summary: "实例 {{ $labels.instance }} RSS > 512MB"
+
+      - alert: HighFDUsage
+        expr: process_open_fds / process_max_fds > 0.8
+        for: 5m
+        labels:
+          severity: critical
+          layer: l4
+        annotations:
+          summary: "实例 {{ $labels.instance }} FD 使用率 > 80%"

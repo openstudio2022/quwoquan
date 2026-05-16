@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import *
+from build_publish_lookup_indexes import build_publish_lookup_indexes
 
 TASK_ID = "四川省全域_v5"
 BATCH_ID = "多维度冒烟"
@@ -20,52 +21,52 @@ BATCH_ID = "多维度冒烟"
 
 ENTITIES = [
     ("地点", "景区", "峨眉山", "Topic/地理/行政区/四川省/乐山市/峨眉山市",
-     ["Topic/主题/佛教文化", "Topic/主题/世界遗产", "Topic/主题/自然风光"],
+     ["Topic/宗教信仰/佛教", "Topic/历史文化/世界遗产", "Topic/自然风光"],
      "中国四大佛教名山之一，世界文化与自然双遗产", ["峨眉"]),
     ("地点", "景区", "九寨沟", "Topic/地理/行政区/四川省/阿坝藏族羌族自治州/九寨沟县",
-     ["Topic/主题/自然风光/湖泊", "Topic/主题/世界遗产"],
+     ["Topic/自然风光/湖泊", "Topic/历史文化/世界遗产"],
      "以翠海叠瀑彩林雪峰著称的世界自然遗产", ["九寨"]),
     ("地点", "景区", "稻城亚丁", "Topic/地理/行政区/四川省/甘孜藏族自治州/稻城县",
-     ["Topic/主题/自然风光/雪山", "Topic/主题/自然风光/高原风光"],
+     ["Topic/自然风光/雪山", "Topic/自然风光/高原风光"],
      "被誉为蓝色星球上最后一片净土的高原神山", ["亚丁"]),
     ("地点", "遗址", "三星堆遗址", "Topic/地理/行政区/四川省/德阳市/广汉市",
-     ["Topic/主题/古蜀文明", "Topic/主题/世界遗产"],
+     ["Topic/历史文化/古蜀文明", "Topic/历史文化/世界遗产"],
      "距今3000-5000年的古蜀文明祭祀遗址群", ["三星堆"]),
     ("地点", "遗址", "东风堰", "Topic/地理/行政区/四川省/乐山市/夹江县",
-     ["Topic/主题/水利工程", "Topic/主题/世界遗产"],
+     ["Topic/历史文化/水利工程", "Topic/历史文化/世界遗产"],
      "始建于清康熙元年的世界灌溉工程遗产", ["毛滩堰"]),
     ("地点", "打卡地", "成都太古里", "Topic/地理/行政区/四川省/成都市/锦江区",
-     ["Topic/主题/建筑艺术"],
+     ["Topic/历史文化/建筑艺术"],
      "开放式低密度商业街区，国际大牌与成都烟火气交融", ["太古里", "IFS"]),
     ("地点", "打卡地", "宽窄巷子", "Topic/地理/行政区/四川省/成都市/青羊区",
-     ["Topic/主题/建筑艺术", "Topic/主题/美食文化/小吃"],
+     ["Topic/历史文化/建筑艺术", "Topic/美食餐饮/品类/小吃"],
      "清代少城遗留的三条平行老街，成都慢生活地标", ["宽巷子", "窄巷子"]),
     ("地点", "博物馆", "三星堆博物馆", "Topic/地理/行政区/四川省/德阳市/广汉市",
-     ["Topic/主题/古蜀文明", "Topic/主题/石刻艺术"],
+     ["Topic/历史文化/古蜀文明", "Topic/历史文化/石刻艺术"],
      "揭开古蜀文明面纱的世界级考古博物馆", []),
     ("地点", "博物馆", "成都博物馆", "Topic/地理/行政区/四川省/成都市/青羊区",
-     ["Topic/主题/古蜀文明", "Topic/主题/建筑艺术"],
+     ["Topic/历史文化/古蜀文明", "Topic/历史文化/建筑艺术"],
      "展示成都4500年城市文明的综合性博物馆", []),
     ("地点", "美食街", "锦里小吃街", "Topic/地理/行政区/四川省/成都市/武侯区",
-     ["Topic/主题/美食文化/川菜", "Topic/主题/美食文化/小吃", "Topic/主题/三国文化"],
+     ["Topic/美食餐饮/菜系/中国菜系/川菜", "Topic/美食餐饮/品类/小吃", "Topic/历史文化/三国文化"],
      "成都最具人气的传统小吃聚集地", ["锦里"]),
     ("地点", "美食街", "建设路小吃街", "Topic/地理/行政区/四川省/成都市/成华区",
-     ["Topic/主题/美食文化/小吃"],
+     ["Topic/美食餐饮/品类/小吃"],
      "成都本地人最爱的平民夜市小吃街", ["建设路"]),
     ("地点", "古镇", "阆中古城", "Topic/地理/行政区/四川省/南充市/阆中市",
-     ["Topic/主题/三国文化", "Topic/主题/建筑艺术", "Topic/主题/非遗传承"],
+     ["Topic/历史文化/三国文化", "Topic/历史文化/建筑艺术", "Topic/非遗民俗"],
      "中国四大古城之一，春节文化发祥地", ["阆中"]),
     ("地点", "古镇", "黄龙溪古镇", "Topic/地理/行政区/四川省/成都市/龙泉驿区",
-     ["Topic/主题/建筑艺术"],
+     ["Topic/历史文化/建筑艺术"],
      "拥有1700年历史的川西水乡古镇", ["黄龙溪"]),
     ("地点", "餐厅", "陈麻婆豆腐", "Topic/地理/行政区/四川省/成都市/青羊区",
-     ["Topic/主题/美食文化/川菜"],
+     ["Topic/美食餐饮/菜系/中国菜系/川菜"],
      "麻婆豆腐发源地，百年老字号川菜名店", []),
     ("机构", "学校", "四川大学", "Topic/地理/行政区/四川省/成都市",
-     ["Topic/主题/红色文化"],
+     ["Topic/历史文化/红色文化"],
      "百年名校，西南学府之冠", ["川大"]),
     ("活动", "赛事", "成都马拉松", "Topic/地理/行政区/四川省/成都市",
-     ["Topic/主题/古蜀文明"],
+     ["Topic/历史文化/古蜀文明"],
      "世界田联金标赛事，跑过千年蜀都的城市马拉松", ["成马"]),
 ]
 
@@ -81,6 +82,28 @@ TYPE_ANGLES = {
     ("机构", "学校"): ["攻略", "体验"],
     ("活动", "赛事"): ["体验", "攻略"],
 }
+
+
+TRAVEL_TOPIC_OVERRIDES = {
+    ("地点", "景区", "峨眉山"): "Topic/旅行/旅行主题/朝圣礼佛",
+    ("地点", "景区", "九寨沟"): "Topic/旅行/玩法/观光游览",
+    ("地点", "景区", "稻城亚丁"): "Topic/旅行/旅行主题/雪山探险",
+    ("地点", "景区", "黄龙"): "Topic/旅行/玩法/观光游览",
+    ("地点", "景区", "海螺沟"): "Topic/旅行/旅行主题/雪山探险",
+    ("地点", "遗址", "三星堆遗址"): "Topic/旅行/旅行主题/文化深度游",
+    ("地点", "遗址", "东风堰"): "Topic/旅行/玩法/古迹寻访",
+    ("地点", "打卡地", "成都太古里"): "Topic/旅行/旅行主题/城市漫步",
+    ("地点", "打卡地", "宽窄巷子"): "Topic/旅行/旅行主题/城市漫步",
+    ("地点", "古镇", "阆中古城"): "Topic/旅行/旅行主题/文化深度游",
+    ("地点", "古镇", "黄龙溪古镇"): "Topic/旅行/旅行主题/文化深度游",
+}
+
+
+def augment_travel_tags(domain: str, etype: str, name: str, tags: list[str]) -> list[str]:
+    travel_tag = TRAVEL_TOPIC_OVERRIDES.get((domain, etype, name))
+    if travel_tag and travel_tag not in tags:
+        return tags + [travel_tag]
+    return tags
 
 
 def w(path: Path, data):
@@ -134,7 +157,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 - **{name}主峰**：海拔高耸，云海翻涌，是观日出的绝佳位置。清晨的光线将山峦染成金色，吸引了无数[摄影打卡](/tag/Topic/场景/摄影打卡)爱好者。建议提前一天住在山顶附近的客栈。
 - **核心步道**：沿途古木参天，溪水潺潺，步道平均海拔变化500米，[徒步](/tag/Topic/场景/徒步)全程约4小时。途中设有多处休息亭和观景平台。
-- **文化遗存**：保留有始建于唐宋时期的古建筑群，[建筑艺术](/tag/Topic/主题/建筑艺术)融合了当地特色与中原风格，是[文化研学](/tag/Topic/场景/文化研学)的重要基地。
+- **文化遗存**：保留有始建于唐宋时期的古建筑群，[建筑艺术](/tag/Topic/历史文化/建筑艺术)融合了当地特色与中原风格，是[文化研学](/tag/Topic/场景/文化研学)的重要基地。
 
 ## 实用信息
 
@@ -148,7 +171,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 ## 文化特色
 
-{name}承载着丰富的{tag_links}遗产。千百年来，这里不仅是自然奇观，更是精神信仰的载体。当地的[民族文化](/tag/Topic/主题/民族文化)与自然景观交相辉映，形成了独特的文化景观。每年的传统节庆活动吸引大量信众和游客，是体验[非遗传承](/tag/Topic/主题/非遗传承)的绝佳场所。""",
+{name}承载着丰富的{tag_links}遗产。千百年来，这里不仅是自然奇观，更是精神信仰的载体。当地的[民族文化](/tag/Topic/非遗民俗/少数民族文化)与自然景观交相辉映，形成了独特的文化景观。每年的传统节庆活动吸引大量信众和游客，是体验[非遗传承](/tag/Topic/非遗民俗)的绝佳场所。""",
 
         "遗址": f"""# {name}
 
@@ -171,7 +194,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 {{asset://{name}_highlight.jpg|wrapRight|核心遗存|width=40%}}
 
 - **核心遗存区**：保存最完整的遗存主体，展现了当时的建造工艺和生产水平。考古发掘揭示了复杂的建筑结构和精巧的工程设计。
-- **出土文物**：包括青铜器、陶器、玉器等，工艺水平令人惊叹，反映了[古蜀文明](/tag/Topic/主题/古蜀文明)的高度发达。
+- **出土文物**：包括青铜器、陶器、玉器等，工艺水平令人惊叹，反映了[古蜀文明](/tag/Topic/历史文化/古蜀文明)的高度发达。
 - **遗址公园**：在保护原址的基础上建设了开放式公园，游客可沿步道近距离观察遗址本体，配有详细的解说系统。
 
 ## 实用信息
@@ -185,7 +208,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 ## 文化价值
 
-{name}是{tag_links}的杰出代表，其出土文物和遗址本体为研究中华文明多元一体格局提供了重要证据。该遗址证明了长江上游地区在远古时期就存在高度发达的文明形态，具有极高的[世界遗产](/tag/Topic/主题/世界遗产)价值。""",
+{name}是{tag_links}的杰出代表，其出土文物和遗址本体为研究中华文明多元一体格局提供了重要证据。该遗址证明了长江上游地区在远古时期就存在高度发达的文明形态，具有极高的[世界遗产](/tag/Topic/历史文化/世界遗产)价值。""",
 
         "打卡地": f"""# {name}
 
@@ -207,7 +230,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 - **标志性入口**：{name}的主入口是最经典的拍照地点，建筑风格独特，光线在午后尤为适合拍摄，是[摄影打卡](/tag/Topic/场景/摄影打卡)首选。
 - **文创聚集区**：汇集了本地独立设计品牌和文创工作室，可以淘到独一无二的纪念品，也是感受成都创意文化的窗口。
-- **美食一条街**：从传统[小吃](/tag/Topic/主题/美食文化/小吃)到创意料理应有尽有，人均30-100元即可吃遍一整条街。
+- **美食一条街**：从传统[小吃](/tag/Topic/美食餐饮/品类/小吃)到创意料理应有尽有，人均30-100元即可吃遍一整条街。
 
 ## 实用信息
 
@@ -230,15 +253,15 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 ## 概况
 
-{name}位于{geo_link}，是四川省最重要的文化展示空间之一。馆藏文物丰富，涵盖{tag_links}等多个领域，是了解四川乃至中国西南文明史的必到之地。博物馆建筑本身也是[建筑艺术](/tag/Topic/主题/建筑艺术)的代表作。适合[文化研学](/tag/Topic/场景/文化研学)和[学生](/tag/Audience/用户/学生)研学旅行。年接待观众超百万人次。
+{name}位于{geo_link}，是四川省最重要的文化展示空间之一。馆藏文物丰富，涵盖{tag_links}等多个领域，是了解四川乃至中国西南文明史的必到之地。博物馆建筑本身也是[建筑艺术](/tag/Topic/历史文化/建筑艺术)的代表作。适合[文化研学](/tag/Topic/场景/文化研学)和[学生](/tag/Audience/用户/学生)研学旅行。年接待观众超百万人次。
 
 ## 镇馆之宝
 
 {{asset://{name}_treasure.jpg|wrapRight|核心藏品|width=40%}}
 
-- **核心藏品一**：年代久远，工艺精湛，是该馆最具标志性的展品。材质珍贵，造型独特，被列为国家一级文物，是[古蜀文明](/tag/Topic/主题/古蜀文明)的实物见证。
+- **核心藏品一**：年代久远，工艺精湛，是该馆最具标志性的展品。材质珍贵，造型独特，被列为国家一级文物，是[古蜀文明](/tag/Topic/历史文化/古蜀文明)的实物见证。
 - **核心藏品二**：出土于重要考古遗址，反映了当时的社会生活和宗教信仰。保存完好，细节清晰可辨。
-- **核心藏品三**：兼具艺术价值和历史价值，常年借展国内外重要博物馆，是[石刻艺术](/tag/Topic/主题/石刻艺术)的杰出代表。
+- **核心藏品三**：兼具艺术价值和历史价值，常年借展国内外重要博物馆，是[石刻艺术](/tag/Topic/历史文化/石刻艺术)的杰出代表。
 
 ## 参观动线
 
@@ -266,7 +289,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 ## 概况
 
-{name}位于{geo_link}，是成都最具代表性的美食聚集区之一。街区汇聚了数十乃至上百家[小吃](/tag/Topic/主题/美食文化/小吃)摊位和餐饮店铺，涵盖{tag_links}等多种风味。无论是外地游客还是本地食客，这里都是品尝正宗[川菜](/tag/Topic/主题/美食文化/川菜)的首选地点。[探店](/tag/Format/内容角度/探店)博主的常驻打卡地。
+{name}位于{geo_link}，是成都最具代表性的美食聚集区之一。街区汇聚了数十乃至上百家[小吃](/tag/Topic/美食餐饮/品类/小吃)摊位和餐饮店铺，涵盖{tag_links}等多种风味。无论是外地游客还是本地食客，这里都是品尝正宗[川菜](/tag/Topic/美食餐饮/菜系/中国菜系/川菜)的首选地点。[探店](/tag/Format/内容角度/探店)博主的常驻打卡地。
 
 ## 必吃清单
 
@@ -290,7 +313,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 ## 美食文化
 
-{name}承载着成都的[美食文化](/tag/Topic/主题/美食文化)记忆。这里的每一个摊位都有自己的故事，从父辈传下的老配方到年轻一代的创新融合，{tag_links}在这条街上得到了最鲜活的传承。""",
+{name}承载着成都的[美食文化](/tag/Topic/美食餐饮)记忆。这里的每一个摊位都有自己的故事，从父辈传下的老配方到年轻一代的创新融合，{tag_links}在这条街上得到了最鲜活的传承。""",
 
         "古镇": f"""# {name}
 
@@ -305,7 +328,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 ## 历史沿革
 
 - **始建期**：{name}的历史可追溯到上千年前，因水陆交通便利而逐渐发展为区域商贸重镇。
-- **繁盛期**：明清时期达到鼎盛，商铺林立，会馆众多，留下了大量精美的[建筑艺术](/tag/Topic/主题/建筑艺术)遗存。
+- **繁盛期**：明清时期达到鼎盛，商铺林立，会馆众多，留下了大量精美的[建筑艺术](/tag/Topic/历史文化/建筑艺术)遗存。
 - **保护期**：21世纪以来启动全面保护修缮，在保持原貌的基础上引入文化旅游业态。
 
 ## 核心看点
@@ -314,7 +337,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 - **古街主巷**：保存完整的明清街巷，两侧木构建筑鳞次栉比。漫步其中可感受到数百年前的市井繁华，[登山](/tag/Topic/场景/登山)前后在此休整是绝佳安排。
 - **标志性古建**：最能代表{name}建筑特色的核心建筑群，融合了川西民居的实用与雅致。
-- **民俗体验区**：可体验传统手工艺和[非遗传承](/tag/Topic/主题/非遗传承)项目，如剪纸、年画、豆腐制作等。
+- **民俗体验区**：可体验传统手工艺和[非遗传承](/tag/Topic/非遗民俗)项目，如剪纸、年画、豆腐制作等。
 
 ## 实用信息
 
@@ -327,7 +350,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 ## 民俗文化
 
-{name}是四川[非遗传承](/tag/Topic/主题/非遗传承)的活态博物馆。这里的{tag_links}传统通过节庆活动、民间手艺和饮食习俗代代相传。古镇的[美食文化](/tag/Topic/主题/美食文化)同样丰富，当地特色小吃值得细细品味。""",
+{name}是四川[非遗传承](/tag/Topic/非遗民俗)的活态博物馆。这里的{tag_links}传统通过节庆活动、民间手艺和饮食习俗代代相传。古镇的[美食文化](/tag/Topic/美食餐饮)同样丰富，当地特色小吃值得细细品味。""",
 
         "餐厅": f"""# {name}
 
@@ -337,15 +360,15 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 ## 概况
 
-{name}位于{geo_link}，是四川[川菜](/tag/Topic/主题/美食文化/川菜)的标杆性餐厅。创始至今已逾百年，是「中华老字号」认证企业。餐厅以传统烹饪技法著称，{tag_links}在这里得到了最正宗的呈现。是[探店](/tag/Format/内容角度/探店)爱好者和[美食文化](/tag/Topic/主题/美食文化)研究者的必到之地。门店朴素大方，保留了老成都饭馆的烟火气息。
+{name}位于{geo_link}，是四川[川菜](/tag/Topic/美食餐饮/菜系/中国菜系/川菜)的标杆性餐厅。创始至今已逾百年，是「中华老字号」认证企业。餐厅以传统烹饪技法著称，{tag_links}在这里得到了最正宗的呈现。是[探店](/tag/Format/内容角度/探店)爱好者和[美食文化](/tag/Topic/美食餐饮)研究者的必到之地。门店朴素大方，保留了老成都饭馆的烟火气息。
 
 ## 招牌菜
 
 {{asset://{name}_dish.jpg|wrapRight|招牌菜品|width=40%}}
 
-- **镇店名菜**：传承百年的经典制法，选料考究，火候精准。一入口便能感受到[川菜](/tag/Topic/主题/美食文化/川菜)「麻辣鲜香」的极致平衡。25元/份。必点。
+- **镇店名菜**：传承百年的经典制法，选料考究，火候精准。一入口便能感受到[川菜](/tag/Topic/美食餐饮/菜系/中国菜系/川菜)「麻辣鲜香」的极致平衡。25元/份。必点。
 - **经典二味**：另一道代表性菜品，体现了川菜「一菜一格」的烹饪哲学。搭配米饭堪称完美。35元/份。
-- **传统三味**：老成都家常菜的升级版，保持了[小吃](/tag/Topic/主题/美食文化/小吃)原始的朴素风味。30元/份。
+- **传统三味**：老成都家常菜的升级版，保持了[小吃](/tag/Topic/美食餐饮/品类/小吃)原始的朴素风味。30元/份。
 
 ## 用餐体验
 
@@ -362,7 +385,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 ## 美食故事
 
-{name}的创立充满了成都市井智慧。一道偶然诞生的家常菜，因口味独到而声名远播，最终成为{tag_links}的代表作。这道菜不仅入选了[川菜](/tag/Topic/主题/美食文化/川菜)正谱，更传播到了海外，成为中国饮食文化的一张名片。""",
+{name}的创立充满了成都市井智慧。一道偶然诞生的家常菜，因口味独到而声名远播，最终成为{tag_links}的代表作。这道菜不仅入选了[川菜](/tag/Topic/美食餐饮/菜系/中国菜系/川菜)正谱，更传播到了海外，成为中国饮食文化的一张名片。""",
 
         "学校": f"""# {name}
 
@@ -390,7 +413,7 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 {{asset://{name}_campus.jpg|wrapRight|校园一角|width=40%}}
 
-{name}的校园本身就是一座建筑博物馆。民国时期的老建筑与现代化的教学楼交相辉映，[建筑艺术](/tag/Topic/主题/建筑艺术)爱好者可在此流连半日。校园内绿树成荫，四季花木交替，是[上班族](/tag/Audience/用户/上班族)和[学生](/tag/Audience/用户/学生)休闲散步的好去处。
+{name}的校园本身就是一座建筑博物馆。民国时期的老建筑与现代化的教学楼交相辉映，[建筑艺术](/tag/Topic/历史文化/建筑艺术)爱好者可在此流连半日。校园内绿树成荫，四季花木交替，是[上班族](/tag/Audience/用户/上班族)和[学生](/tag/Audience/用户/学生)休闲散步的好去处。
 
 ## 实用信息
 
@@ -432,13 +455,13 @@ def gen_page_content(domain: str, etype: str, name: str, desc: str, geo: str, ta
 
 {{asset://{name}_route.jpg|wrapRight|赛道风景|width=40%}}
 
-- **起跑段**：从具有[古蜀文明](/tag/Topic/主题/古蜀文明)象征意义的地标出发，在历史与现代的交汇中开启旅程，是[摄影打卡](/tag/Topic/场景/摄影打卡)的第一站。
-- **文化段**：穿越历史文化核心区域，沿途可见[三国文化](/tag/Topic/主题/三国文化)遗迹和传统民居，是赛道最具人文厚度的路段。
+- **起跑段**：从具有[古蜀文明](/tag/Topic/历史文化/古蜀文明)象征意义的地标出发，在历史与现代的交汇中开启旅程，是[摄影打卡](/tag/Topic/场景/摄影打卡)的第一站。
+- **文化段**：穿越历史文化核心区域，沿途可见[三国文化](/tag/Topic/历史文化/三国文化)遗迹和传统民居，是赛道最具人文厚度的路段。
 - **冲刺段**：进入城市核心，两侧观众夹道欢呼，冲线仪式感满满。
 
 ## 赛事文化
 
-{name}不仅是一场体育赛事，更是城市文化的集中展示。赛道沿线设有特色补给站，提供[火锅](/tag/Topic/主题/美食文化/火锅)风味能量补给和[茶文化](/tag/Topic/主题/美食文化/茶文化)盖碗茶等本地特色。赛事带动了{tag_links}和城市跑步社群的蓬勃发展，[上班族](/tag/Audience/用户/上班族)周末长跑已成为新生活方式。""",
+{name}不仅是一场体育赛事，更是城市文化的集中展示。赛道沿线设有特色补给站，提供[火锅](/tag/Topic/美食餐饮/品类/火锅)风味能量补给和[茶文化](/tag/Topic/历史文化/茶文化)盖碗茶等本地特色。赛事带动了{tag_links}和城市跑步社群的蓬勃发展，[上班族](/tag/Audience/用户/上班族)周末长跑已成为新生活方式。""",
     }
 
     result = sections.get(etype, sections["景区"])
@@ -508,6 +531,7 @@ def main():
     print("\n[2/7] 生成实体...")
     entity_names = []
     for domain, etype, name, geo, tags, desc, aliases in ENTITIES:
+        tags = augment_travel_tags(domain, etype, name, list(tags))
         w(td.entity_json(domain, etype, name), {
             "aliases": aliases,
             "tagRefs": tags,
@@ -520,7 +544,6 @@ def main():
         w(td.entity_page(domain, etype, name), page_content)
         w(td.entity_manifest(domain, etype, name), {
             "entityRefs": [],
-            "tagRefs": tags + [f"Entity/{domain}/{etype}"],
             "assets": [f"{name}_panorama.jpg", f"{name}_highlight.jpg"],
             "createdAt": NOW_ISO,
             "updatedAt": NOW_ISO,
@@ -532,12 +555,13 @@ def main():
     print("\n[3/7] 生成 posts...")
     post_count = 0
     for domain, etype, name, geo, tags, desc, aliases in ENTITIES:
+        tags = augment_travel_tags(domain, etype, name, list(tags))
         angles = TYPE_ANGLES.get((domain, etype), ["攻略", "体验"])
         for angle in angles:
             title = f"{name}{angle}指南"
             article = gen_article(name, domain, etype, angle, tags, geo)
-            w(td.post_article("article", f"Format/内容角度/{angle}", title, 1), article)
-            w(td.post_manifest("article", f"Format/内容角度/{angle}", title, 1), {
+            w(td.post_article("article", angle, title, 1), article)
+            w(td.post_manifest("article", angle, title, 1), {
                 "entityRefs": [f"{domain}/{etype}/{name}"],
                 "tagRefs": tags + [f"Format/内容角度/{angle}"],
                 "sourcePaths": [f"download/sources/{name}/source_01.html"],
@@ -603,7 +627,7 @@ def main():
     for domain, etype, name, geo, tags, desc, aliases in ENTITIES:
         angles = TYPE_ANGLES.get((domain, etype), ["攻略", "体验"])
         for angle in angles:
-            post_ids.append(f"article/内容角度/{angle}/{name}{angle}指南/1")
+            post_ids.append(f"article/{angle}/{name}{angle}指南/1")
     w(cs / "posts.txt", "\n".join(post_ids) + "\n")
     print(f"  entities={len(entity_names)}, posts={len(post_ids)}")
 
@@ -638,14 +662,18 @@ def main():
         angles = TYPE_ANGLES.get((domain, etype), ["攻略", "体验"])
         for angle in angles:
             title = f"{name}{angle}指南"
-            src_dir = td.post_dir("article", f"Format/内容角度/{angle}", title, 1)
-            dst_dir = pd.post_dir("article", f"Format/内容角度/{angle}", title, 1)
+            src_dir = td.post_dir("article", angle, title, 1)
+            dst_dir = pd.post_dir("article", angle, title, 1)
             dst_dir.mkdir(parents=True, exist_ok=True)
             for f in src_dir.iterdir():
                 shutil.copy2(f, dst_dir / f.name)
 
     # publish_meta
     w(publish_meta_path(), {"activeVersion": 1, "publishedAt": NOW_ISO})
+
+    print("\n[8/8] 重建 publish/v1 lookup 索引...")
+    counts = build_publish_lookup_indexes()
+    print(f"  lookup 索引: entities={counts['entities']}, posts={counts['posts']}")
 
     # 统计
     p_tags = len(list(pd.tags_dir().rglob("_definition.json")))

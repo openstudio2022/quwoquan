@@ -67,6 +67,12 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
   /// 滑动接近末尾时回调（用于加载更多）
   final VoidCallback? onNearEnd;
 
+  /// 当前显示的帖子索引变化时回调（用于追踪浏览进度）
+  final ValueChanged<int>? onPostIndexChanged;
+
+  /// 当前帖子内图片索引变化时回调（用于追踪图片浏览进度）
+  final ValueChanged<int>? onImageIndexChanged;
+
   /// flat：一维横向（作品/美图）；nested：外垂直（微趣）× 内横向（同微趣图）
   final String layoutMode;
 
@@ -108,6 +114,8 @@ class ImmersiveImageViewer extends ConsumerStatefulWidget {
     this.onHeroAnimationComplete,
     this.onAssistantClick,
     this.onNearEnd,
+    this.onPostIndexChanged,
+    this.onImageIndexChanged,
     this.layoutMode = 'flat',
     this.initialImageIndex = 0,
     this.toolbarMode = 'full',
@@ -391,10 +399,20 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
   }
 
   void _handlePageChanged(int index) {
+    final prevPostIndex = _currentEntry?.postIndex;
+    final prevImageIndex = _currentEntry?.imageIndex;
     setState(() {
       _currentEntryIndex = index;
     });
     _initializePostState();
+    final newPostIndex = _currentEntry?.postIndex;
+    final newImageIndex = _currentEntry?.imageIndex;
+    if (newPostIndex != null && newPostIndex != prevPostIndex) {
+      widget.onPostIndexChanged?.call(newPostIndex);
+    }
+    if (newImageIndex != null && newImageIndex != prevImageIndex) {
+      widget.onImageIndexChanged?.call(newImageIndex);
+    }
     if (widget.onNearEnd != null &&
         _mediaEntries.length > 1 &&
         index >= _mediaEntries.length - 2) {
@@ -775,6 +793,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
           _currentImageIndex = 0;
         });
         _initializePostState();
+        widget.onPostIndexChanged?.call(postIdx);
         if (widget.onNearEnd != null && postIdx >= widget.posts.length - 2) {
           widget.onNearEnd!();
         }
@@ -799,6 +818,7 @@ class _ImmersiveImageViewerState extends ConsumerState<ImmersiveImageViewer>
           onPageChanged: (imgIdx) {
             if (postIdx == _currentPostIndex) {
               setState(() => _currentImageIndex = imgIdx);
+              widget.onImageIndexChanged?.call(imgIdx);
             }
           },
           itemBuilder: (context, imgIdx) {

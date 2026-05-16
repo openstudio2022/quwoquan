@@ -5,7 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	rtid "quwoquan_service/runtime/id"
+	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -24,7 +27,11 @@ func WithAppMessageStore(store AppMessageStore) AssistantServiceOption {
 	return func(s *AssistantService) { s.appMessages = store }
 }
 
-func (s *AssistantService) CreateAppMessage(ctx context.Context, input assistant.CreateAppMessageInput) (assistant.AppMessage, error) {
+func (s *AssistantService) CreateAppMessage(ctx context.Context, input assistant.CreateAppMessageInput) (_ assistant.AppMessage, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.CreateAppMessage",
+		attribute.String("message.type", input.MessageType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.appMessages == nil {
 		return assistant.AppMessage{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "app message store is not configured")
 	}
@@ -35,7 +42,12 @@ func (s *AssistantService) CreateAppMessage(ctx context.Context, input assistant
 	return s.appMessages.CreateAppMessage(ctx, normalized)
 }
 
-func (s *AssistantService) ListAppMessages(ctx context.Context, userID string, limit int, cursor string) (assistant.AppMessageListView, error) {
+func (s *AssistantService) ListAppMessages(ctx context.Context, userID string, limit int, cursor string) (_ assistant.AppMessageListView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListAppMessages",
+		attribute.String("user.id", userID),
+		attribute.Int("list.limit", limit))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.appMessages == nil {
 		return assistant.AppMessageListView{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "app message store is not configured")
 	}
@@ -53,28 +65,44 @@ func (s *AssistantService) ListAppMessages(ctx context.Context, userID string, l
 	return assistant.AppMessageListView{Items: items}, nil
 }
 
-func (s *AssistantService) GetAppMessage(ctx context.Context, userID, messageID string) (assistant.AppMessage, error) {
+func (s *AssistantService) GetAppMessage(ctx context.Context, userID, messageID string) (_ assistant.AppMessage, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetAppMessage",
+		attribute.String("message.id", messageID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.appMessages == nil {
 		return assistant.AppMessage{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "app message store is not configured")
 	}
 	return s.appMessages.GetAppMessage(ctx, strings.TrimSpace(userID), strings.TrimSpace(messageID))
 }
 
-func (s *AssistantService) AckAppMessage(ctx context.Context, userID, messageID string) (assistant.AppMessage, error) {
+func (s *AssistantService) AckAppMessage(ctx context.Context, userID, messageID string) (_ assistant.AppMessage, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.AckAppMessage",
+		attribute.String("message.id", messageID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.appMessages == nil {
 		return assistant.AppMessage{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "app message store is not configured")
 	}
 	return s.appMessages.AckAppMessage(ctx, strings.TrimSpace(userID), strings.TrimSpace(messageID), s.now())
 }
 
-func (s *AssistantService) ReadAppMessage(ctx context.Context, userID, messageID string) (assistant.AppMessage, error) {
+func (s *AssistantService) ReadAppMessage(ctx context.Context, userID, messageID string) (_ assistant.AppMessage, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ReadAppMessage",
+		attribute.String("message.id", messageID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.appMessages == nil {
 		return assistant.AppMessage{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "app message store is not configured")
 	}
 	return s.appMessages.ReadAppMessage(ctx, strings.TrimSpace(userID), strings.TrimSpace(messageID), s.now())
 }
 
-func (s *AssistantService) GetAppMessageUnreadCount(ctx context.Context, userID string) (assistant.AppMessageUnreadCountView, error) {
+func (s *AssistantService) GetAppMessageUnreadCount(ctx context.Context, userID string) (_ assistant.AppMessageUnreadCountView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetAppMessageUnreadCount",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.appMessages == nil {
 		return assistant.AppMessageUnreadCountView{}, rterr.NewUnavailable(rterr.ModuleAssistant, "应用消息通道不可用", "app message store is not configured")
 	}

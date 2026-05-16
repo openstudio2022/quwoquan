@@ -81,7 +81,7 @@ start_colima_tunnels_if_needed() {
   local http_port="${LOCAL_GAMMA_HTTP_PORT:-18080}"
   local product_ops_port="${LOCAL_GAMMA_PRODUCT_OPS_PORT:-18086}"
   local ssh_config="$ROOT/artifacts/local-gamma/colima-ssh-config"
-  mkdir -p "$ROOT/artifacts/local-gamma"
+  mkdir -p "$ROOT/artifacts/local-gamma" "$ROOT/artifacts/local-gamma/model-cache"
   stop_colima_tunnels
   colima ssh-config > "$ssh_config"
   : > "$tunnel_pid_file"
@@ -656,7 +656,9 @@ if [[ "$podman_compose" == "1" ]]; then
     -e SERVICE_NAME=recommendation-service -e APP_ENV=gamma \
     -e CONFIG_ROOT=/etc/qwq-config -e CONFIG_VERSION="$CONFIG_VERSION" \
     -e IMAGE_VERSION="$LOCAL_GAMMA_IMAGE_VERSION" -e PYTHONUNBUFFERED=1 \
+    -e MODEL_CACHE_DIR=/app/cache \
     -v "$ROOT/artifacts/local-gamma/config-root:/etc/qwq-config:ro" \
+    -v "$ROOT/artifacts/local-gamma/model-cache:/app/cache" \
     -p "${LOCAL_GAMMA_REC_MODEL_PORT:-18090}:8000" \
     --healthcheck-command "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1" \
     --healthcheck-interval 10s --healthcheck-timeout 3s --healthcheck-start-period 10s --healthcheck-retries 5 \

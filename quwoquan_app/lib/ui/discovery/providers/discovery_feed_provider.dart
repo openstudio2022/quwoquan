@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -112,7 +113,7 @@ class DiscoveryFeedMapNotifier
         ),
       };
     } catch (e, st) {
-      debugPrint('DiscoveryFeedMapNotifier load error: $e $st');
+      developer.log('load error: $e', name: 'DiscoveryFeed', error: e, stackTrace: st);
       state = {
         ...state,
         tabId: AsyncData(
@@ -172,7 +173,7 @@ class DiscoveryFeedMapNotifier
         ),
       };
     } catch (e, st) {
-      debugPrint('DiscoveryFeedMapNotifier append error: $e $st');
+      developer.log('append error: $e', name: 'DiscoveryFeed', error: e, stackTrace: st);
       state = {
         ...state,
         tabId: AsyncData(

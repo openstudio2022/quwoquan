@@ -2,81 +2,151 @@ package recommendation
 
 import (
 	"log/slog"
-	"sync/atomic"
+	"strings"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // PipelineMetrics captures per-request recommendation pipeline timing.
 type PipelineMetrics struct {
-	UserID          string            `json:"userId"`
-	SessionID       string            `json:"sessionId"`
-	RecallLatency   time.Duration     `json:"recallLatencyMs"`
-	ScoreLatency    time.Duration     `json:"scoreLatencyMs"`
-	RerankLatency   time.Duration     `json:"rerankLatencyMs"`
-	TotalLatency    time.Duration     `json:"totalLatencyMs"`
-	CandidateCount  int               `json:"candidateCount"`
-	FilteredCount   int               `json:"filteredCount"`
-	ResultCount     int               `json:"resultCount"`
-	SourceBreakdown map[string]int    `json:"sourceBreakdown,omitempty"`
-	ModelUsed       string            `json:"modelUsed,omitempty"`
-	ExperimentBucket string           `json:"experimentBucket,omitempty"`
+	UserID             string         `json:"userId"`
+	SessionID          string         `json:"sessionId"`
+	RecallLatency      time.Duration  `json:"recallLatencyMs"`
+	ScoreLatency       time.Duration  `json:"scoreLatencyMs"`
+	RerankLatency      time.Duration  `json:"rerankLatencyMs"`
+	TotalLatency       time.Duration  `json:"totalLatencyMs"`
+	CandidateCount     int            `json:"candidateCount"`
+	FilteredCount      int            `json:"filteredCount"`
+	ResultCount        int            `json:"resultCount"`
+	SourceBreakdown    map[string]int `json:"sourceBreakdown,omitempty"`
+	ModelUsed          string         `json:"modelUsed,omitempty"`
+	ExperimentBucket   string         `json:"experimentBucket,omitempty"`
+	TopicEntropy       float64        `json:"topicEntropy,omitempty"`
+	AuthorRepeatRate   float64        `json:"authorRepeatRate,omitempty"`
+	AuthorHHI          float64        `json:"authorHhi,omitempty"`
+	GeoCoverage        float64        `json:"geoCoverage,omitempty"`
+	DistinctAuthors    int            `json:"distinctAuthors,omitempty"`
+	DistinctTopics     int            `json:"distinctTopics,omitempty"`
+	DistinctGeoBuckets int            `json:"distinctGeoBuckets,omitempty"`
 }
 
-// PipelineStats provides global pipeline statistics (thread-safe counters).
-type PipelineStats struct {
-	TotalRequests     atomic.Int64
-	EmptyResults      atomic.Int64
-	ModelTimeouts     atomic.Int64
-	SlowRequests      atomic.Int64
-	TotalRecallMs     atomic.Int64
-	TotalScoreMs      atomic.Int64
-	TotalRerankMs     atomic.Int64
-}
+var (
+	pipelineRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "requests_total",
+		Help:      "Total recommendation pipeline requests.",
+	})
 
-// GlobalPipelineStats holds real-time pipeline counters.
-var GlobalPipelineStats PipelineStats
+	pipelineModelHitsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "model_hits_total",
+		Help:      "Pipeline requests served by the model path.",
+	})
 
-// RecordMetrics updates global stats from a single pipeline execution.
+	pipelineRuleHitsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "rule_hits_total",
+		Help:      "Pipeline requests served by the rule fallback path.",
+	})
+
+	pipelineEmptyResultsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "empty_results_total",
+		Help:      "Requests returning zero results.",
+	})
+
+	pipelineModelTimeoutsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "model_timeouts_total",
+		Help:      "Model scoring timeouts.",
+	})
+
+	pipelineSlowRequestsTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "slow_requests_total",
+		Help:      "Requests exceeding 200ms SLO.",
+	})
+
+	pipelineStageLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "stage_latency_seconds",
+		Help:      "Latency per pipeline stage.",
+		Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0},
+	}, []string{"stage"})
+
+	pipelineTotalLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "total_latency_seconds",
+		Help:      "End-to-end pipeline latency.",
+		Buckets:   []float64{0.01, 0.025, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0},
+	}, []string{"experiment"})
+
+	pipelineCandidates = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "candidate_count",
+		Help:      "Number of candidates per request.",
+		Buckets:   []float64{0, 10, 50, 100, 200, 500, 1000},
+	})
+
+	pipelineResults = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "rec",
+		Subsystem: "pipeline",
+		Name:      "result_count",
+		Help:      "Number of results returned per request.",
+		Buckets:   []float64{0, 5, 10, 20, 30, 50, 100},
+	})
+)
+
+// RecordMetrics observes Prometheus metrics from a single pipeline execution.
 func RecordMetrics(m PipelineMetrics) {
-	GlobalPipelineStats.TotalRequests.Add(1)
+	pipelineRequestsTotal.Inc()
+	modelUsed := strings.ToLower(strings.TrimSpace(m.ModelUsed))
+	if modelUsed == "" {
+		modelUsed = strings.ToLower(strings.TrimSpace(m.ExperimentBucket))
+	}
+	switch modelUsed {
+	case "rule", "":
+		pipelineRuleHitsTotal.Inc()
+	default:
+		pipelineModelHitsTotal.Inc()
+	}
 	if m.ResultCount == 0 {
-		GlobalPipelineStats.EmptyResults.Add(1)
+		pipelineEmptyResultsTotal.Inc()
 	}
 	if m.TotalLatency > 200*time.Millisecond {
-		GlobalPipelineStats.SlowRequests.Add(1)
+		pipelineSlowRequestsTotal.Inc()
 	}
-	GlobalPipelineStats.TotalRecallMs.Add(m.RecallLatency.Milliseconds())
-	GlobalPipelineStats.TotalScoreMs.Add(m.ScoreLatency.Milliseconds())
-	GlobalPipelineStats.TotalRerankMs.Add(m.RerankLatency.Milliseconds())
+
+	pipelineStageLatency.WithLabelValues("recall").Observe(m.RecallLatency.Seconds())
+	pipelineStageLatency.WithLabelValues("score").Observe(m.ScoreLatency.Seconds())
+	pipelineStageLatency.WithLabelValues("rerank").Observe(m.RerankLatency.Seconds())
+
+	bucket := m.ExperimentBucket
+	if bucket == "" {
+		bucket = "default"
+	}
+	pipelineTotalLatency.WithLabelValues(bucket).Observe(m.TotalLatency.Seconds())
+	pipelineCandidates.Observe(float64(m.CandidateCount))
+	pipelineResults.Observe(float64(m.ResultCount))
 }
 
 // RecordModelTimeout increments the model timeout counter.
 func RecordModelTimeout() {
-	GlobalPipelineStats.ModelTimeouts.Add(1)
+	pipelineModelTimeoutsTotal.Inc()
 }
 
-// SnapshotStats returns a point-in-time stats map (for /metrics or structured logs).
-func SnapshotStats() map[string]int64 {
-	total := GlobalPipelineStats.TotalRequests.Load()
-	return map[string]int64{
-		"total_requests":  total,
-		"empty_results":   GlobalPipelineStats.EmptyResults.Load(),
-		"model_timeouts":  GlobalPipelineStats.ModelTimeouts.Load(),
-		"slow_requests":   GlobalPipelineStats.SlowRequests.Load(),
-		"avg_recall_ms":   safeDiv(GlobalPipelineStats.TotalRecallMs.Load(), total),
-		"avg_score_ms":    safeDiv(GlobalPipelineStats.TotalScoreMs.Load(), total),
-		"avg_rerank_ms":   safeDiv(GlobalPipelineStats.TotalRerankMs.Load(), total),
-	}
-}
-
-func safeDiv(a, b int64) int64 {
-	if b == 0 {
-		return 0
-	}
-	return a / b
-}
-
-// LogMetrics emits structured observability data for the recommendation pipeline.
+// LogMetrics emits structured observability data and updates Prometheus.
 func LogMetrics(logger *slog.Logger, m PipelineMetrics) {
 	RecordMetrics(m)
 	if logger == nil {
@@ -98,6 +168,27 @@ func LogMetrics(logger *slog.Logger, m PipelineMetrics) {
 	}
 	if m.ExperimentBucket != "" {
 		attrs = append(attrs, slog.String("bucket", m.ExperimentBucket))
+	}
+	if m.TopicEntropy > 0 {
+		attrs = append(attrs, slog.Float64("topicEntropy", m.TopicEntropy))
+	}
+	if m.AuthorRepeatRate > 0 {
+		attrs = append(attrs, slog.Float64("authorRepeatRate", m.AuthorRepeatRate))
+	}
+	if m.AuthorHHI > 0 {
+		attrs = append(attrs, slog.Float64("authorHhi", m.AuthorHHI))
+	}
+	if m.GeoCoverage > 0 {
+		attrs = append(attrs, slog.Float64("geoCoverage", m.GeoCoverage))
+	}
+	if m.DistinctAuthors > 0 {
+		attrs = append(attrs, slog.Int("distinctAuthors", m.DistinctAuthors))
+	}
+	if m.DistinctTopics > 0 {
+		attrs = append(attrs, slog.Int("distinctTopics", m.DistinctTopics))
+	}
+	if m.DistinctGeoBuckets > 0 {
+		attrs = append(attrs, slog.Int("distinctGeoBuckets", m.DistinctGeoBuckets))
 	}
 
 	if m.TotalLatency > 200*time.Millisecond {

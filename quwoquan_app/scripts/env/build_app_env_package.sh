@@ -25,6 +25,8 @@ if [[ ! -f "$cfg" ]]; then
   exit 1
 fi
 
+APP_RUNTIME_ENV="$env_name" bash agent_ops/deploy/shared/verify_cdn_domain_injection.sh
+
 python3 scripts/verify_app_seed_manifests.py >/dev/null
 
 out_dir="artifacts/app-env-packages/${env_name}"

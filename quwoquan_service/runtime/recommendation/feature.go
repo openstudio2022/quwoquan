@@ -30,13 +30,11 @@ type UserFeatureVector struct {
 	EntityInstanceAffinities map[string]float64 `json:"entityInstanceAffinities,omitempty"`
 
 	// Content type engagement (ENER: Exposure-Normalized Engagement Rate)
-	TypeENER         map[string]float64 `json:"typeENER,omitempty"`
-	TypeConfidence   map[string]float64 `json:"typeConfidence,omitempty"`
-	TypeExploreBonus map[string]float64 `json:"typeExploreBonus,omitempty"`
+	TypeENER map[string]float64 `json:"typeENER,omitempty"`
 
-	// Depth engagement profile
-	AvgEngagementDepth float64     `json:"avgEngagementDepth"`
-	DepthDistribution  map[int]int `json:"depthDistribution,omitempty"`
+	// Depth engagement profile (keys: "L0".."L4")
+	AvgEngagementDepth float64        `json:"avgEngagementDepth"`
+	DepthDistribution  map[string]int `json:"depthDistribution,omitempty"`
 
 	// Source distribution
 	SourceDistribution map[string]int `json:"sourceDistribution,omitempty"`
@@ -44,6 +42,9 @@ type UserFeatureVector struct {
 	// Social features
 	CircleTagAffinities map[string]float64 `json:"circleTagAffinities,omitempty"`
 	SocialInterestScore float64            `json:"socialInterestScore"`
+
+	// Embedding (Phase 5+, populated by dual-tower inference)
+	UserEmbedding []float64 `json:"userEmbedding,omitempty"`
 }
 
 // MapCountToLevel maps a raw count to a 0-5 level using fixed thresholds.

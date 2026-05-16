@@ -14,3 +14,22 @@ redis:
     mode: cluster
     addrs: []
     tls: true
+
+rec_model_service:
+  url: "${REC_MODEL_SERVICE_URL}"
+  timeout_ms: 80
+  enabled: true
+
+experiments:
+  rec_model_vs_rule:
+    enabled: true
+    buckets:
+      rule: 90
+      model: 10
+  rec_scoring_weights:
+    enabled: true
+    buckets:
+      control: 60
+      engagement_heavy: 15
+      freshness_heavy: 15
+      explore_heavy: 10

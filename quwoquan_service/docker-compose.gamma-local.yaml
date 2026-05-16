@@ -63,8 +63,8 @@ services:
 
   rec-model-service:
     build:
-      context: ./services/rec-model-service
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: quwoquan_service/services/rec-model-service/Dockerfile
       args:
         PYTHON_BASE_IMAGE: "${LOCAL_GAMMA_PYTHON_BASE_IMAGE:-python:3.11-slim}"
         PIP_INDEX_URL: "${LOCAL_GAMMA_PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
@@ -73,13 +73,17 @@ services:
       SERVICE_NAME: recommendation-service
       APP_ENV: gamma
       CONFIG_ROOT: /etc/qwq-config
+      MONGODB_URI: mongodb://mongodb:27017/?directConnection=true
+      MONGODB_DATABASE: quwoquan_content
       CONFIG_VERSION: "${LOCAL_GAMMA_CONFIG_VERSION:-local-gamma-v1}"
       IMAGE_VERSION: "${LOCAL_GAMMA_IMAGE_VERSION:-0.0.1}"
       PYTHONUNBUFFERED: "1"
+      MODEL_CACHE_DIR: /app/cache
     ports:
       - "${LOCAL_GAMMA_REC_MODEL_PORT:-18090}:8000"
     volumes:
       - ../artifacts/local-gamma/config-root:/etc/qwq-config:ro
+      - ../artifacts/local-gamma/model-cache:/app/cache
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
       interval: 10s

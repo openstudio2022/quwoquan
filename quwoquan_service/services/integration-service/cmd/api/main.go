@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,8 +14,11 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-	rhttp "quwoquan_service/runtime/http"
+	rtgov "quwoquan_service/runtime/governance"
+	rthttp "quwoquan_service/runtime/http"
+	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
+	rtotel "quwoquan_service/runtime/otel"
 	httpadapter "quwoquan_service/services/integration-service/internal/adapters/http"
 	"quwoquan_service/services/integration-service/internal/application"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
@@ -55,6 +61,11 @@ func main() {
 	applyEnvOverrides(&cfg)
 	normalizeDefaults(&cfg)
 
+	ctx := context.Background()
+
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "integration-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
 	kvFilter := robs.NewKVMetadataFilter(nil)
 	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, robs.TraceLogLevelInfo, kvFilter)
@@ -66,12 +77,12 @@ func main() {
 		log.Fatalf("integration-service exception logger init failed: %v", err)
 	}
 
-	factoryCfg := rhttp.DefaultHTTPClientFactoryConfig()
+	factoryCfg := rthttp.DefaultHTTPClientFactoryConfig()
 	factoryCfg.Timeout = time.Duration(cfg.Integration.Location.TimeoutMs) * time.Millisecond
 	factoryCfg.MaxRetries = 0
 	factoryCfg.RetryBackoff = 0
 	factoryCfg.RetryOnCodes = map[int]struct{}{}
-	logCfg := rhttp.HTTPClientMiddlewareConfig{
+	logCfg := rthttp.HTTPClientMiddlewareConfig{
 		Service:           "integration-service",
 		Origin:            "cloud",
 		Direction:         "outbound",
@@ -80,7 +91,7 @@ func main() {
 		ServiceName:       "integration-service",
 		ServiceInstanceID: "local",
 	}
-	observedClient := rhttp.NewObservedHTTPClient(
+	observedClient := rthttp.NewObservedHTTPClient(
 		nil,
 		factoryCfg,
 		logCfg,
@@ -89,9 +100,11 @@ func main() {
 		exceptionLogger,
 	)
 
+	mapCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
+	cbClient := rtgov.WrapClientWithCB(observedClient, mapCB)
 	clients := map[model.Provider]model.ProviderClient{
-		model.ProviderBaidu: provider.NewBaiduClient(cfg.Integration.Location.BaiduBaseURL, cfg.Integration.Location.BaiduAK, observedClient),
-		model.ProviderAMap:  provider.NewAMapClient(cfg.Integration.Location.AMapBaseURL, cfg.Integration.Location.AMapKey, observedClient),
+		model.ProviderBaidu: provider.NewBaiduClient(cfg.Integration.Location.BaiduBaseURL, cfg.Integration.Location.BaiduAK, cbClient),
+		model.ProviderAMap:  provider.NewAMapClient(cfg.Integration.Location.AMapBaseURL, cfg.Integration.Location.AMapKey, cbClient),
 	}
 	locationService := application.NewService(
 		cfg.Integration.Location.PrimaryProvider,
@@ -108,7 +121,16 @@ func main() {
 		cfg.Integration.Location.DefaultLongitude,
 	).Routes()
 
-	serverCfg := rhttp.HTTPServerMiddlewareConfig{
+	rootMux := http.NewServeMux()
+	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	})
+	rootMux.Handle("/metrics", rtmetrics.Handler())
+	rootMux.Handle("/", handler)
+
+	serverCfg := rthttp.HTTPServerMiddlewareConfig{
 		Service:           "integration-service",
 		Origin:            "cloud",
 		Direction:         "inbound",
@@ -117,12 +139,18 @@ func main() {
 		ServiceName:       "integration-service",
 		ServiceInstanceID: "local",
 	}
-	withObs := rhttp.NewHTTPServerMiddleware(handler, serverCfg, ioLogger, processLogger, exceptionLogger)
+	withObs := rthttp.NewHTTPServerMiddleware(rootMux, serverCfg, ioLogger, processLogger, exceptionLogger)
+
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(withObs)
 
 	server := &http.Server{
 		Addr:              cfg.Service.HTTP.Addr,
-		Handler:           withObs,
+		Handler:           rateLimited,
+		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf(
 		"integration-service listening on %s primary=%s backup=%s timeout_ms=%d",
@@ -131,8 +159,8 @@ func main() {
 		cfg.Integration.Location.BackupProvider,
 		cfg.Integration.Location.TimeoutMs,
 	)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("integration-service listen and serve: %v", err)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("integration-service: %v", err)
 	}
 }
 

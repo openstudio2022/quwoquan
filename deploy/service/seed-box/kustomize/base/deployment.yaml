@@ -22,6 +22,35 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: seed-box
+      initContainers:
+        - name: recommendation-service-config-bootstrap
+          image: seed-box/recommendation-service:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -eu
+              mkdir -p \
+                /work/configs/recommendation-service/default \
+                /work/configs/recommendation-service/alpha \
+                /work/configs/recommendation-service/beta \
+                /work/configs/recommendation-service/gamma \
+                /work/configs/recommendation-service/prod-gray \
+                /work/configs/recommendation-service/prod \
+                /work/releases/config/recommendation-service
+              cp /app/configs/default/config.yaml /work/configs/recommendation-service/default/config.yaml
+              cp /app/configs/alpha/config.yaml /work/configs/recommendation-service/alpha/config.yaml
+              cp /app/configs/beta/config.yaml /work/configs/recommendation-service/beta/config.yaml
+              cp /app/configs/gamma/config.yaml /work/configs/recommendation-service/gamma/config.yaml
+              cp /app/configs/prod-gray/config.yaml /work/configs/recommendation-service/prod-gray/config.yaml
+              cp /app/configs/prod/config.yaml /work/configs/recommendation-service/prod/config.yaml
+              if [ -d /app/releases/config/recommendation-service ]; then
+                cp -R /app/releases/config/recommendation-service/. /work/releases/config/recommendation-service/
+              fi
+          volumeMounts:
+            - name: recommendation-service-config-root
+              mountPath: /work
       containers:
         - name: seed-box
           image: seed-box/seed-box:latest
@@ -40,8 +69,8 @@ spec:
               value: v0.0.0
             - name: IMAGE_VERSION
               value: v0.0.0
-            - name: REC_MODEL_URL
-              value: http://127.0.0.1:18090
+            - name: REC_MODEL_SERVICE_URL
+              value: http://127.0.0.1:8000
           readinessProbe:
             httpGet:
               path: /healthz
@@ -72,7 +101,7 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - name: rec-http
-              containerPort: 18090
+              containerPort: 8000
           env:
             - name: APP_ENV
               value: gamma
@@ -84,6 +113,25 @@ spec:
               value: v0.0.0
             - name: IMAGE_VERSION
               value: v0.0.0
+            - name: MONGODB_URI
+              value: ""
+            - name: MONGODB_DATABASE
+              value: quwoquan_content
+            - name: MODEL_ARTIFACT_ENDPOINT
+              value: ""
+            - name: MODEL_ARTIFACT_BUCKET
+              value: quwoquan-models
+            - name: MODEL_ARTIFACT_ACCESS_KEY
+              value: ""
+            - name: MODEL_ARTIFACT_SECRET_KEY
+              value: ""
+            - name: MODEL_CACHE_DIR
+              value: /app/cache
+          volumeMounts:
+            - name: recommendation-service-config-root
+              mountPath: /etc/seed-box-config
+            - name: recommendation-service-cache
+              mountPath: /app/cache
           readinessProbe:
             httpGet:
               path: /health
@@ -151,3 +199,8 @@ spec:
             limits:
               cpu: "1"
               memory: 1Gi
+      volumes:
+        - name: recommendation-service-config-root
+          emptyDir: {}
+        - name: recommendation-service-cache
+          emptyDir: {}

@@ -5,6 +5,9 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type HTTPClientMiddlewareConfig struct {
@@ -78,6 +81,9 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	if req.Header.Get("X-Client-Page-Id") == "" && meta.PageID != "" {
 		req.Header.Set("X-Client-Page-Id", meta.PageID)
 	}
+
+	// Inject W3C traceparent for distributed trace propagation.
+	otel.GetTextMapPropagator().Inject(req.Context(), propagation.HeaderCarrier(req.Header))
 
 	_ = rt.processLogger.Write(ProcessTraceLog{
 		SchemaVersion:     defaultSchemaVersion,

@@ -40,7 +40,7 @@ ITEM_FEATURE_KEYS = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
     "bodyLength", "tagCount", "qualityScore", "publishHour",
 ]
-CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "moment": 3}
+CONTENT_TYPE_MAP = {"photo": 0, "video": 1, "article": 2, "moment": 3}
 
 
 def _build_user_vector(sample: dict) -> list[float]:
@@ -250,12 +250,21 @@ def main():
     print(f"Embedding metrics: {json.dumps(metrics)}", file=sys.stderr)
 
     import model_registry as mr
+    artifact_uri = ""
+    try:
+        import artifact_store
+        artifact_uri = artifact_store.upload(str(model_path), args.scenario, version)
+    except Exception as e:
+        print(f"[train_embedding] artifact upload skipped: {e}", file=sys.stderr)
+
     mr.write_registry(
         db,
         scenario=f"{args.scenario}_embedding",
         version=version,
         metrics=metrics,
         artifact_path=str(model_path),
+        artifact_uri=artifact_uri,
+        model_type="dual_tower",
         production=args.production,
     )
     print(f"Saved embedding model to {model_path}", file=sys.stderr)

@@ -1,0 +1,333 @@
+name: "10. ML Training Pipeline"
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Model scenario (e.g. content_feed)"
+        default: "content_feed"
+      production:
+        description: "Promote to production if gate passes"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry-run with minimal data"
+        type: boolean
+        default: false
+      train_env:
+        description: "Training data environment (dryrun/gamma/prod)"
+        type: choice
+        options:
+          - gamma
+          - prod
+          - dryrun
+        default: "gamma"
+      baseline_date:
+        description: "Optional ISO baseline date for PSI monitoring (e.g. 2026-05-01)"
+        default: ""
+  schedule:
+    - cron: "0 18 * * 0"  # Sunday UTC 18:00 = Monday Beijing 02:00
+
+env:
+  MONGODB_URI: ${{ secrets.GAMMA_MONGODB_URI }}
+  DB: quwoquan_content
+  SCENARIO: ${{ github.event.inputs.scenario || 'content_feed' }}
+  MODEL_ARTIFACT_ENDPOINT: ${{ secrets.MODEL_ARTIFACT_ENDPOINT }}
+  MODEL_ARTIFACT_BUCKET: ${{ secrets.MODEL_ARTIFACT_BUCKET || 'quwoquan-models' }}
+  MODEL_ARTIFACT_ACCESS_KEY: ${{ secrets.MODEL_ARTIFACT_ACCESS_KEY }}
+  MODEL_ARTIFACT_SECRET_KEY: ${{ secrets.MODEL_ARTIFACT_SECRET_KEY }}
+
+jobs:
+  dry-run-e2e:
+    name: "0. Dry-Run E2E"
+    runs-on: ubuntu-latest
+    if: github.event.inputs.dry_run == 'true'
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/?directConnection=true
+      MODEL_OUT_DIR: .local_models
+      REC_MODEL_URL: http://127.0.0.1:18090
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r quwoquan_service/scripts/ml/requirements.txt
+      - name: Run ML contract tests
+        working-directory: quwoquan_service
+        run: make verify-ml-tests
+      - name: Verify ML feature consistency
+        working-directory: quwoquan_service
+        run: python3 scripts/ml/verify_feature_consistency.py
+      - name: Start local ML stack
+        working-directory: quwoquan_service
+        run: docker compose -f docker-compose.yaml -f docker-compose.rec-model.yml up -d mongodb mongo-init rec-model-service
+      - name: Run dry-run e2e
+        working-directory: quwoquan_service
+        run: make verify-ml-e2e
+      - name: Stop local ML stack
+        if: always()
+        working-directory: quwoquan_service
+        run: docker compose -f docker-compose.yaml -f docker-compose.rec-model.yml down -v
+
+  join-samples:
+    name: "1. Join Training Samples"
+    if: github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: ${{ github.event.inputs.train_env == 'prod' && secrets.PROD_TRAINING_MONGODB_URI || secrets.GAMMA_MONGODB_URI }}
+      DB: ${{ github.event.inputs.train_env == 'prod' && 'quwoquan_content_training' || 'quwoquan_content' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r quwoquan_service/scripts/ml/requirements.txt
+      - name: Run sample joiner
+        working-directory: quwoquan_service/scripts/ml
+        run: |
+          LIMIT=${{ github.event.inputs.dry_run == 'true' && '200' || '50000' }}
+          python sample_joiner.py --scenario "$SCENARIO" --limit "$LIMIT" --db "$DB" --clean
+
+  train:
+    name: "2. Train Models"
+    if: github.event.inputs.dry_run != 'true'
+    needs: join-samples
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: ${{ github.event.inputs.train_env == 'prod' && secrets.PROD_TRAINING_MONGODB_URI || secrets.GAMMA_MONGODB_URI }}
+      DB: ${{ github.event.inputs.train_env == 'prod' && 'quwoquan_content_training' || 'quwoquan_content' }}
+    strategy:
+      matrix:
+        model_type: [lgb, multiobjective]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r quwoquan_service/scripts/ml/requirements.txt
+      - name: Train
+        working-directory: quwoquan_service/scripts/ml
+        run: |
+          ROUNDS=${{ github.event.inputs.dry_run == 'true' && '5' || '100' }}
+          MIN_SAMPLES=${{ github.event.inputs.dry_run == 'true' && '50' || '100' }}
+          if [ "${{ matrix.model_type }}" = "lgb" ]; then
+            python train.py --scenario "$SCENARIO" --num-boost-round "$ROUNDS" --min-samples "$MIN_SAMPLES"
+          else
+            python train_multiobjective.py --scenario "$SCENARIO" --num-boost-round "$ROUNDS" --min-samples "$MIN_SAMPLES"
+          fi
+
+  evaluate:
+    name: "3. Evaluate & Gate"
+    if: github.event.inputs.dry_run != 'true'
+    needs: train
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: ${{ github.event.inputs.train_env == 'prod' && secrets.PROD_TRAINING_MONGODB_URI || secrets.GAMMA_MONGODB_URI }}
+      DB: ${{ github.event.inputs.train_env == 'prod' && 'quwoquan_content_training' || 'quwoquan_content' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r quwoquan_service/scripts/ml/requirements.txt
+      - name: Run evaluation
+        working-directory: quwoquan_service/scripts/ml
+        run: |
+          python evaluate.py --scenario "$SCENARIO"
+          python evaluate.py --scenario "${SCENARIO}_multiobjective"
+      - name: Quality gate
+        working-directory: quwoquan_service
+        run: |
+          DRY_RUN_FLAG="false"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="true"
+          fi
+          make verify-ml-model-quality ML_DRY_RUN="$DRY_RUN_FLAG"
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: |
+            quwoquan_service/eval_report_*.json
+
+  promote:
+    name: "4. Promote Models"
+    if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.production == 'true' }}
+    needs: evaluate
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: ${{ github.event.inputs.train_env == 'prod' && secrets.PROD_TRAINING_MONGODB_URI || secrets.GAMMA_MONGODB_URI }}
+      DB: ${{ github.event.inputs.train_env == 'prod' && 'quwoquan_content_training' || 'quwoquan_content' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r quwoquan_service/scripts/ml/requirements.txt
+      - name: Promote models to production
+        working-directory: quwoquan_service/scripts/ml
+        run: |
+          python model_registry_cli.py promote --scenario "$SCENARIO"
+          python model_registry_cli.py promote --scenario "${SCENARIO}_multiobjective"
+
+  reload:
+    name: "5. Trigger Model Reload"
+    if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.production == 'true' }}
+    needs: promote
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reload gamma rec-model-service
+        env:
+          REC_MODEL_URL: ${{ secrets.GAMMA_REC_MODEL_URL }}
+        run: |
+          if [ -n "$REC_MODEL_URL" ]; then
+            python3 - <<'PY'
+import json
+import os
+import sys
+import urllib.request
+
+url = os.environ["REC_MODEL_URL"].rstrip("/")
+req = urllib.request.Request(f"{url}/v1/model/reload", method="POST")
+with urllib.request.urlopen(req, timeout=30) as resp:
+    data = json.loads(resp.read())
+if data.get("status") != "reloaded" or not data.get("versions"):
+    raise SystemExit(f"reload failed: {data}")
+with urllib.request.urlopen(f"{url}/v1/model/status", timeout=30) as resp:
+    status = json.loads(resp.read())
+if not status.get("versions") or not status.get("last_reload"):
+    raise SystemExit(f"status check failed: {status}")
+print(json.dumps({"reload": data, "status": status}, ensure_ascii=False, indent=2))
+PY
+            make -C quwoquan_service verify-ml-e2e-live
+          else
+            echo "SKIP: GAMMA_REC_MODEL_URL not configured"
+          fi
+      - name: Reload prod rec-model-service
+        env:
+          REC_MODEL_URL: ${{ secrets.PROD_REC_MODEL_URL }}
+          MONGODB_URI: ${{ secrets.PROD_TRAINING_MONGODB_URI }}
+          DB: quwoquan_content_training
+        run: |
+          if [ -n "$REC_MODEL_URL" ]; then
+            python3 - <<'PY'
+import json
+import os
+import sys
+import urllib.request
+
+url = os.environ["REC_MODEL_URL"].rstrip("/")
+req = urllib.request.Request(f"{url}/v1/model/reload", method="POST")
+with urllib.request.urlopen(req, timeout=30) as resp:
+    data = json.loads(resp.read())
+if data.get("status") != "reloaded" or not data.get("versions"):
+    raise SystemExit(f"reload failed: {data}")
+with urllib.request.urlopen(f"{url}/v1/model/status", timeout=30) as resp:
+    status = json.loads(resp.read())
+if not status.get("versions") or not status.get("last_reload"):
+    raise SystemExit(f"status check failed: {status}")
+print(json.dumps({"reload": data, "status": status}, ensure_ascii=False, indent=2))
+PY
+            make -C quwoquan_service verify-ml-e2e-live
+          else
+            echo "SKIP: PROD_REC_MODEL_URL not configured"
+          fi
+
+  monitoring:
+    name: "6. Guardrail & Drift Monitoring"
+    if: ${{ always() && github.event.inputs.dry_run != 'true' }}
+    needs: evaluate
+    runs-on: ubuntu-latest
+    env:
+      MONGODB_URI: ${{ github.event.inputs.train_env == 'prod' && secrets.PROD_TRAINING_MONGODB_URI || secrets.GAMMA_MONGODB_URI }}
+      DB: ${{ github.event.inputs.train_env == 'prod' && 'quwoquan_content_training' || 'quwoquan_content' }}
+      ML_GUARDRAIL_ENV: ${{ github.event.inputs.train_env == 'prod' && 'prod-gray' || 'gamma' }}
+      ML_GUARDRAIL_DRY_RUN: true
+      ML_GUARDRAIL_WINDOW_HOURS: 4
+      ML_DRIFT_BASELINE_DATE: ${{ github.event.inputs.baseline_date || '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r quwoquan_service/scripts/ml/requirements.txt
+      - name: Run rule-only guardrail dry-run
+        id: guardrail
+        working-directory: quwoquan_service
+        continue-on-error: true
+        run: make verify-ml-guardrail ML_GUARDRAIL_OUT="guardrail_report.json"
+      - name: Run PSI drift monitor
+        id: drift
+        working-directory: quwoquan_service
+        continue-on-error: true
+        run: make verify-ml-drift ML_DRIFT_OUT="drift_report.json"
+      - name: Evaluate monitoring results
+        if: always()
+        working-directory: quwoquan_service
+        run: |
+          if [ "${{ steps.guardrail.outcome }}" = "failure" ]; then
+            echo "Guardrail dry-run reported a rule-only cutover condition"
+            exit 1
+          fi
+          if [ "${{ steps.drift.outcome }}" = "failure" ]; then
+            echo "PSI drift monitor reported an alert condition"
+            exit 1
+          fi
+      - name: Upload monitoring reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rec-monitoring-reports
+          path: |
+            quwoquan_service/guardrail_report.json
+            quwoquan_service/drift_report.json
+
+  notify:
+    name: "7. Summary"
+    if: ${{ always() && github.event.inputs.dry_run != 'true' }}
+    needs: [evaluate, promote, reload, monitoring]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download report
+        uses: actions/download-artifact@v4
+        with:
+          name: eval-report
+          path: .
+        continue-on-error: true
+      - name: Download monitoring reports
+        uses: actions/download-artifact@v4
+        with:
+          name: rec-monitoring-reports
+          path: monitoring
+        continue-on-error: true
+      - name: Print summary
+        run: |
+          echo "## ML Training Pipeline Results" >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob
+          import json
+          import os
+          for path in sorted(glob.glob('eval_report_*.json')):
+              with open(path, encoding='utf-8') as f:
+                  r = json.load(f)
+              print(f'### {os.path.basename(path)}')
+              print(f"Status: **{r['status'].upper()}**")
+              print(f"Reason: {r['reason']}")
+              print(f"New metrics: {json.dumps(r['new_metrics'], indent=2)}")
+              print("")
+          for path in ['monitoring/guardrail_report.json', 'monitoring/drift_report.json']:
+              if os.path.exists(path):
+                  with open(path, encoding='utf-8') as f:
+                      r = json.load(f)
+                  print(f'### {os.path.basename(path)}')
+                  print(f"Status: **{r.get('status', r.get('overall_status', 'UNKNOWN')).upper()}**")
+                  print(f"Reason: {r.get('reason', r.get('overall_status', ''))}")
+                  print("")
+          PY

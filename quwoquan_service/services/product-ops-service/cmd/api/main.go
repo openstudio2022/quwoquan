@@ -13,11 +13,18 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	rtmongo "quwoquan_service/runtime/mongodb"
+
+	"log/slog"
 
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
+	rtgov "quwoquan_service/runtime/governance"
+	rthealth "quwoquan_service/runtime/health"
+	rthttp "quwoquan_service/runtime/http"
+	rtmetrics "quwoquan_service/runtime/metrics"
+	robs "quwoquan_service/runtime/observability"
+	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/services/product-ops-service/internal/application"
 	"quwoquan_service/services/product-ops-service/internal/infrastructure/messaging"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
@@ -118,17 +125,25 @@ func main() {
 	if strings.TrimSpace(addr) == "" {
 		addr = ":18086"
 	}
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "product-ops-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
+	ctx := context.Background()
 	repoRoot := resolveRepoRoot()
 	store := controlplane.NewFileStore(filepath.Join(repoRoot, ".control-plane-state", "product-ops-service.json"))
 	router := buildRedisRouter(cfg)
 	defer router.Close()
+	if err := router.PingAll(ctx); err != nil {
+		log.Printf("WARN: product-ops-service redis PingAll: %v", err)
+	}
+	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("redis", func(ctx context.Context) error {
+		return router.PingAll(ctx)
+	})
 	publisher := messaging.NewRedisEventPublisher(router.Scene("general"), serviceName, nil)
 	telemetryStore := application.TelemetryStore(telemetrypersistence.NewMemoryTelemetryStore())
 	if strings.TrimSpace(cfg.MongoDB.URI) != "" {
-		mongoClient, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoDB.URI))
-		if err != nil {
-			log.Fatalf("product-ops-service mongo connect failed: %v", err)
-		}
+		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "product-ops-service")
 		defer func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -142,6 +157,9 @@ func main() {
 		if err := mongoStore.EnsureIndexes(context.Background()); err != nil {
 			log.Printf("WARN: product-ops-service ensure mongo indexes: %v", err)
 		}
+		healthChecker.Register("mongodb", func(ctx context.Context) error {
+			return mongoClient.Ping(ctx, nil)
+		})
 		telemetryStore = mongoStore
 		log.Printf("product-ops-service telemetry storage=mongodb db=%s", dbName)
 	} else {
@@ -149,27 +167,56 @@ func main() {
 	}
 	var eventMirror application.EventMirror
 	if esURL := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ES_URL")); esURL != "" {
-		eventMirror = telemetrypersistence.NewElasticsearchEventMirror(esURL)
+		esCB := rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default())
+		esClient := rtgov.WrapClientWithCB(&http.Client{Timeout: 5 * time.Second}, esCB)
+		eventMirror = telemetrypersistence.NewElasticsearchEventMirror(esURL, telemetrypersistence.WithESHTTPClient(esClient))
 		log.Printf("product-ops-service exception ES mirror enabled url=%s", esURL)
 	}
 	service := newProductService(store, application.NewTelemetryServiceWithMirror(telemetryStore, publisher, eventMirror))
 	if err := service.seed(); err != nil {
 		log.Fatalf("seed product ops service: %v", err)
 	}
-	mux := newServerMux(service)
-	log.Printf("product-ops-service listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	mux := newServerMux(service, healthChecker)
+
+	instanceID, _ := os.Hostname()
+	ioLogger := robs.NewIOAccessLogger(os.Stdout)
+	processLogger, pErr := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	if pErr != nil {
+		log.Fatalf("product-ops-service process logger init failed: %v", pErr)
+	}
+	exceptionLogger, eErr := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	if eErr != nil {
+		log.Fatalf("product-ops-service exception logger init failed: %v", eErr)
+	}
+	observedHandler := rthttp.NewHTTPServerMiddleware(mux, rthttp.HTTPServerMiddlewareConfig{
+		Service:           "product-ops-service",
+		ServiceName:       "product-ops-service",
+		ServiceInstanceID: instanceID,
+	}, ioLogger, processLogger, exceptionLogger)
+
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           rateLimited,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	log.Printf("product-ops-service listening on %s (rate_limit=1000/s)", addr)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("product-ops-service: %v", err)
+	}
 }
 
 func newProductService(store *controlplane.FileStore, telemetry *application.TelemetryService) *productService {
 	return &productService{store: store, telemetry: telemetry}
 }
 
-func newServerMux(service *productService) *http.ServeMux {
+func newServerMux(service *productService, healthChecker *rthealth.Checker) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
-	})
+	mux.HandleFunc("/healthz", healthChecker.Handler())
+	mux.Handle("/metrics", rtmetrics.Handler())
 	mux.HandleFunc("/v1/ops/experiments/", func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimPrefix(r.URL.Path, "/v1/ops/experiments/")
 		switch {

@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 
 /// 端侧请求上下文 header 注入（用于网关访问日志/异常日志/过程日志关联）。
 ///
@@ -14,9 +15,10 @@ import 'package:flutter/foundation.dart';
 class CloudRequestHeaders {
   CloudRequestHeaders._();
 
-  static final String sessionId = _toBase36(
-    DateTime.now().microsecondsSinceEpoch,
-  );
+  /// Canonical session ID shared across HTTP headers, OpsEvent, BehaviorEvent,
+  /// and AppLog. Delegates to AppTraceContextStore to guarantee a single ID
+  /// per app lifecycle.
+  static String get sessionId => AppTraceContextStore.instance.sessionId;
   static final Random _rng = Random();
 
   static const String appVersion = String.fromEnvironment(

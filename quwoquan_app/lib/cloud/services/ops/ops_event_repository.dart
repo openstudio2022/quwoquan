@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
+import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
@@ -501,18 +503,42 @@ class MockOpsEventRepository implements OpsEventRepository {
   }
 }
 
-class RemoteOpsEventRepository implements OpsEventRepository {
+class RemoteOpsEventRepository
+    with WidgetsBindingObserver
+    implements OpsEventRepository {
   RemoteOpsEventRepository({
     CloudHttpClient? httpClient,
     String? baseUrl,
     String? queueBoxName,
-  }) : _httpClient = httpClient ?? CloudHttpClient(client: http.Client()),
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-       _queueBoxName = queueBoxName ?? kOpsEventQueueBoxName;
+       _queueBoxName = queueBoxName ?? kOpsEventQueueBoxName {
+    _bindLifecycle();
+  }
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
   final String _queueBoxName;
+
+  void _bindLifecycle() {
+    try {
+      WidgetsBinding.instance.addObserver(this);
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      unawaited(flushPending());
+    }
+  }
+
+  void dispose() {
+    try {
+      WidgetsBinding.instance.removeObserver(this);
+    } catch (_) {}
+  }
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
     return Uri.parse(
@@ -535,6 +561,7 @@ class RemoteOpsEventRepository implements OpsEventRepository {
     final box = await _ensureBox();
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
+    var consecutiveFailures = 0;
     for (final key in keys) {
       final raw = box.get(key);
       if (raw == null || raw.isEmpty) {
@@ -551,8 +578,14 @@ class RemoteOpsEventRepository implements OpsEventRepository {
             .toList(growable: false);
         await _postBatch(parsed);
         await box.delete(key);
-      } catch (_) {
-        break;
+        consecutiveFailures = 0;
+      } catch (e) {
+        developer.log(
+          'OpsEventRepository.flushPending failed key=$key: $e',
+          name: 'ops',
+        );
+        consecutiveFailures++;
+        if (consecutiveFailures >= 3) break;
       }
     }
   }
@@ -649,7 +682,11 @@ class RemoteOpsEventRepository implements OpsEventRepository {
     await flushPending();
     try {
       return await _postBatch(events);
-    } catch (_) {
+    } catch (e) {
+      developer.log(
+        'ops reportEventBatch failed, enqueuing: $e',
+        name: 'OpsEventRepository',
+      );
       await _enqueue(events);
       return const OpsEventBatchAck(acceptedCount: 0, duplicateCount: 0);
     }

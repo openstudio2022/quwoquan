@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -530,6 +532,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+    final navFeedRequestId =
+        ref.read(feedSessionProvider.notifier).newFeedRequestId();
     final result = await context.push<Object?>(
       _isVideoPost(tappedDto)
           ? AppRoutePaths.videoViewer(index: '$initialIndex')
@@ -554,6 +558,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         circleId: tapped.wireCircleId.isEmpty ? null : tapped.wireCircleId,
         rawPostsById: mediaRaws,
         interactionSnapshot: interactionSnapshot,
+        referralSource: ReferralSource.circlePost,
+        feedRequestId: navFeedRequestId,
       ),
     );
     if (result is MediaViewerResult) {

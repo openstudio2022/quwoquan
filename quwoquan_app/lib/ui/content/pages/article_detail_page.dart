@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -23,9 +25,16 @@ import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.d
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 class ArticleDetailPage extends ConsumerStatefulWidget {
-  const ArticleDetailPage({super.key, required this.articleId});
+  const ArticleDetailPage({
+    super.key,
+    required this.articleId,
+    this.referralSource = ReferralSource.organicFeed,
+    this.feedRequestId,
+  });
 
   final String articleId;
+  final ReferralSource referralSource;
+  final String? feedRequestId;
 
   @override
   ConsumerState<ArticleDetailPage> createState() => _ArticleDetailPageState();
@@ -36,7 +45,6 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   PostReadUiBundle? _postReadBundle;
   bool _isLoading = true;
   Object? _loadError;
-  late final DateTime _enterTime = DateTime.now();
 
   @override
   void initState() {
@@ -46,17 +54,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
 
   @override
   void deactivate() {
-    final seconds =
-        DateTime.now().difference(_enterTime).inMilliseconds / 1000.0;
-    if (seconds >= 1) {
-      ref
-          .read(behaviorRepositoryProvider)
-          .reportSingle(
-            contentId: widget.articleId,
-            action: 'dwell',
-            duration: seconds,
-          );
-    }
+    ref.read(contentEngagementTrackerProvider).trackContentExit(widget.articleId);
     super.deactivate();
   }
 
@@ -94,9 +92,14 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         _isLoading = false;
         _loadError = null;
       });
-      ref
-          .read(behaviorRepositoryProvider)
-          .reportSingle(contentId: widget.articleId, action: 'impression');
+      ref.read(contentEngagementTrackerProvider).trackContentEnter(
+        widget.articleId,
+        contentType: ContentType.article,
+        referralSource: widget.referralSource,
+        authorId: detail.post.authorId,
+        totalPages: article.pages.length,
+        feedRequestId: widget.feedRequestId,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -216,7 +219,20 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       child: Column(
         children: [
           Expanded(
-            child: SingleChildScrollView(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollUpdateNotification &&
+                    notification.metrics.maxScrollExtent > 0) {
+                  final depth = notification.metrics.pixels /
+                      notification.metrics.maxScrollExtent;
+                  ref.read(contentEngagementTrackerProvider).trackContentProgress(
+                    widget.articleId,
+                    scrollDepth: depth.clamp(0.0, 1.0),
+                  );
+                }
+                return false;
+              },
+              child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
                 AppSpacing.containerMd,
                 AppSpacing.containerMd,
@@ -281,6 +297,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                   ),
                 ],
               ),
+            ),
             ),
           ),
           Container(

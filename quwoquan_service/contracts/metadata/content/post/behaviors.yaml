@@ -18,6 +18,7 @@ behavior_events:
     dart_method: trackImpression
     payload_fields: [postId, contentType, feedPosition]
     ml_signal: weak_positive
+    signal_weight: 0.1
 
   - type: dwell
     description: 停留时长（视口内累计时长，单位毫秒）
@@ -27,6 +28,7 @@ behavior_events:
     dart_method: trackDwell
     payload_fields: [postId, dwellMs, contentType]
     ml_signal: strong_positive_if_gt_10s
+    signal_weight: 1.0
 
   - type: click
     description: 点击内容卡片进入详情
@@ -36,6 +38,7 @@ behavior_events:
     dart_method: trackClick
     payload_fields: [postId, contentType, feedPosition]
     ml_signal: strong_positive
+    signal_weight: 0.5
 
   - type: dislike
     description: 用户明确标记"不感兴趣"
@@ -45,6 +48,7 @@ behavior_events:
     dart_method: trackDislike
     payload_fields: [postId, contentType]
     ml_signal: explicit_negative
+    signal_weight: -5.0
 
   - type: share
     description: 分享到外部/圈子
@@ -54,6 +58,7 @@ behavior_events:
     dart_method: trackShare
     payload_fields: [postId, contentType, shareTarget]
     ml_signal: strong_positive
+    signal_weight: 3.0
 
   # like/favorite 走专用路由，不进 BehaviorTracker 批量队列
   - type: like
@@ -61,12 +66,14 @@ behavior_events:
     dedicated_route: POST /v1/content/posts/{postId}/like
     dart_method: null
     ml_signal: explicit_positive
+    signal_weight: 2.0
 
   - type: favorite
     description: 收藏（由 intent layer 处理，不走 BehaviorTracker）
     dedicated_route: POST /v1/content/posts/{postId}/favorite
     dart_method: null
     ml_signal: explicit_positive
+    signal_weight: 3.0
 
   - type: comment
     description: |
@@ -77,6 +84,7 @@ behavior_events:
     dart_method: null
     payload_fields: [postId, contentType, commentLength]
     ml_signal: very_strong_positive
+    signal_weight: 2.5
     notes: |
       like/favorite/comment/report 四个显式行为均走专用路由，不进批量队列，
       以保证实时性和幂等语义。commentLength 从评论完成事件回调中获取。
@@ -86,6 +94,74 @@ behavior_events:
     dedicated_route: POST /v1/content/reports
     dart_method: null
     ml_signal: explicit_negative
+    signal_weight: -10.0
+
+  - type: skip
+    description: 快速跳过（停留 <1s 即离开，负反馈信号）
+    trigger: viewport_exit_lt_1s
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackSkip
+    payload_fields: [postId, contentType]
+    ml_signal: weak_negative
+    signal_weight: -0.3
+
+  - type: follow
+    description: 关注内容作者（强正向社交信号）
+    trigger: user_action_follow_button
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackFollow
+    payload_fields: [postId, authorId]
+    ml_signal: very_strong_positive
+    signal_weight: 4.0
+
+  - type: author_view
+    description: 进入作者主页/实体主页查看
+    trigger: tap_author_avatar_or_name
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackAuthorView
+    payload_fields: [postId, authorId, entityRefs]
+    ml_signal: moderate_positive
+    signal_weight: 1.5
+
+  - type: tag_click
+    description: 点击内容标签进入标签聚合页
+    trigger: tap_tag_chip
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackTagClick
+    payload_fields: [postId, tags]
+    ml_signal: moderate_positive
+    signal_weight: 1.8
+
+  - type: content_depth
+    description: 内容消费深度（退出时汇总的归一化消费指标）
+    trigger: content_exit_with_depth_data
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: null
+    payload_fields: [postId, engagementDepth, consumedRatio, totalUnits]
+    ml_signal: depth_proportional
+    signal_weight: 1.0
+    notes: |
+      由 ContentEngagementTracker 在退出时自动生成，不需要独立 dart_method。
+      engagementDepth 为 L0-L4 归一化等级，consumedRatio 为原始消费比例。
+
+  - type: play_progress
+    description: 视频/音频播放进度里程碑
+    trigger: playback_25pct_50pct_75pct_100pct
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackPlayProgress
+    payload_fields: [postId, consumedRatio, totalUnits]
+    ml_signal: proportional_positive
+    signal_weight: 1.0
+    notes: |
+      在 25%/50%/75%/100% 播放节点上报。consumedRatio 为当前播放比例，
+      totalUnits 为总时长（秒）。与 content_depth 互补但语义不同：
+      play_progress 是实时里程碑，content_depth 是退出时汇总。
 
 # ── 二、推荐特征声明 ────────────────────────────────────────────────────
 # 由 codegen_rec_model_python 生成 Python Pydantic ContentFeatures model

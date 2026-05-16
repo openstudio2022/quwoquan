@@ -17,6 +17,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_app_exception_p
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_payload.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_route_exception_summary.g.dart';
 import 'package:quwoquan_app/core/design_system/theme/app_theme.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart'
+    show appLogUploaderProvider;
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 
@@ -176,6 +178,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
           .updateSystemBrightness(
             WidgetsBinding.instance.platformDispatcher.platformBrightness,
           );
+      ref.read(appLogUploaderProvider);
     } catch (e) {
       // 初始化错误由上层观测处理
     }

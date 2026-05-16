@@ -9,25 +9,28 @@ import (
 	htmlpkg "html"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gopkg.in/yaml.v3"
 
+	rtmongo "quwoquan_service/runtime/mongodb"
+
+	rtgov "quwoquan_service/runtime/governance"
+	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
+	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
+	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
 	httpadapter "quwoquan_service/services/assistant-service/internal/adapters/http"
 	"quwoquan_service/services/assistant-service/internal/application"
@@ -122,16 +125,24 @@ func main() {
 	}
 	router := buildRedisRouter(cfg)
 	defer router.Close()
+	if err := router.PingAll(context.Background()); err != nil {
+		log.Printf("WARN: assistant-service redis PingAll: %v", err)
+	}
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "assistant-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
+	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("redis", func(ctx context.Context) error {
+		return router.PingAll(ctx)
+	})
+
 	ctx := context.Background()
 
 	var eventStore application.EventStore
 	var profileStore application.LearningProfileStore
 	var subscriptionStore application.SkillSubscriptionStore
 	if strings.TrimSpace(cfg.MongoDB.URI) != "" {
-		mongoClient, err := mongo.Connect(options.Client().ApplyURI(cfg.MongoDB.URI))
-		if err != nil {
-			log.Fatalf("assistant-service mongo connect failed: %v", err)
-		}
+		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "assistant-service")
 		defer func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -157,6 +168,9 @@ func main() {
 			log.Printf("WARN: assistant-service ensure skill subscription indexes: %v", err)
 		}
 		subscriptionStore = mongoSubscriptions
+		healthChecker.Register("mongodb", func(ctx context.Context) error {
+			return mongoClient.Ping(ctx, nil)
+		})
 		log.Printf("assistant-service events storage=mongodb db=%s", dbName)
 		log.Printf("assistant-service learning profile storage=mongodb db=%s", dbName)
 		log.Printf("assistant-service skill subscription storage=mongodb db=%s", dbName)
@@ -189,6 +203,12 @@ func main() {
 			log.Fatalf("assistant-service postgres connect failed: %v", err)
 		}
 		defer pgPool.Close()
+		if err := pgPool.Ping(ctx); err != nil {
+			log.Printf("WARN: assistant-service postgres ping: %v", err)
+		}
+		healthChecker.Register("postgres", func(ctx context.Context) error {
+			return pgPool.Ping(ctx)
+		})
 		pgStore := persistence.NewPgConsentStore(pgPool)
 		if err := pgStore.EnsureSchema(ctx); err != nil {
 			log.Printf("WARN: assistant-service ensure pg schema: %v", err)
@@ -221,8 +241,12 @@ func main() {
 		}
 		log.Printf("assistant-service scenario seed loaded refs=%s", strings.Join(seedRefs, ","))
 	}
-	handler := httpadapter.NewHandler(service).Routes()
-	observedHandler := rthttp.NewHTTPServerMiddleware(handler, rthttp.HTTPServerMiddlewareConfig{
+	baseHandler := httpadapter.NewHandler(service).Routes()
+	outerMux := http.NewServeMux()
+	outerMux.HandleFunc("/healthz", healthChecker.Handler())
+	outerMux.Handle("/metrics", rtmetrics.Handler())
+	outerMux.Handle("/", baseHandler)
+	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "assistant-service",
 		ServiceName:       "assistant-service",
 		ServiceInstanceID: instanceID,
@@ -231,46 +255,13 @@ func main() {
 		SourceID:          "assistant-service",
 		Src:               "assistant-service",
 	}, ioLogger, processLogger, exceptionLogger)
-	server := &http.Server{Addr: addr, Handler: observedHandler, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: assistantHTTPWriteTimeout(), IdleTimeout: 60 * time.Second}
-	log.Printf("assistant-service listening on %s env=%s", addr, appEnv)
-	if err := runHTTPServerWithGracefulShutdown(server, assistantShutdownTimeout()); err != nil {
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
+	server := &http.Server{Addr: addr, Handler: rateLimited, ReadHeaderTimeout: 5 * time.Second, WriteTimeout: assistantHTTPWriteTimeout(), IdleTimeout: 60 * time.Second}
+	log.Printf("assistant-service listening on %s env=%s (rate_limit=1000/s)", addr, appEnv)
+	if err := rthttp.ListenAndServeGraceful(server, assistantShutdownTimeout()); err != nil {
 		log.Fatalf("assistant-service listen failed: %v", err)
 	}
-}
-
-func runHTTPServerWithGracefulShutdown(server *http.Server, shutdownTimeout time.Duration) error {
-	signalCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	errCh := make(chan error, 1)
-	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errCh <- err
-			return
-		}
-		errCh <- nil
-	}()
-
-	select {
-	case err := <-errCh:
-		return err
-	case <-signalCtx.Done():
-		stop()
-	}
-
-	log.Printf("assistant-service shutdown signal received; draining for %s", shutdownTimeout)
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("WARN: assistant-service graceful shutdown failed: %v", err)
-		_ = server.Close()
-		return err
-	}
-	if err := <-errCh; err != nil {
-		return err
-	}
-	log.Printf("assistant-service shutdown complete")
-	return nil
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
@@ -422,7 +413,10 @@ func buildModelProvider(cfg providerCfg, appEnv string) (application.ModelProvid
 			baseURL: strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
 			model:   strings.TrimSpace(cfg.Model),
 			apiKey:  apiKey,
-			client:  &http.Client{Timeout: providerTimeout(cfg.TimeoutMs)},
+			client: rtgov.WrapClientWithCB(
+				&http.Client{Timeout: providerTimeout(cfg.TimeoutMs)},
+				rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default()),
+			),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported model_provider.provider %q", provider)
@@ -1953,7 +1947,10 @@ func searchHTTPClient(ms int) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSHandshakeTimeout = timeout
 	transport.ResponseHeaderTimeout = timeout
-	return &http.Client{Timeout: timeout, Transport: transport}
+	return rtgov.WrapClientWithCB(
+		&http.Client{Timeout: timeout, Transport: transport},
+		rtgov.NewCircuitBreaker(5, 15*time.Second, slog.Default()),
+	)
 }
 
 func requiresRealProvider(appEnv string) bool {
@@ -2001,6 +1998,16 @@ func parseSemver(raw string) [3]int {
 }
 
 func buildRedisRouter(cfg config) *rtredis.Router {
+	generalScene := rtredis.SceneConfig{
+		Mode:         fallbackMode(cfg.Redis.General.Mode, cfg.Redis.General.Addr, cfg.Redis.General.Addrs),
+		Addr:         cfg.Redis.General.Addr,
+		Addrs:        cfg.Redis.General.Addrs,
+		Password:     cfg.Redis.General.Password,
+		DB:           cfg.Redis.General.DB,
+		TLS:          cfg.Redis.General.TLS,
+		PoolSize:     cfg.Redis.General.Pool.Size,
+		MinIdleConns: cfg.Redis.General.Pool.MinIdle,
+	}
 	return rtredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"rec": {
@@ -2013,19 +2020,11 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 				PoolSize:     cfg.Redis.Rec.Pool.Size,
 				MinIdleConns: cfg.Redis.Rec.Pool.MinIdle,
 			},
-			"general": {
-				Mode:         fallbackMode(cfg.Redis.General.Mode, cfg.Redis.General.Addr, cfg.Redis.General.Addrs),
-				Addr:         cfg.Redis.General.Addr,
-				Addrs:        cfg.Redis.General.Addrs,
-				Password:     cfg.Redis.General.Password,
-				DB:           cfg.Redis.General.DB,
-				TLS:          cfg.Redis.General.TLS,
-				PoolSize:     cfg.Redis.General.Pool.Size,
-				MinIdleConns: cfg.Redis.General.Pool.MinIdle,
-			},
+			"general":  generalScene,
+			"realtime": generalScene,
 		},
-		PrefixRoutes: []rtredis.PrefixRoute{{Prefix: "rec:", Scene: "rec"}, {Prefix: "cache:", Scene: "general"}, {Prefix: "page_ctx:", Scene: "general"}, {Prefix: "suggested_actions:", Scene: "general"}},
-		DefaultScene: "general",
+		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
+		DefaultScene: rtredis.GeneratedDefaultScene,
 	})
 }
 

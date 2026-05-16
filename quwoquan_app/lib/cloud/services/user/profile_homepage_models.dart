@@ -408,12 +408,8 @@ class ActivePersonaContextViewData {
     if (ownerUserId.isEmpty) {
       ownerUserId = subAccountId;
     }
-    final displayName = w.displayName.isNotEmpty
-        ? w.displayName
-        : subAccountId;
-    final subjectType = w.subjectType.isNotEmpty
-        ? w.subjectType
-        : 'subAccount';
+    final displayName = w.displayName.isNotEmpty ? w.displayName : subAccountId;
+    final subjectType = w.subjectType.isNotEmpty ? w.subjectType : 'subAccount';
     return ActivePersonaContextViewData(
       subAccountId: subAccountId,
       ownerUserId: ownerUserId,

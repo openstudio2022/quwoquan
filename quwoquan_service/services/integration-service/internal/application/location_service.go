@@ -6,6 +6,9 @@ import (
 	"log"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
+	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
 	"quwoquan_service/services/integration-service/internal/generated"
 )
@@ -34,13 +37,23 @@ func NewService(
 	}
 }
 
-func (s *Service) Nearby(ctx context.Context, q model.NearbyQuery) ([]model.POI, error) {
+func (s *Service) Nearby(ctx context.Context, q model.NearbyQuery) (_ []model.POI, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "integration.Nearby",
+		attribute.String("geo.lat", fmt.Sprintf("%g", q.Lat)),
+		attribute.String("geo.lng", fmt.Sprintf("%g", q.Lng)))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return s.withFallback(ctx, "nearby", func(client model.ProviderClient) ([]model.POI, error) {
 		return client.Nearby(ctx, q)
 	})
 }
 
-func (s *Service) Search(ctx context.Context, q model.SearchQuery) ([]model.POI, error) {
+func (s *Service) Search(ctx context.Context, q model.SearchQuery) (_ []model.POI, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "integration.Search",
+		attribute.String("search.query", q.Query),
+		attribute.String("city.code", q.CityCode))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return s.withFallback(ctx, "search", func(client model.ProviderClient) ([]model.POI, error) {
 		return client.Search(ctx, q)
 	})

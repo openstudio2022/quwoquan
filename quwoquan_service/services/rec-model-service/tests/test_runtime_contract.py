@@ -93,7 +93,9 @@ def test_bootstrap_fail_fast_when_version_file_missing(
     ("app_env", "env_dir", "expected_profile"),
     [
         ("alpha", "alpha", "alpha-local"),
+        ("beta", "beta", "beta-local"),
         ("gamma", "gamma", "integration"),
+        ("prod-gray", "prod-gray", "prod-gray-release"),
         ("prod", "prod", "prod"),
     ],
 )

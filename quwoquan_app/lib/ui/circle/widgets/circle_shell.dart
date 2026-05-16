@@ -660,6 +660,12 @@ class _CircleShellState extends ConsumerState<CircleShell> {
               tags: circle?.tags ?? const [],
               badgeLabel: _badgeLabel(state),
               metaLine: _metaLine(state),
+              onTagTap: (tag) {
+                ref.read(contentEngagementTrackerProvider).trackTagClick(
+                  tag,
+                  fromContentId: widget.circleId,
+                );
+              },
             ),
             SizedBox(height: AppSpacing.md),
             Wrap(

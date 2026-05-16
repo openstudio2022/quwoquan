@@ -8,6 +8,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+
+	rtobs "quwoquan_service/runtime/observability"
 )
 
 const (
@@ -193,13 +197,18 @@ func NewHomepageService() *HomepageService {
 }
 
 func (s *HomepageService) SearchHomepages(
-	_ context.Context,
+	ctx context.Context,
 	query string,
 	homepageType string,
 	city string,
 	status string,
 	limit int,
 ) []HomepageSearchItemView {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.SearchHomepages",
+		attribute.String("search.query", query),
+		attribute.String("homepage.type", homepageType))
+	defer func() { rtobs.EndSpan(span, nil) }()
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	needle := normalize(query)
@@ -264,8 +273,13 @@ func (s *HomepageService) SearchHomepages(
 	return items
 }
 
-func (s *HomepageService) IntakeHomepageCandidate(_ context.Context, input HomepageInput, sourceType string) (*Homepage, error) {
-	if err := validateHomepageInput(input); err != nil {
+func (s *HomepageService) IntakeHomepageCandidate(ctx context.Context, input HomepageInput, sourceType string) (_ *Homepage, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.IntakeHomepageCandidate",
+		attribute.String("homepage.type", input.HomepageType),
+		attribute.String("source.type", sourceType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	if err = validateHomepageInput(input); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
@@ -297,12 +311,18 @@ func (s *HomepageService) SuggestHomepageCandidate(ctx context.Context, input Ho
 	return s.IntakeHomepageCandidate(ctx, input, "user_suggested")
 }
 
-func (s *HomepageService) PublishHomepageCandidate(_ context.Context, homepageID string) (*Homepage, error) {
+func (s *HomepageService) PublishHomepageCandidate(ctx context.Context, homepageID string) (*Homepage, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.PublishHomepageCandidate",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	homepage, ok := s.homepages[homepageID]
 	if !ok {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
 	}
 	now := time.Now().UTC()
 	homepage.Status = "published"
@@ -314,18 +334,29 @@ func (s *HomepageService) PublishHomepageCandidate(_ context.Context, homepageID
 	return &out, nil
 }
 
-func (s *HomepageService) GetHomepage(_ context.Context, homepageID string) (*Homepage, error) {
+func (s *HomepageService) GetHomepage(ctx context.Context, homepageID string) (*Homepage, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.GetHomepage",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	homepage, ok := s.homepages[homepageID]
 	if !ok {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
 	}
 	out := cloneHomepage(homepage)
 	return &out, nil
 }
 
 func (s *HomepageService) GetHomepageShell(ctx context.Context, homepageID string) (*HomepageShellView, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.GetHomepageShell",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	homepage, err := s.GetHomepage(ctx, homepageID)
 	if err != nil {
 		return nil, err
@@ -340,6 +371,11 @@ func (s *HomepageService) GetHomepageShell(ctx context.Context, homepageID strin
 }
 
 func (s *HomepageService) GetHomepageReviewSummary(ctx context.Context, homepageID string) (*HomepageReviewSummaryView, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.GetHomepageReviewSummary",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	homepage, err := s.GetHomepage(ctx, homepageID)
 	if err != nil {
 		return nil, err
@@ -355,6 +391,11 @@ func (s *HomepageService) GetHomepageReviewSummary(ctx context.Context, homepage
 }
 
 func (s *HomepageService) GetHomepageRelatedGroups(ctx context.Context, homepageID string) (*HomepageRelatedGroupSummaryView, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.GetHomepageRelatedGroups",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	homepage, err := s.GetHomepage(ctx, homepageID)
 	if err != nil {
 		return nil, err
@@ -363,24 +404,33 @@ func (s *HomepageService) GetHomepageRelatedGroups(ctx context.Context, homepage
 }
 
 func (s *HomepageService) CreateHomepageClaimRequest(
-	_ context.Context,
+	ctx context.Context,
 	homepageID string,
 	input ClaimRequestInput,
 ) (*HomepageClaimRequest, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.CreateHomepageClaimRequest",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	homepage, ok := s.homepages[homepageID]
 	if !ok {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
 	}
 	if homepage.Status == "offline" {
-		return nil, newAppError(410, codeHomepageOffline, "主页已下线，仅保留记录信息", "homepage offline")
+		err = newAppError(410, codeHomepageOffline, "主页已下线，仅保留记录信息", "homepage offline")
+		return nil, err
 	}
 	if strings.TrimSpace(input.ClaimTier) == "" || strings.TrimSpace(input.ContactPhone) == "" {
-		return nil, newAppError(400, codeClaimMaterialMissing, "认领材料不完整，请补充后重试", "claim tier or contact phone missing")
+		err = newAppError(400, codeClaimMaterialMissing, "认领材料不完整，请补充后重试", "claim tier or contact phone missing")
+		return nil, err
 	}
 	if homepage.ClaimStatus == "claimed" {
-		return nil, newAppError(409, codeAlreadyClaimed, "该主页已被认领", "homepage already claimed")
+		err = newAppError(409, codeAlreadyClaimed, "该主页已被认领", "homepage already claimed")
+		return nil, err
 	}
 	now := time.Now().UTC()
 	request := &HomepageClaimRequest{
@@ -404,20 +454,28 @@ func (s *HomepageService) CreateHomepageClaimRequest(
 }
 
 func (s *HomepageService) ReviewHomepageClaimRequest(
-	_ context.Context,
+	ctx context.Context,
 	homepageID string,
 	claimRequestID string,
 	input ClaimReviewInput,
 ) (*HomepageClaimRequest, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.ReviewHomepageClaimRequest",
+		attribute.String("homepage.id", homepageID),
+		attribute.String("claim.request_id", claimRequestID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	request, ok := s.claimRequests[claimRequestID]
 	if !ok || request.HomepageID != homepageID {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "claim request not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "claim request not found")
+		return nil, err
 	}
 	homepage, ok := s.homepages[homepageID]
 	if !ok {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
 	}
 	now := time.Now().UTC()
 	status := normalize(input.Status)
@@ -430,7 +488,8 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 		request.Status = "rejected"
 		homepage.ClaimStatus = "rejected"
 	default:
-		return nil, newAppError(400, codePermissionDenied, "当前无权限执行此操作", "unsupported claim review status")
+		err = newAppError(400, codePermissionDenied, "当前无权限执行此操作", "unsupported claim review status")
+		return nil, err
 	}
 	request.ReviewNote = strings.TrimSpace(input.ReviewNote)
 	request.ReviewedAt = &now
@@ -440,18 +499,25 @@ func (s *HomepageService) ReviewHomepageClaimRequest(
 }
 
 func (s *HomepageService) UpdateClaimedHomepageBasics(
-	_ context.Context,
+	ctx context.Context,
 	homepageID string,
 	input HomepageBasicInput,
 ) (*Homepage, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.UpdateClaimedHomepageBasics",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	homepage, ok := s.homepages[homepageID]
 	if !ok {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
 	}
 	if homepage.ClaimStatus != "claimed" {
-		return nil, newAppError(403, codePermissionDenied, "当前无权限执行此操作", "homepage is not claimed yet")
+		err = newAppError(403, codePermissionDenied, "当前无权限执行此操作", "homepage is not claimed yet")
+		return nil, err
 	}
 	if strings.TrimSpace(input.Title) != "" {
 		homepage.Title = strings.TrimSpace(input.Title)
@@ -480,14 +546,20 @@ func (s *HomepageService) UpdateClaimedHomepageBasics(
 }
 
 func (s *HomepageService) CreateHomepageStatusReport(
-	_ context.Context,
+	ctx context.Context,
 	homepageID string,
 	input StatusReportInput,
 ) (*HomepageStatusReport, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.CreateHomepageStatusReport",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.homepages[homepageID]; !ok {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
 	}
 	report := &HomepageStatusReport{
 		ID:             s.nextID("report"),
@@ -505,20 +577,28 @@ func (s *HomepageService) CreateHomepageStatusReport(
 }
 
 func (s *HomepageService) ReviewHomepageStatusReport(
-	_ context.Context,
+	ctx context.Context,
 	homepageID string,
 	reportID string,
 	input StatusReportReviewInput,
 ) (*HomepageStatusReport, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.ReviewHomepageStatusReport",
+		attribute.String("homepage.id", homepageID),
+		attribute.String("report.id", reportID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	report, ok := s.statusReports[reportID]
 	if !ok || report.HomepageID != homepageID {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "status report not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "status report not found")
+		return nil, err
 	}
 	homepage, ok := s.homepages[homepageID]
 	if !ok {
-		return nil, newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		err = newAppError(404, codeHomepageNotFound, "主页不存在或已下线", "homepage not found")
+		return nil, err
 	}
 	now := time.Now().UTC()
 	switch normalize(input.Status) {
@@ -529,7 +609,8 @@ func (s *HomepageService) ReviewHomepageStatusReport(
 	case "dismissed":
 		report.Status = "dismissed"
 	default:
-		return nil, newAppError(400, codePermissionDenied, "当前无权限执行此操作", "unsupported status report review status")
+		err = newAppError(400, codePermissionDenied, "当前无权限执行此操作", "unsupported status report review status")
+		return nil, err
 	}
 	report.ReviewNote = strings.TrimSpace(input.ReviewNote)
 	report.ReviewedAt = &now

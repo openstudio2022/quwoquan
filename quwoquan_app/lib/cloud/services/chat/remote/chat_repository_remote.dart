@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
@@ -33,11 +32,9 @@ typedef ChatRemoteMergeRequestContext =
 class RemoteChatRepository implements ChatRepository {
   RemoteChatRepository({
     CloudHttpClient? httpClient,
-    http.Client? client,
     String? baseUrl,
     ChatRemoteMergeRequestContext? mergeRequestContext,
-  }) : _httpClient =
-           httpClient ?? CloudHttpClient(client: client ?? http.Client()),
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
        _mergeRequestContext = mergeRequestContext;
 

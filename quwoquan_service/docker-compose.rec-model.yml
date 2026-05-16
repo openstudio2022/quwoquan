@@ -1,0 +1,22 @@
+# docker-compose.rec-model.yml — Extends the main docker-compose for local rec-model-service.
+# Usage: docker-compose -f docker-compose.yaml -f docker-compose.rec-model.yml up
+version: "3.8"
+services:
+  rec-model-service:
+    build:
+      context: ..
+      dockerfile: quwoquan_service/services/rec-model-service/Dockerfile
+    ports:
+      - "18090:8000"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/?directConnection=true
+      - MONGODB_DATABASE=quwoquan_content
+      - APP_ENV=beta
+      - SERVICE_NAME=recommendation-service
+      - MODEL_CACHE_DIR=/app/cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped

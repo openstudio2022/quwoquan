@@ -1,5 +1,5 @@
 # prod-gray overrides (production gray release)
-# Recommend injecting APP_ENV=prod, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
+# Recommend injecting APP_ENV=prod-gray, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
 service:
   http:
     addr: ":18080"
@@ -14,3 +14,22 @@ redis:
     mode: cluster
     addrs: []
     tls: true
+
+rec_model_service:
+  url: "${REC_MODEL_SERVICE_URL}"
+  timeout_ms: 80
+  enabled: true
+
+experiments:
+  rec_model_vs_rule:
+    enabled: true
+    buckets:
+      rule: 90
+      model: 10
+  rec_scoring_weights:
+    enabled: true
+    buckets:
+      control: 80
+      engagement_heavy: 10
+      freshness_heavy: 5
+      explore_heavy: 5

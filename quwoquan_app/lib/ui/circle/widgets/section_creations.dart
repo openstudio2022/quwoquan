@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
@@ -829,6 +831,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+    final navFeedRequestId =
+        ref.read(feedSessionProvider.notifier).newFeedRequestId();
     final result = await context.push<Object?>(
       route,
       extra: MediaViewerExtra(
@@ -842,6 +846,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         circleId: widget.circleId,
         rawPostsById: rawPostsById,
         interactionSnapshot: interactionSnapshot,
+        referralSource: ReferralSource.circlePost,
+        feedRequestId: navFeedRequestId,
       ),
     );
     if (result is MediaViewerResult) {

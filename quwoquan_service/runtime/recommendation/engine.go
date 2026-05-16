@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"math"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	experiments "quwoquan_service/runtime/experiments"
+	learning "quwoquan_service/runtime/learning"
 )
 
 // FeedType identifies the kind of recommendation feed.
@@ -104,6 +107,10 @@ type ScoringWeights struct {
 	ExploreBoost    float64
 	NegativePenalty float64
 	DwellBonus      float64
+	EntityAffinity  float64
+	TopicMatch      float64
+	AudienceMatch   float64
+	FormatMatch     float64
 }
 
 // DefaultWeights returns production-default scoring weights.
@@ -117,6 +124,10 @@ func DefaultWeights() ScoringWeights {
 		ExploreBoost:    0.5,
 		NegativePenalty: 5.0,
 		DwellBonus:      0.8,
+		EntityAffinity:  1.2,
+		TopicMatch:      1.0,
+		AudienceMatch:   0.8,
+		FormatMatch:     0.6,
 	}
 }
 
@@ -138,6 +149,8 @@ type Engine struct {
 	maxAuthorPerFeed int
 	recallTimeout    time.Duration
 	featureTimeout   time.Duration
+
+	socialMiner *SocialInterestMiner
 
 	expResolver experiments.Resolver
 	logger      *slog.Logger
@@ -189,6 +202,11 @@ func WithFeatureProvider(fp FeatureProvider) EngineOption {
 // WithPreRanker sets the pre-ranking filter.
 func WithPreRanker(pr PreRanker) EngineOption {
 	return func(e *Engine) { e.preRanker = pr }
+}
+
+// WithSocialMiner enables social interest enrichment during feature assembly.
+func WithSocialMiner(m *SocialInterestMiner) EngineOption {
+	return func(e *Engine) { e.socialMiner = m }
 }
 
 // NewEngine creates a recommendation engine.
@@ -246,8 +264,12 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	}
 
 	weights := e.weights
+	modelBucket := "rule"
+	modelVersion := "champion"
 	if e.expResolver != nil {
 		weights = ResolveWeights(ctx, e.expResolver, req.UserID)
+		modelBucket = ResolveModelBucket(ctx, e.expResolver, req.UserID)
+		modelVersion = ResolveModelVersion(ctx, e.expResolver, req.UserID)
 	}
 
 	// Stage 2: Parallel recall from all sources
@@ -287,17 +309,62 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		featCancel()
 	}
 
+	// Enrich with social interest mining if projector hasn't populated social fields
+	if e.socialMiner != nil && (userFeatures == nil || len(userFeatures.CircleTagAffinities) == 0) {
+		socialCtx, socialCancel := context.WithTimeout(ctx, e.featureTimeout)
+		socialVec, socialErr := e.socialMiner.Mine(socialCtx, req.UserID)
+		socialCancel()
+		if socialErr == nil && socialVec != nil {
+			if userFeatures == nil {
+				userFeatures = &UserFeatureVector{}
+			}
+			if len(userFeatures.CircleTagAffinities) == 0 {
+				userFeatures.CircleTagAffinities = socialVec.CircleTagAffinities
+			}
+			if userFeatures.SocialInterestScore == 0 {
+				userFeatures.SocialInterestScore = socialVec.SocialDensity
+			}
+			if len(socialVec.FriendTagIntersection) > 0 {
+				if userFeatures.TagAffinities == nil {
+					userFeatures.TagAffinities = make(map[string]float64)
+				}
+				for tag, weight := range socialVec.FriendTagIntersection {
+					userFeatures.TagAffinities[tag] += weight
+				}
+			}
+		}
+	}
+
 	scoringFeatures := &ScoringFeatures{
-		Session:      session,
-		User:         userFeatures,
-		Weights:      weights,
-		ExploreRate:  e.exploreFraction,
+		Session:       session,
+		User:          userFeatures,
+		Weights:       weights,
+		ExploreRate:   e.exploreFraction,
 		Deterministic: req.Sort == FeedSortRecommend, // stable ordering for recommend + cursor pagination (no random explore boost)
 	}
 
 	// Stage 6: Model scoring (RuleScorer, RemoteModelScorer, or CascadeScorer)
+	// model_vs_rule experiment: "model" uses primary scorer; "rule" uses fallback.
+	// model_version experiment: when "challenger", ask model service for canary version.
 	scoreStart := time.Now()
-	scored, scoreErr := e.scorer.ScoreBatch(ctx, scoringFeatures, filtered)
+	activeScorer := e.scorer
+	if modelBucket == "rule" {
+		if cascade, ok := e.scorer.(*CascadeScorer); ok {
+			activeScorer = cascade.Fallback
+		}
+	} else if modelVersion == "challenger" {
+		if cascade, ok := e.scorer.(*CascadeScorer); ok {
+			if remote, ok := cascade.Primary.(*RemoteModelScorer); ok {
+				activeScorer = &CascadeScorer{
+					Primary:  remote.WithModelVersion("challenger"),
+					Fallback: cascade.Fallback,
+					Timeout:  cascade.Timeout,
+					Logger:   cascade.Logger,
+				}
+			}
+		}
+	}
+	scored, scoreErr := activeScorer.ScoreBatch(ctx, scoringFeatures, filtered)
 	if scoreErr != nil {
 		if e.logger != nil {
 			e.logger.Error("rec.score.error", slog.String("err", scoreErr.Error()))
@@ -305,6 +372,27 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 		scored = make([]ScoredCandidate, 0)
 	}
 	scoreLatency := time.Since(scoreStart)
+
+	// Shadow scoring: async call to challenger model for offline comparison
+	if modelBucket == "model" && modelVersion == "champion" && e.feedback != nil {
+		if cascade, ok := e.scorer.(*CascadeScorer); ok {
+			if remote, ok := cascade.Primary.(*RemoteModelScorer); ok {
+				shadowScorer := remote.WithModelVersion("challenger")
+				go func() {
+					shadowCtx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+					defer cancel()
+					shadowScored, err := shadowScorer.ScoreBatch(shadowCtx, scoringFeatures, filtered)
+					if err != nil {
+						if e.logger != nil {
+							e.logger.Debug("rec.shadow.error", slog.String("err", err.Error()))
+						}
+						return
+					}
+					e.recordShadowScores(shadowCtx, req.UserID, req.SessionID, shadowScored)
+				}()
+			}
+		}
+	}
 
 	// Sort by score (scorer returns unsorted). Tie-break by ContentID for stable pagination.
 	sort.Slice(scored, func(i, j int) bool {
@@ -322,6 +410,11 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 	rerankStart := time.Now()
 	reranked := e.rerank(scored, windowLimit)
 	rerankLatency := time.Since(rerankStart)
+
+	topicEntropy := computeTopicEntropy(reranked)
+	authorRepeatRate, authorHHI, distinctAuthors := computeAuthorDiversity(reranked)
+	geoCoverage, distinctGeoBuckets := computeGeoCoverage(reranked)
+	distinctTopics := computeDistinctTopicCount(reranked)
 
 	allItems := make([]FeedItem, 0, len(reranked))
 	for _, s := range reranked {
@@ -375,17 +468,32 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			sourceBreakdown[c.RecallPath]++
 		}
 		LogMetrics(e.logger, PipelineMetrics{
-			UserID:          req.UserID,
-			SessionID:       req.SessionID,
-			RecallLatency:   recallLatency,
-			ScoreLatency:    scoreLatency,
-			RerankLatency:   rerankLatency,
-			TotalLatency:    totalLatency,
-			CandidateCount:  len(allCandidates),
-			FilteredCount:   len(filtered),
-			ResultCount:     len(items),
-			SourceBreakdown: sourceBreakdown,
+			UserID:             req.UserID,
+			SessionID:          req.SessionID,
+			RecallLatency:      recallLatency,
+			ScoreLatency:       scoreLatency,
+			RerankLatency:      rerankLatency,
+			TotalLatency:       totalLatency,
+			CandidateCount:     len(allCandidates),
+			FilteredCount:      len(filtered),
+			ResultCount:        len(items),
+			SourceBreakdown:    sourceBreakdown,
+			ModelUsed:          modelBucket,
+			ExperimentBucket:   modelBucket,
+			TopicEntropy:       topicEntropy,
+			AuthorRepeatRate:   authorRepeatRate,
+			AuthorHHI:          authorHHI,
+			GeoCoverage:        geoCoverage,
+			DistinctAuthors:    distinctAuthors,
+			DistinctTopics:     distinctTopics,
+			DistinctGeoBuckets: distinctGeoBuckets,
 		})
+		if topicEntropy < 1.5 && topicEntropy > 0 && len(items) >= 5 {
+			e.logger.Warn("rec.diversity.low_entropy",
+				slog.Float64("topicEntropy", topicEntropy),
+				slog.String("userId", req.UserID),
+				slog.Int("resultCount", len(items)))
+		}
 	}
 
 	// Learning: record impressions asynchronously (fire-and-forget)
@@ -398,6 +506,8 @@ func (e *Engine) GetFeed(ctx context.Context, req GetFeedRequest) (*FeedResponse
 			_ = e.feedback.RecordImpression(fbCtx, req.UserID, req.SessionID, feedbackItems)
 		}()
 	}
+
+	RecordPipelineResult(modelBucket, len(items) == 0)
 
 	return resp, nil
 }
@@ -571,7 +681,7 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 	}
 
 	// Explore injection: at least 1 per 5 items
-	exploreTarget := limit / 5
+	exploreTarget := int(float64(limit) * e.exploreFraction)
 	if exploreTarget < 1 && len(exploreBuffer) > 0 {
 		exploreTarget = 1
 	}
@@ -582,17 +692,27 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 		coldStartTarget = 1
 	}
 
-	// Inject explore items at even intervals
+	// Inject explore items at even intervals, respecting diversity constraints
 	final := make([]ScoredCandidate, 0, limit)
 	exploreIdx := 0
 	coldIdx := 0
 	resultIdx := 0
 	for i := 0; i < limit; i++ {
 		if (i+1)%5 == 0 && exploreIdx < len(exploreBuffer) && exploreIdx < exploreTarget {
-			final = append(final, exploreBuffer[exploreIdx])
+			s := exploreBuffer[exploreIdx]
+			final = append(final, s)
+			typeCount[s.Candidate.ContentType]++
+			if s.Candidate.AuthorID != "" {
+				authorCount[s.Candidate.AuthorID]++
+			}
 			exploreIdx++
 		} else if (i+1)%10 == 0 && coldIdx < len(coldStartBuffer) && coldIdx < coldStartTarget {
-			final = append(final, coldStartBuffer[coldIdx])
+			s := coldStartBuffer[coldIdx]
+			final = append(final, s)
+			typeCount[s.Candidate.ContentType]++
+			if s.Candidate.AuthorID != "" {
+				authorCount[s.Candidate.AuthorID]++
+			}
 			coldIdx++
 		} else if resultIdx < len(result) {
 			final = append(final, result[resultIdx])
@@ -606,7 +726,7 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 		}
 	}
 
-	// Fill remaining slots from any source
+	// Fill remaining slots from any source, applying the same diversity constraints
 	if len(final) < limit {
 		existing := make(map[string]bool, len(final))
 		for _, f := range final {
@@ -619,18 +739,121 @@ func (e *Engine) rerank(scored []ScoredCandidate, limit int) []ScoredCandidate {
 			if existing[s.Candidate.ContentID] {
 				continue
 			}
+			ct := s.Candidate.ContentType
 			author := s.Candidate.AuthorID
+			if typeCount[ct] >= maxPerType {
+				continue
+			}
 			if author != "" && authorCount[author] >= maxPerAuthor {
 				continue
 			}
+			topTag := topTagOf(s.Candidate)
+			if topTag != "" && len(recentTopTags) >= 2 &&
+				recentTopTags[len(recentTopTags)-1] == topTag &&
+				recentTopTags[len(recentTopTags)-2] == topTag {
+				continue
+			}
 			final = append(final, s)
+			typeCount[ct]++
 			if author != "" {
 				authorCount[author]++
 			}
+			recentTopTags = append(recentTopTags, topTag)
 		}
 	}
 
 	return final
+}
+
+// computeTopicEntropy calculates Shannon entropy of topic tag distribution.
+// Higher entropy = more diverse; lower = more concentrated (potential filter bubble).
+func computeTopicEntropy(items []ScoredCandidate) float64 {
+	topicCounts := make(map[string]int)
+	total := 0
+	for _, item := range items {
+		for _, tag := range item.Candidate.Tags {
+			if ClassifyTagDimension(tag) == DimensionTopic {
+				topicCounts[tag]++
+				total++
+			}
+		}
+	}
+	if total == 0 {
+		return 0
+	}
+	entropy := 0.0
+	for _, count := range topicCounts {
+		p := float64(count) / float64(total)
+		if p > 0 {
+			entropy -= p * math.Log2(p)
+		}
+	}
+	return entropy
+}
+
+func computeAuthorDiversity(items []ScoredCandidate) (repeatRate float64, hhi float64, distinctAuthors int) {
+	authorCounts := make(map[string]int)
+	total := 0
+	for _, item := range items {
+		author := strings.TrimSpace(item.Candidate.AuthorID)
+		if author == "" {
+			continue
+		}
+		authorCounts[author]++
+		total++
+	}
+	if total == 0 {
+		return 0, 0, 0
+	}
+	distinctAuthors = len(authorCounts)
+	repeatRate = 1 - float64(distinctAuthors)/float64(total)
+	for _, count := range authorCounts {
+		p := float64(count) / float64(total)
+		hhi += p * p
+	}
+	return repeatRate, hhi, distinctAuthors
+}
+
+func computeGeoCoverage(items []ScoredCandidate) (coverage float64, distinctGeoBuckets int) {
+	geoCounts := make(map[string]int)
+	total := 0
+	for _, item := range items {
+		bucket := primaryGeoBucket(item.Candidate.Tags)
+		if bucket == "" {
+			continue
+		}
+		geoCounts[bucket]++
+		total++
+	}
+	if total == 0 {
+		return 0, 0
+	}
+	distinctGeoBuckets = len(geoCounts)
+	return float64(distinctGeoBuckets) / float64(len(items)), distinctGeoBuckets
+}
+
+func computeDistinctTopicCount(items []ScoredCandidate) int {
+	topics := make(map[string]struct{})
+	for _, item := range items {
+		for _, tag := range item.Candidate.Tags {
+			if ClassifyTagDimension(tag) == DimensionTopic {
+				topics[tag] = struct{}{}
+			}
+		}
+	}
+	return len(topics)
+}
+
+func primaryGeoBucket(tags []string) string {
+	for _, tag := range tags {
+		if strings.HasPrefix(tag, "Topic/地理/行政区/") {
+			parts := strings.Split(tag, "/")
+			if len(parts) >= 5 {
+				return parts[4]
+			}
+		}
+	}
+	return ""
 }
 
 func topNTags(weights map[string]float64, n int) []string {
@@ -662,4 +885,30 @@ func toSet(ss []string) map[string]bool {
 		m[s] = true
 	}
 	return m
+}
+
+// recordShadowScores writes shadow (challenger) scores as learning events
+// for offline champion-vs-challenger comparison.
+func (e *Engine) recordShadowScores(ctx context.Context, userID, sessionID string, scored []ScoredCandidate) {
+	if e.feedback == nil || e.feedback.recorder == nil {
+		return
+	}
+	for _, s := range scored {
+		_ = e.feedback.recorder.RecordEvent(ctx, learning.Event{
+			EventID:    fmt.Sprintf("rec_shadow_%s_%s_%d", userID, s.Candidate.ContentID, time.Now().UnixNano()),
+			EventType:  "rec_shadow",
+			Scenario:   "content_feed",
+			OccurredAt: time.Now().UTC().Format(time.RFC3339),
+			UserID:     userID,
+			TargetID:   s.Candidate.ContentID,
+			Labels: map[string]string{
+				"sessionId":    sessionID,
+				"modelVersion": "challenger",
+			},
+			Context: map[string]any{
+				"shadowScore": s.Score,
+				"detail":      s.Detail,
+			},
+		})
+	}
 }

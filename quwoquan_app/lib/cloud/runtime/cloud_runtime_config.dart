@@ -41,6 +41,12 @@ class CloudRuntimeConfig {
     defaultValue: 'http://127.0.0.1:18088',
   );
 
+  /// CDN 主域名（用于判断 URL 是否属于本应用 CDN，启用图片处理参数）。
+  static const String cdnDomain = String.fromEnvironment(
+    'CDN_DOMAIN',
+    defaultValue: '',
+  );
+
   /// 当前 App 实例 ID。
   ///
   /// 由多实例启动脚本通过 `--dart-define=APP_INSTANCE_ID=...` 注入，用于

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/assistant/assistant_cloud_api_wire.g.dart';
@@ -604,11 +605,13 @@ class MockAssistantRepository implements AssistantRepository {
 }
 
 class RemoteAssistantRepository implements AssistantRepository {
-  RemoteAssistantRepository({http.Client? client, AssistantConsentStore? store})
-    : _client = client ?? http.Client(),
-      _store = store ?? const AssistantConsentStore();
+  RemoteAssistantRepository({
+    CloudHttpClient? httpClient,
+    AssistantConsentStore? store,
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
+       _store = store ?? const AssistantConsentStore();
 
-  final http.Client _client;
+  final CloudHttpClient _httpClient;
   final AssistantConsentStore _store;
 
   @override
@@ -620,7 +623,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         if (policyVersionHint.trim().isNotEmpty)
           'policyVersionHint': policyVersionHint.trim(),
       });
-      final response = await _client.get(
+      final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
           operationId: AssistantApiMetadata.getPolicyOperation,
@@ -672,7 +675,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         final uri = _assistantUri(
           AssistantApiMetadata.reportInteractionEventPath,
         );
-        final response = await _client.post(
+        final response = await _httpClient.post(
           uri,
           headers: <String, String>{
             ..._headersForPersonalAssistantDialog(
@@ -711,7 +714,7 @@ class RemoteAssistantRepository implements AssistantRepository {
       }
       try {
         final uri = _assistantUri(AssistantApiMetadata.reportScorecardPath);
-        final response = await _client.post(
+        final response = await _httpClient.post(
           uri,
           headers: <String, String>{
             ..._headersForPersonalAssistantDialog(
@@ -829,7 +832,7 @@ class RemoteAssistantRepository implements AssistantRepository {
     final local = await _store.load();
     try {
       final uri = _assistantUri(AssistantApiMetadata.listConsentsPath);
-      final response = await _client.get(
+      final response = await _httpClient.get(
         uri,
         headers: _headersForSettings(
           operationId: AssistantApiMetadata.listConsentsOperation,
@@ -880,7 +883,7 @@ class RemoteAssistantRepository implements AssistantRepository {
       final uri = _assistantUri(
         AssistantApiMetadata.grantSkillConsentPath(skillId: skillId),
       );
-      final response = await _client.post(
+      final response = await _httpClient.post(
         uri,
         headers: <String, String>{
           ..._headersForSettings(
@@ -915,7 +918,7 @@ class RemoteAssistantRepository implements AssistantRepository {
       final uri = _assistantUri(
         AssistantApiMetadata.revokeSkillConsentPath(skillId: skillId),
       );
-      await _client.delete(
+      await _httpClient.delete(
         uri,
         headers: _headersForSettings(
           operationId: AssistantApiMetadata.revokeSkillConsentOperation,
@@ -942,7 +945,7 @@ class RemoteAssistantRepository implements AssistantRepository {
     }
     try {
       final uri = _assistantUri(AssistantApiMetadata.searchXiaoquResultsPath);
-      final response = await _client.post(
+      final response = await _httpClient.post(
         uri,
         headers: <String, String>{
           ..._headersForNetworkResults(
@@ -996,7 +999,7 @@ class RemoteAssistantRepository implements AssistantRepository {
             if (status != null && status.trim().isNotEmpty)
               'status': status.trim(),
           });
-      final response = await _client.get(
+      final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
           operationId: AssistantApiMetadata.listAssistantTasksOperation,
@@ -1034,7 +1037,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         AssistantApiMetadata.listAssistantMemoriesPath,
         {'limit': '$limit'},
       );
-      final response = await _client.get(
+      final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
           operationId: AssistantApiMetadata.listAssistantMemoriesOperation,
@@ -1071,7 +1074,7 @@ class RemoteAssistantRepository implements AssistantRepository {
       final uri = _assistantGetUri(AssistantApiMetadata.listSkillsPath, {
         'limit': '$limit',
       });
-      final response = await _client.get(
+      final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
           operationId: AssistantApiMetadata.listSkillsOperation,
@@ -1113,7 +1116,7 @@ class RemoteAssistantRepository implements AssistantRepository {
           if (status.trim().isNotEmpty) 'status': status.trim(),
         },
       );
-      final response = await _client.get(
+      final response = await _httpClient.get(
         uri,
         headers: _headersForPersonalAssistantDialog(
           operationId: AssistantApiMetadata.listSkillSubscriptionsOperation,
@@ -1151,7 +1154,7 @@ class RemoteAssistantRepository implements AssistantRepository {
     List<String> queries = const <String>[],
     String cron = '0 8 * * *',
   }) async {
-    final response = await _client.post(
+    final response = await _httpClient.post(
       _assistantUri(AssistantApiMetadata.createSkillSubscriptionPath),
       headers: <String, String>{
         ..._headersForPersonalAssistantDialog(
@@ -1185,7 +1188,7 @@ class RemoteAssistantRepository implements AssistantRepository {
     required String subscriptionId,
     required String status,
   }) async {
-    final response = await _client.patch(
+    final response = await _httpClient.patch(
       _assistantUri(
         AssistantApiMetadata.updateSkillSubscriptionStatusPath(
           subscriptionId: subscriptionId,
@@ -1220,7 +1223,7 @@ class RemoteAssistantRepository implements AssistantRepository {
     _debugAssistantRepository(
       'POST $uri operation=${AssistantApiMetadata.createAssistantConversationOperation}',
     );
-    final response = await _client.post(
+    final response = await _httpClient.post(
       uri,
       headers: <String, String>{
         ..._headersForPersonalAssistantDialog(
@@ -1251,7 +1254,7 @@ class RemoteAssistantRepository implements AssistantRepository {
   Future<AssistantConversationWire> getAssistantConversation({
     required String conversationId,
   }) async {
-    final response = await _client.get(
+    final response = await _httpClient.get(
       _assistantUri(
         AssistantApiMetadata.getAssistantConversationPath(
           conversationId: conversationId,
@@ -1287,7 +1290,7 @@ class RemoteAssistantRepository implements AssistantRepository {
       'POST $uri operation=${AssistantApiMetadata.createAssistantTurnOperation} '
       'conversationId=$conversationId text="${_assistantDebugSnippet(text)}"',
     );
-    final response = await _client.post(
+    final response = await _httpClient.post(
       uri,
       headers: <String, String>{
         ..._headersForPersonalAssistantDialog(
@@ -1323,7 +1326,7 @@ class RemoteAssistantRepository implements AssistantRepository {
   Future<AssistantTurnEnvelopeWire> getAssistantTurn({
     required String turnId,
   }) async {
-    final response = await _client.get(
+    final response = await _httpClient.get(
       _assistantUri(AssistantApiMetadata.getAssistantTurnPath(turnId: turnId)),
       headers: _headersForPersonalAssistantDialog(
         operationId: AssistantApiMetadata.getAssistantTurnOperation,
@@ -1357,7 +1360,7 @@ class RemoteAssistantRepository implements AssistantRepository {
         'Content-Type': 'application/json',
       })
       ..body = '{}';
-    final response = await _client.send(request);
+    final response = await _httpClient.send(request);
     _debugAssistantRepository(
       'stream response status=${response.statusCode} turnId=$turnId',
     );

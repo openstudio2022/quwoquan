@@ -172,6 +172,16 @@ func parseSemver(raw string) [3]int {
 }
 
 func buildRedisRouter(cfg config) *rtredis.Router {
+	generalScene := rtredis.SceneConfig{
+		Mode:         fallbackMode(cfg.Redis.General.Mode, cfg.Redis.General.Addr, cfg.Redis.General.Addrs),
+		Addr:         cfg.Redis.General.Addr,
+		Addrs:        cfg.Redis.General.Addrs,
+		Password:     cfg.Redis.General.Password,
+		DB:           cfg.Redis.General.DB,
+		TLS:          cfg.Redis.General.TLS,
+		PoolSize:     cfg.Redis.General.Pool.Size,
+		MinIdleConns: cfg.Redis.General.Pool.MinIdle,
+	}
 	return rtredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"rec": {
@@ -184,23 +194,11 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 				PoolSize:     cfg.Redis.Rec.Pool.Size,
 				MinIdleConns: cfg.Redis.Rec.Pool.MinIdle,
 			},
-			"general": {
-				Mode:         fallbackMode(cfg.Redis.General.Mode, cfg.Redis.General.Addr, cfg.Redis.General.Addrs),
-				Addr:         cfg.Redis.General.Addr,
-				Addrs:        cfg.Redis.General.Addrs,
-				Password:     cfg.Redis.General.Password,
-				DB:           cfg.Redis.General.DB,
-				TLS:          cfg.Redis.General.TLS,
-				PoolSize:     cfg.Redis.General.Pool.Size,
-				MinIdleConns: cfg.Redis.General.Pool.MinIdle,
-			},
+			"general":  generalScene,
+			"realtime": generalScene,
 		},
-		PrefixRoutes: []rtredis.PrefixRoute{
-			{Prefix: "rec:", Scene: "rec"},
-			{Prefix: "cache:", Scene: "general"},
-			{Prefix: "ops:event:", Scene: "general"},
-		},
-		DefaultScene: "general",
+		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
+		DefaultScene: rtredis.GeneratedDefaultScene,
 	})
 }
 

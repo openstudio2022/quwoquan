@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
@@ -25,8 +25,8 @@ class CallSettingsDto {
     return CallSettingsDto(
       defaultIncomingCallRingtoneId:
           (w.defaultIncomingCallRingtoneId?.trim().isEmpty ?? true)
-              ? null
-              : w.defaultIncomingCallRingtoneId,
+          ? null
+          : w.defaultIncomingCallRingtoneId,
       allowCallerRingtoneOverride: w.allowCallerRingtoneOverride,
       enableCallVibration: w.enableCallVibration,
       enableGroupCallRing: w.enableGroupCallRing,
@@ -141,11 +141,11 @@ class MockCallSettingsRepository implements CallSettingsRepository {
 }
 
 class RemoteCallSettingsRepository implements CallSettingsRepository {
-  RemoteCallSettingsRepository({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteCallSettingsRepository({CloudHttpClient? httpClient, String? baseUrl})
+    : _httpClient = httpClient ?? CloudHttpClient(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
-  final http.Client _client;
+  final CloudHttpClient _httpClient;
   final String _baseUrl;
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
@@ -154,13 +154,13 @@ class RemoteCallSettingsRepository implements CallSettingsRepository {
       CloudRequestHeaders.forPage(UserRequestPageIds.getCallSettings);
 
   Map<String, String> get _patchHeaders => <String, String>{
-        ...CloudRequestHeaders.forPage(UserRequestPageIds.updateCallSettings),
-        'Content-Type': 'application/json',
-      };
+    ...CloudRequestHeaders.forPage(UserRequestPageIds.updateCallSettings),
+    'Content-Type': 'application/json',
+  };
 
   @override
   Future<CallSettingsDto> getCallSettings() async {
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       _uri(UserApiMetadata.getCallSettingsPath),
       headers: _getHeaders,
     );
@@ -181,7 +181,7 @@ class RemoteCallSettingsRepository implements CallSettingsRepository {
 
   @override
   Future<CallSettingsDto> updateCallSettings(CallSettingsDto settings) async {
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       _uri(UserApiMetadata.updateCallSettingsPath),
       headers: _patchHeaders,
       body: jsonEncode(settings.toMap()),

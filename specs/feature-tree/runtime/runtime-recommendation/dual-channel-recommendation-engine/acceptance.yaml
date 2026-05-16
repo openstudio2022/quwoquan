@@ -42,7 +42,7 @@ global_acceptance:
   - Engine 端到端测试
 tests:
   contract:
-  - quwoquan_service/runtime/recommendation/tests/engine_contract_test.go
+  - quwoquan_service/runtime/recommendation/engine_test.go
 execution:
   local_gate: make gate
   full_gate: make gate-full

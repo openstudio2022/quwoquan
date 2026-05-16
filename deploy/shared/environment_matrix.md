@@ -100,3 +100,26 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 - [branch_strategy.md](branch_strategy.md)
 - [deliver_to_production_runbook.md](deliver_to_production_runbook.md)
 - [gamma_validation_suites.json](gamma_validation_suites.json)
+
+## 6. 推荐模型服务环境变量
+
+| 变量 | 说明 | alpha/beta | gamma | prod-gray | prod |
+|------|------|------------|-------|-----------|------|
+| `REC_MODEL_SERVICE_URL` | rec-model-service 内网地址 | `http://rec-model-service:8000`（compose） | config.yaml 硬编码 | `${REC_MODEL_SERVICE_URL}` 注入 | `${REC_MODEL_SERVICE_URL}` 注入 |
+| `CONFIG_ROOT` | 版本化配置根目录 | 镜像内默认 `/app`；本地 compose 可不显式注入 | `/etc/seed-box-config`（initContainer 组装） | `/etc/seed-box-config` | `/etc/seed-box-config` |
+| `CONFIG_VERSION` | 配置版本 | 可空 | release-state / workflow input | workflow input | workflow input |
+| `IMAGE_VERSION` | 镜像版本 | 可空 | release-state / workflow input | workflow input | workflow input |
+| `MONGODB_DATABASE` | 训练 / registry 数据库 | `quwoquan_content` | `quwoquan_content` | `quwoquan_content_training`（训练） | `quwoquan_content_training`（训练） |
+| `MODEL_ARTIFACT_ENDPOINT` | S3/MinIO/OSS endpoint | 本地 MinIO 或留空 | CI Secret | CI Secret | CI Secret |
+| `MODEL_ARTIFACT_BUCKET` | 模型制品桶名 | `quwoquan-models` | `quwoquan-models` | `quwoquan-models` | `quwoquan-models` |
+| `MODEL_ARTIFACT_ACCESS_KEY` | OSS Access Key | 本地 MinIO key | CI Secret | Secret | Secret |
+| `MODEL_ARTIFACT_SECRET_KEY` | OSS Secret Key | 本地 MinIO secret | CI Secret | Secret | Secret |
+| `MODEL_CACHE_DIR` | 模型本地缓存目录 | `/app/cache` | `/app/cache` | `/app/cache` | `/app/cache` |
+| `MONGODB_URI` | 训练管线读取 events/samples | `mongodb://127.0.0.1:27017/?directConnection=true`（本地 dry-run / compose） | CI Secret `GAMMA_MONGODB_URI` | 生产 MongoDB | 生产 MongoDB |
+
+### 实验配置（experiments block in config.yaml）
+
+| 实验 | gamma | prod-gray | prod |
+|------|-------|-----------|------|
+| `rec_model_vs_rule` | rule:50 / model:50 | rule:90 / model:10 | rule:90 / model:10 |
+| `rec_scoring_weights` | control:60 / engagement_heavy:15 / freshness_heavy:15 / explore_heavy:10 | control:80 / 其余各 5~10 | control:80 / 其余各 5~10 |

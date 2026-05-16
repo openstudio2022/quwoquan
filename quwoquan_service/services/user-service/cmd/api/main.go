@@ -12,8 +12,15 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 	"gopkg.in/yaml.v3"
+
+	rthealth "quwoquan_service/runtime/health"
+	rtgov "quwoquan_service/runtime/governance"
+	rthttp "quwoquan_service/runtime/http"
+	rtmetrics "quwoquan_service/runtime/metrics"
+	rtmongo "quwoquan_service/runtime/mongodb"
+	robs "quwoquan_service/runtime/observability"
+	rtotel "quwoquan_service/runtime/otel"
 
 	rtredis "quwoquan_service/runtime/redis"
 	runtimesync "quwoquan_service/runtime/sync"
@@ -82,13 +89,30 @@ func main() {
 	}
 
 	ctx := context.Background()
+
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "user-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
 	addr := getenvOrDefault("USER_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
 		addr = ":18081"
 	}
 
 	// 1. PostgreSQL
-	pgPool, err := pgxpool.New(ctx, cfg.Postgres.DSN)
+	poolCfg, err := pgxpool.ParseConfig(cfg.Postgres.DSN)
+	if err != nil {
+		log.Fatalf("postgres parse config: %v", err)
+	}
+	if cfg.Postgres.MaxOpenConns > 0 {
+		poolCfg.MaxConns = int32(cfg.Postgres.MaxOpenConns)
+	}
+	if cfg.Postgres.MaxIdleConns > 0 {
+		poolCfg.MinConns = int32(cfg.Postgres.MaxIdleConns)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		poolCfg.MaxConnLifetime = time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute
+	}
+	pgPool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		log.Fatalf("postgres connect: %v", err)
 	}
@@ -103,23 +127,28 @@ func main() {
 	}
 
 	// 3. MongoDB
+	var mongoClient *mongo.Client
 	var mongoDB *mongo.Database
 	if cfg.MongoDB.URI != "" {
-		mongoClient, err := mongo.Connect(mongoopts.Client().ApplyURI(cfg.MongoDB.URI))
-		if err != nil {
-			log.Fatalf("mongodb connect: %v", err)
-		}
-		defer func() { _ = mongoClient.Disconnect(ctx) }()
+		mongoClient = rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "user-service")
 		dbName := cfg.MongoDB.Database
 		if dbName == "" {
 			dbName = "quwoquan"
 		}
 		mongoDB = mongoClient.Database(dbName)
 	}
+	defer func() {
+		if mongoClient != nil {
+			_ = mongoClient.Disconnect(ctx)
+		}
+	}()
 
 	// 4. Redis
 	redisRouter := buildRedisRouter(cfg)
 	defer redisRouter.Close()
+	if err := redisRouter.PingAll(ctx); err != nil {
+		log.Printf("WARN: user-service redis ping: %v", err)
+	}
 	redisClient := redisRouter.Scene("general")
 
 	shardDirectory, err := application.LoadDefaultShardDirectory()
@@ -190,6 +219,19 @@ func main() {
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
 	inviteService := application.NewInviteService(inviteStore, personaStore)
 
+	healthChecker := rthealth.NewChecker()
+	healthChecker.Register("postgres", func(hctx context.Context) error {
+		return pgPool.Ping(hctx)
+	})
+	healthChecker.Register("redis", func(hctx context.Context) error {
+		return redisRouter.PingAll(hctx)
+	})
+	if mongoDB != nil {
+		healthChecker.Register("mongodb", func(hctx context.Context) error {
+			return mongoClient.Ping(hctx, nil)
+		})
+	}
+
 	// 8. Handler
 	handler := httpadapter.NewUserHandler(
 		profileService, searchService, followService, blockService,
@@ -197,15 +239,41 @@ func main() {
 		authService, subAccountService, contactDiscoveryService, inviteService,
 	).Routes()
 
+	outerMux := http.NewServeMux()
+	outerMux.HandleFunc("/healthz", healthChecker.Handler())
+	outerMux.Handle("/metrics", rtmetrics.Handler())
+	outerMux.Handle("/", handler)
+
+	// 8.1 Observability middleware
+	instanceID, _ := os.Hostname()
+	ioLogger := robs.NewIOAccessLogger(os.Stdout)
+	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	if err != nil {
+		log.Fatalf("user-service process logger init failed: %v", err)
+	}
+	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	if err != nil {
+		log.Fatalf("user-service exception logger init failed: %v", err)
+	}
+	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
+		Service:           "user-service",
+		ServiceName:       "user-service",
+		ServiceInstanceID: instanceID,
+	}, ioLogger, processLogger, exceptionLogger)
+
 	// 9. Start
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observedHandler)
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           handler,
+		Handler:           rateLimited,
 		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 	log.Printf("user-service listening on %s (env=%s)", addr, appEnv)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("listen and serve: %v", err)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("user-service: %v", err)
 	}
 }
 
@@ -339,25 +407,33 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 	if rtMode == "" {
 		rtMode = mode
 	}
+	generalScene := rtredis.SceneConfig{
+		Mode:         mode,
+		Addr:         rc.Addr,
+		Addrs:        rc.Addrs,
+		Password:     rc.Password,
+		DB:           rc.DB,
+		TLS:          rc.TLS,
+		PoolSize:     rc.Pool.Size,
+		MinIdleConns: rc.Pool.MinIdle,
+	}
+	realtimeScene := rtredis.SceneConfig{
+		Mode:         rtMode,
+		Addr:         rt.Addr,
+		Addrs:        rt.Addrs,
+		Password:     rt.Password,
+		DB:           rt.DB,
+		TLS:          rt.TLS,
+		PoolSize:     rt.Pool.Size,
+		MinIdleConns: rt.Pool.MinIdle,
+	}
 	return rtredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"general": {
-				Mode:     mode,
-				Addr:     rc.Addr,
-				Addrs:    rc.Addrs,
-				Password: rc.Password,
-				DB:       rc.DB,
-				TLS:      rc.TLS,
-			},
-			"realtime": {
-				Mode:     rtMode,
-				Addr:     rt.Addr,
-				Addrs:    rt.Addrs,
-				Password: rt.Password,
-				DB:       rt.DB,
-				TLS:      rt.TLS,
-			},
+			"general":  generalScene,
+			"realtime": realtimeScene,
+			"rec":      generalScene,
 		},
-		DefaultScene: "general",
+		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
+		DefaultScene: rtredis.GeneratedDefaultScene,
 	})
 }

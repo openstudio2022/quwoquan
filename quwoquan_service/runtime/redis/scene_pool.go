@@ -49,6 +49,15 @@ func newStandaloneClient(cfg SceneConfig) (Client, error) {
 	if cfg.MinIdleConns > 0 {
 		opts.MinIdleConns = cfg.MinIdleConns
 	}
+	if cfg.DialTimeoutMs > 0 {
+		opts.DialTimeout = time.Duration(cfg.DialTimeoutMs) * time.Millisecond
+	}
+	if cfg.ReadTimeoutMs > 0 {
+		opts.ReadTimeout = time.Duration(cfg.ReadTimeoutMs) * time.Millisecond
+	}
+	if cfg.WriteTimeoutMs > 0 {
+		opts.WriteTimeout = time.Duration(cfg.WriteTimeoutMs) * time.Millisecond
+	}
 	if cfg.TLS {
 		opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
@@ -68,6 +77,15 @@ func newClusterClient(cfg SceneConfig) (Client, error) {
 	}
 	if cfg.MinIdleConns > 0 {
 		opts.MinIdleConns = cfg.MinIdleConns
+	}
+	if cfg.DialTimeoutMs > 0 {
+		opts.DialTimeout = time.Duration(cfg.DialTimeoutMs) * time.Millisecond
+	}
+	if cfg.ReadTimeoutMs > 0 {
+		opts.ReadTimeout = time.Duration(cfg.ReadTimeoutMs) * time.Millisecond
+	}
+	if cfg.WriteTimeoutMs > 0 {
+		opts.WriteTimeout = time.Duration(cfg.WriteTimeoutMs) * time.Millisecond
 	}
 	if cfg.TLS {
 		opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
