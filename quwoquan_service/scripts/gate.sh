@@ -811,5 +811,29 @@ fi
 "$PYTHON_TEST_RUNNER" -m pytest services/rec-model-service/tests -q \
   || fail "recommendation-service python tests failed"
 
+echo "[gate] running ML feature consistency checks"
+make verify-ml-features \
+  || fail "ML feature consistency checks failed"
+
+if [ -n "${REC_MODEL_URL:-}" ]; then
+  echo "[gate] running ML live e2e smoke"
+  make verify-ml-e2e-live \
+    || fail "ML live e2e smoke failed"
+else
+  echo "[gate] skipping ML live e2e smoke (REC_MODEL_URL not set)"
+fi
+
+if [ "${RUN_REC_GUARDRAIL:-0}" = "1" ]; then
+  echo "[gate] running ML guardrail dry-run"
+  make verify-ml-guardrail \
+    || fail "ML guardrail dry-run failed"
+fi
+
+if [ "${RUN_REC_DRIFT:-0}" = "1" ]; then
+  echo "[gate] running ML drift monitor"
+  make verify-ml-drift \
+    || fail "ML drift monitor failed"
+fi
+
 echo "[gate] OK"
 

@@ -1,0 +1,143 @@
+{
+  "dashboard": {
+    "title": "L2 — 业务旅程健康",
+    "uid": "qwq-l2-journey",
+    "tags": ["quwoquan", "l2", "journey"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "panels": [
+      {
+        "title": "Projector 吞吐量",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "sum(rate(projector_events_total[5m])) by (projector, status)",
+            "legendFormat": "{{ projector }} ({{ status }})"
+          }
+        ]
+      },
+      {
+        "title": "Projector 延迟 P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(projector_duration_seconds_bucket[5m])) by (le, projector))",
+            "legendFormat": "P95 {{ projector }}"
+          }
+        ]
+      },
+      {
+        "title": "EventStore 追加速率",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(eventstore_append_total[5m])) by (aggregate_type, status)",
+            "legendFormat": "{{ aggregate_type }} ({{ status }})"
+          }
+        ]
+      },
+      {
+        "title": "EventStore Publish 失败",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(eventstore_publish_failures_total[5m])) by (aggregate_type)",
+            "legendFormat": "{{ aggregate_type }}"
+          }
+        ]
+      },
+      {
+        "title": "Feed API QPS（按 HTTP status）",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "description": "HTTP 层请求速率。推荐「空结果」业务率由 recommendation.RecordPipelineResult 写入 EmptyFeedResults（当前未暴露为 Prometheus counter）；若后续导出 rec_pipeline_empty_feed_total 或等价指标，可另开面板展示 empty/total。",
+        "targets": [
+          {
+            "expr": "sum(rate(http_server_requests_total{route=~\".*v1/content/feed\"}[5m])) by (status)",
+            "legendFormat": "{{ status }}"
+          }
+        ]
+      },
+      {
+        "title": "用户行为采集量",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "sum(rate(rec_engagement_impression_total[5m])) by (content_type)",
+            "legendFormat": "曝光 {{ content_type }}"
+          },
+          {
+            "expr": "sum(rate(rec_engagement_click_total[5m])) by (content_type)",
+            "legendFormat": "点击 {{ content_type }}"
+          }
+        ]
+      },
+      {
+        "title": "MQ Throughput（publish / consume）",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+        "targets": [
+          {
+            "expr": "sum(rate(mq_publish_total[5m])) by (topic)",
+            "legendFormat": "publish {{ topic }}"
+          },
+          {
+            "expr": "sum(rate(mq_consume_total[5m])) by (topic, consumer_group)",
+            "legendFormat": "consume {{ topic }} / {{ consumer_group }}"
+          }
+        ]
+      },
+      {
+        "title": "MQ Consume Latency P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(mq_consume_duration_seconds_bucket[5m])) by (le, topic, consumer_group))",
+            "legendFormat": "P95 {{ topic }} / {{ consumer_group }}"
+          }
+        ]
+      },
+      {
+        "title": "MongoDB Command Latency P95",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(mongo_command_duration_seconds_bucket[5m])) by (le, command))",
+            "legendFormat": "P95 {{ command }}"
+          }
+        ]
+      },
+      {
+        "title": "MongoDB Slow Commands（command_total status=error）",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+        "description": "mongo_command_total{status=\"error\"} 表示 Mongo 驱动 CommandFailed 次数；并非慢查询阈值，仅作失败/异常命令率参考。",
+        "targets": [
+          {
+            "expr": "sum(rate(mongo_command_total{status=\"error\"}[5m])) by (command, database)",
+            "legendFormat": "{{ command }} @ {{ database }}"
+          }
+        ]
+      },
+      {
+        "title": "Business Span Duration P95（按 span_name）",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
+        "description": "依赖 Span Metrics / otel_span_duration_bucket 接入；若集群未启用 span-to-metrics，本面板可能无数据。",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(otel_span_duration_bucket{span_name=~\"content.*|chat.*|circle.*|user.*\"}[5m])) by (le, span_name))",
+            "legendFormat": "P95 {{ span_name }}"
+          }
+        ]
+      }
+    ]
+  }
+}
