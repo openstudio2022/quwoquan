@@ -4,9 +4,9 @@
 
 | 阶段命令 | 必过项（最小集） | 不通过处理 |
 |---|---|---|
-| `/prd` | ① 特性树新增 L4 节点并补齐四件套；② 产出 `deploy/shared/process_domain_mapping.yaml`；③ 规则文档补充三态约束 | 阻断 FF，先补文档与配置 |
+| `/prd` | ① 特性树新增 L4 节点并补齐四件套；② 产出 `deploy/shared/process_domain_mapping.yaml`；③ 规则文档补充四态约束 | 阻断 FF，先补文档与配置 |
 | `/design` | ① 增加映射门禁脚本；② 接入 `make verify` 与 `gate_repo.sh`；③ 修复校验失败项 | 阻断 apply，先补门禁 |
-| `/commit` / submit-with-gate | ① `verify_deployment_domain_mapping.sh` PASS；② integration/prod 拓扑一致；③ 无 domain 重复归属 | 禁止提交入库 |
+| `/commit` / submit-with-gate | ① `verify_deployment_domain_mapping.sh` PASS；② beta/gamma/prod 拓扑一致；③ 无 domain 重复归属 | 禁止提交入库 |
 
 ## 当前交付任务
 
@@ -33,7 +33,7 @@
 
 - [x] D10 将 `recommendation-service` Python 测试接入 `make gate-full` 必过
 - [x] D11 增加 Python 配置契约校验脚本并接入 `make verify`
-- [x] D12 补齐 split-dev / integration-prod 拓扑回归测试与证据
+- [x] D12 补齐 split-dev / beta-gamma-prod 拓扑回归测试与证据
 
 ### Wave 4 — 端到端契约一致性
 
@@ -45,11 +45,11 @@
 
 - [x] D18 设计 all-in-one Sidecar 生产增强基线（Deployment + Service + HPA + PDB）
 - [x] D19 落地 `deploy/service/seed-box/kustomize/base` 基础清单
-- [x] D20 落地统一 overlays：`alpha/beta/gamma/prod-gray/prod`
+- [x] D20 落地统一 overlays：`alpha/beta/gamma/prod`
 - [x] D21 通过 replacements 参数化 `CONFIG_VERSION/IMAGE_VERSION/replicas/HPA` 阈值
 - [x] D22 补充“后续拆分独立 Pod”的迁移说明（保持 API 与门禁兼容）
 
 ## 后续演进任务
 
 - [x] D16 增加“变更影响报告”：当映射变更时自动输出受影响 domain 与进程
-- [x] D17 在 CI 中增加环境级回归（split dev / composed integration）对比测试
+- [x] D17 在 CI 中增加环境级回归（split dev / composed beta/gamma/prod）对比测试

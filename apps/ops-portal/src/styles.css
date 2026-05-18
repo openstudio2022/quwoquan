@@ -97,6 +97,19 @@ select {
   gap: 6px;
 }
 
+.portal-subnav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.portal-subnav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 16px;
+}
+
 .portal-nav-group__title {
   padding: 0 12px;
   color: #6b7280;
@@ -123,6 +136,11 @@ select {
   background: #dbeafe;
   color: #1d4ed8;
   font-weight: 600;
+}
+
+.portal-nav-item--nested {
+  min-height: 40px;
+  padding-left: 16px;
 }
 
 .portal-nav-item__left {
@@ -395,6 +413,59 @@ select {
   margin-top: 8px;
   font-size: 18px;
   font-weight: 600;
+}
+
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.toolbar-field {
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.toolbar-field select {
+  min-height: 42px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0 12px;
+  color: #111827;
+}
+
+.tab-strip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tab-chip {
+  min-height: 36px;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-radius: 999px;
+  padding: 0 14px;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+}
+
+.tab-chip--active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.inline-note {
+  margin-top: 12px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .table {

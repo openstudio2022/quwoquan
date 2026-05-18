@@ -28,7 +28,7 @@
 | 云侧 beta | 不参与端侧 mock | 本地服务实例启动前 reset+seed 到自身数据库/缓存，并对 App 开放 HTTP API |
 | 端侧 gamma | RemoteRepository 访问 gamma gateway | 不允许读取 Dart mock |
 | 云侧 gamma | 不参与端侧 mock | 集成环境测试命名空间 reset+seed，并输出 seed report |
-| prod/prod-gray | 唯一生产 App 包使用真实数据 | 禁止 test fixture、seedRefs、reset seed、mock 数据源 |
+| prod | 唯一生产 App 包使用真实数据 | 禁止 test fixture、seedRefs、reset seed、mock 数据源 |
 
 ## 强制规则
 

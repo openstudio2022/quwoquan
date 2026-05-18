@@ -57,7 +57,7 @@
 | **房型** | 大床/双床/套房 | Room type | Room type | Bedrooms | — | 房型 | `Topic/住宿/房型`（12 种） |
 | **区位** | 商圈/地铁/景区 | Location | District | Map search | 位置 | 商圈 | `Topic/住宿/区位`（13 种） |
 | **认证** | 钻级/金牌 | Travelers' Choice | Genius | — | 蜂首 | 金枕头 | `Topic/住宿/认证评级`（12 项含米其林之钥） |
-| **预订** | 闪订/免费取消 | Free cancellation | 灵活预订 | Instant Book | — | — | `Topic/住宿/预订特征`（7 项） |
+| **预订** | 即时确认/免费取消 | Free cancellation | 灵活预订 | Instant Book | — | — | `Topic/住宿/预订特征`（7 项） |
 | **实体类型** | — | — | — | — | — | — | `Entity/地点/住宿`（10 种骨架） |
 
 ### 设计决策

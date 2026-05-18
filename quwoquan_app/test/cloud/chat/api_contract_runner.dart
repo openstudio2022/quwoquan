@@ -37,16 +37,23 @@ const _apiContractEnv = String.fromEnvironment(
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
+const _currentUserId = 'fixture_user_current';
+const _currentSubAccountId = 'fixture_user_current';
 
 // ─── Shared state ───────────────────────────────────────────────────────────
 
 bool _apiAvailable = false;
 late http.Client _client;
 
-Map<String, String> _authHeaders(String pageId) => {
-  ...CloudRequestHeaders.forPage(pageId),
-  if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
-};
+Map<String, String> _authHeaders(String pageId) =>
+    CloudRequestHeaders.withOwnerSubAccountContext(
+      <String, String>{
+        ...CloudRequestHeaders.forPage(pageId),
+        if (_testToken.isNotEmpty) 'Authorization': 'Bearer $_testToken',
+      },
+      ownerUserId: _currentUserId,
+      subAccountId: _currentSubAccountId,
+    );
 
 /// 创建一个测试会话，返回 conversationId。
 Future<String> _seedConversation() async {
@@ -93,6 +100,7 @@ Future<Map<String, dynamic>> _sendMessage(
           'type': 'text',
           'content': 'L3 contract test message',
           'clientMsgId': clientMsgId,
+          'senderSubAccountId': _currentSubAccountId,
         }),
       )
       .timeout(const Duration(seconds: 10));

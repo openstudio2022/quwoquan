@@ -36,14 +36,12 @@ spec:
                 /work/configs/recommendation-service/alpha \
                 /work/configs/recommendation-service/beta \
                 /work/configs/recommendation-service/gamma \
-                /work/configs/recommendation-service/prod-gray \
                 /work/configs/recommendation-service/prod \
                 /work/releases/config/recommendation-service
               cp /app/configs/default/config.yaml /work/configs/recommendation-service/default/config.yaml
               cp /app/configs/alpha/config.yaml /work/configs/recommendation-service/alpha/config.yaml
               cp /app/configs/beta/config.yaml /work/configs/recommendation-service/beta/config.yaml
               cp /app/configs/gamma/config.yaml /work/configs/recommendation-service/gamma/config.yaml
-              cp /app/configs/prod-gray/config.yaml /work/configs/recommendation-service/prod-gray/config.yaml
               cp /app/configs/prod/config.yaml /work/configs/recommendation-service/prod/config.yaml
               if [ -d /app/releases/config/recommendation-service ]; then
                 cp -R /app/releases/config/recommendation-service/. /work/releases/config/recommendation-service/

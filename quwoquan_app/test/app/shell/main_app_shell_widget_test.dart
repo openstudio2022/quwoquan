@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,10 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
-import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildShell(String location) {
@@ -67,23 +69,36 @@ void main() {
   });
 
   group('MainAppShell', () {
-    testWidgets('底部导航展示四栏，圈子保留在首页一级 Tab', (tester) async {
+    testWidgets('底部导航展示五栏，圈子成为独立一级入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('首页'), findsWidgets);
-      expect(find.text('私助'), findsWidgets);
-      expect(find.text('趣信'), findsWidgets);
-      expect(find.text('我的'), findsWidgets);
+      expect(find.text('圈子'), findsWidgets);
+      expect(find.text('消息'), findsWidgets);
+      expect(find.text('我'), findsWidgets);
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
           matching: find.text('圈子'),
         ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.byIcon(CupertinoIcons.plus),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text('创作'),
+        ),
         findsNothing,
       );
-      expect(find.text('圈子'), findsWidgets);
     });
 
     testWidgets('圈子路由渲染独立圈子页', (tester) async {
@@ -92,10 +107,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(MainAppShell), findsOneWidget);
-      expect(find.byType(CirclesPage), findsOneWidget);
+      expect(find.byType(CirclesHubPage), findsOneWidget);
     });
 
-    testWidgets('深色模式下底部导航仍展示四栏', (tester) async {
+    testWidgets('深色模式下底部导航仍展示五栏', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildDarkShell(AppRoutePaths.home));
       await tester.pump(const Duration(milliseconds: 300));
@@ -107,26 +122,57 @@ void main() {
           of: find.byType(BottomNavigationWidget),
           matching: find.text('圈子'),
         ),
-        findsNothing,
+        findsOneWidget,
       );
     });
 
-    testWidgets('assistant 路由也能在主壳中渲染', (tester) async {
+    testWidgets('底部中间加号打开统一动作面板', (tester) async {
       _suppressExpectedErrors();
-      await tester.pumpWidget(_buildShell(AppRoutePaths.assistant));
-      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpWidget(_buildShell(AppRoutePaths.home));
+      await tester.pumpAndSettle();
 
-      expect(find.byType(MainAppShell), findsOneWidget);
-      expect(find.byType(PersonalAssistantConversationPage), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.byIcon(CupertinoIcons.plus),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(UITextConstants.createActionWrite), findsOneWidget);
+      expect(find.text(UITextConstants.createActionGallery), findsOneWidget);
     });
 
-    testWidgets('助理主入口隐藏底部导航并直接渲染找私助', (tester) async {
+    testWidgets('底部导航上下留白对称且使用统一语义 token', (tester) async {
       _suppressExpectedErrors();
-      await tester.pumpWidget(_buildShell(AppRoutePaths.assistant));
-      await tester.pump(const Duration(milliseconds: 300));
+      tester.view.physicalSize = const Size(1179, 2556);
+      tester.view.devicePixelRatio = 3.0;
+      tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewPadding);
 
-      expect(find.byType(PersonalAssistantConversationPage), findsOneWidget);
-      expect(find.byType(BottomNavigationWidget), findsNothing);
+      await tester.pumpWidget(_buildShell(AppRoutePaths.home));
+      await tester.pumpAndSettle();
+
+      final navFinder = find.byType(BottomNavigationWidget);
+      final navElement = tester.element(navFinder);
+      final navSize = tester.getSize(navFinder);
+      final bottomInset =
+          tester.view.viewPadding.bottom / tester.view.devicePixelRatio;
+      final navHeight = AppSpacing.bottomNavBarHeight(navElement);
+      final expectedHeight = navHeight + bottomInset;
+      final homeIcon = find.descendant(
+        of: navFinder,
+        matching: find.byIcon(CupertinoIcons.house_fill),
+      );
+      final navTop = tester.getTopLeft(navFinder).dy;
+      final iconTop = tester.getTopLeft(homeIcon).dy;
+
+      expect(navSize.height, closeTo(expectedHeight, 0.5));
+      final iconToTop = iconTop - navTop;
+      expect(iconToTop, greaterThanOrEqualTo(0));
+      expect(iconToTop, lessThan(navHeight / 2));
     });
   });
 }

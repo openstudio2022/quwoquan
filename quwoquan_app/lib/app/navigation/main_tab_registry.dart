@@ -1,26 +1,28 @@
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 
-enum MainTabDestination { home, circles, assistant, chat, profile }
+enum MainTabDestination { home, circles, create, chat, profile }
 
 extension MainTabDestinationX on MainTabDestination {
   static const List<MainTabDestination> bottomNavOrdered = <MainTabDestination>[
     MainTabDestination.home,
-    MainTabDestination.assistant,
+    MainTabDestination.circles,
+    MainTabDestination.create,
     MainTabDestination.chat,
     MainTabDestination.profile,
   ];
 
   int get bottomNavIndex => switch (this) {
-    MainTabDestination.home || MainTabDestination.circles => 0,
-    MainTabDestination.assistant => 1,
-    MainTabDestination.chat => 2,
-    MainTabDestination.profile => 3,
+    MainTabDestination.home => 0,
+    MainTabDestination.circles => 1,
+    MainTabDestination.create => 2,
+    MainTabDestination.chat => 3,
+    MainTabDestination.profile => 4,
   };
 
   String get routePath => switch (this) {
     MainTabDestination.home => AppRoutePaths.home,
     MainTabDestination.circles => AppRoutePaths.circles,
-    MainTabDestination.assistant => AppRoutePaths.assistant,
+    MainTabDestination.create => AppRoutePaths.createEntry,
     MainTabDestination.chat => AppRoutePaths.chat,
     MainTabDestination.profile => AppRoutePaths.profile,
   };
@@ -28,7 +30,7 @@ extension MainTabDestinationX on MainTabDestination {
   String get routeName => switch (this) {
     MainTabDestination.home => 'home',
     MainTabDestination.circles => 'circles',
-    MainTabDestination.assistant => 'assistant',
+    MainTabDestination.create => 'create',
     MainTabDestination.chat => 'chat',
     MainTabDestination.profile => 'profile',
   };
@@ -41,8 +43,9 @@ MainTabDestination mainTabFromLocation(String location) {
   if (location == AppRoutePaths.circles) {
     return MainTabDestination.circles;
   }
-  if (location == AppRoutePaths.assistant) {
-    return MainTabDestination.assistant;
+  if (location == AppRoutePaths.createEntry ||
+      location.startsWith(AppRoutePaths.createPathTemplate)) {
+    return MainTabDestination.create;
   }
   if (location.startsWith(AppRoutePaths.chat)) {
     return MainTabDestination.chat;

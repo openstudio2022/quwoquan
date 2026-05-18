@@ -12,7 +12,7 @@ level_acceptance:
     - A1_contract_and_governance
     - A2_local_environment_readiness
     - A3_t3_t4_left_shift
-  notes: 本地 gamma 镜像预测试只左移提交前验证，不替代云侧 gamma/prod-gray/prod 发布真实性门禁。
+  notes: 本地 gamma 镜像预测试只左移提交前验证，不替代云侧 gamma/prod 发布真实性门禁。
   A1:
     criteria: spec/design/acceptance/plan 已落地，并明确不新增第六环境、不新增第四份 seed manifest。
     status: implemented
@@ -99,10 +99,10 @@ level_acceptance:
 execution:
   local_gate: make gate-local-gamma
   report: artifacts/local-gamma/report.json
-  cloud_gate: "`04. Pre-Release Gate` + `05. App Env Device Matrix` + prod-gray SLO + prod 观测"
+  cloud_gate: "`04. Pre-Release Gate` + `05. App Env Device Matrix` + 灰度阶段 SLO + prod 观测"
 journey_acceptance:
   - id: A1
-    statement: 本地 gamma mirror 规格冻结五环境语义与云端不可替代边界。
+    statement: 本地 gamma mirror 规格冻结四环境语义与云端不可替代边界。
     t_layers: [T1]
   - id: A3
     statement: 本地镜像栈可重复启动并承载 gamma RemoteRepository 流量。

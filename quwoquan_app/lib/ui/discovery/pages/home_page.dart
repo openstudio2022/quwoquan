@@ -13,9 +13,7 @@ import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
-import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
@@ -36,11 +34,7 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin {
   static const String _defaultTab = 'following';
-  static const List<String> _tabOrder = <String>[
-    'following',
-    'featured',
-    'circles',
-  ];
+  static const List<String> _tabOrder = <String>['following', 'featured'];
   late String _activeTab;
   late String _lastNonFeaturedTab;
 
@@ -162,6 +156,9 @@ class _HomePageState extends ConsumerState<HomePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final effectiveTopInset =
+        AppSpacing.primaryTopBarSafeTopInset(safeTop, context);
 
     // 沉浸式模式（精品页）直接返回全屏 Viewer
     if (_activeTab == 'featured') {
@@ -171,14 +168,23 @@ class _HomePageState extends ConsumerState<HomePage>
         // DefaultTextStyle/Material 回退样式（真机易出现黄色下划线等强调线）。
         child: Material(
           type: MaterialType.transparency,
-          child: WorksImmersiveViewer(
-            showWorksToolbar: true,
-            onUserTap: _openUserProfile,
-            onAssistantTap: _openAssistantHalfSheet,
-            onTapBack: _handleFeaturedBack,
-            onSwitchToMoment: () => _handleTabChange('following'),
-            onSwitchToFollowing: () => _handleTabChange('following'),
-            onSwitchToCircles: () => _handleTabChange('circles'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: effectiveTopInset),
+              Expanded(
+                child: WorksImmersiveViewer(
+                  showWorksToolbar: true,
+                  topChromeSafeInset: AppSpacing.zero,
+                  onUserTap: _openUserProfile,
+                  onAssistantTap: _openAssistantHalfSheet,
+                  onTapBack: _handleFeaturedBack,
+                  onSwitchToMoment: () => _handleTabChange('following'),
+                  onSwitchToFollowing: () => _handleTabChange('following'),
+                  onSwitchToCircles: () => context.go(AppRoutePaths.circles),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -196,58 +202,54 @@ class _HomePageState extends ConsumerState<HomePage>
       backgroundColor: bg,
       child: Material(
         type: MaterialType.transparency,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                height: AppSpacing.tabNavigationHeight,
-                decoration: BoxDecoration(
-                  color: bg,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: borderColor,
-                      width: AppSpacing.hairline,
-                    ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: effectiveTopInset),
+            Container(
+              height: AppSpacing.primaryTopBarHeight(context),
+              decoration: BoxDecoration(
+                color: bg,
+                border: Border(
+                  bottom: BorderSide(
+                    color: borderColor,
+                    width: AppSpacing.hairline,
                   ),
                 ),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Center(
-                        child: HomePrimaryTabStrip(
-                          activeTab: _activeTab,
-                          onTabChange: _handleTabChange,
-                          onHorizontalDragEnd: _handleTabSwipeDragEnd,
-                          isDark: isDark,
-                        ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Center(
+                      child: HomePrimaryTabStrip(
+                        activeTab: _activeTab,
+                        onTabChange: _handleTabChange,
+                        onHorizontalDragEnd: _handleTabSwipeDragEnd,
+                        isDark: isDark,
                       ),
                     ),
-                    Positioned(
-                      right: AppSpacing.topBarTrailingButtonInset(context),
-                      top: 0,
-                      bottom: 0,
-                      child: const Center(
-                        child: GlobalTopActions(
-                          initialSearchScope: GlobalSearchScope.content,
-                          quickActionPriority:
-                              CreateActionSheetPriority.createPrimary,
-                        ),
+                  ),
+                  Positioned(
+                    right: AppSpacing.topBarTrailingButtonInset(context),
+                    top: 0,
+                    bottom: 0,
+                    child: const Center(
+                      child: GlobalTopActions(
+                        initialSearchScope: GlobalSearchScope.content,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              Expanded(
-                child: TabSwipeSwitchRegion(
-                  enabled: true,
-                  onSwipe: _handleTabSwipe,
-                  child: _buildBody(isDark),
-                ),
+            ),
+            Expanded(
+              child: TabSwipeSwitchRegion(
+                enabled: true,
+                onSwipe: _handleTabSwipe,
+                child: _buildBody(isDark),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -267,8 +269,6 @@ class _HomePageState extends ConsumerState<HomePage>
       case 'featured':
         // This case is handled in the main build method now for full screen
         return const SizedBox.shrink();
-      case 'circles':
-        return CirclesHubPage(onPrimaryOverflowSwipe: _handleTabSwipe);
       default:
         return const SizedBox.shrink();
     }
@@ -315,15 +315,18 @@ class _HomePageState extends ConsumerState<HomePage>
       return;
     }
 
-    final navFeedRequestId =
-        ref.read(feedSessionProvider.notifier).newFeedRequestId();
-    ref.read(behaviorRepositoryProvider).reportSingle(
-      contentId: post.id,
-      action: BehaviorAction.click,
-      authorId: post.authorId,
-      referralSource: ReferralSource.organicFeed,
-      feedRequestId: navFeedRequestId,
-    );
+    final navFeedRequestId = ref
+        .read(feedSessionProvider.notifier)
+        .newFeedRequestId();
+    ref
+        .read(behaviorRepositoryProvider)
+        .reportSingle(
+          contentId: post.id,
+          action: BehaviorAction.click,
+          authorId: post.authorId,
+          referralSource: ReferralSource.organicFeed,
+          feedRequestId: navFeedRequestId,
+        );
 
     final rawPostsById = homeFollowingMediaViewerRaws(
       content: ref.read(contentRepositoryProvider),

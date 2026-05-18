@@ -15,22 +15,25 @@ import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
 
 void main() {
-  test('CloudResponseDecoder.mapListFirstPresent 优先使用 groups 而非 relatedGroups', () {
-    final obj = <String, dynamic>{
-      'groups': [
-        {'circleId': 'g', 'name': 'FromGroups'},
-      ],
-      'relatedGroups': [
-        {'circleId': 'r', 'name': 'FromRelated'},
-      ],
-    };
-    final rows = CloudResponseDecoder.mapListFirstPresent(
-      obj,
-      const <String>['groups', 'relatedGroups'],
-    );
-    expect(rows, hasLength(1));
-    expect(rows.single['circleId'], 'g');
-  });
+  test(
+    'CloudResponseDecoder.mapListFirstPresent 优先使用 groups 而非 relatedGroups',
+    () {
+      final obj = <String, dynamic>{
+        'groups': [
+          {'circleId': 'g', 'name': 'FromGroups'},
+        ],
+        'relatedGroups': [
+          {'circleId': 'r', 'name': 'FromRelated'},
+        ],
+      };
+      final rows = CloudResponseDecoder.mapListFirstPresent(obj, const <String>[
+        'groups',
+        'relatedGroups',
+      ]);
+      expect(rows, hasLength(1));
+      expect(rows.single['circleId'], 'g');
+    },
+  );
 
   group('MockHomepageRepository', () {
     late MockHomepageRepository repo;
@@ -89,6 +92,33 @@ void main() {
       final emptyGroups = await r.getHomepageRelatedGroups(created.id);
       expect(emptyGroups, isEmpty);
     });
+
+    test(
+      'contract seed includes campus and travel photography homepage templates',
+      () async {
+        final campus = await repo.searchHomepages(
+          query: '北京大学',
+          homepageType: 'university',
+          status: 'published',
+          limit: 10,
+        );
+        expect(
+          campus.map((h) => h.id),
+          contains('fixture_homepage_university_pku'),
+        );
+
+        final travelPhoto = await repo.searchHomepages(
+          query: '旅行摄影',
+          homepageType: 'travel_photo',
+          status: 'published',
+          limit: 10,
+        );
+        expect(
+          travelPhoto.map((h) => h.id),
+          contains('fixture_homepage_travel_photo_west_lake'),
+        );
+      },
+    );
   });
 
   group('HomepageMockData 强类型种子', () {
@@ -163,30 +193,33 @@ void main() {
   });
 
   group('RemoteHomepageRepository — related groups & detail JSON', () {
-    test('getHomepageRelatedGroups 解析 relatedGroups 键（与 groups 等价优先级）', () async {
-      final client = MockClient((request) async {
-        if (request.url.path.endsWith('/related-groups')) {
-          return http.Response(
-            json.encode({
-              'relatedGroups': [
-                {'circleId': 'c2', 'name': 'RG', 'memberCount': 1},
-              ],
-            }),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('not found', 404);
-      });
-      final repo = RemoteHomepageRepository(
-        httpClient: CloudHttpClient(client: client),
-        baseUrl: 'https://gw.test',
-      );
-      final groups = await repo.getHomepageRelatedGroups('h1');
-      expect(groups, hasLength(1));
-      expect(groups.single.circleId, 'c2');
-      expect(groups.single.name, 'RG');
-    });
+    test(
+      'getHomepageRelatedGroups 解析 relatedGroups 键（与 groups 等价优先级）',
+      () async {
+        final client = MockClient((request) async {
+          if (request.url.path.endsWith('/related-groups')) {
+            return http.Response(
+              json.encode({
+                'relatedGroups': [
+                  {'circleId': 'c2', 'name': 'RG', 'memberCount': 1},
+                ],
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          }
+          return http.Response('not found', 404);
+        });
+        final repo = RemoteHomepageRepository(
+          httpClient: CloudHttpClient(client: client),
+          baseUrl: 'https://gw.test',
+        );
+        final groups = await repo.getHomepageRelatedGroups('h1');
+        expect(groups, hasLength(1));
+        expect(groups.single.circleId, 'c2');
+        expect(groups.single.name, 'RG');
+      },
+    );
 
     test('getHomepageRelatedGroups 解析 groups 并跳过非 Map 元素', () async {
       final client = MockClient((request) async {
@@ -216,7 +249,9 @@ void main() {
     });
 
     test('getHomepageRelatedGroups 缺省或空 groups 返回空列表', () async {
-      Future<http.Response> respondMissingGroups(http.BaseRequest request) async {
+      Future<http.Response> respondMissingGroups(
+        http.BaseRequest request,
+      ) async {
         if (request.url.path.endsWith('/related-groups')) {
           return http.Response(
             '{}',

@@ -172,7 +172,7 @@ v*-rc* tag push / main merge
 **触发**：
 
 - **方案 A**：pre-release-gate 最后一个 job（如 l4-ios）成功后，通过 `workflow_run` 或 `workflow_call` 触发 `deploy-prod-auto.yml`。
-- **方案 B**：在 pre-release-gate 内增加 `deploy-prod-gray-auto` job，`needs: [l3-api-contract, l4-android, l4-ios]`，`if: success()`；该 job 内用矩阵或顺序步进调用同一套「单步逻辑」。
+- **方案 B**：在 pre-release-gate 内增加用于生产灰度放量的自动化 job（例如挂上 `deploy-prod-auto` 的一段 `needs: [l3-api-contract, l4-android, l4-ios]`，`if: success()`）；该 job 内用矩阵或顺序步进调用同一套「单步逻辑」。
 
 **版本来源**：
 
@@ -221,7 +221,7 @@ v*-rc* tag push / main merge
 
 ## 5. 实施顺序建议
 
-1. **先上半自动**：新增 `deploy-prod-gray.yml`（workflow_dispatch），实现单步灰度 + 手填 SLO + 可选 prod apply；补齐 `PROD_KUBECONFIG` 与 prod 构建/apply 脚本；当前 step 为 50（初始）→ 100（全量）。
+1. **先上半自动**：新增手动触发的半自动生产灰度 workflow（`workflow_dispatch`），实现单步灰度 + 手填 SLO + 可选 prod apply；补齐 `PROD_KUBECONFIG` 与 prod 构建/apply 脚本；当前 step 为 50（初始）→ 100（全量）。
 2. **再上全自动**：新增 `deploy-prod-auto.yml` 或 pre-release-gate 内 deploy-prod 链：**初始灰度**（1 pod，可配置）全自动 deploy + SLO；**Carry-on 100%** 使用 Protected Environment approval 或 workflow_dispatch 续跑。
 3. **配置扩展**：引入 `deploy/shared/gray_rollout_stages.yaml`（或等效），声明 `stages: [{replicas, auto}]`；workflow 按配置计算 STEP、决定各阶段是否审批；副本增加时仅改配置即可增加滚动阶段。
 

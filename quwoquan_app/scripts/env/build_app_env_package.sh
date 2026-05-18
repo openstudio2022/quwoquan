@@ -12,9 +12,9 @@ if [[ -z "$env_name" ]]; then
   env_name="${ENV:-}"
 fi
 case "$env_name" in
-  alpha|beta|gamma|prod-gray|prod) ;;
+  alpha|beta|gamma|prod) ;;
   *)
-    echo "FAIL: --env must be one of alpha|beta|gamma|prod-gray|prod" >&2
+    echo "FAIL: --env must be one of alpha|beta|gamma|prod" >&2
     exit 2
     ;;
 esac
@@ -27,7 +27,7 @@ fi
 
 APP_RUNTIME_ENV="$env_name" bash agent_ops/deploy/shared/verify_cdn_domain_injection.sh
 
-python3 scripts/verify_app_seed_manifests.py >/dev/null
+python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py >/dev/null
 
 out_dir="artifacts/app-env-packages/${env_name}"
 rm -rf "$out_dir"
@@ -75,9 +75,9 @@ if runtime_env != env_name:
     raise SystemExit(f"runtime.appRuntimeEnv mismatch: {runtime_env} != {env_name}")
 if env_name == "alpha" and data_source != "mock":
     raise SystemExit("alpha package must use mock data source")
-if env_name in {"beta", "gamma", "prod-gray", "prod"} and data_source != "remote":
+if env_name in {"beta", "gamma", "prod"} and data_source != "remote":
     raise SystemExit(f"{env_name} package must use remote data source")
-if env_name in {"prod-gray", "prod"} and ("test_fixtures" in text or "seedRefs" in text or "requiresSeedReset" in text):
+if env_name in {"prod"} and ("test_fixtures" in text or "seedRefs" in text or "requiresSeedReset" in text):
     raise SystemExit(f"{env_name} app package config must not reference test fixtures or seed refs")
 for label, value in {
     "gatewayBaseUrl": gateway,
@@ -88,7 +88,7 @@ for label, value in {
 }.items():
     if not (value.startswith("http://") or value.startswith("https://")):
         raise SystemExit(f"{label} must include http/https scheme")
-if env_name in {"prod-gray", "prod"}:
+if env_name in {"prod"}:
     forbidden = (".example", ".test", "127.0.0.1", "10.0.2.2", "192.168.", "mock-cdn.example.com")
     joined = "\n".join([gateway, realtime, avatar_cdn, image_cdn, video_cdn, upload_base])
     if any(token in joined for token in forbidden):

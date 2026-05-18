@@ -1,0 +1,14 @@
+{
+  "status": "pass",
+  "reason": "v=v20260516_134224 AUC=0.6238 NDCG=0.7226",
+  "new_metrics": {
+    "auc": 0.6238,
+    "gauc": 0.5489,
+    "ndcg_20": 0.7226,
+    "logloss": 0.7155,
+    "train_size": 135,
+    "test_size": 29
+  },
+  "prod_metrics": {},
+  "evaluated_at": "2026-05-16T13:42:28.147638"
+}

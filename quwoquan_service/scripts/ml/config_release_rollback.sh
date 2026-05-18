@@ -3,11 +3,11 @@
 # Sets model bucket to 0% (all traffic to rule) for a given environment.
 #
 # Usage:
-#   bash scripts/ml/config_release_rollback.sh --env prod-gray
+#   bash scripts/ml/config_release_rollback.sh --env prod
 #   bash scripts/ml/config_release_rollback.sh --env gamma
 set -euo pipefail
 
-ENV="${ENV:-prod-gray}"
+ENV="${ENV:-prod}"
 CONFIG_ROOT="${CONFIG_ROOT:-services/content-service/configs}"
 
 while [[ $# -gt 0 ]]; do

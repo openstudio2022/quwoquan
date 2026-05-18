@@ -375,7 +375,7 @@ class _CenteredScrollableTabBarState
     final horizontalPadding = AppSpacing.feedContentHorizontal(context);
 
     return Container(
-      height: AppSpacing.tabNavigationHeight,
+      height: AppSpacing.primaryTopBarHeight(context),
       decoration: BoxDecoration(
         color: bg,
         border: isVideoImmersion
@@ -667,7 +667,9 @@ class _CenteredScrollableTabBarState
                         ? AppSpacing.primaryTabUnderlineHeight
                         : 0,
                     decoration: BoxDecoration(
-                      color: isExcluded ? AppColors.transparent : underlineColor,
+                      color: isExcluded
+                          ? AppColors.transparent
+                          : underlineColor,
                       borderRadius: BorderRadius.circular(
                         AppSpacing.primaryTabUnderlineHeight / 2,
                       ),

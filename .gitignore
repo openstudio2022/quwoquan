@@ -72,3 +72,9 @@ quwoquan_data/batch_plans/
 artifacts/local-gamma/
 artifacts/ecs-onebox/
 
+# Local control-plane and runtime caches
+.control-plane-state/
+quwoquan_service/.control-plane-state/
+quwoquan_service/.local_models/
+quwoquan_service/services/*/.runtime-cache/
+

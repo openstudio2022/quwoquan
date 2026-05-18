@@ -143,11 +143,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutePaths.assistant,
-            pageBuilder: (context, state) => NoTransitionPage(
-              key: state.pageKey,
-              child:
-                  const SizedBox.shrink(), // AssistantHomePage 在 MainAppShell 中渲染
-            ),
+            redirect: (context, state) => AppRoutePaths.assistantPersonal,
           ),
         ],
       ),
@@ -449,7 +445,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               : null;
           return CircleDetailPage(
             circleId: id,
-            referralSource: circleExtra?.referralSource ?? ReferralSource.organicFeed,
+            referralSource:
+                circleExtra?.referralSource ?? ReferralSource.organicFeed,
             onBack: () {
               if (context.canPop()) {
                 context.pop();
@@ -512,7 +509,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ReferralSource profileReferralSource = ReferralSource.authorProfile;
           if (state.extra is OtherProfilePageRouteExtra) {
             final profileExtra = state.extra! as OtherProfilePageRouteExtra;
-            profileReferralSource = profileExtra.referralSource ?? ReferralSource.authorProfile;
+            profileReferralSource =
+                profileExtra.referralSource ?? ReferralSource.authorProfile;
             extra = UserProfileRouteExtra(
               subAccountId: profileExtra.subAccountId,
               avatar: profileExtra.avatar,
@@ -524,8 +522,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           } else if (state.extra is Map) {
             final m = state.extra! as Map;
             extra = UserProfileRouteExtra(
-              subAccountId:
-                  (m['subAccountId'] ?? m['profileSubjectId'])?.toString(),
+              subAccountId: (m['subAccountId'] ?? m['profileSubjectId'])
+                  ?.toString(),
               avatar: m['avatar']?.toString(),
               displayName: m['displayName']?.toString(),
               backgroundImage: m['backgroundImage']?.toString(),
@@ -596,7 +594,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               if (context.canPop()) {
                 context.pop();
               } else {
-                context.go(AppRoutePaths.assistant);
+                context.go(AppRoutePaths.home);
               }
             },
           );
@@ -610,7 +608,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               if (context.canPop()) {
                 context.pop();
               } else {
-                context.go(AppRoutePaths.assistant);
+                context.go(AppRoutePaths.assistantPersonal);
               }
             },
           );
@@ -624,7 +622,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               if (context.canPop()) {
                 context.pop();
               } else {
-                context.go(AppRoutePaths.assistant);
+                context.go(AppRoutePaths.assistantPersonal);
               }
             },
           );

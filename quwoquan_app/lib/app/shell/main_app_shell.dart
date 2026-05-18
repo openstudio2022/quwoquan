@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,11 +9,11 @@ import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
-import 'package:quwoquan_app/ui/assistant/pages/personal_assistant_conversation_page.dart';
-import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_bottom_nav_tap_meta.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_page_browse_payload.g.dart';
@@ -20,7 +22,7 @@ import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 
 /// 主 App 壳
 ///
-/// 包含四个底部一级频道，圈子作为首页内一级 Tab 保留。
+/// 包含五个底部一级频道；小趣作为全局入口，不占底栏。
 /// 使用 IndexedStack 保持各频道状态，底部导航切换频道。
 class MainAppShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -131,8 +133,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
     final bottomNavHidden =
         ref.watch(bottomNavHiddenProvider).hidden ||
-        widget.currentLocation == AppRoutePaths.assistant ||
-        widget.currentLocation == AppRoutePaths.circles;
+        widget.currentLocation == AppRoutePaths.createEntry ||
+        widget.currentLocation.startsWith(AppRoutePaths.createPathTemplate);
 
     final statusBarStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -153,8 +155,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             IndexedStack(
               index: _currentIndex,
               children: [
-                _buildPrimarySurface(),
-                PersonalAssistantConversationPage(onBack: _handleAssistantBack),
+                HomePage(routeLocation: _currentLocation),
+                const CirclesHubPage(),
+                const SizedBox.shrink(),
                 const ChatPage(),
                 const MyProfilePage(),
               ],
@@ -185,6 +188,11 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         toIndex: index,
       ),
     );
+    if (nextTab == MainTabDestination.create) {
+      unawaited(GlobalQuickActionSheet.show(context));
+      return;
+    }
+
     setState(() {
       _currentIndex = index;
     });
@@ -195,19 +203,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(nextTab.routePath);
         break;
-      case MainTabDestination.assistant:
-        if (previousIndex != MainTabDestination.assistant.bottomNavIndex) {
-          final previousTab = mainTabFromLocation(_currentLocation);
-          ref
-              .read(lastMainTabBeforeAssistantProvider.notifier)
-              .set(
-                previousTab == MainTabDestination.assistant
-                    ? null
-                    : previousTab,
-              );
-        }
-        ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
-        context.go(nextTab.routePath);
+      case MainTabDestination.create:
         break;
       case MainTabDestination.chat:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
@@ -222,27 +218,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       case MainTabDestination.circles:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
-        context.go(AppRoutePaths.circles);
+        context.go(nextTab.routePath);
         break;
     }
-  }
-
-  void _handleAssistantBack() {
-    final lastTab = ref.read(lastMainTabBeforeAssistantProvider);
-    ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
-    ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
-    if (lastTab != null) {
-      context.go(lastTab.routePath);
-      return;
-    }
-    context.go(AppRoutePaths.home);
-  }
-
-  Widget _buildPrimarySurface() {
-    if (_currentLocation == AppRoutePaths.circles) {
-      return const CirclesPage();
-    }
-    return HomePage(routeLocation: _currentLocation);
   }
 
   Future<void> _logBrowseEvent({

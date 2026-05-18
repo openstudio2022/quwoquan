@@ -14,7 +14,7 @@
 
 - [ ] F1 定义低风险字段白名单来源与格式（metadata-first）
 - [ ] F2 新增 `scripts/verify_config_hot_reload_scope.sh`（门禁草案实现）
-- [ ] F3 增加热更新灰度回归样例（local/integration）
+- [ ] F3 增加热更新灰度回归样例（alpha/beta/gamma/prod）
 
 ### Wave 2 — C12 runtime/config 公共库
 

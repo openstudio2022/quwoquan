@@ -42,6 +42,47 @@ export const portalMenu = {
       ]
     },
     {
+      "menu_id": "platform-config-center",
+      "parent_menu_id": "platform-config",
+      "label": "配置中心",
+      "domain": "platform-ops",
+      "route_path": "/platform/config/layers",
+      "icon": "settings-2",
+      "order": 211,
+      "permission_scope": "ops.platform.config.read",
+      "object_types": [
+        "service_config",
+        "config_layer_value"
+      ]
+    },
+    {
+      "menu_id": "platform-config-packages",
+      "parent_menu_id": "platform-config",
+      "label": "配置包",
+      "domain": "platform-ops",
+      "route_path": "/platform/config/packages",
+      "icon": "package",
+      "order": 212,
+      "permission_scope": "ops.platform.config.read",
+      "object_types": [
+        "config_package"
+      ]
+    },
+    {
+      "menu_id": "platform-config-drift",
+      "parent_menu_id": "platform-config",
+      "label": "实例一致性",
+      "domain": "platform-ops",
+      "route_path": "/platform/config/drift",
+      "icon": "badge-check",
+      "order": 213,
+      "permission_scope": "ops.platform.config.read",
+      "object_types": [
+        "config_instance_report",
+        "runtime_instance"
+      ]
+    },
+    {
       "menu_id": "platform-service-catalog",
       "parent_menu_id": "platform-ops",
       "label": "服务目录",
@@ -108,6 +149,21 @@ export const portalMenu = {
         "environment_topology",
         "dependency_profile",
         "capacity_profile"
+      ]
+    },
+    {
+      "menu_id": "platform-topology-cluster",
+      "parent_menu_id": "platform-dependency",
+      "label": "集群与实例",
+      "domain": "platform-ops",
+      "route_path": "/platform/dependency/clusters",
+      "icon": "network",
+      "order": 251,
+      "permission_scope": "ops.platform.dependency.read",
+      "object_types": [
+        "runtime_cluster",
+        "runtime_service",
+        "runtime_instance"
       ]
     },
     {
@@ -208,13 +264,141 @@ export const portalMenu = {
       ]
     },
     {
+      "menu_id": "product-l1-l4",
+      "parent_menu_id": "product-ops",
+      "label": "四层指标",
+      "domain": "product-ops",
+      "route_path": "/product/l1-l4",
+      "icon": "chart-area",
+      "order": 34,
+      "permission_scope": "ops.product.dashboard.read",
+      "object_types": [
+        "dashboard",
+        "metric_registry"
+      ]
+    },
+    {
+      "menu_id": "product-l1-l4-overview",
+      "parent_menu_id": "product-l1-l4",
+      "label": "环境总览",
+      "domain": "product-ops",
+      "route_path": "/product/l1-l4/environment",
+      "icon": "chart-area",
+      "order": 341,
+      "permission_scope": "ops.product.dashboard.read",
+      "object_types": [
+        "l1l4_metric_snapshot"
+      ]
+    },
+    {
+      "menu_id": "product-l1-l4-drilldown",
+      "parent_menu_id": "product-l1-l4",
+      "label": "集群下钻",
+      "domain": "product-ops",
+      "route_path": "/product/l1-l4/cluster",
+      "icon": "chart-area",
+      "order": 342,
+      "permission_scope": "ops.product.dashboard.read",
+      "object_types": [
+        "l1l4_metric_snapshot",
+        "runtime_cluster"
+      ]
+    },
+    {
+      "menu_id": "product-l1-l4-service",
+      "parent_menu_id": "product-l1-l4",
+      "label": "服务下钻",
+      "domain": "product-ops",
+      "route_path": "/product/l1-l4/service",
+      "icon": "chart-area",
+      "order": 343,
+      "permission_scope": "ops.product.dashboard.read",
+      "object_types": [
+        "l1l4_metric_snapshot",
+        "runtime_cluster",
+        "runtime_service"
+      ]
+    },
+    {
+      "menu_id": "product-l1-l4-instance",
+      "parent_menu_id": "product-l1-l4",
+      "label": "实例下钻",
+      "domain": "product-ops",
+      "route_path": "/product/l1-l4/instance",
+      "icon": "chart-area",
+      "order": 344,
+      "permission_scope": "ops.product.dashboard.read",
+      "object_types": [
+        "l1l4_metric_snapshot",
+        "runtime_cluster",
+        "runtime_service",
+        "runtime_instance"
+      ]
+    },
+    {
+      "menu_id": "entity-homepages",
+      "parent_menu_id": "product-ops",
+      "label": "实体主页运营",
+      "domain": "product-ops",
+      "route_path": "/product/entity-homepages",
+      "icon": "building-2",
+      "order": 35,
+      "permission_scope": "ops.product.homepage.read",
+      "object_types": [
+        "entity_homepage",
+        "homepage_quality_case"
+      ]
+    },
+    {
+      "menu_id": "circles-ops",
+      "parent_menu_id": "product-ops",
+      "label": "圈子运营",
+      "domain": "product-ops",
+      "route_path": "/product/circles-ops",
+      "icon": "users-round",
+      "order": 36,
+      "permission_scope": "ops.product.circle.read",
+      "object_types": [
+        "circle",
+        "circle_scenario"
+      ]
+    },
+    {
+      "menu_id": "xiaoqu-comments",
+      "parent_menu_id": "product-ops",
+      "label": "小趣评论审核",
+      "domain": "product-ops",
+      "route_path": "/product/xiaoqu-comments",
+      "icon": "sparkles",
+      "order": 37,
+      "permission_scope": "ops.product.xiaoqu.read",
+      "object_types": [
+        "assistant_comment",
+        "correction_case"
+      ]
+    },
+    {
+      "menu_id": "campus-bootstrap",
+      "parent_menu_id": "product-ops",
+      "label": "校园冷启动",
+      "domain": "product-ops",
+      "route_path": "/product/campus-bootstrap",
+      "icon": "school",
+      "order": 38,
+      "permission_scope": "ops.product.bootstrap.read",
+      "object_types": [
+        "campus_homepage",
+        "bootstrap_seed"
+      ]
+    },
+    {
       "menu_id": "experiments",
       "parent_menu_id": "product-ops",
       "label": "实验与灰度",
       "domain": "product-ops",
       "route_path": "/product/experiments",
       "icon": "flask-conical",
-      "order": 34,
+      "order": 39,
       "permission_scope": "ops.experiment.read",
       "object_types": [
         "experiment"
@@ -227,7 +411,7 @@ export const portalMenu = {
       "domain": "product-ops",
       "route_path": "/product/segments",
       "icon": "users-round",
-      "order": 35,
+      "order": 40,
       "permission_scope": "ops.segment.read",
       "object_types": [
         "segment"

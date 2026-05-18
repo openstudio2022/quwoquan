@@ -1,0 +1,11 @@
+{
+  "status": "packaged",
+  "service": "platform-ops-service",
+  "env": "alpha",
+  "configLayout": "default+env",
+  "modulePackage": null,
+  "enabledModules": [],
+  "disabledModules": [],
+  "catalogVersion": 1,
+  "retentionPolicyVersion": 1
+}

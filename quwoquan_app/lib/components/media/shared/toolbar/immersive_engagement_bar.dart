@@ -67,6 +67,8 @@ class ImmersiveEngagementBar extends StatelessWidget {
   static const double _kFollowBtnWidth = AppSpacing.followButtonWidthCompact;
 
   /// 工具栏预留高度（含内边距），供宿主布局使用。
+  /// 基于语义 token：`vPad * 2 + navHeight + bottomInset`。
+  /// 108 ≈ 4*2 + 44 + 56（宽裕估算，保证字幕/进度条不被遮盖）。
   static const double preferredReservedHeight = 108;
   static const Duration _kTransitionDuration = Duration(milliseconds: 260);
 
@@ -419,10 +421,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
     final avatarImage = avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null;
     final showFollowLane = showFollowButton;
     final normalizedAuthor = _normalizeAuthorDisplay(displayName);
-    final topPadding = isSelfPost ? AppSpacing.xs : AppSpacing.intraGroupSm;
-    final bottomPadding = isSelfPost
-        ? bottomInset + AppSpacing.xs
-        : AppSpacing.containerMd + bottomInset;
+    final contentPad = AppSpacing.xs;
+    final topPadding = contentPad;
+    final bottomPadding = contentPad + bottomInset;
 
     return GestureDetector(
       onVerticalDragUpdate: (details) {

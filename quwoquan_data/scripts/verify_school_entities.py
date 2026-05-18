@@ -2,7 +2,7 @@
 
 检查项：
   E1 - 每个 seed catalog 行对应实体目录存在
-  E2 - 每目录含 _entity.json + page.md + manifest.json
+  E2 - 每目录含 _entity.json + page.md，且不得有 manifest.json
   E3 - _entity.json 含 geoTagRef（以 Topic/地理/行政区/ 开头）
   E4 - tagRefs 至少含 Entity/机构/学校 + 1 个学段标签
   E5 - 所有 tagRefs 在 publish/v1/tags 中可解析
@@ -48,10 +48,13 @@ def e2_three_files():
         if not d.is_dir():
             continue
         count += 1
-        for fname in ("_entity.json", "page.md", "manifest.json"):
+        for fname in ("_entity.json", "page.md"):
             if not (d / fname).exists():
                 errors.append(f"E2: {d.name}/ 缺少 {fname}")
                 missing += 1
+        if (d / "manifest.json").exists():
+            errors.append(f"E2: {d.name}/ 不应存在 manifest.json")
+            missing += 1
     print(f"  E2: {count} 个实体目录, {missing} 缺失文件")
     return count
 

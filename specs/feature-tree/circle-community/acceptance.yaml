@@ -23,7 +23,7 @@ level_acceptance:
   - path: quwoquan_app/lib/cloud/services/circle/circle_repository.dart
   - path: quwoquan_app/lib/core/providers/app_providers.dart
 - id: A3
-  description: '首页一级入口与全局搜索一级筛选统一显示为“群组”； 群组列表和搜索结果可同时承接兴趣型圈子与组织型主页， 并继续由统一领域标签体系驱动（至少 travel/local_life/health_wellness/tech/education
+  description: '底栏一级入口与全局搜索一级筛选统一显示为“圈子”； 圈子列表和搜索结果可同时承接兴趣型圈子与组织型主页， 并继续由统一领域标签体系驱动（至少 travel/local_life/health_wellness/tech/education
     5 个领域对齐）。
 
     '
@@ -74,7 +74,7 @@ level_acceptance:
   status: pending
   tests: []
 - id: A9
-  description: '首页“群组”推荐与搜索“群组”结果口径一致： 基于用户兴趣画像（领域标签权重） 推荐排序群组列表，结果可同时返回兴趣型圈子与组织型主页； 推荐结果与用户近
+  description: '圈子推荐与搜索“圈子”结果口径一致： 基于用户兴趣画像（领域标签权重） 推荐排序圈子列表，结果可同时返回兴趣型圈子与组织型主页； 推荐结果与用户近
     7 天活跃领域相关度 ≥ 60%（通过离线评测验证）， 推荐服务不可用时自动降级到按热度排序。
 
     '

@@ -264,7 +264,7 @@ func TestEngine_GetFeed_EngagementCountsAffectRanking(t *testing.T) {
 			},
 			{
 				ContentID:    "low",
-				ContentType:  "photo",
+				ContentType:  "video",
 				PublishedAt:  now,
 				LikeCount:    3,
 				CommentCount: 1,
@@ -1330,18 +1330,24 @@ func TestRerank_ColdStartGuarantee(t *testing.T) {
 
 	now := time.Now()
 	var candidates []ContentCandidate
+	contentTypes := []string{"photo", "video", "article"}
 	for i := 0; i < 30; i++ {
 		c := ContentCandidate{
-			ContentID:   fmt.Sprintf("c%d", i),
-			ContentType: "photo",
-			Tags:        []string{fmt.Sprintf("tag%d", i%3)},
-			PublishedAt: now.Add(-time.Duration(i*10) * time.Hour),
-			LikeCount:   int64(100 - i),
-			ViewCount:   int64(500 + i*50),
+			ContentID:    fmt.Sprintf("c%d", i),
+			ContentType:  contentTypes[i%len(contentTypes)],
+			Tags:         []string{fmt.Sprintf("tag%d", i%3)},
+			PublishedAt:  now.Add(-time.Duration(24+i) * time.Hour),
+			LikeCount:    int64(25 + i),
+			CommentCount: int64(5),
+			ShareCount:   int64(1),
+			ViewCount:    int64(500 + i*50),
 		}
 		if i < 5 {
 			c.PublishedAt = now.Add(-time.Duration(i) * time.Hour)
 			c.ViewCount = int64(10 + i*5)
+			c.LikeCount = int64(220 - i*10)
+			c.CommentCount = int64(80 - i*5)
+			c.ShareCount = int64(30 - i*2)
 		}
 		candidates = append(candidates, c)
 	}

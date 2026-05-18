@@ -3,7 +3,7 @@ version: 1
 # Deployment process -> domain ownership mapping by environment.
 # Rules:
 # 1) Within one environment, a domain can only belong to one process.
-# 2) beta, gamma, prod-gray 与 prod 映射须一致；integration 与 prod 的拓扑映射须一致（门禁）。
+# 2) beta, gamma 与 prod 映射须一致。
 # 3) External API routes remain domain-based and cannot be changed by deployment topology.
 #
 # Redis Scene 独立部署说明（详见 redis_keyspace.yaml scene_routing）：
@@ -13,7 +13,7 @@ version: 1
 #     dev       → 三个 scene 共用 1 个 standalone（或 in-memory）
 #     alpha/beta → 本地 standalone（或 in-memory）
 #     gamma      → rec cluster + general standalone + realtime cluster
-#     prod-gray/prod → 三个 scene 各自 cluster，独立扩缩容
+#     prod → 三个 scene 各自 cluster，独立扩缩容
 environments:
   dev:
     content-service:
@@ -44,26 +44,6 @@ environments:
       domains: [media]
     coturn:
       domains: [turn]
-
-  integration:
-    entity-service:
-      domains: [entity]
-    product-ops-service:
-      domains: [ops]
-    recommendation-service:
-      domains: [recommendation]
-    realtime-gateway:
-      domains: [realtime]
-    rtc-service:
-      domains: [rtc]
-    livekit-sfu:
-      domains: [media]
-    coturn:
-      domains: [turn]
-    assistant-service:
-      domains: [assistant]
-    seed-box:
-      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
 
   alpha:
     content-service:
@@ -116,26 +96,6 @@ environments:
       domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
 
   gamma:
-    entity-service:
-      domains: [entity]
-    product-ops-service:
-      domains: [ops]
-    recommendation-service:
-      domains: [recommendation]
-    realtime-gateway:
-      domains: [realtime]
-    rtc-service:
-      domains: [rtc]
-    livekit-sfu:
-      domains: [media]
-    coturn:
-      domains: [turn]
-    assistant-service:
-      domains: [assistant]
-    seed-box:
-      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
-
-  prod-gray:
     entity-service:
       domains: [entity]
     product-ops-service:

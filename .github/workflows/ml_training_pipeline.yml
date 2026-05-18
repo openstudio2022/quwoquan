@@ -247,7 +247,7 @@ PY
     env:
       MONGODB_URI: ${{ github.event.inputs.train_env == 'prod' && secrets.PROD_TRAINING_MONGODB_URI || secrets.GAMMA_MONGODB_URI }}
       DB: ${{ github.event.inputs.train_env == 'prod' && 'quwoquan_content_training' || 'quwoquan_content' }}
-      ML_GUARDRAIL_ENV: ${{ github.event.inputs.train_env == 'prod' && 'prod-gray' || 'gamma' }}
+      ML_GUARDRAIL_ENV: ${{ github.event.inputs.train_env == 'prod' && 'prod' || 'gamma' }}
       ML_GUARDRAIL_DRY_RUN: true
       ML_GUARDRAIL_WINDOW_HOURS: 4
       ML_DRIFT_BASELINE_DATE: ${{ github.event.inputs.baseline_date || '' }}

@@ -43,15 +43,14 @@ for svc_path in "$services_dir"/*; do
   alpha_file="$cfg_root/alpha/config.yaml"
   beta_file="$cfg_root/beta/config.yaml"
   gamma_file="$cfg_root/gamma/config.yaml"
-  prod_gray_file="$cfg_root/prod-gray/config.yaml"
   prod_file="$cfg_root/prod/config.yaml"
 
-  if [[ -f "$default_file" && -f "$alpha_file" && -f "$beta_file" && -f "$gamma_file" && -f "$prod_gray_file" && -f "$prod_file" ]]; then
-    echo "[verify] OK: $svc config layout complete (default/alpha/beta/gamma/prod-gray/prod)"
+  if [[ -f "$default_file" && -f "$alpha_file" && -f "$beta_file" && -f "$gamma_file" && -f "$prod_file" ]]; then
+    echo "[verify] OK: $svc config layout complete (default/alpha/beta/gamma/prod)"
     continue
   fi
 
-  echo "[verify] FAIL: $svc missing env-split config layout (default/alpha/beta/gamma/prod-gray/prod)" >&2
+  echo "[verify] FAIL: $svc missing env-split config layout (default/alpha/beta/gamma/prod)" >&2
   failures=$((failures + 1))
 done
 

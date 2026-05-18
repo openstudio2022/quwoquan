@@ -147,8 +147,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         limit: 10,
       );
       final others = members.where((m) => m.userId != currentUserId).toList();
-      final otherId =
-          others.isEmpty ? null : others.first.userId;
+      final otherId = others.isEmpty ? null : others.first.userId;
       if (mounted && otherId != null && otherId.isNotEmpty) {
         setState(() => _otherParticipantId = otherId);
         await _loadRelationshipCapability(otherId);
@@ -301,7 +300,9 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
   }
 
   Future<void> _submitChatInput(ChatInputSubmitPayload payload) async {
-    final notifier = ref.read(chatMessageProvider(widget.conversationId).notifier);
+    final notifier = ref.read(
+      chatMessageProvider(widget.conversationId).notifier,
+    );
     if (payload.attachments.isNotEmpty) {
       for (final item in payload.attachments) {
         final kind = item.type == ChatInputAttachmentType.image
@@ -587,7 +588,8 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
         .toList();
     final timelinePadding = EdgeInsets.symmetric(
       horizontal:
-          AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ??
+          AppSpacing.semantic[DesignSemanticConstants
+              .container]?[DesignSemanticConstants.sm] ??
           AppSpacing.containerSm,
       vertical: AppSpacing.md,
     );
@@ -606,130 +608,127 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
 
     final bodyContent = Column(
       children: [
-          if (widget.searchAnchorContext case final anchor?)
-            _SearchAnchorBanner(
-              sourceQuery: anchor.sourceQuery,
-              isDark: isDark,
-            ),
-          Expanded(
-            child: ConversationTimeline(
-              controller: _scrollController,
-              backgroundColor: chatListBg,
-              padding: timelinePadding,
-              itemCount: displayMessages.length,
-              itemBuilder: (context, index) {
-                final msg = displayMessages[index];
-                final prevTime = index > 0
-                    ? displayMessages[index - 1].timestampLabel
-                    : null;
-                final showTime = index == 0 || msg.timestampLabel != prevTime;
-                final timeStr = formatChatTime(msg.timestampLabel);
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showTime && timeStr.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          bottom:
-                              AppSpacing.semantic[DesignSemanticConstants.intraGroup]?[DesignSemanticConstants.sm] ??
-                              AppSpacing.intraGroupSm,
-                        ),
-                        child: Center(
-                          child: Text(
-                            timeStr,
-                            style: TextStyle(
-                              fontSize: AppTypography.sm,
-                              color: fgPrimary.withValues(alpha: 0.5),
-                            ),
+        if (widget.searchAnchorContext case final anchor?)
+          _SearchAnchorBanner(sourceQuery: anchor.sourceQuery, isDark: isDark),
+        Expanded(
+          child: ConversationTimeline(
+            controller: _scrollController,
+            backgroundColor: chatListBg,
+            padding: timelinePadding,
+            itemCount: displayMessages.length,
+            itemBuilder: (context, index) {
+              final msg = displayMessages[index];
+              final prevTime = index > 0
+                  ? displayMessages[index - 1].timestampLabel
+                  : null;
+              final showTime = index == 0 || msg.timestampLabel != prevTime;
+              final timeStr = formatChatTime(msg.timestampLabel);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showTime && timeStr.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom:
+                            AppSpacing.semantic[DesignSemanticConstants
+                                .intraGroup]?[DesignSemanticConstants.sm] ??
+                            AppSpacing.intraGroupSm,
+                      ),
+                      child: Center(
+                        child: Text(
+                          timeStr,
+                          style: TextStyle(
+                            fontSize: AppTypography.sm,
+                            color: fgPrimary.withValues(alpha: 0.5),
                           ),
                         ),
                       ),
-                    ChatMessageBubble(
-                      message: msg,
-                      isRight: msg.isSelf,
-                      bubbleColor: msg.isSelf
-                          ? AppColors.chatBubbleOutgoing
-                          : AppColors.chatBubbleIncoming,
-                      textColor: msg.isSelf ? AppColors.white : fgPrimary,
-                      isSelectionMode: _isSelectionMode,
-                      isSelected: _selectedIds.contains(msg.id),
-                      onLongPressStart: (details) => _onLongPressMessage(
-                        msg,
-                        details.globalPosition,
-                      ),
-                      onTap: _isSelectionMode
-                          ? () => _toggleSelect(msg.id)
-                          : null,
-                      receiptEnabled: false,
-                      memberCount: _memberCount,
-                      onAvatarTap: () {
-                        final senderId = msg.senderId;
-                        if (msg.isSelf) {
-                          final currentUser = ref.read(userDataProvider);
-                          final userId = currentUser?.username ?? currentUser?.id;
-                          if (userId != null && userId.isNotEmpty) {
-                            context.push(
-                              AppRoutePaths.userProfile(username: userId),
-                            );
-                          }
-                        } else if (senderId.isNotEmpty) {
+                    ),
+                  ChatMessageBubble(
+                    message: msg,
+                    isRight: msg.isSelf,
+                    bubbleColor: msg.isSelf
+                        ? AppColors.chatBubbleOutgoing
+                        : AppColors.chatBubbleIncoming,
+                    textColor: msg.isSelf ? AppColors.white : fgPrimary,
+                    isSelectionMode: _isSelectionMode,
+                    isSelected: _selectedIds.contains(msg.id),
+                    onLongPressStart: (details) =>
+                        _onLongPressMessage(msg, details.globalPosition),
+                    onTap: _isSelectionMode
+                        ? () => _toggleSelect(msg.id)
+                        : null,
+                    receiptEnabled: false,
+                    memberCount: _memberCount,
+                    onAvatarTap: () {
+                      final senderId = msg.senderId;
+                      if (msg.isSelf) {
+                        final currentUser = ref.read(userDataProvider);
+                        final userId = currentUser?.username ?? currentUser?.id;
+                        if (userId != null && userId.isNotEmpty) {
                           context.push(
-                            AppRoutePaths.userProfile(username: senderId),
-                            extra: UserProfileRouteExtra(
-                              subAccountId: senderId,
-                            ),
+                            AppRoutePaths.userProfile(username: userId),
                           );
                         }
-                      },
-                    ),
-                  ],
-                );
-              },
-            ),
+                      } else if (senderId.isNotEmpty) {
+                        context.push(
+                          AppRoutePaths.userProfile(username: senderId),
+                          extra: UserProfileRouteExtra(subAccountId: senderId),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              );
+            },
           ),
-          ColoredBox(
-            color: isDark ? bgColor : AppColors.chatToolbarBackground,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ??
-                      AppSpacing.containerSm,
-                  AppSpacing.sm,
-                  AppSpacing.semantic[DesignSemanticConstants.container]?[DesignSemanticConstants.sm] ??
-                      AppSpacing.containerSm,
-                  AppSpacing.sm,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!_isGroupChat &&
-                        _relationshipCapability?.isSameInterest != true &&
-                        _otherParticipantId != null)
-                      _buildSameInterestPromptBar(),
-                    CustomizableChatInputBar(
-                      controller: _inputController,
-                      focusNode: _inputFocusNode,
-                      maxTextLength: 5000,
-                      maxVisibleLines: 5,
-                      onPickImages: _pickChatImages,
-                      onCapturePhoto: _captureChatPhoto,
-                      onPickFiles: _pickChatFiles,
-                      onRequestMicPermission: _requestMicPermissionForChat,
-                      onStartRecord: _startVoiceRecordForChat,
-                      onStopRecord: _stopVoiceRecordForChat,
-                      onVoiceAsrTransform: _voiceAsrForChat,
-                      onSend: _submitChatInput,
-                      showEmojiButton: true,
-                      extraPanelItems: _buildCallPanelItems(),
-                    ),
-                  ],
-                ),
+        ),
+        ColoredBox(
+          color: isDark ? bgColor : AppColors.chatToolbarBackground,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.semantic[DesignSemanticConstants
+                        .container]?[DesignSemanticConstants.sm] ??
+                    AppSpacing.containerSm,
+                AppSpacing.sm,
+                AppSpacing.semantic[DesignSemanticConstants
+                        .container]?[DesignSemanticConstants.sm] ??
+                    AppSpacing.containerSm,
+                AppSpacing.sm,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!_isGroupChat &&
+                      _relationshipCapability?.isSameInterest != true &&
+                      _otherParticipantId != null)
+                    _buildSameInterestPromptBar(),
+                  CustomizableChatInputBar(
+                    controller: _inputController,
+                    focusNode: _inputFocusNode,
+                    maxTextLength: 5000,
+                    maxVisibleLines: 5,
+                    onPickImages: _pickChatImages,
+                    onCapturePhoto: _captureChatPhoto,
+                    onPickFiles: _pickChatFiles,
+                    onRequestMicPermission: _requestMicPermissionForChat,
+                    onStartRecord: _startVoiceRecordForChat,
+                    onStopRecord: _stopVoiceRecordForChat,
+                    onVoiceAsrTransform: _voiceAsrForChat,
+                    onSend: _submitChatInput,
+                    showEmojiButton: true,
+                    showXiaoquMentionButton: _isGroupChat,
+                    extraPanelItems: _buildCallPanelItems(),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
+      ],
     );
 
     return ConversationPageScaffold(
@@ -743,8 +742,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                 icon: _isSelectionMode
                     ? CupertinoIcons.xmark
                     : CupertinoIcons.back,
-                onPressed:
-                    _isSelectionMode ? _cancelSelection : widget.onBack,
+                onPressed: _isSelectionMode ? _cancelSelection : widget.onBack,
               ),
               middle: Text(
                 _isSelectionMode
@@ -757,9 +755,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                       padding: EdgeInsets.zero,
                       onPressed: () async {
                         final selectedMessages = displayMessages
-                            .where(
-                              (item) => _selectedIds.contains(item.id),
-                            )
+                            .where((item) => _selectedIds.contains(item.id))
                             .toList(growable: false);
                         await _shareMessages(selectedMessages);
                         _cancelSelection();
@@ -791,10 +787,7 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
 }
 
 class _SearchAnchorBanner extends StatelessWidget {
-  const _SearchAnchorBanner({
-    required this.sourceQuery,
-    required this.isDark,
-  });
+  const _SearchAnchorBanner({required this.sourceQuery, required this.isDark});
 
   final String? sourceQuery;
   final bool isDark;
@@ -816,7 +809,9 @@ class _SearchAnchorBanner extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.primaryColor.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-          border: Border.all(color: AppColors.primaryColor.withValues(alpha: 0.18)),
+          border: Border.all(
+            color: AppColors.primaryColor.withValues(alpha: 0.18),
+          ),
         ),
         child: Padding(
           padding: EdgeInsets.symmetric(

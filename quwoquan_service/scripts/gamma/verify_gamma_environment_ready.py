@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Tuple
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-ROUTING_SCRIPT = REPO_ROOT / "scripts" / "verify_gamma_public_gateway_routing.py"
+ROUTING_SCRIPT = REPO_ROOT / "quwoquan_service" / "scripts" / "gamma" / "verify_gamma_public_gateway_routing.py"
 
 
 def utc_now() -> str:

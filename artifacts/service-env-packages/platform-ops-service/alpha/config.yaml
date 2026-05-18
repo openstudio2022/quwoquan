@@ -1,0 +1,10 @@
+# alpha overrides (developer single-instance validation)
+service:
+  http:
+    addr: ":18087"
+
+redis:
+  rec:
+    mode: standalone
+    addr: "127.0.0.1:6379"
+    db: 0

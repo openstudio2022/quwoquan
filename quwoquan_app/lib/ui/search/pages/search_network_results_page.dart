@@ -98,39 +98,50 @@ class _SearchNetworkResultsPageState
       backgroundColor: backgroundColor,
       contentPadding: EdgeInsets.fromLTRB(
         AppSpacing.containerMd,
-        AppSpacing.containerXs,
+        AppSpacing.xs,
         AppSpacing.containerMd,
         AppSpacing.containerLg,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          Stack(
+            alignment: Alignment.centerLeft,
             children: [
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                onPressed: _handleClose,
-                child: Icon(
-                  CupertinoIcons.chevron_back,
-                  color: fgSecondary,
-                  size: AppSpacing.iconLarge,
+              AppSearchField(
+                key: const ValueKey<String>('search_network_field'),
+                controller: _controller,
+                focusNode: _focusNode,
+                placeholder: UITextConstants.globalSearchTitle,
+                onSubmitted: _handleSearchSubmitted,
+                onChanged: (value) {
+                  setState(() {
+                    _query = value.trim();
+                  });
+                  _scheduleRefresh();
+                },
+                backgroundColor: backgroundColor,
+                elevated: false,
+                padding: EdgeInsetsDirectional.only(
+                  start: AppSpacing.minInteractiveSize + AppSpacing.containerSm,
+                  end: AppSpacing.containerSm,
                 ),
               ),
-              SizedBox(width: AppSpacing.containerSm),
-              Expanded(
-                child: AppSearchField(
-                  key: const ValueKey<String>('search_network_field'),
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  placeholder: UITextConstants.globalSearchTitle,
-                  onSubmitted: _handleSearchSubmitted,
-                  onChanged: (value) {
-                    setState(() {
-                      _query = value.trim();
-                    });
-                    _scheduleRefresh();
-                  },
+              PositionedDirectional(
+                start: 0,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    onPressed: _handleClose,
+                    child: Icon(
+                      CupertinoIcons.chevron_back,
+                      color: fgSecondary,
+                      size: AppSpacing.iconLarge,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -717,7 +728,9 @@ class _SearchNetworkResultsPageState
       if (dto.isArticleLike) {
         context.push(
           AppRoutePaths.articleDetail(id: dto.id),
-          extra: const ArticleDetailPageRouteExtra(referralSource: ReferralSource.search),
+          extra: const ArticleDetailPageRouteExtra(
+            referralSource: ReferralSource.search,
+          ),
         );
         return;
       }
@@ -731,8 +744,9 @@ class _SearchNetworkResultsPageState
         postInteractionState: ref.read(postInteractionStateProvider),
       );
       primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
-      final navFeedRequestId =
-          ref.read(feedSessionProvider.notifier).newFeedRequestId();
+      final navFeedRequestId = ref
+          .read(feedSessionProvider.notifier)
+          .newFeedRequestId();
       final result = await context.push<Object?>(
         route,
         extra: MediaViewerExtra(
@@ -769,7 +783,9 @@ class _SearchNetworkResultsPageState
     }
     context.push(
       AppRoutePaths.homepageDetail(id: homepageId),
-      extra: const HomepageDetailPageRouteExtra(referralSource: ReferralSource.search),
+      extra: const HomepageDetailPageRouteExtra(
+        referralSource: ReferralSource.search,
+      ),
     );
   }
 
@@ -779,7 +795,9 @@ class _SearchNetworkResultsPageState
     }
     context.push(
       AppRoutePaths.circleDetail(id: group.circleId),
-      extra: const CircleDetailPageRouteExtra(referralSource: ReferralSource.search),
+      extra: const CircleDetailPageRouteExtra(
+        referralSource: ReferralSource.search,
+      ),
     );
   }
 

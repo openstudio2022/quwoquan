@@ -24,6 +24,9 @@ const (
 	FeedCircle    FeedType = "circle"
 	FeedFollow    FeedType = "follow"
 	FeedSimilar   FeedType = "similar"
+	FeedTopic     FeedType = "topic"
+	FeedHomepage  FeedType = "homepage"
+	FeedSearch    FeedType = "search"
 )
 
 const (
@@ -33,13 +36,17 @@ const (
 
 // GetFeedRequest defines input for feed generation.
 type GetFeedRequest struct {
-	UserID    string
-	SessionID string
-	FeedType  FeedType
-	Sort      string
-	CircleID  string
-	Cursor    string
-	Limit     int
+	UserID        string
+	SessionID     string
+	FeedType      FeedType
+	Sort          string
+	CircleID      string
+	TopicID       string
+	HomepageID    string
+	Surface       string
+	FeedRequestID string
+	Cursor        string
+	Limit         int
 }
 
 // FeedResponse holds the recommendation result.
@@ -88,12 +95,16 @@ type CandidateSource interface {
 }
 
 type RecallRequest struct {
-	FeedType FeedType
-	UserID   string
-	CircleID string
-	Tags     []string
-	Limit    int
-	Cursor   string
+	FeedType      FeedType
+	UserID        string
+	CircleID      string
+	TopicID       string
+	HomepageID    string
+	Surface       string
+	FeedRequestID string
+	Tags          []string
+	Limit         int
+	Cursor        string
 }
 
 // ScoringWeights controls the relative importance of each scoring dimension.
@@ -552,12 +563,16 @@ func encodeFeedCursor(state feedCursorState) string {
 func (e *Engine) parallelRecallInto(ctx context.Context, req GetFeedRequest, session *SessionState, out *[]ContentCandidate) {
 	interestTags := topNTags(session.TagWeights, 10)
 	recallReq := RecallRequest{
-		FeedType: req.FeedType,
-		UserID:   req.UserID,
-		CircleID: req.CircleID,
-		Tags:     interestTags,
-		Limit:    req.Limit * 3,
-		Cursor:   req.Cursor,
+		FeedType:      req.FeedType,
+		UserID:        req.UserID,
+		CircleID:      req.CircleID,
+		TopicID:       req.TopicID,
+		HomepageID:    req.HomepageID,
+		Surface:       req.Surface,
+		FeedRequestID: req.FeedRequestID,
+		Tags:          interestTags,
+		Limit:         req.Limit * 3,
+		Cursor:        req.Cursor,
 	}
 
 	recallCtx := ctx

@@ -14,7 +14,6 @@
    - `configs/alpha/config.yaml`
    - `configs/beta/config.yaml`
    - `configs/gamma/config.yaml`
-   - `configs/prod-gray/config.yaml`
    - `configs/prod/config.yaml`
 
 2. **加载顺序固定**
@@ -24,7 +23,7 @@
 
 3. **显式环境选择**
    - `APP_ENV` 必填（未设置可默认 `alpha`）
-   - `gamma`、`prod-gray`、`prod` 必须显式配置版本
+   - `gamma`、`prod` 必须显式配置版本
 
 4. **配置版本化**
    - 配置发布版本 `CONFIG_VERSION`
@@ -58,10 +57,10 @@
 ## 门禁设计（必须通过）
 
 1. **目录完备门禁**
-   - 校验每个服务必须包含 `default/alpha/beta/gamma/prod-gray/prod/config.yaml`
+   - 校验每个服务必须包含 `default/alpha/beta/gamma/prod/config.yaml`
 2. **环境变量契约门禁**
-   - 校验 `APP_ENV` 仅允许 `alpha|beta|gamma|prod-gray|prod`
-   - 校验 `gamma`、`prod-gray`、`prod` 清单必须显式声明 `APP_ENV` 与 `CONFIG_VERSION`
+   - 校验 `APP_ENV` 仅允许 `alpha|beta|gamma|prod`
+   - 校验 `gamma`、`prod` 清单必须显式声明 `APP_ENV` 与 `CONFIG_VERSION`
 3. **版本可用性门禁**
    - 校验 `CONFIG_VERSION` 在版本目录存在对应文件
 4. **兼容性门禁**
@@ -69,9 +68,9 @@
 5. **不可变门禁**
    - 已发布版本配置文件禁止覆盖，只允许新增版本
 6. **部署拓扑门禁**
-   - `deploy/shared/process_domain_mapping.yaml` 必须声明 `alpha/beta/gamma/prod-gray/prod` 五环境
+   - `deploy/shared/process_domain_mapping.yaml` 必须声明 `alpha/beta/gamma/prod` 四环境
    - 同一环境中 domain 不可重复归属到多个部署进程
-   - `beta`、`gamma`、`prod-gray`、`prod` 的进程-领域映射必须一致
+   - `beta`、`gamma`、`prod` 的进程-领域映射必须一致
 
 ## 与治理主线协同
 

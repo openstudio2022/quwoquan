@@ -15,6 +15,25 @@ export const productControlPlane = {
   },
   "object_types": [
     {
+      "object_kind": "dashboard",
+      "object_type": "l1l4_metric_snapshot",
+      "label": "四层指标快照",
+      "source_entity": "ProductMetricSnapshot",
+      "view_model": "ProductMetricSnapshot",
+      "risk_level": "medium",
+      "deployment_profile": "latency_sensitive",
+      "operations": [
+        {
+          "operation": "ListL1L4MetricSnapshots",
+          "method": "GET",
+          "path": "/v1/control-plane/product/metrics/l1l4",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        }
+      ]
+    },
+    {
       "object_kind": "workflow_case",
       "object_type": "moderation_case",
       "label": "治理案例",

@@ -11,7 +11,6 @@
    - `${CONFIG_ROOT}/configs/<service>/alpha/config.yaml`
    - `${CONFIG_ROOT}/configs/<service>/beta/config.yaml`
    - `${CONFIG_ROOT}/configs/<service>/gamma/config.yaml`
-   - `${CONFIG_ROOT}/configs/<service>/prod-gray/config.yaml`
    - `${CONFIG_ROOT}/configs/<service>/prod/config.yaml`
    - `${CONFIG_ROOT}/releases/config/<service>/<config_version>.yaml`
 
@@ -33,14 +32,14 @@
 
 ## 容器环境识别与参数契约
 
-- `APP_ENV`: `alpha|beta|gamma|prod-gray|prod`
+- `APP_ENV`: `alpha|beta|gamma|prod`
 - `SERVICE_NAME`: 服务名（如 `content-service`）
 - `CONFIG_VERSION`: 配置发布版本（如 `v2026.02.28.0`）
 - `IMAGE_VERSION`: 镜像版本（如 `1.8.0`）
 - `CONFIG_ROOT`: 配置挂载根目录（默认 `/etc/qwq-config`）
 
 云侧集成与生产要求：
-- `APP_ENV=gamma|prod-gray|prod` 必须显式设置
+- `APP_ENV=gamma|prod` 必须显式设置
 - `CONFIG_VERSION` 必须存在并可解析
 
 ## 门禁实现建议（脚本级）

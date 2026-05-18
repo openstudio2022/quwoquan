@@ -76,13 +76,12 @@ class HomePrimaryTabStrip extends StatelessWidget {
       UITextConstants.homeTabFeatured,
       reserveAccessorySlot: true,
     );
-    final circlesWidth = _slotWidth(context, UITextConstants.homeTabCircles);
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: onHorizontalDragEnd,
       child: SizedBox(
         key: stripKey,
-        height: AppSpacing.tabNavigationHeight,
+        height: AppSpacing.primaryTopBarHeight(context),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -109,17 +108,6 @@ class HomePrimaryTabStrip extends StatelessWidget {
               showIndicator: featuredIndicatorVisible,
               indicatorExpanded: featuredExpanded,
               onTap: () => _handleTabTap(featuredTabId),
-            ),
-            SizedBox(width: gap),
-            _HomePrimaryTabStripItem(
-              key: tabKey(circlesTabId),
-              tabId: circlesTabId,
-              label: UITextConstants.homeTabCircles,
-              selected: activeTab == circlesTabId,
-              slotWidth: circlesWidth,
-              isDark: isDark,
-              style: style,
-              onTap: () => _handleTabTap(circlesTabId),
             ),
           ],
         ),
@@ -171,8 +159,8 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
       ),
     };
     final unselectedColor = switch (style) {
-      HomePrimaryTabStripStyle.immersive => AppColors.worksBodyText.withValues(
-        alpha: 0.74,
+      HomePrimaryTabStripStyle.immersive => AppColors.worksTitle.withValues(
+        alpha: 0.72,
       ),
       HomePrimaryTabStripStyle.regular => AppColorsFunctional.getColor(
         isDark,

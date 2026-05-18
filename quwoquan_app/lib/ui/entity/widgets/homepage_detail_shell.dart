@@ -1811,6 +1811,10 @@ String _typeLabel(String type) {
       return '车型';
     case 'sight':
       return '景点';
+    case 'university':
+      return '大学';
+    case 'travel_photo':
+      return '旅行摄影';
     default:
       return '主页';
   }

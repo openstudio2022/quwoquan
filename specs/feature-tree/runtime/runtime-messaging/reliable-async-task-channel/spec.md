@@ -32,7 +32,7 @@
 - 合并策略、幂等键、payload 白名单、RuntimeFailure 上下文。
 - `RuntimeModule`、`ModuleCapability`、`DeploymentPackage`、`ProcessInstance` 的模块化部署契约。
 - task catalog、module catalog、package catalog、retention policy、rate limit policy 与权限边界。
-- alpha/beta/gamma/prod-gray/prod 的 onebox 与拆分部署实施路径。
+- alpha/beta/gamma/prod 的 onebox 与拆分部署实施路径。
 - 所有现有领域服务的 module/catalog/config 处置；`chat` 首批完整接入，`user` 与 `content` 用于证明公共能力。
 - `chat-service` 私有 group avatar scheduler/timer/local queue 到 reliable-task 的迁移与双链路关闭。
 - T1-T4 自动化验证与故障注入用例。
@@ -106,5 +106,5 @@
 - 生成 worker 用例时，必须覆盖 claim 后崩溃、结果写库失败、结果写库成功但 ACK 失败、重复执行幂等、旧 lease token 不得 ACK 新租约。
 - 生成合并用例时，必须覆盖 `pending` 合并、`processing` 不合并、`maxDelayUntil` 封顶。
 - 生成通知用例时，必须覆盖全部成功、部分失败、全部失败、recipient 级去重、notification lease timeout。
-- 生成模块化用例时，必须覆盖 alpha 单服务 all-in-one、beta seed-box、gamma 拆分包演练、prod-gray 灰度拆分、prod 默认 onebox。
+- 生成模块化用例时，必须覆盖 alpha 单服务 all-in-one、beta seed-box、gamma 拆分包演练、prod 内灰度拆分 worker package、prod 默认 onebox。
 - 生成治理用例时，必须覆盖 catalog 版本不兼容 fail-fast、权限越界阻断、retention policy 缺失、rate limit 生效、DLQ 人工恢复。

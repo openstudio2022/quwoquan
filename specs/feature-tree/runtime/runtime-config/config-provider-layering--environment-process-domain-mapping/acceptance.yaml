@@ -14,35 +14,35 @@ level_acceptance:
   - A3_service_governance
   - A7_contract_metadata_consistency
   - A8_test_automation
-  notes: 部署进程-领域映射三态约束与门禁。
+  notes: 部署进程-领域映射四态约束与门禁。
 global_acceptance:
   A1_functional:
     scenarios:
     - given: 存在 deploy/shared/process_domain_mapping.yaml
-      when: 声明 alpha/beta/gamma/prod-gray/prod 三个环境
+      when: 声明 alpha/beta/gamma/prod 四个环境
       then: 每个环境均可解析出 deploy process -> domains 映射
-    - given: 运行环境通过 APP_ENV=dev|integration|prod 选择拓扑
+    - given: 运行环境通过 APP_ENV=alpha|beta|gamma|prod 选择拓扑
       when: 服务启动读取环境映射
       then: 仅加载 APP_ENV 对应映射，不跨环境混用
     - given: 同一环境下同一 domain 被两个进程声明
       when: 执行 verify_deployment_domain_mapping.sh
       then: 门禁失败并输出冲突进程
-    - given: beta/gamma/prod-gray/prod 映射不一致
+    - given: beta/gamma/prod 映射不一致
       when: 执行 verify_deployment_domain_mapping.sh
       then: 门禁失败并阻断提交
-    - given: integration/prod 拓扑需要绑定配置发布版本
+    - given: beta/gamma/prod 拓扑需要绑定配置发布版本
       when: 服务以 CONFIG_VERSION 发布配置
       then: 拓扑一致性门禁与配置版本门禁可同时通过
     - given: recommendation domain
       when: 检查 process-domain 映射
       then: 仅允许 recommendation-service 独占 recommendation domain
     - given: Go 与 Python 部署拓扑
-      when: integration/prod 环境发布
+      when: beta/gamma/prod 环境发布
       then: seed-box 与 recommendation-service 以独立进程部署，不合并
     - given: all-in-one Sidecar 部署
       when: 使用 deploy/service/seed-box/kustomize/overlays/{env} 渲染
       then: 可得到 Go+Python 双容器同 Pod 的可部署清单
-    - given: 同一套 overlays 在 alpha/beta/gamma/prod-gray/prod 复用
+    - given: 同一套 overlays 在 alpha/beta/gamma/prod 复用
       when: 按环境注入参数
       then: CONFIG_VERSION/IMAGE_VERSION/replicas/HPA 阈值均可被参数化替换
   A2_experience:
@@ -61,7 +61,7 @@ global_acceptance:
   - 领域 API 仍按 service.yaml 对外暴露，不受进程组合影响
   A8_test_automation:
   - verify 脚本自动校验 domain 唯一归属
-  - verify 脚本自动校验 integration/prod 拓扑一致
+  - verify 脚本自动校验 beta/gamma/prod 拓扑一致
   - 脚本接入 make verify 与 gate_repo
   - recommendation-service Python 配置契约测试接入并通过
   - make gate-full 将 recommendation-service Python 测试设为必过项

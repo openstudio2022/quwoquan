@@ -27,7 +27,7 @@
 
 ## 多环境与波次（跨节点口径）
 
-**五类逻辑环境**（alpha / beta / gamma / prod-gray / prod）与 **B→C→(D→E)** 大波段、prod 内 **wave**，以 **[environment_matrix.md](../../../../../deploy/shared/environment_matrix.md)** 为总览，与 [ci_cd_end_to_end_design.md](../../../../../deploy/shared/ci_cd_end_to_end_design.md) 一致。
+**四类逻辑环境**（alpha / beta / gamma / prod）与 **B→C→(D→E)** 大波段、prod 内 **wave**，以 **[environment_matrix.md](../../../../../deploy/shared/environment_matrix.md)** 为总览，与 [ci_cd_end_to_end_design.md](../../../../../deploy/shared/ci_cd_end_to_end_design.md) 一致。
 
 ## 验收标准概要
 

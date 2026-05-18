@@ -172,7 +172,7 @@ level_acceptance:
       T4: optional
     tests: []
   A11:
-    criteria: "灰度到 prod 可执行： - deploy-prod-gray workflow 可触发 - Stage 1 (50% replicas)\
+    criteria: "灰度到 prod 可执行： - deploy-prod workflow 可触发 - Stage 1 (50% replicas)\
       \ 自动执行，SLO 门禁通过：\n  error_rate < 0.01, p95_ms < 300, redis_error_rate < 0.01\n\
       - Stage 2 (100% replicas) 需人工审批 - config-rollback 可回退到前一版本 - process_domain_mapping.yaml\
       \ 中 user 域 integration 与 prod 映射一致\n"

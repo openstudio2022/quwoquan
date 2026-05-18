@@ -52,4 +52,4 @@ gamma-upload.quwoquan-env.test
 - `T3`：真实 API、真实存储副作用、错误响应与 RemoteRepository。
 - `T4`：模拟器/真机 Patrol 核心旅程。
 
-本地通过不替代云侧 gamma、prod-gray、prod 的 K8s、Ingress/LB、Secret、云观测、SLO、回滚与真实分发验证。
+本地通过不替代云侧 gamma、prod 的 K8s、Ingress/LB、Secret、云观测、SLO、回滚与真实分发验证。

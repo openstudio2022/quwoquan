@@ -14,13 +14,13 @@
 
 - alpha：端侧 mock/fixture 读取 `notification_core`。
 - beta/gamma：本地 gateway fixture harness 提供 `/v1/app-messages` smoke。
-- prod/prod-gray：禁止 test fixture 与 seedRefs。
+- prod：禁止 test fixture 与 seedRefs。
 
 ## 后续补齐条件
 
 当新增 `notification-service` 后，必须补齐：
 
-- `services/notification-service/configs/default|alpha|beta|gamma|prod-gray|prod/config.yaml`
+- `services/notification-service/configs/default|alpha|beta|gamma|prod/config.yaml`
 - `services/notification-service/tests/contract_fixture_seed_test.go`
 - `services/notification-service/tests/contract_fixture_seed_contract_test.go`
 - `app_beta_seed_manifest.json` 的 `targetStore` 从 `notification-service:test_store` 对齐到真实测试存储

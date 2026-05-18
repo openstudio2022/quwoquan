@@ -3,10 +3,11 @@
 export const portalShell = {
   "portal_id": "ops-portal",
   "title": "趣我圈运营与平台门户",
-  "default_environment": "integration",
+  "default_environment": "beta",
   "supported_environments": [
-    "dev",
-    "integration",
+    "alpha",
+    "beta",
+    "gamma",
     "prod"
   ],
   "default_domain": "product-ops",

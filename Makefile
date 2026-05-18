@@ -40,6 +40,9 @@
 .PHONY: build-service-env
 .PHONY: test-app-alpha-seed
 .PHONY: test-app-beta-seed
+.PHONY: beta-up
+.PHONY: beta-down
+.PHONY: beta-status
 .PHONY: verify
 .PHONY: codegen
 .PHONY: codegen-app
@@ -158,6 +161,27 @@ test-app-alpha-seed:
 
 test-app-beta-seed:
 	@python3 quwoquan_app/scripts/env/run_app_alpha_beta_seed_matrix.py
+
+beta-up:
+	@DEVICE_ID="$(DEVICE_ID)" \
+	START_APP="$(START_APP)" \
+	AUTO_OPEN_OPS="$(AUTO_OPEN_OPS)" \
+	CDN_DOMAIN="$(CDN_DOMAIN)" \
+	SEED_VERIFY_MODE="$(SEED_VERIFY_MODE)" \
+	MEDIA_MODE="$(MEDIA_MODE)" \
+	LOCAL_PUBLIC_HOST="$(LOCAL_PUBLIC_HOST)" \
+	MEDIA_BASE_URL="$(MEDIA_BASE_URL)" \
+	GATEWAY_BASE_URL_OVERRIDE="$(GATEWAY_BASE_URL_OVERRIDE)" \
+	bash agent_ops/deploy/beta/start_beta_stack.sh up
+
+beta-down:
+	@bash agent_ops/deploy/beta/start_beta_stack.sh down
+
+beta-status:
+	@DEVICE_ID="$(DEVICE_ID)" \
+	START_APP="$(START_APP)" \
+	AUTO_OPEN_OPS="$(AUTO_OPEN_OPS)" \
+	bash agent_ops/deploy/beta/start_beta_stack.sh status
 
 # 页面横向质量：矩阵列合法 + 磁盘路径与矩阵一致 + P2 清单 ⊆（与 gate app 段同向子集）
 verify-app-page-horizontal-quality:

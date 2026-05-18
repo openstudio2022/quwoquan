@@ -36,7 +36,7 @@
 - **CI 层（回归态）**
   - workflow job: `config-evolution-regression`
   - 执行：
-    - local/integration/prod 加载一致性回归
+    - alpha/beta/gamma/prod 加载一致性回归
     - 热更新灰度场景回归（低风险字段）
     - 漂移检测样例回归（期望/实际差异）
 

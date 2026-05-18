@@ -74,8 +74,8 @@ class AppColors {
   static const Color overlayDark = Color(0xCC000000);
   static const Color overlayLight = Color(0x4D000000);
 
-  /// 媒体查看器等深色背景上的「已关注」按钮背景，与黑底明显区分
-  static const Color followingButtonOnDark = Color(0xFF4A4A4A);
+  /// 媒体查看器等深色背景上的「已关注」按钮背景，低对比度融入沉浸模式
+  static const Color followingButtonOnDark = Color(0xFF333333);
   static const Color iosSystemSurfaceDark = Color(0xFF2C2C2E);
   static const Color iosAccentLight = primaryColor;
   static const Color iosAccentDark = Color(0xFF0A84FF);

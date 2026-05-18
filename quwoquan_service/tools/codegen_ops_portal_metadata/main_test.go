@@ -15,8 +15,8 @@ func TestCodegenOpsPortalMetadataGeneratesExpectedFiles(t *testing.T) {
 version: 1
 portal_id: ops-portal
 title: 趣我圈运营与平台门户
-default_environment: integration
-supported_environments: [dev, integration, prod]
+default_environment: beta
+supported_environments: [alpha, beta, gamma, prod]
 default_domain: product-ops
 domains:
   - id: overview

@@ -41,28 +41,28 @@ type ApprovalDecision struct {
 }
 
 type AuditEvent struct {
-	AuditID      string         `json:"auditId"`
-	ObjectType   string         `json:"objectType"`
-	ObjectID     string         `json:"objectId"`
-	Action       string         `json:"action"`
-	DangerLevel  string         `json:"dangerLevel"`
-	Actor        string         `json:"actor"`
-	Environment  string         `json:"environment"`
-	RequestID    string         `json:"requestId"`
-	TraceID      string         `json:"traceId"`
-	WorkflowRef  string         `json:"workflowRef,omitempty"`
-	RollbackToken string        `json:"rollbackToken,omitempty"`
-	Before       map[string]any `json:"before,omitempty"`
-	After        map[string]any `json:"after,omitempty"`
-	Metadata     map[string]any `json:"metadata,omitempty"`
-	At           string         `json:"at"`
+	AuditID       string         `json:"auditId"`
+	ObjectType    string         `json:"objectType"`
+	ObjectID      string         `json:"objectId"`
+	Action        string         `json:"action"`
+	DangerLevel   string         `json:"dangerLevel"`
+	Actor         string         `json:"actor"`
+	Environment   string         `json:"environment"`
+	RequestID     string         `json:"requestId"`
+	TraceID       string         `json:"traceId"`
+	WorkflowRef   string         `json:"workflowRef,omitempty"`
+	RollbackToken string         `json:"rollbackToken,omitempty"`
+	Before        map[string]any `json:"before,omitempty"`
+	After         map[string]any `json:"after,omitempty"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
+	At            string         `json:"at"`
 }
 
 type FileState struct {
-	Documents map[string]map[string]Document   `json:"documents"`
-	Workflows map[string]WorkflowState         `json:"workflows"`
-	Approvals map[string][]ApprovalDecision    `json:"approvals"`
-	Audits    []AuditEvent                     `json:"audits"`
+	Documents map[string]map[string]Document `json:"documents"`
+	Workflows map[string]WorkflowState       `json:"workflows"`
+	Approvals map[string][]ApprovalDecision  `json:"approvals"`
+	Audits    []AuditEvent                   `json:"audits"`
 }
 
 type FileStore struct {
@@ -108,6 +108,28 @@ func (s *FileStore) PutDocument(namespace, id string, doc Document) error {
 		state.Documents[namespace] = map[string]Document{}
 	}
 	state.Documents[namespace][id] = cloneDocument(doc)
+	return s.writeLocked(state)
+}
+
+func (s *FileStore) DeleteDocument(namespace, id string) error {
+	if namespace == "" || id == "" {
+		return errors.New("namespace and id are required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, err := s.readLocked()
+	if err != nil {
+		return err
+	}
+	items := state.Documents[namespace]
+	if items == nil {
+		return nil
+	}
+	delete(items, id)
+	if len(items) == 0 {
+		delete(state.Documents, namespace)
+	}
 	return s.writeLocked(state)
 }
 

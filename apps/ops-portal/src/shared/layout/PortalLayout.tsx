@@ -4,6 +4,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { portalMenu } from '../../generated/control-plane/portalMenu.generated.js';
 import { portalShell } from '../../generated/control-plane/portalShell.generated.js';
 import { getPortalIcon } from '../navigation/icons.js';
+import { usePortalScope } from './PortalContext.js';
 
 function buildMenuGroups() {
   const roots = [...portalMenu.menus]
@@ -14,13 +15,21 @@ function buildMenuGroups() {
     root,
     children: portalMenu.menus
       .filter((item) => 'parent_menu_id' in item && item.parent_menu_id === root.menu_id)
-      .sort((a, b) => a.order - b.order),
+      .sort((a, b) => a.order - b.order)
+      .map((child) => ({
+        child,
+        grandchildren: portalMenu.menus
+          .filter((item) => 'parent_menu_id' in item && item.parent_menu_id === child.menu_id)
+          .sort((a, b) => a.order - b.order),
+      })),
   }));
 }
 
 const menuGroups = buildMenuGroups();
 
 export function PortalLayout() {
+  const { environment, setEnvironment } = usePortalScope();
+
   return (
     <div className="portal-root">
       <aside className="portal-sidebar">
@@ -53,22 +62,45 @@ export function PortalLayout() {
                 {children.length ? (
                   <>
                     <div className="portal-nav-group__title">{root.label}</div>
-                    {children.map((child) => {
+                    {children.map(({ child, grandchildren }) => {
                       const ChildIcon = getPortalIcon(child.icon);
                       return (
-                        <NavLink
-                          key={child.menu_id}
-                          to={child.route_path}
-                          className={({ isActive }) =>
-                            `portal-nav-item ${isActive ? 'portal-nav-item--active' : ''}`
-                          }
-                        >
-                          <span className="portal-nav-item__left">
-                            <ChildIcon size={18} />
-                            <span>{child.label}</span>
-                          </span>
-                          <span className="portal-nav-item__badge">{child.object_types.length}</span>
-                        </NavLink>
+                        <div key={child.menu_id} className="portal-subnav-group">
+                          <NavLink
+                            to={child.route_path}
+                            className={({ isActive }) =>
+                              `portal-nav-item ${isActive ? 'portal-nav-item--active' : ''}`
+                            }
+                          >
+                            <span className="portal-nav-item__left">
+                              <ChildIcon size={18} />
+                              <span>{child.label}</span>
+                            </span>
+                            <span className="portal-nav-item__badge">{child.object_types.length}</span>
+                          </NavLink>
+                          {grandchildren.length ? (
+                            <div className="portal-subnav-list">
+                              {grandchildren.map((grandchild) => {
+                                const GrandchildIcon = getPortalIcon(grandchild.icon);
+                                return (
+                                  <NavLink
+                                    key={grandchild.menu_id}
+                                    to={grandchild.route_path}
+                                    className={({ isActive }) =>
+                                      `portal-nav-item portal-nav-item--nested ${isActive ? 'portal-nav-item--active' : ''}`
+                                    }
+                                  >
+                                    <span className="portal-nav-item__left">
+                                      <GrandchildIcon size={16} />
+                                      <span>{grandchild.label}</span>
+                                    </span>
+                                    <span className="portal-nav-item__badge">{grandchild.object_types.length}</span>
+                                  </NavLink>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
                       );
                     })}
                   </>
@@ -84,7 +116,7 @@ export function PortalLayout() {
           <div className="portal-topbar__left">
             <div className="portal-pill">
               环境
-              <strong>{portalShell.default_environment}</strong>
+              <strong>{environment}</strong>
               <ChevronDown size={16} />
             </div>
             <div className="portal-pill">
@@ -97,7 +129,11 @@ export function PortalLayout() {
             </div>
           </div>
           <div className="portal-topbar__right">
-            <select className="portal-select" defaultValue={portalShell.default_environment}>
+            <select
+              className="portal-select"
+              value={environment}
+              onChange={(event) => setEnvironment(event.target.value)}
+            >
               {portalShell.supported_environments.map((environment) => (
                 <option key={environment} value={environment}>
                   {environment}

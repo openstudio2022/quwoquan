@@ -42,9 +42,16 @@ class BottomNavigationWidget extends ConsumerWidget {
         selectedIcon: CupertinoIcons.house_fill,
       ),
       _BottomDestination(
-        label: AppConceptConstants.assistantTabLabel,
-        icon: CupertinoIcons.sparkles,
-        selectedIcon: CupertinoIcons.sparkles,
+        label: AppConceptConstants.circles,
+        icon: CupertinoIcons.person_2,
+        selectedIcon: CupertinoIcons.person_2_fill,
+      ),
+      _BottomDestination(
+        label: '',
+        semanticLabel: AppConceptConstants.create,
+        icon: CupertinoIcons.plus,
+        selectedIcon: CupertinoIcons.plus,
+        isPrimaryAction: true,
       ),
       _BottomDestination(
         label: AppConceptConstants.chat,
@@ -58,6 +65,9 @@ class BottomNavigationWidget extends ConsumerWidget {
       ),
     ];
 
+    final sideInset = AppSpacing.bottomNavContentSideInset(context, bottomInset);
+    final vPad = AppSpacing.toolbarVerticalPadding(context);
+    final navHeight = AppSpacing.bottomNavBarHeight(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: navBackground,
@@ -65,21 +75,20 @@ class BottomNavigationWidget extends ConsumerWidget {
           top: BorderSide(color: borderColor, width: AppSpacing.hairline),
         ),
       ),
-      child: SizedBox(
-        height: AppSpacing.bottomNavHeight + bottomInset,
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: sideInset),
+        child: SizedBox(
+          height: navHeight + bottomInset,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: List<Widget>.generate(destinations.length, (index) {
-              final selected = (currentIndex < 0 ? 0 : currentIndex) == index;
+              final selected =
+                  (currentIndex < 0 ? 0 : currentIndex) == index;
               final destination = destinations[index];
               return Expanded(
                 child: CupertinoButton(
                   padding: EdgeInsets.zero,
-                  minimumSize: const Size.fromHeight(
-                    AppSpacing.bottomNavHeight,
-                  ),
+                  minimumSize: Size.zero,
                   onPressed: () {
                     if (selected) return;
                     HapticFeedback.selectionClick();
@@ -90,6 +99,7 @@ class BottomNavigationWidget extends ConsumerWidget {
                     selected: selected,
                     activeColor: activeColor,
                     inactiveColor: inactiveColor,
+                    contentHeight: navHeight + bottomInset,
                   ),
                 ),
               );
@@ -106,11 +116,15 @@ class _BottomDestination {
     required this.label,
     required this.icon,
     required this.selectedIcon,
+    this.semanticLabel,
+    this.isPrimaryAction = false,
   });
 
   final String label;
   final IconData icon;
   final IconData selectedIcon;
+  final String? semanticLabel;
+  final bool isPrimaryAction;
 }
 
 class _BottomNavItem extends StatelessWidget {
@@ -119,12 +133,14 @@ class _BottomNavItem extends StatelessWidget {
     required this.selected,
     required this.activeColor,
     required this.inactiveColor,
+    required this.contentHeight,
   });
 
   final _BottomDestination destination;
   final bool selected;
   final Color activeColor;
   final Color inactiveColor;
+  final double contentHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -139,26 +155,49 @@ class _BottomNavItem extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: destination.label,
+      label: destination.semanticLabel ?? destination.label,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            selected ? destination.selectedIcon : destination.icon,
-            size: AppSpacing.iconSmall + 6,
-            color: selected ? activeColor : inactiveColor,
-          ),
-          SizedBox(height: AppSpacing.oneHalf),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            style: labelStyle,
-            child: Text(
-              destination.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          if (destination.isPrimaryAction)
+            Container(
+              width: AppSpacing.primaryActionCircleSize,
+              height: AppSpacing.primaryActionCircleSize,
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryColor.withValues(alpha: 0.28),
+                    blurRadius: AppSpacing.sm,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(
+                destination.selectedIcon,
+                size: AppSpacing.iconSmall + 4,
+                color: AppColors.white,
+              ),
+            )
+          else ...[
+            Icon(
+              selected ? destination.selectedIcon : destination.icon,
+              size: AppSpacing.iconSmall + 6,
+              color: selected ? activeColor : inactiveColor,
             ),
-          ),
+            SizedBox(height: AppSpacing.oneHalf),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              style: labelStyle,
+              child: Text(
+                destination.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ],
       ),
     );

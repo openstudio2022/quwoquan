@@ -2,12 +2,11 @@
 
 ## 1. 目标
 
-在不改变领域 API 契约的前提下，统一管理五态部署拓扑：
+在不改变领域 API 契约的前提下，统一管理四态部署拓扑：
 - `alpha`：开发期单实例独立验证
 - `beta`：开发期本地端云集成验证
 - `gamma`：云侧类生产集成验证
-- `prod-gray`：生产灰度
-- `prod`：生产全量
+- `prod`：生产全量（**灰度、放量与回滚在 prod 发布策略下完成**）
 
 唯一配置文件：`deploy/shared/process_domain_mapping.yaml`
 
@@ -39,11 +38,6 @@ environments:
       domains: [recommendation]
     seed-box:
       domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
-  prod-gray:
-    recommendation-service:
-      domains: [recommendation]
-    seed-box:
-      domains: [content, integration, chat, user, circle, assistant, gateway, orchestrator]
   prod:
     recommendation-service:
       domains: [recommendation]
@@ -53,7 +47,7 @@ environments:
 
 强约束：
 - 同一环境下，一个 `domain` 只能出现一次
-- `beta`、`gamma`、`prod-gray`、`prod` 映射必须一致
+- `beta`、`gamma`、`prod` 映射必须一致
 - 对外接口仍按领域服务暴露（如 `/v1/content/*`），不受进程组合影响
 - onebox 只是 deployment package 组合，不是业务代码目录
 - package 中 module 的 domain 必须属于该 package/process 的 domains
@@ -103,7 +97,7 @@ alpha 默认允许单服务 all-in-one package，例如 `chat-service` 可以在
 
 ---
 
-## 4. beta / gamma / prod-gray / prod 运行（组合拓扑）
+## 4. beta / gamma / prod 运行（组合拓扑）
 
 1) 先验证映射（必须通过）：
 
@@ -118,10 +112,9 @@ APP_ENV=gamma SERVICE_NAME=seed-box CONFIG_ROOT=/etc/seed-box-config CONFIG_VERS
 APP_ENV=gamma SERVICE_NAME=recommendation-service CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <python-start-command>
 ```
 
-生产灰度与生产同理，仅 `APP_ENV=prod-gray|prod`：
+生产环境同理，使用 `APP_ENV=prod`（**灰度与全量由发布编排与配置版本区分**）：
 
 ```bash
-APP_ENV=prod-gray SERVICE_NAME=seed-box CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <start-command>
 APP_ENV=prod SERVICE_NAME=seed-box CONFIG_ROOT=/etc/seed-box-config CONFIG_VERSION=<version> IMAGE_VERSION=<image> <start-command>
 ```
 
@@ -151,7 +144,7 @@ make gate-full
 - `content.search_index_worker`
 - `notification.fanout_worker`
 
-`gamma/prod-gray/prod` 默认与 `beta` 的 module package mapping 一致。热点模块可在 `prod-gray` 灰度拆分为独立 package，但必须满足：
+`gamma/prod` 默认与 `beta` 的 module package mapping 一致。热点模块可在 `prod` 灰度拆分为独立 package，但必须满足：
 - 保持 `process_domain_mapping.yaml` domain 唯一归属
 - 通过 `env + domain + module + shardId` lease scope 与 onebox 安全竞争
 - 具备回滚到 seed-box onebox 的配置路径
@@ -160,7 +153,7 @@ make gate-full
 
 ## 4.1 local-gamma mirror（本地组合拓扑预测试）
 
-`local-gamma mirror` 用于提交前在本机验证组合拓扑，不改变本文件的五环境映射：
+`local-gamma mirror` 用于提交前在本机验证组合拓扑，不改变本文件的四环境映射：
 
 1. 运行时仍使用 `APP_ENV=gamma`，不得新增 `local-gamma` 环境名。
 2. 本地 Docker compose 的进程/domain 归属必须按 `gamma` 映射设计，不能引入本地独有 domain 绑定。
@@ -168,7 +161,7 @@ make gate-full
 4. App 以 `APP_RUNTIME_ENV=gamma`、`APP_DATA_SOURCE=remote` 连接本地 mirror endpoint，测试数据来自 `app_gamma_seed_manifest.json`。
 5. 每次提交前运行 `make gate-local-gamma`，报告写入 `artifacts/local-gamma/report.json`；缺少 DNS、TLS、设备或服务依赖时状态为 `GATE_BLOCK`。
 
-本地通过只证明提交前左移质量，不代表云侧 gamma、prod-gray 或 prod 的发布真实性已通过。
+本地通过只证明提交前左移质量，不代表云侧 gamma 或 prod 的发布真实性已通过。
 
 ---
 
@@ -205,7 +198,7 @@ kustomize build deploy/service/seed-box/kustomize/overlays/prod
 - 现态：`seed-box` + `recommendation-service` 同 Pod（Sidecar）
 - 拆分触发：某领域服务需要独立扩缩容/独立发布窗口/独立故障域
 - 拆分原则：
-  - 保持 `process_domain_mapping.yaml` 归属唯一与 beta/gamma/prod-gray/prod 一致性
+  - 保持 `process_domain_mapping.yaml` 归属唯一与 beta/gamma/prod 一致性
   - 保持领域 API 路径与契约不变
   - 复用同一参数模型（`CONFIG_VERSION/IMAGE_VERSION/replicas/HPA`）
   - 拆分 package 只移动 module，不移动领域事务事实源
@@ -233,8 +226,8 @@ chat-avatar-worker-package:
 - 失败：`domain 'x' appears in both ...`
   - 处理：在同一环境内仅保留一个归属进程
 
-- 失败：`beta, gamma, prod-gray and prod process-domain mapping must be identical`
-  - 处理：将 `gamma`、`prod-gray`、`prod` 调整为与 `beta` 完全一致
+- 失败：`beta, gamma and prod process-domain mapping must be identical`
+  - 处理：将 `gamma`、`prod` 调整为与 `beta` 完全一致
 
 - 失败：进程名不合规
   - 处理：使用 `*-service` 或 `seed-box`

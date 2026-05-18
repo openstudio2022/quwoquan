@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  fetchEffectiveConfig,
   fetchOnboardingDomains,
   fetchProductEventDrilldown,
   fetchProductEventSummary,
+  fetchProductL1L4Metrics,
   fetchProductProjectionSummary,
   fetchServiceCatalog,
 } from '../../../.test-dist/shared/api/controlPlane.js';
@@ -125,6 +127,38 @@ test('requests product event drilldown from configured base url', async () => {
 
   assert.equal(calls[0], 'http://product.test/v1/ops/events/drilldown?eventType=experience&limit=5');
   assert.equal(drilldown.items[0].eventId, 'evt-1');
+  restoreEnvAndFetch();
+});
+
+test('requests effective config from platform control plane', async () => {
+  process.env.VITE_PLATFORM_OPS_BASE_URL = 'http://platform.test';
+  const calls = stubFetch({
+    scope: { environment: 'beta', cluster: 'beta-control-a', service: 'product-ops-service' },
+    resolvedAt: '2026-05-17T00:00:00Z',
+    effectiveHash: 'hash-1',
+    desiredHash: 'hash-1',
+    values: [{ key: 'sys.gateway.rate_limit.per_user_rps', value: 50, scopeLevel: 'service', scopeId: 'product-ops-service', sourceLayer: 'service:product-ops-service' }],
+    source: 'control-plane',
+  });
+
+  const payload = await fetchEffectiveConfig({ env: 'beta', cluster: 'beta-control-a', service: 'product-ops-service' });
+
+  assert.equal(calls[0], 'http://platform.test/v1/control-plane/platform/configs/resolve?env=beta&cluster=beta-control-a&service=product-ops-service');
+  assert.equal(payload.effectiveHash, 'hash-1');
+  restoreEnvAndFetch();
+});
+
+test('requests l1l4 metrics from product control plane', async () => {
+  process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
+  const calls = stubFetch({
+    scope: { env: 'beta' },
+    items: [{ id: 'L1:beta', level: 'L1', environment: 'beta', label: '五栏主旅程完成率', metric: 'five_tab_journey_completion_rate', value: 82.4, unit: '%', status: 'success', trend: '+2.1%', description: 'ok' }],
+  });
+
+  const payload = await fetchProductL1L4Metrics({ env: 'beta' });
+
+  assert.equal(calls[0], 'http://product.test/v1/control-plane/product/metrics/l1l4?env=beta');
+  assert.equal(payload.items[0].level, 'L1');
   restoreEnvAndFetch();
 });
 

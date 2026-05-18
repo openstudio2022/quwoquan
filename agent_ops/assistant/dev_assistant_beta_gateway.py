@@ -215,7 +215,7 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _upstream_for_path(self, path: str) -> tuple[str, str, int] | None:
-        if path in {"/v1/chat/contacts", "/v1/chat/inbox"}:
+        if path in {"/v1/chat/contacts", "/v1/chat/inbox", "/v1/chat/conversations"}:
             return None
         if path.startswith("/v1/chat/conversations/") and (
             path.endswith("/messages") or path.endswith("/members")
@@ -297,6 +297,8 @@ class AssistantBetaGateway(BaseHTTPRequestHandler):
         if path == "/v1/chat/contacts":
             return {"items": chat_contacts.get("contacts", [])}
         if path == "/v1/chat/inbox":
+            return {"items": chat.get("conversations", [])}
+        if path == "/v1/chat/conversations":
             return {"items": chat.get("conversations", [])}
         if path.startswith("/v1/chat/conversations/") and path.endswith("/messages"):
             conversation_id = path.split("/")[-2]

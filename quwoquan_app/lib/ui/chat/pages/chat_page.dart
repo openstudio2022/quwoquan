@@ -21,7 +21,6 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
@@ -76,7 +75,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
   static const List<String> _messageSubTabs = [
     UITextConstants.contactsTabAll,
     UITextConstants.atMe,
+    UITextConstants.atXiaoqu,
     UITextConstants.unread,
+    UITextConstants.reminders,
     UITextConstants.secretMessage,
   ];
   static const List<String> _contactsSubTabs = [
@@ -149,6 +150,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final effectiveTopInset =
+        AppSpacing.primaryTopBarSafeTopInset(safeTop, context);
     final isDark = ref.watch(isDarkProvider);
     final bgColor = AppColorsFunctional.getColor(
       isDark,
@@ -169,39 +173,37 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
     return AppScaffold(
       backgroundColor: bgColor,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildMainTabs(context, bgColor, fgPrimary, fgSecondary),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              height: _hideSecondaryTab ? 0 : AppSpacing.subTabNavigationHeight,
-              clipBehavior: Clip.hardEdge,
-              decoration: const BoxDecoration(),
-              child: _buildSubTabs(context, borderColor),
-            ),
-            Expanded(
-              child: TabSwipeSwitchRegion(
-                onSwipe: _handleTabSwipe,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (n) {
-                    _onScroll();
-                    return false;
-                  },
-                  child: _buildActiveTabContent(
-                    context,
-                    fgPrimary,
-                    fgSecondary,
-                    borderColor,
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(height: effectiveTopInset),
+          _buildMainTabs(context, bgColor, fgPrimary, fgSecondary),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            height: _hideSecondaryTab ? 0 : AppSpacing.subTabNavigationHeight,
+            clipBehavior: Clip.hardEdge,
+            decoration: const BoxDecoration(),
+            child: _buildSubTabs(context, borderColor),
+          ),
+          Expanded(
+            child: TabSwipeSwitchRegion(
+              onSwipe: _handleTabSwipe,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (n) {
+                  _onScroll();
+                  return false;
+                },
+                child: _buildActiveTabContent(
+                  context,
+                  fgPrimary,
+                  fgSecondary,
+                  borderColor,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -245,7 +247,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
 
     return Container(
-      height: AppSpacing.tabNavigationHeight,
+      height: AppSpacing.primaryTopBarHeight(context),
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(
@@ -285,7 +287,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
             child: const Center(
               child: GlobalTopActions(
                 initialSearchScope: GlobalSearchScope.messages,
-                quickActionPriority: CreateActionSheetPriority.socialPrimary,
               ),
             ),
           ),
@@ -621,9 +622,15 @@ class _ChatPageState extends ConsumerState<ChatPage>
     if (subTab == UITextConstants.atMe) {
       title = UITextConstants.noMentionsMessages;
       subtitle = UITextConstants.noMentionsHint;
+    } else if (subTab == UITextConstants.atXiaoqu) {
+      title = UITextConstants.noXiaoquMessages;
+      subtitle = UITextConstants.noXiaoquHint;
     } else if (subTab == UITextConstants.unread) {
       title = UITextConstants.noUnreadMessages;
       subtitle = UITextConstants.noUnreadHint;
+    } else if (subTab == UITextConstants.reminders) {
+      title = UITextConstants.noReminderMessages;
+      subtitle = UITextConstants.noReminderHint;
     }
 
     return Center(
@@ -670,8 +677,30 @@ class _ChatPageState extends ConsumerState<ChatPage>
     if (sub == UITextConstants.atMe) {
       return list.where((item) => item.hasMention).toList(growable: false);
     }
+    if (sub == UITextConstants.atXiaoqu) {
+      return list
+          .where(
+            (item) =>
+                item.id == AppConceptConstants.assistantConversationId ||
+                item.title.contains(UITextConstants.assistantEntryXiaoqu) ||
+                item.subtitle.contains(UITextConstants.assistantEntryXiaoqu) ||
+                item.subtitle.contains(UITextConstants.atXiaoqu),
+          )
+          .toList(growable: false);
+    }
     if (sub == UITextConstants.unread) {
       return list.where((item) => item.hasUnread).toList(growable: false);
+    }
+    if (sub == UITextConstants.reminders) {
+      return list
+          .where(
+            (item) =>
+                item.title.contains(UITextConstants.reminders) ||
+                item.subtitle.contains('提醒') ||
+                item.subtitle.contains('更新') ||
+                item.subtitle.contains('摘要'),
+          )
+          .toList(growable: false);
     }
     return list;
   }

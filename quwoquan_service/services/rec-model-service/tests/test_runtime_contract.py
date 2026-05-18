@@ -36,7 +36,7 @@ runtime:
         tmp_path / "configs" / service / "gamma" / "config.yaml",
         """
 runtime:
-  model_profile: "integration"
+  model_profile: "gamma"
 """.strip(),
     )
     _write_yaml(
@@ -94,8 +94,7 @@ def test_bootstrap_fail_fast_when_version_file_missing(
     [
         ("alpha", "alpha", "alpha-local"),
         ("beta", "beta", "beta-local"),
-        ("gamma", "gamma", "integration"),
-        ("prod-gray", "prod-gray", "prod-gray-release"),
+        ("gamma", "gamma", "gamma"),
         ("prod", "prod", "prod"),
     ],
 )

@@ -80,14 +80,14 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       backgroundColor: backgroundColor,
       contentPadding: EdgeInsets.fromLTRB(
         AppSpacing.containerMd,
-        AppSpacing.containerXs,
+        AppSpacing.xs,
         AppSpacing.containerMd,
         AppSpacing.containerLg,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildSearchBar(state, fgSecondary),
+          _buildSearchBar(state, fgSecondary, backgroundColor),
           SizedBox(height: AppSpacing.containerSm),
           _buildSearchObjectSelector(
             state: state,
@@ -131,35 +131,61 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     );
   }
 
-  Widget _buildSearchBar(SearchSessionState state, Color fgSecondary) {
-    return Row(
+  Widget _buildSearchBar(
+    SearchSessionState state,
+    Color fgSecondary,
+    Color backgroundColor,
+  ) {
+    final trailingInset = state.isLoading
+        ? AppSpacing.minInteractiveSize + AppSpacing.intraGroupSm
+        : AppSpacing.containerSm;
+    return Stack(
+      alignment: Alignment.centerLeft,
       children: [
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
-          onPressed: _handleClose,
-          child: Icon(
-            CupertinoIcons.chevron_back,
-            color: fgSecondary,
-            size: AppSpacing.iconLarge,
+        AppSearchField(
+          key: const ValueKey<String>('global_search_field'),
+          controller: _controller,
+          focusNode: _focusNode,
+          autofocus: true,
+          placeholder: UITextConstants.globalSearchTitle,
+          onChanged: (value) => _coordinator.updateQuery(value),
+          onSubmitted: _handleSearchSubmitted,
+          backgroundColor: backgroundColor,
+          elevated: false,
+          padding: EdgeInsetsDirectional.only(
+            start: AppSpacing.minInteractiveSize + AppSpacing.containerSm,
+            end: trailingInset,
           ),
         ),
-        SizedBox(width: AppSpacing.containerSm),
-        Expanded(
-          child: AppSearchField(
-            key: const ValueKey<String>('global_search_field'),
-            controller: _controller,
-            focusNode: _focusNode,
-            autofocus: true,
-            placeholder: UITextConstants.globalSearchTitle,
-            onChanged: (value) => _coordinator.updateQuery(value),
-            onSubmitted: _handleSearchSubmitted,
+        PositionedDirectional(
+          start: 0,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: _handleClose,
+              child: Icon(
+                CupertinoIcons.chevron_back,
+                color: fgSecondary,
+                size: AppSpacing.iconLarge,
+              ),
+            ),
           ),
         ),
-        if (state.isLoading) ...[
-          SizedBox(width: AppSpacing.intraGroupSm),
-          const CupertinoActivityIndicator(radius: 8),
-        ],
+        if (state.isLoading)
+          PositionedDirectional(
+            end: 0,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: SizedBox(
+                width: AppSpacing.minInteractiveSize,
+                child: CupertinoActivityIndicator(radius: 8),
+              ),
+            ),
+          ),
       ],
     );
   }

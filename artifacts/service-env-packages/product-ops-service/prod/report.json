@@ -1,0 +1,15 @@
+{
+  "status": "packaged",
+  "service": "product-ops-service",
+  "env": "prod",
+  "configLayout": "default+env",
+  "modulePackage": "product-ops-service",
+  "enabledModules": [
+    "ops.api",
+    "ops.task_outbox_dispatcher",
+    "ops.audit_projection_worker"
+  ],
+  "disabledModules": [],
+  "catalogVersion": 1,
+  "retentionPolicyVersion": 1
+}

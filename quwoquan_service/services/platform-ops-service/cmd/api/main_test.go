@@ -136,3 +136,73 @@ func TestPlatformMutableEndpointsEmitAudit(t *testing.T) {
 		t.Fatalf("projection summary status=%d body=%s", projectionResp.Code, projectionResp.Body.String())
 	}
 }
+
+func TestPlatformConfigResolveAndInstanceReports(t *testing.T) {
+	server := newServerMux(newTestPlatformService(t))
+
+	resolveReq := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/control-plane/platform/configs/resolve?env=beta&cluster=beta-control-a&service=product-ops-service&instance=product-ops-service-beta-control-a-0",
+		nil,
+	)
+	resolveResp := httptest.NewRecorder()
+	server.ServeHTTP(resolveResp, resolveReq)
+	if resolveResp.Code != http.StatusOK {
+		t.Fatalf("resolve config status=%d body=%s", resolveResp.Code, resolveResp.Body.String())
+	}
+
+	var resolvePayload struct {
+		EffectiveHash string            `json:"effectiveHash"`
+		DesiredHash   string            `json:"desiredHash"`
+		Values        []map[string]any  `json:"values"`
+		Scope         map[string]string `json:"scope"`
+	}
+	if err := json.Unmarshal(resolveResp.Body.Bytes(), &resolvePayload); err != nil {
+		t.Fatalf("unmarshal resolve payload: %v", err)
+	}
+	if resolvePayload.EffectiveHash == "" {
+		t.Fatalf("expected effective hash, got %+v", resolvePayload)
+	}
+	if resolvePayload.DesiredHash == "" {
+		t.Fatalf("expected desired hash, got %+v", resolvePayload)
+	}
+	if len(resolvePayload.Values) == 0 {
+		t.Fatalf("expected resolved values")
+	}
+	if got := resolvePayload.Scope["Environment"]; got != "beta" {
+		t.Fatalf("expected environment beta, got %+v", resolvePayload.Scope)
+	}
+
+	reportReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/control-plane/platform/configs/instances/product-ops-service-beta-control-a-0:report",
+		bytes.NewBufferString(`{"environment":"beta","cluster":"beta-control-a","service":"product-ops-service","desiredHash":"hash-a","effectiveHash":"hash-b","source":"disk-fallback"}`),
+	)
+	reportReq.Header.Set("Content-Type", "application/json")
+	reportResp := httptest.NewRecorder()
+	server.ServeHTTP(reportResp, reportReq)
+	if reportResp.Code != http.StatusOK {
+		t.Fatalf("report config instance status=%d body=%s", reportResp.Code, reportResp.Body.String())
+	}
+
+	instancesReq := httptest.NewRequest(http.MethodGet, "/v1/control-plane/platform/configs/instances", nil)
+	instancesResp := httptest.NewRecorder()
+	server.ServeHTTP(instancesResp, instancesReq)
+	if instancesResp.Code != http.StatusOK {
+		t.Fatalf("list config instances status=%d body=%s", instancesResp.Code, instancesResp.Body.String())
+	}
+
+	var instancePayload struct {
+		Items   []map[string]any `json:"items"`
+		Summary map[string]any   `json:"summary"`
+	}
+	if err := json.Unmarshal(instancesResp.Body.Bytes(), &instancePayload); err != nil {
+		t.Fatalf("unmarshal config instance payload: %v", err)
+	}
+	if len(instancePayload.Items) == 0 {
+		t.Fatalf("expected config instance items")
+	}
+	if _, ok := instancePayload.Summary["outOfSyncInstances"]; !ok {
+		t.Fatalf("expected drift summary, got %+v", instancePayload.Summary)
+	}
+}

@@ -117,11 +117,13 @@ class _UnifiedMediaViewerPageState
 
   @override
   Widget build(BuildContext context) {
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
     return CupertinoPageScaffold(
       backgroundColor: AppColors.black,
       child: WorksImmersiveViewer(
         showWorksToolbar: true,
         showTopNavigation: widget.extra.showWorksNavigation,
+        topChromeSafeInset: safeTop,
         externalPosts: widget.extra.dtoPosts,
         externalPostViews: widget.extra.posts,
         initialPostIndex: widget.extra.initialIndex,

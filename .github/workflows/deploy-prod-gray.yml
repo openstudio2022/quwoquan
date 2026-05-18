@@ -163,11 +163,14 @@ jobs:
       - name: SLO gate
         id: slo
         run: |
-          make config-slo-gate \
+          set +e
+          gate_output="$(make config-slo-gate \
             ERROR_RATE=${{ github.event.inputs.error_rate }} \
             P95_MS=${{ github.event.inputs.p95_ms }} \
-            REDIS_ERROR_RATE=${{ github.event.inputs.redis_error_rate }} || true
+            REDIS_ERROR_RATE=${{ github.event.inputs.redis_error_rate }} 2>&1)"
           exit_code=$?
+          set -e
+          echo "$gate_output"
           echo "exitcode=$exit_code" >> $GITHUB_OUTPUT
           exit $exit_code
       - name: Rollback on SLO rollback

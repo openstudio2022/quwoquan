@@ -15,7 +15,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from device_matrix_evidence import (
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from agent_ops.avatar.device_matrix_evidence import (
     capture_device_screenshot,
     repo_relative,
     sanitize_device_id,
@@ -25,7 +29,6 @@ from device_matrix_evidence import (
 )
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
 APP_DIR = REPO_ROOT / "quwoquan_app"
 DEFAULT_REPORT = REPO_ROOT / "artifacts" / "device-matrix" / "gamma-patrol" / "report.json"
 DEFAULT_TARGET = "test/patrol/discovery/feed_load_test.dart"
@@ -142,7 +145,7 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
     payload = subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "scripts" / "discover_flutter_mobile_devices.py"),
+            str(REPO_ROOT / "quwoquan_app" / "scripts" / "device" / "discover_flutter_mobile_devices.py"),
         ],
         cwd=str(REPO_ROOT),
         text=True,

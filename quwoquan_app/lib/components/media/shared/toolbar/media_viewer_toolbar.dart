@@ -1,5 +1,3 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -46,15 +44,16 @@ class MediaViewerTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final verticalPadding = context.safeGetIntraGroupSpacing(SpacingSize.sm);
-    final statusBarTop = MediaQuery.of(context).padding.top;
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final topInset = AppSpacing.primaryTopBarSafeTopInset(safeTop, context);
+    final vPad = AppSpacing.toolbarVerticalPadding(context);
     final showPositionInBar = showPosition && !_isBackOnly;
     final showAuthorInBar = !_isBackOnly;
 
     return Container(
       padding: EdgeInsets.only(
-        top: statusBarTop + verticalPadding,
-        bottom: verticalPadding,
+        top: topInset,
+        bottom: vPad,
       ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -63,9 +62,11 @@ class MediaViewerTopBar extends StatelessWidget {
           colors: [AppColors.overlayStrong, AppColors.transparent],
         ),
       ),
-      child: ImmersiveViewerLayout.alignToRail(
-        context: context,
-        layoutSpec: layoutSpec,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: layoutSpec.horizontalInset -
+              (AppSpacing.minInteractiveSize - AppSpacing.iconMedium) / 2,
+        ),
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -104,20 +105,13 @@ class MediaViewerTopBar extends StatelessWidget {
   }
 
   Widget _buildPositionIndicator(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.black.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
       child: Text(
         positionText,
         style: TextStyle(
-          color: AppColors.white,
-          fontSize: AppTypography.sm,
+          color: AppColors.white.withValues(alpha: 0.9),
+          fontSize: AppTypography.base,
           fontWeight: AppTypography.semiBold,
         ),
       ),
@@ -316,30 +310,24 @@ class ImmersiveToolbarIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fill = backgroundColor ?? AppColors.black.withValues(alpha: 0.24);
-    final outline = borderColor ?? AppColors.white.withValues(alpha: 0.14);
+    final fill = backgroundColor ?? AppColors.transparent;
+    final outline = borderColor ?? AppColors.transparent;
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: Size.square(size),
       onPressed: onPressed,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: AppSpacing.sm,
-            sigmaY: AppSpacing.sm,
-          ),
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: fill,
-              shape: BoxShape.circle,
-              border: Border.all(color: outline, width: AppSpacing.hairline),
-            ),
-            child: Icon(icon, color: foregroundColor, size: iconSize),
-          ),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: fill,
+          shape: BoxShape.circle,
+          border: outline == AppColors.transparent
+              ? null
+              : Border.all(color: outline, width: AppSpacing.hairline),
         ),
+        child: Icon(icon, color: foregroundColor, size: iconSize),
       ),
     );
   }
@@ -369,13 +357,13 @@ class MediaViewerBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = context.safeGetIntraGroupSpacing(SpacingSize.sm);
-    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final vPad = AppSpacing.toolbarVerticalPadding(context);
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
 
     return Container(
       padding: EdgeInsets.only(
-        top: context.safeGetIntraGroupSpacing(SpacingSize.sm),
-        bottom: safeBottom + bottomPadding,
+        top: vPad,
+        bottom: vPad + safeBottom,
       ),
       decoration: BoxDecoration(
         gradient: LinearGradient(

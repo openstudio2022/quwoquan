@@ -205,7 +205,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }
 
   double _toolbarHeight(BuildContext context) {
-    return MediaQuery.paddingOf(context).top + kToolbarHeight;
+    return MediaQuery.paddingOf(context).top +
+        AppSpacing.primaryTopBarHeight(context);
   }
 
   double _pinTransitionDistance() {
@@ -845,7 +846,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child: SizedBox(
-                  height: kToolbarHeight,
+                  height: AppSpacing.primaryTopBarHeight(context),
                   child: Row(
                     children: [
                       SizedBox(

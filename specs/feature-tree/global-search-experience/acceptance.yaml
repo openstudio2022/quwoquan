@@ -28,7 +28,7 @@ level_acceptance:
     done_when:
       - 全局搜索拥有独立 L1 能力路径，不再挂靠 discovery-content
       - chat 记录搜索节点从特性树中移除，不再保留平行治理路径
-      - "content、messages、circle、user、assistant 的职责边界在新 L1 中明确，且首页/搜索统一入口词冻结为 `群组`"
+      - "content、messages、circle、user、assistant 的职责边界在新 L1 中明确，且首页/搜索统一入口词冻结为 `圈子`"
     evidence:
       primary:
         - T1_schema
@@ -71,7 +71,7 @@ level_acceptance:
     done_when:
       - SLO、弱网、并发、容量假设已冻结
       - 最近搜索、语音 ASR、小趣搜 assistant continuation 的生命周期边界已冻结
-      - 整体上线与整体回滚口径明确，且“群组”用户词不再回退为“圈子”总称
+      - 整体上线与整体替换口径明确，且底栏“圈子”用户词不再回退为旧“群组”总入口
     evidence:
       primary:
         - T2_module_interaction
@@ -83,7 +83,7 @@ level_acceptance:
         - prd baseline checklist review
         - release readiness checklist review
       recorded:
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
         - make gate
     status: pending
   C4:

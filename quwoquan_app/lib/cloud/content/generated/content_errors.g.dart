@@ -8,6 +8,7 @@ enum ContentErrorCode {
   forbiddenDelete,
   unauthorized,
   invalidArgument,
+  assistantMentionContextMissing,
   invalidContentType,
   rateLimited,
   mediaNotFound,
@@ -43,6 +44,8 @@ enum ContentErrorCode {
         return ContentErrorCode.unauthorized;
       case 'CONTENT.USER.invalid_argument':
         return ContentErrorCode.invalidArgument;
+      case 'CONTENT.USER.assistant_mention_context_missing':
+        return ContentErrorCode.assistantMentionContextMissing;
       case 'CONTENT.USER.invalid_content_type':
         return ContentErrorCode.invalidContentType;
       case 'CONTENT.USER.rate_limited':
@@ -98,6 +101,7 @@ class ContentErrorMessages {
     ContentErrorCode.forbiddenDelete: '无权删除此内容',
     ContentErrorCode.unauthorized: '请先登录',
     ContentErrorCode.invalidArgument: '请求参数有误，请检查后重试',
+    ContentErrorCode.assistantMentionContextMissing: '小趣暂时无法识别这条评论的上下文',
     ContentErrorCode.invalidContentType: '不支持的内容类型',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
     ContentErrorCode.mediaNotFound: '媒体资源不存在或已过期',
@@ -126,6 +130,7 @@ class ContentErrorMessages {
     ContentErrorCode.forbiddenDelete: 'Not allowed to delete this post',
     ContentErrorCode.unauthorized: 'Please sign in to continue',
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
+    ContentErrorCode.assistantMentionContextMissing: 'Xiaoqu cannot resolve this comment context yet',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
     ContentErrorCode.mediaNotFound: 'Media asset not found or expired',

@@ -13,6 +13,7 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -396,7 +397,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       ),
     );
     final adaptiveHeight = titleHeight + (AppSpacing.intraGroupSm * 2);
-    return adaptiveHeight > kToolbarHeight ? adaptiveHeight : kToolbarHeight;
+    final minHeight = AppSpacing.primaryTopBarHeight(context);
+    return adaptiveHeight > minHeight ? adaptiveHeight : minHeight;
   }
 
   double _primaryTabBarHeight(BuildContext context) {
@@ -803,6 +805,11 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final topPadding = MediaQuery.paddingOf(context).top;
     final sideSlotWidth =
         AppSpacing.minInteractiveSize + AppSpacing.containerXs;
+    final trailingSlotWidth = widget.mode == ProfileMode.mine
+        ? AppSpacing.minInteractiveSize * 3 +
+              AppSpacing.intraGroupXs * 2 +
+              AppSpacing.containerXs
+        : sideSlotWidth;
     final resolvedOpacity = backgroundOpacity.clamp(0.0, 1.0);
     final compactForeground = resolvedOpacity > 0.12
         ? fg
@@ -916,16 +923,25 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                         ),
                       ),
                       SizedBox(
-                        width: sideSlotWidth,
+                        width: trailingSlotWidth,
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: widget.mode == ProfileMode.mine
-                              ? ProfileIosIconButton(
-                                  icon: CupertinoIcons.settings,
-                                  onPressed: () =>
-                                      context.push(AppRoutePaths.settings),
-                                  backgroundColor: tintFill,
-                                  foregroundColor: compactForeground,
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const GlobalTopActions(
+                                      showQuickAction: false,
+                                    ),
+                                    SizedBox(width: AppSpacing.intraGroupXs),
+                                    ProfileIosIconButton(
+                                      icon: CupertinoIcons.settings,
+                                      onPressed: () =>
+                                          context.push(AppRoutePaths.settings),
+                                      backgroundColor: tintFill,
+                                      foregroundColor: compactForeground,
+                                    ),
+                                  ],
                                 )
                               : ProfileIosIconButton(
                                   icon: CupertinoIcons.ellipsis,

@@ -69,6 +69,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.initialInteractionSnapshot = const MediaViewerInteractionSnapshot(),
     this.onDismissed,
     this.onPostIndexChanged,
+    this.topChromeSafeInset = 0,
   });
 
   final bool showWorksToolbar;
@@ -97,6 +98,7 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final MediaViewerInteractionSnapshot initialInteractionSnapshot;
   final ValueChanged<MediaViewerResult>? onDismissed;
   final ValueChanged<int>? onPostIndexChanged;
+  final double topChromeSafeInset;
 
   @override
   ConsumerState<WorksImmersiveViewer> createState() =>
@@ -1123,10 +1125,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
           statusBarColor: AppColors.transparent,
-          statusBarIconBrightness: Brightness.light,
-          statusBarBrightness: Brightness.dark,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
           systemNavigationBarColor: AppColors.transparent,
-          systemNavigationBarIconBrightness: Brightness.light,
+          systemNavigationBarIconBrightness: Brightness.dark,
         ),
         child: GestureDetector(
           behavior: HitTestBehavior.deferToChild,
@@ -1155,12 +1157,14 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                       // Track skip: user swiped away from prevPost
                       final enterTime = _pageEnterTime;
                       final skipDwell = enterTime != null
-                          ? DateTime.now().difference(enterTime).inMilliseconds / 1000.0
+                          ? DateTime.now()
+                                    .difference(enterTime)
+                                    .inMilliseconds /
+                                1000.0
                           : null;
-                      ref.read(contentBehaviorTrackerProvider).trackSkip(
-                        prevPost.id,
-                        dwellSeconds: skipDwell,
-                      );
+                      ref
+                          .read(contentBehaviorTrackerProvider)
+                          .trackSkip(prevPost.id, dwellSeconds: skipDwell);
 
                       setState(() => _currentPage = index);
                       widget.onPostIndexChanged?.call(index);
@@ -1192,8 +1196,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 top: 0,
                 left: 0,
                 right: 0,
-                child: SafeArea(
-                  bottom: false,
+                child: Padding(
+                  padding: EdgeInsets.only(top: widget.topChromeSafeInset),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1525,7 +1529,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
       child: SizedBox(
         key: const ValueKey<String>('works-top-rail'),
         width: double.infinity,
-        height: AppSpacing.tabNavigationHeight,
+        height: AppSpacing.primaryTopBarHeight(context),
         child: Stack(
           children: [
             Positioned.fill(
@@ -1611,36 +1615,15 @@ class _WorksTopProgressLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: DecoratedBox(
-          key: const ValueKey<String>('works-top-progress-label'),
-          decoration: BoxDecoration(
-            color: AppColors.black.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(
-              AppSpacing.circularBorderRadius,
-            ),
-            border: Border.all(
-              color: AppColors.white.withValues(alpha: 0.12),
-              width: AppSpacing.hairline,
-            ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.containerSm,
-              vertical: AppSpacing.intraGroupXs,
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: AppColors.worksBodyText,
-                fontSize: AppTypography.xsPlus,
-                fontWeight: AppTypography.semiBold,
-              ),
-            ),
-          ),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+      child: Text(
+        label,
+        key: const ValueKey<String>('works-top-progress-label'),
+        style: TextStyle(
+          color: AppColors.white.withValues(alpha: 0.9),
+          fontSize: AppTypography.base,
+          fontWeight: AppTypography.semiBold,
         ),
       ),
     );

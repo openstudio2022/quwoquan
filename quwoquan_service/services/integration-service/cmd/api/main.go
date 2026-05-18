@@ -171,7 +171,7 @@ func loadRuntimeConfig() (config, error) {
 	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
 	configVersion := strings.TrimSpace(os.Getenv("CONFIG_VERSION"))
 	if !isValidAppEnv(appEnv) {
-		return config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod-gray|prod, got %q", appEnv)
+		return config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
 	}
 	if requiresConfigVersion(appEnv) && configVersion == "" {
 		return config{}, fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
@@ -212,7 +212,7 @@ func loadRuntimeConfig() (config, error) {
 
 func isValidAppEnv(env string) bool {
 	switch env {
-	case "alpha", "beta", "gamma", "prod-gray", "prod":
+	case "alpha", "beta", "gamma", "prod":
 		return true
 	default:
 		return false
@@ -221,7 +221,7 @@ func isValidAppEnv(env string) bool {
 
 func requiresConfigVersion(env string) bool {
 	switch env {
-	case "gamma", "prod-gray", "prod":
+	case "gamma", "prod":
 		return true
 	default:
 		return false

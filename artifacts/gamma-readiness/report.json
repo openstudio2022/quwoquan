@@ -1,0 +1,30 @@
+{
+  "status": "passed",
+  "failureCategory": "",
+  "blockingReason": "",
+  "startedAt": "2026-05-18T01:01:37.859685Z",
+  "endedAt": "2026-05-18T01:01:37.993586Z",
+  "environment": {
+    "baseUrl": "http://127.0.0.1:18180",
+    "productOpsBaseUrl": "http://127.0.0.1:18186",
+    "commitSha": "",
+    "githubRunId": ""
+  },
+  "attempts": [
+    {
+      "at": "2026-05-18T01:01:37.859871Z",
+      "baseHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\",\"checks\":{\"mongodb\":\"ok\",\"redis\":\"ok\"}}\n"
+      },
+      "productOpsHealth": {
+        "status": "passed",
+        "detail": "{\"status\":\"ok\",\"checks\":{\"mongodb\":\"ok\",\"redis\":\"ok\"}}\n"
+      },
+      "routing": {
+        "status": "passed",
+        "detail": "[gamma-gateway-routing] OK http://127.0.0.1:18180"
+      }
+    }
+  ]
+}

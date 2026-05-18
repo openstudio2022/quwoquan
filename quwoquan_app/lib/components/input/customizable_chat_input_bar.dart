@@ -133,6 +133,7 @@ class CustomizableChatInputBar extends StatefulWidget {
     this.onToast,
     this.showAddPanel = true,
     this.showEmojiButton = false,
+    this.showXiaoquMentionButton = false,
     this.enableExpandedEditor = true,
     this.sendButtonKey,
     this.leftBuilder,
@@ -160,6 +161,7 @@ class CustomizableChatInputBar extends StatefulWidget {
   final ValueChanged<String>? onToast;
   final bool showAddPanel;
   final bool showEmojiButton;
+  final bool showXiaoquMentionButton;
   final bool enableExpandedEditor;
   final Key? sendButtonKey;
   final ChatInputLeftBuilder? leftBuilder;
@@ -229,10 +231,28 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     return Color.lerp(sheet, field, 0.28) ?? field;
   }
 
+  void _insertXiaoquMention() {
+    const mention = '${UITextConstants.commentAtXiaoqu} ';
+    final text = _controller.text;
+    final selection = _controller.selection;
+    final insertionOffset = selection.isValid
+        ? selection.baseOffset.clamp(0, text.length)
+        : text.length;
+    _controller
+      ..text =
+          text.substring(0, insertionOffset) +
+          mention +
+          text.substring(insertionOffset)
+      ..selection = TextSelection.collapsed(
+        offset: insertionOffset + mention.length,
+      );
+    _focusNode.requestFocus();
+    setState(() => _panelMode = ChatInputPanelMode.none);
+  }
+
   /// 与聊天气泡正文一致：Theme `bodyLarge` + 统一行高。
   TextStyle _composerTextStyle(BuildContext context) {
-    final fontSize =
-        AppTypography.base;
+    final fontSize = AppTypography.base;
     return TextStyle(
       fontSize: fontSize,
       height: AppTypography.bodyLineHeight,
@@ -558,6 +578,34 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
 
   List<Widget> _buildTrailingButtons(BuildContext context) {
     final buttons = <Widget>[];
+    if (widget.showXiaoquMentionButton && !_isVoiceMode) {
+      buttons.add(
+        Semantics(
+          button: true,
+          label: UITextConstants.commentAtXiaoqu,
+          child: CupertinoButton(
+            key: TestKeys.chatInputAtXiaoquButton,
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+            minimumSize: Size(
+              AppSpacing.buttonHeightMd,
+              AppSpacing.buttonHeightMd,
+            ),
+            onPressed: _insertXiaoquMention,
+            child: Text(
+              UITextConstants.commentAtXiaoqu,
+              style: TextStyle(
+                fontSize: AppTypography.xs,
+                fontWeight: AppTypography.semiBold,
+                color: AppColors.primaryColor,
+              ),
+            ),
+          ),
+        ),
+      );
+      if (widget.showEmojiButton || _canSend || widget.showAddPanel) {
+        buttons.add(SizedBox(width: AppSpacing.xs));
+      }
+    }
     if (widget.showEmojiButton) {
       buttons.add(
         _buildToolbarPlainIconButton(
@@ -938,7 +986,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
                       child: CupertinoButton(
                         key: TestKeys.chatInputExpandButton,
                         padding: EdgeInsets.zero,
-                        minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                        minimumSize: Size.square(
+                          AppSpacing.iconButtonMinSizeSm,
+                        ),
                         onPressed: _openExpandedEditor,
                         child: Align(
                           alignment: Alignment.centerLeft,
@@ -970,7 +1020,9 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         _buildToolbarPlainIconButton(
           context: context,
           key: TestKeys.chatInputVoiceToggleButton,
-          icon: _isVoiceMode ? _kChatInputKeyboardCompactIcon : CupertinoIcons.mic,
+          icon: _isVoiceMode
+              ? _kChatInputKeyboardCompactIcon
+              : CupertinoIcons.mic,
           onTap: _toggleVoiceMode,
           semanticLabel: _isVoiceMode
               ? UITextConstants.keyboard
@@ -982,9 +1034,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         left,
         if (left is! SizedBox) SizedBox(width: AppSpacing.intraGroupXs),
         Expanded(
-          child: _isVoiceMode
-              ? _buildVoicePanel()
-              : _buildTextComposerCenter(),
+          child: _isVoiceMode ? _buildVoicePanel() : _buildTextComposerCenter(),
         ),
         if (right.isNotEmpty) SizedBox(width: AppSpacing.intraGroupXs),
         Row(mainAxisSize: MainAxisSize.min, children: right),
@@ -1240,8 +1290,7 @@ class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
 
   @override
   Widget build(BuildContext context) {
-    final composerFontSize =
-        AppTypography.base;
+    final composerFontSize = AppTypography.base;
     final composerStyle = TextStyle(
       fontSize: composerFontSize,
       height: AppTypography.bodyLineHeight,
@@ -1332,8 +1381,9 @@ class _ExpandedChatInputPageState extends State<_ExpandedChatInputPage> {
                             ? _kChatInputKeyboardCompactIcon
                             : _kChatInputEmojiPanelIcon,
                         size: _kChatInputToolbarGlyphSize,
-                        color: _foregroundPrimary(context)
-                            .withValues(alpha: 0.82),
+                        color: _foregroundPrimary(
+                          context,
+                        ).withValues(alpha: 0.82),
                       ),
                     ),
                 ],

@@ -48,7 +48,18 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
     media_urls = post.get("imageUrls") or post.get("mediaUrls") or []
     if not media_urls and post.get("coverUrl") and post.get("contentType") == "image":
         media_urls = [post["coverUrl"]]
-    return {
+    width = post.get("width")
+    height = post.get("height")
+    device_info = dict(post.get("deviceInfo") or {})
+    if width is not None:
+        width = int(width)
+        device_info.setdefault("width", width)
+        device_info.setdefault("imageWidth", width)
+    if height is not None:
+        height = int(height)
+        device_info.setdefault("height", height)
+        device_info.setdefault("imageHeight", height)
+    doc = {
         "_id": post_id,
         "authorId": post.get("authorId", ""),
         "subAccountId": post.get("subAccountId") or post.get("authorId", ""),
@@ -80,6 +91,13 @@ def fixture_post_to_doc(post: Dict[str, Any]) -> Dict[str, Any]:
         "publishedAt": created_at,
         "lastActiveAt": created_at,
     }
+    if device_info:
+        doc["deviceInfo"] = device_info
+    if width is not None:
+        doc["width"] = width
+    if height is not None:
+        doc["height"] = height
+    return doc
 
 
 def gamma_content_fixture_spec() -> Tuple[Path, List[str]]:

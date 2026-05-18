@@ -301,7 +301,7 @@ func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request
 
 func shouldHonorTestErrorInject(r *http.Request, code string) bool {
 	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
-	if appEnv == "prod" || appEnv == "prod-gray" {
+	if appEnv == "prod" {
 		return false
 	}
 	return strings.TrimSpace(r.Header.Get("X-Test-Error-Inject")) == code
@@ -525,7 +525,7 @@ func (h *ContentHandler) handleQuoteToCircle(w http.ResponseWriter, r *http.Requ
 
 func (h *ContentHandler) handleInitMediaUpload(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		MediaType string `json:"mediaType"`
+		MediaType  string `json:"mediaType"`
 		AssetScope string `json:"assetScope"`
 		SourceKind string `json:"sourceKind"`
 	}
@@ -695,6 +695,18 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		}
 		if strings.TrimSpace(batch.Events[i].FeedSessionID) == "" {
 			batch.Events[i].FeedSessionID = strings.TrimSpace(batch.FeedSessionID)
+		}
+		if strings.EqualFold(strings.TrimSpace(batch.Events[i].Type), "like") {
+			writeHTTPError(
+				w,
+				r,
+				rterr.NewInvalidArgument(
+					rterr.ModuleContent,
+					"like 需走专属点赞路由",
+					"like must use dedicated route",
+				),
+			)
+			return
 		}
 	}
 	if err := h.behaviorService.ProcessBatch(r.Context(), batch.Events); err != nil {

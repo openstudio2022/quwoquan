@@ -22,7 +22,7 @@ func TestGetFeedByType(t *testing.T) {
 	// Create mixed content types
 	for i := range 3 {
 		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"]}`,
+			`{"contentType":"image","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"],"deviceInfo":{"width":1280,"height":720}}`,
 			i, i,
 		))
 	}
@@ -53,6 +53,25 @@ func TestGetFeedByType(t *testing.T) {
 		if item["type"] != "image" && item["contentType"] != "image" {
 			t.Errorf("non-photo item in photo feed: %v", item)
 		}
+	}
+
+	var dimensionItem map[string]any
+	for _, item := range page.Items {
+		if item["title"] == "Photo post 0" {
+			dimensionItem = item
+			break
+		}
+	}
+	if dimensionItem == nil {
+		t.Fatal("expected Photo post 0 in feed response")
+	}
+	width, widthOK := dimensionItem["width"].(float64)
+	height, heightOK := dimensionItem["height"].(float64)
+	if !widthOK || !heightOK {
+		t.Fatalf("expected width/height on feed item, got %v", dimensionItem)
+	}
+	if int(width) != 1280 || int(height) != 720 {
+		t.Fatalf("unexpected dimensions on feed item: width=%v height=%v", width, height)
 	}
 }
 

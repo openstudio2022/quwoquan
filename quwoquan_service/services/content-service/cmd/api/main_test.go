@@ -212,16 +212,16 @@ func TestLoadRuntimeConfig_LocalLayered(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join("configs", "default"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join("configs", "integration"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join("configs", "beta"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join("configs", "default", "config.yaml"), []byte("service:\n  http:\n    addr: \":18080\"\nredis:\n  rec:\n    mode: standalone\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join("configs", "integration", "config.yaml"), []byte("service:\n  http:\n    addr: \":19090\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join("configs", "beta", "config.yaml"), []byte("service:\n  http:\n    addr: \":19090\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := loadRuntimeConfig("content-service", "integration", "", "")
+	cfg, err := loadRuntimeConfig("content-service", "beta", "", "")
 	if err != nil {
 		t.Fatalf("loadRuntimeConfig failed: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestLoadRuntimeConfig_ExternalRootLayered(t *testing.T) {
 		}
 	}
 	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "default"), 0o755))
-	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "integration"), 0o755))
+	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "beta"), 0o755))
 	must(os.MkdirAll(filepath.Join(root, "releases", "config", "content-service"), 0o755))
 
 	must(os.WriteFile(
@@ -248,7 +248,7 @@ func TestLoadRuntimeConfig_ExternalRootLayered(t *testing.T) {
 		0o644,
 	))
 	must(os.WriteFile(
-		filepath.Join(root, "configs", "content-service", "integration", "config.yaml"),
+		filepath.Join(root, "configs", "content-service", "beta", "config.yaml"),
 		[]byte("service:\n  http:\n    addr: \":19090\"\n"),
 		0o644,
 	))
@@ -258,12 +258,12 @@ func TestLoadRuntimeConfig_ExternalRootLayered(t *testing.T) {
 		0o644,
 	))
 
-	cfg, err := loadRuntimeConfig("content-service", "integration", root, "v2026.02.28.0")
+	cfg, err := loadRuntimeConfig("content-service", "beta", root, "v2026.02.28.0")
 	if err != nil {
 		t.Fatalf("loadRuntimeConfig external root failed: %v", err)
 	}
 	if cfg.Service.HTTP.Addr != ":19090" {
-		t.Fatalf("expected integration override addr :19090, got %q", cfg.Service.HTTP.Addr)
+		t.Fatalf("expected beta override addr :19090, got %q", cfg.Service.HTTP.Addr)
 	}
 	if cfg.Config.Version != "v2026.02.28.0" {
 		t.Fatalf("expected version overlay v2026.02.28.0, got %q", cfg.Config.Version)
@@ -288,7 +288,7 @@ func TestValidateRuntimeCompatibility(t *testing.T) {
 func TestPreflightConfig_ClusterRequiresAddrs(t *testing.T) {
 	cfg := config{}
 	cfg.Redis.Rec.Mode = "cluster"
-	err := preflightConfig(cfg, "integration")
+	err := preflightConfig(cfg, "beta")
 	if err == nil || !strings.Contains(err.Error(), "requires redis.rec.addrs") {
 		t.Fatalf("expected cluster addrs error, got %v", err)
 	}

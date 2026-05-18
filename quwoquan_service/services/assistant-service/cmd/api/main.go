@@ -271,7 +271,7 @@ func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, i
 	configVersion = os.Getenv("CONFIG_VERSION")
 	imageVersion = os.Getenv("IMAGE_VERSION")
 	if !isValidAppEnv(appEnv) {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod-gray|prod, got %q", appEnv)
+		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
 	}
 	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
 		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
@@ -1954,7 +1954,7 @@ func searchHTTPClient(ms int) *http.Client {
 }
 
 func requiresRealProvider(appEnv string) bool {
-	return appEnv == "beta" || appEnv == "gamma" || appEnv == "prod-gray" || appEnv == "prod"
+	return appEnv == "beta" || appEnv == "gamma" || appEnv == "prod"
 }
 
 func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
@@ -2053,7 +2053,7 @@ func scenarioSeedRefsFromEnv() []string {
 
 func isValidAppEnv(env string) bool {
 	switch env {
-	case "alpha", "beta", "gamma", "prod-gray", "prod":
+	case "alpha", "beta", "gamma", "prod":
 		return true
 	default:
 		return false
@@ -2062,7 +2062,7 @@ func isValidAppEnv(env string) bool {
 
 func requiresConfigVersion(env string) bool {
 	switch env {
-	case "gamma", "prod-gray", "prod":
+	case "gamma", "prod":
 		return true
 	default:
 		return false

@@ -542,12 +542,6 @@ def main():
         })
         page_content = gen_page_content(domain, etype, name, desc, geo, tags)
         w(td.entity_page(domain, etype, name), page_content)
-        w(td.entity_manifest(domain, etype, name), {
-            "entityRefs": [],
-            "assets": [f"{name}_panorama.jpg", f"{name}_highlight.jpg"],
-            "createdAt": NOW_ISO,
-            "updatedAt": NOW_ISO,
-        })
         entity_names.append((domain, etype, name))
     print(f"  {len(ENTITIES)} 实体已生成")
 

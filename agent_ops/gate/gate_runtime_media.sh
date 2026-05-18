@@ -47,9 +47,9 @@ echo "[runtime-media] go test user-service avatar sync contract"
 
 
 echo "[runtime-media] image delivery policy static gates"
-python3 "${ROOT_DIR}/scripts/verify_app_network_image_surface.py"
-python3 "${ROOT_DIR}/scripts/verify_app_media_url_policy.py"
-python3 "${ROOT_DIR}/scripts/verify_media_variant_registry_metadata.py"
+python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_network_image_surface.py"
+python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_media_url_policy.py"
+python3 "${ROOT_DIR}/quwoquan_service/scripts/media/verify_media_variant_registry_metadata.py"
 
 echo "[runtime-media] flutter test realtime/cache coverage"
 (

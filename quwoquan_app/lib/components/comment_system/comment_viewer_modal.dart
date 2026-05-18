@@ -88,8 +88,7 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
   @override
   Widget build(BuildContext context) {
     final commentState = ref.watch(commentProviderFamily(widget.postId));
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
 
     if (!_initialLoaded) {
       _initialLoaded = true;
@@ -401,6 +400,11 @@ class _CommentItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isXiaoquReply =
+        comment.authorId == AppConceptConstants.assistantSenderId ||
+        (comment.displayName ?? '').contains(
+          UITextConstants.assistantEntryXiaoqu,
+        );
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.md),
       child: Column(
@@ -474,10 +478,13 @@ class _CommentItem extends StatelessWidget {
                       ],
                     ),
                     SizedBox(height: AppSpacing.xs),
-                    Text(
-                      comment.content,
-                      style: TextStyle(fontSize: AppTypography.sm),
-                    ),
+                    if (isXiaoquReply)
+                      _buildXiaoquReplyCard(context)
+                    else
+                      Text(
+                        comment.content,
+                        style: TextStyle(fontSize: AppTypography.sm),
+                      ),
                     SizedBox(height: AppSpacing.xs),
                     _buildActions(context),
                   ],
@@ -520,6 +527,57 @@ class _CommentItem extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildXiaoquReplyCard(BuildContext context) {
+    return Container(
+      key: TestKeys.commentXiaoquReplyCard,
+      padding: EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.primaryColor.withValues(alpha: isDark ? 0.14 : 0.08),
+        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        border: Border.all(
+          color: AppColors.primaryColor.withValues(alpha: isDark ? 0.28 : 0.16),
+          width: AppSpacing.one,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                CupertinoIcons.sparkles,
+                size: AppSpacing.iconSmall,
+                color: AppColors.primaryColor,
+              ),
+              SizedBox(width: AppSpacing.xs),
+              Text(
+                UITextConstants.commentXiaoquBadge,
+                style: TextStyle(
+                  fontSize: AppTypography.xs,
+                  fontWeight: AppTypography.semiBold,
+                  color: AppColors.primaryColor,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.xs),
+          Text(comment.content, style: TextStyle(fontSize: AppTypography.sm)),
+          SizedBox(height: AppSpacing.xs),
+          Text(
+            UITextConstants.commentXiaoquSource,
+            style: TextStyle(
+              fontSize: AppTypography.xs,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundSecondary,
+              ),
+            ),
+          ),
         ],
       ),
     );

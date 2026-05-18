@@ -181,7 +181,7 @@ def write_entity(
 ):
     """写入实体三件套到 task 目录。
 
-    其中 `_entity.json` 是事实源，`manifest.json` 只保存发布/索引元数据。
+    其中 `_entity.json` 是事实源，实体叶不再写 `manifest.json`。
     """
     edir = task_root / "entities" / domain / etype / name
     edir.mkdir(parents=True, exist_ok=True)
@@ -189,9 +189,6 @@ def write_entity(
         json.dumps(entity_json, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (edir / "page.md").write_text(page_md, encoding="utf-8")
-    (edir / "manifest.json").write_text(
-        json.dumps(manifest_json, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
 
 
 def write_post(

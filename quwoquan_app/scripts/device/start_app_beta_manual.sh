@@ -243,6 +243,37 @@ beta_manual_compose_up_chat_backing_services() {
   docker compose -f "$LOCAL_GAMMA_COMPOSE_FILE" up -d mongodb mongo-init redis >/dev/null
 }
 
+beta_manual_ensure_docker_daemon() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "docker CLI unavailable; cannot start chat fallback services" >&2
+    return 1
+  fi
+  if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! command -v colima >/dev/null 2>&1; then
+    echo "docker daemon unavailable and colima is not installed" >&2
+    return 1
+  fi
+
+  echo "[app-beta-manual] docker daemon unavailable, starting colima..."
+  if ! colima start; then
+    echo "colima start failed; please start a Docker daemon manually and retry" >&2
+    return 1
+  fi
+
+  local deadline=$((SECONDS + 180))
+  until docker info >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      echo "docker daemon still unavailable after starting colima" >&2
+      return 1
+    fi
+    sleep 2
+  done
+  echo "[app-beta-manual] docker daemon ready"
+}
+
 beta_manual_ensure_chat_backing_services() {
   local default_mongo_uri="mongodb://localhost:27017"
   local default_redis_addr="localhost:6379"
@@ -263,6 +294,7 @@ beta_manual_ensure_chat_backing_services() {
     return 1
   fi
 
+  beta_manual_ensure_docker_daemon || return 1
   beta_manual_compose_up_chat_backing_services || return 1
   effective_mongo_uri="mongodb://127.0.0.1:${LOCAL_GAMMA_MONGO_PORT}/?directConnection=true"
   effective_redis_addr="127.0.0.1:${LOCAL_GAMMA_REDIS_PORT}"
@@ -465,7 +497,7 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-cmd = [sys.executable, str(root / "scripts" / "discover_flutter_mobile_devices.py")]
+cmd = [sys.executable, str(root / "quwoquan_app" / "scripts" / "device" / "discover_flutter_mobile_devices.py")]
 result = subprocess.run(cmd, cwd=str(root), text=True, capture_output=True, check=False)
 if result.returncode != 0:
     print(result.stderr.strip() or result.stdout.strip(), file=sys.stderr)
@@ -546,9 +578,9 @@ case "$MEDIA_PREP_MODE" in
     ;;
 esac
 
-python3 scripts/verify_app_seed_manifests.py
-bash scripts/build_app_env_package.sh --env beta >/dev/null
-bash scripts/build_service_env_package.sh --service assistant-service --env beta >/dev/null
+python3 "$ROOT_DIR/quwoquan_app/scripts/env/verify_app_seed_manifests.py"
+bash "$ROOT_DIR/quwoquan_app/scripts/env/build_app_env_package.sh" --env beta >/dev/null
+bash "$ROOT_DIR/quwoquan_service/scripts/runtime/build_service_env_package.sh" --service assistant-service --env beta >/dev/null
 
 if [[ "$RESTART_STACK" == "1" || "$CLEAN_ENV" == "1" ]]; then
   echo "[app-beta-manual] restarting managed beta stack before launch"
@@ -591,7 +623,7 @@ echo "[app-beta-manual] model: ${ASSISTANT_BETA_MODEL_REF:-unknown} (${ASSISTANT
 echo "[app-beta-manual] verify mode: $VERIFY_MODE"
 echo "[app-beta-manual] media mode: $MEDIA_PREP_MODE"
 if [[ "$VERIFY_MODE" == "full" ]]; then
-  python3 scripts/verify_avatar_user_pool_consistency.py >/dev/null
+  python3 agent_ops/avatar/verify_avatar_user_pool_consistency.py >/dev/null
 else
   echo "[app-beta-manual] fast mode: skip full shared-pool consistency verification"
 fi
@@ -711,7 +743,7 @@ beta_manual_start_process \
   "gateway" \
   "$GATEWAY_LOG" \
   "$ROOT_DIR" \
-  python3 scripts/dev_assistant_beta_gateway.py \
+  python3 agent_ops/assistant/dev_assistant_beta_gateway.py \
     --listen-host 127.0.0.1 \
     --listen-port "$GATEWAY_PORT" \
     --assistant-upstream-host 127.0.0.1 \

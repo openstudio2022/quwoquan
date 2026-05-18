@@ -291,4 +291,44 @@ func TestControlPlaneWorkflowEndpoints(t *testing.T) {
 	if summaryPayload["workflowCount"] == nil || summaryPayload["approvalCount"] == nil {
 		t.Fatalf("unexpected projection summary: %+v", summaryPayload)
 	}
+	if cards, ok := summaryPayload["l1l4Cards"].([]any); !ok || len(cards) == 0 {
+		t.Fatalf("expected l1l4 cards, got %+v", summaryPayload["l1l4Cards"])
+	}
+}
+
+func TestL1L4MetricsEndpoint(t *testing.T) {
+	service := newTestProductService(t)
+	if err := service.seed(); err != nil {
+		t.Fatalf("seed service: %v", err)
+	}
+	server := newTestServerMux(service)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/control-plane/product/metrics/l1l4?env=beta&level=L3", nil)
+	resp := httptest.NewRecorder()
+	server.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("l1l4 metrics status=%d body=%s", resp.Code, resp.Body.String())
+	}
+
+	var payload struct {
+		Items []struct {
+			Level       string `json:"level"`
+			Environment string `json:"environment"`
+			Metric      string `json:"metric"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal l1l4 metrics: %v", err)
+	}
+	if len(payload.Items) == 0 {
+		t.Fatalf("expected l1l4 metric items")
+	}
+	for _, item := range payload.Items {
+		if item.Level != "L3" {
+			t.Fatalf("expected only L3 items, got %+v", payload.Items)
+		}
+		if item.Environment != "beta" {
+			t.Fatalf("expected beta environment, got %+v", payload.Items)
+		}
+	}
 }

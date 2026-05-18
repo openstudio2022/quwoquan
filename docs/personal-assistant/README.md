@@ -501,7 +501,6 @@ quwoquan_service/services/assistant-service/
 │   ├── alpha/config.yaml
 │   ├── beta/config.yaml
 │   ├── gamma/config.yaml
-│   ├── prod-gray/config.yaml
 │   └── prod/config.yaml
 ├── go.mod
 └── Makefile
@@ -514,7 +513,7 @@ quwoquan_service/services/assistant-service/
 - `adapters/` 只处理 HTTP、stream、MQ 边界，不直接访问数据库。
 - `infrastructure/` 放模型供应商、外部工具、持久化、AppMessage 客户端等实现。
 - `appmessage/` 在 M3-M9 可作为 adapter 存在；长期统一消息服务落地后只保留客户端，不拥有消息真相源。
-- 配置目录与运行时环境一一对应：`APP_ENV=alpha|beta|gamma|prod-gray|prod` 只读取同名 `configs/{env}/config.yaml`，禁止通过旧 `local` / `integration` 目录做兼容映射。
+- 配置目录与运行时环境一一对应：`APP_ENV=alpha|beta|gamma|prod` 只读取同名 `configs/{env}/config.yaml`，禁止通过旧 `local` / `integration` 目录做兼容映射。
 
 #### 5.4.4 云侧统一消息服务目标目录
 
@@ -2564,7 +2563,7 @@ M10 自检与冻结状态：
 
 ### M11：测试与门禁收口
 
-目标：保证云端化后仍能快速本地开发、稳定集中验收，并按 `alpha → beta → gamma → prod-gray → prod` 完成“找私助”端云验证与“找小趣”旧入口无回归验证。
+目标：保证云端化后仍能快速本地开发、稳定集中验收，并按 `alpha → beta → gamma → prod` 完成“找私助”端云验证与“找小趣”旧入口无回归验证。
 
 准入条件：
 
@@ -2619,7 +2618,7 @@ M10 自检与冻结状态：
   - 云侧部署 assistant-service / gateway / AppMessage 相关组件，使用 `APP_ENV=gamma` 和版本化配置。
   - 端侧使用 `APP_RUNTIME_ENV=gamma` 与 gamma 网关完成同一组三场景验证。
   - gamma 使用与 beta 完全相同的 scenario/seed artifact，差异只允许来自网关、认证、部署配置和观测链路；不得复制一套 gamma 专用问题或期望。
-  - 可选择性接入真实模型或外部供应商；失败必须记录风险、回退策略和是否阻断进入 `prod-gray`。
+  - 可选择性接入真实模型或外部供应商；失败必须记录风险、回退策略和是否阻断进入 `prod`。
 
 M11 环境验收流转：
 
@@ -2627,8 +2626,7 @@ M11 环境验收流转：
 alpha：端侧 simulator mock/stub + 云侧 single-service
   → beta：本地网关 + 本地 assistant-service + 模拟器端云联调
   → gamma：云侧集成部署 + 同场景验收
-  → prod-gray：生产灰度，只验证开关、观测、回滚和小流量
-  → prod：全量开放
+  → prod：生产发布（含灰度验证、观测、回滚与放量）
 ```
 
 其中既有端侧 mock / stub 测试统一归入端侧 alpha；`assistant-service` 单实例与 HTTP handler typed stream 统一归入云侧 alpha；本地模拟器连本机 Go 服务的端云协同归入 beta；云侧部署后再验收的同一组三场景归入 gamma。
@@ -2639,7 +2637,7 @@ alpha：端侧 simulator mock/stub + 云侧 single-service
 - `scenario` 定义用户操作、期望答案片段、期望 stream event；`seed` 定义云侧服务测试前需要加载的数据。
 - `APP_RUNTIME_ENV=alpha` 默认端侧使用 mock repository；`APP_RUNTIME_ENV=beta|gamma` 默认端侧使用 remote repository。`APP_DATA_SOURCE` 可显式覆盖，但必须与环境契约一致。
 - 找私助和技能管理均必须走同一套 scenario/seed 机制；后续新增端云功能也必须先定义 fixture，再接入 alpha mock 与 beta/gamma remote 验证。
-- `prod-gray` / `prod` 不使用测试 fixture，不做 reset + seed，使用真实用户数据和正式灰度/生产治理。
+- `prod` 不使用测试 fixture，不做 reset + seed，使用真实用户数据和正式生产/灰度放量治理。
 
 alpha 验收证据模板：
 
@@ -2828,7 +2826,7 @@ beta 手工场景记录表：
 - T1：metadata verify、Dart/Go fixture roundtrip、SSE golden 解码、runtime failure fixture。
 - T2：端侧 alpha stub stream journey 测试、“找小趣”旧入口回归测试；云侧 alpha fake model / fake tool / fake clock / fake AppMessage 测试。
 - T3：beta local e2e mode 下 assistant-service 通过 `APP_ENV=beta` 启动并服务 typed stream；本地网关可转发到 assistant-service。
-- T4：beta 模拟器完成股票、天气、行程规划三条“找私助”端云验证，并同步完成“找小趣”旧入口流式叙事和答案生成验证；gamma 云侧集成验证通过后才可进入 `prod-gray`。
+- T4：beta 模拟器完成股票、天气、行程规划三条“找私助”端云验证，并同步完成“找小趣”旧入口流式叙事和答案生成验证；gamma 云侧集成验证通过后才可进入 `prod`。
 
 M11-S2 状态核对：
 

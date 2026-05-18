@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,10 +9,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tabs_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
+import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 
 const Duration _kCirclesPageSettleTimeout = Duration(seconds: 1);
 
@@ -47,7 +49,8 @@ Map<String, CircleCategoryTabConfigDto> _fixtureCategoryTabsConfig() {
 /// 避免单测里 [CircleCategoryTabsLoader.loadFromAsset] 走 `rootBundle` 挂起。
 class _FixtureCategoryMockRepo extends MockCircleRepository {
   @override
-  Future<Map<String, CircleCategoryTabConfigDto>> getCircleCategoryConfig() async {
+  Future<Map<String, CircleCategoryTabConfigDto>>
+  getCircleCategoryConfig() async {
     return _fixtureCategoryTabsConfig();
   }
 }
@@ -71,7 +74,7 @@ Widget _scopedApp({CircleRepository? mock, double textScaleFactor = 1.0}) {
         routes: [
           GoRoute(
             path: '/circles',
-            builder: (_, _) => const Scaffold(body: CirclesPage()),
+            builder: (_, _) => const Scaffold(body: CirclesHubPage()),
           ),
           GoRoute(path: '/circle/:id', builder: (_, _) => const SizedBox()),
           GoRoute(path: '/article/:id', builder: (_, _) => const SizedBox()),
@@ -87,7 +90,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pump();
 
-      expect(find.byType(CirclesPage), findsOneWidget);
+      expect(find.byType(CirclesHubPage), findsOneWidget);
     });
 
     testWidgets('Tab 导航栏存在', (tester) async {
@@ -97,15 +100,44 @@ void main() {
       expect(find.byType(Scaffold), findsWidgets);
     });
 
-    testWidgets('展示圈子广场标题与左侧分类菜单', (tester) async {
+    testWidgets('展示圈子搜索、小趣与实体主页入口', (tester) async {
       final mock = _FixtureCategoryMockRepo();
       final cfg = _fixtureCategoryTabsConfig();
       await tester.pumpWidget(_scopedApp(mock: mock));
       await tester.pump();
       await _circlesPumpSettled(tester);
 
-      expect(find.text(UITextConstants.circlesDirectoryTitle), findsOneWidget);
-      expect(find.text(UITextConstants.homeCirclesMy), findsOneWidget);
+      expect(find.text(UITextConstants.circlesSearchHint), findsOneWidget);
+      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
+      expect(
+        find.text(UITextConstants.circlesEntitySectionTitle),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.circlesRecommendedTitle),
+        findsOneWidget,
+      );
+      expect(find.byIcon(CupertinoIcons.search), findsAtLeastNWidgets(1));
+      expect(find.byIcon(CupertinoIcons.sparkles), findsAtLeastNWidgets(1));
+      expect(
+        find.text(cfg['all']?.subCategories.first ?? '综合'),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.homeTabCircles), findsNothing);
+      expect(find.text(UITextConstants.circlesDirectoryTitle), findsNothing);
+    });
+
+    testWidgets('展示分类标签与频道管理入口', (tester) async {
+      final mock = _FixtureCategoryMockRepo();
+      final cfg = _fixtureCategoryTabsConfig();
+      await tester.pumpWidget(_scopedApp(mock: mock));
+      await tester.pump();
+      await _circlesPumpSettled(tester);
+
+      expect(
+        find.byIcon(CupertinoIcons.line_horizontal_3_decrease),
+        findsOneWidget,
+      );
       final allLabel = cfg['all']?.label ?? '推荐';
       expect(find.text(allLabel), findsOneWidget);
       final meet = cfg['meet'];
@@ -120,7 +152,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await _circlesPumpSettled(tester);
 
-      expect(find.byType(CirclesPage), findsOneWidget);
+      expect(find.byType(CirclesHubPage), findsOneWidget);
     });
 
     testWidgets('窄屏大字号下保持自适应不溢出', (tester) async {
@@ -155,7 +187,7 @@ void main() {
       await tester.pumpWidget(_scopedApp(mock: _EmptyCircleRepository()));
       await tester.pump();
 
-      expect(find.byType(CirclesPage), findsOneWidget);
+      expect(find.byType(CirclesHubPage), findsOneWidget);
     });
   });
 }

@@ -9,7 +9,6 @@ import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 class HomeCirclesCategoryTab extends ConsumerWidget {
   final String categoryId;
   final String label;
-  final List<String> subCategories;
   final List<CircleHubFeedPostEntry> posts;
   final void Function(
     CircleHubFeedPostEntry tapped,
@@ -21,7 +20,6 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
     super.key,
     required this.categoryId,
     required this.label,
-    required this.subCategories,
     required this.posts,
     required this.onPostTap,
   });
@@ -60,8 +58,16 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
       );
     }
 
+    final horizontal = AppSpacing.feedContentHorizontal(context);
+
     return SliverPadding(
-      padding: const EdgeInsets.all(AppSpacing.postPreviewSectionPadding),
+      key: ValueKey<String>('home-circles-category-$categoryId'),
+      padding: EdgeInsets.fromLTRB(
+        horizontal,
+        AppSpacing.xs,
+        horizontal,
+        AppSpacing.containerXs,
+      ),
       sliver: SliverMasonryGrid.count(
         crossAxisCount: AppSpacing.responsiveGridColumns(context),
         mainAxisSpacing: AppSpacing.postPreviewGridSpacing,

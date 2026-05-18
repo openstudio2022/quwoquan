@@ -100,13 +100,9 @@ def g2_entities():
 
         check(td.entity_page(domain, etype, name).exists(),
               f"G2: page.md 不存在: {domain}/{etype}/{name}")
-        check(td.entity_manifest(domain, etype, name).exists(),
-              f"G2: manifest.json 不存在: {domain}/{etype}/{name}")
         mf = td.entity_manifest(domain, etype, name)
-        if mf.exists():
-            manifest = json.loads(mf.read_text(encoding="utf-8"))
-            check("tagRefs" not in manifest, f"G2: entity manifest 不应重复 tagRefs: {domain}/{etype}/{name}")
-            check("geoTagRef" not in manifest, f"G2: entity manifest 不应重复 geoTagRef: {domain}/{etype}/{name}")
+        check(not mf.exists(),
+              f"G2: 实体叶 manifest.json 应删除: {domain}/{etype}/{name}")
 
     check(domains_seen >= EXPECTED_DOMAINS,
           f"G2: 缺领域: {EXPECTED_DOMAINS - domains_seen}")
@@ -322,12 +318,15 @@ def g11_entity_type_taxonomy():
 # ─── G12: 全局标签四分组完备性 ────────────────────────────────────
 REQUIRED_GROUPS = ["Topic", "Audience", "Format", "Entity"]
 REQUIRED_GROUP_DIMS = {
-    "Topic": ["场景", "事件话题", "时间", "地理",
-              "自然风光", "美食餐饮", "住宿", "旅行", "运动", "健康养生", "摄影"],
+    "Topic": ["场景", "事件", "话题", "时间", "地理",
+              "自然风光", "历史文化", "人文社科", "美食餐饮", "住宿", "旅行",
+              "运动", "健康养生", "科技", "数码", "摄影"],
     "Audience": ["用户", "创作者", "圈子"],
     "Format": ["内容载体", "内容角度", "表现手法", "视觉风格", "互动玩法", "商业形式"],
     "Entity": ["地点", "机构", "活动", "人物", "品牌", "作品", "商品", "生物", "交通工具"],
 }
+
+RETIRED_TOPIC_ROOTS = ["事件话题", "数码科技"]
 
 def g12_dimension_completeness():
     tags_root = PUBLISH_ROOT / "v1" / "tags"
@@ -337,6 +336,9 @@ def g12_dimension_completeness():
         for dim_name in REQUIRED_GROUP_DIMS.get(g, []):
             dim_dir = tags_root / g / dim_name
             check(dim_dir.exists(), f"G12: publish 缺维度目录 {g}/{dim_name}/")
+    for retired in RETIRED_TOPIC_ROOTS:
+        check(not (tags_root / "Topic" / retired).exists(),
+              f"G12: 已退役的 Topic 根仍存在: Topic/{retired}/")
 
 
 # ─── G13: 行政区完备性（多省抽样） ─────────────────────────────────────

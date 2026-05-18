@@ -22,7 +22,7 @@ class AppConceptConstants {
   /// 助理拟人化名称（可配置）
   static const String assistantName = '智多星';
 
-  /// 助理入口标签（用于底部主导航）
+  /// 助理入口标签（用于全局入口）
   static const String assistantTabLabel = '私助';
 
   /// 助理展示名（用于对话、设置等文案）
@@ -77,10 +77,10 @@ class AppConceptConstants {
 
   // ==================== 五大频道 ====================
   static const String discovery = '首页';
-  static const String circles = '群组';
+  static const String circles = '圈子';
   static const String create = '创作';
-  static const String chat = '趣信';
-  static const String profile = '我的';
+  static const String chat = '消息';
+  static const String profile = '我';
 
   // ==================== 趣聊 Tab ====================
   static const String messages = '消息';

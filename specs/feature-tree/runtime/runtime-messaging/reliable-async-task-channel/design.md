@@ -737,12 +737,11 @@ beta：
 - `seed-box` 至少声明 `chat`、`user`、`content`、`notification` 的模块组合，用于端云集成验证。
 - beta 是模块化 onebox 主验证环境，必须覆盖任务投递、合并、worker ACK、notification fanout。
 
-gamma / prod-gray / prod：
+gamma / prod：
 
 - 默认与 beta 拓扑一致，继续支持 `seed-box` 组合包。
 - gamma 用于容量演练和拆分包演练。
-- prod-gray 允许灰度启用独立 worker package。
-- prod 默认先 onebox，达到容量阈值后拆分热点模块。
+- prod 默认先 onebox；发布波次内可灰度启用独立 worker package，达到容量阈值后拆分热点模块。
 - 拆分只改变 package composition，不改变 domain API、Outbox 事实源和 task routing 语义。
 
 拆分触发阈值必须进入配置或 catalog：
@@ -811,7 +810,7 @@ package catalog 必须登记：
 - deployment package 启动时必须校验 task/module/package catalog 与 runtime 版本兼容。
 - 不兼容必须 fail-fast，并输出结构化 `RuntimeFailure`。
 - package 中 module 的 domain 必须属于当前 process-domain mapping。
-- beta/gamma/prod-gray/prod 的 package/module mapping 必须一致，除非显式声明 prod-gray 灰度 override。
+- beta/gamma/prod 的 package/module mapping 必须一致，除非显式声明 prod 灰度 override。
 
 ### 11.5 租约与弹性
 

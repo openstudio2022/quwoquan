@@ -298,20 +298,12 @@ def process_row(row: dict, source_type: str, args, seen_names: dict) -> bool:
     }
 
     page_md = make_school_page(name, row, source_type)
-    manifest_json = {
-        "entityRefs": [],
-        "assets": [f"{name}_cover.jpg"],
-        "createdAt": NOW_ISO,
-        "updatedAt": NOW_ISO,
-    }
 
     if not args.dry_run:
         entity_dir.mkdir(parents=True, exist_ok=True)
         (entity_dir / "_entity.json").write_text(
             json.dumps(entity_json, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         (entity_dir / "page.md").write_text(page_md, encoding="utf-8")
-        (entity_dir / "manifest.json").write_text(
-            json.dumps(manifest_json, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     stats["created"] += 1
     return True

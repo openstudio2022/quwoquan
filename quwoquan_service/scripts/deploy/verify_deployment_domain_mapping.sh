@@ -15,7 +15,7 @@ ruby -ryaml -e '
   envs = data["environments"]
   abort("[verify] FAIL: environments must be a map") unless envs.is_a?(Hash) && !envs.empty?
 
-  expected_envs = %w[alpha beta gamma prod-gray prod]
+  expected_envs = %w[alpha beta gamma prod]
   expected_envs.each do |env|
     abort("[verify] FAIL: missing environments.#{env}") unless envs[env].is_a?(Hash) && !envs[env].empty?
   end
@@ -58,10 +58,10 @@ ruby -ryaml -e '
     end
   end
 
-  # beta/gamma/prod-gray/prod must keep identical topology mapping.
-  %w[gamma prod-gray prod].each do |env|
+  # beta/gamma/prod must keep identical topology mapping.
+  %w[gamma prod].each do |env|
     if normalized["beta"] != normalized[env]
-      abort("[verify] FAIL: beta, gamma, prod-gray and prod process-domain mapping must be identical")
+      abort("[verify] FAIL: beta, gamma and prod process-domain mapping must be identical")
     end
   end
 
@@ -97,7 +97,7 @@ ruby -ryaml -e '
     abort("[verify] FAIL: process_domain_plane_mapping missing plane #{plane}") unless planes.include?(plane)
   end
 
-  expected_envs = %w[alpha beta gamma prod-gray prod]
+  expected_envs = %w[alpha beta gamma prod]
   expected_envs.each do |env|
     abort("[verify] FAIL: process_domain_plane_mapping missing environments.#{env}") unless envs[env].is_a?(Hash) && !envs[env].empty?
   end
@@ -131,9 +131,9 @@ ruby -ryaml -e '
     end
   end
 
-  %w[gamma prod-gray prod].each do |env|
+  %w[gamma prod].each do |env|
     if normalized["beta"] != normalized[env]
-      abort("[verify] FAIL: beta, gamma, prod-gray and prod process-domain-plane mapping must be identical")
+      abort("[verify] FAIL: beta, gamma and prod process-domain-plane mapping must be identical")
     end
   end
 

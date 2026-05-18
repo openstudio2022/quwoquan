@@ -41,6 +41,18 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       cluePlaceholder: UITextConstants.addHomepageVehicleCluePlaceholder,
       usesLocationFields: false,
     ),
+    _HomepageTypeOption(
+      id: 'university',
+      label: UITextConstants.homepageTypeUniversity,
+      cluePlaceholder: UITextConstants.addHomepageUniversityCluePlaceholder,
+      usesLocationFields: true,
+    ),
+    _HomepageTypeOption(
+      id: 'travel_photo',
+      label: UITextConstants.homepageTypeTravelPhoto,
+      cluePlaceholder: UITextConstants.addHomepageTravelPhotoCluePlaceholder,
+      usesLocationFields: true,
+    ),
   ];
 
   late final TextEditingController _titleController;
@@ -276,7 +288,8 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
               label: UITextConstants.addHomepageVehicleSeriesLabel,
               child: _PlainFormTextField(
                 controller: _vehicleSeriesController,
-                placeholder: UITextConstants.addHomepageVehicleSeriesPlaceholder,
+                placeholder:
+                    UITextConstants.addHomepageVehicleSeriesPlaceholder,
               ),
             ),
             _buildDivider(),
@@ -372,7 +385,9 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
       _isSubmitting = true;
     });
     try {
-      await ref.read(homepageRepositoryProvider).suggestHomepageCandidate(
+      await ref
+          .read(homepageRepositoryProvider)
+          .suggestHomepageCandidate(
             draft: HomepageSuggestionDraft(
               title: title,
               homepageType: _homepageType,
@@ -408,9 +423,10 @@ class _SuggestHomepagePageState extends ConsumerState<SuggestHomepagePage> {
   String _buildVehicleTitle() {
     final manufacturer = _vehicleManufacturerController.text.trim();
     final series = _vehicleSeriesController.text.trim();
-    return <String>[manufacturer, series]
-        .where((item) => item.isNotEmpty)
-        .join(' ');
+    return <String>[
+      manufacturer,
+      series,
+    ].where((item) => item.isNotEmpty).join(' ');
   }
 
   String _buildVehicleSubtitle() {
@@ -522,7 +538,9 @@ class _PlainFormTextField extends StatelessWidget {
       minLines: maxLines,
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerXs,
-        vertical: maxLines > 1 ? AppSpacing.intraGroupSm : AppSpacing.intraGroupXs,
+        vertical: maxLines > 1
+            ? AppSpacing.intraGroupSm
+            : AppSpacing.intraGroupXs,
       ),
       style: TextStyle(
         fontSize: AppTypography.iosBody,

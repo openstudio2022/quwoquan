@@ -2,7 +2,7 @@
 
 > 目标：进入 `main` 前完成 pull request required checks 阻断验证；进入 `main` 后再执行发布后续动作。主干门禁统一为 `03 + 04 + 05`。
 
-**五环境总览**（alpha / beta / gamma / prod-gray / prod、波次关系）：见 [environment_matrix.md](environment_matrix.md)。
+**四环境总览**（alpha / beta / gamma / prod、波次关系）：见 [environment_matrix.md](environment_matrix.md)。
 
 ## 1. 当前 Workflows
 
@@ -14,7 +14,7 @@
 | 02. Service Pipeline | `service_pipeline.yml` | `push main`、手动 | main 后 Go 构建、Python 镜像、prod 校验 | G2 / post-main |
 | 07. Deploy To Prod (Auto) | `deploy-prod-auto.yml` | `push main`、手动 | main 后自动推进 prod 占位链路 | G5c |
 | 01. App Pipeline | `app_pipeline.yml` | `v*` tag、手动 | 端侧发布构建（macOS） | 发布 |
-| 06. Deploy To Prod (Gray) | `deploy-prod-gray.yml` | 手动 | 半自动灰度 | G5c |
+| 06. Deploy To Prod (Gray) | 手动触发的半自动生产灰度 workflow（见 `.github/workflows`） | 手动 | 半自动灰度 | G5c |
 | 08. Deploy Gamma ECS | `deploy-gamma-ecs.yml` | 手动 | ECS gamma / onebox 手动发布与 prod 复验（完整 ECS pre 链 + prod 升级） | G5a → G5b |
 | 09. Gamma Full Validation | `gamma-full-validation.yml` | 每晚 22:00 UTC+8、手动 | Nightly 全量验证：完整 ECS deploy + full semantic smoke + Patrol UI + 设备矩阵 | G5b |
 

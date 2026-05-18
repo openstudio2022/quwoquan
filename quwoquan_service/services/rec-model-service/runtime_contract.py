@@ -6,7 +6,7 @@ from typing import Any
 
 import yaml
 
-VALID_APP_ENVS = {"alpha", "beta", "gamma", "prod-gray", "prod"}
+VALID_APP_ENVS = {"alpha", "beta", "gamma", "prod"}
 EXPECTED_SERVICE_NAME = "recommendation-service"
 
 
@@ -146,9 +146,9 @@ def _validate_runtime_compatibility_or_die(
 def bootstrap_runtime_contract_or_die() -> dict[str, Any]:
     """
     Fail-fast runtime contract:
-    - APP_ENV must be one of alpha/beta/gamma/prod-gray/prod.
+    - APP_ENV must be one of alpha/beta/gamma/prod.
     - SERVICE_NAME, when provided, must be recommendation-service.
-    - For gamma/prod-gray/prod, CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT are required.
+    - For gamma/prod, CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT are required.
     """
     app_env = _env("APP_ENV") or "alpha"
     if app_env not in VALID_APP_ENVS:
@@ -166,7 +166,7 @@ def bootstrap_runtime_contract_or_die() -> dict[str, Any]:
     config_version = _env("CONFIG_VERSION")
     image_version = _env("IMAGE_VERSION")
 
-    if app_env in {"gamma", "prod-gray", "prod"}:
+    if app_env in {"gamma", "prod"}:
         required = ["CONFIG_VERSION", "IMAGE_VERSION", "CONFIG_ROOT"]
         missing = [k for k in required if not _env(k)]
         if missing:

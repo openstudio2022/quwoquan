@@ -382,14 +382,6 @@ def gen_entity(e: dict):
     }
     write_json(edir / "_entity.json", entity_json)
 
-    manifest_json = {
-        "entityRefs": [],
-        "assets": [f'{e["name"]}_cover.jpg'],
-        "createdAt": NOW_ISO,
-        "updatedAt": NOW_ISO,
-    }
-    write_json(edir / "manifest.json", manifest_json)
-
     page_md = f"""# {e["name"]}
 
 > {e["desc"]}

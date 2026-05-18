@@ -30,7 +30,7 @@
 | task/module/package catalog | `reliable_task_module_catalog.yaml` | 已覆盖 |
 | catalog 版本与 fail-fast | `spec.md`、`design.md`、`tasks.md` | 已覆盖 |
 | domain/module 权限边界 | `design.md`、`verify_module_permission_scope.py` | 已覆盖 |
-| beta/gamma/prod-gray/prod 一致性 | `verify_module_package_mapping.py` | 已覆盖 |
+| beta/gamma/prod 一致性 | `verify_module_package_mapping.py` | 已覆盖 |
 
 ## 领域服务处置
 

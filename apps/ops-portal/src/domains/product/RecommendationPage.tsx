@@ -42,6 +42,15 @@ export function RecommendationPage() {
     }));
   }, [policies]);
 
+  const surfaceRows = [
+    ['featured', '首页精品', 'feed.impression / click / dwell'],
+    ['circle', '圈子推荐', 'circleId + feedRequestId'],
+    ['campus', '校园场景', 'topicId=campus + homepageId'],
+    ['travel', '旅行摄影', 'topicId=travel_photo + homepageId'],
+    ['homepage_detail', '实体主页详情', 'homepageId + related content'],
+    ['search_xiaoqu', '搜索 + 小趣', 'query + assistant handoff'],
+  ];
+
   return (
     <PageScaffold
       title="推荐运营"
@@ -140,6 +149,29 @@ export function RecommendationPage() {
             </div>
           ) : null}
         </div>
+      </SectionCard>
+
+      <SectionCard title="推荐 Surface 看板" subtitle="按五栏小趣定稿 surface 展示曝光、点击、CTR 与停留归因">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Surface</th>
+              <th>场景</th>
+              <th>归因维度</th>
+              <th>指标</th>
+            </tr>
+          </thead>
+          <tbody>
+            {surfaceRows.map(([surface, label, attribution]) => (
+              <tr key={surface}>
+                <td>{surface}</td>
+                <td>{label}</td>
+                <td>{attribution}</td>
+                <td>曝光 / 点击 / CTR / dwell</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </SectionCard>
 
       <SectionCard title="可编辑参数空间" subtitle="只暴露受限参数，不允许通过控制面直写个体排序结果">
