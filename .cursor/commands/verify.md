@@ -46,6 +46,61 @@ description: 验证 Scenario / Journey 完成度、plan 覆盖率与 CR 证据
 - 是否引入第二真相源（tool 文案、skill 策略、prompt 模板、权限矩阵）
 - 回归测试是否以合同和结构为主，而不是以垂类样例文案为主
 
+## 工程合规核查（代码评审专家视角）
+
+若本次交付涉及代码变更，还必须核查：
+
+### DDD / 强类型 / 存储无关
+
+```
+☐ 新增域逻辑在 domain/runtime，无 DB driver import
+☐ 新增存储在 infrastructure，interface 定义在上层
+☐ Go struct / Dart DTO 无 interface{} / Map<String, dynamic> 穿透
+☐ Repository 是 interface，切换存储只需替换 infra + DI
+☐ 端云字段对齐：Dart DTO ↔ Go struct ↔ metadata YAML
+☐ 元数据驱动：path/operation/surface/errorCode 来自 codegen
+☐ codegen 文件（DO NOT EDIT）无手改
+```
+
+### 可观测与推荐合规
+
+```
+☐ 涉及的页面已有行为埋点（或已创建 /obs-plan 条目）
+☐ 新增行为信号已纳入 supportedBehaviorActions
+☐ 新增字段已同步 feature_registry.yaml
+☐ verify_feature_consistency.py 通过（若涉及推荐链路）
+☐ 新增页面已更新页面横向质量矩阵
+☐ 性能关键路径有 TTI / P99 目标
+```
+
+### 合规扫描命令
+
+```bash
+# DDD 导入方向扫描
+cd quwoquan_service && python3 -c "
+import pathlib
+violations = []
+for d in ['runtime/recommendation', 'runtime/observability']:
+    p = pathlib.Path(d)
+    if not p.exists(): continue
+    for f in p.rglob('*.go'):
+        c = f.read_text()
+        for b in ['go.mongodb.org', 'github.com/go-redis', 'database/sql']:
+            if b in c: violations.append(f'DDD: {f} imports {b}')
+for v in violations: print(f'✗ {v}')
+if not violations: print('✓ DDD runtime layers: PASS')
+"
+
+# 特征一致性（若涉及推荐）
+cd quwoquan_service && python3 scripts/ml/verify_feature_consistency.py
+
+# Mock 隔离
+make verify-app-mock-isolation
+
+# 页面矩阵
+make verify-app-page-horizontal-quality
+```
+
 ## G3
 
 ```bash
@@ -59,6 +114,9 @@ make gate-full
 L3_scenario: <scenario>
 L2_journey: <journey>
 CR: <change-request>
+DDD 合规: PASS/FAIL
+端云一致: PASS/FAIL
+T1~T4: T1 ✓ T2 ✓ T3 ○ T4 ○
 BLOCKING: <N>
 WARNING: <N>
 ```

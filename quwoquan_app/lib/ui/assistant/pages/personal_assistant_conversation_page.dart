@@ -12,12 +12,14 @@ import 'package:quwoquan_app/assistant/transcript/row/assistant_transcript_timel
 import 'package:quwoquan_app/components/conversation/conversation_timeline.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/assistant/pages/assistant_reference_webview_page.dart';
 import 'package:quwoquan_app/ui/assistant/providers/personal_assistant_stream_controller.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/message/assistant_message_bubble.dart';
@@ -179,23 +181,22 @@ class _PersonalAssistantConversationPageState
     if (widget.embedded) {
       return content;
     }
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
+    return AppScaffold(
+      backgroundColor: CupertinoColors.systemBackground.resolveFrom(context),
+      navigationBar: AppNavigationBar(
         middle: const Text(UITextConstants.assistantEntryFindPersonal),
         leading: widget.onBack == null
             ? null
-            : CupertinoButton(
-                padding: EdgeInsets.zero,
+            : AppNavigationBarIconButton(
+                icon: CupertinoIcons.back,
                 onPressed: widget.onBack,
-                child: const Icon(CupertinoIcons.back),
               ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
+        trailing: AppNavigationBarIconButton(
+          icon: AppNavigationSemanticConstants.settingsActionIcon,
           onPressed: () => context.push(AppRoutePaths.assistantManagement),
-          child: const Icon(CupertinoIcons.settings),
         ),
       ),
-      child: SafeArea(child: content),
+      child: content,
     );
   }
 }
@@ -358,11 +359,11 @@ class _PersonalAssistantConversationBody extends ConsumerWidget {
                   AppSpacing.semantic[DesignSemanticConstants
                           .container]?[DesignSemanticConstants.sm] ??
                       AppSpacing.containerSm,
-                  AppSpacing.sm,
+                  AppSpacing.chatInputToolbarVerticalPadding,
                   AppSpacing.semantic[DesignSemanticConstants
                           .container]?[DesignSemanticConstants.sm] ??
                       AppSpacing.containerSm,
-                  AppSpacing.sm,
+                  AppSpacing.chatInputToolbarVerticalPadding,
                 ),
                 child: Material(
                   type: MaterialType.transparency,

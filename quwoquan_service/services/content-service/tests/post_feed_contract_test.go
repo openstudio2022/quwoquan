@@ -14,7 +14,7 @@ import (
 )
 
 // TestGetFeedByType creates image and video posts, then requests feed with
-// type=photo and verifies only image-type items are returned.
+// type=image and verifies only image-type items are returned.
 // contract.yaml: get_feed_by_type / go_func: TestGetFeedByType
 func TestGetFeedByType(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
@@ -22,7 +22,7 @@ func TestGetFeedByType(t *testing.T) {
 	// Create mixed content types
 	for i := range 3 {
 		createPost(t, fmt.Sprintf(
-			`{"contentType":"image","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"]}`,
+			`{"contentType":"image","title":"Photo post %d","mediaUrls":["https://example.com/img%d.jpg"],"deviceInfo":{"width":1280,"height":720}}`,
 			i, i,
 		))
 	}
@@ -33,7 +33,7 @@ func TestGetFeedByType(t *testing.T) {
 		))
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&limit=10", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=10", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -50,9 +50,28 @@ func TestGetFeedByType(t *testing.T) {
 		t.Error("expected at least one image post in photo feed")
 	}
 	for _, item := range page.Items {
-		if item["type"] != "photo" && item["contentType"] != "image" {
+		if item["type"] != "image" && item["contentType"] != "image" {
 			t.Errorf("non-photo item in photo feed: %v", item)
 		}
+	}
+
+	var dimensionItem map[string]any
+	for _, item := range page.Items {
+		if item["title"] == "Photo post 0" {
+			dimensionItem = item
+			break
+		}
+	}
+	if dimensionItem == nil {
+		t.Fatal("expected Photo post 0 in feed response")
+	}
+	width, widthOK := dimensionItem["width"].(float64)
+	height, heightOK := dimensionItem["height"].(float64)
+	if !widthOK || !heightOK {
+		t.Fatalf("expected width/height on feed item, got %v", dimensionItem)
+	}
+	if int(width) != 1280 || int(height) != 720 {
+		t.Fatalf("unexpected dimensions on feed item: width=%v height=%v", width, height)
 	}
 }
 
@@ -66,7 +85,7 @@ func TestGetFeedByIdentity(t *testing.T) {
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?identity=moment&type=article&limit=10",
+		"/v1/content/feed?identity=moment&type=image&limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -149,7 +168,7 @@ func TestGetFeedCursorPagination(t *testing.T) {
 	}
 
 	// First page: limit=3
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&limit=3", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=3", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 
@@ -181,7 +200,7 @@ func TestGetFeedCursorPagination(t *testing.T) {
 
 	req2 := httptest.NewRequest(
 		http.MethodGet,
-		"/v1/content/feed?type=photo&limit=3&cursor="+page1.NextCursor, nil,
+		"/v1/content/feed?type=image&limit=3&cursor="+page1.NextCursor, nil,
 	)
 	rec2 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec2, req2)
@@ -380,7 +399,7 @@ func TestListFeedWithPagination(t *testing.T) {
 		createPost(t, payload)
 	}
 
-	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=photo&limit=3", nil)
+	req1 := httptest.NewRequest(http.MethodGet, "/v1/content/feed?type=image&limit=3", nil)
 	rec1 := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec1, req1)
 

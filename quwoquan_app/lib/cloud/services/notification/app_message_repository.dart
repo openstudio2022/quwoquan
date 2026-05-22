@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
@@ -67,10 +68,10 @@ class MockAppMessageRepository implements AppMessageRepository {
 }
 
 class RemoteAppMessageRepository implements AppMessageRepository {
-  final http.Client _client;
+  final CloudHttpClient _httpClient;
 
-  RemoteAppMessageRepository({http.Client? client})
-    : _client = client ?? http.Client();
+  RemoteAppMessageRepository({CloudHttpClient? httpClient})
+    : _httpClient = httpClient ?? CloudHttpClient();
 
   @override
   Future<List<AppMessageWire>> listAppMessages({
@@ -80,7 +81,7 @@ class RemoteAppMessageRepository implements AppMessageRepository {
       NotificationApiMetadata.listAppMessagesPath,
       <String, String>{'limit': '$limit'},
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       uri,
       headers: CloudRequestHeaders.forPage(
         NotificationRequestPageIds.listAppMessages,
@@ -96,7 +97,7 @@ class RemoteAppMessageRepository implements AppMessageRepository {
 
   @override
   Future<AppMessageWire> getAppMessage(String messageId) async {
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       _uri(NotificationApiMetadata.getAppMessagePath(messageId: messageId)),
       headers: CloudRequestHeaders.forPage(
         NotificationRequestPageIds.getAppMessage,
@@ -107,7 +108,7 @@ class RemoteAppMessageRepository implements AppMessageRepository {
 
   @override
   Future<AppMessageWire> ackAppMessage(String messageId) async {
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       _uri(NotificationApiMetadata.ackAppMessagePath(messageId: messageId)),
       headers: CloudRequestHeaders.forPage(
         NotificationRequestPageIds.ackAppMessage,
@@ -118,7 +119,7 @@ class RemoteAppMessageRepository implements AppMessageRepository {
 
   @override
   Future<AppMessageWire> readAppMessage(String messageId) async {
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       _uri(NotificationApiMetadata.readAppMessagePath(messageId: messageId)),
       headers: CloudRequestHeaders.forPage(
         NotificationRequestPageIds.readAppMessage,
@@ -129,7 +130,7 @@ class RemoteAppMessageRepository implements AppMessageRepository {
 
   @override
   Future<int> getUnreadCount() async {
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       _uri(NotificationApiMetadata.getAppMessageUnreadCountPath),
       headers: CloudRequestHeaders.forPage(
         NotificationRequestPageIds.getAppMessageUnreadCount,

@@ -5,13 +5,14 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
@@ -23,12 +24,17 @@ import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show BehaviorAction, ReferralSource;
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/article_reader_observability.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart'
+    show ContentType;
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
@@ -64,6 +70,8 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
     this.defaultCircleId,
     this.initialInteractionSnapshot = const MediaViewerInteractionSnapshot(),
     this.onDismissed,
+    this.onPostIndexChanged,
+    this.topChromeSafeInset = 0,
   });
 
   final bool showWorksToolbar;
@@ -91,6 +99,8 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final String? defaultCircleId;
   final MediaViewerInteractionSnapshot initialInteractionSnapshot;
   final ValueChanged<MediaViewerResult>? onDismissed;
+  final ValueChanged<int>? onPostIndexChanged;
+  final double topChromeSafeInset;
 
   @override
   ConsumerState<WorksImmersiveViewer> createState() =>
@@ -100,8 +110,6 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
 class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     with TickerProviderStateMixin {
   static bool _didAutoExpandInSession = false;
-  static const double _toolbarReservedHeight =
-      ImmersiveEngagementBar.preferredReservedHeight;
 
   String? _filterType;
   bool _isFilterExpanded = false;
@@ -122,6 +130,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   // Follow-button delayed reveal: 3 s for photos, 5 s for video/article.
   Timer? _followButtonTimer;
   bool _showFollowButton = false;
+  String? _followTimerPostId;
 
   late final PageController _pageController;
 
@@ -149,11 +158,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       if (widget.showTopNavigation) {
         _runOneTimeAutoExpand();
       }
-      // Kick off the follow-button timer for the first visible post.
       final posts = _buildFeed();
       if (posts.isNotEmpty) {
         final initialIndex = _currentPage.clamp(0, posts.length - 1);
-        _startFollowButtonTimer(posts[initialIndex]);
         // Track impression for the first post
         _trackImpressionForPost(posts[initialIndex]);
         _pageEnterTime = DateTime.now();
@@ -264,6 +271,34 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     });
   }
 
+  void _ensureFollowButtonVisibility(PostBaseDto? post) {
+    if (post == null) {
+      _followTimerPostId = null;
+      return;
+    }
+    final isFollowing = effectiveProfileFollowing(ref, post.subAccountId);
+    final shouldResync =
+        _followTimerPostId != post.id || (isFollowing && !_showFollowButton);
+    if (!shouldResync) {
+      return;
+    }
+    _followTimerPostId = post.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final posts = _buildFeed();
+      if (posts.isEmpty) {
+        return;
+      }
+      final current = posts[_currentPage.clamp(0, posts.length - 1)];
+      if (current.id != post.id) {
+        return;
+      }
+      _startFollowButtonTimer(current);
+    });
+  }
+
   void _runOneTimeAutoExpand() {
     if (_didAutoExpandInSession) return;
     _didAutoExpandInSession = true;
@@ -329,7 +364,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         onReport: () {
           ref
               .read(behaviorRepositoryProvider)
-              .reportSingle(contentId: post.id, action: 'report');
+              .reportSingle(contentId: post.id, action: BehaviorAction.report);
           ref
               .read(reportRepositoryProvider)
               .createReport(
@@ -816,6 +851,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void _trackImpressionForPost(PostBaseDto post) {
     final tracker = ref.read(contentBehaviorTrackerProvider);
     tracker.trackImpression(post.id);
+
+    final engTracker = ref.read(contentEngagementTrackerProvider);
+    engTracker.trackContentEnter(
+      post.id,
+      contentType: _mapPostContentType(post),
+      referralSource: ReferralSource.organicFeed,
+      totalImages: post.imageUrls.length,
+      authorId: post.authorId,
+    );
+
     if (!_isArticleLikePost(post)) {
       return;
     }
@@ -997,6 +1042,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final tracker = ref.read(contentBehaviorTrackerProvider);
     tracker.trackDwell(post.id, durationSeconds: durationSec);
     _pageEnterTime = null;
+
+    ref.read(contentEngagementTrackerProvider).trackContentExit(post.id);
+  }
+
+  ContentType _mapPostContentType(PostBaseDto post) {
+    final fmt = post.displayFormat;
+    if (fmt == 'video') return ContentType.video;
+    if (fmt == 'article') return ContentType.article;
+    if (fmt == 'moment') return ContentType.moment;
+    return ContentType.photo;
   }
 
   // ── 互动操作（乐观 UI + 云侧 API 同步）────────────────────────
@@ -1071,6 +1126,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final currentPost = posts.isEmpty
         ? null
         : posts[_currentPage.clamp(0, posts.length - 1)];
+    _ensureFollowButtonVisibility(currentPost);
     final currentLayoutSpec = currentPost == null
         ? ImmersiveViewerStageLayoutSpec.feedRail
         : _layoutSpecForPost(currentPost);
@@ -1097,10 +1153,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
           statusBarColor: AppColors.transparent,
-          statusBarIconBrightness: Brightness.light,
-          statusBarBrightness: Brightness.dark,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
           systemNavigationBarColor: AppColors.transparent,
-          systemNavigationBarIconBrightness: Brightness.light,
+          systemNavigationBarIconBrightness: Brightness.dark,
         ),
         child: GestureDetector(
           behavior: HitTestBehavior.deferToChild,
@@ -1129,17 +1185,18 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                       // Track skip: user swiped away from prevPost
                       final enterTime = _pageEnterTime;
                       final skipDwell = enterTime != null
-                          ? DateTime.now().difference(enterTime).inMilliseconds / 1000.0
+                          ? DateTime.now()
+                                    .difference(enterTime)
+                                    .inMilliseconds /
+                                1000.0
                           : null;
-                      ref.read(contentBehaviorTrackerProvider).trackSkip(
-                        prevPost.id,
-                        dwellSeconds: skipDwell,
-                      );
+                      ref
+                          .read(contentBehaviorTrackerProvider)
+                          .trackSkip(prevPost.id, dwellSeconds: skipDwell);
 
                       setState(() => _currentPage = index);
-                      // Reset + restart the follow-button timer for the new post.
+                      widget.onPostIndexChanged?.call(index);
                       final newPost = posts[index.clamp(0, posts.length - 1)];
-                      _startFollowButtonTimer(newPost);
                       _trackImpressionForPost(newPost);
                       _pageEnterTime = DateTime.now();
                     }
@@ -1166,8 +1223,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 top: 0,
                 left: 0,
                 right: 0,
-                child: SafeArea(
-                  bottom: false,
+                child: Padding(
+                  padding: EdgeInsets.only(top: widget.topChromeSafeInset),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1220,7 +1277,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: _toolbarReservedHeight + AppSpacing.containerSm,
+                  bottom: ImmersiveEngagementBar.overlayClearance(
+                    context,
+                    gap: AppSpacing.containerSm,
+                  ),
                   child: MediaCaptionBlock(
                     layoutSpec: currentLayoutSpec,
                     railKey: const ValueKey<String>('works-caption-rail'),
@@ -1499,7 +1559,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
       child: SizedBox(
         key: const ValueKey<String>('works-top-rail'),
         width: double.infinity,
-        height: AppSpacing.tabNavigationHeight,
+        height: AppSpacing.appChromeTopBarHeight(context),
         child: Stack(
           children: [
             Positioned.fill(
@@ -1551,7 +1611,9 @@ class _WorksPrimaryTopBar extends StatelessWidget {
 
             if (progressLabel?.isNotEmpty == true)
               Positioned(
-                left: AppSpacing.iconButtonMinSizeSm + AppSpacing.intraGroupSm,
+                left:
+                    AppSpacing.appChromeActionButtonSize +
+                    AppSpacing.appChromeActionGap(context),
                 top: 0,
                 bottom: 0,
                 child: Center(
@@ -1585,36 +1647,15 @@ class _WorksTopProgressLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: DecoratedBox(
-          key: const ValueKey<String>('works-top-progress-label'),
-          decoration: BoxDecoration(
-            color: AppColors.black.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(
-              AppSpacing.circularBorderRadius,
-            ),
-            border: Border.all(
-              color: AppColors.white.withValues(alpha: 0.12),
-              width: AppSpacing.hairline,
-            ),
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.containerSm,
-              vertical: AppSpacing.intraGroupXs,
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: AppColors.worksBodyText,
-                fontSize: AppTypography.xsPlus,
-                fontWeight: AppTypography.semiBold,
-              ),
-            ),
-          ),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+      child: Text(
+        label,
+        key: const ValueKey<String>('works-top-progress-label'),
+        style: TextStyle(
+          color: AppColors.white.withValues(alpha: 0.9),
+          fontSize: AppTypography.base,
+          fontWeight: AppTypography.semiBold,
         ),
       ),
     );
@@ -2145,9 +2186,10 @@ class _WorksArticleCanvas extends StatelessWidget {
           left: AppSpacing.intraGroupSm,
           right: AppSpacing.intraGroupSm,
           top: 0,
-          bottom:
-              _WorksImmersiveViewerState._toolbarReservedHeight +
-              AppSpacing.containerMd,
+          bottom: ImmersiveEngagementBar.overlayClearance(
+            context,
+            gap: AppSpacing.containerMd,
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final pages = resolvePaginatedArticlePages(
@@ -2244,9 +2286,10 @@ class _WorksTextCanvas extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.only(
               top: AppSpacing.containerLg,
-              bottom:
-                  _WorksImmersiveViewerState._toolbarReservedHeight +
-                  AppSpacing.containerMd,
+              bottom: ImmersiveEngagementBar.overlayClearance(
+                context,
+                gap: AppSpacing.containerMd,
+              ),
             ),
             child: ImmersiveViewerLayout.alignToRail(
               context: context,
@@ -2673,12 +2716,13 @@ class _WorksBottomToolbar extends StatelessWidget {
                 GestureDetector(
                   onTap: onUserTap,
                   behavior: HitTestBehavior.opaque,
-                  child: CircleAvatar(
-                    radius: AppSpacing.avatarUserMd * 0.5,
-                    backgroundImage: post.avatarUrl.isNotEmpty
-                        ? NetworkImage(post.avatarUrl)
-                        : null,
+                  child: RoundedSquareAvatar(
+                    size: AppSpacing.avatarUserMd,
+                    imageUrl: post.avatarUrl,
+                    name: post.displayName,
+                    borderRadius: AppSpacing.avatarUserMd * 0.5,
                     backgroundColor: AppColors.worksCaption,
+                    fallbackIcon: CupertinoIcons.person_crop_circle_fill,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.intraGroupSm),
@@ -2799,8 +2843,8 @@ class _WorksBottomToolbar extends StatelessWidget {
                     _action(
                       icon: Icon(
                         isLiked
-                            ? CupertinoIcons.heart_fill
-                            : CupertinoIcons.heart,
+                            ? FluentIcons.heart_24_filled
+                            : FluentIcons.heart_24_regular,
                         color: isLiked
                             ? AppColors.worksLike
                             : AppColors.worksTitle,
@@ -2813,7 +2857,7 @@ class _WorksBottomToolbar extends StatelessWidget {
                     SizedBox(width: actionGap),
                     _action(
                       icon: Icon(
-                        CupertinoIcons.arrowshape_turn_up_right,
+                        FluentIcons.share_24_regular,
                         color: AppColors.worksTitle,
                         size: AppSpacing.iconMedium,
                       ),
@@ -2840,8 +2884,7 @@ class _WorksBottomToolbar extends StatelessWidget {
                     ),
                     SizedBox(width: actionGap),
                     _action(
-                      icon: Icon(
-                        CupertinoIcons.chat_bubble,
+                      icon: AppBubbleIcon(
                         color: AppColors.worksTitle,
                         size: AppSpacing.iconMedium,
                       ),

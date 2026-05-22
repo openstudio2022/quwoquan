@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
@@ -160,8 +159,8 @@ class MockRtcRepository implements RtcRepository {
 }
 
 class RemoteRtcRepository implements RtcRepository {
-  RemoteRtcRepository({http.Client? client})
-    : _http = CloudHttpClient(client: client);
+  RemoteRtcRepository({CloudHttpClient? httpClient})
+    : _http = httpClient ?? CloudHttpClient();
 
   final CloudHttpClient _http;
 

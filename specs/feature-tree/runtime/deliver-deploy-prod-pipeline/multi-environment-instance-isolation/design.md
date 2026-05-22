@@ -14,12 +14,12 @@
 
 ### 1. 不新增环境枚举
 
-保持现有五环境口径不变：
+保持现有四环境口径不变：
 
 | 层 | 取值 |
 |---|---|
-| App 运行时 | `APP_RUNTIME_ENV=alpha|beta|gamma|prod-gray|prod` |
-| 服务运行时 | `APP_ENV=alpha|beta|gamma|prod-gray|prod` |
+| App 运行时 | `APP_RUNTIME_ENV=alpha|beta|gamma|prod` |
+| 服务运行时 | `APP_ENV=alpha|beta|gamma|prod` |
 | seed manifest | 继续复用 `app_alpha_seed_manifest.json` / `app_beta_seed_manifest.json` / `app_gamma_seed_manifest.json` |
 
 实例化只发生在启动命令、状态记录和诊断层，不引入新配置目录。

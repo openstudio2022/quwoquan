@@ -10,9 +10,11 @@ import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart'
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_session_provider.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
@@ -396,7 +398,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       ),
     );
     final adaptiveHeight = titleHeight + (AppSpacing.intraGroupSm * 2);
-    return adaptiveHeight > kToolbarHeight ? adaptiveHeight : kToolbarHeight;
+    final minHeight = AppSpacing.appChromeTopBarHeight(context);
+    return adaptiveHeight > minHeight ? adaptiveHeight : minHeight;
   }
 
   double _primaryTabBarHeight(BuildContext context) {
@@ -415,7 +418,11 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   }
 
   double _toolbarExtent(BuildContext context) {
-    return MediaQuery.paddingOf(context).top + _compactToolbarHeight(context);
+    return AppSpacing.appChromeTopSafeInset(
+          MediaQuery.viewPaddingOf(context).top,
+          context,
+        ) +
+        _compactToolbarHeight(context);
   }
 
   double _pinTransitionDistance() {
@@ -800,9 +807,17 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     required double opacity,
     required double backgroundOpacity,
   }) {
-    final topPadding = MediaQuery.paddingOf(context).top;
+    final topPadding = AppSpacing.appChromeTopSafeInset(
+      MediaQuery.viewPaddingOf(context).top,
+      context,
+    );
     final sideSlotWidth =
-        AppSpacing.minInteractiveSize + AppSpacing.containerXs;
+        AppSpacing.appChromeActionButtonSize + AppSpacing.containerXs;
+    final trailingSlotWidth = widget.mode == ProfileMode.mine
+        ? AppSpacing.appChromeActionButtonSize * 3 +
+              AppSpacing.intraGroupXs * 2 +
+              AppSpacing.containerXs
+        : sideSlotWidth;
     final resolvedOpacity = backgroundOpacity.clamp(0.0, 1.0);
     final compactForeground = resolvedOpacity > 0.12
         ? fg
@@ -812,9 +827,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       AppColors.iosSystemBackground(context),
       resolvedOpacity,
     )!;
-    final tintFill = resolvedOpacity > 0.14
-        ? AppColors.iosSecondaryFill(context)
-        : AppColors.black.withValues(alpha: 0.24);
+    final actionBackground =
+        AppNavigationSemanticConstants.chromeActionBackground(
+          surface: AppChromeSurface.overlay,
+        );
     return Positioned(
       top: 0,
       left: 0,
@@ -851,7 +867,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                                   icon: CupertinoIcons.back,
                                   onPressed:
                                       widget.onBack ?? () => context.pop(),
-                                  backgroundColor: tintFill,
+                                  backgroundColor: actionBackground,
                                   foregroundColor: compactForeground,
                                 )
                               : const SizedBox.shrink(),
@@ -875,7 +891,7 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                                     children: [
                                       CircleAvatar(
                                         radius: AppSpacing.avatarUserSm / 2,
-                                        backgroundColor: tintFill,
+                                        backgroundColor: actionBackground,
                                         backgroundImage:
                                             avatarUrl != null &&
                                                 avatarUrl.isNotEmpty
@@ -916,21 +932,32 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
                         ),
                       ),
                       SizedBox(
-                        width: sideSlotWidth,
+                        width: trailingSlotWidth,
                         child: Align(
                           alignment: Alignment.centerRight,
                           child: widget.mode == ProfileMode.mine
-                              ? ProfileIosIconButton(
-                                  icon: CupertinoIcons.settings,
-                                  onPressed: () =>
-                                      context.push(AppRoutePaths.settings),
-                                  backgroundColor: tintFill,
-                                  foregroundColor: compactForeground,
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const GlobalTopActions(
+                                      showQuickAction: false,
+                                      surface: AppChromeSurface.overlay,
+                                    ),
+                                    SizedBox(width: AppSpacing.intraGroupXs),
+                                    ProfileIosIconButton(
+                                      icon: AppNavigationSemanticConstants
+                                          .settingsActionIcon,
+                                      onPressed: () =>
+                                          context.push(AppRoutePaths.settings),
+                                      backgroundColor: actionBackground,
+                                      foregroundColor: compactForeground,
+                                    ),
+                                  ],
                                 )
                               : ProfileIosIconButton(
                                   icon: CupertinoIcons.ellipsis,
                                   onPressed: () => _showMoreOptions(context),
-                                  backgroundColor: tintFill,
+                                  backgroundColor: actionBackground,
                                   foregroundColor: compactForeground,
                                 ),
                         ),

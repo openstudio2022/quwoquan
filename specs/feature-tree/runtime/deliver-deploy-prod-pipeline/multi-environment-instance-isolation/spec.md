@@ -40,8 +40,8 @@
 | 关联节点 | 说明 |
 |----------|------|
 | `local-gamma-mirror` | 复用 gamma 语义做本地左移，但本特性要求其保持单套切换语义 |
-| `multi-environment-wave-deployment` | 复用五环境统一语义，不新增新环境枚举 |
-| `gray-release-to-prod` | gamma/prod-gray/prod 的发布口径不因端侧多实例而改变 |
+| `multi-environment-wave-deployment` | 复用四环境统一语义，不新增新环境枚举 |
+| `gray-release-to-prod` | gamma/prod 的发布口径不因端侧多实例而改变 |
 
 ## 支持矩阵
 

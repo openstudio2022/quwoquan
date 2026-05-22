@@ -5,7 +5,7 @@
 - 所有 ID 从目录路径推导，JSON 中不重复存储
 - entities 三层目录：entities/{领域}/{类型}/{名称}/（如 entities/地点/景区/峨眉山/）
 - tags 全目录化，每个标签 = 目录 + _definition.json
-- posts 按内容角度标签分类，标题命名目录，编号子目录
+- posts 按内容角度标签分类，实际路径为 posts/{载体}/{angle}/{title}/{seq}/（angle 取内容角度最后一段）
 - sop 目录与实体类型对齐：sop/主页/{领域}/{类型}/
 """
 from __future__ import annotations

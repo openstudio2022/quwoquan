@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 class BottomNavigationWidget extends ConsumerWidget {
@@ -38,26 +39,36 @@ class BottomNavigationWidget extends ConsumerWidget {
     final destinations = const <_BottomDestination>[
       _BottomDestination(
         label: AppConceptConstants.discovery,
-        icon: CupertinoIcons.house,
-        selectedIcon: CupertinoIcons.house_fill,
+        icon: FluentIcons.home_24_regular,
+        selectedIcon: FluentIcons.home_24_filled,
       ),
       _BottomDestination(
-        label: AppConceptConstants.assistantTabLabel,
-        icon: CupertinoIcons.sparkles,
-        selectedIcon: CupertinoIcons.sparkles,
+        label: AppConceptConstants.premium,
+        customIcon: _BottomCustomIcon.premium,
+      ),
+      _BottomDestination(
+        label: '',
+        semanticLabel: AppConceptConstants.create,
+        icon: CupertinoIcons.plus,
+        selectedIcon: CupertinoIcons.plus,
+        isPrimaryAction: true,
       ),
       _BottomDestination(
         label: AppConceptConstants.chat,
-        icon: CupertinoIcons.chat_bubble_2,
-        selectedIcon: CupertinoIcons.chat_bubble_2_fill,
+        customIcon: _BottomCustomIcon.messages,
       ),
       _BottomDestination(
         label: AppConceptConstants.profile,
-        icon: CupertinoIcons.person_crop_circle,
-        selectedIcon: CupertinoIcons.person_crop_circle_fill,
+        icon: FluentIcons.person_circle_24_regular,
+        selectedIcon: FluentIcons.person_circle_24_filled,
       ),
     ];
 
+    final sideInset = AppSpacing.bottomNavContentSideInset(
+      context,
+      bottomInset,
+    );
+    final navHeight = AppSpacing.bottomNavBarHeight(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: navBackground,
@@ -65,10 +76,10 @@ class BottomNavigationWidget extends ConsumerWidget {
           top: BorderSide(color: borderColor, width: AppSpacing.hairline),
         ),
       ),
-      child: SizedBox(
-        height: AppSpacing.bottomNavHeight + bottomInset,
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: sideInset),
+        child: SizedBox(
+          height: navHeight + bottomInset,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: List<Widget>.generate(destinations.length, (index) {
@@ -77,9 +88,7 @@ class BottomNavigationWidget extends ConsumerWidget {
               return Expanded(
                 child: CupertinoButton(
                   padding: EdgeInsets.zero,
-                  minimumSize: const Size.fromHeight(
-                    AppSpacing.bottomNavHeight,
-                  ),
+                  minimumSize: Size.zero,
                   onPressed: () {
                     if (selected) return;
                     HapticFeedback.selectionClick();
@@ -90,6 +99,7 @@ class BottomNavigationWidget extends ConsumerWidget {
                     selected: selected,
                     activeColor: activeColor,
                     inactiveColor: inactiveColor,
+                    contentHeight: navHeight + bottomInset,
                   ),
                 ),
               );
@@ -104,14 +114,22 @@ class BottomNavigationWidget extends ConsumerWidget {
 class _BottomDestination {
   const _BottomDestination({
     required this.label,
-    required this.icon,
-    required this.selectedIcon,
+    this.icon,
+    this.selectedIcon,
+    this.semanticLabel,
+    this.customIcon,
+    this.isPrimaryAction = false,
   });
 
   final String label;
-  final IconData icon;
-  final IconData selectedIcon;
+  final IconData? icon;
+  final IconData? selectedIcon;
+  final String? semanticLabel;
+  final _BottomCustomIcon? customIcon;
+  final bool isPrimaryAction;
 }
+
+enum _BottomCustomIcon { premium, messages }
 
 class _BottomNavItem extends StatelessWidget {
   const _BottomNavItem({
@@ -119,12 +137,14 @@ class _BottomNavItem extends StatelessWidget {
     required this.selected,
     required this.activeColor,
     required this.inactiveColor,
+    required this.contentHeight,
   });
 
   final _BottomDestination destination;
   final bool selected;
   final Color activeColor;
   final Color inactiveColor;
+  final double contentHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -133,34 +153,77 @@ class _BottomNavItem extends StatelessWidget {
       fontWeight: AppTypography.bottomNavLabelWeight,
       color: selected ? activeColor : inactiveColor,
       height: AppTypography.lineHeightTight,
-      letterSpacing: -0.08,
+      letterSpacing: AppSpacing.bottomNavLabelLetterSpacing,
     );
 
     return Semantics(
       button: true,
       selected: selected,
-      label: destination.label,
+      label: destination.semanticLabel ?? destination.label,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            selected ? destination.selectedIcon : destination.icon,
-            size: AppSpacing.iconSmall + 6,
-            color: selected ? activeColor : inactiveColor,
-          ),
-          SizedBox(height: AppSpacing.oneHalf),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            style: labelStyle,
-            child: Text(
-              destination.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          if (destination.isPrimaryAction)
+            Container(
+              width: AppSpacing.primaryActionCircleSize,
+              height: AppSpacing.primaryActionCircleSize,
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryColor.withValues(alpha: 0.28),
+                    blurRadius: AppSpacing.sm,
+                    offset: const Offset(
+                      AppSpacing.zero,
+                      AppSpacing.bottomNavPrimaryActionShadowOffsetDy,
+                    ),
+                  ),
+                ],
+              ),
+              child: Icon(
+                destination.selectedIcon,
+                size: AppSpacing.bottomNavPrimaryActionIconSize,
+                color: AppColors.white,
+              ),
+            )
+          else ...[
+            _buildIcon(selected ? activeColor : inactiveColor),
+            SizedBox(height: AppSpacing.bottomNavIconLabelGap),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              style: labelStyle,
+              child: Text(
+                destination.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildIcon(Color color) {
+    final size = AppSpacing.bottomNavItemIconSize;
+    return switch (destination.customIcon) {
+      _BottomCustomIcon.premium => AppPremiumMarkIcon(
+        size: size,
+        color: color,
+        filled: selected,
+      ),
+      _BottomCustomIcon.messages => AppMessagesIcon(
+        size: size,
+        color: color,
+        filled: selected,
+      ),
+      null => Icon(
+        selected ? destination.selectedIcon : destination.icon,
+        size: size,
+        color: color,
+      ),
+    };
   }
 }

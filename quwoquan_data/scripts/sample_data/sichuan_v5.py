@@ -165,8 +165,8 @@ def build(dry_run: bool = False):
             "theme": "Topic/旅行/玩法/市集探店",
         },
         {
-            "name": "峨眉山温泉度假酒店",
-            "label_en": "Emei Mountain Hot Spring Resort",
+            "name": "峨眉山蓝光己庄温泉度假村",
+            "label_en": "Blulight Yizhuang Emei Hot Spring Resort",
             "etype": "住宿",
             "domain": "地点",
             "city": "乐山市",
@@ -251,11 +251,16 @@ def build(dry_run: bool = False):
             validate_travel_post(pm, etype, context=f"{TASK_ID}:{title}")
             art = make_post_article(title, name, domain, etype, angle, paras)
             if not dry_run:
-                write_post(root, "article", f"内容角度/{angle}", title, 1, art, pm)
+                write_post(root, "article", angle, title, 1, art, pm)
             post_count += 1
 
     if not dry_run:
         write_task_manifest(root, TASK_ID, entity_count, post_count)
+
+        # publish 同构：把当前 task 产物同步到 publish/v1，供 gate_e2e 读取
+        publish_root = PUBLISH_ROOT / "v1"
+        shutil.copytree(root / "entities", publish_root / "entities", dirs_exist_ok=True)
+        shutil.copytree(root / "posts", publish_root / "posts", dirs_exist_ok=True)
 
         # gate_e2e.py（G1/G7/G8）需要的最小文件结构
         publish_tags = PUBLISH_ROOT / "v1" / "tags"
@@ -296,7 +301,7 @@ def build(dry_run: bool = False):
             etype_i = r["etype"]
             for ang in TYPE_ANGLES[(domain_i, etype_i)]:
                 tit = f"{name_i}{ang}指南"
-                posts_lines.append(f"article/内容角度/{ang}/{tit}/1")
+                posts_lines.append(f"article/{ang}/{tit}/1")
         (cs_dir / "posts.txt").write_text("\n".join(posts_lines) + "\n", encoding="utf-8")
 
         batch_root = root / "batches" / "多维度冒烟"

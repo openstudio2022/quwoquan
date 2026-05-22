@@ -59,7 +59,7 @@ func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, i
 	configVersion = os.Getenv("CONFIG_VERSION")
 	imageVersion = os.Getenv("IMAGE_VERSION")
 	if !isValidAppEnv(appEnv) {
-		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod-gray|prod, got %q", appEnv)
+		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
 	}
 	if requiresConfigVersion(appEnv) && strings.TrimSpace(configVersion) == "" {
 		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
@@ -129,6 +129,9 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("REDIS_REC_ADDR")); v != "" {
 		cfg.Redis.Rec.Addr = v
 	}
+	if strings.HasPrefix(strings.TrimSpace(cfg.MongoDB.URI), "${") {
+		cfg.MongoDB.URI = ""
+	}
 }
 
 func validateRuntimeCompatibility(cfg config, configVersion, imageVersion string) error {
@@ -172,6 +175,16 @@ func parseSemver(raw string) [3]int {
 }
 
 func buildRedisRouter(cfg config) *rtredis.Router {
+	generalScene := rtredis.SceneConfig{
+		Mode:         fallbackMode(cfg.Redis.General.Mode, cfg.Redis.General.Addr, cfg.Redis.General.Addrs),
+		Addr:         cfg.Redis.General.Addr,
+		Addrs:        cfg.Redis.General.Addrs,
+		Password:     cfg.Redis.General.Password,
+		DB:           cfg.Redis.General.DB,
+		TLS:          cfg.Redis.General.TLS,
+		PoolSize:     cfg.Redis.General.Pool.Size,
+		MinIdleConns: cfg.Redis.General.Pool.MinIdle,
+	}
 	return rtredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"rec": {
@@ -184,23 +197,11 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 				PoolSize:     cfg.Redis.Rec.Pool.Size,
 				MinIdleConns: cfg.Redis.Rec.Pool.MinIdle,
 			},
-			"general": {
-				Mode:         fallbackMode(cfg.Redis.General.Mode, cfg.Redis.General.Addr, cfg.Redis.General.Addrs),
-				Addr:         cfg.Redis.General.Addr,
-				Addrs:        cfg.Redis.General.Addrs,
-				Password:     cfg.Redis.General.Password,
-				DB:           cfg.Redis.General.DB,
-				TLS:          cfg.Redis.General.TLS,
-				PoolSize:     cfg.Redis.General.Pool.Size,
-				MinIdleConns: cfg.Redis.General.Pool.MinIdle,
-			},
+			"general":  generalScene,
+			"realtime": generalScene,
 		},
-		PrefixRoutes: []rtredis.PrefixRoute{
-			{Prefix: "rec:", Scene: "rec"},
-			{Prefix: "cache:", Scene: "general"},
-			{Prefix: "ops:event:", Scene: "general"},
-		},
-		DefaultScene: "general",
+		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
+		DefaultScene: rtredis.GeneratedDefaultScene,
 	})
 }
 
@@ -213,7 +214,7 @@ func fallbackMode(mode string, addr string, addrs []string) string {
 
 func isValidAppEnv(env string) bool {
 	switch env {
-	case "alpha", "beta", "gamma", "prod-gray", "prod":
+	case "alpha", "beta", "gamma", "prod":
 		return true
 	default:
 		return false
@@ -222,7 +223,7 @@ func isValidAppEnv(env string) bool {
 
 func requiresConfigVersion(env string) bool {
 	switch env {
-	case "gamma", "prod-gray", "prod":
+	case "gamma", "prod":
 		return true
 	default:
 		return false

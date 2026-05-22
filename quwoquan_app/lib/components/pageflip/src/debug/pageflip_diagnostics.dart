@@ -254,6 +254,11 @@ class _PageflipDiagnosticsAppState extends State<PageflipDiagnosticsApp> {
       'currentUnderlay=${_rectLabel(debugState.backwardCurrentResidualBounds)} '
       'paintVerso=${_doubleLabel(debugState.backwardPaintedVersoWidth)} '
       'backPixels=${debugState.backwardBackPixelSurfaceStrategy ?? "-"} '
+      'backUv=${debugState.backwardVersoTextureUvStrategy ?? "-"} '
+      'frontBackOverlap=${_doubleLabel(debugState.backwardFrontBackOverlapWidth)} '
+      'backUncovered=${_doubleLabel(debugState.backwardBackVisibleUncoveredWidth)} '
+      'backSamples=${debugState.backwardBackVisibleProbeCount ?? "-"} '
+      'sources=${_sourceSummary(debugState.backwardPaintSources)} '
       'surfaceOrigin=${_offsetLabel(debugState.backwardSurfaceOrigin)} '
       'surfaceRect=${_rectLabel(debugState.backwardSurfaceViewportRect)} '
       'pivotLocal=${_offsetLabel(debugState.backwardPivotLocal)} '
@@ -326,6 +331,19 @@ String _rectLabel(Rect? rect) {
     rect.right.toStringAsFixed(1),
     rect.bottom.toStringAsFixed(1),
   ].join(',');
+}
+
+String _sourceSummary(List<BackwardPaintSourceDiagnostic> sources) {
+  if (sources.isEmpty) {
+    return '-';
+  }
+  return sources
+      .where((source) => source.hasVisibleBounds)
+      .map(
+        (source) =>
+            '${source.zOrder}:${source.label}@${_pageLabel(source.pageIndex)}:${source.surfaceKind}:${_rectLabel(source.viewportBounds)}',
+      )
+      .join(' | ');
 }
 
 class _SamplingPointsOverlay extends StatelessWidget {
@@ -446,6 +464,9 @@ class _DebugInfoCard extends StatelessWidget {
               'back ${_presenceLabel(debugState.backwardBackPolygonPoints)} | '
               'bottom ${_presenceLabel(debugState.backwardBottomClipPolygonPoints)}'
         : null;
+    final sourceSummary = isBackward
+        ? _sourceSummary(debugState.backwardPaintSources)
+        : null;
     return DecoratedBox(
       key: const ValueKey('article_read_only_book_debug_card'),
       decoration: BoxDecoration(
@@ -512,10 +533,24 @@ class _DebugInfoCard extends StatelessWidget {
               ),
               _DebugLine(label: 'front', value: _rectLabel(overlayFrontRect)),
               _DebugLine(label: 'back', value: _rectLabel(overlayBackRect)),
+              if (isBackward)
+                _DebugLine(
+                  label: 'tex',
+                  value:
+                      'v ${_pageLabel(debugState.activeVersoPageIndex)}/${debugState.activeVersoSurfaceKind ?? "-"}/${debugState.backwardVersoTextureUvStrategy ?? "-"}/fail ${debugState.backwardVersoFailureReason.name}',
+                ),
+              if (isBackward)
+                _DebugLine(
+                  label: 'overlap',
+                  value:
+                      'frontBack ${_doubleLabel(debugState.backwardFrontBackOverlapWidth)} | backFree ${_doubleLabel(debugState.backwardBackVisibleUncoveredWidth)} | samples ${debugState.backwardBackVisibleProbeCount ?? "-"}',
+                ),
               if (faceSummary != null)
                 _DebugLine(label: 'faces', value: faceSummary),
               if (polygonSummary != null)
                 _DebugLine(label: 'polys', value: polygonSummary),
+              if (sourceSummary != null)
+                _DebugLine(label: 'sources', value: sourceSummary),
               _DebugLine(
                 label: 'guide',
                 value: debugState.guideX == null

@@ -199,6 +199,9 @@ article_template_recommendations:
   - category_id: life
     recommended_article_templates: [gentle, diffuse]
 
+  - category_id: photography
+    recommended_article_templates: [journal, ritual]
+
 # ── 二、内容卡片展示配置 ────────────────────────────────────────────────
 card_config:
   photo:

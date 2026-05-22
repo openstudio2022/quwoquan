@@ -32,12 +32,41 @@ make gate-local-gamma
 
 本地 DNS/TLS、设备、服务依赖或 seed/reset 能力不足时，状态必须为 `GATE_BLOCK`，不得降级为通过或只用 `make gate` 替代。
 
-必要时按变更范围补充：
+### 变更范围补充门禁
 
-- Flutter tests
-- `make verify-app-mock-isolation`（`quwoquan_app` 内 Mock/Remote、UI/Core import、`main_prod` 或构建脚本变更时）
-- `make verify-app-lib-test-only-symbols`（`lib/**` 新增 `createForTest` / 测试工厂时）
-- service gate
+按变更范围选择性执行：
+
+```
+☐ Flutter tests（涉及 quwoquan_app）
+☐ make verify-app-mock-isolation（Mock/Remote、UI import、main_prod 变更时）
+☐ make verify-app-lib-test-only-symbols（lib/ 新增 createForTest 时）
+☐ make verify-app-page-horizontal-quality（新增/搬迁页面时）
+☐ service gate（涉及 quwoquan_service）
+```
+
+### 工程合规门禁（代码评审专家视角）
+
+所有 commit 必须满足以下合规项，否则 `GATE_BLOCK`：
+
+```
+☐ DDD: runtime/domain 层无 DB driver import
+☐ 强类型: 无新增 interface{} / Map<String, dynamic> 穿透
+☐ 存储无关: 新增 Repository 是 interface，实现在 infrastructure
+☐ 端云一致: Dart DTO ↔ Go struct ↔ YAML 字段已对齐
+☐ 元数据: path/operation/surface/errorCode 来自 codegen，无硬编码
+☐ codegen: DO NOT EDIT 文件无手改
+☐ Mock 隔离: UI 不 import mock 目录
+```
+
+### 可观测与推荐门禁（涉及用户可见功能时）
+
+```
+☐ 埋点: 涉及页面有行为埋点
+☐ 推荐: 新行为信号已同步 BehaviorSignal → HotPath → 投影器
+☐ 特征: verify_feature_consistency.py 通过
+☐ 页面矩阵: 新页面已更新横向质量矩阵
+☐ 性能: 关键路径有性能可观测
+```
 
 ## 提交行为（默认先 dev1.0；进入 main 以 PR required checks 绿灯为准）
 

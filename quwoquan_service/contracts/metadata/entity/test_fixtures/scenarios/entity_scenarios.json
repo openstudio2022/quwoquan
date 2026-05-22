@@ -32,6 +32,121 @@
           "title": "杭州西湖契约主页",
           "summary": "地点主页契约数据",
           "geo": { "lat": 30.2431, "lng": 120.1505 }
+        },
+        {
+          "homepageId": "fixture_homepage_university_pku",
+          "type": "university",
+          "title": "北京大学",
+          "subtitle": "校园大学主页模板样本",
+          "summary": "以百科资料、关联内容、校友圈和问小趣入口承接校园冷启动",
+          "city": "北京",
+          "status": "published",
+          "categoryTags": ["校园", "大学", "北京"],
+          "contentPreview": [
+            {
+              "postId": "fixture_pku_post_001",
+              "title": "未名湖春日路线",
+              "summary": "AI 冷启动补齐的校园参观与摄影路线。",
+              "contentType": "article"
+            }
+          ],
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_pku_alumni",
+              "name": "北大校友同趣圈",
+              "memberCount": 1280,
+              "linkedHomepageId": "fixture_homepage_university_pku",
+              "linkedHomepageTitle": "北京大学"
+            }
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_university_tsinghua",
+          "type": "university",
+          "title": "清华大学",
+          "subtitle": "校园大学主页模板样本",
+          "summary": "承接校园介绍、内容、圈子和活跃贡献者的组织型主页",
+          "city": "北京",
+          "status": "published",
+          "categoryTags": ["校园", "大学", "北京"],
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_tsinghua_photo",
+              "name": "清华校园摄影圈",
+              "memberCount": 920,
+              "linkedHomepageId": "fixture_homepage_university_tsinghua",
+              "linkedHomepageTitle": "清华大学"
+            }
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_university_fudan",
+          "type": "university",
+          "title": "复旦大学",
+          "subtitle": "上海高校主页样本",
+          "summary": "面向校园生活、校友圈、问答与内容聚合的组织型主页",
+          "city": "上海",
+          "status": "published",
+          "categoryTags": ["校园", "大学", "上海"]
+        },
+        {
+          "homepageId": "fixture_homepage_university_zju",
+          "type": "university",
+          "title": "浙江大学",
+          "subtitle": "杭州高校主页样本",
+          "summary": "聚合校园资料、创作内容、同城圈子和校友关系",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": ["校园", "大学", "杭州"]
+        },
+        {
+          "homepageId": "fixture_homepage_university_nju",
+          "type": "university",
+          "title": "南京大学",
+          "subtitle": "南京高校主页样本",
+          "summary": "作为校园冷启动样本沉淀可信资料与同趣关系",
+          "city": "南京",
+          "status": "published",
+          "categoryTags": ["校园", "大学", "南京"]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_photo_west_lake",
+          "type": "travel_photo",
+          "title": "西湖旅行摄影机位",
+          "subtitle": "旅行摄影主页模板样本",
+          "summary": "聚合机位说明、最佳时段、作品与摄影同好圈",
+          "city": "杭州",
+          "status": "published",
+          "categoryTags": ["旅行摄影", "机位", "杭州"],
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_west_lake_photo",
+              "name": "西湖旅行摄影圈",
+              "memberCount": 680,
+              "linkedHomepageId": "fixture_homepage_travel_photo_west_lake",
+              "linkedHomepageTitle": "西湖旅行摄影机位"
+            }
+          ]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_photo_dali",
+          "type": "travel_photo",
+          "title": "大理洱海旅行摄影",
+          "subtitle": "目的地摄影主页样本",
+          "summary": "沉淀环海路线、机位建议、作品和结伴交流",
+          "city": "大理",
+          "status": "published",
+          "categoryTags": ["旅行摄影", "目的地", "云南"]
+        },
+        {
+          "homepageId": "fixture_homepage_travel_photo_tokyo",
+          "type": "travel_photo",
+          "title": "东京城市摄影路线",
+          "subtitle": "海外旅行摄影主页样本",
+          "summary": "覆盖街拍路线、作品精选、问答和旅行摄影圈",
+          "city": "东京",
+          "status": "published",
+          "categoryTags": ["旅行摄影", "城市街拍", "海外"]
         }
       ]
     },
@@ -48,7 +163,13 @@
     },
     "entity_picker_core": {
       "description": "发布/搜索可选择主页列表。",
-      "candidateHomepageIds": ["fixture_homepage_author", "fixture_homepage_circle", "fixture_homepage_poi"]
+        "candidateHomepageIds": [
+          "fixture_homepage_author",
+          "fixture_homepage_circle",
+          "fixture_homepage_poi",
+          "fixture_homepage_university_pku",
+          "fixture_homepage_travel_photo_west_lake"
+        ]
     }
   },
   "scenarios": [
@@ -59,11 +180,23 @@
       "domainId": "entity",
       "seedRefs": ["entity_homepage_core", "entity_claim_core", "entity_picker_core"],
       "uiExpectations": {
-        "homepageIds": ["fixture_homepage_author", "fixture_homepage_circle", "fixture_homepage_poi"],
-        "textFragments": ["契约摄影师主页", "杭州西湖契约主页"]
+        "homepageIds": [
+          "fixture_homepage_author",
+          "fixture_homepage_circle",
+          "fixture_homepage_poi",
+          "fixture_homepage_university_pku",
+          "fixture_homepage_travel_photo_west_lake"
+        ],
+        "textFragments": ["契约摄影师主页", "北京大学", "西湖旅行摄影机位"]
       },
       "remoteExpectations": {
-        "homepageIds": ["fixture_homepage_author", "fixture_homepage_circle", "fixture_homepage_poi"],
+        "homepageIds": [
+          "fixture_homepage_author",
+          "fixture_homepage_circle",
+          "fixture_homepage_poi",
+          "fixture_homepage_university_pku",
+          "fixture_homepage_travel_photo_west_lake"
+        ],
         "claimIds": ["fixture_claim_author"]
       },
       "environments": {

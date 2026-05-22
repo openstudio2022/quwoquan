@@ -9,8 +9,7 @@
 | alpha | contract-seeded MockRepository | 单服务自身 reset+seed 测试存储 | 端侧离线 mock 与云侧单服务接口验证 |
 | beta | RemoteRepository | 本地服务按 `app_beta_seed_manifest.json` reset+seed | 本地端云联调与人工测试 |
 | gamma | RemoteRepository | 云侧集成环境按 `app_gamma_seed_manifest.json` reset+seed | 云侧集成验证 |
-| prod | 真实用户数据 | 真实用户数据 | 正式发布 |
-| prod-gray | 同一个生产 App 包 | 云侧灰度策略/配置版本 | 灰度，不是单独 App 包 |
+| prod | 真实用户数据 | 真实用户数据 | 正式发布（含云侧灰度策略与配置版本；同一生产 App 包，非独立环境包） |
 
 ### 多实例 / 单套补充约束
 
@@ -39,8 +38,8 @@
 - `alpha` 端侧 mock、`beta/gamma` 云侧 seed 必须使用同一业务对象 ID。
 - 人工 beta 数据必须进入 fixture 与 `app_beta_seed_manifest.json`，不得在脚本或数据库临时追加。
 - beta / gamma 服务端不允许因端侧多实例而新增第二套本地/云侧栈；任何“切换”都必须是 stop-then-start。
-- 生产 App 只有一个包，禁止独立 `app-prod-gray`；灰度由应用市场分发策略、端侧上下文和云侧策略控制。
-- `prod/prod-gray` 禁止 `test_fixtures`、`seedRefs`、`requiresSeedReset`、`mock` 数据源。
+- 生产 App 只有一个包，灰度由应用市场分发策略、端侧上下文和云侧策略控制。
+- `prod` 禁止 `test_fixtures`、`seedRefs`、`requiresSeedReset`、`mock` 数据源。
 
 ## flutter run 页面真实数据链路
 

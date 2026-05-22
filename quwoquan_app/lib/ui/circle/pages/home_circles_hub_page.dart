@@ -1,13 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/ui/circle/constants/circle_channel_manage_layout.dart';
 import 'package:quwoquan_app/ui/circle/constants/circle_channel_manage_style.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
+import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
@@ -21,6 +26,7 @@ import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CirclesHubPage extends ConsumerStatefulWidget {
@@ -90,14 +96,23 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     'c3',
     'c-human-1',
   };
-  static const String _channelPrefsKey = 'home_circles.selected_channels.v1';
-  static const List<String> _fixedCategoryOrder = <String>['all'];
+  static const String _channelPrefsKey = 'home_circles.selected_channels.v2';
+  static const List<String> _businessCategoryOrder = <String>[
+    'campus',
+    'travel',
+    'photography',
+    'tech',
+    'car',
+  ];
+  static const List<String> _fixedCategoryOrder = _businessCategoryOrder;
 
-  String _activeCategoryId = 'all';
+  String _activeCategoryId = 'campus';
   _HomeCirclesModuleTab _activeModuleTab = _HomeCirclesModuleTab.recommended;
   bool _isChannelPanelOpen = false;
   String? _draggingChannelId;
   List<String>? _selectedCategoryIds;
+  final Map<String, String> _activeSubCategoryIdsByCategory =
+      <String, String>{};
   final GlobalKey _categoryBarKey = GlobalKey();
   late List<CircleHubFeedPostEntry> _circleFeedItems;
   Map<String, CircleCategoryTabConfigDto> _categoryConfig =
@@ -180,13 +195,11 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       list.add({'id': id, 'label': label});
     }
 
-    addCategory('all', config['all']?.label ?? '推荐');
-    for (final entry in config.entries) {
-      if (_fixedCategoryOrder.contains(entry.key)) continue;
-      addCategory(
-        entry.key,
-        entry.value.label.isNotEmpty ? entry.value.label : entry.key,
-      );
+    for (final id in _businessCategoryOrder) {
+      final category =
+          config[id] ?? CircleCategoryTabDefaults.remoteStyleFallback[id];
+      if (category == null) continue;
+      addCategory(id, category.label.isNotEmpty ? category.label : id);
     }
     return list;
   }
@@ -219,7 +232,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         selected.add(id);
       }
     }
-    if (selected.isEmpty) {
+    if (selected.isEmpty && _defaultSelectedCategoryIds.isNotEmpty) {
       selected.addAll(_defaultSelectedCategoryIds);
     }
     return selected;
@@ -236,7 +249,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   String get _effectiveActiveCategoryId {
     final visibleCategoryIds = _visibleCategoryIds;
     if (visibleCategoryIds.isEmpty) {
-      return 'all';
+      return _businessCategoryOrder.first;
     }
     return visibleCategoryIds.contains(_activeCategoryId)
         ? _activeCategoryId
@@ -251,11 +264,50 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   }
 
   List<MapEntry<String, CircleCategoryTabConfigDto>> get _visibleCategories {
-    final config = _categoryConfig;
     return _visibleCategoryIds
-        .where(config.containsKey)
-        .map((id) => MapEntry(id, config[id]!))
+        .map((id) {
+          final config =
+              _categoryConfig[id] ??
+              CircleCategoryTabDefaults.remoteStyleFallback[id];
+          if (config == null) {
+            return null;
+          }
+          return MapEntry(id, config);
+        })
+        .whereType<MapEntry<String, CircleCategoryTabConfigDto>>()
         .toList(growable: false);
+  }
+
+  List<String> _visibleSubCategoriesFor(String categoryId) {
+    final config =
+        _categoryConfig[categoryId] ??
+        CircleCategoryTabDefaults.remoteStyleFallback[categoryId];
+    if (config == null) {
+      return const <String>[];
+    }
+    return config.subCategories
+        .where((item) => item.trim().isNotEmpty)
+        .toList(growable: false);
+  }
+
+  String _effectiveSubCategoryId(
+    String categoryId,
+    List<String> subCategories,
+  ) {
+    if (subCategories.isEmpty) {
+      return '';
+    }
+    final selected = _activeSubCategoryIdsByCategory[categoryId]?.trim();
+    if (selected != null && subCategories.contains(selected)) {
+      return selected;
+    }
+    return subCategories.first;
+  }
+
+  void _setActiveSubCategory(String categoryId, String subCategoryId) {
+    setState(() {
+      _activeSubCategoryIdsByCategory[categoryId] = subCategoryId;
+    });
   }
 
   Future<void> _restoreChannelSelection() async {
@@ -320,6 +372,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   }
 
   void _toggleChannelPanel() {
+    if (_manageableAllCategoryIds.isEmpty) {
+      return;
+    }
     setState(() {
       _isChannelPanelOpen = !_isChannelPanelOpen;
       if (!_isChannelPanelOpen) {
@@ -467,6 +522,7 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
   List<CircleHubFeedPostEntry> _filteredLevelOnePosts(
     _HomeCirclesModuleTab tab,
     String categoryId, {
+    String? subCategoryId,
     bool fallbackToAllWhenEmpty = false,
   }) {
     final circleById = <String, CircleDto>{
@@ -481,9 +537,6 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
               : !_isMyCircleId(circleId);
         })
         .toList(growable: false);
-    if (categoryId == 'all') {
-      return modeFiltered;
-    }
     final categoryFiltered = modeFiltered
         .where((entry) {
           final circleId = entry.wireCircleId;
@@ -491,10 +544,22 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
           return circle?.category == categoryId;
         })
         .toList(growable: false);
-    if (categoryFiltered.isNotEmpty || !fallbackToAllWhenEmpty) {
-      return categoryFiltered;
+    final scopedByCategory = categoryId == 'all'
+        ? modeFiltered
+        : (categoryFiltered.isNotEmpty || !fallbackToAllWhenEmpty
+              ? categoryFiltered
+              : modeFiltered);
+    final resolvedSubCategory = subCategoryId?.trim() ?? '';
+    if (resolvedSubCategory.isEmpty) {
+      return scopedByCategory;
     }
-    return modeFiltered;
+    final subCategoryFiltered = scopedByCategory
+        .where((entry) => entry.wireSubCategory == resolvedSubCategory)
+        .toList(growable: false);
+    if (subCategoryFiltered.isNotEmpty || !fallbackToAllWhenEmpty) {
+      return subCategoryFiltered;
+    }
+    return scopedByCategory;
   }
 
   bool _supportsViewer(PostBaseDto post) {
@@ -530,6 +595,9 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+    final navFeedRequestId = ref
+        .read(feedSessionProvider.notifier)
+        .newFeedRequestId();
     final result = await context.push<Object?>(
       _isVideoPost(tappedDto)
           ? AppRoutePaths.videoViewer(index: '$initialIndex')
@@ -554,6 +622,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
         circleId: tapped.wireCircleId.isEmpty ? null : tapped.wireCircleId,
         rawPostsById: mediaRaws,
         interactionSnapshot: interactionSnapshot,
+        referralSource: ReferralSource.circlePost,
+        feedRequestId: navFeedRequestId,
       ),
     );
     if (result is MediaViewerResult) {
@@ -569,6 +639,13 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final isDark = ref.watch(effectiveIsDarkProvider);
     final categories = _visibleCategories;
     final effectiveActiveCategoryId = _effectiveActiveCategoryId;
+    final activeSubCategories = _visibleSubCategoriesFor(
+      effectiveActiveCategoryId,
+    );
+    final effectiveActiveSubCategoryId = _effectiveSubCategoryId(
+      effectiveActiveCategoryId,
+      activeSubCategories,
+    );
     final activeCategory = categories.firstWhere(
       (entry) => entry.key == effectiveActiveCategoryId,
       orElse: () => categories.first,
@@ -592,30 +669,41 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final levelOnePosts = _filteredLevelOnePosts(
       _activeModuleTab,
       effectiveActiveCategoryId,
+      subCategoryId: effectiveActiveSubCategoryId,
       fallbackToAllWhenEmpty: true,
     );
 
-    return Stack(
-      children: [
-        TabSwipeSwitchRegion(
-          onSwipe: _handleCategorySwipe,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics(),
-            ),
-            slivers: [
-              SliverPersistentHeader(
-                floating: true,
-                delegate: _StickyTabBarDelegate(
-                  extent: AppSpacing.subTabNavigationHeight,
-                  child: _HomeCirclesCategoryCapsuleBar(
-                    tabBarKey: _categoryBarKey,
+    return Material(
+      type: MaterialType.transparency,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Stack(
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _CirclesHubTopBar(
+                  isDark: isDark,
+                  onSearchTap: () => GlobalSearchLauncher.open(
+                    context,
+                    initialScope: GlobalSearchScope.circles.searchScope,
+                  ),
+                  onAssistantTap: () =>
+                      GlobalAssistantLauncher.open(context, ref),
+                ),
+                KeyedSubtree(
+                  key: _categoryBarKey,
+                  child: _CirclesPrimaryCategoryTabBar(
                     isDark: isDark,
                     categories: categories,
                     activeCategoryId: effectiveActiveCategoryId,
+                    showChannelSelector: _manageableAllCategoryIds.isNotEmpty,
                     onCategoryTap: (index) {
                       final nextCategoryId = categories[index].key;
-                      if (nextCategoryId == effectiveActiveCategoryId) return;
+                      if (nextCategoryId == effectiveActiveCategoryId) {
+                        return;
+                      }
                       setState(() {
                         _activeCategoryId = nextCategoryId;
                       });
@@ -624,119 +712,165 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
                     onChannelSelectorTap: _toggleChannelPanel,
                   ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: _CirclesGlobalHeader(
-                  isDark: isDark,
-                  activeModuleTab: _activeModuleTab,
-                  circles: circles,
-                  stories: stories,
-                  onStoryTap: (item, items) => _openCircleFeedViewer(
-                    context,
-                    item.feedEntry,
-                    items
-                        .map((entry) => entry.feedEntry)
-                        .toList(growable: false),
+                Expanded(
+                  child: TabSwipeSwitchRegion(
+                    onSwipe: _handleCategorySwipe,
+                    child: CustomScrollView(
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: _CirclesGlobalHeader(
+                            isDark: isDark,
+                            activeModuleTab: _activeModuleTab,
+                            circles: circles,
+                            stories: stories,
+                            onStoryTap: (item, items) => _openCircleFeedViewer(
+                              context,
+                              item.feedEntry,
+                              items
+                                  .map((entry) => entry.feedEntry)
+                                  .toList(growable: false),
+                            ),
+                            onModuleTabChanged: (nextTab) {
+                              if (nextTab == _activeModuleTab) return;
+                              setState(() {
+                                _activeModuleTab = nextTab;
+                              });
+                            },
+                            onSeeMoreTap: () {
+                              final uri = Uri(
+                                path: AppRoutePaths.circles,
+                                queryParameters: <String, String>{
+                                  'category': effectiveActiveCategoryId,
+                                },
+                              );
+                              context.push(uri.toString());
+                            },
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: _CirclesEntityBridgeStrip(
+                            isDark: isDark,
+                            onEntityTap: (query) {
+                              context.push(
+                                AppRoutePaths.suggestHomepage(query: query),
+                              );
+                            },
+                          ),
+                        ),
+                        if (activeSubCategories.isNotEmpty)
+                          SliverPersistentHeader(
+                            pinned: true,
+                            delegate: _StickyTabBarDelegate(
+                              extent: _CirclesSubCategoryBar.extent(context),
+                              child: _CirclesSubCategoryBar(
+                                isDark: isDark,
+                                categoryId: effectiveActiveCategoryId,
+                                subCategories: activeSubCategories,
+                                activeSubCategoryId:
+                                    effectiveActiveSubCategoryId,
+                                onSubCategoryTap: (subCategoryId) {
+                                  _setActiveSubCategory(
+                                    effectiveActiveCategoryId,
+                                    subCategoryId,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        HomeCirclesCategoryTab(
+                          key: ValueKey(
+                            'home-circles-category-$effectiveActiveCategoryId',
+                          ),
+                          categoryId: effectiveActiveCategoryId,
+                          posts: levelOnePosts,
+                          onPostTap: (tapped, sourceItems) =>
+                              _openCircleFeedViewer(
+                                context,
+                                tapped,
+                                sourceItems,
+                              ),
+                          label: activeCategory.value.label.isNotEmpty
+                              ? activeCategory.value.label
+                              : effectiveActiveCategoryId,
+                        ),
+                      ],
+                    ),
                   ),
-                  onModuleTabChanged: (nextTab) {
-                    if (nextTab == _activeModuleTab) return;
-                    setState(() {
-                      _activeModuleTab = nextTab;
-                    });
-                  },
-                  onSeeMoreTap: () {
-                    final uri = Uri(
-                      path: AppRoutePaths.circles,
-                      queryParameters: <String, String>{
-                        'category': effectiveActiveCategoryId,
-                      },
-                    );
-                    context.push(uri.toString());
-                  },
                 ),
+              ],
+            ),
+            Positioned.fill(
+              child: AnimatedSwitcher(
+                duration: _channelPanelTransitionDuration,
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  );
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, -0.06),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  );
+                },
+                child: _isChannelPanelOpen
+                    ? AppTopModalSurface(
+                        key: const ValueKey('home-circles-channel-panel-open'),
+                        panelKey: const ValueKey('home-circles-channel-panel'),
+                        onDismiss: _toggleChannelPanel,
+                        backgroundColor:
+                            CircleChannelManageStyle.panelBackground(isDark),
+                        backdropColor: CircleChannelManageStyle.backdropColor(
+                          isDark,
+                        ),
+                        backdropBlurSigma:
+                            CircleChannelManageStyle.backdropBlurSigma(context),
+                        maxHeightRatio:
+                            CircleChannelManageLayout.panelMaxHeightRatio(
+                              context,
+                            ),
+                        child: _HomeCirclesChannelPanel(
+                          isDark: isDark,
+                          categoryLabelMap: _categoryLabelMap,
+                          selectedIds: _manageableSelectedCategoryIds,
+                          unselectedIds: _unselectedCategoryIds,
+                          draggingChannelId: _draggingChannelId,
+                          onClose: _toggleChannelPanel,
+                          onMoveToSelected: _moveToSelected,
+                          onMoveToUnselected: _moveToUnselected,
+                          onReorderSelectedBefore: _reorderSelectedBefore,
+                          onDragStarted: (id) {
+                            setState(() {
+                              _draggingChannelId = id;
+                            });
+                          },
+                          onDragEnded: () {
+                            if (!mounted) return;
+                            setState(() {
+                              _draggingChannelId = null;
+                            });
+                          },
+                        ),
+                      )
+                    : const SizedBox.shrink(
+                        key: ValueKey('home-circles-channel-panel-closed'),
+                      ),
               ),
-              HomeCirclesCategoryTab(
-                key: ValueKey(
-                  'home-circles-category-$effectiveActiveCategoryId',
-                ),
-                categoryId: effectiveActiveCategoryId,
-                posts: levelOnePosts,
-                onPostTap: (tapped, sourceItems) =>
-                    _openCircleFeedViewer(context, tapped, sourceItems),
-                label: activeCategory.value.label.isNotEmpty
-                    ? activeCategory.value.label
-                    : effectiveActiveCategoryId,
-                subCategories: activeCategory.value.subCategories,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-        Positioned.fill(
-          child: AnimatedSwitcher(
-            duration: _channelPanelTransitionDuration,
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              final curved = CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              );
-              return FadeTransition(
-                opacity: curved,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, -0.06),
-                    end: Offset.zero,
-                  ).animate(curved),
-                  child: child,
-                ),
-              );
-            },
-            child: _isChannelPanelOpen
-                ? AppTopModalSurface(
-                    key: const ValueKey('home-circles-channel-panel-open'),
-                    panelKey: const ValueKey('home-circles-channel-panel'),
-                    onDismiss: _toggleChannelPanel,
-                    backgroundColor: CircleChannelManageStyle.panelBackground(
-                      isDark,
-                    ),
-                    backdropColor: CircleChannelManageStyle.backdropColor(
-                      isDark,
-                    ),
-                    backdropBlurSigma:
-                        CircleChannelManageStyle.backdropBlurSigma(context),
-                    maxHeightRatio:
-                        CircleChannelManageLayout.panelMaxHeightRatio(context),
-                    child: _HomeCirclesChannelPanel(
-                      isDark: isDark,
-                      categoryLabelMap: _categoryLabelMap,
-                      selectedIds: _manageableSelectedCategoryIds,
-                      unselectedIds: _unselectedCategoryIds,
-                      draggingChannelId: _draggingChannelId,
-                      onClose: _toggleChannelPanel,
-                      onMoveToSelected: _moveToSelected,
-                      onMoveToUnselected: _moveToUnselected,
-                      onReorderSelectedBefore: _reorderSelectedBefore,
-                      onDragStarted: (id) {
-                        setState(() {
-                          _draggingChannelId = id;
-                        });
-                      },
-                      onDragEnded: () {
-                        if (!mounted) return;
-                        setState(() {
-                          _draggingChannelId = null;
-                        });
-                      },
-                    ),
-                  )
-                : const SizedBox.shrink(
-                    key: ValueKey('home-circles-channel-panel-closed'),
-                  ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -812,9 +946,9 @@ class _CirclesGlobalHeader extends StatelessWidget {
       color: bgPrimary,
       padding: EdgeInsets.fromLTRB(
         horizontal,
-        AppSpacing.interGroupSm,
+        AppSpacing.containerXs,
         horizontal,
-        AppSpacing.interGroupMd,
+        AppSpacing.containerSm,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -828,6 +962,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
                   fontSize: AppTypography.iosFootnote,
                   fontWeight: AppTypography.medium,
                   color: fgSecondary.withValues(alpha: 0.78),
+                  decoration: TextDecoration.none,
                 ),
               ),
               CupertinoButton(
@@ -840,12 +975,13 @@ class _CirclesGlobalHeader extends StatelessWidget {
                     fontSize: AppTypography.sm,
                     color: AppColors.primaryColor,
                     fontWeight: AppTypography.medium,
+                    decoration: TextDecoration.none,
                   ),
                 ),
               ),
             ],
           ),
-          SizedBox(height: AppSpacing.intraGroupSm),
+          SizedBox(height: AppSpacing.intraGroupXs),
           SizedBox(
             height: _circleRailHeight(context),
             child: ListView.separated(
@@ -906,21 +1042,21 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
-class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
-  const _HomeCirclesCategoryCapsuleBar({
-    this.tabBarKey,
+class _CirclesPrimaryCategoryTabBar extends StatelessWidget {
+  const _CirclesPrimaryCategoryTabBar({
     required this.isDark,
     required this.categories,
     required this.activeCategoryId,
+    required this.showChannelSelector,
     required this.onCategoryTap,
     this.onHorizontalDragEnd,
     required this.onChannelSelectorTap,
   });
 
-  final Key? tabBarKey;
   final bool isDark;
   final List<MapEntry<String, CircleCategoryTabConfigDto>> categories;
   final String activeCategoryId;
+  final bool showChannelSelector;
   final ValueChanged<int> onCategoryTap;
   final GestureDragEndCallback? onHorizontalDragEnd;
   final VoidCallback onChannelSelectorTap;
@@ -929,45 +1065,108 @@ class _HomeCirclesCategoryCapsuleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabs = categories
         .map(
-          (entry) =>
-              entry.value.label.isNotEmpty ? entry.value.label : entry.key,
+          (entry) => TabItem(
+            id: entry.key,
+            label: entry.value.label.isNotEmpty ? entry.value.label : entry.key,
+          ),
         )
         .toList(growable: false);
-    final activeIndex = categories.indexWhere(
-      (entry) => entry.key == activeCategoryId,
-    );
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
 
-    return SecondaryCapsuleTabBar(
-      key: tabBarKey,
-      isDark: isDark,
+    return CenteredScrollableTabBar(
       tabs: tabs,
-      activeIndex: activeIndex < 0 ? 0 : activeIndex,
-      onTap: onCategoryTap,
+      activeTab: activeCategoryId,
+      onTabChange: (tabId) {
+        final nextIndex = categories.indexWhere((entry) => entry.key == tabId);
+        if (nextIndex < 0) {
+          return;
+        }
+        onCategoryTap(nextIndex);
+      },
+      isDark: isDark,
       onHorizontalDragEnd: onHorizontalDragEnd,
-      fontSize: AppTypography.smPlus,
-      trailing: Padding(
-        padding: EdgeInsets.only(
-          right: AppSpacing.topBarTrailingButtonInset(context),
-        ),
-        child: SizedBox(
-          width: AppSpacing.minInteractiveSize,
-          height: AppSpacing.minInteractiveSize,
-          child: CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: onChannelSelectorTap,
-            child: Icon(
-              CupertinoIcons.line_horizontal_3_decrease,
-              size: AppSpacing.iconMedium,
-              color: fgSecondary,
-            ),
-          ),
+      trailingActions: showChannelSelector
+          ? [
+              GlobalTopBarIconButton(
+                icon: CupertinoIcons.line_horizontal_3_decrease,
+                semanticLabel: UITextConstants.circleManageChannels,
+                onTap: onChannelSelectorTap,
+              ),
+            ]
+          : const [],
+      leftAlignedCompactMode: true,
+    );
+  }
+}
+
+class _CirclesSubCategoryBar extends StatelessWidget {
+  const _CirclesSubCategoryBar({
+    required this.isDark,
+    required this.categoryId,
+    required this.subCategories,
+    required this.activeSubCategoryId,
+    required this.onSubCategoryTap,
+  });
+
+  final bool isDark;
+  final String categoryId;
+  final List<String> subCategories;
+  final String activeSubCategoryId;
+  final ValueChanged<String> onSubCategoryTap;
+
+  static double extent(BuildContext context) {
+    final verticalPadding = AppSpacing.secondaryTabBarVerticalPadding(context);
+    final chipVerticalPadding = AppSpacing.secondaryTabChipVerticalPadding(
+      context,
+    );
+    final painter = TextPainter(
+      text: TextSpan(
+        text: 'Hg',
+        style: TextStyle(
+          fontSize: AppTypography.secondaryTabLabelResponsive(context),
+          fontWeight: AppTypography.secondaryTabSelectedWeight,
         ),
       ),
-      showTrailingDivider: true,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final measuredBarHeight =
+        painter.height + (verticalPadding * 2) + (chipVerticalPadding * 2);
+    final barHeight = measuredBarHeight > AppSpacing.subTabNavigationHeight
+        ? measuredBarHeight
+        : AppSpacing.subTabNavigationHeight;
+    return barHeight + AppSpacing.xs + AppSpacing.containerXs;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final activeIndex = subCategories.indexWhere(
+      (subCategory) => subCategory == activeSubCategoryId,
+    );
+    final horizontal = AppSpacing.feedContentHorizontal(context);
+
+    return Container(
+      key: ValueKey<String>('circles-sub-category-$categoryId'),
+      color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+      padding: EdgeInsets.fromLTRB(
+        horizontal,
+        AppSpacing.xs,
+        horizontal,
+        AppSpacing.containerXs,
+      ),
+      child: SecondaryCapsuleTabBar(
+        isDark: isDark,
+        tabs: subCategories,
+        activeIndex: activeIndex < 0 ? 0 : activeIndex,
+        onTap: (index) {
+          if (index < 0 || index >= subCategories.length) {
+            return;
+          }
+          onSubCategoryTap(subCategories[index]);
+        },
+        horizontalPadding: 0,
+        variant: SecondaryCapsuleTabBarVariant.inlineMuted,
+      ),
     );
   }
 }
@@ -1597,6 +1796,317 @@ class _HomeCirclesChannelTile extends StatelessWidget {
                   child: const SizedBox.expand(),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CirclesHubTopBar extends StatelessWidget {
+  const _CirclesHubTopBar({
+    required this.isDark,
+    required this.onSearchTap,
+    required this.onAssistantTap,
+  });
+
+  final bool isDark;
+  final VoidCallback onSearchTap;
+  final VoidCallback onAssistantTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final chromeBackground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.pageBackground,
+    );
+    final fieldBackground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final horizontal = AppSpacing.feedContentHorizontal(context);
+    final topInset = AppSpacing.appChromeTopSafeInset(
+      MediaQuery.viewPaddingOf(context).top,
+      context,
+    );
+
+    return Container(
+      color: chromeBackground,
+      padding: EdgeInsets.only(top: topInset),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: AppSpacing.appChromeTopBarHeight(context),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontal),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: onSearchTap,
+                      child: IgnorePointer(
+                        child: AppSearchField(
+                          placeholder: UITextConstants.circlesSearchHint,
+                          backgroundColor: fieldBackground,
+                          elevated: false,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                  GlobalAssistantEntryButton(
+                    semanticLabel: UITextConstants.assistantEntryXiaoqu,
+                    onTap: onAssistantTap,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CirclesEntityBridgeItem {
+  const _CirclesEntityBridgeItem({
+    required this.title,
+    required this.hint,
+    required this.query,
+    required this.icon,
+  });
+
+  final String title;
+  final String hint;
+  final String query;
+  final IconData icon;
+}
+
+class _CirclesEntityBridgeStrip extends StatelessWidget {
+  const _CirclesEntityBridgeStrip({
+    required this.isDark,
+    required this.onEntityTap,
+  });
+
+  final bool isDark;
+  final ValueChanged<String> onEntityTap;
+
+  static const List<_CirclesEntityBridgeItem> _items =
+      <_CirclesEntityBridgeItem>[
+        _CirclesEntityBridgeItem(
+          title: UITextConstants.homepageTypeUniversity,
+          hint: UITextConstants.homepageTypeUniversityHint,
+          query: UITextConstants.homepageTypeUniversity,
+          icon: CupertinoIcons.building_2_fill,
+        ),
+        _CirclesEntityBridgeItem(
+          title: UITextConstants.homepageTypeTravelPhoto,
+          hint: UITextConstants.homepageTypeTravelPhotoHint,
+          query: UITextConstants.homepageTypeTravelPhoto,
+          icon: CupertinoIcons.photo_fill_on_rectangle_fill,
+        ),
+        _CirclesEntityBridgeItem(
+          title: UITextConstants.homepageTypeHotel,
+          hint: UITextConstants.homepageTypeHotelHint,
+          query: UITextConstants.homepageTypeHotel,
+          icon: CupertinoIcons.bed_double_fill,
+        ),
+      ];
+
+  double _cardWidth(BuildContext context) {
+    return AppSpacing.responsiveValue(
+      context,
+      compact: AppSpacing.bottomNavHeight * 2.8,
+      regular: AppSpacing.bottomNavHeight * 3.0,
+      expanded: AppSpacing.bottomNavHeight * 3.2,
+    );
+  }
+
+  double _stripHeight(BuildContext context) {
+    return AppSpacing.responsiveValue(
+      context,
+      compact: AppSpacing.bottomNavHeight * 2.25,
+      regular: AppSpacing.bottomNavHeight * 2.35,
+      expanded: AppSpacing.bottomNavHeight * 2.45,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final borderColor = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.borderPrimary,
+    );
+    final horizontal = AppSpacing.feedContentHorizontal(context);
+    final cardWidth = _cardWidth(context);
+
+    return Container(
+      color: bgPrimary,
+      padding: EdgeInsets.fromLTRB(
+        horizontal,
+        AppSpacing.containerXs,
+        horizontal,
+        AppSpacing.containerSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                UITextConstants.circlesEntitySectionTitle,
+                style: TextStyle(
+                  fontSize: AppTypography.iosFootnote,
+                  fontWeight: AppTypography.medium,
+                  color: fgSecondary.withValues(alpha: 0.82),
+                  decoration: TextDecoration.none,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                UITextConstants.circlesEntitySectionHint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: AppTypography.xs,
+                  color: fgSecondary.withValues(alpha: 0.7),
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.intraGroupXs),
+          SizedBox(
+            height: _stripHeight(context),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _items.length,
+              separatorBuilder: (context, index) =>
+                  SizedBox(width: AppSpacing.intraGroupMd),
+              itemBuilder: (context, index) {
+                final item = _items[index];
+                return _CirclesEntityBridgeCard(
+                  width: cardWidth,
+                  isDark: isDark,
+                  borderColor: borderColor,
+                  foregroundPrimary: fgPrimary,
+                  foregroundSecondary: fgSecondary,
+                  item: item,
+                  onTap: () => onEntityTap(item.query),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CirclesEntityBridgeCard extends StatelessWidget {
+  const _CirclesEntityBridgeCard({
+    required this.width,
+    required this.isDark,
+    required this.borderColor,
+    required this.foregroundPrimary,
+    required this.foregroundSecondary,
+    required this.item,
+    required this.onTap,
+  });
+
+  final double width;
+  final bool isDark;
+  final Color borderColor;
+  final Color foregroundPrimary;
+  final Color foregroundSecondary;
+  final _CirclesEntityBridgeItem item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        width: width,
+        decoration: BoxDecoration(
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.surfaceElevated,
+          ),
+          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+          border: Border.all(
+            color: borderColor.withValues(alpha: 0.12),
+            width: AppSpacing.hairline,
+          ),
+        ),
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: AppSpacing.avatarCircleSm + AppSpacing.intraGroupXs,
+                  height: AppSpacing.avatarCircleSm + AppSpacing.intraGroupXs,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    item.icon,
+                    size: AppSpacing.iconMedium,
+                    color: AppColors.primaryColor,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  size: AppSpacing.iconSmall,
+                  color: foregroundSecondary.withValues(alpha: 0.72),
+                ),
+              ],
+            ),
+            SizedBox(height: AppSpacing.intraGroupSm),
+            Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.smPlus,
+                fontWeight: AppTypography.semiBold,
+                color: foregroundPrimary,
+              ),
+            ),
+            SizedBox(height: AppSpacing.oneHalf),
+            Text(
+              item.hint,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.xsPlus,
+                color: foregroundSecondary,
+                height: AppTypography.lineHeightTight,
+              ),
+            ),
           ],
         ),
       ),

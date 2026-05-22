@@ -6,7 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 
 Widget _scopedApp({CircleRepository? mock}) {
@@ -19,7 +19,7 @@ Widget _scopedApp({CircleRepository? mock}) {
         routes: [
           GoRoute(
             path: '/circles',
-            builder: (_, _) => const Scaffold(body: CirclesPage()),
+            builder: (_, _) => const Scaffold(body: CirclesHubPage()),
           ),
           GoRoute(
             path: '/circle/:id',
@@ -54,7 +54,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      expect(find.byType(CirclesPage), findsOneWidget);
+      expect(find.byType(CirclesHubPage), findsOneWidget);
       expect(find.byType(Scaffold), findsWidgets);
     });
 
@@ -62,7 +62,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/circle_photo_01');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -76,14 +76,14 @@ void main() {
       await tester.pumpWidget(_scopedApp(mock: _ErrorCircleRepository()));
       await tester.pumpAndSettle();
 
-      expect(find.byType(CirclesPage), findsOneWidget);
+      expect(find.byType(CirclesHubPage), findsOneWidget);
     });
 
     testWidgets('旅程 B2：加入不存在的圈子时页面不崩溃', (tester) async {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/nonexistent_circle_id');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -97,7 +97,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
       router.push('/circle/circle_photo_01');
       await tester.pump(const Duration(milliseconds: 200));
@@ -111,7 +111,7 @@ void main() {
       await tester.pumpWidget(_scopedApp(mock: _EmptyCircleRepository()));
       await tester.pumpAndSettle();
 
-      expect(find.byType(CirclesPage), findsOneWidget);
+      expect(find.byType(CirclesHubPage), findsOneWidget);
     });
   });
 }

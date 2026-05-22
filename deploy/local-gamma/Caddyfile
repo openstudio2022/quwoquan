@@ -37,12 +37,31 @@ gamma-api.quwoquan-env.test {
 	handle /v1/ops/* {
 		reverse_proxy product-ops-service:18086
 	}
+	handle /v1/control-plane/platform/* {
+		reverse_proxy platform-ops-service:18092
+	}
+	handle /v1/control-plane/product/* {
+		reverse_proxy product-ops-service:18086
+	}
 	handle /media/* {
 		root * /srv/media
 		file_server
 	}
 	handle {
 		respond "local-gamma mirror route is not ready for this path" 404
+	}
+}
+
+gamma-platform-ops.quwoquan-env.test {
+	import local_gamma_tls
+	handle /healthz {
+		reverse_proxy platform-ops-service:18092
+	}
+	handle /v1/control-plane/platform/* {
+		reverse_proxy platform-ops-service:18092
+	}
+	handle {
+		respond "local-gamma platform-ops route is not ready for this path" 404
 	}
 }
 
@@ -89,6 +108,12 @@ gamma-upload.quwoquan-env.test {
 		reverse_proxy assistant-service:18087
 	}
 	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /v1/control-plane/platform/* {
+		reverse_proxy platform-ops-service:18092
+	}
+	handle /v1/control-plane/product/* {
 		reverse_proxy product-ops-service:18086
 	}
 	handle /media/* {

@@ -92,6 +92,8 @@ ALLOWLIST_PATHS = {
     "quwoquan_data/tools/catalog_iteration.py",
     "quwoquan_data/tools/semantic_entity_resolution.py",
     ".cursor/commands/data-explore.md",
+    ".cursor/commands/infra-plan.md",
+    ".cursor/rules/13-coding-discipline.mdc",
     "quwoquan_app/lib/cloud/services/tag/mock/tag_mock_data.dart",
     "quwoquan_data/README.md",
     "quwoquan_data/schema/tag/tag_policy.yaml",

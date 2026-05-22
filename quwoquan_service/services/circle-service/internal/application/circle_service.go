@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.opentelemetry.io/otel/attribute"
 
 	rterr "quwoquan_service/runtime/errors"
+	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/repository"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
@@ -87,7 +89,12 @@ type CreateCircleRequest struct {
 	OwnerID     string
 }
 
-func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleRequest) (*model.Circle, error) {
+func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleRequest) (circle *model.Circle, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.CreateCircle",
+		attribute.String("circle.owner_id", req.OwnerID),
+		attribute.String("circle.visibility", req.Visibility))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if req.Name == "" {
 		return nil, rterr.NewInvalidArgument(rterr.ModuleCircle, "圈子名称不能为空", "missing name")
 	}
@@ -107,7 +114,7 @@ func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleReques
 	}
 
 	defaultQuota := int64(1024 * 1024 * 1024) // 1 GB
-	circle := &model.Circle{
+	circle = &model.Circle{
 		ID:                id,
 		Name:              req.Name,
 		Description:       req.Description,
@@ -156,12 +163,18 @@ func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleReques
 }
 
 func (s *CircleService) GetCircle(ctx context.Context, circleID string) (*model.Circle, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetCircle",
+		attribute.String("circle.id", circleID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	c, ok := s.circles.FindByID(ctx, circleID)
 	if !ok {
-		return nil, rterr.NewAppError(
+		err = rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
 			"圈子不存在", "circle not found",
 		)
+		return nil, err
 	}
 	return c, nil
 }
@@ -181,6 +194,11 @@ type ListCirclesResponse struct {
 }
 
 func (s *CircleService) ListCircles(ctx context.Context, req ListCirclesRequest) ListCirclesResponse {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListCircles",
+		attribute.String("list.category", req.Category),
+		attribute.Int("list.limit", req.Limit))
+	defer func() { rtobs.EndSpan(span, nil) }()
+
 	circles, cursor := s.circles.List(ctx, persistence.ListCirclesOpts{
 		Category:     req.Category,
 		DomainID:     req.DomainID,
@@ -210,7 +228,12 @@ type ListCircleGroupsResponse struct {
 	Cursor string              `json:"cursor,omitempty"`
 }
 
-func (s *CircleService) ListGroups(ctx context.Context, req ListCircleGroupsRequest) (ListCircleGroupsResponse, error) {
+func (s *CircleService) ListGroups(ctx context.Context, req ListCircleGroupsRequest) (_ ListCircleGroupsResponse, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListGroups",
+		attribute.String("circle.id", req.CircleID),
+		attribute.String("group.type", req.GroupType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if _, ok := s.circles.FindByID(ctx, req.CircleID); !ok {
 		return ListCircleGroupsResponse{}, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
@@ -281,6 +304,11 @@ func (s *CircleService) SearchCircles(
 	ctx context.Context,
 	req SearchCirclesRequest,
 ) SearchCirclesResponse {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.SearchCircles",
+		attribute.String("search.query", req.Query),
+		attribute.String("search.category_id", req.CategoryID))
+	defer func() { rtobs.EndSpan(span, nil) }()
+
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 20
@@ -367,7 +395,11 @@ func (s *CircleService) SearchCircles(
 	}
 }
 
-func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data map[string]any) (*model.Circle, error) {
+func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data map[string]any) (c *model.Circle, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.UpdateCircle",
+		attribute.String("circle.id", circleID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	c, ok := s.circles.FindByID(ctx, circleID)
 	if !ok {
 		return nil, rterr.NewAppError(
@@ -400,7 +432,11 @@ func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data 
 	return c, nil
 }
 
-func (s *CircleService) ArchiveCircle(ctx context.Context, circleID string) error {
+func (s *CircleService) ArchiveCircle(ctx context.Context, circleID string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ArchiveCircle",
+		attribute.String("circle.id", circleID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if !s.circles.Archive(ctx, circleID) {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
@@ -413,7 +449,12 @@ func (s *CircleService) ArchiveCircle(ctx context.Context, circleID string) erro
 
 // --- Membership ---
 
-func (s *CircleService) JoinCircle(ctx context.Context, circleID, userID string) error {
+func (s *CircleService) JoinCircle(ctx context.Context, circleID, userID string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.JoinCircle",
+		attribute.String("circle.id", circleID),
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	c, ok := s.circles.FindByID(ctx, circleID)
 	if !ok {
 		return rterr.NewAppError(
@@ -457,7 +498,12 @@ func (s *CircleService) JoinCircle(ctx context.Context, circleID, userID string)
 	return nil
 }
 
-func (s *CircleService) LeaveCircle(ctx context.Context, circleID, userID string) error {
+func (s *CircleService) LeaveCircle(ctx context.Context, circleID, userID string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.LeaveCircle",
+		attribute.String("circle.id", circleID),
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	member, ok := s.members.FindByCircleAndUser(ctx, circleID, userID)
 	if !ok {
 		return rterr.NewAppError(
@@ -488,10 +534,20 @@ func (s *CircleService) LeaveCircle(ctx context.Context, circleID, userID string
 }
 
 func (s *CircleService) ListMembers(ctx context.Context, circleID string, limit int, cursor string) ([]model.CircleMember, string) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListMembers",
+		attribute.String("circle.id", circleID),
+		attribute.Int("list.limit", limit))
+	defer func() { rtobs.EndSpan(span, nil) }()
+
 	return s.members.ListByCircle(ctx, circleID, limit, cursor)
 }
 
 func (s *CircleService) ListUserCircles(ctx context.Context, userID string, limit int, cursor string) ([]model.Circle, string) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListUserCircles",
+		attribute.String("user.id", userID),
+		attribute.Int("list.limit", limit))
+	defer func() { rtobs.EndSpan(span, nil) }()
+
 	memberships, _ := s.members.ListByUser(ctx, userID, limit, cursor)
 	var circles []model.Circle
 	for _, m := range memberships {
@@ -506,7 +562,12 @@ func (s *CircleService) ListUserCircles(ctx context.Context, userID string, limi
 	return circles, nextCursor
 }
 
-func (s *CircleService) UpdateMemberRole(ctx context.Context, circleID, userID string, role string) error {
+func (s *CircleService) UpdateMemberRole(ctx context.Context, circleID, userID string, role string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.UpdateMemberRole",
+		attribute.String("circle.id", circleID),
+		attribute.String("member.role", role))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	memberRole := model.CircleMemberRole(role)
 	if memberRole != model.CircleMemberRoleAdmin && memberRole != model.CircleMemberRoleMember {
 		return rterr.NewInvalidArgument(rterr.ModuleCircle, "无效的角色", "invalid role: "+role)
@@ -523,7 +584,11 @@ func (s *CircleService) UpdateMemberRole(ctx context.Context, circleID, userID s
 
 // --- Stats ---
 
-func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (map[string]any, error) {
+func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (_ map[string]any, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetCircleStats",
+		attribute.String("circle.id", circleID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	c, ok := s.circles.FindByID(ctx, circleID)
 	if !ok {
 		return nil, rterr.NewAppError(
@@ -543,6 +608,11 @@ func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (ma
 // --- Feed ---
 
 func (s *CircleService) GetCircleFeed(ctx context.Context, circleID string, limit int, cursor string, sort string) ([]map[string]any, string) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetCircleFeed",
+		attribute.String("circle.id", circleID),
+		attribute.String("feed.sort", sort))
+	defer func() { rtobs.EndSpan(span, nil) }()
+
 	if s.feedStore == nil {
 		return []map[string]any{}, ""
 	}
@@ -555,18 +625,33 @@ func (s *CircleService) GetCircleFeed(ctx context.Context, circleID string, limi
 
 // --- Feed management ---
 
-func (s *CircleService) PinPost(_ context.Context, _, _ string, _ bool) error {
+func (s *CircleService) PinPost(ctx context.Context, circleID, postID string, pinned bool) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.PinPost",
+		attribute.String("circle.id", circleID),
+		attribute.String("post.id", postID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return nil
 }
 
-func (s *CircleService) FeaturePost(_ context.Context, _, _ string, _ bool) error {
+func (s *CircleService) FeaturePost(ctx context.Context, circleID, postID string, featured bool) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.FeaturePost",
+		attribute.String("circle.id", circleID),
+		attribute.String("post.id", postID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return nil
 }
 
 // --- Sections ---
 
-func (s *CircleService) UpdateSections(ctx context.Context, circleID string, sections []model.CircleSectionConfig) error {
-	if err := s.circles.UpdateSections(ctx, circleID, sections); err != nil {
+func (s *CircleService) UpdateSections(ctx context.Context, circleID string, sections []model.CircleSectionConfig) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.UpdateSections",
+		attribute.String("circle.id", circleID),
+		attribute.Int("sections.count", len(sections)))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	if err = s.circles.UpdateSections(ctx, circleID, sections); err != nil {
 		return err
 	}
 	s.publishEvent(ctx, "CircleSectionsUpdated", circleID, map[string]any{
@@ -577,7 +662,10 @@ func (s *CircleService) UpdateSections(ctx context.Context, circleID string, sec
 
 // --- Behavior ---
 
-func (s *CircleService) ReportBehavior(ctx context.Context, report map[string]any) error {
+func (s *CircleService) ReportBehavior(ctx context.Context, report map[string]any) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ReportBehavior")
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	s.publishEvent(ctx, "CircleBehaviorReported", "", report)
 	return nil
 }

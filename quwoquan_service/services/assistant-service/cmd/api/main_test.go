@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	rtgov "quwoquan_service/runtime/governance"
 )
 
 func TestAlphaRuntimeIdentityAndConfigLoadsSameNamedOverlay(t *testing.T) {
@@ -84,9 +86,13 @@ func TestSearchProviderTimeoutKeepsRealtimeBudget(t *testing.T) {
 	if client.Timeout != 10*time.Second {
 		t.Fatalf("client timeout=%s, want 10s", client.Timeout)
 	}
-	transport, ok := client.Transport.(*http.Transport)
+	cbTransport, ok := client.Transport.(*rtgov.CBTransport)
 	if !ok {
-		t.Fatalf("transport type=%T, want *http.Transport", client.Transport)
+		t.Fatalf("transport type=%T, want *runtimegovernance.CBTransport", client.Transport)
+	}
+	transport, ok := cbTransport.Base.(*http.Transport)
+	if !ok {
+		t.Fatalf("base transport type=%T, want *http.Transport", cbTransport.Base)
 	}
 	if transport.TLSHandshakeTimeout != 10*time.Second {
 		t.Fatalf("tls handshake timeout=%s, want 10s", transport.TLSHandshakeTimeout)

@@ -17,6 +17,26 @@ class HomepageMockData {
     _bambooInnDetail,
     _nightMarketDetail,
     _vehicleCandidateDetail,
+    _campusHomepage('fixture_homepage_university_pku', '北京大学', '北京'),
+    _campusHomepage('fixture_homepage_university_tsinghua', '清华大学', '北京'),
+    _campusHomepage('fixture_homepage_university_fudan', '复旦大学', '上海'),
+    _campusHomepage('fixture_homepage_university_zju', '浙江大学', '杭州'),
+    _campusHomepage('fixture_homepage_university_nju', '南京大学', '南京'),
+    _travelPhotoHomepage(
+      'fixture_homepage_travel_photo_west_lake',
+      '西湖旅行摄影机位',
+      '杭州',
+    ),
+    _travelPhotoHomepage(
+      'fixture_homepage_travel_photo_dali',
+      '大理洱海旅行摄影',
+      '大理',
+    ),
+    _travelPhotoHomepage(
+      'fixture_homepage_travel_photo_tokyo',
+      '东京城市摄影路线',
+      '东京',
+    ),
   ];
 
   static final HomepageDetail _westLakeDetail = HomepageDetail(
@@ -24,8 +44,7 @@ class HomepageMockData {
     homepageType: 'sight',
     title: '西湖景区',
     subtitle: '杭州西湖核心游览区',
-    coverUrl:
-        'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
+    coverUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
     status: 'published',
     sourceType: 'official_seed',
     claimStatus: 'unclaimed',
@@ -89,8 +108,7 @@ class HomepageMockData {
     homepageType: 'hotel',
     title: '竹隐民宿',
     subtitle: '近景区山景庭院房',
-    coverUrl:
-        'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85',
+    coverUrl: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85',
     status: 'published',
     sourceType: 'owner_created',
     claimStatus: 'claimed',
@@ -147,8 +165,7 @@ class HomepageMockData {
     homepageType: 'restaurant',
     title: '夜巷小馆',
     subtitle: '本地人常去的深夜小馆',
-    coverUrl:
-        'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4',
+    coverUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4',
     status: 'published',
     sourceType: 'imported',
     claimStatus: 'unclaimed',
@@ -204,8 +221,7 @@ class HomepageMockData {
     homepageType: 'vehicle',
     title: 'Model X 2026 款',
     subtitle: '纯电中大型 SUV 候选主页',
-    coverUrl:
-        'https://images.unsplash.com/photo-1494976388531-d1058494cdd8',
+    coverUrl: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8',
     status: 'candidate',
     sourceType: 'user_suggested',
     claimStatus: 'unclaimed',
@@ -218,6 +234,74 @@ class HomepageMockData {
 
 DateTime _dt(String iso) => DateTime.parse(iso).toUtc();
 
+HomepageDetail _campusHomepage(String id, String title, String city) {
+  return HomepageDetail(
+    id: id,
+    homepageType: 'university',
+    title: title,
+    subtitle: '校园大学主页模板样本',
+    status: 'published',
+    sourceType: 'contract_fixture',
+    claimStatus: 'unclaimed',
+    categoryTags: <String>['校园', '大学', city],
+    city: city,
+    contentPreview: <HomepageContentPreview>[
+      HomepageContentPreview(
+        postId: '${id}_post_001',
+        title: '$title 校园指南',
+        summary: '以可信资料、创作内容和校友圈承接校园冷启动。',
+        contentType: 'article',
+      ),
+    ],
+    relatedGroups: <HomepageRelatedGroupSummary>[
+      HomepageRelatedGroupSummary(
+        circleId: '${id}_circle_001',
+        name: '$title 同趣圈',
+        memberCount: 600,
+        linkedHomepageId: id,
+        linkedHomepageTitle: title,
+      ),
+    ],
+    createdAt: _dt('2026-05-01T00:00:00.000Z'),
+    updatedAt: _dt('2026-05-01T00:00:00.000Z'),
+    publishedAt: _dt('2026-05-01T00:00:00.000Z'),
+  );
+}
+
+HomepageDetail _travelPhotoHomepage(String id, String title, String city) {
+  return HomepageDetail(
+    id: id,
+    homepageType: 'travel_photo',
+    title: title,
+    subtitle: '旅行摄影主页模板样本',
+    status: 'published',
+    sourceType: 'contract_fixture',
+    claimStatus: 'unclaimed',
+    categoryTags: <String>['旅行摄影', '机位', city],
+    city: city,
+    contentPreview: <HomepageContentPreview>[
+      HomepageContentPreview(
+        postId: '${id}_post_001',
+        title: '$title 路线与机位',
+        summary: '聚合最佳时段、作品精选、问答和结伴交流。',
+        contentType: 'article',
+      ),
+    ],
+    relatedGroups: <HomepageRelatedGroupSummary>[
+      HomepageRelatedGroupSummary(
+        circleId: '${id}_circle_001',
+        name: '$title 同好圈',
+        memberCount: 480,
+        linkedHomepageId: id,
+        linkedHomepageTitle: title,
+      ),
+    ],
+    createdAt: _dt('2026-05-01T00:00:00.000Z'),
+    updatedAt: _dt('2026-05-01T00:00:00.000Z'),
+    publishedAt: _dt('2026-05-01T00:00:00.000Z'),
+  );
+}
+
 HomepageDetail _deepCloneHomepageDetail(HomepageDetail h) {
   final rs = h.reviewSummary;
   return h.copyWith(
@@ -228,12 +312,12 @@ HomepageDetail _deepCloneHomepageDetail(HomepageDetail h) {
             averageRating: rs.averageRating,
             ratingCount: rs.ratingCount,
             highlightTags: List<String>.from(rs.highlightTags),
-            dimensionScores:
-                List<HomepageReviewDimensionScore>.from(rs.dimensionScores),
+            dimensionScores: List<HomepageReviewDimensionScore>.from(
+              rs.dimensionScores,
+            ),
           ),
     contentPreview: List<HomepageContentPreview>.from(h.contentPreview),
     questionPreview: List<HomepageQuestionPreview>.from(h.questionPreview),
-    relatedGroups:
-        List<HomepageRelatedGroupSummary>.from(h.relatedGroups),
+    relatedGroups: List<HomepageRelatedGroupSummary>.from(h.relatedGroups),
   );
 }

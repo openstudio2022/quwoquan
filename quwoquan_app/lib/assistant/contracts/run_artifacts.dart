@@ -26,7 +26,89 @@ import 'package:quwoquan_app/assistant/generated/contracts/run_artifacts.g.dart'
 String slotValueStatusToWire(SlotValueStatus status) => status.wireName;
 
 RunArtifacts parseRunArtifacts(Map<String, dynamic> json) =>
-    RunArtifacts.fromJson(json);
+    RunArtifacts.fromJson(_normalizeRunArtifactsWireMap(json));
+
+const Set<String> _runArtifactsStringWireKeys = <String>{
+  'activeStepId',
+  'answerEligibility',
+  'blockId',
+  'body',
+  'claim',
+  'continuityMode',
+  'detail',
+  'dimension',
+  'dimensionLabel',
+  'displayMarkdown',
+  'displayPlainText',
+  'domainId',
+  'evidenceId',
+  'evidenceSummary',
+  'expansionReason',
+  'finalAnswerMode',
+  'frameId',
+  'headline',
+  'intentSummary',
+  'itemId',
+  'kind',
+  'label',
+  'listStyle',
+  'machineEnvelope',
+  'mismatchSignal',
+  'nextAction',
+  'note',
+  'originalValue',
+  'processingSummary',
+  'readinessSummary',
+  'reasoning',
+  'renderFallback',
+  'renderMode',
+  'resolvedValue',
+  'retrieveMoreReason',
+  'retrievalDesignNarrative',
+  'searchPlanId',
+  'slotId',
+  'snippet',
+  'source',
+  'sourceHost',
+  'sourceTier',
+  'status',
+  'stepId',
+  'summary',
+  'synthesisReason',
+  'title',
+  'updatedAt',
+  'url',
+  'userFacingSummary',
+};
+
+Map<String, dynamic> _normalizeRunArtifactsWireMap(Map<String, dynamic> json) {
+  return json.map((key, value) {
+    if (_runArtifactsStringWireKeys.contains(key) &&
+        value != null &&
+        value is! String) {
+      return MapEntry(key, value.toString());
+    }
+    if (value is Map) {
+      return MapEntry(
+        key,
+        _normalizeRunArtifactsWireMap(value.cast<String, dynamic>()),
+      );
+    }
+    if (value is List) {
+      return MapEntry(
+        key,
+        value
+            .map(
+              (item) => item is Map
+                  ? _normalizeRunArtifactsWireMap(item.cast<String, dynamic>())
+                  : item,
+            )
+            .toList(growable: false),
+      );
+    }
+    return MapEntry(key, value);
+  });
+}
 
 AssistantJourney parseAssistantJourney(Map<String, dynamic> json) =>
     AssistantJourney.fromJson(json);

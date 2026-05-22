@@ -567,6 +567,33 @@ entities:
         api_exposure: read
         ops_exposure: read
 
+      - name: assistantMentioned
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 用户是否在评论中显式 @小趣，作为助手回复上下文触发条件
+
+      - name: assistantReplySource
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 小趣评论回复来源，如 user_mention、quality_boost、ops_seed
+
+      - name: assistantCorrectionStatus
+        type: enum
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read_write
+        description: 小趣回复纠错状态，如 none、pending、corrected、dismissed
+
       - name: replyCount
         type: int
         constraints: [NOT_NULL, DEFAULT_0]

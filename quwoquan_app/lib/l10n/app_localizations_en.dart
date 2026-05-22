@@ -176,16 +176,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get welcomeTitle => 'TODO: translate';
 
   @override
-  String get welcomeSubtitle => 'TODO: translate';
-
-  @override
   String get welcomeMainSlogan => 'TODO: translate';
 
   @override
   String get welcomeButtonLabel => 'TODO: translate';
 
   @override
-  String get welcomeFooterCredit => 'TODO: translate';
+  String get assistantWhisperSignature => 'TODO: translate';
+
+  @override
+  String get assistantWhisperLine => 'TODO: translate';
 
   @override
   String get commentPlaceholder => 'TODO: translate';

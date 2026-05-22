@@ -1,7 +1,7 @@
 """生成完整标签体系到 publish/v1/tags/
 
 四大分组：Topic / Audience / Format / Entity
-- Topic: 主题垂类与场景/事件话题/时间/地理（行政区由 bootstrap_admin_regions.py 生成；垂类无 Topic/主题 中间层）
+- Topic: 主题垂类与场景/事件/话题/时间/地理（行政区由 bootstrap_admin_regions.py 生成；垂类无 Topic/主题 中间层）
 - Audience: 用户/创作者/圈子（商品画像并入 Entity/商品）
 - Format: 内容载体/内容角度/表现手法/视觉风格/互动玩法/商业形式
 - Entity: 9 领域类型骨架（不实例化具体对象）
@@ -104,22 +104,22 @@ def tags_list(prefix: str, items: list[tuple]):
 
 def gen_topic():
     group("Topic", "内容主题", "Topic",
-          "描述内容所属的主题领域、地理位置、时间节点、事件话题与场景氛围",
+          "描述内容所属的主题领域、地理位置、时间节点、事件/话题与场景氛围",
           [
               "Topic/自然风光", "Topic/历史文化", "Topic/美食餐饮", "Topic/住宿", "Topic/旅行",
               "Topic/时尚穿搭", "Topic/美妆护肤", "Topic/健康养生", "Topic/运动",
-              "Topic/数码科技", "Topic/汽车文化", "Topic/家居生活", "Topic/教育成长",
+              "Topic/科技", "Topic/数码", "Topic/人文社科",
+              "Topic/汽车文化", "Topic/家居生活", "Topic/教育成长",
               "Topic/职场效率", "Topic/亲子育儿", "Topic/情感关系", "Topic/影视娱乐",
               "Topic/游戏电竞", "Topic/二次元", "Topic/艺术创作", "Topic/三农生活",
               "Topic/宠物动物", "Topic/金融理财", "Topic/非遗民俗", "Topic/宗教信仰",
               "Topic/命理玄学", "Topic/法律政务", "Topic/公益社会", "Topic/军事国防",
               "Topic/国际视野", "Topic/购物消费", "Topic/摄影",
-              "Topic/场景", "Topic/事件话题", "Topic/时间", "Topic/地理",
+              "Topic/场景", "Topic/事件", "Topic/话题", "Topic/时间", "Topic/地理",
           ])
 
     _gen_topic_verticals()
     _gen_topic_场景()
-    _gen_topic_事件话题()
     _gen_topic_时间()
     # 地理/行政区 由 bootstrap_admin_regions.py 生成，此处只生成地理骨架
     _gen_topic_地理_骨架()
@@ -134,14 +134,17 @@ def _gen_topic_verticals():
         ("极光", "Aurora", "极光天象景观"),
         ("花海", "Flower Sea", "大面积鲜花景观"),
         ("森林", "Forest", "森林丛林林海景观"),
+        ("湖泊", "Lakes", "高山湖泊与湖区景观"),
         ("云海", "Sea of Clouds", "云海云雾奇观"),
+        ("雪山", "Snow Mountain", "雪山冰川与山岳景观"),
+        ("高原风光", "Plateau Scenery", "高原地貌与开阔风光"),
         ("日出日落", "Sunrise & Sunset", "日出与日落天象景观"),
         ("雾凇", "Rime Ice", "雾凇冰挂等冬季凝结景观"),
         ("雪景", "Snowscape", "降雪与雪景氛围"),
         ("候鸟迁徙", "Bird Migration", "候鸟迁飞与观鸟季"),
     ])
 
-    # 2. 历史文化
+    # 2. 历史文化（历史深度兼容层；人文社科另行承载）
     tag("Topic/历史文化", "历史文化", "History & Culture", "人类历史遗迹、传统文化与文明相关主题")
     tags_list("Topic/历史文化", [
         ("古镇文化", "Ancient Town Culture", "古镇老街的历史风貌"),
@@ -149,14 +152,31 @@ def _gen_topic_verticals():
         ("考古遗址", "Archaeological Site", "考古发掘与历史遗址"),
         ("红色文化", "Red Culture", "革命历史与红色精神"),
         ("帝王文化", "Imperial Culture", "皇家宫廷与帝制历史"),
+        ("世界遗产", "World Heritage", "联合国教科文世界遗产"),
         ("三国文化", "Three Kingdoms Culture", "三国历史文化专题"),
         ("古蜀文明", "Ancient Shu Civilization", "古蜀国文化遗存"),
+        ("石刻艺术", "Stone Carving Art", "石刻、石窟与雕刻艺术"),
+        ("水利工程", "Water Conservancy Engineering", "古代与现代水利工程遗产"),
         ("丝绸之路", "Silk Road", "丝绸之路历史文化"),
         ("茶文化", "Tea Culture", "茶的历史、产地与文化", ["茶道", "茶艺"]),
         ("酒文化", "Wine & Liquor Culture", "白酒、黄酒、葡萄酒文化", ["白酒", "黄酒"]),
         ("节庆文化", "Festival Culture", "传统节日与民俗庆典"),
         ("建筑艺术", "Architectural Art", "传统与现代建筑艺术"),
         ("文物收藏", "Antique & Collection", "文物古玩与收藏鉴赏"),
+    ])
+
+    # 2b. 人文社科（人文观察与社会纪实，和历史深度分离）
+    tag("Topic/人文社科", "人文社科", "Humanities & Social Science",
+        "人文观察、社会纪实与文化评论内容")
+    tags_list("Topic/人文社科", [
+        ("城市观察", "Urban Observation", "城市空间、街区与生活方式观察"),
+        ("社会纪实", "Social Documentary", "社会现实与纪实观察"),
+        ("民俗风物", "Folkways & Customs", "民俗、节庆与地方风物"),
+        ("旅行人文", "Travel Humanities", "旅行中的人文观察与记述"),
+        ("乡土生活", "Local Life", "乡村、县城与地方日常生活"),
+        ("文化评论", "Cultural Commentary", "文化现象与文化议题评论"),
+        ("纪录片式观察", "Documentary Observation", "纪实镜头和观察式表达"),
+        ("文学散记", "Literary Notes", "文学、散文与随笔式人文表达"),
     ])
 
     # 3. 美食餐饮（9 维正交：菜系/品类/饮品/就餐时段/用餐场合/饮食特征/风味口味/认证评级/特色食材）
@@ -526,7 +546,7 @@ def _gen_topic_verticals():
         "住宿预订相关的特征标签",
         max_depth=2, expected_size=7)
     tags_list("Topic/住宿/预订特征", [
-        ("闪订", "Instant Book", "即时确认预订"),
+        ("即时确认", "Instant Book", "即时确认预订", ["闪订"]),
         ("免费取消", "Free Cancellation", "可免费取消的预订"),
         ("价保", "Price Match", "最低价保证"),
         ("含早", "Breakfast Included", "房价含早餐的预订"),
@@ -582,7 +602,7 @@ def _gen_topic_verticals():
         ("手作工坊", "Workshop", "手工艺制作体验活动"),
         ("农场体验", "Farm Experience", "田园采摘与农牧体验"),
         ("研学游学", "Study Tour", "研究性学习与游学旅行"),
-        ("摄影旅拍", "Travel Photography", "以摄影创作为核心的旅行体验，与 Topic/数码科技/摄影摄像（器材技巧）和 Topic/艺术创作/摄影艺术（艺术属性）正交"),
+        ("摄影旅拍", "Travel Photography", "以摄影创作为核心的旅行体验，与 Topic/数码/影像（器材技巧）和 Format/表现手法/摄影技法（拍摄方法）正交"),
         ("观鸟观兽", "Wildlife Watching", "野生动物与鸟类观察体验"),
         ("观星", "Stargazing", "暗夜星空观测体验"),
         ("看演出", "Live Performance", "现场演出与表演观赏体验"),
@@ -635,7 +655,7 @@ def _gen_topic_verticals():
         ("跨境多国", "Multi-country", "跨越多个国家的长途旅行"),
     ])
 
-    # 4.6 住宿（内容讲住宿的哪个话题；15 项；与 Entity/地点/住宿 六轴实体骨架正交）
+    # 4.6 住宿（内容讲住宿的哪个话题；15 项；与 Entity/地点/住宿 10 类扁平实体骨架正交）
     dim("Topic/旅行/住宿", "住宿", "Accommodation Topic",
         "内容围绕住宿的话题角度（讲什么）；与 Entity/地点/住宿（实体是什么）、Format/内容角度（怎么讲）正交",
         max_depth=2, expected_size=15)
@@ -673,13 +693,17 @@ def _gen_topic_verticals():
         ("行后回顾", "Post-trip Review", "旅行归来的总结与回顾"),
     ])
 
-    # 5. 时尚穿搭
+    # 5. 时尚穿搭（风格 / 场景 / 单品 / 搭配方法）
     tag("Topic/时尚穿搭", "时尚穿搭", "Fashion & Style", "服饰穿搭与时尚潮流内容")
     tags_list("Topic/时尚穿搭", [
         ("日常穿搭", "Daily Outfit", "日常生活服装搭配"),
         ("职场穿搭", "Office Outfit", "职场正式商务着装"),
+        ("通勤穿搭", "Commute Outfit", "通勤上班场景穿搭"),
         ("户外穿搭", "Outdoor Outfit", "户外运动功能性着装"),
+        ("旅行穿搭", "Travel Outfit", "旅行出游场景穿搭"),
         ("约会穿搭", "Date Outfit", "约会浪漫风格着装"),
+        ("婚礼穿搭", "Wedding Outfit", "婚礼与庆典着装"),
+        ("宴会穿搭", "Banquet Outfit", "宴会与正式场合着装"),
         ("运动穿搭", "Sports Outfit", "运动健身着装"),
         ("复古风", "Vintage Style", "复古vintage风格穿搭"),
         ("汉服", "Hanfu", "中国传统汉服文化"),
@@ -692,16 +716,20 @@ def _gen_topic_verticals():
         ("单品推荐", "Item Recommendation", "单件服饰产品推荐"),
     ])
 
-    # 6. 美妆护肤
+    # 6. 美妆护肤（护肤 / 彩妆 / 造型修饰 / 工具与产品）
     tag("Topic/美妆护肤", "美妆护肤", "Beauty & Skincare", "美妆护肤化妆品相关内容")
     tags_list("Topic/美妆护肤", [
         ("护肤流程", "Skincare Routine", "日常护肤步骤与流程"),
+        ("防晒", "Sunscreen", "防晒与紫外线防护"),
         ("底妆", "Base Makeup", "粉底遮瑕等底妆技巧"),
         ("眼妆", "Eye Makeup", "眼影眼线睫毛膏等眼妆"),
+        ("眼霜", "Eye Cream", "眼周护理与眼霜"),
         ("唇妆", "Lip Makeup", "口红唇釉唇线笔"),
         ("彩妆教程", "Makeup Tutorial", "全套彩妆教学"),
         ("仿妆", "Cosplay Makeup", "明星仿妆角色仿妆"),
         ("医美抗衰", "Medical Beauty", "医美项目与抗老护肤"),
+        ("面膜", "Mask Care", "面膜与密集护理"),
+        ("精华", "Serum", "精华液与功效型护理"),
         ("素人改造", "Makeover", "普通人化妆前后对比"),
         ("香水调香", "Perfume & Fragrance", "香水品鉴与调香"),
         ("美甲美睫", "Nail & Lash Art", "美甲美睫美容内容"),
@@ -746,7 +774,7 @@ def _gen_topic_verticals():
         ("ESFP", "ESFP", "表演者"),
     ])
 
-    # 8. 运动（休闲健身 / 户外探险 / 竞技体育 / 极限运动 / 电竞）
+    # 8. 运动（休闲健身 / 户外探险 / 竞技体育 / 极限运动；电竞赛事后续拆出独立主轴）
     tag("Topic/运动", "运动", "Sports", "运动健身、户外探险、竞技体育、极限运动与电竞内容")
     tag("Topic/运动/休闲健身", "休闲健身", "Leisure Fitness", "以健康与体态为目标的日常运动")
     tags_list("Topic/运动/休闲健身", [
@@ -793,20 +821,32 @@ def _gen_topic_verticals():
         ("游戏竞技直播", "Game & Esports Live", "游戏与电竞向直播内容"),
     ])
 
-    # 9. 数码科技
-    tag("Topic/数码科技", "数码科技", "Digital & Tech", "数码产品与科学技术相关内容")
-    tags_list("Topic/数码科技", [
+    # 9. 科技（行业趋势 / 公司 / 新技术）
+    tag("Topic/科技", "科技", "Tech",
+        "行业趋势、公司动态、新技术与科技政策内容")
+    tags_list("Topic/科技", [
+        ("AI技术", "AI Technology", "人工智能应用与前沿进展"),
+        ("机器人", "Robotics", "机器人技术与应用"),
+        ("半导体芯片", "Semiconductor", "芯片、半导体与硬件底座"),
+        ("新能源", "New Energy", "电动车、储能与能源转型"),
+        ("智能家居", "Smart Home", "智能家居与物联网生活"),
+        ("编程开发", "Programming", "编程、工程实践与技术学习"),
+        ("软件应用", "Software & Apps", "软件产品、工具与应用生态"),
+        ("科学探索", "Science Exploration", "基础科学与前沿探索"),
+    ])
+
+    # 9b. 数码（消费电子 / 影像 / 器材）
+    tag("Topic/数码", "数码", "Digital Devices",
+        "消费电子、影像器材、无人机与电子产品内容")
+    tags_list("Topic/数码", [
         ("手机测评", "Smartphone Review", "手机性能测评与使用体验"),
         ("电脑测评", "Computer Review", "笔记本台式机测评"),
-        ("智能家居", "Smart Home", "智能家居设备与生活"),
-        ("影像", "Imaging", "相机摄像机相关内容"),
-        ("无人机", "Drone", "无人机使用与航拍"),
-        ("AI技术", "AI Technology", "人工智能应用与进展"),
-        ("游戏硬件", "Gaming Hardware", "游戏设备外设测评"),
-        ("软件应用", "Software & Apps", "手机应用与软件工具"),
-        ("编程开发", "Programming", "代码开发与技术学习"),
-        ("科学探索", "Science Exploration", "科学知识与前沿探索"),
-        ("新能源", "New Energy", "电动车与新能源技术"),
+        ("影像", "Imaging", "相机摄像机与影像器材内容"),
+        ("无人机", "Drone", "无人机使用、航拍与器材测评"),
+        ("游戏硬件", "Gaming Hardware", "游戏设备、外设与性能测评"),
+        ("智能穿戴", "Wearables", "智能手表、手环与可穿戴设备"),
+        ("耳机音频", "Audio Gear", "耳机、音箱与音频器材"),
+        ("数码配件", "Accessories", "数码配件与周边装备"),
     ])
 
     # 10. 汽车文化
@@ -1189,12 +1229,13 @@ def _gen_topic_verticals():
         ("好物清单", "Shopping List", "精选好物推荐清单"),
     ])
 
-    # 31. 摄影（独立垂类，含题材社区 + 知识类；对标 500px/图虫/Flickr 等平台频道）
+    # 31. 摄影（题材社区 / 知识方法 / 活动赛事；对标 500px/图虫/Flickr 等平台频道）
     tag("Topic/摄影", "摄影", "Photography",
         "摄影创作与摄影文化内容：按题材流派形成的社区频道 + 摄影知识与器材内容")
     tags_list("Topic/摄影", [
         ("风光摄影", "Landscape Photography", "以自然风景为主题的摄影创作"),
         ("人像摄影", "Portrait Photography", "以人物肖像为主题的摄影创作"),
+        ("儿童摄影", "Children Photography", "以儿童与亲子为主题的摄影创作"),
         ("街头摄影", "Street Photography", "城市街头抓拍与日常记录"),
         ("纪实摄影", "Documentary Photography", "纪实报道与社会记录摄影"),
         ("建筑摄影", "Architecture Photography", "建筑与城市景观摄影"),
@@ -1256,20 +1297,6 @@ def _gen_topic_场景():
         ("家庭聚会", "Family Gathering", "家庭聚会活动场景"),
         ("网友见面", "Online Friend Meetup", "网络认识后线下见面"),
     ])
-
-
-def _gen_topic_事件话题():
-    """事件话题骨架：只建立一级分类节点。
-    所有叶子节点由 bootstrap_event_topics.py 统一管理，避免重复定义。
-    """
-    dim("Topic/事件话题", "事件话题", "Trending Topics",
-        "时效性话题与热点事件分类，不写生命周期字段，热度由 tag_runtime/topic_hotness.ndjson 管理",
-        max_depth=3, expected_size=100)
-
-    tag("Topic/事件话题/社会热点", "社会热点", "Social Trending", "社会民生热点话题")
-    tag("Topic/事件话题/赛事活动", "赛事活动", "Sports & Event Topics", "体育赛事与大型活动话题")
-    tag("Topic/事件话题/文娱话题", "文娱话题", "Entertainment Topics", "影视娱乐热点话题")
-    tag("Topic/事件话题/地区话题", "地区话题", "Regional Topics", "特定地区热点话题")
 
 
 def _gen_topic_时间():
@@ -1922,6 +1949,8 @@ def _gen_format_内容角度():
         ("小众秘境", "Hidden Gem Guide", "小众目的地发现指引"),
         ("省钱攻略", "Budget Guide", "低价优惠攻略"),
         ("住宿攻略", "Accommodation Guide", "住宿选择与预订攻略"),
+        ("择园攻略", "Kindergarten Selection Guide", "幼儿园择园与入园准备"),
+        ("幼小衔接", "Preschool-Primary Transition", "从幼儿园到小学的衔接准备"),
         ("新生攻略", "Freshman Guide", "大学或学校新生入学攻略"),
         ("选课攻略", "Course Selection Guide", "大学选课策略与避坑指南"),
     ])
@@ -2308,6 +2337,27 @@ def _gen_entity_地点():
     ])
 
     tag("Entity/地点/住宿", "住宿", "Accommodation", "住宿经营业态类型骨架")
+    dim("Entity/地点/住宿/设施服务", "设施服务", "Accommodation Amenities",
+        "住宿实体的设施与服务配置骨架",
+        max_depth=2, expected_size=8)
+    tags_list("Entity/地点/住宿/设施服务", [
+        ("厨房厨具", "Kitchen & Cookware", "提供厨房与厨具，可自炊"),
+        ("接送服务", "Transfer Service", "提供接送或摆渡服务"),
+        ("早餐服务", "Breakfast Service", "提供早餐或餐食服务"),
+        ("洗衣服务", "Laundry Service", "提供洗衣与烘干服务"),
+        ("停车位", "Parking", "提供停车位"),
+        ("无障碍", "Accessible", "提供无障碍设施与服务"),
+    ])
+    dim("Entity/地点/住宿/房源形态", "房源形态", "Accommodation Form",
+        "住宿实体的空间与房源形态骨架",
+        max_depth=2, expected_size=8)
+    tags_list("Entity/地点/住宿/房源形态", [
+        ("树屋", "Treehouse", "树屋住宿形态"),
+        ("合住房间", "Shared Room", "多人合住房间"),
+        ("独立房间", "Private Room", "独立房间"),
+        ("整租房源", "Entire Place", "整租房源"),
+        ("套房", "Suite", "套房形态"),
+    ])
     tags_list("Entity/地点/住宿", [
         ("酒店", "Hotel", "标准酒店业态"),
         ("民宿", "Homestay", "非标个人住宿业态"),

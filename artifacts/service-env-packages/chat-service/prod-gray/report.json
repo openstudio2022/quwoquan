@@ -1,6 +1,0 @@
-{
-  "status": "packaged",
-  "service": "chat-service",
-  "env": "prod-gray",
-  "configLayout": "default+env"
-}

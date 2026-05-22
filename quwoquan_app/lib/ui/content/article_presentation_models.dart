@@ -5,6 +5,39 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/content/article_document_models.dart';
 
+@immutable
+class BackwardPaintSourceDiagnostic {
+  const BackwardPaintSourceDiagnostic({
+    required this.label,
+    required this.zOrder,
+    required this.pageIndex,
+    required this.surfaceKind,
+    required this.status,
+    required this.viewportBounds,
+    required this.polygonSignature,
+  });
+
+  final String label;
+  final int zOrder;
+  final int? pageIndex;
+  final String surfaceKind;
+  final String status;
+  final Rect? viewportBounds;
+  final String polygonSignature;
+
+  bool get hasVisibleBounds =>
+      viewportBounds != null && !viewportBounds!.isEmpty;
+
+  String get summary {
+    final pageLabel = pageIndex == null ? '-' : '${pageIndex! + 1}';
+    final rect = viewportBounds;
+    final rectLabel = rect == null
+        ? '-'
+        : '${rect.left.toStringAsFixed(1)},${rect.top.toStringAsFixed(1)},${rect.right.toStringAsFixed(1)},${rect.bottom.toStringAsFixed(1)}';
+    return '$zOrder:$label:p$pageLabel/$surfaceKind/$status/$rectLabel/$polygonSignature';
+  }
+}
+
 enum ArticleTemplatePreset { gentle, ritual, diffuse, journal, tech }
 
 extension ArticleTemplatePresetX on ArticleTemplatePreset {

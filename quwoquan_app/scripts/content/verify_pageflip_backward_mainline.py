@@ -472,10 +472,23 @@ def _check_recto_verso_split_in_host() -> list[str]:
                 f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back must render as a clipped "
                 "fold band with dedicated backside texture/overlay semantics."
             )
+        if "_buildBackwardSheetFacePolygon(" not in surface_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front visible plane must "
+                "render through the previous front surface path."
+            )
         if "ArticlePageSurfaceKind.front" not in surface_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-front must render as a "
-                "sheet-local recto face inside the rotating sheet."
+                f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front visible plane must "
+                "draw the previous front page surface; do not route it to semantic back."
+            )
+        recto_surface_body = surface_body.split(
+            "_buildBackwardBackFoldBandSurface("
+        )[0]
+        if "_buildBackwardVersoTextureSurface(" in recto_surface_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front visible plane must not "
+                "call the verso/back texture painter."
             )
         if "_backwardFoldDerivedFacePolygons(" not in surface_body:
             violations.append(
@@ -512,10 +525,10 @@ def _check_recto_verso_split_in_host() -> list[str]:
                 f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back fold band must use "
                 "the explicit verso texture surface instead of the front/recto path."
             )
-        if "_validPageTextureSnapshotForIndex(" not in back_band_body:
+        if "_validBackPageTextureSnapshotForIndex(" not in back_band_body:
             violations.append(
                 f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back fold band must bind "
-                "the previous/flipping leafVerso snapshot before painting."
+                "a semantic-back validated previous/flipping leafVerso snapshot before painting."
             )
         if "_buildFlippingSurfaceOverlay(" not in back_band_body or "showBackside: true" not in back_band_body:
             violations.append(
@@ -526,6 +539,40 @@ def _check_recto_verso_split_in_host() -> list[str]:
             violations.append(
                 f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back fold band must not "
                 "draw a front page surface."
+            )
+    flat_body = _extract_method_body(
+        text,
+        r"Widget\s+_buildBackwardFrontFlatLayer\([^)]*\)\s*\{",
+    )
+    if flat_body is None:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: failed to parse `_buildBackwardFrontFlatLayer` body"
+        )
+    else:
+        if "_buildCachedPageSurface(" not in flat_body or "ArticlePageSurfaceKind.front" not in flat_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK flat previous-front plane must consume "
+                "the previous front surface."
+            )
+        if "_buildBackwardVersoTextureSurface(" in flat_body or "_validBackPageTextureSnapshotForIndex(" in flat_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK flat previous-front plane must not "
+                "draw semantic back texture."
+            )
+    validator_body = _extract_method_body(
+        text,
+        r"ArticlePageTextureSnapshot\?\s+_validBackPageTextureSnapshotForIndex\([^)]*\)\s*\{",
+    )
+    if validator_body is None:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back must define "
+            "`_validBackPageTextureSnapshotForIndex` for semantic snapshot validation."
+        )
+    else:
+        if "semanticSurfaceKind == ArticlePageSurfaceKind.back.name" not in validator_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back snapshot validator must "
+                "reject same-size snapshots unless `semanticSurfaceKind` is `back`."
             )
     texture_body = _extract_method_body(
         text,
@@ -542,10 +589,15 @@ def _check_recto_verso_split_in_host() -> list[str]:
                 f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture must mirror in "
                 "page-space, not around the moving foldLine."
             )
+        if "RawImage(" in texture_body:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture mainline must not use "
+                "RawImage fallback; host and probes must share the same painter."
+            )
         if "_BackwardLeafVersoUvPainter" not in texture_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture mainline must use "
-                "the leafVerso vertex-UV painter instead of a whole-widget mirror."
+                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture mainline must route "
+                "through `_BackwardLeafVersoUvPainter`."
             )
         if "leafVersoSnapshot" not in texture_body:
             violations.append(
@@ -572,19 +624,24 @@ def _check_recto_verso_split_in_host() -> list[str]:
             f"{HOST_PATH.relative_to(ROOT)}: BACK backBand must not keep a visual "
             "fallback branch that can draw the wrong texture."
         )
-    if "class _BackwardLeafVersoUvPainter" not in text:
+    if "_buildBackwardVersoTextureSurface" not in text:
         violations.append(
-            f"{HOST_PATH.relative_to(ROOT)}: missing `_BackwardLeafVersoUvPainter`; "
-            "BACK backBand needs per-vertex leafVerso UV mapping."
+            f"{HOST_PATH.relative_to(ROOT)}: missing `_buildBackwardVersoTextureSurface`; "
+            "BACK backBand needs one explicit semantic-back snapshot path."
         )
     else:
-        painter_body = text[text.find("class _BackwardLeafVersoUvPainter") :]
-        for marker in ("buildBackwardLeafVersoUvMesh(", "leafVersoSnapshot.image"):
-            if marker not in painter_body:
+        texture_surface_body = text[text.find("_buildBackwardVersoTextureSurface") :]
+        for marker in ("_BackwardLeafVersoUvPainter",):
+            if marker not in texture_surface_body:
                 violations.append(
-                    f"{HOST_PATH.relative_to(ROOT)}: `_BackwardLeafVersoUvPainter` "
-                    f"missing `{marker}` required for forward-mesh-compatible verso UV."
+                    f"{HOST_PATH.relative_to(ROOT)}: `_buildBackwardVersoTextureSurface` "
+                    f"missing `{marker}` required for shared visible semantic-back texture."
                 )
+        if "paintBackwardLeafVersoSurface(" not in text:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: host painter missing "
+                "`paintBackwardLeafVersoSurface(` required for shared visible semantic-back texture."
+            )
     uv_mesh_path = (
         APP_LIB
         / "ui"
@@ -594,6 +651,15 @@ def _check_recto_verso_split_in_host() -> list[str]:
         / "layers"
         / "backward_leaf_verso_uv_mesh.dart"
     )
+    uv_mapping_path = (
+        APP_LIB
+        / "ui"
+        / "content"
+        / "article_reader"
+        / "pageflip"
+        / "layers"
+        / "backward_leaf_verso_texture_mapping.dart"
+    )
     if not uv_mesh_path.exists():
         violations.append(f"missing BACK leafVerso UV mesh: {uv_mesh_path.relative_to(ROOT)}")
     else:
@@ -602,13 +668,86 @@ def _check_recto_verso_split_in_host() -> list[str]:
             "BackwardLeafVersoUvMesh",
             "ui.Vertices.raw(",
             "textureCoordinates: textureValues",
-            "pageSize.width - localPoint.dx",
+            "backwardVersoTexturePoint(",
         ):
             if marker not in uv_mesh_text:
                 violations.append(
                     f"{uv_mesh_path.relative_to(ROOT)}: missing `{marker}` required "
                     "for testable forward-mesh-compatible BACK verso UV."
                 )
+        if "pageSize.width - localPoint.dx" in uv_mesh_text:
+            violations.append(
+                f"{uv_mesh_path.relative_to(ROOT)}: BACK leafVerso UV must not "
+                "mirror an already mirrored semantic back snapshot a second time."
+            )
+    if not uv_mapping_path.exists():
+        violations.append(
+            f"missing BACK leafVerso UV mapping: {uv_mapping_path.relative_to(ROOT)}"
+        )
+    else:
+        uv_mapping_text = _strip_comments(uv_mapping_path.read_text(encoding="utf-8"))
+        for marker in (
+            "backwardVersoTextureMappingStrategy",
+            "semanticBackSnapshotUvLocal",
+            "localPoint.dx.clamp(0.0, pageSize.width)",
+        ):
+            if marker not in uv_mapping_text:
+                violations.append(
+                    f"{uv_mapping_path.relative_to(ROOT)}: missing `{marker}` required "
+                    "for BACK semantic back snapshot UV mapping."
+                )
+        if "pageSize.width - localPoint.dx" in uv_mapping_text:
+            violations.append(
+                f"{uv_mapping_path.relative_to(ROOT)}: BACK leafVerso UV mapping "
+                "must not use the old double-mirror formula."
+            )
+    for marker in (
+        "backwardVersoTextureUvStrategy",
+        "backwardFrontBackOverlapWidth",
+        "backwardBackVisibleUncoveredWidth",
+        "backwardBackVisibleProbeCount",
+        "backwardPaintSources",
+        "backwardVersoProbeViewportPoints",
+    ):
+        if marker not in text:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: missing `{marker}` required "
+                "for BACK visible-texture diagnostics and framebuffer acceptance."
+            )
+    diagnostics_path = APP_LIB / "components" / "pageflip" / "src" / "debug" / "pageflip_diagnostics.dart"
+    if diagnostics_path.exists():
+        diagnostics_text = _strip_comments(diagnostics_path.read_text(encoding="utf-8"))
+        for marker in ("label: 'tex'", "label: 'overlap'", "label: 'sources'"):
+            if marker not in diagnostics_text:
+                violations.append(
+                    f"{diagnostics_path.relative_to(ROOT)}: missing `{marker}` required "
+                    "for screenshot-visible BACK texture and overlap diagnostics."
+                )
+    else:
+        violations.append(f"missing diagnostics overlay: {diagnostics_path.relative_to(ROOT)}")
+    for marker in (
+        "staticCurrentFront",
+        "bottomCurrentFront",
+        "previousFrontFlat",
+        "sheetRectoFront",
+        "sheetVersoBack",
+        "foldOverlay",
+    ):
+        if marker not in text:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: missing BACK paint source marker `{marker}` "
+                "required for source-attributed color-block debugging."
+            )
+    for marker in (
+        "previousFrontFlatUnifiedToBack",
+        "sheetRectoUnifiedToBack",
+        "status: 'unifiedToBack'",
+    ):
+        if marker in text:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: forbidden unified-back source marker `{marker}`; "
+                "BACK recto/front and verso/back diagnostics must remain separate."
+            )
     texture_path = APP_LIB / "ui" / "content" / "pageflip" / "page_surface_snapshot.dart"
     if texture_path.exists():
         texture_text = _strip_comments(texture_path.read_text(encoding="utf-8"))

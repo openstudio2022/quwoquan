@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
+	rtobs "quwoquan_service/runtime/observability"
 	runtimesync "quwoquan_service/runtime/sync"
 	event "quwoquan_service/services/user-service/internal/domain/user/event"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
@@ -45,8 +48,13 @@ func NewProfileService(
 	}
 }
 
-func (s *ProfileService) GetProfile(ctx context.Context, userID string) (*model.FullSnapshot, error) {
-	if cached, err := s.pcache.Get(ctx, userID); err == nil && cached != nil {
+func (s *ProfileService) GetProfile(ctx context.Context, userID string) (snap *model.FullSnapshot, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.GetProfile",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	cached, cacheErr := s.pcache.Get(ctx, userID)
+	if cacheErr == nil && cached != nil {
 		return cached, nil
 	}
 
@@ -61,7 +69,7 @@ func (s *ProfileService) GetProfile(ctx context.Context, userID string) (*model.
 	activePersona, _ := s.personas.FindActiveByUserID(ctx, userID)
 	setting, _ := s.settings.FindByUserID(ctx, userID)
 
-	snap := &model.FullSnapshot{
+	snap = &model.FullSnapshot{
 		Profile:       profile,
 		ActivePersona: activePersona,
 		Settings:      setting,
@@ -71,7 +79,11 @@ func (s *ProfileService) GetProfile(ctx context.Context, userID string) (*model.
 	return snap, nil
 }
 
-func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data map[string]any) (*model.UserProfile, error) {
+func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data map[string]any) (_ *model.UserProfile, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.UpdateProfile",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	profile, err := s.profiles.FindByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -149,7 +161,11 @@ func (s *ProfileService) UpdateProfile(ctx context.Context, userID string, data 
 	return profile, nil
 }
 
-func (s *ProfileService) GetStats(ctx context.Context, userID string) (map[string]any, error) {
+func (s *ProfileService) GetStats(ctx context.Context, userID string) (_ map[string]any, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.GetStats",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	profile, err := s.profiles.FindByID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -171,7 +187,12 @@ func (s *ProfileService) PullSync(
 	userID string,
 	afterSeq int64,
 	limit int,
-) (runtimesync.PullResponse, error) {
+) (_ runtimesync.PullResponse, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.PullSync",
+		attribute.String("user.id", userID),
+		attribute.Int64("sync.after_seq", afterSeq))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.sync == nil {
 		return runtimesync.PullResponse{
 			Patches:        []runtimesync.Patch{},

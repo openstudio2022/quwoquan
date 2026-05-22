@@ -18,6 +18,10 @@ type SceneConfig struct {
 
 	PoolSize     int `yaml:"pool_size"`
 	MinIdleConns int `yaml:"min_idle_conns"`
+
+	DialTimeoutMs  int `yaml:"dial_timeout_ms"`
+	ReadTimeoutMs  int `yaml:"read_timeout_ms"`
+	WriteTimeoutMs int `yaml:"write_timeout_ms"`
 }
 
 // PrefixRoute maps a key prefix to a scene name.
@@ -29,24 +33,15 @@ type PrefixRoute struct {
 
 // DefaultRouterConfig returns a config suitable for local development
 // (all scenes use in-memory implementation).
+// Scene names and prefix routes are sourced from redis_keyspace.yaml via codegen.
 func DefaultRouterConfig() RouterConfig {
+	scenes := make(map[string]SceneConfig, len(GeneratedSceneNames()))
+	for _, name := range GeneratedSceneNames() {
+		scenes[name] = SceneConfig{Mode: "memory"}
+	}
 	return RouterConfig{
-		Scenes: map[string]SceneConfig{
-			"rec":      {Mode: "memory"},
-			"general":  {Mode: "memory"},
-			"realtime": {Mode: "memory"},
-		},
-		PrefixRoutes: []PrefixRoute{
-			{Prefix: "rec:", Scene: "rec"},
-			{Prefix: "cache:", Scene: "general"},
-			{Prefix: "counter:", Scene: "general"},
-			{Prefix: "reaction:", Scene: "general"},
-			{Prefix: "rt:", Scene: "realtime"},
-			{Prefix: "seq:", Scene: "realtime"},
-			{Prefix: "presence:", Scene: "realtime"},
-			{Prefix: "dedup:", Scene: "realtime"},
-			{Prefix: "transport:", Scene: "realtime"},
-		},
-		DefaultScene: "general",
+		Scenes:       scenes,
+		PrefixRoutes: GeneratedPrefixRoutes(),
+		DefaultScene: GeneratedDefaultScene,
 	}
 }

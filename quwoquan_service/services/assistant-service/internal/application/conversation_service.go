@@ -5,13 +5,20 @@ import (
 	"sort"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	rterr "quwoquan_service/runtime/errors"
 	rtid "quwoquan_service/runtime/id"
+	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/streaming"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
 
-func (s *AssistantService) CreateConversation(_ context.Context, userID string, input assistant.CreateConversationInput) (assistant.AssistantConversation, error) {
+func (s *AssistantService) CreateConversation(ctx context.Context, userID string, input assistant.CreateConversationInput) (_ assistant.AssistantConversation, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.CreateConversation",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
 		return assistant.AssistantConversation{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
@@ -35,7 +42,12 @@ func (s *AssistantService) CreateConversation(_ context.Context, userID string, 
 	return conversation, nil
 }
 
-func (s *AssistantService) GetConversation(_ context.Context, userID, conversationID string) (assistant.AssistantConversation, error) {
+func (s *AssistantService) GetConversation(ctx context.Context, userID, conversationID string) (_ assistant.AssistantConversation, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetConversation",
+		attribute.String("user.id", userID),
+		attribute.String("conversation.id", conversationID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	userID = strings.TrimSpace(userID)
 	conversationID = strings.TrimSpace(conversationID)
 	s.mu.RLock()
@@ -47,7 +59,12 @@ func (s *AssistantService) GetConversation(_ context.Context, userID, conversati
 	return conversation, nil
 }
 
-func (s *AssistantService) CreateTurn(_ context.Context, userID, conversationID string, input assistant.CreateTurnInput) (assistant.AssistantTurn, error) {
+func (s *AssistantService) CreateTurn(ctx context.Context, userID, conversationID string, input assistant.CreateTurnInput) (_ assistant.AssistantTurn, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.CreateTurn",
+		attribute.String("conversation.id", conversationID),
+		attribute.String("turn.type", input.TurnType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	userID = strings.TrimSpace(userID)
 	conversationID = strings.TrimSpace(conversationID)
 	if strings.TrimSpace(input.Input.Text) == "" {
@@ -97,7 +114,12 @@ func (s *AssistantService) CreateTurn(_ context.Context, userID, conversationID 
 	return turn, nil
 }
 
-func (s *AssistantService) GetTurn(_ context.Context, userID, turnID string) (assistant.AssistantTurn, error) {
+func (s *AssistantService) GetTurn(ctx context.Context, userID, turnID string) (_ assistant.AssistantTurn, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetTurn",
+		attribute.String("user.id", userID),
+		attribute.String("turn.id", turnID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	userID = strings.TrimSpace(userID)
 	turnID = strings.TrimSpace(turnID)
 	s.mu.RLock()
@@ -109,12 +131,21 @@ func (s *AssistantService) GetTurn(_ context.Context, userID, turnID string) (as
 	return turn, nil
 }
 
-func (s *AssistantService) BuildFakeTurnStream(ctx context.Context, userID, turnID string) ([]streaming.Envelope, error) {
+func (s *AssistantService) BuildFakeTurnStream(ctx context.Context, userID, turnID string) (_ []streaming.Envelope, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.BuildFakeTurnStream",
+		attribute.String("turn.id", turnID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return s.buildTurnStream(ctx, userID, turnID, nil)
 }
 
-func (s *AssistantService) StreamTurn(ctx context.Context, userID, turnID string, emit func(streaming.Envelope) error) error {
-	_, err := s.buildTurnStream(ctx, userID, turnID, emit)
+func (s *AssistantService) StreamTurn(ctx context.Context, userID, turnID string, emit func(streaming.Envelope) error) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.StreamTurn",
+		attribute.String("user.id", userID),
+		attribute.String("turn.id", turnID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	_, err = s.buildTurnStream(ctx, userID, turnID, emit)
 	return err
 }
 

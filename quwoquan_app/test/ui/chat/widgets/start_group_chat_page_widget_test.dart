@@ -105,11 +105,12 @@ Map<String, dynamic> _member(
   required int order,
   String role = 'member',
   bool isCurrentUser = false,
+  String? avatarUrl,
 }) {
   return <String, dynamic>{
     'userId': userId,
     'displayName': chatDisplayNameFor(userId),
-    'avatarUrl': chatAvatarUrlFor(userId),
+    'avatarUrl': avatarUrl ?? chatAvatarUrlFor(userId),
     'role': role,
     'isCurrentUser': isCurrentUser,
     'joinedAt': DateTime.utc(
@@ -247,7 +248,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('选择群聊页使用共享会话头像 token 与更重的占位图标', (tester) async {
+  testWidgets('选择群聊页使用共享会话头像 token，并在缺头像时显示稳定群占位', (tester) async {
     _suppressImageErrors();
 
     final repository = MockChatRepository(
@@ -269,6 +270,15 @@ void main() {
             isCurrentUser: true,
           ),
         ],
+        'conv_source_placeholder': <Map<String, dynamic>>[
+          _member(
+            chatCurrentUserProfileId(),
+            order: 0,
+            role: 'owner',
+            isCurrentUser: true,
+          ),
+          _member('user_003', order: 1, avatarUrl: ''),
+        ],
       },
     );
     final container = _buildContainer(repository);
@@ -286,11 +296,8 @@ void main() {
     expect(avatarSize.width, ChatConversationAvatarTokens.listSize);
     expect(avatarSize.height, ChatConversationAvatarTokens.listSize);
 
-    final groupIcon = tester.widget<Icon>(find.byIcon(Icons.group).first);
-    expect(
-      groupIcon.size,
-      ChatConversationAvatarTokens.listSize *
-          ChatConversationAvatarTokens.placeholderIconScale,
-    );
+    final avatar = tester.widget<RoundedSquareAvatar>(avatarFinder);
+    expect(avatar.imageUrl, isNull);
+    expect(find.text('占'), findsNothing);
   });
 }

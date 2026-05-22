@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -75,11 +77,24 @@ Widget _buildApp({
     overrides: [
       searchRepositoryProvider.overrideWithValue(_FakeSearchRepository()),
       assistantRepositoryProvider.overrideWithValue(_FakeAssistantRepository()),
+      chatRepositoryProvider.overrideWithValue(MockChatRepository()),
     ],
     child: MaterialApp.router(
       routerConfig: _buildRouter(launchContext: launchContext),
     ),
   );
+}
+
+void _suppressImageErrors() {
+  final original = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    final message = details.exceptionAsString();
+    if (message.contains('HTTP request failed') ||
+        message.contains('NetworkImageLoadException')) {
+      return;
+    }
+    original?.call(details);
+  };
 }
 
 void main() {
@@ -328,6 +343,27 @@ void main() {
     expect(find.text('chat:conv_grid_3'), findsOneWidget);
   });
 
+  testWidgets('聊天记录群聊缺失 avatarUrl 时显示稳定群占位', (tester) async {
+    _suppressImageErrors();
+    await tester.pumpWidget(_buildApp());
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('global_search_field')),
+      '群',
+    );
+    await tester.pump(const Duration(milliseconds: 220));
+    await _pumpUntil(
+      tester,
+      condition: () => find.byType(RoundedSquareAvatar).evaluate().isNotEmpty,
+    );
+
+    final avatar = tester.widget<RoundedSquareAvatar>(
+      find.byType(RoundedSquareAvatar).first,
+    );
+    expect(avatar.imageUrl, isNull);
+  });
+
   testWidgets('联系人没有单聊时回退到已存在群聊会话', (tester) async {
     await tester.pumpWidget(_buildApp());
     await tester.pumpAndSettle();
@@ -368,11 +404,11 @@ void main() {
     await tester.tap(find.text('冰').last);
     await _pumpUntil(
       tester,
-      condition: () => find.text('小趣搜').evaluate().isNotEmpty,
+      condition: () => find.text('综合').evaluate().isNotEmpty,
     );
 
-    expect(find.text('小趣搜'), findsWidgets);
-    expect(find.text('推荐'), findsOneWidget);
+    expect(find.text('综合'), findsWidgets);
+    expect(find.text('推荐'), findsNothing);
   });
 
   testWidgets('主页网络建议可直达主页结果 tab', (tester) async {
@@ -469,7 +505,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_ming',
             title: '李明',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadWireMap(<String, dynamic>{
+            payload: SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_ming',
               'displayName': '李明',
               'conversationId': 'conv_001',
@@ -480,7 +516,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_xiang',
             title: '李想',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadWireMap(<String, dynamic>{
+            payload: SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_xiang',
               'displayName': '李想',
               'conversationId': 'conv_007',
@@ -491,7 +527,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_qing',
             title: '李青',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadWireMap(<String, dynamic>{
+            payload: SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_qing',
               'displayName': '李青',
               'conversationId': 'conv_008',
@@ -502,7 +538,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_yue',
             title: '李悦',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadWireMap(<String, dynamic>{
+            payload: SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_yue',
               'displayName': '李悦',
               'conversationId': 'conv_009',
@@ -513,7 +549,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_li_ze',
             title: '李泽',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadWireMap(<String, dynamic>{
+            payload: SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_li_ze',
               'displayName': '李泽',
               'conversationId': 'conv_010',
@@ -527,7 +563,7 @@ class _FakeSearchRepository implements SearchRepository {
             objectId: 'user_wang_fang',
             title: '王芳',
             resolvedFrom: SearchResolvedFrom.local,
-            payload: const SearchHitPayloadWireMap(<String, dynamic>{
+            payload: SearchHitPayloadWireMap(<String, dynamic>{
               'contactId': 'user_wang_fang',
               'displayName': '王芳',
               'conversationId': 'conv_002',
@@ -549,7 +585,7 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_002',
         title: '周末登山群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: const SearchHitPayloadWireMap(<String, dynamic>{
+        payload: SearchHitPayloadWireMap(<String, dynamic>{
           'conversationId': 'conv_002',
           'type': 'group',
           'title': '周末登山群',
@@ -562,7 +598,7 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_grid_3',
         title: '3人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: const SearchHitPayloadWireMap(<String, dynamic>{
+        payload: SearchHitPayloadWireMap(<String, dynamic>{
           'conversationId': 'conv_grid_3',
           'type': 'group',
           'title': '3人测试群',
@@ -575,7 +611,7 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_grid_4',
         title: '4人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: const SearchHitPayloadWireMap(<String, dynamic>{
+        payload: SearchHitPayloadWireMap(<String, dynamic>{
           'conversationId': 'conv_grid_4',
           'type': 'group',
           'title': '4人测试群',
@@ -588,7 +624,7 @@ class _FakeSearchRepository implements SearchRepository {
         objectId: 'conv_grid_5',
         title: '5人测试群',
         resolvedFrom: SearchResolvedFrom.local,
-        payload: const SearchHitPayloadWireMap(<String, dynamic>{
+        payload: SearchHitPayloadWireMap(<String, dynamic>{
           'conversationId': 'conv_grid_5',
           'type': 'group',
           'title': '5人测试群',

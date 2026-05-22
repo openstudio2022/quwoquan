@@ -1,0 +1,191 @@
+id: runtime-recommendation-audit-p8
+title: 推荐系统八期审计 — 商用达标修复
+status: in_progress
+created: "2026-05-16"
+baseline_score: 2.7
+target_score: 4.0
+
+slices:
+
+  # ── 阶段 1: P0 阻断修复 ──────────────────────────
+  - id: B-01
+    title: 社交召回 GetFriendInteractedContent 查询修复
+    priority: P0
+    status: done
+    files:
+      - quwoquan_service/services/content-service/internal/infrastructure/recommendation/social_infra.go
+    dimensions: [D5, D8]
+
+  - id: B-02
+    title: depthDistribution 键语义 Go map[string]int 对齐 Python "L0".."L4"
+    priority: P0
+    status: done
+    files:
+      - quwoquan_service/runtime/recommendation/feature.go
+      - quwoquan_service/services/content-service/internal/infrastructure/recommendation/recommend_feature.go
+    dimensions: [D7]
+
+  - id: B-03
+    title: UnifiedMediaViewerPage 接入 ContentEngagementTracker
+    priority: P0
+    status: done
+    files:
+      - quwoquan_app/lib/ui/content/pages/unified_media_viewer_page.dart
+      - quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
+    dimensions: [D1, D2]
+
+  - id: B-04
+    title: post_feed_contract_test image→photo 统一
+    priority: P0
+    status: done
+    files:
+      - quwoquan_service/services/content-service/tests/post_feed_contract_test.go
+    dimensions: [D10]
+
+  # ── 阶段 2: P1 归因 + 特征修复 ──────────────────
+  - id: B-05
+    title: ArticleDetailPage 路由接收归因参数
+    priority: P1
+    status: done
+    files:
+      - quwoquan_app/lib/ui/content/models/content_route_models.dart
+      - quwoquan_app/lib/app/navigation/app_router.dart
+      - quwoquan_app/lib/ui/discovery/pages/discovery_page.dart
+    dimensions: [D2]
+
+  - id: B-06
+    title: Moment 帖 following 分类下 contentType 修复
+    priority: P1
+    status: done
+    files:
+      - quwoquan_app/lib/ui/content/pages/photo_detail_page.dart
+    dimensions: [D1]
+
+  - id: B-07
+    title: reportSingle/impression 已有 feedRequestId（已有实现确认）
+    priority: P1
+    status: done
+    files:
+      - quwoquan_app/lib/ui/discovery/pages/discovery_page.dart
+    dimensions: [D2]
+    note: 审计时误判为缺失，复查发现已经通过 feedSession.currentFeedRequestId 传入
+
+  - id: B-08
+    title: socialPrior 移除重复 AuthorAffinities 消费
+    priority: P1
+    status: done
+    files:
+      - quwoquan_service/runtime/recommendation/scorer.go
+    dimensions: [D4]
+
+  - id: B-09
+    title: rerank 探索/冷启动插入更新去重计数
+    priority: P1
+    status: done
+    files:
+      - quwoquan_service/runtime/recommendation/engine.go
+    dimensions: [D5]
+
+  - id: B-10
+    title: OtherProfilePage referralSource 透传
+    priority: P1
+    status: done
+    files:
+      - quwoquan_app/lib/ui/content/models/content_route_models.dart
+      - quwoquan_app/lib/app/navigation/app_router.dart
+      - quwoquan_app/lib/ui/user/pages/other_profile_page.dart
+    dimensions: [D2]
+
+  - id: B-11
+    title: HomepageDetailPage 搜索入口传 search referralSource
+    priority: P1
+    status: done
+    files:
+      - quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
+    dimensions: [D2]
+
+  - id: B-12
+    title: train.py/train_multiobjective.py 消费 aspectRatio/recallPath
+    priority: P1
+    status: done
+    files:
+      - quwoquan_service/scripts/ml/train.py
+      - quwoquan_service/scripts/ml/train_multiobjective.py
+      - quwoquan_service/services/rec-model-service/models/content_feed.py
+    dimensions: [D7]
+
+  - id: B-13
+    title: recEngagementContext 补 referralSource/contentType/authorId
+    priority: P1
+    status: done
+    files:
+      - quwoquan_service/runtime/recommendation/learning.go
+    dimensions: [D6]
+
+  - id: B-14
+    title: CircleDetailPage 路由 referralSource 透传
+    priority: P1
+    status: done
+    files:
+      - quwoquan_app/lib/ui/content/models/content_route_models.dart
+      - quwoquan_app/lib/app/navigation/app_router.dart
+      - quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
+    dimensions: [D2]
+
+  # ── 阶段 3: P2 健壮性 + 合规 ────────────────────
+  - id: B-15
+    title: learning.Event.Context 强类型结构体替换
+    priority: P2
+    status: deferred
+    note: recEngagementContext 已增强含全部归因字段；结构体替换需改 runtime/learning 通用模块，延期到下期
+    dimensions: [D9]
+
+  - id: B-16
+    title: CascadeScorer 超时调用 RecordModelTimeout
+    priority: P2
+    status: done
+    files:
+      - quwoquan_service/runtime/recommendation/scorer.go
+    dimensions: [D6]
+
+  - id: B-17
+    title: favorite/comment per-type 原子计数+Prometheus
+    priority: P2
+    status: done
+    files:
+      - quwoquan_service/runtime/recommendation/metrics.go
+    dimensions: [D6]
+
+  - id: B-18
+    title: verify_feature_consistency.py 覆盖 train_embedding.py
+    priority: P2
+    status: done
+    files:
+      - quwoquan_service/scripts/ml/verify_feature_consistency.py
+    dimensions: [D7]
+
+  - id: B-19
+    title: trackContentEnter 补传 tags
+    priority: P2
+    status: done
+    files:
+      - quwoquan_app/lib/ui/content/post_summary_view.dart
+      - quwoquan_app/lib/ui/content/pages/photo_detail_page.dart
+      - quwoquan_app/lib/ui/content/pages/unified_media_viewer_page.dart
+    dimensions: [D1]
+
+  - id: B-20
+    title: PostCreated 在 RecommendFeatureProjector 写入特征
+    priority: P2
+    status: done
+    files:
+      - quwoquan_service/services/content-service/internal/infrastructure/recommendation/recommend_feature.go
+    dimensions: [D3]
+
+  - id: B-21
+    title: 特性树补 plan.yaml
+    priority: P2
+    status: done
+    files:
+      - specs/feature-tree/runtime/runtime-recommendation/plan.yaml
+    dimensions: [D10]

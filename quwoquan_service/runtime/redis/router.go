@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sort"
@@ -107,4 +108,14 @@ func (r *Router) Scenes() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// PingAll pings every scene and returns the first error encountered.
+func (r *Router) PingAll(ctx context.Context) error {
+	for _, name := range r.Scenes() {
+		if err := r.scenes[name].Ping(ctx); err != nil {
+			return fmt.Errorf("redis: ping scene %q: %w", name, err)
+		}
+	}
+	return nil
 }

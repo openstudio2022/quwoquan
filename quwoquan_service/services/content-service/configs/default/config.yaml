@@ -44,3 +44,32 @@ redis:
       read_timeout_ms: 200
       write_timeout_ms: 200
       dial_timeout_ms: 500
+
+# rec-model-service (default: disabled; gamma/prod enable via env override)
+rec_model_service:
+  url: ""
+  timeout_ms: 50
+  enabled: false
+
+# Embedding service (default: disabled)
+embedding:
+  endpoint: ""
+  api_key: ""
+  model: "text-embedding-3-small"
+  enabled: false
+
+# Object storage (default: local MinIO)
+oss:
+  endpoint: "127.0.0.1:9000"
+  bucket: "quwoquan-media"
+  region: "us-east-1"
+  access_key_id: ""
+  access_key_secret: ""
+  cdn_domain: ""
+  cdn_sign_key: ""
+  presign_ttl_minutes: 15
+  cdn_ttl_minutes: 60
+  use_ssl: false
+
+metadata:
+  dir: "../../../contracts/metadata"

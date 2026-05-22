@@ -14,6 +14,11 @@ import (
 
 	"quwoquan_service/runtime/controlplane"
 	rterr "quwoquan_service/runtime/errors"
+	rtgov "quwoquan_service/runtime/governance"
+	rthttp "quwoquan_service/runtime/http"
+	rtmetrics "quwoquan_service/runtime/metrics"
+	robs "quwoquan_service/runtime/observability"
+	rtotel "quwoquan_service/runtime/otel"
 
 	"gopkg.in/yaml.v3"
 )
@@ -24,7 +29,18 @@ type platformService struct {
 }
 
 func main() {
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "platform-ops-service", SamplingRatio: 0.1})
+	defer otelShutdown()
+
+	serviceName, appEnv, configRoot, configVersion, imageVersion := resolvePlatformRuntimeIdentity()
+	cfg, err := loadPlatformRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
+	if err != nil {
+		log.Fatalf("platform-ops-service config load failed: %v", err)
+	}
 	addr := strings.TrimSpace(os.Getenv("PLATFORM_OPS_SERVICE_ADDR"))
+	if addr == "" {
+		addr = strings.TrimSpace(cfg.Service.HTTP.Addr)
+	}
 	if addr == "" {
 		addr = ":18087"
 	}
@@ -37,15 +53,59 @@ func main() {
 		log.Fatalf("seed platform ops service: %v", err)
 	}
 	mux := newServerMux(service)
-	log.Printf("platform-ops-service listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+
+	instanceID, _ := os.Hostname()
+	ioLogger := robs.NewIOAccessLogger(os.Stdout)
+	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
+	if err != nil {
+		log.Fatalf("platform-ops-service process logger init failed: %v", err)
+	}
+	exceptionLogger, err := robs.NewExceptionLogger(os.Stdout, os.Stderr, nil)
+	if err != nil {
+		log.Fatalf("platform-ops-service exception logger init failed: %v", err)
+	}
+	observedHandler := rthttp.NewHTTPServerMiddleware(mux, rthttp.HTTPServerMiddlewareConfig{
+		Service:           "platform-ops-service",
+		ServiceName:       "platform-ops-service",
+		ServiceInstanceID: instanceID,
+	}, ioLogger, processLogger, exceptionLogger)
+	corsHandler := rthttp.WithCORS(observedHandler, rthttp.CORSOptionsFromEnv())
+	log.Printf(
+		"platform-ops-service runtime identity env=%s config_version=%s image_version=%s config_root=%s",
+		appEnv,
+		configVersion,
+		imageVersion,
+		strings.TrimSpace(configRoot),
+	)
+
+	rateLimiter := rtgov.NewRateLimiter(1000)
+	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           rateLimited,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	log.Printf("platform-ops-service listening on %s (rate_limit=1000/s)", addr)
+	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
+		log.Fatalf("platform-ops-service: %v", err)
+	}
 }
 
 func newServerMux(service *platformService) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := os.Stat(service.repoRoot); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"status": "degraded",
+				"error":  "repo root inaccessible",
+			})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 	})
+	mux.Handle("/metrics", rtmetrics.Handler())
 	mux.HandleFunc("/v1/control-plane/platform/catalog/services", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
@@ -81,6 +141,27 @@ func newServerMux(service *platformService) *http.ServeMux {
 		}
 		service.handleListEnvironmentTopologies(w, r)
 	})
+	mux.HandleFunc("/v1/control-plane/platform/topology/clusters", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleListNamespace(w, r, "runtime_clusters")
+	})
+	mux.HandleFunc("/v1/control-plane/platform/topology/services", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleListNamespace(w, r, "runtime_services")
+	})
+	mux.HandleFunc("/v1/control-plane/platform/topology/instances", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleListNamespace(w, r, "runtime_instances")
+	})
 	mux.HandleFunc("/v1/control-plane/platform/topology/dependencies", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
@@ -100,14 +181,52 @@ func newServerMux(service *platformService) *http.ServeMux {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleListNamespace(w, r, "service_configs")
+		service.handleListConfigKeys(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/configs/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":update") {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, ":effective"):
+			service.handleGetEffectiveConfig(w, r)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":update"):
+			service.handleUpdateNamespaceDocument(w, r, "config_layers", "config_layer_updated")
+		default:
+			writeRuntimeNotFound(w, r)
+		}
+	})
+	mux.HandleFunc("/v1/control-plane/platform/configs/layers", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
 			writeRuntimeNotFound(w, r)
 			return
 		}
-		service.handleUpdateNamespaceDocument(w, r, "service_configs", "config_updated")
+		service.handleListNamespace(w, r, "config_layers")
+	})
+	mux.HandleFunc("/v1/control-plane/platform/configs/resolve", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleResolveConfig(w, r)
+	})
+	mux.HandleFunc("/v1/control-plane/platform/configs/packages", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleListNamespace(w, r, "config_packages")
+	})
+	mux.HandleFunc("/v1/control-plane/platform/configs/instances", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleListConfigInstanceReports(w, r)
+	})
+	mux.HandleFunc("/v1/control-plane/platform/configs/instances/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, ":report") {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		service.handleReportConfigInstance(w, r)
 	})
 	mux.HandleFunc("/v1/control-plane/platform/governance/bindings", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -231,11 +350,132 @@ func newServerMux(service *platformService) *http.ServeMux {
 }
 
 func (s *platformService) seed() error {
+	schemaPath := filepath.Join(s.repoRoot, "contracts", "metadata", "_control_plane", "platform", "config_schema.yaml")
+	schemaKeys, schemaErr := controlplane.LoadConfigKeysFromSchema(schemaPath)
+	if schemaErr != nil {
+		log.Printf("WARN: platform-ops-service: load config_schema.yaml failed, using empty keys: %v", schemaErr)
+		schemaKeys = nil
+	}
+
 	defaultDocs := map[string][]controlplane.Document{
-		"service_configs": {
-			{"id": "sys.gateway.timeout.default", "key": "sys.gateway.timeout.default", "default": 800, "scope": "service", "reload": "hot", "risk": "high", "service": "gateway-orchestrator"},
-			{"id": "sys.content.mongo.pool", "key": "sys.content.mongo.pool", "default": 120, "scope": "service", "reload": "restart", "risk": "medium", "service": "content-service"},
-			{"id": "sys.assistant.trace.sampling", "key": "sys.assistant.trace.sampling", "default": 0.2, "scope": "service", "reload": "hot", "risk": "low", "service": "seed-box"},
+		"config_keys": schemaKeys,
+		"config_layers": {
+			{
+				"id":          "global:all",
+				"title":       "系统级默认",
+				"scopeLevel":  "global",
+				"scopeID":     "all",
+				"environment": "all",
+				"values": map[string]any{
+					"sys.gateway.rate_limit.per_user_rps":    30,
+					"sys.orchestrator.downstream.timeout_ms": 900,
+					"sys.client_state_sync.flush_delay_sec":  12,
+					"sys.assistant.otel.trace_sample_ratio":  0.15,
+					"sys.content.mongo.max_pool_size":        100,
+				},
+			},
+			{
+				"id":          "environment:beta",
+				"title":       "beta 环境默认",
+				"scopeLevel":  "environment",
+				"scopeID":     "beta",
+				"environment": "beta",
+				"values": map[string]any{
+					"sys.orchestrator.downstream.timeout_ms": 850,
+				},
+			},
+			{
+				"id":          "cluster:beta-control-a",
+				"title":       "beta 控制面集群 A",
+				"scopeLevel":  "cluster",
+				"scopeID":     "beta-control-a",
+				"environment": "beta",
+				"cluster":     "beta-control-a",
+				"values": map[string]any{
+					"sys.gateway.rate_limit.per_user_rps": 45,
+				},
+			},
+			{
+				"id":          "service:product-ops-service",
+				"title":       "product-ops-service 服务层",
+				"scopeLevel":  "service",
+				"scopeID":     "product-ops-service",
+				"environment": "beta",
+				"cluster":     "beta-control-a",
+				"service":     "product-ops-service",
+				"values": map[string]any{
+					"sys.gateway.rate_limit.per_user_rps":    50,
+					"sys.client_state_sync.flush_delay_sec":  9,
+					"sys.orchestrator.downstream.timeout_ms": 720,
+				},
+			},
+		},
+		"config_packages": {
+			{
+				"id":            "beta-control-a-product-ops-service-v2026.03.08.0",
+				"packageId":     "beta-control-a-product-ops-service-v2026.03.08.0",
+				"environment":   "beta",
+				"cluster":       "beta-control-a",
+				"service":       "product-ops-service",
+				"configVersion": "v2026.03.08.0",
+				"imageVersion":  "0.0.1",
+				"releaseState":  "ready",
+				"distribution":  "config-center+disk",
+			},
+			{
+				"id":            "beta-control-a-platform-ops-service-v2026.03.08.0",
+				"packageId":     "beta-control-a-platform-ops-service-v2026.03.08.0",
+				"environment":   "beta",
+				"cluster":       "beta-control-a",
+				"service":       "platform-ops-service",
+				"configVersion": "v2026.03.08.0",
+				"imageVersion":  "0.0.1",
+				"releaseState":  "ready",
+				"distribution":  "config-center+disk",
+			},
+		},
+		"config_instance_reports": {
+			{
+				"id":            "product-ops-service-beta-control-a-0",
+				"environment":   "beta",
+				"cluster":       "beta-control-a",
+				"service":       "product-ops-service",
+				"instanceId":    "product-ops-service-beta-control-a-0",
+				"configVersion": "v2026.03.08.0",
+				"imageVersion":  "0.0.1",
+				"desiredHash":   "bootstrap-product-hash",
+				"effectiveHash": "bootstrap-product-hash",
+				"inSync":        true,
+				"source":        "config-center",
+			},
+			{
+				"id":            "platform-ops-service-beta-control-a-0",
+				"environment":   "beta",
+				"cluster":       "beta-control-a",
+				"service":       "platform-ops-service",
+				"instanceId":    "platform-ops-service-beta-control-a-0",
+				"configVersion": "v2026.03.08.0",
+				"imageVersion":  "0.0.1",
+				"desiredHash":   "bootstrap-platform-hash",
+				"effectiveHash": "stale-bootstrap-platform-hash",
+				"inSync":        false,
+				"source":        "disk-fallback",
+				"lastError":     "config center timeout",
+			},
+		},
+		"runtime_clusters": {
+			{"id": "beta-control-a", "environment": "beta", "cluster": "beta-control-a", "plane": "control-plane", "services": []string{"platform-ops-service", "product-ops-service", "seed-box"}, "status": "success"},
+			{"id": "beta-user-a", "environment": "beta", "cluster": "beta-user-a", "plane": "user-plane", "services": []string{"realtime-gateway", "recommendation-service"}, "status": "warning"},
+		},
+		"runtime_services": {
+			{"id": "platform-ops-service", "environment": "beta", "cluster": "beta-control-a", "service": "platform-ops-service", "plane": "platform-control-plane", "instances": 1, "status": "warning"},
+			{"id": "product-ops-service", "environment": "beta", "cluster": "beta-control-a", "service": "product-ops-service", "plane": "product-control-plane", "instances": 1, "status": "success"},
+			{"id": "realtime-gateway", "environment": "beta", "cluster": "beta-user-a", "service": "realtime-gateway", "plane": "user-plane", "instances": 2, "status": "success"},
+		},
+		"runtime_instances": {
+			{"id": "platform-ops-service-beta-control-a-0", "environment": "beta", "cluster": "beta-control-a", "service": "platform-ops-service", "plane": "platform-control-plane", "status": "warning"},
+			{"id": "product-ops-service-beta-control-a-0", "environment": "beta", "cluster": "beta-control-a", "service": "product-ops-service", "plane": "product-control-plane", "status": "success"},
+			{"id": "realtime-gateway-beta-user-a-0", "environment": "beta", "cluster": "beta-user-a", "service": "realtime-gateway", "plane": "user-plane", "status": "success"},
 		},
 		"governance_bindings": {
 			{"id": "gateway.timeout.default", "title": "gateway.timeout.default", "subtitle": "默认超时 800ms · 作用于 orchestrator / gateway。", "status": "warning"},
@@ -282,17 +522,39 @@ func (s *platformService) seed() error {
 	for namespace, items := range defaultDocs {
 		for _, item := range items {
 			id := item["id"].(string)
-			_, ok, err := s.store.GetDocument(namespace, id)
-			if err != nil {
-				return err
-			}
-			if ok {
-				continue
-			}
-			if err := s.store.PutDocument(namespace, id, item); err != nil {
-				return err
+			switch namespace {
+			case "config_keys", "config_layers":
+				if err := s.store.PutDocument(namespace, id, item); err != nil {
+					return err
+				}
+			default:
+				_, ok, err := s.store.GetDocument(namespace, id)
+				if err != nil {
+					return err
+				}
+				if ok {
+					continue
+				}
+				if err := s.store.PutDocument(namespace, id, item); err != nil {
+					return err
+				}
 			}
 		}
+	}
+	configLayers, err := s.store.ListDocuments("config_layers")
+	if err != nil {
+		return err
+	}
+	for _, layer := range configLayers {
+		if stringifyDocumentValue(layer["scopeLevel"]) != "instance" {
+			continue
+		}
+		if err := s.store.DeleteDocument("config_layers", stringifyDocumentValue(layer["id"])); err != nil {
+			return err
+		}
+	}
+	if err := s.syncConfigPackageDesiredHashes(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -425,6 +687,106 @@ func (s *platformService) handleListEnvironmentTopologies(w http.ResponseWriter,
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+func (s *platformService) handleListConfigKeys(w http.ResponseWriter, r *http.Request) {
+	items, err := s.store.ListDocuments("config_keys")
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *platformService) handleResolveConfig(w http.ResponseWriter, r *http.Request) {
+	scope := controlplane.ConfigResolutionScope{
+		Environment: strings.TrimSpace(r.URL.Query().Get("env")),
+		Cluster:     strings.TrimSpace(r.URL.Query().Get("cluster")),
+		Service:     strings.TrimSpace(r.URL.Query().Get("service")),
+	}
+	configLayers, err := s.store.ListDocuments("config_layers")
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	configKeys, err := s.store.ListDocuments("config_keys")
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	values := controlplane.ResolveEffectiveConfig(configLayers, configKeys, scope)
+	hash := controlplane.EffectiveConfigHash(values)
+	desiredHash, err := s.lookupConfigPackageDesiredHash(scope, hash)
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"scope":         scope,
+		"resolvedAt":    nowRFC3339(),
+		"effectiveHash": hash,
+		"desiredHash":   desiredHash,
+		"values":        values,
+		"source":        "control-plane",
+	})
+}
+
+func (s *platformService) handleGetEffectiveConfig(w http.ResponseWriter, r *http.Request) {
+	layerID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/configs/", ":effective")
+	layer, ok, err := s.store.GetDocument("config_layers", layerID)
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	if !ok {
+		writeRuntimeError(w, r, http.StatusNotFound, "请求处理失败", "config layer not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, layer)
+}
+
+func (s *platformService) handleListConfigInstanceReports(w http.ResponseWriter, r *http.Request) {
+	items, err := s.store.ListDocuments("config_instance_reports")
+	if err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	summary := controlplane.SummarizeConfigDrift(items)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":   items,
+		"summary": summary,
+	})
+}
+
+func (s *platformService) handleReportConfigInstance(w http.ResponseWriter, r *http.Request) {
+	instanceID := segmentBetween(r.URL.Path, "/v1/control-plane/platform/configs/instances/", ":report")
+	current, _, _ := s.store.GetDocument("config_instance_reports", instanceID)
+	before := cloneMap(current)
+	var body map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body == nil {
+		body = map[string]any{}
+	}
+	body["id"] = instanceID
+	body["instanceId"] = instanceID
+	body["updatedAt"] = nowRFC3339()
+	if stringifyDocumentValue(body["desiredHash"]) == "" {
+		desiredHash, err := s.lookupConfigPackageDesiredHash(controlplane.ConfigResolutionScope{
+			Environment: stringifyDocumentValue(body["environment"]),
+			Cluster:     stringifyDocumentValue(body["cluster"]),
+			Service:     stringifyDocumentValue(body["service"]),
+		}, "")
+		if err == nil && desiredHash != "" {
+			body["desiredHash"] = desiredHash
+		}
+	}
+	body["inSync"] = body["desiredHash"] == body["effectiveHash"]
+	if err := s.store.PutDocument("config_instance_reports", instanceID, body); err != nil {
+		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
+		return
+	}
+	_ = s.appendAudit("config_instance_report", instanceID, "config_instance_reported", before, body, r)
+	writeJSON(w, http.StatusOK, body)
+}
+
 func (s *platformService) handleListNamespace(w http.ResponseWriter, r *http.Request, namespace string) {
 	items, err := s.store.ListDocuments(namespace)
 	if err != nil {
@@ -469,6 +831,92 @@ func (s *platformService) handleUpdateNamespaceDocument(w http.ResponseWriter, r
 	})
 	_ = s.appendAudit(namespace, id, auditAction, before, body, r)
 	writeJSON(w, http.StatusOK, body)
+}
+
+func (s *platformService) syncConfigPackageDesiredHashes() error {
+	configLayers, err := s.store.ListDocuments("config_layers")
+	if err != nil {
+		return err
+	}
+	configKeys, err := s.store.ListDocuments("config_keys")
+	if err != nil {
+		return err
+	}
+	configPackages, err := s.store.ListDocuments("config_packages")
+	if err != nil {
+		return err
+	}
+	packageDesiredHashes := map[string]string{}
+	for _, pkg := range configPackages {
+		pkgID := stringifyDocumentValue(pkg["id"])
+		if pkgID == "" {
+			continue
+		}
+		scope := controlplane.ConfigResolutionScope{
+			Environment: stringifyDocumentValue(pkg["environment"]),
+			Cluster:     stringifyDocumentValue(pkg["cluster"]),
+			Service:     stringifyDocumentValue(pkg["service"]),
+		}
+		values := controlplane.ResolveEffectiveConfig(configLayers, configKeys, scope)
+		desiredHash := controlplane.EffectiveConfigHash(values)
+		pkg["desiredHash"] = desiredHash
+		if err := s.store.PutDocument("config_packages", pkgID, pkg); err != nil {
+			return err
+		}
+		packageDesiredHashes[configPackageScopeKey(scope)] = desiredHash
+	}
+	configInstanceReports, err := s.store.ListDocuments("config_instance_reports")
+	if err != nil {
+		return err
+	}
+	for _, report := range configInstanceReports {
+		reportID := stringifyDocumentValue(report["id"])
+		if reportID == "" {
+			continue
+		}
+		scope := controlplane.ConfigResolutionScope{
+			Environment: stringifyDocumentValue(report["environment"]),
+			Cluster:     stringifyDocumentValue(report["cluster"]),
+			Service:     stringifyDocumentValue(report["service"]),
+		}
+		if desiredHash := packageDesiredHashes[configPackageScopeKey(scope)]; desiredHash != "" {
+			report["desiredHash"] = desiredHash
+			if stringifyDocumentValue(report["effectiveHash"]) == "" {
+				report["effectiveHash"] = desiredHash
+			}
+			report["inSync"] = stringifyDocumentValue(report["desiredHash"]) == stringifyDocumentValue(report["effectiveHash"])
+			if err := s.store.PutDocument("config_instance_reports", reportID, report); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *platformService) lookupConfigPackageDesiredHash(scope controlplane.ConfigResolutionScope, fallback string) (string, error) {
+	configPackages, err := s.store.ListDocuments("config_packages")
+	if err != nil {
+		return "", err
+	}
+	for _, pkg := range configPackages {
+		if configPackageMatchesScope(pkg, scope) {
+			if desiredHash := stringifyDocumentValue(pkg["desiredHash"]); desiredHash != "" {
+				return desiredHash, nil
+			}
+			break
+		}
+	}
+	return fallback, nil
+}
+
+func configPackageMatchesScope(pkg controlplane.Document, scope controlplane.ConfigResolutionScope) bool {
+	return stringifyDocumentValue(pkg["environment"]) == scope.Environment &&
+		stringifyDocumentValue(pkg["cluster"]) == scope.Cluster &&
+		stringifyDocumentValue(pkg["service"]) == scope.Service
+}
+
+func configPackageScopeKey(scope controlplane.ConfigResolutionScope) string {
+	return scope.Environment + "|" + scope.Cluster + "|" + scope.Service
 }
 
 func (s *platformService) handleRunDrill(w http.ResponseWriter, r *http.Request) {
@@ -749,6 +1197,10 @@ func stringify(value any) string {
 	return text
 }
 
+func stringifyDocumentValue(value any) string {
+	return strings.TrimSpace(stringify(value))
+}
+
 func actorFromRequest(r *http.Request) string {
 	if actor := strings.TrimSpace(r.Header.Get("X-Actor")); actor != "" {
 		return actor
@@ -760,7 +1212,7 @@ func environmentFromRequest(r *http.Request) string {
 	if env := strings.TrimSpace(r.Header.Get("X-Environment")); env != "" {
 		return env
 	}
-	return "integration"
+	return "beta"
 }
 
 func requestIDFromRequest(r *http.Request) string {

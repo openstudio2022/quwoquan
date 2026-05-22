@@ -82,7 +82,7 @@ jobs:
       - name: 构建并推送 recommendation-service 镜像
         uses: docker/build-push-action@v5
         with:
-          context: quwoquan_service/services/rec-model-service
+          context: .
           file: quwoquan_service/services/rec-model-service/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |

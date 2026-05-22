@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
@@ -511,9 +512,8 @@ class MockUserProfileRepository extends UserProfileRepository {
   }) async {
     return _mockRelationUsers
         .where(
-          (user) => UserProfileMockData.viewerFollowsTarget(
-            _subAccountIdOf(user),
-          ),
+          (user) =>
+              UserProfileMockData.viewerFollowsTarget(_subAccountIdOf(user)),
         )
         .map(_withMockRelationship)
         .take(limit)
@@ -534,9 +534,8 @@ class MockUserProfileRepository extends UserProfileRepository {
   }) async {
     return _mockRelationUsers
         .where(
-          (user) => UserProfileMockData.targetFollowsViewer(
-            _subAccountIdOf(user),
-          ),
+          (user) =>
+              UserProfileMockData.targetFollowsViewer(_subAccountIdOf(user)),
         )
         .map(_withMockRelationship)
         .take(limit)
@@ -780,20 +779,21 @@ class MockUserProfileRepository extends UserProfileRepository {
     };
   }
 
-  static final Map<String, SubAccountProfileWireDto> _mockProfileWireByUserId = {
-    for (final e in _decodeBundledMockUserProfiles(
-      _kBundledMockUserProfilesJson,
-    ).entries)
-      e.key: SubAccountProfileWireDto.fromMap(e.value),
-  };
-
-  static final Map<String, SubAccountProfileWireDto> _contractProfileWireByUserId =
+  static final Map<String, SubAccountProfileWireDto> _mockProfileWireByUserId =
       {
-        for (final item in _contractProfileRows())
-          item['userId'].toString(): SubAccountProfileWireDto.fromMap(
-            _contractProfileWire(item),
-          ),
+        for (final e in _decodeBundledMockUserProfiles(
+          _kBundledMockUserProfilesJson,
+        ).entries)
+          e.key: SubAccountProfileWireDto.fromMap(e.value),
       };
+
+  static final Map<String, SubAccountProfileWireDto>
+  _contractProfileWireByUserId = {
+    for (final item in _contractProfileRows())
+      item['userId'].toString(): SubAccountProfileWireDto.fromMap(
+        _contractProfileWire(item),
+      ),
+  };
 
   static final Map<String, Map<String, dynamic>>
   _contractRelationshipByTargetUserId = {
@@ -852,9 +852,7 @@ class MockUserProfileRepository extends UserProfileRepository {
   ];
 
   static String _subAccountIdOf(Map<String, dynamic> user) {
-    return user['subAccountId']?.toString() ??
-        user['userId']?.toString() ??
-        '';
+    return user['subAccountId']?.toString() ?? user['userId']?.toString() ?? '';
   }
 
   static Map<String, dynamic> _withMockRelationship(Map<String, dynamic> user) {
@@ -883,11 +881,11 @@ class MockUserProfileRepository extends UserProfileRepository {
 // ─── Remote 实现（调用云侧 API）───────────────────────────────────────────────
 
 class RemoteUserProfileRepository extends UserProfileRepository {
-  RemoteUserProfileRepository({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
+  RemoteUserProfileRepository({CloudHttpClient? httpClient, String? baseUrl})
+    : _httpClient = httpClient ?? CloudHttpClient(),
       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
-  final http.Client _client;
+  final CloudHttpClient _httpClient;
   final String _baseUrl;
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
@@ -997,7 +995,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   Future<SubAccountProfileViewData> getUserProfile(String userId) async {
     if (userId == 'me') {
       final meUrl = _uri(UserApiMetadata.getMeProfilePath);
-      final meResp = await _client.get(
+      final meResp = await _httpClient.get(
         meUrl,
         headers: CloudRequestHeaders.forPage(UserRequestPageIds.getMeProfile),
       );
@@ -1015,7 +1013,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final subjectUrl = _uri(
       UserApiMetadata.getSubAccountProfilePath(subAccountId: userId),
     );
-    final subjectResp = await _client.get(
+    final subjectResp = await _httpClient.get(
       subjectUrl,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.getSubAccountProfile,
@@ -1037,7 +1035,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<void> updateProfile(ProfileEditUpdatePayload data) async {
     final url = _uri(UserApiMetadata.updateUserProfilePath);
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       url,
       headers: {
         ...CloudRequestHeaders.forPage(UserRequestPageIds.updateUserProfile),
@@ -1061,7 +1059,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ContentApiMetadata.listUserPostsPath(subAccountId: userId),
       queryParameters: <String, String>{'limit': '$limit'},
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(ContentRequestPageIds.listUserPosts),
     );
@@ -1079,7 +1077,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<List<UserWorkItem>> listUserWorks(String userId) async {
     final url = _uri(UserApiMetadata.listUserWorksPath(userId: userId));
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listUserWorks),
     );
@@ -1097,7 +1095,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<List<UserLifeItem>> listUserLifeItems(String userId) async {
     final url = _uri(UserApiMetadata.listUserLifeItemsPath(userId: userId));
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.listUserLifeItems,
@@ -1123,7 +1121,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       CircleApiMetadata.listUserCirclesPath(userId: userId),
       queryParameters: <String, String>{'limit': '$limit'},
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(
         CircleRequestPageIds.listUserCircles,
@@ -1155,7 +1153,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       UserApiMetadata.searchSocialRelationsPath,
       queryParameters: <String, String>{'query': query, 'limit': '$limit'},
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.searchSocialRelations,
@@ -1176,7 +1174,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<List<RecentSearchEntryView>> listRecentSearches() async {
     final url = _uri(UserApiMetadata.listRecentSearchesPath);
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.listRecentSearches,
@@ -1204,7 +1202,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final seed = '$scopeValue|${facet ?? ''}|${query.trim().toLowerCase()}';
     final entryId = 'recent_${seed.hashCode.abs().toRadixString(16)}';
     final url = _uri(UserApiMetadata.upsertRecentSearchPath(entryId: entryId));
-    final resp = await _client.put(
+    final resp = await _httpClient.put(
       url,
       headers: {
         ...CloudRequestHeaders.forPage(UserRequestPageIds.upsertRecentSearch),
@@ -1230,7 +1228,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<void> deleteRecentSearch(String entryId) async {
     final url = _uri(UserApiMetadata.deleteRecentSearchPath(entryId: entryId));
-    final resp = await _client.delete(
+    final resp = await _httpClient.delete(
       url,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.deleteRecentSearch,
@@ -1244,7 +1242,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<void> clearRecentSearches() async {
     final url = _uri(UserApiMetadata.clearRecentSearchesPath);
-    final resp = await _client.delete(
+    final resp = await _httpClient.delete(
       url,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.clearRecentSearches,
@@ -1267,7 +1265,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final url = _uri(
       UserApiMetadata.followUserPath(targetSubAccountId: targetUserId),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       url,
       headers: CloudRequestHeaders.withOwnerSubAccountContext(
         CloudRequestHeaders.forPage(UserRequestPageIds.followUser),
@@ -1291,7 +1289,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final url = _uri(
       UserApiMetadata.unfollowUserPath(targetSubAccountId: targetUserId),
     );
-    final resp = await _client.delete(
+    final resp = await _httpClient.delete(
       url,
       headers: CloudRequestHeaders.withOwnerSubAccountContext(
         CloudRequestHeaders.forPage(UserRequestPageIds.unfollowUser),
@@ -1317,7 +1315,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       UserApiMetadata.listFollowingPath(subAccountId: userId),
       queryParameters: params,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listFollowing),
     );
@@ -1347,7 +1345,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       UserApiMetadata.listFollowersPath(subAccountId: userId),
       queryParameters: params,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listFollowers),
     );
@@ -1367,10 +1365,8 @@ class RemoteUserProfileRepository extends UserProfileRepository {
 
   @override
   Future<RelationshipViewData> getRelationship(String userId) async {
-    final url = _uri(
-      UserApiMetadata.getRelationshipPath(subAccountId: userId),
-    );
-    final resp = await _client.get(
+    final url = _uri(UserApiMetadata.getRelationshipPath(subAccountId: userId));
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.getRelationship),
     );
@@ -1398,7 +1394,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       UserApiMetadata.listUserLikesPath(userId: userId),
       queryParameters: params,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listUserLikes),
     );
@@ -1433,7 +1429,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
       queryParameters: params,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.listProfileInteractionActivitiesReceived,
@@ -1471,7 +1467,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       ),
       queryParameters: params,
     );
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(
         ContentRequestPageIds.listProfileInteractionActivitiesSent,
@@ -1500,7 +1496,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   @override
   Future<List<PersonaDto>> listPersonas() async {
     final url = _uri(UserApiMetadata.listPersonasPath);
-    final resp = await _client.get(
+    final resp = await _httpClient.get(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.listPersonas),
     );
@@ -1519,7 +1515,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
   Future<PersonaDto> createPersona(PersonaCreateRequestDto request) async {
     final url = _uri(UserApiMetadata.createPersonaPath);
     final bodyMap = _omitNullMapValues(request.toMap());
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       url,
       headers: {
         ...CloudRequestHeaders.forPage(UserRequestPageIds.createPersona),
@@ -1547,7 +1543,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
       UserApiMetadata.updatePersonaPath(subAccountId: subAccountId),
     );
     final bodyMap = _omitNullMapValues(request.toMap());
-    final resp = await _client.patch(
+    final resp = await _httpClient.patch(
       url,
       headers: {
         ...CloudRequestHeaders.forPage(UserRequestPageIds.updatePersona),
@@ -1565,7 +1561,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final url = _uri(
       UserApiMetadata.deleteEmptyPersonaPath(subAccountId: subAccountId),
     );
-    final resp = await _client.delete(
+    final resp = await _httpClient.delete(
       url,
       headers: CloudRequestHeaders.forPage(
         UserRequestPageIds.deleteEmptyPersona,
@@ -1581,7 +1577,7 @@ class RemoteUserProfileRepository extends UserProfileRepository {
     final url = _uri(
       UserApiMetadata.activatePersonaPath(subAccountId: subAccountId),
     );
-    final resp = await _client.post(
+    final resp = await _httpClient.post(
       url,
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.activatePersona),
     );

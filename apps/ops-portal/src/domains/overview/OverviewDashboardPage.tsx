@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Activity, AlertTriangle, ShieldCheck, Sparkles } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -7,12 +8,14 @@ import {
   fetchPlatformAudits,
   fetchProductEventDrilldown,
   fetchProductEventSummary,
+  fetchProductL1L4Metrics,
   fetchProductProjectionSummary,
   fetchProductWorkflows,
   fetchReleases,
   type PlatformAuditItem,
   type ProductEventDrilldownItem,
   type ProductEventSummary,
+  type ProductMetricItem,
   type ProductProjectionSummary,
   type ReleaseItem,
   type WorkflowItem,
@@ -30,6 +33,7 @@ export function OverviewDashboardPage() {
   const [pageAccessSummary, setPageAccessSummary] = useState<ProductEventSummary | null>(null);
   const [behaviorSummary, setBehaviorSummary] = useState<ProductEventSummary | null>(null);
   const [drilldownItems, setDrilldownItems] = useState<ProductEventDrilldownItem[]>([]);
+  const [l1l4Metrics, setL1l4Metrics] = useState<ProductMetricItem[]>([]);
   const [remoteReady, setRemoteReady] = useState(false);
   const [runtimeError, setRuntimeError] = useState<RuntimeError | null>(null);
 
@@ -42,8 +46,9 @@ export function OverviewDashboardPage() {
       fetchProductEventSummary({ source: 'page_access' }),
       fetchProductEventSummary({ eventType: 'behavior' }),
       fetchProductEventDrilldown({ limit: 6 }),
+      fetchProductL1L4Metrics({}),
     ])
-      .then(([auditItems, workflowItems, releaseItems, summaryItem, pageAccessItem, behaviorItem, drilldown]) => {
+      .then(([auditItems, workflowItems, releaseItems, summaryItem, pageAccessItem, behaviorItem, drilldown, l1l4Payload]) => {
         setAudits(auditItems);
         setWorkflows(workflowItems);
         setReleases(releaseItems);
@@ -51,6 +56,7 @@ export function OverviewDashboardPage() {
         setPageAccessSummary(pageAccessItem);
         setBehaviorSummary(behaviorItem);
         setDrilldownItems(drilldown.items);
+        setL1l4Metrics(l1l4Payload.items);
         setRemoteReady(true);
         setRuntimeError(null);
       })
@@ -89,6 +95,15 @@ export function OverviewDashboardPage() {
       })),
     [releases],
   );
+  const l1l4ByLevel = useMemo(() => {
+    const map = new Map<string, ProductMetricItem>();
+    l1l4Metrics.forEach((item) => {
+      if (!map.has(item.level)) {
+        map.set(item.level, item);
+      }
+    });
+    return map;
+  }, [l1l4Metrics]);
   const hottestPage = useMemo(() => {
     const entries = Object.entries(pageAccessSummary?.dimensions.pageName ?? {});
     return entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'n/a';
@@ -159,6 +174,36 @@ export function OverviewDashboardPage() {
           description="内容行为已桥接到统一事件面，可与页面、实验桶一起复盘。"
         />
       </div>
+
+      <SectionCard title="五栏小趣 L1-L4 指标入口" subtitle="产品、业务、系统、基础设施四层指标使用统一口径">
+        <div className="section-grid section-grid--cards">
+          {(['L1', 'L2', 'L3', 'L4'] as const).map((level) => {
+            const m = l1l4ByLevel.get(level);
+            const iconMap = {
+              L1: <Sparkles size={20} color="#2563EB" />,
+              L2: <Activity size={20} color="#16A34A" />,
+              L3: <ShieldCheck size={20} color="#2563EB" />,
+              L4: <AlertTriangle size={20} color="#F59E0B" />,
+            };
+            return (
+              <KpiCard
+                key={level}
+                label={m ? `${level} ${m.label}` : level}
+                value={m ? `${m.value}${m.unit}` : 'n/a'}
+                icon={iconMap[level]}
+                trendLabel={m?.trend ?? 'n/a'}
+                trendTone={m?.status === 'warning' ? 'warning' : 'positive'}
+                description={m?.description ?? '等待控制面数据。'}
+              />
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+          <Link className="button button--primary" to="/product/l1-l4/environment">
+            进入四层指标页
+          </Link>
+        </div>
+      </SectionCard>
 
       <div className="section-grid section-grid--two">
         <SectionCard title="治理负载与处理趋势" subtitle="按天观察创建量、解决量和 SLA 风险">
@@ -302,6 +347,29 @@ export function OverviewDashboardPage() {
           </div>
         </SectionCard>
       </div>
+
+      <SectionCard title="控制面二级入口" subtitle="配置中心与四层指标已升级为可选择、可下钻的二级体验">
+        <div className="section-grid section-grid--two">
+          <div className="policy-item">
+            <div>
+              <p className="item-title">配置与可靠性</p>
+              <p className="item-subtitle">查看四层配置中心、配置包、实例漂移与磁盘兜底一致性。</p>
+            </div>
+            <Link className="button button--primary" to="/platform/config/layers">
+              进入配置中心
+            </Link>
+          </div>
+          <div className="policy-item">
+            <div>
+              <p className="item-title">四层指标</p>
+              <p className="item-subtitle">从环境整体一路下钻到集群、服务、实例的 L1-L4 指标。</p>
+            </div>
+            <Link className="button button--primary" to="/product/l1-l4/environment">
+              进入四层指标
+            </Link>
+          </div>
+        </div>
+      </SectionCard>
     </PageScaffold>
   );
 }

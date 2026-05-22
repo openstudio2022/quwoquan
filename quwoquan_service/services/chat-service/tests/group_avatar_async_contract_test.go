@@ -294,7 +294,7 @@ func doHandlerJSON(
 	return result
 }
 
-func TestGroupAvatar_CreateConversationReturnsDefaultBeforeAsyncAvatarReady(t *testing.T) {
+func TestGroupAvatar_CreateConversationReturnsCreatorAvatarBeforeAsyncAvatarReady(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	handler, syncService := newGroupAvatarTestHandler(t, delayedFailingGroupAvatarAssetizer{delay: 250 * time.Millisecond}, nil)
@@ -311,8 +311,8 @@ func TestGroupAvatar_CreateConversationReturnsDefaultBeforeAsyncAvatarReady(t *t
 	if elapsed := time.Since(start); elapsed >= 200*time.Millisecond {
 		t.Fatalf("expected create conversation to return before async recompute, elapsed=%s", elapsed)
 	}
-	if got := strings.TrimSpace(created["avatarUrl"].(string)); got != application.DefaultGroupAvatarURL() {
-		t.Fatalf("expected default group avatar url on create, got %q", got)
+	if got, want := strings.TrimSpace(created["avatarUrl"].(string)), "https://test.avatar/user_test_001"; got != want {
+		t.Fatalf("expected creator avatar url on create, got %q want %q", got, want)
 	}
 	if got := int(created["groupAvatarVersion"].(float64)); got != 0 {
 		t.Fatalf("expected groupAvatarVersion 0 before async recompute, got %d", got)
@@ -324,6 +324,60 @@ func TestGroupAvatar_CreateConversationReturnsDefaultBeforeAsyncAvatarReady(t *t
 	}
 	if len(resp.Patches) != 0 {
 		t.Fatalf("expected no avatar patches after failed create recompute, got %d", len(resp.Patches))
+	}
+}
+
+func TestGroupAvatar_DeprecatedMemberAvatarURLFallsBackToCreatorAvatar(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	handler, _ := newGroupAvatarTestHandler(t, delayedFailingGroupAvatarAssetizer{delay: 250 * time.Millisecond}, nil)
+	created := doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations",
+		`{"type":"group","title":"stale polluted avatar","initialMemberIds":["user_test_002"]}`,
+		"user_test_001",
+		http.StatusCreated,
+	)
+	convID := created["_id"].(string)
+	chatStore := persistence.NewMongoChatStore(mongoDB)
+	conv, err := chatStore.FindConversationByID(context.Background(), convID)
+	if err != nil {
+		t.Fatalf("find conversation: %v", err)
+	}
+	conv.AvatarUrl = "https://test.avatar/user_test_002"
+	conv.GroupAvatarAssetId = ""
+	conv.GroupAvatarVersion = 0
+	conv.GroupAvatarSourceHash = ""
+	if err := chatStore.UpdateConversation(context.Background(), convID, conv); err != nil {
+		t.Fatalf("update polluted conversation: %v", err)
+	}
+
+	detail := doHandlerJSON(
+		t,
+		handler,
+		http.MethodGet,
+		"/v1/chat/conversations/"+convID,
+		"",
+		"user_test_001",
+		http.StatusOK,
+	)
+	if got, want := strings.TrimSpace(detail["avatarUrl"].(string)), "https://test.avatar/user_test_001"; got != want {
+		t.Fatalf("expected creator avatar fallback, got %q want %q", got, want)
+	}
+	inbox := doHandlerJSON(
+		t,
+		handler,
+		http.MethodGet,
+		"/v1/chat/inbox?limit=20",
+		"",
+		"user_test_002",
+		http.StatusOK,
+	)
+	row := findInboxRow(t, inbox["items"], convID)
+	if got, want := strings.TrimSpace(row["avatarUrl"].(string)), "https://test.avatar/user_test_001"; got != want {
+		t.Fatalf("expected creator avatar fallback in inbox, got %q want %q", got, want)
 	}
 }
 
@@ -982,6 +1036,112 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 	t.Fatal("expected add/remove storm to converge to latest top9 group avatar source hash")
 }
 
+func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+
+	handler, syncService := newGroupAvatarTestHandler(
+		t,
+		runtimemedia.NewGroupAvatarService(
+			redisRouter.Scene("general"),
+			"http://127.0.0.1:18081",
+			testChatMediaRoot,
+		),
+		nil,
+	)
+	created := doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations",
+		`{"type":"group","title":"member fanout consistency","initialMemberIds":["user_test_002","user_test_003"]}`,
+		"user_test_001",
+		http.StatusCreated,
+	)
+	convID := created["_id"].(string)
+	waitForConversationAvatarVersion(t, convID, 1)
+
+	beforeAddSeq := map[string]int64{}
+	for _, userID := range []string{"user_test_001", "user_test_002", "user_test_003", "user_test_004"} {
+		beforeAddSeq[userID] = latestSyncSeq(t, syncService, userID)
+	}
+	doHandlerJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/v1/chat/conversations/"+convID+"/members",
+		`{"userIds":["user_test_004"]}`,
+		"user_test_001",
+		http.StatusOK,
+	)
+	waitForConversationAvatarVersion(t, convID, 2)
+	addDetail := doHandlerJSON(
+		t,
+		handler,
+		http.MethodGet,
+		"/v1/chat/conversations/"+convID,
+		"",
+		"user_test_001",
+		http.StatusOK,
+	)
+	addURL := strings.TrimSpace(addDetail["avatarUrl"].(string))
+	addVersion := int(addDetail["groupAvatarVersion"].(float64))
+	if !strings.Contains(addURL, "/media/avatar/conversation/"+convID+"/") {
+		t.Fatalf("expected derived group avatar url after add, got %q", addURL)
+	}
+	for _, userID := range []string{"user_test_001", "user_test_002", "user_test_003", "user_test_004"} {
+		patch := waitForAvatarPatchAfter(t, syncService, userID, beforeAddSeq[userID], convID)
+		if got := strings.TrimSpace(fmt.Sprint(patch.Payload["avatarUrl"])); got != addURL {
+			t.Fatalf("user %s patch avatarUrl = %q want %q", userID, got, addURL)
+		}
+		if got := patchIntValue(patch.Payload["groupAvatarVersion"]); got != addVersion {
+			t.Fatalf("user %s patch version = %d want %d", userID, got, addVersion)
+		}
+		inbox := doHandlerJSON(t, handler, http.MethodGet, "/v1/chat/inbox?limit=20", "", userID, http.StatusOK)
+		row := findInboxRow(t, inbox["items"], convID)
+		if got := strings.TrimSpace(row["avatarUrl"].(string)); got != addURL {
+			t.Fatalf("user %s inbox avatarUrl = %q want %q", userID, got, addURL)
+		}
+	}
+
+	beforeRemoveSeq := map[string]int64{}
+	for _, userID := range []string{"user_test_001", "user_test_002", "user_test_004"} {
+		beforeRemoveSeq[userID] = latestSyncSeq(t, syncService, userID)
+	}
+	doHandlerJSON(
+		t,
+		handler,
+		http.MethodDelete,
+		"/v1/chat/conversations/"+convID+"/members/user_test_003",
+		"",
+		"user_test_001",
+		http.StatusOK,
+	)
+	waitForConversationAvatarVersion(t, convID, addVersion+1)
+	removeDetail := doHandlerJSON(
+		t,
+		handler,
+		http.MethodGet,
+		"/v1/chat/conversations/"+convID,
+		"",
+		"user_test_001",
+		http.StatusOK,
+	)
+	removeURL := strings.TrimSpace(removeDetail["avatarUrl"].(string))
+	removeVersion := int(removeDetail["groupAvatarVersion"].(float64))
+	if removeURL == addURL {
+		t.Fatalf("expected new derived group avatar url after remove, got unchanged %q", removeURL)
+	}
+	for _, userID := range []string{"user_test_001", "user_test_002", "user_test_004"} {
+		patch := waitForAvatarPatchAfter(t, syncService, userID, beforeRemoveSeq[userID], convID)
+		if got := strings.TrimSpace(fmt.Sprint(patch.Payload["avatarUrl"])); got != removeURL {
+			t.Fatalf("user %s remove patch avatarUrl = %q want %q", userID, got, removeURL)
+		}
+		if got := patchIntValue(patch.Payload["groupAvatarVersion"]); got != removeVersion {
+			t.Fatalf("user %s remove patch version = %d want %d", userID, got, removeVersion)
+		}
+	}
+}
+
 func TestGroupAvatar_RedisReadyIndexAlphaBetaLocalLoop(t *testing.T) {
 	for _, env := range []string{"alpha", "beta"} {
 		t.Run(env, func(t *testing.T) {
@@ -1076,4 +1236,66 @@ func waitForAvatarPatch(t *testing.T, syncService *runtimesync.Service, userID s
 		time.Sleep(25 * time.Millisecond)
 	}
 	t.Fatalf("user %s did not receive conversation.avatar.updated for %s", userID, convID)
+}
+
+func waitForAvatarPatchAfter(
+	t *testing.T,
+	syncService *runtimesync.Service,
+	userID string,
+	afterSeq int64,
+	convID string,
+) runtimesync.Patch {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		resp, err := syncService.Pull(context.Background(), userID, afterSeq, 50)
+		if err != nil {
+			t.Fatalf("Pull for %s: %v", userID, err)
+		}
+		for _, patch := range resp.Patches {
+			if patch.Type == "conversation.avatar.updated" && patch.Payload["conversationId"] == convID {
+				if strings.TrimSpace(fmt.Sprint(patch.Payload["avatarUrl"])) == "" {
+					t.Fatalf("avatar patch for %s missing avatarUrl: %#v", userID, patch.Payload)
+				}
+				return patch
+			}
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	t.Fatalf("user %s did not receive conversation.avatar.updated for %s after seq %d", userID, convID, afterSeq)
+	return runtimesync.Patch{}
+}
+
+func findInboxRow(t *testing.T, raw any, convID string) map[string]any {
+	t.Helper()
+	items, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("inbox items is not list: %#v", raw)
+	}
+	for _, item := range items {
+		row, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if row["conversationId"] == convID || row["id"] == convID || row["_id"] == convID {
+			return row
+		}
+	}
+	t.Fatalf("conversation %s not found in inbox: %#v", convID, items)
+	return nil
+}
+
+func patchIntValue(raw any) int {
+	switch value := raw.(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	case json.Number:
+		parsed, _ := value.Int64()
+		return int(parsed)
+	default:
+		return 0
+	}
 }

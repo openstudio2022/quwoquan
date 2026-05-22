@@ -12,35 +12,31 @@ import (
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
-var supportedBehaviorActions = map[string]struct{}{
-	"impression":    {},
-	"click":         {},
-	"dwell":         {},
-	"like":          {},
-	"favorite":      {},
-	"share":         {},
-	"dislike":       {},
-	"report":        {},
-	"skip":          {},
-	"comment":       {},
-	"follow":        {},
-	"author_view":   {},
-	"tag_click":     {},
-	"play_progress": {},
-	"content_depth": {},
-}
+// supportedBehaviorActions derives from SignalWeights (single source of truth
+// aligned with behaviors.yaml signal_weight). An action is supported iff it
+// has a weight entry, preventing silent drift between the two maps.
+var supportedBehaviorActions = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(rtrec.SignalWeights))
+	for action := range rtrec.SignalWeights {
+		m[action] = struct{}{}
+	}
+	return m
+}()
 
 type BehaviorEventInput struct {
 	UserID          string   `json:"userId"`
 	SessionID       string   `json:"sessionId"`
+	FeedSessionID   string   `json:"feedSessionId"`
 	ContentID       string   `json:"contentId"`
 	PostID          string   `json:"postId"`
 	Action          string   `json:"action"`
 	Type            string   `json:"type"`
+	ContentType     string   `json:"contentType"`
 	Tags            []string `json:"tags"`
 	Duration        float64  `json:"duration"`
 	DwellMs         float64  `json:"dwellMs"`
 	FeedPosition    int      `json:"feedPosition"`
+	Position        int      `json:"position"`
 	AuthorID        string   `json:"authorId"`
 	ReferralSource  string   `json:"referralSource"`
 	EngagementDepth int      `json:"engagementDepth"`
@@ -48,6 +44,7 @@ type BehaviorEventInput struct {
 	TotalUnits      int      `json:"totalUnits"`
 	EntityRefs      []string `json:"entityRefs"`
 	FeedRequestID   string   `json:"feedRequestId"`
+	CommentLength   int      `json:"commentLength"`
 }
 
 type BehaviorService struct {
@@ -56,6 +53,8 @@ type BehaviorService struct {
 	publisher      repository.EventPublisher
 	projector      Projector
 	feedback       *rtrec.FeedbackRecorder
+	eventStore     persistence.BehaviorEventStore
+	metricsStore   *persistence.DailyMetricsStore
 	sessionInvalid func(userID, sessionID string)
 }
 
@@ -75,6 +74,14 @@ func WithBehaviorFeedbackRecorder(f *rtrec.FeedbackRecorder) BehaviorServiceOpti
 
 func WithSessionCacheInvalidator(fn func(userID, sessionID string)) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.sessionInvalid = fn }
+}
+
+func WithBehaviorEventStore(es persistence.BehaviorEventStore) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.eventStore = es }
+}
+
+func WithDailyMetricsStore(ms *persistence.DailyMetricsStore) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.metricsStore = ms }
 }
 
 func NewBehaviorService(hotPath rtrec.SignalProcessor, store persistence.PostRepository, opts ...BehaviorServiceOption) *BehaviorService {
@@ -119,11 +126,17 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 				tags = behaviorTagsFromAny(post.Tags)
 			}
 		}
+		feedPos := eventInput.FeedPosition
+		if feedPos == 0 && eventInput.Position > 0 {
+			feedPos = eventInput.Position
+		}
 		signal := rtrec.BehaviorSignal{
 			UserID:          userID,
 			SessionID:       strings.TrimSpace(eventInput.SessionID),
+			FeedSessionID:   strings.TrimSpace(eventInput.FeedSessionID),
 			ContentID:       contentID,
 			Action:          action,
+			ContentType:     strings.TrimSpace(eventInput.ContentType),
 			Tags:            tags,
 			Duration:        duration,
 			Timestamp:       occurredAt,
@@ -133,6 +146,9 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			ConsumedRatio:   eventInput.ConsumedRatio,
 			TotalUnits:      eventInput.TotalUnits,
 			EntityRefs:      eventInput.EntityRefs,
+			FeedRequestID:   strings.TrimSpace(eventInput.FeedRequestID),
+			Position:        feedPos,
+			CommentLength:   eventInput.CommentLength,
 		}
 		signals = append(signals, signal)
 		projectedEvents = append(projectedEvents, map[string]any{
@@ -140,6 +156,7 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			"sessionId":       signal.SessionID,
 			"contentId":       contentID,
 			"action":          action,
+			"contentType":     signal.ContentType,
 			"tags":            append([]string(nil), tags...),
 			"duration":        duration,
 			"timestamp":       occurredAt.Format(time.RFC3339),
@@ -150,6 +167,8 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			"totalUnits":      signal.TotalUnits,
 			"entityRefs":      signal.EntityRefs,
 			"feedRequestId":   strings.TrimSpace(eventInput.FeedRequestID),
+			"feedPosition":    feedPos,
+			"commentLength":   eventInput.CommentLength,
 		})
 		if batchUserID == "" {
 			batchUserID = userID
@@ -160,6 +179,45 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 	}
 	if err := s.hotPath.ProcessSignalBatch(ctx, signals); err != nil {
 		return err
+	}
+	for _, signal := range signals {
+		rtrec.RecordBehaviorMetric(signal)
+	}
+	if s.eventStore != nil {
+		rawEvents := make([]persistence.RawBehaviorEvent, len(signals))
+		for i, sig := range signals {
+			rawEvents[i] = persistence.RawBehaviorEvent{
+				UserID:          sig.UserID,
+				SessionID:       sig.SessionID,
+				ContentID:       sig.ContentID,
+				Action:          sig.Action,
+				Tags:            sig.Tags,
+				Duration:        sig.Duration,
+				AuthorID:        sig.AuthorID,
+				ReferralSource:  sig.ReferralSource,
+				EngagementDepth: sig.EngagementDepth,
+				ConsumedRatio:   sig.ConsumedRatio,
+				TotalUnits:      sig.TotalUnits,
+				EntityRefs:      sig.EntityRefs,
+				FeedRequestID:   strings.TrimSpace(events[i].FeedRequestID),
+				OccurredAt:      occurredAt.Format(time.RFC3339),
+				CreatedAt:       occurredAt,
+			}
+		}
+		_ = s.eventStore.InsertBatch(ctx, rawEvents)
+	}
+	if s.metricsStore != nil {
+		dateStr := occurredAt.Format("2006-01-02")
+		for _, sig := range signals {
+			dwellMs := int64(sig.Duration * 1000)
+			_ = s.metricsStore.IncrementMetric(ctx, dateStr, "action", sig.Action, sig.Action, dwellMs, sig.EngagementDepth)
+			if sig.ContentID != "" {
+				_ = s.metricsStore.IncrementMetric(ctx, dateStr, "content", sig.ContentID, sig.Action, dwellMs, sig.EngagementDepth)
+			}
+			if sig.AuthorID != "" {
+				_ = s.metricsStore.IncrementMetric(ctx, dateStr, "author", sig.AuthorID, sig.Action, dwellMs, sig.EngagementDepth)
+			}
+		}
 	}
 	if s.feedback != nil {
 		for _, signal := range signals {

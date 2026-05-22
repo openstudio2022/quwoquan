@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
@@ -21,10 +20,12 @@ class MockBlockRepository extends BlockRepository {
   final Set<String> blockedUsers = <String>{};
 
   @override
-  Future<void> blockUser(String targetUserId) async => blockedUsers.add(targetUserId);
+  Future<void> blockUser(String targetUserId) async =>
+      blockedUsers.add(targetUserId);
 
   @override
-  Future<void> unblockUser(String targetUserId) async => blockedUsers.remove(targetUserId);
+  Future<void> unblockUser(String targetUserId) async =>
+      blockedUsers.remove(targetUserId);
 
   @override
   bool isBlocked(String targetUserId) => blockedUsers.contains(targetUserId);
@@ -32,13 +33,10 @@ class MockBlockRepository extends BlockRepository {
 
 /// Remote 实现：调用云侧 API。
 class RemoteBlockRepository extends BlockRepository {
-  RemoteBlockRepository({
-    CloudHttpClient? httpClient,
-    http.Client? client,
-    String? baseUrl,
-  })  : _httpClient = httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-        _localCache = <String>{};
+  RemoteBlockRepository({CloudHttpClient? httpClient, String? baseUrl})
+    : _httpClient = httpClient ?? CloudHttpClient(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+      _localCache = <String>{};
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
@@ -50,9 +48,7 @@ class RemoteBlockRepository extends BlockRepository {
   @override
   Future<void> blockUser(String targetUserId) async {
     final uri = _uri(
-      UserApiMetadata.blockUserPath(
-        targetSubAccountId: targetUserId,
-      ),
+      UserApiMetadata.blockUserPath(targetSubAccountId: targetUserId),
     );
     try {
       await _httpClient.postJson(
@@ -71,9 +67,7 @@ class RemoteBlockRepository extends BlockRepository {
   @override
   Future<void> unblockUser(String targetUserId) async {
     final uri = _uri(
-      UserApiMetadata.unblockUserPath(
-        targetSubAccountId: targetUserId,
-      ),
+      UserApiMetadata.unblockUserPath(targetSubAccountId: targetUserId),
     );
     try {
       await _httpClient.deleteJson(

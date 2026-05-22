@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+
+	rtobs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
@@ -55,6 +58,8 @@ type FeedItemView struct {
 	Images       []string `json:"images,omitempty"`
 	VideoURL     string   `json:"videoUrl,omitempty"`
 	CoverURL     string   `json:"coverUrl,omitempty"`
+	Width        int64    `json:"width,omitempty"`
+	Height       int64    `json:"height,omitempty"`
 	LikeCount    int64    `json:"likesCount"`
 	CommentCount int64    `json:"commentsCount"`
 	SaveCount    int64    `json:"savesCount"`
@@ -68,7 +73,13 @@ type ListFeedResponse struct {
 	Cursor     string         `json:"cursor,omitempty"`
 }
 
-func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListFeedResponse, error) {
+func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *ListFeedResponse, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "rec.ListFeed",
+		attribute.String("feed.type", req.Type),
+		attribute.String("feed.sort", req.Sort),
+		attribute.Int("feed.limit", req.Limit))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 20
@@ -109,6 +120,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 			return false
 		}
 		seenPostIDs[post.ID] = struct{}{}
+		width, height := resolvePostDimensions(post)
 		views = append(views, FeedItemView{
 			ID:           post.ID,
 			PostID:       post.ID,
@@ -121,6 +133,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (*ListF
 			Images:       toStringSlice(post.MediaUrls),
 			VideoURL:     post.VideoUrl,
 			CoverURL:     post.CoverUrl,
+			Width:        width,
+			Height:       height,
 			LikeCount:    post.LikeCount,
 			CommentCount: post.CommentCount,
 			SaveCount:    post.FavoriteCount,
@@ -285,6 +299,75 @@ func resolvedContentIdentity(contentType, contentIdentity string) string {
 		return "moment"
 	}
 	return "work"
+}
+
+func resolvePostDimensions(post *postmodel.Post) (int64, int64) {
+	if post == nil {
+		return 0, 0
+	}
+	if width, height, ok := extractDimensions(post.DeviceInfo); ok {
+		return width, height
+	}
+	if width, height, ok := extractDimensions(post.ArticleRenderProfile); ok {
+		return width, height
+	}
+	if width, height, ok := extractDimensions(post.PrimaryHomepageSnapshot); ok {
+		return width, height
+	}
+	return 0, 0
+}
+
+func extractDimensions(source map[string]any) (int64, int64, bool) {
+	if len(source) == 0 {
+		return 0, 0, false
+	}
+	width, widthOK := extractDimension(source, "width", "imageWidth", "image_width", "w")
+	height, heightOK := extractDimension(source, "height", "imageHeight", "image_height", "h")
+	return width, height, widthOK && heightOK
+}
+
+func extractDimension(source map[string]any, keys ...string) (int64, bool) {
+	for _, key := range keys {
+		value, ok := source[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch v := value.(type) {
+		case int:
+			if v > 0 {
+				return int64(v), true
+			}
+		case int32:
+			if v > 0 {
+				return int64(v), true
+			}
+		case int64:
+			if v > 0 {
+				return v, true
+			}
+		case uint:
+			if v > 0 {
+				return int64(v), true
+			}
+		case uint32:
+			if v > 0 {
+				return int64(v), true
+			}
+		case uint64:
+			if v > 0 {
+				return int64(v), true
+			}
+		case float32:
+			if v > 0 {
+				return int64(v), true
+			}
+		case float64:
+			if v > 0 {
+				return int64(v), true
+			}
+		}
+	}
+	return 0, false
 }
 
 func toStringSlice(v any) []string {

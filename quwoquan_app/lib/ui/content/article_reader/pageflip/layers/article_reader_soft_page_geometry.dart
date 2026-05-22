@@ -93,9 +93,8 @@ Offset transformSoftLayerLocalPoint({
   required SoftPageLayerGeometry geometry,
 }) {
   final angle = rotationZFromMatrix(geometry.transform);
-  final translated = point - geometry.pivotLocal;
-  final rotated = rotatePointForCanvasTransform(translated, angle);
-  return geometry.positionViewport + geometry.pivotLocal + rotated;
+  final rotated = rotatePointForCanvasTransform(point, angle);
+  return geometry.positionViewport + rotated;
 }
 
 Offset inverseTransformSoftLayerLocalPoint({
@@ -103,12 +102,8 @@ Offset inverseTransformSoftLayerLocalPoint({
   required SoftPageLayerGeometry geometry,
 }) {
   final angle = rotationZFromMatrix(geometry.transform);
-  final translated = point - geometry.surfaceOrigin;
-  final unrotated = rotatePointForCanvasTransform(
-    translated - geometry.pivotLocal,
-    -angle,
-  );
-  return geometry.pivotLocal + unrotated;
+  final translated = point - geometry.positionViewport;
+  return rotatePointForCanvasTransform(translated, -angle);
 }
 
 List<Offset> transformSoftLayerLocalPolygon({
@@ -319,7 +314,14 @@ BackwardFoldFaceGeometry backwardFoldFaceGeometry({
   required List<Offset> sheetLocalPolygon,
   required (Offset, Offset)? foldLine,
   required (Offset, Offset)? freeEdgeLine,
+  double? versoRevealWidthNormalized,
 }) {
+  final verso = backwardSheetVersoPolygon(
+    pageSize: pageSize,
+    sheetLocalPolygon: sheetLocalPolygon,
+    foldLine: foldLine,
+    freeEdgeLine: freeEdgeLine,
+  );
   return (
     sheetLocalPolygon: List<Offset>.unmodifiable(sheetLocalPolygon),
     foldLine: foldLine,
@@ -330,13 +332,74 @@ BackwardFoldFaceGeometry backwardFoldFaceGeometry({
       foldLine: foldLine,
       freeEdgeLine: freeEdgeLine,
     ),
-    verso: backwardSheetVersoPolygon(
+    verso: _expandDegenerateBackwardVersoPolygon(
       pageSize: pageSize,
       sheetLocalPolygon: sheetLocalPolygon,
-      foldLine: foldLine,
-      freeEdgeLine: freeEdgeLine,
+      verso: verso,
+      versoRevealWidthNormalized: versoRevealWidthNormalized,
     ),
   );
+}
+
+List<Offset> _expandDegenerateBackwardVersoPolygon({
+  required Size pageSize,
+  required List<Offset> sheetLocalPolygon,
+  required List<Offset> verso,
+  required double? versoRevealWidthNormalized,
+}) {
+  if (verso.length < 4 || versoRevealWidthNormalized == null) {
+    return verso;
+  }
+  final desiredWidth = (pageSize.width * versoRevealWidthNormalized)
+      .clamp(0.0, pageSize.width)
+      .toDouble();
+  if (desiredWidth <= 1) {
+    return verso;
+  }
+  final sorted = verso.toList(growable: false)
+    ..sort((a, b) => a.dy.compareTo(b.dy));
+  final top = sorted.take(2).toList(growable: false)
+    ..sort((a, b) => a.dx.compareTo(b.dx));
+  final bottom = sorted.skip(sorted.length - 2).toList(growable: false)
+    ..sort((a, b) => a.dx.compareTo(b.dx));
+  if (top.length < 2 || bottom.length < 2) {
+    return verso;
+  }
+  final topWidth = (top.last.dx - top.first.dx).abs();
+  final bottomWidth = (bottom.last.dx - bottom.first.dx).abs();
+  final averageEdgeWidth = (topWidth + bottomWidth) / 2;
+  if (averageEdgeWidth >= desiredWidth * 0.72) {
+    return verso;
+  }
+
+  Offset center(Offset a, Offset b) {
+    return Offset((a.dx + b.dx) / 2, (a.dy + b.dy) / 2);
+  }
+
+  final topCenter = center(top.first, top.last);
+  final bottomCenter = center(bottom.first, bottom.last);
+  final halfWidth = desiredWidth / 2;
+  final expanded = <Offset>[
+    Offset(topCenter.dx - halfWidth, topCenter.dy),
+    Offset(topCenter.dx + halfWidth, topCenter.dy),
+    Offset(bottomCenter.dx + halfWidth, bottomCenter.dy),
+    Offset(bottomCenter.dx - halfWidth, bottomCenter.dy),
+  ];
+  final sheetBounds = polygonBounds(sheetLocalPolygon);
+  if (sheetBounds == null) {
+    return List<Offset>.unmodifiable(expanded);
+  }
+  final bounded = expanded
+      .map(
+        (point) => Offset(
+          point.dx.clamp(sheetBounds.left, sheetBounds.right).toDouble(),
+          point.dy.clamp(sheetBounds.top, sheetBounds.bottom).toDouble(),
+        ),
+      )
+      .toList(growable: false);
+  return polygonHasVisibleArea(bounded)
+      ? List<Offset>.unmodifiable(bounded)
+      : verso;
 }
 
 List<Offset> clipPolygonByLine({

@@ -2,10 +2,13 @@
 
 ## 功能说明
 
-定义部署态下“服务进程（非领域服务）→ 领域服务集合（domains）”的统一映射模型，覆盖三种环境：
-- `dev`：默认独立进程开发测试，服务名与部署进程名一致
-- `integration`：用于集成联调与集成测试，通常与生产拓扑一致
+定义部署态下“服务进程（非领域服务）→ 领域服务集合（domains）”的统一映射模型，覆盖四种交付环境：
+- `alpha`：默认独立进程开发测试，服务名与部署进程名一致
+- `beta`：本地端云集成与联调，拓扑与云侧发布态对齐
+- `gamma`：云侧类生产集成验证
 - `prod`：生产发布拓扑
+
+`dev` 可以保留为开发脚手架别名，但不作为当前门禁基线。
 
 统一配置文件：`deploy/shared/process_domain_mapping.yaml`
 
@@ -17,7 +20,7 @@
 ## 核心约束
 
 - 一个 domain 在同一环境中只能归属一个部署进程
-- `beta`、`gamma`、`prod-gray`、`prod` 的进程-领域映射必须一致
+- `beta`、`gamma`、`prod` 的进程-领域映射必须一致
 - 对外接口仍按领域服务暴露（`/v1/content/*`、`/v1/chat/*` 等），不受部署拓扑影响
 - 不新增 `all-in-one/`、`content-only/` 目录，代码目录保持按领域服务组织
 - 模块化部署通过 `RuntimeModule` 与 `DeploymentPackage` 表达；onebox 是 package 组合，不是业务代码目录
@@ -29,16 +32,16 @@
 - Go 组合进程与 Python 进程独立部署，禁止合并为单进程
 - Python 配置校验失败策略为启动即失败（fail-fast）
 - 允许采用 K8s Sidecar 实现“逻辑耦合、物理隔离”：`seed-box` 与 `recommendation-service` 同 Pod 双进程
-- 同一套 Kustomize overlays（`alpha/beta/gamma/prod-gray/prod`）必须参数化 `CONFIG_VERSION/IMAGE_VERSION/replicas/HPA` 阈值
+- 同一套 Kustomize overlays（`alpha/beta/gamma/prod`）必须参数化 `CONFIG_VERSION/IMAGE_VERSION/replicas/HPA` 阈值
 - 部署形态需支持后续将领域服务（如 content-service）拆解为独立 Pod，而不改变 domain API 语义
-- `beta/gamma/prod-gray/prod` 的 package/module mapping 必须一致；prod-gray 若要灰度拆分 worker package，必须显式声明 override 与回滚条件
+- `beta/gamma/prod` 的 package/module mapping 必须一致；prod 内若要灰度拆分 worker package，必须显式声明 override 与回滚条件
 
 ## 边界说明
 
 本节点负责：
 - 拓扑声明格式
 - 拓扑一致性门禁
-- 开发/集成/生产三态流程约束
+- 开发/集成/生产四态流程约束
 
 本节点不负责：
 - 具体业务路由实现
@@ -46,8 +49,8 @@
 
 ## 验收标准
 
-- A1：`deploy/shared/process_domain_mapping.yaml` 可表达 alpha/beta/gamma/prod-gray/prod 三态拓扑
-- A3：门禁可阻断 domain 重复归属与 integration/prod 漂移
+- A1：`deploy/shared/process_domain_mapping.yaml` 可表达 alpha/beta/gamma/prod 四态拓扑
+- A3：门禁可阻断 domain 重复归属与 beta/gamma/prod 漂移
 - A7：部署进程映射不改变领域 API 契约
 - A8：`make verify`/`make gate` 自动执行映射校验
 - A8：`make gate-full` 将 `recommendation-service` 的 Python 测试作为必过项

@@ -50,7 +50,7 @@ def main() -> None:
     if not isinstance(module_envs, dict) or not module_envs:
         fail("module_package_mapping.environments must be a non-empty map")
 
-    required_envs = ["alpha", "beta", "gamma", "prod-gray", "prod"]
+    required_envs = ["alpha", "beta", "gamma", "prod"]
     for env in required_envs:
         if env not in module_envs:
             fail(f"module_package_mapping missing environments.{env}")
@@ -90,9 +90,9 @@ def main() -> None:
                     fail(f"{env}.{process_name} module '{module}' missing from reliable_task_module_catalog.modules")
 
     beta_norm = normalize_env(module_envs["beta"])
-    for env in ["gamma", "prod-gray", "prod"]:
+    for env in ["gamma", "prod"]:
         if normalize_env(module_envs[env]) != beta_norm:
-            fail("beta, gamma, prod-gray and prod module-package mapping must be identical")
+            fail("beta, gamma and prod module-package mapping must be identical")
 
     print("[verify] OK: module package mapping validated")
 

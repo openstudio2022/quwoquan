@@ -87,6 +87,34 @@ export interface EnvironmentTopologyItem {
   domains: string[];
 }
 
+export interface RuntimeClusterItem {
+  id: string;
+  environment: string;
+  cluster: string;
+  plane: string;
+  services: string[];
+  status: string;
+}
+
+export interface RuntimeServiceItem {
+  id: string;
+  environment: string;
+  cluster: string;
+  service: string;
+  plane: string;
+  instances: number;
+  status: string;
+}
+
+export interface RuntimeInstanceItem {
+  id: string;
+  environment: string;
+  cluster: string;
+  service: string;
+  plane: string;
+  status: string;
+}
+
 export interface DependencyItem {
   id: string;
   dependency: string;
@@ -185,6 +213,86 @@ export interface DashboardCardItem {
   summary: string;
 }
 
+export interface ConfigKeyItem {
+  id: string;
+  key: string;
+  owner?: string;
+  default: unknown;
+  scope: string;
+  reload: string;
+  rollout?: string;
+  risk_level?: string;
+  ui_editable?: boolean;
+}
+
+export interface ConfigLayerItem {
+  id: string;
+  title?: string;
+  scopeLevel: string;
+  scopeID: string;
+  environment?: string;
+  cluster?: string;
+  service?: string;
+  values: Record<string, unknown>;
+}
+
+export interface ConfigPackageItem {
+  id: string;
+  packageId: string;
+  environment: string;
+  cluster: string;
+  service: string;
+  configVersion: string;
+  imageVersion: string;
+  releaseState: string;
+  distribution: string;
+}
+
+export interface ConfigInstanceReportItem {
+  id: string;
+  environment: string;
+  cluster: string;
+  service: string;
+  instanceId: string;
+  configVersion?: string;
+  imageVersion?: string;
+  desiredHash?: string;
+  effectiveHash?: string;
+  inSync: boolean;
+  source?: string;
+  updatedAt?: string;
+  lastError?: string;
+}
+
+export interface ConfigInstanceReportSummary {
+  inSyncInstances: number;
+  outOfSyncInstances: number;
+  totalInstances: number;
+}
+
+export interface EffectiveConfigValue {
+  key: string;
+  value: unknown;
+  scopeLevel: string;
+  scopeId: string;
+  sourceLayer: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface EffectiveConfigResponse {
+  scope: {
+    environment?: string;
+    cluster?: string;
+    service?: string;
+    instanceId?: string;
+  };
+  resolvedAt: string;
+  effectiveHash: string;
+  desiredHash: string;
+  values: EffectiveConfigValue[];
+  source: string;
+}
+
 export interface ModerationCaseItem {
   id: string;
   targetType: string;
@@ -248,6 +356,11 @@ export interface ProductProjectionSummary {
   auditCount: number;
   pendingDualReview: number;
   activeObjectTypes: string[];
+  l1l4Cards?: Array<{
+    level: string;
+    label: string;
+    metric: string;
+  }>;
 }
 
 export interface ProductEventSummary {
@@ -293,6 +406,35 @@ export interface ProductEventQuery {
   experimentBucket?: string;
   source?: string;
   limit?: number;
+}
+
+export interface ControlPlaneScopeQuery {
+  env?: string;
+  cluster?: string;
+  service?: string;
+  instance?: string;
+  level?: string;
+}
+
+export interface ProductMetricItem {
+  id: string;
+  level: string;
+  environment: string;
+  cluster?: string;
+  service?: string;
+  instanceId?: string;
+  label: string;
+  metric: string;
+  value: number;
+  unit: string;
+  status: string;
+  trend: string;
+  description: string;
+}
+
+export interface ProductL1L4MetricsResponse {
+  scope: Record<string, string>;
+  items: ProductMetricItem[];
 }
 
 function envBaseUrl(key: 'VITE_PRODUCT_OPS_BASE_URL' | 'VITE_PLATFORM_OPS_BASE_URL' | 'VITE_CONTENT_SERVICE_BASE_URL') {
@@ -361,7 +503,10 @@ async function fetchJSON<T>(baseUrl: string, path: string): Promise<T> {
   }
 }
 
-function withQuery(path: string, query: ProductEventQuery = {}): string {
+function withQuery(
+  path: string,
+  query: Record<string, string | number | undefined | null> | ProductEventQuery | ControlPlaneScopeQuery = {},
+): string {
   const params = new URLSearchParams();
   Object.entries(query).forEach(([key, value]) => {
     if (value === undefined || value === null || value === '') {
@@ -377,6 +522,30 @@ export async function fetchExperiments(): Promise<ExperimentItem[]> {
   const payload = await fetchJSON<{ items: ExperimentItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
     '/v1/control-plane/product/experiments',
+  );
+  return payload.items;
+}
+
+export async function fetchRuntimeClusters(): Promise<RuntimeClusterItem[]> {
+  const payload = await fetchJSON<{ items: RuntimeClusterItem[] }>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    '/v1/control-plane/platform/topology/clusters',
+  );
+  return payload.items;
+}
+
+export async function fetchRuntimeServices(): Promise<RuntimeServiceItem[]> {
+  const payload = await fetchJSON<{ items: RuntimeServiceItem[] }>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    '/v1/control-plane/platform/topology/services',
+  );
+  return payload.items;
+}
+
+export async function fetchRuntimeInstances(): Promise<RuntimeInstanceItem[]> {
+  const payload = await fetchJSON<{ items: RuntimeInstanceItem[] }>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    '/v1/control-plane/platform/topology/instances',
   );
   return payload.items;
 }
@@ -524,6 +693,47 @@ export async function fetchDashboardCards(): Promise<DashboardCardItem[]> {
   return payload.items;
 }
 
+export async function fetchPlatformConfigKeys(): Promise<ConfigKeyItem[]> {
+  const payload = await fetchJSON<{ items: ConfigKeyItem[] }>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    '/v1/control-plane/platform/configs',
+  );
+  return payload.items;
+}
+
+export async function fetchPlatformConfigLayers(): Promise<ConfigLayerItem[]> {
+  const payload = await fetchJSON<{ items: ConfigLayerItem[] }>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    '/v1/control-plane/platform/configs/layers',
+  );
+  return payload.items;
+}
+
+export async function fetchPlatformConfigPackages(): Promise<ConfigPackageItem[]> {
+  const payload = await fetchJSON<{ items: ConfigPackageItem[] }>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    '/v1/control-plane/platform/configs/packages',
+  );
+  return payload.items;
+}
+
+export async function fetchPlatformConfigInstanceReports(): Promise<{
+  items: ConfigInstanceReportItem[];
+  summary: ConfigInstanceReportSummary;
+}> {
+  return fetchJSON<{ items: ConfigInstanceReportItem[]; summary: ConfigInstanceReportSummary }>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    '/v1/control-plane/platform/configs/instances',
+  );
+}
+
+export async function fetchEffectiveConfig(query: ControlPlaneScopeQuery = {}): Promise<EffectiveConfigResponse> {
+  return fetchJSON<EffectiveConfigResponse>(
+    envBaseUrl('VITE_PLATFORM_OPS_BASE_URL'),
+    withQuery('/v1/control-plane/platform/configs/resolve', query),
+  );
+}
+
 export async function fetchModerationCases(): Promise<ModerationCaseItem[]> {
   const payload = await fetchJSON<{ items: ModerationCaseItem[] }>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
@@ -590,5 +800,12 @@ export async function fetchProductEventDrilldown(query: ProductEventQuery = {}):
   return fetchJSON<ProductEventDrilldown>(
     envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
     withQuery('/v1/ops/events/drilldown', query),
+  );
+}
+
+export async function fetchProductL1L4Metrics(query: ControlPlaneScopeQuery = {}): Promise<ProductL1L4MetricsResponse> {
+  return fetchJSON<ProductL1L4MetricsResponse>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    withQuery('/v1/control-plane/product/metrics/l1l4', query),
   );
 }

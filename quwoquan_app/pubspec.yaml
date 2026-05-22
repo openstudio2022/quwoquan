@@ -81,6 +81,8 @@ dependencies:
     path: ../packages/quwoquan_cloud_contracts
   quwoquan_runtime_errors:
     path: ../packages/quwoquan_runtime_errors
+  flutter_cache_manager: ^3.4.1
+  fluentui_system_icons: ^1.1.273
 
 dev_dependencies:
   flutter_test:

@@ -1,6 +1,6 @@
 # feature_registry: shared with rec-model-service inference.
 # Align field names and types with ModelScoreRequest / CandidateInput.
-version: 3
+version: 5
 scenarios:
   content_feed:
     user_features:
@@ -27,6 +27,51 @@ scenarios:
       - name: totalEvents
         type: int
         source: rm_recommend_feature.userFeatures.totalEvents
+      - name: topicAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.topicAffinities
+        description: "Topic dimension tag -> weighted affinity"
+      - name: audienceAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.audienceAffinities
+        description: "Audience dimension tag -> weighted affinity"
+      - name: formatAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.formatAffinities
+        description: "Format dimension tag -> weighted affinity"
+      - name: entityAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.entityAffinities
+        description: "Entity dimension tag -> weighted affinity"
+      - name: entityInstanceAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.entityInstanceAffinities
+        description: "Specific entity instance -> weighted affinity (e.g. places, brands)"
+      - name: avgEngagementDepth
+        type: float
+        source: rm_recommend_feature.userFeatures.avgEngagementDepth
+        description: "Running average of engagement depth level (0-4)"
+      - name: depthDistribution
+        type: map_int
+        source: rm_recommend_feature.userFeatures.depthDistribution
+        description: "L0-L4 -> count histogram of engagement depth levels"
+      - name: sourceDistribution
+        type: map_int
+        source: rm_recommend_feature.userFeatures.sourceDistribution
+        description: "referralSource -> count histogram"
+      - name: circleTagAffinities
+        type: map_float
+        source: rm_recommend_feature.userFeatures.circleTagAffinities
+        description: "Tags propagated from user's circles (0.3x decay)"
+      - name: socialInterestScore
+        type: float
+        source: rm_recommend_feature.userFeatures.socialInterestScore
+        description: "Combined social interest density"
+      - name: typeENER
+        type: map_float
+        source: rm_recommend_feature.userFeatures.typeENER
+        description: "Exposure-Normalized Engagement Rate per content type"
+        nullable: true
       - name: userEmbedding
         type: vector_float64
         source: dual_tower_model.user_embed
@@ -43,6 +88,8 @@ scenarios:
         type: list_string
       - name: entityRefs
         type: list_string
+      - name: geoTagRef
+        type: string
       - name: ageHours
         type: float
         derived: "hours_since(publishedAt)"

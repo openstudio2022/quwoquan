@@ -35,16 +35,25 @@ type LiveKitRoomAdapter struct {
 	client    *http.Client
 }
 
-func NewLiveKitRoomAdapter(livekitURL, apiKey, apiSecret string) *LiveKitRoomAdapter {
+func NewLiveKitRoomAdapter(livekitURL, apiKey, apiSecret string, opts ...func(*LiveKitRoomAdapter)) *LiveKitRoomAdapter {
 	httpURL := livekitURL
 	httpURL = strings.Replace(httpURL, "ws://", "http://", 1)
 	httpURL = strings.Replace(httpURL, "wss://", "https://", 1)
-	return &LiveKitRoomAdapter{
+	a := &LiveKitRoomAdapter{
 		httpURL:   httpURL,
 		apiKey:    apiKey,
 		apiSecret: apiSecret,
 		client:    &http.Client{Timeout: 10 * time.Second},
 	}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
+}
+
+// WithHTTPClient replaces the default HTTP client (e.g. for CB wrapping).
+func WithHTTPClient(c *http.Client) func(*LiveKitRoomAdapter) {
+	return func(a *LiveKitRoomAdapter) { a.client = c }
 }
 
 func (a *LiveKitRoomAdapter) CreateRoom(ctx context.Context, roomName string, maxParticipants int) error {

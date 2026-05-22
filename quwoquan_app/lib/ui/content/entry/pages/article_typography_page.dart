@@ -191,7 +191,10 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
         filter: ImageFilter.blur(sigmaX: AppSpacing.sm, sigmaY: AppSpacing.sm),
         child: Container(
           padding: EdgeInsets.only(
-            top: MediaQuery.viewPaddingOf(context).top,
+            top: AppSpacing.appChromeTopSafeInset(
+              MediaQuery.viewPaddingOf(context).top,
+              context,
+            ),
             left: AppSpacing.containerSm,
             right: AppSpacing.containerSm,
           ),
@@ -205,7 +208,7 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
             ),
           ),
           child: SizedBox(
-            height: AppSpacing.toolbarHeight,
+            height: AppSpacing.appChromeNavigationBarHeight,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: <Widget>[
@@ -213,10 +216,14 @@ class _ArticleTypographyPageState extends ConsumerState<ArticleTypographyPage> {
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   minimumSize: const Size.square(
-                    AppSpacing.iconButtonMinSizeSm,
+                    AppSpacing.appChromeActionButtonSize,
                   ),
                   onPressed: () => Navigator.of(context).pop(),
-                  child: Icon(CupertinoIcons.back, color: fg),
+                  child: Icon(
+                    CupertinoIcons.back,
+                    color: fg,
+                    size: AppSpacing.appChromeActionIconSize,
+                  ),
                 ),
                 // 页码（紧跟返回按钮）
                 if (pageLabel != null)

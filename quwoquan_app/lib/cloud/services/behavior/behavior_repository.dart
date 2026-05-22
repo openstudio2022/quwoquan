@@ -1,15 +1,53 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
+import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/widgets.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+
+/// Behavior action types aligned with behaviors.yaml.
+///
+/// Wire values use snake_case to match Go-side `supportedBehaviorActions`.
+enum BehaviorAction {
+  impression('impression'),
+  click('click'),
+  dwell('dwell'),
+  like('like'),
+  favorite('favorite'),
+  share('share'),
+  dislike('dislike'),
+  report('report'),
+  skip('skip'),
+  comment('comment'),
+  follow('follow'),
+  authorView('author_view'),
+  entityPageView('entity_page_view'),
+  tagClick('tag_click'),
+  playProgress('play_progress'),
+  contentDepth('content_depth');
+
+  const BehaviorAction(this.wireValue);
+
+  final String wireValue;
+
+  static final Map<String, BehaviorAction> _byWire = {
+    for (final v in values) v.wireValue: v,
+  };
+
+  /// Parse from wire-format string; returns null for unknown values.
+  static BehaviorAction? fromWireValue(String? wire) =>
+      wire == null ? null : _byWire[wire];
+}
 
 /// Referral source indicating how the user arrived at the content.
 enum ReferralSource {
@@ -54,6 +92,7 @@ class BehaviorEvent {
   const BehaviorEvent({
     required this.contentId,
     required this.action,
+    this.contentType,
     this.tags,
     this.duration,
     this.feedRequestId,
@@ -65,13 +104,15 @@ class BehaviorEvent {
     this.consumedRatio,
     this.totalUnits,
     this.entityRefs,
+    this.pageVisitId,
   });
 
   final String contentId;
+  final BehaviorAction action;
 
-  /// One of: impression, click, dwell, like, favorite, share, dislike, report,
-  /// skip, comment, follow, author_view, tag_click, play_progress, content_depth
-  final String action;
+  /// Content format: photo, video, article, moment (for ENER type stats)
+  final String? contentType;
+
   final List<String>? tags;
 
   /// Dwell time in seconds (for dwell/skip action)
@@ -104,9 +145,14 @@ class BehaviorEvent {
   /// Entity references from the content (for interest propagation)
   final List<String>? entityRefs;
 
+  /// Page visit ID for ops event correlation
+  final String? pageVisitId;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'contentId': contentId,
-    'action': action,
+    'action': action.wireValue,
+    if (contentType != null && contentType!.isNotEmpty)
+      'contentType': contentType,
     if (tags != null && tags!.isNotEmpty) 'tags': tags,
     if (duration != null && duration! > 0) 'duration': duration,
     if (feedRequestId != null) 'feedRequestId': feedRequestId,
@@ -118,6 +164,8 @@ class BehaviorEvent {
     if (consumedRatio != null) 'consumedRatio': consumedRatio,
     if (totalUnits != null) 'totalUnits': totalUnits,
     if (entityRefs != null && entityRefs!.isNotEmpty) 'entityRefs': entityRefs,
+    if (pageVisitId != null && pageVisitId!.isNotEmpty)
+      'pageVisitId': pageVisitId,
   };
 }
 
@@ -130,9 +178,13 @@ abstract class BehaviorRepository {
 
   Future<void> reportSingle({
     required String contentId,
-    required String action,
+    required BehaviorAction action,
     List<String>? tags,
     double? duration,
+    String? authorId,
+    ReferralSource? referralSource,
+    int? position,
+    String? feedRequestId,
   }) {
     return reportEvents(
       events: <BehaviorEvent>[
@@ -141,6 +193,10 @@ abstract class BehaviorRepository {
           action: action,
           tags: tags,
           duration: duration,
+          authorId: authorId,
+          referralSource: referralSource,
+          position: position,
+          feedRequestId: feedRequestId,
         ),
       ],
     );
@@ -157,29 +213,77 @@ class MockBehaviorRepository extends BehaviorRepository {
   }
 }
 
+/// Non-retryable behavior report error (e.g. 400 schema mismatch).
+class BehaviorReportException implements Exception {
+  BehaviorReportException(
+    this.statusCode,
+    this.reason, {
+    this.retryable = false,
+  });
+  final int statusCode;
+  final String reason;
+  final bool retryable;
+
+  @override
+  String toString() =>
+      'BehaviorReportException($statusCode, $reason, retryable=$retryable)';
+}
+
 /// Remote 实现：对接云侧 POST /v1/content/behaviors。
 const String kBehaviorPendingQueueBoxName = 'behavior_pending_queue';
+const int _maxRetries = 3;
+const int _gzipThreshold = 512;
 
-class RemoteBehaviorRepository extends BehaviorRepository {
+class RemoteBehaviorRepository extends BehaviorRepository
+    with WidgetsBindingObserver {
   RemoteBehaviorRepository({
     OpsEventRepository? eventRepository,
     String currentUserId = '',
     String experimentBucket = '',
     CloudHttpClient? httpClient,
-    http.Client? client,
     String? baseUrl,
-  }) : _httpClient =
-           httpClient ?? CloudHttpClient(client: client ?? http.Client()),
+    String Function()? feedSessionIdProvider,
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
        _eventRepository = eventRepository,
        _currentUserId = currentUserId.trim(),
-       _experimentBucket = experimentBucket.trim();
+       _experimentBucket = experimentBucket.trim(),
+       _feedSessionIdProvider = feedSessionIdProvider {
+    _bindLifecycle();
+  }
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
   final OpsEventRepository? _eventRepository;
   final String _currentUserId;
   final String _experimentBucket;
+  final String Function()? _feedSessionIdProvider;
+
+  /// Canonical session ID for cross-service tracing (matches HTTP header).
+  String get _resolvedSessionId => CloudRequestHeaders.sessionId;
+
+  /// Feed-scoped session for recommendation attribution (30min rolling UUID).
+  String get _resolvedFeedSessionId => _feedSessionIdProvider?.call() ?? '';
+
+  void _bindLifecycle() {
+    try {
+      WidgetsBinding.instance.addObserver(this);
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      unawaited(_flushPending());
+    }
+  }
+
+  void dispose() {
+    try {
+      WidgetsBinding.instance.removeObserver(this);
+    } catch (_) {}
+  }
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
@@ -198,27 +302,34 @@ class RemoteBehaviorRepository extends BehaviorRepository {
     if (events.isEmpty) return;
 
     final uri = _uri(ContentApiMetadata.reportBehaviorsPath);
+    final feedSid = _resolvedFeedSessionId;
     final body = <String, dynamic>{
-      'sessionId': CloudRequestHeaders.sessionId,
+      'sessionId': _resolvedSessionId,
+      if (feedSid.isNotEmpty) 'feedSessionId': feedSid,
       'events': events.map((e) => e.toJson()).toList(),
     };
 
     try {
       await _flushPending();
-      await _httpClient.postJson(
-        uri,
-        headers: CloudRequestHeaders.forPage(
-          ContentRequestPageIds.reportBehaviors,
-        ),
-        body: body,
+      await _postWithRetry(uri, body);
+    } on BehaviorReportException catch (e) {
+      if (e.retryable) {
+        await _enqueue(events);
+      }
+    } catch (e) {
+      developer.log(
+        'behavior reportEvents failed, enqueuing: $e',
+        name: 'BehaviorRepository',
       );
-    } catch (_) {
       await _enqueue(events);
     }
 
     final eventRepository = _eventRepository;
     if (eventRepository != null) {
       final now = DateTime.now().toUtc();
+      final traceCtx = AppTraceContextStore.instance;
+      final batchTraceId =
+          'behavior:${traceCtx.sessionId}:${now.microsecondsSinceEpoch}';
       unawaited(
         eventRepository.reportEventBatch(
           events: events
@@ -236,7 +347,9 @@ class RemoteBehaviorRepository extends BehaviorRepository {
                   producer: 'app.content_behavior',
                   source: 'content_behavior',
                   userIdHash: _hashUserId(_currentUserId),
-                  sessionId: CloudRequestHeaders.sessionId,
+                  sessionId: _resolvedSessionId,
+                  traceId: batchTraceId,
+                  pageVisitId: event.pageVisitId ?? '',
                   targetType: 'content',
                   targetKey: event.contentId,
                   entityType: 'post',
@@ -268,6 +381,7 @@ class RemoteBehaviorRepository extends BehaviorRepository {
     final box = await _ensureQueueBox();
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
+    var consecutiveFailures = 0;
     for (final key in keys) {
       final raw = box.get(key);
       if (raw == null || raw.isEmpty) {
@@ -275,23 +389,47 @@ class RemoteBehaviorRepository extends BehaviorRepository {
         continue;
       }
       try {
-        final events = (jsonDecode(raw) as List)
+        final envelope = jsonDecode(raw);
+        List<dynamic> eventsList;
+        String sessionId;
+        String feedSessionId = '';
+        if (envelope is Map && envelope.containsKey('sessionId')) {
+          sessionId = (envelope['sessionId'] ?? '').toString();
+          feedSessionId = (envelope['feedSessionId'] ?? '').toString();
+          eventsList = (envelope['events'] as List?) ?? <dynamic>[];
+        } else {
+          sessionId = _resolvedSessionId;
+          eventsList = envelope as List;
+        }
+        final events = eventsList
             .whereType<Map>()
             .map((item) => _behaviorEventFromJson(item.cast<String, dynamic>()))
             .toList(growable: false);
-        await _httpClient.postJson(
-          _uri(ContentApiMetadata.reportBehaviorsPath),
-          headers: CloudRequestHeaders.forPage(
-            ContentRequestPageIds.reportBehaviors,
-          ),
-          body: <String, dynamic>{
-            'sessionId': CloudRequestHeaders.sessionId,
-            'events': events.map((event) => event.toJson()).toList(growable: false),
-          },
-        );
+        final uri = _uri(ContentApiMetadata.reportBehaviorsPath);
+        final body = <String, dynamic>{
+          'sessionId': sessionId,
+          if (feedSessionId.isNotEmpty) 'feedSessionId': feedSessionId,
+          'events': events
+              .map((event) => event.toJson())
+              .toList(growable: false),
+        };
+        await _postWithRetry(uri, body);
         await box.delete(key);
-      } catch (_) {
-        break;
+        consecutiveFailures = 0;
+      } on BehaviorReportException catch (e) {
+        if (!e.retryable) {
+          await box.delete(key);
+          continue;
+        }
+        consecutiveFailures++;
+        if (consecutiveFailures >= 3) break;
+      } catch (e) {
+        developer.log(
+          'behavior flushPending failed (consecutive=$consecutiveFailures): $e',
+          name: 'BehaviorRepository',
+        );
+        consecutiveFailures++;
+        if (consecutiveFailures >= 3) break;
       }
     }
   }
@@ -299,14 +437,18 @@ class RemoteBehaviorRepository extends BehaviorRepository {
   Future<void> _enqueue(List<BehaviorEvent> events) async {
     final box = await _ensureQueueBox();
     final key = DateTime.now().microsecondsSinceEpoch.toString();
-    await box.put(
-      key,
-      jsonEncode(events.map((event) => event.toJson()).toList(growable: false)),
-    );
+    final feedSid = _resolvedFeedSessionId;
+    final envelope = <String, dynamic>{
+      'sessionId': _resolvedSessionId,
+      if (feedSid.isNotEmpty) 'feedSessionId': feedSid,
+      'events': events.map((event) => event.toJson()).toList(growable: false),
+    };
+    await box.put(key, jsonEncode(envelope));
     const maxBacklog = 200;
     if (box.length > maxBacklog) {
-      final keys = box.keys.map((value) => value.toString()).toList(growable: false)
-        ..sort();
+      final keys =
+          box.keys.map((value) => value.toString()).toList(growable: false)
+            ..sort();
       final overflow = box.length - maxBacklog;
       for (var i = 0; i < overflow; i++) {
         await box.delete(keys[i]);
@@ -314,10 +456,80 @@ class RemoteBehaviorRepository extends BehaviorRepository {
     }
   }
 
+  Future<void> _postWithRetry(Uri uri, Map<String, dynamic> body) async {
+    final jsonStr = jsonEncode(body);
+    final headers = Map<String, String>.from(
+      CloudRequestHeaders.forPage(ContentRequestPageIds.reportBehaviors),
+    );
+
+    final useGzip = jsonStr.length > _gzipThreshold;
+    List<int> payload;
+    if (useGzip) {
+      payload = gzip.encode(utf8.encode(jsonStr));
+      headers['Content-Encoding'] = 'gzip';
+      headers['Content-Type'] = 'application/json';
+    } else {
+      payload = utf8.encode(jsonStr);
+      headers['Content-Type'] = 'application/json';
+    }
+
+    for (var attempt = 0; attempt <= _maxRetries; attempt++) {
+      try {
+        final response = await _httpClient.postBytes(
+          uri,
+          headers: headers,
+          body: payload,
+        );
+        if (response.statusCode >= 200 && response.statusCode < 300) return;
+        if (response.statusCode == 400) {
+          throw BehaviorReportException(
+            response.statusCode,
+            'schema error',
+            retryable: false,
+          );
+        }
+        if (response.statusCode == 429) {
+          throw BehaviorReportException(
+            response.statusCode,
+            'rate limited',
+            retryable: true,
+          );
+        }
+        if (response.statusCode >= 400 && response.statusCode < 500) {
+          throw BehaviorReportException(
+            response.statusCode,
+            'client error',
+            retryable: false,
+          );
+        }
+        if (response.statusCode >= 500) {
+          developer.log(
+            'behavior POST 5xx: ${response.statusCode} (attempt ${attempt + 1}/${_maxRetries + 1})',
+            name: 'BehaviorRepository',
+          );
+          throw BehaviorReportException(
+            response.statusCode,
+            'server error',
+            retryable: true,
+          );
+        }
+      } catch (e) {
+        if (e is BehaviorReportException && !e.retryable) rethrow;
+        if (attempt == _maxRetries) rethrow;
+      }
+      final delayMs = math.min(1000 * math.pow(2, attempt).toInt(), 8000);
+      await Future<void>.delayed(Duration(milliseconds: delayMs));
+    }
+  }
+
   BehaviorEvent _behaviorEventFromJson(Map<String, dynamic> json) {
+    final action =
+        BehaviorAction.fromWireValue((json['action'] ?? '').toString()) ??
+        BehaviorAction.impression;
     return BehaviorEvent(
       contentId: (json['contentId'] ?? '').toString(),
-      action: (json['action'] ?? '').toString(),
+      action: action,
+      contentType: json['contentType'] as String?,
       tags: (json['tags'] as List?)?.map((item) => item.toString()).toList(),
       duration: (json['duration'] as num?)?.toDouble(),
       feedRequestId: json['feedRequestId'] as String?,
@@ -331,6 +543,7 @@ class RemoteBehaviorRepository extends BehaviorRepository {
       entityRefs: (json['entityRefs'] as List?)
           ?.map((item) => item.toString())
           .toList(),
+      pageVisitId: json['pageVisitId'] as String?,
     );
   }
 

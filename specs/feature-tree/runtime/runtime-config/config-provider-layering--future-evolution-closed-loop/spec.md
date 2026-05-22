@@ -35,7 +35,7 @@
   - `scripts/verify_config_drift_rules.sh`（漂移规则有效性）
 - G2（CI）：
   - 增加 `config-evolution-regression` workflow 任务
-  - 执行 split local/integration/prod 配置加载回归 + 漂移模拟
+  - 执行 split alpha/beta/gamma/prod 配置加载回归 + 漂移模拟
 - G3（发布前）：
   - `make gate-full` 追加演进门禁聚合 target（草案）
 

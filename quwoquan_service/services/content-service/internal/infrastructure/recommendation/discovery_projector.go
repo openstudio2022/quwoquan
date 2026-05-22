@@ -113,6 +113,7 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 		"visibility":         normalizeVisibility(strVal(event.Payload, "visibility")),
 		"assistantUsePolicy": strVal(event.Payload, "assistantUsePolicy"),
 		"circleIds":          anySlice(event.Payload, "circleIds"),
+		"entityRefs":         anySlice(event.Payload, "entityRefs"),
 	}
 	if publishedAt := parseEventTime(strVal(event.Payload, "publishedAt"), event.OccurredAt); !publishedAt.IsZero() {
 		set["publishedAt"] = publishedAt

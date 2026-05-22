@@ -23,5 +23,5 @@
 ## Scope conclusion
 
 - recommendation-service 已实现配置分层加载（default/env/version/env vars）并 fail-fast
-- split-dev 与 composed integration/prod 拓扑校验已自动化并接入 CI
+- split-dev 与 composed beta/gamma/prod 拓扑校验已自动化并接入 CI
 - 灰度配置新老版本并行绑定链路（from/to image + config）可执行并可审计

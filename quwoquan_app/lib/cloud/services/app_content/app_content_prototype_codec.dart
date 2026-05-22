@@ -84,9 +84,7 @@ CirclePagePrototypeInfo decodeCirclePageInfo(Map<String, dynamic> m) {
 Map<String, CircleCategoryTabConfigDto> decodeCirclesCategoryConfig(
   Map<String, Map<String, dynamic>> raw,
 ) {
-  return raw.map(
-    (k, v) => MapEntry(k, CircleCategoryTabConfigDto.fromMap(v)),
-  );
+  return raw.map((k, v) => MapEntry(k, CircleCategoryTabConfigDto.fromMap(v)));
 }
 
 List<CircleDto> decodeCircleDtos(List<Map<String, dynamic>> rows) {
@@ -123,9 +121,9 @@ Object? _objectifyValue(Object? v) {
         .toList(growable: false);
   }
   if (v is Map) {
-    return Map<Object?, Object?>.from(v).map(
-      (k, val) => MapEntry(k.toString(), _objectifyValue(val)),
-    );
+    return Map<Object?, Object?>.from(
+      v,
+    ).map((k, val) => MapEntry(k.toString(), _objectifyValue(val)));
   }
   return v.toString();
 }
@@ -146,8 +144,7 @@ HelperReadSummaryPrototype decodeHelperReadSummary(Map<String, dynamic> m) {
             items.add(
               HelperReadFactItemPrototype(
                 raw: im.map(
-                  (k, val) =>
-                      MapEntry(k.toString(), _objectifyValue(val)),
+                  (k, val) => MapEntry(k.toString(), _objectifyValue(val)),
                 ),
               ),
             );
@@ -279,9 +276,7 @@ class AppContentPrototypeBundle {
     circlesMockActivities: decodeCircleActivities(
       PrototypeMockData.circlesMockActivities,
     ),
-    circlesMockCircles: decodeCircleDtos(
-      PrototypeMockData.circlesMockCircles,
-    ),
+    circlesMockCircles: decodeCircleDtos(PrototypeMockData.circlesMockCircles),
   );
 
   final List<ChatInboxDto> chatMockConversations;

@@ -129,6 +129,7 @@ PROVINCE_DESC = {
 
 # 直辖市列表（pca.json 中直辖市有 "市辖区" 中间层需跳过）
 MUNICIPALITIES = {"北京市", "天津市", "上海市", "重庆市"}
+DIRECT_COUNTY_GROUPS = {"省直辖县级行政区划", "自治区直辖县级行政区划"}
 
 
 # ─────────────────────────────────────────────
@@ -176,6 +177,20 @@ def gen_china(filter_province: str | None = None):
             # 普通省/自治区：{省: {市: [区县列表]}}
             if isinstance(cities_data, dict):
                 for city, districts in cities_data.items():
+                    if city in DIRECT_COUNTY_GROUPS:
+                        if isinstance(districts, list):
+                            for county_city in districts:
+                                ensure_tag(
+                                    f"中国/{province}/{county_city}",
+                                    county_city, county_city, f"{province}{county_city}"
+                                )
+                        elif isinstance(districts, dict):
+                            for county_city in districts:
+                                ensure_tag(
+                                    f"中国/{province}/{county_city}",
+                                    county_city, county_city, f"{province}{county_city}"
+                                )
+                        continue
                     ensure_tag(
                         f"中国/{province}/{city}",
                         city, city, f"{province}{city}"

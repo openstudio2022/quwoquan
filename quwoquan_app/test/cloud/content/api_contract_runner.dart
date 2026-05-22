@@ -230,11 +230,6 @@ void main() {
     test('PhotoPostDto fromMap 解析所有字段包含 aspectRatio', () async {
       if (!_apiAvailable)
         return markTestSkipped('$_apiContractEnv unavailable');
-      if (_isLocalGammaContentOnly) {
-        return markTestSkipped(
-          'local gamma content mirror does not yet expose image dimensions',
-        );
-      }
       final url = Uri.parse('$_apiBase/v1/content/feed?type=image&limit=5');
       final resp = await _client
           .get(url, headers: _authHeaders('content.feed'))

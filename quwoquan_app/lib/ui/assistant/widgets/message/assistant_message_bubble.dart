@@ -38,6 +38,18 @@ String _sanitizeAssistantTimelineText(String text) {
   return normalized;
 }
 
+RunArtifacts? _tryParseRunArtifacts(Map<String, dynamic> json) {
+  try {
+    return parseRunArtifacts(json);
+  } catch (error) {
+    assert(() {
+      debugPrint('Assistant runArtifacts parse failed: $error');
+      return true;
+    }());
+    return null;
+  }
+}
+
 String _resolveAssistantVisibleAnswerTextFromTranscriptRow({
   required AssistantTranscriptTimelineRow row,
   required String previewAnswer,
@@ -48,7 +60,7 @@ String _resolveAssistantVisibleAnswerTextFromTranscriptRow({
   final answerRow = row;
   final runArtifacts = answerRow.runArtifacts.isEmpty
       ? null
-      : parseRunArtifacts(answerRow.runArtifacts);
+      : _tryParseRunArtifacts(answerRow.runArtifacts);
   final candidates = isStreaming
       ? <String>[previewAnswer]
       : <String>[

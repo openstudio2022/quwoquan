@@ -61,9 +61,9 @@ void main() {
 
     test('getCircleCategoryConfig 与 ui_category_tabs SSOT 对齐', () async {
       final cfg = await repo.getCircleCategoryConfig();
-      expect(cfg.containsKey('all'), isTrue);
-      expect(cfg['all']!.label, isNotEmpty);
-      expect(cfg.length, greaterThanOrEqualTo(8));
+      expect(cfg.containsKey('campus'), isTrue);
+      expect(cfg['campus']!.label, isNotEmpty);
+      expect(cfg.length, greaterThanOrEqualTo(5));
     });
 
     test('getCircleStats 返回统计数据', () async {

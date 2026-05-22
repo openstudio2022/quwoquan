@@ -1,7 +1,16 @@
-import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show BehaviorAction, BehaviorEvent, BehaviorRepository, ReferralSource;
 
 /// Content type for engagement depth calculation.
-enum ContentType { article, photo, video, moment }
+enum ContentType {
+  article,
+  photo,
+  video,
+  moment;
+
+  /// Wire-format string matching Go `contentType` field.
+  String get wireValue => name;
+}
 
 /// Tracks in-progress content engagement and computes depth on exit.
 class _ContentSession {
@@ -36,6 +45,9 @@ class _ContentSession {
   int maxImageReached = 0;
   int lastPlayPositionMs = 0;
   double maxScrollDepth = 0.0;
+
+  /// Last reported play_progress threshold to avoid duplicate reports.
+  double lastReportedPlayThreshold = 0.0;
 }
 
 /// Unified content engagement tracker that handles all content types with
@@ -46,6 +58,20 @@ class ContentEngagementTracker {
 
   final BehaviorRepository _repository;
   final Map<String, _ContentSession> _activeSessions = {};
+  final List<Future<void>> _pendingReports = [];
+
+  void _fireAndTrack(Future<void> future) {
+    _pendingReports.add(future);
+    future.whenComplete(() => _pendingReports.remove(future));
+  }
+
+  /// Flush all pending report futures. Call before teardown.
+  Future<void> dispose() async {
+    for (final id in _activeSessions.keys.toList()) {
+      await trackContentExit(id);
+    }
+    await Future.wait(List<Future<void>>.of(_pendingReports));
+  }
 
   /// Called when user opens/enters a content item.
   void trackContentEnter(
@@ -75,10 +101,11 @@ class ContentEngagementTracker {
       position: position,
     );
 
-    _repository.reportEvents(events: [
+    _fireAndTrack(_repository.reportEvents(events: [
       BehaviorEvent(
         contentId: contentId,
-        action: 'impression',
+        action: BehaviorAction.impression,
+        contentType: contentType.wireValue,
         tags: tags,
         feedRequestId: feedRequestId,
         position: position,
@@ -86,7 +113,7 @@ class ContentEngagementTracker {
         referralSource: referralSource,
         entityRefs: entityRefs,
       ),
-    ]);
+    ]));
   }
 
   /// Called to update progress (page flip, image swipe, video progress).
@@ -116,7 +143,7 @@ class ContentEngagementTracker {
   }
 
   /// Called when user exits/leaves a content item. Computes final depth.
-  void trackContentExit(String contentId) {
+  Future<void> trackContentExit(String contentId) async {
     final session = _activeSessions.remove(contentId);
     if (session == null) return;
 
@@ -130,10 +157,12 @@ class ContentEngagementTracker {
     final ratio = _computeConsumedRatio(session);
     final totalUnits = _computeTotalUnits(session);
 
+    final ct = session.contentType.wireValue;
     final events = <BehaviorEvent>[
       BehaviorEvent(
         contentId: contentId,
-        action: 'dwell',
+        action: BehaviorAction.dwell,
+        contentType: ct,
         duration: dwellSeconds,
         tags: session.tags,
         feedRequestId: session.feedRequestId,
@@ -147,7 +176,8 @@ class ContentEngagementTracker {
       ),
       BehaviorEvent(
         contentId: contentId,
-        action: 'content_depth',
+        action: BehaviorAction.contentDepth,
+        contentType: ct,
         tags: session.tags,
         feedRequestId: session.feedRequestId,
         authorId: session.authorId,
@@ -159,45 +189,55 @@ class ContentEngagementTracker {
       ),
     ];
 
-    _repository.reportEvents(events: events);
+    await _repository.reportEvents(events: events);
   }
 
   /// Track author profile view.
   void trackAuthorProfileView(String authorId, {required ReferralSource from}) {
-    _repository.reportEvents(events: [
+    _fireAndTrack(_repository.reportEvents(events: [
       BehaviorEvent(
         contentId: authorId,
-        action: 'author_view',
+        action: BehaviorAction.authorView,
         referralSource: from,
         authorId: authorId,
       ),
-    ]);
+    ]));
   }
 
   /// Track tag click within content.
-  void trackTagClick(String tagRef, {required String fromContentId}) {
-    _repository.reportEvents(events: [
+  void trackTagClick(
+    String tagRef, {
+    required String fromContentId,
+    ReferralSource? referralSource,
+    String? feedRequestId,
+  }) {
+    final session = _activeSessions[fromContentId];
+    _fireAndTrack(_repository.reportEvents(events: [
       BehaviorEvent(
         contentId: fromContentId,
-        action: 'tag_click',
+        action: BehaviorAction.tagClick,
         tags: [tagRef],
+        referralSource: referralSource ?? session?.referralSource ?? ReferralSource.organicFeed,
+        feedRequestId: feedRequestId ?? session?.feedRequestId,
+        authorId: session?.authorId,
       ),
-    ]);
+    ]));
   }
 
   /// Track entity page navigation.
   void trackEntityPageView(String entityId, {required ReferralSource from}) {
-    _repository.reportEvents(events: [
+    _fireAndTrack(_repository.reportEvents(events: [
       BehaviorEvent(
         contentId: entityId,
-        action: 'author_view',
+        action: BehaviorAction.entityPageView,
         referralSource: from,
         entityRefs: [entityId],
       ),
-    ]);
+    ]));
   }
 
   /// Track video play progress (called periodically or on pause/seek).
+  /// Throttled to fire only when crossing 0.25/0.50/0.75/0.90/1.0 thresholds.
   void trackPlayProgress(
     String contentId, {
     required int positionMs,
@@ -206,17 +246,33 @@ class ContentEngagementTracker {
     trackContentProgress(contentId, playPositionMs: positionMs);
 
     if (totalDurationMs <= 0) return;
-    final ratio = positionMs / totalDurationMs;
-    if (ratio < 0.25) return; // only report at meaningful thresholds
+    final ratio = positionMs / totalDurationMs.toDouble();
 
-    _repository.reportEvents(events: [
+    const thresholds = [0.25, 0.50, 0.75, 0.90, 1.0];
+    final session = _activeSessions[contentId];
+    if (session == null) return;
+
+    double currentThreshold = 0.0;
+    for (final t in thresholds) {
+      if (ratio >= t) currentThreshold = t;
+    }
+    if (currentThreshold <= 0 || currentThreshold <= session.lastReportedPlayThreshold) {
+      return;
+    }
+    session.lastReportedPlayThreshold = currentThreshold;
+
+    _fireAndTrack(_repository.reportEvents(events: [
       BehaviorEvent(
         contentId: contentId,
-        action: 'play_progress',
-        consumedRatio: positionMs / totalDurationMs.toDouble(),
+        action: BehaviorAction.playProgress,
+        contentType: session.contentType.wireValue,
+        consumedRatio: ratio,
         totalUnits: (totalDurationMs / 1000).round(),
+        referralSource: session.referralSource,
+        feedRequestId: session.feedRequestId,
+        authorId: session.authorId,
       ),
-    ]);
+    ]));
   }
 
   /// Compute engagement depth level (0-4).
@@ -231,6 +287,7 @@ class ContentEngagementTracker {
   double _computeConsumedRatio(_ContentSession session) {
     switch (session.contentType) {
       case ContentType.article:
+        if (session.maxScrollDepth > 0) return session.maxScrollDepth;
         final total = session.totalPages ?? 0;
         if (total <= 2) return -1;
         if (total <= 0 || session.maxPageReached <= 0) return 0;

@@ -7,7 +7,25 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
 	"quwoquan_service/runtime/eventstore"
+)
+
+var (
+	projectorEventsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "projector",
+		Name:      "events_total",
+		Help:      "Total events dispatched to projectors by projector, event_type, and status.",
+	}, []string{"projector", "event_type", "status"})
+
+	projectorDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "projector",
+		Name:      "duration_seconds",
+		Help:      "Projector event processing duration in seconds.",
+		Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 5},
+	}, []string{"projector", "event_type"})
 )
 
 // Projector consumes domain events and builds read models.
@@ -54,6 +72,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event eventstore.StoredEvent)
 	for _, p := range handlers {
 		start := time.Now()
 		if err := p.Project(ctx, event); err != nil {
+			elapsed := time.Since(start)
+			projectorEventsTotal.WithLabelValues(p.Name(), event.Type, "error").Inc()
+			projectorDurationSeconds.WithLabelValues(p.Name(), event.Type).Observe(elapsed.Seconds())
 			d.logger.Error("projector.failed",
 				slog.String("projector", p.Name()),
 				slog.String("eventType", event.Type),
@@ -61,10 +82,13 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event eventstore.StoredEvent)
 				slog.String("error", err.Error()))
 			errs = append(errs, fmt.Errorf("%s: %w", p.Name(), err))
 		} else {
+			elapsed := time.Since(start)
+			projectorEventsTotal.WithLabelValues(p.Name(), event.Type, "ok").Inc()
+			projectorDurationSeconds.WithLabelValues(p.Name(), event.Type).Observe(elapsed.Seconds())
 			d.logger.Debug("projector.ok",
 				slog.String("projector", p.Name()),
 				slog.String("eventType", event.Type),
-				slog.Duration("duration", time.Since(start)))
+				slog.Duration("duration", elapsed))
 		}
 	}
 

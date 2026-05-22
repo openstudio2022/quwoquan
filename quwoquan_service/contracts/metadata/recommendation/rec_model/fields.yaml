@@ -43,6 +43,8 @@ entities:
         type: string
       - name: tags
         type: "[]string"
+      - name: entityRefs
+        type: "[]string"
       - name: ageHours
         type: float64
       - name: viewCount

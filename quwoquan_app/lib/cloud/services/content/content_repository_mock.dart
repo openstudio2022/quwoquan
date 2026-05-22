@@ -781,14 +781,16 @@ class MockContentRepository implements ContentRepository {
         case 'c1':
         case 'c-human-1':
         case 'c-photo-owner':
-          return 'humanity';
+        case 'c-meet-2':
+          return 'photography';
         case 'c2':
+        case 'c3':
           return 'travel';
         case 'c-tech-admin':
           return 'tech';
         case 'c-meet-1':
-        case 'c-meet-2':
-          return 'meet';
+          return 'campus';
+        case 'c-car-1':
         case 'c-car-2':
           return 'car';
       }

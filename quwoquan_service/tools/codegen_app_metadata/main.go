@@ -2998,6 +2998,16 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 			switch pf {
 			case "dwellMs":
 				positional = append(positional, "int dwellMs")
+			case "authorId":
+				positional = append(positional, "String authorId")
+			case "entityRefs":
+				positional = append(positional, "List<String> entityRefs")
+			case "tags":
+				positional = append(positional, "List<String> tags")
+			case "consumedRatio":
+				positional = append(positional, "double consumedRatio")
+			case "totalUnits":
+				positional = append(positional, "int totalUnits")
 			case "feedPosition":
 				named = append(named, "int feedPosition = 0")
 			case "contentType":

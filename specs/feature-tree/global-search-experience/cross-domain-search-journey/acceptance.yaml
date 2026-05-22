@@ -11,7 +11,7 @@ execution:
 scope:
   summary: >
     冻结全屏搜索首页初始态、实时联想、独立网络结果页、联系人/聊天记录直达、
-    群组结果与群组分类 facet、最近搜索、语音转词与小趣搜 assistant 结果的端到端旅程。
+    圈子结果与圈子分类 facet、最近搜索、语音转词与小趣搜 assistant 结果的端到端旅程。
   composed_scenarios:
     - full-screen-search-shell-and-entry
     - multi-domain-result-composition
@@ -27,13 +27,13 @@ scope:
 journey_acceptance:
   J1:
     title: 用户可从任一一级页面进入统一全屏搜索首页
-    journey: home/chat/group-hub/assistant -> open full-screen search -> see history state -> input query
+    journey: home/chat/circle-hub/assistant -> open full-screen search -> see history state -> input query
     scenario_refs:
       - full-screen-search-shell-and-entry
       - recent-search-sync-and-voice-asr
       - xiaoqu-entry-handoff
     done_when:
-      - 首页、聊天页、群组页、助手页进入同一全屏搜索首页
+      - 首页、聊天页、圈子页、助手页进入同一全屏搜索首页
       - 搜索首页包含搜索框、最近在搜双列卡片、展开与记录管理态
       - 用户取消、返回与重新进入时，上下文行为稳定可预期
     release_guardrails:
@@ -52,7 +52,7 @@ journey_acceptance:
         - route and surface traceability test
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-        - flutter test test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+        - flutter test test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
     status: pending
   J2:
     title: 用户可得到实时联想并进入独立网络结果页
@@ -64,11 +64,11 @@ journey_acceptance:
     done_when:
       - 联想页按“最常使用 / 联系人 / 聊天记录 / 搜索网络结果”四段组织
       - 联系人、聊天记录由端侧本地搜索提供，可页内展开更多，并稳定直达对应会话
-      - 网络结果页可在小趣搜与群组分类 facet 间切换，并进入对应群组或内容目标页
+      - 网络结果页可在小趣搜与圈子分类 facet 间切换，并进入对应圈子或内容目标页
       - "`circle.group` 云侧失败或返回 0 结果时，可回退端侧本地全量结果而不阻塞旅程"
     release_guardrails:
       - 不把小趣搜结果混入联想页实时分段
-      - 群组分类仅以 circle facet 形式出现
+      - 圈子分类仅以 circle facet 形式出现
       - "页面层不直接依赖分域搜索方法名，只消费统一 `search(request)` 接口"
     evidence:
       primary:
@@ -112,7 +112,7 @@ journey_acceptance:
         - xiaoqu tab regression test
       recorded:
         - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-        - flutter test test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+        - flutter test test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
     status: pending
 
 release_acceptance:
@@ -135,5 +135,5 @@ release_acceptance:
         - weak network degrade verification
       recorded:
         - make gate
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/assistant_tab_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+        - flutter test test/ui/search/pages/global_search_page_widget_test.dart test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
     status: pending

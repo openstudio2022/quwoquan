@@ -129,7 +129,7 @@ ruby -ryaml -e '
     fail("#{file}: deployment.plane_binding_domain is required") if plane_domain.empty?
     fail("#{file}: plane_binding_domain must match domain") unless plane_domain == domain
 
-    %w[dev integration prod].each do |env|
+    %w[dev gamma prod].each do |env|
       mapping = plane_lookup[domain][env] || {}
       current_mapping = current_lookup[domain][env] || []
       if mapping.empty?

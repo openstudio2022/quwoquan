@@ -40,6 +40,9 @@ class CircleHubFeedPostEntry {
   /// 圈子故事卡片 / 筛选用；避免在 UI 上散写 `raw['circleId']`。
   String get wireCircleId => (raw['circleId'] ?? '').toString();
 
+  /// 圈子页二级筛选用；兼容 `subCategory` wire 字段。
+  String get wireSubCategory => (raw['subCategory'] ?? '').toString();
+
   /// MediaViewer 回写关注态、互动快照 fallback 等用同一作者主键解析顺序。
   String get wireAuthorRelationshipId =>
       (raw['subAccountId'] ?? raw['authorId'] ?? raw['userId'] ?? '')
@@ -87,6 +90,26 @@ class CircleHubFeedPostEntry {
       return imageUrls.first.toString();
     }
     return '';
+  }
+
+  List<String> get wireImageUrls {
+    final d = dto;
+    final dtoImages = d?.mediaImageUrls ?? const <String>[];
+    if (dtoImages.isNotEmpty) {
+      return dtoImages;
+    }
+    final imageUrls = raw['imageUrls'];
+    if (imageUrls is List) {
+      final urls = imageUrls
+          .map((url) => url.toString().trim())
+          .where((url) => url.isNotEmpty)
+          .toList(growable: false);
+      if (urls.isNotEmpty) {
+        return urls;
+      }
+    }
+    final cover = wireCoverUrl.trim();
+    return cover.isEmpty ? const <String>[] : <String>[cover];
   }
 
   String get wireTitle {

@@ -32,19 +32,22 @@ TAGS_ROOT = PUBLISH_ROOT / "v1" / "tags"
 GROUPS = ["Topic", "Audience", "Format", "Entity"]
 
 REQUIRED_DIMS = {
-    "Topic": ["场景", "事件话题", "时间", "地理"],
+    "Topic": ["场景", "时间", "地理"],
     "Audience": ["用户", "创作者", "圈子"],
     "Format": ["内容载体", "内容角度", "表现手法", "视觉风格", "互动玩法", "商业形式"],
     "Entity": ["地点", "机构", "活动", "人物", "品牌", "作品", "商品", "生物", "交通工具"],
 }
 
 REQUIRED_TOPIC_VERTICALS = [
-    "自然风光", "历史文化", "美食餐饮", "旅行", "住宿", "运动",
-    "健康养生", "数码科技", "影视娱乐", "亲子育儿", "教育成长",
+    "自然风光", "历史文化", "事件", "话题", "美食餐饮", "旅行", "住宿", "运动",
+    "健康养生", "科技", "数码", "人文社科",
+    "影视娱乐", "亲子育儿", "教育成长",
     "情感关系", "时尚穿搭", "美妆护肤", "游戏电竞", "家居生活",
     "非遗民俗", "宠物动物", "金融理财", "购物消费", "艺术创作",
     "摄影",
 ]
+
+RETIRED_TOPIC_ROOTS = ["事件话题", "数码科技"]
 
 REQUIRED_FIELDS = ["label", "labelEn", "createdAt", "updatedAt"]
 FORBIDDEN_FIELDS = ["appliesTo", "status", "lifecycle", "deprecatedTo",
@@ -73,6 +76,11 @@ def check_r1_groups():
         group_dir = TAGS_ROOT / g
         if not group_dir.exists():
             errors.append(f"R1: 分组目录不存在 {g}/")
+    topic_root = TAGS_ROOT / "Topic"
+    for retired in RETIRED_TOPIC_ROOTS:
+        retired_dir = topic_root / retired
+        if retired_dir.exists():
+            errors.append(f"R1: 已退役的 Topic 根仍存在: Topic/{retired}/")
 
 
 # ─────────────────────────────────────────────
@@ -296,7 +304,6 @@ def check_r9_capacity_balance():
     """
     SKIP_PATHS = {
         # 时效性特殊维度，允许子节点少
-        str(TAGS_ROOT / "Topic" / "事件话题"),
         str(TAGS_ROOT / "Topic" / "时间"),
         # 行政区初期仅收录中国，其他国家待后续扩充
         str(TAGS_ROOT / "Topic" / "地理" / "行政区"),

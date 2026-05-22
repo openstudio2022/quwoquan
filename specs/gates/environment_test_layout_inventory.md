@@ -26,6 +26,6 @@
 - alpha/beta/gamma 的业务对象和断言数据必须来自 `contracts/metadata/**/test_fixtures`。
 - `quwoquan_app/pubspec.yaml` 不得挂载 contracts `test_fixtures` 为生产 assets。
 - `app-alpha` 可随包携带 seed manifest allowlist 中的精简 fixture；`app-beta/app-gamma` 只能通过 remote/gateway 读取云侧 seed 数据。
-- App 只构建 `alpha/beta/gamma/prod` 四类环境包；不存在独立 `app-prod-gray` 包。
+- App 只构建 `alpha/beta/gamma/prod` 四类环境包；生产灰度不通过独立 App 包承载。
 - 人工 beta 数据必须来自 `app_beta_seed_manifest.json`，不得在启动脚本或数据库中临时造数。
 - 环境包、seed manifest 与 gateway smoke 使用统一命令面：`make build-app-env`、`make verify-app-seed-manifest`、`make test-app-alpha-seed`、`make test-app-beta-seed`。

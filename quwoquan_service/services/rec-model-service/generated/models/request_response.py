@@ -14,6 +14,7 @@ class CandidateInput(BaseModel):
     contentType: str | None = None
     authorId: str | None = None
     tags: list[str] | None = None
+    entityRefs: list[str] | None = None
     ageHours: float | None = None
     viewCount: int | None = None
     likeCount: int | None = None

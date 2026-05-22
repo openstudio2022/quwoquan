@@ -1,0 +1,310 @@
+version: 1
+feature: local-cache-architecture
+policy_scope: app_client_object_cache
+cache_classes:
+  pinned:
+    description: 当前用户、关注/联系人、最近会话、收藏/最近阅读、待同步对象
+    ordinary_clear_behavior: preserve
+    account_logout_behavior: require_explicit_high_risk_confirmation
+  recent:
+    description: 最近 feed/query/detail 命中的可重建对象
+    ordinary_clear_behavior: removable_by_offline_content_clear
+    account_logout_behavior: clear
+  ephemeral:
+    description: 大图、视频、临时缩略图、未交互对象、临时搜索页
+    ordinary_clear_behavior: removable_by_resource_clear_or_space_pressure
+    account_logout_behavior: clear
+cache_read_result:
+  required_fields:
+    value: 强类型对象或查询快照
+    source: [memory, disk, remote, seed, optimisticOverlay]
+    freshness: [fresh, stale, expired, unknown]
+    syncState: [idle, refreshing, offline, pendingWrite, conflict, error]
+    objectVersion: updatedAt/avatarVersion/groupAvatarVersion/membersRosterRevision/postReadVersion/syncSeq 等对象版本
+    cacheClass: [pinned, recent, ephemeral]
+    resourceRefs: URL/objectKey/version/variant 引用集合
+    overlay: 本地未确认 desired state
+    diagnostics: 命中层级、请求次数、刷新耗时、失败原因
+objects:
+  UserProfile:
+    owner_scope: user_or_persona
+    identity_key: userId
+    cache_fields:
+      pinned:
+        - userId
+        - displayName
+        - avatarUrl
+        - avatarVersion
+        - relationshipState
+        - relationshipVersion
+        - updatedAt
+      recent:
+        - userId
+        - displayName
+        - avatarUrl
+        - avatarVersion
+        - authorSnapshot
+      excluded:
+        - credentials
+        - privateDeviceState
+    resource_refs:
+      avatar:
+        version_key: avatarVersion
+        variants: [avatar]
+    cache_class_rules:
+      pinned:
+        - currentUser
+        - followedUser
+        - mutualContact
+        - chatContact
+      recent:
+        - feedAuthor
+        - commentAuthor
+      ephemeral:
+        - searchOnlyTransientUser
+    freshness_keys: [updatedAt, avatarVersion, relationshipVersion]
+    write_overlay:
+      supported: true
+      operations: [follow, unfollow, block, unblock]
+    retention_policy:
+      memory_lru: medium
+      disk_retention: long_for_pinned_short_for_recent
+      space_pressure_order: [ephemeral, recent]
+    clear_policy:
+      resource_clear: delete_avatar_bytes_only
+      offline_content_clear: delete_non_pinned_profile_details
+      all_cache_clear: preserve_current_user_min_snapshot_and_outbox
+    offline_contract: 当前用户、关注/联系人、最近互动作者可显示最小资料与头像占位
+    sync_contract: realtime hint 或 profile read 返回较新版本后更新对象并刷新引用页面
+    tests: [profile_cache_hit, avatar_version_invalidation, follow_overlay_merge, protected_clear]
+  Post:
+    owner_scope: user_personalized_read
+    identity_key: postId
+    cache_fields:
+      pinned:
+        - postId
+        - contentType
+        - title
+        - summary
+        - bodyOrBlocks
+        - authorId
+        - authorSnapshot
+        - visibility
+        - updatedAt
+        - mediaRefs
+        - interactionCounts
+        - viewerInteractionState
+      recent:
+        - postId
+        - contentType
+        - title
+        - summary
+        - authorSnapshot
+        - mediaRefs
+        - updatedAt
+        - interactionCounts
+      excluded:
+        - editDraft
+        - non_public_private_payload
+    resource_refs:
+      cover:
+        version_key: mediaVersion
+        variants: [thumbnail, cover]
+      inlineImages:
+        version_key: mediaVersion
+        variants: [thumbnail, inline, full]
+      video:
+        version_key: mediaVersion
+        variants: [thumbnail, preview]
+    cache_class_rules:
+      pinned:
+        - savedPost
+        - recentlyReadDetail
+        - userCreatedPost
+      recent:
+        - feedHit
+        - searchHit
+      ephemeral:
+        - fullScreenImageBytes
+        - videoBytes
+    freshness_keys: [updatedAt, postReadVersion, mediaVersion]
+    write_overlay:
+      supported: true
+      operations: [like, unlike, save, unsave, share, commentCreate, commentDelete]
+    retention_policy:
+      memory_lru: medium
+      disk_retention: detail_recent_medium_summary_longer
+      space_pressure_order: [ephemeral_media_bytes, comment_pages, non_pinned_detail]
+    clear_policy:
+      resource_clear: delete_media_bytes_preserve_metadata
+      offline_content_clear: delete_non_pinned_detail_and_query_snapshots
+      all_cache_clear: preserve_drafts_and_pending_interaction_outbox
+    offline_contract: 最近打开详情可显示标题、正文/blocks、作者快照、媒体占位与最近计数
+    sync_contract: 远端较新 updatedAt/postReadVersion 更新对象，overlay desired state 合并到展示层
+    tests: [post_detail_swr, offline_detail_restore, interaction_overlay_merge, media_clear_preserves_metadata]
+  Conversation:
+    owner_scope: user_private
+    identity_key: conversationId
+    cache_fields:
+      pinned:
+        - conversationId
+        - type
+        - title
+        - avatarUrl
+        - groupAvatarVersion
+        - membersRosterRevision
+        - lastMessageSummary
+        - unreadCount
+        - updatedAt
+      recent:
+        - memberAvatarTiles
+        - memberDisplayNames
+      excluded:
+        - deletedMessagesWithoutRetention
+    resource_refs:
+      groupAvatar:
+        version_key: groupAvatarVersion
+        variants: [avatar]
+      memberAvatars:
+        version_key: membersRosterRevision
+        variants: [avatar]
+    cache_class_rules:
+      pinned:
+        - recentConversation
+        - unreadConversation
+        - pinnedConversation
+      recent:
+        - archivedRecentConversation
+      ephemeral:
+        - transientMemberAvatarBytes
+    freshness_keys: [updatedAt, groupAvatarVersion, membersRosterRevision]
+    write_overlay:
+      supported: true
+      operations: [sendMessage, markRead, mute, pin]
+    retention_policy:
+      memory_lru: medium
+      disk_retention: long_for_recent_conversations
+      space_pressure_order: [avatar_bytes, older_member_roster_details]
+    clear_policy:
+      resource_clear: delete_avatar_bytes_only
+      offline_content_clear: preserve_recent_conversation_projection_and_pending_messages
+      all_cache_clear: preserve_pending_messages_until_sent_or_user_confirms_data_clear
+    offline_contract: 最近会话列表、标题、头像占位、最近消息摘要可显示
+    sync_contract: websocket/realtime hint 更新版本，gap 时拉 conversation snapshot
+    tests: [conversation_projection_restore, group_avatar_version_invalidation, roster_revision_prefetch, pending_message_protected_clear]
+  Comment:
+    owner_scope: post_scoped_user_personalized
+    identity_key: postId_sort_cursor_commentId
+    cache_fields:
+      recent:
+        - commentId
+        - postId
+        - body
+        - authorSnapshot
+        - createdAt
+        - updatedAt
+        - likeCount
+        - viewerLikeState
+      excluded:
+        - moderatedHiddenPayload
+    resource_refs:
+      authorAvatar:
+        version_key: authorAvatarVersion
+        variants: [avatar]
+    cache_class_rules:
+      pinned:
+        - pendingLocalComment
+      recent:
+        - recentlyOpenedThreadPage
+      ephemeral:
+        - deepReplyPageNotInteracted
+    freshness_keys: [updatedAt, commentPageVersion]
+    write_overlay:
+      supported: true
+      operations: [commentCreate, commentDelete, commentLike, commentUnlike]
+    retention_policy:
+      memory_lru: small
+      disk_retention: shorter_than_post_detail
+      space_pressure_order: [deep_reply_pages, top_level_comment_pages]
+    clear_policy:
+      resource_clear: delete_author_avatar_bytes_only
+      offline_content_clear: delete_comment_pages_except_pending_local_comments
+      all_cache_clear: preserve_pending_comment_outbox
+    offline_contract: 最近打开评论页可展示正文、作者快照和本地待发评论
+    sync_contract: post 计数与 comment page 版本分别刷新，本地新增/删除通过 overlay 合并
+    tests: [comment_page_restore, pending_comment_protected_clear, comment_count_overlay_merge]
+  MediaResource:
+    owner_scope: public_or_signed_resource
+    identity_key: objectKey_variant_version
+    cache_fields:
+      recent:
+        - objectKey
+        - url
+        - variant
+        - version
+        - byteSize
+        - lastAccessedAt
+    resource_refs:
+      bytes:
+        version_key: version
+        variants: [avatar, thumbnail, cover, inline, full, videoPreview]
+    cache_class_rules:
+      pinned:
+        - avatarSmallVariantReferencedByPinnedObject
+      recent:
+        - coverOrInlineReferencedByRecentObject
+      ephemeral:
+        - fullImageBytes
+        - videoBytes
+    freshness_keys: [version, urlSignatureExpiresAt]
+    write_overlay:
+      supported: false
+      operations: []
+    retention_policy:
+      memory_lru: image_cache_default
+      disk_retention: resource_budget_based
+      space_pressure_order: [full_video_bytes, full_image_bytes, inline_images, thumbnails, avatars]
+    clear_policy:
+      resource_clear: delete_bytes_by_variant_budget
+      offline_content_clear: delete_unreferenced_resource_bytes
+      all_cache_clear: delete_all_rebuildable_resource_bytes
+    offline_contract: 缓存字节存在则展示；不存在时对象 metadata 仍可回显占位
+    sync_contract: 对象版本更新改变 resourceRef，旧字节自然淘汰
+    tests: [resource_variant_dedup, resource_clear_keeps_object_metadata, avatar_wrapper_usage]
+  QuerySnapshot:
+    owner_scope: user_personalized_query
+    identity_key: surface_querySignature_cursor
+    cache_fields:
+      recent:
+        - surfaceId
+        - querySignature
+        - objectIds
+        - cursor
+        - sort
+        - fetchedAt
+        - freshness
+      excluded:
+        - raw_remote_response_without_type
+    resource_refs: {}
+    cache_class_rules:
+      pinned:
+        - primaryTabLastSuccessfulSnapshot
+      recent:
+        - feedSearchProfileCircleSnapshot
+      ephemeral:
+        - temporaryFilterSnapshot
+    freshness_keys: [fetchedAt, queryVersion, objectVersions]
+    write_overlay:
+      supported: false
+      operations: []
+    retention_policy:
+      memory_lru: medium
+      disk_retention: recent_query_short_to_medium
+      space_pressure_order: [temporary_filter_snapshot, search_snapshot, older_feed_pages]
+    clear_policy:
+      resource_clear: no_effect
+      offline_content_clear: delete_query_snapshots
+      all_cache_clear: delete_query_snapshots
+    offline_contract: 一级/二级 tab 可恢复最近成功快照并标识离线
+    sync_contract: 对象缓存更新后派生刷新 snapshot；query 结构变更时重建
+    tests: [tab_switch_no_refetch, offline_snapshot_restore, query_snapshot_clear]

@@ -77,6 +77,17 @@ errors:
       zh: "请求参数有误，请检查后重试"
       en: "Invalid request, please check and retry"
 
+  - code: CONTENT.USER.assistant_mention_context_missing
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: assistantMentionContextMissing
+    go_const: ErrAssistantMentionContextMissing
+    user_message:
+      zh: "小趣暂时无法识别这条评论的上下文"
+      en: "Xiaoqu cannot resolve this comment context yet"
+
   - code: CONTENT.USER.invalid_content_type
     kind: USER
     reason: invalid_argument

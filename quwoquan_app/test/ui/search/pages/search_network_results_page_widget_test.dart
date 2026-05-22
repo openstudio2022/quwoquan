@@ -6,10 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tabs_loader.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -48,7 +48,7 @@ Widget _buildApp({
   SearchLaunchContext launchContext = const SearchLaunchContext(
     entrySurfaceId: '/search',
     prefilledQuery: '影',
-    initialNetworkTabId: 'xiaoqu',
+    initialNetworkTabId: 'all',
   ),
 }) {
   return ProviderScope(
@@ -81,15 +81,48 @@ Widget _buildAppWithSearchRepository({
 }
 
 void main() {
-  testWidgets('网络结果页展示小趣搜和圈子频道分类', (tester) async {
-    await tester.pumpWidget(_buildApp());
+  testWidgets('网络结果页按方案 B 默认综合并展示圈子频道分类', (tester) async {
+    await tester.pumpWidget(
+      _buildAppWithSearchRepository(
+        launchContext: const SearchLaunchContext(
+          entrySurfaceId: '/search',
+          prefilledQuery: '影',
+          initialNetworkTabId: 'all',
+        ),
+        repository: _FakeNetworkSearchRepository(),
+      ),
+    );
     await tester.pump();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('小趣搜'), findsWidgets);
-    expect(find.text('推荐'), findsOneWidget);
-    expect(find.text('人文'), findsOneWidget);
-    expect(find.textContaining('正在为你整理'), findsOneWidget);
+    expect(find.text('小趣搜'), findsOneWidget);
+    expect(find.text('综合'), findsWidgets);
+    expect(
+      tester.getTopLeft(find.text('小趣搜')).dx,
+      lessThan(tester.getTopLeft(find.text('综合').first).dx),
+    );
+    expect(find.text('主页'), findsOneWidget);
+    expect(find.text('消息'), findsWidgets);
+    expect(find.text('视频'), findsOneWidget);
+    expect(find.text('图片'), findsOneWidget);
+    expect(find.text('文章'), findsOneWidget);
+    expect(find.text('内容'), findsWidgets);
+    expect(find.text('推荐'), findsNothing);
+    expect(find.text('遇见'), findsNothing);
+    expect(find.text('位置'), findsNothing);
+    const businessLabels = <String>['校园', '旅行', '摄影', '科技', '车之家'];
+    final tabBar = tester.widget<SecondaryCapsuleTabBar>(
+      find.byType(SecondaryCapsuleTabBar),
+    );
+    expect(
+      tabBar.tabs.sublist(tabBar.tabs.length - businessLabels.length),
+      businessLabels,
+    );
+    for (final removed in <String>['人文', '生活', '运动', '美食', '车友']) {
+      expect(find.text(removed), findsNothing);
+    }
+    expect(find.textContaining('小趣正在整理'), findsNothing);
   });
 
   testWidgets('切换频道后展示对应分类结果', (tester) async {
@@ -98,7 +131,7 @@ void main() {
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
           prefilledQuery: '影',
-          initialNetworkTabId: 'xiaoqu',
+          initialNetworkTabId: 'all',
         ),
         repository: _FakeNetworkSearchRepository(),
       ),
@@ -106,10 +139,10 @@ void main() {
     await tester.pump();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('人文'));
+    await tester.tap(find.text('摄影'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('人文'), findsWidgets);
+    expect(find.textContaining('摄影'), findsWidgets);
     expect(find.text('街头摄影'), findsWidgets);
   });
 
@@ -132,13 +165,13 @@ void main() {
     expect(find.byType(HomepageSummaryCard), findsWidgets);
   });
 
-  testWidgets('群组 tab 可展示圈子与群组结果', (tester) async {
+  testWidgets('综合 tab 汇总圈子与群组结果', (tester) async {
     await tester.pumpWidget(
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
           prefilledQuery: '光影',
-          initialNetworkTabId: 'groups',
+          initialNetworkTabId: 'all',
         ),
         repository: _FakeNetworkSearchRepository(),
       ),
@@ -147,18 +180,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(seconds: 3));
 
-    expect(find.text('群组'), findsWidgets);
-    expect(find.text('没有找到相关群组'), findsNothing);
+    expect(find.text('综合'), findsWidgets);
+    expect(find.text('光影摄影社主群'), findsWidgets);
     expect(find.byType(PostPreviewListTile), findsWidgets);
   });
 
-  testWidgets('位置 tab 可展示 integration location 结果', (tester) async {
+  testWidgets('消息 tab 可展示聊天搜索结果', (tester) async {
     await tester.pumpWidget(
       _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
           prefilledQuery: '西湖',
-          initialNetworkTabId: 'locations',
+          initialNetworkTabId: 'messages',
         ),
         repository: _FakeNetworkSearchRepository(),
       ),
@@ -167,29 +200,30 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('位置'), findsWidgets);
-    expect(find.text('西湖风景名胜区'), findsWidgets);
+    expect(find.text('消息'), findsWidgets);
+    expect(find.text('西湖摄影讨论'), findsWidgets);
   });
 
   testWidgets('内容类型筛选可驱动网络结果页加载指定内容结果', (tester) async {
     await tester.pumpWidget(
-      _buildApp(
+      _buildAppWithSearchRepository(
         launchContext: const SearchLaunchContext(
           entrySurfaceId: '/search',
           prefilledQuery: 'UI',
-          initialNetworkTabId: 'all',
+          initialNetworkTabId: 'humanity',
           searchObjectSelection: SearchObjectSelection(
             contentTypes: <SearchContentTypeFilter>{
               SearchContentTypeFilter.article,
             },
           ),
         ),
+        repository: _FakeNetworkSearchRepository(),
       ),
     );
     await tester.pump();
     await tester.pumpAndSettle();
 
-    expect(find.text('UI设计的心理学原理：色彩、布局与用户认知'), findsWidgets);
+    expect(find.text('街头摄影'), findsWidgets);
   });
 }
 
@@ -203,12 +237,12 @@ class _FakeNetworkSearchRepository implements SearchRepository {
         'contentType': 'image',
         'contentIdentity': 'work',
         'title': '街头摄影',
-        'summary': '人文影像频道结果',
+        'summary': '摄影频道结果',
         'coverUrl':
             'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
         'authorDisplayName': '街头摄影',
-        'circleName': '人文影像',
-        'categoryId': normalized.categoryId ?? 'humanity',
+        'circleName': '摄影影像',
+        'categoryId': normalized.categoryId ?? 'photography',
         'subCategory': '影像',
         'likeCount': 32,
         'matchedField': 'author',
@@ -256,7 +290,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 title: '光影摄影社主群',
                 subtitle: '圈子主群',
                 resolvedFrom: SearchResolvedFrom.remote,
-                payload: const SearchHitPayloadWireMap(<String, dynamic>{
+                payload: SearchHitPayloadWireMap(<String, dynamic>{
                   'circleId': 'circle_photo_01',
                   'groupId': 'group_light_photo',
                   'name': '光影摄影社主群',
@@ -270,32 +304,29 @@ class _FakeNetworkSearchRepository implements SearchRepository {
         ],
       );
     }
-    if (normalized.objectTypes.contains(
-      SearchObjectType.integrationLocationPoi,
-    )) {
+    if (normalized.objectTypes.contains(SearchObjectType.chatConversation) ||
+        normalized.objectTypes.contains(SearchObjectType.chatMessage)) {
       return SearchResponse(
         request: normalized,
         sections: <SearchSection>[
           SearchSection(
-            id: 'locations',
-            title: '位置',
+            id: 'chat_records',
+            title: '聊天记录',
             objectTypes: const <SearchObjectType>[
-              SearchObjectType.integrationLocationPoi,
+              SearchObjectType.chatConversation,
+              SearchObjectType.chatMessage,
             ],
             hits: const <SearchHit>[
               SearchHit(
-                objectType: SearchObjectType.integrationLocationPoi,
-                objectId: 'poi_west_lake',
-                title: '西湖风景名胜区',
-                subtitle: '杭州市西湖区龙井路1号',
+                objectType: SearchObjectType.chatMessage,
+                objectId: 'msg_west_lake',
+                title: '西湖摄影讨论',
+                subtitle: '光影摄影社主群',
+                snippet: '周末西湖拍摄路线和集合时间',
                 resolvedFrom: SearchResolvedFrom.remote,
-                payload: const SearchHitPayloadWireMap(<String, dynamic>{
-                  'id': 'poi_west_lake',
-                  'name': '西湖风景名胜区',
-                  'latitude': 30.2431,
-                  'longitude': 120.1500,
-                  'address': '杭州市西湖区龙井路1号',
-                  'distanceMeters': 1200,
+                payload: SearchHitPayloadWireMap(<String, dynamic>{
+                  'conversationId': 'group_light_photo',
+                  'messageId': 'msg_west_lake',
                 }),
               ),
             ],

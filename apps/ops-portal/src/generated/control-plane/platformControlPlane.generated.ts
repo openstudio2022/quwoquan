@@ -97,7 +97,80 @@ export const platformControlPlane = {
             "risk_distribution",
             "rollout_backlog"
           ],
-          "drilldown_route_id": "/platform/config"
+          "drilldown_route_id": "/platform/config/layers"
+        }
+      ]
+    },
+    {
+      "object_kind": "policy",
+      "object_type": "config_layer_value",
+      "label": "配置层值",
+      "source_entity": "ConfigLayer",
+      "view_model": "ConfigLayerValue",
+      "risk_level": "high",
+      "deployment_profile": "latency_sensitive",
+      "operations": [
+        {
+          "operation": "ListConfigLayers",
+          "method": "GET",
+          "path": "/v1/control-plane/platform/configs/layers",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        },
+        {
+          "operation": "ResolveEffectiveConfig",
+          "method": "GET",
+          "path": "/v1/control-plane/platform/configs/resolve",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        }
+      ]
+    },
+    {
+      "object_kind": "release",
+      "object_type": "config_package",
+      "label": "配置包",
+      "source_entity": "ConfigPackage",
+      "view_model": "ConfigPackage",
+      "risk_level": "critical",
+      "deployment_profile": "batch_heavy",
+      "operations": [
+        {
+          "operation": "ListConfigPackages",
+          "method": "GET",
+          "path": "/v1/control-plane/platform/configs/packages",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        }
+      ]
+    },
+    {
+      "object_kind": "snapshot",
+      "object_type": "config_instance_report",
+      "label": "实例配置报告",
+      "source_entity": "ConfigInstanceReport",
+      "view_model": "ConfigInstanceReport",
+      "risk_level": "high",
+      "deployment_profile": "audit_heavy",
+      "operations": [
+        {
+          "operation": "ListConfigInstanceReports",
+          "method": "GET",
+          "path": "/v1/control-plane/platform/configs/instances",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        },
+        {
+          "operation": "ReportConfigInstance",
+          "method": "POST",
+          "path": "/v1/control-plane/platform/configs/instances/{instanceId}:report",
+          "scopes": [
+            "ops.platform.config.write"
+          ]
         }
       ]
     },
@@ -212,6 +285,63 @@ export const platformControlPlane = {
           "operation": "ListEnvironmentTopologies",
           "method": "GET",
           "path": "/v1/control-plane/platform/topology/environments",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ]
+    },
+    {
+      "object_kind": "snapshot",
+      "object_type": "runtime_cluster",
+      "label": "运行时集群",
+      "source_entity": "RuntimeCluster",
+      "view_model": "RuntimeCluster",
+      "risk_level": "medium",
+      "deployment_profile": "audit_heavy",
+      "operations": [
+        {
+          "operation": "ListRuntimeClusters",
+          "method": "GET",
+          "path": "/v1/control-plane/platform/topology/clusters",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ]
+    },
+    {
+      "object_kind": "snapshot",
+      "object_type": "runtime_service",
+      "label": "运行时服务",
+      "source_entity": "RuntimeService",
+      "view_model": "RuntimeService",
+      "risk_level": "medium",
+      "deployment_profile": "audit_heavy",
+      "operations": [
+        {
+          "operation": "ListRuntimeServices",
+          "method": "GET",
+          "path": "/v1/control-plane/platform/topology/services",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ]
+    },
+    {
+      "object_kind": "snapshot",
+      "object_type": "runtime_instance",
+      "label": "运行时实例",
+      "source_entity": "RuntimeInstance",
+      "view_model": "RuntimeInstance",
+      "risk_level": "medium",
+      "deployment_profile": "audit_heavy",
+      "operations": [
+        {
+          "operation": "ListRuntimeInstances",
+          "method": "GET",
+          "path": "/v1/control-plane/platform/topology/instances",
           "scopes": [
             "ops.platform.dependency.read"
           ]

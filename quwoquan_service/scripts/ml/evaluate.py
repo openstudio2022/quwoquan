@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Offline evaluation: load model and test samples, compute AUC/GAUC/NDCG@20/logloss.
+Offline evaluation: load model from registry (or explicit path) and test samples,
+compute AUC/GAUC/NDCG@20/logloss.
 
-Usage: python scripts/ml/evaluate.py --model-path /tmp/rec_models/content_feed_v*.txt
+Usage:
+    python scripts/ml/evaluate.py --scenario content_feed
+    python scripts/ml/evaluate.py --scenario content_feed --model-path /tmp/model.txt
 """
 import argparse
 import json
@@ -31,6 +34,8 @@ try:
     import lightgbm as lgb
 except ImportError:
     lgb = None
+
+from diversity_metrics import compute_diversity_metrics
 
 
 def _gauc(y_true, y_pred, user_ids):
@@ -61,11 +66,46 @@ def _extract_features(sample: dict) -> list[float]:
     return _ef(sample)
 
 
+def _resolve_model_path(db, scenario: str, explicit_path: str | None) -> str | None:
+    """Resolve model path: explicit > registry artifactUri > registry artifactPath."""
+    if explicit_path:
+        if os.path.exists(explicit_path):
+            return explicit_path
+        print(f"[evaluate] Explicit model path not found: {explicit_path}", file=sys.stderr)
+        return None
+
+    coll = db["rec_model_registry"]
+    doc = coll.find_one({"scenario": scenario}, sort=[("createdAt", -1)])
+    if not doc:
+        print(f"[evaluate] No model in registry for scenario={scenario}", file=sys.stderr)
+        return None
+
+    version = doc.get("version", "unknown")
+
+    artifact_uri = doc.get("artifactUri", "")
+    if artifact_uri:
+        try:
+            import artifact_store
+            local = artifact_store.download(artifact_uri)
+            print(f"[evaluate] Downloaded model v={version} from {artifact_uri}", file=sys.stderr)
+            return local
+        except Exception as e:
+            print(f"[evaluate] artifact download failed: {e}", file=sys.stderr)
+
+    artifact_path = doc.get("artifactPath", "")
+    if artifact_path and os.path.exists(artifact_path):
+        print(f"[evaluate] Using local model v={version} at {artifact_path}", file=sys.stderr)
+        return artifact_path
+
+    print(f"[evaluate] Model v={version} registered but artifact not accessible", file=sys.stderr)
+    return None
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--scenario", default="content_feed")
-    p.add_argument("--model-path", required=True, help="Path to LightGBM model file")
-    p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://localhost:27017"))
+    p.add_argument("--model-path", default=None, help="Explicit path to LightGBM model (optional; defaults to registry)")
+    p.add_argument("--mongodb-uri", default=os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true"))
     p.add_argument("--db", default="quwoquan_content")
     p.add_argument("--split", default="test", choices=["test", "val", "all"])
     args = p.parse_args()
@@ -77,18 +117,34 @@ def main():
         print("pip install lightgbm", file=sys.stderr)
         return 1
 
-    model = lgb.Booster(model_file=args.model_path)
-
     client = MongoClient(args.mongodb_uri)
     db = client[args.db]
+
+    model_path = _resolve_model_path(db, args.scenario, args.model_path)
+    if not model_path:
+        print("[evaluate] No model available — skipping evaluation", file=sys.stderr)
+        return 1
+
+    if model_path.endswith(".json"):
+        print(f"[evaluate] Skipping evaluation for fusion config JSON: {model_path}", file=sys.stderr)
+        print("[evaluate] Multi-objective models are evaluated inline during training", file=sys.stderr)
+        return 0
+
+    model = lgb.Booster(model_file=model_path)
+
     samples_coll = db["rec_training_samples"]
 
-    rows = list(samples_coll.find({"scenario": args.scenario}).sort("ts", 1))
+    sample_scenario = args.scenario
+    rows = list(samples_coll.find({"scenario": sample_scenario}).sort("ts", 1))
+    if not rows and args.scenario.endswith("_multiobjective"):
+        sample_scenario = args.scenario.removesuffix("_multiobjective")
+        rows = list(samples_coll.find({"scenario": sample_scenario}).sort("ts", 1))
     if not rows:
         print("No samples found", file=sys.stderr)
         return 1
+    if sample_scenario != args.scenario:
+        print(f"[evaluate] using samples from scenario={sample_scenario} for registry scenario={args.scenario}", file=sys.stderr)
 
-    # Time-split matching train.py
     n = len(rows)
     train_end = int(n * 0.70)
     val_end = int(n * 0.85)
@@ -124,10 +180,11 @@ def main():
     except ValueError:
         metrics["ndcg_20"] = 0.0
 
+    metrics.update(compute_diversity_metrics(eval_rows, list(y_pred), top_k=20))
+
     metrics["eval_size"] = len(eval_rows)
     metrics["positive_rate"] = round(float(y_true.mean()), 4)
 
-    # Dislike prediction accuracy
     y_dislike = np.array([float((r.get("labels") or {}).get("dislike", 0)) for r in eval_rows])
     if y_dislike.sum() > 0:
         dislike_pred = 1 - y_pred

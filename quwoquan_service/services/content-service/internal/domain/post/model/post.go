@@ -99,6 +99,7 @@ type Post struct {
 	Title                     string         `json:"title" bson:"title"`
 	Body                      string         `json:"body" bson:"body"`
 	Tags                      []string       `json:"tags" bson:"tags"`
+	EntityRefs                []string       `json:"entityRefs" bson:"entityRefs"`
 	MediaUrls                 []string       `json:"mediaUrls" bson:"mediaUrls"`
 	CoverUrl                  string         `json:"coverUrl" bson:"coverUrl"`
 	ArticleDocument           map[string]any `json:"articleDocument" bson:"articleDocument"`

@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -75,7 +74,7 @@ class MockInviteRepository implements InviteRepository {
 
 class RemoteInviteRepository implements InviteRepository {
   RemoteInviteRepository({CloudHttpClient? httpClient, String? baseUrl})
-    : _client = httpClient ?? CloudHttpClient(client: http.Client()),
+    : _client = httpClient ?? CloudHttpClient(),
       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _client;

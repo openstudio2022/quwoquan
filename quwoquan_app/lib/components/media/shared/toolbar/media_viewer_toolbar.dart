@@ -1,8 +1,8 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
@@ -46,16 +46,14 @@ class MediaViewerTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final verticalPadding = context.safeGetIntraGroupSpacing(SpacingSize.sm);
-    final statusBarTop = MediaQuery.of(context).padding.top;
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final topInset = AppSpacing.appChromeTopSafeInset(safeTop, context);
+    final vPad = AppSpacing.appChromeToolbarVerticalPadding(context);
     final showPositionInBar = showPosition && !_isBackOnly;
     final showAuthorInBar = !_isBackOnly;
 
     return Container(
-      padding: EdgeInsets.only(
-        top: statusBarTop + verticalPadding,
-        bottom: verticalPadding,
-      ),
+      padding: EdgeInsets.only(top: topInset, bottom: vPad),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -63,9 +61,14 @@ class MediaViewerTopBar extends StatelessWidget {
           colors: [AppColors.overlayStrong, AppColors.transparent],
         ),
       ),
-      child: ImmersiveViewerLayout.alignToRail(
-        context: context,
-        layoutSpec: layoutSpec,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal:
+              layoutSpec.horizontalInset -
+              (AppSpacing.appChromeActionButtonSize -
+                      AppSpacing.appChromeActionIconSize) /
+                  2,
+        ),
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -104,20 +107,13 @@ class MediaViewerTopBar extends StatelessWidget {
   }
 
   Widget _buildPositionIndicator(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.black.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-      ),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
       child: Text(
         positionText,
         style: TextStyle(
-          color: AppColors.white,
-          fontSize: AppTypography.sm,
+          color: AppColors.white.withValues(alpha: 0.9),
+          fontSize: AppTypography.base,
           fontWeight: AppTypography.semiBold,
         ),
       ),
@@ -233,20 +229,13 @@ class MediaViewerTopBar extends StatelessWidget {
 
   Widget _buildAvatar() {
     final avatarSize = AppSpacing.avatarUserSm;
-    if (authorAvatarUrl != null && authorAvatarUrl!.isNotEmpty) {
-      return CircleAvatar(
-        radius: avatarSize / 2,
-        backgroundImage: NetworkImage(authorAvatarUrl!),
-      );
-    }
-    return CircleAvatar(
-      radius: avatarSize / 2,
+    return RoundedSquareAvatar(
+      size: avatarSize,
+      imageUrl: authorAvatarUrl,
+      name: authorName,
+      borderRadius: avatarSize / 2,
       backgroundColor: AppColors.overlayMedium,
-      child: Icon(
-        Icons.person,
-        color: AppColors.white,
-        size: AppSpacing.iconMedium,
-      ),
+      fallbackIcon: Icons.person,
     );
   }
 
@@ -302,8 +291,8 @@ class ImmersiveToolbarIconButton extends StatelessWidget {
     this.foregroundColor = AppColors.white,
     this.backgroundColor,
     this.borderColor,
-    this.size = AppSpacing.minInteractiveSize,
-    this.iconSize = AppSpacing.iconMedium,
+    this.size = AppSpacing.appChromeActionButtonSize,
+    this.iconSize = AppSpacing.appChromeActionIconSize,
   });
 
   final IconData icon;
@@ -316,30 +305,24 @@ class ImmersiveToolbarIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fill = backgroundColor ?? AppColors.black.withValues(alpha: 0.24);
-    final outline = borderColor ?? AppColors.white.withValues(alpha: 0.14);
+    final fill = backgroundColor ?? AppColors.transparent;
+    final outline = borderColor ?? AppColors.transparent;
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: Size.square(size),
       onPressed: onPressed,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(
-            sigmaX: AppSpacing.sm,
-            sigmaY: AppSpacing.sm,
-          ),
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              color: fill,
-              shape: BoxShape.circle,
-              border: Border.all(color: outline, width: AppSpacing.hairline),
-            ),
-            child: Icon(icon, color: foregroundColor, size: iconSize),
-          ),
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: fill,
+          shape: BoxShape.circle,
+          border: outline == AppColors.transparent
+              ? null
+              : Border.all(color: outline, width: AppSpacing.hairline),
         ),
+        child: Icon(icon, color: foregroundColor, size: iconSize),
       ),
     );
   }
@@ -369,13 +352,19 @@ class MediaViewerBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPadding = context.safeGetIntraGroupSpacing(SpacingSize.sm);
-    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final vPad = AppSpacing.appChromeToolbarVerticalPadding(context);
+    final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final hSafeInset = AppSpacing.appChromeBottomSafeSideInset(
+      context,
+      safeBottom,
+    );
 
     return Container(
       padding: EdgeInsets.only(
-        top: context.safeGetIntraGroupSpacing(SpacingSize.sm),
-        bottom: safeBottom + bottomPadding,
+        left: hSafeInset,
+        top: vPad,
+        right: hSafeInset,
+        bottom: vPad + safeBottom,
       ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -392,9 +381,11 @@ class MediaViewerBottomBar extends StatelessWidget {
               child: _buildActionSlot(
                 context,
                 iconWidget: Icon(
-                  isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                  isLiked
+                      ? FluentIcons.heart_24_filled
+                      : FluentIcons.heart_24_regular,
                   color: isLiked ? AppColors.error : AppColors.white,
-                  size: AppSpacing.iconMedium,
+                  size: AppSpacing.bottomNavItemIconSize,
                 ),
                 count: likeCount,
                 onTap: onLike,
@@ -404,9 +395,9 @@ class MediaViewerBottomBar extends StatelessWidget {
               child: _buildActionSlot(
                 context,
                 iconWidget: Icon(
-                  CupertinoIcons.arrowshape_turn_up_right,
+                  FluentIcons.share_24_regular,
                   color: AppColors.white,
-                  size: AppSpacing.iconMedium,
+                  size: AppSpacing.bottomNavItemIconSize,
                 ),
                 count: shareCount,
                 onTap: onShare,
@@ -416,8 +407,8 @@ class MediaViewerBottomBar extends StatelessWidget {
               child: _buildActionSlot(
                 context,
                 iconWidget: AppBubbleIcon(
-                  size: AppSpacing.iconMedium,
                   color: AppColors.white,
+                  size: AppSpacing.bottomNavItemIconSize,
                 ),
                 count: commentCount,
                 onTap: onComment,
@@ -464,7 +455,7 @@ class MediaViewerActionButton extends StatelessWidget {
         vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
         horizontal: context.safeGetIntraGroupSpacing(SpacingSize.xs),
       ),
-      minimumSize: Size.zero,
+      minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
       onPressed: onTap,
       child: Row(
         mainAxisSize: MainAxisSize.min,

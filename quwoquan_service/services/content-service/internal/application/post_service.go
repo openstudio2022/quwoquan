@@ -13,7 +13,10 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	rterr "quwoquan_service/runtime/errors"
+	rtobs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/runtime/repository"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
@@ -312,7 +315,11 @@ func canViewPost(post *postmodel.Post, viewerID string, viewerCircleIDs []string
 	}
 }
 
-func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*postmodel.Post, error) {
+func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (result *postmodel.Post, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "content.CreatePost",
+		attribute.String("content.type", strings.TrimSpace(asString(payload["contentType"]))))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	contentType := strings.TrimSpace(asString(payload["contentType"]))
 	if contentType == "" {
 		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "contentType 必填", "missing contentType")
@@ -349,6 +356,7 @@ func (s *PostService) CreatePost(ctx context.Context, payload map[string]any) (*
 		Title:               strings.TrimSpace(asString(payload["title"])),
 		Body:                strings.TrimSpace(asString(payload["body"])),
 		Tags:                asStringSlice(payload["tags"]),
+		EntityRefs:          asStringSlice(payload["entityRefs"]),
 		MediaUrls:           asStringSlice(payload["mediaUrls"]),
 		CoverUrl:            strings.TrimSpace(asString(payload["coverUrl"])),
 		VideoUrl:            strings.TrimSpace(asString(payload["videoUrl"])),
@@ -556,7 +564,11 @@ func (s *PostService) UpdatePost(ctx context.Context, id string, payload map[str
 	return post, nil
 }
 
-func (s *PostService) PublishPost(ctx context.Context, postID string, payload map[string]any) (*postmodel.Post, error) {
+func (s *PostService) PublishPost(ctx context.Context, postID string, payload map[string]any) (result *postmodel.Post, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "content.PublishPost",
+		attribute.String("post.id", postID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
 		return nil, rterr.NewAppError(
@@ -614,6 +626,8 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"circleIds":          asStringSlice(post.CircleIds),
 				"assistantUsePolicy": post.AssistantUsePolicy,
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
+				"tags":               asStringSlice(post.Tags),
+				"entityRefs":         asStringSlice(post.EntityRefs),
 			},
 			OccurredAt: now.Format(time.RFC3339),
 		})
@@ -633,6 +647,8 @@ func (s *PostService) PublishPost(ctx context.Context, postID string, payload ma
 				"circleIds":          asStringSlice(post.CircleIds),
 				"assistantUsePolicy": post.AssistantUsePolicy,
 				"publishedAt":        post.PublishedAt.Format(time.RFC3339),
+				"tags":               asStringSlice(post.Tags),
+				"entityRefs":         asStringSlice(post.EntityRefs),
 			},
 			OccurredAt: now,
 		})
@@ -1301,6 +1317,9 @@ func (s *PostService) GetPostForViewer(
 	postID, viewerID string,
 	viewerCircleIDs []string,
 ) (*postmodel.Post, bool, bool, bool) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "content.GetPostForViewer",
+		attribute.String("post.id", postID))
+	defer func() { rtobs.EndSpan(span, nil) }()
 	post, ok, deleted := s.GetPostOrTombstone(ctx, postID)
 	if !ok {
 		return nil, false, deleted, false
@@ -2442,6 +2461,13 @@ func (s *PostService) SearchPosts(
 	ctx context.Context,
 	req SearchPostsRequest,
 ) ([]postmodel.PostSearchItemView, string, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "content.SearchPosts",
+		attribute.String("search.query", req.Query),
+		attribute.String("search.identity", req.Identity),
+		attribute.String("search.requested_type", req.RequestedType))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	limit := req.Limit
 	if limit <= 0 {
 		limit = 20

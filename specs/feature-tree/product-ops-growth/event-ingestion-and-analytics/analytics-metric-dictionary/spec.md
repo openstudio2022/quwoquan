@@ -84,6 +84,34 @@
 - 用户可见体验指标与训练指标共享口径，但可有不同聚合层。
 - 指标名称、分组与含义必须稳定，版本升级必须记录兼容策略。
 
+## 五栏小趣 L1-L4 指标口径
+
+本节冻结“五栏全局小趣”收口后的四层指标唯一口径，供 App 埋点、服务端 RED 指标、product-ops 汇总和 ops-portal 看板共同消费。
+
+| 层级 | 主口径 | 核心指标 | 必带维度 |
+| --- | --- | --- | --- |
+| L1 产品结果 | 用户是否形成“遇见同趣”的核心旅程 | `five_tab_journey_completion_rate`、`xiaoqu_entry_to_reply_rate`、`campus_or_travel_homepage_open_rate`、`same_interest_circle_join_rate` | `surfaceId`、`routeId`、`feedRequestId`、`primaryDomain` |
+| L2 业务质量 | 内容、圈子、主页、消息是否形成闭环 | `featured_ctr`、`circle_scenario_ctr`、`homepage_content_attach_rate`、`xiaoqu_comment_accept_rate`、`message_delivery_clickback_rate` | `feedType`、`circleId`、`homepageId`、`topicId`、`conversationId` |
+| L3 系统健康 | 端云请求和推荐链路是否稳定 | `api_red_requests_total`、`api_red_error_rate`、`api_red_duration_p95_ms`、`recommendation_recall_hit_rate`、`assistant_reply_latency_p95_ms` | `service`、`operationId`、`runtimeEnv`、`statusCode` |
+| L4 基础设施 | 存储、队列、网关、监控是否支撑 beta 验证 | `gateway_up`、`ops_portal_up`、`product_ops_up`、`queue_lag_seconds`、`redis_latency_p95_ms`、`mongo_latency_p95_ms` | `component`、`region`、`runtimeEnv`、`instanceId` |
+
+### SLO 基线
+
+- L1：T4 旅程 `首页精品 -> 圈子校园 -> 北京大学主页 -> 评论 @小趣 -> 消息承接 -> ops 可见` 完成率 beta ≥ 90%。
+- L2：推荐 surface `featured / circle / campus / travel / homepage_detail / search_xiaoqu` 均必须上报曝光、点击、CTR 和停留；缺任一维度视为看板不可发布。
+- L3：核心 API RED p95 < 800ms，错误率 < 1%；assistant 评论回复 p95 < 5s；recommendation recall hit rate ≥ 95%。
+- L4：`gateway / product-ops / ops-portal / observability` beta health check 可用率 ≥ 99%，队列延迟 p95 < 30s。
+
+### 埋点事件覆盖
+
+- 底栏切换：`app.bottom_tab.switch`，维度 `fromTab / toTab / routeId`。
+- Surface 展示：`surface.view`，维度 `surfaceId / routeId / pageVisitId`。
+- Feed 曝光：`feed.impression`，维度 `feedRequestId / feedType / surfaceId / itemId / rank`。
+- 实体主页打开：`homepage.open`，维度 `homepageId / homepageType / sourceSurface`。
+- 问小趣：`xiaoqu.open`，维度 `assistantOpenContext / routeId / surfaceId`。
+- 评论/群聊 `@小趣`：`xiaoqu.mention.triggered`，维度 `postId / commentId / conversationId / circleId / homepageId`。
+- 创作绑定实体：`content.homepage.attach`，维度 `postId / homepageId / bindPosition`。
+
 ## 验收标准
 
 - A1：体验/行为/QoE/社交/分享/实体/学习/实验/运营九大指标域完整登记。

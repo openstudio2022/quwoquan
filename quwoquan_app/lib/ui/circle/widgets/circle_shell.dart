@@ -10,6 +10,7 @@ import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
@@ -205,7 +206,11 @@ class _CircleShellState extends ConsumerState<CircleShell> {
   }
 
   double _toolbarHeight(BuildContext context) {
-    return MediaQuery.paddingOf(context).top + kToolbarHeight;
+    return AppSpacing.appChromeTopSafeInset(
+          MediaQuery.viewPaddingOf(context).top,
+          context,
+        ) +
+        AppSpacing.appChromeTopBarHeight(context);
   }
 
   double _pinTransitionDistance() {
@@ -660,6 +665,11 @@ class _CircleShellState extends ConsumerState<CircleShell> {
               tags: circle?.tags ?? const [],
               badgeLabel: _badgeLabel(state),
               metaLine: _metaLine(state),
+              onTagTap: (tag) {
+                ref
+                    .read(contentEngagementTrackerProvider)
+                    .trackTagClick(tag, fromContentId: widget.circleId);
+              },
             ),
             SizedBox(height: AppSpacing.md),
             Wrap(
@@ -798,8 +808,12 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     required double identityOpacity,
     required double backgroundOpacity,
   }) {
-    final topPadding = MediaQuery.paddingOf(context).top;
-    final slotWidth = AppSpacing.minInteractiveSize + AppSpacing.containerXs;
+    final topPadding = AppSpacing.appChromeTopSafeInset(
+      MediaQuery.viewPaddingOf(context).top,
+      context,
+    );
+    final slotWidth =
+        AppSpacing.appChromeActionButtonSize + AppSpacing.containerXs;
     final chrome = Color.lerp(
       AppColors.transparent,
       AppColors.iosSystemBackground(context),
@@ -808,9 +822,10 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final compactForeground = backgroundOpacity > 0.12
         ? fg
         : CupertinoColors.white;
-    final tintFill = backgroundOpacity > 0.14
-        ? AppColors.iosSecondaryFill(context)
-        : AppColors.black.withValues(alpha: 0.24);
+    final actionBackground =
+        AppNavigationSemanticConstants.chromeActionBackground(
+          surface: AppChromeSurface.overlay,
+        );
 
     return Positioned(
       top: 0,
@@ -839,7 +854,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxWidth),
                 child: SizedBox(
-                  height: kToolbarHeight,
+                  height: AppSpacing.appChromeTopBarHeight(context),
                   child: Row(
                     children: [
                       SizedBox(
@@ -853,7 +868,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                                 () {
                                   Navigator.of(context).maybePop();
                                 },
-                            backgroundColor: tintFill,
+                            backgroundColor: actionBackground,
                             foregroundColor: compactForeground,
                           ),
                         ),
@@ -870,7 +885,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                             children: [
                               CircleAvatar(
                                 radius: AppSpacing.avatarUserSm / 2,
-                                backgroundColor: tintFill,
+                                backgroundColor: actionBackground,
                                 backgroundImage:
                                     avatarUrl != null && avatarUrl.isNotEmpty
                                     ? NetworkImage(avatarUrl)
@@ -911,7 +926,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
                               context,
                               circleName: circleName,
                             ),
-                            backgroundColor: tintFill,
+                            backgroundColor: actionBackground,
                             foregroundColor: compactForeground,
                           ),
                         ),
@@ -1218,18 +1233,22 @@ class _CircleToolbarButton extends StatelessWidget {
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: const Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
+        AppSpacing.appChromeActionButtonSize,
+        AppSpacing.appChromeActionButtonSize,
       ),
       onPressed: onPressed,
       child: Container(
-        width: AppSpacing.minInteractiveSize,
-        height: AppSpacing.minInteractiveSize,
+        width: AppSpacing.appChromeActionButtonSize,
+        height: AppSpacing.appChromeActionButtonSize,
         decoration: BoxDecoration(
           color: backgroundColor,
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: AppSpacing.iconMedium, color: foregroundColor),
+        child: Icon(
+          icon,
+          size: AppSpacing.appChromeActionIconSize,
+          color: foregroundColor,
+        ),
       ),
     );
   }

@@ -15,7 +15,7 @@
 | **app_pipeline.yml** | `v*` tag、手动 | macOS 构建（主干门禁已由 03/04/05 负责） | G2 / 发布 |
 | **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
 | **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
-| **deploy-prod-gray.yml** | 手动 | 半自动 prod 灰度 | G5c |
+| **deploy-prod.yml** | 手动 | 半自动 prod 发布 | G5c |
 | **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 占位链路 | G5c |
 | **deploy-gamma-ecs.yml** | 手动 | gamma / onebox 手动发布与复验 | G5a→G5b |
 | **ecs-onebox-rollback.yml** | 手动 | ECS onebox 备份回滚 | 运维 |

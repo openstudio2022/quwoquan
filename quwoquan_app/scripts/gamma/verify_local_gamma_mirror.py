@@ -100,7 +100,7 @@ def main() -> int:
                 "T4": t4,
             },
             "cloudGateReminder": (
-                "Local gamma mirror does not replace cloud gamma, prod-gray SLO, "
+                "Local gamma mirror does not replace cloud gamma, prod SLO, "
                 "rollback drill, or prod observability gates."
             ),
         }

@@ -125,6 +125,14 @@
 - **聊天图片/视频/语音/文件**：沿 runtime media 统一上传与对象存储引用模型，后续按业务保留期管理
 - **默认群图标**：作为客户端静态兜底资源，不进入媒体资产主链路
 
+## 资源缓存与对象引用合同
+
+- App 侧资源缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，资源策略以 [`object-cache-policy.yaml`](../runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml) 中 `MediaResource` 为准。
+- runtime-media 只定义 `AssetRef / MediaAsset / objectKey / version / variant`；业务对象决定资源是否应被 `pinned`、`recent` 或 `ephemeral` 保留。
+- 头像、封面、正文图、视频缩略图必须通过统一资源入口加载；业务页面不得直接拼 CDN URL、不得直接使用裸 `Image.network` / `NetworkImage` / `CachedNetworkImage`。
+- 用户执行“清理临时图片和视频”时，资源层只删除可重建字节；业务对象中的 `resourceRefs`、版本号、标题正文等 metadata 必须保留。
+- 资源字节不作为业务新鲜度真相源：用户头像跟随 `avatarVersion`，群头像跟随 `groupAvatarVersion`，post 媒体跟随 post media version 或 `updatedAt`。
+
 ## 小趣 / 权限 / 分享边界
 
 - 本 Journey 不通过 runtime 垂类特判或字符串硬编码兼容任何助手特例

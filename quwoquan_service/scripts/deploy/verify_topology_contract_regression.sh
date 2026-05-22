@@ -20,13 +20,11 @@ ruby -ryaml -e '
   alpha = envs["alpha"] || {}
   beta = envs["beta"] || {}
   gamma = envs["gamma"] || {}
-  prod_gray = envs["prod-gray"] || {}
   prod = envs["prod"] || {}
 
   fail("alpha mapping must not be empty") if alpha.empty?
   fail("beta mapping must not be empty") if beta.empty?
   fail("gamma mapping must not be empty") if gamma.empty?
-  fail("prod-gray mapping must not be empty") if prod_gray.empty?
   fail("prod mapping must not be empty") if prod.empty?
 
   alpha.each do |proc_name, proc_cfg|
@@ -38,14 +36,12 @@ ruby -ryaml -e '
 
   rec_beta = (beta["recommendation-service"] || {})["domains"] || []
   rec_gamma = (gamma["recommendation-service"] || {})["domains"] || []
-  rec_prod_gray = (prod_gray["recommendation-service"] || {})["domains"] || []
   rec_prod = (prod["recommendation-service"] || {})["domains"] || []
   fail("beta recommendation-service must map to [recommendation]") unless rec_beta == ["recommendation"]
   fail("gamma recommendation-service must map to [recommendation]") unless rec_gamma == ["recommendation"]
-  fail("prod-gray recommendation-service must map to [recommendation]") unless rec_prod_gray == ["recommendation"]
   fail("prod recommendation-service must map to [recommendation]") unless rec_prod == ["recommendation"]
 
-  {"beta" => beta, "gamma" => gamma, "prod-gray" => prod_gray, "prod" => prod}.each do |env, process_map|
+  {"beta" => beta, "gamma" => gamma, "prod" => prod}.each do |env, process_map|
     seed_box_domains = (process_map["seed-box"] || {})["domains"] || []
     fail("#{env}.seed-box missing") if seed_box_domains.empty?
     if seed_box_domains.include?("recommendation")

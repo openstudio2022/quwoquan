@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_detail_shell.dart';
@@ -15,11 +16,13 @@ class HomepageDetailPage extends ConsumerStatefulWidget {
     required this.homepageId,
     this.selectionMode = false,
     this.initialSummary,
+    this.referralSource = ReferralSource.entityPage,
   });
 
   final String homepageId;
   final bool selectionMode;
   final HomepageSummary? initialSummary;
+  final ReferralSource referralSource;
 
   @override
   ConsumerState<HomepageDetailPage> createState() => _HomepageDetailPageState();
@@ -36,6 +39,14 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   void initState() {
     super.initState();
     unawaited(_load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(contentEngagementTrackerProvider).trackEntityPageView(
+          widget.homepageId,
+          from: widget.referralSource,
+        );
+      }
+    });
   }
 
   @override

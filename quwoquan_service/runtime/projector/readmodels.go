@@ -3,26 +3,29 @@ package projector
 import (
 	"context"
 	"log/slog"
-	"time"
-
-	"go.mongodb.org/mongo-driver/v2/bson"
-	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/runtime/eventstore"
 )
 
+// ReadModelStore is the storage-agnostic interface for projector read models.
+// Infrastructure implementations (MongoDB, PostgreSQL, etc.) satisfy this
+// interface and are injected at composition root.
+type ReadModelStore interface {
+	Upsert(ctx context.Context, collection string, id string, setFields map[string]any, setOnInsertFields map[string]any) error
+	UpdateFields(ctx context.Context, collection string, id string, setFields map[string]any) error
+	IncrementField(ctx context.Context, collection string, id string, field string, delta int) error
+	IncrementFieldWithSet(ctx context.Context, collection string, id string, field string, delta int, setFields map[string]any) error
+	DeleteByID(ctx context.Context, collection string, id string) error
+}
+
 // DiscoveryFeedProjector builds the discovery feed read model.
 type DiscoveryFeedProjector struct {
-	coll   *mongo.Collection
+	store  ReadModelStore
 	logger *slog.Logger
 }
 
-func NewDiscoveryFeedProjector(db *mongo.Database, logger *slog.Logger) *DiscoveryFeedProjector {
-	return &DiscoveryFeedProjector{
-		coll:   db.Collection("discovery_feed"),
-		logger: logger,
-	}
+func NewDiscoveryFeedProjector(store ReadModelStore, logger *slog.Logger) *DiscoveryFeedProjector {
+	return &DiscoveryFeedProjector{store: store, logger: logger}
 }
 
 func (p *DiscoveryFeedProjector) Name() string { return "DiscoveryFeedProjector" }
@@ -47,41 +50,33 @@ func (p *DiscoveryFeedProjector) Project(ctx context.Context, event eventstore.S
 }
 
 func (p *DiscoveryFeedProjector) upsertFeedItem(ctx context.Context, event eventstore.StoredEvent) error {
-	postID := event.AggregateID
-	doc := bson.M{
-		"$set": bson.M{
-			"postId":      postID,
+	return p.store.Upsert(ctx, "discovery_feed", event.AggregateID,
+		map[string]any{
+			"postId":      event.AggregateID,
 			"authorId":    event.Payload["authorId"],
 			"contentType": event.Payload["contentType"],
 			"title":       event.Payload["title"],
 			"tags":        event.Payload["tags"],
 			"publishedAt": event.OccurredAt,
-			"updatedAt":   time.Now().UTC(),
 		},
-		"$setOnInsert": bson.M{
-			"_id":       postID,
-			"createdAt": time.Now().UTC(),
+		map[string]any{
+			"_id": event.AggregateID,
 		},
-	}
-	opts := options.UpdateOne().SetUpsert(true)
-	_, err := p.coll.UpdateOne(ctx, bson.M{"_id": postID}, doc, opts)
-	return err
+	)
 }
 
 func (p *DiscoveryFeedProjector) updateFeedItem(ctx context.Context, event eventstore.StoredEvent) error {
-	set := bson.M{"updatedAt": time.Now().UTC()}
+	set := map[string]any{}
 	for _, key := range []string{"title", "tags", "body"} {
 		if v, ok := event.Payload[key]; ok {
 			set[key] = v
 		}
 	}
-	_, err := p.coll.UpdateOne(ctx, bson.M{"_id": event.AggregateID}, bson.M{"$set": set})
-	return err
+	return p.store.UpdateFields(ctx, "discovery_feed", event.AggregateID, set)
 }
 
 func (p *DiscoveryFeedProjector) removeFeedItem(ctx context.Context, event eventstore.StoredEvent) error {
-	_, err := p.coll.DeleteOne(ctx, bson.M{"_id": event.AggregateID})
-	return err
+	return p.store.DeleteByID(ctx, "discovery_feed", event.AggregateID)
 }
 
 func (p *DiscoveryFeedProjector) updateEngagement(ctx context.Context, event eventstore.StoredEvent) error {
@@ -90,25 +85,17 @@ func (p *DiscoveryFeedProjector) updateEngagement(ctx context.Context, event eve
 		return nil
 	}
 	action, _ := event.Payload["action"].(string)
-	field := "engagement." + action + "Count"
-	_, err := p.coll.UpdateOne(ctx,
-		bson.M{"_id": postID},
-		bson.M{"$inc": bson.M{field: 1}},
-	)
-	return err
+	return p.store.IncrementField(ctx, "discovery_feed", postID, "engagement."+action+"Count", 1)
 }
 
 // ChatInboxProjector builds the chat inbox read model.
 type ChatInboxProjector struct {
-	coll   *mongo.Collection
+	store  ReadModelStore
 	logger *slog.Logger
 }
 
-func NewChatInboxProjector(db *mongo.Database, logger *slog.Logger) *ChatInboxProjector {
-	return &ChatInboxProjector{
-		coll:   db.Collection("chat_inbox"),
-		logger: logger,
-	}
+func NewChatInboxProjector(store ReadModelStore, logger *slog.Logger) *ChatInboxProjector {
+	return &ChatInboxProjector{store: store, logger: logger}
 }
 
 func (p *ChatInboxProjector) Name() string { return "ChatInboxProjector" }
@@ -133,25 +120,17 @@ func (p *ChatInboxProjector) onMessageSent(ctx context.Context, event eventstore
 	if convID == "" {
 		return nil
 	}
-
-	doc := bson.M{
-		"$set": bson.M{
+	return p.store.Upsert(ctx, "chat_inbox", convID,
+		map[string]any{
 			"conversationId":  convID,
 			"lastMessageAt":   event.OccurredAt,
 			"lastMessageText": event.Payload["content"],
 			"lastSenderId":    event.Payload["senderId"],
 		},
-		"$inc": bson.M{
-			"unreadCount": 1,
+		map[string]any{
+			"_id": convID,
 		},
-		"$setOnInsert": bson.M{
-			"_id":       convID,
-			"createdAt": time.Now().UTC(),
-		},
-	}
-	opts := options.UpdateOne().SetUpsert(true)
-	_, err := p.coll.UpdateOne(ctx, bson.M{"_id": convID}, doc, opts)
-	return err
+	)
 }
 
 func (p *ChatInboxProjector) onMessageRead(ctx context.Context, event eventstore.StoredEvent) error {
@@ -159,24 +138,17 @@ func (p *ChatInboxProjector) onMessageRead(ctx context.Context, event eventstore
 	if convID == "" {
 		return nil
 	}
-	_, err := p.coll.UpdateOne(ctx,
-		bson.M{"_id": convID},
-		bson.M{"$set": bson.M{"unreadCount": 0}},
-	)
-	return err
+	return p.store.UpdateFields(ctx, "chat_inbox", convID, map[string]any{"unreadCount": 0})
 }
 
 // UserProfileViewProjector builds the unified user profile view.
 type UserProfileViewProjector struct {
-	coll   *mongo.Collection
+	store  ReadModelStore
 	logger *slog.Logger
 }
 
-func NewUserProfileViewProjector(db *mongo.Database, logger *slog.Logger) *UserProfileViewProjector {
-	return &UserProfileViewProjector{
-		coll:   db.Collection("user_profile_view"),
-		logger: logger,
-	}
+func NewUserProfileViewProjector(store ReadModelStore, logger *slog.Logger) *UserProfileViewProjector {
+	return &UserProfileViewProjector{store: store, logger: logger}
 }
 
 func (p *UserProfileViewProjector) Name() string { return "UserProfileViewProjector" }
@@ -196,45 +168,32 @@ func (p *UserProfileViewProjector) Project(ctx context.Context, event eventstore
 
 	switch event.Type {
 	case "UserRegistered":
-		doc := bson.M{
-			"$set": bson.M{
+		return p.store.Upsert(ctx, "user_profile_view", userID,
+			map[string]any{
 				"userId":    userID,
 				"nickname":  event.Payload["nickname"],
 				"createdAt": event.OccurredAt,
 			},
-			"$setOnInsert": bson.M{"_id": userID},
-		}
-		opts := options.UpdateOne().SetUpsert(true)
-		_, err := p.coll.UpdateOne(ctx, bson.M{"_id": userID}, doc, opts)
-		return err
-
+			map[string]any{"_id": userID},
+		)
 	case "ProfileUpdated":
-		set := bson.M{"updatedAt": time.Now().UTC()}
+		set := map[string]any{}
 		for _, key := range []string{"nickname", "bio", "avatarUrl", "tags"} {
 			if v, ok := event.Payload[key]; ok {
 				set[key] = v
 			}
 		}
-		_, err := p.coll.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$set": set})
-		return err
-
+		return p.store.UpdateFields(ctx, "user_profile_view", userID, set)
 	case "FollowCreated":
-		_, err := p.coll.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$inc": bson.M{"followingCount": 1}})
-		return err
-
+		return p.store.IncrementField(ctx, "user_profile_view", userID, "followingCount", 1)
 	case "FollowDeleted":
-		_, err := p.coll.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$inc": bson.M{"followingCount": -1}})
-		return err
-
+		return p.store.IncrementField(ctx, "user_profile_view", userID, "followingCount", -1)
 	case "ContentReacted":
 		action, _ := event.Payload["action"].(string)
 		if action != "" {
-			field := "stats." + action + "Count"
-			_, err := p.coll.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{"$inc": bson.M{field: 1}})
-			return err
+			return p.store.IncrementField(ctx, "user_profile_view", userID, "stats."+action+"Count", 1)
 		}
 		return nil
-
 	default:
 		return nil
 	}
@@ -242,15 +201,12 @@ func (p *UserProfileViewProjector) Project(ctx context.Context, event eventstore
 
 // RecommendFeatureProjector builds the recommendation feature wide table.
 type RecommendFeatureProjector struct {
-	coll   *mongo.Collection
+	store  ReadModelStore
 	logger *slog.Logger
 }
 
-func NewRecommendFeatureProjector(db *mongo.Database, logger *slog.Logger) *RecommendFeatureProjector {
-	return &RecommendFeatureProjector{
-		coll:   db.Collection("recommend_features"),
-		logger: logger,
-	}
+func NewRecommendFeatureProjector(store ReadModelStore, logger *slog.Logger) *RecommendFeatureProjector {
+	return &RecommendFeatureProjector{store: store, logger: logger}
 }
 
 func (p *RecommendFeatureProjector) Name() string { return "RecommendFeatureProjector" }
@@ -262,53 +218,34 @@ func (p *RecommendFeatureProjector) EventTypes() []string {
 func (p *RecommendFeatureProjector) Project(ctx context.Context, event eventstore.StoredEvent) error {
 	switch event.Type {
 	case "PostCreated", "PostPublished":
-		postID := event.AggregateID
-		doc := bson.M{
-			"$set": bson.M{
-				"postId":      postID,
+		return p.store.Upsert(ctx, "recommend_features", event.AggregateID,
+			map[string]any{
+				"postId":      event.AggregateID,
 				"authorId":    event.Payload["authorId"],
 				"contentType": event.Payload["contentType"],
 				"tags":        event.Payload["tags"],
 				"publishedAt": event.OccurredAt,
 			},
-			"$setOnInsert": bson.M{
-				"_id":          postID,
+			map[string]any{
+				"_id":          event.AggregateID,
 				"viewCount":    0,
 				"likeCount":    0,
 				"commentCount": 0,
 			},
-		}
-		opts := options.UpdateOne().SetUpsert(true)
-		_, err := p.coll.UpdateOne(ctx, bson.M{"_id": postID}, doc, opts)
-		return err
-
+		)
 	case "ContentReacted":
 		postID, _ := event.Payload["postId"].(string)
 		if postID == "" {
 			return nil
 		}
 		action, _ := event.Payload["action"].(string)
-		field := action + "Count"
-		_, err := p.coll.UpdateOne(ctx,
-			bson.M{"_id": postID},
-			bson.M{
-				"$inc": bson.M{field: 1},
-				"$set": bson.M{"lastEngagementAt": time.Now().UTC()},
-			},
-		)
-		return err
-
+		return p.store.IncrementFieldWithSet(ctx, "recommend_features", postID, action+"Count", 1, nil)
 	case "ContentViewed":
 		postID, _ := event.Payload["postId"].(string)
 		if postID == "" {
 			return nil
 		}
-		_, err := p.coll.UpdateOne(ctx,
-			bson.M{"_id": postID},
-			bson.M{"$inc": bson.M{"viewCount": 1}},
-		)
-		return err
-
+		return p.store.IncrementField(ctx, "recommend_features", postID, "viewCount", 1)
 	default:
 		return nil
 	}

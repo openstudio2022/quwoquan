@@ -5,11 +5,29 @@ import (
 	"log"
 	"sync/atomic"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	redisOpsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "redis",
+		Name:      "operations_total",
+		Help:      "Total Redis operations by scene and status.",
+	}, []string{"scene", "status"})
+
+	redisDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "redis",
+		Name:      "duration_seconds",
+		Help:      "Redis operation latency in seconds.",
+		Buckets:   []float64{0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1},
+	}, []string{"scene", "command"})
 )
 
 // MetricsCollector records per-scene Redis operation metrics.
-// Default implementation uses atomic counters + periodic log output.
-// Replace with Prometheus collectors when the project adopts it.
+// Bridges to Prometheus counters/histograms and retains atomic snapshots
+// for backward-compatible periodic log output.
 type MetricsCollector struct {
 	scenes map[string]*sceneMetrics
 }
@@ -40,9 +58,21 @@ func (mc *MetricsCollector) Record(scene string, dur time.Duration, err error) {
 	}
 	sm.ops.Add(1)
 	sm.totalNs.Add(int64(dur))
+
+	status := "ok"
 	if err != nil {
 		sm.errors.Add(1)
+		status = "error"
 	}
+
+	redisOpsTotal.WithLabelValues(scene, status).Inc()
+	redisDurationSeconds.WithLabelValues(scene, "op").Observe(dur.Seconds())
+}
+
+// RecordCommand records an operation with an explicit command name for finer granularity.
+func (mc *MetricsCollector) RecordCommand(scene, command string, dur time.Duration, err error) {
+	mc.Record(scene, dur, err)
+	redisDurationSeconds.WithLabelValues(scene, command).Observe(dur.Seconds())
 }
 
 // Snapshot returns a point-in-time snapshot of all scene metrics.

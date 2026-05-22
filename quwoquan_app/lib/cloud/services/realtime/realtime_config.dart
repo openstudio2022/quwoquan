@@ -35,12 +35,16 @@ class RealtimeConfig {
   factory RealtimeConfig.fromMap(Map<String, dynamic> map) {
     return RealtimeConfig(
       wsUrl: map['wsUrl'] as String? ?? '',
-      heartbeatIntervalSec: (map['heartbeatIntervalSec'] as num?)?.toInt() ?? 15,
+      heartbeatIntervalSec:
+          (map['heartbeatIntervalSec'] as num?)?.toInt() ?? 15,
       wsIdleTimeoutSec: (map['wsIdleTimeoutSec'] as num?)?.toInt() ?? 120,
       longPollHoldSec: (map['longPollHoldSec'] as num?)?.toInt() ?? 60,
-      maxReconnectAttempts: (map['maxReconnectAttempts'] as num?)?.toInt() ?? 10,
-      reconnectBaseDelayMs: (map['reconnectBaseDelayMs'] as num?)?.toInt() ?? 1000,
-      reconnectMaxDelayMs: (map['reconnectMaxDelayMs'] as num?)?.toInt() ?? 30000,
+      maxReconnectAttempts:
+          (map['maxReconnectAttempts'] as num?)?.toInt() ?? 10,
+      reconnectBaseDelayMs:
+          (map['reconnectBaseDelayMs'] as num?)?.toInt() ?? 1000,
+      reconnectMaxDelayMs:
+          (map['reconnectMaxDelayMs'] as num?)?.toInt() ?? 30000,
     );
   }
 }

@@ -10,7 +10,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_request_p
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 
 /// Callback for incoming realtime events from long-polling.
-typedef LongPollEventCallback = void Function(List<Map<String, dynamic>> events);
+typedef LongPollEventCallback =
+    void Function(List<Map<String, dynamic>> events);
 
 /// Long-polling transport for idle (app foreground, no active chat) state.
 /// Polls `GET /v1/chat/realtime/poll` with long-hold semantics.
@@ -45,15 +46,18 @@ class LongPollTransport {
   Future<void> _poll() async {
     while (_running && !_disposed) {
       try {
-        final url = Uri.parse(
-          '${CloudRuntimeConfig.gatewayBaseUrl}${RealtimeApiMetadata.longPollPath}',
-        ).replace(
-          queryParameters: <String, String>{
-            'userId': userId,
-            'hold': '${config.longPollHoldSec}',
-          },
+        final url =
+            Uri.parse(
+              '${CloudRuntimeConfig.gatewayBaseUrl}${RealtimeApiMetadata.longPollPath}',
+            ).replace(
+              queryParameters: <String, String>{
+                'userId': userId,
+                'hold': '${config.longPollHoldSec}',
+              },
+            );
+        final headers = CloudRequestHeaders.forPage(
+          RealtimeRequestPageIds.longPoll,
         );
-        final headers = CloudRequestHeaders.forPage(RealtimeRequestPageIds.longPoll);
         final resp = await _client
             .get(url, headers: headers)
             .timeout(Duration(seconds: config.longPollHoldSec + 10));
@@ -81,7 +85,10 @@ class LongPollTransport {
 
       if (_consecutiveErrors >= _maxConsecutiveErrors) {
         final backoff = Duration(
-          seconds: (_consecutiveErrors - _maxConsecutiveErrors + 1).clamp(5, 30),
+          seconds: (_consecutiveErrors - _maxConsecutiveErrors + 1).clamp(
+            5,
+            30,
+          ),
         );
         await Future<void>.delayed(backoff);
       }

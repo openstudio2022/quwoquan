@@ -17,11 +17,19 @@ type ElasticsearchEventMirror struct {
 	client  *http.Client
 }
 
-func NewElasticsearchEventMirror(baseURL string) *ElasticsearchEventMirror {
-	return &ElasticsearchEventMirror{
+func NewElasticsearchEventMirror(baseURL string, opts ...func(*ElasticsearchEventMirror)) *ElasticsearchEventMirror {
+	m := &ElasticsearchEventMirror{
 		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		client:  &http.Client{Timeout: 5 * time.Second},
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+func WithESHTTPClient(c *http.Client) func(*ElasticsearchEventMirror) {
+	return func(m *ElasticsearchEventMirror) { m.client = c }
 }
 
 func (m *ElasticsearchEventMirror) MirrorEvents(ctx context.Context, events []application.EventDrilldownItem) error {

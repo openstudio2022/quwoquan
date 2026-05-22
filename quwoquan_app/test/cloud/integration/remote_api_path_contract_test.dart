@@ -113,7 +113,7 @@ void main() {
     setUp(() {
       log = [];
       repo = RemoteCircleRepository(
-        client: _captureClient(log),
+        httpClient: CloudHttpClient(client: _captureClient(log)),
         baseUrl: _baseUrl,
       );
     });
@@ -370,13 +370,31 @@ void main() {
 
     setUp(() {
       log = [];
-      repo = RemoteContentRepository(client: _captureClient(log));
+      repo = RemoteContentRepository(
+        httpClient: CloudHttpClient(client: _captureClient(log)),
+      );
     });
 
     test('listDiscoveryFeed → GET /v1/content/feed', () async {
       await repo.listDiscoveryFeed(category: 'all');
       expect(log.last.method, 'GET');
       expect(log.last.path, ContentApiMetadata.getFeedPath);
+    });
+
+    test('listDiscoveryFeedPage 透传 sessionId / feedRequestId', () async {
+      await repo.listDiscoveryFeedPage(
+        category: 'photo',
+        sessionId: 'session-001',
+        feedRequestId: 'feed-req-001',
+      );
+      expect(log.last.method, 'GET');
+      expect(log.last.path, ContentApiMetadata.getFeedPath);
+      expect(log.last.query['sessionId'], 'session-001');
+      expect(log.last.query['feedRequestId'], 'feed-req-001');
+      _expectPageHeaders(
+        log.last.headers,
+        pageId: ContentRequestPageIds.getFeed,
+      );
     });
 
     test('searchPosts → GET /v1/content/posts/search', () async {
@@ -577,7 +595,7 @@ void main() {
     setUp(() {
       log = [];
       repo = RemoteReportRepository(
-        client: _captureClient(log),
+        httpClient: CloudHttpClient(client: _captureClient(log)),
         baseUrl: _baseUrl,
       );
     });
@@ -600,7 +618,7 @@ void main() {
     setUp(() {
       log = [];
       repo = RemoteUserRepository(
-        client: _captureClient(log),
+        httpClient: CloudHttpClient(client: _captureClient(log)),
         baseUrl: _baseUrl,
       );
     });
@@ -676,7 +694,9 @@ void main() {
         expect(log.last.method, 'POST');
         expect(
           log.last.path,
-          UserApiMetadata.applyPersonaProfileSyncPath(subAccountId: 'persona_1'),
+          UserApiMetadata.applyPersonaProfileSyncPath(
+            subAccountId: 'persona_1',
+          ),
         );
       },
     );
@@ -688,7 +708,9 @@ void main() {
         expect(log.last.method, 'GET');
         expect(
           log.last.path,
-          UserApiMetadata.getPersonaLifecycleGuardPath(subAccountId: 'persona_1'),
+          UserApiMetadata.getPersonaLifecycleGuardPath(
+            subAccountId: 'persona_1',
+          ),
         );
       },
     );
@@ -725,7 +747,7 @@ void main() {
     setUp(() {
       log = [];
       repo = RemoteBlockRepository(
-        client: _captureClient(log),
+        httpClient: CloudHttpClient(client: _captureClient(log)),
         baseUrl: _baseUrl,
       );
     });
@@ -761,7 +783,9 @@ void main() {
 
     setUp(() {
       log = [];
-      repo = RemoteUserProfileRepository(client: _captureClient(log));
+      repo = RemoteUserProfileRepository(
+        httpClient: CloudHttpClient(client: _captureClient(log)),
+      );
     });
 
     test('getUserStats → GET /v1/user/profile/{userId}/stats', () async {

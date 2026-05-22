@@ -1,0 +1,18 @@
+# gamma overrides (cloud integration env)
+service:
+  http:
+    addr: ":18086"
+
+mongodb:
+  uri: "${MONGO_URI}"
+  database: "quwoquan_product_ops"
+
+redis:
+  rec:
+    mode: standalone
+    addr: ""
+    db: 0
+  general:
+    mode: standalone
+    addr: ""
+    db: 1

@@ -93,6 +93,8 @@ GATE_BLOCK（请退回标准链路：/prd → /design）
 - feature flag、观测、SLO 验证与回滚方案
 - `T1~T4` 证据矩阵
 - `plan slices`
+- **工程合规设计 Checklist**（DDD/强类型/存储无关/端云一致/元数据/codegen，与 `/design` 同要求）
+- **可观测与推荐设计 Checklist**（埋点/指标/推荐回流/性能/AB/存储生命周期，与 `/design` 同要求）
 
 ## G0 + G1
 

@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/avatar/conversation_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
@@ -21,7 +22,6 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/utils/chat_time_formatter.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_contacts_row.dart';
 import 'package:quwoquan_app/ui/chat/models/chat_list_item_view_model.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
@@ -76,7 +76,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
   static const List<String> _messageSubTabs = [
     UITextConstants.contactsTabAll,
     UITextConstants.atMe,
+    UITextConstants.atXiaoqu,
     UITextConstants.unread,
+    UITextConstants.reminders,
     UITextConstants.secretMessage,
   ];
   static const List<String> _contactsSubTabs = [
@@ -149,6 +151,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
+      safeTop,
+      context,
+    );
     final isDark = ref.watch(isDarkProvider);
     final bgColor = AppColorsFunctional.getColor(
       isDark,
@@ -169,39 +176,37 @@ class _ChatPageState extends ConsumerState<ChatPage>
 
     return AppScaffold(
       backgroundColor: bgColor,
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildMainTabs(context, bgColor, fgPrimary, fgSecondary),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-              height: _hideSecondaryTab ? 0 : AppSpacing.subTabNavigationHeight,
-              clipBehavior: Clip.hardEdge,
-              decoration: const BoxDecoration(),
-              child: _buildSubTabs(context, borderColor),
-            ),
-            Expanded(
-              child: TabSwipeSwitchRegion(
-                onSwipe: _handleTabSwipe,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (n) {
-                    _onScroll();
-                    return false;
-                  },
-                  child: _buildActiveTabContent(
-                    context,
-                    fgPrimary,
-                    fgSecondary,
-                    borderColor,
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(height: effectiveTopInset),
+          _buildMainTabs(context, bgColor, fgPrimary, fgSecondary),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            height: _hideSecondaryTab ? 0 : AppSpacing.subTabNavigationHeight,
+            clipBehavior: Clip.hardEdge,
+            decoration: const BoxDecoration(),
+            child: _buildSubTabs(context, borderColor),
+          ),
+          Expanded(
+            child: TabSwipeSwitchRegion(
+              onSwipe: _handleTabSwipe,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (n) {
+                  _onScroll();
+                  return false;
+                },
+                child: _buildActiveTabContent(
+                  context,
+                  fgPrimary,
+                  fgSecondary,
+                  borderColor,
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -245,7 +250,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
 
     return Container(
-      height: AppSpacing.tabNavigationHeight,
+      height: AppSpacing.appChromeTopBarHeight(context),
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(
@@ -285,7 +290,6 @@ class _ChatPageState extends ConsumerState<ChatPage>
             child: const Center(
               child: GlobalTopActions(
                 initialSearchScope: GlobalSearchScope.messages,
-                quickActionPriority: CreateActionSheetPriority.socialPrimary,
               ),
             ),
           ),
@@ -596,7 +600,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
       controller: _scrollController,
       padding: EdgeInsets.only(
         bottom:
-            MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight,
+            MediaQuery.viewPaddingOf(context).bottom +
+            AppSpacing.bottomNavBarHeight(context),
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
@@ -621,9 +626,15 @@ class _ChatPageState extends ConsumerState<ChatPage>
     if (subTab == UITextConstants.atMe) {
       title = UITextConstants.noMentionsMessages;
       subtitle = UITextConstants.noMentionsHint;
+    } else if (subTab == UITextConstants.atXiaoqu) {
+      title = UITextConstants.noXiaoquMessages;
+      subtitle = UITextConstants.noXiaoquHint;
     } else if (subTab == UITextConstants.unread) {
       title = UITextConstants.noUnreadMessages;
       subtitle = UITextConstants.noUnreadHint;
+    } else if (subTab == UITextConstants.reminders) {
+      title = UITextConstants.noReminderMessages;
+      subtitle = UITextConstants.noReminderHint;
     }
 
     return Center(
@@ -670,8 +681,30 @@ class _ChatPageState extends ConsumerState<ChatPage>
     if (sub == UITextConstants.atMe) {
       return list.where((item) => item.hasMention).toList(growable: false);
     }
+    if (sub == UITextConstants.atXiaoqu) {
+      return list
+          .where(
+            (item) =>
+                item.id == AppConceptConstants.assistantConversationId ||
+                item.title.contains(UITextConstants.assistantEntryXiaoqu) ||
+                item.subtitle.contains(UITextConstants.assistantEntryXiaoqu) ||
+                item.subtitle.contains(UITextConstants.atXiaoqu),
+          )
+          .toList(growable: false);
+    }
     if (sub == UITextConstants.unread) {
       return list.where((item) => item.hasUnread).toList(growable: false);
+    }
+    if (sub == UITextConstants.reminders) {
+      return list
+          .where(
+            (item) =>
+                item.title.contains(UITextConstants.reminders) ||
+                item.subtitle.contains('提醒') ||
+                item.subtitle.contains('更新') ||
+                item.subtitle.contains('摘要'),
+          )
+          .toList(growable: false);
     }
     return list;
   }
@@ -748,11 +781,19 @@ class _ChatPageState extends ConsumerState<ChatPage>
                 ),
                 child: Row(
                   children: [
-                    RoundedSquareAvatar(
-                      size: AppSpacing.largeButtonSize + AppSpacing.xs,
-                      imageUrl: row.avatarUrl,
-                      name: row.displayName,
-                    ),
+                    row.kind == ChatContactsRowKind.group
+                        ? ConversationAvatar(
+                            conversationId: row.conversationId ?? row.id,
+                            conversationType: 'group',
+                            title: row.displayName,
+                            avatarUrl: row.avatarUrl,
+                            size: AppSpacing.largeButtonSize + AppSpacing.xs,
+                          )
+                        : RoundedSquareAvatar(
+                            size: AppSpacing.largeButtonSize + AppSpacing.xs,
+                            imageUrl: row.avatarUrl,
+                            name: row.displayName,
+                          ),
                     SizedBox(width: AppSpacing.interGroupSm),
                     Expanded(
                       child: Column(
@@ -1259,20 +1300,13 @@ class _ConversationTile extends StatelessWidget {
   }
 
   Widget _buildConversationAvatar(BuildContext context) {
-    final url = conversation.avatarUrl.trim();
-    assert(() {
-      final t = conversation.type.trim().toLowerCase();
-      if (t == 'group' && url.isEmpty) {
-        debugPrint(
-          '会话头像契约：群/圈子会话 avatarUrl 为空 conversationId=${conversation.id}',
-        );
-      }
-      return true;
-    }());
-    return RoundedSquareAvatar(
+    return ConversationAvatar(
+      conversationId: conversation.id,
+      conversationType: conversation.type,
+      title: conversation.title,
+      avatarUrl: conversation.avatarUrl,
+      groupAvatarVersion: conversation.groupAvatarVersion,
       size: _avatarSize,
-      imageUrl: url,
-      name: conversation.title,
     );
   }
 
@@ -1470,17 +1504,13 @@ class _InboxConversationTile extends StatelessWidget {
   static const double _avatarSize = ChatConversationAvatarTokens.listSize;
 
   Widget _buildAvatar(BuildContext context) {
-    final url = item.avatarUrl.trim();
-    assert(() {
-      if (item.isGroup && url.isEmpty) {
-        debugPrint('会话头像契约：群会话列表项 avatarUrl 为空 conversationId=${item.id}');
-      }
-      return true;
-    }());
-    return RoundedSquareAvatar(
+    return ConversationAvatar(
+      conversationId: item.id,
+      conversationType: item.isGroup ? 'group' : 'direct',
+      title: item.title,
+      avatarUrl: item.avatarUrl,
+      groupAvatarVersion: item.groupAvatarVersion,
       size: _avatarSize,
-      imageUrl: url,
-      name: item.title,
     );
   }
 

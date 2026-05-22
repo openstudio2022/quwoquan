@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
-import 'package:quwoquan_app/ui/circle/pages/circles_page.dart';
+import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 
 Widget _scopedApp({CircleRepository? mock}) {
@@ -23,7 +23,7 @@ Widget _scopedApp({CircleRepository? mock}) {
         routes: [
           GoRoute(
             path: '/circles',
-            builder: (_, _) => const Scaffold(body: CirclesPage()),
+            builder: (_, _) => const Scaffold(body: CirclesHubPage()),
           ),
           GoRoute(
             path: '/circle/:id',
@@ -98,14 +98,14 @@ Future<void> _settleIgnoringTabPaintErrors(WidgetTester tester) async {
 }
 
 /// 圈子详情 [CircleShell] 的主内容 [PageView] 使用可滑动 physics；
-/// 列表页 [CirclesPage] 的一级 [PageView] 为 [NeverScrollableScrollPhysics]。
+/// 列表页 [CirclesHubPage] 的一级 [PageView] 为 [NeverScrollableScrollPhysics]。
 void main() {
   group('旅程正常路径', () {
     testWidgets('旅程 A1：导航到圈子详情页并加载信息', (tester) async {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/circle_photo_01');
       await _settleIgnoringTabPaintErrors(tester);
 
@@ -117,7 +117,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/circle_photo_01');
       await _settleIgnoringTabPaintErrors(tester);
 
@@ -129,7 +129,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/circle_photo_01');
       await _settleIgnoringTabPaintErrors(tester);
 
@@ -143,7 +143,7 @@ void main() {
       );
       await _settleIgnoringTabPaintErrors(tester);
 
-      expect(find.byType(CirclesPage), findsOneWidget);
+      expect(find.byType(CirclesHubPage), findsOneWidget);
     });
   });
 
@@ -152,7 +152,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/nonexistent_circle_id');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
@@ -164,7 +164,7 @@ void main() {
       await tester.pumpWidget(_scopedApp(mock: _ErrorCircleRepository()));
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/circle_photo_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
@@ -175,7 +175,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
 
@@ -188,7 +188,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
       router.push('/circle/circle_photo_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 2);
@@ -204,7 +204,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
 
       router.push('/circle/circle_photo_01');
       await _pumpIgnoringTabPaintErrors(tester, frames: 5);
@@ -222,7 +222,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pumpAndSettle();
 
-      final router = GoRouter.of(tester.element(find.byType(CirclesPage)));
+      final router = GoRouter.of(tester.element(find.byType(CirclesHubPage)));
       router.push('/circle/circle_photo_01');
       await _settleIgnoringTabPaintErrors(tester);
 

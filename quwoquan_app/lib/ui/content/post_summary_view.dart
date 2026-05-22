@@ -35,6 +35,8 @@ class PostSummaryView {
     this.duration,
     this.title,
     this.body,
+    this.tags,
+    this.contentType,
   });
 
   /// metadata 只读投影（与 [surfaceId] 对应表面一致由调用方保证）。
@@ -90,6 +92,12 @@ class PostSummaryView {
   /// 正文 / caption（对应 DTO.body）
   final String? body;
 
+  /// 内容标签（推荐归因用）
+  final List<String>? tags;
+
+  /// 内容类型原始字符串（photo/video/article/moment）
+  final String? contentType;
+
   // ── 工厂：直接从 DTO 创建（零字符串 key 访问）────────────
 
   factory PostSummaryView.fromDto(
@@ -135,6 +143,7 @@ class PostSummaryView {
     );
     final title = read.title.isEmpty ? null : read.title;
     final body = read.body.isEmpty ? null : read.body;
+    final wireTags = wire != null ? _parseWireTags(wire['tags']) : null;
 
     return PostSummaryView(
       id: dto.id,
@@ -161,7 +170,16 @@ class PostSummaryView {
       duration: duration,
       title: title,
       body: body,
+      tags: wireTags,
+      contentType: dto.type,
     );
+  }
+
+  static List<String>? _parseWireTags(dynamic raw) {
+    if (raw is List) {
+      return raw.whereType<String>().toList();
+    }
+    return null;
   }
 }
 

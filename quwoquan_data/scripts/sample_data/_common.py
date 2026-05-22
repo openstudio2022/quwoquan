@@ -118,8 +118,8 @@ def make_entity_manifest(
     """创建实体 manifest JSON。"""
     validate_tag_refs(tag_refs, f"manifest:{domain}/{etype}/{name}")
     manifest = {
-        "tagRefs": tag_refs,
         "entityRefs": entity_refs or [],
+        "assets": [],
         "createdAt": NOW_ISO,
         "updatedAt": NOW_ISO,
     }
@@ -179,16 +179,16 @@ def write_entity(
     page_md: str,
     manifest_json: dict,
 ):
-    """写入实体三件套到 task 目录。"""
+    """写入实体三件套到 task 目录。
+
+    其中 `_entity.json` 是事实源，实体叶不再写 `manifest.json`。
+    """
     edir = task_root / "entities" / domain / etype / name
     edir.mkdir(parents=True, exist_ok=True)
     (edir / "_entity.json").write_text(
         json.dumps(entity_json, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     (edir / "page.md").write_text(page_md, encoding="utf-8")
-    (edir / "manifest.json").write_text(
-        json.dumps(manifest_json, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
 
 
 def write_post(

@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
@@ -41,10 +40,9 @@ class MockContentInteractionRepository extends ContentInteractionRepository {
 class RemoteContentInteractionRepository extends ContentInteractionRepository {
   RemoteContentInteractionRepository({
     CloudHttpClient? httpClient,
-    http.Client? client,
     String? baseUrl,
-  })  : _httpClient = httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;

@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
+	rtobs "quwoquan_service/runtime/observability"
 	event "quwoquan_service/services/chat-service/internal/domain/conversation/event"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 	"quwoquan_service/services/chat-service/internal/infrastructure/cache"
@@ -49,7 +52,12 @@ type SendMessageResponse struct {
 	Timestamp string `json:"timestamp"`
 }
 
-func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest) (*SendMessageResponse, error) {
+func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest) (resp *SendMessageResponse, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.SendMessage",
+		attribute.String("conversation.id", req.ConversationId),
+		attribute.String("message.type", req.Type))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	isNew, err := s.cache.TryDedup(ctx, req.ConversationId, req.ClientMsgId)
 	if err != nil {
 		return nil, err
@@ -113,17 +121,17 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 
 	go func() {
 		if err := s.publisher.PublishDomainEvent(context.Background(), event.MessageSent, req.ConversationId, req.SenderId, map[string]any{
-			"messageId":              msg.ID,
-			"seq":                    seq,
-			"type":                   msg.Type,
-			"content":                msg.Content,
-			"mediaUrl":               msg.MediaUrl,
-			"media":                  msg.Media,
-			"mentions":               msg.Mentions,
-			"clientMsgId":            req.ClientMsgId,
-			"timestamp":              msg.Timestamp,
-			"senderSubAccountId":     req.SenderId,
-			"personaContextVersion":  req.PersonaContextVersion,
+			"messageId":             msg.ID,
+			"seq":                   seq,
+			"type":                  msg.Type,
+			"content":               msg.Content,
+			"mediaUrl":              msg.MediaUrl,
+			"media":                 msg.Media,
+			"mentions":              msg.Mentions,
+			"clientMsgId":           req.ClientMsgId,
+			"timestamp":             msg.Timestamp,
+			"senderSubAccountId":    req.SenderId,
+			"personaContextVersion": req.PersonaContextVersion,
 		}); err != nil {
 			slog.Error("publish MessageSent failed", "err", err, "conversationId", req.ConversationId)
 		}
@@ -136,7 +144,12 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 	}, nil
 }
 
-func (s *MessageService) RecallMessage(ctx context.Context, conversationId, messageId, senderId string) error {
+func (s *MessageService) RecallMessage(ctx context.Context, conversationId, messageId, senderId string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.RecallMessage",
+		attribute.String("conversation.id", conversationId),
+		attribute.String("message.id", messageId))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	msg, err := s.repo.FindMessageByID(ctx, messageId)
 	if err != nil {
 		return errors.New("message not found")
@@ -177,7 +190,12 @@ type ListMessagesRequest struct {
 	Cursor         string
 }
 
-func (s *MessageService) ListMessages(ctx context.Context, req ListMessagesRequest) ([]model.Message, error) {
+func (s *MessageService) ListMessages(ctx context.Context, req ListMessagesRequest) (_ []model.Message, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.ListMessages",
+		attribute.String("conversation.id", req.ConversationId),
+		attribute.Int("list.limit", req.Limit))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return s.repo.ListMessages(ctx, req.ConversationId, req.Limit, req.AfterSeq, req.BeforeSeq)
 }
 
@@ -191,7 +209,12 @@ type SearchMessagesRequest struct {
 func (s *MessageService) SearchMessages(
 	ctx context.Context,
 	req SearchMessagesRequest,
-) ([]MessageSearchHit, error) {
+) (_ []MessageSearchHit, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.SearchMessages",
+		attribute.String("user.id", req.UserId),
+		attribute.String("search.query", req.Query))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	query := normalizeSearchQuery(req.Query)
 	if query == "" {
 		return []MessageSearchHit{}, nil
@@ -241,7 +264,12 @@ type SyncMessagesResponse struct {
 	HasMore  bool            `json:"hasMore"`
 }
 
-func (s *MessageService) SyncMessages(ctx context.Context, req SyncMessagesRequest) (*SyncMessagesResponse, error) {
+func (s *MessageService) SyncMessages(ctx context.Context, req SyncMessagesRequest) (_ *SyncMessagesResponse, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.SyncMessages",
+		attribute.String("conversation.id", req.ConversationId),
+		attribute.Int64("sync.last_seq", req.LastSeq))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	limit := req.Limit
 	if limit <= 0 || limit > 500 {
 		limit = 500
@@ -269,7 +297,12 @@ type MarkAsReadRequest struct {
 	UserId         string
 }
 
-func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) error {
+func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.MarkAsRead",
+		attribute.String("conversation.id", req.ConversationId),
+		attribute.String("message.id", req.MessageId))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	msg, err := s.repo.FindMessageByID(ctx, req.MessageId)
 	if err != nil {
 		return err
@@ -328,7 +361,12 @@ func (s *MessageService) MarkAsRead(ctx context.Context, req MarkAsReadRequest) 
 	return nil
 }
 
-func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messageId string) ([]model.MessageReceipt, error) {
+func (s *MessageService) GetReceipts(ctx context.Context, conversationId, messageId string) (_ []model.MessageReceipt, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.GetReceipts",
+		attribute.String("conversation.id", conversationId),
+		attribute.String("message.id", messageId))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return s.repo.ListReceiptsByMessage(ctx, messageId)
 }
 

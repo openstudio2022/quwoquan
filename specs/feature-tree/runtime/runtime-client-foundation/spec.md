@@ -14,6 +14,7 @@
 | `ios-native-page-enforcement` | iOS 原生页面根壳与静态门禁（Material 根 `Scaffold` 阻断） |
 | `metadata-driven-client-data-contract` | 客户端 **消费侧** 与 `contracts/metadata` codegen 对齐：UI/Mock/Remote 同源类型与缺口清单 |
 | `article-editor-refactor` | 沉浸文章编辑器完全重构：WYSIWYG 卡片编辑、底栏五工具 + 撤销重做、排版/样式/序号/图与环绕等（规格见同目录 `article-editor-refactor/spec.md`） |
+| `local-cache-architecture` | 客户端对象级缓存、查询快照、资源缓存、端云同步一致性与用户分层清理入口 |
 
 ## 职责边界
 
@@ -24,13 +25,14 @@
 ## 与父/子节点关系
 
 - 父节点：`runtime` L1（基础设施与运行时层）
-- 子节点：`app-locale-infrastructure`（L3）、`app-theme-infrastructure`（L3，待建）、`error-permission-display-semantics`（L3）、`page-layout-semantics`（L3）、`dart-semantic-gate`（L3）、`ios-native-page-enforcement`（L3）、`metadata-driven-client-data-contract`（L3）、`article-editor-refactor`（L3）
+- 子节点：`app-locale-infrastructure`（L3）、`app-theme-infrastructure`（L3，待建）、`error-permission-display-semantics`（L3）、`page-layout-semantics`（L3）、`dart-semantic-gate`（L3）、`ios-native-page-enforcement`（L3）、`metadata-driven-client-data-contract`（L3）、`article-editor-refactor`（L3）、`local-cache-architecture`（L3）
 
 ## 约束
 
 - 所有客户端横切能力必须经此 L2 统一定义，禁止在业务域 L2（如 `discovery-content`）下新建客户端基础设施节点
 - **元数据 YAML 的唯一编辑仍归属 `contracts/metadata` + codegen 主线**；本 L2 的 `metadata-driven-client-data-contract` 仅约束 **Flutter 侧类型消费与 Mock/Remote 同源**，不替代云侧 metadata 评审流程
 - 纯客户端 Gate（如 iOS 壳、dart semantic）不涉及 Go codegen；**可选** 元数据驱动 UI 门禁见该 L3 的 `plan.yaml`
+- 对象级缓存、查询快照、资源缓存和用户缓存清理统一归属 `local-cache-architecture`；业务域只登记对象策略与验收，不得自建第二套缓存合同或页面级 TTL。
 
 ## 验收标准概要
 

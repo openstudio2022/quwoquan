@@ -4,6 +4,8 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
@@ -293,6 +295,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
+    final navFeedRequestId =
+        ref.read(feedSessionProvider.notifier).newFeedRequestId();
 
     if (post.displayFormat == 'video') {
       final result = await context.push<Object?>(
@@ -304,6 +308,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
           category: isMoment ? 'profile_moment' : 'profile',
           source: isMoment ? 'profile_moment' : 'profile',
           interactionSnapshot: interactionSnapshot,
+          referralSource: ReferralSource.authorProfile,
+          feedRequestId: navFeedRequestId,
         ),
       );
       if (result is MediaViewerResult) {
@@ -322,6 +328,8 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         initialImageIndex: 0,
         source: isMoment ? 'profile_moment' : 'profile',
         interactionSnapshot: interactionSnapshot,
+        referralSource: ReferralSource.authorProfile,
+        feedRequestId: navFeedRequestId,
       ),
     );
     if (result is MediaViewerResult) {

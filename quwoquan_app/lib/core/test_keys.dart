@@ -148,6 +148,12 @@ class TestKeys {
   static const commentInputBar = ValueKey<String>('comment_input_bar');
   static const submitCommentButton = ValueKey<String>('submit_comment_button');
   static const commentTextField = ValueKey<String>('comment_text_field');
+  static const commentAtXiaoquButton = ValueKey<String>(
+    'comment_at_xiaoqu_button',
+  );
+  static const commentXiaoquReplyCard = ValueKey<String>(
+    'comment_xiaoqu_reply_card',
+  );
   static const assistantChatInputField = ValueKey<String>(
     'assistant_chat_input_field',
   );
@@ -157,6 +163,9 @@ class TestKeys {
   );
   static const chatInputEmojiToggleButton = ValueKey<String>(
     'chat_input_emoji_toggle_button',
+  );
+  static const chatInputAtXiaoquButton = ValueKey<String>(
+    'chat_input_at_xiaoqu_button',
   );
   static const chatInputMoreButton = ValueKey<String>('chat_input_more_button');
   static const chatInputExpandButton = ValueKey<String>(

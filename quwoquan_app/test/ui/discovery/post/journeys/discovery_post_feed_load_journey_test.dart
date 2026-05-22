@@ -17,6 +17,7 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 
 // ── 测试辅助 ─────────────────────────────────────────────────────────────────
@@ -68,6 +69,44 @@ class _ErrorContentRepository extends MockContentRepository {
   }) async => throw Exception(_errorMessage);
 }
 
+class _RecordingContentRepository extends MockContentRepository {
+  String? lastCategory;
+  String? lastIdentity;
+  String? lastType;
+  String? lastSessionId;
+  String? lastFeedRequestId;
+
+  @override
+  Future<CursorPage<PostBaseDto>> listDiscoveryFeedPage({
+    required String category,
+    String? identity,
+    String? type,
+    String? subCategory,
+    int limit = 20,
+    String? cursor,
+    String sort = kFeedSortRecommend,
+    String? sessionId,
+    String? feedRequestId,
+  }) async {
+    lastCategory = category;
+    lastIdentity = identity;
+    lastType = type;
+    lastSessionId = sessionId;
+    lastFeedRequestId = feedRequestId;
+    return super.listDiscoveryFeedPage(
+      category: category,
+      identity: identity,
+      type: type,
+      subCategory: subCategory,
+      limit: limit,
+      cursor: cursor,
+      sort: sort,
+      sessionId: sessionId,
+      feedRequestId: feedRequestId,
+    );
+  }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
@@ -117,6 +156,28 @@ void main() {
       expect(feed!.items, isNotEmpty);
       expect(feed.items.first, isA<VideoPostDto>());
       expect(feed.error, isNull);
+    });
+
+    testWidgets('旅程 A3：feed load 透传 sessionId / feedRequestId 到 repository', (
+      tester,
+    ) async {
+      final repo = _RecordingContentRepository();
+      await tester.pumpWidget(_scopedApp(mock: repo));
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      final feedSession = container.read(feedSessionProvider.notifier);
+
+      await container.read(discoveryFeedMapProvider.notifier).load('photo');
+      await tester.pump();
+
+      expect(repo.lastCategory, 'photo');
+      expect(repo.lastIdentity, 'work');
+      expect(repo.lastType, 'image');
+      expect(repo.lastSessionId, feedSession.sessionId);
+      expect(repo.lastFeedRequestId, isNotNull);
+      expect(repo.lastFeedRequestId, feedSession.currentFeedRequestId);
     });
   });
 

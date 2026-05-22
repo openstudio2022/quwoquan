@@ -1,0 +1,66 @@
+{
+  "dashboard": {
+    "title": "L1 — 用户体验与运营指标",
+    "uid": "qwq-l1-ux",
+    "tags": ["quwoquan", "l1", "user-experience"],
+    "timezone": "browser",
+    "refresh": "1m",
+    "panels": [
+      {
+        "title": "页面打开量 (OpsEvent page_open)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "description": "来源: OpsEvent eventName=page_open，按 pageName 聚合",
+        "targets": [
+          {
+            "expr": "sum(rate(ops_events_total{event_name=\"page_open\"}[5m])) by (page_name)",
+            "legendFormat": "{{ page_name }}"
+          }
+        ]
+      },
+      {
+        "title": "页面停留时长 (OpsEvent page_return durationMs)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "description": "来源: OpsEvent eventName=page_return，按 pageName P50/P95",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ops_event_metrics_bucket{event_name=\"page_return\",metric=\"durationMs\"}[5m])) by (le, page_name))",
+            "legendFormat": "P95 {{ page_name }}"
+          }
+        ]
+      },
+      {
+        "title": "端侧 API 延迟 (从 AppLog api_latency)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "description": "由 cloudHttpClientProvider ApiLatencyObserver 写入 AppLog → OpsEvent 上传",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(app_api_latency_ms_bucket[5m])) by (le, path))",
+            "legendFormat": "P95 {{ path }}"
+          }
+        ]
+      },
+      {
+        "title": "用户行为漏斗 (impression → click → deep_engage)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(rec_engagement_impression_total[5m]))",
+            "legendFormat": "曝光"
+          },
+          {
+            "expr": "sum(rate(rec_engagement_click_total[5m]))",
+            "legendFormat": "点击"
+          },
+          {
+            "expr": "sum(rate(rec_engagement_deep_engage_total[5m]))",
+            "legendFormat": "深度互动"
+          }
+        ]
+      }
+    ]
+  }
+}

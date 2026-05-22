@@ -17,9 +17,10 @@ policies:
 
   - id: post_angle_dir_match
     description: >
-      post 目录结构为 posts/{载体}/{内容角度路径段}/{title}/{seq}/，
-      其中 {内容角度路径段} 必须与该 post 的 manifest.json.tagRefs 中
+      post 目录结构应统一为 posts/{载体}/{angle}/{title}/{seq}/，
+      其中 {angle} 必须与该 post 的 manifest.json.tagRefs 中
       某个 Format/内容角度/* 路径的最后一个路径段完全相等。
+      历史兼容写法 posts/{载体}/内容角度/{angle}/... 仍可被解析，但不应作为新产出默认结构。
       例：目录段为 "攻略"，则 tagRefs 必须含 "Format/内容角度/攻略" 或其子路径。
     severity: blocking
     appliesTo: [post]

@@ -7,6 +7,7 @@
 用途：
 - 快速回归服务端 patch / queue / metrics
 - 回归客户端 realtime hint / namespace / orphan cleanup
+- 回归客户端对象缓存、查询快照、缓存清理保护与网络图片入口 ratchet
 - 校验里程碑文档包是否齐备
 
 ### 发布前半自动门禁
@@ -24,10 +25,15 @@
 - `go test ./quwoquan_service/services/user-service/tests -run TestUpdateProfile_AvatarVersionAndSyncPatch`
 - `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`
 - `flutter test test/core/services/local_chat_search_sync_service_test.dart`
+- `flutter test test/core/services/content_cache_services_test.dart`
+- `flutter test test/ui/chat/widgets/chat_page_widget_test.dart`
+- `python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py`
+- `specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/*` 文档包存在性检查
 
 ## 当前仍需人工补充的项
 - 双设备 / 双账号 / 弱网 / gap / `requiresResync` 的真机 T4 演练
 - 默认群图标降级比例与 hint-to-pull 抓样
+- 冷启动 feed、连续滚动、重复进入详情、分层清理缓存后的真机录屏和抓包证据
 
 ## 判定口径
 - 自动化门禁通过 + T4 演练记录完整：可宣称高标准准出成立

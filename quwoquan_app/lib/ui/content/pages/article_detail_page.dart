@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/trackers/content_engagement_tracker.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -23,9 +25,16 @@ import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.d
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 class ArticleDetailPage extends ConsumerStatefulWidget {
-  const ArticleDetailPage({super.key, required this.articleId});
+  const ArticleDetailPage({
+    super.key,
+    required this.articleId,
+    this.referralSource = ReferralSource.organicFeed,
+    this.feedRequestId,
+  });
 
   final String articleId;
+  final ReferralSource referralSource;
+  final String? feedRequestId;
 
   @override
   ConsumerState<ArticleDetailPage> createState() => _ArticleDetailPageState();
@@ -36,7 +45,6 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   PostReadUiBundle? _postReadBundle;
   bool _isLoading = true;
   Object? _loadError;
-  late final DateTime _enterTime = DateTime.now();
 
   @override
   void initState() {
@@ -46,17 +54,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
 
   @override
   void deactivate() {
-    final seconds =
-        DateTime.now().difference(_enterTime).inMilliseconds / 1000.0;
-    if (seconds >= 1) {
-      ref
-          .read(behaviorRepositoryProvider)
-          .reportSingle(
-            contentId: widget.articleId,
-            action: 'dwell',
-            duration: seconds,
-          );
-    }
+    ref
+        .read(contentEngagementTrackerProvider)
+        .trackContentExit(widget.articleId);
     super.deactivate();
   }
 
@@ -95,8 +95,15 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         _loadError = null;
       });
       ref
-          .read(behaviorRepositoryProvider)
-          .reportSingle(contentId: widget.articleId, action: 'impression');
+          .read(contentEngagementTrackerProvider)
+          .trackContentEnter(
+            widget.articleId,
+            contentType: ContentType.article,
+            referralSource: widget.referralSource,
+            authorId: detail.post.authorId,
+            totalPages: article.pages.length,
+            feedRequestId: widget.feedRequestId,
+          );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -210,159 +217,186 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         ),
         trailing: AppNavigationBarIconButton(
           icon: Icons.auto_awesome,
+          color: AppColors.assistantMarkColor,
           onPressed: _openAssistantHalfSheet,
         ),
       ),
       child: Column(
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.containerMd,
-                AppSpacing.containerMd,
-                AppSpacing.containerMd,
-                AppSpacing.containerLg,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _ArticleHeader(
-                    article: article,
-                    dateText: _formatArticleDate(article.date),
-                  ),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _ArticleSectionLabel(label: context.l10n.articleContent),
-                  SizedBox(height: AppSpacing.intraGroupSm),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final pages = resolvePaginatedArticlePages(
-                        context: context,
-                        constraints: constraints,
-                        document: article.document,
-                        template: article.template,
-                        fontPreset: article.fontPreset,
-                        fallbackPages: article.pages,
-                        variant: ArticleCanvasVariant.detail,
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollUpdateNotification &&
+                    notification.metrics.maxScrollExtent > 0) {
+                  final depth =
+                      notification.metrics.pixels /
+                      notification.metrics.maxScrollExtent;
+                  ref
+                      .read(contentEngagementTrackerProvider)
+                      .trackContentProgress(
+                        widget.articleId,
+                        scrollDepth: depth.clamp(0.0, 1.0),
                       );
-                      final metrics = resolveArticleCanvasMetrics(
-                        context,
-                        constraints,
-                        variant: ArticleCanvasVariant.detail,
-                      );
-                      final pagePadding = articleReaderStagePagePadding();
-                      final stageWidth = resolveArticlePaperStageWidth(
-                        context,
-                        constraints,
-                        stagePadding: pagePadding,
-                        allowLandscapeSpread: true,
-                      );
-                      final stageHeight =
-                          metrics
-                              .frameSpecForStageWidth(stageWidth)
-                              .paperSize
-                              .height +
-                          pagePadding.vertical;
-                      return UnconstrainedBox(
-                        alignment: Alignment.topCenter,
-                        child: SizedBox(
-                          width: stageWidth,
-                          height: stageHeight,
-                          child: ArticleReadOnlyBookDeck(
-                            pages: pages,
-                            template: article.template,
-                            fontPreset: article.fontPreset,
-                            metrics: metrics,
-                            coverUrl: article.coverImage,
-                            pagePadding: pagePadding,
+                }
+                return false;
+              },
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.containerMd,
+                  AppSpacing.containerMd,
+                  AppSpacing.containerMd,
+                  AppSpacing.containerLg,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _ArticleHeader(
+                      article: article,
+                      dateText: _formatArticleDate(article.date),
+                    ),
+                    SizedBox(height: AppSpacing.interGroupMd),
+                    _ArticleSectionLabel(label: context.l10n.articleContent),
+                    SizedBox(height: AppSpacing.intraGroupSm),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final pages = resolvePaginatedArticlePages(
+                          context: context,
+                          constraints: constraints,
+                          document: article.document,
+                          template: article.template,
+                          fontPreset: article.fontPreset,
+                          fallbackPages: article.pages,
+                          variant: ArticleCanvasVariant.detail,
+                        );
+                        final metrics = resolveArticleCanvasMetrics(
+                          context,
+                          constraints,
+                          variant: ArticleCanvasVariant.detail,
+                        );
+                        final pagePadding = articleReaderStagePagePadding();
+                        final stageWidth = resolveArticlePaperStageWidth(
+                          context,
+                          constraints,
+                          stagePadding: pagePadding,
+                          allowLandscapeSpread: true,
+                        );
+                        final stageHeight =
+                            metrics
+                                .frameSpecForStageWidth(stageWidth)
+                                .paperSize
+                                .height +
+                            pagePadding.vertical;
+                        return UnconstrainedBox(
+                          alignment: Alignment.topCenter,
+                          child: SizedBox(
+                            width: stageWidth,
+                            height: stageHeight,
+                            child: ArticleReadOnlyBookDeck(
+                              pages: pages,
+                              template: article.template,
+                              fontPreset: article.fontPreset,
+                              metrics: metrics,
+                              coverUrl: article.coverImage,
+                              pagePadding: pagePadding,
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              AppSpacing.containerMd,
-              AppSpacing.intraGroupSm,
-              AppSpacing.containerMd,
-              AppSpacing.containerMd,
-            ),
-            decoration: BoxDecoration(
-              color: CupertinoColors.systemBackground
-                  .resolveFrom(context)
-                  .withValues(alpha: 0.96),
-              border: Border(
-                top: BorderSide(
-                  color: CupertinoColors.separator.resolveFrom(context),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),
-            child: SafeArea(
-              top: false,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _BottomAction(
-                    icon: isLiked
-                        ? CupertinoIcons.hand_thumbsup_fill
-                        : CupertinoIcons.hand_thumbsup,
-                    label: _formatCount(likesCount),
-                    color: isLiked
-                        ? CupertinoColors.activeBlue.resolveFrom(context)
-                        : CupertinoColors.label.resolveFrom(context),
-                    onTap: () {
-                      syncPostLikeIntent(
-                        ref,
-                        postId: postId,
-                        isLiked: !isLiked,
-                        likeCount: isLiked
-                            ? (likesCount - 1).clamp(0, 1 << 31).toInt()
-                            : likesCount + 1,
-                      );
-                    },
+          ),
+          Builder(
+            builder: (context) {
+              final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
+              final sideInset = AppSpacing.appChromeBottomSafeSideInset(
+                context,
+                bottomSafe,
+              );
+              return Container(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.containerMd + sideInset,
+                  AppSpacing.intraGroupSm,
+                  AppSpacing.containerMd + sideInset,
+                  AppSpacing.containerMd,
+                ),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemBackground
+                      .resolveFrom(context)
+                      .withValues(alpha: 0.96),
+                  border: Border(
+                    top: BorderSide(
+                      color: CupertinoColors.separator.resolveFrom(context),
+                    ),
                   ),
-                  _BottomAction(
-                    icon: isSaved
-                        ? CupertinoIcons.bookmark_fill
-                        : CupertinoIcons.bookmark,
-                    label: _formatCount(bookmarksCount),
-                    color: isSaved
-                        ? CupertinoColors.systemYellow.resolveFrom(context)
-                        : CupertinoColors.label.resolveFrom(context),
-                    onTap: () {
-                      syncPostSaveIntent(
-                        ref,
-                        postId: postId,
-                        isSaved: !isSaved,
-                        bookmarkCount: isSaved
-                            ? (bookmarksCount - 1).clamp(0, 1 << 31).toInt()
-                            : bookmarksCount + 1,
-                      );
-                    },
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _BottomAction(
+                        icon: isLiked
+                            ? CupertinoIcons.hand_thumbsup_fill
+                            : CupertinoIcons.hand_thumbsup,
+                        label: _formatCount(likesCount),
+                        color: isLiked
+                            ? CupertinoColors.activeBlue.resolveFrom(context)
+                            : CupertinoColors.label.resolveFrom(context),
+                        onTap: () {
+                          syncPostLikeIntent(
+                            ref,
+                            postId: postId,
+                            isLiked: !isLiked,
+                            likeCount: isLiked
+                                ? (likesCount - 1).clamp(0, 1 << 31).toInt()
+                                : likesCount + 1,
+                          );
+                        },
+                      ),
+                      _BottomAction(
+                        icon: isSaved
+                            ? CupertinoIcons.bookmark_fill
+                            : CupertinoIcons.bookmark,
+                        label: _formatCount(bookmarksCount),
+                        color: isSaved
+                            ? CupertinoColors.systemYellow.resolveFrom(context)
+                            : CupertinoColors.label.resolveFrom(context),
+                        onTap: () {
+                          syncPostSaveIntent(
+                            ref,
+                            postId: postId,
+                            isSaved: !isSaved,
+                            bookmarkCount: isSaved
+                                ? (bookmarksCount - 1).clamp(0, 1 << 31).toInt()
+                                : bookmarksCount + 1,
+                          );
+                        },
+                      ),
+                      _BottomAction(
+                        icon: CupertinoIcons.chat_bubble,
+                        label: _formatCount(commentsCount),
+                        color: CupertinoColors.label.resolveFrom(context),
+                        onTap: () {
+                          CommentViewer.showModal(
+                            context: context,
+                            postId: widget.articleId,
+                          );
+                        },
+                      ),
+                      _BottomAction(
+                        icon: CupertinoIcons.arrowshape_turn_up_right,
+                        label: context.l10n.share,
+                        color: CupertinoColors.label.resolveFrom(context),
+                        onTap: () {},
+                      ),
+                    ],
                   ),
-                  _BottomAction(
-                    icon: CupertinoIcons.chat_bubble,
-                    label: _formatCount(commentsCount),
-                    color: CupertinoColors.label.resolveFrom(context),
-                    onTap: () {
-                      CommentViewer.showModal(
-                        context: context,
-                        postId: widget.articleId,
-                      );
-                    },
-                  ),
-                  _BottomAction(
-                    icon: CupertinoIcons.arrowshape_turn_up_right,
-                    label: context.l10n.share,
-                    color: CupertinoColors.label.resolveFrom(context),
-                    onTap: () {},
-                  ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -601,7 +635,7 @@ class _BottomAction extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: AppSpacing.iconMedium),
+            Icon(icon, color: color, size: AppSpacing.bottomNavItemIconSize),
             SizedBox(height: AppSpacing.intraGroupXs / 2),
             Text(
               label,

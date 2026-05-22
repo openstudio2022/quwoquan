@@ -35,6 +35,7 @@ class ContentBehaviorTracker {
 
   /// 记录一次曝光（impression）。同一 contentId 在本 session 内去重。
   void trackImpression(String contentId, {
+    String? contentType,
     List<String>? tags,
     String? feedRequestId,
     int? position,
@@ -43,7 +44,8 @@ class ContentBehaviorTracker {
     _impressionSeen.add(contentId);
     _add(BehaviorEvent(
       contentId: contentId,
-      action: 'impression',
+      action: BehaviorAction.impression,
+      contentType: contentType,
       tags: tags,
       feedRequestId: feedRequestId,
       position: position,
@@ -53,6 +55,7 @@ class ContentBehaviorTracker {
   /// 记录停留时长（dwell）。
   void trackDwell(String contentId, {
     required double durationSeconds,
+    String? contentType,
     List<String>? tags,
     String? feedRequestId,
     int? position,
@@ -60,7 +63,8 @@ class ContentBehaviorTracker {
     if (durationSeconds < 1) return;
     _add(BehaviorEvent(
       contentId: contentId,
-      action: 'dwell',
+      action: BehaviorAction.dwell,
+      contentType: contentType,
       tags: tags,
       duration: durationSeconds,
       feedRequestId: feedRequestId,
@@ -70,13 +74,15 @@ class ContentBehaviorTracker {
 
   /// 记录点击（click）。
   void trackClick(String contentId, {
+    String? contentType,
     List<String>? tags,
     String? feedRequestId,
     int? position,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
-      action: 'click',
+      action: BehaviorAction.click,
+      contentType: contentType,
       tags: tags,
       feedRequestId: feedRequestId,
       position: position,
@@ -85,13 +91,15 @@ class ContentBehaviorTracker {
 
   /// 记录「不感兴趣」（dislike）。
   void trackDislike(String contentId, {
+    String? contentType,
     List<String>? tags,
     String? feedRequestId,
     int? position,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
-      action: 'dislike',
+      action: BehaviorAction.dislike,
+      contentType: contentType,
       tags: tags,
       feedRequestId: feedRequestId,
       position: position,
@@ -100,13 +108,15 @@ class ContentBehaviorTracker {
 
   /// 记录分享（share）。
   void trackShare(String contentId, {
+    String? contentType,
     List<String>? tags,
     String? feedRequestId,
     int? position,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
-      action: 'share',
+      action: BehaviorAction.share,
+      contentType: contentType,
       tags: tags,
       feedRequestId: feedRequestId,
       position: position,
@@ -116,13 +126,15 @@ class ContentBehaviorTracker {
   /// 记录翻页跳过（skip）——沉浸式流翻到下一帖时上报前帖。
   void trackSkip(String contentId, {
     double? dwellSeconds,
+    String? contentType,
     List<String>? tags,
     String? feedRequestId,
     int? position,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
-      action: 'skip',
+      action: BehaviorAction.skip,
+      contentType: contentType,
       tags: tags,
       duration: dwellSeconds,
       feedRequestId: feedRequestId,
@@ -132,13 +144,15 @@ class ContentBehaviorTracker {
 
   /// 记录评论完成（comment）。
   void trackComment(String contentId, {
+    String? contentType,
     int? commentLength,
     List<String>? tags,
     String? feedRequestId,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
-      action: 'comment',
+      action: BehaviorAction.comment,
+      contentType: contentType,
       tags: tags,
       feedRequestId: feedRequestId,
       commentLength: commentLength,
@@ -151,7 +165,7 @@ class ContentBehaviorTracker {
   }) {
     _add(BehaviorEvent(
       contentId: authorId,
-      action: 'follow',
+      action: BehaviorAction.follow,
       feedRequestId: feedRequestId,
     ));
   }

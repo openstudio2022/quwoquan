@@ -3,11 +3,25 @@ class UITextConstants {
   static const String home = '首页';
   static const String discovery = '发现';
   static const String homeTabFollowing = '关注';
-  static const String homeTabFeatured = '精选';
-  static const String homeTabCircles = '群组';
+  static const String homeTabRecommended = '推荐';
+  static const String homeTabFeatured = '精品';
+  static const String homeTabCircles = '圈子';
+  static const String homeTabTravel = '旅行';
+  static const String homeTabPhotography = '摄影';
+  static const String homeTabTech = '科技';
+  static const String homeTabCarFriends = '车之家';
+  static const String globalXiaoquSearchHint = '搜内容、圈子、聊天';
+  static const String globalXiaoquSearchAsk = '找小趣';
   static const String homeCirclesMy = '我的';
   static const String homeCirclesRecommendTab = '圈子推荐';
   static const String homeCirclesManage = '管理';
+  static const String circleScenarioRecommended = '推荐';
+  static const String circleScenarioMine = '我的';
+  static const String circleScenarioCampus = '校园';
+  static const String circleScenarioTravel = '旅行';
+  static const String circleScenarioPhotography = '摄影';
+  static const String circleScenarioTech = '科技';
+  static const String circleScenarioTravelPhotography = '旅行摄影';
   static const String homeCirclesHotTopics = '热议话题';
   static const String homeCirclesMyCircles = '我的圈子';
   static const String homeCirclesSuggested = '推荐加入';
@@ -92,6 +106,7 @@ class UITextConstants {
   static const String assistantTabSkills = '技能';
   static const String assistantEntryFindPersonal = '找私助';
   static const String assistantEntryAsk = '问小趣';
+  static const String assistantEntryXiaoqu = '小趣';
 
   /// 半弹窗：进入完整对话按钮
   static const String assistantHalfSheetEnterFullChat = '进入完整对话';
@@ -113,12 +128,19 @@ class UITextConstants {
 
   // ==================== 欢迎页 ====================
   static const String welcomeTitle = '趣我圈';
-  static const String welcomeSubtitle = '以兴趣为半径，画出我们的交集';
-  static const String welcomeMainSlogan = '专注你的热爱，其余交给小趣';
+
+  /// 欢迎页主 slogan：品牌视角（第三人称），与全局基线 slogan 一致。
+  /// 「绽放热爱」承接花瓣视觉，强化轻快、明亮的品牌记忆。
+  static const String welcomeMainSlogan = '遇见同趣，绽放热爱';
   static const String welcomeButtonLabel = '开启发现之旅';
 
-  /// 欢迎页底部署名（中文表达，居中）
-  static const String welcomeFooterCredit = '小趣私人助手 · 与你相伴';
+  /// 欢迎页底部「小趣寄语」署名 chip 中的发言人名（与 `✨` 一起出现）。
+  /// 与中央 slogan 形成「品牌口吻 → 小趣口吻」的双层结构。
+  static const String assistantWhisperSignature = '小趣';
+
+  /// 欢迎页底部「小趣寄语」第一人称承诺一句话。
+  /// 由小趣以「我」直接对用户说话，呈现 AI Native 的主动感。
+  static const String assistantWhisperLine = '专注你的热爱，剩下的交给我';
 
   // ==================== 通用 ====================
   static const String commentPlaceholder = '添加评论...';
@@ -225,8 +247,11 @@ class UITextConstants {
   static const String circleUploadFile = '上传文件';
   static const String circleComments = '评论';
   static const String circleOfficialBadge = '官方认证 | 优质社区';
-  static const String circlesRecommendedTitle = '推荐群组';
-  static const String circlesDirectoryTitle = '群组广场';
+  static const String circlesRecommendedTitle = '推荐圈子';
+  static const String circlesDirectoryTitle = '圈子广场';
+  static const String circlesSearchHint = '搜索圈子、实体与内容';
+  static const String circlesEntitySectionTitle = '实体主页';
+  static const String circlesEntitySectionHint = '补实体主页，圈子和内容会自动聚合';
   static const String circlesFollowingEmpty = '关注暂无内容';
   static const String discoveryEndHint = '已经到底啦';
   static const String circleManageChannels = '频道管理';
@@ -299,7 +324,9 @@ class UITextConstants {
 
   // ==================== 趣聊 ====================
   static const String atMe = '@我';
+  static const String atXiaoqu = '@小趣';
   static const String unread = '未读';
+  static const String reminders = '提醒';
   static const String secretMessage = '密信';
   static const String friends = '好友';
   static const String groupChat = '群聊';
@@ -317,6 +344,13 @@ class UITextConstants {
   static const String noMentionsHint = '有人提到你时，会在这里提醒你';
   static const String noUnreadMessages = '暂无未读消息';
   static const String noUnreadHint = '新消息来了，会第一时间出现在这里';
+  static const String noXiaoquMessages = '暂无小趣回复';
+  static const String noXiaoquHint = '你在评论或圈子里 @小趣 后，回复会出现在这里';
+  static const String commentAtXiaoqu = '@小趣';
+  static const String commentXiaoquBadge = '小趣回复';
+  static const String commentXiaoquSource = '基于当前内容与评论上下文生成，可继续追问或纠错';
+  static const String noReminderMessages = '暂无提醒';
+  static const String noReminderHint = '实体更新、圈子摘要和主动提醒会在这里汇总';
   static const String untitledConversation = '未命名对话';
   static const String chatPreviewImage = '[图片]';
   static const String chatPreviewVideo = '[视频]';
@@ -755,7 +789,7 @@ class UITextConstants {
       '先选择主页类型，再补充最少必要信息。提交后会进入审核，审核通过后才会出现在搜索和关联中。';
   static const String addHomepageTypeSectionTitle = '主页类型';
   static const String addHomepageBasicInfoSectionTitle = '基础信息';
-  static const String addHomepageFutureTypeHint = '学校等组织型主页会在后续单独支持。';
+  static const String addHomepageFutureTypeHint = '校园大学与旅行摄影主页已纳入首批模板。';
   static const String addHomepageNameLabel = '主页名称';
   static const String addHomepageNamePlaceholder = '输入主页名称';
   static const String addHomepageClueLabel = '补充说明';
@@ -783,10 +817,16 @@ class UITextConstants {
   static const String homepageTypeRestaurantHint = '正餐、小馆、咖啡酒馆';
   static const String homepageTypeVehicle = '车型';
   static const String homepageTypeVehicleHint = '车型、车系、版本';
+  static const String homepageTypeUniversity = '大学';
+  static const String homepageTypeUniversityHint = '高校、学院、校园公共主页';
+  static const String homepageTypeTravelPhoto = '旅行摄影';
+  static const String homepageTypeTravelPhotoHint = '目的地、机位、摄影路线';
   static const String addHomepageSightCluePlaceholder = '例如 景区入口或游玩亮点';
   static const String addHomepageHotelCluePlaceholder = '例如 房型特色或所在片区';
   static const String addHomepageRestaurantCluePlaceholder = '例如 菜系或招牌菜';
   static const String addHomepageVehicleCluePlaceholder = '例如 动力形式或主要卖点';
+  static const String addHomepageUniversityCluePlaceholder = '例如 院系、校区或校园亮点';
+  static const String addHomepageTravelPhotoCluePlaceholder = '例如 机位、路线或最佳拍摄时段';
   static const String unsavedChangesTitle = '放弃本次修改？';
   static const String unsavedChangesMessage = '未提交的内容会丢失。';
   static const String continueEditing = '继续编辑';

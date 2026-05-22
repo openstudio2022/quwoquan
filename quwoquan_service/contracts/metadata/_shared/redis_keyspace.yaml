@@ -161,6 +161,18 @@ key_patterns:
     type: hash
     description: 互动状态缓存（like / favorite）
 
+  - pattern: "cache:group_avatar:{conversationId}"
+    redis_scene: general
+    ttl_seconds: 86400
+    type: string
+    description: 群组合成头像 CDN URL 缓存（24h TTL，头像变更时主动失效）
+
+  - pattern: "cache:rtask_ready:{taskType}"
+    redis_scene: general
+    ttl_seconds: null
+    type: sorted_set
+    description: Reliable task ready index（score = startAt unix millis）
+
   # ─── realtime 场景 ────────────────────────────────────────────────
   - pattern: "rt:conversation:{<conversationId>}"
     redis_scene: realtime

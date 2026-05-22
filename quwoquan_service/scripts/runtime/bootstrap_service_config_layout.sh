@@ -19,7 +19,6 @@ Behavior:
       quwoquan_service/services/<service>/configs/alpha/config.yaml
       quwoquan_service/services/<service>/configs/beta/config.yaml
       quwoquan_service/services/<service>/configs/gamma/config.yaml
-      quwoquan_service/services/<service>/configs/prod-gray/config.yaml
       quwoquan_service/services/<service>/configs/prod/config.yaml
   - Creates versioned config release directory:
       releases/config/<service>/
@@ -70,7 +69,6 @@ default_cfg="$configs_root/default/config.yaml"
 alpha_cfg="$configs_root/alpha/config.yaml"
 beta_cfg="$configs_root/beta/config.yaml"
 gamma_cfg="$configs_root/gamma/config.yaml"
-prod_gray_cfg="$configs_root/prod-gray/config.yaml"
 prod_cfg="$configs_root/prod/config.yaml"
 current_cfg="$configs_root/config.yaml"
 
@@ -173,21 +171,6 @@ redis:
 EOF
 )"
 
-PROD_GRAY_CONTENT="$(cat <<'EOF'
-# prod-gray overrides (production gray release)
-# Recommend injecting APP_ENV=prod-gray, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
-service:
-  http:
-    addr: ":18080"
-
-redis:
-  rec:
-    mode: cluster
-    addrs: []
-    tls: true
-EOF
-)"
-
 PROD_CONTENT="$(cat <<'EOF'
 # prod overrides (container/k8s)
 # Recommend injecting APP_ENV=prod, CONFIG_VERSION, IMAGE_VERSION, CONFIG_ROOT via env.
@@ -207,7 +190,6 @@ write_file "$default_cfg" "$DEFAULT_CONTENT"
 write_file "$alpha_cfg" "$ALPHA_CONTENT"
 write_file "$beta_cfg" "$BETA_CONTENT"
 write_file "$gamma_cfg" "$GAMMA_CONTENT"
-write_file "$prod_gray_cfg" "$PROD_GRAY_CONTENT"
 write_file "$prod_cfg" "$PROD_CONTENT"
 
 release_dir="$ROOT/releases/config/$SERVICE_NAME"
@@ -230,7 +212,7 @@ fi
 
 if [[ -f "$current_cfg" ]]; then
   echo "WARN: current file exists: $current_cfg"
-  echo "      Consider migrating it into default/alpha/beta/gamma/prod-gray/prod split files."
+  echo "      Consider migrating it into default/alpha/beta/gamma/prod split files."
 fi
 
 echo "DONE: service config layout bootstrapped for $SERVICE_NAME"

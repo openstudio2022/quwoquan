@@ -5,7 +5,38 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
 	runtimefailures "quwoquan_service/runtime/failures"
+)
+
+var (
+	mqPublishTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "mq",
+		Name:      "publish_total",
+		Help:      "Total messages published by topic and status.",
+	}, []string{"topic", "status"})
+
+	mqPublishDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "mq",
+		Name:      "publish_duration_seconds",
+		Help:      "Message publish latency in seconds.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{"topic"})
+
+	mqConsumeTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: "mq",
+		Name:      "consume_total",
+		Help:      "Total messages consumed by topic, consumer_group, and status.",
+	}, []string{"topic", "consumer_group", "status"})
+
+	mqConsumeDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: "mq",
+		Name:      "consume_duration_seconds",
+		Help:      "Message consume processing latency in seconds.",
+		Buckets:   prometheus.DefBuckets,
+	}, []string{"topic", "consumer_group"})
 )
 
 type MQMessage struct {
@@ -18,11 +49,13 @@ type MQConsumerHandler func(ctx context.Context, msg MQMessage) error
 type MQPublisher func(ctx context.Context, msg MQMessage) error
 
 type MQMiddlewareConfig struct {
-	Service           string
-	Origin            string
-	Direction         string
-	Endpoint          string
-	SourceID          string
+	Service   string
+	Origin    string
+	Direction string
+	Endpoint  string
+	SourceID  string
+	// ConsumerGroup is used for mq_consume_* Prometheus labels; when empty, SourceID is used.
+	ConsumerGroup     string
 	Src               string
 	ServiceName       string
 	ServiceInstanceID string
@@ -81,6 +114,21 @@ func WrapMQConsumer(
 		}, cfg.Model, cfg.Operation, input, nil)
 
 		err := handler(ctx, msg)
+		durSec := time.Since(start).Seconds()
+		consumerGroup := cfg.ConsumerGroup
+		if consumerGroup == "" {
+			consumerGroup = cfg.SourceID
+		}
+		if consumerGroup == "" {
+			consumerGroup = "unknown"
+		}
+		metricStatus := "ok"
+		if err != nil {
+			metricStatus = "error"
+		}
+		mqConsumeTotal.WithLabelValues(msg.Topic, consumerGroup, metricStatus).Inc()
+		mqConsumeDurationSeconds.WithLabelValues(msg.Topic, consumerGroup).Observe(durSec)
+
 		status := "success"
 		errorCode := ""
 		if err != nil {
@@ -197,6 +245,14 @@ func WrapMQPublisher(
 			"messageId": msg.ID,
 		}
 		err := publisher(ctx, msg)
+		durSec := time.Since(start).Seconds()
+		metricStatus := "ok"
+		if err != nil {
+			metricStatus = "error"
+		}
+		mqPublishTotal.WithLabelValues(msg.Topic, metricStatus).Inc()
+		mqPublishDurationSeconds.WithLabelValues(msg.Topic).Observe(durSec)
+
 		status := "success"
 		errorCode := ""
 		if err != nil {

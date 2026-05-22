@@ -10,6 +10,8 @@ type SocialGraphProvider interface {
 	GetFriendInterestIntersection(ctx context.Context, userID string) (map[string]float64, error)
 	// GetFriendInteractedContent returns contentIDs that followed users interacted with.
 	GetFriendInteractedContent(ctx context.Context, userID string, limit int) ([]string, error)
+	// GetUserCircleIDs returns the IDs of circles the user belongs to.
+	GetUserCircleIDs(ctx context.Context, userID string) ([]string, error)
 }
 
 // NullSocialGraphProvider returns empty social signals.
@@ -22,6 +24,9 @@ func (*NullSocialGraphProvider) GetFriendInterestIntersection(_ context.Context,
 	return nil, nil
 }
 func (*NullSocialGraphProvider) GetFriendInteractedContent(_ context.Context, _ string, _ int) ([]string, error) {
+	return nil, nil
+}
+func (*NullSocialGraphProvider) GetUserCircleIDs(_ context.Context, _ string) ([]string, error) {
 	return nil, nil
 }
 

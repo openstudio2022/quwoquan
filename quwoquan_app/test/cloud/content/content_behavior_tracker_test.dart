@@ -36,7 +36,7 @@ void main() {
       await tracker.flush();
 
       final impressions = repo.recorded
-          .where((e) => e.action == 'impression')
+          .where((e) => e.action == BehaviorAction.impression)
           .map((e) => e.contentId)
           .toList();
       expect(impressions, equals(['post_1', 'post_2']));
@@ -53,7 +53,7 @@ void main() {
       await tracker.flush();
 
       expect(repo.recorded.length, equals(1));
-      expect(repo.recorded.first.action, equals('dwell'));
+      expect(repo.recorded.first.action, BehaviorAction.dwell);
       expect(repo.recorded.first.duration, equals(3.5));
     });
 
@@ -78,14 +78,14 @@ void main() {
     test('dislike 事件正确上报', () async {
       tracker.trackDislike('post_1');
       await tracker.flush();
-      expect(repo.recorded.first.action, equals('dislike'));
+      expect(repo.recorded.first.action, BehaviorAction.dislike);
       expect(repo.recorded.first.contentId, equals('post_1'));
     });
 
     test('share 事件正确上报', () async {
       tracker.trackShare('post_1');
       await tracker.flush();
-      expect(repo.recorded.first.action, equals('share'));
+      expect(repo.recorded.first.action, BehaviorAction.share);
     });
   });
 }

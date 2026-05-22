@@ -95,18 +95,6 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
-	if IsGroupConversation(*conv) {
-		defaultAvatarURL := DefaultGroupAvatarURL()
-		if strings.TrimSpace(defaultAvatarURL) == "" {
-			return nil, rterr.NewAppError(
-				rterr.NewCode(rterr.ModuleChat, rterr.KindSystem, "avatar_default_unavailable"),
-				"群头像暂不可用，请稍后重试",
-				"group default avatar url is not configured",
-			)
-		}
-		conv.AvatarUrl = defaultAvatarURL
-	}
-
 	profileIDs := append([]string{req.CreatorId}, initialMemberIds...)
 	profMap, _ := s.profiles.ResolveMany(ctx, profileIDs)
 	lookup := func(uid string) (string, string, string, int) {
@@ -117,6 +105,12 @@ func (s *ConversationService) CreateConversation(ctx context.Context, req Create
 	}
 
 	creatorDN, creatorAV, creatorAssetID, creatorAvatarVersion := lookup(req.CreatorId)
+	if IsGroupConversation(*conv) {
+		conv.AvatarUrl = strings.TrimSpace(creatorAV)
+		if conv.AvatarUrl == "" {
+			conv.AvatarUrl = DefaultGroupAvatarURL()
+		}
+	}
 	creator := &model.ConversationMember{
 		ID:             generateID(),
 		ConversationId: conv.ID,

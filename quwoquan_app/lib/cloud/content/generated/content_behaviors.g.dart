@@ -64,6 +64,48 @@ class ContentBehaviorTracker {
     });
   }
 
+  static void trackSkip(String postId, {String contentType = ''}) {
+    _enqueue(<String, dynamic>{
+      'type': 'skip',
+      'postId': postId,
+      'contentType': contentType,
+    });
+  }
+
+  static void trackFollow(String postId, String authorId) {
+    _enqueue(<String, dynamic>{
+      'type': 'follow',
+      'postId': postId,
+      'authorId': authorId,
+    });
+  }
+
+  static void trackAuthorView(String postId, String authorId, List<String> entityRefs) {
+    _enqueue(<String, dynamic>{
+      'type': 'author_view',
+      'postId': postId,
+      'authorId': authorId,
+      'entityRefs': entityRefs,
+    });
+  }
+
+  static void trackTagClick(String postId, List<String> tags) {
+    _enqueue(<String, dynamic>{
+      'type': 'tag_click',
+      'postId': postId,
+      'tags': tags,
+    });
+  }
+
+  static void trackPlayProgress(String postId, double consumedRatio, int totalUnits) {
+    _enqueue(<String, dynamic>{
+      'type': 'play_progress',
+      'postId': postId,
+      'consumedRatio': consumedRatio,
+      'totalUnits': totalUnits,
+    });
+  }
+
   static void _enqueue(Map<String, dynamic> event) {
     _queue.add(event);
     if (_queue.length >= _flushThreshold) {

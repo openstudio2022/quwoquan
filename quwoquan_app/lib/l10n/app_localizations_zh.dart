@@ -176,16 +176,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get welcomeTitle => '趣我圈';
 
   @override
-  String get welcomeSubtitle => '以兴趣为半径，画出我们的交集';
-
-  @override
-  String get welcomeMainSlogan => '专注你的热爱，其余交给小趣';
+  String get welcomeMainSlogan => '遇见同趣，绽放热爱';
 
   @override
   String get welcomeButtonLabel => '开启发现之旅';
 
   @override
-  String get welcomeFooterCredit => '小趣私人助手 · 与你相伴';
+  String get assistantWhisperSignature => '小趣';
+
+  @override
+  String get assistantWhisperLine => '专注你的热爱，剩下的交给我';
 
   @override
   String get commentPlaceholder => '添加评论...';

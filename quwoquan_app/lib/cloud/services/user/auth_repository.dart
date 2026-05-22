@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
@@ -59,9 +58,7 @@ class MockAuthRepository implements AuthRepository {
       'accessToken': 'mock_token_${credentialKey.hashCode}',
       'refreshToken': 'mock_refresh',
       'ownerId': 'mock_owner_id',
-      'activeSub': <String, dynamic>{
-        'subAccountId': 'mock_sub_id',
-      },
+      'activeSub': <String, dynamic>{'subAccountId': 'mock_sub_id'},
       'subAccountCount': 1,
     });
   }
@@ -127,8 +124,8 @@ class MockAuthRepository implements AuthRepository {
 
 class RemoteAuthRepository implements AuthRepository {
   RemoteAuthRepository({CloudHttpClient? httpClient, String? baseUrl})
-      : _client = httpClient ?? CloudHttpClient(client: http.Client()),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+    : _client = httpClient ?? CloudHttpClient(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _client;
   final String _baseUrl;
@@ -220,7 +217,9 @@ class RemoteAuthRepository implements AuthRepository {
   @override
   Future<void> unbindCredential(String credentialType) async {
     await _client.deleteJson(
-      _uri(UserApiMetadata.unbindCredentialPath(credentialType: credentialType)),
+      _uri(
+        UserApiMetadata.unbindCredentialPath(credentialType: credentialType),
+      ),
       headers: CloudRequestHeaders.forPage(UserRequestPageIds.unbindCredential),
     );
   }
@@ -235,9 +234,10 @@ class RemoteAuthRepository implements AuthRepository {
       resp,
       context: UserRequestPageIds.listCredentials,
     );
-    return CloudResponseDecoder.mapList(data, 'credentials')
-        .map(OwnerCredentialRowDto.fromMap)
-        .toList(growable: false);
+    return CloudResponseDecoder.mapList(
+      data,
+      'credentials',
+    ).map(OwnerCredentialRowDto.fromMap).toList(growable: false);
   }
 
   @override
@@ -250,9 +250,10 @@ class RemoteAuthRepository implements AuthRepository {
       resp,
       context: UserRequestPageIds.listPersonas,
     );
-    return CloudResponseDecoder.mapList(data, 'items')
-        .map(PersonaManagementItemViewData.fromMap)
-        .toList(growable: false);
+    return CloudResponseDecoder.mapList(
+      data,
+      'items',
+    ).map(PersonaManagementItemViewData.fromMap).toList(growable: false);
   }
 
   @override
@@ -286,7 +287,9 @@ class RemoteAuthRepository implements AuthRepository {
   Future<void> deletePersona(String subAccountId) async {
     await _client.deleteJson(
       _uri(UserApiMetadata.deleteEmptyPersonaPath(subAccountId: subAccountId)),
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.deleteEmptyPersona),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.deleteEmptyPersona,
+      ),
     );
   }
 }

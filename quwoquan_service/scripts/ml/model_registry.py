@@ -32,11 +32,22 @@ def check_promotion_gate(
 ) -> tuple[bool, str]:
     """Check if new model passes promotion gate.
     
+    For multiobjective scenarios, uses fused_auc as the primary metric.
+    For standard scenarios, uses auc + ndcg_20.
     Returns (passed, reason).
     """
     current = get_production_metrics(mongo_db, scenario)
     if current is None:
         return True, "no existing production model"
+
+    is_multiobjective = "fused_auc" in new_metrics or scenario.endswith("_multiobjective")
+
+    if is_multiobjective:
+        new_fused = new_metrics.get("fused_auc", 0)
+        current_fused = current.get("fused_auc", 0)
+        if new_fused < current_fused + AUC_PROMOTION_DELTA:
+            return False, f"fused_auc {new_fused:.4f} < production {current_fused:.4f} + {AUC_PROMOTION_DELTA}"
+        return True, f"fused_auc +{new_fused - current_fused:.4f}"
 
     new_auc = new_metrics.get("auc", 0)
     current_auc = current.get("auc", 0)
@@ -100,8 +111,15 @@ def write_registry(
     version: str,
     metrics: dict[str, Any],
     artifact_path: str,
+    artifact_uri: str = "",
+    model_type: str = "lgb",
     production: bool = False,
 ):
+    if production and not str(artifact_uri or "").strip().startswith("s3://"):
+        raise RuntimeError(
+            f"production registry write requires uploaded artifactUri for scenario={scenario}/{version}"
+        )
+
     coll = mongo_db["rec_model_registry"]
     now = datetime.utcnow()
 
@@ -120,12 +138,15 @@ def write_registry(
     doc = {
         "scenario": scenario,
         "version": version,
+        "modelType": model_type,
         "metrics": metrics,
         "artifactPath": artifact_path,
+        "artifactUri": artifact_uri,
         "production": production,
         "createdAt": now,
         "updatedAt": now,
     }
     coll.insert_one(doc)
     status = "PRODUCTION" if production else "staged"
-    print(f"[model_registry] Registered {scenario}/{version} as {status}")
+    uri_info = f" uri={artifact_uri}" if artifact_uri else ""
+    print(f"[model_registry] Registered {scenario}/{version} ({model_type}) as {status}{uri_info}")

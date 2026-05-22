@@ -13,6 +13,7 @@ class CircleHeader extends StatelessWidget {
     this.tags = const [],
     this.metaLine,
     this.badgeLabel,
+    this.onTagTap,
   });
 
   final bool isDark;
@@ -22,6 +23,7 @@ class CircleHeader extends StatelessWidget {
   final List<String> tags;
   final String? metaLine;
   final String? badgeLabel;
+  final ValueChanged<String>? onTagTap;
 
   static const double avatarRadius = AppSpacing.xl;
   static const double _avatarBorder = AppSpacing.intraGroupXs;
@@ -180,10 +182,13 @@ class CircleHeader extends StatelessWidget {
                         accent: true,
                       ),
                     ...tags.map(
-                      (tag) => _buildInfoChip(
-                        label: tag,
-                        foreground: fgSecondary,
-                        background: tertiary,
+                      (tag) => GestureDetector(
+                        onTap: onTagTap != null ? () => onTagTap!(tag) : null,
+                        child: _buildInfoChip(
+                          label: tag,
+                          foreground: fgSecondary,
+                          background: tertiary,
+                        ),
                       ),
                     ),
                   ],

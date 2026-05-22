@@ -223,8 +223,20 @@ void main() {
           hostSource,
           contains('_buildBackwardRectoVersoFlippingPageSurface('),
           reason:
-              'BACK flipping sheet must split recto/front and verso/back inside '
+              'BACK flipping sheet must split recto/back-unified and verso/back inside '
               'the same soft surface.',
+        );
+        expect(
+          hostSource,
+          contains('_buildBackwardSheetFacePolygon('),
+          reason:
+              'BACK recto/front visible plane must use the previous front surface, not the semantic back texture path.',
+        );
+        expect(
+          hostSource,
+          contains('Widget _buildBackwardSheetFacePolygon'),
+          reason:
+              'BACK must keep a live recto/front page-surface helper separate from the verso/back texture path.',
         );
         expect(
           hostSource,
@@ -323,7 +335,7 @@ void main() {
           'Widget _buildBackwardRectoVersoFlippingPageSurface',
         );
         final backwardSurfaceEnd = hostSource.indexOf(
-          'Widget _buildBackwardSheetFacePolygon',
+          'Widget _buildBackwardBackFoldBandSurface',
           backwardSurfaceStart,
         );
         expect(backwardSurfaceStart, isNonNegative);
@@ -336,8 +348,13 @@ void main() {
           backwardSurfaceSource,
           contains('ArticlePageSurfaceKind.front'),
           reason:
-              'the moving sheet may keep a narrow recto/front seam while Route-B flat '
-              'front owns the S-E area.',
+              'the moving sheet recto slice must draw the previous front texture.',
+        );
+        expect(
+          backwardSurfaceSource,
+          contains('_buildBackwardSheetFacePolygon('),
+          reason:
+              'the moving sheet recto slice must be routed through the front surface path.',
         );
         expect(
           backwardSurfaceSource,
@@ -393,16 +410,35 @@ void main() {
         );
         expect(
           backFoldBandSource,
-          contains('_validPageTextureSnapshotForIndex('),
+          contains('_validBackPageTextureSnapshotForIndex('),
           reason:
-              'previous-back fold band must bind the previous/flipping leafVerso snapshot '
-              'before painting the E/F back band.',
+              'previous-back fold band must bind a semantic-back validated '
+              'previous/flipping leafVerso snapshot before painting the E/F back band.',
+        );
+        final validatorStart = hostSource.indexOf(
+          'ArticlePageTextureSnapshot? _validBackPageTextureSnapshotForIndex',
+        );
+        final validatorEnd = hostSource.indexOf(
+          'void _queueSceneTextureSnapshots',
+          validatorStart,
+        );
+        expect(validatorStart, isNonNegative);
+        expect(validatorEnd, greaterThan(validatorStart));
+        final validatorSource = hostSource.substring(
+          validatorStart,
+          validatorEnd,
+        );
+        expect(
+          validatorSource,
+          contains('semanticSurfaceKind == ArticlePageSurfaceKind.back.name'),
+          reason:
+              'BACK verso must reject same-size snapshots that are not semantic back surfaces.',
         );
         final backTextureStart = hostSource.indexOf(
           'Widget _buildBackwardVersoTextureSurface',
         );
         final backTextureEnd = hostSource.indexOf(
-          'Widget _buildBackwardSheetFacePolygon',
+          'Widget _buildBackwardRectoVersoFoldOverlay',
           backTextureStart,
         );
         expect(backTextureStart, isNonNegative);
@@ -426,16 +462,16 @@ void main() {
         );
         expect(
           backTextureSource,
-          contains('_BackwardLeafVersoUvPainter'),
+          isNot(contains('RawImage(')),
           reason:
-              'BACK mainline backBand must use a vertex-UV leafVerso painter, '
-              'not a whole-widget mirror.',
+              'BACK mainline backBand must not fall back to page-rect RawImage; '
+              'host and probes must share the same texture painter.',
         );
         expect(
           backTextureSource,
-          contains('leafVersoSnapshot'),
+          contains('_BackwardLeafVersoUvPainter'),
           reason:
-              'BACK backBand texture must come from the previous/flipping leafVerso snapshot.',
+              'BACK backBand must route the previous/flipping leafVerso snapshot through the shared painter.',
         );
         expect(
           backTextureSource,
@@ -455,22 +491,26 @@ void main() {
           reason:
               'BACK backBand must not keep a visual fallback branch that can draw the wrong texture.',
         );
-        final uvPainterStart = hostSource.indexOf(
-          'class _BackwardLeafVersoUvPainter',
+        final versoProbeSource = _readAppSource(
+          'lib/ui/content/article_reader/pageflip/layers/backward_leaf_verso_pixel_probe.dart',
         );
-        expect(uvPainterStart, isNonNegative);
-        final uvPainterSource = hostSource.substring(uvPainterStart);
         expect(
-          uvPainterSource,
+          versoProbeSource,
           contains('buildBackwardLeafVersoUvMesh('),
           reason:
-              'BACK leafVerso painter must use the shared, testable UV mesh builder.',
+              'BACK leafVerso probes must keep using the shared, testable UV mesh builder.',
         );
         expect(
-          uvPainterSource,
+          hostSource,
+          contains('paintBackwardLeafVersoSurface('),
+          reason:
+              'BACK host painter must share the same verso texture paint entrypoint as the pixel probe.',
+        );
+        expect(
+          versoProbeSource,
           contains('leafVersoSnapshot.image'),
           reason:
-              'BACK leafVerso painter must draw the previous/flipping leaf image, not current content.',
+              'BACK leafVerso probe renderer must draw the previous/flipping leaf image, not current content.',
         );
         final uvMeshSource = _readAppSource(
           'lib/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart',
@@ -483,9 +523,96 @@ void main() {
         );
         expect(
           uvMeshSource,
-          contains('pageSize.width - localPoint.dx'),
+          contains('backwardVersoTexturePoint('),
           reason:
-              'BACK leafVerso mesh must lock the forward mesh verso UV semantic.',
+              'BACK leafVerso mesh must consume the shared UV mapping helper '
+              'instead of reintroducing an inline mirror formula.',
+        );
+        final uvMappingSource = _readAppSource(
+          'lib/ui/content/article_reader/pageflip/layers/backward_leaf_verso_texture_mapping.dart',
+        );
+        expect(
+          uvMappingSource,
+          contains("semanticBackSnapshotUvLocal"),
+          reason:
+              'BACK texture diagnostics must identify the single-mirror UV strategy.',
+        );
+        expect(
+          uvMappingSource,
+          isNot(contains('pageSize.width - localPoint.dx')),
+          reason:
+              'BACK receives a semantic back snapshot that was already mirrored '
+              'by the forward back surface; UV must not mirror it again.',
+        );
+        for (final debugField in <String>[
+          'backwardVersoTextureUvStrategy',
+          'backwardFrontBackOverlapWidth',
+          'backwardBackVisibleUncoveredWidth',
+          'backwardBackVisibleProbeCount',
+          'backwardPaintSources',
+          'status',
+          'backwardVersoProbeViewportPoints',
+        ]) {
+          expect(
+            hostSource,
+            contains(debugField),
+            reason:
+                'BACK visible texture acceptance needs `$debugField` in the host debug state.',
+          );
+        }
+        final diagnosticsSource = _readAppSource(
+          'lib/components/pageflip/src/debug/pageflip_diagnostics.dart',
+        );
+        expect(
+          diagnosticsSource,
+          contains("label: 'tex'"),
+          reason:
+              'screenshot overlay must expose verso page/kind/UV/failure so texture routing is debuggable.',
+        );
+        expect(
+          diagnosticsSource,
+          contains("label: 'overlap'"),
+          reason:
+              'screenshot overlay must expose front/back overlap and visible back width.',
+        );
+        expect(
+          diagnosticsSource,
+          contains("label: 'sources'"),
+          reason:
+              'screenshot overlay must expose source attribution so visible color blocks are debuggable.',
+        );
+        for (final sourceLabel in <String>[
+          'staticCurrentFront',
+          'bottomCurrentFront',
+          'previousFrontFlat',
+          'sheetRectoFront',
+          'sheetVersoBack',
+          'foldOverlay',
+        ]) {
+          expect(
+            hostSource,
+            contains(sourceLabel),
+            reason:
+                'BACK paint source `$sourceLabel` must stay explicitly attributable.',
+          );
+        }
+        expect(
+          hostSource,
+          isNot(contains('previousFrontFlatUnifiedToBack')),
+          reason:
+              'the flat BACK plane must not be normalized into a semantic-back source.',
+        );
+        expect(
+          hostSource,
+          isNot(contains('sheetRectoUnifiedToBack')),
+          reason:
+              'the sheet recto slice must not be attributed as unified back.',
+        );
+        expect(
+          hostSource,
+          isNot(contains("status: 'unifiedToBack'")),
+          reason:
+              'BACK diagnostics must keep recto/front and verso/back source labels separate.',
         );
         expect(
           backFoldBandSource,
@@ -855,35 +982,38 @@ void main() {
       );
     });
 
-    test('BACK leafVerso UV mirrors asymmetric page-local samples', () {
-      const pageSize = Size(400, 600);
-      final mesh = buildBackwardLeafVersoUvMesh(
-        pageSize: pageSize,
-        polygon: const <Offset>[
-          Offset(40, 120),
-          Offset(260, 120),
-          Offset(260, 480),
-          Offset(40, 480),
-        ],
-      );
+    test(
+      'BACK leafVerso UV samples the already mirrored semantic back surface',
+      () {
+        const pageSize = Size(400, 600);
+        final mesh = buildBackwardLeafVersoUvMesh(
+          pageSize: pageSize,
+          polygon: const <Offset>[
+            Offset(40, 120),
+            Offset(260, 120),
+            Offset(260, 480),
+            Offset(40, 480),
+          ],
+        );
 
-      expect(mesh, isNotNull);
-      expect(
-        mesh!.textureCoordinates,
-        equals(const <Offset>[
-          Offset(360, 120),
-          Offset(140, 120),
-          Offset(140, 480),
-          Offset(360, 480),
-        ]),
-        reason:
-            'BACK leafVerso must sample the previous leaf as a paper-back mirror, '
-            'matching forward mesh `pageSize.width - localX` semantics.',
-      );
-      expect(mesh.indices, equals(<int>[0, 1, 2, 0, 2, 3]));
-    });
+        expect(mesh, isNotNull);
+        expect(
+          mesh!.textureCoordinates,
+          equals(const <Offset>[
+            Offset(40, 120),
+            Offset(260, 120),
+            Offset(260, 480),
+            Offset(40, 480),
+          ]),
+          reason:
+              'BACK leafVerso receives a snapshot that was already mirrored by '
+              'the forward back surface; UV must not mirror it a second time.',
+        );
+        expect(mesh.indices, equals(<int>[0, 1, 2, 0, 2, 3]));
+      },
+    );
 
-    test('BACK leafVerso UV preserves Route-B overflow local coordinates', () {
+    test('BACK leafVerso UV clamps Route-B overflow only at texture edges', () {
       const pageSize = Size(400, 600);
       const overflowPolygon = <Offset>[
         Offset(-72, 96),
@@ -908,14 +1038,14 @@ void main() {
       expect(
         mesh.textureCoordinates,
         equals(const <Offset>[
-          Offset(472, 96),
-          Offset(-56, 96),
-          Offset(-28, 504),
-          Offset(444, 504),
+          Offset(0, 96),
+          Offset(400, 96),
+          Offset(400, 504),
+          Offset(0, 504),
         ]),
         reason:
-            'Verso sampling must mirror raw local X with pageWidth - localX; '
-            'ImageShader clamp handles texture edge sampling, not geometry.',
+            'Route-B keeps overflow geometry, but UV must explicitly clamp to the '
+            'semantic back snapshot edge so the back does not sample undefined pixels.',
       );
       expect(mesh.indices, equals(<int>[0, 1, 2, 0, 2, 3]));
     });

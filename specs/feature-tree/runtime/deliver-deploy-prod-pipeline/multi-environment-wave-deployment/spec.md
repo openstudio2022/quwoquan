@@ -2,7 +2,7 @@
 
 ## 功能说明
 
-五类逻辑环境（alpha、beta、gamma、prod-gray、prod）与**代码一套、配置分环境**，以及 B→C→(D→E) 大波段 + prod 内小 wave 的落档与门禁对齐。
+四类逻辑环境（alpha、beta、gamma、prod）与**代码一套、配置分环境**，以及 B→C→(D→E) 大波段 + prod 内小 wave 的落档与门禁对齐。
 
 ## 范围
 

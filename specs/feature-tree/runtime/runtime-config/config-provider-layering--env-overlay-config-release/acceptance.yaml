@@ -15,9 +15,9 @@ level_acceptance:
 global_acceptance:
   A1_functional:
     scenarios:
-    - given: 存在 default 与 local 配置
+    - given: 存在 default 与 alpha 配置
       when: APP_ENV=alpha 启动
-      then: 默认配置被 local 覆盖，得到可预测结果
+      then: 默认配置被 alpha 覆盖，得到可预测结果
     - given: CONFIG_ROOT=/etc/qwq-config 且 CONFIG_VERSION=v2026.02.28.0
       when: 容器启动
       then: 从公共挂载目录读取对应版本配置并生效
@@ -32,7 +32,7 @@ global_acceptance:
   - 高风险配置变更通过滚动发布生效
   A8_test_automation:
   - 覆盖顺序和非法环境有单测
-  - 三环境加载行为有集成测试
+  - alpha/beta/gamma/prod 四环境加载行为有集成测试
   - 目录结构与版本文件映射门禁脚本自动校验并可阻断
   - S04 新建服务自动生成配置目录的回归测试通过
 execution:

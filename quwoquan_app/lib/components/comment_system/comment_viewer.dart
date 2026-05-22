@@ -10,8 +10,6 @@ import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 export 'comment_viewer_modal.dart' show CommentViewer;
 
-
-
 /// 评论输入组件
 class CommentInput extends ConsumerStatefulWidget {
   final CommentConfig config;
@@ -64,19 +62,44 @@ class _CommentInputState extends ConsumerState<CommentInput> {
     }
   }
 
+  void _insertXiaoquMention() {
+    const mention = '${UITextConstants.commentAtXiaoqu} ';
+    final text = _controller.text;
+    final selection = _controller.selection;
+    final insertionOffset = selection.isValid
+        ? selection.baseOffset.clamp(0, text.length)
+        : text.length;
+    final nextText =
+        text.substring(0, insertionOffset) +
+        mention +
+        text.substring(insertionOffset);
+    _controller
+      ..text = nextText
+      ..selection = TextSelection.collapsed(
+        offset: insertionOffset + mention.length,
+      );
+    _focusNode.requestFocus();
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+
     return Container(
       key: TestKeys.commentInputBar,
       padding: CommentResponsive.getModalPadding(context),
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundPrimary,
+        ),
         border: Border(
           top: BorderSide(
-            color: AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.borderPrimary,
+            ),
             width: AppSpacing.one,
           ),
         ),
@@ -91,9 +114,17 @@ class _CommentInputState extends ConsumerState<CommentInput> {
           if (_showEmojiPanel)
             UnifiedEmojiPicker(
               onEmojiSelected: (char) {
-                final pos = _controller.selection.baseOffset.clamp(0, _controller.text.length);
-                _controller.text = _controller.text.substring(0, pos) + char + _controller.text.substring(pos);
-                _controller.selection = TextSelection.collapsed(offset: pos + char.length);
+                final pos = _controller.selection.baseOffset.clamp(
+                  0,
+                  _controller.text.length,
+                );
+                _controller.text =
+                    _controller.text.substring(0, pos) +
+                    char +
+                    _controller.text.substring(pos);
+                _controller.selection = TextSelection.collapsed(
+                  offset: pos + char.length,
+                );
                 setState(() {});
               },
             ),
@@ -107,14 +138,23 @@ class _CommentInputState extends ConsumerState<CommentInput> {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: CommentResponsive.getContainerSpacing(context, SpacingSize.sm),
-        vertical: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.xs),
+        horizontal: CommentResponsive.getContainerSpacing(
+          context,
+          SpacingSize.sm,
+        ),
+        vertical: CommentResponsive.getIntraGroupSpacing(
+          context,
+          SpacingSize.xs,
+        ),
       ),
       margin: EdgeInsets.only(
         bottom: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.sm),
       ),
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundSecondary,
+        ),
         borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
         border: Border.all(
           color: AppColors.primaryColor.withValues(alpha: 0.3),
@@ -128,9 +168,14 @@ class _CommentInputState extends ConsumerState<CommentInput> {
             size: CommentResponsive.getCommentItemIconSize(context),
             color: AppColors.primaryColor,
           ),
-          
-              SizedBox(width: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.xs)),
-          
+
+          SizedBox(
+            width: CommentResponsive.getIntraGroupSpacing(
+              context,
+              SpacingSize.xs,
+            ),
+          ),
+
           Expanded(
             child: Text(
               '${UITextConstants.replyAction} @${widget.replyTo!.username}',
@@ -140,13 +185,16 @@ class _CommentInputState extends ConsumerState<CommentInput> {
               ),
             ),
           ),
-          
+
           GestureDetector(
             onTap: widget.onCancelReply,
             child: Icon(
               Icons.close,
               size: CommentResponsive.getCommentItemIconSize(context),
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ),
             ),
           ),
         ],
@@ -161,27 +209,47 @@ class _CommentInputState extends ConsumerState<CommentInput> {
         // 头像
         CircleAvatar(
           radius: CommentResponsive.getAvatarSize(context) / 2,
-          backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+          backgroundColor: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.backgroundSecondary,
+          ),
           child: Icon(
             Icons.person,
             size: CommentResponsive.getAvatarSize(context) / 2,
-            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundSecondary,
+            ),
           ),
         ),
-        
-        SizedBox(width: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.sm)),
-        
+
+        SizedBox(
+          width: CommentResponsive.getIntraGroupSpacing(
+            context,
+            SpacingSize.sm,
+          ),
+        ),
+
         // 输入框
         Expanded(
           child: Container(
-            height: CommentResponsive.getInputHeight(context),
+            constraints: const BoxConstraints(
+              minHeight: AppSpacing.commentInputHeight,
+              maxHeight: AppSpacing.commentInputHeight * 2,
+            ),
             decoration: BoxDecoration(
-              color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.backgroundSecondary,
+              ),
               borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
               border: Border.all(
-                color: _focusNode.hasFocus 
-                  ? AppColors.primaryColor 
-                  : AppColorsFunctional.getColor(isDark, ColorType.borderPrimary),
+                color: _focusNode.hasFocus
+                    ? AppColors.primaryColor
+                    : AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.borderPrimary,
+                      ),
                 width: _focusNode.hasFocus ? AppSpacing.two : AppSpacing.one,
               ),
             ),
@@ -191,51 +259,108 @@ class _CommentInputState extends ConsumerState<CommentInput> {
               focusNode: _focusNode,
               enabled: widget.enabled && widget.config.canUserComment,
               maxLines: null,
+              minLines: 1,
               textInputAction: TextInputAction.send,
               onSubmitted: _isComposing ? _onSubmit : null,
               decoration: InputDecoration(
                 hintText: widget.hintText ?? _getHintText(),
                 hintStyle: TextStyle(
                   fontSize: CommentResponsive.getFontSize(context, 14.0),
-                  color: isDark 
-                    ? AppColors.dark.foregroundTertiary 
-                    : AppColors.light.foregroundTertiary,
+                  color: isDark
+                      ? AppColors.dark.foregroundTertiary
+                      : AppColors.light.foregroundTertiary,
                 ),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(
-                  horizontal: CommentResponsive.getContainerSpacing(context, SpacingSize.md),
-                  vertical: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.sm),
+                  horizontal: CommentResponsive.getContainerSpacing(
+                    context,
+                    SpacingSize.md,
+                  ),
+                  vertical: CommentResponsive.getIntraGroupSpacing(
+                    context,
+                    SpacingSize.sm,
+                  ),
                 ),
               ),
               style: TextStyle(
                 fontSize: CommentResponsive.getFontSize(context, 14.0),
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundPrimary,
+                ),
               ),
             ),
           ),
         ),
-        
-        SizedBox(width: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.sm)),
+
+        SizedBox(
+          width: CommentResponsive.getIntraGroupSpacing(
+            context,
+            SpacingSize.sm,
+          ),
+        ),
+        CupertinoButton(
+          key: TestKeys.commentAtXiaoquButton,
+          padding: EdgeInsets.zero,
+          minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
+          onPressed: _insertXiaoquMention,
+          child: Container(
+            height: AppSpacing.appChromeActionButtonSize,
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.primaryColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusTwenty),
+            ),
+            child: Text(
+              UITextConstants.commentAtXiaoqu,
+              style: TextStyle(
+                fontSize: CommentResponsive.getFontSize(context, 12.0),
+                fontWeight: AppTypography.semiBold,
+                color: AppColors.primaryColor,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(
+          width: CommentResponsive.getIntraGroupSpacing(
+            context,
+            SpacingSize.sm,
+          ),
+        ),
         // Emoji 入口
-        GestureDetector(
-          onTap: () {
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
+          onPressed: () {
             setState(() {
               _showEmojiPanel = !_showEmojiPanel;
               if (_showEmojiPanel) _focusNode.unfocus();
             });
           },
-          child: Container(
-            width: CommentResponsive.getCommentItemSize(context),
-            height: CommentResponsive.getCommentItemSize(context),
-            alignment: Alignment.center,
-            child: Icon(
-              _showEmojiPanel ? Icons.keyboard_outlined : Icons.emoji_emotions_outlined,
-              size: CommentResponsive.getCommentItemIconSize(context),
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+          child: SizedBox(
+            width: AppSpacing.appChromeActionButtonSize,
+            height: AppSpacing.appChromeActionButtonSize,
+            child: Center(
+              child: Icon(
+                _showEmojiPanel
+                    ? Icons.keyboard_outlined
+                    : Icons.emoji_emotions_outlined,
+                size: AppSpacing.appChromeActionIconSize,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundSecondary,
+                ),
+              ),
             ),
           ),
         ),
-        SizedBox(width: CommentResponsive.getIntraGroupSpacing(context, SpacingSize.sm)),
+        SizedBox(
+          width: CommentResponsive.getIntraGroupSpacing(
+            context,
+            SpacingSize.sm,
+          ),
+        ),
         // 发送按钮
         _buildSendButton(context, isDark),
       ],
@@ -244,28 +369,35 @@ class _CommentInputState extends ConsumerState<CommentInput> {
 
   /// 构建发送按钮
   Widget _buildSendButton(BuildContext context, bool isDark) {
-    final canSend = _isComposing && 
-                   widget.enabled && 
-                   widget.config.canUserComment;
-    
+    final canSend =
+        _isComposing && widget.enabled && widget.config.canUserComment;
+
     return GestureDetector(
       key: TestKeys.submitCommentButton,
       onTap: canSend ? _onSubmit : null,
       child: Container(
-        width: CommentResponsive.getCommentItemSize(context),
-        height: CommentResponsive.getCommentItemSize(context),
+        width: AppSpacing.appChromeActionButtonSize,
+        height: AppSpacing.appChromeActionButtonSize,
         decoration: BoxDecoration(
-          color: canSend 
-            ? AppColors.primaryColor 
-            : AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
-          borderRadius: BorderRadius.circular(CommentResponsive.getCommentItemSize(context) / 2),
+          color: canSend
+              ? AppColors.primaryColor
+              : AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.backgroundTertiary,
+                ),
+          borderRadius: BorderRadius.circular(
+            AppSpacing.appChromeActionButtonSize / 2,
+          ),
         ),
         child: Icon(
           Icons.send,
-          size: CommentResponsive.getCommentItemIconSize(context),
-          color: canSend 
-            ? AppColors.white 
-            : AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
+          size: AppSpacing.appChromeActionIconSize,
+          color: canSend
+              ? AppColors.white
+              : AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundTertiary,
+                ),
         ),
       ),
     );
@@ -274,35 +406,35 @@ class _CommentInputState extends ConsumerState<CommentInput> {
   /// 获取提示文本
   String _getHintText() {
     if (!widget.config.canUserComment) {
-      return widget.config.isUserLoggedIn 
-        ? UITextConstants.commentClosed 
-        : UITextConstants.needLogin;
+      return widget.config.isUserLoggedIn
+          ? UITextConstants.commentClosed
+          : UITextConstants.needLogin;
     }
-    
+
     if (widget.replyTo != null) {
       return CommentHierarchyManager.getReplyPlaceholder(widget.replyTo!);
     }
-    
+
     return UITextConstants.commentPlaceholder;
   }
 
   /// 提交评论
   void _onSubmit([String? text]) {
     final content = (text ?? _controller.text).trim();
-    
+
     if (content.isEmpty) {
       return;
     }
-    
+
     // 检查内容长度
     if (content.length > 500) {
       _showError(UITextConstants.commentTooLong);
       return;
     }
-    
+
     widget.onSubmit?.call(content);
     _controller.clear();
-    
+
     // 取消回复状态
     if (widget.replyTo != null) {
       widget.onCancelReply?.call();
@@ -338,11 +470,11 @@ class CommentInputUtils {
     if (content.trim().isEmpty) {
       return UITextConstants.commentEmpty;
     }
-    
+
     if (content.length > 500) {
       return UITextConstants.commentTooLong;
     }
-    
+
     return null;
   }
 
@@ -358,8 +490,8 @@ class CommentInputUtils {
 
   /// 检查是否可以发送
   static bool canSend(String content, CommentConfig config) {
-    return content.trim().isNotEmpty && 
-           config.canUserComment &&
-           content.trim().length <= 500;
+    return content.trim().isNotEmpty &&
+        config.canUserComment &&
+        content.trim().length <= 500;
   }
 }

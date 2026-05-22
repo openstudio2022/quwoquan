@@ -11,3 +11,8 @@ redis:
     mode: standalone
     addr: "127.0.0.1:6379"
     db: 0
+
+rec_model_service:
+  url: "http://localhost:18090"
+  enabled: true
+  timeout_ms: 200

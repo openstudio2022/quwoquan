@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _common.paths import RUNTIME_ROOT  # noqa: E402
 
 from sample_data import europe_v5, sichuan_v5, thailand_v5  # noqa: E402
+from build_publish_lookup_indexes import build_publish_lookup_indexes  # noqa: E402
 
 
 def clean_old_tasks():
@@ -68,6 +69,11 @@ def main():
         total_entities += ec
         total_posts += pc
         print(f"  实体: {ec}, Posts: {pc}")
+
+    if not args.dry_run:
+        print("\n重建 publish/v1 lookup 索引...")
+        counts = build_publish_lookup_indexes()
+        print(f"  lookup 索引: entities={counts['entities']}, posts={counts['posts']}")
 
     print(f"\n合计: {total_entities} 实体, {total_posts} posts")
     if args.dry_run:

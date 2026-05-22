@@ -67,6 +67,12 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
   /// 滑动接近末尾时回调（用于加载更多）
   final VoidCallback? onNearEnd;
 
+  /// 当前显示的帖子索引变化时回调（用于追踪浏览进度）
+  final ValueChanged<int>? onPostIndexChanged;
+
+  /// 视频播放进度回调 (positionMs, totalDurationMs)
+  final void Function(int positionMs, int totalDurationMs)? onPlayProgress;
+
   /// 'full'（默认）| 'backOnly'：backOnly 时顶栏仅返回、更多
   final String toolbarMode;
 
@@ -102,6 +108,8 @@ class ImmersiveVideoViewer extends ConsumerStatefulWidget {
     this.onHeroAnimationComplete,
     this.onAssistantClick,
     this.onNearEnd,
+    this.onPostIndexChanged,
+    this.onPlayProgress,
     this.toolbarMode = 'full',
   });
 
@@ -292,6 +300,7 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
       _currentPostIndex = index;
     });
     _initializePostState();
+    widget.onPostIndexChanged?.call(index);
     if (widget.onNearEnd != null &&
         widget.posts.length > 1 &&
         index >= widget.posts.length - 2) {
@@ -684,6 +693,17 @@ class _ImmersiveVideoViewerState extends ConsumerState<ImmersiveVideoViewer>
           showControls: true,
           aspectRatio: mediaItem.aspectRatio ?? 9 / 16,
           onTap: _toggleControls,
+          onControllerCreated: (controller) {
+            if (widget.onPlayProgress == null) return;
+            controller.addListener(() {
+              if (!controller.value.isInitialized) return;
+              final pos = controller.value.position.inMilliseconds;
+              final total = controller.value.duration.inMilliseconds;
+              if (total > 0) {
+                widget.onPlayProgress!(pos, total);
+              }
+            });
+          },
         ),
       );
     }

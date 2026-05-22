@@ -223,11 +223,13 @@ class AppSpacing {
   static const double avatarRailHeight = 90.0;
 
   // ==================== 欢迎页动效（Figma WelcomeScreen） ====================
-  static const double welcomePetalWidth = 56.0;
-  static const double welcomePetalHeight = 96.0;
-  static const double welcomePetalCornerRadius = 30.0;
-  static const double welcomeDropDiameter = 112.0;
-  static const double welcomeDropBorderWidth = 1.0;
+  static const double welcomeGraphicDiameter = 256.0;
+  static const double welcomePetalWidth = 52.0;
+  static const double welcomePetalHeight = 94.0;
+  static const double welcomePetalRadialOffset = 54.0;
+
+  /// 花瓣下层径向柔光直径（羽化至透明，提亮花心叠色区；刻意避开早前「独立光圈」像素断言）。
+  static const double welcomeBloomDiameter = 92.0;
 
   /// 圈子头像圆角比例（border-radius: 20%）
   static const double avatarCircleBorderRadiusRatio = 0.2;
@@ -237,6 +239,127 @@ class AppSpacing {
 
   /// 标签导航高度: 48.0
   static const double tabNavigationHeight = 48.0;
+
+  /// 主壳顶部一级 Tab 栏的响应式高度。
+  /// 手机优先节省垂直空间（44），平板/宽屏保持 48，让顶部工具栏离手机
+  /// 状态栏的视觉间距与底部导航的上下留白对齐。
+  static double primaryTopBarHeight(BuildContext context) =>
+      responsiveValue(context, compact: 44.0, regular: 44.0, expanded: 48.0);
+
+  /// 顶部一级工具栏在挖孔/灵动岛机型上的安全区压缩值。
+  /// Tab 容器上半段延伸入安全区，使 label 上边缘与圈子搜索框顶部对齐
+  /// （均距安全区底线 xs 呼吸间距），视觉上 label 紧贴安全区。
+  static double primaryTopBarSafeTopInset(
+    double safeTop,
+    BuildContext context,
+  ) {
+    if (safeTop <= zero) {
+      return zero;
+    }
+    final labelTopPadding =
+        (primaryTopBarHeight(context) - _primaryTabFontSize) / 2;
+    return (safeTop - labelTopPadding + xs).clamp(zero, safeTop);
+  }
+
+  static const double _primaryTabFontSize = 14.0;
+
+  /// 主壳底部导航的响应式内容区高度（icon + gap + label 区域）。
+  /// 手机紧凑 50（与 iOS CupertinoTabBar 标准一致），平板/宽屏保持 56。
+  static double bottomNavBarHeight(BuildContext context) =>
+      responsiveValue(context, compact: 50.0, regular: 50.0, expanded: 56.0);
+
+  /// 工具栏统一上下内边距。
+  /// 顶部/底部工具栏共享，让间距与顶部工具栏 label-to-underline 视觉距离一致。
+  /// compact = xs(4)，保证图标紧凑不浪费垂直空间。
+  static double toolbarVerticalPadding(BuildContext context) =>
+      responsiveValue(context, compact: xs, regular: sm, expanded: sm);
+
+  /// 应用级顶部 chrome 安全区入口，复用一级 Tab 的压缩安全区算法。
+  static double appChromeTopSafeInset(double safeTop, BuildContext context) =>
+      primaryTopBarSafeTopInset(safeTop, context);
+
+  /// 应用级顶部 chrome 高度，所有一级顶栏/沉浸顶栏共享。
+  static double appChromeTopBarHeight(BuildContext context) =>
+      primaryTopBarHeight(context);
+
+  /// 普通导航栏 chrome 高度（CupertinoNavigationBar / Inset / 内页）。
+  static const double appChromeNavigationBarHeight = toolbarHeight;
+
+  /// 应用级 toolbar 纵向节奏，顶部按钮行与底部动作栏共享。
+  static double appChromeToolbarVerticalPadding(BuildContext context) =>
+      toolbarVerticalPadding(context);
+
+  /// 应用级 toolbar 操作按钮热区。
+  static const double appChromeActionButtonSize = minInteractiveSize;
+
+  /// 应用级 toolbar 操作图标尺寸。
+  static const double appChromeActionIconSize = iconMedium;
+
+  /// 顶栏文字操作最小热区高度。
+  static const double appChromeTextActionMinHeight = appChromeActionButtonSize;
+
+  /// 顶栏文字操作水平内边距。
+  static const double appChromeTextActionHorizontalPadding = containerXs;
+
+  /// 应用级 toolbar 操作组内间距。
+  static double appChromeActionGap(BuildContext context) => responsiveValue(
+    context,
+    compact: intraGroupXs,
+    regular: intraGroupSm,
+    expanded: intraGroupSm,
+  );
+
+  /// 底部 chrome 在圆弧/Home Indicator 机型上的额外左右保护。
+  static double appChromeBottomSafeSideInset(
+    BuildContext context,
+    double bottomSafeInset,
+  ) => bottomNavContentSideInset(context, bottomSafeInset);
+
+  /// 对话输入栏单行默认中心槽高度。
+  static const double chatInputToolbarMinHeight = appChromeActionButtonSize;
+
+  /// 对话输入栏外层上下留白，保持默认单行状态轻量。
+  static const double chatInputToolbarVerticalPadding = xs;
+
+  /// 对话输入栏图标按钮热区。
+  static const double chatInputIconButtonSize = appChromeActionButtonSize;
+
+  /// 对话输入栏发送按钮直径。
+  static const double chatInputSendButtonSize = appChromeActionButtonSize;
+
+  /// 评论输入默认高度，与对话输入单行槽一致。
+  static const double commentInputHeight = chatInputToolbarMinHeight;
+
+  /// 简版媒体底栏内容区高度。
+  static double mediaBottomBarHeight(BuildContext context) =>
+      bottomNavBarHeight(context);
+
+  /// 主壳底部导航条左右内收量（让 tab 项与机身底部圆角/曲面屏对齐）。
+  static double bottomNavSideInset(BuildContext context) => responsiveValue(
+    context,
+    compact: containerXs,
+    regular: zero,
+    expanded: zero,
+  );
+
+  /// 底部导航在存在 home indicator/底部圆角时的内容左右保护量。
+  /// 通过加大左右留白，允许内容在垂直方向上与底部安全区做对称收口。
+  static double bottomNavContentSideInset(
+    BuildContext context,
+    double bottomSafeInset,
+  ) {
+    final baseInset = bottomNavSideInset(context);
+    if (bottomSafeInset <= zero) {
+      return baseInset;
+    }
+    return baseInset +
+        responsiveValue(
+          context,
+          compact: containerXs,
+          regular: containerSm,
+          expanded: containerMd,
+        );
+  }
 
   /// 子标签导航高度: 44.0
   static const double subTabNavigationHeight = 44.0;
@@ -423,6 +546,36 @@ class AppSpacing {
 
   /// 媒体查看器顶栏位置指示器预估宽度（如 "1/9"）: 44.0
   static const double mediaViewerPositionIndicatorWidth = 44.0;
+
+  /// 底部导航中间创作按钮圆形直径
+  static const double primaryActionCircleSize = 36.0;
+
+  /// 底部导航普通项图标尺寸，保持当前主壳视觉基线。
+  static const double bottomNavItemIconSize = 22.0;
+
+  /// 底部导航主操作内图标尺寸。
+  static const double bottomNavPrimaryActionIconSize = 20.0;
+
+  /// 底部导航图标与标签间距。
+  static const double bottomNavIconLabelGap = oneHalf;
+
+  /// 底部导航标签字距。
+  static const double bottomNavLabelLetterSpacing = -0.08;
+
+  /// 底部导航主操作阴影垂直偏移。
+  static const double bottomNavPrimaryActionShadowOffsetDy = xs;
+
+  /// 沉浸媒体底栏作者头像尺寸，三档统一避免压过动作列。
+  static double immersiveEngagementAvatarSize(BuildContext context) =>
+      responsiveValue(
+        context,
+        compact: avatarUserSm,
+        regular: avatarUserSm,
+        expanded: avatarUserSm,
+      );
+
+  /// 沉浸媒体底栏动作标签字号，与主壳底栏 label 基线一致。
+  static const double immersiveEngagementActionLabelSize = 11.0;
 
   // ==================== 图标尺寸 ====================
   /// 小图标: 16.0

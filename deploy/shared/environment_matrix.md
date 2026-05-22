@@ -1,8 +1,8 @@
-# 部署环境矩阵（五环境 · 一套代码）
+# 部署环境矩阵（四环境 · 一套代码）
 
-> **总览**：正式环境语义统一为 **alpha → beta → gamma → prod-gray → prod**。`alpha` 与 `beta` 都是开发期本地验证；`gamma` 是云侧类生产集成验证；`prod-gray` 是准生产灰度；`prod` 是全量生产。
+> **总览**：正式环境语义统一为 **alpha → beta → gamma → prod**。`alpha` 与 `beta` 都是开发期本地验证；`gamma` 是云侧类生产集成验证；`prod` 是全量生产（**灰度放量与回滚由云侧发布策略、观测与审批在 prod 语义下完成，不单独拆分环境名**）。
 >
-> **拓扑唯一源**：[`process_domain_mapping.yaml`](process_domain_mapping.yaml)。`beta`、`gamma`、`prod-gray`、`prod` 的 domain→进程映射必须一致，避免本地集成验证与云侧发布拓扑漂移。
+> **拓扑唯一源**：[`process_domain_mapping.yaml`](process_domain_mapping.yaml)。`beta`、`gamma`、`prod` 的 domain→进程映射必须一致，避免本地集成验证与云侧发布拓扑漂移。
 
 ## 1. 环境定义
 
@@ -11,10 +11,9 @@
 | `alpha` | 单实例独立验证：端侧 App、云侧 service 各自独立跑通 | 开发机 / 模拟器 / 本机依赖 | `alpha` | 每个 domain 独立进程 | `APP_RUNTIME_ENV=alpha`；可用 `APP_DATA_SOURCE=mock` 或单服务网关 |
 | `beta` | 本地端云集成验证：本机网关 + 多服务协同 | 开发机 / 局域网 / 模拟器 | `beta` | 与 `gamma/prod` 一致 | `APP_RUNTIME_ENV=beta`、`APP_DATA_SOURCE=remote` |
 | `gamma` | 云侧类生产集成验证：ECS gamma pre + 本地 self-hosted 设备验证 | ECS / 公网入口 / 本地 Mac 设备 | `gamma` | 与 `beta/prod` 一致 | `APP_RUNTIME_ENV=gamma`、远端测试网关、测试 token |
-| `prod-gray` | 准生产灰度：有限用户 / 有审批 / 可回滚 | 生产集群灰度阶段 | `prod-gray` | 与 `prod` 一致 | `APP_RUNTIME_ENV=prod-gray`、`APP_DATA_SOURCE=remote` |
-| `prod` | 全量生产 | 生产集群 | `prod` | 全量生产拓扑 | `APP_RUNTIME_ENV=prod`、`APP_DATA_SOURCE=remote` |
+| `prod` | 全量生产（含按计划灰度与放量） | 生产集群 | `prod` | 全量生产拓扑 | `APP_RUNTIME_ENV=prod`、`APP_DATA_SOURCE=remote` |
 
-**配置约束**：服务公开 `APP_ENV` 只允许 `alpha|beta|gamma|prod-gray|prod`，运行时只读取同名配置目录。禁止通过 `local` / `integration` 目录做兼容映射。
+**配置约束**：服务公开 `APP_ENV` 只允许 `alpha|beta|gamma|prod`，运行时只读取同名配置目录。禁止通过 `local` / `integration` 目录做兼容映射。
 
 ## 1.1 多实例与单套服务口径
 
@@ -36,7 +35,7 @@
 
 ```text
 alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-hosted device evidence)
-                                                 → prod-gray(生产灰度) → prod(生产全量)
+                                                 → prod(生产：含灰度与全量)
 ```
 
 ### 2.1 local-gamma mirror（提交前本地预测试）
@@ -83,8 +82,7 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 | `alpha` | 单服务 `APP_ENV=alpha go test ./...`；端侧 `flutter test` | 单实例用例绿 |
 | `beta` | 本地启动单套网关与服务，App 注入 `APP_RUNTIME_ENV=beta` + `APP_DATA_SOURCE=remote` | 本地 Android/iOS 设备矩阵通过，且新启动前会 stop 旧 beta 栈 |
 | `gamma` | `04` PR 轻量 preflight 探针共享 gamma（readiness 阻断、smoke 告警）；`09` nightly 完整 ECS deploy + full semantic + Patrol UI + 全设备矩阵 | PR gate：readiness 绿；nightly/manual_full：hosted + self-hosted 全绿并带证据 |
-| `prod-gray` | 生产灰度流水线与 runbook 审批 | 灰度指标与回滚条件达标 |
-| `prod` | 全量发布流水线 | 生产观测稳定 |
+| `prod` | 生产发布流水线与 runbook 审批 | 灰度指标与回滚条件达标；全量观测稳定 |
 
 提交前本地左移：
 
@@ -100,3 +98,26 @@ alpha(本地单实例) → beta(本地端云集成) → gamma(ECS gamma + self-h
 - [branch_strategy.md](branch_strategy.md)
 - [deliver_to_production_runbook.md](deliver_to_production_runbook.md)
 - [gamma_validation_suites.json](gamma_validation_suites.json)
+
+## 6. 推荐模型服务环境变量
+
+| 变量 | 说明 | alpha/beta | gamma | prod |
+|------|------|------------|-------|------|
+| `REC_MODEL_SERVICE_URL` | rec-model-service 内网地址 | `http://rec-model-service:8000`（compose） | config.yaml 硬编码 | `${REC_MODEL_SERVICE_URL}` 注入 |
+| `CONFIG_ROOT` | 版本化配置根目录 | 镜像内默认 `/app`；本地 compose 可不显式注入 | `/etc/seed-box-config`（initContainer 组装） | `/etc/seed-box-config` |
+| `CONFIG_VERSION` | 配置版本 | 可空 | release-state / workflow input | workflow input |
+| `IMAGE_VERSION` | 镜像版本 | 可空 | release-state / workflow input | workflow input |
+| `MONGODB_DATABASE` | 训练 / registry 数据库 | `quwoquan_content` | `quwoquan_content` | `quwoquan_content_training`（训练） |
+| `MODEL_ARTIFACT_ENDPOINT` | S3/MinIO/OSS endpoint | 本地 MinIO 或留空 | CI Secret | CI Secret |
+| `MODEL_ARTIFACT_BUCKET` | 模型制品桶名 | `quwoquan-models` | `quwoquan-models` | `quwoquan-models` |
+| `MODEL_ARTIFACT_ACCESS_KEY` | OSS Access Key | 本地 MinIO key | CI Secret | Secret |
+| `MODEL_ARTIFACT_SECRET_KEY` | OSS Secret Key | 本地 MinIO secret | CI Secret | Secret |
+| `MODEL_CACHE_DIR` | 模型本地缓存目录 | `/app/cache` | `/app/cache` | `/app/cache` |
+| `MONGODB_URI` | 训练管线读取 events/samples | `mongodb://127.0.0.1:27017/?directConnection=true`（本地 dry-run / compose） | CI Secret `GAMMA_MONGODB_URI` | 生产 MongoDB |
+
+### 实验配置（experiments block in config.yaml）
+
+| 实验 | gamma | prod |
+|------|-------|------|
+| `rec_model_vs_rule` | rule:50 / model:50 | rule:90 / model:10 |
+| `rec_scoring_weights` | control:60 / engagement_heavy:15 / freshness_heavy:15 / explore_heavy:10 | control:80 / 其余各 5~10 |

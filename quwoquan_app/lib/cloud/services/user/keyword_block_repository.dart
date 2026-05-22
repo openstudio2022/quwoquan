@@ -1,4 +1,3 @@
-import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
@@ -25,23 +24,23 @@ class MockKeywordBlockRepository extends KeywordBlockRepository {
   final List<String> _keywords = <String>[];
 
   @override
-  Future<List<String>> getBlockedKeywords() async => List<String>.from(_keywords);
+  Future<List<String>> getBlockedKeywords() async =>
+      List<String>.from(_keywords);
 
   @override
   Future<void> setBlockedKeywords(List<String> keywords) async {
     _keywords
       ..clear()
-      ..addAll(keywords.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet());
+      ..addAll(
+        keywords.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet(),
+      );
   }
 }
 
 class RemoteKeywordBlockRepository extends KeywordBlockRepository {
-  RemoteKeywordBlockRepository({
-    CloudHttpClient? httpClient,
-    http.Client? client,
-    String? baseUrl,
-  })  : _httpClient = httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteKeywordBlockRepository({CloudHttpClient? httpClient, String? baseUrl})
+    : _httpClient = httpClient ?? CloudHttpClient(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
@@ -53,7 +52,9 @@ class RemoteKeywordBlockRepository extends KeywordBlockRepository {
     final uri = _uri(UserApiMetadata.getPrivacySettingsPath);
     final decoded = await _httpClient.getJson(
       uri,
-      headers: CloudRequestHeaders.forPage(UserRequestPageIds.getPrivacySettings),
+      headers: CloudRequestHeaders.forPage(
+        UserRequestPageIds.getPrivacySettings,
+      ),
     );
     final map = CloudResponseDecoder.asObject(
       decoded,
@@ -69,7 +70,11 @@ class RemoteKeywordBlockRepository extends KeywordBlockRepository {
   @override
   Future<void> setBlockedKeywords(List<String> keywords) async {
     final uri = _uri(UserApiMetadata.updatePrivacySettingsPath);
-    final normalized = keywords.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
+    final normalized = keywords
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
     await _httpClient.patchJson(
       uri,
       headers: CloudRequestHeaders.forPage(
@@ -79,4 +84,3 @@ class RemoteKeywordBlockRepository extends KeywordBlockRepository {
     );
   }
 }
-

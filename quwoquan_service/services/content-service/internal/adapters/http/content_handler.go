@@ -9,7 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	rterr "quwoquan_service/runtime/errors"
+	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/internal/application"
 )
@@ -19,6 +22,8 @@ type ContentHandler struct {
 	postService     *application.PostService
 	reportService   *application.ReportService
 	behaviorService *application.BehaviorService
+	importService   *application.BulkImportService
+	healthChecker   *rthealth.Checker
 }
 
 func NewContentHandler(
@@ -26,13 +31,29 @@ func NewContentHandler(
 	postService *application.PostService,
 	reportService *application.ReportService,
 	behaviorService *application.BehaviorService,
+	opts ...ContentHandlerOption,
 ) *ContentHandler {
-	return &ContentHandler{
+	h := &ContentHandler{
 		feedService:     feedService,
 		postService:     postService,
 		reportService:   reportService,
 		behaviorService: behaviorService,
 	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	return h
+}
+
+// ContentHandlerOption configures the ContentHandler.
+type ContentHandlerOption func(*ContentHandler)
+
+func WithBulkImportService(svc *application.BulkImportService) ContentHandlerOption {
+	return func(h *ContentHandler) { h.importService = svc }
+}
+
+func WithHealthChecker(c *rthealth.Checker) ContentHandlerOption {
+	return func(h *ContentHandler) { h.healthChecker = c }
 }
 
 func (h *ContentHandler) Routes() http.Handler {
@@ -41,6 +62,9 @@ func (h *ContentHandler) Routes() http.Handler {
 	mux.HandleFunc("/livez", h.handleHealthz)
 	mux.HandleFunc("/startupz", h.handleHealthz)
 	mux.HandleFunc("/metrics/rec", h.handleRecMetrics)
+	mux.HandleFunc("/metrics/rec/engagement", h.handleEngagementMetrics)
+	mux.HandleFunc("/metrics/rec/prometheus", h.handlePrometheusMetrics)
+	mux.HandleFunc("/admin/import", h.handleBulkImport)
 	mux.HandleFunc("/v1/content/users/posts", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET"))
@@ -75,12 +99,51 @@ func (h *ContentHandler) Routes() http.Handler {
 	return mux
 }
 
-func (h *ContentHandler) handleHealthz(w http.ResponseWriter, _ *http.Request) {
+func (h *ContentHandler) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if h.healthChecker != nil {
+		h.healthChecker.Handler()(w, r)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 }
 
 func (h *ContentHandler) handleRecMetrics(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, rtrec.SnapshotStats())
+	writeJSON(w, http.StatusOK, rtrec.SnapshotEngagementMetrics())
+}
+
+func (h *ContentHandler) handleEngagementMetrics(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, rtrec.SnapshotEngagementMetrics())
+}
+
+func (h *ContentHandler) handlePrometheusMetrics(w http.ResponseWriter, r *http.Request) {
+	promhttp.Handler().ServeHTTP(w, r)
+}
+
+func (h *ContentHandler) handleBulkImport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only POST"))
+		return
+	}
+	if h.importService == nil {
+		writeHTTPError(w, r, rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "unavailable"),
+			"导入服务未启用",
+			"bulk import not configured (no MongoDB)",
+		))
+		return
+	}
+	defer r.Body.Close()
+	result, err := h.importService.ImportNDJSON(r.Context(), r.Body)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"total":    result.Total,
+		"success":  result.Success,
+		"failed":   result.Failed,
+		"duration": result.Duration.String(),
+	})
 }
 
 func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
@@ -238,7 +301,7 @@ func (h *ContentHandler) handleCreatePost(w http.ResponseWriter, r *http.Request
 
 func shouldHonorTestErrorInject(r *http.Request, code string) bool {
 	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
-	if appEnv == "prod" || appEnv == "prod-gray" {
+	if appEnv == "prod" {
 		return false
 	}
 	return strings.TrimSpace(r.Header.Get("X-Test-Error-Inject")) == code
@@ -462,7 +525,7 @@ func (h *ContentHandler) handleQuoteToCircle(w http.ResponseWriter, r *http.Requ
 
 func (h *ContentHandler) handleInitMediaUpload(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		MediaType string `json:"mediaType"`
+		MediaType  string `json:"mediaType"`
 		AssetScope string `json:"assetScope"`
 		SourceKind string `json:"sourceKind"`
 	}
@@ -603,9 +666,10 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var batch struct {
-		UserID    string                           `json:"userId"`
-		SessionID string                           `json:"sessionId"`
-		Events    []application.BehaviorEventInput `json:"events"`
+		UserID        string                           `json:"userId"`
+		SessionID     string                           `json:"sessionId"`
+		FeedSessionID string                           `json:"feedSessionId"`
+		Events        []application.BehaviorEventInput `json:"events"`
 	}
 	if err := json.Unmarshal(raw, &batch); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "请求体解析失败", err.Error()))
@@ -628,6 +692,21 @@ func (h *ContentHandler) handleReportBehaviors(w http.ResponseWriter, r *http.Re
 		}
 		if strings.TrimSpace(batch.Events[i].SessionID) == "" {
 			batch.Events[i].SessionID = batch.SessionID
+		}
+		if strings.TrimSpace(batch.Events[i].FeedSessionID) == "" {
+			batch.Events[i].FeedSessionID = strings.TrimSpace(batch.FeedSessionID)
+		}
+		if strings.EqualFold(strings.TrimSpace(batch.Events[i].Type), "like") {
+			writeHTTPError(
+				w,
+				r,
+				rterr.NewInvalidArgument(
+					rterr.ModuleContent,
+					"like 需走专属点赞路由",
+					"like must use dedicated route",
+				),
+			)
+			return
 		}
 	}
 	if err := h.behaviorService.ProcessBatch(r.Context(), batch.Events); err != nil {

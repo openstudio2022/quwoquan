@@ -17,6 +17,7 @@ class PostPreviewCard extends StatelessWidget {
     this.coverUrl = '',
     this.mediaAspectRatio = 1.0,
     this.showVideoBadge = false,
+    this.mediaContent,
     this.mediaOverlay,
     this.onHorizontalDragEnd,
     this.supportingTextMaxLines = 2,
@@ -28,6 +29,7 @@ class PostPreviewCard extends StatelessWidget {
   final String coverUrl;
   final double mediaAspectRatio;
   final bool showVideoBadge;
+  final Widget? mediaContent;
   final Widget? mediaOverlay;
   final Widget footer;
   final VoidCallback onTap;
@@ -94,16 +96,17 @@ class PostPreviewCard extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        CachedNetworkImage(
-                          imageUrl: coverUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                          ),
-                          errorWidget: (context, url, error) => ColoredBox(
-                            color: fgSecondary.withValues(alpha: 0.12),
-                          ),
-                        ),
+                        mediaContent ??
+                            CachedNetworkImage(
+                              imageUrl: coverUrl,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => ColoredBox(
+                                color: fgSecondary.withValues(alpha: 0.12),
+                              ),
+                              errorWidget: (context, url, error) => ColoredBox(
+                                color: fgSecondary.withValues(alpha: 0.12),
+                              ),
+                            ),
                         if (showVideoBadge)
                           Positioned(
                             top: AppSpacing.postPreviewCardPadding,

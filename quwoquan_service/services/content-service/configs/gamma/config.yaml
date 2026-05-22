@@ -13,3 +13,22 @@ redis:
     mode: standalone
     addr: ""
     db: 0
+
+rec_model_service:
+  url: "http://rec-model-service:8000"
+  timeout_ms: 100
+  enabled: true
+
+experiments:
+  rec_model_vs_rule:
+    enabled: true
+    buckets:
+      rule: 50
+      model: 50
+  rec_scoring_weights:
+    enabled: true
+    buckets:
+      control: 60
+      engagement_heavy: 15
+      freshness_heavy: 15
+      explore_heavy: 10

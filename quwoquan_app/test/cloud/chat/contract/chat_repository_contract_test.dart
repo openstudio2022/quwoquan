@@ -38,6 +38,16 @@ void main() {
       expect(first.avatarUrl, isA<String>());
     });
 
+    test('mock 群聊头像使用群派生 URL，不使用成员个人头像', () async {
+      final inbox = await repo.listInbox(limit: 80);
+      final gridGroup = inbox.firstWhere((item) => item.id == 'conv_grid_10');
+
+      expect(gridGroup.type, 'group');
+      expect(gridGroup.avatarUrl, contains('/media/avatar/conversation/'));
+      expect(gridGroup.avatarUrl, isNot(contains('grid_10_member_1')));
+      expect(gridGroup.groupAvatarVersion, greaterThan(0));
+    });
+
     test('listConversations 与 listInbox 同为 ChatInboxDto', () async {
       final conversations = await repo.listConversations();
       expect(conversations, isNotEmpty);

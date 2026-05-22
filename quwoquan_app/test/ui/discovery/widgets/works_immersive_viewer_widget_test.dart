@@ -17,6 +17,8 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
@@ -369,6 +371,57 @@ void _consumeImageLoadExceptions(WidgetTester tester) {
   }
 }
 
+class _DeferredPostWorksViewer extends StatefulWidget {
+  const _DeferredPostWorksViewer({
+    required this.post,
+    required this.rawRow,
+    required this.revealDelay,
+  });
+
+  final PostBaseDto post;
+  final Map<String, dynamic> rawRow;
+  final Duration revealDelay;
+
+  @override
+  State<_DeferredPostWorksViewer> createState() =>
+      _DeferredPostWorksViewerState();
+}
+
+class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
+  List<PostBaseDto> _posts = const <PostBaseDto>[];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(widget.revealDelay);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _posts = <PostBaseDto>[widget.post];
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return WorksImmersiveViewer(
+      showWorksToolbar: true,
+      showTopNavigation: false,
+      externalPosts: _posts,
+      externalPostViews: _posts
+          .map(PostSummaryView.fromDto)
+          .toList(growable: false),
+      rawPostsById: _posts.isEmpty
+          ? const <String, MediaViewerPostWireRow>{}
+          : _viewerRawByPostId({widget.post.id: widget.rawRow}),
+      onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+      onAssistantTap: () {},
+    );
+  }
+}
+
 void main() {
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
@@ -579,6 +632,156 @@ void main() {
     expect((captionRailRect.right - topRailRect.right).abs(), lessThan(1));
     expect((bottomRailRect.left - topRailRect.left).abs(), lessThan(1));
     expect((bottomRailRect.right - topRailRect.right).abs(), lessThan(1));
+  });
+
+  testWidgets('首帧帖子延后就绪时 follow 按钮仍会按首帖定时出现', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final post = _photoPost();
+    await tester.pumpWidget(
+      _wrap(
+        _DeferredPostWorksViewer(
+          post: post,
+          revealDelay: const Duration(milliseconds: 50),
+          rawRow: <String, dynamic>{
+            'postId': post.id,
+            'type': 'photo',
+            'contentType': 'image',
+            'authorId': post.authorId,
+            'authorNickname': post.displayName,
+            'authorAvatarUrl': post.avatarUrl,
+            'title': '延后加载标题',
+            'body': '延后加载正文',
+            'coverUrl': post.coverUrl,
+            'imageUrls': post.imageUrls,
+          },
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    _consumeImageLoadExceptions(tester);
+    await tester.pump();
+
+    final followLane = find.byKey(const ValueKey('immersive-follow-lane'));
+    expect(find.byType(ImmersiveEngagementBar), findsOneWidget);
+    expect(tester.getSize(followLane).width, moreOrLessEquals(0, epsilon: 0.1));
+
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.getSize(followLane).width, greaterThan(0));
+  });
+
+  testWidgets('photo caption 与底部工具栏顶部保持固定间距', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final post = _photoPost(
+      imageUrls: const ['https://example.com/photo-gap.jpg'],
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'photo',
+              'contentType': 'image',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '贴底标题',
+              'body': '贴底说明正文',
+              'coverUrl': post.coverUrl,
+              'imageUrls': post.imageUrls,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final captionRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-caption-rail')),
+    );
+    final toolbarRect = tester.getRect(find.byType(ImmersiveEngagementBar));
+
+    expect(
+      toolbarRect.top - captionRect.bottom,
+      moreOrLessEquals(AppSpacing.containerSm, epsilon: 1),
+    );
+  });
+
+  testWidgets('分页书内容区与底部工具栏保持统一净空', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final post = _articlePost();
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'article',
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': post.title,
+              'body': post.body,
+              'summary': post.summary,
+              'coverUrl': post.coverUrl,
+              'articleTemplate': post.articleTemplate,
+              'articleFontPreset': post.articleFontPreset,
+              'cards': const [
+                {'title': '第二页标题', 'body': '第二页正文'},
+              ],
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final bookRect = tester.getRect(find.byType(ArticleReadOnlyBookDeck));
+    final toolbarRect = tester.getRect(find.byType(ImmersiveEngagementBar));
+
+    expect(
+      toolbarRect.top - bookRect.bottom,
+      moreOrLessEquals(AppSpacing.containerMd, epsilon: 1),
+    );
   });
 
   testWidgets('text-only moment 使用文本画布展示 title/body', (tester) async {

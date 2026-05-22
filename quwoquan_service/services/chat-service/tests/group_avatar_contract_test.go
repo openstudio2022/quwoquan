@@ -1,6 +1,9 @@
 package tests
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestGroupAvatar_GetConversationReturnsPrecomposedAvatar(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
@@ -16,6 +19,9 @@ func TestGroupAvatar_GetConversationReturnsPrecomposedAvatar(t *testing.T) {
 	avatarURL, _ := result["avatarUrl"].(string)
 	if avatarURL == "" {
 		t.Fatal("expected non-empty avatarUrl in conversation detail")
+	}
+	if !strings.Contains(avatarURL, "/media/avatar/conversation/"+convId+"/") {
+		t.Fatalf("expected precomposed conversation avatar URL, got %q", avatarURL)
 	}
 	version, ok := result["groupAvatarVersion"].(float64)
 	if !ok || int(version) <= 0 {
@@ -46,6 +52,9 @@ func TestGroupAvatar_InboxReturnsPrecomposedAvatar(t *testing.T) {
 		avatarURL, _ := row["avatarUrl"].(string)
 		if avatarURL == "" {
 			t.Fatal("expected non-empty avatarUrl in inbox row")
+		}
+		if !strings.Contains(avatarURL, "/media/avatar/conversation/"+convId+"/") {
+			t.Fatalf("expected precomposed conversation avatar URL in inbox, got %q", avatarURL)
 		}
 		return
 	}

@@ -17,13 +17,9 @@ CommentDto _commentDtoFromContentWire(Map<String, dynamic> obj) {
 }
 
 class RemoteContentRepository implements ContentRepository {
-  RemoteContentRepository({
-    CloudHttpClient? httpClient,
-    http.Client? client,
-    String? baseUrl,
-  }) : _httpClient =
-           httpClient ?? CloudHttpClient(client: client ?? http.Client()),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteContentRepository({CloudHttpClient? httpClient, String? baseUrl})
+    : _httpClient = httpClient ?? CloudHttpClient(),
+      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;

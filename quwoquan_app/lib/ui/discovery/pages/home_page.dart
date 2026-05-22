@@ -13,11 +13,12 @@ import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
-import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
+    show BehaviorAction, ReferralSource;
+import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
@@ -32,14 +33,9 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin {
-  static const String _defaultTab = 'following';
-  static const List<String> _tabOrder = <String>[
-    'following',
-    'featured',
-    'circles',
-  ];
+  static const String _defaultTab = HomePrimaryTabStrip.recommendedTabId;
+  static const List<String> _tabOrder = HomePrimaryTabStrip.homeTabIds;
   late String _activeTab;
-  late String _lastNonFeaturedTab;
 
   @override
   bool get wantKeepAlive => true;
@@ -48,11 +44,6 @@ class _HomePageState extends ConsumerState<HomePage>
   void initState() {
     super.initState();
     _activeTab = _initialTabForRoute(widget.routeLocation);
-    _lastNonFeaturedTab = _activeTab == 'featured' ? _defaultTab : _activeTab;
-    // Ensure state consistency on load
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateImmersiveState();
-    });
   }
 
   @override
@@ -62,18 +53,14 @@ class _HomePageState extends ConsumerState<HomePage>
       return;
     }
     final routeTab = _routeDrivenTab(widget.routeLocation);
-    if (routeTab == null ||
-        _activeTab == 'featured' ||
-        routeTab == _activeTab) {
+    if (routeTab == null || routeTab == _activeTab) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
         _activeTab = routeTab;
-        _lastNonFeaturedTab = routeTab;
       });
-      _updateImmersiveState();
     });
   }
 
@@ -84,7 +71,9 @@ class _HomePageState extends ConsumerState<HomePage>
   String? _routeDrivenTab(String? location) {
     switch (location) {
       case AppRoutePaths.home:
-        return 'following';
+        return _defaultTab;
+      case '/following':
+        return HomePrimaryTabStrip.followingTabId;
       default:
         return null;
     }
@@ -92,7 +81,7 @@ class _HomePageState extends ConsumerState<HomePage>
 
   void _syncShellRouteForTab(String id) {
     final targetLocation = switch (id) {
-      'following' => AppRoutePaths.home,
+      HomePrimaryTabStrip.followingTabId => AppRoutePaths.home,
       _ => null,
     };
     final router = GoRouter.maybeOf(context);
@@ -109,21 +98,8 @@ class _HomePageState extends ConsumerState<HomePage>
 
   void _handleTabChange(String id) {
     if (_activeTab == id) return;
-    if (id == 'featured' && _activeTab != 'featured') {
-      _lastNonFeaturedTab = _activeTab;
-    } else if (id != 'featured') {
-      _lastNonFeaturedTab = id;
-    }
     setState(() => _activeTab = id);
     _syncShellRouteForTab(id);
-    _updateImmersiveState();
-  }
-
-  void _handleFeaturedBack() {
-    final nextTab = _lastNonFeaturedTab == 'featured'
-        ? _defaultTab
-        : _lastNonFeaturedTab;
-    _handleTabChange(nextTab);
   }
 
   void _handleTabSwipeDragEnd(DragEndDetails details) {
@@ -146,42 +122,15 @@ class _HomePageState extends ConsumerState<HomePage>
     _handleTabChange(_tabOrder[nextIndex]);
   }
 
-  void _updateImmersiveState() {
-    final isImmersive = _activeTab == 'featured';
-    // Use Future.microtask to avoid build conflicts if called during build
-    Future.microtask(() {
-      if (!mounted) return;
-      ref.read(bottomNavHiddenProvider.notifier).setHidden(isImmersive);
-      ref.read(videoForceDarkProvider.notifier).setForceDark(isImmersive);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
+      safeTop,
+      context,
+    );
 
-    // 沉浸式模式（精品页）直接返回全屏 Viewer
-    if (_activeTab == 'featured') {
-      return CupertinoPageScaffold(
-        backgroundColor: AppColors.black,
-        // 与 AppScaffold 一致：Cupertino 壳下补透明 Material，避免 Text 继承到错误的
-        // DefaultTextStyle/Material 回退样式（真机易出现黄色下划线等强调线）。
-        child: Material(
-          type: MaterialType.transparency,
-          child: WorksImmersiveViewer(
-            showWorksToolbar: true,
-            onUserTap: _openUserProfile,
-            onAssistantTap: _openAssistantHalfSheet,
-            onTapBack: _handleFeaturedBack,
-            onSwitchToMoment: () => _handleTabChange('following'),
-            onSwitchToFollowing: () => _handleTabChange('following'),
-            onSwitchToCircles: () => _handleTabChange('circles'),
-          ),
-        ),
-      );
-    }
-
-    // 常规模式
     final isDark = ref.watch(isDarkProvider);
     final bg = AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
     final borderColor = AppColorsFunctional.getColor(
@@ -193,58 +142,65 @@ class _HomePageState extends ConsumerState<HomePage>
       backgroundColor: bg,
       child: Material(
         type: MaterialType.transparency,
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                height: AppSpacing.tabNavigationHeight,
-                decoration: BoxDecoration(
-                  color: bg,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: borderColor,
-                      width: AppSpacing.hairline,
-                    ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: effectiveTopInset),
+            Container(
+              height:
+                  AppSpacing.appChromeTopBarHeight(context) +
+                  AppSpacing.primaryTopBarHeight(context) +
+                  AppSpacing.hairline,
+              decoration: BoxDecoration(
+                color: bg,
+                border: Border(
+                  bottom: BorderSide(
+                    color: borderColor,
+                    width: AppSpacing.hairline,
                   ),
                 ),
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Center(
-                        child: HomePrimaryTabStrip(
-                          activeTab: _activeTab,
-                          onTabChange: _handleTabChange,
-                          onHorizontalDragEnd: _handleTabSwipeDragEnd,
-                          isDark: isDark,
-                        ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: AppSpacing.appChromeTopBarHeight(context),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.feedContentHorizontal(context),
                       ),
-                    ),
-                    Positioned(
-                      right: AppSpacing.topBarTrailingButtonInset(context),
-                      top: 0,
-                      bottom: 0,
                       child: const Center(
-                        child: GlobalTopActions(
+                        child: GlobalXiaoquSearchBar(
                           initialSearchScope: GlobalSearchScope.content,
-                          quickActionPriority:
-                              CreateActionSheetPriority.createPrimary,
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  SizedBox(
+                    height: AppSpacing.primaryTopBarHeight(context),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppSpacing.feedContentHorizontal(context),
+                      ),
+                      child: HomePrimaryTabStrip(
+                        activeTab: _activeTab,
+                        onTabChange: _handleTabChange,
+                        onHorizontalDragEnd: _handleTabSwipeDragEnd,
+                        isDark: isDark,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              Expanded(
-                child: TabSwipeSwitchRegion(
-                  enabled: true,
-                  onSwipe: _handleTabSwipe,
-                  child: _buildBody(isDark),
-                ),
+            ),
+            Expanded(
+              child: TabSwipeSwitchRegion(
+                enabled: true,
+                onSwipe: _handleTabSwipe,
+                child: _buildBody(isDark),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -252,23 +208,44 @@ class _HomePageState extends ConsumerState<HomePage>
 
   Widget _buildBody(bool isDark) {
     switch (_activeTab) {
-      case 'following':
-        return MomentSocialFeed(
-          isDark: isDark,
-          feedTabId: 'following',
-          onUserTap: _openUserProfile,
-          onPostTap: (post, index, {feedPosts}) {
-            _openFeedPost(post, index, feedPosts: feedPosts);
-          },
-        );
-      case 'featured':
-        // This case is handled in the main build method now for full screen
-        return const SizedBox.shrink();
-      case 'circles':
-        return CirclesHubPage(onPrimaryOverflowSwipe: _handleTabSwipe);
+      case HomePrimaryTabStrip.followingTabId:
+        return _buildFeedTab(isDark, HomePrimaryTabStrip.followingTabId);
+      case HomePrimaryTabStrip.recommendedTabId:
+        return _buildFeedTab(isDark, 'moment');
+      case HomePrimaryTabStrip.travelPhotographyTabId:
+        return _buildFeedTab(isDark, HomePrimaryTabStrip.travelTabId);
+      case HomePrimaryTabStrip.campusTabId:
+        return _buildFeedTab(isDark, HomePrimaryTabStrip.campusTabId);
+      case HomePrimaryTabStrip.travelTabId:
+        return _buildFeedTab(isDark, HomePrimaryTabStrip.travelTabId);
+      case HomePrimaryTabStrip.photographyTabId:
+        return _buildFeedTab(isDark, HomePrimaryTabStrip.photographyTabId);
+      case HomePrimaryTabStrip.techTabId:
+        return _buildFeedTab(isDark, HomePrimaryTabStrip.techTabId);
+      case HomePrimaryTabStrip.carFriendsTabId:
+        return _buildFeedTab(isDark, HomePrimaryTabStrip.carFriendsTabId);
       default:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildFeedTab(bool isDark, String feedTabId) {
+    final visualPriority = _isInlineImageCarouselTab(feedTabId);
+    return MomentSocialFeed(
+      isDark: isDark,
+      feedTabId: feedTabId,
+      inlineImageCarousel: visualPriority,
+      disableImageViewerOnTap: visualPriority,
+      onUserTap: _openUserProfile,
+      onPostTap: (post, index, {feedPosts}) {
+        _openFeedPost(post, index, feedPosts: feedPosts);
+      },
+    );
+  }
+
+  bool _isInlineImageCarouselTab(String feedTabId) {
+    return feedTabId == HomePrimaryTabStrip.travelTabId ||
+        feedTabId == HomePrimaryTabStrip.photographyTabId;
   }
 
   void _openUserProfile(
@@ -288,18 +265,6 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  void _openAssistantHalfSheet() {
-    final target = VisitTarget.page('home_$_activeTab');
-    final service = ref.read(visitRecorderServiceProvider);
-    final ctx = AssistantOpenContext(
-      source: AssistantSource.discovery,
-      tab: _activeTab,
-      visitTarget: target,
-      experienceLevel: service.getExperience(target),
-    );
-    AssistantHalfSheet.show(context, ctx);
-  }
-
   Future<void> _openFeedPost(
     PostBaseDto post,
     int mediaIndex, {
@@ -311,6 +276,20 @@ class _HomePageState extends ConsumerState<HomePage>
     if (viewerPosts.isEmpty) {
       return;
     }
+
+    final navFeedRequestId = ref
+        .read(feedSessionProvider.notifier)
+        .newFeedRequestId();
+    ref
+        .read(behaviorRepositoryProvider)
+        .reportSingle(
+          contentId: post.id,
+          action: BehaviorAction.click,
+          authorId: post.authorId,
+          referralSource: ReferralSource.organicFeed,
+          feedRequestId: navFeedRequestId,
+        );
+
     final rawPostsById = homeFollowingMediaViewerRaws(
       content: ref.read(contentRepositoryProvider),
       viewerPosts: viewerPosts,
@@ -349,6 +328,7 @@ class _HomePageState extends ConsumerState<HomePage>
         initialImageIndex: mediaIndex,
         rawPostsById: rawPostsById,
         interactionSnapshot: interactionSnapshot,
+        feedRequestId: navFeedRequestId,
       ),
     );
     if (result is MediaViewerResult) {
@@ -358,5 +338,81 @@ class _HomePageState extends ConsumerState<HomePage>
 
   bool _supportsUnifiedViewer(PostBaseDto post) {
     return post.supportsUnifiedViewer;
+  }
+}
+
+class HomeFeaturedImmersivePage extends ConsumerWidget {
+  const HomeFeaturedImmersivePage({super.key, required this.onExitToHome});
+
+  final VoidCallback onExitToHome;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
+      safeTop,
+      context,
+    );
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.black,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: effectiveTopInset),
+            Expanded(
+              child: WorksImmersiveViewer(
+                showWorksToolbar: true,
+                topChromeSafeInset: AppSpacing.zero,
+                onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
+                    _openUserProfile(
+                      context,
+                      userId,
+                      avatarUrl: avatarUrl,
+                      displayName: displayName,
+                      backgroundUrl: backgroundUrl,
+                    ),
+                onAssistantTap: () => _openAssistantHalfSheet(context, ref),
+                onTapBack: onExitToHome,
+                onSwitchToMoment: onExitToHome,
+                onSwitchToFollowing: onExitToHome,
+                onSwitchToCircles: onExitToHome,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openUserProfile(
+    BuildContext context,
+    String userId, {
+    String? avatarUrl,
+    String? displayName,
+    String? backgroundUrl,
+  }) {
+    context.push(
+      AppRoutePaths.userProfile(username: userId),
+      extra: UserProfileRouteExtra(
+        subAccountId: userId,
+        avatar: avatarUrl,
+        displayName: displayName,
+        backgroundImage: backgroundUrl,
+      ),
+    );
+  }
+
+  void _openAssistantHalfSheet(BuildContext context, WidgetRef ref) {
+    final target = VisitTarget.page('home_featured');
+    final service = ref.read(visitRecorderServiceProvider);
+    final ctx = AssistantOpenContext(
+      source: AssistantSource.discovery,
+      tab: HomePrimaryTabStrip.featuredTabId,
+      visitTarget: target,
+      experienceLevel: service.getExperience(target),
+    );
+    AssistantHalfSheet.show(context, ctx);
   }
 }

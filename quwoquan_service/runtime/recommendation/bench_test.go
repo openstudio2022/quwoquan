@@ -17,7 +17,7 @@ func BenchmarkGetFeed_SingleSource(b *testing.B) {
 	for i := range candidates {
 		candidates[i] = ContentCandidate{
 			ContentID:   fmt.Sprintf("c%d", i),
-			ContentType: []string{"image", "video", "article"}[i%3],
+			ContentType: []string{"photo", "video", "article"}[i%3],
 			AuthorID:    fmt.Sprintf("a%d", i%20),
 			Tags:        []string{fmt.Sprintf("tag%d", i%10), fmt.Sprintf("cat%d", i%5)},
 			PublishedAt: now.Add(-time.Duration(i) * time.Hour),
@@ -55,7 +55,7 @@ func BenchmarkGetFeed_WithSessionCache(b *testing.B) {
 	for i := range candidates {
 		candidates[i] = ContentCandidate{
 			ContentID:   fmt.Sprintf("c%d", i),
-			ContentType: []string{"image", "video", "article"}[i%3],
+			ContentType: []string{"photo", "video", "article"}[i%3],
 			AuthorID:    fmt.Sprintf("a%d", i%20),
 			Tags:        []string{fmt.Sprintf("tag%d", i%10)},
 			PublishedAt: now.Add(-time.Duration(i) * time.Hour),
@@ -94,7 +94,7 @@ func BenchmarkGetFeed_MultiSource(b *testing.B) {
 		for i := range out {
 			out[i] = ContentCandidate{
 				ContentID:   fmt.Sprintf("%s_%d", prefix, i),
-				ContentType: "image",
+				ContentType: "photo",
 				AuthorID:    fmt.Sprintf("a%d", i%10),
 				Tags:        []string{fmt.Sprintf("tag%d", i%5)},
 				PublishedAt: now,
@@ -210,7 +210,7 @@ func BenchmarkGetFeed_WithPool(b *testing.B) {
 	for i := range candidates {
 		candidates[i] = ContentCandidate{
 			ContentID:   fmt.Sprintf("c%d", i),
-			ContentType: []string{"image", "video", "article"}[i%3],
+			ContentType: []string{"photo", "video", "article"}[i%3],
 			AuthorID:    fmt.Sprintf("a%d", i%20),
 			Tags:        []string{fmt.Sprintf("tag%d", i%10), fmt.Sprintf("cat%d", i%5)},
 			PublishedAt: now.Add(-time.Duration(i) * time.Hour),

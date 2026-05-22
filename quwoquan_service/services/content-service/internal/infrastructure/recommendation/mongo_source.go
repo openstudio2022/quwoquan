@@ -59,11 +59,12 @@ func (s *MongoCandidateSource) Recall(ctx context.Context, req rtrec.RecallReque
 			AuthorID:     doc.AuthorID,
 			Title:        doc.Title,
 			Tags:         doc.Tags,
+			EntityRefs:   doc.EntityRefs,
 			PublishedAt:  doc.PublishedAt,
 			ViewCount:    doc.ViewCount,
 			LikeCount:    doc.LikeCount,
 			CommentCount: doc.CommentCount,
-			ShareCount:   0,
+			ShareCount:   doc.ShareCount,
 			RecallPath:   "mongo_discovery",
 		})
 	}
@@ -76,9 +77,11 @@ type discoveryFeedDoc struct {
 	AuthorID      string    `bson:"authorId"`
 	Title         string    `bson:"title"`
 	Tags          []string  `bson:"tags"`
+	EntityRefs    []string  `bson:"entityRefs"`
 	CoverURL      string    `bson:"coverUrl"`
 	LikeCount     int64     `bson:"likeCount"`
 	CommentCount  int64     `bson:"commentCount"`
+	ShareCount    int64     `bson:"shareCount"`
 	FavoriteCount int64     `bson:"favoriteCount"`
 	ViewCount     int64     `bson:"viewCount"`
 	PublishedAt   time.Time `bson:"publishedAt"`

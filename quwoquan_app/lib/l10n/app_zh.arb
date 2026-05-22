@@ -62,10 +62,10 @@
   "comment": "评论",
 
   "welcomeTitle": "趣我圈",
-  "welcomeSubtitle": "以兴趣为半径，画出我们的交集",
-  "welcomeMainSlogan": "专注你的热爱，其余交给小趣",
+  "welcomeMainSlogan": "遇见同趣，绽放热爱",
   "welcomeButtonLabel": "开启发现之旅",
-  "welcomeFooterCredit": "小趣私人助手 · 与你相伴",
+  "assistantWhisperSignature": "小趣",
+  "assistantWhisperLine": "专注你的热爱，剩下的交给我",
 
   "commentPlaceholder": "添加评论...",
   "commentTooLong": "评论过长",

@@ -2,6 +2,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 /// 圆角方形头像组件（替代 CircleAvatar）
 ///
@@ -15,6 +16,7 @@ class RoundedSquareAvatar extends StatelessWidget {
     this.borderRadius,
     this.onTap,
     this.backgroundColor,
+    this.fallbackIcon,
   });
 
   final double size;
@@ -23,6 +25,7 @@ class RoundedSquareAvatar extends StatelessWidget {
   final double? borderRadius;
   final VoidCallback? onTap;
   final Color? backgroundColor;
+  final IconData? fallbackIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -51,12 +54,13 @@ class RoundedSquareAvatar extends StatelessWidget {
     double radius,
     bool isDark,
   ) {
-    return Image.network(
-      candidates[index],
+    return AppCachedNetworkImage(
+      imageUrl: candidates[index],
       width: size,
       height: size,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, _) {
+      placeholder: _buildLoadingPlaceholder(radius, isDark),
+      errorWidget: () {
         final next = index + 1;
         if (next < candidates.length) {
           return _buildNetworkImageWithFallback(
@@ -67,7 +71,20 @@ class RoundedSquareAvatar extends StatelessWidget {
           );
         }
         return _buildFallback(radius, isDark);
-      },
+      }(),
+    );
+  }
+
+  Widget _buildLoadingPlaceholder(double radius, bool isDark) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color:
+            backgroundColor ??
+            AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
+        borderRadius: BorderRadius.circular(radius),
+      ),
     );
   }
 
@@ -83,17 +100,26 @@ class RoundedSquareAvatar extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
       ),
       alignment: Alignment.center,
-      child: Text(
-        initial,
-        style: TextStyle(
-          fontSize: size * 0.4,
-          fontWeight: FontWeight.w600,
-          color: AppColorsFunctional.getColor(
-            isDark,
-            ColorType.foregroundSecondary,
-          ),
-        ),
-      ),
+      child: fallbackIcon == null
+          ? Text(
+              initial,
+              style: TextStyle(
+                fontSize: size * 0.4,
+                fontWeight: FontWeight.w600,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundSecondary,
+                ),
+              ),
+            )
+          : Icon(
+              fallbackIcon,
+              size: size * 0.5,
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundSecondary,
+              ),
+            ),
     );
   }
 

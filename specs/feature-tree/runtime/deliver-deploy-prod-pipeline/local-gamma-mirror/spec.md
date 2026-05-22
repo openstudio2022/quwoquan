@@ -18,7 +18,7 @@
 ## Out of Scope
 
 - 不替代云侧 gamma 的 K8s、Ingress/LB、Secret、云观测、云网络策略与多云 overlay 验证。
-- 不替代 prod-gray 的真实灰度流量、SLO 卡点、审批与回滚演练。
+- 不替代云侧 prod 灰度流量、SLO 卡点、审批与回滚演练。
 - 不新增 `local-gamma` 配置目录、`APP_ENV` 枚举或第四份 seed manifest。
 - 不在生产包中引入 test fixture、seed reset 或本地 mirror URL。
 

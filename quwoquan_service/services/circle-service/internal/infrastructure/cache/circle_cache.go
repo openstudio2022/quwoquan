@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/redis/go-redis/v9"
+	rtredis "quwoquan_service/runtime/redis"
 
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
@@ -21,10 +21,10 @@ const (
 // Cache is invalidated on write operations per storage.yaml invalidation rules.
 type CachedCircleStore struct {
 	inner persistence.CircleStore
-	rdb   redis.Cmdable
+	rdb   rtredis.Client
 }
 
-func NewCachedCircleStore(inner persistence.CircleStore, rdb redis.Cmdable) *CachedCircleStore {
+func NewCachedCircleStore(inner persistence.CircleStore, rdb rtredis.Client) *CachedCircleStore {
 	return &CachedCircleStore{inner: inner, rdb: rdb}
 }
 
@@ -33,12 +33,12 @@ func (s *CachedCircleStore) cacheKey(id string) string {
 }
 
 func (s *CachedCircleStore) invalidate(ctx context.Context, id string) {
-	s.rdb.Del(ctx, s.cacheKey(id))
+	_ = s.rdb.Del(ctx, s.cacheKey(id))
 }
 
 func (s *CachedCircleStore) FindByID(ctx context.Context, id string) (*model.Circle, bool) {
 	key := s.cacheKey(id)
-	data, err := s.rdb.Get(ctx, key).Bytes()
+	data, err := s.rdb.GetBytes(ctx, key)
 	if err == nil {
 		var c model.Circle
 		if json.Unmarshal(data, &c) == nil {
@@ -52,7 +52,7 @@ func (s *CachedCircleStore) FindByID(ctx context.Context, id string) (*model.Cir
 	}
 
 	if encoded, err := json.Marshal(c); err == nil {
-		s.rdb.Set(ctx, key, encoded, circleCacheTTL)
+		_ = s.rdb.SetBytes(ctx, key, encoded, circleCacheTTL)
 	}
 	return c, true
 }

@@ -70,6 +70,7 @@ class ConversationCacheRecord {
       title: dto.title?.trim() ?? '',
       avatarUrl: dto.avatarUrl?.trim() ?? '',
       groupAvatarVersion: dto.groupAvatarVersion,
+      groupAvatarSourceHash: dto.groupAvatarSourceHash?.trim(),
       creatorId: dto.creatorId.trim(),
       circleId: dto.circleId?.trim() ?? '',
       maxSeq: dto.maxSeq,

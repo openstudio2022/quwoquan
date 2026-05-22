@@ -3,6 +3,28 @@
 export const platformConfigSchema = {
   "configs": [
     {
+      "key": "sys.config_center.poll_interval_sec",
+      "type": "int",
+      "owner": "platform-ops",
+      "default": 30,
+      "scope": "environment",
+      "reload": "hot",
+      "rollout": "progressive",
+      "risk_level": "medium",
+      "ui_editable": true
+    },
+    {
+      "key": "sys.config_center.disk_fallback_enabled",
+      "type": "bool",
+      "owner": "platform-ops",
+      "default": true,
+      "scope": "environment",
+      "reload": "hot",
+      "rollout": "progressive",
+      "risk_level": "high",
+      "ui_editable": true
+    },
+    {
       "key": "sys.gateway.rate_limit.per_user_rps",
       "type": "int",
       "owner": "platform-ops",

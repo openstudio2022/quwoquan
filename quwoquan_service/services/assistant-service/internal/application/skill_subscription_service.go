@@ -6,8 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	rterr "quwoquan_service/runtime/errors"
 	rtid "quwoquan_service/runtime/id"
+	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
 
@@ -18,7 +21,12 @@ type SkillSubscriptionStore interface {
 	UpdateSkillSubscriptionStatus(ctx context.Context, userID, subscriptionID, status string, updatedAt time.Time) (assistant.SkillSubscription, error)
 }
 
-func (s *AssistantService) CreateSkillSubscription(ctx context.Context, userID string, input assistant.CreateSkillSubscriptionInput) (assistant.SkillSubscription, error) {
+func (s *AssistantService) CreateSkillSubscription(ctx context.Context, userID string, input assistant.CreateSkillSubscriptionInput) (_ assistant.SkillSubscription, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.CreateSkillSubscription",
+		attribute.String("user.id", userID),
+		attribute.String("skill.id", input.SkillID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.subscriptions == nil {
 		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
 	}
@@ -33,7 +41,12 @@ func (s *AssistantService) CreateSkillSubscription(ctx context.Context, userID s
 	return s.subscriptions.CreateSkillSubscription(ctx, normalized)
 }
 
-func (s *AssistantService) ListSkillSubscriptions(ctx context.Context, userID string, status string, limit int) (assistant.SkillSubscriptionListView, error) {
+func (s *AssistantService) ListSkillSubscriptions(ctx context.Context, userID string, status string, limit int) (_ assistant.SkillSubscriptionListView, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListSkillSubscriptions",
+		attribute.String("user.id", userID),
+		attribute.String("subscription.status", status))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.subscriptions == nil {
 		return assistant.SkillSubscriptionListView{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
 	}
@@ -51,14 +64,23 @@ func (s *AssistantService) ListSkillSubscriptions(ctx context.Context, userID st
 	return assistant.SkillSubscriptionListView{Items: items}, nil
 }
 
-func (s *AssistantService) GetSkillSubscription(ctx context.Context, userID, subscriptionID string) (assistant.SkillSubscription, error) {
+func (s *AssistantService) GetSkillSubscription(ctx context.Context, userID, subscriptionID string) (_ assistant.SkillSubscription, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GetSkillSubscription",
+		attribute.String("subscription.id", subscriptionID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.subscriptions == nil {
 		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
 	}
 	return s.subscriptions.GetSkillSubscription(ctx, strings.TrimSpace(userID), strings.TrimSpace(subscriptionID))
 }
 
-func (s *AssistantService) UpdateSkillSubscriptionStatus(ctx context.Context, userID, subscriptionID string, input assistant.UpdateSkillSubscriptionStatusInput) (assistant.SkillSubscription, error) {
+func (s *AssistantService) UpdateSkillSubscriptionStatus(ctx context.Context, userID, subscriptionID string, input assistant.UpdateSkillSubscriptionStatusInput) (_ assistant.SkillSubscription, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.UpdateSkillSubscriptionStatus",
+		attribute.String("subscription.id", subscriptionID),
+		attribute.String("subscription.status", input.Status))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.subscriptions == nil {
 		return assistant.SkillSubscription{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
 	}
@@ -69,7 +91,10 @@ func (s *AssistantService) UpdateSkillSubscriptionStatus(ctx context.Context, us
 	return s.subscriptions.UpdateSkillSubscriptionStatus(ctx, strings.TrimSpace(userID), strings.TrimSpace(subscriptionID), status, s.now())
 }
 
-func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input assistant.SkillSubscriptionCronTickInput) (assistant.SkillSubscriptionCronTickResult, error) {
+func (s *AssistantService) TickSkillSubscriptionCron(ctx context.Context, input assistant.SkillSubscriptionCronTickInput) (_ assistant.SkillSubscriptionCronTickResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.TickSkillSubscriptionCron")
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if s.subscriptions == nil {
 		return assistant.SkillSubscriptionCronTickResult{}, rterr.NewUnavailable(rterr.ModuleAssistant, "订阅存储不可用", "skill subscription store is not configured")
 	}

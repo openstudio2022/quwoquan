@@ -26,9 +26,9 @@ service="${service:-${SERVICE:-}}"
 env_name="${env_name:-${ENV:-}}"
 
 case "$env_name" in
-  alpha|beta|gamma|prod-gray|prod) ;;
+  alpha|beta|gamma|prod) ;;
   *)
-    echo "FAIL: --env must be one of alpha|beta|gamma|prod-gray|prod" >&2
+    echo "FAIL: --env must be one of alpha|beta|gamma|prod" >&2
     exit 2
     ;;
 esac
@@ -67,16 +67,15 @@ value = match.group(1).strip()
 if value.startswith("${"):
     value = {
         "prod": "https://avatar-cdn.quwoquan.com",
-        "prod-gray": "https://avatar-cdn.quwoquan.com",
     }.get(env_name, value)
 if not (value.startswith("http://") or value.startswith("https://")):
     raise SystemExit("chat-service group_avatar_cdn_base_url must include http/https scheme")
 if env_name in {"gamma"} and not (value.endswith(".quwoquan-env.test") or ".quwoquan-env.test/" in value):
     raise SystemExit("gamma chat-service group avatar CDN must use *.quwoquan-env.test or explicit env-test domain")
-if env_name in {"prod", "prod-gray"}:
+if env_name in {"prod"}:
     forbidden = (".example", ".test", "127.0.0.1", "10.0.2.2", "192.168.", "mock-cdn.example.com")
     if value.startswith("http://") or any(token in value for token in forbidden):
-        raise SystemExit("prod/prod-gray chat-service group avatar CDN must be production HTTPS domain")
+        raise SystemExit("prod chat-service group avatar CDN must be production HTTPS domain")
 PY
 fi
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
@@ -11,11 +12,13 @@ import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 class CircleDetailPage extends ConsumerStatefulWidget {
   final String circleId;
   final VoidCallback onBack;
+  final ReferralSource referralSource;
 
   const CircleDetailPage({
     super.key,
     required this.circleId,
     required this.onBack,
+    this.referralSource = ReferralSource.organicFeed,
   });
 
   @override
@@ -34,6 +37,10 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
                 id: widget.circleId,
               ),
             );
+        ref.read(contentEngagementTrackerProvider).trackEntityPageView(
+          widget.circleId,
+          from: widget.referralSource,
+        );
       }
     });
   }

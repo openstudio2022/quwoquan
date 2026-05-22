@@ -10,7 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	runtimegovernance "quwoquan_service/runtime/governance"
+	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
@@ -73,7 +76,11 @@ type LoginResult struct {
 
 // LoginWithCredential authenticates via the given credential type and key.
 // It creates a new OwnerAccount + default SubAccount if not found.
-func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey, displayLabel string) (*LoginResult, error) {
+func (s *AuthService) LoginWithCredential(ctx context.Context, credType, credKey, displayLabel string) (_ *LoginResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginWithCredential",
+		attribute.String("credential.type", credType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	if strings.TrimSpace(credType) == credentialAnonymousDevice {
 		credKey = normalizeAnonymousCredentialKey(credKey)
 	}
@@ -163,7 +170,11 @@ func (s *AuthService) LoginAnonymously(
 	deviceFingerprintHash string,
 	platform string,
 	appVersion string,
-) (*LoginResult, error) {
+) (_ *LoginResult, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.LoginAnonymously",
+		attribute.String("platform", platform))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	installIDHash := hashInstallID(installID)
 	deviceFingerprintHash = normalizeAnonymousCredentialKey(deviceFingerprintHash)
 	if installIDHash == "" {
@@ -216,7 +227,12 @@ func (s *AuthService) LoginAnonymously(
 }
 
 // BindCredential binds a new credential to an existing OwnerAccount.
-func (s *AuthService) BindCredential(ctx context.Context, ownerID, credType, credKey, displayLabel string) error {
+func (s *AuthService) BindCredential(ctx context.Context, ownerID, credType, credKey, displayLabel string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.BindCredential",
+		attribute.String("owner.id", ownerID),
+		attribute.String("credential.type", credType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	// Check global uniqueness: this credential must not be bound to another owner
 	existing, err := s.credentials.FindByTypeAndKey(ctx, credType, credKey)
 	if err != nil {
@@ -267,7 +283,12 @@ func (s *AuthService) BindCredential(ctx context.Context, ownerID, credType, cre
 }
 
 // UnbindCredential deactivates a credential, but prevents removing the last one.
-func (s *AuthService) UnbindCredential(ctx context.Context, ownerID, credType string) error {
+func (s *AuthService) UnbindCredential(ctx context.Context, ownerID, credType string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.UnbindCredential",
+		attribute.String("owner.id", ownerID),
+		attribute.String("credential.type", credType))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	count, err := s.credentials.CountActive(ctx, ownerID)
 	if err != nil {
 		return err
@@ -279,7 +300,11 @@ func (s *AuthService) UnbindCredential(ctx context.Context, ownerID, credType st
 }
 
 // ListCredentials returns the public-facing (masked) credential list for an owner.
-func (s *AuthService) ListCredentials(ctx context.Context, ownerID string) ([]model.CredentialBinding, error) {
+func (s *AuthService) ListCredentials(ctx context.Context, ownerID string) (_ []model.CredentialBinding, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.ListCredentials",
+		attribute.String("owner.id", ownerID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return s.credentials.FindByOwner(ctx, ownerID)
 }
 

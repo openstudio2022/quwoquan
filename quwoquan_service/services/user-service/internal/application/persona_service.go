@@ -5,7 +5,9 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/attribute"
 
+	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
@@ -21,11 +23,19 @@ func NewPersonaService(personas userrepo.PersonaRepository, pool *pgxpool.Pool, 
 	return &PersonaService{personas: personas, pool: pool, pcache: pcache}
 }
 
-func (s *PersonaService) List(ctx context.Context, userID string) ([]model.Persona, error) {
+func (s *PersonaService) List(ctx context.Context, userID string) (_ []model.Persona, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.PersonaList",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	return s.personas.FindByUserID(ctx, userID)
 }
 
-func (s *PersonaService) Create(ctx context.Context, userID string, data map[string]any) (*model.Persona, error) {
+func (s *PersonaService) Create(ctx context.Context, userID string, data map[string]any) (_ *model.Persona, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.PersonaCreate",
+		attribute.String("user.id", userID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	subAccountID, err := buildSubAccountIdentity(extractOwnerRootPrefix(userID))
 	if err != nil {
 		return nil, err
@@ -51,7 +61,11 @@ func (s *PersonaService) Create(ctx context.Context, userID string, data map[str
 	return p, nil
 }
 
-func (s *PersonaService) Update(ctx context.Context, personaID string, data map[string]any) (*model.Persona, error) {
+func (s *PersonaService) Update(ctx context.Context, personaID string, data map[string]any) (_ *model.Persona, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.PersonaUpdate",
+		attribute.String("persona.id", personaID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	p, err := s.personas.FindByID(ctx, personaID)
 	if err != nil {
 		return nil, err
@@ -75,7 +89,11 @@ func (s *PersonaService) Update(ctx context.Context, personaID string, data map[
 	return p, nil
 }
 
-func (s *PersonaService) Delete(ctx context.Context, personaID string) error {
+func (s *PersonaService) Delete(ctx context.Context, personaID string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.PersonaDelete",
+		attribute.String("persona.id", personaID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	p, err := s.personas.FindByID(ctx, personaID)
 	if err != nil {
 		return err
@@ -93,7 +111,11 @@ func (s *PersonaService) Delete(ctx context.Context, personaID string) error {
 	return nil
 }
 
-func (s *PersonaService) Activate(ctx context.Context, personaID string) error {
+func (s *PersonaService) Activate(ctx context.Context, personaID string) (err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "user.PersonaActivate",
+		attribute.String("persona.id", personaID))
+	defer func() { rtobs.EndSpan(span, err) }()
+
 	p, err := s.personas.FindByID(ctx, personaID)
 	if err != nil {
 		return err

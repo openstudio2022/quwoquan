@@ -1,0 +1,442 @@
+---
+description: 编码军规 · 八角色全视角 · 历史教训驱动（每次开发必须遵从）
+alwaysApply: true
+---
+
+# 编码军规
+
+> 本文件是从产品总监、架构师、代码评审人员、质量审核人员、测试人员、使用者、运维和运营八个角色视角提炼的强制约束。
+> 所有规则来自仓库实际反模式审计 + 历史返工教训，非理论推导。
+> 与具体子域规则冲突时，以子域规则为准（如 `12-pageflip-backward-mainline.mdc`）；本文件覆盖所有子域共性。
+
+---
+
+## 0. 八角色视角速查
+
+每条军规标注其主要关注角色：
+
+| 角色 | 缩写 | 核心关注 |
+|------|------|---------|
+| 产品总监 | **P** | 用户价值落地、验收可度量、功能覆盖无盲区 |
+| 架构师 | **A** | 分层正确、抽象克制、存储无关、可扩展不可逆 |
+| 代码评审 | **R** | 类型安全、元数据驱动、无硬编码、无冗余分支 |
+| 质量审核 | **Q** | 测试一体、Mock↔Remote 一致、门禁绿灯 |
+| 测试人员 | **T** | T1-T4 分层覆盖、契约不漂移、环境数据驱动 |
+| 使用者 | **U** | 性能无断点、异常有兜底、体验一致 |
+| 运维 | **O** | 可观测、TTL 明确、存储可替换、回滚可行 |
+| 运营 | **M** | 埋点全覆盖、指标可算、AB 可切分、旅程可还原 |
+
+---
+
+## 1. 架构分层军规 [A R]
+
+### R01 — DDD 依赖方向不可逆
+
+```
+domain ← application ← adapters ← infrastructure
+```
+
+| 层 | 允许 import | 绝对禁止 import |
+|----|-------------|----------------|
+| domain | 标准库, runtime 接口 | application, adapters, infrastructure, DB 驱动 |
+| application | domain, 标准库, runtime 接口 | adapters, infrastructure, DB 驱动 |
+| adapters | domain, application, 标准库 | infrastructure 内部实现 |
+| infrastructure | 全部内部层, DB 驱动 | — |
+
+**历史教训**：审计发现 `content-service`、`chat-service`、`user-service` 等多个服务的 application 层**大量直接 import infrastructure**（如 `post_service.go` import `infrastructure/recommendation`），`rtc-service` 的 application 甚至直接 import adapters（`mq`、`ws`）。这使得**业务逻辑与存储实现强耦合**，违反存储无关原则，导致替换存储时必须改业务代码。
+
+**实例**：`runtime/projector/readmodels.go` 在 runtime 层直接 import Mongo driver（`go.mongodb.org`），与同一 runtime 层的 recommendation 模块形成**命名空间冲突**——存在两套 `DiscoveryFeedProjector`（runtime vs infrastructure），任何消费者都可能引用错误的那一个。
+
+### R02 — 接口隔离：单接口不超过 10 个方法
+
+**历史教训**：审计发现 Dart 端多个 Repository 严重膨胀——`ContentRepository` 39+ 方法、`CircleRepository` 34 方法、`ChatRepository` 31 方法、`UserProfileRepository` 26+ 方法。这些"上帝接口"导致 Mock 实现庞大、测试难以聚焦、消费者被迫依赖不需要的方法。
+
+**军规**：新增 Repository 或 interface 方法超过 10 个时，必须按读写、场景或子域拆分为细粒度接口（如 `ContentReadRepository`、`ContentWriteRepository`、`ContentInteractionRepository`）。存量接口在重构时逐步拆分，新增方法前先评估是否应拆到子接口。
+
+### R03 — 文件行数红线
+
+- **单文件超过 500 行**：必须在 PR 中说明为什么不能拆分
+- **单文件超过 1000 行**：GATE_BLOCK，必须拆分后才能合入
+
+**历史教训**：审计发现 40+ 个 Dart 文件超过 500 行，其中 `article_read_only_book_deck.dart`（4236 行）、`create_page.dart`（3069 行）、`works_immersive_viewer.dart`（2929 行）、`discovery_page.dart`（2298 行）。Go 侧 `post_service.go`（3149 行）、`assistant main.go`（2109 行）同样严重膨胀。超大文件是抽象缺失和职责不分的信号，导致改一处影响不可预测、合并冲突频繁、新人无法理解。
+
+---
+
+## 2. 类型安全军规 [A R Q]
+
+### R04 — 禁止弱类型穿透
+
+Go 侧禁止 `interface{}`（或 `any`）作为业务数据的参数、返回值或字段类型。Dart 侧禁止 `Map<String, dynamic>` 和 `dynamic` 在以下位置出现：
+
+- Repository 抽象接口的参数和返回值
+- Provider/Notifier 的 state 类型
+- Widget 的构造参数
+- 跨模块传递的数据结构
+
+**历史教训**：审计发现 `lib/ui/` 下 43 个文件包含 `Map<String, dynamic>` 穿透，散布在 assistant、content、circle、discovery、chat、search、rtc、user 等**几乎所有域**。`recommendation/learning.go` 使用 `map[string]any` 传递训练上下文。弱类型使得字段增删无编译期保护，拼写错误运行时才暴露，重构风险极高。
+
+**合规路径**：
+- 新代码必须使用强类型 DTO/ViewModel/sealed class
+- 存量代码按域分批替换，每个 PR 减少而非增加 `Map<String, dynamic>` 出现次数
+- 门禁 `verify_ui_map_literal_budget.py` 跟踪 budget 递减
+
+### R05 — DTO 子类型禁止 is/as/whereType
+
+见 `04-dart-polymorphism.mdc`。对 DTO 子类型做类型判断必须通过契约字段（如 `type` 枚举），不得使用运行时类型检查。
+
+---
+
+## 3. 元数据驱动军规 [A R Q]
+
+### R06 — 路径、错误码、字段必须从 metadata 生成
+
+所有以下标识符的唯一真相源是 `contracts/metadata/` 下的 YAML 文件：
+
+- API path（`service.yaml`）
+- 错误码和用户文案（`errors.yaml`）
+- DTO 字段（`fields.yaml`）
+- surfaceId / operationId / routeId（`ui_config.yaml`）
+
+**绝对禁止**：在业务代码中硬编码 `/v1/...` 路径字符串、错误码字符串、surfaceId 字符串。
+
+**历史教训**：审计发现 `tag_repository_remote.dart` 存在 10 处硬编码 `/api/v1/tags/...` 路径，而同仓库的 `RemoteBehaviorRepository` 已经正确使用 `ContentApiMetadata.reportBehaviorsPath`。两种风格并存说明规范执行不一致，新人会学到错误的写法。
+
+### R07 — codegen 产物禁止手改
+
+带 `// Code generated ... DO NOT EDIT.` 标记的文件禁止手动修改。修改需求必须回到 metadata YAML → `make codegen` / `make codegen-app`。`make gate` 通过 hash 比对检测违规。
+
+---
+
+## 4. 端云一致性军规 [A R T]
+
+### R08 — Dart DTO ↔ Go struct ↔ YAML 字段必须对齐
+
+每次修改端侧 DTO 或云侧 struct 的字段时，必须同步检查对端和 metadata YAML 的一致性。
+
+**历史教训**：审计发现 Dart `BehaviorEvent` 与 Go `BehaviorSignal` 存在**三组字段不一致**：
+
+| 仅 Dart 有 | 仅 Go 有 |
+|-----------|----------|
+| `feedRequestId` | `UserID` |
+| `position` | `SessionID` |
+| `commentLength` | `Timestamp` |
+
+这些差异导致端侧上报的部分字段在云侧被丢弃（如 `feedRequestId` 不进入 HotPath），推荐归因链断裂。
+
+### R09 — HTTP 栈统一
+
+Remote Repository 必须统一使用 `CloudHttpClient`，不得使用裸 `http.Client`。
+
+**历史教训**：审计发现至少三套并行的 HTTP 处理模式：
+1. `CloudHttpClient`（`postJson`/`getJson`，大多数 Repository 使用）
+2. `RemoteBehaviorRepository` 自建 `_postWithRetry`（绕过 `CloudHttpClient`）
+3. `circle_repository_remote.dart` 使用裸 `http.Response` + 本地 `_ensureSuccess`
+
+三套栈的重试策略、超时配置、错误映射、性能监控能力**各不相同**，导致行为不可预测。任何横切关注（如性能打点、统一鉴权头变更）都要改三处。
+
+---
+
+## 5. 存储无关军规 [A O]
+
+### R10 — 存储访问必须通过 interface
+
+任何数据持久化操作（数据库、缓存、对象存储、消息队列）必须通过 interface（Go）或 abstract class（Dart）访问，实现放在 infrastructure 层。
+
+**军规**：
+- domain/application 层禁止出现 `mongo`、`redis`、`sql`、`pgx`、`hive` 等存储 SDK 的 import
+- runtime 层禁止出现存储驱动 import（runtime 提供 interface 定义，不提供实现）
+- 新增存储操作必须先定义 interface，再在 infrastructure 实现
+
+### R11 — TTL 必须声明且可审计
+
+每个缓存/临时存储必须在代码中明确 TTL 常量，并在 `redis_keyspace.yaml` 或等价契约中登记。禁止无 TTL 的 Redis key 或 Mongo 临时集合。
+
+---
+
+## 6. 分层测试军规 [Q T] — 核心：Mock 与集成测试的一体性
+
+### R12 — Mock 测试不是集成测试的替代，是集成测试的分解
+
+这是最常犯的错误：Mock 测试通过了就认为功能正确，上线后发现 Mock 行为与真实服务不一致。
+
+**军规**：
+- **T1（契约静态）**：验证 Mock 的行为契约与 metadata 定义一致——Mock 返回的字段集、类型、边界值必须与 `fields.yaml` / `service.yaml` 对齐
+- **T2（模块交互）**：验证 Widget/Provider 通过 Mock 工作——但必须覆盖 Mock 的**正常路径 + 异常路径 + 边界条件**
+- **T3（端云集成）**：验证 Remote 实现与真实 API 对齐——**T3 的每个断言必须能在 T2 的 Mock 测试中找到对应断言**
+- **T4（端到端旅程）**：验证用户旅程在真实环境下完整
+
+**一体性检查**：
+```
+对于 T3 中验证的每个 API 行为（字段、状态码、错误码）：
+  → T2 中必须有对应的 Mock 测试覆盖相同行为
+  → Mock 的返回值结构必须与 T3 验证的真实返回值结构一致
+  → 如果 T3 发现 Mock 行为偏离，必须同时修复 Mock 和 T2
+```
+
+**历史教训**：审计发现以下分层测试缺口：
+- `domain/` 和 `application/` 层 **零测试文件**（Go 侧）
+- 推荐引擎 18 个实现文件仅 3 个测试文件（覆盖率 17%）
+- 行为上报 `behavior/` 仅 1 个契约测试文件，且**不包含 Remote HTTP、sessionId、feedRequestId 的断言**
+- `AppContentRepository` Mock 与 Remote 的 override 数**差 1**，可能存在接口演进不同步
+
+### R13 — 新增 Remote 方法必须同时补 Mock 方法和契约测试
+
+```
+顺序：
+1. 在 abstract class 中声明方法签名
+2. 在 MockXxxRepository 中实现（返回 fixture 数据）
+3. 在 RemoteXxxRepository 中实现（调用真实 API）
+4. 写 T2 测试验证 Mock 行为
+5. 写 T3 测试验证 Remote 行为与 Mock 一致
+```
+
+禁止只实现 Remote 不补 Mock，或只补 Mock 不写测试。
+
+### R14 — acceptance.yaml 声明的测试路径必须与磁盘文件一致
+
+**历史教训**：审计发现 `dual-channel-recommendation-engine/acceptance.yaml` 声明了 `engine_contract_test.go` 的路径，但仓库中**该路径不存在**。这说明 acceptance 与实际测试脱节，特性树诚信性被破坏。
+
+**军规**：`make gate` 包含路径存在性检查；acceptance.yaml 中声明的 `tests[].file` 必须在磁盘上存在。
+
+---
+
+## 7. Mock 隔离军规 [Q R]
+
+### R15 — UI 层绝对隔离 Mock
+
+- `lib/ui/**`、`lib/app/**`、`lib/core/**` 禁止 `import .../cloud/services/*/mock/`
+- 禁止在 `lib/ui/**/models/` 中放置 `prototypeCircles` 等域名 const 列表
+- 禁止向 `ui_mock_isolation_allowlist.yaml` 新增豁免条目
+- UI 禁止 import `AppDataSourceMode`（由 Provider 透明切换）
+
+**历史教训**：审计发现 `developer_settings_page.dart` 直接使用 `AppDataSourceMode`，虽然是开发者设置页，但路径在 `lib/ui/**`，与规范「UI 不碰模式枚举」矛盾。
+
+### R16 — Mock/Remote 实现风格一致
+
+- Mock 禁止发 HTTP
+- Remote 禁止整类委托 Mock（如 `RemoteAppContentRepository` 的历史技术债）
+- Mock 和 Remote 必须 `implements`（不是 `extends`）同一个 abstract class
+
+**历史教训**：审计发现 `RelationshipCapabilityRepository`、`GreetingRepository` 等使用 `extends` 而非 `implements`，与主流的 `implements` 混存，增加维护者的认知负担。
+
+---
+
+## 8. 错误处理军规 [U R Q]
+
+### R17 — 禁止空 catch
+
+```dart
+// ❌ 绝对禁止
+catch (_) {}
+catch (e) {}
+
+// ✅ 必须有处理
+catch (e) {
+  logger.w('xxx failed', error: e);
+  // 或 rethrow，或设置错误状态，或降级
+}
+```
+
+**历史教训**：审计发现 `lib/` 下至少 28 个文件包含空 catch 块，包括 `RemoteAssistantRepository`（吞异常返回 fallback policy）、`websocket_transport.dart`、`rtc_signaling_client.dart`、`app_providers.dart`（3 处）、`chat_conversation_page.dart`（3 处）等。空 catch 使得错误静默消失，用户看到数据丢失/功能异常却无法定位原因。
+
+### R18 — 异常处理必须结构化
+
+- 使用 `RuntimeFailure` + `RuntimeRecoveryPolicy`（见 `10-runtime-error-cutover.mdc`）
+- 错误码通过 `errors.yaml` → codegen 生成
+- UI/Provider 消费结构化错误，不消费原始异常字符串
+- Go HTTP 边界使用 `runtime/errors` 的 `RuntimeErrorResponse`
+
+### R19 — 禁止 print / 非守卫 debugPrint
+
+- `lib/` 下禁止 `print()`
+- `debugPrint` 必须包裹在 `assert` 或 `kDebugMode` 守卫内，或使用统一 logger
+
+**历史教训**：审计发现至少 19 个文件使用 `debugPrint`，其中 `immersive_image_viewer.dart` 和 `immersive_video_viewer.dart` 各约 15 处，这些在 release 包中仍会执行（`debugPrint` 在 release 中不会被编译器移除，只是输出被截断）。
+
+---
+
+## 9. 可观测军规 [M O U]
+
+### R20 — 新增页面必须有行为埋点
+
+每个 `*_page.dart` 至少必须具备：
+- **曝光**：页面进入时上报（`trackContentEnter` / `reportSingle` / 等效调用）
+- **停留**：页面离开时上报停留时长
+- **异常**：页面级错误捕获和上报
+
+内容消费页（详情页、阅读器、播放器）额外要求：
+- **深度**：消费进度/完成率
+- **互动**：点赞/评论/分享/关注
+
+**历史教训**：审计发现 56 个页面中仅 8 个有曝光埋点（14%），4 个有停留追踪（7%），2 个有深度追踪（4%）。chat（10 页）、assistant（5 页）、rtc（5 页）**全域零行为埋点**。首页入口 `home_page.dart` 也无任何埋点，导致漏斗分析起点缺失。
+
+### R21 — referralSource 不可为空
+
+从一个页面跳转到另一个页面时，必须传递 `referralSource`（来源标识），不得使用默认值。
+
+**历史教训**：审计发现仅 10 个文件传入 `referralSource`，`feedRequestId` 仅在图片和视频详情页（2 个文件）传入，文章详情页未传入。这导致推荐归因链断裂——无法知道用户是从哪个入口进入内容消费的。
+
+### R22 — 端侧必须有性能打点
+
+- `CloudHttpClient` 必须有请求耗时拦截器（API RT histogram）
+- 关键页面必须有 TTI（Time to Interactive）打点
+- 长列表/复杂动画页面必须有帧率监控
+
+**历史教训**：审计发现端侧 `lib/` 内**零性能打点**——无 `Stopwatch` 使用、无 `PerformanceOverlay` 配置、无 `addTimingsCallback`、`CloudHttpClient` 无耗时统计。云侧推荐管线仅有算术平均延迟（无 P50/P99 分位数）。这意味着性能退化只能靠用户反馈发现。
+
+### R23 — 双轨标识必须统一
+
+同一语义的标识符在端侧和云侧必须使用同一个值。
+
+**历史教训**：审计发现 `sessionId` 存在双轨——Feed 使用 UUID（`FeedSessionNotifier`），行为上报使用 base36 时间戳（`CloudRequestHeaders.sessionId`）。两个 sessionId 语义不同但名称相同，导致推荐 HotPath 中的会话信号与 Feed 拉取请求**无法关联**。
+
+---
+
+## 10. 抽象克制军规 [A R] — 防止代码复杂化不可维护
+
+### R24 — 新建分支必须先评估整体抽象
+
+新增实现路径（新 Repository、新 Provider、新工具类、新渲染分支）前，必须回答三个问题：
+
+1. **是否已有可复用的抽象**？如果有，优先复用而非新建
+2. **新抽象是否会与现有抽象产生重叠**？如果是，必须先重构统一
+3. **新分支删除后，系统是否能正常运行**？如果不能，说明耦合过深
+
+**历史教训**（pageflip 典型案例）：后翻（BACK）功能经历了多次"新建分支解决问题"的迭代——先后引入 `_runForwardEquivalentCalc`、`_ForwardEquivalentGeometry`、`_mirrorAreaX`、`BackwardFoldSurfaceGeometry`、`_buildBackwardCurrentResidualLayer`、`_buildBackwardPreviousLeafSoftLayer`、`_buildBackwardGeometryProbeSurface` 等大量旁路分支。每个分支都试图独立解决一个视觉问题，但引入了新的几何不一致，最终代码膨胀到 4236 行且无人能理解全貌。最后不得不用 `12-pageflip-backward-mainline.mdc` 以**符号级黑名单**彻底封死这些旁路。
+
+**军规**：
+- 禁止创建只服务 diagnostics 或测试通过的第二坐标链/第二数据通路
+- 禁止用标签、阈值、fallback 或"视觉稳定化"掩盖主逻辑问题
+- 一帧/一请求/一事务只能有一个 geometry/状态 真相源
+- 新增 helper/utility 类超过 3 个同类时，必须提取共享抽象
+
+### R25 — 横切关注提取为统一抽象
+
+以下模式如果在 2 个以上文件重复出现，必须提取：
+
+- HTTP 响应解码（`CloudResponseDecoder.asObject/asCursorPage/mapList`）→ 统一 decoder pipeline
+- 重试策略（`_postWithRetry`、指数退避）→ 统一 `RetryPolicy`
+- 状态水合（`Hive → Notifier → unawaited(_hydrate)`）→ 统一 `PersistedNotifier` 基类
+- 首次加载（`_didSchedule + microtask(refresh)`）→ 统一 `AutoRefreshNotifier` mixin
+
+**历史教训**：审计发现 `CloudResponseDecoder` 的 `asObject/asCursorPage/mapList` 在 assistant、user_profile、content、entity、chat 等 5+ 个 Repository 中以几乎相同的模式重复出现。`_didSchedule + microtask(refresh)` 模式在 `PersonalContentAccessNotifier`、`ContentRuntimeConfigNotifier` 等多处重复。Hive 水合 + Notifier 模式在 `UserRelationshipStateNotifier`、`PostInteractionStateNotifier`、`ClientStateSyncOutboxNotifier` 中重复。
+
+### R26 — 死代码/废弃代码及时清理
+
+- TODO/FIXME 标记的代码必须在当前 PR 或下个 sprint 处理，不得无限期搁置
+- `@Deprecated` 标记的 API 必须在标记后 2 个版本内移除
+- 被注释掉的代码块（连续 3 行以上）必须删除，如需保留历史参考使用 git history
+
+**历史教训**：审计发现 `media_post_card.dart` 有约 18 处 TODO/FIXME/HACK，`create_editor_provider.dart` 有约 26 处 `@Deprecated`，说明清理节奏严重滞后。
+
+---
+
+## 11. 设计系统军规 [U R]
+
+### R27 — 视觉字面量必须语义化
+
+- 颜色必须使用 `AppColors.*`（禁止 `Color(0xFFxxxxxx)`）
+- 间距必须使用 `AppSpacing.*`（禁止数字字面量）
+- 字体必须使用 `AppTypography.*`（禁止 `fontSize: 14`）
+- 文本必须使用 `UITextConstants.*` 或 `context.l10n.*`（禁止中文字面量）
+
+详见 `02-dart-coding.mdc`。
+
+### R28 — URL 不得硬编码
+
+非 Mock 的 `lib/` 文件中禁止出现 `http://` 或 `https://` 字符串字面量。API 地址使用 `CloudRuntimeConfig.gatewayBaseUrl`；CDN/资源地址使用配置注入。
+
+---
+
+## 12. 环境与发布军规 [O Q]
+
+### R29 — 生产包纯净性
+
+- 只有一个 `prod` 包，不存在 `app-prod-gray`
+- 生产包默认 Remote 数据源，无 Mock/Remote 切换入口
+- 生产配置禁止 `test_fixtures`、`seedRefs`、`requiresSeedReset`
+- 灰度由应用市场分发 + 端侧上下文 + 云侧策略控制
+
+### R30 — 环境数据严格分层
+
+| 环境 | 数据源 | 禁止 |
+|------|--------|------|
+| alpha（开发/CI） | Contract-seeded MockRepository | 访问云服务 |
+| beta（人工验收） | RemoteRepository + gateway seed 数据 | 读取 Dart mock 数据 |
+| gamma（自动化集成） | RemoteRepository + API seed 数据 | 读取 Dart mock 数据 |
+| prod（生产） | RemoteRepository + 真实数据 | test_fixtures / seed / mock |
+
+---
+
+## 13. 变更影响评估军规 [P A]
+
+### R31 — 改一处验三面
+
+每个代码变更必须评估三个影响面：
+
+1. **纵向**：当前调用链上下游是否需要同步修改（Dart DTO ↔ Go struct ↔ metadata YAML）
+2. **横向**：同层其他模块是否有类似逻辑需要一致性修改（如改了 content 的错误处理，circle/chat 是否也需要）
+3. **时间轴**：变更是否影响已发布版本的兼容性（API 版本、数据迁移、灰度回滚）
+
+### R32 — 新增能力必须评估可观测和推荐影响
+
+| 变更类型 | 必须同步评估 |
+|----------|-------------|
+| 新增页面 | 埋点覆盖（R20）+ 页面矩阵更新（`09-page-horizontal-quality.mdc`）|
+| 新增 API | Prometheus metric + 延迟 histogram |
+| 新增行为信号 | 推荐 HotPath 消费 + 特征工程投影 |
+| 新增 AB 实验 | 指标大盘按桶切分 + 归因链完整 |
+| 新增内容类型 | 标签体系覆盖 + 推荐召回通道 |
+
+---
+
+## 门禁对照表
+
+| 军规 | 门禁脚本 | 触发时机 |
+|------|---------|---------|
+| R01 DDD 分层 | `gate_repo.sh` (Go `go vet` + 自定义 import 检查) | `make gate` |
+| R04 弱类型 | `verify_ui_map_literal_budget.py` | `make gate` app |
+| R06 元数据驱动 | `verify_metadata_driven_ui_gate.py` + `verify_metadata_routes_vs_codegen_app.py` | `make gate` app |
+| R07 codegen 保护 | `gate_repo.sh` hash 比对 | `make gate` |
+| R14 测试路径 | `verify_page_matrix_scan_complete.py` | `make gate` app |
+| R15 Mock 隔离 | `verify_ui_mock_isolation.py` | `make gate` app |
+| R17 空 catch | `dart analyze` + 自定义 lint | `make gate` app |
+| R20 页面埋点 | `verify_page_horizontal_quality_matrix.py` | `make gate` app |
+| R27 语义化 | `verify_dart_semantic.py` | `make gate` app |
+| R29 生产纯净 | `verify_app_seed_manifests.py` + `verify_ui_app_data_source_mode_ratchet.py` | `make gate` app |
+| R30 环境数据 | `verify_business_env_data_inventory.py` + `verify_contract_mock_data_inventory.py` | `make gate` app |
+
+---
+
+## 违规等级
+
+| 等级 | 含义 | 处理 |
+|------|------|------|
+| **GATE_BLOCK** | 合入前必须修复 | `make gate` 失败 |
+| **PR_WARN** | PR 评审中必须讨论 | 评审人标记 |
+| **TECH_DEBT** | 记录到 CR，限期修复 | sprint backlog |
+
+以下军规违规等级为 GATE_BLOCK：R01、R04（新增）、R06、R07、R15、R17（新增）、R29。
+其余为 PR_WARN 或 TECH_DEBT。
+
+---
+
+## 与现有规则的关系
+
+本文件是**跨域共性**的提炼和**历史教训**的固化，不替代任何子域规则：
+
+| 本文件军规 | 详细规则来源 |
+|-----------|-------------|
+| R01-R03 架构 | `01-arch-constraints.mdc` |
+| R04-R05 类型 | `02-dart-coding.mdc`, `04-dart-polymorphism.mdc` |
+| R06-R07 元数据 | `01-arch-constraints.mdc` §3 |
+| R08-R09 端云 | `01-arch-constraints.mdc` §3.1 |
+| R10-R11 存储 | `01-arch-constraints.mdc` §1.3 |
+| R12-R14 测试 | `03-testing.mdc` |
+| R15-R16 Mock | `08-mock-data-isolation.mdc` |
+| R17-R19 错误 | `10-runtime-error-cutover.mdc` |
+| R20-R23 可观测 | `/obs-audit`, `/rec-audit` commands |
+| R24-R26 抽象 | `11-pageflip-geometry-guardrails.mdc`, `12-pageflip-backward-mainline.mdc` |
+| R27-R28 设计 | `02-dart-coding.mdc` |
+| R29-R30 环境 | `08-mock-data-isolation.mdc` 发布态 |
+| R31-R32 评估 | `00-fullstack-development-flow.mdc` |

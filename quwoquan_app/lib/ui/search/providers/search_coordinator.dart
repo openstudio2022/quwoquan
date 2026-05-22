@@ -953,15 +953,14 @@ class _ChatRecordAccumulator {
     MessageSearchItemView message, {
     ConversationSearchItemView? seedConversation,
   }) {
+    // 会话头像只保留 authoritative conversation avatar；
+    // direct/group 的成员回退统一由共享 ConversationAvatar 组件负责。
     return _ChatRecordAccumulator(
       conversationId: message.conversationId,
       conversationTitle:
           message.conversationTitle ?? seedConversation?.title ?? '聊天记录',
       conversationType: seedConversation?.type ?? 'group',
-      avatarUrl:
-          message.conversationAvatarUrl ??
-          seedConversation?.avatarUrl ??
-          message.senderAvatarUrl,
+      avatarUrl: message.conversationAvatarUrl ?? seedConversation?.avatarUrl,
       matchedPreview: message.highlightText ?? message.contentPreview,
       matchCount: 1,
       messageAnchorId: message.messageId,
@@ -994,8 +993,7 @@ class _ChatRecordAccumulator {
     matchedPreview = message.highlightText ?? message.contentPreview;
     messageAnchorId ??= message.messageId;
     timestamp = _maxTimestamp(timestamp, message.timestamp);
-    avatarUrl =
-        avatarUrl ?? message.conversationAvatarUrl ?? message.senderAvatarUrl;
+    avatarUrl = avatarUrl ?? message.conversationAvatarUrl;
   }
 
   ChatRecordSearchSuggestion build() {

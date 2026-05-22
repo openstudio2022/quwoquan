@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
@@ -34,13 +35,17 @@ void main() {
       final mockDetail = await mockRepo.getPost(postId: postId);
       final rawFixture = mockDetail.mergedArticleWireMap;
       final remoteRepo = RemoteContentRepository(
-        client: MockClient((request) async {
-          return http.Response(
-            jsonEncode(rawFixture),
-            200,
-            headers: const <String, String>{'content-type': 'application/json'},
-          );
-        }),
+        httpClient: CloudHttpClient(
+          client: MockClient((request) async {
+            return http.Response(
+              jsonEncode(rawFixture),
+              200,
+              headers: const <String, String>{
+                'content-type': 'application/json',
+              },
+            );
+          }),
+        ),
         baseUrl: 'https://example.com',
       );
       final remoteDetail = await remoteRepo.getPost(postId: postId);

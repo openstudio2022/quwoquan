@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
@@ -288,7 +289,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
+      expect(find.byIcon(AppNavigationSemanticConstants.settingsActionIcon), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.ellipsis), findsNothing);
     });
 
@@ -300,7 +301,7 @@ void main() {
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.other));
       await _pumpFrames(tester);
       expect(find.byIcon(CupertinoIcons.ellipsis), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.settings), findsNothing);
+      expect(find.byIcon(AppNavigationSemanticConstants.settingsActionIcon), findsNothing);
     });
   });
 }

@@ -14,7 +14,7 @@
 ### Wave 2 — 自动化验证
 
 - [x] E7 完成单元测试：覆盖顺序、非法环境、版本兼容
-- [x] E8 完成集成测试：local/integration/prod 三环境加载
+- [x] E8 完成集成测试：alpha/beta/gamma/prod 四环境加载
 - [x] E9 完成容器场景验证：`CONFIG_ROOT=/etc/qwq-config` 外部挂载加载
 
 ### Wave 3 — 门禁接入（去重后由本节点主实现）

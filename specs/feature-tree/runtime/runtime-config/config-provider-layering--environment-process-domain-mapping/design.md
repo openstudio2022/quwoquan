@@ -2,9 +2,9 @@
 
 ## 设计动因
 
-服务既要支持开发态解耦（独立服务开发测试），又要支持集成/发布态组合部署。此前缺少统一拓扑声明，容易出现：
+服务既要支持开发态解耦（独立服务开发测试），又要支持 alpha/beta/gamma/prod 四环境一致的组合部署。此前缺少统一拓扑声明，容易出现：
 - 同一 domain 被重复挂载到多个进程
-- 集成环境与生产拓扑不一致
+- beta/gamma/prod 拓扑不一致
 - 部署拓扑变化影响对外接口认知
 
 ## 设计决策
@@ -15,11 +15,12 @@
    - deploy 目录分层为 `shared/service/app`，避免部署资产与领域代码耦合
    - `recommendation` domain 仅允许绑定 `recommendation-service`
 
-2. **三态模型**
-   - `dev`：默认独立服务进程（服务名即进程名）
-   - `integration`：按发布拓扑运行，用于集成测试
-   - `prod`：与 integration 拓扑一致，仅环境参数不同
-   - `recommendation-service` 在三态均保持独立 Python 进程，不并入 Go 组合进程
+2. **四态模型**
+   - `alpha`：默认独立服务进程（服务名即进程名）
+   - `beta`：按发布拓扑运行，用于端云联调
+   - `gamma`：类生产集成验证
+   - `prod`：生产发布拓扑；与 `beta/gamma` 拓扑一致，仅环境参数不同
+   - `recommendation-service` 在四态均保持独立 Python 进程，不并入 Go 组合进程
 
 3. **接口稳定原则**
    - 部署进程是运维抽象，不是领域抽象
@@ -29,7 +30,7 @@
 4. **门禁策略**
    - 校验同一环境内 domain 唯一归属
    - 校验 process 名称规范（`*-service` 或 `seed-box`）
-   - 校验 `beta == gamma == prod-gray == prod` 映射
+   - 校验 `beta == gamma == prod` 映射
    - 接入 `make verify` 与 `agent_ops/gate/gate_repo.sh`
    - `make gate-full` 必须包含并通过 `recommendation-service` Python 测试
    - recommendation-service 启动前执行配置分层与版本兼容校验；失败即 fail-fast
@@ -60,31 +61,36 @@
    - `rec-model-service` 仍为 Python 独立进程，catalog 可引用但不得并入 Go `seed-box`
 
 8. **onebox 与拆分包等价策略**
-   - beta/gamma/prod-gray/prod 默认使用 `seed-box` onebox package
+   - beta/gamma/prod 默认使用 `seed-box` onebox package
    - 热点模块可拆为独立 package，例如 `chat-avatar-worker-package`
    - onebox 与拆分 package 同时运行时，必须通过 `env + domain + module + shardId` lease scope 协调
    - 拆分不改变 domain API、Outbox 事实源、task routing 或 notification fanout 语义
-   - prod-gray 可声明灰度 override，但必须有回滚条件与门禁校验
+   - prod 发布波次内可声明拆分包或 worker package 灰度 override，但必须有回滚条件与门禁校验
 
 ## 配置示例
 
 ```yaml
 environments:
-  dev:
+  alpha:
     content-service:
       domains: [content]
     recommendation-service:
       domains: [recommendation]
-  integration:
+  beta:
     recommendation-service:
       domains: [recommendation]
     seed-box:
-      domains: [content, chat, integration, user, circle, assistant, gateway, orchestrator]
+      domains: [content, chat, user, circle, assistant, gateway, orchestrator]
+  gamma:
+    recommendation-service:
+      domains: [recommendation]
+    seed-box:
+      domains: [content, chat, user, circle, assistant, gateway, orchestrator]
   prod:
     recommendation-service:
       domains: [recommendation]
     seed-box:
-      domains: [content, chat, integration, user, circle, assistant, gateway, orchestrator]
+      domains: [content, chat, user, circle, assistant, gateway, orchestrator]
 ```
 
 模块包示例：
@@ -113,7 +119,7 @@ environments:
 
 约束：
 - 不允许一个 domain 在同一环境中多归属
-- 不允许 integration/prod 拓扑漂移
+- 不允许 beta/gamma/prod 拓扑漂移
 - 不允许通过部署拓扑改写领域路由契约
 - 不允许绕过 overlays 直接在 base 中固化环境特定版本与扩缩容阈值
 - 不允许 package 中 module 引用未归属 domain

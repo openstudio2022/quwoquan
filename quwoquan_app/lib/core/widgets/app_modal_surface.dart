@@ -254,12 +254,14 @@ class AppFullscreenModalSurface extends StatelessWidget {
     this.backgroundColor,
     this.contentPadding = EdgeInsets.zero,
     this.surfaceKey,
+    this.safeAreaTop = true,
   });
 
   final Widget child;
   final Color? backgroundColor;
   final EdgeInsetsGeometry contentPadding;
   final Key? surfaceKey;
+  final bool safeAreaTop;
 
   @override
   Widget build(BuildContext context) {
@@ -279,6 +281,7 @@ class AppFullscreenModalSurface extends StatelessWidget {
                 AppColorsFunctional.getColor(isDark, ColorType.pageBackground),
           ),
           child: SafeArea(
+            top: safeAreaTop,
             child: Padding(padding: contentPadding, child: child),
           ),
         ),

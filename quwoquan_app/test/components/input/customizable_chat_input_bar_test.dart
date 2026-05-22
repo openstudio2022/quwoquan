@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/input/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
 void main() {
@@ -71,6 +72,32 @@ void main() {
       expect(find.text(UITextConstants.chatMoreFile), findsOneWidget);
     });
 
+    testWidgets('群聊输入区可插入 @小趣 上下文 mention', (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                controller: controller,
+                onSend: (_) async {},
+                showXiaoquMentionButton: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(TestKeys.chatInputAtXiaoquButton), findsOneWidget);
+
+      await tester.tap(find.byKey(TestKeys.chatInputAtXiaoquButton));
+      await tester.pump();
+
+      expect(controller.text, startsWith('@小趣 '));
+    });
+
     testWidgets('超过五行后出现展开入口', (tester) async {
       final controller = TextEditingController();
       addTearDown(controller.dispose);
@@ -93,7 +120,10 @@ void main() {
         ),
       );
 
-      await tester.enterText(find.byKey(const ValueKey<String>('inline_field')), longText);
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('inline_field')),
+        longText,
+      );
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.byKey(TestKeys.chatInputExpandButton), findsOneWidget);
@@ -104,9 +134,7 @@ void main() {
         ProviderScope(
           child: MaterialApp(
             home: Scaffold(
-              body: CustomizableChatInputBar(
-                onSend: (_) async {},
-              ),
+              body: CustomizableChatInputBar(onSend: (_) async {}),
             ),
           ),
         ),
@@ -119,6 +147,42 @@ void main() {
 
       expect(find.byIcon(Icons.keyboard_outlined), findsOneWidget);
       expect(find.text(UITextConstants.chatVoiceHoldToTalk), findsOneWidget);
+    });
+
+    testWidgets('默认单行输入槽保持统一高度，多行输入可自然撑高', (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: CustomizableChatInputBar(
+                controller: controller,
+                textFieldKey: const ValueKey<String>('single_line_field'),
+                onSend: (_) async {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final fieldFinder = find.byKey(
+        const ValueKey<String>('single_line_field'),
+      );
+      final singleLineHeight = tester.getSize(fieldFinder).height;
+      expect(
+        singleLineHeight,
+        lessThanOrEqualTo(AppSpacing.commentInputHeight + 1),
+      );
+
+      await tester.enterText(fieldFinder, '第一行\n第二行\n第三行');
+      await tester.pump();
+
+      final multiLineHeight = tester.getSize(fieldFinder).height;
+      expect(multiLineHeight, greaterThan(singleLineHeight));
     });
   });
 }

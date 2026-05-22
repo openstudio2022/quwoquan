@@ -9,6 +9,8 @@ import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/models/assistant_open_context.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -17,20 +19,26 @@ import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
 
-class GlobalTopActions extends StatelessWidget {
+class GlobalTopActions extends ConsumerWidget {
   const GlobalTopActions({
     super.key,
     this.showSearch = true,
+    this.showQuickAction = false,
     this.initialSearchScope = GlobalSearchScope.all,
     this.quickActionPriority = CreateActionSheetPriority.createPrimary,
+    this.surface = AppChromeSurface.standard,
+    this.foregroundColor,
   });
 
   final bool showSearch;
+  final bool showQuickAction;
   final GlobalSearchScope initialSearchScope;
   final CreateActionSheetPriority quickActionPriority;
+  final AppChromeSurface surface;
+  final Color? foregroundColor;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -38,21 +46,79 @@ class GlobalTopActions extends StatelessWidget {
           GlobalTopBarIconButton(
             key: TestKeys.globalSearchLauncherButton,
             icon: CupertinoIcons.search,
+            surface: surface,
+            foregroundColor: foregroundColor,
             onTap: () => GlobalSearchLauncher.open(
               context,
               initialScope: initialSearchScope.searchScope,
             ),
           ),
         if (showSearch) SizedBox(width: AppSpacing.intraGroupXs),
-        GlobalTopBarIconButton(
-          icon: CupertinoIcons.add,
-          onTap: () => GlobalQuickActionSheet.show(
-            context,
-            priority: quickActionPriority,
-          ),
+        GlobalAssistantEntryButton(
+          semanticLabel: UITextConstants.globalXiaoquSearchAsk,
+          showLabel: false,
+          onTap: () => GlobalAssistantLauncher.open(context, ref),
         ),
+        if (showQuickAction) ...[
+          SizedBox(width: AppSpacing.intraGroupXs),
+          GlobalTopBarIconButton(
+            icon: CupertinoIcons.add,
+            surface: surface,
+            foregroundColor: foregroundColor,
+            onTap: () => GlobalQuickActionSheet.show(
+              context,
+              priority: quickActionPriority,
+            ),
+          ),
+        ],
       ],
     );
+  }
+}
+
+class GlobalAssistantLauncher {
+  const GlobalAssistantLauncher._();
+
+  static Future<void> open(BuildContext context, WidgetRef ref) {
+    final route = _routeForContext(context);
+    final target = VisitTarget.page('global_assistant_$route');
+    final experience = ref
+        .read(visitRecorderServiceProvider)
+        .getExperience(target);
+    final openContext = AssistantOpenContext(
+      source: _sourceForRoute(route),
+      visitTarget: target,
+      experienceLevel: experience,
+      tab: route,
+    );
+    return context.push(AppRoutePaths.assistantPersonal, extra: openContext);
+  }
+
+  static String _routeForContext(BuildContext context) {
+    try {
+      return GoRouterState.of(context).uri.path;
+    } catch (_) {
+      return AppRoutePaths.home;
+    }
+  }
+
+  static AssistantSource _sourceForRoute(String route) {
+    if (route == AppRoutePaths.circles || route.startsWith('/circle/')) {
+      return AssistantSource.circles;
+    }
+    if (route.startsWith(AppRoutePaths.chat)) {
+      return AssistantSource.chat;
+    }
+    if (route.startsWith(AppRoutePaths.createPathTemplate)) {
+      return AssistantSource.create;
+    }
+    if (route.startsWith(AppRoutePaths.globalSearch)) {
+      return AssistantSource.search;
+    }
+    if (route == AppRoutePaths.profile || route.startsWith('/user/')) {
+      return AssistantSource.profile;
+    }
+    return AssistantSource.discovery;
   }
 }
 
@@ -87,35 +153,222 @@ class GlobalSearchLauncher {
   }
 }
 
+class GlobalXiaoquSearchBar extends ConsumerWidget {
+  const GlobalXiaoquSearchBar({
+    super.key,
+    this.hint = UITextConstants.globalXiaoquSearchHint,
+    this.initialSearchScope = GlobalSearchScope.all,
+    this.surface = AppChromeSurface.standard,
+  });
+
+  final String hint;
+  final GlobalSearchScope initialSearchScope;
+  final AppChromeSurface surface;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final background = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
+    final secondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: AppSpacing.buttonHeightMd,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+              border: Border.all(color: border, width: AppSpacing.hairline),
+            ),
+            child: CupertinoButton(
+              key: TestKeys.globalSearchLauncherButton,
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+              minimumSize: const Size(
+                AppSpacing.minInteractiveSize,
+                AppSpacing.buttonHeightMd,
+              ),
+              onPressed: () => GlobalSearchLauncher.open(
+                context,
+                initialScope: initialSearchScope.searchScope,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    CupertinoIcons.search,
+                    size: AppSpacing.iconSmall,
+                    color: secondary,
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                  Expanded(
+                    child: Text(
+                      hint,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        fontWeight: AppTypography.regular,
+                        color: secondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: AppSpacing.intraGroupXs),
+        GlobalAssistantEntryButton(
+          semanticLabel: UITextConstants.globalXiaoquSearchAsk,
+          showLabel: true,
+          onTap: () => GlobalAssistantLauncher.open(context, ref),
+        ),
+      ],
+    );
+  }
+}
+
 /// 首页顶栏等与 [GlobalTopActions] 一致的圆形热区 + 主标签色图标（非强调蓝）。
 class GlobalTopBarIconButton extends StatelessWidget {
   const GlobalTopBarIconButton({
     super.key,
     required this.icon,
     required this.onTap,
+    this.semanticLabel,
+    this.surface = AppChromeSurface.standard,
+    this.foregroundColor,
   });
 
   final IconData icon;
   final VoidCallback onTap;
+  final String? semanticLabel;
+  final AppChromeSurface surface;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
-      minimumSize: Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        minimumSize: Size(
+          AppSpacing.appChromeActionButtonSize,
+          AppSpacing.appChromeActionButtonSize,
+        ),
+        child: SizedBox(
+          width: AppSpacing.appChromeActionButtonSize,
+          height: AppSpacing.appChromeActionButtonSize,
+          child: Center(
+            child: Icon(
+              icon,
+              size: AppSpacing.appChromeActionIconSize,
+              color:
+                  foregroundColor ??
+                  AppNavigationSemanticConstants.chromeActionIconColor(
+                    isDark,
+                    surface: surface,
+                  ),
+            ),
+          ),
+        ),
       ),
-      child: SizedBox(
-        width: AppSpacing.minInteractiveSize,
-        height: AppSpacing.minInteractiveSize,
-        child: Center(
-          child: Icon(
-            icon,
-            size: AppNavigationSemanticConstants.barIconSize,
-            color: AppNavigationSemanticConstants.barIconColor(isDark),
+    );
+  }
+}
+
+class GlobalAssistantEntryButton extends StatelessWidget {
+  const GlobalAssistantEntryButton({
+    super.key,
+    required this.onTap,
+    this.semanticLabel,
+    this.showLabel = true,
+  });
+
+  final VoidCallback onTap;
+  final String? semanticLabel;
+  final bool showLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    // 与 [GlobalTopBarIconButton] 的图标直径一致，首页「找小趣」与其它页并排搜索图标对齐。
+    final circleSize = AppSpacing.appChromeActionIconSize;
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        minimumSize: Size(
+          AppSpacing.appChromeActionButtonSize,
+          AppSpacing.appChromeActionButtonSize,
+        ),
+        child: SizedBox(
+          width: AppSpacing.appChromeActionButtonSize,
+          height: AppSpacing.appChromeActionButtonSize,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: circleSize,
+                height: circleSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.welcomeTitleGradientEnd,
+                      isDark
+                          ? AppColors.assistantMarkColorOnDark
+                          : AppColors.assistantMarkColor,
+                      AppColors.welcomeTitleGradientMid,
+                    ],
+                  ),
+                  border: Border.all(
+                    color: AppColors.white.withValues(
+                      alpha: isDark ? 0.24 : 0.4,
+                    ),
+                    width: AppSpacing.hairline,
+                  ),
+                ),
+                child: Icon(
+                  CupertinoIcons.sparkles,
+                  size: AppSpacing.iconSmall,
+                  color: AppColors.white,
+                ),
+              ),
+              if (showLabel) ...[
+                SizedBox(height: AppSpacing.one),
+                Text(
+                  UITextConstants.globalXiaoquSearchAsk,
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    fontWeight: AppTypography.medium,
+                    height: AppSpacing.textLineHeightDense,
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.foregroundPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),

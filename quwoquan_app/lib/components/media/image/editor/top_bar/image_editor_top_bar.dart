@@ -25,10 +25,14 @@ class ImageEditorTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topBarHeight = AppSpacing.toolbarHeight;
+    final topBarHeight = AppSpacing.appChromeNavigationBarHeight;
+    final effectiveTopPadding = AppSpacing.appChromeTopSafeInset(
+      topPadding,
+      context,
+    );
     return Container(
-      height: topPadding + topBarHeight,
-      padding: EdgeInsets.only(top: topPadding),
+      height: effectiveTopPadding + topBarHeight,
+      padding: EdgeInsets.only(top: effectiveTopPadding),
       color: backgroundColor,
       child: Stack(
         alignment: Alignment.center,
@@ -41,16 +45,18 @@ class ImageEditorTopBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   SizedBox(
-                    width: AppSpacing.iconButtonMinSizeSm,
+                    width: AppSpacing.appChromeActionButtonSize,
                     height: topBarHeight,
                     child: CupertinoButton(
                       padding: EdgeInsets.zero,
-                      minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                      minimumSize: Size.square(
+                        AppSpacing.appChromeActionButtonSize,
+                      ),
                       onPressed: onBack,
                       child: Icon(
                         CupertinoIcons.back,
                         color: foregroundColor,
-                        size: AppSpacing.iconMedium,
+                        size: AppSpacing.appChromeActionIconSize,
                       ),
                     ),
                   ),
@@ -70,16 +76,16 @@ class ImageEditorTopBar extends StatelessWidget {
           Align(
             alignment: Alignment.center,
             child: SizedBox(
-              width: AppSpacing.iconButtonMinSizeSm,
+              width: AppSpacing.appChromeActionButtonSize,
               height: topBarHeight,
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
-                minimumSize: Size.square(AppSpacing.iconButtonMinSizeSm),
+                minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
                 onPressed: historyEnabled ? onHistory : null,
                 child: Icon(
                   CupertinoIcons.clock,
                   color: foregroundColor,
-                  size: AppSpacing.iconMedium,
+                  size: AppSpacing.appChromeActionIconSize,
                 ),
               ),
             ),
@@ -89,16 +95,3 @@ class ImageEditorTopBar extends StatelessWidget {
     );
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
