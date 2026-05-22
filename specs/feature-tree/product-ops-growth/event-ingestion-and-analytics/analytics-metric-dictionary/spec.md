@@ -90,7 +90,7 @@
 
 | 层级 | 主口径 | 核心指标 | 必带维度 |
 | --- | --- | --- | --- |
-| L1 产品结果 | 用户是否形成“同趣相连”的核心旅程 | `five_tab_journey_completion_rate`、`xiaoqu_entry_to_reply_rate`、`campus_or_travel_homepage_open_rate`、`same_interest_circle_join_rate` | `surfaceId`、`routeId`、`feedRequestId`、`primaryDomain` |
+| L1 产品结果 | 用户是否形成“遇见同趣”的核心旅程 | `five_tab_journey_completion_rate`、`xiaoqu_entry_to_reply_rate`、`campus_or_travel_homepage_open_rate`、`same_interest_circle_join_rate` | `surfaceId`、`routeId`、`feedRequestId`、`primaryDomain` |
 | L2 业务质量 | 内容、圈子、主页、消息是否形成闭环 | `featured_ctr`、`circle_scenario_ctr`、`homepage_content_attach_rate`、`xiaoqu_comment_accept_rate`、`message_delivery_clickback_rate` | `feedType`、`circleId`、`homepageId`、`topicId`、`conversationId` |
 | L3 系统健康 | 端云请求和推荐链路是否稳定 | `api_red_requests_total`、`api_red_error_rate`、`api_red_duration_p95_ms`、`recommendation_recall_hit_rate`、`assistant_reply_latency_p95_ms` | `service`、`operationId`、`runtimeEnv`、`statusCode` |
 | L4 基础设施 | 存储、队列、网关、监控是否支撑 beta 验证 | `gateway_up`、`ops_portal_up`、`product_ops_up`、`queue_lag_seconds`、`redis_latency_p95_ms`、`mongo_latency_p95_ms` | `component`、`region`、`runtimeEnv`、`instanceId` |

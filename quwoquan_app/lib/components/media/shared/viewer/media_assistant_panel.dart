@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/assistant/assistant_avatar.dart';
@@ -39,7 +38,10 @@ class MediaAssistantPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundPrimary,
+        ),
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(AppSpacing.largeBorderRadius),
           topRight: Radius.circular(AppSpacing.largeBorderRadius),
@@ -60,7 +62,9 @@ class MediaAssistantPanel extends StatelessWidget {
             vertical: context.safeGetIntraGroupSpacing(SpacingSize.md),
           ),
           child: SizedBox(
-            height: MediaQuery.of(context).size.height * AppSpacing.assistantPanelHeightRatioMax,
+            height:
+                MediaQuery.of(context).size.height *
+                AppSpacing.assistantPanelHeightRatioMax,
             child: Column(
               children: [
                 Row(
@@ -70,25 +74,36 @@ class MediaAssistantPanel extends StatelessWidget {
                         child: Text(
                           titleText,
                           style: TextStyle(
-                            fontSize: AppTypography.lg.sp,
+                            fontSize: AppTypography.lg,
                             fontWeight: FontWeight.w600,
-                            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                            color: AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.foregroundPrimary,
+                            ),
                           ),
                         ),
                       ),
                     ),
                     CupertinoButton(
                       padding: EdgeInsets.zero,
-                      onPressed: onClose, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
+                      onPressed: onClose,
+                      minimumSize: Size.square(
+                        AppSpacing.appChromeActionButtonSize,
+                      ),
                       child: Icon(
                         CupertinoIcons.xmark,
-                        size: AppSpacing.iconMedium,
-                        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+                        size: AppSpacing.appChromeActionIconSize,
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundPrimary,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+                SizedBox(
+                  height: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                ),
                 Expanded(
                   child: ValueListenableBuilder<List<AssistantChatMessage>>(
                     valueListenable: messages,
@@ -109,33 +124,46 @@ class MediaAssistantPanel extends StatelessWidget {
                     },
                   ),
                 ),
-                SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+                SizedBox(
+                  height: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                ),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     UITextConstants.assistantPromptFollowUp,
                     style: TextStyle(
-                      fontSize: AppTypography.sm.sp,
-                      color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                      fontSize: AppTypography.sm,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
                     ),
                   ),
                 ),
-                SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+                SizedBox(
+                  height: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                ),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Wrap(
                     spacing: context.safeGetIntraGroupSpacing(SpacingSize.sm),
-                    runSpacing: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                    runSpacing: context.safeGetIntraGroupSpacing(
+                      SpacingSize.sm,
+                    ),
                     children: suggestions
-                        .map((text) => _MediaSuggestionChip(
-                              isDark: isDark,
-                              text: text,
-                              onTap: () => onSuggestionTap(text),
-                            ))
+                        .map(
+                          (text) => _MediaSuggestionChip(
+                            isDark: isDark,
+                            text: text,
+                            onTap: () => onSuggestionTap(text),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),
-                SizedBox(height: context.safeGetInterGroupSpacing(SpacingSize.sm)),
+                SizedBox(
+                  height: context.safeGetInterGroupSpacing(SpacingSize.sm),
+                ),
                 _MediaAssistantInput(
                   isDark: isDark,
                   controller: inputController,
@@ -167,7 +195,10 @@ class _MediaAssistantMessageBubble extends StatelessWidget {
     final messageKind = message.kind ?? 'text';
     final bubbleSelf = AppColors.chatBubbleOutgoing;
     final bubbleOther = AppColors.chatBubbleIncoming;
-    final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
     final isSelf = message.isSelf;
     final bubbleColor = isSelf ? bubbleSelf : bubbleOther;
     final textColor = isSelf ? AppColors.white : fgPrimary;
@@ -180,11 +211,15 @@ class _MediaAssistantMessageBubble extends StatelessWidget {
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: isSelf ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isSelf
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           if (!isSelf)
             Padding(
-              padding: EdgeInsets.only(right: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+              padding: EdgeInsets.only(
+                right: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+              ),
               child: AssistantAvatar(
                 radius: AppSpacing.iconMedium,
                 onTap: onAssistantAvatarTap,
@@ -195,19 +230,22 @@ class _MediaAssistantMessageBubble extends StatelessWidget {
               crossAxisAlignment: align,
               children: [
                 if (messageKind == 'summary_cards')
-                  _MediaAssistantSummaryCards(
-                    isDark: isDark,
-                    message: message,
-                  )
+                  _MediaAssistantSummaryCards(isDark: isDark, message: message)
                 else
                   Container(
                     padding: EdgeInsets.symmetric(
-                      horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
-                      vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+                      horizontal: context.safeGetContainerSpacing(
+                        SpacingSize.sm,
+                      ),
+                      vertical: context.safeGetIntraGroupSpacing(
+                        SpacingSize.xs,
+                      ),
                     ),
                     decoration: BoxDecoration(
                       color: bubbleColor,
-                      borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.borderRadius,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: AppColors.black.withValues(alpha: 0.08),
@@ -220,7 +258,7 @@ class _MediaAssistantMessageBubble extends StatelessWidget {
                       message.text,
                       style: TextStyle(
                         color: textColor,
-                        fontSize: AppTypography.base.sp,
+                        fontSize: AppTypography.base,
                       ),
                     ),
                   ),
@@ -229,17 +267,26 @@ class _MediaAssistantMessageBubble extends StatelessWidget {
           ),
           if (isSelf)
             Padding(
-              padding: EdgeInsets.only(left: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+              padding: EdgeInsets.only(
+                left: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+              ),
               child: CircleAvatar(
                 radius: AppSpacing.iconMedium,
-                backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-                backgroundImage:
-                    selfAvatarUrl != null ? NetworkImage(selfAvatarUrl) : null,
+                backgroundColor: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.backgroundSecondary,
+                ),
+                backgroundImage: selfAvatarUrl != null
+                    ? NetworkImage(selfAvatarUrl)
+                    : null,
                 child: selfAvatarUrl == null
                     ? Icon(
                         Icons.person,
                         size: AppSpacing.iconSmall,
-                        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundSecondary,
+                        ),
                       )
                     : null,
               ),
@@ -268,9 +315,18 @@ class _MediaAssistantSummaryCards extends StatelessWidget {
   Widget build(BuildContext context) {
     final cards = message.cards ?? [];
     final summaryText = message.text.trim();
-    final fgPrimary = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
-    final cardBg = AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
+    final fgPrimary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final cardBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -284,8 +340,10 @@ class _MediaAssistantSummaryCards extends StatelessWidget {
               color: cardBg,
               borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
               border: Border.all(
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
-                    .withValues(alpha: 0.2),
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundTertiary,
+                ).withValues(alpha: 0.2),
               ),
               boxShadow: [
                 BoxShadow(
@@ -297,17 +355,16 @@ class _MediaAssistantSummaryCards extends StatelessWidget {
             ),
             child: Text(
               summaryText,
-              style: TextStyle(
-                color: fgPrimary,
-                fontSize: AppTypography.base.sp,
-              ),
+              style: TextStyle(color: fgPrimary, fontSize: AppTypography.base),
             ),
           ),
         if (summaryText.isNotEmpty)
           SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
         ...cards.map(
           (card) => Padding(
-            padding: EdgeInsets.only(bottom: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
+            padding: EdgeInsets.only(
+              bottom: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+            ),
             child: Container(
               padding: EdgeInsets.symmetric(
                 horizontal: context.safeGetContainerSpacing(SpacingSize.sm),
@@ -317,8 +374,10 @@ class _MediaAssistantSummaryCards extends StatelessWidget {
                 color: cardBg,
                 borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
                 border: Border.all(
-                  color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
-                      .withValues(alpha: 0.2),
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.foregroundTertiary,
+                  ).withValues(alpha: 0.2),
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -335,16 +394,18 @@ class _MediaAssistantSummaryCards extends StatelessWidget {
                     card.title,
                     style: TextStyle(
                       color: fgPrimary,
-                      fontSize: AppTypography.base.sp,
+                      fontSize: AppTypography.base,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  SizedBox(height: context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+                  SizedBox(
+                    height: context.safeGetIntraGroupSpacing(SpacingSize.xs),
+                  ),
                   Text(
                     card.body,
                     style: TextStyle(
                       color: fgSecondary,
-                      fontSize: AppTypography.sm.sp,
+                      fontSize: AppTypography.sm,
                     ),
                   ),
                 ],
@@ -376,11 +437,16 @@ class _MediaSuggestionChip extends StatelessWidget {
         vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
       ),
       decoration: BoxDecoration(
-        color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+        color: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.backgroundSecondary,
+        ),
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
         border: Border.all(
-          color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
-              .withValues(alpha: 0.2),
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.foregroundTertiary,
+          ).withValues(alpha: 0.2),
         ),
         boxShadow: [
           BoxShadow(
@@ -400,8 +466,11 @@ class _MediaSuggestionChip extends StatelessWidget {
         child: Text(
           text,
           style: TextStyle(
-            fontSize: AppTypography.sm.sp,
-            color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
+            fontSize: AppTypography.sm,
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.foregroundPrimary,
+            ),
           ),
         ),
       ),
@@ -433,11 +502,16 @@ class _MediaAssistantInput extends StatelessWidget {
               vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
             ),
             decoration: BoxDecoration(
-              color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.backgroundSecondary,
+              ),
               borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               border: Border.all(
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
-                    .withValues(alpha: 0.2),
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundTertiary,
+                ).withValues(alpha: 0.2),
               ),
               boxShadow: [
                 BoxShadow(
@@ -450,17 +524,21 @@ class _MediaAssistantInput extends StatelessWidget {
             child: CupertinoTextField(
               controller: controller,
               focusNode: focusNode,
-              decoration: BoxDecoration(
-                color: AppColors.transparent,
-              ),
+              decoration: BoxDecoration(color: AppColors.transparent),
               placeholder: UITextConstants.assistantAskPlaceholder,
               placeholderStyle: TextStyle(
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
-                fontSize: AppTypography.sm.sp,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundSecondary,
+                ),
+                fontSize: AppTypography.sm,
               ),
               style: TextStyle(
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary),
-                fontSize: AppTypography.sm.sp,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundPrimary,
+                ),
+                fontSize: AppTypography.sm,
               ),
               onSubmitted: (_) => onSend(),
             ),
@@ -469,11 +547,18 @@ class _MediaAssistantInput extends StatelessWidget {
         SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.sm)),
         Container(
           decoration: BoxDecoration(
-            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary),
-            borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.backgroundSecondary,
+            ),
+            borderRadius: BorderRadius.circular(
+              AppSpacing.circularBorderRadius,
+            ),
             border: Border.all(
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary)
-                  .withValues(alpha: 0.2),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ).withValues(alpha: 0.2),
             ),
             boxShadow: [
               BoxShadow(
@@ -485,13 +570,19 @@ class _MediaAssistantInput extends StatelessWidget {
           ),
           child: CupertinoButton(
             padding: EdgeInsets.zero,
-            onPressed: onSend, minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
+            onPressed: onSend,
+            minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
             child: Padding(
-              padding: EdgeInsets.all(context.safeGetIntraGroupSpacing(SpacingSize.xs)),
+              padding: EdgeInsets.all(
+                context.safeGetIntraGroupSpacing(SpacingSize.xs),
+              ),
               child: Icon(
                 CupertinoIcons.arrow_up_circle_fill,
-                color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
-                size: AppSpacing.iconMedium,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundSecondary,
+                ),
+                size: AppSpacing.appChromeActionIconSize,
               ),
             ),
           ),

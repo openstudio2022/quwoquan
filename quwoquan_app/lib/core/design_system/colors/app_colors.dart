@@ -79,6 +79,27 @@ class AppColors {
   static const Color iosSystemSurfaceDark = Color(0xFF2C2C2E);
   static const Color iosAccentLight = primaryColor;
   static const Color iosAccentDark = Color(0xFF0A84FF);
+
+  // ==================== 小趣身份色（assistant brand mark） ====================
+  /// 「小趣」品牌身份色（浅色 / 常规背景）。
+  ///
+  /// 全 App 中所有承担「这是小趣」身份语义的 `CupertinoIcons.sparkles` /
+  /// `Icons.auto_awesome` 必须引用此 token，建立用户对「小趣 = 这个蓝色」
+  /// 的全局认知锚点。当前与 iOS 系统蓝同源，未来若要差异化只需改此一处。
+  ///
+  /// 反例（禁止）：
+  /// - 用 `welcomeTitleGradientMid` 等装饰色作为小趣 icon 颜色
+  /// - 在新增页面直接写 `color: AppColors.primaryColor` 表达小趣身份
+  ///
+  /// 例外：助手悬浮球内部的 sparkle 是反白处理（用 `AppColors.white`），
+  /// 不属于本 token 语义。
+  static const Color assistantMarkColor = primaryColor;
+
+  /// 「小趣」品牌身份色（深色 / 品牌渐变 / 沉浸面板背景）。
+  ///
+  /// 在欢迎页深蓝渐变、媒体沉浸模式等深色背景上，`assistantMarkColor`
+  /// 的对比度不足，必须使用更亮的系统蓝变体；与 iOS 深色模式 accent 同源。
+  static const Color assistantMarkColorOnDark = iosAccentDark;
   static const Color iosGroupedBackgroundLight = Color(0xFFF2F2F7);
   static const Color iosGroupedBackgroundDark = Color(0xFF000000);
   static const Color iosGroupedSurfaceLight = Color(0xFFFFFFFF);

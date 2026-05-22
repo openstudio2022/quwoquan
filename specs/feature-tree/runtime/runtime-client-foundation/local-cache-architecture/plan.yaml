@@ -1,0 +1,76 @@
+version: 1
+feature: local-cache-architecture
+status: baseline_ready
+execution_order:
+  - slice-1-inventory-and-policy
+  - slice-2-resource-entrypoint-ratchet
+  - slice-3-content-object-and-query-cache
+  - slice-4-cache-management-entry
+  - slice-5-sync-and-diagnostics
+  - slice-6-business-feature-tree-closure
+slices:
+  - id: slice-1-inventory-and-policy
+    title: 冻结对象缓存 inventory 与策略模板
+    scope:
+      - specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-inventory.md
+      - specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml
+    exit_criteria:
+      - UserProfile/Post/Conversation/Comment/MediaResource/QuerySnapshot 均有 cache_fields、freshness_keys、clear_policy、tests
+      - 不可误删对象边界明确
+    tests: [T1]
+  - id: slice-2-resource-entrypoint-ratchet
+    title: 收口图片、头像、封面、正文图入口
+    scope:
+      - quwoquan_app/lib/core/widgets/app_cached_network_image.dart
+      - quwoquan_app/scripts/media/verify_app_network_image_surface.py
+      - specs/gates/app_network_image_policy_allowlist.yaml
+    exit_criteria:
+      - 直用 Image.network、NetworkImage、CachedNetworkImage 的 allowlist 递减
+      - 头像/封面/正文图使用统一语义 wrapper 或 preset
+    tests: [T1, T2]
+  - id: slice-3-content-object-and-query-cache
+    title: 建立 post 对象缓存与 query snapshot
+    scope:
+      - quwoquan_app/lib/ui/discovery/providers/discovery_feed_provider.dart
+      - quwoquan_app/lib/ui/content/pages/article_detail_page.dart
+      - quwoquan_app/lib/cloud/services/content
+    exit_criteria:
+      - feed/search/profile/circle query 能 stale-while-revalidate
+      - 最近打开 post 详情可离线回显
+      - 重复打开详情不线性增加 GET
+    tests: [T2, T3, T4]
+  - id: slice-4-cache-management-entry
+    title: 增加用户可见分层缓存清理入口
+    scope:
+      - quwoquan_app/lib/ui/settings
+      - quwoquan_app/lib/core/services/cache
+    exit_criteria:
+      - 清理临时图片和视频、清理离线内容、清理搜索和浏览记录、清理全部本地缓存四层可执行
+      - 草稿、待发送消息、待同步 outbox、当前用户最小资料受保护
+    tests: [T2, T4]
+  - id: slice-5-sync-and-diagnostics
+    title: 对齐同步、overlay、diagnostics 与请求数看护
+    scope:
+      - quwoquan_app/lib/cloud/runtime
+      - quwoquan_app/lib/core/services/cache
+      - agent_ops/gate
+    exit_criteria:
+      - cache hit/miss、请求数、后台刷新耗时、清理结果可观测
+      - overlay/outbox 与远端确认合并有测试
+    tests: [T2, T3]
+  - id: slice-6-business-feature-tree-closure
+    title: 业务特性树缓存规格收口
+    scope:
+      - specs/feature-tree/discovery-content
+      - specs/feature-tree/user-identity-profile-relationship
+      - specs/feature-tree/chat-conversation
+      - specs/feature-tree/runtime/runtime-media
+    exit_criteria:
+      - post、comment、user、conversation、media、query snapshot 均引用统一对象策略
+      - acceptance 中登记缓存验收
+    tests: [T1]
+local_gate:
+  - make verify-app-page-horizontal-quality
+  - python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py
+full_gate:
+  - make gate

@@ -3,14 +3,24 @@ class UITextConstants {
   static const String home = '首页';
   static const String discovery = '发现';
   static const String homeTabFollowing = '关注';
+  static const String homeTabRecommended = '推荐';
   static const String homeTabFeatured = '精品';
   static const String homeTabCircles = '圈子';
+  static const String homeTabTravel = '旅行';
+  static const String homeTabPhotography = '摄影';
+  static const String homeTabTech = '科技';
+  static const String homeTabCarFriends = '车之家';
+  static const String globalXiaoquSearchHint = '搜内容、圈子、聊天';
+  static const String globalXiaoquSearchAsk = '找小趣';
   static const String homeCirclesMy = '我的';
   static const String homeCirclesRecommendTab = '圈子推荐';
   static const String homeCirclesManage = '管理';
   static const String circleScenarioRecommended = '推荐';
   static const String circleScenarioMine = '我的';
   static const String circleScenarioCampus = '校园';
+  static const String circleScenarioTravel = '旅行';
+  static const String circleScenarioPhotography = '摄影';
+  static const String circleScenarioTech = '科技';
   static const String circleScenarioTravelPhotography = '旅行摄影';
   static const String homeCirclesHotTopics = '热议话题';
   static const String homeCirclesMyCircles = '我的圈子';
@@ -118,12 +128,19 @@ class UITextConstants {
 
   // ==================== 欢迎页 ====================
   static const String welcomeTitle = '趣我圈';
-  static const String welcomeSubtitle = '以兴趣为半径，画出我们的交集';
-  static const String welcomeMainSlogan = '专注你的热爱，其余交给小趣';
+
+  /// 欢迎页主 slogan：品牌视角（第三人称），与全局基线 slogan 一致。
+  /// 「绽放热爱」承接花瓣视觉，强化轻快、明亮的品牌记忆。
+  static const String welcomeMainSlogan = '遇见同趣，绽放热爱';
   static const String welcomeButtonLabel = '开启发现之旅';
 
-  /// 欢迎页底部署名（中文表达，居中）
-  static const String welcomeFooterCredit = '小趣私人助手 · 与你相伴';
+  /// 欢迎页底部「小趣寄语」署名 chip 中的发言人名（与 `✨` 一起出现）。
+  /// 与中央 slogan 形成「品牌口吻 → 小趣口吻」的双层结构。
+  static const String assistantWhisperSignature = '小趣';
+
+  /// 欢迎页底部「小趣寄语」第一人称承诺一句话。
+  /// 由小趣以「我」直接对用户说话，呈现 AI Native 的主动感。
+  static const String assistantWhisperLine = '专注你的热爱，剩下的交给我';
 
   // ==================== 通用 ====================
   static const String commentPlaceholder = '添加评论...';

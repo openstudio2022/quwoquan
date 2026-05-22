@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/avatar/conversation_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
@@ -151,8 +152,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
   Widget build(BuildContext context) {
     super.build(context);
     final safeTop = MediaQuery.viewPaddingOf(context).top;
-    final effectiveTopInset =
-        AppSpacing.primaryTopBarSafeTopInset(safeTop, context);
+    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
+      safeTop,
+      context,
+    );
     final isDark = ref.watch(isDarkProvider);
     final bgColor = AppColorsFunctional.getColor(
       isDark,
@@ -247,7 +250,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
 
     return Container(
-      height: AppSpacing.primaryTopBarHeight(context),
+      height: AppSpacing.appChromeTopBarHeight(context),
       decoration: BoxDecoration(
         color: bgColor,
         border: Border(
@@ -597,7 +600,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
       controller: _scrollController,
       padding: EdgeInsets.only(
         bottom:
-            MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight,
+            MediaQuery.viewPaddingOf(context).bottom +
+            AppSpacing.bottomNavBarHeight(context),
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
@@ -777,11 +781,19 @@ class _ChatPageState extends ConsumerState<ChatPage>
                 ),
                 child: Row(
                   children: [
-                    RoundedSquareAvatar(
-                      size: AppSpacing.largeButtonSize + AppSpacing.xs,
-                      imageUrl: row.avatarUrl,
-                      name: row.displayName,
-                    ),
+                    row.kind == ChatContactsRowKind.group
+                        ? ConversationAvatar(
+                            conversationId: row.conversationId ?? row.id,
+                            conversationType: 'group',
+                            title: row.displayName,
+                            avatarUrl: row.avatarUrl,
+                            size: AppSpacing.largeButtonSize + AppSpacing.xs,
+                          )
+                        : RoundedSquareAvatar(
+                            size: AppSpacing.largeButtonSize + AppSpacing.xs,
+                            imageUrl: row.avatarUrl,
+                            name: row.displayName,
+                          ),
                     SizedBox(width: AppSpacing.interGroupSm),
                     Expanded(
                       child: Column(
@@ -1288,20 +1300,13 @@ class _ConversationTile extends StatelessWidget {
   }
 
   Widget _buildConversationAvatar(BuildContext context) {
-    final url = conversation.avatarUrl.trim();
-    assert(() {
-      final t = conversation.type.trim().toLowerCase();
-      if (t == 'group' && url.isEmpty) {
-        debugPrint(
-          '会话头像契约：群/圈子会话 avatarUrl 为空 conversationId=${conversation.id}',
-        );
-      }
-      return true;
-    }());
-    return RoundedSquareAvatar(
+    return ConversationAvatar(
+      conversationId: conversation.id,
+      conversationType: conversation.type,
+      title: conversation.title,
+      avatarUrl: conversation.avatarUrl,
+      groupAvatarVersion: conversation.groupAvatarVersion,
       size: _avatarSize,
-      imageUrl: url,
-      name: conversation.title,
     );
   }
 
@@ -1499,17 +1504,13 @@ class _InboxConversationTile extends StatelessWidget {
   static const double _avatarSize = ChatConversationAvatarTokens.listSize;
 
   Widget _buildAvatar(BuildContext context) {
-    final url = item.avatarUrl.trim();
-    assert(() {
-      if (item.isGroup && url.isEmpty) {
-        debugPrint('会话头像契约：群会话列表项 avatarUrl 为空 conversationId=${item.id}');
-      }
-      return true;
-    }());
-    return RoundedSquareAvatar(
+    return ConversationAvatar(
+      conversationId: item.id,
+      conversationType: item.isGroup ? 'group' : 'direct',
+      title: item.title,
+      avatarUrl: item.avatarUrl,
+      groupAvatarVersion: item.groupAvatarVersion,
       size: _avatarSize,
-      imageUrl: url,
-      name: item.title,
     );
   }
 

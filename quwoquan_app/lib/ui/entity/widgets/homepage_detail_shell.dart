@@ -318,7 +318,10 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
 
   Widget _buildToolbar(BuildContext context) {
     final progress = _toolbarRevealProgress();
-    final safeTop = MediaQuery.paddingOf(context).top;
+    final safeTop = AppSpacing.appChromeTopSafeInset(
+      MediaQuery.viewPaddingOf(context).top,
+      context,
+    );
     final toolbarFill = AppColors.iosSystemBackground(
       context,
     ).withValues(alpha: progress * 0.92);
@@ -347,9 +350,9 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       child: Container(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.containerMd,
-          safeTop + AppSpacing.intraGroupXs,
+          safeTop + AppSpacing.appChromeToolbarVerticalPadding(context),
           AppSpacing.containerMd,
-          AppSpacing.intraGroupXs,
+          AppSpacing.appChromeToolbarVerticalPadding(context),
         ),
         decoration: BoxDecoration(
           color: toolbarFill,

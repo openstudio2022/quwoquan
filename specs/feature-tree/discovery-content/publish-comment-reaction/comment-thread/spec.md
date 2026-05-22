@@ -123,6 +123,15 @@
 - 用户在弱网/断网环境下的评论体验降级
 - 多 persona 身份切换的社交互动
 
+### 3.1.1 对象级缓存规格
+
+- 评论缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 [`object-cache-policy.yaml`](../../../runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml) 中 `Comment` 为准。
+- 评论分页缓存 key 使用 `postId + sort + cursor`，值只保存评论 id 列表、cursor 与分页元数据；评论正文、作者快照与点赞状态进入 `Comment` 对象缓存。
+- 评论作者头像只保存 resource ref 与版本，字节由资源缓存层管理。
+- 本地新发评论、删除评论、评论点赞必须进入 overlay/outbox；普通缓存清理不得删除待发送评论。
+- 评论页缓存默认短于 post 详情缓存；清理离线内容时可删除已确认的 comment page，保留 pending local comment。
+- post 评论计数以 post 对象为主，本地新增/删除评论通过 overlay 叠加显示，云端确认后合并。
+
 ### 3.2 前置条件
 
 - Post 实体及其 commentCount 字段已存在
@@ -347,12 +356,13 @@ TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
 - **A12~A14**：个人主页/Persona/审核
 - **A15~A17**：端云一致/配置/DTO
 - **A18~A20**：NFR（性能/弱网/热帖）
+- **A21**：对象级缓存，覆盖 comment page snapshot、作者快照、pending comment outbox 保护、清理离线内容后的恢复行为。
 
 ### 测试层责任
 
 | 层级 | 职责 |
 |------|------|
 | T1 | 防契约漂移：Comment DTO ↔ metadata fields.yaml；API 路径 ↔ service.yaml |
-| T2 | 防交互回归：8 入口打开弹窗 → 加载 → 提交 → 列表更新 → 点赞 → 删除 |
-| T3 | 防端云联调断裂：Remote Repository 与 Go Handler 路径/参数/响应一致 |
-| T4 | 防真实设备失效：弱网 >3s 降级提示；10 万评论滚动流畅度 ≥ 50fps |
+| T2 | 防交互回归：8 入口打开弹窗 → 加载 → 提交 → 列表更新 → 点赞 → 删除；缓存命中时先显示最近 comment page |
+| T3 | 防端云联调断裂：Remote Repository 与 Go Handler 路径/参数/响应一致；评论 overlay/outbox 与云端确认合并 |
+| T4 | 防真实设备失效：弱网 >3s 降级提示；10 万评论滚动流畅度 ≥ 50fps；清理缓存后待发送评论不丢失 |

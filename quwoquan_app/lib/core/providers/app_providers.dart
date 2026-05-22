@@ -50,6 +50,9 @@ import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/client_state_sync.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_sync_service.dart';
+import 'package:quwoquan_app/core/services/cache/cached_content_repository.dart';
+import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
+import 'package:quwoquan_app/core/services/cache/content_cache_services.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
@@ -1533,11 +1536,17 @@ final assistantContentIdentityIndexEnabledProvider = Provider<bool>((ref) {
 /// Content Repository（按业务对象组织的端侧入口）
 final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
+  final delegate = cloudRepositoryImplForMode(
     mode,
     remote: () =>
         RemoteContentRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockContentRepository.new,
+  );
+  return CachedContentRepository(
+    delegate: delegate,
+    postCache: ref.watch(postObjectCacheProvider),
+    querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
+    userProfileCache: ref.watch(userProfileCacheProvider),
   );
 });
 
@@ -1597,7 +1606,26 @@ final conversationCacheProvider = Provider<ConversationCacheService>((ref) {
 
 /// 用户资料缓存（LRU 内存 200 条 + 磁盘持久化无 TTL）
 final userProfileCacheProvider = Provider<UserProfileCacheService>((ref) {
-  return UserProfileCacheService();
+  return UserProfileCacheService(persistToPreferences: true);
+});
+
+final postObjectCacheProvider = Provider<PostObjectCacheService>((ref) {
+  return PostObjectCacheService();
+});
+
+final contentQuerySnapshotStoreProvider = Provider<ContentQuerySnapshotStore>((
+  ref,
+) {
+  return ContentQuerySnapshotStore();
+});
+
+final cacheManagementServiceProvider = Provider<CacheManagementService>((ref) {
+  return CacheManagementService(
+    postCache: ref.watch(postObjectCacheProvider),
+    querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
+    userProfileCache: ref.watch(userProfileCacheProvider),
+    conversationCache: ref.watch(conversationCacheProvider),
+  );
 });
 
 /// 会话同步引擎

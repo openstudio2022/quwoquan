@@ -7,8 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
@@ -39,6 +39,23 @@ class SearchNetworkResultsPage extends ConsumerStatefulWidget {
 class _SearchNetworkResultsPageState
     extends ConsumerState<SearchNetworkResultsPage> {
   static const Duration _queryDebounce = Duration(milliseconds: 220);
+  static const String _tabXiaoqu = 'xiaoqu';
+  static const String _tabAll = 'all';
+  static const String _tabVideo = 'video';
+  static const String _tabImage = 'image';
+  static const String _tabArticle = 'article';
+  static const String _tabContent = 'content';
+  static const String _tabHomepages = 'homepages';
+  static const String _tabGroups = 'groups';
+  static const String _tabMessages = 'messages';
+  static const String _tabContacts = 'contacts';
+  static const List<String> _businessCategoryOrder = <String>[
+    'campus',
+    'travel',
+    'photography',
+    'tech',
+    'car',
+  ];
 
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
@@ -53,7 +70,8 @@ class _SearchNetworkResultsPageState
   List<PostSearchItemView> _contentResults = const <PostSearchItemView>[];
   List<HomepageSummary> _homepageResults = const <HomepageSummary>[];
   List<SearchHit> _groupResults = const <SearchHit>[];
-  List<LocationPoiDto> _locationResults = const <LocationPoiDto>[];
+  List<SearchHit> _messageResults = const <SearchHit>[];
+  List<SearchHit> _contactResults = const <SearchHit>[];
 
   @override
   void initState() {
@@ -62,10 +80,12 @@ class _SearchNetworkResultsPageState
     _controller = TextEditingController(text: _query);
     _focusNode = FocusNode();
     _tabs = _buildBaseTabs();
-    final initialTabId = widget.launchContext.initialNetworkTabId;
+    final initialTabId = _normalizeInitialTabId(
+      widget.launchContext.initialNetworkTabId,
+    );
     _activeTabId = _tabs.any((tab) => tab.id == initialTabId)
         ? initialTabId!
-        : _tabs.first.id;
+        : _tabAll;
     unawaited(_appendCategoryTabsFromRepo());
     _scheduleRefresh(immediate: true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -96,56 +116,11 @@ class _SearchNetworkResultsPageState
 
     return AppFullscreenModalSurface(
       backgroundColor: backgroundColor,
-      contentPadding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
-        AppSpacing.xs,
-        AppSpacing.containerMd,
-        AppSpacing.containerLg,
-      ),
+      safeAreaTop: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Stack(
-            alignment: Alignment.centerLeft,
-            children: [
-              AppSearchField(
-                key: const ValueKey<String>('search_network_field'),
-                controller: _controller,
-                focusNode: _focusNode,
-                placeholder: UITextConstants.globalSearchTitle,
-                onSubmitted: _handleSearchSubmitted,
-                onChanged: (value) {
-                  setState(() {
-                    _query = value.trim();
-                  });
-                  _scheduleRefresh();
-                },
-                backgroundColor: backgroundColor,
-                elevated: false,
-                padding: EdgeInsetsDirectional.only(
-                  start: AppSpacing.minInteractiveSize + AppSpacing.containerSm,
-                  end: AppSpacing.containerSm,
-                ),
-              ),
-              PositionedDirectional(
-                start: 0,
-                top: 0,
-                bottom: 0,
-                child: Center(
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: Size.zero,
-                    onPressed: _handleClose,
-                    child: Icon(
-                      CupertinoIcons.chevron_back,
-                      color: fgSecondary,
-                      size: AppSpacing.iconLarge,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _buildSearchChrome(isDark, fgSecondary, backgroundColor),
           SizedBox(height: AppSpacing.containerSm),
           SecondaryCapsuleTabBar(
             isDark: isDark,
@@ -160,13 +135,21 @@ class _SearchNetworkResultsPageState
           ),
           SizedBox(height: AppSpacing.containerSm),
           Expanded(
-            child: ListView(
-              key: ValueKey<String>('network_results_$_activeTabId'),
-              padding: EdgeInsets.zero,
-              children: _buildResultChildren(
-                isDark: isDark,
-                fgSecondary: fgSecondary,
-                activeTab: activeTab,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerMd,
+                0,
+                AppSpacing.containerMd,
+                AppSpacing.containerLg,
+              ),
+              child: ListView(
+                key: ValueKey<String>('network_results_$_activeTabId'),
+                padding: EdgeInsets.zero,
+                children: _buildResultChildren(
+                  isDark: isDark,
+                  fgSecondary: fgSecondary,
+                  activeTab: activeTab,
+                ),
               ),
             ),
           ),
@@ -175,29 +158,131 @@ class _SearchNetworkResultsPageState
     );
   }
 
+  Widget _buildSearchChrome(
+    bool isDark,
+    Color fgSecondary,
+    Color backgroundColor,
+  ) {
+    final fieldBackground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
+    final topInset = AppSpacing.appChromeTopSafeInset(
+      MediaQuery.viewPaddingOf(context).top,
+      context,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(color: backgroundColor),
+      child: Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: SizedBox(
+          height: AppSpacing.appChromeTopBarHeight(context),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.feedContentHorizontal(context),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.square(
+                    AppSpacing.appChromeActionButtonSize,
+                  ),
+                  onPressed: _handleClose,
+                  child: Icon(
+                    CupertinoIcons.chevron_back,
+                    color: fgSecondary,
+                    size: AppSpacing.appChromeActionIconSize,
+                  ),
+                ),
+                SizedBox(width: AppSpacing.intraGroupXs),
+                Expanded(
+                  child: AppSearchField(
+                    key: const ValueKey<String>('search_network_field'),
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    placeholder: UITextConstants.globalSearchTitle,
+                    onSubmitted: _handleSearchSubmitted,
+                    onChanged: (value) {
+                      setState(() {
+                        _query = value.trim();
+                      });
+                      _scheduleRefresh();
+                    },
+                    backgroundColor: fieldBackground,
+                    elevated: false,
+                    padding: EdgeInsetsDirectional.only(
+                      start: AppSpacing.containerSm,
+                      end: AppSpacing.containerSm,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   List<_SearchNetworkTab> _buildBaseTabs() {
     return <_SearchNetworkTab>[
       const _SearchNetworkTab(
-        id: 'xiaoqu',
+        id: _tabXiaoqu,
         label: '小趣搜',
-        description: '从圈子内容和创作里快速梳理线索',
+        description: '由小趣整理话题、引用和可继续追问的线索',
       ),
       const _SearchNetworkTab(
-        id: 'homepages',
+        id: _tabAll,
+        label: '综合',
+        description: '汇总应用内主页、消息、内容和圈子结果',
+      ),
+      const _SearchNetworkTab(
+        id: _tabHomepages,
         label: '主页',
         description: '搜索共享主页并进入详情',
       ),
-      _SearchNetworkTab(
-        id: 'groups',
-        label: SearchRegistry.sectionById('groups')?.title ?? '群组',
-        description: '搜索圈子与群组结果',
+      const _SearchNetworkTab(
+        id: _tabMessages,
+        label: '消息',
+        description: '搜索聊天记录和消息内容',
       ),
-      _SearchNetworkTab(
-        id: 'locations',
-        label: SearchRegistry.sectionById('locations')?.title ?? '位置',
-        description: '搜索站内可挂载的位置结果',
+      const _SearchNetworkTab(
+        id: _tabVideo,
+        label: UITextConstants.discoveryWorksFilterVideo,
+        description: '搜索相关视频内容',
+      ),
+      const _SearchNetworkTab(
+        id: _tabImage,
+        label: UITextConstants.discoveryWorksFilterImage,
+        description: '搜索相关图片内容',
+      ),
+      const _SearchNetworkTab(
+        id: _tabArticle,
+        label: '文章',
+        description: '搜索相关文章内容',
+      ),
+      const _SearchNetworkTab(
+        id: _tabContent,
+        label: '内容',
+        description: '搜索视频、图片、文章和点滴内容',
       ),
     ];
+  }
+
+  String? _normalizeInitialTabId(String? tabId) {
+    final normalized = tabId?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    if (normalized == _tabXiaoqu) {
+      return _tabAll;
+    }
+    if (normalized == 'humanity') {
+      return 'photography';
+    }
+    return normalized;
   }
 
   Future<void> _appendCategoryTabsFromRepo() async {
@@ -209,19 +294,24 @@ class _SearchNetworkResultsPageState
         return;
       }
       final extra = <_SearchNetworkTab>[];
-      for (final entry in cfg.entries) {
-        final CircleCategoryTabConfigDto value = entry.value;
+      for (final id in _businessCategoryOrder) {
+        final CircleCategoryTabConfigDto? value =
+            cfg[id] ?? CircleCategoryTabDefaults.remoteStyleFallback[id];
+        if (value == null) continue;
+        final label = value.label.isNotEmpty ? value.label : id;
         extra.add(
           _SearchNetworkTab(
-            id: entry.key,
-            label: value.label.isNotEmpty ? value.label : entry.key,
+            id: id,
+            label: label,
             description: value.desc ?? '',
           ),
         );
       }
       final merged = [..._buildBaseTabs(), ...extra];
       final prevActive = _activeTabId;
-      final want = widget.launchContext.initialNetworkTabId;
+      final want = _normalizeInitialTabId(
+        widget.launchContext.initialNetworkTabId,
+      );
       var nextActive = prevActive;
       if (want != null && merged.any((t) => t.id == want)) {
         nextActive = want;
@@ -235,7 +325,17 @@ class _SearchNetworkResultsPageState
       if (nextActive != prevActive) {
         _scheduleRefresh(immediate: true);
       }
-    } catch (_) {}
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _tabs = _buildBaseTabs();
+        if (!_tabs.any((tab) => tab.id == _activeTabId)) {
+          _activeTabId = _tabAll;
+        }
+      });
+    }
   }
 
   List<Widget> _buildResultChildren({
@@ -243,7 +343,7 @@ class _SearchNetworkResultsPageState
     required Color fgSecondary,
     required _SearchNetworkTab activeTab,
   }) {
-    if (_activeTabId == 'xiaoqu') {
+    if (_activeTabId == _tabXiaoqu) {
       return <Widget>[
         _XiaoquSummaryCard(
           query: _query,
@@ -252,7 +352,7 @@ class _SearchNetworkResultsPageState
         ),
         SizedBox(height: AppSpacing.containerMd),
         if (_isLoading)
-          _StatusMessage(text: '小趣搜正在整理网络结果', isDark: isDark, loading: true)
+          _StatusMessage(text: '小趣正在整理综合结果', isDark: isDark, loading: true)
         else if (_errorText != null)
           _StatusMessage(text: _errorText!, isDark: isDark)
         else if ((_xiaoquResult?.citations?.length ?? 0) == 0)
@@ -265,7 +365,15 @@ class _SearchNetworkResultsPageState
       ];
     }
 
-    if (_activeTabId == 'homepages') {
+    if (_activeTabId == _tabAll) {
+      return _buildAllResultChildren(
+        isDark: isDark,
+        fgSecondary: fgSecondary,
+        activeTab: activeTab,
+      );
+    }
+
+    if (_activeTabId == _tabHomepages) {
       return <Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
@@ -284,7 +392,7 @@ class _SearchNetworkResultsPageState
       ];
     }
 
-    if (_activeTabId == 'groups') {
+    if (_activeTabId == _tabGroups) {
       return <Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
@@ -303,22 +411,48 @@ class _SearchNetworkResultsPageState
       ];
     }
 
-    if (_activeTabId == 'locations') {
+    if (_activeTabId == _tabMessages) {
       return <Widget>[
         _CategorySummaryCard(
           title: activeTab.label,
           description: activeTab.description,
-          count: _locationResults.length,
+          count: _messageResults.length,
           isDark: isDark,
         ),
         if (_isLoading)
-          _StatusMessage(text: '正在加载位置结果', isDark: isDark, loading: true)
+          _StatusMessage(text: '正在加载消息结果', isDark: isDark, loading: true)
         else if (_errorText != null)
           _StatusMessage(text: _errorText!, isDark: isDark)
-        else if (_locationResults.isEmpty)
-          _StatusMessage(text: '没有找到相关位置', isDark: isDark)
+        else if (_messageResults.isEmpty)
+          _StatusMessage(text: '没有找到相关消息', isDark: isDark)
         else
-          ..._buildLocationResultTiles(
+          ..._buildGenericHitTiles(
+            hits: _messageResults,
+            emptyEyebrow: activeTab.label,
+            isDark: isDark,
+            fgSecondary: fgSecondary,
+          ),
+      ];
+    }
+
+    if (_activeTabId == _tabContacts) {
+      return <Widget>[
+        _CategorySummaryCard(
+          title: activeTab.label,
+          description: activeTab.description,
+          count: _contactResults.length,
+          isDark: isDark,
+        ),
+        if (_isLoading)
+          _StatusMessage(text: '正在加载联系人结果', isDark: isDark, loading: true)
+        else if (_errorText != null)
+          _StatusMessage(text: _errorText!, isDark: isDark)
+        else if (_contactResults.isEmpty)
+          _StatusMessage(text: '没有找到相关联系人', isDark: isDark)
+        else
+          ..._buildGenericHitTiles(
+            hits: _contactResults,
+            emptyEyebrow: activeTab.label,
             isDark: isDark,
             fgSecondary: fgSecondary,
           ),
@@ -341,6 +475,108 @@ class _SearchNetworkResultsPageState
       else
         ..._buildContentResultTiles(isDark: isDark, fgSecondary: fgSecondary),
     ];
+  }
+
+  List<Widget> _buildAllResultChildren({
+    required bool isDark,
+    required Color fgSecondary,
+    required _SearchNetworkTab activeTab,
+  }) {
+    if (_isLoading) {
+      return <Widget>[
+        _StatusMessage(text: '正在加载应用内结果', isDark: isDark, loading: true),
+      ];
+    }
+    if (_errorText != null) {
+      return <Widget>[_StatusMessage(text: _errorText!, isDark: isDark)];
+    }
+
+    final sections = <Widget>[];
+    void addSection({
+      required String title,
+      required String description,
+      required int count,
+      required List<Widget> tiles,
+    }) {
+      if (count == 0 || tiles.isEmpty) {
+        return;
+      }
+      if (sections.isNotEmpty) {
+        sections.add(SizedBox(height: AppSpacing.containerLg));
+      }
+      sections.add(
+        _CategorySummaryCard(
+          title: title,
+          description: description,
+          count: count,
+          isDark: isDark,
+        ),
+      );
+      sections.addAll(tiles);
+    }
+
+    addSection(
+      title: '主页',
+      description: '用户主页、圈子主页和实体主页',
+      count: _homepageResults.length,
+      tiles: _buildHomepageResultTiles(
+        items: _homepageResults.take(3).toList(growable: false),
+      ),
+    );
+    addSection(
+      title: '消息',
+      description: '聊天记录、会话和联系人线索',
+      count: _messageResults.length + _contactResults.length,
+      tiles: [
+        ..._buildGenericHitTiles(
+          hits: _messageResults.take(3).toList(growable: false),
+          emptyEyebrow: '消息',
+          isDark: isDark,
+          fgSecondary: fgSecondary,
+        ),
+        if (_messageResults.isNotEmpty && _contactResults.isNotEmpty)
+          SizedBox(height: AppSpacing.containerSm),
+        ..._buildGenericHitTiles(
+          hits: _contactResults.take(3).toList(growable: false),
+          emptyEyebrow: '联系人',
+          isDark: isDark,
+          fgSecondary: fgSecondary,
+        ),
+      ],
+    );
+    addSection(
+      title: UITextConstants.contactsTabCircles,
+      description: '圈子与群组结果',
+      count: _groupResults.length,
+      tiles: _buildGroupResultTiles(
+        isDark: isDark,
+        fgSecondary: fgSecondary,
+        hits: _groupResults.take(3).toList(growable: false),
+      ),
+    );
+    addSection(
+      title: '内容',
+      description: '视频、图片、文章和点滴内容',
+      count: _contentResults.length,
+      tiles: _buildContentResultTiles(
+        isDark: isDark,
+        fgSecondary: fgSecondary,
+        items: _contentResults.take(3).toList(growable: false),
+      ),
+    );
+
+    if (sections.isEmpty) {
+      return <Widget>[
+        _CategorySummaryCard(
+          title: activeTab.label,
+          description: activeTab.description,
+          count: 0,
+          isDark: isDark,
+        ),
+        _StatusMessage(text: '没有找到相关应用内结果', isDark: isDark),
+      ];
+    }
+    return sections;
   }
 
   List<Widget> _buildXiaoquCitationTiles({
@@ -382,8 +618,9 @@ class _SearchNetworkResultsPageState
   List<Widget> _buildContentResultTiles({
     required bool isDark,
     required Color fgSecondary,
+    List<PostSearchItemView>? items,
   }) {
-    final cards = _contentResults
+    final cards = (items ?? _contentResults)
         .map(_NetworkResultCardModel.fromSearchItem)
         .toList(growable: false);
     return <Widget>[
@@ -425,18 +662,16 @@ class _SearchNetworkResultsPageState
     ];
   }
 
-  List<Widget> _buildHomepageResultTiles() {
+  List<Widget> _buildHomepageResultTiles({List<HomepageSummary>? items}) {
+    final results = items ?? _homepageResults;
     return <Widget>[
-      for (var i = 0; i < _homepageResults.length; i++) ...[
+      for (var i = 0; i < results.length; i++) ...[
         HomepageSummaryCard(
-          key: ValueKey<String>(
-            'search_homepage_result_${_homepageResults[i].id}',
-          ),
-          summary: _homepageResults[i],
-          onTap: () => _openHomepage(_homepageResults[i].id),
+          key: ValueKey<String>('search_homepage_result_${results[i].id}'),
+          summary: results[i],
+          onTap: () => _openHomepage(results[i].id),
         ),
-        if (i != _homepageResults.length - 1)
-          SizedBox(height: AppSpacing.containerSm),
+        if (i != results.length - 1) SizedBox(height: AppSpacing.containerSm),
       ],
     ];
   }
@@ -444,8 +679,9 @@ class _SearchNetworkResultsPageState
   List<Widget> _buildGroupResultTiles({
     required bool isDark,
     required Color fgSecondary,
+    List<SearchHit>? hits,
   }) {
-    final cards = _groupResults
+    final cards = (hits ?? _groupResults)
         .map(_GroupResultCardModel.fromHit)
         .toList(growable: false);
     return <Widget>[
@@ -472,23 +708,24 @@ class _SearchNetworkResultsPageState
     ];
   }
 
-  List<Widget> _buildLocationResultTiles({
+  List<Widget> _buildGenericHitTiles({
+    required List<SearchHit> hits,
+    required String emptyEyebrow,
     required bool isDark,
     required Color fgSecondary,
   }) {
-    final cards = _locationResults
-        .map(_LocationResultCardModel.fromDto)
-        .toList(growable: false);
     return <Widget>[
-      for (var i = 0; i < cards.length; i++) ...[
+      for (var i = 0; i < hits.length; i++) ...[
         PostPreviewListTile(
           isDark: isDark,
-          title: cards[i].title,
-          supportingText: cards[i].supportingText,
+          title: hits[i].title,
+          supportingText: hits[i].snippet ?? hits[i].subtitle ?? '打开相关搜索结果',
           coverUrl: '',
-          eyebrowText: cards[i].eyebrowText,
+          eyebrowText:
+              SearchRegistry.entryFor(hits[i].objectType)?.label ??
+              emptyEyebrow,
           footer: Text(
-            cards[i].footerLabel,
+            hits[i].subtitle ?? emptyEyebrow,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -498,7 +735,7 @@ class _SearchNetworkResultsPageState
           ),
           onTap: () {},
         ),
-        if (i != cards.length - 1) SizedBox(height: AppSpacing.containerSm),
+        if (i != hits.length - 1) SizedBox(height: AppSpacing.containerSm),
       ],
     ];
   }
@@ -518,20 +755,28 @@ class _SearchNetworkResultsPageState
     setState(() {
       _isLoading = true;
       _errorText = null;
-      if (_activeTabId == 'xiaoqu') {
+      if (_activeTabId == _tabXiaoqu) {
         _xiaoquResult = null;
-      } else if (_activeTabId == 'homepages') {
+      } else if (_activeTabId == _tabAll) {
         _homepageResults = const <HomepageSummary>[];
-      } else if (_activeTabId == 'groups') {
         _groupResults = const <SearchHit>[];
-      } else if (_activeTabId == 'locations') {
-        _locationResults = const <LocationPoiDto>[];
+        _messageResults = const <SearchHit>[];
+        _contactResults = const <SearchHit>[];
+        _contentResults = const <PostSearchItemView>[];
+      } else if (_activeTabId == _tabHomepages) {
+        _homepageResults = const <HomepageSummary>[];
+      } else if (_activeTabId == _tabGroups) {
+        _groupResults = const <SearchHit>[];
+      } else if (_activeTabId == _tabMessages) {
+        _messageResults = const <SearchHit>[];
+      } else if (_activeTabId == _tabContacts) {
+        _contactResults = const <SearchHit>[];
       } else {
         _contentResults = const <PostSearchItemView>[];
       }
     });
     try {
-      if (_activeTabId == 'xiaoqu') {
+      if (_activeTabId == _tabXiaoqu) {
         final result = await ref
             .read(assistantRepositoryProvider)
             .searchXiaoquResults(query: trimmedQuery);
@@ -545,7 +790,36 @@ class _SearchNetworkResultsPageState
         return;
       }
 
-      if (_activeTabId == 'homepages') {
+      if (_activeTabId == _tabAll) {
+        if (trimmedQuery.isEmpty) {
+          if (!mounted || token != _requestToken) {
+            return;
+          }
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+        final homepageItems = await _loadHomepageResults(trimmedQuery);
+        final groupItems = await _loadGroupResults(trimmedQuery);
+        final messageItems = await _loadMessageResults(trimmedQuery);
+        final contactItems = await _loadContactResults(trimmedQuery);
+        final contentItems = await _loadContentResults(trimmedQuery);
+        if (!mounted || token != _requestToken) {
+          return;
+        }
+        setState(() {
+          _homepageResults = homepageItems;
+          _groupResults = groupItems;
+          _messageResults = messageItems;
+          _contactResults = contactItems;
+          _contentResults = contentItems;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (_activeTabId == _tabHomepages) {
         final items = trimmedQuery.isEmpty
             ? const <HomepageSummary>[]
             : await _loadHomepageResults(trimmedQuery);
@@ -559,7 +833,7 @@ class _SearchNetworkResultsPageState
         return;
       }
 
-      if (_activeTabId == 'groups') {
+      if (_activeTabId == _tabGroups) {
         final items = trimmedQuery.isEmpty
             ? const <SearchHit>[]
             : await _loadGroupResults(trimmedQuery);
@@ -573,15 +847,29 @@ class _SearchNetworkResultsPageState
         return;
       }
 
-      if (_activeTabId == 'locations') {
+      if (_activeTabId == _tabMessages) {
         final items = trimmedQuery.isEmpty
-            ? const <LocationPoiDto>[]
-            : await _loadLocationResults(trimmedQuery);
+            ? const <SearchHit>[]
+            : await _loadMessageResults(trimmedQuery);
         if (!mounted || token != _requestToken) {
           return;
         }
         setState(() {
-          _locationResults = items;
+          _messageResults = items;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (_activeTabId == _tabContacts) {
+        final items = trimmedQuery.isEmpty
+            ? const <SearchHit>[]
+            : await _loadContactResults(trimmedQuery);
+        if (!mounted || token != _requestToken) {
+          return;
+        }
+        setState(() {
+          _contactResults = items;
           _isLoading = false;
         });
         return;
@@ -609,8 +897,29 @@ class _SearchNetworkResultsPageState
   }
 
   Future<List<PostSearchItemView>> _loadContentResults(String query) async {
-    final categoryId = _activeTabId == 'all' ? null : _activeTabId;
+    final categoryId =
+        _activeTabId == _tabVideo ||
+            _activeTabId == _tabImage ||
+            _activeTabId == _tabArticle ||
+            _activeTabId == _tabContent ||
+            _activeTabId == _tabAll ||
+            _activeTabId == _tabXiaoqu
+        ? null
+        : _activeTabId;
     final selection = widget.launchContext.searchObjectSelection.normalized();
+    final contentTypes = switch (_activeTabId) {
+      _tabVideo => const <SearchContentTypeFilter>{
+        SearchContentTypeFilter.video,
+      },
+      _tabImage => const <SearchContentTypeFilter>{
+        SearchContentTypeFilter.image,
+      },
+      _tabArticle => const <SearchContentTypeFilter>{
+        SearchContentTypeFilter.article,
+      },
+      _tabContent => const <SearchContentTypeFilter>{},
+      _ => selection.contentTypes,
+    };
     final response = await ref
         .read(searchRepositoryProvider)
         .search(
@@ -620,7 +929,7 @@ class _SearchNetworkResultsPageState
             objectTypes: const <SearchObjectType>{SearchObjectType.contentPost},
             limit: 12,
             categoryId: categoryId,
-            contentTypes: selection.contentTypes,
+            contentTypes: contentTypes,
           ),
         );
     final results = response.hits
@@ -690,7 +999,7 @@ class _SearchNetworkResultsPageState
         .toList(growable: false);
   }
 
-  Future<List<LocationPoiDto>> _loadLocationResults(String query) async {
+  Future<List<SearchHit>> _loadMessageResults(String query) async {
     final response = await ref
         .read(searchRepositoryProvider)
         .search(
@@ -698,16 +1007,34 @@ class _SearchNetworkResultsPageState
             query: query,
             mode: SearchMode.result,
             objectTypes: const <SearchObjectType>{
-              SearchObjectType.integrationLocationPoi,
+              SearchObjectType.chatConversation,
+              SearchObjectType.chatMessage,
             },
             limit: 12,
           ),
         );
     return response.hits
         .where(
-          (hit) => hit.objectType == SearchObjectType.integrationLocationPoi,
+          (hit) =>
+              hit.objectType == SearchObjectType.chatConversation ||
+              hit.objectType == SearchObjectType.chatMessage,
         )
-        .map((hit) => LocationPoiDto.fromMap(hit.payload.toWireMap()))
+        .toList(growable: false);
+  }
+
+  Future<List<SearchHit>> _loadContactResults(String query) async {
+    final response = await ref
+        .read(searchRepositoryProvider)
+        .search(
+          SearchRequest(
+            query: query,
+            mode: SearchMode.result,
+            objectTypes: const <SearchObjectType>{SearchObjectType.chatContact},
+            limit: 12,
+          ),
+        );
+    return response.hits
+        .where((hit) => hit.objectType == SearchObjectType.chatContact)
         .toList(growable: false);
   }
 
@@ -880,7 +1207,7 @@ class _XiaoquSummaryCard extends StatelessWidget {
               children: [
                 Icon(
                   CupertinoIcons.sparkles,
-                  color: AppColors.primaryColor,
+                  color: AppColors.assistantMarkColor,
                   size: AppSpacing.iconMedium,
                 ),
                 SizedBox(width: AppSpacing.intraGroupSm),
@@ -1116,35 +1443,6 @@ class _GroupResultCardModel {
       coverUrl: view.coverUrl ?? '',
       footerLabel: footerSegments.isEmpty ? '群组结果' : footerSegments.join(' · '),
       eyebrowText: isCircle ? '圈子' : '群组',
-    );
-  }
-}
-
-class _LocationResultCardModel {
-  const _LocationResultCardModel({
-    required this.title,
-    required this.supportingText,
-    required this.footerLabel,
-    required this.eyebrowText,
-  });
-
-  final String title;
-  final String supportingText;
-  final String footerLabel;
-  final String eyebrowText;
-
-  factory _LocationResultCardModel.fromDto(LocationPoiDto dto) {
-    final footerSegments = <String>[
-      if (dto.distanceMeters != null) '${dto.distanceMeters} m',
-      '${dto.latitude.toStringAsFixed(4)}, ${dto.longitude.toStringAsFixed(4)}',
-    ];
-    return _LocationResultCardModel(
-      title: dto.name,
-      supportingText: (dto.address ?? '').trim().isNotEmpty
-          ? dto.address!.trim()
-          : '站内位置结果',
-      footerLabel: footerSegments.join(' · '),
-      eyebrowText: '位置',
     );
   }
 }

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -112,7 +113,7 @@ func (h *ChatHandler) handleListConversations(w http.ResponseWriter, r *http.Req
 		nextCursor = convs[len(convs)-1].ID
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": flattenConversations(convs), "cursor": nextCursor,
+		"items": h.flattenConversations(r.Context(), convs), "cursor": nextCursor,
 	})
 }
 
@@ -137,7 +138,7 @@ func (h *ChatHandler) handleCreateConversation(w http.ResponseWriter, r *http.Re
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, conversationToWire(*conv))
+	writeJSON(w, http.StatusCreated, h.conversationToWire(r.Context(), *conv))
 }
 
 func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +148,7 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 		writeHTTPError(w, r, newNotFound("会话", convId))
 		return
 	}
-	writeJSON(w, http.StatusOK, conversationToWire(*conv))
+	writeJSON(w, http.StatusOK, h.conversationToWire(r.Context(), *conv))
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
@@ -466,7 +467,7 @@ func (h *ChatHandler) handleListInbox(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": flattenInboxItems(items)})
+	writeJSON(w, http.StatusOK, map[string]any{"items": h.flattenInboxItems(r.Context(), items)})
 }
 
 // ── Contacts ─────────────────────────────────────────────────────────────────
@@ -545,7 +546,7 @@ func (h *ChatHandler) handleSearchConversations(w http.ResponseWriter, r *http.R
 			"conversationId":     conversation.ID,
 			"type":               conversation.Type,
 			"title":              conversation.Title,
-			"avatarUrl":          application.ResolveConversationAvatarURL(conversation),
+			"avatarUrl":          h.resolveConversationAvatarURL(r.Context(), conversation),
 			"groupAvatarVersion": conversation.GroupAvatarVersion,
 			"lastMessagePreview": conversation.LastMessagePreview,
 			"lastMessageTime":    conversation.LastMessageTime,
@@ -582,7 +583,7 @@ func (h *ChatHandler) handleSearchMessages(w http.ResponseWriter, r *http.Reques
 			"messageId":             hit.Message.ID,
 			"conversationId":        hit.Conversation.ID,
 			"conversationTitle":     hit.Conversation.Title,
-			"conversationAvatarUrl": application.ResolveConversationAvatarURL(hit.Conversation),
+			"conversationAvatarUrl": h.resolveConversationAvatarURL(r.Context(), hit.Conversation),
 			"senderSubAccountId":    hit.Message.SenderId,
 			"senderDisplayName":     hit.Message.SenderId,
 			"senderAvatarUrl":       "",
@@ -608,24 +609,24 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-func flattenConversations(convs []model.Conversation) []map[string]any {
+func (h *ChatHandler) flattenConversations(ctx context.Context, convs []model.Conversation) []map[string]any {
 	items := make([]map[string]any, 0, len(convs))
 	for _, conv := range convs {
-		items = append(items, conversationToWire(conv))
+		items = append(items, h.conversationToWire(ctx, conv))
 	}
 	return items
 }
 
-func flattenInboxItems(items []application.InboxItem) []map[string]any {
+func (h *ChatHandler) flattenInboxItems(ctx context.Context, items []application.InboxItem) []map[string]any {
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		out = append(out, inboxItemToWire(item))
+		out = append(out, h.inboxItemToWire(ctx, item))
 	}
 	return out
 }
 
-func inboxItemToWire(item application.InboxItem) map[string]any {
-	conv := conversationToWire(item.Conversation)
+func (h *ChatHandler) inboxItemToWire(ctx context.Context, item application.InboxItem) map[string]any {
+	conv := h.conversationToWire(ctx, item.Conversation)
 	conv["lastSeq"] = item.Conversation.MaxSeq
 	conv["unreadCount"] = item.UserState.UnreadCount
 	conv["mentionUnreadCount"] = 0
@@ -634,8 +635,8 @@ func inboxItemToWire(item application.InboxItem) map[string]any {
 	return conv
 }
 
-func conversationToWire(conv model.Conversation) map[string]any {
-	avatarURL := application.ResolveConversationAvatarURL(conv)
+func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Conversation) map[string]any {
+	avatarURL := h.resolveConversationAvatarURL(ctx, conv)
 	return map[string]any{
 		"id":                    conv.ID,
 		"_id":                   conv.ID,
@@ -659,6 +660,27 @@ func conversationToWire(conv model.Conversation) map[string]any {
 		"createdAt":             conv.CreatedAt,
 		"updatedAt":             conv.UpdatedAt,
 	}
+}
+
+func (h *ChatHandler) resolveConversationAvatarURL(ctx context.Context, conv model.Conversation) string {
+	if application.PublicConversationType(conv.Type, conv.CircleId) != "group" {
+		return application.ResolveConversationAvatarURL(conv)
+	}
+	if application.ResolveGroupAvatarURL(conv) != "" {
+		return application.ResolveConversationAvatarURL(conv)
+	}
+	if h == nil || h.memberService == nil {
+		return application.ResolveConversationAvatarURL(conv)
+	}
+	members, err := h.memberService.ListMembers(ctx, application.ListMembersRequest{
+		ConversationId: conv.ID,
+		Limit:          200,
+		Sort:           "joined_asc",
+	})
+	if err != nil {
+		return application.ResolveConversationAvatarURL(conv)
+	}
+	return application.ResolveConversationAvatarURLWithMembers(conv, members)
 }
 
 func messageToWire(msg model.Message) map[string]any {

@@ -233,7 +233,10 @@ class _CommentInputState extends ConsumerState<CommentInput> {
         // 输入框
         Expanded(
           child: Container(
-            height: CommentResponsive.getInputHeight(context),
+            constraints: const BoxConstraints(
+              minHeight: AppSpacing.commentInputHeight,
+              maxHeight: AppSpacing.commentInputHeight * 2,
+            ),
             decoration: BoxDecoration(
               color: AppColorsFunctional.getColor(
                 isDark,
@@ -256,6 +259,7 @@ class _CommentInputState extends ConsumerState<CommentInput> {
               focusNode: _focusNode,
               enabled: widget.enabled && widget.config.canUserComment,
               maxLines: null,
+              minLines: 1,
               textInputAction: TextInputAction.send,
               onSubmitted: _isComposing ? _onSubmit : null,
               decoration: InputDecoration(
@@ -295,11 +299,13 @@ class _CommentInputState extends ConsumerState<CommentInput> {
             SpacingSize.sm,
           ),
         ),
-        GestureDetector(
+        CupertinoButton(
           key: TestKeys.commentAtXiaoquButton,
-          onTap: _insertXiaoquMention,
+          padding: EdgeInsets.zero,
+          minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
+          onPressed: _insertXiaoquMention,
           child: Container(
-            height: CommentResponsive.getCommentItemSize(context),
+            height: AppSpacing.appChromeActionButtonSize,
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -323,25 +329,28 @@ class _CommentInputState extends ConsumerState<CommentInput> {
           ),
         ),
         // Emoji 入口
-        GestureDetector(
-          onTap: () {
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
+          onPressed: () {
             setState(() {
               _showEmojiPanel = !_showEmojiPanel;
               if (_showEmojiPanel) _focusNode.unfocus();
             });
           },
-          child: Container(
-            width: CommentResponsive.getCommentItemSize(context),
-            height: CommentResponsive.getCommentItemSize(context),
-            alignment: Alignment.center,
-            child: Icon(
-              _showEmojiPanel
-                  ? Icons.keyboard_outlined
-                  : Icons.emoji_emotions_outlined,
-              size: CommentResponsive.getCommentItemIconSize(context),
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundSecondary,
+          child: SizedBox(
+            width: AppSpacing.appChromeActionButtonSize,
+            height: AppSpacing.appChromeActionButtonSize,
+            child: Center(
+              child: Icon(
+                _showEmojiPanel
+                    ? Icons.keyboard_outlined
+                    : Icons.emoji_emotions_outlined,
+                size: AppSpacing.appChromeActionIconSize,
+                color: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.foregroundSecondary,
+                ),
               ),
             ),
           ),
@@ -367,8 +376,8 @@ class _CommentInputState extends ConsumerState<CommentInput> {
       key: TestKeys.submitCommentButton,
       onTap: canSend ? _onSubmit : null,
       child: Container(
-        width: CommentResponsive.getCommentItemSize(context),
-        height: CommentResponsive.getCommentItemSize(context),
+        width: AppSpacing.appChromeActionButtonSize,
+        height: AppSpacing.appChromeActionButtonSize,
         decoration: BoxDecoration(
           color: canSend
               ? AppColors.primaryColor
@@ -377,12 +386,12 @@ class _CommentInputState extends ConsumerState<CommentInput> {
                   ColorType.backgroundTertiary,
                 ),
           borderRadius: BorderRadius.circular(
-            CommentResponsive.getCommentItemSize(context) / 2,
+            AppSpacing.appChromeActionButtonSize / 2,
           ),
         ),
         child: Icon(
           Icons.send,
-          size: CommentResponsive.getCommentItemIconSize(context),
+          size: AppSpacing.appChromeActionIconSize,
           color: canSend
               ? AppColors.white
               : AppColorsFunctional.getColor(

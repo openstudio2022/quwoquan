@@ -39,7 +39,7 @@
 ### 3.2 Out-of-Scope
 
 - 会话内消息缓存（属于消息投递链路）
-- 用户头像/昵称缓存（由 `chat-detail-avatar-display` 承担）
+- 用户资料主缓存（由用户域 `UserProfile` 策略承担）；会话列表只缓存展示所需的成员头像引用、群头像版本和成员 roster revision
 - 群管理相关数据同步（由 `chat-group-admin-govern` 承担）
 
 ## 4. 端云同步协议设计
@@ -126,6 +126,10 @@ class ConversationCacheEntry {
 - 磁盘缓存无 TTL，永久保存
 - 批量拉取 `POST /conversations/batch` 单次最多 50 个 ID
 - WebSocket `conv.updated` 事件携带完整会话数据时直接写缓存
+- 会话对象缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 [`object-cache-policy.yaml`](../../../runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml) 中 `Conversation` 为准。
+- 群头像以 `groupAvatarVersion` 失效，成员头像宫格以 `membersRosterRevision` 失效；头像字节清理不得删除会话列表投影。
+- 待发送消息、本地新建会话 pending 状态、未确认 markRead/mute/pin outbox 不属于普通可清缓存。
+- UI 层消费统一缓存输出语义，至少能区分本地命中、后台刷新、离线、pendingWrite。
 
 ## 8. 减少云端冲击的措施
 
@@ -164,11 +168,14 @@ class ConversationCacheEntry {
 - 本地新建会话立即可见
 - 云端有变化的会话被正确增量刷新
 - 本地有但云端无的会话被标记删除
+- 清理临时图片后，会话列表、群头像 URL/版本、成员 roster revision 不丢失
 
 ### T3
 - 端侧 → 云端时间戳比对正确：仅拉取有变化的会话
 - 新建会话成功同步到云端后用正式 ID 覆盖
+- `groupAvatarVersion/membersRosterRevision` 变化后只刷新受影响会话头像派生数据
 
 ### T4
 - 弱网环境下先渲染本地，后台同步完成后静默更新
 - 无网络时会话列表可正常浏览
+- 用户执行普通缓存清理后，最近会话与待发送消息仍可见

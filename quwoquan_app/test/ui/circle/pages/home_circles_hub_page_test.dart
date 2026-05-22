@@ -11,8 +11,8 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
-import 'package:quwoquan_app/ui/circle/constants/circle_channel_manage_layout.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
+import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 单用例原则：settle 上界 1s，避免默认 10 分钟超时拖死整批测试。
@@ -309,7 +309,7 @@ Future<void> _pumpUntilHubGridKeysVisible(WidgetTester tester) async {
 }
 
 Future<void> _pumpUntilHubCategoryTabsVisible(WidgetTester tester) async {
-  final probe = find.text('生活');
+  final probe = find.text('车之家');
   await _hubPumpSettled(tester);
   for (var i = 0; i < 12 && probe.evaluate().isEmpty; i++) {
     await tester.pump(const Duration(milliseconds: 16));
@@ -350,30 +350,39 @@ void main() {
     expect(feed, isNotEmpty);
   });
 
-  testWidgets('频道管理按钮右缘保持统一安全边距', (tester) async {
+  testWidgets('首页只展示五个固定业务垂类并隐藏频道管理入口', (tester) async {
     await tester.pumpWidget(_buildTestApp());
     await _hubPumpSettled(tester);
     _consumeImageLoadExceptions(tester);
+    await _pumpUntilHubCategoryTabsVisible(tester);
 
-    final page = find.byType(CirclesHubPage);
-    final channelIcon = find.byIcon(CupertinoIcons.line_horizontal_3_decrease);
-    final screenWidth = tester.getSize(page).width;
-    final iconRightInset = screenWidth - tester.getTopRight(channelIcon).dx;
-    final expectedInset = AppSpacing.topBarTrailingVisualInset(
-      tester.element(page),
+    const labels = <String>['校园', '旅行', '摄影', '科技', '车之家'];
+    for (final label in labels) {
+      expect(find.text(label), findsOneWidget);
+    }
+    for (final removed in <String>['推荐', '遇见', '人文', '生活', '运动', '美食', '车友']) {
+      expect(find.text(removed), findsNothing);
+    }
+    expect(
+      find.byIcon(CupertinoIcons.line_horizontal_3_decrease),
+      findsNothing,
     );
-
-    expect(channelIcon, findsOneWidget);
-    expect(iconRightInset, closeTo(expectedInset, 2.0));
+    for (var i = 0; i < labels.length - 1; i++) {
+      expect(
+        tester.getTopLeft(find.text(labels[i])).dx,
+        lessThan(tester.getTopLeft(find.text(labels[i + 1])).dx),
+      );
+    }
   });
 
-  testWidgets('频道管理面板在窄屏下仅占上半屏且空白处可关闭', (tester) async {
+  testWidgets('旧频道偏好不会恢复已下线垂类', (tester) async {
     tester.view.physicalSize = const Size(320, 690);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     SharedPreferences.setMockInitialValues(const <String, Object>{
       'home_circles.selected_channels.v1': <String>['life'],
+      'home_circles.selected_channels.v2': <String>['humanity', 'food'],
     });
 
     await tester.pumpWidget(_buildTestApp());
@@ -381,74 +390,55 @@ void main() {
     _consumeImageLoadExceptions(tester);
     await _pumpUntilHubCategoryTabsVisible(tester);
 
-    await tester.tap(find.byIcon(CupertinoIcons.line_horizontal_3_decrease));
-    await _hubPumpSettled(tester);
-
-    final panel = find.byKey(const ValueKey('home-circles-channel-panel'));
-    expect(panel, findsOneWidget);
-
-    final panelRect = tester.getRect(panel);
-    final pageSize = tester.getSize(find.byType(CirclesHubPage));
-    expect(panelRect.top, closeTo(0.0, 1.0));
-    expect(
-      panelRect.height,
-      lessThanOrEqualTo(
-        pageSize.height *
-                CircleChannelManageLayout.panelMaxHeightRatio(
-                  tester.element(panel),
-                ) +
-            1.0,
-      ),
-    );
-
-    expect(
-      find.descendant(
-        of: panel,
-        matching: find.text(UITextConstants.circleTapToAdd),
-      ),
-      findsOneWidget,
-    );
-
-    await tester.tapAt(Offset(pageSize.width * 0.5, pageSize.height * 0.82));
-    await _hubPumpSettled(tester);
-
+    expect(find.text('校园'), findsOneWidget);
+    expect(find.text('旅行'), findsOneWidget);
+    expect(find.text('摄影'), findsOneWidget);
+    expect(find.text('人文'), findsNothing);
+    expect(find.text('生活'), findsNothing);
+    expect(find.text('美食'), findsNothing);
     expect(
       find.byKey(const ValueKey('home-circles-channel-panel')),
       findsNothing,
     );
   });
 
-  testWidgets('iPad 频道管理面板全宽展开且完成按钮右对齐', (tester) async {
-    tester.view.physicalSize = const Size(1024, 768);
+  testWidgets('五个垂类窄屏均保持群组双列自适应', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    SharedPreferences.setMockInitialValues(const <String, Object>{
-      'home_circles.selected_channels.v1': <String>['life'],
-    });
 
-    await tester.pumpWidget(_buildTestApp());
-    await _hubPumpSettled(tester);
-    _consumeImageLoadExceptions(tester);
-    await _pumpUntilHubCategoryTabsVisible(tester);
-
-    await tester.tap(find.byIcon(CupertinoIcons.line_horizontal_3_decrease));
-    await _hubPumpSettled(tester);
-
-    final panel = find.byKey(const ValueKey('home-circles-channel-panel'));
-    expect(panel, findsOneWidget);
-
-    final panelRect = tester.getRect(panel);
-    final pageSize = tester.getSize(find.byType(CirclesHubPage));
-    expect(panelRect.left, closeTo(0.0, 1.0));
-    expect(panelRect.width, closeTo(pageSize.width, 1.0));
-
-    final doneButton = find.byKey(const ValueKey('home-circles-channel-done'));
-    final horizontalPadding = AppSpacing.feedContentHorizontal(
-      tester.element(panel),
+    late int campusColumns;
+    late int travelColumns;
+    late int photographyColumns;
+    late int techColumns;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            campusColumns = resolveHomeCircleCategoryGridColumns(
+              context,
+              'campus',
+            );
+            travelColumns = resolveHomeCircleCategoryGridColumns(
+              context,
+              'travel',
+            );
+            photographyColumns = resolveHomeCircleCategoryGridColumns(
+              context,
+              'photography',
+            );
+            techColumns = resolveHomeCircleCategoryGridColumns(context, 'tech');
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
     );
-    final doneRightInset = pageSize.width - tester.getTopRight(doneButton).dx;
-    expect(doneRightInset, closeTo(horizontalPadding, 4.0));
+
+    expect(travelColumns, greaterThanOrEqualTo(AppSpacing.gridMinColumns));
+    expect(photographyColumns, greaterThanOrEqualTo(AppSpacing.gridMinColumns));
+    expect(campusColumns, greaterThanOrEqualTo(AppSpacing.gridMinColumns));
+    expect(techColumns, greaterThanOrEqualTo(AppSpacing.gridMinColumns));
   });
 
   testWidgets('查看更多跳转到圈子展开页', (tester) async {

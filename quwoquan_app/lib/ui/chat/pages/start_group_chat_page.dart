@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/avatar/conversation_avatar.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
@@ -1161,21 +1162,14 @@ class _SelectGroupChatSheetState extends State<_SelectGroupChatSheet> {
   }
 
   Widget _buildLeading(ChatInboxDto group, bool isDark) {
-    final url = group.avatarUrl.trim();
-    if (url.isNotEmpty) {
-      return RoundedSquareAvatar(
-        size: _groupConversationAvatarSize,
-        imageUrl: url,
-        name: group.title,
-        backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
-      );
-    }
-
-    return _SquareSymbolAvatar(
-      isDark: isDark,
-      icon: Icons.group,
-      tintColor: AppColors.primaryColor,
+    return ConversationAvatar(
+      conversationId: group.id,
+      conversationType: group.type,
+      title: group.title,
+      avatarUrl: group.avatarUrl,
+      groupAvatarVersion: group.groupAvatarVersion,
       size: _groupConversationAvatarSize,
+      backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
     );
   }
 
@@ -1911,16 +1905,15 @@ class _SquareSymbolAvatar extends StatelessWidget {
     required this.isDark,
     required this.icon,
     required this.tintColor,
-    this.size = AppSpacing.avatarSize,
   });
 
   final bool isDark;
   final IconData icon;
   final Color tintColor;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
+    const size = AppSpacing.avatarSize;
     return Container(
       width: size,
       height: size,

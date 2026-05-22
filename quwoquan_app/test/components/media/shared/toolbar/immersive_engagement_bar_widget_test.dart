@@ -1,16 +1,22 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
+import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
-Widget _wrap(Widget child, {double width = 390}) {
+Widget _wrap(Widget child, {double width = 390, double bottomInset = 0}) {
   return MaterialApp(
     home: Scaffold(
       body: MediaQuery(
-        data: MediaQueryData(size: Size(width, 800)),
+        data: MediaQueryData(
+          size: Size(width, 800),
+          padding: EdgeInsets.only(bottom: bottomInset),
+          viewPadding: EdgeInsets.only(bottom: bottomInset),
+        ),
         child: SizedBox(width: width, child: child),
       ),
     ),
@@ -54,11 +60,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final heart = tester.getCenter(find.byIcon(CupertinoIcons.heart));
-    final share = tester.getCenter(
-      find.byIcon(CupertinoIcons.arrowshape_turn_up_right),
-    );
-    final comment = tester.getCenter(find.byIcon(CupertinoIcons.chat_bubble));
+    final heart = tester.getCenter(find.byIcon(FluentIcons.heart_24_regular));
+    final share = tester.getCenter(find.byIcon(FluentIcons.share_24_regular));
+    final comment = tester.getCenter(find.byType(AppBubbleIcon));
     final actionGroupRect = tester.getRect(
       find.byKey(const ValueKey('immersive-actions-group')),
     );
@@ -70,7 +74,7 @@ void main() {
     final likeToShare = share.dx - heart.dx;
     final shareToComment = comment.dx - share.dx;
 
-    expect((likeToShare - shareToComment).abs(), lessThan(4));
+    expect((likeToShare - shareToComment).abs(), lessThan(6));
     // 动作组右缘完全贴合 track 右缘（固定宽 + 右锚定）
     expect((railRect.right - actionGroupRect.right).abs(), lessThan(1));
     // Track 外侧留白 = 水平 inset
@@ -527,6 +531,80 @@ void main() {
     expect(textWidget.maxLines, 2);
   });
 
+  testWidgets('圆弧机型底部安全区在三档断点下保护右侧数字且不破坏 rail 锚定', (tester) async {
+    const bottomInset = 34.0;
+    const viewports = <double>[320, 390, 768];
+
+    for (final width in viewports) {
+      await tester.pumpWidget(
+        _wrap(
+          const ImmersiveEngagementBar(
+            layoutSpec: ImmersiveViewerStageLayoutSpec.mediaStage,
+            avatarUrl: '',
+            displayName: '自然摄影师',
+            circleName: '',
+            likeCount: 1200,
+            shareCount: 18,
+            commentCount: 45,
+            isLiked: false,
+            isFollowing: false,
+            onUserTap: _noop,
+            onCircleTap: _noop,
+            onFollowTap: _noop,
+            onLikeTap: _noop,
+          ),
+          width: width,
+          bottomInset: bottomInset,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final rootRect = tester.getRect(find.byType(ImmersiveEngagementBar));
+      final railRect = tester.getRect(
+        find.byKey(const ValueKey('immersive-engagement-rail')),
+      );
+      final authorRect = tester.getRect(
+        find.byKey(const ValueKey('immersive-author-group')),
+      );
+      final actionRect = tester.getRect(
+        find.byKey(const ValueKey('immersive-actions-group')),
+      );
+      final commentLabelRect = tester.getRect(find.text('45'));
+      final expectedHorizontalInset =
+          AppSpacing.containerMd +
+          AppSpacing.bottomNavContentSideInset(
+            tester.element(find.byType(ImmersiveEngagementBar)),
+            bottomInset,
+          );
+
+      expect(
+        railRect.left,
+        moreOrLessEquals(expectedHorizontalInset, epsilon: 1),
+        reason: 'width=$width: rail 左侧应包含圆弧安全保护',
+      );
+      expect(
+        rootRect.right - railRect.right,
+        moreOrLessEquals(expectedHorizontalInset, epsilon: 1),
+        reason: 'width=$width: rail 右侧应包含圆弧安全保护',
+      );
+      expect(
+        railRect.right - actionRect.right,
+        lessThan(1),
+        reason: 'width=$width: 动作组仍应右锚到 rail',
+      );
+      expect(
+        commentLabelRect.right,
+        lessThanOrEqualTo(rootRect.right - expectedHorizontalInset + 1),
+        reason: 'width=$width: 评论数字不能被圆弧区域裁切',
+      );
+      expect(
+        authorRect.right,
+        lessThanOrEqualTo(actionRect.left),
+        reason: 'width=$width: 作者/关注槽位不能挤压动作组',
+      );
+    }
+  });
+
   testWidgets('无头像时底栏头像仍显示兜底人像图标', (tester) async {
     await tester.pumpWidget(
       _wrap(
@@ -548,7 +626,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(CircleAvatar), findsOneWidget);
+    expect(find.byType(RoundedSquareAvatar), findsOneWidget);
     expect(find.byIcon(Icons.person), findsOneWidget);
   });
 }

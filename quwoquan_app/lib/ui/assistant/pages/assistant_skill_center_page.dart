@@ -273,7 +273,7 @@ class _AssistantSkillCenterPageState
               Icon(
                 CupertinoIcons.sparkles,
                 size: AppSpacing.iconSmall,
-                color: AppColors.primaryColor,
+                color: AppColors.assistantMarkColor,
               ),
               SizedBox(width: AppSpacing.intraGroupSm),
               Text(

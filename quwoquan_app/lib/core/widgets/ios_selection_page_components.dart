@@ -109,7 +109,8 @@ class IosSelectionPageHeader extends StatelessWidget
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(AppSpacing.toolbarHeight);
+  Size get preferredSize =>
+      const Size.fromHeight(AppSpacing.appChromeNavigationBarHeight);
 
   @override
   bool shouldFullyObstruct(BuildContext context) => true;
@@ -380,6 +381,7 @@ class IosSelectionBottomBar extends StatelessWidget {
     this.cancelButtonKey,
     this.confirmEnabled = true,
     this.confirmLoading = false,
+
     /// When false, omits bottom safe area inset from media query — use when the
     /// parent sheet already applies `MediaQuery.viewPadding` on the panel.
     this.includeViewPaddingBottom = true,

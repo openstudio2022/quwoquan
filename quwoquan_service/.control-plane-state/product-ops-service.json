@@ -56,6 +56,18 @@
       }
     },
     "l1l4_metric_snapshots": {
+      "L1:alpha": {
+        "description": "首页精品、圈子校园、实体主页、@小趣、消息承接的完整主旅程。",
+        "environment": "alpha",
+        "id": "L1:alpha",
+        "label": "五栏主旅程完成率",
+        "level": "L1",
+        "metric": "five_tab_journey_completion_rate",
+        "status": "success",
+        "trend": "+2.1%",
+        "unit": "%",
+        "value": 82.4
+      },
       "L1:beta": {
         "description": "首页精品、圈子校园、实体主页、@小趣、消息承接的完整主旅程。",
         "environment": "beta",
@@ -68,6 +80,42 @@
         "unit": "%",
         "value": 82.4
       },
+      "L1:gamma": {
+        "description": "首页精品、圈子校园、实体主页、@小趣、消息承接的完整主旅程。",
+        "environment": "gamma",
+        "id": "L1:gamma",
+        "label": "五栏主旅程完成率",
+        "level": "L1",
+        "metric": "five_tab_journey_completion_rate",
+        "status": "success",
+        "trend": "+2.1%",
+        "unit": "%",
+        "value": 82.4
+      },
+      "L1:prod": {
+        "description": "首页精品、圈子校园、实体主页、@小趣、消息承接的完整主旅程。",
+        "environment": "prod",
+        "id": "L1:prod",
+        "label": "五栏主旅程完成率",
+        "level": "L1",
+        "metric": "five_tab_journey_completion_rate",
+        "status": "success",
+        "trend": "+2.1%",
+        "unit": "%",
+        "value": 82.4
+      },
+      "L2:alpha": {
+        "description": "推荐、圈子、主页、评论与消息回流形成的业务健康口径。",
+        "environment": "alpha",
+        "id": "L2:alpha",
+        "label": "核心业务健康 CTR",
+        "level": "L2",
+        "metric": "core_business_ctr",
+        "status": "success",
+        "trend": "+0.6%",
+        "unit": "%",
+        "value": 11.8
+      },
       "L2:beta": {
         "description": "推荐、圈子、主页、评论与消息回流形成的业务健康口径。",
         "environment": "beta",
@@ -79,6 +127,44 @@
         "trend": "+0.6%",
         "unit": "%",
         "value": 11.8
+      },
+      "L2:gamma": {
+        "description": "推荐、圈子、主页、评论与消息回流形成的业务健康口径。",
+        "environment": "gamma",
+        "id": "L2:gamma",
+        "label": "核心业务健康 CTR",
+        "level": "L2",
+        "metric": "core_business_ctr",
+        "status": "success",
+        "trend": "+0.6%",
+        "unit": "%",
+        "value": 11.8
+      },
+      "L2:prod": {
+        "description": "推荐、圈子、主页、评论与消息回流形成的业务健康口径。",
+        "environment": "prod",
+        "id": "L2:prod",
+        "label": "核心业务健康 CTR",
+        "level": "L2",
+        "metric": "core_business_ctr",
+        "status": "success",
+        "trend": "+0.6%",
+        "unit": "%",
+        "value": 11.8
+      },
+      "L3:alpha:alpha-control-a:product-ops-service": {
+        "cluster": "alpha-control-a",
+        "description": "产品控制面的服务 RED 指标。",
+        "environment": "alpha",
+        "id": "L3:alpha:alpha-control-a:product-ops-service",
+        "label": "product-ops 请求 P95",
+        "level": "L3",
+        "metric": "http_request_p95_ms",
+        "service": "product-ops-service",
+        "status": "success",
+        "trend": "-22ms",
+        "unit": "ms",
+        "value": 184
       },
       "L3:beta:beta-control-a:product-ops-service": {
         "cluster": "beta-control-a",
@@ -108,6 +194,49 @@
         "unit": "%",
         "value": 0.42
       },
+      "L3:gamma:gamma-control-a:product-ops-service": {
+        "cluster": "gamma-control-a",
+        "description": "产品控制面的服务 RED 指标。",
+        "environment": "gamma",
+        "id": "L3:gamma:gamma-control-a:product-ops-service",
+        "label": "product-ops 请求 P95",
+        "level": "L3",
+        "metric": "http_request_p95_ms",
+        "service": "product-ops-service",
+        "status": "success",
+        "trend": "-22ms",
+        "unit": "ms",
+        "value": 184
+      },
+      "L3:prod:prod-control-a:product-ops-service": {
+        "cluster": "prod-control-a",
+        "description": "产品控制面的服务 RED 指标。",
+        "environment": "prod",
+        "id": "L3:prod:prod-control-a:product-ops-service",
+        "label": "product-ops 请求 P95",
+        "level": "L3",
+        "metric": "http_request_p95_ms",
+        "service": "product-ops-service",
+        "status": "success",
+        "trend": "-22ms",
+        "unit": "ms",
+        "value": 184
+      },
+      "L4:alpha:alpha-control-a:product-ops-service:product-ops-service-alpha-0": {
+        "cluster": "alpha-control-a",
+        "description": "配置中心 desired hash 与实例 effective hash 一致。",
+        "environment": "alpha",
+        "id": "L4:alpha:alpha-control-a:product-ops-service:product-ops-service-alpha-0",
+        "instanceId": "product-ops-service-alpha-0",
+        "label": "product-ops 实例配置一致性",
+        "level": "L4",
+        "metric": "config_in_sync",
+        "service": "product-ops-service",
+        "status": "success",
+        "trend": "synced",
+        "unit": "bool",
+        "value": 1
+      },
       "L4:beta:beta-control-a:platform-ops-service:platform-ops-service-beta-control-a-0": {
         "cluster": "beta-control-a",
         "description": "配置中心不可达时回退磁盘快照，等待重新拉齐。",
@@ -129,6 +258,36 @@
         "environment": "beta",
         "id": "L4:beta:beta-control-a:product-ops-service:product-ops-service-beta-control-a-0",
         "instanceId": "product-ops-service-beta-control-a-0",
+        "label": "product-ops 实例配置一致性",
+        "level": "L4",
+        "metric": "config_in_sync",
+        "service": "product-ops-service",
+        "status": "success",
+        "trend": "synced",
+        "unit": "bool",
+        "value": 1
+      },
+      "L4:gamma:gamma-control-a:product-ops-service:product-ops-service-gamma-0": {
+        "cluster": "gamma-control-a",
+        "description": "配置中心 desired hash 与实例 effective hash 一致。",
+        "environment": "gamma",
+        "id": "L4:gamma:gamma-control-a:product-ops-service:product-ops-service-gamma-0",
+        "instanceId": "product-ops-service-gamma-0",
+        "label": "product-ops 实例配置一致性",
+        "level": "L4",
+        "metric": "config_in_sync",
+        "service": "product-ops-service",
+        "status": "success",
+        "trend": "synced",
+        "unit": "bool",
+        "value": 1
+      },
+      "L4:prod:prod-control-a:product-ops-service:product-ops-service-prod-0": {
+        "cluster": "prod-control-a",
+        "description": "配置中心 desired hash 与实例 effective hash 一致。",
+        "environment": "prod",
+        "id": "L4:prod:prod-control-a:product-ops-service:product-ops-service-prod-0",
+        "instanceId": "product-ops-service-prod-0",
         "label": "product-ops 实例配置一致性",
         "level": "L4",
         "metric": "config_in_sync",

@@ -193,6 +193,7 @@ class ContentUIConfig {
     ArticleTemplateRecommendationConfig(categoryId: "food", recommendedArticleTemplates: <String>["gentle", "journal"]),
     ArticleTemplateRecommendationConfig(categoryId: "humanity", recommendedArticleTemplates: <String>["journal", "ritual"]),
     ArticleTemplateRecommendationConfig(categoryId: "life", recommendedArticleTemplates: <String>["gentle", "diffuse"]),
+    ArticleTemplateRecommendationConfig(categoryId: "photography", recommendedArticleTemplates: <String>["journal", "ritual"]),
     ArticleTemplateRecommendationConfig(categoryId: "tech", recommendedArticleTemplates: <String>["tech", "diffuse"]),
     ArticleTemplateRecommendationConfig(categoryId: "travel", recommendedArticleTemplates: <String>["journal", "gentle"]),
   ];

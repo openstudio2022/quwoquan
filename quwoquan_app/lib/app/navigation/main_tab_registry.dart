@@ -1,11 +1,11 @@
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 
-enum MainTabDestination { home, circles, create, chat, profile }
+enum MainTabDestination { home, featured, create, chat, profile }
 
 extension MainTabDestinationX on MainTabDestination {
   static const List<MainTabDestination> bottomNavOrdered = <MainTabDestination>[
     MainTabDestination.home,
-    MainTabDestination.circles,
+    MainTabDestination.featured,
     MainTabDestination.create,
     MainTabDestination.chat,
     MainTabDestination.profile,
@@ -13,7 +13,7 @@ extension MainTabDestinationX on MainTabDestination {
 
   int get bottomNavIndex => switch (this) {
     MainTabDestination.home => 0,
-    MainTabDestination.circles => 1,
+    MainTabDestination.featured => 1,
     MainTabDestination.create => 2,
     MainTabDestination.chat => 3,
     MainTabDestination.profile => 4,
@@ -21,7 +21,7 @@ extension MainTabDestinationX on MainTabDestination {
 
   String get routePath => switch (this) {
     MainTabDestination.home => AppRoutePaths.home,
-    MainTabDestination.circles => AppRoutePaths.circles,
+    MainTabDestination.featured => AppRoutePaths.home,
     MainTabDestination.create => AppRoutePaths.createEntry,
     MainTabDestination.chat => AppRoutePaths.chat,
     MainTabDestination.profile => AppRoutePaths.profile,
@@ -29,7 +29,7 @@ extension MainTabDestinationX on MainTabDestination {
 
   String get routeName => switch (this) {
     MainTabDestination.home => 'home',
-    MainTabDestination.circles => 'circles',
+    MainTabDestination.featured => 'featured',
     MainTabDestination.create => 'create',
     MainTabDestination.chat => 'chat',
     MainTabDestination.profile => 'profile',
@@ -41,7 +41,7 @@ MainTabDestination mainTabFromLocation(String location) {
     return MainTabDestination.home;
   }
   if (location == AppRoutePaths.circles) {
-    return MainTabDestination.circles;
+    return MainTabDestination.home;
   }
   if (location == AppRoutePaths.createEntry ||
       location.startsWith(AppRoutePaths.createPathTemplate)) {

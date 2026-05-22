@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/components/avatar/conversation_avatar.dart';
 import 'package:quwoquan_app/cloud/runtime/models/recent_search_read_presentation.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
@@ -78,52 +79,63 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     return AppFullscreenModalSurface(
       surfaceKey: TestKeys.fullscreenModalSurface,
       backgroundColor: backgroundColor,
-      contentPadding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
-        AppSpacing.xs,
-        AppSpacing.containerMd,
-        AppSpacing.containerLg,
-      ),
+      safeAreaTop: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildSearchBar(state, fgSecondary, backgroundColor),
-          SizedBox(height: AppSpacing.containerSm),
-          _buildSearchObjectSelector(
-            state: state,
-            isDark: isDark,
-            fgSecondary: fgSecondary,
-            mutedSurface: mutedSurface,
-          ),
-          SizedBox(height: AppSpacing.containerSm),
+          _buildSearchChrome(state, isDark, fgSecondary, backgroundColor),
           Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: switch (state.viewMode) {
-                SearchViewMode.historyBrowse => _buildHistoryView(
-                  key: const ValueKey<String>('search_history_browse'),
-                  state: state,
-                  fgSecondary: fgSecondary,
-                  fgTertiary: fgTertiary,
-                  isDark: isDark,
-                  manageMode: false,
-                ),
-                SearchViewMode.historyManage => _buildHistoryView(
-                  key: const ValueKey<String>('search_history_manage'),
-                  state: state,
-                  fgSecondary: fgSecondary,
-                  fgTertiary: fgTertiary,
-                  isDark: isDark,
-                  manageMode: true,
-                ),
-                SearchViewMode.liveSuggestions => _buildSuggestionView(
-                  key: const ValueKey<String>('search_live_suggestions'),
-                  state: state,
-                  fgPrimary: fgPrimary,
-                  fgSecondary: fgSecondary,
-                  isDark: isDark,
-                ),
-              },
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerMd,
+                AppSpacing.containerSm,
+                AppSpacing.containerMd,
+                AppSpacing.containerLg,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildSearchObjectSelector(
+                    state: state,
+                    isDark: isDark,
+                    fgSecondary: fgSecondary,
+                    mutedSurface: mutedSurface,
+                  ),
+                  SizedBox(height: AppSpacing.containerSm),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child: switch (state.viewMode) {
+                        SearchViewMode.historyBrowse => _buildHistoryView(
+                          key: const ValueKey<String>('search_history_browse'),
+                          state: state,
+                          fgSecondary: fgSecondary,
+                          fgTertiary: fgTertiary,
+                          isDark: isDark,
+                          manageMode: false,
+                        ),
+                        SearchViewMode.historyManage => _buildHistoryView(
+                          key: const ValueKey<String>('search_history_manage'),
+                          state: state,
+                          fgSecondary: fgSecondary,
+                          fgTertiary: fgTertiary,
+                          isDark: isDark,
+                          manageMode: true,
+                        ),
+                        SearchViewMode.liveSuggestions => _buildSuggestionView(
+                          key: const ValueKey<String>(
+                            'search_live_suggestions',
+                          ),
+                          state: state,
+                          fgPrimary: fgPrimary,
+                          fgSecondary: fgSecondary,
+                          isDark: isDark,
+                        ),
+                      },
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -131,61 +143,125 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     );
   }
 
-  Widget _buildSearchBar(
+  Widget _buildSearchChrome(
     SearchSessionState state,
+    bool isDark,
     Color fgSecondary,
     Color backgroundColor,
   ) {
+    final topInset = AppSpacing.appChromeTopSafeInset(
+      MediaQuery.viewPaddingOf(context).top,
+      context,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(color: backgroundColor),
+      child: Padding(
+        padding: EdgeInsets.only(top: topInset),
+        child: SizedBox(
+          height: AppSpacing.appChromeTopBarHeight(context),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.feedContentHorizontal(context),
+            ),
+            child: _buildSearchBar(state, isDark, fgSecondary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar(
+    SearchSessionState state,
+    bool isDark,
+    Color fgSecondary,
+  ) {
+    final fieldBackground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
+    );
     final trailingInset = state.isLoading
-        ? AppSpacing.minInteractiveSize + AppSpacing.intraGroupSm
+        ? AppSpacing.appChromeActionButtonSize + AppSpacing.intraGroupSm
         : AppSpacing.containerSm;
-    return Stack(
-      alignment: Alignment.centerLeft,
+    final hasSearchText = state.query.trim().isNotEmpty;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        AppSearchField(
-          key: const ValueKey<String>('global_search_field'),
-          controller: _controller,
-          focusNode: _focusNode,
-          autofocus: true,
-          placeholder: UITextConstants.globalSearchTitle,
-          onChanged: (value) => _coordinator.updateQuery(value),
-          onSubmitted: _handleSearchSubmitted,
-          backgroundColor: backgroundColor,
-          elevated: false,
-          padding: EdgeInsetsDirectional.only(
-            start: AppSpacing.minInteractiveSize + AppSpacing.containerSm,
-            end: trailingInset,
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
+          onPressed: _handleClose,
+          child: Icon(
+            CupertinoIcons.chevron_back,
+            color: fgSecondary,
+            size: AppSpacing.appChromeActionIconSize,
           ),
         ),
-        PositionedDirectional(
-          start: 0,
-          top: 0,
-          bottom: 0,
-          child: Center(
-            child: CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: Size.zero,
-              onPressed: _handleClose,
-              child: Icon(
-                CupertinoIcons.chevron_back,
-                color: fgSecondary,
-                size: AppSpacing.iconLarge,
+        SizedBox(width: AppSpacing.intraGroupXs),
+        Expanded(
+          child: Stack(
+            alignment: Alignment.centerRight,
+            children: [
+              AppSearchField(
+                key: const ValueKey<String>('global_search_field'),
+                controller: _controller,
+                focusNode: _focusNode,
+                autofocus: true,
+                placeholder: UITextConstants.globalSearchTitle,
+                onChanged: (value) => _coordinator.updateQuery(value),
+                onSubmitted: _handleSearchSubmitted,
+                backgroundColor: fieldBackground,
+                elevated: false,
+                padding: EdgeInsetsDirectional.only(
+                  start: AppSpacing.containerSm,
+                  end: trailingInset,
+                ),
               ),
-            ),
+              if (state.isLoading)
+                PositionedDirectional(
+                  end: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(
+                    child: SizedBox(
+                      width: AppSpacing.appChromeActionButtonSize,
+                      child: CupertinoActivityIndicator(radius: 8),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
-        if (state.isLoading)
-          PositionedDirectional(
-            end: 0,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: SizedBox(
-                width: AppSpacing.minInteractiveSize,
-                child: CupertinoActivityIndicator(radius: 8),
-              ),
-            ),
-          ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 160),
+          child: hasSearchText
+              ? Padding(
+                  key: const ValueKey<String>('global_search_submit_visible'),
+                  padding: EdgeInsetsDirectional.only(
+                    start: AppSpacing.intraGroupXs,
+                  ),
+                  child: CupertinoButton(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.containerXs,
+                    ),
+                    minimumSize: const Size(
+                      0,
+                      AppSpacing.appChromeTextActionMinHeight,
+                    ),
+                    onPressed: () => _handleSearchSubmitted(_controller.text),
+                    child: Text(
+                      UITextConstants.search,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosSubheadline,
+                        fontWeight: AppTypography.medium,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(
+                  key: ValueKey<String>('global_search_submit_hidden'),
+                ),
+        ),
       ],
     );
   }
@@ -220,16 +296,17 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       children: [
         CupertinoButton(
           key: TestKeys.searchContentSelectorButton,
-          padding: EdgeInsets.zero,
-          minimumSize: Size.zero,
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
+          minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
           onPressed: _openContentTypeSelector,
           child: Row(
             children: [
               Text(
                 '搜索指定内容',
                 style: TextStyle(
-                  fontSize: AppTypography.iosBody,
-                  color: fgTertiary,
+                  fontSize: AppTypography.iosSubheadline,
+                  fontWeight: AppTypography.medium,
+                  color: fgSecondary,
                 ),
               ),
               SizedBox(width: AppSpacing.intraGroupXs),
@@ -239,22 +316,25 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
                 color: fgTertiary,
               ),
               const Spacer(),
-              Text(
-                _buildContentSelectionSummary(selection),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.iosBody,
-                  fontWeight: AppTypography.medium,
-                  color: selection.isAllContent
-                      ? fgSecondary
-                      : AppColors.primaryColor,
+              Flexible(
+                child: Text(
+                  _buildContentSelectionSummary(selection),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosSubheadline,
+                    fontWeight: AppTypography.medium,
+                    color: selection.isAllContent
+                        ? fgSecondary
+                        : AppColors.primaryColor,
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        SizedBox(height: AppSpacing.containerXs),
+        SizedBox(height: AppSpacing.intraGroupXs),
         SingleChildScrollView(
           key: TestKeys.globalSearchScopeRail,
           scrollDirection: Axis.horizontal,
@@ -658,16 +738,29 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       case SearchSuggestionEntryKind.mostUsed:
         final mostUsed = item.cast<MostUsedSearchItem>();
         return _BasicSuggestionTile(
-          leading: _buildConversationLeading(
-            avatarUrl: mostUsed.avatarUrl,
-            isDark: isDark,
-            fallbackIcon: switch (mostUsed.targetKind) {
-              MostUsedTargetKind.contact => CupertinoIcons.person_fill,
-              MostUsedTargetKind.chatRecord =>
-                CupertinoIcons.chat_bubble_2_fill,
-              MostUsedTargetKind.circle => CupertinoIcons.person_3_fill,
-            },
-          ),
+          leading:
+              mostUsed.targetKind == MostUsedTargetKind.chatRecord &&
+                  mostUsed.conversationId?.trim().isNotEmpty == true
+              ? ConversationAvatar(
+                  conversationId: mostUsed.conversationId!.trim(),
+                  conversationType: mostUsed.conversationType ?? 'group',
+                  title: mostUsed.title,
+                  avatarUrl: mostUsed.avatarUrl ?? '',
+                  size: AppSpacing.avatarUserMd,
+                  borderRadius: AppSpacing.avatarUserMd / 2,
+                  groupFallbackIcon: CupertinoIcons.person_2_fill,
+                  directFallbackIcon: CupertinoIcons.chat_bubble_2_fill,
+                )
+              : _buildConversationLeading(
+                  avatarUrl: mostUsed.avatarUrl,
+                  isDark: isDark,
+                  fallbackIcon: switch (mostUsed.targetKind) {
+                    MostUsedTargetKind.contact => CupertinoIcons.person_fill,
+                    MostUsedTargetKind.chatRecord =>
+                      CupertinoIcons.chat_bubble_2_fill,
+                    MostUsedTargetKind.circle => CupertinoIcons.person_3_fill,
+                  },
+                ),
           title: _highlightedText(
             mostUsed.title,
             query,
@@ -868,7 +961,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   }
 
   String _defaultNetworkTabIdForSelection(SearchObjectSelection selection) {
-    return 'xiaoqu';
+    return 'all';
   }
 
   void _handleSearchSubmitted(String value) {
@@ -999,7 +1092,7 @@ class _InlineSelectionChip extends StatelessWidget {
     return CupertinoButton(
       key: chipKey,
       padding: EdgeInsets.zero,
-      minimumSize: const Size(0, AppSpacing.minInteractiveSize),
+      minimumSize: const Size(0, AppSpacing.toolbarMinTouchHeight),
       onPressed: onTap,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -1015,12 +1108,12 @@ class _InlineSelectionChip extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: AppSpacing.containerSm,
-            vertical: AppSpacing.intraGroupSm,
+            vertical: AppSpacing.intraGroupXs,
           ),
           child: Text(
             label,
             style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
+              fontSize: AppTypography.sm,
               fontWeight: AppTypography.medium,
               color: isSelected ? selectedTextColor : textColor,
             ),
@@ -1441,12 +1534,15 @@ class _ChatRecordTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildConversationLeading(
-            avatarUrl: suggestion.avatarUrl,
-            isDark: isDark,
-            fallbackIcon: suggestion.conversationType == 'group'
-                ? CupertinoIcons.person_2_fill
-                : CupertinoIcons.chat_bubble_2_fill,
+          ConversationAvatar(
+            conversationId: suggestion.conversationId,
+            conversationType: suggestion.conversationType,
+            title: suggestion.conversationTitle,
+            avatarUrl: suggestion.avatarUrl ?? '',
+            size: AppSpacing.avatarUserMd,
+            borderRadius: AppSpacing.avatarUserMd / 2,
+            groupFallbackIcon: CupertinoIcons.person_2_fill,
+            directFallbackIcon: CupertinoIcons.chat_bubble_2_fill,
           ),
           SizedBox(width: AppSpacing.containerSm),
           Expanded(

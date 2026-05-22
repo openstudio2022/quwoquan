@@ -32,7 +32,8 @@ Widget _buildApp() {
             ),
             GoRoute(
               path: '/circles',
-              builder: (context, state) => const Scaffold(body: CirclesHubPage()),
+              builder: (context, state) =>
+                  const Scaffold(body: CirclesHubPage()),
             ),
             GoRoute(
               path: '/circle/:id',
@@ -81,11 +82,12 @@ Widget _buildAppWithStableFollowingArticles() {
             GoRoute(
               path: '/',
               builder: (context, state) =>
-                  const Scaffold(body: HomePage(routeLocation: '/')),
+                  const Scaffold(body: HomePage(routeLocation: '/following')),
             ),
             GoRoute(
               path: '/circles',
-              builder: (context, state) => const Scaffold(body: CirclesHubPage()),
+              builder: (context, state) =>
+                  const Scaffold(body: CirclesHubPage()),
             ),
             GoRoute(
               path: '/circle/:id',
@@ -233,19 +235,28 @@ void main() {
   });
 
   group('HomePage', () {
-    testWidgets('展示 关注/精品 与搜索/小趣入口', (tester) async {
+    testWidgets('展示首页频道与小趣搜入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(HomePage), findsOneWidget);
-      expect(find.text('关注'), findsWidgets);
-      expect(find.text(UITextConstants.homeTabFeatured), findsWidgets);
+      expect(find.text(UITextConstants.homeTabFollowing), findsWidgets);
+      expect(find.text(UITextConstants.homeTabRecommended), findsWidgets);
+      expect(find.text(UITextConstants.circleScenarioCampus), findsWidgets);
+      expect(find.text(UITextConstants.homeTabTravel), findsWidgets);
+      expect(find.text(UITextConstants.homeTabPhotography), findsWidgets);
+      expect(find.text(UITextConstants.homeTabTech), findsWidgets);
+      expect(find.text(UITextConstants.homeTabCarFriends), findsWidgets);
+      expect(
+        find.text(UITextConstants.circleScenarioTravelPhotography),
+        findsNothing,
+      );
       expect(find.byIcon(CupertinoIcons.search), findsAtLeastNWidgets(1));
       expect(find.byIcon(CupertinoIcons.sparkles), findsAtLeastNWidgets(1));
     });
 
-    testWidgets('关注态小趣入口与内容卡更多按钮右缘对齐', (tester) async {
+    testWidgets('首页小趣搜入口保留统一全屏搜索启动器', (tester) async {
       _suppressExpectedErrors();
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
@@ -253,20 +264,9 @@ void main() {
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
 
-      final sparklesIcon = find.byIcon(CupertinoIcons.sparkles).first;
-      final moreIcon = find.byIcon(Icons.more_horiz_rounded).first;
-      final page = find.byType(HomePage);
-      final screenWidth = tester.getSize(page).width;
-      final sparklesRightInset = screenWidth - tester.getTopRight(sparklesIcon).dx;
-      final expectedInset = AppSpacing.topBarTrailingVisualInset(
-        tester.element(page),
-      );
-
-      expect(
-        tester.getTopRight(sparklesIcon).dx,
-        closeTo(tester.getTopRight(moreIcon).dx, 2.0),
-      );
-      expect(sparklesRightInset, closeTo(expectedInset, 2.0));
+      expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
+      expect(find.text(UITextConstants.globalXiaoquSearchHint), findsOneWidget);
+      expect(find.text(UITextConstants.globalXiaoquSearchAsk), findsOneWidget);
     });
 
     testWidgets('首页顶部工具栏与发现页搜索壳保持同源安全区节奏', (tester) async {
@@ -282,13 +282,20 @@ void main() {
 
       final page = tester.element(find.byType(HomePage));
       final stripTop = tester.getTopLeft(find.byType(HomePrimaryTabStrip)).dy;
-      final safeTop = tester.view.viewPadding.top / tester.view.devicePixelRatio;
-      final expectedTopInset =
-          AppSpacing.primaryTopBarSafeTopInset(safeTop, page);
+      final safeTop =
+          tester.view.viewPadding.top / tester.view.devicePixelRatio;
+      final expectedTopInset = AppSpacing.primaryTopBarSafeTopInset(
+        safeTop,
+        page,
+      );
+      final searchHeight = AppSpacing.appChromeTopBarHeight(page);
       final navHeight = AppSpacing.primaryTopBarHeight(page);
 
-      expect(stripTop, greaterThanOrEqualTo(expectedTopInset));
-      expect(stripTop, lessThan(expectedTopInset + navHeight));
+      expect(stripTop, greaterThanOrEqualTo(expectedTopInset + searchHeight));
+      expect(
+        stripTop,
+        lessThanOrEqualTo(expectedTopInset + searchHeight + navHeight),
+      );
       expect(expectedTopInset, lessThan(safeTop));
     });
 
@@ -308,13 +315,36 @@ void main() {
       );
     });
 
-    testWidgets('默认停留在关注信息流', (tester) async {
+    testWidgets('默认停留在推荐信息流', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(MomentSocialFeed), findsOneWidget);
       expect(find.byType(HomePrimaryTabStrip), findsOneWidget);
+      expect(
+        find.byKey(
+          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.recommendedTabId),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('点击关注 tab 不触发无效路由跳转', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(
+          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.followingTabId),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Page Not Found'), findsNothing);
+      expect(find.byType(HomePage), findsOneWidget);
+      expect(find.byType(MomentSocialFeed), findsOneWidget);
     });
 
     testWidgets('关注流手机端首条 post 占满屏宽', (tester) async {
@@ -550,11 +580,14 @@ void main() {
       expect(tester.getSize(searchPanel), equals(logicalSize));
     });
 
-    testWidgets('首页只保留关注与精品两个主 tab', (tester) async {
+    testWidgets('首页一级频道包含关注推荐与五个业务垂类', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
 
+      for (final tabId in HomePrimaryTabStrip.homeTabIds) {
+        expect(find.byKey(HomePrimaryTabStrip.tabKey(tabId)), findsOneWidget);
+      }
       expect(
         find.byKey(
           HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.followingTabId),
@@ -563,43 +596,47 @@ void main() {
       );
       expect(
         find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
+          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.recommendedTabId),
         ),
         findsOneWidget,
       );
       expect(
         find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.circlesTabId),
+          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
         ),
         findsNothing,
       );
     });
 
-    testWidgets('点击精选进入沉浸模式且保留稳定主 tab', (tester) async {
+    testWidgets('精品沉浸页独立承接全屏作品体验', (tester) async {
       _suppressExpectedErrors();
+      var exited = false;
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(home: Scaffold(body: HomePage())),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.byType(HomePrimaryTabStrip), findsOneWidget);
-
-      await tester.tap(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: HomeFeaturedImmersivePage(
+                onExitToHome: () => exited = true,
+              ),
+            ),
+          ),
         ),
       );
       await tester.pumpAndSettle();
 
       expect(find.byType(HomePrimaryTabStrip), findsOneWidget);
       expect(find.byType(WorksImmersiveViewer), findsOneWidget);
+      expect(exited, isFalse);
     });
 
-    testWidgets('横滑关注内容可切到精选', (tester) async {
+    testWidgets('横滑校园内容切到旅行频道', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
+      );
       await tester.pumpAndSettle();
 
       final firstCard = find.byKey(
@@ -614,65 +651,50 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(WorksImmersiveViewer), findsOneWidget);
+      expect(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('切到精选后主 tab 位置保持稳定', (tester) async {
+    testWidgets('切到旅行后主 tab 位置保持稳定', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
 
-      final followingBefore = tester.getCenter(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.followingTabId),
-        ),
+      final campusBefore = tester.getCenter(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
       );
-      final featuredBefore = tester.getCenter(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
-        ),
+      final travelBefore = tester.getCenter(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
       );
-      final followingTopBefore = tester.getTopLeft(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.followingTabId),
-        ),
+      final campusTopBefore = tester.getTopLeft(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
       );
-      final featuredTopBefore = tester.getTopLeft(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
-        ),
+      final travelTopBefore = tester.getTopLeft(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
       );
       await tester.tap(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
-        ),
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
       );
       await tester.pumpAndSettle();
 
-      final followingAfter = tester.getCenter(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.followingTabId),
-        ),
+      final campusAfter = tester.getCenter(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
       );
-      final featuredAfter = tester.getCenter(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
-        ),
+      final travelAfter = tester.getCenter(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
       );
-      final followingTopAfter = tester.getTopLeft(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.followingTabId),
-        ),
+      final campusTopAfter = tester.getTopLeft(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.campusTabId)),
       );
-      final featuredTopAfter = tester.getTopLeft(
-        find.byKey(
-          HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.featuredTabId),
-        ),
+      final travelTopAfter = tester.getTopLeft(
+        find.byKey(HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.travelTabId)),
       );
-      expect(followingAfter.dx, closeTo(followingBefore.dx, 0.1));
-      expect(featuredAfter.dx, closeTo(featuredBefore.dx, 0.1));
-      expect(followingTopAfter.dy, closeTo(followingTopBefore.dy, 0.1));
-      expect(featuredTopAfter.dy, closeTo(featuredTopBefore.dy, 0.1));
+      expect(campusAfter.dx, closeTo(campusBefore.dx, 0.1));
+      expect(travelAfter.dx, closeTo(travelBefore.dx, 0.1));
+      expect(campusTopAfter.dy, closeTo(campusTopBefore.dy, 0.1));
+      expect(travelTopAfter.dy, closeTo(travelTopBefore.dy, 0.1));
     });
   });
 }

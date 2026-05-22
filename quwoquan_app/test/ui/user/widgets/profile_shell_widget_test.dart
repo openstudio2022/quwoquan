@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
@@ -113,7 +114,7 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
+      expect(find.byIcon(AppNavigationSemanticConstants.settingsActionIcon), findsOneWidget);
     });
 
     testWidgets('分身管理开关关闭时我的主页不展示分身管理按钮', (tester) async {
@@ -469,7 +470,7 @@ void main() {
       );
       await _pumpFrames(tester);
       expect(find.text('创作'), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.settings), findsOneWidget);
+      expect(find.byIcon(AppNavigationSemanticConstants.settingsActionIcon), findsOneWidget);
     });
 
     testWidgets('暗色模式下 other 模式基础壳层渲染不崩溃', (tester) async {

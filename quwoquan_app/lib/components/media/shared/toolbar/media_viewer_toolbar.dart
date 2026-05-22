@@ -1,6 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
@@ -45,16 +47,13 @@ class MediaViewerTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.viewPaddingOf(context).top;
-    final topInset = AppSpacing.primaryTopBarSafeTopInset(safeTop, context);
-    final vPad = AppSpacing.toolbarVerticalPadding(context);
+    final topInset = AppSpacing.appChromeTopSafeInset(safeTop, context);
+    final vPad = AppSpacing.appChromeToolbarVerticalPadding(context);
     final showPositionInBar = showPosition && !_isBackOnly;
     final showAuthorInBar = !_isBackOnly;
 
     return Container(
-      padding: EdgeInsets.only(
-        top: topInset,
-        bottom: vPad,
-      ),
+      padding: EdgeInsets.only(top: topInset, bottom: vPad),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -64,8 +63,11 @@ class MediaViewerTopBar extends StatelessWidget {
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: layoutSpec.horizontalInset -
-              (AppSpacing.minInteractiveSize - AppSpacing.iconMedium) / 2,
+          horizontal:
+              layoutSpec.horizontalInset -
+              (AppSpacing.appChromeActionButtonSize -
+                      AppSpacing.appChromeActionIconSize) /
+                  2,
         ),
         child: Stack(
           alignment: Alignment.center,
@@ -227,20 +229,13 @@ class MediaViewerTopBar extends StatelessWidget {
 
   Widget _buildAvatar() {
     final avatarSize = AppSpacing.avatarUserSm;
-    if (authorAvatarUrl != null && authorAvatarUrl!.isNotEmpty) {
-      return CircleAvatar(
-        radius: avatarSize / 2,
-        backgroundImage: NetworkImage(authorAvatarUrl!),
-      );
-    }
-    return CircleAvatar(
-      radius: avatarSize / 2,
+    return RoundedSquareAvatar(
+      size: avatarSize,
+      imageUrl: authorAvatarUrl,
+      name: authorName,
+      borderRadius: avatarSize / 2,
       backgroundColor: AppColors.overlayMedium,
-      child: Icon(
-        Icons.person,
-        color: AppColors.white,
-        size: AppSpacing.iconMedium,
-      ),
+      fallbackIcon: Icons.person,
     );
   }
 
@@ -296,8 +291,8 @@ class ImmersiveToolbarIconButton extends StatelessWidget {
     this.foregroundColor = AppColors.white,
     this.backgroundColor,
     this.borderColor,
-    this.size = AppSpacing.minInteractiveSize,
-    this.iconSize = AppSpacing.iconMedium,
+    this.size = AppSpacing.appChromeActionButtonSize,
+    this.iconSize = AppSpacing.appChromeActionIconSize,
   });
 
   final IconData icon;
@@ -357,12 +352,18 @@ class MediaViewerBottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vPad = AppSpacing.toolbarVerticalPadding(context);
+    final vPad = AppSpacing.appChromeToolbarVerticalPadding(context);
     final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
+    final hSafeInset = AppSpacing.appChromeBottomSafeSideInset(
+      context,
+      safeBottom,
+    );
 
     return Container(
       padding: EdgeInsets.only(
+        left: hSafeInset,
         top: vPad,
+        right: hSafeInset,
         bottom: vPad + safeBottom,
       ),
       decoration: BoxDecoration(
@@ -380,9 +381,11 @@ class MediaViewerBottomBar extends StatelessWidget {
               child: _buildActionSlot(
                 context,
                 iconWidget: Icon(
-                  isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                  isLiked
+                      ? FluentIcons.heart_24_filled
+                      : FluentIcons.heart_24_regular,
                   color: isLiked ? AppColors.error : AppColors.white,
-                  size: AppSpacing.iconMedium,
+                  size: AppSpacing.bottomNavItemIconSize,
                 ),
                 count: likeCount,
                 onTap: onLike,
@@ -392,9 +395,9 @@ class MediaViewerBottomBar extends StatelessWidget {
               child: _buildActionSlot(
                 context,
                 iconWidget: Icon(
-                  CupertinoIcons.arrowshape_turn_up_right,
+                  FluentIcons.share_24_regular,
                   color: AppColors.white,
-                  size: AppSpacing.iconMedium,
+                  size: AppSpacing.bottomNavItemIconSize,
                 ),
                 count: shareCount,
                 onTap: onShare,
@@ -404,8 +407,8 @@ class MediaViewerBottomBar extends StatelessWidget {
               child: _buildActionSlot(
                 context,
                 iconWidget: AppBubbleIcon(
-                  size: AppSpacing.iconMedium,
                   color: AppColors.white,
+                  size: AppSpacing.bottomNavItemIconSize,
                 ),
                 count: commentCount,
                 onTap: onComment,
@@ -452,7 +455,7 @@ class MediaViewerActionButton extends StatelessWidget {
         vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs),
         horizontal: context.safeGetIntraGroupSpacing(SpacingSize.xs),
       ),
-      minimumSize: Size.zero,
+      minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
       onPressed: onTap,
       child: Row(
         mainAxisSize: MainAxisSize.min,

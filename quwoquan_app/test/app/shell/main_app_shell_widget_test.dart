@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -69,19 +71,19 @@ void main() {
   });
 
   group('MainAppShell', () {
-    testWidgets('底部导航展示五栏，圈子成为独立一级入口', (tester) async {
+    testWidgets('底部导航展示五栏，精品成为独立一级入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('首页'), findsWidgets);
-      expect(find.text('圈子'), findsWidgets);
+      expect(find.text('精品'), findsWidgets);
       expect(find.text('消息'), findsWidgets);
       expect(find.text('我'), findsWidgets);
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text('圈子'),
+          matching: find.text('精品'),
         ),
         findsOneWidget,
       );
@@ -120,7 +122,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text('圈子'),
+          matching: find.text('精品'),
         ),
         findsOneWidget,
       );
@@ -164,15 +166,40 @@ void main() {
       final expectedHeight = navHeight + bottomInset;
       final homeIcon = find.descendant(
         of: navFinder,
-        matching: find.byIcon(CupertinoIcons.house_fill),
+        matching: find.byIcon(FluentIcons.home_24_filled),
+      );
+      final premiumIcon = find.descendant(
+        of: navFinder,
+        matching: find.byType(AppPremiumMarkIcon),
+      );
+      final messageIcon = find.descendant(
+        of: navFinder,
+        matching: find.byType(AppMessagesIcon),
+      );
+      final profileIcon = find.descendant(
+        of: navFinder,
+        matching: find.byIcon(FluentIcons.person_circle_24_regular),
       );
       final navTop = tester.getTopLeft(navFinder).dy;
       final iconTop = tester.getTopLeft(homeIcon).dy;
+      final iconCenterY = tester.getCenter(homeIcon).dy;
 
       expect(navSize.height, closeTo(expectedHeight, 0.5));
       final iconToTop = iconTop - navTop;
       expect(iconToTop, greaterThanOrEqualTo(0));
       expect(iconToTop, lessThan(navHeight / 2));
+      expect(
+        (tester.getCenter(premiumIcon).dy - iconCenterY).abs(),
+        lessThan(1),
+      );
+      expect(
+        (tester.getCenter(messageIcon).dy - iconCenterY).abs(),
+        lessThan(1),
+      );
+      expect(
+        (tester.getCenter(profileIcon).dy - iconCenterY).abs(),
+        lessThan(1),
+      );
     });
   });
 }

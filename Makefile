@@ -103,7 +103,6 @@ verify-app-env-package:
 	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env alpha
 	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env beta
 	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env gamma
-	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env prod-gray
 	@bash quwoquan_app/scripts/env/build_app_env_package.sh --env prod
 
 verify-service-env-package:

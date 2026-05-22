@@ -11,6 +11,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
@@ -165,7 +166,12 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     }
   }
 
-  void _trackBehavior(BehaviorAction action, PostBaseDto post, {double? duration, int? position}) {
+  void _trackBehavior(
+    BehaviorAction action,
+    PostBaseDto post, {
+    double? duration,
+    int? position,
+  }) {
     final contentId = post.id;
     if (contentId.isEmpty) return;
     _trackFeedImpression(post, position: position);
@@ -190,17 +196,21 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     if (post.id.isEmpty || _impressedIds.contains(post.id)) return;
     _impressedIds.add(post.id);
     final feedSession = ref.read(feedSessionProvider.notifier);
-    ref.read(behaviorRepositoryProvider).reportEvents(events: [
-      BehaviorEvent(
-        contentId: post.id,
-        action: BehaviorAction.impression,
-        tags: const <String>[],
-        authorId: post.authorId,
-        referralSource: ReferralSource.organicFeed,
-        feedRequestId: feedSession.currentFeedRequestId,
-        position: position,
-      ),
-    ]);
+    ref
+        .read(behaviorRepositoryProvider)
+        .reportEvents(
+          events: [
+            BehaviorEvent(
+              contentId: post.id,
+              action: BehaviorAction.impression,
+              tags: const <String>[],
+              authorId: post.authorId,
+              referralSource: ReferralSource.organicFeed,
+              feedRequestId: feedSession.currentFeedRequestId,
+              position: position,
+            ),
+          ],
+        );
   }
 
   void _recordDiscoveryVisit(String tabId) {
@@ -346,6 +356,11 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
 
   /// 发现页主导航：与圈子/首页复用同一 Tab 组件与字级。
   Widget _buildHeader(bool isDark) {
+    final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
+      safeTop,
+      context,
+    );
     final rightActionsWidth =
         AppSpacing.minInteractiveSize + AppSpacing.intraGroupMd;
     // 预留左侧动作位（未来新增图标）并与右侧取同宽锚点，避免中轴漂移。
@@ -355,10 +370,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         : rightActionsWidth;
     return Container(
       color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
-      child: SafeArea(
-        bottom: false,
+      child: Padding(
+        padding: EdgeInsets.only(top: effectiveTopInset),
         child: SizedBox(
-          height: AppSpacing.tabNavigationHeight,
+          height: AppSpacing.appChromeTopBarHeight(context),
           child: CenteredScrollableTabBar(
             tabs: _categories
                 .map((c) => TabItem(id: c['id']!, label: c['label']!))
@@ -646,9 +661,10 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                 onMoreTap: (post) => _onMomentMoreTap(context, post),
                 onBehavior: (action, post) => _trackBehavior(
                   BehaviorAction.values.cast<BehaviorAction?>().firstWhere(
-                    (a) => a!.wireValue == action,
-                    orElse: () => null,
-                  ) ?? BehaviorAction.click,
+                        (a) => a!.wireValue == action,
+                        orElse: () => null,
+                      ) ??
+                      BehaviorAction.click,
                   post,
                 ),
               ),
@@ -713,7 +729,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
                   _trackBehavior(BehaviorAction.click, dto);
                   context.push(
                     AppRoutePaths.articleDetail(id: dto.id),
-                    extra: const ArticleDetailPageRouteExtra(referralSource: ReferralSource.organicFeed),
+                    extra: const ArticleDetailPageRouteExtra(
+                      referralSource: ReferralSource.organicFeed,
+                    ),
                   );
                 },
                 onUserTap: () {
@@ -885,7 +903,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
     if (post.identity == 'work' && post.displayFormat == 'note') {
       context.push(
         AppRoutePaths.articleDetail(id: post.id),
-        extra: const ArticleDetailPageRouteExtra(referralSource: ReferralSource.organicFeed),
+        extra: const ArticleDetailPageRouteExtra(
+          referralSource: ReferralSource.organicFeed,
+        ),
       );
       return;
     }
@@ -906,7 +926,9 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
       postInteractionState: ref.read(postInteractionStateProvider),
     );
     primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
-    final navFeedRequestId = ref.read(feedSessionProvider.notifier).newFeedRequestId();
+    final navFeedRequestId = ref
+        .read(feedSessionProvider.notifier)
+        .newFeedRequestId();
     // For moment (multi-image per post): initialIndex = post index so viewer shows correct post
     final initialIndex = (feedPosts != null && feedPosts.isNotEmpty)
         ? feedPosts
@@ -1154,9 +1176,12 @@ class _MomentPostCardState extends State<_MomentPostCard>
             children: [
               GestureDetector(
                 onTap: () => widget.onUserTap(item.authorId),
-                child: CircleAvatar(
-                  radius: AppSpacing.avatarUserMd / 2,
-                  backgroundImage: NetworkImage(item.avatarUrl),
+                child: RoundedSquareAvatar(
+                  size: AppSpacing.avatarUserMd,
+                  imageUrl: item.avatarUrl,
+                  name: item.displayName,
+                  borderRadius: AppSpacing.avatarUserMd / 2,
+                  fallbackIcon: CupertinoIcons.person_crop_circle_fill,
                 ),
               ),
               SizedBox(width: AppSpacing.sm.w),
@@ -1264,9 +1289,16 @@ class _MomentPostCardState extends State<_MomentPostCard>
                 child: GestureDetector(
                   onTap: () => widget.onCommentTap?.call(item),
                   child: _actionChip(
-                    CupertinoIcons.chat_bubble,
+                    null,
                     formatCompactActionCount(item.commentCount),
                     isDark,
+                    iconWidget: AppBubbleIcon(
+                      size: AppSpacing.iconMedium,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1284,10 +1316,11 @@ class _MomentPostCardState extends State<_MomentPostCard>
   }
 
   Widget _actionChip(
-    IconData icon,
+    IconData? icon,
     String count,
     bool isDark, {
     Color? iconColor,
+    Widget? iconWidget,
   }) {
     final muted = AppColorsFunctional.getColor(
       isDark,
@@ -1299,7 +1332,12 @@ class _MomentPostCardState extends State<_MomentPostCard>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: AppSpacing.iconMedium, color: iconColor ?? muted),
+            iconWidget ??
+                Icon(
+                  icon,
+                  size: AppSpacing.iconMedium,
+                  color: iconColor ?? muted,
+                ),
             SizedBox(width: AppSpacing.intraGroupXs),
             Text(
               count,
@@ -1378,9 +1416,12 @@ class _ArticleCardPlaceholder extends StatelessWidget {
               children: [
                 GestureDetector(
                   onTap: onUserTap,
-                  child: CircleAvatar(
-                    radius: AppSpacing.avatarUserSm / 2,
-                    backgroundImage: NetworkImage(article.avatarUrl),
+                  child: RoundedSquareAvatar(
+                    size: AppSpacing.avatarUserSm,
+                    imageUrl: article.avatarUrl,
+                    name: article.displayName,
+                    borderRadius: AppSpacing.avatarUserSm / 2,
+                    fallbackIcon: CupertinoIcons.person_crop_circle_fill,
                   ),
                 ),
                 SizedBox(width: AppSpacing.interGroupXs),
@@ -1955,11 +1996,24 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                         clipBehavior: Clip.none,
                                         alignment: Alignment.center,
                                         children: [
-                                          CircleAvatar(
-                                            radius: AppSpacing.buttonHeight / 2,
-                                            backgroundColor: avatarRing,
-                                            backgroundImage: NetworkImage(
-                                              authorAvatar,
+                                          Container(
+                                            width: AppSpacing.buttonHeight,
+                                            height: AppSpacing.buttonHeight,
+                                            decoration: BoxDecoration(
+                                              color: avatarRing,
+                                              borderRadius:
+                                                  BorderRadius.circular(
+                                                    AppSpacing.buttonHeight / 2,
+                                                  ),
+                                            ),
+                                            child: RoundedSquareAvatar(
+                                              size: AppSpacing.buttonHeight,
+                                              imageUrl: authorAvatar,
+                                              name: authorName,
+                                              borderRadius:
+                                                  AppSpacing.buttonHeight / 2,
+                                              fallbackIcon: CupertinoIcons
+                                                  .person_crop_circle_fill,
                                             ),
                                           ),
                                           if (!(widget.followingUsers?.contains(

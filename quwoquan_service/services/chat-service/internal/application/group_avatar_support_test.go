@@ -27,7 +27,7 @@ func TestResolveConversationAvatarURLPrefersPrecomposedGroupAsset(t *testing.T) 
 	}
 }
 
-func TestResolveConversationAvatarURLFallsBackToLegacyAvatarURL(t *testing.T) {
+func TestResolveConversationAvatarURLIgnoresLegacyGroupAvatarURL(t *testing.T) {
 	ConfigureGroupAvatarCDNBase("https://cdn.test")
 
 	conv := model.Conversation{
@@ -35,23 +35,27 @@ func TestResolveConversationAvatarURLFallsBackToLegacyAvatarURL(t *testing.T) {
 		AvatarUrl: "https://legacy.test/user.png",
 	}
 
-	if got := ResolveConversationAvatarURL(conv); got != "https://legacy.test/user.png" {
-		t.Fatalf("expected legacy avatar url fallback, got %q", got)
+	want := DefaultGroupAvatarURL()
+	if got := ResolveConversationAvatarURL(conv); got != want {
+		t.Fatalf("expected default avatar fallback, got %q want %q", got, want)
 	}
 }
 
-func TestResolveConversationAvatarURLBuildsPublicURLFromObjectKeyFallback(t *testing.T) {
+func TestResolveConversationAvatarURLWithMembersUsesCreatorAvatarBeforePrecompose(t *testing.T) {
 	ConfigureGroupAvatarCDNBase("https://cdn.test")
 
 	conv := model.Conversation{
-		Type:               conversationTypeGroup,
-		AvatarUrl:          "media/avatar/group/fixture_conv_group/v1/composite.png",
-		GroupAvatarVersion: 1,
+		Type:      conversationTypeGroup,
+		CreatorId: "creator_user",
 	}
 
-	want := "https://cdn.test/media/avatar/group/fixture_conv_group/v1/composite.png?v=1"
-	if got := ResolveConversationAvatarURL(conv); got != want {
-		t.Fatalf("expected object-key fallback to public url %q, got %q", want, got)
+	members := []model.ConversationMember{
+		{UserId: "member_user", AvatarUrl: "https://legacy.test/member.png"},
+		{UserId: "creator_user", AvatarUrl: "https://legacy.test/creator.png"},
+	}
+	want := "https://legacy.test/creator.png"
+	if got := ResolveConversationAvatarURLWithMembers(conv, members); got != want {
+		t.Fatalf("expected creator avatar fallback %q, got %q", want, got)
 	}
 }
 

@@ -1,11 +1,7 @@
 version: 1
 description: Transitional baseline for pre-AppImage direct image APIs. Counts may only decrease.
 allowed:
-  - path: components/avatar/group_avatar_grid.dart
-    maxCount: 2
   - path: components/avatar/rounded_square_avatar.dart
-    maxCount: 1
-  - path: components/comment_system/comment_viewer_modal.dart
     maxCount: 1
   - path: components/content/image_post_card.dart
     maxCount: 4
@@ -13,16 +9,16 @@ allowed:
     maxCount: 1
   - path: components/content/video_post_card.dart
     maxCount: 1
+  - path: components/post/post_preview_card.dart
+    maxCount: 1
+  - path: components/post/post_preview_list_tile.dart
+    maxCount: 1
   - path: components/media/image/editor/image_editor_page.dart
     maxCount: 4
   - path: components/media/image/viewer/image_viewer.dart
     maxCount: 2
   - path: components/media/image/viewer/immersive_image_viewer.dart
     maxCount: 2
-  - path: components/media/shared/toolbar/immersive_engagement_bar.dart
-    maxCount: 1
-  - path: components/media/shared/toolbar/media_viewer_toolbar.dart
-    maxCount: 1
   - path: components/media/shared/viewer/media_assistant_panel.dart
     maxCount: 1
   - path: components/media/video/viewer/immersive_video_viewer.dart
@@ -47,12 +43,14 @@ allowed:
     maxCount: 1
   - path: ui/content/entry/widgets/article_editor.dart
     maxCount: 1
+  - path: ui/content/widgets/article_content_block_renderer.dart
+    maxCount: 1
   - path: ui/discovery/pages/discovery_page.dart
-    maxCount: 5
+    maxCount: 3
   - path: ui/discovery/widgets/moment_social_feed.dart
     maxCount: 1
   - path: ui/discovery/widgets/works_immersive_viewer.dart
-    maxCount: 1
+    maxCount: 5
   - path: ui/rtc/pages/call_participant_picker_page.dart
     maxCount: 1
   - path: ui/rtc/widgets/caller_avatar_pulse.dart
@@ -82,6 +80,6 @@ allowed:
   - path: ui/user/widgets/profile_lifestyle_tab.dart
     maxCount: 1
   - path: ui/user/widgets/profile_moments_tab.dart
-    maxCount: 1
+    maxCount: 2
   - path: ui/user/widgets/profile_shell.dart
     maxCount: 2

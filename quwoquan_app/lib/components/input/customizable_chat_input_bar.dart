@@ -179,7 +179,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
     with SingleTickerProviderStateMixin {
   /// 与微信一致：输入/语音槽单行同高；多行时仅外轮廓四角为小圆角（非胶囊）。
   static const double _fieldCornerRadius = AppSpacing.smallBorderRadius;
-  static const double _composerCenterMinHeight = AppSpacing.buttonHeight;
+  static const double _composerCenterMinHeight =
+      AppSpacing.chatInputToolbarMinHeight;
 
   late final TextEditingController _controller;
   late final FocusNode _focusNode;
@@ -587,8 +588,8 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
             key: TestKeys.chatInputAtXiaoquButton,
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
             minimumSize: Size(
-              AppSpacing.buttonHeightMd,
-              AppSpacing.buttonHeightMd,
+              AppSpacing.chatInputIconButtonSize,
+              AppSpacing.chatInputIconButtonSize,
             ),
             onPressed: _insertXiaoquMention,
             child: Text(
@@ -658,7 +659,7 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
       child: CupertinoButton(
         key: key,
         padding: EdgeInsets.zero,
-        minimumSize: Size(AppSpacing.buttonHeightMd, AppSpacing.buttonHeightMd),
+        minimumSize: Size.square(AppSpacing.chatInputIconButtonSize),
         onPressed: onTap,
         child: Icon(icon, size: iconSize, color: fg),
       ),
@@ -674,11 +675,13 @@ class _CustomizableChatInputBarState extends State<CustomizableChatInputBar>
         key: widget.sendButtonKey,
         onTap: _send,
         child: Container(
-          width: AppSpacing.buttonSize,
-          height: AppSpacing.buttonSize,
+          width: AppSpacing.chatInputSendButtonSize,
+          height: AppSpacing.chatInputSendButtonSize,
           decoration: BoxDecoration(
             color: AppColors.primaryColor,
-            borderRadius: BorderRadius.circular(AppSpacing.buttonSize),
+            borderRadius: BorderRadius.circular(
+              AppSpacing.chatInputSendButtonSize,
+            ),
           ),
           alignment: Alignment.center,
           child: Icon(

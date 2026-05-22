@@ -85,13 +85,15 @@ class _UnifiedMediaViewerPageState
     List<String>? tags;
     int? totalImages;
 
-    if (widget.extra.dtoPosts.isNotEmpty && index < widget.extra.dtoPosts.length) {
+    if (widget.extra.dtoPosts.isNotEmpty &&
+        index < widget.extra.dtoPosts.length) {
       final dto = widget.extra.dtoPosts[index];
       postId = dto.id;
       contentType = _resolveContentTypeFromDto(dto);
       authorId = dto.authorId;
       totalImages = (dto is PhotoPostDto) ? dto.imageUrls.length : null;
-    } else if (widget.extra.posts.isNotEmpty && index < widget.extra.posts.length) {
+    } else if (widget.extra.posts.isNotEmpty &&
+        index < widget.extra.posts.length) {
       final post = widget.extra.posts[index];
       postId = post.id;
       contentType = _resolveContentType(post);
@@ -118,12 +120,16 @@ class _UnifiedMediaViewerPageState
   @override
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.viewPaddingOf(context).top;
+    final topChromeSafeInset = AppSpacing.appChromeTopSafeInset(
+      safeTop,
+      context,
+    );
     return CupertinoPageScaffold(
       backgroundColor: AppColors.black,
       child: WorksImmersiveViewer(
         showWorksToolbar: true,
         showTopNavigation: widget.extra.showWorksNavigation,
-        topChromeSafeInset: safeTop,
+        topChromeSafeInset: topChromeSafeInset,
         externalPosts: widget.extra.dtoPosts,
         externalPostViews: widget.extra.posts,
         initialPostIndex: widget.extra.initialIndex,
@@ -140,22 +146,23 @@ class _UnifiedMediaViewerPageState
             context.pop(result);
           }
         },
-        onUserTap: (
-          userId, {
-          String? avatarUrl,
-          String? displayName,
-          String? backgroundUrl,
-        }) {
-          context.push(
-            '/user/$userId',
-            extra: UserProfileRouteExtra(
-              subAccountId: userId,
-              avatar: avatarUrl,
-              displayName: displayName,
-              backgroundImage: backgroundUrl,
-            ),
-          );
-        },
+        onUserTap:
+            (
+              userId, {
+              String? avatarUrl,
+              String? displayName,
+              String? backgroundUrl,
+            }) {
+              context.push(
+                '/user/$userId',
+                extra: UserProfileRouteExtra(
+                  subAccountId: userId,
+                  avatar: avatarUrl,
+                  displayName: displayName,
+                  backgroundImage: backgroundUrl,
+                ),
+              );
+            },
         onAssistantTap: () {},
       ),
     );

@@ -89,16 +89,17 @@ class _RoundStarPainter extends CustomPainter {
 }
 
 // ─── 圆润气泡图标 ───────────────────────────────────────────
-/// 画一个正圆形气泡体 + 弧形小尾巴 + 两颗圆点，
-/// 对标原型图中圆润评论图标，确保与心形/星星/箭头等高居中。
+/// 无内部横线的单评论气泡，避免圆圈尾线和文字气泡的视觉干扰。
 class AppBubbleIcon extends StatelessWidget {
   final double size;
   final Color color;
+  final bool filled;
 
   const AppBubbleIcon({
     super.key,
     required this.size,
     required this.color,
+    this.filled = false,
   });
 
   @override
@@ -108,55 +109,265 @@ class AppBubbleIcon extends StatelessWidget {
       height: size,
       child: CustomPaint(
         size: Size(size, size),
-        painter: _RoundBubblePainter(color: color),
+        painter: _RoundedBubblePainter(color: color, filled: filled),
       ),
     );
   }
 }
 
-class _RoundBubblePainter extends CustomPainter {
-  final Color color;
+/// 两个无文字横线的对话气泡，用于表达「消息 = 多人会话」。
+class AppMessagesIcon extends StatelessWidget {
+  const AppMessagesIcon({
+    super.key,
+    required this.size,
+    required this.color,
+    this.filled = false,
+  });
 
-  _RoundBubblePainter({required this.color});
+  final double size;
+  final Color color;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        size: Size(size, size),
+        painter: _MessagesPainter(color: color, filled: filled),
+      ),
+    );
+  }
+}
+
+/// 圆润花印，用于「精品」入口，避免钻石、星星、播放三角带来的尖角和视频误解。
+class AppPremiumMarkIcon extends StatelessWidget {
+  const AppPremiumMarkIcon({
+    super.key,
+    required this.size,
+    required this.color,
+    this.filled = false,
+  });
+
+  final double size;
+  final Color color;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(
+        size: Size(size, size),
+        painter: _PremiumMarkPainter(color: color, filled: filled),
+      ),
+    );
+  }
+}
+
+class _RoundedBubblePainter extends CustomPainter {
+  _RoundedBubblePainter({required this.color, required this.filled});
+
+  final Color color;
+  final bool filled;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final sw = w * 0.075;
+    final sw = size.width * 0.075;
+    final path = _bubblePath(
+      size,
+      Rect.fromLTWH(
+        size.width * 0.14,
+        size.height * 0.17,
+        size.width * 0.72,
+        size.height * 0.54,
+      ),
+      radius: size.width * 0.22,
+      tailBaseStartX: size.width * 0.36,
+      tailBaseEndX: size.width * 0.54,
+      tailTip: Offset(size.width * 0.22, size.height * 0.84),
+    );
 
-    final paint = Paint()
+    _paintIconPath(canvas, path, color: color, strokeWidth: sw, filled: filled);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RoundedBubblePainter old) =>
+      color != old.color || filled != old.filled;
+}
+
+class _MessagesPainter extends CustomPainter {
+  _MessagesPainter({required this.color, required this.filled});
+
+  final Color color;
+  final bool filled;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sw = size.width * 0.075;
+    final back = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        size.width * 0.31,
+        size.height * 0.15,
+        size.width * 0.52,
+        size.height * 0.40,
+      ),
+      Radius.circular(size.width * 0.18),
+    );
+    final front = _bubblePath(
+      size,
+      Rect.fromLTWH(
+        size.width * 0.13,
+        size.height * 0.30,
+        size.width * 0.60,
+        size.height * 0.43,
+      ),
+      radius: size.width * 0.19,
+      tailBaseStartX: size.width * 0.34,
+      tailBaseEndX: size.width * 0.50,
+      tailTip: Offset(size.width * 0.18, size.height * 0.86),
+    );
+
+    final fillPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final strokePaint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
       ..strokeWidth = sw
       ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
 
-    // ── 气泡主体：正圆 ──
-    final bubbleR = w * 0.36;
-    final bubbleCx = w * 0.52;
-    final bubbleCy = h * 0.42;
-    canvas.drawCircle(Offset(bubbleCx, bubbleCy), bubbleR, paint);
-
-    // ── 尾巴：从左下弧线向下 ──
-    final tailPath = Path();
-    final ts = Offset(bubbleCx - bubbleR * 0.45, bubbleCy + bubbleR * 0.82);
-    final te = Offset(w * 0.15, h * 0.85);
-    final tc = Offset(bubbleCx - bubbleR * 0.75, bubbleCy + bubbleR * 1.1);
-    tailPath.moveTo(ts.dx, ts.dy);
-    tailPath.quadraticBezierTo(tc.dx, tc.dy, te.dx, te.dy);
-    canvas.drawPath(tailPath, paint);
-
-    // ── 两颗圆点 ──
-    final dotPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    final dotR = w * 0.055;
-    final dotGap = w * 0.13;
-    canvas.drawCircle(Offset(bubbleCx - dotGap, bubbleCy), dotR, dotPaint);
-    canvas.drawCircle(Offset(bubbleCx + dotGap, bubbleCy), dotR, dotPaint);
+    if (filled) {
+      canvas.drawRRect(back, fillPaint);
+      canvas.drawPath(front, fillPaint);
+    }
+    canvas.drawRRect(back, strokePaint);
+    canvas.drawPath(front, strokePaint);
   }
 
   @override
-  bool shouldRepaint(covariant _RoundBubblePainter old) => color != old.color;
+  bool shouldRepaint(covariant _MessagesPainter old) =>
+      color != old.color || filled != old.filled;
+}
+
+class _PremiumMarkPainter extends CustomPainter {
+  _PremiumMarkPainter({required this.color, required this.filled});
+
+  final Color color;
+  final bool filled;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sw = size.width * 0.075;
+    final strokePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = sw
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+    final fillPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    canvas.save();
+    canvas.translate(size.width / 2, size.height / 2);
+    for (var i = 0; i < 4; i++) {
+      canvas.save();
+      canvas.rotate(pi / 2 * i);
+      final petal = RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(0, -size.height * 0.18),
+          width: size.width * 0.28,
+          height: size.height * 0.46,
+        ),
+        Radius.circular(size.width * 0.14),
+      );
+      if (filled) {
+        canvas.drawRRect(petal, fillPaint);
+      }
+      canvas.drawRRect(petal, strokePaint);
+      canvas.restore();
+    }
+    canvas.restore();
+
+    final center = Offset(size.width / 2, size.height / 2);
+    if (filled) {
+      canvas.drawCircle(center, size.width * 0.09, Paint()..color = color);
+    } else {
+      canvas.drawCircle(center, size.width * 0.07, strokePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PremiumMarkPainter old) =>
+      color != old.color || filled != old.filled;
+}
+
+Path _bubblePath(
+  Size size,
+  Rect rect, {
+  required double radius,
+  required double tailBaseStartX,
+  required double tailBaseEndX,
+  required Offset tailTip,
+}) {
+  final path = Path()
+    ..moveTo(rect.left + radius, rect.top)
+    ..lineTo(rect.right - radius, rect.top)
+    ..quadraticBezierTo(rect.right, rect.top, rect.right, rect.top + radius)
+    ..lineTo(rect.right, rect.bottom - radius)
+    ..quadraticBezierTo(
+      rect.right,
+      rect.bottom,
+      rect.right - radius,
+      rect.bottom,
+    )
+    ..lineTo(tailBaseEndX, rect.bottom)
+    ..quadraticBezierTo(
+      tailTip.dx + size.width * 0.07,
+      tailTip.dy - size.height * 0.01,
+      tailTip.dx,
+      tailTip.dy,
+    )
+    ..quadraticBezierTo(
+      tailTip.dx + size.width * 0.08,
+      tailTip.dy - size.height * 0.11,
+      tailBaseStartX,
+      rect.bottom,
+    )
+    ..lineTo(rect.left + radius, rect.bottom)
+    ..quadraticBezierTo(rect.left, rect.bottom, rect.left, rect.bottom - radius)
+    ..lineTo(rect.left, rect.top + radius)
+    ..quadraticBezierTo(rect.left, rect.top, rect.left + radius, rect.top)
+    ..close();
+  return path;
+}
+
+void _paintIconPath(
+  Canvas canvas,
+  Path path, {
+  required Color color,
+  required double strokeWidth,
+  required bool filled,
+}) {
+  if (filled) {
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.fill,
+    );
+  }
+  canvas.drawPath(
+    path,
+    Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round,
+  );
 }

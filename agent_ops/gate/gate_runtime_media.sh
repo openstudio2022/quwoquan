@@ -11,6 +11,9 @@ required_docs=(
   "specs/feature-tree/runtime/runtime-media/observability-and-rollback.md"
   "specs/feature-tree/runtime/runtime-media/capacity-validation.md"
   "specs/feature-tree/runtime/runtime-media/automation-gates.md"
+  "specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md"
+  "specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml"
+  "specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-management-runbook.md"
 )
 
 for relative_path in "${required_docs[@]}"; do
@@ -48,6 +51,7 @@ echo "[runtime-media] go test user-service avatar sync contract"
 
 echo "[runtime-media] image delivery policy static gates"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_network_image_surface.py"
+python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_avatar_rendering_policy.py"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/media/verify_app_media_url_policy.py"
 python3 "${ROOT_DIR}/quwoquan_service/scripts/media/verify_media_variant_registry_metadata.py"
 
@@ -55,6 +59,9 @@ echo "[runtime-media] flutter test realtime/cache coverage"
 (
   cd "${ROOT_DIR}/quwoquan_app"
   flutter test \
+    test/core/services/content_cache_services_test.dart \
+    test/core/services/conversation_avatar_sync_contract_test.dart \
+    test/components/avatar/conversation_avatar_test.dart \
     test/cloud/realtime/realtime_avatar_sync_handler_test.dart \
     test/core/services/local_chat_search_sync_service_test.dart \
     test/ui/chat/widgets/chat_page_widget_test.dart

@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/core/providers/conversation_avatar_members_provider.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 class ChatInboxListState {
@@ -74,15 +78,34 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
       if (!ref.mounted) {
         return;
       }
+      unawaited(
+        ref
+            .read(conversationAvatarMembersProvider.notifier)
+            .prefetchInbox(cached),
+      );
+      _preloadConversationAvatarUrls(cached);
       state = state.copyWith(items: cached, isLoading: true);
 
       try {
         final remote = _sortItems(await _repo.listInbox(limit: 100));
+        await ref
+            .read(conversationAvatarMembersProvider.notifier)
+            .prefetchInbox(remote);
         if (!ref.mounted) {
           return;
         }
         _cache.replaceAll(remote.map(ConversationCacheRecord.fromInboxDto));
+        _preloadConversationAvatarUrls(remote);
         state = state.copyWith(items: remote, isLoading: false, error: null);
+        unawaited(
+          ref
+              .read(conversationAvatarMembersProvider.notifier)
+              .prefetchInbox(
+                remote,
+                offset: kConversationAvatarInitialPrefetchLimit,
+                limit: kConversationAvatarBackgroundPrefetchLimit,
+              ),
+        );
       } catch (error) {
         if (!ref.mounted) {
           return;
@@ -111,7 +134,22 @@ class ChatInboxListNotifier extends Notifier<ChatInboxListState> {
 
   void _refreshFromCache() {
     final cached = _readCache();
+    _preloadConversationAvatarUrls(cached);
     state = state.copyWith(items: cached);
+  }
+
+  void _preloadConversationAvatarUrls(List<ChatInboxDto> items) {
+    for (final item in items) {
+      final avatarUrl = item.avatarUrl.trim();
+      if (avatarUrl.isEmpty) {
+        continue;
+      }
+      unawaited(
+        AppImageCacheController.preloadAvatar(
+          avatarUrl,
+        ).catchError((_) => null),
+      );
+    }
   }
 
   void _ensureCacheListener() {

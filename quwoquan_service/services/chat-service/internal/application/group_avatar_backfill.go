@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
@@ -24,9 +25,21 @@ func BackfillMissingGroupAvatars(
 		return err
 	}
 	for _, conv := range convs {
-		if conv.AvatarUrl == "" {
-			if defaultURL := DefaultGroupAvatarURL(); defaultURL != "" {
-				conv.AvatarUrl = defaultURL
+		if conv.GroupAvatarVersion <= 0 || conv.GroupAvatarAssetId == "" {
+			if fallbackURL := resolveCreatorGroupAvatarFallback(ctx, repo, conv); fallbackURL != "" {
+				if conv.AvatarUrl != fallbackURL {
+					conv.AvatarUrl = fallbackURL
+					_ = repo.UpdateConversation(ctx, conv.ID, &conv)
+				}
+			} else if conv.AvatarUrl == "" {
+				if defaultURL := DefaultGroupAvatarURL(); defaultURL != "" {
+					conv.AvatarUrl = defaultURL
+					_ = repo.UpdateConversation(ctx, conv.ID, &conv)
+				}
+			}
+		} else if conv.AvatarUrl == "" {
+			if resolvedURL := ResolveGroupAvatarURL(conv); resolvedURL != "" {
+				conv.AvatarUrl = resolvedURL
 				_ = repo.UpdateConversation(ctx, conv.ID, &conv)
 			}
 		}
@@ -44,4 +57,37 @@ func BackfillMissingGroupAvatars(
 		}
 	}
 	return nil
+}
+
+func resolveCreatorGroupAvatarFallback(
+	ctx context.Context,
+	repo persistence.ChatRepository,
+	conv model.Conversation,
+) string {
+	creatorID := conv.CreatorId
+	if creatorID == "" {
+		return ""
+	}
+	members, err := repo.ListMembers(
+		ctx,
+		conv.ID,
+		200,
+		"",
+		"",
+		persistence.SortMembersJoinedAsc,
+	)
+	if err != nil {
+		return ""
+	}
+	for _, member := range members {
+		if member.UserId == creatorID {
+			return resolveConversationAvatarURLValue(member.AvatarUrl, member.AvatarVersion)
+		}
+	}
+	for _, member := range members {
+		if member.Role == "owner" {
+			return resolveConversationAvatarURLValue(member.AvatarUrl, member.AvatarVersion)
+		}
+	}
+	return ""
 }

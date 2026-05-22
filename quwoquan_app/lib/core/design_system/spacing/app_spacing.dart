@@ -223,11 +223,13 @@ class AppSpacing {
   static const double avatarRailHeight = 90.0;
 
   // ==================== 欢迎页动效（Figma WelcomeScreen） ====================
-  static const double welcomePetalWidth = 56.0;
-  static const double welcomePetalHeight = 96.0;
-  static const double welcomePetalCornerRadius = 30.0;
-  static const double welcomeDropDiameter = 112.0;
-  static const double welcomeDropBorderWidth = 1.0;
+  static const double welcomeGraphicDiameter = 256.0;
+  static const double welcomePetalWidth = 52.0;
+  static const double welcomePetalHeight = 94.0;
+  static const double welcomePetalRadialOffset = 54.0;
+
+  /// 花瓣下层径向柔光直径（羽化至透明，提亮花心叠色区；刻意避开早前「独立光圈」像素断言）。
+  static const double welcomeBloomDiameter = 92.0;
 
   /// 圈子头像圆角比例（border-radius: 20%）
   static const double avatarCircleBorderRadiusRatio = 0.2;
@@ -271,6 +273,66 @@ class AppSpacing {
   /// compact = xs(4)，保证图标紧凑不浪费垂直空间。
   static double toolbarVerticalPadding(BuildContext context) =>
       responsiveValue(context, compact: xs, regular: sm, expanded: sm);
+
+  /// 应用级顶部 chrome 安全区入口，复用一级 Tab 的压缩安全区算法。
+  static double appChromeTopSafeInset(double safeTop, BuildContext context) =>
+      primaryTopBarSafeTopInset(safeTop, context);
+
+  /// 应用级顶部 chrome 高度，所有一级顶栏/沉浸顶栏共享。
+  static double appChromeTopBarHeight(BuildContext context) =>
+      primaryTopBarHeight(context);
+
+  /// 普通导航栏 chrome 高度（CupertinoNavigationBar / Inset / 内页）。
+  static const double appChromeNavigationBarHeight = toolbarHeight;
+
+  /// 应用级 toolbar 纵向节奏，顶部按钮行与底部动作栏共享。
+  static double appChromeToolbarVerticalPadding(BuildContext context) =>
+      toolbarVerticalPadding(context);
+
+  /// 应用级 toolbar 操作按钮热区。
+  static const double appChromeActionButtonSize = minInteractiveSize;
+
+  /// 应用级 toolbar 操作图标尺寸。
+  static const double appChromeActionIconSize = iconMedium;
+
+  /// 顶栏文字操作最小热区高度。
+  static const double appChromeTextActionMinHeight = appChromeActionButtonSize;
+
+  /// 顶栏文字操作水平内边距。
+  static const double appChromeTextActionHorizontalPadding = containerXs;
+
+  /// 应用级 toolbar 操作组内间距。
+  static double appChromeActionGap(BuildContext context) => responsiveValue(
+    context,
+    compact: intraGroupXs,
+    regular: intraGroupSm,
+    expanded: intraGroupSm,
+  );
+
+  /// 底部 chrome 在圆弧/Home Indicator 机型上的额外左右保护。
+  static double appChromeBottomSafeSideInset(
+    BuildContext context,
+    double bottomSafeInset,
+  ) => bottomNavContentSideInset(context, bottomSafeInset);
+
+  /// 对话输入栏单行默认中心槽高度。
+  static const double chatInputToolbarMinHeight = appChromeActionButtonSize;
+
+  /// 对话输入栏外层上下留白，保持默认单行状态轻量。
+  static const double chatInputToolbarVerticalPadding = xs;
+
+  /// 对话输入栏图标按钮热区。
+  static const double chatInputIconButtonSize = appChromeActionButtonSize;
+
+  /// 对话输入栏发送按钮直径。
+  static const double chatInputSendButtonSize = appChromeActionButtonSize;
+
+  /// 评论输入默认高度，与对话输入单行槽一致。
+  static const double commentInputHeight = chatInputToolbarMinHeight;
+
+  /// 简版媒体底栏内容区高度。
+  static double mediaBottomBarHeight(BuildContext context) =>
+      bottomNavBarHeight(context);
 
   /// 主壳底部导航条左右内收量（让 tab 项与机身底部圆角/曲面屏对齐）。
   static double bottomNavSideInset(BuildContext context) => responsiveValue(
@@ -487,6 +549,33 @@ class AppSpacing {
 
   /// 底部导航中间创作按钮圆形直径
   static const double primaryActionCircleSize = 36.0;
+
+  /// 底部导航普通项图标尺寸，保持当前主壳视觉基线。
+  static const double bottomNavItemIconSize = 22.0;
+
+  /// 底部导航主操作内图标尺寸。
+  static const double bottomNavPrimaryActionIconSize = 20.0;
+
+  /// 底部导航图标与标签间距。
+  static const double bottomNavIconLabelGap = oneHalf;
+
+  /// 底部导航标签字距。
+  static const double bottomNavLabelLetterSpacing = -0.08;
+
+  /// 底部导航主操作阴影垂直偏移。
+  static const double bottomNavPrimaryActionShadowOffsetDy = xs;
+
+  /// 沉浸媒体底栏作者头像尺寸，三档统一避免压过动作列。
+  static double immersiveEngagementAvatarSize(BuildContext context) =>
+      responsiveValue(
+        context,
+        compact: avatarUserSm,
+        regular: avatarUserSm,
+        expanded: avatarUserSm,
+      );
+
+  /// 沉浸媒体底栏动作标签字号，与主壳底栏 label 基线一致。
+  static const double immersiveEngagementActionLabelSize = 11.0;
 
   // ==================== 图标尺寸 ====================
   /// 小图标: 16.0

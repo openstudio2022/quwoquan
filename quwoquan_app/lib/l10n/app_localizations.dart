@@ -428,16 +428,10 @@ abstract class AppLocalizations {
   /// **'趣我圈'**
   String get welcomeTitle;
 
-  /// No description provided for @welcomeSubtitle.
-  ///
-  /// In zh, this message translates to:
-  /// **'以兴趣为半径，画出我们的交集'**
-  String get welcomeSubtitle;
-
   /// No description provided for @welcomeMainSlogan.
   ///
   /// In zh, this message translates to:
-  /// **'专注你的热爱，其余交给小趣'**
+  /// **'遇见同趣，绽放热爱'**
   String get welcomeMainSlogan;
 
   /// No description provided for @welcomeButtonLabel.
@@ -446,11 +440,17 @@ abstract class AppLocalizations {
   /// **'开启发现之旅'**
   String get welcomeButtonLabel;
 
-  /// No description provided for @welcomeFooterCredit.
+  /// No description provided for @assistantWhisperSignature.
   ///
   /// In zh, this message translates to:
-  /// **'小趣私人助手 · 与你相伴'**
-  String get welcomeFooterCredit;
+  /// **'小趣'**
+  String get assistantWhisperSignature;
+
+  /// No description provided for @assistantWhisperLine.
+  ///
+  /// In zh, this message translates to:
+  /// **'专注你的热爱，剩下的交给我'**
+  String get assistantWhisperLine;
 
   /// No description provided for @commentPlaceholder.
   ///

@@ -45,7 +45,7 @@ export 'media/image/navigation/image_sub_tab_navigation.dart';
 
 // ==================== 头像组件 ====================
 export 'avatar/rounded_square_avatar.dart';
-export 'avatar/group_avatar_grid.dart';
+export 'avatar/conversation_avatar.dart';
 
 // ==================== 助理组件 ====================
 export 'assistant/assistant_avatar.dart';

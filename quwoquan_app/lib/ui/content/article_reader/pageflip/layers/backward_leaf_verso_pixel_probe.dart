@@ -2,8 +2,12 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_texture_mapping.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
 import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
+
+export 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_texture_mapping.dart'
+    show backwardVersoTextureMappingStrategy, backwardVersoTexturePoint;
 
 @immutable
 class BackwardVersoPixelProbe {
@@ -21,13 +25,6 @@ class BackwardVersoPixelProbe {
     localPoints: <Offset>[],
     texturePoints: <Offset>[],
   );
-}
-
-Offset backwardVersoTexturePoint({
-  required Size pageSize,
-  required Offset localPoint,
-}) {
-  return Offset(pageSize.width - localPoint.dx, localPoint.dy);
 }
 
 BackwardVersoPixelProbe resolveBackwardVersoPixelProbe({
@@ -60,7 +57,9 @@ BackwardVersoPixelProbe resolveBackwardVersoPixelProbe({
       if (!_pointInPolygon(candidate, polygon)) {
         continue;
       }
-      if (localPoints.any((existing) => (existing - candidate).distance < minSpacing)) {
+      if (localPoints.any(
+        (existing) => (existing - candidate).distance < minSpacing,
+      )) {
         continue;
       }
       localPoints.add(candidate);
@@ -101,6 +100,7 @@ void paintBackwardLeafVersoSurface({
   required ArticlePageTextureSnapshot leafVersoSnapshot,
   required Size pageSize,
   required List<Offset> polygon,
+  Offset paintOrigin = Offset.zero,
 }) {
   final mesh = buildBackwardLeafVersoUvMesh(
     pageSize: pageSize,
@@ -109,24 +109,32 @@ void paintBackwardLeafVersoSurface({
   if (mesh == null) {
     return;
   }
-  final shader = ui.ImageShader(
+  final path = Path()
+    ..moveTo(
+      mesh.positions.first.dx - paintOrigin.dx,
+      mesh.positions.first.dy - paintOrigin.dy,
+    );
+  for (final point in mesh.positions.skip(1)) {
+    path.lineTo(point.dx - paintOrigin.dx, point.dy - paintOrigin.dy);
+  }
+  path.close();
+  final destinationRect = mesh.textureDestinationRect.shift(-paintOrigin);
+  canvas.save();
+  canvas.clipPath(path);
+  canvas.drawImageRect(
     leafVersoSnapshot.image,
-    ui.TileMode.clamp,
-    ui.TileMode.clamp,
-    Matrix4.diagonal3Values(
-      leafVersoSnapshot.pixelWidthPerLogical,
-      leafVersoSnapshot.pixelHeightPerLogical,
-      1,
-    ).storage,
-  );
-  canvas.drawVertices(
-    mesh.toVertices(),
-    BlendMode.src,
+    Rect.fromLTWH(
+      0,
+      0,
+      leafVersoSnapshot.image.width.toDouble(),
+      leafVersoSnapshot.image.height.toDouble(),
+    ),
+    destinationRect,
     Paint()
       ..isAntiAlias = false
-      ..filterQuality = FilterQuality.none
-      ..shader = shader,
+      ..filterQuality = FilterQuality.none,
   );
+  canvas.restore();
 }
 
 Future<ui.Image?> renderBackwardLeafVersoProbeImage({
@@ -143,24 +151,23 @@ Future<ui.Image?> renderBackwardLeafVersoProbeImage({
   }
 
   final recorder = ui.PictureRecorder();
-  final canvas = Canvas(
-    recorder,
-    Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
-  );
+  final paintBounds = mesh.paintBounds.inflate(1);
+  final canvas = Canvas(recorder, Offset.zero & paintBounds.size);
   paintBackwardLeafVersoSurface(
     canvas: canvas,
     leafVersoSnapshot: leafVersoSnapshot,
     pageSize: pageSize,
     polygon: polygon,
+    paintOrigin: paintBounds.topLeft,
   );
   final picture = recorder.endRecording();
   final width = math.max(
     1,
-    (pageSize.width * leafVersoSnapshot.pixelWidthPerLogical).round(),
+    (paintBounds.width * leafVersoSnapshot.pixelWidthPerLogical).round(),
   );
   final height = math.max(
     1,
-    (pageSize.height * leafVersoSnapshot.pixelHeightPerLogical).round(),
+    (paintBounds.height * leafVersoSnapshot.pixelHeightPerLogical).round(),
   );
   final image = await picture.toImage(width, height);
   picture.dispose();
@@ -192,7 +199,9 @@ bool _pointInPolygon(Offset point, List<Offset> polygon) {
     final intersects =
         ((pi.dy > point.dy) != (pj.dy > point.dy)) &&
         (point.dx <
-            (pj.dx - pi.dx) * (point.dy - pi.dy) / ((pj.dy - pi.dy) + 0.000001) +
+            (pj.dx - pi.dx) *
+                    (point.dy - pi.dy) /
+                    ((pj.dy - pi.dy) + 0.000001) +
                 pi.dx);
     if (intersects) {
       inside = !inside;

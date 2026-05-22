@@ -15,6 +15,9 @@ class ChatMockData {
   static String avatarFor(String userId) =>
       'https://i.pravatar.cc/150?u=$userId';
 
+  static String groupAvatarFor(String conversationId, {int version = 1}) =>
+      'https://example.com/media/avatar/conversation/$conversationId/v$version/mock.png';
+
   static String _relativeIso({
     required int daysAgo,
     required int hour,
@@ -62,7 +65,9 @@ class ChatMockData {
       'id': 'conv_002',
       'type': 'group',
       'title': '周末登山群',
-      'avatarUrl': avatarFor('hiking'),
+      'avatarUrl': groupAvatarFor('conv_002'),
+      'groupAvatarVersion': 1,
+      'groupAvatarSourceHash': 'mock-conv_002-v1',
       'creatorId': currentUserProfileId,
       'maxSeq': 256,
       'memberCount': 15,
@@ -81,7 +86,9 @@ class ChatMockData {
       'id': 'conv_003',
       'type': 'group',
       'title': '摄影爱好者圈子',
-      'avatarUrl': avatarFor('photo'),
+      'avatarUrl': groupAvatarFor('conv_003'),
+      'groupAvatarVersion': 1,
+      'groupAvatarSourceHash': 'mock-conv_003-v1',
       'creatorId': 'user_003',
       'circleId': 'circle_001',
       'maxSeq': 1024,
@@ -195,7 +202,9 @@ class ChatMockData {
       'id': 'conv_006',
       'type': 'group',
       'title': '产品共创群',
-      'avatarUrl': avatarFor('product-collab'),
+      'avatarUrl': groupAvatarFor('conv_006'),
+      'groupAvatarVersion': 1,
+      'groupAvatarSourceHash': 'mock-conv_006-v1',
       'creatorId': currentUserProfileId,
       'maxSeq': 512,
       'memberCount': 8,
@@ -234,7 +243,9 @@ class ChatMockData {
       'id': 'conv_006',
       'type': 'group',
       'title': '产品共创群',
-      'avatarUrl': avatarFor('user_011'),
+      'avatarUrl': groupAvatarFor('conv_006'),
+      'groupAvatarVersion': 1,
+      'groupAvatarSourceHash': 'mock-conv_006-v1',
       'lastMessagePreview': '今晚 8 点前把评审意见同步到文档里',
       'lastMessageType': 'text',
       'lastMessageTime': _relativeIso(daysAgo: 0, hour: 20, minute: 18),
@@ -262,7 +273,9 @@ class ChatMockData {
       'id': 'conv_002',
       'type': 'group',
       'title': '周末登山群',
-      'avatarUrl': avatarFor('user_002'),
+      'avatarUrl': groupAvatarFor('conv_002'),
+      'groupAvatarVersion': 1,
+      'groupAvatarSourceHash': 'mock-conv_002-v1',
       'lastMessagePreview': '路线图已经发到群文件了',
       'lastMessageType': 'image',
       'lastMessageTime': _relativeIso(daysAgo: 1, hour: 21, minute: 10),
@@ -277,7 +290,9 @@ class ChatMockData {
       'type': 'group',
       'title': '摄影爱好者圈子',
       'circleId': 'circle_001',
-      'avatarUrl': avatarFor('photo'),
+      'avatarUrl': groupAvatarFor('conv_003'),
+      'groupAvatarVersion': 1,
+      'groupAvatarSourceHash': 'mock-conv_003-v1',
       'lastMessagePreview': '分享一组新疆风景照',
       'lastMessageType': 'image',
       'lastMessageTime': _relativeIso(daysAgo: 1, hour: 11, minute: 6),
@@ -323,7 +338,9 @@ class ChatMockData {
         'status': 'active',
         'createdAt': '2026-03-01T10:00:00Z',
         'updatedAt': '2026-03-07T0${n < 10 ? n : 9}:00:00Z',
-        'avatarUrl': avatarFor('grid_${n}_member_1'),
+        'avatarUrl': groupAvatarFor('conv_grid_$n'),
+        'groupAvatarVersion': 1,
+        'groupAvatarSourceHash': 'mock-conv_grid_$n-v1',
       });
     }
     return result;

@@ -120,29 +120,28 @@ void main() {
       expect(find.byIcon(CupertinoIcons.search), findsAtLeastNWidgets(1));
       expect(find.byIcon(CupertinoIcons.sparkles), findsAtLeastNWidgets(1));
       expect(
-        find.text(cfg['all']?.subCategories.first ?? '综合'),
+        find.text(cfg['campus']?.subCategories.first ?? '母校'),
         findsOneWidget,
       );
       expect(find.text(UITextConstants.homeTabCircles), findsNothing);
       expect(find.text(UITextConstants.circlesDirectoryTitle), findsNothing);
     });
 
-    testWidgets('展示分类标签与频道管理入口', (tester) async {
+    testWidgets('展示五个固定业务垂类并隐藏频道管理入口', (tester) async {
       final mock = _FixtureCategoryMockRepo();
-      final cfg = _fixtureCategoryTabsConfig();
       await tester.pumpWidget(_scopedApp(mock: mock));
       await tester.pump();
       await _circlesPumpSettled(tester);
 
       expect(
         find.byIcon(CupertinoIcons.line_horizontal_3_decrease),
-        findsOneWidget,
+        findsNothing,
       );
-      final allLabel = cfg['all']?.label ?? '推荐';
-      expect(find.text(allLabel), findsOneWidget);
-      final meet = cfg['meet'];
-      if (meet != null && meet.label.trim().isNotEmpty) {
-        expect(find.text(meet.label), findsOneWidget);
+      for (final label in <String>['校园', '旅行', '摄影', '科技', '车之家']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      for (final removed in <String>['推荐', '遇见', '人文', '生活', '运动', '美食']) {
+        expect(find.text(removed), findsNothing);
       }
     });
   });

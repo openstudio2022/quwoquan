@@ -305,9 +305,8 @@ class MockChatRepository implements ChatRepository {
     int version,
   ) {
     final stableHash = sourceHash.hashCode & 0x7fffffff;
-    final encodedConversationId = Uri.encodeComponent(conversationId);
-    return 'https://i.pravatar.cc/150?u=group_$encodedConversationId'
-        '_v${version}_$stableHash';
+    return '${ChatMockData.groupAvatarFor(conversationId, version: version)}'
+        '?h=$stableHash';
   }
 
   String _matchDirectConversationId(String userId, String displayName) {

@@ -186,6 +186,10 @@ class ConversationCacheService extends ChangeNotifier {
     notifyListeners();
   }
 
+  int get activeDiskCount => _activeBucket.disk.length;
+
+  int get activeMemoryCount => _activeBucket.memory.length;
+
   _NamespaceBucket get _activeBucket => _bucketFor(_activeNamespaceKey);
 
   _NamespaceBucket _bucketFor(String namespaceKey) {

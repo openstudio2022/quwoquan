@@ -693,11 +693,11 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                 AppSpacing.semantic[DesignSemanticConstants
                         .container]?[DesignSemanticConstants.sm] ??
                     AppSpacing.containerSm,
-                AppSpacing.sm,
+                AppSpacing.chatInputToolbarVerticalPadding,
                 AppSpacing.semantic[DesignSemanticConstants
                         .container]?[DesignSemanticConstants.sm] ??
                     AppSpacing.containerSm,
-                AppSpacing.sm,
+                AppSpacing.chatInputToolbarVerticalPadding,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -751,8 +751,8 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                 style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
               ),
               trailing: _isSelectionMode
-                  ? CupertinoButton(
-                      padding: EdgeInsets.zero,
+                  ? AppNavigationBarTextAction(
+                      label: UITextConstants.messageActionForward,
                       onPressed: () async {
                         final selectedMessages = displayMessages
                             .where((item) => _selectedIds.contains(item.id))
@@ -760,16 +760,6 @@ class _ChatConversationPageState extends ConsumerState<ChatConversationPage> {
                         await _shareMessages(selectedMessages);
                         _cancelSelection();
                       },
-                      child: Text(
-                        UITextConstants.messageActionForward,
-                        style: TextStyle(
-                          color: AppNavigationSemanticConstants.barTitleColor(
-                            isDark,
-                          ),
-                          fontSize: AppTypography.iosNavTitle,
-                          fontWeight: AppTypography.semiBold,
-                        ),
-                      ),
                     )
                   : AppNavigationBarIconButton(
                       icon: CupertinoIcons.ellipsis,

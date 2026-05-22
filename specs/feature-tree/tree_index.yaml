@@ -1899,6 +1899,13 @@ features:
               domain: ""
               status: completed
               tags: []
+            - id: local-cache-architecture
+              name: local-cache-architecture
+              level: L3_scenario
+              path: runtime/runtime-client-foundation/local-cache-architecture
+              domain: ""
+              status: in_progress
+              tags: []
             - id: metadata-driven-client-data-contract
               name: metadata-driven-client-data-contract
               level: L3_story

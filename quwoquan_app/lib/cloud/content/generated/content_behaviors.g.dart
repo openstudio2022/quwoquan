@@ -72,7 +72,7 @@ class ContentBehaviorTracker {
     });
   }
 
-  static void trackFollow(String postId) {
+  static void trackFollow(String postId, String authorId) {
     _enqueue(<String, dynamic>{
       'type': 'follow',
       'postId': postId,
@@ -80,7 +80,7 @@ class ContentBehaviorTracker {
     });
   }
 
-  static void trackAuthorView(String postId) {
+  static void trackAuthorView(String postId, String authorId, List<String> entityRefs) {
     _enqueue(<String, dynamic>{
       'type': 'author_view',
       'postId': postId,
@@ -89,7 +89,7 @@ class ContentBehaviorTracker {
     });
   }
 
-  static void trackTagClick(String postId) {
+  static void trackTagClick(String postId, List<String> tags) {
     _enqueue(<String, dynamic>{
       'type': 'tag_click',
       'postId': postId,
@@ -97,7 +97,7 @@ class ContentBehaviorTracker {
     });
   }
 
-  static void trackPlayProgress(String postId) {
+  static void trackPlayProgress(String postId, double consumedRatio, int totalUnits) {
     _enqueue(<String, dynamic>{
       'type': 'play_progress',
       'postId': postId,

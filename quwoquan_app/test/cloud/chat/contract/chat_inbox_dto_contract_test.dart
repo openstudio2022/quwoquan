@@ -34,31 +34,28 @@ void main() {
   });
 
   group('ChatInboxDto — 兼容性契约', () {
-    test(
-      'current memberAvatars no longer fills avatarUrl（统一头像只看 avatarUrl）',
-      () {
-        final dto = ChatInboxDto.fromMap(const <String, dynamic>{
-          '_id': 'current_conv',
-          'type': 'group',
-          'title': '老字段群聊',
-          'memberAvatars': <String>['1.png', '2.png'],
-          'lastMessage': '路线图已经发到群文件了',
-          'messageType': 'image',
-          'lastMessageAt': '2026-03-17T13:00:00Z',
-          'maxSeq': 256,
-          'unreadCount': 6,
-          'mentionCount': 1,
-        });
+    test('deprecated memberAvatars 不反推 avatarUrl，端侧不再据此拼群头像', () {
+      final dto = ChatInboxDto.fromMap(const <String, dynamic>{
+        '_id': 'current_conv',
+        'type': 'group',
+        'title': '老字段群聊',
+        'memberAvatars': <String>['1.png', '2.png'],
+        'lastMessage': '路线图已经发到群文件了',
+        'messageType': 'image',
+        'lastMessageAt': '2026-03-17T13:00:00Z',
+        'maxSeq': 256,
+        'unreadCount': 6,
+        'mentionCount': 1,
+      });
 
-        expect(dto.id, equals('current_conv'));
-        expect(dto.avatarUrl, isEmpty);
-        expect(dto.lastMessagePreview, equals('路线图已经发到群文件了'));
-        expect(dto.lastMessageType, equals('image'));
-        expect(dto.lastSeq, equals(256));
-        expect(dto.mentionUnreadCount, equals(1));
-        expect(dto.hasMention, isTrue);
-      },
-    );
+      expect(dto.id, equals('current_conv'));
+      expect(dto.avatarUrl, isEmpty);
+      expect(dto.lastMessagePreview, equals('路线图已经发到群文件了'));
+      expect(dto.lastMessageType, equals('image'));
+      expect(dto.lastSeq, equals(256));
+      expect(dto.mentionUnreadCount, equals(1));
+      expect(dto.hasMention, isTrue);
+    });
 
     test('toMap round-trip preserves core fields', () {
       final original = ChatInboxDto.fromMap(const <String, dynamic>{

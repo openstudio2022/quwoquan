@@ -6,6 +6,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/services/cache/cache_management_service.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -101,6 +102,17 @@ class SettingsPage extends ConsumerWidget {
                   ),
                   SettingsInsetFormSectionDivider(isDark: isDark),
                   _SettingsRow(
+                    icon: CupertinoIcons.archivebox,
+                    label: '存储与缓存',
+                    trailingText: _cacheUsageSummary(ref),
+                    onTap: () => showCupertinoModalPopup<void>(
+                      context: context,
+                      barrierColor: AppColors.transparent,
+                      builder: (_) => const _CacheManagementSheet(),
+                    ),
+                  ),
+                  SettingsInsetFormSectionDivider(isDark: isDark),
+                  _SettingsRow(
                     icon: CupertinoIcons.lab_flask,
                     label: '开发者',
                     onTap: () => context.push(AppRoutePaths.settingsDeveloper),
@@ -136,6 +148,14 @@ class SettingsPage extends ConsumerWidget {
     if (state.isSyncing) return '同步中';
     if (state.isHydrating) return '加载中';
     return state.summaryLabel;
+  }
+
+  static String _cacheUsageSummary(WidgetRef ref) {
+    final usage = ref.read(cacheManagementServiceProvider).estimateUsage();
+    if (usage.totalTrackedObjects == 0) {
+      return '可清理';
+    }
+    return '${usage.totalTrackedObjects} 项';
   }
 
   static Future<void> _showPersonalContentAccessDialog(
@@ -369,6 +389,184 @@ class _AppearanceSettingsSheetState
         ],
       ),
     );
+  }
+}
+
+class _CacheManagementSheet extends ConsumerStatefulWidget {
+  const _CacheManagementSheet();
+
+  @override
+  ConsumerState<_CacheManagementSheet> createState() =>
+      _CacheManagementSheetState();
+}
+
+class _CacheManagementSheetState extends ConsumerState<_CacheManagementSheet> {
+  CacheClearResult? _lastResult;
+  bool _isClearing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = ref.watch(isDarkProvider);
+    final backgroundColor =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
+    final usage = ref.read(cacheManagementServiceProvider).estimateUsage();
+
+    return AppBottomModalSurface(
+      onDismiss: () => Navigator.of(context).pop(),
+      backgroundColor: backgroundColor,
+      maxHeightRatio: 0.82,
+      contentPadding: EdgeInsets.fromLTRB(
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        0,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+        SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              0,
+              AppSpacing.md,
+              0,
+              AppSpacing.sm,
+            ),
+            child: Row(
+              children: <Widget>[
+                Text(
+                  '存储与缓存',
+                  style: CupertinoTheme.of(context).textTheme.navTitleTextStyle,
+                ),
+                const Spacer(),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('完成'),
+                ),
+              ],
+            ),
+          ),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(
+                0,
+                AppSpacing.sm,
+                0,
+                AppSpacing.lg,
+              ),
+              children: <Widget>[
+                _SettingsGroup(
+                  title: '缓存占用',
+                  children: <Widget>[
+                    _InfoRow(label: 'Post 对象', value: '${usage.postObjects}'),
+                    _InfoRow(label: '查询快照', value: '${usage.querySnapshots}'),
+                    _InfoRow(label: '用户资料', value: '${usage.userProfiles}'),
+                    _InfoRow(label: '最近会话', value: '${usage.conversations}'),
+                  ],
+                ),
+                SizedBox(height: AppSpacing.lg),
+                _SettingsGroup(
+                  title: '分层清理',
+                  children: <Widget>[
+                    _ActionRow(
+                      label: '清理临时图片和视频',
+                      onTap: () => _confirmAndClear(
+                        CacheClearLevel.temporaryMedia,
+                        '只会删除可重建的图片和视频字节；文字、头像 URL、标题和对象版本会保留。',
+                      ),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    _ActionRow(
+                      label: '清理离线内容',
+                      onTap: () => _confirmAndClear(
+                        CacheClearLevel.offlineContent,
+                        '会删除可重建的离线详情和查询快照；草稿、待发送消息、待同步操作会保留。',
+                      ),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    _ActionRow(
+                      label: '清理搜索和浏览记录',
+                      onTap: () => _confirmAndClear(
+                        CacheClearLevel.searchAndBrowseHistory,
+                        '会删除最近查询和浏览快照；收藏、关注和会话引用的对象不会被删除。',
+                      ),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    _ActionRow(
+                      label: '清理全部本地缓存',
+                      onTap: () => _confirmAndClear(
+                        CacheClearLevel.allRebuildable,
+                        '会删除全部可重建缓存；账号凭证、创作草稿、待发送消息和待同步操作不会删除。',
+                      ),
+                    ),
+                  ],
+                ),
+                if (_isClearing) ...<Widget>[
+                  SizedBox(height: AppSpacing.lg),
+                  const Center(child: CupertinoActivityIndicator()),
+                ],
+                if (_lastResult != null) ...<Widget>[
+                  SizedBox(height: AppSpacing.lg),
+                  _SettingsGroup(
+                    title: '最近一次清理',
+                    children: <Widget>[
+                      _InfoRow(
+                        label: '移除对象',
+                        value: '${_lastResult!.objectsRemoved}',
+                      ),
+                      _InfoRow(
+                        label: '保护对象',
+                        value: '${_lastResult!.protectedObjects}',
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmAndClear(CacheClearLevel level, String message) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('确认清理缓存'),
+        content: Text(message),
+        actions: <Widget>[
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('清理'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() => _isClearing = true);
+    final currentUserId = ref.read(currentUserIdProvider).trim();
+    final result = await ref
+        .read(cacheManagementServiceProvider)
+        .clear(
+          level,
+          protectedUserIds: {if (currentUserId.isNotEmpty) currentUserId},
+        );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _lastResult = result;
+      _isClearing = false;
+    });
   }
 }
 

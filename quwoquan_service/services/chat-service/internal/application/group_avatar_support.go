@@ -67,12 +67,47 @@ func ResolveConversationAvatarURL(conv model.Conversation) string {
 		if u := ResolveGroupAvatarURL(conv); u != "" {
 			return u
 		}
-		if u := resolveConversationAvatarURLValue(conv.AvatarUrl, conv.GroupAvatarVersion); u != "" {
-			return u
-		}
 		return DefaultGroupAvatarURL()
 	}
 	return resolveConversationAvatarURLValue(conv.AvatarUrl, 0)
+}
+
+func ResolveConversationAvatarURLWithMembers(
+	conv model.Conversation,
+	members []model.ConversationMember,
+) string {
+	t := PublicConversationType(conv.Type, conv.CircleId)
+	if t != conversationTypeGroup {
+		return ResolveConversationAvatarURL(conv)
+	}
+	if u := ResolveGroupAvatarURL(conv); u != "" {
+		return u
+	}
+	if conv.GroupAvatarVersion > 0 {
+		return DefaultGroupAvatarURL()
+	}
+	if u := resolveCreatorAvatarFallbackURL(conv, members); u != "" {
+		return u
+	}
+	return DefaultGroupAvatarURL()
+}
+
+func resolveCreatorAvatarFallbackURL(
+	conv model.Conversation,
+	members []model.ConversationMember,
+) string {
+	creatorID := strings.TrimSpace(conv.CreatorId)
+	for _, member := range members {
+		if creatorID != "" && strings.TrimSpace(member.UserId) == creatorID {
+			return resolveConversationAvatarURLValue(member.AvatarUrl, member.AvatarVersion)
+		}
+	}
+	for _, member := range members {
+		if strings.TrimSpace(member.Role) == "owner" {
+			return resolveConversationAvatarURLValue(member.AvatarUrl, member.AvatarVersion)
+		}
+	}
+	return ""
 }
 
 func RegisterGroupAvatarAsset(
@@ -166,6 +201,20 @@ func RecomputeGroupAvatar(
 	if err != nil {
 		return err
 	}
+	latestHash, err := latestGroupAvatarSourceHash(ctx, repo, conv.ID, conv.MemberCount)
+	if err != nil {
+		return err
+	}
+	if latestHash != "" && latestHash != sourceHash {
+		if scheduler == nil {
+			return nil
+		}
+		return scheduler.EnqueueRecompute(ctx, GroupAvatarRecomputeTask{
+			ConversationID: conv.ID,
+			ActorID:        actorID,
+			Trigger:        "group_avatar.source_hash_changed_during_render",
+		})
+	}
 
 	conv.GroupAvatarAssetId = asset.Ref.AssetID
 	conv.GroupAvatarVersion = asset.Ref.Version
@@ -236,6 +285,37 @@ func RecomputeGroupAvatar(
 		}
 	}
 	return nil
+}
+
+func latestGroupAvatarSourceHash(
+	ctx context.Context,
+	repo persistence.ChatRepository,
+	conversationID string,
+	memberCount int,
+) (string, error) {
+	memberLimit := memberCount
+	if memberLimit < 16 {
+		memberLimit = 16
+	}
+	if memberLimit > 200 {
+		memberLimit = 200
+	}
+	members, err := repo.ListMembers(
+		ctx,
+		conversationID,
+		memberLimit,
+		"",
+		"",
+		persistence.SortMembersJoinedAsc,
+	)
+	if err != nil {
+		return "", err
+	}
+	top9 := selectTopAvatarMembers(members)
+	if len(top9) == 0 {
+		return "", nil
+	}
+	return BuildGroupAvatarSourceHash(top9), nil
 }
 
 func ensureConversationAvatarNotification(

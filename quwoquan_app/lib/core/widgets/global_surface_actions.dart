@@ -26,12 +26,16 @@ class GlobalTopActions extends ConsumerWidget {
     this.showQuickAction = false,
     this.initialSearchScope = GlobalSearchScope.all,
     this.quickActionPriority = CreateActionSheetPriority.createPrimary,
+    this.surface = AppChromeSurface.standard,
+    this.foregroundColor,
   });
 
   final bool showSearch;
   final bool showQuickAction;
   final GlobalSearchScope initialSearchScope;
   final CreateActionSheetPriority quickActionPriority;
+  final AppChromeSurface surface;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,21 +46,25 @@ class GlobalTopActions extends ConsumerWidget {
           GlobalTopBarIconButton(
             key: TestKeys.globalSearchLauncherButton,
             icon: CupertinoIcons.search,
+            surface: surface,
+            foregroundColor: foregroundColor,
             onTap: () => GlobalSearchLauncher.open(
               context,
               initialScope: initialSearchScope.searchScope,
             ),
           ),
         if (showSearch) SizedBox(width: AppSpacing.intraGroupXs),
-        GlobalTopBarIconButton(
-          icon: CupertinoIcons.sparkles,
-          semanticLabel: UITextConstants.assistantEntryXiaoqu,
+        GlobalAssistantEntryButton(
+          semanticLabel: UITextConstants.globalXiaoquSearchAsk,
+          showLabel: false,
           onTap: () => GlobalAssistantLauncher.open(context, ref),
         ),
         if (showQuickAction) ...[
           SizedBox(width: AppSpacing.intraGroupXs),
           GlobalTopBarIconButton(
             icon: CupertinoIcons.add,
+            surface: surface,
+            foregroundColor: foregroundColor,
             onTap: () => GlobalQuickActionSheet.show(
               context,
               priority: quickActionPriority,
@@ -145,6 +153,91 @@ class GlobalSearchLauncher {
   }
 }
 
+class GlobalXiaoquSearchBar extends ConsumerWidget {
+  const GlobalXiaoquSearchBar({
+    super.key,
+    this.hint = UITextConstants.globalXiaoquSearchHint,
+    this.initialSearchScope = GlobalSearchScope.all,
+    this.surface = AppChromeSurface.standard,
+  });
+
+  final String hint;
+  final GlobalSearchScope initialSearchScope;
+  final AppChromeSurface surface;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final background = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
+    final secondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: AppSpacing.buttonHeightMd,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+              border: Border.all(color: border, width: AppSpacing.hairline),
+            ),
+            child: CupertinoButton(
+              key: TestKeys.globalSearchLauncherButton,
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+              minimumSize: const Size(
+                AppSpacing.minInteractiveSize,
+                AppSpacing.buttonHeightMd,
+              ),
+              onPressed: () => GlobalSearchLauncher.open(
+                context,
+                initialScope: initialSearchScope.searchScope,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    CupertinoIcons.search,
+                    size: AppSpacing.iconSmall,
+                    color: secondary,
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupXs),
+                  Expanded(
+                    child: Text(
+                      hint,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: AppTypography.sm,
+                        fontWeight: AppTypography.regular,
+                        color: secondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SizedBox(width: AppSpacing.intraGroupXs),
+        GlobalAssistantEntryButton(
+          semanticLabel: UITextConstants.globalXiaoquSearchAsk,
+          showLabel: true,
+          onTap: () => GlobalAssistantLauncher.open(context, ref),
+        ),
+      ],
+    );
+  }
+}
+
 /// 首页顶栏等与 [GlobalTopActions] 一致的圆形热区 + 主标签色图标（非强调蓝）。
 class GlobalTopBarIconButton extends StatelessWidget {
   const GlobalTopBarIconButton({
@@ -152,11 +245,15 @@ class GlobalTopBarIconButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.semanticLabel,
+    this.surface = AppChromeSurface.standard,
+    this.foregroundColor,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final String? semanticLabel;
+  final AppChromeSurface surface;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -168,18 +265,110 @@ class GlobalTopBarIconButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         onPressed: onTap,
         minimumSize: Size(
-          AppSpacing.minInteractiveSize,
-          AppSpacing.minInteractiveSize,
+          AppSpacing.appChromeActionButtonSize,
+          AppSpacing.appChromeActionButtonSize,
         ),
         child: SizedBox(
-          width: AppSpacing.minInteractiveSize,
-          height: AppSpacing.minInteractiveSize,
+          width: AppSpacing.appChromeActionButtonSize,
+          height: AppSpacing.appChromeActionButtonSize,
           child: Center(
             child: Icon(
               icon,
-              size: AppNavigationSemanticConstants.barIconSize,
-              color: AppNavigationSemanticConstants.barIconColor(isDark),
+              size: AppSpacing.appChromeActionIconSize,
+              color:
+                  foregroundColor ??
+                  AppNavigationSemanticConstants.chromeActionIconColor(
+                    isDark,
+                    surface: surface,
+                  ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class GlobalAssistantEntryButton extends StatelessWidget {
+  const GlobalAssistantEntryButton({
+    super.key,
+    required this.onTap,
+    this.semanticLabel,
+    this.showLabel = true,
+  });
+
+  final VoidCallback onTap;
+  final String? semanticLabel;
+  final bool showLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    // 与 [GlobalTopBarIconButton] 的图标直径一致，首页「找小趣」与其它页并排搜索图标对齐。
+    final circleSize = AppSpacing.appChromeActionIconSize;
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onTap,
+        minimumSize: Size(
+          AppSpacing.appChromeActionButtonSize,
+          AppSpacing.appChromeActionButtonSize,
+        ),
+        child: SizedBox(
+          width: AppSpacing.appChromeActionButtonSize,
+          height: AppSpacing.appChromeActionButtonSize,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: circleSize,
+                height: circleSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.welcomeTitleGradientEnd,
+                      isDark
+                          ? AppColors.assistantMarkColorOnDark
+                          : AppColors.assistantMarkColor,
+                      AppColors.welcomeTitleGradientMid,
+                    ],
+                  ),
+                  border: Border.all(
+                    color: AppColors.white.withValues(
+                      alpha: isDark ? 0.24 : 0.4,
+                    ),
+                    width: AppSpacing.hairline,
+                  ),
+                ),
+                child: Icon(
+                  CupertinoIcons.sparkles,
+                  size: AppSpacing.iconSmall,
+                  color: AppColors.white,
+                ),
+              ),
+              if (showLabel) ...[
+                SizedBox(height: AppSpacing.one),
+                Text(
+                  UITextConstants.globalXiaoquSearchAsk,
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  style: TextStyle(
+                    fontSize: AppTypography.xs,
+                    fontWeight: AppTypography.medium,
+                    height: AppSpacing.textLineHeightDense,
+                    color: AppColorsFunctional.getColor(
+                      isDark,
+                      ColorType.foregroundPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ),

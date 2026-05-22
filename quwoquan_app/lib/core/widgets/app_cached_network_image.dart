@@ -13,8 +13,58 @@ final _appImageCacheManager = CacheManager(
   ),
 );
 
+class AppImageCacheController {
+  const AppImageCacheController._();
+
+  static Future<void> clearTemporaryImages() {
+    return _appImageCacheManager.emptyCache();
+  }
+
+  static Future<void> preloadAvatar(
+    String imageUrl, {
+    double size = 120,
+  }) async {
+    final normalized = imageUrl.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    final processed = CdnImageUrlBuilder.avatar(normalized, size: size.toInt());
+    await _appImageCacheManager.downloadFile(processed);
+  }
+}
+
 /// CDN-aware image processing preset.
 enum CdnImagePreset { thumbnail, cover, avatar, full, none }
+
+class AppAvatarImage extends StatelessWidget {
+  const AppAvatarImage({
+    super.key,
+    required this.imageUrl,
+    this.size = AppSpacing.avatarSize,
+    this.fit = BoxFit.cover,
+    this.placeholder,
+    this.errorWidget,
+  });
+
+  final String imageUrl;
+  final double size;
+  final BoxFit fit;
+  final Widget? placeholder;
+  final Widget? errorWidget;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCachedNetworkImage(
+      imageUrl: imageUrl,
+      width: size,
+      height: size,
+      fit: fit,
+      cdnPreset: CdnImagePreset.avatar,
+      placeholder: placeholder,
+      errorWidget: errorWidget,
+    );
+  }
+}
 
 class AppCachedNetworkImage extends StatelessWidget {
   final String imageUrl;
@@ -39,11 +89,20 @@ class AppCachedNetworkImage extends StatelessWidget {
   String get _processedUrl {
     switch (cdnPreset) {
       case CdnImagePreset.thumbnail:
-        return CdnImageUrlBuilder.thumbnail(imageUrl, width: (width ?? 400).toInt());
+        return CdnImageUrlBuilder.thumbnail(
+          imageUrl,
+          width: (width ?? 400).toInt(),
+        );
       case CdnImagePreset.cover:
-        return CdnImageUrlBuilder.cover(imageUrl, width: (width ?? 750).toInt());
+        return CdnImageUrlBuilder.cover(
+          imageUrl,
+          width: (width ?? 750).toInt(),
+        );
       case CdnImagePreset.avatar:
-        return CdnImageUrlBuilder.avatar(imageUrl, size: (width ?? 120).toInt());
+        return CdnImageUrlBuilder.avatar(
+          imageUrl,
+          size: (width ?? 120).toInt(),
+        );
       case CdnImagePreset.full:
         return CdnImageUrlBuilder.full(imageUrl);
       case CdnImagePreset.none:
@@ -64,10 +123,7 @@ class AppCachedNetworkImage extends StatelessWidget {
       width: width,
       height: height,
       placeholder: (context, url) =>
-          placeholder ??
-          Container(
-            color: AppColors.light.backgroundSecondary,
-          ),
+          placeholder ?? Container(color: AppColors.light.backgroundSecondary),
       errorWidget: (context, url, error) => errorWidget ?? _buildErrorWidget(),
     );
   }

@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -12,11 +11,11 @@ import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_stage_widgets.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_pixel_probe.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
 import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/pageflip/curl_renderer.dart';
 import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
-import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 void main() {
   testWidgets('PageflipWidget pumps and renders the current page', (
@@ -1328,11 +1327,7 @@ void main() {
               failures.add(sample.describe());
               continue;
             }
-            expect(
-              sample.backWidth,
-              greaterThan(0),
-              reason: sample.describe(),
-            );
+            expect(sample.backWidth, greaterThan(0), reason: sample.describe());
             expect(
               sample.currentWidth,
               greaterThan(0),
@@ -1352,161 +1347,427 @@ void main() {
     },
   );
 
-  testWidgets(
-    'PageflipDiagnosticsApp backward verso samples semantic back surface',
-    (WidgetTester tester) async {
-      final sample = await _renderBackwardVersoTextureProbeScene(tester);
+  testWidgets('PageflipDiagnosticsApp backward verso samples semantic back surface', (
+    WidgetTester tester,
+  ) async {
+    final sample = await _renderBackwardVersoTextureProbeScene(tester);
 
-      expect(
-        sample.backBandWidth,
-        greaterThan(12),
-        reason: 'probe requires a visible BACK fold band to judge texture source.',
-      );
-      expect(
-        sample.backSurfaceStrategy,
-        equals('paperFoldBackMainlineSurface'),
-        reason:
-            'probe must run on the Route-B previous-back mainline surface.',
-      );
-      expect(
-        sample.activeVersoSurfaceKind,
-        equals('back'),
-        reason:
-            'BACK verso runtime snapshot must be marked as semantic back surface.',
-      );
-      expect(
-        sample.activeVersoPageIndex,
-        equals(2),
-        reason:
-            'BACK verso runtime snapshot must remain bound to the flipping leaf.',
-      );
-      expect(
-        sample.runtimeFailureReason,
-        BackwardVersoFailureReason.none,
-        reason:
-            'runtime probe must not report snapshot/mesh/probe-point failures in '
-            'the accepted BACK mainline pose.',
-      );
-      expect(
-        sample.probePointCount,
-        greaterThanOrEqualTo(1),
-        reason:
-            'runtime probe must expose at least one stable fold-band sample point; '
-            'direction discrimination is enforced by the dedicated pixel test.',
-      );
-    },
-  );
+    expect(
+      sample.backBandWidth,
+      greaterThan(12),
+      reason:
+          'probe requires a visible BACK fold band to judge texture source.',
+    );
+    expect(
+      sample.backSurfaceStrategy,
+      equals('paperFoldBackMainlineSurface'),
+      reason: 'probe must run on the Route-B previous-back mainline surface.',
+    );
+    expect(
+      sample.activeVersoSurfaceKind,
+      equals('back'),
+      reason:
+          'BACK verso runtime snapshot must be marked as semantic back surface.',
+    );
+    expect(
+      sample.activeVersoPageIndex,
+      equals(2),
+      reason:
+          'BACK verso runtime snapshot must remain bound to the flipping leaf.',
+    );
+    expect(
+      sample.uvStrategy,
+      equals(backwardVersoTextureMappingStrategy),
+      reason:
+          'runtime probe must expose the UV strategy so screenshot diagnostics '
+          'can distinguish local sampling from the old double-mirror path.',
+    );
+    expect(
+      sample.runtimeFailureReason,
+      BackwardVersoFailureReason.none,
+      reason:
+          'runtime probe must not report snapshot/mesh/probe-point failures in '
+          'the accepted BACK mainline pose.',
+    );
+    expect(
+      sample.probePointCount,
+      greaterThanOrEqualTo(1),
+      reason:
+          'runtime probe must expose at least one stable fold-band sample point; '
+          'direction discrimination is enforced by the dedicated pixel test.',
+    );
+    expect(
+      sample.frontBackOverlapWidth,
+      isNotNull,
+      reason:
+          'runtime probe must report front/back overlap for visibility triage.',
+    );
+    expect(
+      sample.backVisibleUncoveredWidth,
+      greaterThan(0),
+      reason:
+          'BACK must leave at least one visible back-band region not covered by front/recto paint.',
+    );
+    expect(
+      sample.visibleProbeCount,
+      greaterThanOrEqualTo(1),
+      reason:
+          'framebuffer oracle needs at least one screen-space probe inside the visible back band.',
+    );
+    expect(
+      sample.framebufferProbeColors,
+      equals(sample.framebufferBackExpectedColors),
+      reason:
+          'visible BACK back-band framebuffer pixels must match the semantic back surface.',
+    );
+    expect(
+      sample.framebufferProbeColors,
+      isNot(equals(sample.framebufferFrontColors)),
+      reason:
+          'visible BACK back-band framebuffer pixels must not be previous-front paint.',
+    );
+    expect(
+      sample.framebufferProbeColors,
+      isNot(equals(sample.framebufferCurrentColors)),
+      reason:
+          'visible BACK back-band framebuffer pixels must not be covered-current paint.',
+    );
+  });
+
+  testWidgets('BACK high-overlap pose still shows semantic back texture', (
+    WidgetTester tester,
+  ) async {
+    final sample = await _renderBackwardVersoTextureProbeScene(
+      tester,
+      backwardDragDelta: const Offset(360, -36),
+    );
+
+    expect(
+      sample.frontBackOverlapWidth,
+      greaterThan(50),
+      reason: 'this oracle must cover the screenshot-like high-overlap pose.',
+    );
+    expect(
+      sample.backVisibleUncoveredWidth,
+      greaterThan(24),
+      reason:
+          'the fixed screenshot-like pose must no longer collapse the BACK verso band to a subpixel strip.',
+    );
+    expect(sample.visibleProbeCount, greaterThanOrEqualTo(1));
+    expect(
+      sample.framebufferProbeColors,
+      equals(sample.framebufferBackExpectedColors),
+      reason:
+          'even in the high-overlap pose, visible BACK pixels must be the semantic back texture.',
+    );
+    expect(
+      sample.framebufferProbeColors,
+      isNot(equals(sample.framebufferFrontColors)),
+    );
+    expect(
+      sample.framebufferProbeColors,
+      isNot(equals(sample.framebufferCurrentColors)),
+    );
+  });
+
+  testWidgets('BACK source attribution maps high-overlap color blocks', (
+    WidgetTester tester,
+  ) async {
+    final sample = await _renderBackwardVersoTextureProbeScene(
+      tester,
+      backwardDragDelta: const Offset(360, -36),
+    );
+
+    final sourcesByLabel = <String, BackwardPaintSourceDiagnostic>{
+      for (final source in sample.paintSources) source.label: source,
+    };
+    expect(
+      sourcesByLabel.keys,
+      containsAll(<String>[
+        'staticCurrentFront',
+        'bottomCurrentFront',
+        'previousFrontFlat',
+        'sheetRectoFront',
+        'sheetVersoBack',
+        'foldOverlay',
+      ]),
+      reason:
+          'the high-overlap screenshot pose must expose every visible paint source '
+          'so user-visible color blocks can be attributed before geometry changes.',
+    );
+    expect(sourcesByLabel['staticCurrentFront']?.pageIndex, 3);
+    expect(sourcesByLabel['bottomCurrentFront']?.pageIndex, 3);
+    expect(sourcesByLabel['previousFrontFlat']?.pageIndex, 2);
+    expect(sourcesByLabel['sheetRectoFront']?.pageIndex, 2);
+    expect(sourcesByLabel['sheetVersoBack']?.pageIndex, 2);
+    expect(sourcesByLabel['sheetVersoBack']?.surfaceKind, 'back');
+    expect(sourcesByLabel['previousFrontFlat']?.surfaceKind, 'front');
+    expect(sourcesByLabel['sheetRectoFront']?.surfaceKind, 'front');
+    expect(sourcesByLabel, isNot(contains('previousFrontFlatUnifiedToBack')));
+    expect(sourcesByLabel, isNot(contains('sheetRectoUnifiedToBack')));
+    expect(
+      sample.paintSources
+          .map((source) => source.zOrder)
+          .toList(growable: false),
+      orderedEquals(
+        sample.paintSources
+            .map((source) => source.zOrder)
+            .toList(growable: false)
+          ..sort(),
+      ),
+      reason: 'source attribution must follow the actual Stack paint order.',
+    );
+    expect(
+      sample.visibleProbeCount,
+      greaterThanOrEqualTo(1),
+      reason:
+          'source attribution is only useful when at least one visible verso pixel is proven.',
+    );
+    expect(
+      sample.framebufferColorCountsBySource['sheetVersoBack']?[_ProbeColor
+              .cyan] ??
+          0,
+      greaterThan(0),
+      reason:
+          'the sheetVersoBack source must account for visible back-colored pixels.',
+    );
+    expect(
+      sample.framebufferColorCountsBySource['previousFrontFlat']?[_ProbeColor
+              .red] ??
+          0,
+      greaterThan(0),
+      reason:
+          'the flat previous-front plane must keep showing the previous front texture.',
+    );
+    expect(
+      sample.framebufferColorCountsBySource['previousFrontFlat']?[_ProbeColor
+              .cyan] ??
+          0,
+      isA<int>(),
+      reason:
+          'source bounds may overlap the back band; front ownership is proven by the red probe above.',
+    );
+    expect(
+      sample.framebufferColorCountsBySource['sheetRectoFront']?[_ProbeColor
+              .red] ??
+          0,
+      greaterThan(0),
+      reason:
+          'the recto BACK slice must keep showing previous-front colored pixels.',
+    );
+    expect(
+      sample.framebufferColorCountsBySource['sheetRectoFront']?[_ProbeColor
+              .cyan] ??
+          0,
+      isA<int>(),
+      reason:
+          'source bounds may overlap the back band; recto/front ownership is proven by the red probe above.',
+    );
+    expect(
+      sample.framebufferColorCountsBySource['staticCurrentFront']?[_ProbeColor
+              .green] ??
+          0,
+      greaterThan(0),
+      reason:
+          'the static current source must account for visible current-page pixels.',
+    );
+  });
+
+  testWidgets('BACK completion enters static stage without a second page turn', (
+    WidgetTester tester,
+  ) async {
+    final sample = await _renderBackwardCompletionSample(tester);
+
+    expect(
+      sample.pageChanges,
+      equals(<int>[2]),
+      reason:
+          'a committed BACK turn from page index 3 must publish exactly one page change to index 2.',
+    );
+    expect(sample.finalPageIndex, 2);
+    expect(sample.minimumObservedPageIndex, greaterThanOrEqualTo(2));
+    expect(sample.sawDynamicBack, isTrue);
+    expect(sample.sawStaticAfterDynamic, isTrue);
+    expect(sample.lastDynamicFlippingPageIndex, sample.finalPageIndex);
+    expect(sample.firstStaticAfterDynamicPageIndex, sample.finalPageIndex);
+    expect(
+      sample.lastDynamicFrontSourceLabels,
+      contains('previousFrontFlat'),
+      reason:
+          'the final dynamic BACK frame must still hand off through the previous front surface.',
+    );
+    expect(
+      sample.lastDynamicUnifiedBackSourceLabels,
+      isEmpty,
+      reason:
+          'the final dynamic BACK frame must not normalize previous-front sources into semantic back.',
+    );
+    expect(
+      sample.finalRenderBranch,
+      ArticleReadOnlyBookRenderBranch.staticStage,
+    );
+    expect(sample.finalRenderDirection, isNull);
+  });
 
   test('BACK fold band pixels match mirrored semantic back snapshot', () async {
-      const pageSize = Size(400, 600);
-      final snapshotImage = await _createSemanticBackSurfaceProbeImage(
-        pageSize: pageSize,
-        pageIndex: 2,
-      );
-      final snapshot = ArticlePageTextureSnapshot(
-        image: snapshotImage,
-        logicalSize: pageSize,
-        pixelRatio: 1,
-        semanticSurfaceKind: 'back',
-      );
-      const polygon = <Offset>[
-        Offset(44, 92),
-        Offset(332, 124),
-        Offset(306, 520),
-        Offset(72, 492),
-      ];
-      final probe = resolveBackwardVersoPixelProbe(
-        pageSize: pageSize,
-        polygon: polygon,
-      );
-      expect(probe.isEmpty, isFalse);
+    const pageSize = Size(400, 600);
+    final snapshotImage = await _createSemanticBackSurfaceProbeImage(
+      pageSize: pageSize,
+      pageIndex: 2,
+    );
+    final snapshot = ArticlePageTextureSnapshot(
+      image: snapshotImage,
+      logicalSize: pageSize,
+      pixelRatio: 1,
+      semanticSurfaceKind: 'back',
+    );
+    const polygon = <Offset>[
+      Offset(44, 92),
+      Offset(332, 124),
+      Offset(306, 520),
+      Offset(72, 492),
+    ];
+    final probe = resolveBackwardVersoPixelProbe(
+      pageSize: pageSize,
+      polygon: polygon,
+    );
+    expect(probe.isEmpty, isFalse);
 
-      final renderedImage = await renderBackwardLeafVersoProbeImage(
-        leafVersoSnapshot: snapshot,
-        pageSize: pageSize,
-        polygon: polygon,
-      );
-      expect(renderedImage, isNotNull);
-      final renderedBytes = await _rawRgbaBytes(renderedImage!);
-      final snapshotBytes = await _rawRgbaBytes(snapshotImage);
-      final actualProbeColors = <_ProbeColor>[];
-      final mirrorExpectedProbeColors = <_ProbeColor>[];
-      final unmirroredExpectedProbeColors = <_ProbeColor>[];
+    final renderedImage = await renderBackwardLeafVersoProbeImage(
+      leafVersoSnapshot: snapshot,
+      pageSize: pageSize,
+      polygon: polygon,
+    );
+    expect(renderedImage, isNotNull);
+    final renderedMesh = buildBackwardLeafVersoUvMesh(
+      pageSize: pageSize,
+      polygon: polygon,
+    );
+    expect(renderedMesh, isNotNull);
+    final renderedPaintOrigin = renderedMesh!.paintBounds.inflate(1).topLeft;
+    final frontImage = await _createFrontSurfaceProbeImage(
+      pageSize: pageSize,
+      pageIndex: 2,
+    );
+    final currentImage = await _createFrontSurfaceProbeImage(
+      pageSize: pageSize,
+      pageIndex: 3,
+    );
+    final renderedBytes = await _rawRgbaBytes(renderedImage!);
+    final snapshotBytes = await _rawRgbaBytes(snapshotImage);
+    final frontBytes = await _rawRgbaBytes(frontImage);
+    final currentBytes = await _rawRgbaBytes(currentImage);
+    final actualProbeColors = <_ProbeColor>[];
+    final backSurfaceExpectedProbeColors = <_ProbeColor>[];
+    final doubleMirrorProbeColors = <_ProbeColor>[];
+    final frontProbeColors = <_ProbeColor>[];
+    final currentProbeColors = <_ProbeColor>[];
 
-      for (var index = 0; index < probe.localPoints.length; index += 1) {
-        final localPoint = probe.localPoints[index];
-        final mirroredTexturePoint = probe.texturePoints[index];
-        actualProbeColors.add(
-          _classifyProbeColor(
-            _colorAtBytes(
-              renderedImage.width,
-              renderedImage.height,
-              renderedBytes,
-              localPoint,
-            ),
+    for (var index = 0; index < probe.localPoints.length; index += 1) {
+      final localPoint = probe.localPoints[index];
+      actualProbeColors.add(
+        _classifyProbeColor(
+          _colorAtBytes(
+            renderedImage.width,
+            renderedImage.height,
+            renderedBytes,
+            localPoint - renderedPaintOrigin,
           ),
-        );
-        mirrorExpectedProbeColors.add(
-          _classifyProbeColor(
-            _colorAtBytes(
-              snapshotImage.width,
-              snapshotImage.height,
-              snapshotBytes,
-              mirroredTexturePoint,
-            ),
+        ),
+      );
+      backSurfaceExpectedProbeColors.add(
+        _classifyProbeColor(
+          _colorAtBytes(
+            snapshotImage.width,
+            snapshotImage.height,
+            snapshotBytes,
+            localPoint,
           ),
-        );
-        unmirroredExpectedProbeColors.add(
-          _classifyProbeColor(
-            _colorAtBytes(
-              snapshotImage.width,
-              snapshotImage.height,
-              snapshotBytes,
-              localPoint,
-            ),
+        ),
+      );
+      doubleMirrorProbeColors.add(
+        _classifyProbeColor(
+          _colorAtBytes(
+            snapshotImage.width,
+            snapshotImage.height,
+            snapshotBytes,
+            Offset(pageSize.width - localPoint.dx, localPoint.dy),
           ),
-        );
-      }
+        ),
+      );
+      frontProbeColors.add(
+        _classifyProbeColor(
+          _colorAtBytes(
+            frontImage.width,
+            frontImage.height,
+            frontBytes,
+            localPoint,
+          ),
+        ),
+      );
+      currentProbeColors.add(
+        _classifyProbeColor(
+          _colorAtBytes(
+            currentImage.width,
+            currentImage.height,
+            currentBytes,
+            localPoint,
+          ),
+        ),
+      );
+    }
 
-      final mirrorSensitiveSamples = actualProbeColors.asMap().entries.any(
-        (entry) =>
-            entry.value == mirrorExpectedProbeColors[entry.key] &&
-            entry.value != unmirroredExpectedProbeColors[entry.key],
-      );
-      final failureReason = listEquals(
-        actualProbeColors,
-        mirrorExpectedProbeColors,
-      )
-          ? BackwardVersoFailureReason.none
-          : BackwardVersoFailureReason.mirrorDirectionMismatch;
+    final mirrorSensitiveSamples = actualProbeColors.asMap().entries.any(
+      (entry) =>
+          entry.value == backSurfaceExpectedProbeColors[entry.key] &&
+          entry.value != doubleMirrorProbeColors[entry.key],
+    );
+    final failureReason =
+        listEquals(actualProbeColors, backSurfaceExpectedProbeColors)
+        ? BackwardVersoFailureReason.none
+        : BackwardVersoFailureReason.mirrorDirectionMismatch;
 
-      expect(
-        failureReason,
-        BackwardVersoFailureReason.none,
-        reason:
-            'shared BACK fold-band renderer must match mirrored texture sampling '
-            'from the semantic back snapshot. '
-            'actual=$actualProbeColors '
-            'mirrored=$mirrorExpectedProbeColors '
-            'unmirrored=$unmirroredExpectedProbeColors',
-      );
-      expect(
-        mirrorSensitiveSamples,
-        isTrue,
-        reason:
-            'probe pattern must distinguish mirrored from unmirrored sampling; '
-            'otherwise pixel proof cannot verify direction.',
-      );
-      expect(
-        actualProbeColors,
-        isNot(equals(unmirroredExpectedProbeColors)),
-        reason:
-            'fold-band pixels must not match the unmirrored semantic back snapshot direction.',
-      );
+    expect(
+      failureReason,
+      BackwardVersoFailureReason.none,
+      reason:
+          'shared BACK fold-band renderer must sample the already mirrored '
+          'semantic back snapshot without mirroring it a second time. '
+          'actual=$actualProbeColors '
+          'backSurface=$backSurfaceExpectedProbeColors '
+          'doubleMirror=$doubleMirrorProbeColors',
+    );
+    expect(
+      mirrorSensitiveSamples,
+      isTrue,
+      reason:
+          'probe pattern must distinguish single-mirror from double-mirror sampling; '
+          'otherwise pixel proof cannot verify direction.',
+    );
+    expect(
+      actualProbeColors,
+      isNot(equals(doubleMirrorProbeColors)),
+      reason:
+          'fold-band pixels must not match double-mirrored sampling that makes the back look front-facing.',
+    );
+    expect(
+      actualProbeColors,
+      isNot(equals(frontProbeColors)),
+      reason:
+          'fold-band pixels must not match the previous leaf front surface.',
+    );
+    expect(
+      actualProbeColors,
+      isNot(equals(currentProbeColors)),
+      reason:
+          'fold-band pixels must not match the covered current page surface.',
+    );
 
-      renderedImage.dispose();
-      snapshot.dispose();
-    });
+    renderedImage.dispose();
+    frontImage.dispose();
+    currentImage.dispose();
+    snapshot.dispose();
+  });
 
   testWidgets(
     'a. mesh coverage keeps the fold band continuous across scanlines',
@@ -1740,11 +2001,189 @@ Widget _buildProbeBackPageSurface(
 }
 
 Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
+  WidgetTester tester, {
+  Offset backwardDragDelta = const Offset(120, -40),
+}) async {
+  await tester.binding.setSurfaceSize(const Size(900, 1200));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  final boundaryKey = GlobalKey();
+  final debugStates = <ArticleReadOnlyBookDebugState>[];
+  Size? capturedBackPageSize;
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: RepaintBoundary(
+        key: boundaryKey,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final metrics = resolveArticleCanvasMetrics(
+              context,
+              constraints,
+              variant: ArticleCanvasVariant.detail,
+            );
+            return ArticleReadOnlyBookDeck(
+              pages: _diagnosticPages(),
+              template: ArticleTemplatePreset.tech,
+              fontPreset: ArticleFontPreset.mono,
+              metrics: metrics,
+              pagePadding: articleReaderStagePagePadding(),
+              initialPage: 3,
+              coverUrl: '',
+              showFooterPageLabel: false,
+              onDebugStateChanged: debugStates.add,
+              debugPageSurfaceBuilder: _buildProbePageSurface,
+              debugBackPageSurfaceBuilder: (context, pageIndex, pageSize) {
+                capturedBackPageSize = pageSize;
+                return _buildProbeBackPageSurface(context, pageIndex, pageSize);
+              },
+            );
+          },
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+  for (var i = 0; i < 12; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  final backwardGesture = await tester.startGesture(
+    tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+  );
+  await backwardGesture.moveBy(backwardDragDelta);
+  for (var i = 0; i < 10; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  var probeState = debugStates.lastWhere(
+    (state) =>
+        state.renderDirection == StPageFlipDirection.back &&
+        state.backwardCompositeMode == 'paperFoldBackwardMainline' &&
+        state.backwardBackPaintBounds != null &&
+        state.backwardBackSheetId == 'mainlineLeaf:2',
+  );
+  expect(probeState.backwardBackLocalPolygonRaw, isNotEmpty);
+  expect(probeState.backwardVersoProbeLocalPoints, isNotEmpty);
+  expect(probeState.backwardVersoProbeViewportPoints, isNotEmpty);
+  expect(capturedBackPageSize, isNotNull);
+  await tester.pump(const Duration(milliseconds: 16));
+  probeState = debugStates.lastWhere(
+    (state) =>
+        state.renderDirection == StPageFlipDirection.back &&
+        state.backwardCompositeMode == 'paperFoldBackwardMainline' &&
+        state.backwardBackPaintBounds != null &&
+        state.backwardBackSheetId == 'mainlineLeaf:2',
+  );
+
+  final framebufferImage = await tester.runAsync<ui.Image>(
+    () => _captureBoundaryImage(boundaryKey),
+  );
+  if (framebufferImage == null) {
+    fail('failed to capture ArticleReadOnlyBookDeck framebuffer image');
+  }
+  final framebufferBytes = await tester.runAsync<Uint8List>(
+    () => _rawRgbaBytes(framebufferImage),
+  );
+  if (framebufferBytes == null) {
+    fail('failed to read ArticleReadOnlyBookDeck framebuffer bytes');
+  }
+  final framebufferProbeColors = <_ProbeColor>[];
+  final framebufferBackExpectedColors = <_ProbeColor>[];
+  final framebufferFrontColors = <_ProbeColor>[];
+  final framebufferCurrentColors = <_ProbeColor>[];
+  final sampleCount = math.min(
+    probeState.backwardVersoProbeLocalPoints.length,
+    probeState.backwardVersoProbeViewportPoints.length,
+  );
+  for (var index = 0; index < sampleCount; index += 1) {
+    final viewportPoint = probeState.backwardVersoProbeViewportPoints[index];
+    final localPoint = probeState.backwardVersoProbeLocalPoints[index];
+    final backBounds = probeState.backwardBackPaintBounds;
+    if (backBounds == null || !backBounds.contains(viewportPoint)) {
+      continue;
+    }
+    final actualColor = _classifyProbeColor(
+      _colorAtBytes(
+        framebufferImage.width,
+        framebufferImage.height,
+        framebufferBytes,
+        viewportPoint,
+      ),
+    );
+    final expectedBackColor = _semanticBackProbeColor(
+      pageSize: capturedBackPageSize!,
+      pageIndex: 2,
+      localPoint: localPoint,
+    );
+    if (actualColor != expectedBackColor) {
+      continue;
+    }
+    framebufferProbeColors.add(actualColor);
+    framebufferBackExpectedColors.add(expectedBackColor);
+    framebufferFrontColors.add(
+      _frontProbeColor(
+        pageSize: capturedBackPageSize!,
+        pageIndex: 2,
+        localPoint: localPoint,
+      ),
+    );
+    framebufferCurrentColors.add(
+      _frontProbeColor(
+        pageSize: capturedBackPageSize!,
+        pageIndex: 3,
+        localPoint: localPoint,
+      ),
+    );
+  }
+  final framebufferColorCountsBySource = <String, Map<_ProbeColor, int>>{};
+  for (final source in probeState.backwardPaintSources) {
+    final bounds = source.viewportBounds;
+    if (bounds == null || bounds.isEmpty) {
+      continue;
+    }
+    framebufferColorCountsBySource[source.label] = _scanColorsInRect(
+      imageWidth: framebufferImage.width,
+      imageHeight: framebufferImage.height,
+      bytes: framebufferBytes,
+      rect: bounds,
+    );
+  }
+  await backwardGesture.up();
+  for (var i = 0; i < 3; i += 1) {
+    await tester.pump(const Duration(milliseconds: 16));
+  }
+
+  await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+  await tester.pump(const Duration(milliseconds: 16));
+  framebufferImage.dispose();
+
+  return _BackwardVersoTextureProbeSample(
+    backBandWidth: probeState.backwardBackPaintBounds!.width,
+    backSurfaceStrategy: probeState.backwardBackPixelSurfaceStrategy,
+    activeVersoPageIndex: probeState.activeVersoPageIndex,
+    activeVersoSurfaceKind: probeState.activeVersoSurfaceKind,
+    uvStrategy: probeState.backwardVersoTextureUvStrategy,
+    runtimeFailureReason: probeState.backwardVersoFailureReason,
+    probePointCount: probeState.backwardVersoProbeLocalPoints.length,
+    frontBackOverlapWidth: probeState.backwardFrontBackOverlapWidth,
+    backVisibleUncoveredWidth: probeState.backwardBackVisibleUncoveredWidth,
+    visibleProbeCount: framebufferProbeColors.length,
+    paintSources: probeState.backwardPaintSources,
+    framebufferColorCountsBySource: framebufferColorCountsBySource,
+    framebufferProbeColors: framebufferProbeColors,
+    framebufferBackExpectedColors: framebufferBackExpectedColors,
+    framebufferFrontColors: framebufferFrontColors,
+    framebufferCurrentColors: framebufferCurrentColors,
+  );
+}
+
+Future<_BackwardCompletionSample> _renderBackwardCompletionSample(
   WidgetTester tester,
 ) async {
   await tester.binding.setSurfaceSize(const Size(900, 1200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final debugStates = <ArticleReadOnlyBookDebugState>[];
+  final pageChanges = <int>[];
 
   await tester.pumpWidget(
     MaterialApp(
@@ -1765,6 +2204,7 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
             coverUrl: '',
             showFooterPageLabel: false,
             onDebugStateChanged: debugStates.add,
+            onPageChanged: pageChanges.add,
             debugPageSurfaceBuilder: _buildProbePageSurface,
             debugBackPageSurfaceBuilder: _buildProbeBackPageSurface,
           );
@@ -1776,43 +2216,78 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
   for (var i = 0; i < 12; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
+  pageChanges.clear();
+  debugStates.clear();
 
   final backwardGesture = await tester.startGesture(
     tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
   );
-  await backwardGesture.moveBy(const Offset(36, -8));
-  for (var i = 0; i < 4; i += 1) {
+  await backwardGesture.moveBy(const Offset(420, -48));
+  for (var i = 0; i < 8; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
-  await backwardGesture.moveBy(const Offset(360, -36));
-  for (var i = 0; i < 10; i += 1) {
+  await backwardGesture.up();
+  for (var i = 0; i < 90; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
 
-  final probeState = debugStates.lastWhere(
-    (state) =>
-        state.renderDirection == StPageFlipDirection.back &&
-        state.backwardCompositeMode == 'paperFoldBackwardMainline' &&
-        state.backwardBackPaintBounds != null &&
-        state.backwardBackSheetId == 'mainlineLeaf:2',
-  );
-  expect(probeState.backwardBackLocalPolygonRaw, isNotEmpty);
-  expect(probeState.backwardVersoProbeLocalPoints, isNotEmpty);
-  await backwardGesture.up();
-  for (var i = 0; i < 3; i += 1) {
-    await tester.pump(const Duration(milliseconds: 16));
+  final finalState = debugStates.last;
+  var sawDynamicBack = false;
+  var sawStaticAfterDynamic = false;
+  var minimumObservedPageIndex = finalState.currentPageIndex;
+  ArticleReadOnlyBookDebugState? lastDynamicBackState;
+  ArticleReadOnlyBookDebugState? firstStaticAfterDynamicState;
+  for (final state in debugStates) {
+    minimumObservedPageIndex = math.min(
+      minimumObservedPageIndex,
+      state.currentPageIndex,
+    );
+    if (state.renderDirection == StPageFlipDirection.back &&
+        state.renderBranch ==
+            ArticleReadOnlyBookRenderBranch.paperFoldDynamic) {
+      sawDynamicBack = true;
+      lastDynamicBackState = state;
+    }
+    if (sawDynamicBack &&
+        state.renderDirection == null &&
+        state.renderBranch == ArticleReadOnlyBookRenderBranch.staticStage) {
+      sawStaticAfterDynamic = true;
+      firstStaticAfterDynamicState ??= state;
+    }
   }
+  final lastDynamicPaintSources =
+      lastDynamicBackState?.backwardPaintSources ??
+      const <BackwardPaintSourceDiagnostic>[];
 
   await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
   await tester.pump(const Duration(milliseconds: 16));
-
-  return _BackwardVersoTextureProbeSample(
-    backBandWidth: probeState.backwardBackPaintBounds!.width,
-    backSurfaceStrategy: probeState.backwardBackPixelSurfaceStrategy,
-    activeVersoPageIndex: probeState.activeVersoPageIndex,
-    activeVersoSurfaceKind: probeState.activeVersoSurfaceKind,
-    runtimeFailureReason: probeState.backwardVersoFailureReason,
-    probePointCount: probeState.backwardVersoProbeLocalPoints.length,
+  return _BackwardCompletionSample(
+    pageChanges: List<int>.unmodifiable(pageChanges),
+    finalPageIndex: finalState.currentPageIndex,
+    minimumObservedPageIndex: minimumObservedPageIndex,
+    sawDynamicBack: sawDynamicBack,
+    sawStaticAfterDynamic: sawStaticAfterDynamic,
+    finalRenderBranch: finalState.renderBranch,
+    finalRenderDirection: finalState.renderDirection,
+    lastDynamicFlippingPageIndex:
+        lastDynamicBackState?.backwardFlippingLayerPageIndex,
+    firstStaticAfterDynamicPageIndex:
+        firstStaticAfterDynamicState?.currentPageIndex,
+    lastDynamicUnifiedBackSourceLabels: List<String>.unmodifiable(
+      lastDynamicPaintSources
+          .where((source) => source.status == 'unifiedToBack')
+          .map((source) => source.label),
+    ),
+    lastDynamicFrontSourceLabels: List<String>.unmodifiable(
+      lastDynamicPaintSources
+          .where(
+            (source) =>
+                source.surfaceKind == 'front' &&
+                (source.label == 'previousFrontFlat' ||
+                    source.label == 'sheetRectoFront'),
+          )
+          .map((source) => source.label),
+    ),
   );
 }
 
@@ -1858,7 +2333,13 @@ Future<_BackwardGeometrySweepSample> _renderBackwardGeometrySweepSample(
   final gesture = await tester.startGesture(
     tester.getCenter(find.byKey(_cornerHotzoneKey(corner))),
   );
-  await gesture.moveBy(_backwardSweepDelta(corner: corner, angleDegrees: angleDegrees, depth: depth));
+  await gesture.moveBy(
+    _backwardSweepDelta(
+      corner: corner,
+      angleDegrees: angleDegrees,
+      depth: depth,
+    ),
+  );
   for (var i = 0; i < 6; i += 1) {
     await tester.pump(const Duration(milliseconds: 16));
   }
@@ -1904,10 +2385,10 @@ Offset _backwardSweepDelta({
   final radians = angleDegrees * math.pi / 180;
   final dyMagnitude = math.tan(radians) * depth;
   final dy = switch (corner) {
-    ArticlePageCurlCorner.topLeft || ArticlePageCurlCorner.topRight =>
-      dyMagnitude,
-    ArticlePageCurlCorner.bottomLeft || ArticlePageCurlCorner.bottomRight =>
-      -dyMagnitude,
+    ArticlePageCurlCorner.topLeft ||
+    ArticlePageCurlCorner.topRight => dyMagnitude,
+    ArticlePageCurlCorner.bottomLeft ||
+    ArticlePageCurlCorner.bottomRight => -dyMagnitude,
   };
   return Offset(depth, dy);
 }
@@ -1932,6 +2413,42 @@ Future<ui.Image> _createSemanticBackSurfaceProbeImage({
   );
   canvas.drawRect(
     Rect.fromLTWH(0, 0, pageSize.width * 0.22, pageSize.height),
+    Paint()..color = Colors.black,
+  );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(
+    pageSize.width.round(),
+    pageSize.height.round(),
+  );
+  picture.dispose();
+  return image;
+}
+
+Future<ui.Image> _createFrontSurfaceProbeImage({
+  required Size pageSize,
+  required int pageIndex,
+}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(
+    recorder,
+    Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
+  );
+  final background = switch (pageIndex) {
+    2 => const Color(0xFFE53935),
+    3 => const Color(0xFF43A047),
+    _ => const Color(0xFF1E88E5),
+  };
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
+    Paint()..color = background,
+  );
+  canvas.drawRect(
+    Rect.fromLTWH(
+      pageSize.width * 0.78,
+      0,
+      pageSize.width * 0.22,
+      pageSize.height,
+    ),
     Paint()..color = Colors.black,
   );
   final picture = recorder.endRecording();
@@ -2136,6 +2653,35 @@ Color _colorAtBytes(
 
 enum _ProbeColor { red, green, cyan, white, black, paperBack, other }
 
+_ProbeColor _semanticBackProbeColor({
+  required Size pageSize,
+  required int pageIndex,
+  required Offset localPoint,
+}) {
+  if (localPoint.dx <= pageSize.width * 0.22) {
+    return _ProbeColor.black;
+  }
+  return switch (pageIndex) {
+    2 => _ProbeColor.cyan,
+    _ => _ProbeColor.other,
+  };
+}
+
+_ProbeColor _frontProbeColor({
+  required Size pageSize,
+  required int pageIndex,
+  required Offset localPoint,
+}) {
+  if (localPoint.dx >= pageSize.width * 0.78) {
+    return _ProbeColor.black;
+  }
+  return switch (pageIndex) {
+    2 => _ProbeColor.red,
+    3 => _ProbeColor.green,
+    _ => _ProbeColor.other,
+  };
+}
+
 Map<_ProbeColor, int> _scanColorsInRect({
   required int imageWidth,
   required int imageHeight,
@@ -2148,8 +2694,8 @@ Map<_ProbeColor, int> _scanColorsInRect({
   final top = rect.top.round().clamp(0, imageHeight - 1);
   final bottom = rect.bottom.round().clamp(top, imageHeight - 1);
 
-  for (var y = top; y <= bottom; y += 2) {
-    for (var x = left; x <= right; x += 2) {
+  for (var y = top; y <= bottom; y += 3) {
+    for (var x = left; x <= right; x += 3) {
       final color = _colorAtBytes(
         imageWidth,
         imageHeight,
@@ -2160,7 +2706,6 @@ Map<_ProbeColor, int> _scanColorsInRect({
       counts.update(probeColor, (count) => count + 1, ifAbsent: () => 1);
     }
   }
-
   return counts;
 }
 
@@ -2217,16 +2762,64 @@ class _BackwardVersoTextureProbeSample {
     required this.backSurfaceStrategy,
     required this.activeVersoPageIndex,
     required this.activeVersoSurfaceKind,
+    required this.uvStrategy,
     required this.runtimeFailureReason,
     required this.probePointCount,
+    required this.frontBackOverlapWidth,
+    required this.backVisibleUncoveredWidth,
+    required this.visibleProbeCount,
+    required this.paintSources,
+    required this.framebufferColorCountsBySource,
+    required this.framebufferProbeColors,
+    required this.framebufferBackExpectedColors,
+    required this.framebufferFrontColors,
+    required this.framebufferCurrentColors,
   });
 
   final double backBandWidth;
   final String? backSurfaceStrategy;
   final int? activeVersoPageIndex;
   final String? activeVersoSurfaceKind;
+  final String? uvStrategy;
   final BackwardVersoFailureReason runtimeFailureReason;
   final int probePointCount;
+  final double? frontBackOverlapWidth;
+  final double? backVisibleUncoveredWidth;
+  final int visibleProbeCount;
+  final List<BackwardPaintSourceDiagnostic> paintSources;
+  final Map<String, Map<_ProbeColor, int>> framebufferColorCountsBySource;
+  final List<_ProbeColor> framebufferProbeColors;
+  final List<_ProbeColor> framebufferBackExpectedColors;
+  final List<_ProbeColor> framebufferFrontColors;
+  final List<_ProbeColor> framebufferCurrentColors;
+}
+
+class _BackwardCompletionSample {
+  const _BackwardCompletionSample({
+    required this.pageChanges,
+    required this.finalPageIndex,
+    required this.minimumObservedPageIndex,
+    required this.sawDynamicBack,
+    required this.sawStaticAfterDynamic,
+    required this.finalRenderBranch,
+    required this.finalRenderDirection,
+    required this.lastDynamicFlippingPageIndex,
+    required this.firstStaticAfterDynamicPageIndex,
+    required this.lastDynamicUnifiedBackSourceLabels,
+    required this.lastDynamicFrontSourceLabels,
+  });
+
+  final List<int> pageChanges;
+  final int finalPageIndex;
+  final int minimumObservedPageIndex;
+  final bool sawDynamicBack;
+  final bool sawStaticAfterDynamic;
+  final ArticleReadOnlyBookRenderBranch finalRenderBranch;
+  final StPageFlipDirection? finalRenderDirection;
+  final int? lastDynamicFlippingPageIndex;
+  final int? firstStaticAfterDynamicPageIndex;
+  final List<String> lastDynamicUnifiedBackSourceLabels;
+  final List<String> lastDynamicFrontSourceLabels;
 }
 
 class _BackwardCompositeProbeSample {

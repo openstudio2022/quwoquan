@@ -92,6 +92,26 @@ class CircleHubFeedPostEntry {
     return '';
   }
 
+  List<String> get wireImageUrls {
+    final d = dto;
+    final dtoImages = d?.mediaImageUrls ?? const <String>[];
+    if (dtoImages.isNotEmpty) {
+      return dtoImages;
+    }
+    final imageUrls = raw['imageUrls'];
+    if (imageUrls is List) {
+      final urls = imageUrls
+          .map((url) => url.toString().trim())
+          .where((url) => url.isNotEmpty)
+          .toList(growable: false);
+      if (urls.isNotEmpty) {
+        return urls;
+      }
+    }
+    final cover = wireCoverUrl.trim();
+    return cover.isEmpty ? const <String>[] : <String>[cover];
+  }
+
   String get wireTitle {
     final d = dto;
     if (d != null && d.normalizedTitle.isNotEmpty) return d.normalizedTitle;

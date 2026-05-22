@@ -8,11 +8,16 @@ if allow_path.exists():
     data = yaml.safe_load(allow_path.read_text()) or {}
     for item in data.get("allowed", []):
         allowed[item["path"]] = int(item.get("maxCount", 0))
-pattern = re.compile(r"\bImage\.network\s*\(|\bNetworkImage\s*\(")
+pattern = re.compile(
+    r"\bImage\.network\s*\(|\bNetworkImage\s*\(|\bCachedNetworkImage\s*\("
+)
 violations = []
 for path in (ROOT / "quwoquan_app/lib").rglob("*.dart"):
     rel = path.relative_to(ROOT / "quwoquan_app/lib").as_posix()
-    if rel == "core/widgets/app_image.dart":
+    if rel in {
+        "core/widgets/app_image.dart",
+        "core/widgets/app_cached_network_image.dart",
+    }:
         continue
     count = len(pattern.findall(path.read_text(errors="ignore")))
     max_count = allowed.get(rel, 0)

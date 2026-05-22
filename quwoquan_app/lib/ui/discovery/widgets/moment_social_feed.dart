@@ -7,11 +7,13 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
@@ -53,12 +55,16 @@ class MomentSocialFeed extends ConsumerWidget {
     required this.isDark,
     required this.onUserTap,
     this.feedTabId = 'moment',
+    this.inlineImageCarousel = false,
+    this.disableImageViewerOnTap = false,
     this.onPostTap,
     this.onMoreTap,
   });
 
   final bool isDark;
   final String feedTabId;
+  final bool inlineImageCarousel;
+  final bool disableImageViewerOnTap;
   final void Function(
     String userId, {
     String? avatarUrl,
@@ -183,11 +189,13 @@ class MomentSocialFeed extends ConsumerWidget {
 
     Widget buildCard(PostBaseDto dto, int index) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(contentBehaviorTrackerProvider).trackImpression(
-          dto.id,
-          contentType: dto.identity,
-          position: index,
-        );
+        ref
+            .read(contentBehaviorTrackerProvider)
+            .trackImpression(
+              dto.id,
+              contentType: dto.identity,
+              position: index,
+            );
       });
       if (dto.isArticleLike && shouldShowFollowingArticles) {
         return _FollowingArticleCard(
@@ -197,13 +205,16 @@ class MomentSocialFeed extends ConsumerWidget {
               _followingArticleDistributionProfile.summaryLineLimit,
           sourceCircleName: _resolveSourceCircleName(ref, dto.id),
           onTap: () {
-            final feedReqId =
-                ref.read(feedSessionProvider.notifier).newFeedRequestId();
-            ref.read(contentBehaviorTrackerProvider).trackClick(
-              dto.id,
-              contentType: dto.identity,
-              feedRequestId: feedReqId,
-            );
+            final feedReqId = ref
+                .read(feedSessionProvider.notifier)
+                .newFeedRequestId();
+            ref
+                .read(contentBehaviorTrackerProvider)
+                .trackClick(
+                  dto.id,
+                  contentType: dto.identity,
+                  feedRequestId: feedReqId,
+                );
             onPostTap?.call(dto, 0, feedPosts: feedPosts);
           },
           onMoreTap: () {
@@ -224,6 +235,7 @@ class MomentSocialFeed extends ConsumerWidget {
         isLiked: effectivePostLiked(ref, dto.id),
         likeCount: effectivePostLikeCount(ref, dto.id, fallback: dto.likeCount),
         sourceCircleName: _resolveSourceCircleName(ref, dto.id),
+        inlineImageCarousel: inlineImageCarousel,
         onUserTap: (id) => onUserTap(
           id,
           avatarUrl: dto.avatarUrl,
@@ -231,15 +243,20 @@ class MomentSocialFeed extends ConsumerWidget {
           backgroundUrl: dto.authorBackgroundUrl,
         ),
         onImageTap: (imgIndex) {
-            final feedReqId =
-                ref.read(feedSessionProvider.notifier).newFeedRequestId();
-            ref.read(contentBehaviorTrackerProvider).trackClick(
-              dto.id,
-              contentType: dto.identity,
-              feedRequestId: feedReqId,
-            );
+          final feedReqId = ref
+              .read(feedSessionProvider.notifier)
+              .newFeedRequestId();
+          ref
+              .read(contentBehaviorTrackerProvider)
+              .trackClick(
+                dto.id,
+                contentType: dto.identity,
+                feedRequestId: feedReqId,
+              );
+          if (!(disableImageViewerOnTap && dto.hasImages)) {
             onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
-          },
+          }
+        },
         onCommentTap: () {
           CommentViewer.showModal(context: context, postId: dto.id);
         },
@@ -486,6 +503,7 @@ class _MomentWeiboCard extends ConsumerStatefulWidget {
     required this.isLiked,
     required this.likeCount,
     required this.sourceCircleName,
+    required this.inlineImageCarousel,
     required this.onUserTap,
     required this.onImageTap,
     required this.onCommentTap,
@@ -502,6 +520,7 @@ class _MomentWeiboCard extends ConsumerStatefulWidget {
   final bool isLiked;
   final int likeCount;
   final String sourceCircleName;
+  final bool inlineImageCarousel;
   final void Function(String) onUserTap;
   final void Function(int imageIndex) onImageTap;
   final VoidCallback onCommentTap;
@@ -580,19 +599,13 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
                   padding: EdgeInsets.zero,
                   minimumSize: Size.zero,
                   onPressed: () => widget.onUserTap(item.authorId),
-                  child: CircleAvatar(
-                    radius: AppSpacing.avatarUserSm / 2,
-                    backgroundImage: item.avatarUrl.isNotEmpty
-                        ? NetworkImage(item.avatarUrl)
-                        : null,
+                  child: RoundedSquareAvatar(
+                    size: AppSpacing.avatarUserSm,
+                    imageUrl: item.avatarUrl,
+                    name: item.displayName,
+                    borderRadius: AppSpacing.avatarUserSm / 2,
                     backgroundColor: AppColors.iosSecondaryFill(context),
-                    child: item.avatarUrl.isEmpty
-                        ? Icon(
-                            CupertinoIcons.person_crop_circle_fill,
-                            size: AppSpacing.iconSmall,
-                            color: muted,
-                          )
-                        : null,
+                    fallbackIcon: CupertinoIcons.person_crop_circle_fill,
                   ),
                 ),
                 SizedBox(width: AppSpacing.intraGroupMd),
@@ -663,11 +676,17 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
             // 图片区域（自适应宫格）
             if (item.hasImages) ...[
               const SizedBox(height: _momentSectionGap),
-              _MomentImageGrid(
-                urls: item.imageUrls,
-                isDark: isDark,
-                onTap: widget.onImageTap,
-              ),
+              widget.inlineImageCarousel
+                  ? _MomentImageCarousel(
+                      urls: item.imageUrls,
+                      isDark: isDark,
+                      onTap: widget.onImageTap,
+                    )
+                  : _MomentImageGrid(
+                      urls: item.imageUrls,
+                      isDark: isDark,
+                      onTap: widget.onImageTap,
+                    ),
             ],
 
             // 视频卡片
@@ -998,6 +1017,136 @@ class _MomentImageGrid extends StatelessWidget {
   }
 }
 
+class _MomentImageCarousel extends StatefulWidget {
+  const _MomentImageCarousel({
+    required this.urls,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final List<String> urls;
+  final bool isDark;
+  final void Function(int index) onTap;
+
+  @override
+  State<_MomentImageCarousel> createState() => _MomentImageCarouselState();
+}
+
+class _MomentImageCarouselState extends State<_MomentImageCarousel> {
+  late final PageController _controller;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final urls = widget.urls
+        .map((url) => url.trim())
+        .where((url) => url.isNotEmpty)
+        .toList(growable: false);
+    if (urls.isEmpty) return const SizedBox.shrink();
+
+    return AspectRatio(
+      aspectRatio: 4 / 3,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.md),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            PageView.builder(
+              controller: _controller,
+              itemCount: urls.length,
+              onPageChanged: (next) => setState(() => _index = next),
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => widget.onTap(index),
+                  child: CachedNetworkImage(
+                    imageUrl: urls[index],
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => _placeholder(),
+                    errorWidget: (context, url, err) => _placeholder(),
+                  ),
+                );
+              },
+            ),
+            if (urls.length > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: AppSpacing.intraGroupSm,
+                child: _CarouselDots(
+                  total: urls.length,
+                  activeIndex: _index,
+                  isDark: widget.isDark,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColorsFunctional.getColor(
+          widget.isDark,
+          ColorType.surfaceMuted,
+        ),
+      ),
+    );
+  }
+}
+
+class _CarouselDots extends StatelessWidget {
+  const _CarouselDots({
+    required this.total,
+    required this.activeIndex,
+    required this.isDark,
+  });
+
+  final int total;
+  final int activeIndex;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleTotal = total.clamp(1, 7).toInt();
+    final active = total <= visibleTotal
+        ? activeIndex
+        : ((activeIndex / (total - 1)) * (visibleTotal - 1)).round();
+    final color = isDark ? AppColors.white : AppColors.black;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < visibleTotal; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.xs),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: i == active ? AppSpacing.containerSm : AppSpacing.xs,
+            height: AppSpacing.xs,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: i == active ? 0.86 : 0.42),
+              borderRadius: BorderRadius.circular(AppSpacing.xs),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 视频卡片（静态封面 + 时长 + 播放标识）
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1173,8 +1322,7 @@ class _ActionRow extends StatelessWidget {
         Expanded(
           child: _chip(
             context: context,
-            child: Icon(
-              CupertinoIcons.chat_bubble,
+            child: AppBubbleIcon(
               size: _momentToolbarIconSize,
               color: actionIconColor,
             ),

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 
 /// 统一的 iOS 风格页面骨架
 class AppScaffold extends StatelessWidget {
@@ -36,16 +37,14 @@ class AppScaffold extends StatelessWidget {
       // Several pages render Material-style text/actions inside a Cupertino
       // scaffold. A transparent Material host avoids debug-mode fallback text
       // emphasis/underline artifacts on those pages.
-      child: Material(
-        type: MaterialType.transparency,
-        child: child ?? body!,
-      ),
+      child: Material(type: MaterialType.transparency, child: child ?? body!),
     );
   }
 }
 
 /// 统一的 iOS 风格导航栏
-class AppNavigationBar extends StatelessWidget implements ObstructingPreferredSizeWidget {
+class AppNavigationBar extends StatelessWidget
+    implements ObstructingPreferredSizeWidget {
   const AppNavigationBar({
     super.key,
     this.middle,
@@ -79,7 +78,8 @@ class AppNavigationBar extends StatelessWidget implements ObstructingPreferredSi
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(AppSpacing.toolbarHeight);
+  Size get preferredSize =>
+      const Size.fromHeight(AppSpacing.appChromeNavigationBarHeight);
 
   @override
   bool shouldFullyObstruct(BuildContext context) {
@@ -109,18 +109,57 @@ class AppNavigationBarIconButton extends StatelessWidget {
       padding: EdgeInsets.zero,
       onPressed: onPressed,
       minimumSize: Size(
-        AppSpacing.minInteractiveSize,
-        AppSpacing.minInteractiveSize,
+        AppSpacing.appChromeActionButtonSize,
+        AppSpacing.appChromeActionButtonSize,
       ),
       child: SizedBox(
-        width: AppSpacing.minInteractiveSize,
-        height: AppSpacing.minInteractiveSize,
+        width: AppSpacing.appChromeActionButtonSize,
+        height: AppSpacing.appChromeActionButtonSize,
         child: Center(
           child: Icon(
             icon,
-            size: AppNavigationSemanticConstants.barIconSize,
+            size: AppSpacing.appChromeActionIconSize,
             color: color ?? AppNavigationSemanticConstants.barIconColor(isDark),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppNavigationBarTextAction extends StatelessWidget {
+  const AppNavigationBarTextAction({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.enabled = true,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final color = enabled
+        ? AppNavigationSemanticConstants.barIconColor(isDark)
+        : CupertinoColors.systemGrey.resolveFrom(context);
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.appChromeTextActionHorizontalPadding,
+      ),
+      minimumSize: const Size(
+        AppSpacing.appChromeActionButtonSize,
+        AppSpacing.appChromeTextActionMinHeight,
+      ),
+      onPressed: enabled ? onPressed : null,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: AppTypography.iosNavTitle,
+          fontWeight: AppTypography.semiBold,
         ),
       ),
     );

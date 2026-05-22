@@ -221,7 +221,8 @@ class ProfileIosGroupedCell extends StatelessWidget {
                       color: labelColor,
                     ),
                   ),
-                  if (subtitle != null && subtitle!.trim().isNotEmpty) ...<Widget>[
+                  if (subtitle != null &&
+                      subtitle!.trim().isNotEmpty) ...<Widget>[
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
                       subtitle!,
@@ -235,7 +236,8 @@ class ProfileIosGroupedCell extends StatelessWidget {
                 ],
               ),
             ),
-            if (trailingText != null && trailingText!.trim().isNotEmpty) ...<Widget>[
+            if (trailingText != null &&
+                trailingText!.trim().isNotEmpty) ...<Widget>[
               Flexible(
                 child: Text(
                   trailingText!,
@@ -280,8 +282,8 @@ class ProfileIosIconButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.style = ProfileIosIconButtonStyle.tinted,
-    this.size = 36,
-    this.iconSize = 18,
+    this.size = AppSpacing.appChromeActionButtonSize,
+    this.iconSize = AppSpacing.appChromeActionIconSize,
     this.backgroundColor,
     this.foregroundColor,
   });
@@ -298,21 +300,23 @@ class ProfileIosIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = AppColors.iosAccent(context);
     final label = AppColors.iosLabel(context);
-    final background = backgroundColor ??
+    final background =
+        backgroundColor ??
         switch (style) {
-      ProfileIosIconButtonStyle.filled => accent,
-      ProfileIosIconButtonStyle.tinted => AppColors.iosFill(context),
-      ProfileIosIconButtonStyle.plain => AppColors.transparent,
-    };
-    final iconColor = foregroundColor ??
+          ProfileIosIconButtonStyle.filled => accent,
+          ProfileIosIconButtonStyle.tinted => AppColors.iosFill(context),
+          ProfileIosIconButtonStyle.plain => AppColors.transparent,
+        };
+    final iconColor =
+        foregroundColor ??
         switch (style) {
-      ProfileIosIconButtonStyle.filled => CupertinoColors.white,
-      ProfileIosIconButtonStyle.tinted => label,
-      ProfileIosIconButtonStyle.plain => label,
-    };
+          ProfileIosIconButtonStyle.filled => CupertinoColors.white,
+          ProfileIosIconButtonStyle.tinted => label,
+          ProfileIosIconButtonStyle.plain => label,
+        };
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+      minimumSize: const Size.square(AppSpacing.appChromeActionButtonSize),
       onPressed: onPressed,
       child: Container(
         width: size,
@@ -366,29 +370,31 @@ class ProfileIosActionButton extends StatelessWidget {
     final foreground =
         foregroundColor ??
         switch (style) {
-      ProfileIosActionStyle.filled => CupertinoColors.white,
-      ProfileIosActionStyle.tinted => accent,
-      ProfileIosActionStyle.outlined => AppColors.iosLabel(context),
-      ProfileIosActionStyle.plain => accent,
-    };
+          ProfileIosActionStyle.filled => CupertinoColors.white,
+          ProfileIosActionStyle.tinted => accent,
+          ProfileIosActionStyle.outlined => AppColors.iosLabel(context),
+          ProfileIosActionStyle.plain => accent,
+        };
     final background =
         backgroundColor ??
         switch (style) {
-      ProfileIosActionStyle.filled => accent,
-      ProfileIosActionStyle.tinted => accent.withValues(
-          alpha: isDark ? 0.24 : 0.12,
-        ),
-      ProfileIosActionStyle.outlined => AppColors.iosSystemBackground(context),
-      ProfileIosActionStyle.plain => AppColors.transparent,
-    };
+          ProfileIosActionStyle.filled => accent,
+          ProfileIosActionStyle.tinted => accent.withValues(
+            alpha: isDark ? 0.24 : 0.12,
+          ),
+          ProfileIosActionStyle.outlined => AppColors.iosSystemBackground(
+            context,
+          ),
+          ProfileIosActionStyle.plain => AppColors.transparent,
+        };
     final resolvedBorderColor =
         borderColor ??
         switch (style) {
-      ProfileIosActionStyle.outlined => AppColors.iosSeparator(
-          context,
-        ).withValues(alpha: 0.24),
-      _ => AppColors.transparent,
-    };
+          ProfileIosActionStyle.outlined => AppColors.iosSeparator(
+            context,
+          ).withValues(alpha: 0.24),
+          _ => AppColors.transparent,
+        };
 
     Widget child = Container(
       height: height,
@@ -438,7 +444,10 @@ class ProfileIosActionButton extends StatelessWidget {
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
-      minimumSize: const Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
+      minimumSize: const Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
       onPressed: onPressed,
       child: child,
     );

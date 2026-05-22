@@ -69,7 +69,7 @@ def gen():
     tag_at(EVENT_CANONICAL_ROOT, "", "事件", "Event", "可指称事实事件")
     tags_list_at(EVENT_CANONICAL_ROOT, "", [
         ("新闻事件", "News Event", "新闻报道中的可指称事实事件"),
-        ("历史事件", "Historical Event", "已发生且可考证的历史事实事件"),
+        ("史实事件", "Historical Event", "已发生且可考证的史实事实事件"),
         ("社会事件", "Social Event", "社会公共领域中的事实事件"),
         ("赛事事件", "Competition Event", "体育与大型赛事事实事件"),
         ("地区事件", "Regional Event", "区域性事实事件"),

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
@@ -133,7 +134,12 @@ class _CommentSheetState extends ConsumerState<_CommentSheet> {
                   widget.onCommentAdded?.call(confirmed.id);
                 }
                 if (mounted) setState(() => _replyTo = null);
-              } catch (_) {}
+              } catch (error) {
+                assert(() {
+                  debugPrint('Comment submit failed: $error');
+                  return true;
+                }());
+              }
             },
             onCancelReply: () {
               setState(() => _replyTo = null);
@@ -298,14 +304,21 @@ class _Header extends StatelessWidget {
             onChanged: onSortChanged,
           ),
           SizedBox(width: AppSpacing.sm),
-          GestureDetector(
-            onTap: onClose,
-            child: Icon(
-              CupertinoIcons.xmark,
-              size: AppSpacing.iconMedium,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundSecondary,
+          CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
+            onPressed: onClose,
+            child: SizedBox.square(
+              dimension: AppSpacing.appChromeActionButtonSize,
+              child: Center(
+                child: Icon(
+                  CupertinoIcons.xmark,
+                  size: AppSpacing.appChromeActionIconSize,
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.foregroundSecondary,
+                  ),
+                ),
               ),
             ),
           ),
@@ -413,25 +426,16 @@ class _CommentItem extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: AppSpacing.iconMedium / 2,
+              RoundedSquareAvatar(
+                size: AppSpacing.iconMedium,
+                imageUrl: comment.avatarUrl,
+                name: comment.displayName,
+                borderRadius: AppSpacing.iconMedium / 2,
                 backgroundColor: AppColorsFunctional.getColor(
                   isDark,
                   ColorType.backgroundSecondary,
                 ),
-                backgroundImage: comment.avatarUrl != null
-                    ? NetworkImage(comment.avatarUrl!)
-                    : null,
-                child: comment.avatarUrl == null
-                    ? Icon(
-                        CupertinoIcons.person_fill,
-                        size: AppSpacing.iconSmall,
-                        color: AppColorsFunctional.getColor(
-                          isDark,
-                          ColorType.foregroundTertiary,
-                        ),
-                      )
-                    : null,
+                fallbackIcon: CupertinoIcons.person_fill,
               ),
               SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -552,7 +556,7 @@ class _CommentItem extends StatelessWidget {
               Icon(
                 CupertinoIcons.sparkles,
                 size: AppSpacing.iconSmall,
-                color: AppColors.primaryColor,
+                color: AppColors.assistantMarkColor,
               ),
               SizedBox(width: AppSpacing.xs),
               Text(
@@ -560,7 +564,7 @@ class _CommentItem extends StatelessWidget {
                 style: TextStyle(
                   fontSize: AppTypography.xs,
                   fontWeight: AppTypography.semiBold,
-                  color: AppColors.primaryColor,
+                  color: AppColors.assistantMarkColor,
                 ),
               ),
             ],
@@ -691,20 +695,16 @@ class _ReplyItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: AppSpacing.iconSmall / 2,
+          RoundedSquareAvatar(
+            size: AppSpacing.iconSmall,
+            imageUrl: reply.avatarUrl,
+            name: reply.displayName,
+            borderRadius: AppSpacing.iconSmall / 2,
             backgroundColor: AppColorsFunctional.getColor(
               isDark,
               ColorType.backgroundSecondary,
             ),
-            child: Icon(
-              CupertinoIcons.person_fill,
-              size: AppSpacing.iconSmall / 2,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundTertiary,
-              ),
-            ),
+            fallbackIcon: CupertinoIcons.person_fill,
           ),
           SizedBox(width: AppSpacing.xs),
           Expanded(

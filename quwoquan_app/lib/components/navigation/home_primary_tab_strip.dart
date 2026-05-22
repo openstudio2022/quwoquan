@@ -18,9 +18,32 @@ class HomePrimaryTabStrip extends StatelessWidget {
   });
 
   static const String followingTabId = 'following';
+  static const String recommendedTabId = 'recommended';
   static const String featuredTabId = 'featured';
   static const String circlesTabId = 'circles';
+  static const String travelPhotographyTabId = 'travel_photography';
+  static const String campusTabId = 'campus';
+  static const String travelTabId = 'travel';
+  static const String photographyTabId = 'photography';
+  static const String techTabId = 'tech';
+  static const String carTabId = 'car';
+  static const String carFriendsTabId = carTabId;
   static const Key stripKey = ValueKey<String>('home-primary-tab-strip');
+
+  static const List<String> homeTabIds = <String>[
+    followingTabId,
+    recommendedTabId,
+    campusTabId,
+    travelTabId,
+    photographyTabId,
+    techTabId,
+    carTabId,
+  ];
+
+  static const List<String> immersiveTabIds = <String>[
+    followingTabId,
+    featuredTabId,
+  ];
 
   static Key tabKey(String tabId) =>
       ValueKey<String>('home-primary-tab-$tabId');
@@ -67,53 +90,62 @@ class HomePrimaryTabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gap = AppSpacing.primaryTabGroupGap(context);
-    final followingWidth = _slotWidth(
-      context,
-      UITextConstants.homeTabFollowing,
-    );
-    final featuredWidth = _slotWidth(
-      context,
-      UITextConstants.homeTabFeatured,
-      reserveAccessorySlot: true,
-    );
+    final tabs = style == HomePrimaryTabStripStyle.immersive
+        ? immersiveTabIds
+        : homeTabIds;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: onHorizontalDragEnd,
-      child: SizedBox(
+      child: SingleChildScrollView(
         key: stripKey,
-        height: AppSpacing.primaryTopBarHeight(context),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _HomePrimaryTabStripItem(
-              key: tabKey(followingTabId),
-              tabId: followingTabId,
-              label: UITextConstants.homeTabFollowing,
-              selected: activeTab == followingTabId,
-              slotWidth: followingWidth,
-              isDark: isDark,
-              style: style,
-              onTap: () => _handleTabTap(followingTabId),
-            ),
-            SizedBox(width: gap),
-            _HomePrimaryTabStripItem(
-              key: tabKey(featuredTabId),
-              tabId: featuredTabId,
-              label: UITextConstants.homeTabFeatured,
-              selected: activeTab == featuredTabId,
-              slotWidth: featuredWidth,
-              isDark: isDark,
-              style: style,
-              reserveIndicatorSlot: true,
-              showIndicator: featuredIndicatorVisible,
-              indicatorExpanded: featuredExpanded,
-              onTap: () => _handleTabTap(featuredTabId),
-            ),
-          ],
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        child: SizedBox(
+          height: AppSpacing.primaryTopBarHeight(context),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < tabs.length; i++) ...[
+                if (i > 0) SizedBox(width: gap),
+                _HomePrimaryTabStripItem(
+                  key: tabKey(tabs[i]),
+                  tabId: tabs[i],
+                  label: _labelForTab(tabs[i]),
+                  selected: activeTab == tabs[i],
+                  slotWidth: _slotWidth(
+                    context,
+                    _labelForTab(tabs[i]),
+                    reserveAccessorySlot: tabs[i] == featuredTabId,
+                  ),
+                  isDark: isDark,
+                  style: style,
+                  reserveIndicatorSlot: tabs[i] == featuredTabId,
+                  showIndicator:
+                      tabs[i] == featuredTabId && featuredIndicatorVisible,
+                  indicatorExpanded: featuredExpanded,
+                  onTap: () => _handleTabTap(tabs[i]),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  static String _labelForTab(String tabId) => switch (tabId) {
+    followingTabId => UITextConstants.homeTabFollowing,
+    recommendedTabId => UITextConstants.homeTabRecommended,
+    featuredTabId => UITextConstants.homeTabFeatured,
+    circlesTabId => UITextConstants.homeTabCircles,
+    travelPhotographyTabId => UITextConstants.circleScenarioTravelPhotography,
+    campusTabId => UITextConstants.circleScenarioCampus,
+    travelTabId => UITextConstants.homeTabTravel,
+    photographyTabId => UITextConstants.homeTabPhotography,
+    techTabId => UITextConstants.homeTabTech,
+    carFriendsTabId => UITextConstants.homeTabCarFriends,
+    _ => UITextConstants.homeTabRecommended,
+  };
 
   void _handleTabTap(String tabId) {
     if (tabId != activeTab) {

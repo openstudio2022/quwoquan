@@ -5,13 +5,14 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
@@ -23,6 +24,7 @@ import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
@@ -108,8 +110,6 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
 class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     with TickerProviderStateMixin {
   static bool _didAutoExpandInSession = false;
-  static const double _toolbarReservedHeight =
-      ImmersiveEngagementBar.preferredReservedHeight;
 
   String? _filterType;
   bool _isFilterExpanded = false;
@@ -130,6 +130,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   // Follow-button delayed reveal: 3 s for photos, 5 s for video/article.
   Timer? _followButtonTimer;
   bool _showFollowButton = false;
+  String? _followTimerPostId;
 
   late final PageController _pageController;
 
@@ -157,11 +158,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       if (widget.showTopNavigation) {
         _runOneTimeAutoExpand();
       }
-      // Kick off the follow-button timer for the first visible post.
       final posts = _buildFeed();
       if (posts.isNotEmpty) {
         final initialIndex = _currentPage.clamp(0, posts.length - 1);
-        _startFollowButtonTimer(posts[initialIndex]);
         // Track impression for the first post
         _trackImpressionForPost(posts[initialIndex]);
         _pageEnterTime = DateTime.now();
@@ -269,6 +268,34 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         : const Duration(seconds: 5);
     _followButtonTimer = Timer(delay, () {
       if (mounted) setState(() => _showFollowButton = true);
+    });
+  }
+
+  void _ensureFollowButtonVisibility(PostBaseDto? post) {
+    if (post == null) {
+      _followTimerPostId = null;
+      return;
+    }
+    final isFollowing = effectiveProfileFollowing(ref, post.subAccountId);
+    final shouldResync =
+        _followTimerPostId != post.id || (isFollowing && !_showFollowButton);
+    if (!shouldResync) {
+      return;
+    }
+    _followTimerPostId = post.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final posts = _buildFeed();
+      if (posts.isEmpty) {
+        return;
+      }
+      final current = posts[_currentPage.clamp(0, posts.length - 1)];
+      if (current.id != post.id) {
+        return;
+      }
+      _startFollowButtonTimer(current);
     });
   }
 
@@ -1099,6 +1126,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final currentPost = posts.isEmpty
         ? null
         : posts[_currentPage.clamp(0, posts.length - 1)];
+    _ensureFollowButtonVisibility(currentPost);
     final currentLayoutSpec = currentPost == null
         ? ImmersiveViewerStageLayoutSpec.feedRail
         : _layoutSpecForPost(currentPost);
@@ -1169,7 +1197,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                       setState(() => _currentPage = index);
                       widget.onPostIndexChanged?.call(index);
                       final newPost = posts[index.clamp(0, posts.length - 1)];
-                      _startFollowButtonTimer(newPost);
                       _trackImpressionForPost(newPost);
                       _pageEnterTime = DateTime.now();
                     }
@@ -1250,7 +1277,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: _toolbarReservedHeight + AppSpacing.containerSm,
+                  bottom: ImmersiveEngagementBar.overlayClearance(
+                    context,
+                    gap: AppSpacing.containerSm,
+                  ),
                   child: MediaCaptionBlock(
                     layoutSpec: currentLayoutSpec,
                     railKey: const ValueKey<String>('works-caption-rail'),
@@ -1529,7 +1559,7 @@ class _WorksPrimaryTopBar extends StatelessWidget {
       child: SizedBox(
         key: const ValueKey<String>('works-top-rail'),
         width: double.infinity,
-        height: AppSpacing.primaryTopBarHeight(context),
+        height: AppSpacing.appChromeTopBarHeight(context),
         child: Stack(
           children: [
             Positioned.fill(
@@ -1581,7 +1611,9 @@ class _WorksPrimaryTopBar extends StatelessWidget {
 
             if (progressLabel?.isNotEmpty == true)
               Positioned(
-                left: AppSpacing.iconButtonMinSizeSm + AppSpacing.intraGroupSm,
+                left:
+                    AppSpacing.appChromeActionButtonSize +
+                    AppSpacing.appChromeActionGap(context),
                 top: 0,
                 bottom: 0,
                 child: Center(
@@ -2154,9 +2186,10 @@ class _WorksArticleCanvas extends StatelessWidget {
           left: AppSpacing.intraGroupSm,
           right: AppSpacing.intraGroupSm,
           top: 0,
-          bottom:
-              _WorksImmersiveViewerState._toolbarReservedHeight +
-              AppSpacing.containerMd,
+          bottom: ImmersiveEngagementBar.overlayClearance(
+            context,
+            gap: AppSpacing.containerMd,
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final pages = resolvePaginatedArticlePages(
@@ -2253,9 +2286,10 @@ class _WorksTextCanvas extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.only(
               top: AppSpacing.containerLg,
-              bottom:
-                  _WorksImmersiveViewerState._toolbarReservedHeight +
-                  AppSpacing.containerMd,
+              bottom: ImmersiveEngagementBar.overlayClearance(
+                context,
+                gap: AppSpacing.containerMd,
+              ),
             ),
             child: ImmersiveViewerLayout.alignToRail(
               context: context,
@@ -2682,12 +2716,13 @@ class _WorksBottomToolbar extends StatelessWidget {
                 GestureDetector(
                   onTap: onUserTap,
                   behavior: HitTestBehavior.opaque,
-                  child: CircleAvatar(
-                    radius: AppSpacing.avatarUserMd * 0.5,
-                    backgroundImage: post.avatarUrl.isNotEmpty
-                        ? NetworkImage(post.avatarUrl)
-                        : null,
+                  child: RoundedSquareAvatar(
+                    size: AppSpacing.avatarUserMd,
+                    imageUrl: post.avatarUrl,
+                    name: post.displayName,
+                    borderRadius: AppSpacing.avatarUserMd * 0.5,
                     backgroundColor: AppColors.worksCaption,
+                    fallbackIcon: CupertinoIcons.person_crop_circle_fill,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.intraGroupSm),
@@ -2808,8 +2843,8 @@ class _WorksBottomToolbar extends StatelessWidget {
                     _action(
                       icon: Icon(
                         isLiked
-                            ? CupertinoIcons.heart_fill
-                            : CupertinoIcons.heart,
+                            ? FluentIcons.heart_24_filled
+                            : FluentIcons.heart_24_regular,
                         color: isLiked
                             ? AppColors.worksLike
                             : AppColors.worksTitle,
@@ -2822,7 +2857,7 @@ class _WorksBottomToolbar extends StatelessWidget {
                     SizedBox(width: actionGap),
                     _action(
                       icon: Icon(
-                        CupertinoIcons.arrowshape_turn_up_right,
+                        FluentIcons.share_24_regular,
                         color: AppColors.worksTitle,
                         size: AppSpacing.iconMedium,
                       ),
@@ -2849,8 +2884,7 @@ class _WorksBottomToolbar extends StatelessWidget {
                     ),
                     SizedBox(width: actionGap),
                     _action(
-                      icon: Icon(
-                        CupertinoIcons.chat_bubble,
+                      icon: AppBubbleIcon(
                         color: AppColors.worksTitle,
                         size: AppSpacing.iconMedium,
                       ),

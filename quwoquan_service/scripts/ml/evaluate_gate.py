@@ -57,10 +57,10 @@ def main():
         reason = "no model found"
         if args.allow_bootstrap:
             print("[evaluate_gate] No model found — SKIP (bootstrap allowed)")
-            _write_report(args.out, "skip", reason, {}, {})
+            _write_report(args.out, "skip", reason, {}, {}, {})
             return 0
         print(f"[evaluate_gate] BLOCKED: {reason}")
-        _write_report(args.out, "blocked", reason, {}, {})
+        _write_report(args.out, "blocked", reason, {}, {}, {})
         return 1
 
     new_metrics = latest.get("metrics", {})
