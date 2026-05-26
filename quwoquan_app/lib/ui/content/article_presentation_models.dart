@@ -15,6 +15,7 @@ class BackwardPaintSourceDiagnostic {
     required this.status,
     required this.viewportBounds,
     required this.polygonSignature,
+    this.viewportPolygon = const <Offset>[],
   });
 
   final String label;
@@ -24,6 +25,7 @@ class BackwardPaintSourceDiagnostic {
   final String status;
   final Rect? viewportBounds;
   final String polygonSignature;
+  final List<Offset> viewportPolygon;
 
   bool get hasVisibleBounds =>
       viewportBounds != null && !viewportBounds!.isEmpty;

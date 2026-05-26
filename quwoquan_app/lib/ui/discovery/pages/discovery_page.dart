@@ -1266,12 +1266,17 @@ class _MomentPostCardState extends State<_MomentPostCard>
                     if (_isLiked) widget.onBehavior?.call('like', item);
                   },
                   child: _actionChip(
-                    _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                    null,
                     formatCompactActionCount(
                       item.likeCount + (_isLiked ? 1 : 0),
                     ),
                     isDark,
                     iconColor: likeColor,
+                    iconWidget: AppMediaHeartIcon(
+                      size: AppSpacing.iconMedium,
+                      color: likeColor,
+                      filled: _isLiked,
+                    ),
                   ),
                 ),
               ),
@@ -1279,9 +1284,16 @@ class _MomentPostCardState extends State<_MomentPostCard>
                 child: GestureDetector(
                   onTap: () => widget.onShareTap?.call(item),
                   child: _actionChip(
-                    CupertinoIcons.arrowshape_turn_up_right,
+                    null,
                     formatCompactActionCount(item.shareCount),
                     isDark,
+                    iconWidget: AppMediaShareIcon(
+                      size: AppSpacing.iconMedium,
+                      color: AppColorsFunctional.getColor(
+                        isDark,
+                        ColorType.foregroundSecondary,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1292,7 +1304,7 @@ class _MomentPostCardState extends State<_MomentPostCard>
                     null,
                     formatCompactActionCount(item.commentCount),
                     isDark,
-                    iconWidget: AppBubbleIcon(
+                    iconWidget: AppMediaCommentIcon(
                       size: AppSpacing.iconMedium,
                       color: AppColorsFunctional.getColor(
                         isDark,
@@ -1344,7 +1356,11 @@ class _MomentPostCardState extends State<_MomentPostCard>
               maxLines: 1,
               overflow: TextOverflow.fade,
               softWrap: false,
-              style: TextStyle(fontSize: AppTypography.sm, color: muted),
+              style: TextStyle(
+                fontSize: AppTypography.sm,
+                color: muted,
+                height: AppSpacing.one,
+              ),
             ),
           ],
         ),
@@ -1475,8 +1491,7 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      CupertinoIcons.heart,
+                    AppMediaHeartIcon(
                       size: AppSpacing.iconMedium,
                       color: muted,
                     ),
@@ -1495,7 +1510,10 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                         color: muted,
                       ),
                     ),
-                    AppBubbleIcon(size: AppSpacing.iconMedium, color: muted),
+                    AppMediaCommentIcon(
+                      size: AppSpacing.iconMedium,
+                      color: muted,
+                    ),
                     Text(
                       ' ${article.commentCount} ',
                       style: TextStyle(
@@ -1506,11 +1524,7 @@ class _ArticleCardPlaceholder extends StatelessWidget {
                   ],
                 ),
                 const Spacer(),
-                Icon(
-                  CupertinoIcons.arrowshape_turn_up_right,
-                  size: AppSpacing.iconMedium,
-                  color: muted,
-                ),
+                AppMediaShareIcon(size: AppSpacing.iconMedium, color: muted),
                 Text(
                   ' ${UITextConstants.share}',
                   style: TextStyle(fontSize: AppTypography.base, color: muted),
@@ -2143,7 +2157,7 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                   ),
                                   _videoActionWidget(
                                     context,
-                                    AppBubbleIcon(
+                                    AppMediaCommentIcon(
                                       size: AppSpacing.iconMedium,
                                       color: videoFgQuaternary,
                                     ),
@@ -2155,8 +2169,7 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                                   ),
                                   _videoActionWidget(
                                     context,
-                                    Icon(
-                                      CupertinoIcons.arrowshape_turn_up_right,
+                                    AppMediaShareIcon(
                                       size: AppSpacing.iconMedium,
                                       color: videoFgQuaternary,
                                     ),
@@ -2300,13 +2313,13 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
         AppSpacing.semantic[DesignSemanticConstants
             .intraGroup]?[DesignSemanticConstants.xs] ??
         AppSpacing.intraGroupXs;
-    final iconWidget = Icon(
-      icon == CupertinoIcons.heart
-          ? (filled ? CupertinoIcons.heart_fill : CupertinoIcons.heart)
-          : icon,
-      color: filled ? AppColors.error : videoFgQuaternary,
-      size: AppSpacing.iconMedium,
-    );
+    final iconWidget = icon == CupertinoIcons.heart
+        ? AppMediaHeartIcon(
+            size: AppSpacing.iconMedium,
+            color: filled ? AppColors.error : videoFgQuaternary,
+            filled: filled,
+          )
+        : Icon(icon, color: videoFgQuaternary, size: AppSpacing.iconMedium);
     return Padding(
       padding: EdgeInsets.only(bottom: AppSpacing.interGroupMd),
       child: GestureDetector(
@@ -2325,6 +2338,7 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.bold,
                 color: videoFg,
+                height: AppSpacing.one,
               ),
             ),
           ],
@@ -2368,6 +2382,7 @@ class _VideoImmersionViewState extends ConsumerState<_VideoImmersionView>
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.bold,
                 color: videoFg,
+                height: AppSpacing.one,
               ),
             ),
           ],

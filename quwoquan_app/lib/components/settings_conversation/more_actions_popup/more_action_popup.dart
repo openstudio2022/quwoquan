@@ -207,9 +207,10 @@ class _MediaPostMoreActionSheetState
   }
 
   void _showToast(String message) {
-    final navigatorContext = Navigator.of(context, rootNavigator: true).context;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final toastContext = navigator.overlay?.context ?? navigator.context;
     AppToast.show(
-      navigatorContext,
+      toastContext,
       message,
       duration: const Duration(milliseconds: 1600),
     );
@@ -358,10 +359,11 @@ class _MoreActionQuickSection extends StatelessWidget {
                               width: AppSpacing.hairline,
                             ),
                           ),
-                          child: Icon(
-                            action.icon,
-                            size: AppSpacing.iconMedium,
-                            color: secondaryText,
+                          child: Center(
+                            child: _QuickActionIcon(
+                              action: action,
+                              color: secondaryText,
+                            ),
                           ),
                         ),
                         SizedBox(height: AppSpacing.intraGroupSm),
@@ -389,6 +391,21 @@ class _MoreActionQuickSection extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _QuickActionIcon extends StatelessWidget {
+  const _QuickActionIcon({required this.action, required this.color});
+
+  final _ScrollAction action;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    if (action.id == 'message') {
+      return AppMessageBubbleIcon(size: AppSpacing.iconMedium, color: color);
+    }
+    return Icon(action.icon, size: AppSpacing.iconMedium, color: color);
   }
 }
 

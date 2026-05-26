@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
 import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
+import 'package:quwoquan_app/ui/content/pageflip/reverse_curl_calculation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
 @immutable
@@ -22,10 +23,12 @@ class BackwardRenderFrameData {
     required this.freeEdgeLine,
     required this.maxShadowOpacity,
     this.shadow,
+    this.reversePose,
   });
 
   final ui.Offset localPagePoint;
   final double progress;
+  final ReverseFlipPose? reversePose;
   final StPageFlipOrientation orientation;
   final StPageFlipCorner corner;
   final ui.Size pageSize;
@@ -102,7 +105,7 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
   final renderDirection = resolvePageFlipRenderDirection(
     direction: StPageFlipDirection.back,
     orientation: data.orientation,
-    reversePose: null,
+    reversePose: data.reversePose,
   );
 
   final visualGeometry = _resolveBackwardVisualGeometry(data);
@@ -110,7 +113,7 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
   final backwardLeafFrame = resolveArticlePageBackwardLeafFrame(
     direction: StPageFlipDirection.back,
     progress: progress,
-    reversePose: null,
+    reversePose: data.reversePose,
   )!;
   final backwardProjectedFrame = _buildBackwardProjectedFrame(
     localPagePoint: visualGeometry.localPagePoint,
@@ -153,9 +156,9 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
       pageSize: data.pageSize,
       corner: data.corner,
       angleBand: angleBand,
-      reversePose: null,
+      reversePose: data.reversePose,
     ),
-    reversePose: null,
+    reversePose: data.reversePose,
     backwardLeafFrame: backwardLeafFrame,
     backwardProjectedFrame: backwardProjectedFrame,
     routeBSpineMirroredApplied:
@@ -193,6 +196,19 @@ _BackwardVisualGeometry _resolveBackwardVisualGeometry(
         edgeLineSource: 'backwardForwardIsomorphicFreeEdgeLine',
       );
     }
+    return _BackwardVisualGeometry(
+      direction: StPageFlipDirection.forward,
+      localPagePoint: replayPoint,
+      flippingClipArea: const <ui.Offset>[],
+      bottomClipArea: const <ui.Offset>[],
+      flippingAnchor: ui.Offset.zero,
+      bottomAnchor: ui.Offset.zero,
+      angle: 0,
+      foldLine: null,
+      freeEdgeLine: null,
+      foldLineSource: 'backwardForwardIsomorphicCalcFailed',
+      edgeLineSource: 'backwardForwardIsomorphicCalcFailed',
+    );
   }
 
   return _BackwardVisualGeometry(

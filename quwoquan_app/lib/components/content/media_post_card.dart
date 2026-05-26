@@ -1,6 +1,5 @@
 // ignore_for_file: unused_element, deprecated_member_use_from_same_package
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -15,14 +14,17 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart' as comment_models;
+import 'package:quwoquan_app/components/comment_system/comment_models.dart'
+    as comment_models;
 
 /// 媒体帖子卡片基类
 /// 按照Figma原型设计，包含完整的交互功能和评论显示
 abstract class MediaPostCard extends ConsumerStatefulWidget {
   final PostBaseDto post;
+
   /// 可选覆盖；默认由 [presentation] 从 [post] 机械映射。
   final PostReadPresentation? readPresentation;
+
   /// 本卡片所服务的只读表面（见 `post-projection-pipeline-inventory`）。
   final PostReadSurfaceId surfaceId;
   final void Function(PostBaseDto, int) onPostTap;
@@ -107,7 +109,10 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
           decoration: BoxDecoration(
             // 浅色模式：post卡片使用乳白色/白色（backgroundPrimary）
             // 深色模式：post卡片使用稍微明亮一点的黑色 (#262626)
-            color: AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary),
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.backgroundPrimary,
+            ),
             borderRadius: widget.isFirstPost
                 ? BorderRadius.only(
                     // 第一个post的顶部两个角保持直角
@@ -212,13 +217,13 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   void _handleThemeToggle() {
     // 切换主题 - 添加mounted检查防止dispose后访问ref
     if (!mounted) return;
-    
+
     try {
       // 立即关闭弹窗，避免在主题切换过程中出现布局异常
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       }
-      
+
       // 延迟切换主题，确保弹窗关闭完成
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
@@ -284,16 +289,9 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
       onBlockUser: _handleBlockUser,
       onReport: _handleReport,
     );
-    
-    MoreActionPopup.show(
-      context: context,
-      config: config,
-    );
+
+    MoreActionPopup.show(context: context, config: config);
   }
-
-
-
-
 
   /// 显示评论查看器
   void _showCommentViewer() {
@@ -303,12 +301,11 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     );
   }
 
-
   /// 构建用户信息头部 - 基于原型代码增强，支持发布者类型和关注功能
   Widget _buildPostHeader(BuildContext context, bool isDark) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        AppSpacing.contentSpacingMd.w,  // 使用更小的内容间距
+        AppSpacing.contentSpacingMd.w, // 使用更小的内容间距
         AppSpacing.contentSpacingMd.h,
         AppSpacing.contentSpacingMd.w,
         AppSpacing.contentSpacingMd.h,
@@ -327,22 +324,27 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
               ),
               child: CircleAvatar(
                 radius: (AppSpacing.avatarSize / 2).r,
-                backgroundColor: AppColorsFunctional.getColor(isDark, ColorType.backgroundTertiary),
+                backgroundColor: AppColorsFunctional.getColor(
+                  isDark,
+                  ColorType.backgroundTertiary,
+                ),
                 backgroundImage: widget.presentation.avatarUrl.isNotEmpty
                     ? NetworkImage(widget.presentation.avatarUrl)
                     : null,
                 child: widget.presentation.avatarUrl.isEmpty
-                    ? Icon(Icons.person,
+                    ? Icon(
+                        Icons.person,
                         size: AppSpacing.iconMedium, // 使用语义标签
-                        color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary))
+                        color: AppColorsFunctional.getColor(
+                          isDark,
+                          ColorType.foregroundSecondary,
+                        ),
+                      )
                     : null,
               ),
             ),
           ),
-          SizedBox(
-              width: context
-                              .safeGetIntraGroupSpacing(SpacingSize.sm)
-                  .w),
+          SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.sm).w),
 
           // 用户名和时间 - 基于原型代码增强
           Expanded(
@@ -408,14 +410,16 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
           GestureDetector(
             onTap: _showMoreOptions,
             child: Padding(
-              padding: EdgeInsets.all(context
-                              .safeGetIntraGroupSpacing(SpacingSize.sm)
-                  .w),
+              padding: EdgeInsets.all(
+                context.safeGetIntraGroupSpacing(SpacingSize.sm).w,
+              ),
               child: Icon(
                 Icons.more_horiz,
                 size: AppSpacing.iconMedium, // 使用语义标签
                 color: isDark
-                    ? AppColors.dark.foregroundSecondary // 黑夜模式使用次颜色
+                    ? AppColors
+                          .dark
+                          .foregroundSecondary // 黑夜模式使用次颜色
                     : AppColors.light.foregroundSecondary,
               ),
             ),
@@ -446,7 +450,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
       '192.168.1.9': '南京',
       '192.168.1.10': '重庆',
     };
-    
+
     return ipLocationMap[ip] ?? '未知地区';
   }
 
@@ -454,19 +458,21 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   Widget _buildInteractionToolbar(BuildContext context, bool isDark) {
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.contentSpacingMd.w,  // 使用更小的内容间距
+        horizontal: AppSpacing.contentSpacingMd.w, // 使用更小的内容间距
         vertical: AppSpacing.contentSpacingMd.h,
       ),
       child: Row(
         children: [
           // 点赞按钮
           _buildInteractionButton(
-            iconWidget: Icon(
-              _isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+            iconWidget: AppMediaHeartIcon(
               size: AppSpacing.iconSmall,
               color: _isLiked
                   ? AppColors.error
-                  : (isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary),
+                  : (isDark
+                        ? AppColors.dark.foregroundPrimary
+                        : AppColors.light.foregroundPrimary),
+              filled: _isLiked,
             ),
             count: _likesCount,
             isActive: _isLiked,
@@ -476,9 +482,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             countKey: TestKeys.likeCountText,
           ),
 
-          SizedBox(
-            width: context.safeGetInterGroupSpacing(SpacingSize.lg).w,
-          ),
+          SizedBox(width: context.safeGetInterGroupSpacing(SpacingSize.lg).w),
 
           // 收藏按钮
           _buildInteractionButton(
@@ -486,7 +490,9 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
               size: AppSpacing.iconSmall,
               color: _isBookmarked
                   ? AppColors.warning
-                  : (isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary),
+                  : (isDark
+                        ? AppColors.dark.foregroundPrimary
+                        : AppColors.light.foregroundPrimary),
               filled: _isBookmarked,
             ),
             count: _savesCount,
@@ -495,15 +501,15 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             isDark: isDark,
           ),
 
-          SizedBox(
-            width: context.safeGetInterGroupSpacing(SpacingSize.lg).w,
-          ),
+          SizedBox(width: context.safeGetInterGroupSpacing(SpacingSize.lg).w),
 
           // 评论按钮
           _buildInteractionButton(
-            iconWidget: AppBubbleIcon(
+            iconWidget: AppMediaCommentIcon(
               size: AppSpacing.iconSmall,
-              color: isDark ? AppColors.dark.foregroundPrimary : AppColors.light.foregroundPrimary,
+              color: isDark
+                  ? AppColors.dark.foregroundPrimary
+                  : AppColors.light.foregroundPrimary,
             ),
             count: _commentsCount,
             isActive: false,
@@ -513,9 +519,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
             countKey: TestKeys.commentCountText,
           ),
 
-          SizedBox(
-            width: context.safeGetInterGroupSpacing(SpacingSize.sm).w,
-          ),
+          SizedBox(width: context.safeGetInterGroupSpacing(SpacingSize.sm).w),
 
           // 转发按钮 - 与左组固定组间间距
           _buildShareButton(isDark),
@@ -540,25 +544,19 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: EdgeInsets.symmetric(
-          horizontal: context
-                              .safeGetIntraGroupSpacing(SpacingSize.sm)
-              .w,
-          vertical: context
-                    .safeGetIntraGroupSpacing(SpacingSize.xs)
-              .h,
+          horizontal: context.safeGetIntraGroupSpacing(SpacingSize.sm).w,
+          vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs).h,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             AnimatedScale(
               scale: isActive ? 1.1 : 1.0,
               duration: const Duration(milliseconds: 200),
               child: iconWidget,
             ),
-            SizedBox(
-                width: context
-                    .safeGetIntraGroupSpacing(SpacingSize.xs)
-                    .w),
+            SizedBox(width: context.safeGetIntraGroupSpacing(SpacingSize.xs).w),
             SizedBox(
               width: AppSpacing.forty.w,
               child: Text(
@@ -570,6 +568,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
                       ? AppColors.dark.foregroundSecondary
                       : AppColors.light.foregroundSecondary,
                   fontWeight: AppTypography.medium,
+                  height: AppSpacing.one,
                 ),
                 textAlign: TextAlign.left,
                 overflow: TextOverflow.ellipsis,
@@ -587,18 +586,14 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
       onTap: _handleShare,
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: context
-                              .safeGetIntraGroupSpacing(SpacingSize.sm)
-              .w,
-          vertical: context
-                    .safeGetIntraGroupSpacing(SpacingSize.xs)
-              .h,
+          horizontal: context.safeGetIntraGroupSpacing(SpacingSize.sm).w,
+          vertical: context.safeGetIntraGroupSpacing(SpacingSize.xs).h,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(
-              CupertinoIcons.arrowshape_turn_up_right,
+            AppMediaShareIcon(
               size: AppSpacing.iconSmall,
               color: isDark
                   ? AppColors.dark.foregroundPrimary
@@ -614,7 +609,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
   Widget _buildLikesAndCommentsCount(BuildContext context, bool isDark) {
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.contentSpacingMd.w,  // 使用更小的内容间距
+        horizontal: AppSpacing.contentSpacingMd.w, // 使用更小的内容间距
         vertical: AppSpacing.contentSpacingXs.h,
       ),
       child: Column(
@@ -624,9 +619,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
           if (_likesCount > 0)
             Padding(
               padding: EdgeInsets.only(
-                  bottom: context
-                    .safeGetIntraGroupSpacing(SpacingSize.xs)
-                      .h),
+                bottom: context.safeGetIntraGroupSpacing(SpacingSize.xs).h,
+              ),
               child: Row(
                 children: [
                   Text(
@@ -679,7 +673,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
 
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.contentSpacingMd.w,  // 使用更小的内容间距
+        horizontal: AppSpacing.contentSpacingMd.w, // 使用更小的内容间距
         vertical: AppSpacing.contentSpacingXs.h,
       ),
       child: RichText(
@@ -743,7 +737,6 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     return formatCompactActionCount(count);
   }
 
-
   /// 处理评论添加
   void _handleCommentAdded(String content) {
     _showToast(UITextConstants.commentSent);
@@ -755,7 +748,7 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     _showToast(AppStrings.likeSuccess);
     // TODO: 实现实际的评论点赞逻辑
   }
-  
+
   void _handleCommentLikedById(String commentId) {
     _showToast(AppStrings.likeSuccess);
     // TODO: 实现实际的评论点赞逻辑

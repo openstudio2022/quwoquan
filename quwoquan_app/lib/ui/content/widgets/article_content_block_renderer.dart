@@ -26,7 +26,7 @@ class ArticleContentSurface extends StatelessWidget {
         backgroundColor ??
         CupertinoColors.systemBackground.resolveFrom(context);
     final borderColor = highlighted
-        ? CupertinoColors.activeBlue.resolveFrom(context)
+        ? AppColors.iosAccent(context)
         : CupertinoColors.separator
               .resolveFrom(context)
               .withValues(alpha: 0.14);
@@ -63,6 +63,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
     final sectionHeadingLineHeight = articleBodyLineHeight() * 0.72;
     final titleColor = CupertinoColors.label.resolveFrom(context);
     final bodyColor = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final accent = AppColors.iosAccent(context);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -128,9 +129,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                 height: AppSpacing.twentyEight,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: CupertinoColors.activeBlue
-                      .resolveFrom(context)
-                      .withValues(alpha: 0.12),
+                  color: accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(
                     AppSpacing.radiusNinetyNine,
                   ),
@@ -138,7 +137,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                 child: Text(
                   '${block.orderedIndex ?? 1}',
                   style: TextStyle(
-                    color: CupertinoColors.activeBlue.resolveFrom(context),
+                    color: accent,
                     fontSize: AppTypography.sm,
                     fontWeight: AppTypography.semiBold,
                   ),
@@ -166,7 +165,7 @@ class ArticleContentBlockRenderer extends StatelessWidget {
                   width: AppSpacing.sm,
                   height: AppSpacing.sm,
                   decoration: BoxDecoration(
-                    color: CupertinoColors.activeBlue.resolveFrom(context),
+                    color: accent,
                     borderRadius: BorderRadius.circular(AppSpacing.xs),
                   ),
                 ),

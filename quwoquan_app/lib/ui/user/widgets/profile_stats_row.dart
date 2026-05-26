@@ -24,9 +24,9 @@ class ProfileStatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final fg = AppColors.iosLabel(context);
     final fgSecondary = AppColors.iosSecondaryLabel(context);
-    final separator = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.28 : 0.18);
+    final separator = SettingsSemanticConstants.conversationSheetDividerColor(
+      isDark,
+    ).withValues(alpha: 0.9);
     final subject = profile;
 
     final items = [
@@ -49,10 +49,12 @@ class ProfileStatsRow extends StatelessWidget {
 
     return ProfileIosSectionCard(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.containerSm),
-      backgroundColor: AppColors.iosProfileSurface(context),
-      borderColor: AppColors.iosSeparator(
-        context,
-      ).withValues(alpha: isDark ? 0.24 : 0.1),
+      backgroundColor: SettingsSemanticConstants.conversationSheetCardSurface(
+        isDark,
+      ),
+      borderColor: SettingsSemanticConstants.conversationSheetCardBorderColor(
+        isDark,
+      ),
       child: Row(
         children: <Widget>[
           for (var i = 0; i < items.length; i += 1) ...<Widget>[

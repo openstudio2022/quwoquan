@@ -281,6 +281,8 @@ class _RemoteModeNotifier extends AppDataSourceModeNotifier {
 
 PhotoPostDto _photoPost({
   List<String> imageUrls = const ['https://example.com/photo.jpg'],
+  int? width,
+  int? height,
 }) {
   return PhotoPostDto(
     id: 'photo-1',
@@ -293,6 +295,30 @@ PhotoPostDto _photoPost({
     body: 'dto body',
     coverUrl: 'https://example.com/photo.jpg',
     imageUrls: imageUrls,
+    width: width,
+    height: height,
+    likeCount: 0,
+    commentCount: 0,
+    favoriteCount: 0,
+    shareCount: 0,
+    createdAt: DateTime.now(),
+  );
+}
+
+VideoPostDto _videoPost({int? width, int? height}) {
+  return VideoPostDto(
+    id: 'video-1',
+    type: 'video',
+    identity: 'work',
+    assistantUsePolicy: 'inherit',
+    authorId: 'author-video',
+    displayName: '视频作者',
+    avatarUrl: 'https://example.com/avatar-video.jpg',
+    body: 'video body',
+    videoUrl: 'https://example.com/video.mp4',
+    thumbnailUrl: 'https://example.com/video.jpg',
+    width: width,
+    height: height,
     likeCount: 0,
     commentCount: 0,
     favoriteCount: 0,
@@ -568,6 +594,87 @@ void main() {
     expect(find.text('测试圈子A'), findsOneWidget);
     expect(find.text('测试圈子B'), findsOneWidget);
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
+  });
+
+  testWidgets('精品页竖向图片按宽高比铺入状态栏', (tester) async {
+    final post = _photoPost(width: 900, height: 1200);
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          topChromeSafeInset: AppSpacing.twenty,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    final canvasRect = tester.getRect(
+      find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
+    );
+    expect((canvasRect.top - viewerRect.top).abs(), lessThan(1));
+  });
+
+  testWidgets('精品页宽横图保留状态栏安全区', (tester) async {
+    final post = _photoPost(width: 1600, height: 900);
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          topChromeSafeInset: AppSpacing.twenty,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    final canvasRect = tester.getRect(
+      find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
+    );
+    expect(
+      canvasRect.top - viewerRect.top,
+      moreOrLessEquals(AppSpacing.twenty),
+    );
+  });
+
+  testWidgets('精品页视频可铺入状态栏', (tester) async {
+    final post = _videoPost(width: 1920, height: 1080);
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          topChromeSafeInset: AppSpacing.twenty,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await tester.pumpAndSettle();
+
+    final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
+    final canvasRect = tester.getRect(
+      find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
+    );
+    expect((canvasRect.top - viewerRect.top).abs(), lessThan(1));
   });
 
   testWidgets('photo post 在 iPad 宽屏下顶部说明底部对齐到同一 media rail', (tester) async {

@@ -23,19 +23,13 @@ class BottomNavigationWidget extends ConsumerWidget {
     // 与 [MainAppShell] 主壳底同色，避免 glassSurface + BackdropFilter 的半透明毛玻璃感。
     final navBackground = forceDark
         ? AppColors.worksBackground
-        : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
+        : SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final activeColor = forceDark
         ? CupertinoColors.white
         : AppColors.iosLabel(context);
     final inactiveColor = forceDark
         ? CupertinoColors.systemGrey
         : AppColors.iosSecondaryLabel(context);
-    final borderColor = forceDark
-        ? CupertinoColors.systemGrey.withValues(alpha: 0.28)
-        : AppColorsFunctional.getColor(
-            isDark,
-            ColorType.separatorOpaque,
-          ).withValues(alpha: 0.72);
     final destinations = const <_BottomDestination>[
       _BottomDestination(
         label: AppConceptConstants.discovery,
@@ -70,12 +64,7 @@ class BottomNavigationWidget extends ConsumerWidget {
     );
     final navHeight = AppSpacing.bottomNavBarHeight(context);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: navBackground,
-        border: Border(
-          top: BorderSide(color: borderColor, width: AppSpacing.hairline),
-        ),
-      ),
+      decoration: BoxDecoration(color: navBackground),
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: sideInset),
         child: SizedBox(
@@ -99,6 +88,7 @@ class BottomNavigationWidget extends ConsumerWidget {
                     selected: selected,
                     activeColor: activeColor,
                     inactiveColor: inactiveColor,
+                    backgroundColor: navBackground,
                     contentHeight: navHeight + bottomInset,
                   ),
                 ),
@@ -137,6 +127,7 @@ class _BottomNavItem extends StatelessWidget {
     required this.selected,
     required this.activeColor,
     required this.inactiveColor,
+    required this.backgroundColor,
     required this.contentHeight,
   });
 
@@ -144,6 +135,7 @@ class _BottomNavItem extends StatelessWidget {
   final bool selected;
   final Color activeColor;
   final Color inactiveColor;
+  final Color backgroundColor;
   final double contentHeight;
 
   @override
@@ -217,6 +209,7 @@ class _BottomNavItem extends StatelessWidget {
       _BottomCustomIcon.messages => AppMessagesIcon(
         size: size,
         color: color,
+        backgroundColor: backgroundColor,
         filled: selected,
       ),
       null => Icon(

@@ -282,6 +282,9 @@ class AppSpacing {
   static double appChromeTopBarHeight(BuildContext context) =>
       primaryTopBarHeight(context);
 
+  /// 媒体可铺进状态栏的最大宽高比；竖图/方图可沉浸，宽横图保留安全区。
+  static const double immersiveStatusBarMaxAspectRatio = one;
+
   /// 普通导航栏 chrome 高度（CupertinoNavigationBar / Inset / 内页）。
   static const double appChromeNavigationBarHeight = toolbarHeight;
 
@@ -294,6 +297,18 @@ class AppSpacing {
 
   /// 应用级 toolbar 操作图标尺寸。
   static const double appChromeActionIconSize = iconMedium;
+
+  /// 全局「小趣」入口品牌圆标直径，与搜索等顶栏图标保持同一视觉尺寸。
+  static const double globalAssistantEntryMarkSize = appChromeActionIconSize;
+
+  /// 全局「小趣」入口圆标内星光尺寸，首页、消息、我的主页保持一致。
+  static const double globalAssistantEntryGlyphSize = iconSmall;
+
+  /// 全局「小趣」入口圆标与文字标签的垂直间距，与底部导航图标/文字节奏一致。
+  static const double globalAssistantEntryLabelGap = bottomNavIconLabelGap;
+
+  /// 首页「小趣搜」搜索框高度，与 iOS 最小可触控高度对齐。
+  static const double globalSearchFieldHeight = minInteractiveSize;
 
   /// 顶栏文字操作最小热区高度。
   static const double appChromeTextActionMinHeight = appChromeActionButtonSize;
@@ -427,6 +442,14 @@ class AppSpacing {
     return inset < 0 ? 0 : inset;
   }
 
+  /// 顶部右侧以「小趣」圆标作为最右视觉对象时的热区定位值。
+  static double topBarTrailingAssistantButtonInset(BuildContext context) {
+    final inset =
+        topBarTrailingVisualInset(context) -
+        ((minInteractiveSize - globalAssistantEntryMarkSize) / 2);
+    return inset < 0 ? 0 : inset;
+  }
+
   /// 二级 Tab 组间距语义。趣信、作者主页与其他二级筛选统一使用。
   static double secondaryTabGap(BuildContext context) => responsiveValue(
     context,
@@ -547,23 +570,23 @@ class AppSpacing {
   /// 媒体查看器顶栏位置指示器预估宽度（如 "1/9"）: 44.0
   static const double mediaViewerPositionIndicatorWidth = 44.0;
 
-  /// 底部导航中间创作按钮圆形直径
-  static const double primaryActionCircleSize = 36.0;
+  /// 底部导航中间创作按钮圆形直径，靠主色突出而不高于普通项视觉块。
+  static const double primaryActionCircleSize = 32.0;
 
   /// 底部导航普通项图标尺寸，保持当前主壳视觉基线。
   static const double bottomNavItemIconSize = 22.0;
 
   /// 底部导航主操作内图标尺寸。
-  static const double bottomNavPrimaryActionIconSize = 20.0;
+  static const double bottomNavPrimaryActionIconSize = 18.0;
 
-  /// 底部导航图标与标签间距。
-  static const double bottomNavIconLabelGap = oneHalf;
+  /// 底部导航图标与标签间距，保留小幅呼吸感。
+  static const double bottomNavIconLabelGap = six;
 
   /// 底部导航标签字距。
   static const double bottomNavLabelLetterSpacing = -0.08;
 
   /// 底部导航主操作阴影垂直偏移。
-  static const double bottomNavPrimaryActionShadowOffsetDy = xs;
+  static const double bottomNavPrimaryActionShadowOffsetDy = two;
 
   /// 沉浸媒体底栏作者头像尺寸，三档统一避免压过动作列。
   static double immersiveEngagementAvatarSize(BuildContext context) =>

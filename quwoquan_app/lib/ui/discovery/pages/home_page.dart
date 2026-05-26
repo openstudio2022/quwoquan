@@ -1,10 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, MaterialType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/models/assistant_open_context.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
@@ -126,81 +128,81 @@ class _HomePageState extends ConsumerState<HomePage>
   Widget build(BuildContext context) {
     super.build(context);
     final safeTop = MediaQuery.viewPaddingOf(context).top;
-    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
-      safeTop,
-      context,
-    );
+    final effectiveTopInset = safeTop + AppSpacing.intraGroupXs;
 
     final isDark = ref.watch(isDarkProvider);
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
-    final borderColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
+    final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final searchChromeColor = isDark ? bg : AppColors.primaryColor;
+    final searchChromeSurface = AppChromeSurface.immersive;
+    final searchToTabGap = AppSpacing.intraGroupXs;
+    final statusBarStyle = SystemUiOverlayStyle(
+      statusBarColor: AppColors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: AppColors.transparent,
+      systemNavigationBarIconBrightness: isDark
+          ? Brightness.light
+          : Brightness.dark,
     );
 
-    return CupertinoPageScaffold(
-      backgroundColor: bg,
-      child: Material(
-        type: MaterialType.transparency,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: effectiveTopInset),
-            Container(
-              height:
-                  AppSpacing.appChromeTopBarHeight(context) +
-                  AppSpacing.primaryTopBarHeight(context) +
-                  AppSpacing.hairline,
-              decoration: BoxDecoration(
-                color: bg,
-                border: Border(
-                  bottom: BorderSide(
-                    color: borderColor,
-                    width: AppSpacing.hairline,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: statusBarStyle,
+      child: CupertinoPageScaffold(
+        backgroundColor: bg,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                key: const ValueKey<String>('home-search-chrome'),
+                height:
+                    effectiveTopInset +
+                    AppSpacing.globalSearchFieldHeight +
+                    searchToTabGap,
+                padding: EdgeInsets.only(top: effectiveTopInset),
+                color: searchChromeColor,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.feedContentHorizontal(context),
+                    ),
+                    child: GlobalXiaoquSearchBar(
+                      initialSearchScope: GlobalSearchScope.content,
+                      surface: searchChromeSurface,
+                    ),
                   ),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SizedBox(
-                    height: AppSpacing.appChromeTopBarHeight(context),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.feedContentHorizontal(context),
-                      ),
-                      child: const Center(
-                        child: GlobalXiaoquSearchBar(
-                          initialSearchScope: GlobalSearchScope.content,
-                        ),
-                      ),
+              Container(
+                key: const ValueKey<String>('home-primary-tab-chrome'),
+                height: AppSpacing.primaryTopBarHeight(context),
+                decoration: BoxDecoration(color: bg),
+                child: SizedBox(
+                  height: AppSpacing.primaryTopBarHeight(context),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppSpacing.feedContentHorizontal(context),
+                    ),
+                    child: HomePrimaryTabStrip(
+                      activeTab: _activeTab,
+                      onTabChange: _handleTabChange,
+                      onHorizontalDragEnd: _handleTabSwipeDragEnd,
+                      isDark: isDark,
                     ),
                   ),
-                  SizedBox(
-                    height: AppSpacing.primaryTopBarHeight(context),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.feedContentHorizontal(context),
-                      ),
-                      child: HomePrimaryTabStrip(
-                        activeTab: _activeTab,
-                        onTabChange: _handleTabChange,
-                        onHorizontalDragEnd: _handleTabSwipeDragEnd,
-                        isDark: isDark,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            Expanded(
-              child: TabSwipeSwitchRegion(
-                enabled: true,
-                onSwipe: _handleTabSwipe,
-                child: _buildBody(isDark),
+              Expanded(
+                child: TabSwipeSwitchRegion(
+                  enabled: true,
+                  onSwipe: _handleTabSwipe,
+                  child: _buildBody(isDark),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -357,30 +359,22 @@ class HomeFeaturedImmersivePage extends ConsumerWidget {
       backgroundColor: AppColors.black,
       child: Material(
         type: MaterialType.transparency,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(height: effectiveTopInset),
-            Expanded(
-              child: WorksImmersiveViewer(
-                showWorksToolbar: true,
-                topChromeSafeInset: AppSpacing.zero,
-                onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
-                    _openUserProfile(
-                      context,
-                      userId,
-                      avatarUrl: avatarUrl,
-                      displayName: displayName,
-                      backgroundUrl: backgroundUrl,
-                    ),
-                onAssistantTap: () => _openAssistantHalfSheet(context, ref),
-                onTapBack: onExitToHome,
-                onSwitchToMoment: onExitToHome,
-                onSwitchToFollowing: onExitToHome,
-                onSwitchToCircles: onExitToHome,
+        child: WorksImmersiveViewer(
+          showWorksToolbar: true,
+          topChromeSafeInset: effectiveTopInset,
+          onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
+              _openUserProfile(
+                context,
+                userId,
+                avatarUrl: avatarUrl,
+                displayName: displayName,
+                backgroundUrl: backgroundUrl,
               ),
-            ),
-          ],
+          onAssistantTap: () => _openAssistantHalfSheet(context, ref),
+          onTapBack: onExitToHome,
+          onSwitchToMoment: onExitToHome,
+          onSwitchToFollowing: onExitToHome,
+          onSwitchToCircles: onExitToHome,
         ),
       ),
     );

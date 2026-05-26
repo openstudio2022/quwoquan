@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -70,10 +71,14 @@ class ProfileIosSectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fill = backgroundColor ?? AppColors.iosGroupedSurface(context);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fill =
+        backgroundColor ??
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final separator =
-        borderColor ?? AppColors.iosSeparator(context).withValues(alpha: 0.16);
-    final shadow = CupertinoTheme.of(context).brightness == Brightness.dark
+        borderColor ??
+        SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
+    final shadow = isDark
         ? AppColors.black.withValues(alpha: 0.22)
         : AppColors.black.withValues(alpha: 0.05);
     return Container(
@@ -119,12 +124,15 @@ class ProfileIosGroupedSection extends StatelessWidget {
     for (var i = 0; i < children.length; i += 1) {
       sectionChildren.add(children[i]);
       if (showDividers && i != children.length - 1) {
+        final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
         sectionChildren.add(
           Padding(
             padding: EdgeInsets.only(left: AppSpacing.containerMd),
             child: Container(
               height: AppSpacing.hairline,
-              color: AppColors.iosSeparator(context).withValues(alpha: 0.32),
+              color: SettingsSemanticConstants.conversationSheetDividerColor(
+                isDark,
+              ).withValues(alpha: 0.9),
             ),
           ),
         );
@@ -147,7 +155,9 @@ class ProfileIosGroupedSection extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(AppSpacing.radiusEighteen),
             child: Container(
-              color: AppColors.iosGroupedSurface(context),
+              color: SettingsSemanticConstants.conversationSheetCardSurface(
+                CupertinoTheme.of(context).brightness == Brightness.dark,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: sectionChildren,

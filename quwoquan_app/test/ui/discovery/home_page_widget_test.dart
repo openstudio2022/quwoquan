@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -7,8 +8,10 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
@@ -52,6 +55,38 @@ Widget _buildApp() {
             GoRoute(
               path: '/user/:username',
               builder: (context, state) => const SizedBox(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildDarkApp() {
+  return ProviderScope(
+    overrides: [isDarkProvider.overrideWith((ref) => true)],
+    child: ScreenUtilInit(
+      designSize: const Size(393, 852),
+      child: MaterialApp.router(
+        theme: ThemeData.dark(),
+        routerConfig: GoRouter(
+          initialLocation: '/',
+          routes: [
+            GoRoute(
+              path: '/',
+              builder: (context, state) =>
+                  const Scaffold(body: HomePage(routeLocation: '/')),
+            ),
+            GoRoute(
+              path: '/search',
+              builder: (context, state) => const GlobalSearchPage(
+                launchContext: SearchLaunchContext(entrySurfaceId: '/'),
+              ),
+            ),
+            GoRoute(
+              path: '/user/:username',
+              builder: (_, _) => const SizedBox(),
             ),
           ],
         ),
@@ -267,9 +302,128 @@ void main() {
       expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
       expect(find.text(UITextConstants.globalXiaoquSearchHint), findsOneWidget);
       expect(find.text(UITextConstants.globalXiaoquSearchAsk), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(TestKeys.globalAssistantEntryMark)),
+        const Size.square(AppSpacing.globalAssistantEntryMarkSize),
+      );
+      final assistantMarkRect = tester.getRect(
+        find.byKey(TestKeys.globalAssistantEntryMark),
+      );
+      final assistantLabelRect = tester.getRect(
+        find.text(UITextConstants.globalXiaoquSearchAsk),
+      );
+      expect(
+        assistantLabelRect.top - assistantMarkRect.bottom,
+        moreOrLessEquals(
+          AppSpacing.globalAssistantEntryLabelGap,
+          epsilon: AppSpacing.hairline,
+        ),
+      );
     });
 
-    testWidgets('首页顶部工具栏与发现页搜索壳保持同源安全区节奏', (tester) async {
+    testWidgets('浅色首页状态栏和搜索区使用品牌蓝沉浸背景', (tester) async {
+      _suppressExpectedErrors();
+      _setPhoneSize(tester);
+      tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewPadding);
+
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      final chrome = tester.widget<Container>(
+        find.byKey(const ValueKey<String>('home-search-chrome')),
+      );
+      expect(chrome.color, AppColors.primaryColor);
+      expect(
+        tester
+            .widget<GlobalXiaoquSearchBar>(find.byType(GlobalXiaoquSearchBar))
+            .surface,
+        AppChromeSurface.immersive,
+      );
+      final searchField = tester
+          .widgetList<Container>(
+            find.descendant(
+              of: find.byType(GlobalXiaoquSearchBar),
+              matching: find.byType(Container),
+            ),
+          )
+          .firstWhere((widget) => widget.decoration is BoxDecoration);
+      final searchFieldDecoration = searchField.decoration! as BoxDecoration;
+      expect(
+        searchFieldDecoration.color,
+        AppColorsFunctional.getColor(
+          false,
+          ColorType.globalSearchFieldBackground,
+        ),
+      );
+      final searchHint = tester.widget<Text>(
+        find.text(UITextConstants.globalXiaoquSearchHint),
+      );
+      final searchIcon = tester.widget<Icon>(
+        find
+            .descendant(
+              of: find.byType(GlobalXiaoquSearchBar),
+              matching: find.byIcon(CupertinoIcons.search),
+            )
+            .first,
+      );
+      expect(
+        searchHint.style?.color,
+        AppColorsFunctional.getColor(false, ColorType.foregroundSecondary),
+      );
+      expect(
+        searchIcon.color,
+        AppColorsFunctional.getColor(false, ColorType.foregroundSecondary),
+      );
+      final overlay = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+        find
+            .descendant(
+              of: find.byType(HomePage),
+              matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+            )
+            .first,
+      );
+      expect(overlay.value.statusBarIconBrightness, Brightness.light);
+      expect(overlay.value.statusBarBrightness, Brightness.dark);
+    });
+
+    testWidgets('深色首页搜索输入框使用低对比语义背景', (tester) async {
+      _suppressExpectedErrors();
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildDarkApp());
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .widget<GlobalXiaoquSearchBar>(find.byType(GlobalXiaoquSearchBar))
+            .surface,
+        AppChromeSurface.immersive,
+      );
+      final searchField = tester
+          .widgetList<Container>(
+            find.descendant(
+              of: find.byType(GlobalXiaoquSearchBar),
+              matching: find.byType(Container),
+            ),
+          )
+          .firstWhere((widget) => widget.decoration is BoxDecoration);
+      final decoration = searchField.decoration! as BoxDecoration;
+      expect(
+        decoration.color,
+        AppColorsFunctional.getColor(
+          true,
+          ColorType.globalSearchFieldBackground,
+        ),
+      );
+      expect(decoration.color, isNot(AppColors.white));
+    });
+
+    testWidgets('首页搜索框避开安全区并使用 post 正文字号', (tester) async {
       _suppressExpectedErrors();
       _setPhoneSize(tester);
       tester.view.viewPadding = const FakeViewPadding(top: 59, bottom: 34);
@@ -281,22 +435,119 @@ void main() {
       await tester.pumpAndSettle();
 
       final page = tester.element(find.byType(HomePage));
+      final searchBar = find.byType(GlobalXiaoquSearchBar);
       final stripTop = tester.getTopLeft(find.byType(HomePrimaryTabStrip)).dy;
+      final searchTop = tester.getTopLeft(searchBar).dy;
+      final searchSize = tester.getSize(searchBar);
+      final searchHint = tester.widget<Text>(
+        find.text(UITextConstants.globalXiaoquSearchHint),
+      );
       final safeTop =
           tester.view.viewPadding.top / tester.view.devicePixelRatio;
-      final expectedTopInset = AppSpacing.primaryTopBarSafeTopInset(
-        safeTop,
-        page,
-      );
-      final searchHeight = AppSpacing.appChromeTopBarHeight(page);
+      final expectedTopInset = safeTop + AppSpacing.intraGroupXs;
+      final searchHeight = AppSpacing.globalSearchFieldHeight;
+      final searchToTabGap = AppSpacing.intraGroupXs;
       final navHeight = AppSpacing.primaryTopBarHeight(page);
 
-      expect(stripTop, greaterThanOrEqualTo(expectedTopInset + searchHeight));
+      expect(searchTop, greaterThanOrEqualTo(expectedTopInset));
+      expect(searchSize.height, equals(searchHeight));
+      expect(
+        searchHint.style?.fontSize,
+        equals(AppTypography.feedBodyResponsive(page)),
+      );
       expect(
         stripTop,
-        lessThanOrEqualTo(expectedTopInset + searchHeight + navHeight),
+        greaterThanOrEqualTo(expectedTopInset + searchHeight + searchToTabGap),
       );
-      expect(expectedTopInset, lessThan(safeTop));
+      expect(
+        stripTop,
+        lessThanOrEqualTo(
+          expectedTopInset + searchHeight + searchToTabGap + navHeight,
+        ),
+      );
+    });
+
+    testWidgets('浅色首页一级 Tab 选中 label 和下划线使用蓝色', (tester) async {
+      _suppressExpectedErrors();
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      final selectedTab = find.byKey(
+        HomePrimaryTabStrip.tabKey(HomePrimaryTabStrip.recommendedTabId),
+      );
+      final selectedLabel = tester.widget<Text>(
+        find
+            .descendant(
+              of: selectedTab,
+              matching: find.text(UITextConstants.homeTabRecommended),
+            )
+            .first,
+      );
+      final underline = tester.widget<AnimatedContainer>(
+        find.descendant(
+          of: selectedTab,
+          matching: find.byType(AnimatedContainer),
+        ),
+      );
+      final underlineDecoration = underline.decoration! as BoxDecoration;
+
+      expect(selectedLabel.style?.color, AppColors.primaryColor);
+      expect(underlineDecoration.color, AppColors.primaryColor);
+    });
+
+    testWidgets('浅色首页一级 Tab 与列表露底使用 post 表面色', (tester) async {
+      _suppressExpectedErrors();
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      final expectedSurface =
+          SettingsSemanticConstants.conversationSheetCardSurface(false);
+      final tabChrome = tester.widget<Container>(
+        find.byKey(const ValueKey<String>('home-primary-tab-chrome')),
+      );
+      final listBackground = tester.widget<ColoredBox>(
+        find
+            .ancestor(
+              of: find.byType(ListView),
+              matching: find.byType(ColoredBox),
+            )
+            .first,
+      );
+
+      expect(tabChrome.decoration, isA<BoxDecoration>());
+      expect((tabChrome.decoration! as BoxDecoration).color, expectedSurface);
+      expect((tabChrome.decoration! as BoxDecoration).border, isNull);
+      expect(listBackground.color, expectedSurface);
+    });
+
+    testWidgets('首页 post 之间使用消息列表同源分割线', (tester) async {
+      _suppressExpectedErrors();
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_buildApp());
+      await tester.pumpAndSettle();
+
+      final divider = tester.widget<Divider>(
+        find.byKey(const ValueKey<String>('moment-feed-divider-0')),
+      );
+      expect(divider.height, AppSpacing.one);
+      expect(divider.thickness, AppSpacing.hairline);
+      expect(
+        divider.color,
+        SettingsSemanticConstants.conversationSheetDividerColor(
+          false,
+        ).withValues(alpha: 0.9),
+      );
     });
 
     testWidgets('首页主 Tab 不再渲染圈子入口', (tester) async {
@@ -364,6 +615,19 @@ void main() {
 
       expect(cardFinder, findsOneWidget);
       expect(tester.getSize(cardFinder).width, closeTo(screenWidth, 1.0));
+      final cardDecoration =
+          tester.widget<DecoratedBox>(cardFinder).decoration as BoxDecoration;
+      final isDark =
+          CupertinoTheme.of(tester.element(cardFinder)).brightness ==
+          Brightness.dark;
+      expect(
+        cardDecoration.color,
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark),
+      );
+      expect(
+        (cardDecoration.border! as Border).top.color,
+        AppColors.transparent,
+      );
       expect(
         find.descendant(
           of: cardFinder,

@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_debug_state.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
@@ -69,6 +70,14 @@ class ArticleReaderDebugMapper {
                 Offset(pageSize.width, pageSize.height),
                 Offset(0, pageSize.height),
               ];
+        final pageAreaPolygon = sheetLocalPolygon.length >= 3
+            ? input.renderFrame.flippingClipArea
+            : <Offset>[
+                Offset.zero,
+                Offset(pageSize.width, 0),
+                Offset(pageSize.width, pageSize.height),
+                Offset(0, pageSize.height),
+              ];
         if (foldLine != null) {
           final localFoldLine = (
             toLayerLocal(
@@ -100,21 +109,19 @@ class ArticleReaderDebugMapper {
                     direction: visualGeometryDirection,
                   ),
                 );
-          frontLocalPolygon = backwardFrontFlatPolygon(
-            pageSize: pageSize,
-            foldLine: foldLine,
-            freeEdgeLine: freeEdgeLine,
+          final faces = resolveBackwardCanonicalSheetFaces(
+            BackwardCanonicalSheetInput(
+              pageSize: pageSize,
+              sheetLocalPolygon: pagePolygon,
+              sheetAreaPolygon: pageAreaPolygon,
+              sheetLocalFoldLine: localFoldLine,
+              sheetLocalFreeEdgeLine: localFreeEdgeLine,
+              currentResidualPagePolygon: input.renderFrame.bottomClipArea,
+            ),
           );
-          final faceGeometry = backwardFoldFaceGeometry(
-            pageSize: pageSize,
-            sheetLocalPolygon: pagePolygon,
-            foldLine: localFoldLine,
-            freeEdgeLine: localFreeEdgeLine,
-          );
-          backLocalPolygon = faceGeometry.verso;
+          frontLocalPolygon = faces.previousFrontRectoLocalPolygon;
+          backLocalPolygon = faces.previousBackVersoLocalPolygon;
         }
-      } else {
-        backLocalPolygon = sheetLocalPolygon;
       }
       if (input.renderFrame.bottomClipArea.length >= 3) {
         currentResidualViewportPolygon = input.renderFrame.bottomClipArea

@@ -742,7 +742,7 @@ class _SelectionRow extends StatelessWidget {
                   ? CupertinoIcons.check_mark_circled_solid
                   : CupertinoIcons.circle,
               color: selected
-                  ? CupertinoColors.activeBlue
+                  ? AppColors.iosAccent(context)
                   : CupertinoColors.systemGrey3.resolveFrom(context),
               size: AppSpacing.iconMedium,
             ),

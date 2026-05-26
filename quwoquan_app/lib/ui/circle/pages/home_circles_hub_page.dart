@@ -931,9 +931,8 @@ class _CirclesGlobalHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgPrimary = AppColorsFunctional.getColor(
+    final cardSurface = SettingsSemanticConstants.conversationSheetCardSurface(
       isDark,
-      ColorType.backgroundPrimary,
     );
     final fgSecondary = AppColorsFunctional.getColor(
       isDark,
@@ -943,7 +942,7 @@ class _CirclesGlobalHeader extends StatelessWidget {
     final circleCardWidth = _circleCardWidth(context);
 
     return Container(
-      color: bgPrimary,
+      color: cardSurface,
       padding: EdgeInsets.fromLTRB(
         horizontal,
         AppSpacing.containerXs,
@@ -1194,13 +1193,10 @@ class _HomeCircleRailCard extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final borderColor = AppColorsFunctional.getColor(
+    final borderColor =
+        SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
+    final cardSurface = SettingsSemanticConstants.conversationSheetCardSurface(
       isDark,
-      ColorType.borderPrimary,
-    );
-    final bgPrimary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundPrimary,
     );
     final titleStyle = _homeCircleRailTitleTextStyle().copyWith(
       color: fgPrimary,
@@ -1216,9 +1212,9 @@ class _HomeCircleRailCard extends StatelessWidget {
         onPressed: onTap,
         child: Container(
           decoration: BoxDecoration(
-            color: bgPrimary,
+            color: cardSurface,
             borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+            border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
                 color: AppColors.black.withValues(alpha: isDark ? 0.16 : 0.05),
@@ -1290,18 +1286,15 @@ class _HomeCircleViewAllCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgPrimary = AppColorsFunctional.getColor(
+    final cardSurface = SettingsSemanticConstants.conversationSheetCardSurface(
       isDark,
-      ColorType.backgroundPrimary,
     );
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
     );
-    final borderColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.borderPrimary,
-    );
+    final borderColor =
+        SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
     return SizedBox(
       width: width,
       child: CupertinoButton(
@@ -1310,9 +1303,9 @@ class _HomeCircleViewAllCard extends StatelessWidget {
         onPressed: onTap,
         child: Container(
           decoration: BoxDecoration(
-            color: bgPrimary,
+            color: cardSurface,
             borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            border: Border.all(color: borderColor.withValues(alpha: 0.12)),
+            border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
                 color: AppColors.black.withValues(alpha: isDark ? 0.16 : 0.05),
@@ -1936,9 +1929,8 @@ class _CirclesEntityBridgeStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgPrimary = AppColorsFunctional.getColor(
+    final cardSurface = SettingsSemanticConstants.conversationSheetCardSurface(
       isDark,
-      ColorType.backgroundPrimary,
     );
     final fgPrimary = AppColorsFunctional.getColor(
       isDark,
@@ -1956,7 +1948,7 @@ class _CirclesEntityBridgeStrip extends StatelessWidget {
     final cardWidth = _cardWidth(context);
 
     return Container(
-      color: bgPrimary,
+      color: cardSurface,
       padding: EdgeInsets.fromLTRB(
         horizontal,
         AppSpacing.containerXs,
@@ -2047,10 +2039,7 @@ class _CirclesEntityBridgeCard extends StatelessWidget {
       child: Container(
         width: width,
         decoration: BoxDecoration(
-          color: AppColorsFunctional.getColor(
-            isDark,
-            ColorType.surfaceElevated,
-          ),
+          color: SettingsSemanticConstants.conversationSheetCardSurface(isDark),
           borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
           border: Border.all(
             color: borderColor.withValues(alpha: 0.12),

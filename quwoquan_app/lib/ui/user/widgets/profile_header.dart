@@ -63,7 +63,7 @@ class ProfileHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColors.iosProfileSurface(context);
+    final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final fg = AppColors.iosLabel(context);
     final fgSecondary = AppColors.iosSecondaryLabel(context);
 

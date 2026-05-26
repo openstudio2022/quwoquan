@@ -481,11 +481,17 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     final state = ref.watch(profileNotifierProvider(widget.userId));
     final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     final userData = ref.watch(userDataProvider);
-    final bg = AppColors.iosPageBackground(context);
-    final backgroundBridge = AppColors.iosPageBackground(context);
-    final profileSurface = AppColors.iosProfileSurface(context);
+    final bg = SettingsSemanticConstants.conversationSheetPanelBackground(
+      isDark,
+    );
+    final backgroundBridge =
+        SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
+    final profileSurface =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final fg = AppColors.iosLabel(context);
-    final border = AppColors.iosSeparator(context);
+    final border = SettingsSemanticConstants.conversationSheetDividerColor(
+      isDark,
+    );
     final profile = state.profile;
     final isMine = widget.mode == ProfileMode.mine;
     final avatarUrl =
@@ -670,10 +676,10 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     required ProfileState state,
     required ProfileNotifier notifier,
   }) {
-    final summarySurface = AppColors.iosProfileSurface(context);
-    final summaryBorder = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.24 : 0.08);
+    final summarySurface =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final summaryBorder =
+        SettingsSemanticConstants.conversationSheetCardBorderColor(isDark);
     final displayCapability = state.displayCapability;
     final summaryShadow = isDark
         ? AppColors.black.withValues(alpha: 0.18)

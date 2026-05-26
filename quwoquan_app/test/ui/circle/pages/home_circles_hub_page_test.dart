@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
@@ -400,6 +402,30 @@ void main() {
       find.byKey(const ValueKey('home-circles-channel-panel')),
       findsNothing,
     );
+  });
+
+  testWidgets('圈子主页区块表面使用更多功能同源语义 token', (tester) async {
+    await tester.pumpWidget(_buildTestApp());
+    await _hubPumpSettled(tester);
+    _consumeImageLoadExceptions(tester);
+
+    final isDark =
+        CupertinoTheme.of(
+          tester.element(find.byType(CirclesHubPage)),
+        ).brightness ==
+        Brightness.dark;
+    final expectedPageBackground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.pageBackground,
+    );
+    final expectedCardSurface =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final cardSurfaceBlocks = find.byWidgetPredicate(
+      (widget) => widget is Container && widget.color == expectedCardSurface,
+    );
+
+    expect(cardSurfaceBlocks, findsWidgets);
+    expect(expectedCardSurface, isNot(expectedPageBackground));
   });
 
   testWidgets('五个垂类窄屏均保持群组双列自适应', (tester) async {

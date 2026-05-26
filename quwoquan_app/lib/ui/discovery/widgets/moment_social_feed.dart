@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
@@ -177,10 +178,12 @@ class MomentSocialFeed extends ConsumerWidget {
       );
     }
 
-    final pageBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.pageBackground,
-    );
+    final pageBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final listDividerColor =
+        SettingsSemanticConstants.conversationSheetDividerColor(
+          isDark,
+        ).withValues(alpha: 0.9);
     final columns = AppSpacing.feedResponsiveColumns(context);
     final isMultiColumn = columns > 1;
     final horizontalPad = isMultiColumn
@@ -322,8 +325,12 @@ class MomentSocialFeed extends ConsumerWidget {
       child: ListView.separated(
         padding: EdgeInsets.fromLTRB(0, 0, 0, bottomPad),
         itemCount: feedPosts.length,
-        separatorBuilder: (context, index) =>
-            SizedBox(height: AppSpacing.intraGroupSm),
+        separatorBuilder: (context, index) => Divider(
+          key: ValueKey<String>('moment-feed-divider-$index'),
+          height: AppSpacing.one,
+          thickness: AppSpacing.hairline,
+          color: listDividerColor,
+        ),
         itemBuilder: (context, index) => buildCard(feedPosts[index], index),
       ),
     );
@@ -566,21 +573,22 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
       isDark,
       ColorType.foregroundSecondary,
     );
-    final cardBg = AppColors.feedCardSurface(context);
-    final cardBorder = AppColors.feedCardBorder(context);
-    final borderRadius = BorderRadius.circular(
-      AppSpacing.contentPreviewCornerRadius,
+    final cardBg = SettingsSemanticConstants.conversationSheetCardSurface(
+      isDark,
     );
+    final cardBorder = widget.wideLayout
+        ? SettingsSemanticConstants.conversationSheetCardBorderColor(isDark)
+        : AppColors.transparent;
+    final borderRadius = widget.wideLayout
+        ? BorderRadius.circular(AppSpacing.contentPreviewCornerRadius)
+        : BorderRadius.zero;
 
     return DecoratedBox(
       key: widget.cardContainerKey,
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: borderRadius,
-        border: Border.all(
-          color: cardBorder.withValues(alpha: isDark ? 0.22 : 0.38),
-          width: AppSpacing.hairline,
-        ),
+        border: Border.all(color: cardBorder, width: AppSpacing.hairline),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -1295,10 +1303,10 @@ class _ActionRow extends StatelessWidget {
             selected: isLiked,
             child: ScaleTransition(
               scale: likeScale,
-              child: Icon(
-                isLiked ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+              child: AppMediaHeartIcon(
                 size: _momentToolbarIconSize,
                 color: likeColor,
+                filled: isLiked,
               ),
             ),
             label: formatCompactActionCount(likeCount),
@@ -1309,8 +1317,7 @@ class _ActionRow extends StatelessWidget {
         Expanded(
           child: _chip(
             context: context,
-            child: Icon(
-              CupertinoIcons.arrowshape_turn_up_right,
+            child: AppMediaShareIcon(
               size: _momentToolbarIconSize,
               color: actionIconColor,
             ),
@@ -1322,7 +1329,7 @@ class _ActionRow extends StatelessWidget {
         Expanded(
           child: _chip(
             context: context,
-            child: AppBubbleIcon(
+            child: AppMediaCommentIcon(
               size: _momentToolbarIconSize,
               color: actionIconColor,
             ),
@@ -1366,6 +1373,7 @@ class _ActionRow extends StatelessWidget {
                 fontSize: AppTypography.feedActionCountResponsive(context),
                 color: foreground,
                 fontWeight: AppTypography.regular,
+                height: AppSpacing.one,
               ),
             ),
           ],

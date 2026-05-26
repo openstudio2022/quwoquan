@@ -262,25 +262,10 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
   final rectoCoverageByFold = coveredWidth > 0.5
       ? (2.0 - 1.0 / coveredWidth).clamp(0.0, 1.0).toDouble()
       : 0.0;
-  final rectoCoverageByCurl =
-      (Curves.easeOutCubic.transform(
-                ((settledProgress - 0.24) / 0.38).clamp(0.0, 1.0),
-              ) *
-              0.72)
-          .clamp(0.0, 1.0)
-          .toDouble();
   // Recto ownership must stay locked until the fold crosses the page midpoint.
-  // Curl timing may change appearance, but it must not make the front face
-  // appear before the physical fold has exposed the spine-side segment.
-  final rectoCoverage = coveredWidth > 0.5
-      ? math
-            .max(
-              math.max(rectoCoverageByFold, rectoCoverageByCurl),
-              settleProgress,
-            )
-            .clamp(0.0, 1.0)
-            .toDouble()
-      : 0.0;
+  // Settle timing may move the sheet toward commit, but it must not re-own the
+  // moving sheet as front before the dynamic frame hands off to staticStage.
+  final rectoCoverage = rectoCoverageByFold;
   final versoOverlayStart = (coveredWidth * rectoCoverage)
       .clamp(0.0, coveredWidth)
       .toDouble();

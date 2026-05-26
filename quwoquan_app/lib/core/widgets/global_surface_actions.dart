@@ -168,24 +168,29 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final background = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundSecondary,
-    );
+    final elevatedSurface = surface != AppChromeSurface.standard;
+    final background = elevatedSurface
+        ? AppColorsFunctional.getColor(
+            isDark,
+            ColorType.globalSearchFieldBackground,
+          )
+        : AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary);
     final secondary = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundSecondary,
     );
-    final border = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.separatorSubtle,
-    );
+    final border = elevatedSurface
+        ? AppColorsFunctional.getColor(
+            isDark,
+            ColorType.globalSearchFieldBorder,
+          )
+        : AppColorsFunctional.getColor(isDark, ColorType.separatorSubtle);
 
     return Row(
       children: [
         Expanded(
           child: Container(
-            height: AppSpacing.buttonHeightMd,
+            height: AppSpacing.globalSearchFieldHeight,
             decoration: BoxDecoration(
               color: background,
               borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
@@ -196,33 +201,43 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
               padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
               minimumSize: const Size(
                 AppSpacing.minInteractiveSize,
-                AppSpacing.buttonHeightMd,
+                AppSpacing.globalSearchFieldHeight,
               ),
               onPressed: () => GlobalSearchLauncher.open(
                 context,
                 initialScope: initialSearchScope.searchScope,
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    CupertinoIcons.search,
-                    size: AppSpacing.iconSmall,
-                    color: secondary,
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupXs),
-                  Expanded(
-                    child: Text(
-                      hint,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.sm,
-                        fontWeight: AppTypography.regular,
-                        color: secondary,
+              child: SizedBox(
+                height: AppSpacing.globalSearchFieldHeight,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      CupertinoIcons.search,
+                      size: AppSpacing.globalAssistantEntryMarkSize,
+                      color: secondary,
+                    ),
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    Expanded(
+                      child: Text(
+                        hint,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        strutStyle: StrutStyle(
+                          fontSize: AppTypography.feedBodyResponsive(context),
+                          height: AppSpacing.textLineHeightDense,
+                          forceStrutHeight: true,
+                        ),
+                        style: TextStyle(
+                          fontSize: AppTypography.feedBodyResponsive(context),
+                          fontWeight: AppTypography.regular,
+                          height: AppSpacing.textLineHeightDense,
+                          color: secondary,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -231,6 +246,7 @@ class GlobalXiaoquSearchBar extends ConsumerWidget {
         GlobalAssistantEntryButton(
           semanticLabel: UITextConstants.globalXiaoquSearchAsk,
           showLabel: true,
+          surface: surface,
           onTap: () => GlobalAssistantLauncher.open(context, ref),
         ),
       ],
@@ -295,17 +311,19 @@ class GlobalAssistantEntryButton extends StatelessWidget {
     required this.onTap,
     this.semanticLabel,
     this.showLabel = true,
+    this.surface = AppChromeSurface.standard,
   });
 
   final VoidCallback onTap;
   final String? semanticLabel;
   final bool showLabel;
+  final AppChromeSurface surface;
 
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    // 与 [GlobalTopBarIconButton] 的图标直径一致，首页「找小趣」与其它页并排搜索图标对齐。
-    final circleSize = AppSpacing.appChromeActionIconSize;
+    final circleSize = AppSpacing.globalAssistantEntryMarkSize;
+    final elevatedSurface = surface != AppChromeSurface.standard;
     return Semantics(
       button: true,
       label: semanticLabel,
@@ -323,6 +341,7 @@ class GlobalAssistantEntryButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
+                key: TestKeys.globalAssistantEntryMark,
                 width: circleSize,
                 height: circleSize,
                 decoration: BoxDecoration(
@@ -340,19 +359,27 @@ class GlobalAssistantEntryButton extends StatelessWidget {
                   ),
                   border: Border.all(
                     color: AppColors.white.withValues(
-                      alpha: isDark ? 0.24 : 0.4,
+                      alpha: elevatedSurface ? 0.68 : (isDark ? 0.24 : 0.4),
                     ),
                     width: AppSpacing.hairline,
                   ),
+                  boxShadow: elevatedSurface
+                      ? [
+                          BoxShadow(
+                            color: AppColors.black.withValues(alpha: 0.18),
+                            blurRadius: AppSpacing.six,
+                          ),
+                        ]
+                      : null,
                 ),
                 child: Icon(
                   CupertinoIcons.sparkles,
-                  size: AppSpacing.iconSmall,
+                  size: AppSpacing.globalAssistantEntryGlyphSize,
                   color: AppColors.white,
                 ),
               ),
               if (showLabel) ...[
-                SizedBox(height: AppSpacing.one),
+                SizedBox(height: AppSpacing.globalAssistantEntryLabelGap),
                 Text(
                   UITextConstants.globalXiaoquSearchAsk,
                   maxLines: 1,
@@ -361,10 +388,12 @@ class GlobalAssistantEntryButton extends StatelessWidget {
                     fontSize: AppTypography.xs,
                     fontWeight: AppTypography.medium,
                     height: AppSpacing.textLineHeightDense,
-                    color: AppColorsFunctional.getColor(
-                      isDark,
-                      ColorType.foregroundPrimary,
-                    ),
+                    color: elevatedSurface
+                        ? AppColors.white
+                        : AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.foregroundPrimary,
+                          ),
                   ),
                 ),
               ],

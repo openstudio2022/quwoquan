@@ -132,7 +132,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final isDark = themeDark || effectiveForceDark;
     final shellBackground = effectiveForceDark
         ? AppColors.worksBackground
-        : AppColorsFunctional.getColor(isDark, ColorType.pageBackground);
+        : SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final bottomNavHidden =
         ref.watch(bottomNavHiddenProvider).hidden ||
         isFeaturedActive ||

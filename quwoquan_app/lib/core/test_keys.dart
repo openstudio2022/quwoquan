@@ -34,6 +34,9 @@ class TestKeys {
   static const globalSearchLauncherButton = ValueKey<String>(
     'global_search_launcher_button',
   );
+  static const globalAssistantEntryMark = ValueKey<String>(
+    'global_assistant_entry_mark',
+  );
   static const globalSearchObjectSelector = ValueKey<String>(
     'global_search_object_selector',
   );

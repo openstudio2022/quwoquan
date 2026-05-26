@@ -694,10 +694,17 @@ class StPageFlipController {
         .toDouble();
     final pageSize = Size(_layout.bounds.pageWidth, _layout.bounds.height);
     final canonicalFoldGeometry = calculation.getCanonicalFoldGeometry();
+    final reversePose = resolveReverseFlipPose(
+      localPagePoint: localPagePoint,
+      pageSize: pageSize,
+      progress: progress,
+      corner: corner,
+    );
     return buildBackwardDynamicRenderFrame(
       BackwardRenderFrameData(
         localPagePoint: localPagePoint,
         progress: progress,
+        reversePose: reversePose,
         orientation: _layout.orientation,
         corner: corner,
         pageSize: pageSize,

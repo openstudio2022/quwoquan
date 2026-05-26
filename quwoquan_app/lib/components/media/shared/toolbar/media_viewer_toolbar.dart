@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
@@ -380,11 +379,9 @@ class MediaViewerBottomBar extends StatelessWidget {
             Expanded(
               child: _buildActionSlot(
                 context,
-                iconWidget: Icon(
-                  isLiked
-                      ? FluentIcons.heart_24_filled
-                      : FluentIcons.heart_24_regular,
+                iconWidget: AppMediaHeartIcon(
                   color: isLiked ? AppColors.error : AppColors.white,
+                  filled: isLiked,
                   size: AppSpacing.bottomNavItemIconSize,
                 ),
                 count: likeCount,
@@ -394,8 +391,7 @@ class MediaViewerBottomBar extends StatelessWidget {
             Expanded(
               child: _buildActionSlot(
                 context,
-                iconWidget: Icon(
-                  FluentIcons.share_24_regular,
+                iconWidget: AppMediaShareIcon(
                   color: AppColors.white,
                   size: AppSpacing.bottomNavItemIconSize,
                 ),
@@ -406,7 +402,7 @@ class MediaViewerBottomBar extends StatelessWidget {
             Expanded(
               child: _buildActionSlot(
                 context,
-                iconWidget: AppBubbleIcon(
+                iconWidget: AppMediaCommentIcon(
                   color: AppColors.white,
                   size: AppSpacing.bottomNavItemIconSize,
                 ),
@@ -469,6 +465,7 @@ class MediaViewerActionButton extends StatelessWidget {
                 color: AppColors.white,
                 fontSize: AppTypography.sm,
                 fontWeight: AppTypography.medium,
+                height: AppSpacing.one,
               ),
             ),
           ],

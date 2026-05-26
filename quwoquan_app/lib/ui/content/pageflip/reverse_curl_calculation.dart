@@ -154,7 +154,7 @@ class ReverseCurlCalculation extends StPageFlipCalculation {
       localPos.dx.clamp(-pageWidth * 0.35, pageWidth).toDouble(),
       localPos.dy.clamp(0.0, pageHeight).toDouble(),
     );
-    _pose ??= resolveReverseFlipPose(
+    _pose = resolveReverseFlipPose(
       localPagePoint: _localPagePoint,
       pageSize: Size(pageWidth, pageHeight),
       progress: resolveReverseFlipProgress(
@@ -230,9 +230,7 @@ class ReverseCurlCalculation extends StPageFlipCalculation {
   /// 让 [_buildSoftPageLayer] 的 Positioned 从页面左边缘开始定位。
   @override
   Offset getActiveCorner() {
-    return corner == StPageFlipCorner.top
-        ? Offset.zero
-        : Offset(0, pageHeight);
+    return corner == StPageFlipCorner.top ? Offset.zero : Offset(0, pageHeight);
   }
 
   /// 回翻角度：固定为 0（不旋转）。

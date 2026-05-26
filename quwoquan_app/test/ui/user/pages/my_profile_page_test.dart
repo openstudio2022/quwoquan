@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
@@ -298,6 +299,10 @@ void main() {
 
       expect(find.byKey(TestKeys.globalSearchLauncherButton), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.sparkles), findsAtLeastNWidgets(1));
+      expect(
+        tester.getSize(find.byKey(TestKeys.globalAssistantEntryMark)),
+        const Size.square(AppSpacing.globalAssistantEntryMarkSize),
+      );
     });
 
     testWidgets('currentUserIdProvider 可 override 用于测试', (tester) async {

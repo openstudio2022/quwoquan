@@ -185,19 +185,22 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final selectedColor = switch (style) {
       HomePrimaryTabStripStyle.immersive => AppColors.worksTitle,
-      HomePrimaryTabStripStyle.regular => AppColorsFunctional.getColor(
-        isDark,
-        ColorType.foregroundPrimary,
-      ),
+      HomePrimaryTabStripStyle.regular =>
+        isDark
+            ? AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
+            : AppColors.primaryColor,
     };
     final unselectedColor = switch (style) {
       HomePrimaryTabStripStyle.immersive => AppColors.worksTitle.withValues(
         alpha: 0.72,
       ),
-      HomePrimaryTabStripStyle.regular => AppColorsFunctional.getColor(
-        isDark,
-        ColorType.tabUnselected,
-      ),
+      HomePrimaryTabStripStyle.regular =>
+        isDark
+            ? AppColorsFunctional.getColor(isDark, ColorType.tabUnselected)
+            : AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundSecondary,
+              ),
     };
     final underlineColor = isDark
         ? AppColors.iosAccentDark

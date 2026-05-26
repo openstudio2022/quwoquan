@@ -343,7 +343,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                             : CupertinoIcons.hand_thumbsup,
                         label: _formatCount(likesCount),
                         color: isLiked
-                            ? CupertinoColors.activeBlue.resolveFrom(context)
+                            ? AppColors.iosAccent(context)
                             : CupertinoColors.label.resolveFrom(context),
                         onTap: () {
                           syncPostLikeIntent(
@@ -561,21 +561,20 @@ class _ArticleBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = AppColors.iosAccent(context);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.intraGroupXs,
         vertical: 2,
       ),
       decoration: BoxDecoration(
-        color: CupertinoColors.activeBlue
-            .resolveFrom(context)
-            .withValues(alpha: 0.1),
+        color: accent.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: CupertinoColors.activeBlue.resolveFrom(context),
+          color: accent,
           fontSize: AppTypography.xs,
           fontWeight: AppTypography.semiBold,
         ),

@@ -826,6 +826,29 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     return ImmersiveViewerStageLayoutSpec.mediaStage;
   }
 
+  double _statusBarContentInsetFor(PostBaseDto post) {
+    if (widget.topChromeSafeInset <= AppSpacing.zero) {
+      return AppSpacing.zero;
+    }
+    return _shouldMediaInvadeStatusBar(post)
+        ? AppSpacing.zero
+        : widget.topChromeSafeInset;
+  }
+
+  bool _shouldMediaInvadeStatusBar(PostBaseDto post) {
+    if (_isVideoLikePost(post)) {
+      return true;
+    }
+    if (!_isImageLikePost(post)) {
+      return false;
+    }
+    final aspectRatio = post.aspectRatio;
+    if (aspectRatio == null || aspectRatio <= AppSpacing.zero) {
+      return false;
+    }
+    return aspectRatio <= AppSpacing.immersiveStatusBarMaxAspectRatio;
+  }
+
   bool _isCaptionExpanded(String postId) {
     return _expandedCaptionPostIds.contains(postId);
   }
@@ -1153,10 +1176,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
           statusBarColor: AppColors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
           systemNavigationBarColor: AppColors.transparent,
-          systemNavigationBarIconBrightness: Brightness.dark,
+          systemNavigationBarIconBrightness: Brightness.light,
         ),
         child: GestureDetector(
           behavior: HitTestBehavior.deferToChild,
@@ -1205,7 +1228,18 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                     if (posts.isEmpty) {
                       return Center(child: CupertinoActivityIndicator());
                     }
-                    return _buildPostCanvas(posts[index]);
+                    final post = posts[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        top: _statusBarContentInsetFor(post),
+                      ),
+                      child: KeyedSubtree(
+                        key: ValueKey<String>(
+                          'works-status-content-canvas-${post.id}',
+                        ),
+                        child: _buildPostCanvas(post),
+                      ),
+                    );
                   },
                 ),
               ),

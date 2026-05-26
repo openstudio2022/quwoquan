@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/services/user/relationship_capability_reposit
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
@@ -114,7 +115,10 @@ void main() {
 
       await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
       await _pumpFrames(tester);
-      expect(find.byIcon(AppNavigationSemanticConstants.settingsActionIcon), findsOneWidget);
+      expect(
+        find.byIcon(AppNavigationSemanticConstants.settingsActionIcon),
+        findsOneWidget,
+      );
     });
 
     testWidgets('分身管理开关关闭时我的主页不展示分身管理按钮', (tester) async {
@@ -165,6 +169,35 @@ void main() {
       expect(find.text('创作'), findsOneWidget);
       expect(_inlinePrimaryTab('圈子'), findsOneWidget);
       expect(find.text('互动'), findsOneWidget);
+    });
+
+    testWidgets('用户主页主区块表面使用更多功能同源语义 token', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester);
+
+      final tabsSurface = tester.widget<Container>(
+        find.byKey(const ValueKey<String>('profile-shell-primary-tabs-inline')),
+      );
+      final tabsDecoration = tabsSurface.decoration! as BoxDecoration;
+      final isDark =
+          CupertinoTheme.of(
+            tester.element(find.byType(ProfileShell)),
+          ).brightness ==
+          Brightness.dark;
+      expect(
+        tabsDecoration.color,
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark),
+      );
+      expect(
+        (tabsDecoration.border! as Border).bottom.color,
+        SettingsSemanticConstants.conversationSheetDividerColor(
+          isDark,
+        ).withValues(alpha: 0.1),
+      );
     });
 
     testWidgets('窄屏大字号下保持自适应不溢出', (tester) async {
@@ -470,7 +503,10 @@ void main() {
       );
       await _pumpFrames(tester);
       expect(find.text('创作'), findsOneWidget);
-      expect(find.byIcon(AppNavigationSemanticConstants.settingsActionIcon), findsOneWidget);
+      expect(
+        find.byIcon(AppNavigationSemanticConstants.settingsActionIcon),
+        findsOneWidget,
+      );
     });
 
     testWidgets('暗色模式下 other 模式基础壳层渲染不崩溃', (tester) async {

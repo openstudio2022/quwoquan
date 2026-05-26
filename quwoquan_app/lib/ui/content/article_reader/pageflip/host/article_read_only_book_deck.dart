@@ -18,6 +18,7 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_rea
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_dynamic_layers.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_pixel_probe.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/single_page_mode_strategy.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
@@ -126,6 +127,7 @@ class ArticleReadOnlyBookDebugState {
     required this.activeVersoPageIndex,
     required this.activeBottomPageIndex,
     this.activeVersoSurfaceKind,
+    this.backwardVersoDisplayState,
     this.backwardVersoFailureReason = BackwardVersoFailureReason.none,
     this.backwardGeometryFailureReason = BackwardGeometryFailureReason.none,
     this.backwardVersoProbeLocalPoints = const <Offset>[],
@@ -229,6 +231,7 @@ class ArticleReadOnlyBookDebugState {
   final int? activeVersoPageIndex;
   final int? activeBottomPageIndex;
   final String? activeVersoSurfaceKind;
+  final String? backwardVersoDisplayState;
   final BackwardVersoFailureReason backwardVersoFailureReason;
   final BackwardGeometryFailureReason backwardGeometryFailureReason;
   final List<Offset> backwardVersoProbeLocalPoints;
@@ -332,6 +335,7 @@ class ArticleReadOnlyBookDebugState {
     activeVersoPageIndex,
     activeBottomPageIndex,
     activeVersoSurfaceKind,
+    backwardVersoDisplayState,
     backwardVersoFailureReason.name,
     backwardGeometryFailureReason.name,
     articleDiagnosticPolygonSignature(backwardVersoProbeLocalPoints),
@@ -433,17 +437,21 @@ typedef _PageLine = (Offset, Offset);
 typedef _BackwardDiagnosticGeometry = ({
   SoftPageLayerGeometry softGeometry,
   List<Offset> sheetLocalPolygon,
+  List<Offset> sheetMaterialLocalPolygon,
   Rect? sheetLocalBounds,
   Rect? sheetViewportBounds,
   List<Offset> previousBackLocalPolygon,
+  List<Offset> previousBackAreaPolygon,
   List<Offset> previousBackViewportPolygon,
   Rect? previousBackViewportBounds,
   List<Offset> previousFrontLocalPolygon,
+  List<Offset> previousFrontAreaPolygon,
   List<Offset> previousFrontViewportPolygon,
   Rect? previousFrontViewportBounds,
-  List<Offset> previousFrontFlatPagePolygon,
-  List<Offset> previousFrontFlatViewportPolygon,
-  Rect? previousFrontFlatViewportBounds,
+  List<Offset> paintedUnionLocalPolygon,
+  List<Offset> paintedUnionAreaPolygon,
+  List<Offset> paintedUnionViewportPolygon,
+  Rect? paintedUnionViewportBounds,
   (Offset, Offset)? foldLineViewport,
   (Offset, Offset)? freeEdgeLineViewport,
   List<Offset> currentResidualPagePolygon,
@@ -601,12 +609,14 @@ class _BackwardLeafVersoUvPainter extends CustomPainter {
     required this.leafVersoSnapshot,
     required this.pageSize,
     required this.polygon,
+    required this.materialLocalPolygon,
     required this.paintOrigin,
   });
 
   final ArticlePageTextureSnapshot leafVersoSnapshot;
   final Size pageSize;
   final List<Offset> polygon;
+  final List<Offset> materialLocalPolygon;
   final Offset paintOrigin;
 
   @override
@@ -620,6 +630,7 @@ class _BackwardLeafVersoUvPainter extends CustomPainter {
       leafVersoSnapshot: leafVersoSnapshot,
       pageSize: pageSize,
       polygon: polygon,
+      materialLocalPolygon: materialLocalPolygon,
       paintOrigin: paintOrigin,
     );
   }
@@ -629,7 +640,8 @@ class _BackwardLeafVersoUvPainter extends CustomPainter {
     return oldDelegate.leafVersoSnapshot != leafVersoSnapshot ||
         oldDelegate.pageSize != pageSize ||
         oldDelegate.paintOrigin != paintOrigin ||
-        !_samePolygon(oldDelegate.polygon, polygon);
+        !_samePolygon(oldDelegate.polygon, polygon) ||
+        !_samePolygon(oldDelegate.materialLocalPolygon, materialLocalPolygon);
   }
 
   bool _samePolygon(List<Offset> previous, List<Offset> next) {
@@ -1007,6 +1019,22 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     return null;
   }
 
+  ArticlePageTextureSnapshot? _peekBackPageTextureSnapshotForIndex(
+    int pageIndex, {
+    required Size expectedSize,
+  }) {
+    final snapshot = _pageTextureSnapshots[pageIndex];
+    if (snapshot == null) {
+      return null;
+    }
+    if (!snapshot.matchesLogicalSize(expectedSize)) {
+      return null;
+    }
+    return snapshot.semanticSurfaceKind == ArticlePageSurfaceKind.back.name
+        ? snapshot
+        : null;
+  }
+
   void _queueSceneTextureSnapshots(StPageFlipScene scene) {
     final textureBinding = _textureBindingForScene(scene);
     final indices = <int>[
@@ -1170,61 +1198,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return 'transition';
     }
     return 'recto';
-  }
-
-  BackwardFoldFaceGeometry _backwardFoldDerivedFacePolygons({
-    required Size pageSize,
-    required _PageLine? foldLine,
-    required _PageLine? freeEdgeLine,
-    required List<Offset> sheetLocalPolygon,
-    ArticlePageBackwardLeafFrame? leafFrame,
-  }) {
-    return backwardFoldFaceGeometry(
-      pageSize: pageSize,
-      sheetLocalPolygon: sheetLocalPolygon,
-      foldLine: foldLine,
-      freeEdgeLine: freeEdgeLine,
-      versoRevealWidthNormalized: leafFrame?.versoRevealWidthNormalized,
-    );
-  }
-
-  List<Offset> _pagePolygonToViewport({
-    required List<Offset> polygon,
-    required Rect pageRect,
-  }) {
-    return polygon
-        .map((point) => pageRect.topLeft + point)
-        .toList(growable: false);
-  }
-
-  Widget _buildBackwardFrontFlatLayer({
-    required BuildContext context,
-    required int pageIndex,
-    required Rect pageRect,
-    required List<Offset> pagePolygon,
-  }) {
-    return Positioned.fill(
-      child: ClipPath(
-        clipper: ArticlePolygonClipper(
-          _pagePolygonToViewport(polygon: pagePolygon, pageRect: pageRect),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            Positioned.fromRect(
-              rect: pageRect,
-              child: _buildCachedPageSurface(
-                context,
-                pageIndex,
-                pageRect.size,
-                kind: ArticlePageSurfaceKind.front,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   String? _resolveBackwardPhaseLabel(StPageFlipScene scene) {
@@ -1471,7 +1444,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (frame.flippingClipArea.length < 3) {
       return null;
     }
-    final pageRect = _backwardPageRect(scene);
     final leafFrame = frame.backwardLeafFrame;
     final softGeometry = _resolveDynamicLayerGeometry(
       area: frame.flippingClipArea,
@@ -1492,55 +1464,75 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       scene.layout.bounds.pageWidth,
       scene.layout.bounds.height,
     );
-    final anchor = frame.flippingAnchor;
     final angle = frame.angle;
     final visualGeometryDirection = frame.visualGeometryDirection;
+    final sheetMaterialLocalPolygon = pageRectPolygon(pageSize);
     final projected = frame.backwardProjectedFrame;
-    final localFoldLine = projected?.foldLine == null
+    final projectedFoldLine = projected?.foldLine;
+    final projectedFreeEdgeLine = projected?.projectedRightEdgeLine;
+    final currentResidualPagePolygon = frame.bottomClipArea.length >= 3
+        ? List<Offset>.unmodifiable(frame.bottomClipArea)
+        : const <Offset>[];
+    final sheetLocalFoldLine = projectedFoldLine == null
         ? null
         : (
             _localPointFromAreaPoint(
-              point: projected!.foldLine.$1,
+              point: projectedFoldLine.$1,
               anchor: softGeometry.surfaceOrigin,
               angle: angle,
               direction: visualGeometryDirection,
             ),
             _localPointFromAreaPoint(
-              point: projected.foldLine.$2,
+              point: projectedFoldLine.$2,
               anchor: softGeometry.surfaceOrigin,
               angle: angle,
               direction: visualGeometryDirection,
             ),
           );
-    final localFreeEdgeLine = projected?.projectedRightEdgeLine == null
+    final sheetLocalFreeEdgeLine = projectedFreeEdgeLine == null
         ? null
         : (
             _localPointFromAreaPoint(
-              point: projected!.projectedRightEdgeLine.$1,
+              point: projectedFreeEdgeLine.$1,
               anchor: softGeometry.surfaceOrigin,
               angle: angle,
               direction: visualGeometryDirection,
             ),
             _localPointFromAreaPoint(
-              point: projected.projectedRightEdgeLine.$2,
+              point: projectedFreeEdgeLine.$2,
               anchor: softGeometry.surfaceOrigin,
               angle: angle,
               direction: visualGeometryDirection,
             ),
           );
-    final foldFaceGeometry = _backwardFoldDerivedFacePolygons(
-      pageSize: pageSize,
-      foldLine: localFoldLine,
-      freeEdgeLine: localFreeEdgeLine,
-      sheetLocalPolygon: sheetLocalPolygon,
-      leafFrame: leafFrame,
+    final faces = resolveBackwardCanonicalSheetFaces(
+      BackwardCanonicalSheetInput(
+        pageSize: pageSize,
+        sheetLocalPolygon: sheetLocalPolygon,
+        sheetAreaPolygon: frame.flippingClipArea,
+        sheetLocalFoldLine: sheetLocalFoldLine,
+        sheetLocalFreeEdgeLine: sheetLocalFreeEdgeLine,
+        currentResidualPagePolygon: currentResidualPagePolygon,
+      ),
     );
     final previousFrontLocalPolygon = leafFrame == null
         ? const <Offset>[]
-        : foldFaceGeometry.recto;
+        : faces.previousFrontRectoLocalPolygon;
     final previousBackLocalPolygon = leafFrame == null
         ? const <Offset>[]
-        : foldFaceGeometry.verso;
+        : faces.previousBackVersoLocalPolygon;
+    final previousFrontAreaPolygon = leafFrame == null
+        ? const <Offset>[]
+        : faces.previousFrontRectoAreaPolygon;
+    final previousBackAreaPolygon = leafFrame == null
+        ? const <Offset>[]
+        : faces.previousBackVersoAreaPolygon;
+    final paintedUnionLocalPolygon = leafFrame == null
+        ? const <Offset>[]
+        : faces.paintedUnionLocalPolygon;
+    final paintedUnionAreaPolygon = leafFrame == null
+        ? const <Offset>[]
+        : faces.paintedUnionAreaPolygon;
     final previousFrontViewportPolygon = transformSoftLayerLocalPolygon(
       polygon: previousFrontLocalPolygon,
       geometry: softGeometry,
@@ -1549,28 +1541,24 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       polygon: previousBackLocalPolygon,
       geometry: softGeometry,
     );
-    final previousFrontFlatPagePolygon = leafFrame == null
-        ? const <Offset>[]
-        : backwardFrontFlatPolygon(
-            pageSize: pageSize,
-            foldLine: projected?.foldLine,
-            freeEdgeLine: projected?.projectedRightEdgeLine,
-          );
-    final previousFrontFlatViewportPolygon = _pagePolygonToViewport(
-      polygon: previousFrontFlatPagePolygon,
-      pageRect: pageRect,
+    final paintedUnionViewportPolygon = transformSoftLayerLocalPolygon(
+      polygon: paintedUnionLocalPolygon,
+      geometry: softGeometry,
     );
-    final currentResidualPagePolygon = frame.bottomClipArea.length >= 3
-        ? List<Offset>.unmodifiable(frame.bottomClipArea)
-        : const <Offset>[];
     final currentResidualViewportPolygon = currentResidualPagePolygon
-        .map((p) => pageRect.topLeft + p)
+        .map((p) => _backwardPageRect(scene).topLeft + p)
         .toList(growable: false);
     final positionViewport = softGeometry.positionViewport;
     Offset toViewportPoint(Offset p) {
       final translated = visualGeometryDirection == StPageFlipDirection.back
-          ? Offset(anchor.dx - p.dx, p.dy - anchor.dy)
-          : Offset(p.dx - anchor.dx, p.dy - anchor.dy);
+          ? Offset(
+              softGeometry.surfaceOrigin.dx - p.dx,
+              p.dy - softGeometry.surfaceOrigin.dy,
+            )
+          : Offset(
+              p.dx - softGeometry.surfaceOrigin.dx,
+              p.dy - softGeometry.surfaceOrigin.dy,
+            );
       final rotated = rotatePointForCanvasTransform(translated, angle);
       return positionViewport + rotated;
     }
@@ -1588,19 +1576,21 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     return (
       softGeometry: softGeometry,
       sheetLocalPolygon: sheetLocalPolygon,
+      sheetMaterialLocalPolygon: sheetMaterialLocalPolygon,
       sheetLocalBounds: polygonBounds(sheetLocalPolygon),
       sheetViewportBounds: polygonBounds(sheetViewportPolygon),
       previousBackLocalPolygon: previousBackLocalPolygon,
+      previousBackAreaPolygon: previousBackAreaPolygon,
       previousBackViewportPolygon: previousBackViewportPolygon,
       previousBackViewportBounds: polygonBounds(previousBackViewportPolygon),
       previousFrontLocalPolygon: previousFrontLocalPolygon,
+      previousFrontAreaPolygon: previousFrontAreaPolygon,
       previousFrontViewportPolygon: previousFrontViewportPolygon,
       previousFrontViewportBounds: polygonBounds(previousFrontViewportPolygon),
-      previousFrontFlatPagePolygon: previousFrontFlatPagePolygon,
-      previousFrontFlatViewportPolygon: previousFrontFlatViewportPolygon,
-      previousFrontFlatViewportBounds: polygonBounds(
-        previousFrontFlatViewportPolygon,
-      ),
+      paintedUnionLocalPolygon: paintedUnionLocalPolygon,
+      paintedUnionAreaPolygon: paintedUnionAreaPolygon,
+      paintedUnionViewportPolygon: paintedUnionViewportPolygon,
+      paintedUnionViewportBounds: polygonBounds(paintedUnionViewportPolygon),
       foldLineViewport: toViewportLine(projected?.foldLine),
       freeEdgeLineViewport: toViewportLine(projected?.projectedRightEdgeLine),
       currentResidualPagePolygon: currentResidualPagePolygon,
@@ -1840,6 +1830,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required ArticlePageTextureBinding? requestedBinding,
     required ArticlePageTextureSnapshot? activeVersoSnapshot,
     required List<Offset> backwardBackLocalPolygon,
+    required List<Offset> sheetMaterialLocalPolygon,
     required Size pageSize,
     required BackwardVersoPixelProbe probe,
   }) {
@@ -1858,9 +1849,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (backwardBackLocalPolygon.length < 3) {
       return BackwardVersoFailureReason.versoPolygonEmpty;
     }
-    if (buildBackwardLeafVersoUvMesh(
+    if (buildBackwardLeafVersoMaterialUvMesh(
           pageSize: pageSize,
-          polygon: backwardBackLocalPolygon,
+          materialLocalPolygon: sheetMaterialLocalPolygon,
         ) ==
         null) {
       return BackwardVersoFailureReason.meshDegenerate;
@@ -1911,9 +1902,11 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (backwardBackLocalPolygon.length < 3) {
       return BackwardGeometryFailureReason.versoPolygonEmpty;
     }
-    if (buildBackwardLeafVersoUvMesh(
+    if (buildBackwardLeafVersoMaterialUvMesh(
           pageSize: pageSize,
-          polygon: backwardBackLocalPolygon,
+          materialLocalPolygon:
+              backwardDiagnosticGeometry?.sheetMaterialLocalPolygon ??
+              const <Offset>[],
         ) ==
         null) {
       return BackwardGeometryFailureReason.meshDegenerate;
@@ -2032,11 +2025,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         backwardDiagnosticGeometry?.previousBackViewportBounds ??
         (backwardSurfaceShowsBack ? backwardFoldSurfaceBounds : null);
     final backwardBackFoldBounds = backBoundsViewport;
-    final frontFlatBoundsViewport =
-        backwardDiagnosticGeometry?.previousFrontFlatViewportBounds;
     final frontBoundsViewport =
-        backwardDiagnosticGeometry?.previousFrontViewportBounds ??
-        frontFlatBoundsViewport;
+        backwardDiagnosticGeometry?.previousFrontViewportBounds;
     final backwardFrontFoldVisible = frontBoundsViewport != null;
     final backwardFrontFoldBounds = backwardFrontFoldVisible
         ? frontBoundsViewport
@@ -2091,8 +2081,10 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     final backwardBackLocalPolygon =
         backwardDiagnosticGeometry?.previousBackLocalPolygon ??
         backwardLocalClipPolygon;
+    final backwardBackAreaPolygon =
+        backwardDiagnosticGeometry?.previousBackAreaPolygon ??
+        backwardBackLocalPolygon;
     final backwardFrontLocalPolygon =
-        backwardDiagnosticGeometry?.previousFrontFlatPagePolygon ??
         backwardDiagnosticGeometry?.previousFrontLocalPolygon ??
         const <Offset>[];
     final backwardCurrentResidualPolygon =
@@ -2115,8 +2107,26 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         status: status,
         viewportBounds: viewportBounds,
         polygonSignature: articleDiagnosticPolygonSignature(viewportPolygon),
+        viewportPolygon: List<Offset>.unmodifiable(viewportPolygon),
       );
     }
+
+    final visibleFrontViewportPolygon =
+        backwardDiagnosticGeometry?.previousFrontViewportPolygon ??
+        const <Offset>[];
+    final visibleFrontViewportBounds = polygonBounds(
+      visibleFrontViewportPolygon,
+    );
+    final visibleBackViewportPolygon =
+        backwardDiagnosticGeometry?.previousBackViewportPolygon ??
+        const <Offset>[];
+    final visibleBackViewportBounds = polygonBounds(visibleBackViewportPolygon);
+    final paintedUnionViewportPolygon =
+        backwardDiagnosticGeometry?.paintedUnionViewportPolygon ??
+        const <Offset>[];
+    final paintedUnionViewportBounds = polygonBounds(
+      paintedUnionViewportPolygon,
+    );
 
     final backwardPaintSources = direction == StPageFlipDirection.back
         ? <BackwardPaintSourceDiagnostic>[
@@ -2137,41 +2147,34 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
                 viewportBounds: dynamicBottomBounds,
                 viewportPolygon: backwardCurrentResidualPolygon,
               ),
-            if (frontFlatBoundsViewport != null)
+            if (paintedUnionViewportBounds != null)
               sourceDiagnostic(
-                label: 'previousFrontFlat',
+                label: 'sheetPaintedUnion',
                 zOrder: 4,
                 pageIndex: scene.flippingPageIndex,
-                surfaceKind: ArticlePageSurfaceKind.front,
-                viewportBounds: frontFlatBoundsViewport,
-                viewportPolygon:
-                    backwardDiagnosticGeometry
-                        ?.previousFrontFlatViewportPolygon ??
-                    rectToPolygon(frontFlatBoundsViewport),
+                surfaceKind: ArticlePageSurfaceKind.back,
+                status: 'coverage',
+                viewportBounds: paintedUnionViewportBounds,
+                viewportPolygon: paintedUnionViewportPolygon,
               ),
-            if (backwardDiagnosticGeometry?.previousFrontViewportBounds != null)
+            if (visibleFrontViewportBounds != null)
               sourceDiagnostic(
                 label: 'sheetRectoFront',
                 zOrder: 5,
                 pageIndex: scene.flippingPageIndex,
                 surfaceKind: ArticlePageSurfaceKind.front,
-                viewportBounds:
-                    backwardDiagnosticGeometry?.previousFrontViewportBounds,
-                viewportPolygon:
-                    backwardDiagnosticGeometry?.previousFrontViewportPolygon ??
-                    const <Offset>[],
+                viewportBounds: visibleFrontViewportBounds,
+                viewportPolygon: visibleFrontViewportPolygon,
               ),
-            if (backwardDiagnosticGeometry?.previousBackViewportBounds != null)
+            if (visibleBackViewportBounds != null)
               sourceDiagnostic(
                 label: 'sheetVersoBack',
                 zOrder: 6,
                 pageIndex: scene.flippingPageIndex,
                 surfaceKind: ArticlePageSurfaceKind.back,
-                viewportBounds:
-                    backwardDiagnosticGeometry?.previousBackViewportBounds,
-                viewportPolygon:
-                    backwardDiagnosticGeometry?.previousBackViewportPolygon ??
-                    const <Offset>[],
+                status: 'visible',
+                viewportBounds: visibleBackViewportBounds,
+                viewportPolygon: visibleBackViewportPolygon,
               ),
             if (backwardFoldLine != null)
               sourceDiagnostic(
@@ -2190,16 +2193,22 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
               ),
           ]
         : const <BackwardPaintSourceDiagnostic>[];
-    final activeVersoSnapshot = requestedBinding?.versoPageIndex == null
-        ? null
-        : _pageTextureSnapshots[requestedBinding!.versoPageIndex];
     final backwardPageSize = Size(
       scene.layout.bounds.pageWidth,
       scene.layout.bounds.height,
     );
+    final activeVersoSnapshot = requestedBinding?.versoPageIndex == null
+        ? null
+        : _peekBackPageTextureSnapshotForIndex(
+            requestedBinding!.versoPageIndex,
+            expectedSize: backwardPageSize,
+          );
     final backwardVersoProbe = resolveBackwardVersoPixelProbe(
       pageSize: backwardPageSize,
       polygon: backwardBackLocalPolygon,
+      materialLocalPolygon:
+          backwardDiagnosticGeometry?.sheetMaterialLocalPolygon ??
+          const <Offset>[],
     );
     final backwardVersoProbeViewportPoints = backwardDiagnosticGeometry == null
         ? const <Offset>[]
@@ -2215,22 +2224,91 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         ? _intersectNonEmptyRects(backwardFrontBounds, backwardBackBounds)
         : null;
     final backwardFrontBackOverlapWidth = backwardFrontBackOverlap?.width;
+    final backwardVisibleBackProbePoints = direction == StPageFlipDirection.back
+        ? backwardVersoProbeViewportPoints
+              .where((point) {
+                final backPolygon =
+                    backwardDiagnosticGeometry?.previousBackViewportPolygon ??
+                    const <Offset>[];
+                if (!backwardPartitionContainsPoint(
+                  polygon: backPolygon,
+                  point: point,
+                )) {
+                  return false;
+                }
+                final frontPolygon =
+                    backwardDiagnosticGeometry?.previousFrontViewportPolygon ??
+                    const <Offset>[];
+                return !backwardPartitionContainsPoint(
+                  polygon: frontPolygon,
+                  point: point,
+                );
+              })
+              .toList(growable: false)
+        : const <Offset>[];
     final backwardBackVisibleUncoveredWidth = backwardBackBounds == null
         ? null
-        : math.max(
-            0.0,
-            backwardBackBounds.width - (backwardFrontBackOverlapWidth ?? 0.0),
-          );
+        : backwardVisibleBackProbePoints.isEmpty
+        ? 0.0
+        : polygonBounds(backwardVisibleBackProbePoints)?.width ??
+              backwardBackBounds.width;
     final backwardBackVisibleProbeCount = backwardBackBounds == null
         ? null
-        : backwardVersoProbeViewportPoints
-              .where(backwardBackBounds.contains)
-              .length;
+        : backwardVisibleBackProbePoints.length;
+    final isBackwardDynamic =
+        direction == StPageFlipDirection.back &&
+        renderBranch == ArticleReadOnlyBookRenderBranch.paperFoldDynamic;
+    final activeRectoPageIndex = isBackwardDynamic
+        ? requestedBinding?.rectoPageIndex
+        : null;
+    final activeBottomPageIndex = isBackwardDynamic
+        ? requestedBinding?.bottomPageIndex
+        : null;
+    final activeVersoPageIndex =
+        activeVersoSnapshot == null || !isBackwardDynamic
+        ? null
+        : requestedBinding?.versoPageIndex;
+    final sessionHasBundle = isBackwardDynamic && activeVersoSnapshot != null;
+    final renderSceneReady = isBackwardDynamic && sessionHasBundle;
+    final backwardVersoDisplayState = direction != StPageFlipDirection.back
+        ? null
+        : requestedBinding?.versoPageIndex == null
+        ? 'notRequested'
+        : backwardBackBounds == null || backwardBackBounds.isEmpty
+        ? activeVersoSnapshot == null
+              ? 'waitingForSnapshot'
+              : 'semanticSnapshotHidden'
+        : activeVersoSnapshot == null
+        ? 'paperFallback'
+        : 'semanticSnapshot';
+    final backwardPaintSourcesWithRuntimeStatus =
+        direction == StPageFlipDirection.back
+        ? backwardPaintSources
+              .map((source) {
+                if (source.label != 'sheetVersoBack') {
+                  return source;
+                }
+                return BackwardPaintSourceDiagnostic(
+                  label: source.label,
+                  zOrder: source.zOrder,
+                  pageIndex: source.pageIndex,
+                  surfaceKind: source.surfaceKind,
+                  status: backwardVersoDisplayState ?? source.status,
+                  viewportBounds: source.viewportBounds,
+                  polygonSignature: source.polygonSignature,
+                  viewportPolygon: source.viewportPolygon,
+                );
+              })
+              .toList(growable: false)
+        : backwardPaintSources;
     final backwardVersoFailureReason = _resolveBackwardVersoFailureReason(
       direction: direction,
       requestedBinding: requestedBinding,
       activeVersoSnapshot: activeVersoSnapshot,
       backwardBackLocalPolygon: backwardBackLocalPolygon,
+      sheetMaterialLocalPolygon:
+          backwardDiagnosticGeometry?.sheetMaterialLocalPolygon ??
+          const <Offset>[],
       pageSize: backwardPageSize,
       probe: backwardVersoProbe,
     );
@@ -2268,17 +2346,16 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       rightPageIndex: scene.visibleSpread.rightPageIndex,
       renderBranch: renderBranch,
       renderDirection: _sceneRenderDirection(scene),
-      renderSceneReady: false,
-      sessionHasBundle: false,
+      renderSceneReady: renderSceneReady,
+      sessionHasBundle: sessionHasBundle,
       requestedRectoPageIndex: requestedBinding?.rectoPageIndex,
       requestedVersoPageIndex: requestedBinding?.versoPageIndex,
       requestedBottomPageIndex: requestedBinding?.bottomPageIndex,
-      activeRectoPageIndex: null,
-      activeVersoPageIndex: activeVersoSnapshot == null
-          ? null
-          : requestedBinding?.versoPageIndex,
-      activeBottomPageIndex: null,
+      activeRectoPageIndex: activeRectoPageIndex,
+      activeVersoPageIndex: activeVersoPageIndex,
+      activeBottomPageIndex: activeBottomPageIndex,
       activeVersoSurfaceKind: activeVersoSnapshot?.semanticSurfaceKind,
+      backwardVersoDisplayState: backwardVersoDisplayState,
       backwardVersoFailureReason: backwardVersoFailureReason,
       backwardGeometryFailureReason: backwardGeometryFailureReason,
       backwardVersoProbeLocalPoints: backwardVersoProbe.localPoints,
@@ -2344,9 +2421,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       backwardRectoWidth: backwardLeafFrame?.totalRectoVisibleWidthNormalized,
       backwardBottomStart: backwardLeafFrame?.bottomRevealStartNormalized,
       backwardPhase: _resolveBackwardPhaseLabel(scene),
-      backwardReplayFrontLayerCount: _resolveBackwardReplayFrontLayerCount(
-        scene,
-      ),
+      backwardReplayFrontLayerCount: direction == StPageFlipDirection.back
+          ? (backwardFrontFoldVisible ? 1 : 0)
+          : _resolveBackwardReplayFrontLayerCount(scene),
       backwardReplayBackSurfaceStrategy:
           _resolveBackwardReplayBackSurfaceStrategy(scene),
       backwardBottomLayerPageIndex: direction == StPageFlipDirection.back
@@ -2382,7 +2459,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           : null,
       backwardFrontPaintBounds: backwardFrontBounds,
       backwardBackPaintBounds: backwardBackBounds,
-      backwardLaidFrontPaintBounds: frontFlatBoundsViewport,
+      backwardLaidFrontPaintBounds: null,
       backwardFoldSurfacePaintBounds: backwardFoldSurfaceBounds,
       backwardCurrentResidualBounds: backwardCurrentResidualBounds,
       backwardMainline: backwardMainline,
@@ -2396,12 +2473,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           ? 'paperFoldBackMainlineSurface'
           : null,
       backwardVersoTextureUvStrategy: _hasBackwardPaperFoldFrame(scene)
-          ? backwardVersoTextureMappingStrategy
+          ? 'materialLockedUv'
           : null,
       backwardFrontBackOverlapWidth: backwardFrontBackOverlapWidth,
       backwardBackVisibleUncoveredWidth: backwardBackVisibleUncoveredWidth,
       backwardBackVisibleProbeCount: backwardBackVisibleProbeCount,
-      backwardPaintSources: backwardPaintSources,
+      backwardPaintSources: backwardPaintSourcesWithRuntimeStatus,
       backwardSurfaceOrigin: direction == StPageFlipDirection.back
           ? backwardDiagnosticGeometry?.softGeometry.surfaceOrigin
           : null,
@@ -2568,22 +2645,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           visualGeometryDirection: frame.visualGeometryDirection,
           density: scene.bottomPageDensity ?? StPageFlipDensity.soft,
           isFlippingPage: false,
-        ),
-      );
-    }
-
-    final frontFlatPolygon = backwardFrontFlatPolygon(
-      pageSize: pageSize,
-      foldLine: frame.backwardProjectedFrame?.foldLine,
-      freeEdgeLine: frame.backwardProjectedFrame?.projectedRightEdgeLine,
-    );
-    if (frontFlatPolygon.length >= 3) {
-      layers.add(
-        _buildBackwardFrontFlatLayer(
-          context: context,
-          pageIndex: scene.flippingPageIndex!,
-          pageRect: _backwardPageRect(scene),
-          pagePolygon: frontFlatPolygon,
         ),
       );
     }
@@ -3495,6 +3556,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     final highlightColor = AppColors.white.withValues(
       alpha: (showBackside ? 0.12 : 0.14) + (lift * 0.08),
     );
+    final edgeTintColor = showBackside
+        ? AppColors.white.withValues(alpha: 0.05 + lift * 0.03)
+        : palette.paperBorderColor.withValues(alpha: 0.08 + lift * 0.06);
     return IgnorePointer(
       child: Stack(
         fit: StackFit.expand,
@@ -3520,9 +3584,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
                 end: oppositeEdge,
                 colors: <Color>[
                   shadowColor,
-                  palette.paperBorderColor.withValues(
-                    alpha: 0.08 + lift * 0.06,
-                  ),
+                  edgeTintColor,
                   AppColors.transparent,
                 ],
                 stops: const <double>[0.0, 0.28, 0.9],
@@ -3561,10 +3623,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     _PageLine? backwardFoldLine,
     _PageLine? backwardFreeEdgeLine,
     List<Offset> sheetLocalPolygon = const <Offset>[],
+    List<Offset> sheetAreaPolygon = const <Offset>[],
+    List<Offset> sheetMaterialLocalPolygon = const <Offset>[],
   }) {
     final palette = resolveArticleTemplatePalette(context, widget.template);
     if (direction == StPageFlipDirection.back && backwardLeafFrame != null) {
-      return _buildBackwardRectoVersoFlippingPageSurface(
+      return _buildBackwardCanonicalFlippingPageSurface(
         context: context,
         pageIndex: pageIndex,
         backFacePageIndex: backFacePageIndex ?? pageIndex,
@@ -3572,7 +3636,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         foldLine: backwardFoldLine,
         freeEdgeLine: backwardFreeEdgeLine,
         sheetLocalPolygon: sheetLocalPolygon,
-        backwardLeafFrame: backwardLeafFrame,
+        sheetAreaPolygon: sheetAreaPolygon,
+        sheetMaterialLocalPolygon: sheetMaterialLocalPolygon,
         palette: palette,
         progress: progress,
       );
@@ -3606,7 +3671,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     );
   }
 
-  Widget _buildBackwardRectoVersoFlippingPageSurface({
+  Widget _buildBackwardCanonicalFlippingPageSurface({
     required BuildContext context,
     required int pageIndex,
     required int backFacePageIndex,
@@ -3614,32 +3679,37 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required _PageLine? foldLine,
     required _PageLine? freeEdgeLine,
     required List<Offset> sheetLocalPolygon,
-    required ArticlePageBackwardLeafFrame backwardLeafFrame,
+    required List<Offset> sheetAreaPolygon,
+    required List<Offset> sheetMaterialLocalPolygon,
     required ArticleTemplatePalette palette,
     required double progress,
   }) {
-    final facePolygons = _backwardFoldDerivedFacePolygons(
-      pageSize: pageSize,
-      foldLine: foldLine,
-      freeEdgeLine: freeEdgeLine,
-      sheetLocalPolygon: sheetLocalPolygon,
-      leafFrame: backwardLeafFrame,
+    final faces = resolveBackwardCanonicalSheetFaces(
+      BackwardCanonicalSheetInput(
+        pageSize: pageSize,
+        sheetLocalPolygon: sheetLocalPolygon,
+        sheetAreaPolygon: sheetAreaPolygon,
+        sheetLocalFoldLine: foldLine,
+        sheetLocalFreeEdgeLine: freeEdgeLine,
+        currentResidualPagePolygon: const <Offset>[],
+      ),
     );
     final children = <Widget>[
-      if (facePolygons.recto.length >= 3)
+      if (faces.previousFrontRectoLocalPolygon.length >= 3)
         _buildBackwardSheetFacePolygon(
           context: context,
           pageIndex: pageIndex,
           kind: ArticlePageSurfaceKind.front,
           pageSize: pageSize,
-          polygon: facePolygons.recto,
+          polygon: faces.previousFrontRectoLocalPolygon,
         ),
-      if (facePolygons.verso.length >= 3)
+      if (faces.previousBackVersoLocalPolygon.length >= 3)
         _buildBackwardBackFoldBandSurface(
           context: context,
           pageIndex: backFacePageIndex,
           pageSize: pageSize,
-          polygon: facePolygons.verso,
+          polygon: faces.previousBackVersoLocalPolygon,
+          materialLocalPolygon: sheetMaterialLocalPolygon,
           palette: palette,
           progress: progress,
         ),
@@ -3661,6 +3731,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required int pageIndex,
     required Size pageSize,
     required List<Offset> polygon,
+    required List<Offset> materialLocalPolygon,
     required ArticleTemplatePalette palette,
     required double progress,
   }) {
@@ -3668,32 +3739,35 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       pageIndex,
       expectedSize: pageSize,
     );
-    return Positioned.fill(
-      child: ClipPath(
-        clipper: ArticlePolygonClipper(polygon),
-        child: SizedBox(
-          width: pageSize.width,
-          height: pageSize.height,
-          child: Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.none,
-            children: <Widget>[
-              _buildBackwardVersoTextureSurface(
-                context,
-                pageIndex,
-                pageSize,
-                polygon,
-                leafVersoSnapshot,
-              ),
-              _buildFlippingSurfaceOverlay(
-                palette: palette,
-                direction: StPageFlipDirection.back,
-                progress: progress,
-                showBackside: true,
-              ),
-            ],
+    return _buildBackwardSheetPolygonSurface(
+      pageSize: pageSize,
+      polygon: polygon,
+      child: Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          _buildCachedPageSurface(
+            context,
+            pageIndex,
+            pageSize,
+            kind: ArticlePageSurfaceKind.back,
           ),
-        ),
+          _buildBackwardVersoTextureSurface(
+            context,
+            pageIndex,
+            pageSize,
+            polygon,
+            materialLocalPolygon,
+            leafVersoSnapshot,
+          ),
+          if (leafVersoSnapshot == null)
+            _buildFlippingSurfaceOverlay(
+              palette: palette,
+              direction: StPageFlipDirection.back,
+              progress: progress,
+              showBackside: true,
+            ),
+        ],
       ),
     );
   }
@@ -3705,17 +3779,37 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     required Size pageSize,
     required List<Offset> polygon,
   }) {
-    return Positioned.fill(
+    return _buildBackwardSheetPolygonSurface(
+      pageSize: pageSize,
+      polygon: polygon,
+      child: _buildCachedPageSurface(context, pageIndex, pageSize, kind: kind),
+    );
+  }
+
+  Widget _buildBackwardSheetPolygonSurface({
+    required Size pageSize,
+    required List<Offset> polygon,
+    required Widget child,
+  }) {
+    final bounds = polygonBounds(polygon);
+    final paintBounds = bounds == null || bounds.isEmpty
+        ? Offset.zero & pageSize
+        : bounds;
+    final paintOrigin = paintBounds.topLeft;
+    final shiftedPolygon = paintOrigin == Offset.zero
+        ? polygon
+        : polygon.map((point) => point - paintOrigin).toList(growable: false);
+    return Positioned.fromRect(
+      rect: paintBounds,
       child: ClipPath(
-        clipper: ArticlePolygonClipper(polygon),
-        child: SizedBox(
-          width: pageSize.width,
-          height: pageSize.height,
-          child: _buildCachedPageSurface(
-            context,
-            pageIndex,
-            pageSize,
-            kind: kind,
+        clipper: ArticlePolygonClipper(shiftedPolygon),
+        clipBehavior: Clip.hardEdge,
+        child: Transform.translate(
+          offset: -paintOrigin,
+          child: SizedBox(
+            width: pageSize.width,
+            height: pageSize.height,
+            child: child,
           ),
         ),
       ),
@@ -3727,6 +3821,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     int pageIndex,
     Size pageSize,
     List<Offset> polygon,
+    List<Offset> materialLocalPolygon,
     ArticlePageTextureSnapshot? leafVersoSnapshot,
   ) {
     if (leafVersoSnapshot == null) {
@@ -3734,24 +3829,22 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         key: ValueKey<String>('article_backward_leaf_verso_texture_wait'),
       );
     }
-    final mesh = buildBackwardLeafVersoUvMesh(
+    final mesh = buildBackwardLeafVersoMaterialUvMesh(
       pageSize: pageSize,
-      polygon: polygon,
+      materialLocalPolygon: materialLocalPolygon,
     );
     if (mesh == null) {
       return const SizedBox.shrink();
     }
-    final paintBounds = mesh.paintBounds.inflate(1);
-    return Positioned.fromRect(
-      rect: paintBounds,
+    return Positioned.fill(
       child: CustomPaint(
         painter: _BackwardLeafVersoUvPainter(
           leafVersoSnapshot: leafVersoSnapshot,
           pageSize: pageSize,
           polygon: polygon,
-          paintOrigin: paintBounds.topLeft,
+          materialLocalPolygon: materialLocalPolygon,
+          paintOrigin: Offset.zero,
         ),
-        size: paintBounds.size,
       ),
     );
   }
@@ -3990,6 +4083,14 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       angle: geometryAngle,
       direction: geometryDirection,
     );
+    final useBackwardMaterialSheet =
+        direction == StPageFlipDirection.back &&
+        isFlippingPage &&
+        backwardLeafFrame != null;
+    final sheetPartitionAreaPolygon = area;
+    final sheetMaterialLocalPolygon = useBackwardMaterialSheet
+        ? pageRectPolygon(pageSize)
+        : const <Offset>[];
     final localBackwardFoldLine = backwardFoldLine == null
         ? null
         : (
@@ -4070,6 +4171,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
                       backwardFoldLine: localBackwardFoldLine,
                       backwardFreeEdgeLine: localBackwardFreeEdgeLine,
                       sheetLocalPolygon: polygon,
+                      sheetAreaPolygon: sheetPartitionAreaPolygon,
+                      sheetMaterialLocalPolygon: sheetMaterialLocalPolygon,
                     )
                   : _buildBottomProjectedPageSurface(
                       context: context,

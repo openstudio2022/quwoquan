@@ -4,7 +4,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_texture_mapping.dart';
 
 const double _polygonEpsilon = 0.001;
 
@@ -15,14 +14,14 @@ class BackwardLeafVersoUvMesh {
     required this.textureCoordinates,
     required this.indices,
     required this.paintBounds,
-    required this.textureDestinationRect,
+    required this.clipPolygon,
   });
 
   final List<Offset> positions;
   final List<Offset> textureCoordinates;
   final List<int> indices;
   final Rect paintBounds;
-  final Rect textureDestinationRect;
+  final List<Offset> clipPolygon;
 
   ui.Vertices toVertices({Offset paintOrigin = Offset.zero}) {
     final positionValues = Float32List(positions.length * 2);
@@ -45,103 +44,100 @@ class BackwardLeafVersoUvMesh {
   }
 }
 
-BackwardLeafVersoUvMesh? buildBackwardLeafVersoUvMesh({
+BackwardLeafVersoUvMesh? buildBackwardLeafVersoMaterialUvMesh({
   required Size pageSize,
-  required List<Offset> polygon,
+  required List<Offset> materialLocalPolygon,
+  int columns = 12,
+  int rows = 16,
 }) {
-  if (pageSize.isEmpty || polygon.length < 3) {
+  if (pageSize.isEmpty ||
+      materialLocalPolygon.length != 4 ||
+      columns < 1 ||
+      rows < 1) {
     return null;
   }
-  final positions = _dedupePolygonPoints(polygon);
-  if (positions.length < 3 || _polygonArea(positions) <= _polygonEpsilon) {
+  final materialBounds = _polygonBounds(materialLocalPolygon);
+  if (materialBounds == null ||
+      materialBounds.width <= _polygonEpsilon ||
+      materialBounds.height <= _polygonEpsilon ||
+      _polygonArea(materialLocalPolygon) <= _polygonEpsilon) {
     return null;
   }
-  final polygonBounds = _polygonBounds(positions);
-  if (polygonBounds == null ||
-      polygonBounds.width <= _polygonEpsilon ||
-      polygonBounds.height <= _polygonEpsilon) {
-    return null;
-  }
-  final textureDestinationRect = _textureDestinationRect(
-    pageSize: pageSize,
-    polygonBounds: polygonBounds,
-  );
-  final paintBounds = polygonBounds.expandToInclude(textureDestinationRect);
+
+  final topLeft = materialLocalPolygon[0];
+  final topRight = materialLocalPolygon[1];
+  final bottomRight = materialLocalPolygon[2];
+  final bottomLeft = materialLocalPolygon[3];
+  final positions = <Offset>[];
   final textureCoordinates = <Offset>[];
-  for (final localPoint in positions) {
-    // Route-B BACK local geometry may legitimately live outside the page rect.
-    // Keep geometry raw; ImageShader clamp handles texture-edge sampling.
-    textureCoordinates.add(
-      backwardVersoTexturePoint(pageSize: pageSize, localPoint: localPoint),
-    );
+  for (var row = 0; row <= rows; row += 1) {
+    final v = row / rows;
+    final left = Offset.lerp(topLeft, bottomLeft, v)!;
+    final right = Offset.lerp(topRight, bottomRight, v)!;
+    final materialY = pageSize.height * v;
+    for (var column = 0; column <= columns; column += 1) {
+      final u = column / columns;
+      final materialX = pageSize.width * u;
+      positions.add(Offset.lerp(left, right, u)!);
+      textureCoordinates.add(Offset(materialX, materialY));
+    }
   }
 
   final indices = <int>[];
-  for (var triangle = 0; triangle < positions.length - 2; triangle += 1) {
-    indices
-      ..add(0)
-      ..add(triangle + 1)
-      ..add(triangle + 2);
+  final stride = columns + 1;
+  for (var row = 0; row < rows; row += 1) {
+    for (var column = 0; column < columns; column += 1) {
+      final topLeftIndex = row * stride + column;
+      final topRightIndex = topLeftIndex + 1;
+      final bottomLeftIndex = topLeftIndex + stride;
+      final bottomRightIndex = bottomLeftIndex + 1;
+      indices
+        ..add(topLeftIndex)
+        ..add(bottomLeftIndex)
+        ..add(topRightIndex)
+        ..add(topRightIndex)
+        ..add(bottomLeftIndex)
+        ..add(bottomRightIndex);
+    }
   }
+
   return BackwardLeafVersoUvMesh(
     positions: List<Offset>.unmodifiable(positions),
     textureCoordinates: List<Offset>.unmodifiable(textureCoordinates),
     indices: List<int>.unmodifiable(indices),
-    paintBounds: paintBounds,
-    textureDestinationRect: textureDestinationRect,
+    paintBounds: materialBounds,
+    clipPolygon: List<Offset>.unmodifiable(materialLocalPolygon),
   );
 }
 
-Rect _textureDestinationRect({
+BackwardLeafVersoUvMesh? buildBackwardLeafVersoPairedUvMesh({
   required Size pageSize,
-  required Rect polygonBounds,
+  required List<Offset> displayLocalPolygon,
+  required List<Offset> sourceAreaPolygon,
 }) {
-  double originForAxis({
-    required double min,
-    required double max,
-    required double size,
-  }) {
-    if (min < 0) {
-      return min;
-    }
-    if (max > size) {
-      return max - size;
-    }
-    return 0;
+  if (pageSize.isEmpty ||
+      displayLocalPolygon.length < 3 ||
+      displayLocalPolygon.length != sourceAreaPolygon.length ||
+      _polygonArea(displayLocalPolygon) <= _polygonEpsilon ||
+      _polygonArea(sourceAreaPolygon) <= _polygonEpsilon) {
+    return null;
   }
 
-  return Rect.fromLTWH(
-    originForAxis(
-      min: polygonBounds.left,
-      max: polygonBounds.right,
-      size: pageSize.width,
-    ),
-    originForAxis(
-      min: polygonBounds.top,
-      max: polygonBounds.bottom,
-      size: pageSize.height,
-    ),
-    pageSize.width,
-    pageSize.height,
+  final indices = <int>[];
+  for (var index = 1; index < displayLocalPolygon.length - 1; index += 1) {
+    indices
+      ..add(0)
+      ..add(index)
+      ..add(index + 1);
+  }
+  return BackwardLeafVersoUvMesh(
+    positions: List<Offset>.unmodifiable(displayLocalPolygon),
+    textureCoordinates: List<Offset>.unmodifiable(sourceAreaPolygon),
+    indices: List<int>.unmodifiable(indices),
+    paintBounds:
+        _polygonBounds(displayLocalPolygon) ?? (Offset.zero & pageSize),
+    clipPolygon: List<Offset>.unmodifiable(displayLocalPolygon),
   );
-}
-
-List<Offset> _dedupePolygonPoints(List<Offset> polygon) {
-  final points = <Offset>[];
-  for (final point in polygon) {
-    if (points.isEmpty || !_offsetsNear(points.last, point)) {
-      points.add(point);
-    }
-  }
-  if (points.length > 1 && _offsetsNear(points.first, points.last)) {
-    points.removeLast();
-  }
-  return points;
-}
-
-bool _offsetsNear(Offset a, Offset b) {
-  return (a.dx - b.dx).abs() <= _polygonEpsilon &&
-      (a.dy - b.dy).abs() <= _polygonEpsilon;
 }
 
 double _polygonArea(List<Offset> polygon) {

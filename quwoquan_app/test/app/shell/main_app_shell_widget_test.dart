@@ -7,12 +7,13 @@ import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
-import 'package:quwoquan_app/ui/circle/pages/home_circles_hub_page.dart';
+import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _buildShell(String location) {
@@ -103,13 +104,13 @@ void main() {
       );
     });
 
-    testWidgets('圈子路由渲染独立圈子页', (tester) async {
+    testWidgets('圈子路由归并到首页频道', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.circles));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.byType(MainAppShell), findsOneWidget);
-      expect(find.byType(CirclesHubPage), findsOneWidget);
+      expect(find.byType(HomePage), findsOneWidget);
     });
 
     testWidgets('深色模式下底部导航仍展示五栏', (tester) async {
@@ -200,6 +201,27 @@ void main() {
         (tester.getCenter(profileIcon).dy - iconCenterY).abs(),
         lessThan(1),
       );
+    });
+
+    testWidgets('底部导航背景与 post 表面色一致', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShell(AppRoutePaths.home));
+      await tester.pumpAndSettle();
+
+      final navDecoration = tester.widget<DecoratedBox>(
+        find
+            .descendant(
+              of: find.byType(BottomNavigationWidget),
+              matching: find.byType(DecoratedBox),
+            )
+            .first,
+      );
+      final decoration = navDecoration.decoration as BoxDecoration;
+      expect(
+        decoration.color,
+        SettingsSemanticConstants.conversationSheetCardSurface(false),
+      );
+      expect(decoration.border, isNull);
     });
   });
 }

@@ -16,6 +16,7 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -173,6 +174,12 @@ class _ChatPageState extends ConsumerState<ChatPage>
       isDark,
       ColorType.separatorSubtle,
     );
+    final listItemBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final listDividerColor =
+        SettingsSemanticConstants.conversationSheetDividerColor(
+          isDark,
+        ).withValues(alpha: 0.9);
 
     return AppScaffold(
       backgroundColor: bgColor,
@@ -182,12 +189,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
           SizedBox(height: effectiveTopInset),
           _buildMainTabs(context, bgColor, fgPrimary, fgSecondary),
           AnimatedContainer(
+            key: const ValueKey<String>('chat-secondary-tabs-slot'),
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeInOut,
             height: _hideSecondaryTab ? 0 : AppSpacing.subTabNavigationHeight,
             clipBehavior: Clip.hardEdge,
-            decoration: const BoxDecoration(),
-            child: _buildSubTabs(context, borderColor),
+            decoration: BoxDecoration(color: bgColor),
+            child: _buildSubTabs(context),
           ),
           Expanded(
             child: TabSwipeSwitchRegion(
@@ -202,6 +210,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
                   fgPrimary,
                   fgSecondary,
                   borderColor,
+                  listItemBackground,
+                  listDividerColor,
                 ),
               ),
             ),
@@ -216,6 +226,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color fgPrimary,
     Color fgSecondary,
     Color borderColor,
+    Color listItemBackground,
+    Color listDividerColor,
   ) {
     if (_mainTabIndex != 0) {
       return _buildContactsContent(
@@ -223,6 +235,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
         fgPrimary,
         fgSecondary,
         borderColor,
+        listItemBackground,
+        listDividerColor,
       );
     }
     final subTab = _messageSubTabs[_subTabIndex];
@@ -232,9 +246,17 @@ class _ChatPageState extends ConsumerState<ChatPage>
         fgPrimary,
         fgSecondary,
         borderColor,
+        listItemBackground,
+        listDividerColor,
       );
     }
-    return _buildInboxMessagesContent(context, fgPrimary, fgSecondary);
+    return _buildInboxMessagesContent(
+      context,
+      fgPrimary,
+      fgSecondary,
+      listItemBackground,
+      listDividerColor,
+    );
   }
 
   Widget _buildMainTabs(
@@ -250,18 +272,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
     final activeTabId = _mainTabIndex == 0 ? 'messages' : 'contacts';
 
     return Container(
+      key: const ValueKey<String>('chat-main-tabs-chrome'),
       height: AppSpacing.appChromeTopBarHeight(context),
-      decoration: BoxDecoration(
-        color: bgColor,
-        border: Border(
-          bottom: BorderSide(
-            color: AppColorsFunctional.getColor(
-              ref.read(isDarkProvider),
-              ColorType.borderPrimary,
-            ),
-          ),
-        ),
-      ),
+      decoration: BoxDecoration(color: bgColor),
       child: Stack(
         children: [
           // Layer 1: Absolutely Centered Tabs
@@ -284,7 +297,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
           ),
           // Layer 2: Trailing Actions
           Positioned(
-            right: AppSpacing.topBarTrailingButtonInset(context),
+            right: AppSpacing.topBarTrailingAssistantButtonInset(context),
             top: 0,
             bottom: 0,
             child: const Center(
@@ -298,7 +311,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
   }
 
-  Widget _buildSubTabs(BuildContext context, Color borderColor) {
+  Widget _buildSubTabs(BuildContext context) {
     final subTabs = _mainTabIndex == 0 ? _messageSubTabs : _contactsSubTabs;
 
     Map<int, int>? numberBadges;
@@ -344,15 +357,13 @@ class _ChatPageState extends ConsumerState<ChatPage>
     }
 
     return SecondaryCapsuleTabBar(
+      key: const ValueKey<String>('chat-secondary-capsule-tabs'),
       isDark: ref.read(isDarkProvider),
       tabs: subTabs,
       activeIndex: _subTabIndex,
       onTap: (index) => setState(() => _subTabIndex = index),
       onHorizontalDragEnd: _handleTabSwipeDragEnd,
       horizontalPadding: AppSpacing.feedContentHorizontal(context),
-      border: Border(
-        bottom: BorderSide(color: borderColor.withValues(alpha: 0.2)),
-      ),
       numberBadges: numberBadges,
       dotBadges: dotBadges,
     );
@@ -363,6 +374,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color fgPrimary,
     Color fgSecondary,
     Color borderColor,
+    Color listItemBackground,
+    Color listDividerColor,
   ) {
     if (!_secretUnlocked) {
       return _buildSecretLockScreen(context, fgPrimary, fgSecondary);
@@ -405,7 +418,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
           onTap: () => context.push(AppRoutePaths.chatDetail(id: c.id)),
           fgPrimary: fgPrimary,
           fgSecondary: fgSecondary,
-          borderColor: borderColor,
+          backgroundColor: listItemBackground,
+          dividerColor: listDividerColor,
           showEncryptedBadge: false, // Do not show lock icon
         );
       },
@@ -572,6 +586,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
     BuildContext context,
     Color fgPrimary,
     Color fgSecondary,
+    Color listItemBackground,
+    Color listDividerColor,
   ) {
     final inboxState = ref.watch(chatInboxListProvider);
     final items = _filterInboxListForSubTab(
@@ -610,6 +626,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
           item: item,
           fgPrimary: fgPrimary,
           fgSecondary: fgSecondary,
+          backgroundColor: listItemBackground,
+          dividerColor: listDividerColor,
           onTap: () => context.push(AppRoutePaths.chatDetail(id: item.id)),
         );
       },
@@ -714,6 +732,8 @@ class _ChatPageState extends ConsumerState<ChatPage>
     Color fgPrimary,
     Color fgSecondary,
     Color borderColor,
+    Color listItemBackground,
+    Color listDividerColor,
   ) {
     final sub = _contactsSubTabs[_subTabIndex];
     final asyncRows = ref.watch(chatContactsRowsForSubTabProvider(sub));
@@ -756,6 +776,12 @@ class _ChatPageState extends ConsumerState<ChatPage>
             fgPrimary: fgPrimary,
             fgSecondary: fgSecondary,
             borderColor: borderColor,
+            rowBackgroundColor: listItemBackground,
+            rowDividerColor: listDividerColor,
+            sectionBandColor:
+                SettingsSemanticConstants.conversationSheetPanelBackground(
+                  ref.read(isDarkProvider),
+                ),
           );
         }
         return ListView.builder(
@@ -767,57 +793,82 @@ class _ChatPageState extends ConsumerState<ChatPage>
               minimumSize: Size.zero,
               onPressed: () => row.open(context),
               child: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm + AppSpacing.two,
-                ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: borderColor,
-                      width: AppSpacing.hairline,
-                    ),
-                  ),
-                ),
-                child: Row(
+                key: ValueKey<String>('chat-contact-row-${row.id}'),
+                color: listItemBackground,
+                padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Column(
                   children: [
-                    row.kind == ChatContactsRowKind.group
-                        ? ConversationAvatar(
-                            conversationId: row.conversationId ?? row.id,
-                            conversationType: 'group',
-                            title: row.displayName,
-                            avatarUrl: row.avatarUrl,
-                            size: AppSpacing.largeButtonSize + AppSpacing.xs,
-                          )
-                        : RoundedSquareAvatar(
-                            size: AppSpacing.largeButtonSize + AppSpacing.xs,
-                            imageUrl: row.avatarUrl,
-                            name: row.displayName,
-                          ),
-                    SizedBox(width: AppSpacing.interGroupSm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        vertical: AppSpacing.sm + AppSpacing.xs,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            row.displayName,
-                            style: TextStyle(
-                              fontSize: AppTypography.iosBody,
-                              fontWeight: AppTypography.regular,
-                              color: fgPrimary,
+                          row.kind == ChatContactsRowKind.group
+                              ? ConversationAvatar(
+                                  conversationId: row.conversationId ?? row.id,
+                                  conversationType: 'group',
+                                  title: row.displayName,
+                                  avatarUrl: row.avatarUrl,
+                                  size: _kContactAvatarSize,
+                                )
+                              : RoundedSquareAvatar(
+                                  size: _kContactAvatarSize,
+                                  imageUrl: row.avatarUrl,
+                                  name: row.displayName,
+                                ),
+                          SizedBox(
+                            width: ChatConversationAvatarTokens.leadingGap,
+                          ),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  row.displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: AppTypography.iosBody,
+                                    fontWeight: AppTypography.regular,
+                                    color: fgPrimary,
+                                    height: AppTypography.lineHeightTight,
+                                  ),
+                                ),
+                                if (row.subtitle.isNotEmpty) ...[
+                                  SizedBox(height: AppSpacing.xs),
+                                  Text(
+                                    row.subtitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: AppTypography.iosFootnote,
+                                      color: fgSecondary.withValues(alpha: 0.9),
+                                      height: AppTypography.lineHeightCompact,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          if (row.subtitle.isNotEmpty)
-                            Text(
-                              row.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: AppTypography.iosFootnote,
-                                color: fgSecondary,
-                              ),
-                            ),
                         ],
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.only(
+                        left: ChatConversationAvatarTokens.dividerInset(
+                          _kContactAvatarSize,
+                        ),
+                      ),
+                      child: Divider(
+                        key: ValueKey<String>(
+                          'chat-contact-row-divider-${row.id}',
+                        ),
+                        height: AppSpacing.one,
+                        thickness: AppSpacing.hairline,
+                        color: listDividerColor,
                       ),
                     ),
                   ],
@@ -880,12 +931,18 @@ class _ContactsListWithIndex extends StatefulWidget {
     required this.fgPrimary,
     required this.fgSecondary,
     required this.borderColor,
+    required this.rowBackgroundColor,
+    required this.rowDividerColor,
+    required this.sectionBandColor,
   });
 
   final List<ChatContactsRow> items;
   final Color fgPrimary;
   final Color fgSecondary;
   final Color borderColor;
+  final Color rowBackgroundColor;
+  final Color rowDividerColor;
+  final Color sectionBandColor;
 
   @override
   State<_ContactsListWithIndex> createState() => _ContactsListWithIndexState();
@@ -976,8 +1033,9 @@ String _getInitial(String name) {
   return map[name[0]] ?? 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[name.codeUnitAt(0) % 26];
 }
 
-const double _kSectionHeaderHeight = 28;
+const double _kSectionHeaderHeight = AppSpacing.twenty;
 const double _kContactRowHeight = 56;
+const double _kContactAvatarSize = ChatConversationAvatarTokens.listSize;
 
 class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
   final Map<String, GlobalKey> _sectionKeys = {};
@@ -1042,9 +1100,9 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
     }
 
     final listIsDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    final onIndexLetterActiveFg = AppColorsFunctional.getColor(
+    final activeIndexLetterColor = AppColorsFunctional.getColor(
       listIsDark,
-      ColorType.badgeForeground,
+      ColorType.selectionForeground,
     );
 
     final listChildren = <Widget>[];
@@ -1064,15 +1122,15 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
           listChildren.add(
             Container(
               key: key,
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: 4,
-              ),
-              color: widget.borderColor.withValues(alpha: 0.18),
+              height: _kSectionHeaderHeight,
+              alignment: Alignment.centerLeft,
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              color: widget.sectionBandColor,
               child: Text(
+                key: const ValueKey<String>('chat-contact-section-label-star'),
                 UITextConstants.starredFriends,
                 style: TextStyle(
-                  fontSize: AppTypography.iosCaption1,
+                  fontSize: AppTypography.xs,
                   fontWeight: AppTypography.semiBold,
                   color: widget.fgSecondary,
                 ),
@@ -1089,15 +1147,15 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
           listChildren.add(
             Container(
               key: key,
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: 4,
-              ),
-              color: widget.borderColor.withValues(alpha: 0.18),
+              height: _kSectionHeaderHeight,
+              alignment: Alignment.centerLeft,
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              color: widget.sectionBandColor,
               child: Text(
+                key: ValueKey<String>('chat-contact-section-label-$initial'),
                 initial,
                 style: TextStyle(
-                  fontSize: AppTypography.iosCaption1,
+                  fontSize: AppTypography.xs,
                   fontWeight: AppTypography.semiBold,
                   color: widget.fgSecondary,
                 ),
@@ -1118,63 +1176,86 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
           minimumSize: Size.zero,
           onPressed: () => row.open(context),
           child: Container(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm + AppSpacing.two,
-            ),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: widget.borderColor,
-                  width: AppSpacing.hairline,
-                ),
-              ),
-            ),
-            child: Row(
+            key: ValueKey<String>('chat-contact-row-${row.id}'),
+            color: widget.rowBackgroundColor,
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Column(
               children: [
-                RoundedSquareAvatar(
-                  size: AppSpacing.largeButtonSize + AppSpacing.xs,
-                  imageUrl: avatar,
-                  name: title,
-                ),
-                SizedBox(width: AppSpacing.interGroupSm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    vertical: AppSpacing.sm + AppSpacing.xs,
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: TextStyle(
-                                fontSize: AppTypography.iosBody,
-                                fontWeight: AppTypography.regular,
-                                color: widget.fgPrimary,
-                              ),
-                            ),
-                          ),
-                          if (starred) ...[
-                            SizedBox(width: AppSpacing.xs),
-                            Icon(
-                              CupertinoIcons.star_fill,
-                              size: AppSpacing.iconSmall,
-                              color: AppColors.warning,
-                            ),
-                          ],
-                        ],
+                      RoundedSquareAvatar(
+                        size: _kContactAvatarSize,
+                        imageUrl: avatar,
+                        name: title,
                       ),
-                      if (subtitle.isNotEmpty)
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: widget.fgSecondary,
-                          ),
+                      SizedBox(width: ChatConversationAvatarTokens.leadingGap),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: AppTypography.iosBody,
+                                      fontWeight: AppTypography.regular,
+                                      color: widget.fgPrimary,
+                                      height: AppTypography.lineHeightTight,
+                                    ),
+                                  ),
+                                ),
+                                if (starred) ...[
+                                  SizedBox(width: AppSpacing.xs),
+                                  Icon(
+                                    CupertinoIcons.star_fill,
+                                    size: AppSpacing.iconSmall,
+                                    color: AppColors.warning,
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (subtitle.isNotEmpty) ...[
+                              SizedBox(height: AppSpacing.xs),
+                              Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: AppTypography.iosFootnote,
+                                  color: widget.fgSecondary.withValues(
+                                    alpha: 0.9,
+                                  ),
+                                  height: AppTypography.lineHeightCompact,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
+                      ),
                     ],
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: ChatConversationAvatarTokens.dividerInset(
+                      _kContactAvatarSize,
+                    ),
+                  ),
+                  child: Divider(
+                    key: ValueKey<String>('chat-contact-row-divider-${row.id}'),
+                    height: AppSpacing.one,
+                    thickness: AppSpacing.hairline,
+                    color: widget.rowDividerColor,
                   ),
                 ),
               ],
@@ -1197,7 +1278,7 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
           },
           child: ListView(
             controller: _scrollController,
-            padding: EdgeInsets.only(right: 32),
+            padding: EdgeInsets.zero,
             children: listChildren,
           ),
         ),
@@ -1237,27 +1318,18 @@ class _ContactsListWithIndexState extends State<_ContactsListWithIndex> {
                     }
                   },
                   child: Container(
+                    key: ValueKey<String>('chat-contact-index-letter-$letter'),
                     width: AppSpacing.twenty,
                     height: AppSpacing.twenty,
                     alignment: Alignment.center,
                     margin: EdgeInsets.symmetric(vertical: 1),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? AppColorsFunctional.getColor(
-                              CupertinoTheme.of(context).brightness ==
-                                  Brightness.dark,
-                              ColorType.selectionForeground,
-                            )
-                          : AppColors.transparent,
-                      shape: BoxShape.circle,
-                    ),
                     child: Text(
                       letter,
                       style: TextStyle(
                         fontSize: AppTypography.xs,
                         fontWeight: AppTypography.semiBold,
                         color: isActive
-                            ? onIndexLetterActiveFg
+                            ? activeIndexLetterColor
                             : widget.fgSecondary,
                       ),
                     ),
@@ -1278,7 +1350,8 @@ class _ConversationTile extends StatelessWidget {
   final VoidCallback onTap;
   final Color fgPrimary;
   final Color fgSecondary;
-  final Color borderColor;
+  final Color backgroundColor;
+  final Color dividerColor;
   final bool showEncryptedBadge;
 
   const _ConversationTile({
@@ -1286,7 +1359,8 @@ class _ConversationTile extends StatelessWidget {
     required this.onTap,
     required this.fgPrimary,
     required this.fgSecondary,
-    required this.borderColor,
+    required this.backgroundColor,
+    required this.dividerColor,
     this.isSpecial = false,
     this.showEncryptedBadge = false,
   });
@@ -1324,13 +1398,15 @@ class _ConversationTile extends StatelessWidget {
       minimumSize: Size.zero,
       onPressed: onTap,
       child: Container(
+        key: ValueKey<String>('chat-conversation-row-${conversation.id}'),
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.sm + AppSpacing.two,
         ),
         decoration: BoxDecoration(
+          color: backgroundColor,
           border: Border(
-            bottom: BorderSide(color: borderColor, width: AppSpacing.hairline),
+            bottom: BorderSide(color: dividerColor, width: AppSpacing.hairline),
           ),
         ),
         child: Row(
@@ -1350,7 +1426,7 @@ class _ConversationTile extends StatelessWidget {
                         color: AppColors.primaryColor,
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: AppColors.iosSystemBackground(context),
+                          color: backgroundColor,
                           width: AppSpacing.oneHalf,
                         ),
                       ),
@@ -1376,7 +1452,7 @@ class _ConversationTile extends StatelessWidget {
                           AppSpacing.radiusTen,
                         ),
                         border: Border.all(
-                          color: AppColors.iosSystemBackground(context),
+                          color: backgroundColor,
                           width: AppSpacing.oneHalf,
                         ),
                       ),
@@ -1494,12 +1570,16 @@ class _InboxConversationTile extends StatelessWidget {
     required this.onTap,
     required this.fgPrimary,
     required this.fgSecondary,
+    required this.backgroundColor,
+    required this.dividerColor,
   });
 
   final ChatListItemViewModel item;
   final VoidCallback onTap;
   final Color fgPrimary;
   final Color fgSecondary;
+  final Color backgroundColor;
+  final Color dividerColor;
 
   static const double _avatarSize = ChatConversationAvatarTokens.listSize;
 
@@ -1522,19 +1602,19 @@ class _InboxConversationTile extends StatelessWidget {
       inboxTileIsDark,
       ColorType.badgeForeground,
     );
-    final scaffoldBackground = AppColors.iosPageBackground(context);
-    final dividerColor = AppColors.iosSeparator(context);
     final subtitleColor = fgSecondary.withValues(alpha: 0.9);
     final timeColor = fgSecondary.withValues(alpha: 0.72);
+    final rowBackground = item.isPinned
+        ? Color.alphaBlend(fgSecondary.withValues(alpha: 0.04), backgroundColor)
+        : backgroundColor;
 
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: Size.zero,
       onPressed: onTap,
       child: Container(
-        color: item.isPinned
-            ? fgSecondary.withValues(alpha: 0.04)
-            : AppColors.transparent,
+        key: ValueKey<String>('chat-inbox-row-${item.id}'),
+        color: rowBackground,
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
         child: Column(
           children: [
@@ -1567,7 +1647,7 @@ class _InboxConversationTile extends StatelessWidget {
                                 AppSpacing.ten,
                               ),
                               border: Border.all(
-                                color: scaffoldBackground,
+                                color: rowBackground,
                                 width: AppSpacing.oneHalf,
                               ),
                             ),
@@ -1662,6 +1742,7 @@ class _InboxConversationTile extends StatelessWidget {
                 left: ChatConversationAvatarTokens.dividerInset(_avatarSize),
               ),
               child: Divider(
+                key: ValueKey<String>('chat-inbox-row-divider-${item.id}'),
                 height: AppSpacing.one,
                 thickness: AppSpacing.hairline,
                 color: dividerColor,

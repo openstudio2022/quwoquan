@@ -57,7 +57,7 @@ class ArticleEditor extends StatefulWidget {
   final ValueChanged<ArticleDocumentTitleStyle> onTitleStyleChanged;
   final void Function(String nodeId, String value) onUpdateNodeText;
   final void Function(String figureNodeId, String narrowText, String belowText)
-      onUpdateWrapParagraphTexts;
+  onUpdateWrapParagraphTexts;
   final void Function(String nodeId, String layout) onUpdateNodeImageLayout;
   final void Function(String nodeId, String caption) onUpdateNodeCaption;
   final Future<void> Function(String nodeId) onEditNodeImage;
@@ -66,9 +66,10 @@ class ArticleEditor extends StatefulWidget {
   final Future<void> Function(String nodeId, int selectionOffset)
   onInsertImageAtSelection;
   final ValueChanged<String?> onActiveBlockChanged;
-  final String Function(String afterNodeId, {String initialText}) onInsertTextNodeAfter;
+  final String Function(String afterNodeId, {String initialText})
+  onInsertTextNodeAfter;
   final ArticleWrapNodeGroup? Function(String figureNodeId, {int? splitOffset})
-      onEnsureWrapNodeGroup;
+  onEnsureWrapNodeGroup;
   final VoidCallback? onArticleIntrinsicImageResolved;
   final ValueChanged<ArticlePaperTexture>? onPaperTextureSelected;
   final ValueChanged<ArticleFontPreset>? onFontSelected;
@@ -77,8 +78,18 @@ class ArticleEditor extends StatefulWidget {
   final bool canRedo;
   final VoidCallback? onUndo;
   final VoidCallback? onRedo;
-  final void Function(String nodeId, ArticleDocumentNodeType type)? onUpdateNodeType;
-  final void Function(String nodeId, int start, int end, {bool? bold, bool? italic, bool? underline, bool? strikethrough})? onToggleInlineStyle;
+  final void Function(String nodeId, ArticleDocumentNodeType type)?
+  onUpdateNodeType;
+  final void Function(
+    String nodeId,
+    int start,
+    int end, {
+    bool? bold,
+    bool? italic,
+    bool? underline,
+    bool? strikethrough,
+  })?
+  onToggleInlineStyle;
   final VoidCallback? onCommitTextEdit;
   final void Function(String nodeId, String alignment)? onUpdateNodeAlignment;
 
@@ -89,15 +100,13 @@ class ArticleEditor extends StatefulWidget {
 class _ArticleEditorState extends State<ArticleEditor> {
   final Map<String, TextEditingController> _nodeControllers =
       <String, TextEditingController>{};
-  final Map<String, FocusNode> _nodeFocusNodes =
-      <String, FocusNode>{};
+  final Map<String, FocusNode> _nodeFocusNodes = <String, FocusNode>{};
   final Map<String, TextEditingController> _captionControllers =
       <String, TextEditingController>{};
-  final Map<String, FocusNode> _captionFocusNodes =
-      <String, FocusNode>{};
+  final Map<String, FocusNode> _captionFocusNodes = <String, FocusNode>{};
   final Map<String, TextSelection> _nodeSelections = <String, TextSelection>{};
-  final Map<String, GlobalKey<ArticleWrapParagraphEditorState>> _wrapEditorKeys =
-      <String, GlobalKey<ArticleWrapParagraphEditorState>>{};
+  final Map<String, GlobalKey<ArticleWrapParagraphEditorState>>
+  _wrapEditorKeys = <String, GlobalKey<ArticleWrapParagraphEditorState>>{};
   final Map<String, Set<String>> _wrapEditorGroupNodeIds =
       <String, Set<String>>{};
   final Set<String> _pendingWrapNormalizations = <String>{};
@@ -205,7 +214,8 @@ class _ArticleEditorState extends State<ArticleEditor> {
       }
     }
     for (final entry in _wrapEditorKeys.entries) {
-      final handledNodeIds = _wrapEditorGroupNodeIds[entry.key] ?? const <String>{};
+      final handledNodeIds =
+          _wrapEditorGroupNodeIds[entry.key] ?? const <String>{};
       if (exceptNodeId != null && handledNodeIds.contains(exceptNodeId)) {
         continue;
       }
@@ -238,10 +248,9 @@ class _ArticleEditorState extends State<ArticleEditor> {
     Set<String> unmanagedNodeIds = const <String>{},
   }) {
     final liveIds = nodes.map((n) => n.id).toSet();
-    final staleIds =
-        _nodeControllers.keys
-            .where((id) => !liveIds.contains(id) || unmanagedNodeIds.contains(id))
-            .toList();
+    final staleIds = _nodeControllers.keys
+        .where((id) => !liveIds.contains(id) || unmanagedNodeIds.contains(id))
+        .toList();
     for (final id in staleIds) {
       _nodeControllers.remove(id)?.dispose();
       _nodeFocusNodes.remove(id)?.dispose();
@@ -345,8 +354,8 @@ class _ArticleEditorState extends State<ArticleEditor> {
           activeSlot.anchorNodeId,
           initialText: value,
         );
-        final selectionOffset =
-            _activeSlotController!.selection.extentOffset.clamp(0, value.length);
+        final selectionOffset = _activeSlotController!.selection.extentOffset
+            .clamp(0, value.length);
         _nodeSelections[newNodeId] = TextSelection.collapsed(
           offset: selectionOffset,
         );
@@ -369,11 +378,8 @@ class _ArticleEditorState extends State<ArticleEditor> {
           _bodyStartAnchorId(widget.state.articleDocument),
           initialText: value,
         );
-        final selectionOffset =
-            _emptyDocumentController!.selection.extentOffset.clamp(
-              0,
-              value.length,
-            );
+        final selectionOffset = _emptyDocumentController!.selection.extentOffset
+            .clamp(0, value.length);
         _nodeSelections[newNodeId] = TextSelection.collapsed(
           offset: selectionOffset,
         );
@@ -457,8 +463,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
         ArticleEditorStructureAction.titleMajor,
       ArticleDocumentTitleStyle.minor =>
         ArticleEditorStructureAction.titleMinor,
-      ArticleDocumentTitleStyle.none =>
-        ArticleEditorStructureAction.titleNone,
+      ArticleDocumentTitleStyle.none => ArticleEditorStructureAction.titleNone,
     };
   }
 
@@ -621,8 +626,8 @@ class _ArticleEditorState extends State<ArticleEditor> {
     return Stack(
       children: <Widget>[
         Positioned.fill(
-          bottom: SettingsSemanticConstants.toolbarHeightOverKeyboard +
-              panelHeight,
+          bottom:
+              SettingsSemanticConstants.toolbarHeightOverKeyboard + panelHeight,
           child: GestureDetector(
             onTap: () {
               if (_selectedImageNodeId != null) {
@@ -632,8 +637,8 @@ class _ArticleEditorState extends State<ArticleEditor> {
             child: SingleChildScrollView(
               controller: _scrollController,
               padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top +
-                    AppSpacing.containerMd,
+                top:
+                    MediaQuery.of(context).padding.top + AppSpacing.containerMd,
                 bottom: AppSpacing.containerXl,
                 left: AppSpacing.containerMd,
                 right: AppSpacing.containerMd,
@@ -679,16 +684,17 @@ class _ArticleEditorState extends State<ArticleEditor> {
               }
               final titleAnchor = projection.entries.isNotEmpty
                   ? (projection.entries.first is ArticleEditorSlotProjection
-                        ? (projection.entries.first as ArticleEditorSlotProjection)
+                        ? (projection.entries.first
+                                  as ArticleEditorSlotProjection)
                               .anchorNodeId
                         : kArticleEditorStartAnchorId)
                   : widget.state.articleDocument.nodes
-                            .where((node) => node.isDocumentTitle)
-                            .map((node) => node.id)
-                            .firstWhere(
-                              (id) => id.trim().isNotEmpty,
-                              orElse: () => kArticleEditorStartAnchorId,
-                            );
+                        .where((node) => node.isDocumentTitle)
+                        .map((node) => node.id)
+                        .firstWhere(
+                          (id) => id.trim().isNotEmpty,
+                          orElse: () => kArticleEditorStartAnchorId,
+                        );
               final fallbackAnchor = switch (_focusedNodeId) {
                 'title' => titleAnchor,
                 _kEmptyDocumentBodyFocusId => titleAnchor,
@@ -769,7 +775,8 @@ class _ArticleEditorState extends State<ArticleEditor> {
     for (final entry in projection.entries) {
       if (entry is ArticleEditorSlotProjection) {
         final gap = _slotGap(entry, spacing);
-        final shouldRenderStandalone = entry.isFigureFigureSlot ||
+        final shouldRenderStandalone =
+            entry.isFigureFigureSlot ||
             entry.isTailSlot ||
             (entry.isStartSlot && entry.hasFigureBelow);
         if (gap > 0) {
@@ -851,8 +858,9 @@ class _ArticleEditorState extends State<ArticleEditor> {
     ArticleTypographySpec typography,
   ) {
     _emptyDocumentController ??= TextEditingController();
-    _emptyDocumentFocusNode ??=
-        FocusNode(debugLabel: _kEmptyDocumentBodyFocusId);
+    _emptyDocumentFocusNode ??= FocusNode(
+      debugLabel: _kEmptyDocumentBodyFocusId,
+    );
     return CupertinoTextField(
       key: TestKeys.createMomentInput,
       controller: _emptyDocumentController!,
@@ -915,7 +923,10 @@ class _ArticleEditorState extends State<ArticleEditor> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && !f.hasFocus) {
           f.requestFocus();
-          final offset = (pendingSelection ?? c.text.length).clamp(0, c.text.length);
+          final offset = (pendingSelection ?? c.text.length).clamp(
+            0,
+            c.text.length,
+          );
           c.selection = TextSelection.collapsed(offset: offset);
           _nodeSelections[node.id] = c.selection;
         }
@@ -924,15 +935,13 @@ class _ArticleEditorState extends State<ArticleEditor> {
 
     final style = switch (node.type) {
       ArticleDocumentNodeType.headingMajor => typography.bodyStyle.copyWith(
-          fontSize:
-              (typography.bodyStyle.fontSize ?? AppTypography.base) * 1.3,
-          fontWeight: AppTypography.semiBold,
-        ),
+        fontSize: (typography.bodyStyle.fontSize ?? AppTypography.base) * 1.3,
+        fontWeight: AppTypography.semiBold,
+      ),
       ArticleDocumentNodeType.headingMinor => typography.bodyStyle.copyWith(
-          fontSize:
-              (typography.bodyStyle.fontSize ?? AppTypography.base) * 1.15,
-          fontWeight: AppTypography.medium,
-        ),
+        fontSize: (typography.bodyStyle.fontSize ?? AppTypography.base) * 1.15,
+        fontWeight: AppTypography.medium,
+      ),
       _ => typography.bodyStyle,
     };
 
@@ -1065,8 +1074,12 @@ class _ArticleEditorState extends State<ArticleEditor> {
     }
     final controller = _nodeControllers[nodeId];
     final selection =
-        _nodeSelections[nodeId] ?? controller?.selection ?? const TextSelection.collapsed(offset: 0);
-    final rawOffset = selection.isValid ? selection.extentOffset : node.text.length;
+        _nodeSelections[nodeId] ??
+        controller?.selection ??
+        const TextSelection.collapsed(offset: 0);
+    final rawOffset = selection.isValid
+        ? selection.extentOffset
+        : node.text.length;
     final selectionOffset = rawOffset.clamp(0, node.text.length);
     return _TextSelectionInsertionTarget(
       nodeId: nodeId,
@@ -1087,10 +1100,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
       if (!mounted) {
         return;
       }
-      widget.onEnsureWrapNodeGroup(
-        figureNodeId,
-        splitOffset: splitOffset,
-      );
+      widget.onEnsureWrapNodeGroup(figureNodeId, splitOffset: splitOffset);
     });
   }
 
@@ -1159,10 +1169,12 @@ class _ArticleEditorState extends State<ArticleEditor> {
         final gap = wrapData.sideGap;
         final narrowWidth = wrapData.besideWidth;
         final floatHeight = wrapData.besideHeight;
-        final resolvedNarrowText =
-            group.hasBelowParagraph ? group.narrowText : wrapResult.leadingText;
-        final resolvedBelowText =
-            group.hasBelowParagraph ? group.belowText : wrapResult.trailingText;
+        final resolvedNarrowText = group.hasBelowParagraph
+            ? group.narrowText
+            : wrapResult.leadingText;
+        final resolvedBelowText = group.hasBelowParagraph
+            ? group.belowText
+            : wrapResult.trailingText;
 
         if (!group.hasNarrowParagraph || !group.hasBelowParagraph) {
           _scheduleWrapGroupNormalization(
@@ -1180,8 +1192,13 @@ class _ArticleEditorState extends State<ArticleEditor> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                _buildImageWidget(context, node, isSelected,
-                    width: imageWidth, height: wrapData.imageHeight),
+                _buildImageWidget(
+                  context,
+                  node,
+                  isSelected,
+                  width: imageWidth,
+                  height: wrapData.imageHeight,
+                ),
                 if (node.caption.trim().isNotEmpty || isSelected)
                   _buildCaptionField(context, node, typography),
                 // 工具栏紧跟配文，在 imageColumn 内部，
@@ -1242,7 +1259,8 @@ class _ArticleEditorState extends State<ArticleEditor> {
             _scheduleTextCommit();
           },
           onFocused: (segment) {
-            final targetNodeId = _ensureWrapSegmentNodeId(
+            final targetNodeId =
+                _ensureWrapSegmentNodeId(
                   group,
                   segment,
                   splitOffset: wrapData.splitOffset,
@@ -1271,17 +1289,16 @@ class _ArticleEditorState extends State<ArticleEditor> {
                 ? (narrowNode?.id ?? _pendingFocusNodeId)
                 : (belowNode?.id ?? _pendingFocusNodeId);
             if (targetNodeId != null) {
-              _nodeSelections[targetNodeId] =
-                  TextSelection.collapsed(offset: offset);
+              _nodeSelections[targetNodeId] = TextSelection.collapsed(
+                offset: offset,
+              );
             }
           },
         );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            wrapContent,
-          ],
+          children: <Widget>[wrapContent],
         );
       },
     );
@@ -1340,8 +1357,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
 
     return GestureDetector(
       onTap: () => setState(() {
-        _selectedImageNodeId =
-            _selectedImageNodeId == node.id ? null : node.id;
+        _selectedImageNodeId = _selectedImageNodeId == node.id ? null : node.id;
         _activeSlotId = null;
         _activeSlotController?.clear();
         // 选中图片时收起键盘，确保工具栏可见
@@ -1353,7 +1369,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
         foregroundDecoration: isSelected
             ? BoxDecoration(
                 border: Border.all(
-                  color: CupertinoColors.activeBlue.resolveFrom(context),
+                  color: AppColors.iosAccent(context),
                   width: AppSpacing.two,
                 ),
               )
@@ -1364,7 +1380,9 @@ class _ArticleEditorState extends State<ArticleEditor> {
             ? SizedBox(
                 width: width,
                 height: height,
-                child: ClipRect(child: FittedBox(fit: BoxFit.cover, child: image)),
+                child: ClipRect(
+                  child: FittedBox(fit: BoxFit.cover, child: image),
+                ),
               )
             : AspectRatio(aspectRatio: aspect, child: image),
       ),
@@ -1416,8 +1434,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
           label: '全宽',
           active: node.imageLayout == 'fullWidth',
           color: fg,
-          onTap: () =>
-              widget.onUpdateNodeImageLayout(node.id, 'fullWidth'),
+          onTap: () => widget.onUpdateNodeImageLayout(node.id, 'fullWidth'),
         ),
         SizedBox(width: AppSpacing.md),
         _ToolBtn(
@@ -1425,8 +1442,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
           label: '左图',
           active: node.imageLayout == 'wrapLeft',
           color: fg,
-          onTap: () =>
-              widget.onUpdateNodeImageLayout(node.id, 'wrapLeft'),
+          onTap: () => widget.onUpdateNodeImageLayout(node.id, 'wrapLeft'),
         ),
         SizedBox(width: AppSpacing.md),
         _ToolBtn(
@@ -1434,8 +1450,7 @@ class _ArticleEditorState extends State<ArticleEditor> {
           label: '右图',
           active: node.imageLayout == 'wrapRight',
           color: fg,
-          onTap: () =>
-              widget.onUpdateNodeImageLayout(node.id, 'wrapRight'),
+          onTap: () => widget.onUpdateNodeImageLayout(node.id, 'wrapRight'),
         ),
         SizedBox(width: AppSpacing.md),
         _ToolBtn(
@@ -1498,7 +1513,7 @@ class _ToolBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = active ? CupertinoColors.activeBlue : color;
+    final c = active ? AppColors.iosAccent(context) : color;
     return GestureDetector(
       onTap: onTap,
       child: Column(

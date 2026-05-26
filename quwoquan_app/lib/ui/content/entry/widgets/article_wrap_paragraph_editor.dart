@@ -43,7 +43,7 @@ class ArticleWrapParagraphEditor extends StatefulWidget {
   final void Function(String narrowText, String belowText) onChanged;
   final ValueChanged<ArticleWrapEditorSegment> onFocused;
   final void Function(ArticleWrapEditorSegment segment, int offset)
-      onSelectionChanged;
+  onSelectionChanged;
   final String? placeholder;
   final ArticleWrapEditorSegment? autofocusSegment;
   final int? autofocusSelectionOffset;
@@ -145,7 +145,10 @@ class ArticleWrapParagraphEditorState
           )
         : TextSelection.collapsed(offset: nextText.length);
     _syncingControllers = true;
-    controller.value = TextEditingValue(text: nextText, selection: nextSelection);
+    controller.value = TextEditingValue(
+      text: nextText,
+      selection: nextSelection,
+    );
     _syncingControllers = false;
   }
 
@@ -161,13 +164,13 @@ class ArticleWrapParagraphEditorState
 
   TextEditingController _controller(ArticleWrapEditorSegment segment) =>
       segment == ArticleWrapEditorSegment.narrow
-          ? _narrowController
-          : _belowController;
+      ? _narrowController
+      : _belowController;
 
   FocusNode _focusNode(ArticleWrapEditorSegment segment) =>
       segment == ArticleWrapEditorSegment.narrow
-          ? _narrowFocusNode
-          : _belowFocusNode;
+      ? _narrowFocusNode
+      : _belowFocusNode;
 
   ArticleWrapEditorSegment? _currentFocusedSegment() {
     if (_belowFocusNode.hasFocus) {
@@ -198,10 +201,9 @@ class ArticleWrapParagraphEditorState
     widget.onFocused(segment);
     widget.onSelectionChanged(
       segment,
-      _controller(segment).selection.extentOffset.clamp(
-            0,
-            _controller(segment).text.length,
-          ),
+      _controller(
+        segment,
+      ).selection.extentOffset.clamp(0, _controller(segment).text.length),
     );
     if (mounted) {
       setState(() {});
@@ -246,7 +248,9 @@ class ArticleWrapParagraphEditorState
 
   int? _spillOverflowToBelow() {
     final currentText = _narrowController.text;
-    if (currentText.isEmpty || widget.narrowWidth <= 0 || widget.floatHeight <= 0) {
+    if (currentText.isEmpty ||
+        widget.narrowWidth <= 0 ||
+        widget.floatHeight <= 0) {
       return null;
     }
     final splitOffset = resolveWrappedSplitIndex(
@@ -330,15 +334,9 @@ class ArticleWrapParagraphEditorState
 
   Widget _buildInactiveBelow(double lineHeight) {
     if (_belowController.text.isNotEmpty) {
-      return Text(
-        _belowController.text,
-        style: widget.style,
-      );
+      return Text(_belowController.text, style: widget.style);
     }
-    return SizedBox(
-      height: lineHeight,
-      child: const SizedBox.shrink(),
-    );
+    return SizedBox(height: lineHeight, child: const SizedBox.shrink());
   }
 
   @override
@@ -363,7 +361,8 @@ class ArticleWrapParagraphEditorState
       forceStrutHeight: true,
     );
     final activeSegment =
-        _pendingFocusSegment ?? (_currentFocusedSegment() ?? ArticleWrapEditorSegment.narrow);
+        _pendingFocusSegment ??
+        (_currentFocusedSegment() ?? ArticleWrapEditorSegment.narrow);
 
     final Widget narrowField = activeSegment != ArticleWrapEditorSegment.below
         ? EditableText(
@@ -372,7 +371,7 @@ class ArticleWrapParagraphEditorState
             focusNode: _narrowFocusNode,
             style: narrowStyle,
             strutStyle: narrowStrut,
-            cursorColor: CupertinoColors.activeBlue,
+            cursorColor: AppColors.iosAccent(context),
             backgroundCursorColor: CupertinoColors.inactiveGray,
             keyboardType: TextInputType.multiline,
             textInputAction: TextInputAction.newline,
@@ -419,10 +418,7 @@ class ArticleWrapParagraphEditorState
         ArticleWrapEditorSegment.narrow,
         _narrowController.text.length,
       ),
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: narrowContent,
-      ),
+      child: Align(alignment: Alignment.topLeft, child: narrowContent),
     );
 
     final Widget belowField = activeSegment == ArticleWrapEditorSegment.below
@@ -430,7 +426,7 @@ class ArticleWrapParagraphEditorState
             controller: _belowController,
             focusNode: _belowFocusNode,
             style: widget.style,
-            cursorColor: CupertinoColors.activeBlue,
+            cursorColor: AppColors.iosAccent(context),
             backgroundCursorColor: CupertinoColors.inactiveGray,
             keyboardType: TextInputType.multiline,
             textInputAction: TextInputAction.newline,
