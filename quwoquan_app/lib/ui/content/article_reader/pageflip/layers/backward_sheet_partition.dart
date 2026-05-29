@@ -46,6 +46,9 @@ class BackwardCanonicalSheetFaces {
   const BackwardCanonicalSheetFaces({
     required this.sheetLocalPolygon,
     required this.sheetAreaPolygon,
+    required this.previousFrontRevealPagePolygon,
+    required this.previousBackVersoSheetPolygon,
+    required this.previousBackVersoSheetAreaPolygon,
     required this.previousFrontRectoLocalPolygon,
     required this.previousFrontRectoAreaPolygon,
     required this.previousBackVersoLocalPolygon,
@@ -65,6 +68,9 @@ class BackwardCanonicalSheetFaces {
 
   final List<Offset> sheetLocalPolygon;
   final List<Offset> sheetAreaPolygon;
+  final List<Offset> previousFrontRevealPagePolygon;
+  final List<Offset> previousBackVersoSheetPolygon;
+  final List<Offset> previousBackVersoSheetAreaPolygon;
   final List<Offset> previousFrontRectoLocalPolygon;
   final List<Offset> previousFrontRectoAreaPolygon;
   final List<Offset> previousBackVersoLocalPolygon;
@@ -80,6 +86,35 @@ class BackwardCanonicalSheetFaces {
   final BackwardCanonicalSheetFailureReason failureReason;
   final BackwardCanonicalFaceFailureReason rectoFailureReason;
   final BackwardCanonicalFaceFailureReason versoFailureReason;
+}
+
+List<Offset> resolveBackwardPreviousFrontRevealPagePolygon({
+  required Size pageSize,
+  required List<Offset> currentResidualPagePolygon,
+}) {
+  final pageRect = Offset.zero & pageSize;
+  final residualBounds = polygonBounds(currentResidualPagePolygon);
+  if (residualBounds == null || residualBounds.isEmpty) {
+    return <Offset>[
+      pageRect.topLeft,
+      pageRect.topRight,
+      pageRect.bottomRight,
+      pageRect.bottomLeft,
+    ];
+  }
+  final left = residualBounds.left.clamp(0.0, pageSize.width).toDouble();
+  final top = residualBounds.top.clamp(0.0, pageSize.height).toDouble();
+  if (left <= 0.5 && top <= 0.5) {
+    return const <Offset>[];
+  }
+  return <Offset>[
+    Offset.zero,
+    Offset(pageSize.width, 0),
+    Offset(pageSize.width, top),
+    Offset(left, top),
+    Offset(left, pageSize.height),
+    Offset(0, pageSize.height),
+  ];
 }
 
 BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
@@ -105,6 +140,12 @@ BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
     return BackwardCanonicalSheetFaces(
       sheetLocalPolygon: const <Offset>[],
       sheetAreaPolygon: const <Offset>[],
+      previousFrontRevealPagePolygon: resolveBackwardPreviousFrontRevealPagePolygon(
+        pageSize: input.pageSize,
+        currentResidualPagePolygon: currentResidualPagePolygon,
+      ),
+      previousBackVersoSheetPolygon: const <Offset>[],
+      previousBackVersoSheetAreaPolygon: const <Offset>[],
       previousFrontRectoLocalPolygon: const <Offset>[],
       previousFrontRectoAreaPolygon: const <Offset>[],
       previousBackVersoLocalPolygon: const <Offset>[],
@@ -141,29 +182,35 @@ BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
     );
   }
 
-  final sheetLocalPolygon = List<Offset>.unmodifiable(input.sheetLocalPolygon);
-  final sheetAreaPolygon =
-      input.sheetAreaPolygon.length == input.sheetLocalPolygon.length
-      ? List<Offset>.unmodifiable(input.sheetAreaPolygon)
-      : sheetLocalPolygon;
-  final splitX = _resolveCanonicalFaceSplitX(
+  final pairedSheet = _sortPairedPolygonClockwise(
+    localPolygon: input.sheetLocalPolygon,
+    areaPolygon: input.sheetAreaPolygon,
+  );
+  final sheetLocalPolygon = List<Offset>.unmodifiable(pairedSheet.localPolygon);
+  final sheetAreaPolygon = List<Offset>.unmodifiable(pairedSheet.areaPolygon);
+  final splitLine = _resolveCanonicalFaceSplitLine(
     sheetLocalPolygon: sheetLocalPolygon,
     foldLine: foldLine,
     freeEdgeLine: rawFreeEdgeLine,
-    pageSize: input.pageSize,
   );
+  final versoProbe = _farthestSheetPointTowardFree(
+    sheetLocalPolygon: sheetLocalPolygon,
+    foldLine: foldLine,
+    freeEdgeLine: rawFreeEdgeLine,
+  );
+  final keepVersoSide = lineSide(splitLine, versoProbe) >= 0;
 
-  final recto = _clipPairedPolygonToXRange(
+  final recto = _clipPairedPolygonByLine(
     localPolygon: sheetLocalPolygon,
     areaPolygon: sheetAreaPolygon,
-    minX: splitX,
-    maxX: double.infinity,
+    line: splitLine,
+    keepPositiveSide: !keepVersoSide,
   );
-  final verso = _clipPairedPolygonToXRange(
+  final verso = _clipPairedPolygonByLine(
     localPolygon: sheetLocalPolygon,
     areaPolygon: sheetAreaPolygon,
-    minX: double.negativeInfinity,
-    maxX: splitX,
+    line: splitLine,
+    keepPositiveSide: keepVersoSide,
   );
 
   final rectoFailure = _isVisibleFace(recto.localPolygon)
@@ -184,6 +231,16 @@ BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
   return BackwardCanonicalSheetFaces(
     sheetLocalPolygon: sheetLocalPolygon,
     sheetAreaPolygon: sheetAreaPolygon,
+    previousFrontRevealPagePolygon: resolveBackwardPreviousFrontRevealPagePolygon(
+      pageSize: input.pageSize,
+      currentResidualPagePolygon: currentResidualPagePolygon,
+    ),
+    previousBackVersoSheetPolygon: List<Offset>.unmodifiable(
+      verso.localPolygon,
+    ),
+    previousBackVersoSheetAreaPolygon: List<Offset>.unmodifiable(
+      verso.areaPolygon,
+    ),
     previousFrontRectoLocalPolygon: List<Offset>.unmodifiable(
       recto.localPolygon,
     ),
@@ -231,56 +288,98 @@ bool backwardPartitionContainsPoint({
   return inside;
 }
 
-double _resolveCanonicalFaceSplitX({
+BackwardPageLine _resolveCanonicalFaceSplitLine({
   required List<Offset> sheetLocalPolygon,
   required BackwardPageLine foldLine,
   required BackwardPageLine freeEdgeLine,
-  required Size pageSize,
 }) {
   final bounds = polygonBounds(sheetLocalPolygon);
-  if (bounds == null || bounds.width <= 0.0001) {
-    return _midPoint(foldLine).dx;
+  if (bounds == null || bounds.width <= 0.0001 || bounds.height <= 0.0001) {
+    return foldLine;
   }
-  final minFaceWidth = math.min(
-    math.max(1.0, math.min(pageSize.width, bounds.width) * 0.08),
-    bounds.width / 2,
+  final freeSignedDistance = _signedDistanceToLine(
+    line: foldLine,
+    point: _midPoint(freeEdgeLine),
   );
-  final foldMidX = _midPoint(foldLine).dx;
-  final freeMidX = _midPoint(freeEdgeLine).dx;
-  final foldInsideX = foldMidX.clamp(bounds.left, bounds.right).toDouble();
-  final freeInsideX = freeMidX.clamp(bounds.left, bounds.right).toDouble();
-  final rawSplit = (foldInsideX * 0.82 + freeInsideX * 0.18).clamp(
-    bounds.left + minFaceWidth,
-    bounds.right - minFaceWidth,
+  final freeDirection = freeSignedDistance >= 0 ? 1.0 : -1.0;
+  final projectedDistances = sheetLocalPolygon
+      .map(
+        (point) =>
+            _signedDistanceToLine(line: foldLine, point: point) * freeDirection,
+      )
+      .toList(growable: false);
+  var minDistance = projectedDistances.first;
+  var maxDistance = projectedDistances.first;
+  for (final distance in projectedDistances.skip(1)) {
+    minDistance = math.min(minDistance, distance);
+    maxDistance = math.max(maxDistance, distance);
+  }
+  final span = maxDistance - minDistance;
+  if (span <= 0.0001) {
+    return foldLine;
+  }
+  final splitDistance = ((minDistance + maxDistance) / 2)
+      .clamp(minDistance, maxDistance)
+      .toDouble();
+  return _offsetLineToward(
+    line: foldLine,
+    towardPoint: _midPoint(freeEdgeLine),
+    distance: splitDistance.toDouble(),
   );
-  return rawSplit.toDouble();
 }
 
-({List<Offset> localPolygon, List<Offset> areaPolygon})
-_clipPairedPolygonToXRange({
-  required List<Offset> localPolygon,
-  required List<Offset> areaPolygon,
-  required double minX,
-  required double maxX,
+BackwardPageLine _offsetLineToward({
+  required BackwardPageLine line,
+  required Offset towardPoint,
+  required double distance,
 }) {
-  var result = (localPolygon: localPolygon, areaPolygon: areaPolygon);
-  if (minX.isFinite) {
-    result = _clipPairedPolygonByLine(
-      localPolygon: result.localPolygon,
-      areaPolygon: result.areaPolygon,
-      line: (Offset(minX, 0), Offset(minX, 1)),
-      keepPositiveSide: false,
-    );
+  final dx = line.$2.dx - line.$1.dx;
+  final dy = line.$2.dy - line.$1.dy;
+  final length = math.sqrt(dx * dx + dy * dy);
+  if (length <= 0.000001) {
+    return line;
   }
-  if (maxX.isFinite) {
-    result = _clipPairedPolygonByLine(
-      localPolygon: result.localPolygon,
-      areaPolygon: result.areaPolygon,
-      line: (Offset(maxX, 0), Offset(maxX, 1)),
-      keepPositiveSide: true,
-    );
+  final normal = Offset(-dy / length, dx / length);
+  final direction = lineSide(line, towardPoint) >= 0 ? 1.0 : -1.0;
+  final delta = normal * direction * distance;
+  return (line.$1 + delta, line.$2 + delta);
+}
+
+Offset _farthestSheetPointTowardFree({
+  required List<Offset> sheetLocalPolygon,
+  required BackwardPageLine foldLine,
+  required BackwardPageLine freeEdgeLine,
+}) {
+  final freeSignedDistance = _signedDistanceToLine(
+    line: foldLine,
+    point: _midPoint(freeEdgeLine),
+  );
+  final freeDirection = freeSignedDistance >= 0 ? 1.0 : -1.0;
+  var bestPoint = sheetLocalPolygon.first;
+  var bestDistance =
+      _signedDistanceToLine(line: foldLine, point: bestPoint) * freeDirection;
+  for (final point in sheetLocalPolygon.skip(1)) {
+    final distance =
+        _signedDistanceToLine(line: foldLine, point: point) * freeDirection;
+    if (distance > bestDistance) {
+      bestDistance = distance;
+      bestPoint = point;
+    }
   }
-  return result;
+  return bestPoint;
+}
+
+double _signedDistanceToLine({
+  required BackwardPageLine line,
+  required Offset point,
+}) {
+  final dx = line.$2.dx - line.$1.dx;
+  final dy = line.$2.dy - line.$1.dy;
+  final length = math.sqrt(dx * dx + dy * dy);
+  if (length <= 0.000001) {
+    return 0;
+  }
+  return lineSide(line, point) / length;
 }
 
 ({List<Offset> localPolygon, List<Offset> areaPolygon})
@@ -324,6 +423,37 @@ _clipPairedPolygonByLine({
   return (
     localPolygon: _dedupePolygon(localResult),
     areaPolygon: _dedupePolygon(areaResult),
+  );
+}
+
+({List<Offset> localPolygon, List<Offset> areaPolygon})
+_sortPairedPolygonClockwise({
+  required List<Offset> localPolygon,
+  required List<Offset> areaPolygon,
+}) {
+  if (localPolygon.length < 3) {
+    return _emptyPaired();
+  }
+  final pairedArea = areaPolygon.length == localPolygon.length
+      ? areaPolygon
+      : localPolygon;
+  final center =
+      localPolygon.fold(Offset.zero, (sum, point) => sum + point) /
+      localPolygon.length.toDouble();
+  final indexed = <({Offset local, Offset area, double angle})>[
+    for (var index = 0; index < localPolygon.length; index += 1)
+      (
+        local: localPolygon[index],
+        area: pairedArea[index],
+        angle: math.atan2(
+          localPolygon[index].dy - center.dy,
+          localPolygon[index].dx - center.dx,
+        ),
+      ),
+  ]..sort((a, b) => a.angle.compareTo(b.angle));
+  return (
+    localPolygon: indexed.map((entry) => entry.local).toList(growable: false),
+    areaPolygon: indexed.map((entry) => entry.area).toList(growable: false),
   );
 }
 

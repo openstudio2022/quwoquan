@@ -262,9 +262,6 @@ ArticlePageBackwardLeafFrame? resolveArticlePageBackwardLeafFrame({
   final rectoCoverageByFold = coveredWidth > 0.5
       ? (2.0 - 1.0 / coveredWidth).clamp(0.0, 1.0).toDouble()
       : 0.0;
-  // Recto ownership must stay locked until the fold crosses the page midpoint.
-  // Settle timing may move the sheet toward commit, but it must not re-own the
-  // moving sheet as front before the dynamic frame hands off to staticStage.
   final rectoCoverage = rectoCoverageByFold;
   final versoOverlayStart = (coveredWidth * rectoCoverage)
       .clamp(0.0, coveredWidth)

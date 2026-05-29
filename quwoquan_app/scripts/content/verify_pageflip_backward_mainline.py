@@ -141,7 +141,7 @@ BASELINE_VALUE_KEY = "'article_backward_previous_front_baseline'"
 # preserve BACK semantics while using forward-isomorphic visual geometry.
 REQUIRED_FRAME_BUILDER_STRINGS = (
     "_resolveBackwardVisualGeometry(",
-    "resolveBackwardVisualReplayLocalPagePoint(",
+    "resolveBackwardForwardCanonicalPoint(",
     "direction: StPageFlipDirection.forward",
     "visualGeometryDirection: visualGeometry.direction",
     "foldLineSource: 'backwardForwardIsomorphicFoldLine'",
@@ -154,6 +154,9 @@ FORBIDDEN_FRAME_BUILDER_STRINGS = (
     "_ForwardEquivalentGeometry",
     "_mirrorAreaX(",
     "_mirrorX(",
+    "backwardForwardIsomorphicCalcFailed",
+    "flippingClipArea: const <ui.Offset>[]",
+    "bottomClipArea: const <ui.Offset>[]",
 )
 
 
@@ -356,19 +359,14 @@ def _check_recto_verso_split_in_host() -> list[str]:
         return violations
     text = _strip_comments(HOST_PATH.read_text(encoding="utf-8"))
     required_markers = (
-        "_buildBackwardCanonicalFlippingPageSurface(",
-        "_buildBackwardSheetFacePolygon(",
-        "_buildBackwardBackFoldBandSurface(",
-        "resolveBackwardCanonicalSheetFaces(",
-        "BackwardCanonicalSheetInput(",
+        "_buildSoftFlippingPageSurface(",
+        "_buildBackwardFullSheetBackSurface(",
         "backwardFreeEdgeLine:",
         "projectedRightEdgeLine",
-        "backwardLeafFrame: frame.backwardLeafFrame",
+        "rectoPageIndex",
         "backwardFoldLine: frame.backwardProjectedFrame?.foldLine",
-        "ArticlePageSurfaceKind.front",
         "ArticlePageSurfaceKind.back",
-        "_buildBackwardVersoTextureSurface(",
-        "clipBehavior: Clip.none",
+        "showBackside",
         "previousBackLocalPolygon",
         "transformSoftLayerLocalPolygon(",
     )
@@ -420,15 +418,15 @@ def _check_recto_verso_split_in_host() -> list[str]:
                 f"{HOST_PATH.relative_to(ROOT)}: `_resolveBackwardDiagnosticGeometry` must no longer "
                 "force previousFrontViewportBounds to null."
             )
-        if "previousFrontLocalPolygon: const <Offset>[]" in diag_body:
+        if "resolveBackwardCanonicalSheetFaces(" in diag_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: `_resolveBackwardDiagnosticGeometry` must derive "
-                "previousFrontLocalPolygon from the recto split, not hard-code an empty polygon."
+                f"{HOST_PATH.relative_to(ROOT)}: `_resolveBackwardDiagnosticGeometry` must not "
+                "consume the old sheet-local recto/verso partition resolver."
             )
-        if "resolveBackwardCanonicalSheetFaces(" not in diag_body:
+        if "previousBackLocalPolygon = showsBackside" not in diag_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: `_resolveBackwardDiagnosticGeometry` must consume "
-                "the shared canonical BACK face resolver used by rendering."
+                f"{HOST_PATH.relative_to(ROOT)}: `_resolveBackwardDiagnosticGeometry` must map "
+                "BACK diagnostics to the same single flipping face decision as paint."
             )
 
     if not SOFT_GEOMETRY_PATH.exists():
@@ -471,58 +469,23 @@ def _check_recto_verso_split_in_host() -> list[str]:
                 )
     surface_body = _extract_method_body(
         text,
-        r"Widget\s+_buildBackwardCanonicalFlippingPageSurface\([^)]*\)\s*\{",
+        r"Widget\s+_buildSoftFlippingPageSurface\([^)]*\)\s*\{",
     )
     if surface_body is None:
         violations.append(
             f"{HOST_PATH.relative_to(ROOT)}: failed to parse "
-            "`_buildBackwardCanonicalFlippingPageSurface` body"
+            "`_buildSoftFlippingPageSurface` body"
         )
     else:
-        if "_buildBackwardBackFoldBandSurface(" not in surface_body:
+        if "_buildBackwardFullSheetBackSurface(" not in surface_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back must render as a clipped "
-                "fold band with dedicated backside texture/overlay semantics."
+                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back must render through the "
+                "forward-equivalent full flipping surface, not a clipped custom band."
             )
-        if "_buildBackwardSheetFacePolygon(" not in surface_body:
+        if "_buildBackwardCanonicalFlippingPageSurface(" in surface_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front visible plane must "
-                "render through the previous front surface path."
-            )
-        if "ArticlePageSurfaceKind.front" not in surface_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front visible plane must "
-                "draw the previous front page surface; do not route it to semantic back."
-            )
-        if "BackwardCanonicalSheetInput(" not in surface_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK front/back sheet faces must build "
-                "the single sheet-local `BackwardCanonicalSheetInput`."
-            )
-        if "materialLocalPolygon: partition.previousBackVersoAreaPolygon" in surface_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture must not pass "
-                "`partition.previousBackVersoAreaPolygon` as the main UV source; "
-                "that dynamic F/E source area reintroduces visible texture scanning."
-            )
-        if "materialLocalPolygon: sheetMaterialLocalPolygon" not in surface_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture must pass the "
-                "fixed `sheetMaterialLocalPolygon` material domain and use the "
-                "partition polygon only as display clip."
-            )
-        recto_surface_body = surface_body.split(
-            "_buildBackwardBackFoldBandSurface("
-        )[0]
-        if "_buildBackwardVersoTextureSurface(" in recto_surface_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front visible plane must not "
-                "call the verso/back texture painter."
-            )
-        if "resolveBackwardCanonicalSheetFaces(" not in surface_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK front/back sheet faces must come "
-                "from the shared canonical face resolver."
+                f"{HOST_PATH.relative_to(ROOT)}: BACK must not route paint into the old "
+                "custom canonical band surface."
             )
 
     if "backwardSheetRectoPolygon(" in text or "backwardSheetVersoPolygon(" in text:
@@ -531,39 +494,87 @@ def _check_recto_verso_split_in_host() -> list[str]:
             "through shared canonical face resolver; do not reintroduce duplicate "
             "F/E geometry branches in render or diagnostics."
         )
-    recto_face_body = _extract_method_body(
+    backward_layers_body = _extract_method_body(
         text,
-        r"Widget\s+_buildBackwardSheetFacePolygon\([^)]*\)\s*\{",
+        r"ArticleReadOnlyBookRenderBranch\s+_buildBackwardDynamicLayers\([^)]*\)\s*\{",
     )
-    if recto_face_body is None:
+    if backward_layers_body is None:
         violations.append(
-            f"{HOST_PATH.relative_to(ROOT)}: failed to parse "
-            "`_buildBackwardSheetFacePolygon` body"
+            f"{HOST_PATH.relative_to(ROOT)}: failed to parse `_buildBackwardDynamicLayers` body"
         )
     else:
-        if "_buildBackwardSheetPolygonSurface(" not in recto_face_body:
+        replacement_index = backward_layers_body.find(
+            "_buildBackwardPageSpaceReplacementLayer("
+        )
+        bottom_index = backward_layers_body.find("scene.bottomPageIndex")
+        if replacement_index < 0:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front must render "
-                "through `_buildBackwardSheetPolygonSurface` so sheet-local "
-                "polygons with out-of-page bounds do not leak current underlay."
+                f"{HOST_PATH.relative_to(ROOT)}: BACK must paint previous front through "
+                "`_buildBackwardPageSpaceReplacementLayer` before current residual and "
+                "the single moving sheet."
             )
-        if "Positioned.fill(" in recto_face_body:
+        elif bottom_index >= 0 and replacement_index > bottom_index:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK recto/front must not use "
-                "`Positioned.fill`; it clips sheet-local recto polygons against "
-                "the page box and lets current/front leak through."
+                f"{HOST_PATH.relative_to(ROOT)}: BACK previousFrontReplacement must be "
+                "a page-space layer below bottomCurrentFront, matching FORWARD bottom "
+                "page-space ordering."
             )
+    replacement_body = _extract_method_body(
+        text,
+        r"Widget\s+_buildBackwardPageSpaceReplacementLayer\([^)]*\)\s*\{",
+    )
+    if replacement_body is None:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: missing `_buildBackwardPageSpaceReplacementLayer`; "
+            "BACK needs a page-space previous-front replacement source."
+        )
+    else:
+        for marker in (
+            "Positioned.fromRect(",
+            "ArticlePageSurfaceKind.front",
+            "_buildCachedPageSurface(",
+        ):
+            if marker not in replacement_body:
+                violations.append(
+                    f"{HOST_PATH.relative_to(ROOT)}: `_buildBackwardPageSpaceReplacementLayer` "
+                    f"missing `{marker}`; previous front must be a normal page-space front "
+                    "surface, not a sheet-local fold segment."
+                )
+    if "label: 'previousFrontReplacement'" not in text:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: BACK source attribution must include "
+            "`previousFrontReplacement` for the page-space previous front."
+        )
+    if "status: 'pageSpaceReplacement'" not in text:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: `previousFrontReplacement` must be labelled "
+            "as page-space replacement, not a moving sheet/front-band source."
+        )
+    for forbidden_marker in (
+        "_buildBackwardPreviousFrontRevealLayer(",
+        "_buildBackwardCanonicalFlippingPageSurface(",
+        "_buildBackwardBackFoldBandSurface(",
+        "_buildBackwardSheetPolygonSurface(",
+        "_buildBackwardVersoTextureSurface(",
+        "_buildBackwardRectoVersoFoldOverlay(",
+        "_buildBackwardSheetFacePolygon(",
+    ):
+        if forbidden_marker in text:
+            violations.append(
+                f"{HOST_PATH.relative_to(ROOT)}: old BACK multi-plane marker "
+                f"`{forbidden_marker}` must stay removed."
+            )
+    if "resolveBackwardCanonicalSheetFaces(" in text:
+        violations.append(
+            f"{HOST_PATH.relative_to(ROOT)}: host paint/diagnostics must not use "
+            "the old BACK sheet-local face resolver."
+        )
     if DEBUG_MAPPER_PATH.exists():
         debug_mapper = _strip_comments(DEBUG_MAPPER_PATH.read_text(encoding="utf-8"))
-        if "resolveBackwardCanonicalSheetFaces(" not in debug_mapper:
+        if "resolveBackwardCanonicalSheetFaces(" in debug_mapper:
             violations.append(
-                f"{DEBUG_MAPPER_PATH.relative_to(ROOT)}: diagnostics must use "
-                "the single shared canonical BACK face resolver."
-            )
-        if "BackwardCanonicalSheetInput(" not in debug_mapper:
-            violations.append(
-                f"{DEBUG_MAPPER_PATH.relative_to(ROOT)}: diagnostics must construct "
-                "the same sheet-local `BackwardCanonicalSheetInput` as host paint."
+                f"{DEBUG_MAPPER_PATH.relative_to(ROOT)}: diagnostics must not use "
+                "the old sheet-local BACK face resolver."
             )
         if "backwardSheetVersoPolygon(" in debug_mapper:
             violations.append(
@@ -586,11 +597,14 @@ def _check_recto_verso_split_in_host() -> list[str]:
             )
         for marker in (
             "required this.sheetAreaPolygon",
+            "previousFrontRevealPagePolygon",
+            "previousBackVersoSheetPolygon",
             "previousBackVersoAreaPolygon",
             "previousFrontRectoAreaPolygon",
             "_clipPairedPolygonByLine(",
-            "_resolveCanonicalFaceSplitX(",
-            "_clipPairedPolygonToXRange(",
+            "_resolveCanonicalFaceSplitLine(",
+            "_signedDistanceToLine(",
+            "_farthestSheetPointTowardFree(",
             "rectoVersoOverlap",
         ):
             if marker not in partition_text:
@@ -605,6 +619,9 @@ def _check_recto_verso_split_in_host() -> list[str]:
             "_backwardContinuousFoldEdgeLimitGeometry(",
             "_boundLowAngleVersoPolygon(",
             "_clipPairedPolygonByVerticalX(",
+            "_resolveCanonicalFaceSplitX(",
+            "_clipPairedPolygonToXRange(",
+            "towardFreeWeight",
             "back = (localPolygon: sheetLocalPolygon",
             "_synthesizeRectoLimitBand",
             "_normalizeFreeEdgeLimitLine",
@@ -612,6 +629,9 @@ def _check_recto_verso_split_in_host() -> list[str]:
             "pageWidth * 1.10",
             "limitGeometry.verso.localPolygon",
             "versoRevealWidthNormalized",
+            "ArticlePageBackwardLeafFrame",
+            "backwardLeafFrame",
+            "span * 0.",
         ):
             if forbidden_marker in partition_text:
                 violations.append(
@@ -638,7 +658,9 @@ def _check_recto_verso_split_in_host() -> list[str]:
         )
         for forbidden_marker in (
             "pageWidth * 1.35",
+            "pageWidth * 1.32",
             "pageWidth * 1.10",
+            "pageWidth * 0.86",
             "pageSize.width * 0.92",
         ):
             if forbidden_marker in widget_test:
@@ -648,16 +670,19 @@ def _check_recto_verso_split_in_host() -> list[str]:
                     "not return."
                 )
         for marker in (
-            "narrowFrontSamples",
-            "fullSheetBackSamples",
-            "sheetRectoFrontBounds",
-            "sheetPaintedUnionBounds",
+            "multiPlaneFrontSamples",
+            "multi-plane back regression",
+            "BACK horizontal source mask rejects multi-plane current leaks",
+            "BACK previous front replacement is page 2, not current leak",
+            "previousFrontReplacementVisibleColorCounts",
+            "sheetVersoBackBounds",
         ):
             if marker not in widget_test:
                 violations.append(
                     f"{PAGEFLIP_WIDGET_TEST_PATH.relative_to(ROOT)}: missing `{marker}`; "
-                    "BACK screenshot regression tests must reject recto collapse, "
-                    "full-sheet verso, and current-underlay leaks."
+                    "BACK screenshot regression tests must reject compressed front, "
+                    "multi-plane back, missing previous-front replacement, and "
+                    "current-underlay leaks."
                 )
 
     for path in (HOST_PATH, DEBUG_MAPPER_PATH, SOFT_GEOMETRY_PATH):
@@ -670,41 +695,37 @@ def _check_recto_verso_split_in_host() -> list[str]:
                 "`versoRevealWidthNormalized:` into geometry partitioning."
             )
 
-    back_band_body = _extract_method_body(
+    full_sheet_body = _extract_method_body(
         text,
-        r"Widget\s+_buildBackwardBackFoldBandSurface\([^)]*\)\s*\{",
+        r"Widget\s+_buildBackwardFullSheetBackSurface\([^)]*\)\s*\{",
     )
-    if back_band_body is None:
+    if full_sheet_body is None:
         violations.append(
             f"{HOST_PATH.relative_to(ROOT)}: failed to parse "
-            "`_buildBackwardBackFoldBandSurface` body"
+            "`_buildBackwardFullSheetBackSurface` body"
         )
     else:
-        if "_buildBackwardVersoTextureSurface(" not in back_band_body:
+        if "_validBackPageTextureSnapshotForIndex(" not in full_sheet_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back fold band must use "
-                "the explicit verso texture surface instead of the front/recto path."
-            )
-        if "_validBackPageTextureSnapshotForIndex(" not in back_band_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back fold band must bind "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet surface must bind "
                 "a semantic-back validated previous/flipping leafVerso snapshot before painting."
             )
-        if "_buildFlippingSurfaceOverlay(" not in back_band_body or "showBackside: true" not in back_band_body:
+        if "_BackwardLeafVersoUvPainter(" not in full_sheet_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back fold band must reuse "
-                "the backside overlay semantics instead of looking like a front page."
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet surface must reuse "
+                "the semantic back texture painter over the full material plane."
             )
-        if "ArticlePageSurfaceKind.front" in back_band_body:
+        if "ArticlePageSurfaceKind.front" in full_sheet_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK previous-back fold band must not "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet back surface must not "
                 "draw a front page surface."
             )
     if "_buildBackwardFrontFlatLayer(" in text or "backwardFrontFlatPolygon(" in text:
         violations.append(
             f"{HOST_PATH.relative_to(ROOT)}: BACK must not restore the free "
             "previous-front flat paint branch; previous front is owned by the "
-            "partitioned moving sheet recto source."
+            "page-space replacement layer below current residual and the single "
+            "moving sheet."
         )
     validator_body = _extract_method_body(
         text,
@@ -723,58 +744,48 @@ def _check_recto_verso_split_in_host() -> list[str]:
             )
     texture_body = _extract_method_body(
         text,
-        r"Widget\s+_buildBackwardVersoTextureSurface\([^)]*\)\s*\{",
+        r"Widget\s+_buildBackwardFullSheetBackSurface\([^)]*\)\s*\{",
     )
     if texture_body is None:
         violations.append(
             f"{HOST_PATH.relative_to(ROOT)}: failed to parse "
-            "`_buildBackwardVersoTextureSurface` body"
+            "`_buildBackwardFullSheetBackSurface` body"
         )
     else:
         if "foldCenterX" in texture_body or "foldLine" in texture_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture must mirror in "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet texture must mirror in "
                 "page-space, not around the moving foldLine."
             )
         if "RawImage(" in texture_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture mainline must not use "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet texture mainline must not use "
                 "RawImage fallback; host and probes must share the same painter."
             )
         if "_BackwardLeafVersoUvPainter" not in texture_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture mainline must route "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet texture mainline must route "
                 "through `_BackwardLeafVersoUvPainter`."
-            )
-        if "buildBackwardLeafVersoMaterialUvMesh(" not in texture_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture must validate "
-                "the fixed material-domain UV mesh, not a dynamic source-area mesh."
             )
         if "buildBackwardLeafVersoPairedUvMesh(" in texture_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture must not validate "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet texture must not validate "
                 "or paint from `buildBackwardLeafVersoPairedUvMesh`; host paint "
                 "must keep material-domain UV fixed and clip by display polygon."
             )
         if "leafVersoSnapshot" not in texture_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture must source "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet texture must source "
                 "the previous/flipping leafVerso snapshot."
-            )
-        if "article_backward_leaf_verso_texture_wait" not in texture_body:
-            violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK missing-snapshot state must wait "
-                "diagnostically instead of rendering a fake mirrored backface."
             )
         if "_buildOpaqueBackPageSurface(" in texture_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture mainline must not "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet texture mainline must not "
                 "directly render the old opaque mirrored widget path."
             )
         if "mirrorContent: false" in texture_body:
             violations.append(
-                f"{HOST_PATH.relative_to(ROOT)}: BACK verso texture must not render "
+                f"{HOST_PATH.relative_to(ROOT)}: BACK full-sheet texture must not render "
                 "a front-oriented fallback."
             )
     if "Widget _buildBackwardVersoTextureFallback" in text:
@@ -782,17 +793,17 @@ def _check_recto_verso_split_in_host() -> list[str]:
             f"{HOST_PATH.relative_to(ROOT)}: BACK backBand must not keep a visual "
             "fallback branch that can draw the wrong texture."
         )
-    if "_buildBackwardVersoTextureSurface" not in text:
+    if "_buildBackwardFullSheetBackSurface" not in text:
         violations.append(
-            f"{HOST_PATH.relative_to(ROOT)}: missing `_buildBackwardVersoTextureSurface`; "
-            "BACK backBand needs one explicit semantic-back snapshot path."
+            f"{HOST_PATH.relative_to(ROOT)}: missing `_buildBackwardFullSheetBackSurface`; "
+            "BACK needs one forward-equivalent semantic-back snapshot path."
         )
     else:
-        texture_surface_body = text[text.find("_buildBackwardVersoTextureSurface") :]
+        texture_surface_body = text[text.find("_buildBackwardFullSheetBackSurface") :]
         for marker in ("_BackwardLeafVersoUvPainter",):
             if marker not in texture_surface_body:
                 violations.append(
-                    f"{HOST_PATH.relative_to(ROOT)}: `_buildBackwardVersoTextureSurface` "
+                    f"{HOST_PATH.relative_to(ROOT)}: `_buildBackwardFullSheetBackSurface` "
                     f"missing `{marker}` required for shared visible semantic-back texture."
                 )
         if "paintBackwardLeafVersoSurface(" not in text:
@@ -1029,7 +1040,7 @@ def _check_recto_verso_split_in_host() -> list[str]:
     for marker in (
         "staticCurrentFront",
         "bottomCurrentFront",
-        "sheetRectoFront",
+        "previousFrontReplacement",
         "sheetVersoBack",
         "foldOverlay",
     ):
@@ -1231,7 +1242,9 @@ def _check_backward_visual_replay_mapping() -> list[str]:
     required_markers = (
         "-pageWidth",
         "pageWidth - edgeEpsilon",
-        "- (2 * localPagePoint.dx)",
+        "dragProgress",
+        "visualProgress",
+        "2 * pageWidth * visualProgress",
     )
     for marker in required_markers:
         if marker not in body:

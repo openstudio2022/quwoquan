@@ -98,7 +98,7 @@ void main() {
         );
         expect(
           backBounds!.width,
-          lessThan(pageSize.width * 0.92),
+          lessThan(pageSize.width * 0.88),
           reason: 'canonical BACK verso must not own the whole sheet.',
         );
       },

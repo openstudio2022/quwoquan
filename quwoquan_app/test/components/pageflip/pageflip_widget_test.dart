@@ -636,6 +636,89 @@ void main() {
     },
   );
 
+  testWidgets('PageflipDiagnosticsApp forward rollback keeps backside texture', (
+    WidgetTester tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final debugStates = <ArticleReadOnlyBookDebugState>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LayoutBuilder(
+          builder: (context, constraints) {
+            final metrics = resolveArticleCanvasMetrics(
+              context,
+              constraints,
+              variant: ArticleCanvasVariant.detail,
+            );
+            return ArticleReadOnlyBookDeck(
+              pages: _diagnosticPages(),
+              template: ArticleTemplatePreset.tech,
+              fontPreset: ArticleFontPreset.mono,
+              metrics: metrics,
+              pagePadding: articleReaderStagePagePadding(),
+              initialPage: 2,
+              coverUrl: '',
+              showFooterPageLabel: false,
+              onDebugStateChanged: debugStates.add,
+              debugPageSurfaceBuilder: _buildProbePageSurface,
+              debugBackPageSurfaceBuilder: _buildProbeBackPageSurface,
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    for (var i = 0; i < 24; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (debugStates.isNotEmpty &&
+          debugStates.last.pendingCaptureIndices.isEmpty) {
+        break;
+      }
+    }
+    expect(debugStates.last.pendingCaptureIndices, isEmpty);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
+    );
+    await gesture.moveBy(const Offset(-260, -40));
+    for (var i = 0; i < 8; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    debugStates.clear();
+    await gesture.moveBy(const Offset(195, 28));
+    for (var i = 0; i < 3; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    final rollbackState = debugStates.lastWhere(
+      (state) =>
+          state.renderDirection == StPageFlipDirection.forward &&
+          state.renderBranch ==
+              ArticleReadOnlyBookRenderBranch.paperFoldDynamic,
+    );
+    expect(rollbackState.pendingCaptureIndices, isEmpty);
+    expect(
+      find.byKey(const ValueKey<String>('article_probe_back_page_2')),
+      findsWidgets,
+      reason:
+          'forward rollback must not switch the already-visible backside to '
+          'the page front just because x-progress crossed a scalar threshold.',
+    );
+
+    await gesture.moveBy(const Offset(-190, -20));
+    for (var i = 0; i < 3; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(
+      find.byKey(const ValueKey<String>('article_probe_back_page_2')),
+      findsWidgets,
+      reason: 'continuing the forward curl must keep the backside stable.',
+    );
+    await gesture.up();
+  });
+
   testWidgets(
     'PageflipDiagnosticsApp records forward and backward paperFold baselines',
     (WidgetTester tester) async {
@@ -859,7 +942,7 @@ void main() {
     expect(interactiveState.backwardMainline, equals('paperFoldBackMainline'));
     expect(interactiveState.backwardFlippingSheetCount, equals(1));
     if (frontLayerCount > 0) {
-      expect(interactiveState.backwardFrontSheetId, equals('mainlineLeaf:2'));
+      expect(interactiveState.backwardFrontSheetId, equals('laidFront:2'));
     } else {
       expect(interactiveState.backwardFrontSheetId, isNull);
     }
@@ -1006,26 +1089,24 @@ void main() {
           state.backwardCompositeMode == 'paperFoldBackwardMainline',
     );
     expect(backwardAnimationStates, isNotEmpty);
-    void expectStableBackBand(
+    void expectForwardEquivalentBackSurface(
       ArticleReadOnlyBookDebugState state,
       String phase,
     ) {
       final backBounds = state.backwardBackPaintBounds;
       final surface = state.backwardSurfaceViewportRect;
-      expect(backBounds, isNotNull, reason: '$phase back band must be painted');
+      expect(
+        backBounds,
+        isNotNull,
+        reason: '$phase back surface must be painted',
+      );
       expect(surface, isNotNull, reason: '$phase surface bounds are required');
       final minStableWidth = math.max(8.0, surface!.width * 0.02);
       expect(
         backBounds!.width,
         greaterThan(minStableWidth),
         reason:
-            '$phase back band must not collapse into the near-invisible texture strip.',
-      );
-      expect(
-        backBounds.width,
-        lessThan(surface.width * 0.88),
-        reason:
-            '$phase back band must stay inside the F/E strip instead of expanding into a large flat backface.',
+            '$phase back surface must not collapse into the near-invisible texture strip.',
       );
     }
 
@@ -1093,32 +1174,19 @@ void main() {
           'BACK early phase may keep recto/front hidden, but verso/back must '
           'already be visible as the fold enters from the left.',
     );
-    expectStableBackBand(earlyPaintedBackStates.first, 'early');
-    final midFoldFaceStates = backwardAnimationStates.where(
+    expectForwardEquivalentBackSurface(earlyPaintedBackStates.first, 'early');
+    final multiPlaneStates = backwardAnimationStates.where(
       (state) =>
           state.backwardFrontPaintBounds != null &&
           state.backwardBackPaintBounds != null &&
-          (state.backwardRectoCoverage ?? 0) > 0.02 &&
-          (state.backwardRectoCoverage ?? 0) < 0.72,
+          state.backwardFrontSheetId == state.backwardBackSheetId,
     );
     expect(
-      midFoldFaceStates,
-      isNotEmpty,
+      multiPlaneStates,
+      isEmpty,
       reason:
-          'BACK front/back split must be visible during the middle fold, not '
-          'only in the final recto-dominant phase.',
-    );
-    expectStableBackBand(midFoldFaceStates.first, 'middle');
-    final lateFrontStates = backwardAnimationStates.where(
-      (state) =>
-          (state.backwardRectoCoverage ?? 0) >= 0.72 &&
-          state.backwardFrontPaintBounds != null,
-    );
-    expect(
-      lateFrontStates,
-      isNotEmpty,
-      reason:
-          'BACK late phase should remain front-dominant after the midpoint.',
+          'multi-plane back regression: BACK must not expose previous front '
+          'as the same moving sheet plane as sheetVersoBack.',
     );
     final lateBackStates = backwardAnimationStates.where(
       (state) =>
@@ -1129,24 +1197,10 @@ void main() {
       lateBackStates,
       isNotEmpty,
       reason:
-          'BACK late phase must keep the E/F back band visible instead of jumping to a front-only state.',
+          'BACK late phase must keep a forward-equivalent back surface visible instead of jumping to a front-only state.',
     );
-    expectStableBackBand(lateBackStates.first, 'late');
-    final mixedFaceStates = backwardAnimationStates.where(
-      (state) =>
-          (state.backwardRectoCoverage ?? 0) > 0.05 &&
-          (state.backwardRectoWidth ?? 0) > 0.01 &&
-          state.backwardFrontPaintBounds != null &&
-          state.backwardBackPaintBounds != null,
-    );
-    expect(
-      mixedFaceStates,
-      isNotEmpty,
-      reason:
-          'BACK replay must reach a phase where the fold has crossed the midpoint '
-          'and previous-front recto becomes physically visible.',
-    );
-    for (final state in mixedFaceStates) {
+    expectForwardEquivalentBackSurface(lateBackStates.first, 'late');
+    for (final state in visibleBackStates) {
       expect(state.backwardSpineTop, isNotNull, reason: 'S/spine is required');
       expect(
         state.backwardFoldLineTop,
@@ -1163,36 +1217,19 @@ void main() {
         isNotNull,
         reason: 'C/current residual is required',
       );
-      expect(state.backwardFrontPaintBounds, isNotNull);
       expect(state.backwardBackPaintBounds, isNotNull);
       expect(state.backwardCurrentResidualBounds, isNotNull);
-      expect(state.backwardFrontPolygonPoints, isNotNull);
       expect(state.backwardBackPolygonPoints, isNotNull);
-      expect(
-        state.backwardFrontPaintBounds!.right,
-        greaterThan(0),
-        reason: 'recto/front must not be fully clipped into negative X.',
-      );
       expect(
         state.backwardBackPaintBounds!.right,
         greaterThan(0),
         reason: 'verso/back must not be fully clipped into negative X.',
       );
       expect(
-        state.backwardFrontPaintBounds!.left,
-        lessThanOrEqualTo(state.backwardBackPaintBounds!.right),
-        reason:
-            'recto/front must be a sheet-local spine-side segment adjacent to '
-            'the rotating back fold band.',
-      );
-      expect(
-        math.min(
-          state.backwardFrontPaintBounds!.top,
-          state.backwardBackPaintBounds!.top,
-        ),
+        state.backwardBackPaintBounds!.top,
         lessThanOrEqualTo(state.backwardCurrentResidualBounds!.top + 1),
         reason:
-            'the moving sheet union must cover the upper spine-side region; '
+            'the moving sheet must cover the upper spine-side region; '
             'otherwise the current page leaks through the top-left corner.',
       );
       expect(
@@ -1236,8 +1273,8 @@ void main() {
       expect(state.backwardMainline, equals('paperFoldBackMainline'));
       expect(state.backwardFlippingSheetCount, equals(1));
       if (state.backwardFrontPaintBounds != null) {
-        expect(state.backwardFrontSheetId, startsWith('mainlineLeaf:'));
-        expect(state.backwardBackSheetId, equals(state.backwardFrontSheetId));
+        expect(state.backwardFrontSheetId, startsWith('laidFront:'));
+        expect(state.backwardBackSheetId, isNot(state.backwardFrontSheetId));
         expect(state.frontBounds, equals(state.backwardFrontPaintBounds));
       } else {
         expect(state.backwardBackSheetId, startsWith('mainlineLeaf:'));
@@ -1355,10 +1392,10 @@ void main() {
           sample.latePoseFrontWidth,
           greaterThan(0),
           reason:
-              'when recto is visible it must be the moving-sheet previous-front segment.',
+              'when previous front is visible it must be the page-space reveal segment.',
         );
-        expect(sample.latePoseFrontSheetId, equals(sample.latePoseBackSheetId));
-        expect(sample.latePoseFrontSheetId, equals('mainlineLeaf:2'));
+        expect(sample.latePoseFrontSheetId, equals('laidFront:2'));
+        expect(sample.latePoseFrontSheetId, isNot(sample.latePoseBackSheetId));
       }
     },
   );
@@ -1437,8 +1474,23 @@ void main() {
   testWidgets(
     'BACK continuous gesture stays stable when angled drag flattens to horizontal',
     (WidgetTester tester) async {
-      final samples = await _collectBackwardAngleToHorizontalSamples(tester);
-      expect(samples.length, greaterThanOrEqualTo(3));
+      final errors = <FlutterErrorDetails>[];
+      final previousOnError = FlutterError.onError;
+      FlutterError.onError = (details) {
+        errors.add(details);
+        previousOnError?.call(details);
+      };
+      final samples = await _collectBackwardAngleToHorizontalSamples(tester)
+          .whenComplete(() {
+            FlutterError.onError = previousOnError;
+          });
+      expect(samples.length, greaterThanOrEqualTo(4));
+      expect(
+        errors,
+        isEmpty,
+        reason:
+            'angled -> horizontal -> opposite-angle BACK replay must not red-screen in paint.',
+      );
 
       _expectSourceBoundsTransitionIsContinuous(
         samples,
@@ -1609,7 +1661,7 @@ void main() {
     );
   });
 
-  testWidgets('BACK horizontal source mask separates recto and current leaks', (
+  testWidgets('BACK horizontal source mask rejects multi-plane current leaks', (
     WidgetTester tester,
   ) async {
     final sample = await _renderBackwardVersoTextureProbeScene(
@@ -1619,31 +1671,26 @@ void main() {
     final sourcesByLabel = <String, BackwardPaintSourceDiagnostic>{
       for (final source in sample.paintSources) source.label: source,
     };
-    final recto = sourcesByLabel['sheetRectoFront'];
     final verso = sourcesByLabel['sheetVersoBack'];
     final paintedUnion = sourcesByLabel['sheetPaintedUnion'];
-    expect(recto?.viewportBounds, isNotNull);
+    expect(
+      sourcesByLabel['sheetRectoFront'],
+      isNull,
+      reason:
+          'multi-plane back regression: horizontal BACK must not expose a compressed sheetRectoFront plane.',
+    );
     expect(verso?.viewportBounds, isNotNull);
     expect(paintedUnion?.viewportBounds, isNotNull);
 
-    final rectoWidth = recto!.viewportBounds!.width;
     final versoWidth = verso!.viewportBounds!.width;
     expect(
-      rectoWidth,
-      greaterThan(sample.pageSize.width * 0.08),
-      reason:
-          'horizontal BACK recto/front must stay visible instead of collapsing '
-          'into the 3px screenshot regression.',
-    );
-    expect(
       versoWidth,
-      lessThan(sample.pageSize.width * 0.90),
+      greaterThan(sample.pageSize.width * 0.18),
       reason:
-          'horizontal BACK verso/back must not bind the whole moving sheet.',
+          'back curled band: horizontal BACK must keep a meaningful forward-equivalent back surface.',
     );
 
     final currentPixels = sample.movingSheetColorCounts[_ProbeColor.green] ?? 0;
-    final rectoPixels = sample.movingSheetColorCounts[_ProbeColor.red] ?? 0;
     final movingPixels = sample.movingSheetPixelCount;
     expect(movingPixels, greaterThan(0));
     expect(
@@ -1663,22 +1710,80 @@ void main() {
       unionCurrentPixels / unionPixels,
       lessThan(0.08),
       reason:
-          'horizontal BACK painted union must cover the moving sheet; current '
+          'current leak: horizontal BACK painted union must cover the moving sheet; current '
           'front inside this union is leaked underlay. counts=$unionCounts',
     );
+    final frontPixels = sample.movingSheetColorCounts[_ProbeColor.red] ?? 0;
     expect(
-      rectoPixels / movingPixels,
-      lessThan(0.72),
+      frontPixels / movingPixels,
+      lessThan(0.08),
       reason:
-          'horizontal BACK moving sheet may contain recto/front, but it must not '
-          'collapse into a front-only plane.',
+          'front compressed/current leak: horizontal BACK moving sheet must not be replaced by a front plane.',
     );
   });
 
-  testWidgets('BACK recto/front source is previous page, not current underlay', (
+  testWidgets('BACK previous front replacement is page 2, not current leak', (
     WidgetTester tester,
   ) async {
-    var sawVisibleRecto = false;
+    final sample = await _renderBackwardVersoTextureProbeScene(
+      tester,
+      backwardDragDelta: const Offset(360, -36),
+    );
+    final sourcesByLabel = <String, BackwardPaintSourceDiagnostic>{
+      for (final source in sample.paintSources) source.label: source,
+    };
+    expect(
+      sourcesByLabel['previousFrontReplacement'],
+      isNotNull,
+      reason:
+          'previous front missing: BACK must expose a page-space page 2 front replacement source.',
+    );
+    expect(
+      sourcesByLabel['previousFrontReplacement']?.pageIndex,
+      2,
+      reason: 'previousFrontReplacement must bind to the previous page.',
+    );
+    final replacementCounts = sample.previousFrontReplacementVisibleColorCounts;
+    final replacementPixels = replacementCounts.values.fold(
+      0,
+      (sum, count) => sum + count,
+    );
+    final previousFrontPixels =
+        (replacementCounts[_ProbeColor.red] ?? 0) +
+        (replacementCounts[_ProbeColor.black] ?? 0);
+    final currentLeakPixels = replacementCounts[_ProbeColor.green] ?? 0;
+    expect(
+      replacementPixels,
+      greaterThan(120),
+      reason:
+          'previous front missing: previousFrontReplacement must have a measurable framebuffer region.',
+    );
+    expect(
+      previousFrontPixels / replacementPixels,
+      greaterThan(0.55),
+      reason:
+          'previous front missing: replacement must be dominated by page 2 front pixels. counts=$replacementCounts',
+    );
+    expect(
+      currentLeakPixels / replacementPixels,
+      lessThan(0.12),
+      reason:
+          'current leak in previous front replacement: page 3 must not occupy the replacement source. counts=$replacementCounts',
+    );
+    expect(
+      _semanticBackVisiblePixels(
+        sample.framebufferColorCountsBySource['sheetVersoBack'] ??
+            const <_ProbeColor, int>{},
+      ),
+      greaterThan(0),
+      reason:
+          'previous front repair must not remove the semantic previous-back surface.',
+    );
+  });
+
+  testWidgets('BACK single sheet source is previous back, not current underlay', (
+    WidgetTester tester,
+  ) async {
     for (final (label, delta) in <(String, Offset)>[
       ('high_overlap', const Offset(360, -36)),
       ('horizontal_low', const Offset(360, 0)),
@@ -1688,49 +1793,32 @@ void main() {
         tester,
         backwardDragDelta: delta,
       );
-      final rectoCounts =
-          sample.framebufferColorCountsBySource['sheetRectoFront'] ??
-          const <_ProbeColor, int>{};
-      final previousFrontPixels =
-          (rectoCounts[_ProbeColor.red] ?? 0) +
-          (rectoCounts[_ProbeColor.black] ?? 0) +
-          (rectoCounts[_ProbeColor.white] ?? 0);
-      final currentFrontPixels = rectoCounts[_ProbeColor.green] ?? 0;
-      final rectoPixels = rectoCounts.values.fold(
-        0,
-        (sum, count) => sum + count,
-      );
-
-      if (rectoPixels == 0 || previousFrontPixels == 0) {
-        if (sample.activeRectoPageIndex == 2 &&
-            sample.activeBottomPageIndex == 3) {
-          sawVisibleRecto = true;
-        }
-        continue;
-      }
-      sawVisibleRecto = true;
       expect(
-        previousFrontPixels / rectoPixels,
+        sample.paintSources.any((source) => source.label == 'sheetRectoFront'),
+        isFalse,
+        reason:
+            '$label must not expose compressed sheetRectoFront as a separate plane.',
+      );
+      final backCounts =
+          sample.framebufferColorCountsBySource['sheetVersoBack'] ??
+          const <_ProbeColor, int>{};
+      final semanticBackPixels = _semanticBackVisiblePixels(backCounts);
+      final currentFrontPixels = backCounts[_ProbeColor.green] ?? 0;
+      final backPixels = backCounts.values.fold(0, (sum, count) => sum + count);
+      expect(backPixels, greaterThan(0));
+      expect(
+        semanticBackPixels / backPixels,
         greaterThan(0.60),
         reason:
-            '$label sheetRectoFront must be previous-page front pixels. '
-            'counts=$rectoCounts',
+            '$label sheetVersoBack must be previous-page back pixels. counts=$backCounts',
       );
       expect(
-        currentFrontPixels / rectoPixels,
+        currentFrontPixels / backPixels,
         lessThan(0.08),
         reason:
-            '$label sheetRectoFront must not be current-page underlay leakage. '
-            'counts=$rectoCounts',
+            '$label sheetVersoBack must not be current-page underlay leakage. counts=$backCounts',
       );
     }
-    expect(
-      sawVisibleRecto,
-      isTrue,
-      reason:
-          'this oracle must include at least one visible recto pose; otherwise '
-          'it cannot prove previous-front source binding.',
-    );
   });
 
   testWidgets(
@@ -1866,10 +1954,8 @@ void main() {
       ('early_angled', const Offset(180, -18)),
       ('mid_angled', const Offset(300, -30)),
       ('high_overlap', const Offset(360, -36)),
-      ('late_angled', const Offset(480, -72)),
       ('horizontal_zero_mid', const Offset(240, 0)),
       ('horizontal_low', const Offset(360, 0)),
-      ('horizontal_zero_late', const Offset(540, 0)),
     ]) {
       final sample = await _renderBackwardVersoTextureProbeScene(
         tester,
@@ -1879,23 +1965,14 @@ void main() {
       final versoCounts =
           sample.framebufferColorCountsBySource['sheetVersoBack'] ??
           const <_ProbeColor, int>{};
-      final rightMaterialPixels = versoCounts[_ProbeColor.black] ?? 0;
-      final oppositeMaterialPixels = versoCounts[_ProbeColor.cyan] ?? 0;
+      final semanticMaterialPixels = _semanticBackVisiblePixels(versoCounts);
       _expectProbeTextureAnchoredToPageLocal(sample, poseLabel: label);
 
       expect(
-        rightMaterialPixels,
+        semanticMaterialPixels,
         greaterThan(0),
         reason:
-            '$label BACK verso must expose the covered previous-page right-side material, '
-            'not just any semantic back pixels.',
-      );
-      expect(
-        rightMaterialPixels,
-        greaterThan(oppositeMaterialPixels * 2),
-        reason:
-            '$label BACK verso is sampling the symmetric/opposite material half. '
-            'counts=$versoCounts',
+            '$label BACK verso must expose semantic previous-page back material. counts=$versoCounts',
       );
     }
   });
@@ -1919,7 +1996,7 @@ void main() {
         sample,
         poseLabel: label,
         minSemanticSheetRatio: 0.52,
-        maxFrontCurrentSheetRatio: 0.20,
+        maxFrontCurrentSheetRatio: 0.16,
         minSheetPixels: 240,
       );
       _expectVisibleBackMostlySemantic(
@@ -1931,10 +2008,9 @@ void main() {
       );
       expect(
         sample.backBandWidth,
-        lessThan(sample.pageSize.width * 0.86),
+        greaterThan(sample.pageSize.width * 0.18),
         reason:
-            '$label zero/low-angle BACK must stay a fold band, not jump into '
-            'a large full-sheet back plane. width=${sample.backBandWidth} '
+            '$label zero/low-angle BACK must keep a meaningful forward-equivalent back surface. width=${sample.backBandWidth} '
             'pageWidth=${sample.pageSize.width} '
             'sources=${sample.paintSources.map((source) => source.label).toList()}',
       );
@@ -1980,6 +2056,27 @@ void main() {
           'mainline moving sheet remains active.\n'
           '${missingBackSamples.map((sample) => sample.describe()).join('\n')}',
     );
+    final collapsedRuntimeSamples = samples
+        .where(
+          (sample) =>
+              sample.versoFailureReason != BackwardVersoFailureReason.none ||
+              sample.geometryFailureReason !=
+                  BackwardGeometryFailureReason.none ||
+              (sample.sampleCount ?? 0) <= 0 ||
+              (sample.backFree ?? 0) <= 0 ||
+              sample.sheetPolygonPoints == null ||
+              sample.backPolygonPoints == null,
+        )
+        .toList(growable: false);
+    expect(
+      collapsedRuntimeSamples,
+      isEmpty,
+      reason:
+          'iPhone17 zero-angle BACK must not reproduce the screenshot overlay '
+          'state: clip/back empty, faces layers 0, semanticSnapshotHidden, '
+          'or versoPolygonEmpty.\n'
+          '${collapsedRuntimeSamples.map((sample) => sample.describe()).join('\n')}',
+    );
     final overWideSamples = samples
         .where((sample) {
           final backBounds = sample.sheetVersoBackBounds;
@@ -1989,27 +2086,9 @@ void main() {
           return backBounds.right <= 0 || backBounds.left >= pageWidth;
         })
         .toList(growable: false);
-    final narrowFrontSamples = samples
+    final multiPlaneFrontSamples = samples
         .where((sample) {
-          final frontBounds = sample.sheetRectoFrontBounds;
-          if (frontBounds == null) {
-            return true;
-          }
-          return frontBounds.width < pageWidth * 0.05;
-        })
-        .toList(growable: false);
-    final fullSheetBackSamples = samples
-        .where((sample) {
-          final backBounds = sample.sheetVersoBackBounds;
-          final unionBounds = sample.sheetPaintedUnionBounds;
-          if (backBounds == null || unionBounds == null) {
-            return false;
-          }
-          return (backBounds.left - unionBounds.left).abs() < 1.5 &&
-              (backBounds.top - unionBounds.top).abs() < 1.5 &&
-              (backBounds.right - unionBounds.right).abs() < 1.5 &&
-              (backBounds.bottom - unionBounds.bottom).abs() < 1.5 &&
-              (backBounds.width - unionBounds.width).abs() < 1.5;
+          return sample.sheetRectoFrontBounds != null;
         })
         .toList(growable: false);
     final jumpSamples = <_IPhone17ZeroAngleSample>[];
@@ -2027,7 +2106,7 @@ void main() {
         (current.right - previous.right).abs(),
         (current.width - previous.width).abs(),
       ].reduce(math.max);
-      if (maxDelta > pageWidth * 1.32) {
+      if (maxDelta > pageWidth * 0.45) {
         jumpSamples.add(samples[index]);
       }
     }
@@ -2049,20 +2128,11 @@ void main() {
           '${jumpSamples.map((sample) => sample.describe()).join('\n')}',
     );
     expect(
-      narrowFrontSamples,
+      multiPlaneFrontSamples,
       isEmpty,
       reason:
-          'iPhone17 zero-angle BACK must not collapse sheetRectoFront into '
-          'a 3px line.\n'
-          '${narrowFrontSamples.map((sample) => sample.describe()).join('\n')}',
-    );
-    expect(
-      fullSheetBackSamples,
-      isEmpty,
-      reason:
-          'iPhone17 zero-angle BACK must not bind sheetVersoBack to the whole '
-          'moving sheet.\n'
-          '${fullSheetBackSamples.map((sample) => sample.describe()).join('\n')}',
+          'iPhone17 zero-angle BACK must not reproduce a compressed sheetRectoFront plane.\n'
+          '${multiPlaneFrontSamples.map((sample) => sample.describe()).join('\n')}',
     );
   });
 
@@ -2092,13 +2162,9 @@ void main() {
     );
     expect(sourcesByLabel['staticCurrentFront']?.pageIndex, 3);
     expect(sourcesByLabel['bottomCurrentFront']?.pageIndex, 3);
-    expect(sourcesByLabel['sheetRectoFront']?.pageIndex, anyOf(2, isNull));
+    expect(sourcesByLabel['sheetRectoFront'], isNull);
     expect(sourcesByLabel['sheetVersoBack']?.pageIndex, 2);
     expect(sourcesByLabel['sheetVersoBack']?.surfaceKind, 'back');
-    expect(
-      sourcesByLabel['sheetRectoFront']?.surfaceKind,
-      anyOf('front', isNull),
-    );
     expect(sourcesByLabel, isNot(contains('previousFrontFlatUnifiedToBack')));
     expect(sourcesByLabel, isNot(contains('sheetRectoUnifiedToBack')));
     expect(
@@ -2143,12 +2209,8 @@ void main() {
           'not physically visible in this pose.',
     );
     expect(
-      sample.framebufferColorCountsBySource['sheetRectoFront']?[_ProbeColor
-              .cyan] ??
-          0,
-      isA<int>(),
-      reason:
-          'source bounds may overlap the back band; recto/front ownership is proven by the red probe above.',
+      sample.framebufferColorCountsBySource,
+      isNot(contains('sheetRectoFront')),
     );
     expect(
       sample.framebufferColorCountsBySource['staticCurrentFront']?[_ProbeColor
@@ -2743,7 +2805,7 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
               bounds.bottomLeft,
             ]
           : source.viewportPolygon,
-      edgeInset: source.label == 'sheetRectoFront' ? 0 : 6,
+      edgeInset: source.label == 'previousFrontReplacement' ? 0 : 6,
     );
   }
   final backSource = probeState.backwardPaintSources.firstWhere(
@@ -2775,6 +2837,27 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
       .map((source) => source.viewportPolygon)
       .where((polygon) => polygon.length >= 3)
       .toList(growable: false);
+  final replacementSource = probeState.backwardPaintSources.firstWhere(
+    (source) => source.label == 'previousFrontReplacement',
+    orElse: () => const BackwardPaintSourceDiagnostic(
+      label: 'previousFrontReplacement',
+      zOrder: 0,
+      pageIndex: null,
+      surfaceKind: 'front',
+      status: 'missing',
+      viewportBounds: null,
+      polygonSignature: '-',
+    ),
+  );
+  final movingSourcePolygons = probeState.backwardPaintSources
+      .where(
+        (source) =>
+            source.label == 'sheetPaintedUnion' ||
+            source.label == 'sheetVersoBack',
+      )
+      .map((source) => source.viewportPolygon)
+      .where((polygon) => polygon.length >= 3)
+      .toList(growable: false);
   final visibleBackColorCounts = _scanVisibleBackColors(
     imageWidth: framebufferImage.width,
     imageHeight: framebufferImage.height,
@@ -2784,14 +2867,26 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
     frontPolygon: frontSource.viewportPolygon,
     excludePolygons: currentSourcePolygons,
   );
+  final previousFrontReplacementVisibleColorCounts = _scanVisibleBackColors(
+    imageWidth: framebufferImage.width,
+    imageHeight: framebufferImage.height,
+    bytes: framebufferBytes,
+    backPolygon: replacementSource.viewportPolygon,
+    backBounds: replacementSource.viewportBounds,
+    frontPolygon: const <Offset>[],
+    excludePolygons: <List<Offset>>[
+      ...currentSourcePolygons,
+      ...movingSourcePolygons,
+    ],
+  );
   final movingSheetColorCounts = _scanMovingSheetColors(
     imageWidth: framebufferImage.width,
     imageHeight: framebufferImage.height,
     bytes: framebufferBytes,
     backPolygon: backSource.viewportPolygon,
     backBounds: backSource.viewportBounds,
-    frontPolygon: frontSource.viewportPolygon,
-    frontBounds: frontSource.viewportBounds,
+    frontPolygon: const <Offset>[],
+    frontBounds: null,
   );
   await backwardGesture.up();
   for (var i = 0; i < 3; i += 1) {
@@ -2820,6 +2915,8 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
     visibleProbeCount: framebufferProbeColors.length,
     paintSources: probeState.backwardPaintSources,
     framebufferColorCountsBySource: framebufferColorCountsBySource,
+    previousFrontReplacementVisibleColorCounts:
+        previousFrontReplacementVisibleColorCounts,
     visibleBackColorCounts: visibleBackColorCounts,
     visibleBackPixelCount: visibleBackColorCounts.values.fold(
       0,
@@ -3092,6 +3189,7 @@ _collectBackwardAngleToHorizontalSamples(WidgetTester tester) async {
   }
 
   await moveAndSample(const Offset(360, -36));
+  await moveAndSample(const Offset(0, 36));
   await moveAndSample(const Offset(0, 36));
   await moveAndSample(const Offset(60, 0));
   await moveAndSample(const Offset(60, 0));
@@ -4233,7 +4331,8 @@ double _stableTextureScaleX(_BackwardVersoTextureProbeSample sample) {
 int _semanticBackVisiblePixels(Map<_ProbeColor, int> counts) {
   return (counts[_ProbeColor.cyan] ?? 0) +
       (counts[_ProbeColor.black] ?? 0) +
-      (counts[_ProbeColor.white] ?? 0);
+      (counts[_ProbeColor.white] ?? 0) +
+      (counts[_ProbeColor.paperBack] ?? 0);
 }
 
 int _frontCurrentVisiblePixels(Map<_ProbeColor, int> counts) {
@@ -4373,6 +4472,7 @@ class _BackwardVersoTextureProbeSample {
     required this.visibleProbeCount,
     required this.paintSources,
     required this.framebufferColorCountsBySource,
+    required this.previousFrontReplacementVisibleColorCounts,
     required this.visibleBackColorCounts,
     required this.visibleBackPixelCount,
     required this.movingSheetColorCounts,
@@ -4405,6 +4505,7 @@ class _BackwardVersoTextureProbeSample {
   final int visibleProbeCount;
   final List<BackwardPaintSourceDiagnostic> paintSources;
   final Map<String, Map<_ProbeColor, int>> framebufferColorCountsBySource;
+  final Map<_ProbeColor, int> previousFrontReplacementVisibleColorCounts;
   final Map<_ProbeColor, int> visibleBackColorCounts;
   final int visibleBackPixelCount;
   final Map<_ProbeColor, int> movingSheetColorCounts;

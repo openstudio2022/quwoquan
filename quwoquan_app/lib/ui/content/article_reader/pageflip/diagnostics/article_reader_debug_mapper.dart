@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_debug_state.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
-import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
@@ -35,10 +34,6 @@ class ArticleReaderDebugMapper {
       final anchor = input.renderFrame.flippingAnchor;
       final angle = input.renderFrame.angle;
       final visualGeometryDirection = input.renderFrame.visualGeometryDirection;
-      final pageSize = Size(
-        input.scene.layout.bounds.pageWidth,
-        input.scene.layout.bounds.height,
-      );
       final positionViewport = convertBookPointToViewport(
         anchor,
         input.scene.layout.bounds,
@@ -57,71 +52,10 @@ class ArticleReaderDebugMapper {
       sheetViewportPolygon = sheetLocalPolygon
           .map((p) => positionViewport + p)
           .toList(growable: false);
-      final leafFrame = input.renderFrame.backwardLeafFrame;
-      if (leafFrame != null) {
-        final foldLine = input.renderFrame.backwardProjectedFrame?.foldLine;
-        final freeEdgeLine =
-            input.renderFrame.backwardProjectedFrame?.projectedRightEdgeLine;
-        final pagePolygon = sheetLocalPolygon.length >= 3
-            ? sheetLocalPolygon
-            : <Offset>[
-                Offset.zero,
-                Offset(pageSize.width, 0),
-                Offset(pageSize.width, pageSize.height),
-                Offset(0, pageSize.height),
-              ];
-        final pageAreaPolygon = sheetLocalPolygon.length >= 3
-            ? input.renderFrame.flippingClipArea
-            : <Offset>[
-                Offset.zero,
-                Offset(pageSize.width, 0),
-                Offset(pageSize.width, pageSize.height),
-                Offset(0, pageSize.height),
-              ];
-        if (foldLine != null) {
-          final localFoldLine = (
-            toLayerLocal(
-              point: foldLine.$1,
-              anchor: anchor,
-              angle: angle,
-              direction: visualGeometryDirection,
-            ),
-            toLayerLocal(
-              point: foldLine.$2,
-              anchor: anchor,
-              angle: angle,
-              direction: visualGeometryDirection,
-            ),
-          );
-          final localFreeEdgeLine = freeEdgeLine == null
-              ? null
-              : (
-                  toLayerLocal(
-                    point: freeEdgeLine.$1,
-                    anchor: anchor,
-                    angle: angle,
-                    direction: visualGeometryDirection,
-                  ),
-                  toLayerLocal(
-                    point: freeEdgeLine.$2,
-                    anchor: anchor,
-                    angle: angle,
-                    direction: visualGeometryDirection,
-                  ),
-                );
-          final faces = resolveBackwardCanonicalSheetFaces(
-            BackwardCanonicalSheetInput(
-              pageSize: pageSize,
-              sheetLocalPolygon: pagePolygon,
-              sheetAreaPolygon: pageAreaPolygon,
-              sheetLocalFoldLine: localFoldLine,
-              sheetLocalFreeEdgeLine: localFreeEdgeLine,
-              currentResidualPagePolygon: input.renderFrame.bottomClipArea,
-            ),
-          );
-          frontLocalPolygon = faces.previousFrontRectoLocalPolygon;
-          backLocalPolygon = faces.previousBackVersoLocalPolygon;
-        }
+      if (angle.abs() <= 1.5707963267948966) {
+        backLocalPolygon = sheetLocalPolygon;
+      } else {
+        frontLocalPolygon = sheetLocalPolygon;
       }
       if (input.renderFrame.bottomClipArea.length >= 3) {
         currentResidualViewportPolygon = input.renderFrame.bottomClipArea

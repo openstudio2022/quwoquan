@@ -125,9 +125,11 @@ StPageFlipRenderFrame _buildBackwardRenderFrame(BackwardRenderFrameData data) {
   );
 
   final angleBand = resolveForwardCurlAngleBand(
-    localPagePoint: resolveBackwardVisualReplayLocalPagePoint(
+    localPagePoint: resolveBackwardForwardCanonicalPoint(
       localPagePoint: data.localPagePoint,
-      pageSize: data.pageSize,
+      pageWidth: data.pageSize.width,
+      pageHeight: data.pageSize.height,
+      corner: data.corner,
     ),
     pageSize: data.pageSize,
     corner: data.corner,
@@ -170,9 +172,11 @@ _BackwardVisualGeometry _resolveBackwardVisualGeometry(
   BackwardRenderFrameData data,
 ) {
   if (data.orientation == StPageFlipOrientation.portrait) {
-    final replayPoint = resolveBackwardVisualReplayLocalPagePoint(
+    final replayPoint = resolveBackwardForwardCanonicalPoint(
       localPagePoint: data.localPagePoint,
-      pageSize: data.pageSize,
+      pageWidth: data.pageSize.width,
+      pageHeight: data.pageSize.height,
+      corner: data.corner,
     );
     final forwardCalculation = StPageFlipCalculation(
       direction: StPageFlipDirection.forward,
@@ -180,34 +184,25 @@ _BackwardVisualGeometry _resolveBackwardVisualGeometry(
       pageWidth: data.pageSize.width,
       pageHeight: data.pageSize.height,
     );
-    if (forwardCalculation.calc(replayPoint)) {
-      final canonicalGeometry = forwardCalculation.getCanonicalFoldGeometry();
-      return _BackwardVisualGeometry(
-        direction: StPageFlipDirection.forward,
-        localPagePoint: replayPoint,
-        flippingClipArea: forwardCalculation.getFlippingClipArea(),
-        bottomClipArea: forwardCalculation.getBottomClipArea(),
-        flippingAnchor: forwardCalculation.getActiveCorner(),
-        bottomAnchor: forwardCalculation.getBottomPagePosition(),
-        angle: forwardCalculation.getAngle(),
-        foldLine: canonicalGeometry?.foldLine,
-        freeEdgeLine: canonicalGeometry?.freeEdgeLine,
-        foldLineSource: 'backwardForwardIsomorphicFoldLine',
-        edgeLineSource: 'backwardForwardIsomorphicFreeEdgeLine',
-      );
+    if (!forwardCalculation.calc(replayPoint)) {
+      throw StateError('BACK forward canonical calculation failed');
+    }
+    final canonicalGeometry = forwardCalculation.getCanonicalFoldGeometry();
+    if (canonicalGeometry == null) {
+      throw StateError('BACK forward canonical fold geometry missing');
     }
     return _BackwardVisualGeometry(
       direction: StPageFlipDirection.forward,
       localPagePoint: replayPoint,
-      flippingClipArea: const <ui.Offset>[],
-      bottomClipArea: const <ui.Offset>[],
-      flippingAnchor: ui.Offset.zero,
-      bottomAnchor: ui.Offset.zero,
-      angle: 0,
-      foldLine: null,
-      freeEdgeLine: null,
-      foldLineSource: 'backwardForwardIsomorphicCalcFailed',
-      edgeLineSource: 'backwardForwardIsomorphicCalcFailed',
+      flippingClipArea: forwardCalculation.getFlippingClipArea(),
+      bottomClipArea: forwardCalculation.getBottomClipArea(),
+      flippingAnchor: forwardCalculation.getActiveCorner(),
+      bottomAnchor: forwardCalculation.getBottomPagePosition(),
+      angle: forwardCalculation.getAngle(),
+      foldLine: canonicalGeometry.foldLine,
+      freeEdgeLine: canonicalGeometry.freeEdgeLine,
+      foldLineSource: 'backwardForwardIsomorphicFoldLine',
+      edgeLineSource: 'backwardForwardIsomorphicFreeEdgeLine',
     );
   }
 

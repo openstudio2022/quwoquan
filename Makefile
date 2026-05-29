@@ -188,7 +188,7 @@ verify-app-page-horizontal-quality:
 	@python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
 
 verify-app-pageflip-back-mainline:
-	@cd quwoquan_app && flutter test test/components/pageflip/backward_sheet_partition_contract_test.dart test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart
+	@cd quwoquan_app && flutter test test/components/pageflip/backward_sheet_partition_contract_test.dart test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart test/components/pageflip/pageflip_widget_test.dart
 
 # 后翻路线 B 主线静态门禁（见 .cursor/rules/12-pageflip-backward-mainline.mdc）。
 verify-app-pageflip-backward-mainline:
