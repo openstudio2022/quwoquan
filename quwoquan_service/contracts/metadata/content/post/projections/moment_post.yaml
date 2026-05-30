@@ -40,6 +40,8 @@ client_projection:
   dart_class: MomentPostDto
   base_class: PostBaseDto
   output_path: cloud/runtime/generated/content/moment_post_dto.g.dart
+  dart_imports:
+    - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
   computed_getters:
     - name: displayFormat
       dart_return_type: String
@@ -184,3 +186,12 @@ client_projection:
       source: publishedAt
       aliases: [publishedAt, createdAt, created_at]
       default: "DateTime(0)"
+
+    - name: intersectionReasons
+      dart_type: List<IntersectionReason>
+      nullable: true
+      source: intersectionReasons
+      aliases: [intersectionReasons]
+      list_element_dart_class: IntersectionReason
+      default: "null"
+      description: "交集理由（云侧推荐管线预生成，B1；端只读展示，无来源时为 null）"

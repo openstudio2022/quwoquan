@@ -846,6 +846,16 @@ features:
                 - markdown
                 - article
                 - metadata-first
+            - id: unified-presentation-model
+              name: unified-presentation-model
+              level: L3_story
+              path: discovery-content/content-type-framework/unified-presentation-model
+              domain: content
+              status: specified
+              tags:
+                - debt-cleanup
+                - v2-precondition
+                - presentation-model
         - id: dual-rail-discovery-redesign
           name: dual-rail-discovery-redesign
           level: L2_feature

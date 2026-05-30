@@ -1,0 +1,160 @@
+version: 1
+node: discovery-content/content-type-framework/unified-presentation-model
+
+derived_from:
+  spec: spec.md
+  design: design.md
+  acceptance: acceptance.yaml
+  changelog:
+    - specs/changelog/CR-20260530-021-v2-precondition-debt-cleanup.yaml
+
+slices:
+  - id: D1a
+    title: define content surface view model
+    goal: 新建单一只读 `ContentSurfaceView` 与强类型子对象，字段对齐 content metadata 投影。
+    depends_on: []
+    acceptance_refs:
+      - A1
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 新增 content_surface_view.dart（model + AuthorRef/MediaRef/VideoRef/ContentStats）
+      - 字段集与 fallback 对齐 fields.yaml / discovery 投影
+      - T1 投影契约测试覆盖四媒体类型字段集
+    status: done
+
+  - id: D1a-mapper
+    title: implement single mapper
+    goal: 实现 `ContentSurfaceViewMapper.fromDto`，按 contentType 填充强类型字段，零 is/as。
+    depends_on:
+      - D1a
+    acceptance_refs:
+      - A2
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - 四媒体类型 DTO 经单一 mapper 产出统一 model
+      - 媒体差异由 contentType 契约字段分支，无对 DTO 子类的 is/as/whereType
+    status: done
+
+  - id: D2a
+    title: split content repository and strong-type wire
+    goal: 拆 ContentRepository 为 ≤10 方法子接口，`discoveryPresentationWireForPost` 去裸 Map。
+    depends_on:
+      - D1a
+    acceptance_refs:
+      - A4
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - 子接口 Read/Write/Reaction/Media/Comment/Config 各 ≤10 方法（Reaction 避开既有 ContentInteractionRepository）
+      - 抽象接口无 Map<String,dynamic> 返回
+      - discoveryPresentationWireForPost 返回强类型 DiscoveryPresentationWire
+    status: done
+
+  - id: D2b
+    title: split mock remote and register providers
+    goal: Mock/Remote 同步拆分 implements 子接口，app_providers 注册子接口 Provider，契约测试覆盖。
+    depends_on:
+      - D2a
+    acceptance_refs:
+      - A4
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - Mock/Remote implements 拆后子接口
+      - app_providers 注册子接口 Provider
+      - 契约测试覆盖每个子接口
+    status: done
+
+  - id: D1b
+    title: wire four surfaces to unified model
+    goal: feed/immersive/detail/share 四 surface 接入 ContentSurfaceView，含 flag 双读/观测/回滚。
+    depends_on:
+      - D1a-mapper
+      - D2a
+    acceptance_refs:
+      - A3
+      - A5
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 四 surface 消费统一 model，去各自投影分叉
+      - unified_surface_view flag 双读，可单独回退
+      - 新旧路径字段 diff 与渲染异常可观测
+    status: in_progress
+    progress_note: >-
+      flag unified_surface_view（metadata+codegen）与双读机制就绪；share surface
+      已接入 ContentSurfaceView 并通过四类型同源 parity 测试。feed/detail/immersive
+      三 surface 接入与 D3 大文件强拆同批，尚未完成。
+
+  - id: D3
+    title: split oversized surface files
+    goal: 接入统一 model 时顺带强拆 works_immersive_viewer/discovery_page/moment_social_feed 到 <500 行。
+    depends_on:
+      - D1b
+    acceptance_refs:
+      - A3
+    planned_evidence:
+      - T2_module_interaction
+    done_when:
+      - 三文件均 <500 行（或 PR 说明）
+      - 现有 widget 测试全绿无回归
+    status: planned
+
+  - id: D1c
+    title: close test matrix and deprecate old projections
+    goal: 补 T1 投影契约 + T2 四 surface 同源 widget 测试，旧投影类标 @Deprecated。
+    depends_on:
+      - D1b
+      - D3
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - T1 四类型字段集对齐 metadata
+      - T2 同 DTO 四 surface 同字段断言
+      - PostSummaryView/_wireMapForPresentation/share fallback 标 @Deprecated
+    status: planned
+
+  - id: D4
+    title: clear content discovery gate-block debt
+    goal: 清零 R17 空 catch（create_page_remote_helpers:276）等本域 GATE_BLOCK 硬债。
+    depends_on: []
+    acceptance_refs:
+      - A4
+    planned_evidence:
+      - T1_schema
+    done_when:
+      - create_page_remote_helpers.dart:276 空 catch 改结构化日志/降级
+      - content/discovery 域其余 GATE_BLOCK 扫描清零
+    status: done
+
+  - id: D5
+    title: block d exit gate
+    goal: Block D 全绿，app 全门禁无 BLOCKING。
+    depends_on:
+      - D1c
+      - D2b
+      - D4
+    acceptance_refs:
+      - A1
+      - A2
+      - A3
+      - A4
+      - A5
+    planned_evidence:
+      - T1_schema
+      - T2_module_interaction
+    done_when:
+      - gate_repo.sh --scope app / verify_dart_semantic / verify_ui_mock_isolation / verify-app-page-horizontal-quality 全绿
+      - 无 BLOCKING
+    status: planned

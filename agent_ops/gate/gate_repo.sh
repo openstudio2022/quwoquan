@@ -18,6 +18,7 @@ run_service() {
   echo "[gate] quwoquan_service"
   bash agent_ops/scaffold/verify_feature_traceability.sh
   bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
+  python3 quwoquan_service/scripts/contract/verify_tag_ref_source_of_truth.py
   bash agent_ops/scaffold/verify_acceptance_standard.sh
   bash agent_ops/scaffold/verify_specs_l1_hierarchy.sh
   bash agent_ops/scaffold/verify_feature_tree_refactor.sh

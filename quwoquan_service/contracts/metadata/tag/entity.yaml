@@ -1,0 +1,21 @@
+version: 1
+domain: tag
+entity: TagNode
+is_aggregate: false
+
+description: |
+  路径制标签节点（只读）。唯一真相源为数据工程路径制 taxonomy publish/v1/tags
+  （四分组 Topic/Audience/Format/Entity，tagRef = 目录路径）。
+  tag-service 只读消费离线导入产物，提供 resolve / shared-tags / inverted 查询，
+  不写入、不产生领域事件。V0.5 首发只覆盖校园 + 旅游出行子集，其余分组延后接入。
+
+storage_backend: mongodb
+cache_layer: none
+capabilities:
+  - queryable
+
+ddd_layer_mapping:
+  domain_model: internal/domain/tag/model
+  repository: internal/domain/tag/repository
+  application: internal/application/tag
+  adapter_rest: internal/adapter/rest/tag

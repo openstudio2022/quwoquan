@@ -72,6 +72,9 @@ entities:
         log_policy: allow
         api_exposure: read_write
         ops_exposure: read
+        recommend_feature: true
+        tag_ref: true
+        description: 路径制 tagRef 列表（对象类目锚点）；真相源 publish/v1/tags（Entity/Topic 分组），已废弃扁平 tag_taxonomy.yaml
 
       - name: coverUrl
         type: string
@@ -347,6 +350,8 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
+        tag_ref: true
+        description: 路径制 tagRef 列表（对象亮点锚点）；真相源 publish/v1/tags，已废弃扁平 tag_taxonomy.yaml
 
       - name: dimensionScores
         type: "[]object"

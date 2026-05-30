@@ -23,11 +23,23 @@ import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/content/discovery_wire_lookup.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_cloud_contracts/content_repository.dart'
     show CommentPage, ContentRepository, kFeedSortRecommend;
 
+export 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart'
+    show DiscoveryPresentationWire;
 export 'package:quwoquan_cloud_contracts/content_repository.dart'
-    show CommentPage, ContentRepository, kFeedSortRecommend;
+    show
+        CommentPage,
+        ContentReadRepository,
+        ContentWriteRepository,
+        ContentReactionRepository,
+        ContentCommentRepository,
+        ContentMediaRepository,
+        ContentConfigRepository,
+        ContentRepository,
+        kFeedSortRecommend;
 
 part 'content_repository_mock.dart';
 part 'content_repository_remote.dart';

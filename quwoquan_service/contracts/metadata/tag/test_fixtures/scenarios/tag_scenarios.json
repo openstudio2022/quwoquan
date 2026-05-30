@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "tag-test-fixtures",
+  "description": "tag-service 首发子集 contract seed（校园 + 旅游出行）。供服务侧 resolve/shared-tags/inverted 契约测试与 app mock 共用；全量 5111 节点标签树由数据工程 publish/v1/tags 主线产出，本子集仅冻结首发垂类根 + 演示对象索引。",
+  "scenarios": {
+    "tag_launch_subset": {
+      "tag_nodes": [
+        { "tagRef": "Topic/旅行", "group": "Topic", "label": "旅行", "labelEn": "Travel", "aliases": ["旅游", "出行"], "ancestors": ["Topic"], "depth": 1 },
+        { "tagRef": "Topic/摄影", "group": "Topic", "label": "摄影", "labelEn": "Photography", "aliases": ["拍照"], "ancestors": ["Topic"], "depth": 1 },
+        { "tagRef": "Topic/美食餐饮", "group": "Topic", "label": "美食餐饮", "labelEn": "Food", "aliases": ["美食"], "ancestors": ["Topic"], "depth": 1 },
+        { "tagRef": "Topic/地理", "group": "Topic", "label": "地理", "labelEn": "Geography", "aliases": [], "ancestors": ["Topic"], "depth": 1 },
+        { "tagRef": "Topic/地理/中国/四川省/成都市", "group": "Topic", "label": "成都市", "labelEn": "Chengdu", "aliases": ["成都", "蓉城"], "ancestors": ["Topic", "Topic/地理", "Topic/地理/中国", "Topic/地理/中国/四川省"], "depth": 4 },
+        { "tagRef": "Entity/机构", "group": "Entity", "label": "机构", "labelEn": "Institution", "aliases": [], "ancestors": ["Entity"], "depth": 1 },
+        { "tagRef": "Entity/机构/学校", "group": "Entity", "label": "学校", "labelEn": "School", "aliases": ["院校"], "ancestors": ["Entity", "Entity/机构"], "depth": 2 },
+        { "tagRef": "Entity/机构/学校/北京大学", "group": "Entity", "label": "北京大学", "labelEn": "Peking University", "aliases": ["北大", "PKU"], "ancestors": ["Entity", "Entity/机构", "Entity/机构/学校"], "depth": 3 },
+        { "tagRef": "Entity/地点", "group": "Entity", "label": "地点", "labelEn": "Place", "aliases": [], "ancestors": ["Entity"], "depth": 1 },
+        { "tagRef": "Format/内容载体", "group": "Format", "label": "内容载体", "labelEn": "Format", "aliases": [], "ancestors": ["Format"], "depth": 1 }
+      ],
+      "object_tag_index": [
+        { "objectId": "post_travel_chengdu_demo", "objectType": "post", "tagRefs": ["Topic/旅行", "Topic/摄影", "Topic/地理/中国/四川省/成都市", "Format/内容载体"] },
+        { "objectId": "post_pku_campus_demo", "objectType": "post", "tagRefs": ["Topic/摄影", "Entity/机构/学校/北京大学", "Format/内容载体"] },
+        { "objectId": "entity_pku_demo", "objectType": "entity", "tagRefs": ["Entity/机构/学校/北京大学"] },
+        { "objectId": "user_alice_demo", "objectType": "user", "tagRefs": ["Topic/旅行", "Topic/摄影", "Entity/机构/学校/北京大学"] },
+        { "objectId": "user_bob_demo", "objectType": "user", "tagRefs": ["Topic/摄影", "Topic/美食餐饮", "Entity/机构/学校/北京大学"] }
+      ],
+      "expected_shared_tags": {
+        "description": "shared-tags(user_alice_demo, user_bob_demo) 期望命中（identity: 同校北大 + interest: 同好摄影）",
+        "objectA": "user_alice_demo",
+        "objectB": "user_bob_demo",
+        "shared": ["Topic/摄影", "Entity/机构/学校/北京大学"]
+      }
+    }
+  }
+}

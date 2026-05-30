@@ -6,6 +6,28 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
   "configs": [
     {
       "default": 30,
+      "key": "sys.config_center.poll_interval_sec",
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "medium",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "int",
+      "ui_editable": true
+    },
+    {
+      "default": true,
+      "key": "sys.config_center.disk_fallback_enabled",
+      "owner": "platform-ops",
+      "reload": "hot",
+      "risk_level": "high",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "bool",
+      "ui_editable": true
+    },
+    {
+      "default": 30,
       "key": "sys.gateway.rate_limit.per_user_rps",
       "owner": "platform-ops",
       "reload": "hot",

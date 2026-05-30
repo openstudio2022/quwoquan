@@ -7,6 +7,8 @@
 //   ArticlePostDto ← article_post_dto.g.dart
 //   MomentPostDto  ← moment_post_dto.g.dart
 
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+
 /// 所有类型化帖子 DTO 的抽象基类。
 ///
 /// 共享字段：id / type / identity / displayFormat / 作者信息 / 互动计数 / createdAt。
@@ -56,6 +58,11 @@ abstract class PostBaseDto {
 
   /// Optional media duration in milliseconds.
   int? get durationMs => null;
+
+  /// 交集理由（云侧推荐管线预生成，B1）。
+  /// 默认 null 表示该帖无交集线索；内容卡「无来源不展示」。
+  /// 子类（如 MomentPostDto）按 projection 字段 override。
+  List<IntersectionReason>? get intersectionReasons => null;
 
   /// Optional canonical aspect ratio for visual posts.
   double? get aspectRatio => null;

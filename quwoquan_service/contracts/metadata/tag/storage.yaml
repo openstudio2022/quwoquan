@@ -1,0 +1,15 @@
+version: 1
+entity: TagNode
+backend: mongodb
+
+collections:
+  tag_nodes:
+    entity: TagNode
+    indexes:
+      - { name: idx_tag_ref, keys: { tagRef: 1 }, unique: true }
+      - { name: idx_tag_group, keys: { group: 1 } }
+  object_tag_index:
+    entity: ObjectTagIndex
+    indexes:
+      - { name: idx_object, keys: { objectId: 1, objectType: 1 }, unique: true }
+      - { name: idx_object_tagrefs, keys: { tagRefs: 1 }, sparse: true }

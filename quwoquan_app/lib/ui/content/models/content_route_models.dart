@@ -5,10 +5,14 @@ class ArticleDetailPageRouteExtra {
   const ArticleDetailPageRouteExtra({
     this.referralSource,
     this.feedRequestId,
+    this.position,
   });
 
   final ReferralSource? referralSource;
   final String? feedRequestId;
+
+  /// 入口文章在 feed 中的位置（推荐归因；从 feed 列表序号透传）。
+  final int? position;
 }
 
 class CircleDetailPageRouteExtra {

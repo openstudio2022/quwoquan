@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -455,7 +456,9 @@ ArticlePostDto _articlePost() {
   );
 }
 
-MomentPostDto _textMoment() {
+MomentPostDto _textMoment({
+  List<IntersectionReason>? intersectionReasons,
+}) {
   return MomentPostDto(
     id: 'moment-1',
     type: 'micro',
@@ -471,6 +474,7 @@ MomentPostDto _textMoment() {
     favoriteCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
+    intersectionReasons: intersectionReasons,
   );
 }
 
@@ -1200,6 +1204,54 @@ void main() {
 
     expect(find.text('临时改地点提醒'), findsOneWidget);
     expect(find.textContaining('今天风有点大'), findsOneWidget);
+  });
+
+  testWidgets('沉浸 caption 接入交集理由位（与 feed 同口径，只读 displayText）', (
+    tester,
+  ) async {
+    final post = _textMoment(
+      intersectionReasons: <IntersectionReason>[
+        IntersectionReason(
+          dimension: 'identity',
+          displayText: '你和 TA 都来自同一校园',
+          sharedCount: 2,
+          source: 'identity',
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [PostSummaryView.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'moment',
+              'contentType': 'micro',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '临时改地点提醒',
+              'body': post.body,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>('works-caption-intersection-reason'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('你和 TA 都来自同一校园'), findsOneWidget);
   });
 
   testWidgets('text-only moment 在 iPad 宽屏下顶部内容底部共享 text rail', (tester) async {

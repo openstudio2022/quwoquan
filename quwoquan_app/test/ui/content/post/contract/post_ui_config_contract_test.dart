@@ -1,10 +1,99 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 /// 契约测试：ContentUIConfig — 覆盖 mock.yaml ui_config_scenarios
 ///
 /// 确保 codegen 输出与 ui_config.yaml 元数据一致。
 void main() {
+  group('ContentUIConfig — home_channels contract (V1-B/V1-H)', () {
+    // 频道是运营资产：端 meta 默认（发布自带 fallback），云侧可远程覆盖。
+    // 本组锁定首发四频道默认集与有限模板类型，防止默认频道回归漂移。
+    test('home_channels — exactly 7 default channels', () {
+      expect(ContentUIConfig.homeChannels.length, equals(7));
+    });
+
+    test('home_channels ids: 关注/推荐/校园/旅行/摄影/科技/车友', () {
+      final ids = ContentUIConfig.homeChannels.map((c) => c.id).toList();
+      expect(
+        ids,
+        containsAll(<String>[
+          'following',
+          'recommend',
+          'campus',
+          'travel',
+          'photography',
+          'tech',
+          'car',
+        ]),
+      );
+    });
+
+    test('home_channels order is monotonic 0..6 matching declared sequence', () {
+      final ordered = <HomeChannelConfig>[...ContentUIConfig.homeChannels]
+        ..sort((a, b) => a.order.compareTo(b.order));
+      expect(
+        ordered.map((c) => c.order).toList(),
+        equals(<int>[0, 1, 2, 3, 4, 5, 6]),
+        reason: 'order 必须连续单调，运营调序仅改 order 即生效',
+      );
+      expect(
+        ordered.map((c) => c.id).toList(),
+        equals(<String>[
+          'following',
+          'recommend',
+          'campus',
+          'travel',
+          'photography',
+          'tech',
+          'car',
+        ]),
+      );
+    });
+
+    test('home_channels templates belong to the finite template set', () {
+      // 端只实现有限频道模板类型，运营选模板+配参数，不做无限动态布局。
+      const allowedTemplates = <String>{
+        'single_column_relations',
+        'masonry_recommend',
+        'intersection_rail_masonry',
+      };
+      for (final channel in ContentUIConfig.homeChannels) {
+        expect(
+          allowedTemplates.contains(channel.template),
+          isTrue,
+          reason: '频道 ${channel.id} 模板 ${channel.template} 不在有限模板集',
+        );
+      }
+    });
+
+    test('following channel uses single_column_relations template', () {
+      final following = ContentUIConfig.homeChannels.firstWhere(
+        (c) => c.id == 'following',
+      );
+      expect(following.template, equals('single_column_relations'));
+      expect(following.feedQuery['category'], equals('following'));
+    });
+
+    test('each channel has non-empty labelKey + feedQuery + resolvable moodCopy', () {
+      for (final channel in ContentUIConfig.homeChannels) {
+        expect(channel.labelKey, isNotEmpty, reason: '频道 ${channel.id} 缺 labelKey');
+        expect(
+          channel.feedQuery,
+          isNotEmpty,
+          reason: '频道 ${channel.id} 缺 feedQuery',
+        );
+        // moodCopyKey 必须可被端文案解析器解析（端只读展示、不本地拼）。
+        final mood = UITextConstants.homeChannelMoodCopy(channel.moodCopyKey);
+        expect(
+          mood,
+          isNotEmpty,
+          reason: '频道 ${channel.id} 的 moodCopyKey ${channel.moodCopyKey} 无法解析',
+        );
+      }
+    });
+  });
+
   group('ContentUIConfig — ui_config_scenarios contract', () {
     test('discovery_tabs_count — exactly 4 tabs defined', () {
       expect(ContentUIConfig.discoveryTabs.length, equals(4));

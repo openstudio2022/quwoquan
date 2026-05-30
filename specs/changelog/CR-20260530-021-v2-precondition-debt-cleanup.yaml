@@ -1,0 +1,57 @@
+id: CR-20260530-021
+title: V2 precondition debt cleanup (Block D)
+slug: v2-precondition-debt-cleanup
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-type-framework
+  - specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model
+  - specs/feature-tree/discovery-content/content-type-framework/v2-admission-gate-checklist.md
+
+entries:
+  - timestamp: "2026-05-30T09:30:00+08:00"
+    summary: 在进入 V2「内容多形态统一」前，新增 Block D 硬前置债务清零轮：收敛端侧四套展示模型为单一只读 `ContentSurfaceView`（L3 unified-presentation-model）；拆 `ContentRepository` 上帝接口为 ≤10 方法子接口并去裸 Map；强拆三件 V2 必碰超大文件到 <500 行；清零本域 GATE_BLOCK 硬债。
+    reason: 同一内容在 feed/immersive/detail/share 四个 surface 各维护一套展示模型与 fallback（R24），叠加 `discoveryPresentationWireForPost` 裸 Map 穿透（R04 GATE_BLOCK）、`ContentRepository` 44 方法上帝接口（R02）与三件 >1500 行超大文件（R03）；若不先清零，V2 引入口碑等新形态会再叠分叉，债务不可控。
+    change_type:
+      - baseline
+      - refactor
+      - debt_cleanup
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md
+        sections:
+          - 功能范围
+          - 核心设计原则
+          - 验收重点
+      - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/design.md
+        sections:
+          - 设计决策
+          - ContentSurfaceView 模型设计
+          - 测试矩阵
+      - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/acceptance.yaml
+        sections:
+          - A1
+          - A2
+          - A3
+          - A4
+          - A5
+      - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/plan.yaml
+        sections:
+          - slices
+      - path: specs/feature-tree/discovery-content/content-type-framework/v2-admission-gate-checklist.md
+        sections:
+          - Block D
+    impact:
+      replan_required: true
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: medium
+      breaking_contract: false
+    notes:
+      - D1 统一 model 以 L3 unified-presentation-model 四件套为治理真相源；D2/D3/D4 为纯债务，登记本 CR。
+      - 只收敛读侧消费模型，不改发布/编辑写链路、不新增持久化字段。
+      - 迁移用 unified_surface_view feature flag 双读 + 观测 + 回滚；旧投影类先 @Deprecated，稳定一个迭代后移除。
+      - 范围仅限 content/discovery 域；pageflip 受控文件 article_read_only_book_deck.dart、编辑器类大文件、create_page.dart 不纳入本轮。
+      - 遵循 metadata -> codegen -> 业务逻辑 -> 测试顺序；R02/R03/R04/R17/R24 收敛。

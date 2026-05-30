@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -21,8 +22,10 @@ import 'package:quwoquan_app/components/settings_conversation/more_actions_popup
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show BehaviorAction;
+    show BehaviorAction, ReferralSource;
+import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
@@ -30,6 +33,8 @@ import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/today_intersection_rail.dart';
 
 const double _momentCellVerticalPadding = AppSpacing.fourteen;
 const double _momentSectionGap = AppSpacing.interGroupSm;
@@ -56,14 +61,21 @@ class MomentSocialFeed extends ConsumerWidget {
     required this.isDark,
     required this.onUserTap,
     this.feedTabId = 'moment',
+    this.template = '',
     this.inlineImageCarousel = false,
     this.disableImageViewerOnTap = false,
     this.onPostTap,
     this.onMoreTap,
+    this.onIntersectionObjectOpen,
+    this.onIntersectionObjectAction,
   });
 
   final bool isDark;
   final String feedTabId;
+
+  /// 频道模板（来自 homeChannels.template；驱动单列/多列/今日交集流/图片前置）。
+  /// 取值：single_column_relations / masonry_recommend / intersection_rail_masonry。
+  final String template;
   final bool inlineImageCarousel;
   final bool disableImageViewerOnTap;
   final void Function(
@@ -82,6 +94,12 @@ class MomentSocialFeed extends ConsumerWidget {
   })?
   onPostTap;
   final void Function(PostBaseDto post)? onMoreTap;
+
+  /// 今日交集对象卡卡体点击：跳转对应对象/聚合页（路由由宿主按 metadata 解析）。
+  final void Function(IntersectionReason reason)? onIntersectionObjectOpen;
+
+  /// 今日交集对象卡行动按钮点击：交集行动回流（trackFollow）由宿主处理。
+  final void Function(IntersectionReason reason)? onIntersectionObjectAction;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -184,7 +202,14 @@ class MomentSocialFeed extends ConsumerWidget {
         SettingsSemanticConstants.conversationSheetDividerColor(
           isDark,
         ).withValues(alpha: 0.9);
-    final columns = AppSpacing.feedResponsiveColumns(context);
+    final forceSingleColumn = template == 'single_column_relations';
+    final imageForward = template == 'masonry_recommend';
+    final showIntersectionRail = template == 'intersection_rail_masonry';
+    final effectiveInlineCarousel = inlineImageCarousel || imageForward;
+    final effectiveDisableViewerOnTap = disableImageViewerOnTap || imageForward;
+    final columns = forceSingleColumn
+        ? 1
+        : AppSpacing.feedResponsiveColumns(context);
     final isMultiColumn = columns > 1;
     final horizontalPad = isMultiColumn
         ? AppSpacing.feedContentHorizontal(context)
@@ -198,6 +223,7 @@ class MomentSocialFeed extends ConsumerWidget {
               dto.id,
               contentType: dto.identity,
               position: index,
+              referralSource: ReferralSource.organicFeed,
             );
       });
       if (dto.isArticleLike && shouldShowFollowingArticles) {
@@ -217,6 +243,8 @@ class MomentSocialFeed extends ConsumerWidget {
                   dto.id,
                   contentType: dto.identity,
                   feedRequestId: feedReqId,
+                  position: index,
+                  referralSource: ReferralSource.organicFeed,
                 );
             onPostTap?.call(dto, 0, feedPosts: feedPosts);
           },
@@ -238,7 +266,7 @@ class MomentSocialFeed extends ConsumerWidget {
         isLiked: effectivePostLiked(ref, dto.id),
         likeCount: effectivePostLikeCount(ref, dto.id, fallback: dto.likeCount),
         sourceCircleName: _resolveSourceCircleName(ref, dto.id),
-        inlineImageCarousel: inlineImageCarousel,
+        inlineImageCarousel: effectiveInlineCarousel,
         onUserTap: (id) => onUserTap(
           id,
           avatarUrl: dto.avatarUrl,
@@ -255,8 +283,10 @@ class MomentSocialFeed extends ConsumerWidget {
                 dto.id,
                 contentType: dto.identity,
                 feedRequestId: feedReqId,
+                position: index,
+                referralSource: ReferralSource.organicFeed,
               );
-          if (!(disableImageViewerOnTap && dto.hasImages)) {
+          if (!(effectiveDisableViewerOnTap && dto.hasImages)) {
             onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
           }
         },
@@ -301,39 +331,70 @@ class MomentSocialFeed extends ConsumerWidget {
     final bottomPad =
         MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight;
 
-    if (isMultiColumn) {
-      return ColoredBox(
-        color: pageBackground,
-        child: MasonryGridView.count(
-          crossAxisCount: columns,
-          mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
-          crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
-          padding: EdgeInsets.fromLTRB(
-            horizontalPad,
-            AppSpacing.sm,
-            horizontalPad,
-            bottomPad + AppSpacing.sm,
-          ),
-          itemCount: feedPosts.length,
-          itemBuilder: (context, index) => buildCard(feedPosts[index], index),
-        ),
-      );
-    }
+    final todayReasons = showIntersectionRail
+        ? _collectTodayIntersectionReasons(feedPosts)
+        : const <IntersectionReason>[];
+    final headerSliver = todayReasons.isEmpty
+        ? null
+        : TodayIntersectionRail(
+            reasons: todayReasons,
+            isDark: isDark,
+            onReasonTap: onIntersectionObjectOpen,
+            onReasonAction: onIntersectionObjectAction,
+          );
 
-    return ColoredBox(
-      color: pageBackground,
-      child: ListView.separated(
-        padding: EdgeInsets.fromLTRB(0, 0, 0, bottomPad),
-        itemCount: feedPosts.length,
-        separatorBuilder: (context, index) => Divider(
-          key: ValueKey<String>('moment-feed-divider-$index'),
-          height: AppSpacing.one,
-          thickness: AppSpacing.hairline,
-          color: listDividerColor,
-        ),
-        itemBuilder: (context, index) => buildCard(feedPosts[index], index),
-      ),
+    final topPad = isMultiColumn ? AppSpacing.sm : AppSpacing.zero;
+    return _MomentFeedScrollView(
+      pageBackground: pageBackground,
+      isDark: isDark,
+      isMultiColumn: isMultiColumn,
+      columns: columns,
+      horizontalPad: horizontalPad,
+      topPad: topPad,
+      bottomPad: isMultiColumn ? bottomPad + AppSpacing.sm : bottomPad,
+      itemCount: feedPosts.length,
+      itemBuilder: (index) => buildCard(feedPosts[index], index),
+      dividerColor: listDividerColor,
+      isLoadingMore: feedAsync.value?.isLoading ?? false,
+      hasMore: feedAsync.value?.nextCursor?.isNotEmpty ?? false,
+      moodCopy: _resolveChannelMoodCopy(),
+      headerSliver: headerSliver,
+      onReachBottom: () =>
+          ref.read(discoveryFeedMapProvider.notifier).appendNextPage(feedTabId),
     );
+  }
+
+  /// 从当前 feed 各帖聚合去重的交集理由，供「今日交集」顶部流消费。
+  /// 不引入第二套业务列表（数据来自已加载的 feed item），无来源时返回空。
+  List<IntersectionReason> _collectTodayIntersectionReasons(
+    List<PostBaseDto> feedPosts,
+  ) {
+    final collected = <IntersectionReason>[];
+    final seenKeys = <String>{};
+    for (final post in feedPosts) {
+      final reasons = post.intersectionReasons;
+      if (reasons == null) continue;
+      for (final reason in reasons) {
+        final text = reason.displayText.trim();
+        if (text.isEmpty) continue;
+        final key = '${reason.dimension}|$text';
+        if (seenKeys.add(key)) {
+          collected.add(reason);
+        }
+      }
+    }
+    return collected;
+  }
+
+  /// 频道气质文案：按 feedTabId 匹配运营下发的 [ContentUIConfig.homeChannels]
+  /// 解析 moodCopyKey（真相源 = ui_config home_channels）；无匹配返回空串。
+  String _resolveChannelMoodCopy() {
+    for (final channel in ContentUIConfig.homeChannels) {
+      if (channel.id == feedTabId) {
+        return UITextConstants.homeChannelMoodCopy(channel.moodCopyKey);
+      }
+    }
+    return '';
   }
 
   void _showShare(
@@ -435,21 +496,19 @@ class MomentSocialFeed extends ConsumerWidget {
     required PostBaseDto post,
     required bool enableIdentityTemplate,
   }) {
-    final raw = _rawDiscoveryItem(ref, post.id);
-    final visibility = raw?['visibility']?.toString() ?? 'public';
-    final tags =
-        (raw?['tags'] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-    final circleName = raw?['circleName']?.toString().trim() ?? '';
+    final wire = _rawDiscoveryItem(ref, post.id);
+    final circleName = wire?.circleName ?? '';
+    final surfaceView =
+        ref.read(contentFeatureFlagProvider('unified_surface_view'))
+        ? ContentSurfaceViewMapper.fromDto(post, wire: wire?.toLegacyRow())
+        : null;
     return ContentShareTemplateBuilder.build(
       post: post,
       enableIdentityTemplate: enableIdentityTemplate,
-      visibility: visibility,
-      tags: tags,
+      visibility: wire?.visibility ?? 'public',
+      tags: wire?.tags ?? const <String>[],
       circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
+      surfaceView: surfaceView,
     );
   }
 
@@ -458,7 +517,7 @@ class MomentSocialFeed extends ConsumerWidget {
     String postId,
     String actionId,
   ) async {
-    final raw = _rawDiscoveryItem(ref, postId);
+    final raw = _rawDiscoveryItem(ref, postId)?.toLegacyRow();
     final rawShareCount = (raw?['shareCount'] as num?)?.toInt() ?? 0;
     final baselineShareCount = effectivePostShareCount(
       ref,
@@ -476,11 +535,10 @@ class MomentSocialFeed extends ConsumerWidget {
   }
 
   String _resolveSourceCircleName(WidgetRef ref, String postId) {
-    final raw = _rawDiscoveryItem(ref, postId);
-    return raw?['circleName']?.toString().trim() ?? '';
+    return _rawDiscoveryItem(ref, postId)?.circleName ?? '';
   }
 
-  Map<String, dynamic>? _rawDiscoveryItem(WidgetRef ref, String postId) {
+  DiscoveryPresentationWire? _rawDiscoveryItem(WidgetRef ref, String postId) {
     return ref
         .read(contentRepositoryProvider)
         .discoveryPresentationWireForPost(postId);
@@ -493,6 +551,208 @@ class MomentSocialFeed extends ConsumerWidget {
         .where((e) => e.length >= 2)
         .toList();
     return tokens.isEmpty ? '' : tokens.first;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feed 容器：CustomScrollView + 分段瀑布(多列) / SliverList(单列) + 触底分页
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 多列瀑布每段卡数：段尾由 sliver 边界天然两列齐平，段间留过渡白（今日交集流注入点）。
+const int _kFeedSegmentSize = 10;
+
+class _MomentFeedScrollView extends StatefulWidget {
+  const _MomentFeedScrollView({
+    required this.pageBackground,
+    required this.isDark,
+    required this.isMultiColumn,
+    required this.columns,
+    required this.horizontalPad,
+    required this.topPad,
+    required this.bottomPad,
+    required this.itemCount,
+    required this.itemBuilder,
+    required this.dividerColor,
+    required this.isLoadingMore,
+    required this.hasMore,
+    required this.onReachBottom,
+    this.moodCopy = '',
+    this.headerSliver,
+  });
+
+  final Color pageBackground;
+  final bool isDark;
+  final bool isMultiColumn;
+  final int columns;
+  final double horizontalPad;
+  final double topPad;
+  final double bottomPad;
+  final int itemCount;
+  final Widget Function(int index) itemBuilder;
+  final Color dividerColor;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final VoidCallback onReachBottom;
+
+  /// 频道气质文案（来自 ContentUIConfig.homeChannels.moodCopyKey 解析，只读）；空则不展示。
+  final String moodCopy;
+
+  /// 顶部 sliver（今日交集横滑流）；null 不展示。
+  final Widget? headerSliver;
+
+  @override
+  State<_MomentFeedScrollView> createState() => _MomentFeedScrollViewState();
+}
+
+class _MomentFeedScrollViewState extends State<_MomentFeedScrollView> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onScroll);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!widget.hasMore || widget.isLoadingMore) return;
+    if (!_controller.hasClients) return;
+    final position = _controller.position;
+    // 剩余不足半屏即预取下一页（比例系数，非像素间距）。
+    if (position.extentAfter < position.viewportDimension * 0.5) {
+      widget.onReachBottom();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: widget.pageBackground,
+      child: CustomScrollView(
+        controller: _controller,
+        slivers: _buildSlivers(),
+      ),
+    );
+  }
+
+  List<Widget> _buildSlivers() {
+    final slivers = <Widget>[];
+    if (widget.headerSliver != null) {
+      slivers.add(SliverToBoxAdapter(child: widget.headerSliver!));
+    }
+    if (widget.topPad > 0) {
+      slivers.add(
+        SliverToBoxAdapter(child: SizedBox(height: widget.topPad)),
+      );
+    }
+
+    if (widget.isMultiColumn) {
+      var start = 0;
+      while (start < widget.itemCount) {
+        final end = (start + _kFeedSegmentSize).clamp(0, widget.itemCount);
+        final segStart = start;
+        final segCount = end - segStart;
+        slivers.add(
+          SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: widget.horizontalPad),
+            sliver: SliverMasonryGrid.count(
+              crossAxisCount: widget.columns,
+              mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+              crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+              childCount: segCount,
+              itemBuilder: (context, i) => widget.itemBuilder(segStart + i),
+            ),
+          ),
+        );
+        start = end;
+        // 段间过渡留白：今日交集横滑流(V1-D) 注入点。
+        if (start < widget.itemCount) {
+          slivers.add(
+            SliverToBoxAdapter(
+              child: SizedBox(height: AppSpacing.interGroupMd),
+            ),
+          );
+        }
+      }
+    } else {
+      slivers.add(
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              if (index.isOdd) {
+                final dividerIndex = index ~/ 2;
+                return Divider(
+                  key: ValueKey<String>('moment-feed-divider-$dividerIndex'),
+                  height: AppSpacing.one,
+                  thickness: AppSpacing.hairline,
+                  color: widget.dividerColor,
+                );
+              }
+              return widget.itemBuilder(index ~/ 2);
+            },
+            childCount:
+                widget.itemCount == 0 ? 0 : widget.itemCount * 2 - 1,
+          ),
+        ),
+      );
+    }
+
+    slivers.add(
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.only(
+            top: widget.isLoadingMore
+                ? AppSpacing.interGroupMd
+                : AppSpacing.zero,
+            bottom: widget.bottomPad,
+          ),
+          child: widget.isLoadingMore
+              ? _LoadMoreFooter(moodCopy: widget.moodCopy, isDark: widget.isDark)
+              : const SizedBox.shrink(),
+        ),
+      ),
+    );
+    return slivers;
+  }
+}
+
+/// 触底加载 footer：加载指示 + 频道气质文案（只读，空文案不展示）。
+class _LoadMoreFooter extends StatelessWidget {
+  const _LoadMoreFooter({required this.moodCopy, required this.isDark});
+
+  final String moodCopy;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const CupertinoActivityIndicator(),
+        if (moodCopy.isNotEmpty) ...[
+          SizedBox(height: AppSpacing.intraGroupSm),
+          Text(
+            moodCopy,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: muted,
+              letterSpacing: -0.04,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 
@@ -669,6 +929,15 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
               ],
             ),
 
+            // 交集理由位（一行 displayText，只读；无来源不展示）
+            if (_intersectionReasonText != null) ...[
+              const SizedBox(height: _momentSectionGap),
+              IntersectionReasonChip(
+                text: _intersectionReasonText!,
+                isDark: isDark,
+              ),
+            ],
+
             // 正文（5 行截断 + 就地展开）
             if (item.normalizedBody.isNotEmpty) ...[
               const SizedBox(height: _momentSectionGap),
@@ -728,6 +997,11 @@ class _MomentWeiboCardState extends ConsumerState<_MomentWeiboCard>
       ),
     );
   }
+
+  /// 交集理由首条 displayText（只读）；无来源/空文案返回 null → 不展示。
+  /// 口径真相源 = [IntersectionReasonChip.primaryText]，与沉浸/转发/详情同源。
+  String? get _intersectionReasonText =>
+      IntersectionReasonChip.primaryText(widget.item.intersectionReasons);
 
   String _buildMetaLine(BuildContext context) {
     final time = _timeAgo(context, widget.item.createdAt);

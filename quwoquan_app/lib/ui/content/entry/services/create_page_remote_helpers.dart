@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -273,7 +275,15 @@ Future<void> reportCreateEditorSurfaceEvent(
             ),
           ],
         );
-  } catch (_) {}
+  } catch (e, st) {
+    // 创作埋点上报为非关键路径：失败仅降级为日志，不阻断创作流程（R17）。
+    developer.log(
+      'reportCreateEditorSurfaceEvent failed: event=$event',
+      name: 'CreateEditor',
+      error: e,
+      stackTrace: st,
+    );
+  }
 }
 
 List<CreateDraft> decodeCreateDraftsList(Object? decoded) {

@@ -3,6 +3,8 @@
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+
 class MomentPostDto extends PostBaseDto {
   @override final String id;
   @override final String type;
@@ -21,6 +23,7 @@ class MomentPostDto extends PostBaseDto {
   @override final int favoriteCount;
   @override final int shareCount;
   @override final DateTime createdAt;
+  @override final List<IntersectionReason>? intersectionReasons;
 
   const MomentPostDto({
     required this.id,
@@ -40,6 +43,7 @@ class MomentPostDto extends PostBaseDto {
     required this.favoriteCount,
     required this.shareCount,
     required this.createdAt,
+    this.intersectionReasons,
   });
 
   factory MomentPostDto.fromMap(Map<String, dynamic> m) {
@@ -61,6 +65,7 @@ class MomentPostDto extends PostBaseDto {
       favoriteCount: (m['favoriteCount'] as num?)?.toInt() ?? (m['savesCount'] as num?)?.toInt() ?? (m['bookmarks'] as num?)?.toInt() ?? (m['favorite_count'] as num?)?.toInt() ?? 0,
       shareCount: (m['shareCount'] as num?)?.toInt() ?? (m['shares'] as num?)?.toInt() ?? (m['share_count'] as num?)?.toInt() ?? 0,
       createdAt: _parseDateTime(m['publishedAt']) ?? _parseDateTime(m['createdAt']) ?? _parseDateTime(m['created_at']) ?? DateTime(0),
+      intersectionReasons: m['intersectionReasons'] == null ? null : _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
     );
   }
 
@@ -84,6 +89,7 @@ class MomentPostDto extends PostBaseDto {
       'favoriteCount': favoriteCount,
       'shareCount': shareCount,
       'createdAt': createdAt,
+      'intersectionReasons': intersectionReasons,
     };
   }
 
@@ -105,6 +111,7 @@ class MomentPostDto extends PostBaseDto {
     int? favoriteCount,
     int? shareCount,
     DateTime? createdAt,
+    List<IntersectionReason>? intersectionReasons,
   }) {
     return MomentPostDto(
       id: id ?? this.id,
@@ -124,6 +131,7 @@ class MomentPostDto extends PostBaseDto {
       favoriteCount: favoriteCount ?? this.favoriteCount,
       shareCount: shareCount ?? this.shareCount,
       createdAt: createdAt ?? this.createdAt,
+      intersectionReasons: intersectionReasons ?? this.intersectionReasons,
     );
   }
 
@@ -155,4 +163,21 @@ List<String>? _parseStringList(dynamic v) {
   if (v == null) return null;
   if (v is List) return v.map((e) => e?.toString() ?? '').toList();
   return null;
+}
+
+List<T> _parseProjectionDtoList<T>(
+  Object? v,
+  T Function(Map<String, dynamic> m) fromMap,
+) {
+  if (v == null) return List<T>.empty(growable: false);
+  if (v is! List) return List<T>.empty(growable: false);
+  final out = <T>[];
+  for (final e in v) {
+    if (e is Map<String, dynamic>) {
+      out.add(fromMap(e));
+    } else if (e is Map) {
+      out.add(fromMap(Map<String, dynamic>.from(e)));
+    }
+  }
+  return out;
 }

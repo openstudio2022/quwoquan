@@ -65,7 +65,7 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
     {
       "analytics_views": [
         {
-          "drilldown_route_id": "/platform/config",
+          "drilldown_route_id": "/platform/config/layers",
           "view_id": "config-risk-overview",
           "widget_types": [
             "risk_distribution",
@@ -100,6 +100,79 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "risk_level": "high",
       "source_entity": "RuntimeConfig",
       "view_model": "ServiceConfig"
+    },
+    {
+      "deployment_profile": "latency_sensitive",
+      "label": "配置层值",
+      "object_kind": "policy",
+      "object_type": "config_layer_value",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListConfigLayers",
+          "path": "/v1/control-plane/platform/configs/layers",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        },
+        {
+          "method": "GET",
+          "operation": "ResolveEffectiveConfig",
+          "path": "/v1/control-plane/platform/configs/resolve",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "ConfigLayer",
+      "view_model": "ConfigLayerValue"
+    },
+    {
+      "deployment_profile": "batch_heavy",
+      "label": "配置包",
+      "object_kind": "release",
+      "object_type": "config_package",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListConfigPackages",
+          "path": "/v1/control-plane/platform/configs/packages",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        }
+      ],
+      "risk_level": "critical",
+      "source_entity": "ConfigPackage",
+      "view_model": "ConfigPackage"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "实例配置报告",
+      "object_kind": "snapshot",
+      "object_type": "config_instance_report",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListConfigInstanceReports",
+          "path": "/v1/control-plane/platform/configs/instances",
+          "scopes": [
+            "ops.platform.config.read"
+          ]
+        },
+        {
+          "method": "POST",
+          "operation": "ReportConfigInstance",
+          "path": "/v1/control-plane/platform/configs/instances/{instanceId}:report",
+          "scopes": [
+            "ops.platform.config.write"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "ConfigInstanceReport",
+      "view_model": "ConfigInstanceReport"
     },
     {
       "deployment_profile": "latency_sensitive",
@@ -217,6 +290,63 @@ _PLATFORM_CONTROL_PLANE_JSON = r'''{
       "risk_level": "medium",
       "source_entity": "RuntimeTopology",
       "view_model": "EnvironmentTopology"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "运行时集群",
+      "object_kind": "snapshot",
+      "object_type": "runtime_cluster",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListRuntimeClusters",
+          "path": "/v1/control-plane/platform/topology/clusters",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ],
+      "risk_level": "medium",
+      "source_entity": "RuntimeCluster",
+      "view_model": "RuntimeCluster"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "运行时服务",
+      "object_kind": "snapshot",
+      "object_type": "runtime_service",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListRuntimeServices",
+          "path": "/v1/control-plane/platform/topology/services",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ],
+      "risk_level": "medium",
+      "source_entity": "RuntimeService",
+      "view_model": "RuntimeService"
+    },
+    {
+      "deployment_profile": "audit_heavy",
+      "label": "运行时实例",
+      "object_kind": "snapshot",
+      "object_type": "runtime_instance",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListRuntimeInstances",
+          "path": "/v1/control-plane/platform/topology/instances",
+          "scopes": [
+            "ops.platform.dependency.read"
+          ]
+        }
+      ],
+      "risk_level": "medium",
+      "source_entity": "RuntimeInstance",
+      "view_model": "RuntimeInstance"
     },
     {
       "deployment_profile": "audit_heavy",

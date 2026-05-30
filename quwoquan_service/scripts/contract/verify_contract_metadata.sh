@@ -12,11 +12,18 @@ BASE="${ROOT}/quwoquan_service/contracts/metadata"
 [[ -d "$BASE" ]] || { echo "[verify] FAIL: missing $BASE"; exit 1; }
 
 # 1) Required shared files
-for f in _shared/types.yaml _shared/tag_taxonomy.yaml _shared/redis_keyspace.yaml; do
+for f in _shared/types.yaml _shared/redis_keyspace.yaml; do
   p="${BASE}/${f}"
   [[ -f "$p" ]] || { echo "[verify] FAIL: missing $p"; exit 1; }
   ruby -ryaml -e "YAML.load_file('$p')" || { echo "[verify] FAIL: invalid YAML $p"; exit 1; }
 done
+
+# Deprecated flat taxonomy: kept only until path-based tagRef backfill completes,
+# then removed (single source of truth = quwoquan_data/publish/v1/tags). Not required to exist.
+dep="${BASE}/_shared/tag_taxonomy.yaml"
+if [[ -f "$dep" ]]; then
+  ruby -ryaml -e "YAML.load_file('$dep')" || { echo "[verify] FAIL: invalid YAML $dep"; exit 1; }
+fi
 
 _verify_entity_dir() {
   local dir="$1"

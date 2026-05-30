@@ -10,6 +10,96 @@ class UITextConstants {
   static const String homeTabPhotography = '摄影';
   static const String homeTabTech = '科技';
   static const String homeTabCarFriends = '车之家';
+  // 今日交集顶部流标题
+  static const String homeTodayIntersection = '今日交集';
+  // 频道气质文案（下拉加载留白露出；moodCopyKey 来自 ContentUIConfig.homeChannels）
+  static const String homeMoodFollowing = '和在意的人的交集';
+  static const String homeMoodRecommend = '和同趣的人的交集';
+  static const String homeMoodCampus = '和同窗的交集';
+  static const String homeMoodTravel = '和远方的交集';
+  static const String homeMoodPhotography = '和光影的交集';
+  static const String homeMoodTech = '和同行的交集';
+  static const String homeMoodCar = '和同好的交集';
+
+  /// 频道气质文案解析：moodCopyKey（运营配置/codegen 真相源）→ 展示文案。
+  /// 无匹配时返回空串，调用方据此「不展示」。
+  static String homeChannelMoodCopy(String moodCopyKey) {
+    switch (moodCopyKey) {
+      case 'home_mood_following':
+        return homeMoodFollowing;
+      case 'home_mood_recommend':
+        return homeMoodRecommend;
+      case 'home_mood_campus':
+        return homeMoodCampus;
+      case 'home_mood_travel':
+        return homeMoodTravel;
+      case 'home_mood_photography':
+        return homeMoodPhotography;
+      case 'home_mood_tech':
+        return homeMoodTech;
+      case 'home_mood_car':
+        return homeMoodCar;
+      default:
+        return '';
+    }
+  }
+
+  /// 首页频道标签解析：labelKey（ContentUIConfig.homeChannels 真相源）→ 展示标签。
+  /// 无匹配时回退「推荐」，避免空标签。
+  static String homeChannelLabel(String labelKey) {
+    switch (labelKey) {
+      case 'home_tab_following':
+        return homeTabFollowing;
+      case 'home_tab_recommend':
+        return homeTabRecommended;
+      case 'home_tab_campus':
+        return circleScenarioCampus;
+      case 'home_tab_travel':
+        return homeTabTravel;
+      case 'home_tab_photography':
+        return homeTabPhotography;
+      case 'home_tab_tech':
+        return homeTabTech;
+      case 'home_tab_car':
+        return homeTabCarFriends;
+      default:
+        return homeTabRecommended;
+    }
+  }
+
+  // ==================== 统一对象推荐卡（今日交集对象） ====================
+  // 对象行动按钮动词（actionType 真相源来自 IntersectionReason.actionType，
+  // 此处仅做动词映射，不拼装交集文案——交集句以 displayText 为准）。
+  static const String homeObjectActionFollow = '关注';
+  static const String homeObjectActionJoin = '加入';
+  static const String homeObjectActionAddContact = '加好友';
+  static const String homeObjectActionView = '查看';
+  // 共同点计数后缀（仅数字格式化，非交集句拼装）。
+  static const String homeObjectSharedCountSuffix = ' 个共同点';
+
+  /// 对象行动按钮文案解析：actionType（IntersectionReason 真相源）→ 动词。
+  /// 无匹配回退「查看」。
+  static String homeObjectActionLabel(String actionType) {
+    switch (actionType) {
+      case 'follow':
+        return homeObjectActionFollow;
+      case 'join':
+        return homeObjectActionJoin;
+      case 'add_contact':
+        return homeObjectActionAddContact;
+      case 'view':
+        return homeObjectActionView;
+      default:
+        return homeObjectActionView;
+    }
+  }
+
+  /// 共同点计数文案：sharedCount → "N 个共同点"；count<=0 返回空串（不展示）。
+  static String homeObjectSharedCount(int count) {
+    if (count <= 0) return '';
+    return '$count$homeObjectSharedCountSuffix';
+  }
+
   static const String globalXiaoquSearchHint = '搜内容、圈子、聊天';
   static const String globalXiaoquSearchAsk = '找小趣';
   static const String homeCirclesMy = '我的';

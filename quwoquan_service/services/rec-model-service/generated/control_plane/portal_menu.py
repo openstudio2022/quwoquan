@@ -45,6 +45,47 @@ _PORTAL_MENU_JSON = r'''{
     },
     {
       "domain": "platform-ops",
+      "icon": "settings-2",
+      "label": "配置中心",
+      "menu_id": "platform-config-center",
+      "object_types": [
+        "service_config",
+        "config_layer_value"
+      ],
+      "order": 211,
+      "parent_menu_id": "platform-config",
+      "permission_scope": "ops.platform.config.read",
+      "route_path": "/platform/config/layers"
+    },
+    {
+      "domain": "platform-ops",
+      "icon": "package",
+      "label": "配置包",
+      "menu_id": "platform-config-packages",
+      "object_types": [
+        "config_package"
+      ],
+      "order": 212,
+      "parent_menu_id": "platform-config",
+      "permission_scope": "ops.platform.config.read",
+      "route_path": "/platform/config/packages"
+    },
+    {
+      "domain": "platform-ops",
+      "icon": "badge-check",
+      "label": "实例一致性",
+      "menu_id": "platform-config-drift",
+      "object_types": [
+        "config_instance_report",
+        "runtime_instance"
+      ],
+      "order": 213,
+      "parent_menu_id": "platform-config",
+      "permission_scope": "ops.platform.config.read",
+      "route_path": "/platform/config/drift"
+    },
+    {
+      "domain": "platform-ops",
       "icon": "boxes",
       "label": "服务目录",
       "menu_id": "platform-service-catalog",
@@ -111,6 +152,21 @@ _PORTAL_MENU_JSON = r'''{
       "parent_menu_id": "platform-ops",
       "permission_scope": "ops.platform.dependency.read",
       "route_path": "/platform/dependency"
+    },
+    {
+      "domain": "platform-ops",
+      "icon": "network",
+      "label": "集群与实例",
+      "menu_id": "platform-topology-cluster",
+      "object_types": [
+        "runtime_cluster",
+        "runtime_service",
+        "runtime_instance"
+      ],
+      "order": 251,
+      "parent_menu_id": "platform-dependency",
+      "permission_scope": "ops.platform.dependency.read",
+      "route_path": "/platform/dependency/clusters"
     },
     {
       "domain": "platform-ops",
@@ -211,13 +267,141 @@ _PORTAL_MENU_JSON = r'''{
     },
     {
       "domain": "product-ops",
+      "icon": "chart-area",
+      "label": "四层指标",
+      "menu_id": "product-l1-l4",
+      "object_types": [
+        "dashboard",
+        "metric_registry"
+      ],
+      "order": 34,
+      "parent_menu_id": "product-ops",
+      "permission_scope": "ops.product.dashboard.read",
+      "route_path": "/product/l1-l4"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "chart-area",
+      "label": "环境总览",
+      "menu_id": "product-l1-l4-overview",
+      "object_types": [
+        "l1l4_metric_snapshot"
+      ],
+      "order": 341,
+      "parent_menu_id": "product-l1-l4",
+      "permission_scope": "ops.product.dashboard.read",
+      "route_path": "/product/l1-l4/environment"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "chart-area",
+      "label": "集群下钻",
+      "menu_id": "product-l1-l4-drilldown",
+      "object_types": [
+        "l1l4_metric_snapshot",
+        "runtime_cluster"
+      ],
+      "order": 342,
+      "parent_menu_id": "product-l1-l4",
+      "permission_scope": "ops.product.dashboard.read",
+      "route_path": "/product/l1-l4/cluster"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "chart-area",
+      "label": "服务下钻",
+      "menu_id": "product-l1-l4-service",
+      "object_types": [
+        "l1l4_metric_snapshot",
+        "runtime_cluster",
+        "runtime_service"
+      ],
+      "order": 343,
+      "parent_menu_id": "product-l1-l4",
+      "permission_scope": "ops.product.dashboard.read",
+      "route_path": "/product/l1-l4/service"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "chart-area",
+      "label": "实例下钻",
+      "menu_id": "product-l1-l4-instance",
+      "object_types": [
+        "l1l4_metric_snapshot",
+        "runtime_cluster",
+        "runtime_service",
+        "runtime_instance"
+      ],
+      "order": 344,
+      "parent_menu_id": "product-l1-l4",
+      "permission_scope": "ops.product.dashboard.read",
+      "route_path": "/product/l1-l4/instance"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "building-2",
+      "label": "实体主页运营",
+      "menu_id": "entity-homepages",
+      "object_types": [
+        "entity_homepage",
+        "homepage_quality_case"
+      ],
+      "order": 35,
+      "parent_menu_id": "product-ops",
+      "permission_scope": "ops.product.homepage.read",
+      "route_path": "/product/entity-homepages"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "users-round",
+      "label": "圈子运营",
+      "menu_id": "circles-ops",
+      "object_types": [
+        "circle",
+        "circle_scenario"
+      ],
+      "order": 36,
+      "parent_menu_id": "product-ops",
+      "permission_scope": "ops.product.circle.read",
+      "route_path": "/product/circles-ops"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "sparkles",
+      "label": "小趣评论审核",
+      "menu_id": "xiaoqu-comments",
+      "object_types": [
+        "assistant_comment",
+        "correction_case"
+      ],
+      "order": 37,
+      "parent_menu_id": "product-ops",
+      "permission_scope": "ops.product.xiaoqu.read",
+      "route_path": "/product/xiaoqu-comments"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "school",
+      "label": "校园冷启动",
+      "menu_id": "campus-bootstrap",
+      "object_types": [
+        "campus_homepage",
+        "bootstrap_seed"
+      ],
+      "order": 38,
+      "parent_menu_id": "product-ops",
+      "permission_scope": "ops.product.bootstrap.read",
+      "route_path": "/product/campus-bootstrap"
+    },
+    {
+      "domain": "product-ops",
       "icon": "flask-conical",
       "label": "实验与灰度",
       "menu_id": "experiments",
       "object_types": [
         "experiment"
       ],
-      "order": 34,
+      "order": 39,
       "parent_menu_id": "product-ops",
       "permission_scope": "ops.experiment.read",
       "route_path": "/product/experiments"
@@ -230,7 +414,7 @@ _PORTAL_MENU_JSON = r'''{
       "object_types": [
         "segment"
       ],
-      "order": 35,
+      "order": 40,
       "parent_menu_id": "product-ops",
       "permission_scope": "ops.segment.read",
       "route_path": "/product/segments"

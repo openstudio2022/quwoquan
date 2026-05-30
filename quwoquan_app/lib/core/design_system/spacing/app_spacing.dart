@@ -88,6 +88,12 @@ class AppSpacing {
   /// 统一可点击区域最低标准（WCAG 触控建议）
   static const double minInteractiveSize = 44.0;
 
+  /// 首页统一对象推荐卡最大宽度（横滑流内单卡上限，避免过宽）。
+  static const double homeObjectCardMaxWidth = 260.0;
+
+  /// 首页统一对象推荐卡横滑流固定高度（含两行文案 + 行动按钮触控余量）。
+  static const double homeObjectCardRailHeight = 88.0;
+
   // ==================== 文本行高语义 ====================
   /// 单行紧凑标题/标签（line height 倍数 1.0）
   static const double textLineHeightSingle = 1.0;

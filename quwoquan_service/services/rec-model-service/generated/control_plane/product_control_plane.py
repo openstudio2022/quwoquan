@@ -15,6 +15,25 @@ _PRODUCT_CONTROL_PLANE_JSON = r'''{
   "domain": "product",
   "object_types": [
     {
+      "deployment_profile": "latency_sensitive",
+      "label": "四层指标快照",
+      "object_kind": "dashboard",
+      "object_type": "l1l4_metric_snapshot",
+      "operations": [
+        {
+          "method": "GET",
+          "operation": "ListL1L4MetricSnapshots",
+          "path": "/v1/control-plane/product/metrics/l1l4",
+          "scopes": [
+            "ops.product.dashboard.read"
+          ]
+        }
+      ],
+      "risk_level": "medium",
+      "source_entity": "ProductMetricSnapshot",
+      "view_model": "ProductMetricSnapshot"
+    },
+    {
       "deployment_profile": "audit_heavy",
       "label": "治理案例",
       "object_kind": "workflow_case",

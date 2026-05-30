@@ -53,6 +53,10 @@ extension FeedItemDtoDiscoveryWireMap on FeedItemDto {
       if (tags != null && tags!.isNotEmpty) 'tags': tags,
       if (visibility != null && visibility!.trim().isNotEmpty)
         'visibility': visibility,
+      if (intersectionReasons != null && intersectionReasons!.isNotEmpty)
+        'intersectionReasons': intersectionReasons!
+            .map((reason) => reason.toMap())
+            .toList(growable: false),
     };
   }
 }

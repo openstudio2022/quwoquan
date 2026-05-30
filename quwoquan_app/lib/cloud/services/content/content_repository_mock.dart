@@ -814,8 +814,10 @@ class MockContentRepository implements ContentRepository {
   bool get usesCloudAssistantEdgeSync => false;
 
   @override
-  Map<String, dynamic>? discoveryPresentationWireForPost(String postId) {
-    return lookupCanonicalDiscoveryWireRowByPostId(postId);
+  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) {
+    return DiscoveryPresentationWire.fromRow(
+      lookupCanonicalDiscoveryWireRowByPostId(postId),
+    );
   }
 
   @override

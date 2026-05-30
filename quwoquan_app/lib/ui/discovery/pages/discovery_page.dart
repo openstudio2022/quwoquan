@@ -29,6 +29,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
@@ -1021,35 +1022,32 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
   }
 
   ContentShareTemplate _buildShareTemplate(PostBaseDto post) {
-    final raw =
-        ref
-            .read(contentRepositoryProvider)
-            .discoveryPresentationWireForPost(post.id) ??
-        post.toMap();
-    final tags =
-        (raw['tags'] as List?)
-            ?.map((item) => item.toString().trim())
-            .where((item) => item.isNotEmpty)
-            .toList(growable: false) ??
-        const <String>[];
-    final circleName = raw['circleName']?.toString().trim() ?? '';
+    final wire = ref
+        .read(contentRepositoryProvider)
+        .discoveryPresentationWireForPost(post.id);
+    final circleName = wire?.circleName ?? '';
     final enableIdentityTemplate = ref.read(
       contentFeatureFlagProvider('enable_identity_share_template'),
     );
+    final surfaceView = ref.read(contentFeatureFlagProvider('unified_surface_view'))
+        ? ContentSurfaceViewMapper.fromDto(post, wire: wire?.toLegacyRow())
+        : null;
     return ContentShareTemplateBuilder.build(
       post: post,
       enableIdentityTemplate: enableIdentityTemplate,
-      visibility: raw['visibility']?.toString() ?? 'public',
-      tags: tags,
+      visibility: wire?.visibility ?? 'public',
+      tags: wire?.tags ?? const <String>[],
       circleNames: circleName.isEmpty ? const <String>[] : <String>[circleName],
+      surfaceView: surfaceView,
     );
   }
 
   String _sourceCircleNameForPost(PostBaseDto post) {
-    final raw = ref
-        .read(contentRepositoryProvider)
-        .discoveryPresentationWireForPost(post.id);
-    return raw?['circleName']?.toString().trim() ?? '';
+    return ref
+            .read(contentRepositoryProvider)
+            .discoveryPresentationWireForPost(post.id)
+            ?.circleName ??
+        '';
   }
 
   Future<void> _trackShareAction(PostBaseDto post, String actionId) async {

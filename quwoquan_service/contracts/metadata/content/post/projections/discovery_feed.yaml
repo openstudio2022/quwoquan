@@ -39,6 +39,7 @@ fields:
   - { name: recScore, type: float, description: 推荐分（实时计算） }
   - { name: authorNickname, type: string, description: 作者昵称（反范式） }
   - { name: authorAvatarUrl, type: string, description: 作者头像（反范式） }
+  - { name: intersectionReasons, type: "[]object", description: "交集理由（云侧推荐管线预生成，B1；端只读展示，无来源时为空）" }
 
 indexes:
   - { name: idx_df_rec_score, keys: { recScore: -1, publishedAt: -1 } }
@@ -51,6 +52,8 @@ indexes:
 client_projection:
   dart_class: FeedItemDto
   output_path: cloud/runtime/generated/content/feed_item_dto.g.dart
+  dart_imports:
+    - package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart
   computed_getters:
     - name: displayFormat
       dart_return_type: String
@@ -321,4 +324,12 @@ client_projection:
       nullable: true
       source: articlePresentationVersion
       aliases: [articlePresentationVersion]
+      default: "null"
+
+    - name: intersectionReasons
+      dart_type: List<IntersectionReason>
+      nullable: true
+      source: intersectionReasons
+      aliases: [intersectionReasons]
+      list_element_dart_class: IntersectionReason
       default: "null"

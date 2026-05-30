@@ -4,6 +4,8 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/tag/mock/tag_mock_data.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/tag/tag_request_page_ids.g.dart';
 
 part 'tag_repository_mock.dart';
 part 'tag_repository_remote.dart';
@@ -16,21 +18,6 @@ class TagApiDefaults {
   static const int relatedLimit = 20;
   static const int graphLimit = 50;
   static const int minCooccurCount = 1;
-}
-
-/// 标签域 request page ids（tag domain 尚未 codegen 时的手写常量）
-class TagRequestPageIds {
-  TagRequestPageIds._();
-  static const String listDimensions = 'tag.list.dimensions';
-  static const String suggest = 'tag.suggest';
-  static const String validate = 'tag.validate';
-  static const String search = 'tag.search';
-  static const String related = 'tag.related';
-  static const String searchByTags = 'tag.search.by.tags';
-  static const String feedback = 'tag.feedback';
-  static const String cooccurrence = 'tag.graph.cooccurrence';
-  static const String invertedIndex = 'tag.graph.inverted.index';
-  static const String relatedObjects = 'tag.graph.related.objects';
 }
 
 /// 标签体系 Repository（场景2: 内容创作 + 场景3: 推荐搜索 + 场景4: 关系图谱）

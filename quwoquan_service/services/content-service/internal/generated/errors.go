@@ -7,6 +7,7 @@ import "errors"
 //
 //nolint:gochecknoglobals
 var (
+	ErrAssistantMentionContextMissing      = errors.New("CONTENT.USER.assistant_mention_context_missing")
 	ErrCircleDistributionForbidden         = errors.New("CONTENT.USER.circle_distribution_forbidden")
 	ErrCommentForbiddenDelete              = errors.New("CONTENT.USER.comment_forbidden_delete")
 	ErrCommentLikeDuplicate                = errors.New("CONTENT.USER.comment_like_duplicate")

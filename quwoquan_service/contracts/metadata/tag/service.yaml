@@ -1,187 +1,157 @@
-# Tag Service — 标签体系四大应用场景 API 定义
-#
-# 场景2：内容创作（list_dimensions / suggest / validate_refs）
-# 场景3：推荐搜索（search / related / search_by_tags / feedback）
-# 场景4：关系图谱（cooccurrence / inverted_index / related_objects）
+version: 1
+entity: TagNode
 
-domain: tag
-version: "1.0"
-description: "标签体系四分组 (Topic/Audience/Format/Entity) 的查询、建议、校验与关系图谱 API"
+service:
+  name: tag-service
+  domain: tag
 
-# ────────────────────────────────────────────────────────────────
-# 场景2: 内容创作
-# ────────────────────────────────────────────────────────────────
-apis:
-  list_dimensions:
-    method: GET
-    path: /api/v1/tags/dimensions
-    description: "列出全部维度及其分组信息（用于创作时的标签面板）"
-    response:
-      type: array
-      items:
-        type: object
-        properties:
-          group: { type: string, description: "Topic/Audience/Format/Entity" }
-          dimensionId: { type: string, description: "相对路径，如 Topic/主题" }
-          label: { type: string }
-          labelEn: { type: string }
-          maxDepth: { type: integer }
-          pathPolicy: { type: string }
+# 唯一标签真相源为数据工程 publish/v1/tags；tag-service 只读消费导入产物。
+# 交集核心新增：ResolveTag / SharedTags / InvertedObjects（V0.5 首发实现）。
+# 创作打标与搜索 API（dimensions/suggest/validate/search/related/search-by-tags/
+#   feedback/cooccurrence/related-objects）保留契约，端统一走 codegen path（消除硬编码）。
+# tagRef 路径制（含 /），统一走 query 参数，不放 path param。
+api_routes:
+  # ── 交集核心（V0.5 首发只读实现） ──
+  - method: GET
+    path: /v1/tag/resolve
+    operation: ResolveTag
+    description: 解析单个路径制 tagRef → 标签定义（label / 别名 / 祖先）
+    query_params: [tagRef]
+    response_entity: TagResolveView
+    response_fields: [tagRef, group, label, labelEn, aliases, ancestors]
 
-  suggest:
-    method: GET
-    path: /api/v1/tags/suggest
-    description: "根据输入文本模糊匹配标签（支持 label / aliases / labelEn）"
-    params:
-      q: { type: string, required: true, description: "搜索关键词" }
-      group: { type: string, description: "限定分组" }
-      limit: { type: integer, default: 20 }
-    response:
-      type: array
-      items:
-        type: object
-        properties:
-          tagRef: { type: string }
-          label: { type: string }
-          labelEn: { type: string }
-          matchField: { type: string, description: "匹配的字段名" }
+  - method: GET
+    path: /v1/tag/shared-tags
+    operation: SharedTags
+    description: 计算两个对象的共享 tagRef（交集锚点 + 强度 + 来源）
+    query_params: [objectAId, objectAType, objectBId, objectBType, limit]
+    response_entity: SharedTagView
+    response_fields: [tagRef, label, strength, source]
 
-  validate_refs:
-    method: POST
-    path: /api/v1/tags/validate
-    description: "批量校验 tagRefs 有效性（创作提交前调用）"
-    body:
-      tagRefs: { type: array, items: { type: string }, required: true }
-    response:
-      type: object
-      properties:
-        valid: { type: array, items: { type: string } }
-        invalid: { type: array, items: { type: string } }
-        suggestions:
-          type: array
-          items:
-            type: object
-            properties:
-              invalid: { type: string }
-              suggestedRef: { type: string }
-              reason: { type: string }
+  - method: GET
+    path: /v1/tag/inverted
+    operation: InvertedObjects
+    description: 反向索引——引用某 tagRef 的对象集合
+    query_params: [tagRef, objectType, limit]
+    response_entity: InvertedObjectsView
+    response_fields: [tagRef, objectCount, objectIds]
 
-  # ────────────────────────────────────────────────────────────────
-  # 场景3: 推荐搜索
-  # ────────────────────────────────────────────────────────────────
-  search:
-    method: GET
-    path: /api/v1/tags/search
-    description: "标签全文搜索（支持中英文、别名）"
-    params:
-      q: { type: string, required: true }
-      group: { type: string }
-      limit: { type: integer, default: 50 }
-    response:
-      type: array
-      items:
-        type: object
-        properties:
-          tagRef: { type: string }
-          label: { type: string }
-          score: { type: number }
+  # ── 创作打标（场景2，端统一走 codegen path） ──
+  - method: GET
+    path: /v1/tag/dimensions
+    operation: ListDimensions
+    description: 列出全部维度及分组信息（创作标签面板）
+    response_entity: TagDimensionView
+    response_fields: [group, dimensionId, label, labelEn, maxDepth, pathPolicy]
 
-  related:
-    method: GET
-    path: /api/v1/tags/{tagRef}/related
-    description: "获取与指定标签共现度最高的相关标签"
-    params:
-      tagRef: { type: string, required: true }
-      limit: { type: integer, default: 20 }
-    response:
-      type: array
-      items:
-        type: object
-        properties:
-          tagRef: { type: string }
-          label: { type: string }
-          cooccurCount: { type: integer }
+  - method: GET
+    path: /v1/tag/suggest
+    operation: SuggestTags
+    description: 根据输入文本模糊匹配标签
+    query_params: [q, group, limit]
+    response_entity: TagSuggestionView
+    response_fields: [tagRef, label, labelEn, matchField]
 
-  search_by_tags:
-    method: POST
-    path: /api/v1/tags/search-by-tags
-    description: "多标签联合搜索对象（实体/post/圈子）"
-    body:
-      tagRefs: { type: array, items: { type: string }, required: true }
-      objectType: { type: string, description: "entity/post/circle/user" }
-      limit: { type: integer, default: 50 }
-    response:
-      type: array
-      items:
-        type: object
-        properties:
-          objectId: { type: string }
-          objectType: { type: string }
-          matchedTags: { type: array, items: { type: string } }
-          score: { type: number }
+  - method: POST
+    path: /v1/tag/validate
+    operation: ValidateTagRefs
+    description: 批量校验 tagRefs 有效性
+    request_entity: TagValidateRequest
+    request_fields: [tagRefs]
+    response_entity: TagValidationResultView
+    response_fields: [valid, invalid]
 
-  feedback:
-    method: POST
-    path: /api/v1/tags/feedback
-    description: "用户对标签推荐的反馈（点击/忽略/修正），写入 tag_runtime/tag_metrics.ndjson"
-    body:
-      tagRef: { type: string, required: true }
-      action: { type: string, enum: ["click", "ignore", "correct"] }
-      context: { type: string, description: "触发场景标识" }
-    response:
-      type: object
-      properties:
-        accepted: { type: boolean }
+  # ── 推荐搜索（场景3） ──
+  - method: GET
+    path: /v1/tag/search
+    operation: SearchTags
+    description: 标签全文搜索
+    query_params: [q, group, limit]
+    response_entity: TagSearchResultView
+    response_fields: [tagRef, label, score]
 
-  # ────────────────────────────────────────────────────────────────
-  # 场景4: 关系图谱
-  # ────────────────────────────────────────────────────────────────
-  cooccurrence:
-    method: GET
-    path: /api/v1/tags/graph/cooccurrence
-    description: "查询标签对共现关系"
-    params:
-      tagRef: { type: string, description: "指定标签，返回其共现对" }
-      minCount: { type: integer, default: 1 }
-      limit: { type: integer, default: 50 }
-    response:
-      type: array
-      items:
-        type: object
-        properties:
-          tagA: { type: string }
-          tagB: { type: string }
-          cooccurCount: { type: integer }
+  - method: GET
+    path: /v1/tag/related
+    operation: RelatedTags
+    description: 与指定标签共现度最高的相关标签
+    query_params: [tagRef, limit]
+    response_entity: RelatedTagView
+    response_fields: [tagRef, label, cooccurCount]
 
-  inverted_index:
-    method: GET
-    path: /api/v1/tags/graph/inverted-index/{tagRef}
-    description: "查询引用了该标签的所有对象"
-    params:
-      tagRef: { type: string, required: true }
-      objectType: { type: string }
-      limit: { type: integer, default: 50 }
-    response:
-      type: object
-      properties:
-        tag: { type: string }
-        objectCount: { type: integer }
-        objects: { type: array, items: { type: string } }
+  - method: POST
+    path: /v1/tag/search-by-tags
+    operation: SearchByTags
+    description: 多标签联合搜索对象
+    request_entity: SearchByTagsRequest
+    request_fields: [tagRefs, objectType, limit]
+    response_entity: TagObjectMatchView
+    response_fields: [objectId, objectType, matchedTags, score]
 
-  related_objects:
-    method: GET
-    path: /api/v1/tags/graph/related-objects/{objectId}
-    description: "通过共享标签查找相关对象"
-    params:
-      objectId: { type: string, required: true }
-      objectType: { type: string }
-      limit: { type: integer, default: 20 }
-    response:
-      type: array
-      items:
-        type: object
-        properties:
-          objectId: { type: string }
-          objectType: { type: string }
-          sharedTags: { type: array, items: { type: string } }
-          sharedCount: { type: integer }
+  - method: POST
+    path: /v1/tag/feedback
+    operation: TagFeedback
+    description: 用户对标签推荐的反馈（点击/忽略/修正）
+    request_entity: TagFeedbackRequest
+    request_fields: [tagRef, action, context]
+    response_entity: TagFeedbackResultView
+    response_fields: [accepted]
+
+  # ── 关系图谱（场景4） ──
+  - method: GET
+    path: /v1/tag/graph/cooccurrence
+    operation: TagCooccurrence
+    description: 查询标签对共现关系
+    query_params: [tagRef, minCount, limit]
+    response_entity: TagCooccurrenceView
+    response_fields: [tagA, tagB, cooccurCount]
+
+  - method: GET
+    path: /v1/tag/related-objects
+    operation: RelatedObjects
+    description: 通过共享标签查找相关对象
+    query_params: [objectId, objectType, limit]
+    response_entity: RelatedObjectView
+    response_fields: [objectId, objectType, sharedTags, sharedCount]
+
+consumers:
+  - name: app
+    capabilities: [resolve, shared_tags, inverted, suggest, validate, search]
+  - name: recommendation-engine
+    capabilities: [shared_tags, inverted, related_objects]
+
+contract_test:
+  mock_strategy:
+    app_side:
+      mock_target: tag-service API
+      data_source: fields.yaml
+      scenarios:
+        - name: resolve_launch_subset
+          route: GET /v1/tag/resolve
+          assertions: [status_200, tagref_resolvable]
+        - name: shared_tags_campus_travel
+          route: GET /v1/tag/shared-tags
+          assertions: [status_200, shared_tagrefs_resolvable]
+        - name: inverted_objects
+          route: GET /v1/tag/inverted
+          assertions: [status_200]
+    service_side:
+      description: 使用真实测试数据库，不 mock 存储层；只读首发子集 seed
+      real_engines:
+        mongodb: testcontainers (mongo:7)
+      data_management:
+        seed: fixture 工厂导入首发子集 tag_nodes + object_tag_index
+        cleanup: "db.tag_nodes.DeleteMany({}); db.object_tag_index.DeleteMany({})"
+      scenarios:
+        - name: resolve_returns_definition
+          route: GET /v1/tag/resolve
+          assertions:
+            - "db.tag_nodes.FindOne({tagRef:'Topic/旅行'}) → exists"
+            - "response.label non-empty"
+        - name: shared_tags_two_objects
+          route: GET /v1/tag/shared-tags
+          assertions:
+            - "shared tagRefs ⊆ both objects' tagRefs"
+  coverage_requirements:
+    - resolve subset tagRefs resolvable
+    - shared-tags intersection correctness
+    - inverted returns objects referencing tagRef

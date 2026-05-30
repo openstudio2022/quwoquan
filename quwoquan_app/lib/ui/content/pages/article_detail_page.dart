@@ -26,6 +26,7 @@ import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
 import 'package:quwoquan_app/ui/content/post_view_projection.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_content_block_renderer.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
+import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 
 class ArticleDetailPage extends ConsumerStatefulWidget {
   const ArticleDetailPage({
@@ -48,6 +49,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
   PostReadUiBundle? _postReadBundle;
   bool _isLoading = true;
   Object? _loadError;
+
+  /// 交集理由首条 displayText（与 feed/沉浸同口径）；无来源 → null 不展示。
+  String? _intersectionReasonText;
 
   @override
   void initState() {
@@ -96,6 +100,9 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
         _postReadBundle = readBundle;
         _isLoading = false;
         _loadError = null;
+        _intersectionReasonText = IntersectionReasonChip.primaryText(
+          detail.post.intersectionReasons,
+        );
       });
       ref
           .read(contentEngagementTrackerProvider)
@@ -124,6 +131,8 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
       source: AssistantSource.article,
       visitTarget: target,
       experienceLevel: service.getExperience(target),
+      entityId: widget.articleId,
+      objectType: 'post',
     );
     AssistantHalfSheet.show(context, ctx);
   }
@@ -256,6 +265,7 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                     _ArticleHeader(
                       article: article,
                       dateText: _formatArticleDate(article.date),
+                      intersectionReasonText: _intersectionReasonText,
                     ),
                     SizedBox(height: AppSpacing.interGroupMd),
                     _ArticleSectionLabel(label: context.l10n.articleContent),
@@ -413,10 +423,15 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
 }
 
 class _ArticleHeader extends StatelessWidget {
-  const _ArticleHeader({required this.article, required this.dateText});
+  const _ArticleHeader({
+    required this.article,
+    required this.dateText,
+    this.intersectionReasonText,
+  });
 
   final ArticleDetailView article;
   final String dateText;
+  final String? intersectionReasonText;
 
   @override
   Widget build(BuildContext context) {
@@ -424,6 +439,7 @@ class _ArticleHeader extends StatelessWidget {
         .resolveFrom(context);
     final titleColor = CupertinoColors.label.resolveFrom(context);
     final bodyColor = CupertinoColors.secondaryLabel.resolveFrom(context);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final stats = <String>[
       '${formatCompactActionCount(article.stats.likes)} 赞',
       '${formatCompactActionCount(article.stats.comments)} 评论',
@@ -467,6 +483,13 @@ class _ArticleHeader extends StatelessWidget {
                 fontSize: AppTypography.base,
                 height: 1.75, // ignore: verify_dart_semantic
               ),
+            ),
+          ],
+          if (intersectionReasonText != null) ...[
+            SizedBox(height: AppSpacing.intraGroupSm),
+            IntersectionReasonChip(
+              text: intersectionReasonText!,
+              isDark: isDark,
             ),
           ],
           SizedBox(height: AppSpacing.interGroupMd),

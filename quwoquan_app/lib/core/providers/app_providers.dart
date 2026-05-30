@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/models/home_channels_remote_override.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/cloud/media/media_download_cache.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
@@ -519,6 +520,7 @@ class ContentRuntimeConfigState {
     required this.currentCanaryStage,
     required this.canaryStages,
     required this.clientStateSync,
+    this.homeChannels = ContentUIConfig.homeChannels,
   });
 
   final Map<String, bool> featureFlags;
@@ -526,6 +528,9 @@ class ContentRuntimeConfigState {
   final String currentCanaryStage;
   final List<ContentCanaryStage> canaryStages;
   final ClientStateSyncConfig clientStateSync;
+
+  /// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels]，远程整体覆盖、失败回退默认。
+  final List<HomeChannelConfig> homeChannels;
 
   bool isEnabled(String flag) => featureFlags[flag] ?? false;
 
@@ -565,6 +570,7 @@ class ContentRuntimeConfigState {
   factory ContentRuntimeConfigState.fromClientParsed(
     ContentAppConfigClientParsed parsed, {
     required ContentRuntimeConfigState fallback,
+    List<HomeChannelConfig>? homeChannelsOverride,
   }) {
     final mergedFlags = <String, bool>{
       ...fallback.featureFlags,
@@ -594,6 +600,7 @@ class ContentRuntimeConfigState {
         parsed.clientStateSyncMap,
         fallback: fallback.clientStateSync,
       ),
+      homeChannels: homeChannelsOverride ?? fallback.homeChannels,
     );
   }
 }
@@ -620,9 +627,13 @@ class ContentRuntimeConfigNotifier extends Notifier<ContentRuntimeConfigState> {
       final remoteConfig = await ref
           .read(contentRepositoryProvider)
           .getAppConfig();
+      final channelsOverride = HomeChannelsRemoteOverride.fromAppConfigRoot(
+        remoteConfig.wireRoot,
+      );
       state = ContentRuntimeConfigState.fromClientParsed(
         remoteConfig.clientParsed,
         fallback: fallback,
+        homeChannelsOverride: channelsOverride,
       );
     } catch (_) {
       state = fallback;
@@ -637,6 +648,12 @@ final contentRuntimeConfigProvider =
 
 final contentFeatureFlagProvider = Provider.family<bool, String>((ref, flag) {
   return ref.watch(contentRuntimeConfigProvider).isEnabled(flag);
+});
+
+/// 首页频道（运营资产）：端默认 [ContentUIConfig.homeChannels] + `/v1/config/app` 远程覆盖，
+/// 失败/缺失回退默认；已按 order 升序。UI 通过本 provider 取频道，禁止硬编码频道列表。
+final homeChannelsProvider = Provider<List<HomeChannelConfig>>((ref) {
+  return ref.watch(contentRuntimeConfigProvider).homeChannels;
 });
 
 const String _personaManagementFeatureFlag = 'ops.user.persona_management_v1';
@@ -1549,6 +1566,30 @@ final contentRepositoryProvider = Provider<ContentRepository>((ref) {
     userProfileCache: ref.watch(userProfileCacheProvider),
   );
 });
+
+/// Content 子接口 Provider（R02）。
+///
+/// `ContentRepository` 由 6 个 ≤10 方法子接口组合，同一实例同时满足全部子接口。
+/// 新消费方应只依赖所需窄接口（Read/Write/Reaction/Comment/Media/Config），
+/// 减少对上帝接口的耦合。
+final contentReadRepositoryProvider = Provider<ContentReadRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentWriteRepositoryProvider = Provider<ContentWriteRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentReactionRepositoryProvider = Provider<ContentReactionRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentCommentRepositoryProvider = Provider<ContentCommentRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentMediaRepositoryProvider = Provider<ContentMediaRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
+final contentConfigRepositoryProvider = Provider<ContentConfigRepository>(
+  (ref) => ref.watch(contentRepositoryProvider),
+);
 
 /// Homepage Repository（共享主页搜索、详情、认领与治理）
 final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {

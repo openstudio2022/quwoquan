@@ -1,0 +1,70 @@
+feature: unified-presentation-model
+level: L3_scenario
+source_path: discovery-content/content-type-framework/unified-presentation-model
+archived: false
+status: pending
+execution:
+  local_gate: flutter analyze quwoquan_app/lib && python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
+  full_gate: make gate-full
+level_acceptance:
+  A1:
+    criteria: '已定义单一只读 `ContentSurfaceView`（含强类型子对象 AuthorRef/MediaRef/VideoRef/ContentStats），覆盖 micro/image/video/article 四媒体类型；字段集与 fallback 口径对齐 `contracts/metadata/content/post` 投影，不引入第二套口径表。'
+    status: done
+    linked_tasks: [D1]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - content surface view schema contract test
+      - content surface view fields vs metadata fixture audit
+  A2:
+    criteria: '单一 `ContentSurfaceViewMapper.fromDto` 将四媒体类型 DTO 映射为统一 model，媒体差异通过 `contentType` 契约字段 + 强类型可选字段表达，无对 DTO 子类的 `is/as/whereType`。'
+    status: done
+    linked_tasks: [D1]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - content surface view mapper four type test
+      - mapper polymorphism contract field test
+  A3:
+    criteria: 'feed/immersive/detail/share 四 surface 均消费 `ContentSurfaceView`，不再各自从裸 DTO/Map 抽字段；同一帖在四 surface 字段口径与交集理由位（A4 chip）一致。'
+    status: pending
+    linked_tasks: [D2, D3]
+    test_layers:
+      T1: optional
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - four surface same source widget test
+      - intersection reason parity across surfaces test
+  A4:
+    criteria: '抽象接口与投影无 `Map<String,dynamic>` 穿透：`discoveryPresentationWireForPost` 已强类型化，immersive `_wireMapForPresentation`/`_rawArticleDataFor` 裸 Map 中转已去除（R04 GATE_BLOCK 清零）。'
+    status: in_progress
+    progress_note: 'discoveryPresentationWireForPost 已强类型化为 DiscoveryPresentationWire（接口去裸 Map）；immersive _wireMapForPresentation/_rawArticleDataFor 的裸 Map 中转待 immersive surface 接入统一 model 时去除（D1b 剩余）。'
+    linked_tasks: [D2]
+    test_layers:
+      T1: required
+      T2: optional
+      T3: optional
+      T4: optional
+    tests:
+      - discovery presentation wire strong type test
+      - ui map literal budget ratchet for content surface
+  A5:
+    criteria: '迁移灰度齐备：`unified_surface_view` flag 可双读并单独回退；新旧路径字段 diff 与 surface 渲染异常可观测；旧投影类（PostSummaryView/_wireMapForPresentation/share fallback）已标 `@Deprecated`，回滚无数据损失。'
+    status: pending
+    linked_tasks: [D1, D2, D3]
+    test_layers:
+      T1: required
+      T2: required
+      T3: optional
+      T4: optional
+    tests:
+      - unified surface view flag double read test
+      - deprecated projection rollback widget test
