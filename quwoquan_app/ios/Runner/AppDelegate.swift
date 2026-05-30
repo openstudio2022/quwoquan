@@ -39,6 +39,25 @@ import UIKit
     assistantChannel.setMethodCallHandler { [weak self] call, result in
       self?.personalAssistantNativeApiPlugin.handle(call: call, result: result)
     }
+
+    let oneTapLoginChannel = FlutterMethodChannel(
+      name: "quwoquan/auth/one_tap",
+      binaryMessenger: binaryMessenger
+    )
+    oneTapLoginChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "isAvailable":
+        result(false)
+      case "requestLoginToken":
+        result(FlutterError(
+          code: "one_tap_sdk_not_configured",
+          message: "One-tap login SDK is not configured for this build.",
+          details: nil
+        ))
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 }
 

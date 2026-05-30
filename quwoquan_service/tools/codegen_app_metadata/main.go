@@ -52,16 +52,52 @@ type fieldsFile struct {
 
 // ── post/service.yaml ─────────────────────────────────────────────────────────
 
+type routeSecurity struct {
+	AuthMode        string   `yaml:"auth_mode"`
+	Principal       string   `yaml:"principal"`
+	Permissions     []string `yaml:"permissions"`
+	TokenTransport  string   `yaml:"token_transport"`
+	AnonymousPolicy string   `yaml:"anonymous_policy"`
+	Visibility      string   `yaml:"visibility"`
+}
+
 type routeDef struct {
-	Method         string   `yaml:"method"`
-	Path           string   `yaml:"path"`
-	Operation      string   `yaml:"operation"`
-	Description    string   `yaml:"description"`
-	QueryParams    []string `yaml:"query_params"`
-	WritableFields []string `yaml:"writable_fields"`
-	RequestFields  []string `yaml:"request_fields"`
-	ResponseFields []string `yaml:"response_fields"`
-	ResponseEntity string   `yaml:"response_entity"`
+	Method         string        `yaml:"method"`
+	Path           string        `yaml:"path"`
+	Operation      string        `yaml:"operation"`
+	Description    string        `yaml:"description"`
+	QueryParams    []string      `yaml:"query_params"`
+	WritableFields []string      `yaml:"writable_fields"`
+	RequestFields  []string      `yaml:"request_fields"`
+	ResponseFields []string      `yaml:"response_fields"`
+	ResponseEntity string        `yaml:"response_entity"`
+	Security       routeSecurity `yaml:"security"`
+	// Back-compat: 旧写法 auth: required / auth_required: bool。统一收敛到 security.auth_mode。
+	Auth         string `yaml:"auth"`
+	AuthRequired *bool  `yaml:"auth_required"`
+}
+
+// resolveAuthMode 返回 public | optional | required 三态。
+// 优先 security.auth_mode；其次兼容旧 auth/auth_required；默认 public。
+func (r routeDef) resolveAuthMode() string {
+	mode := strings.ToLower(strings.TrimSpace(r.Security.AuthMode))
+	switch mode {
+	case "public", "optional", "required":
+		return mode
+	}
+	if strings.EqualFold(strings.TrimSpace(r.Auth), "required") {
+		return "required"
+	}
+	if strings.EqualFold(strings.TrimSpace(r.Auth), "optional") {
+		return "optional"
+	}
+	if r.AuthRequired != nil {
+		if *r.AuthRequired {
+			return "required"
+		}
+		return "public"
+	}
+	return "public"
 }
 
 type serviceInfo struct {
@@ -683,6 +719,10 @@ func main() {
 	}
 	defaultsOut := renderCloudAPIDefaultsDart(feedDefaultLimit)
 	writeFile(filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "cloud_api_defaults.g.dart"), defaultsOut)
+	writeFile(
+		filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "auth", "auth_policy.g.dart"),
+		renderAuthPolicyDart(domainRoutes),
+	)
 	for domain, routes := range domainRoutes {
 		metaOut := renderDomainAPIMetadataDart(domain, routes)
 		pageIDsOut := renderDomainRequestPageIDsDart(domain, routes)
@@ -919,7 +959,7 @@ func buildFeedDefaults(postDefaults map[string]string) map[string]string {
 	return map[string]string{
 		"coverUrl":         get("coverUrl", "''"),
 		"isLocalGenerated": "true",
-		"tags":             get("tags", "<String>[]"),
+		"tagRefs":          get("tagRefs", "<String>[]"),
 		"thumbnailUrl":     get("coverUrl", "''"),
 		"videoUrl":         get("videoUrl", "''"),
 		"visibility":       get("visibility", "'public'"),
@@ -927,41 +967,32 @@ func buildFeedDefaults(postDefaults map[string]string) map[string]string {
 }
 
 func buildContentTypeToRender(contentTypes []string) map[string]string {
+	// renderType 与 ContentType 真相源 (types.yaml) canonical 一致；不再把 micro 映射成 moment。
 	out := map[string]string{}
 	for _, ct := range contentTypes {
-		switch ct {
-		case "micro":
-			out[ct] = "moment"
-		default:
-			out[ct] = ct
-		}
+		out[ct] = ct
 	}
 	return out
 }
 
 func buildDiscoveryMappings(contentTypes []string) (map[string]string, map[string]string) {
+	// requestType 全部使用 canonical ContentType（micro/image/...），无 moment/photo 同义词。
 	feedCategoryToType := map[string]string{
-		"recommended": "moment",
-		"following":   "moment",
+		"recommended": "micro",
+		"following":   "micro",
 	}
 	for _, ct := range contentTypes {
 		category := ct
 		feedType := ct
-		switch ct {
-		case "micro":
-			category = "moment"
-			feedType = "moment"
-		case "image":
+		if ct == "image" {
 			category = "images"
-			feedType = "photo"
-			feedCategoryToType["photo"] = "photo"
 		}
 		feedCategoryToType[category] = feedType
 	}
 
 	appTabToCategory := map[string]string{
-		"moment":  "recommended",
-		"photo":   "images",
+		"micro":   "recommended",
+		"image":   "images",
 		"video":   "video",
 		"article": "article",
 	}
@@ -1071,6 +1102,12 @@ func renderDomainAPIMetadataDart(domain string, routes []routeDef) string {
 		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, strings.ToUpper(route.Method)))
 	}
 	b.WriteString("  };\n\n")
+	b.WriteString("  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。\n")
+	b.WriteString("  static const Map<String, String> operationToAuthMode = <String, String>{\n")
+	for _, route := range routes {
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", route.Operation, route.resolveAuthMode()))
+	}
+	b.WriteString("  };\n\n")
 	for _, route := range routes {
 		identifier := lowerCamel(route.Operation)
 		b.WriteString(fmt.Sprintf("  static const String %sOperation = '%s';\n", identifier, route.Operation))
@@ -1109,6 +1146,53 @@ func renderDomainAPIMetadataDart(domain string, routes []routeDef) string {
 		b.WriteString("    return path;\n")
 		b.WriteString("  }\n")
 	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+// renderAuthPolicyDart 聚合所有域的 operation -> auth_mode，作为端侧鉴权快照的单一来源，
+// 供 AuthGate 矩阵交叉校验与 Remote token 使用测试消费。
+func renderAuthPolicyDart(domainRoutes map[string][]routeDef) string {
+	type opMode struct {
+		op   string
+		mode string
+	}
+	var entries []opMode
+	seen := map[string]bool{}
+	domains := make([]string, 0, len(domainRoutes))
+	for d := range domainRoutes {
+		domains = append(domains, d)
+	}
+	sort.Strings(domains)
+	for _, d := range domains {
+		for _, route := range domainRoutes[d] {
+			if route.Operation == "" || seen[route.Operation] {
+				continue
+			}
+			seen[route.Operation] = true
+			entries = append(entries, opMode{op: route.Operation, mode: route.resolveAuthMode()})
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].op < entries[j].op })
+
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_app_metadata from all domain service.yaml security blocks. DO NOT EDIT.\n\n")
+	b.WriteString("import 'dart:core';\n\n")
+	b.WriteString("/// 端侧 API 鉴权快照：operation -> 鉴权模式（public | optional | required）。\n")
+	b.WriteString("// ignore: avoid_classes_with_only_static_members\n")
+	b.WriteString("class AuthApiPolicy {\n")
+	b.WriteString("  const AuthApiPolicy._();\n\n")
+	b.WriteString("  static const Map<String, String> operationToAuthMode = <String, String>{\n")
+	for _, e := range entries {
+		b.WriteString(fmt.Sprintf("    '%s': '%s',\n", e.op, e.mode))
+	}
+	b.WriteString("  };\n\n")
+	b.WriteString("  static bool isRequired(String operation) =>\n")
+	b.WriteString("      operationToAuthMode[operation] == 'required';\n\n")
+	b.WriteString("  static bool isPublic(String operation) =>\n")
+	b.WriteString("      operationToAuthMode[operation] == 'public';\n\n")
+	b.WriteString("  static bool isOptional(String operation) =>\n")
+	b.WriteString("      operationToAuthMode[operation] == 'optional';\n")
 	b.WriteString("}\n")
 	return b.String()
 }
@@ -3002,8 +3086,8 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				positional = append(positional, "String authorId")
 			case "entityRefs":
 				positional = append(positional, "List<String> entityRefs")
-			case "tags":
-				positional = append(positional, "List<String> tags")
+			case "tagRefs":
+				positional = append(positional, "List<String> tagRefs")
 			case "consumedRatio":
 				positional = append(positional, "double consumedRatio")
 			case "totalUnits":

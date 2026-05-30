@@ -14,6 +14,12 @@ api_routes:
     request_fields: [actorSubAccountId, source, clientRequestId]
     response_entity: FollowCommandResult
     response_fields: [actorSubAccountId, targetSubAccountId, relationState, idempotentReplay, updatedAt]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: DELETE
     path: /v1/user/sub-accounts/{targetSubAccountId}/follow

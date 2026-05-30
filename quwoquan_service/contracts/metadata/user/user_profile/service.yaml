@@ -11,6 +11,14 @@ api_routes:
   # ── 认证（OwnerAccount 主控） ──────────────────────────────────────────────
 
   - method: POST
+    path: /v1/auth/otp/send
+    operation: SendOtp
+    description: 下发手机号验证码（发码冷却 + 每小时配额），非生产返回调试码
+    auth_required: false
+    request_fields: [phone]
+    response_fields: [maskedPhone, expiresInSeconds, debugCode]
+
+  - method: POST
     path: /v1/auth/login/phone
     operation: LoginWithPhone
     description: 手机号 + OTP 登录，创建或恢复 OwnerAccount
@@ -32,6 +40,14 @@ api_routes:
     description: Apple ID token 登录
     auth_required: false
     request_fields: [appleIdToken, deviceId, platform]
+    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy]
+
+  - method: POST
+    path: /v1/auth/login/one-tap
+    operation: LoginOneTap
+    description: 运营商一键登录；App 只提交授权 token，服务端向认证厂商置换真实手机号后创建或恢复 OwnerAccount
+    auth_required: false
+    request_fields: [vendor, carrierToken, deviceId, platform, agreementVersion, privacyVersion]
     response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy]
 
   - method: POST
@@ -64,6 +80,12 @@ api_routes:
     description: 查看已绑定的凭证列表（脱敏展示）
     response_entity: CredentialBinding
     response_fields: [id, credentialType, displayLabel, isActive, boundAt]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: POST
     path: /v1/owner/credentials/bind
@@ -84,6 +106,12 @@ api_routes:
     description: 查看自己所有分身列表
     response_entity: PersonaManagementItemView
     response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/personas/summary
@@ -105,6 +133,12 @@ api_routes:
     description: 创建新分身
     request_entity: Persona
     request_fields: [displayName, userHandle, avatarUrl, isolationLevel, purposeHint]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
     response_entity: PersonaManagementItemView
     response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
 
@@ -166,6 +200,12 @@ api_routes:
     description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
     response_entity: SubAccountProfileView
     response_fields: [subAccountId, ownerUserId, subjectType, userHandle, username, displayName, avatarUrl, backgroundUrl, bio, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
 
   - method: GET
     path: /v1/user/search/social-relations

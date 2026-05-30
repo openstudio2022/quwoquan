@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
@@ -55,6 +57,39 @@ class _EditProfileMockRepository extends MockUserProfileRepository {
   }
 }
 
+/// 已登录态会话存储测试替身：MyProfilePage 现在依据 auth.isAuthenticated
+/// 决定渲染真实主页还是未登录占位页，旅程测试必须注入已登录会话。
+class _AuthenticatedAuthSessionStore implements AuthSessionStore {
+  const _AuthenticatedAuthSessionStore();
+
+  @override
+  Future<StoredAuthSession> read() async {
+    return const StoredAuthSession(
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      ownerId: 'user_001',
+      activeSubAccountId: 'user_001',
+      accountState: 'active',
+      identityOrigin: 'phone',
+      installId: 'install-id',
+      manualLoggedOut: false,
+      launchPromptDismissed: false,
+    );
+  }
+
+  @override
+  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+
+  @override
+  Future<void> updateActiveSubAccount(String subAccountId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
+}
+
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   @override
   bool get reconcilesCapabilityWithSharedRelationshipState => false;
@@ -97,6 +132,8 @@ void main() {
           relationshipCapabilityRepositoryProvider
               .overrideWithValue(_ThrowingCapabilityRepository()),
           currentUserIdProvider.overrideWithValue(currentUserId),
+          authSessionStoreProvider
+              .overrideWithValue(const _AuthenticatedAuthSessionStore()),
         ],
         child: MaterialApp.router(
           routerConfig: GoRouter(

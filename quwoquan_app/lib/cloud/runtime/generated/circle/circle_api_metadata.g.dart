@@ -80,6 +80,41 @@ class CircleApiMetadata {
     'UpdateMemberRole': 'PATCH',
   };
 
+  /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
+  static const Map<String, String> operationToAuthMode = <String, String>{
+    'ApplyJoinCircleGroup': 'required',
+    'ApproveCircleGroupMember': 'required',
+    'ArchiveCircle': 'public',
+    'CreateCircle': 'public',
+    'CreateCircleFile': 'public',
+    'CreateCircleGroup': 'required',
+    'DeleteCircleFile': 'public',
+    'FeatureCirclePost': 'public',
+    'GetCircle': 'public',
+    'GetCircleFeed': 'public',
+    'GetCircleFile': 'public',
+    'GetCircleGroup': 'public',
+    'GetCircleStats': 'public',
+    'JoinCircle': 'required',
+    'LeaveCircle': 'required',
+    'ListCircleFiles': 'public',
+    'ListCircleGroupMembers': 'required',
+    'ListCircleGroups': 'public',
+    'ListCircleMembers': 'public',
+    'ListCircles': 'public',
+    'ListUserCircles': 'public',
+    'PinCirclePost': 'public',
+    'RejectCircleGroupMember': 'required',
+    'ReportCircleBehavior': 'public',
+    'SearchCircleGroups': 'required',
+    'SearchCircles': 'required',
+    'UpdateCircle': 'public',
+    'UpdateCircleFile': 'public',
+    'UpdateCircleGroup': 'required',
+    'UpdateCircleSections': 'public',
+    'UpdateMemberRole': 'public',
+  };
+
   static const String applyJoinCircleGroupOperation = 'ApplyJoinCircleGroup';
   static const String approveCircleGroupMemberOperation = 'ApproveCircleGroupMember';
   static const String archiveCircleOperation = 'ArchiveCircle';

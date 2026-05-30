@@ -30,6 +30,21 @@ func doRequest(t *testing.T, method, path string, body string, headers map[strin
 	return rec
 }
 
+// requestOtpCode 发送一次 OTP 并返回非生产环境暴露的调试码，供手机号登录用例使用。
+func requestOtpCode(t *testing.T, phone string) string {
+	t.Helper()
+	rec := doRequest(t, "POST", "/v1/auth/otp/send", `{"phone":"`+phone+`"}`, nil)
+	if rec.Code != 200 {
+		t.Fatalf("send otp: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := parseJSON(t, rec)
+	code, _ := body["debugCode"].(string)
+	if code == "" {
+		t.Fatalf("send otp: expected debugCode, got %#v", body)
+	}
+	return code
+}
+
 func parseJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var result map[string]any
@@ -86,7 +101,7 @@ func createTestPersona(t *testing.T, legacyID, userID, displayName string, isPri
 func cleanAll(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	_, _ = pgPool.Exec(ctx, `TRUNCATE user_profiles, personas, user_settings, block_edges,
+	_, _ = pgPool.Exec(ctx, `TRUNCATE user_profiles, user_auth, personas, user_settings, block_edges,
 		user_works, user_life_items, credential_bindings, anonymous_device_bindings,
 		contact_discovery_records, invite_records CASCADE`)
 	if mongoDB != nil {

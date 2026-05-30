@@ -1,0 +1,137 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/core/emoji/emoji_analytics.dart';
+import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
+import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+typedef ProviderReader = Object? Function(dynamic provider);
+
+/// 记录冷启动关键节点，并在首帧后异步预热非关键链路。
+final class AppStartupRuntime {
+  AppStartupRuntime._();
+
+  static final AppStartupRuntime instance = AppStartupRuntime._();
+
+  final Stopwatch _stopwatch = Stopwatch();
+
+  bool _bootstrapStarted = false;
+  bool _postFirstFrameWarmupScheduled = false;
+  bool _homeReadyReported = false;
+
+  int? _firstFrameMs;
+  int? _welcomeShownMs;
+  int? _homeFeedWarmMs;
+  int? _homeReadyMs;
+
+  void markBootstrapStarted() {
+    if (_bootstrapStarted) {
+      return;
+    }
+    _bootstrapStarted = true;
+    _stopwatch.start();
+  }
+
+  void markFirstFramePainted() {
+    _firstFrameMs ??= _elapsedMs;
+  }
+
+  void markWelcomeShown() {
+    _welcomeShownMs ??= _elapsedMs;
+  }
+
+  void markHomeFeedWarm() {
+    _homeFeedWarmMs ??= _elapsedMs;
+  }
+
+  void schedulePostFirstFrameWarmup(ProviderReader read) {
+    if (_postFirstFrameWarmupScheduled) {
+      return;
+    }
+    _postFirstFrameWarmupScheduled = true;
+    unawaited(_warmupAfterFirstFrame(read));
+  }
+
+  void scheduleHomeReadyReport(ProviderReader read) {
+    if (_homeReadyReported) {
+      return;
+    }
+    _homeReadyReported = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _homeReadyMs ??= _elapsedMs;
+      final analytics = read(analyticsProvider) as AnalyticsService;
+      unawaited(
+        analytics.trackEvent(
+          AnalyticsEvent(
+            eventType: 'app_startup',
+            eventName: 'home_ready',
+            properties: _snapshotProperties(phase: 'home_ready'),
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _warmupAfterFirstFrame(ProviderReader read) async {
+    unawaited(
+      AppExceptionTelemetryService.instance.flushPending().catchError((_) {}),
+    );
+    unawaited(_warmupHomeFeed(read));
+    await _warmupAnalytics(read);
+  }
+
+  Future<void> _warmupAnalytics(ProviderReader read) async {
+    try {
+      final analytics = read(analyticsProvider) as AnalyticsService;
+      final config = read(analyticsConfigProvider) as AnalyticsConfig;
+      await analytics.initialize(config);
+      unawaited(
+        analytics.trackEvent(
+          AnalyticsEvent(
+            eventType: 'app_startup',
+            eventName: 'app_start',
+            properties: _snapshotProperties(phase: 'first_frame'),
+          ),
+        ),
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      final emojiRepo = EmojiRepository(prefs);
+      unawaited(EmojiAnalytics.tryReportDaily(emojiRepo, analytics));
+    } catch (_) {
+      // 冷启动统计链路必须 best effort，不能影响首屏。
+    }
+  }
+
+  Future<void> _warmupHomeFeed(ProviderReader read) async {
+    try {
+      final notifier =
+          read(discoveryFeedMapProvider.notifier) as DiscoveryFeedMapNotifier;
+      await notifier.load('moment');
+      markHomeFeedWarm();
+    } catch (_) {
+      // 预热失败时保留首页正常回退逻辑。
+    }
+  }
+
+  Map<String, dynamic> _snapshotProperties({required String phase}) {
+    return <String, dynamic>{
+      'phase': phase,
+      if (_firstFrameMs != null) 'firstFrameMs': _firstFrameMs,
+      if (_welcomeShownMs != null) 'welcomeShownMs': _welcomeShownMs,
+      if (_homeFeedWarmMs != null) 'homeFeedWarmMs': _homeFeedWarmMs,
+      if (_homeReadyMs != null) 'homeReadyMs': _homeReadyMs,
+      'elapsedMs': _elapsedMs,
+    };
+  }
+
+  int get _elapsedMs {
+    if (!_stopwatch.isRunning) {
+      return 0;
+    }
+    return _stopwatch.elapsedMilliseconds;
+  }
+}

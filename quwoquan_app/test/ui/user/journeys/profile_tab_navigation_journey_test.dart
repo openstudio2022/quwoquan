@@ -4,14 +4,58 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+
+class _AuthedSessionStore implements AuthSessionStore {
+  const _AuthedSessionStore();
+
+  @override
+  Future<StoredAuthSession> read() async => const StoredAuthSession(
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'test_viewer',
+    activeSubAccountId: 'test_viewer',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+    manualLoggedOut: false,
+    launchPromptDismissed: true,
+  );
+
+  @override
+  Future<void> saveLoginResult(AuthLoginResultDto result) async {}
+
+  @override
+  Future<void> updateActiveSubAccount(String subAccountId) async {}
+
+  @override
+  Future<void> clearSession({required bool manualLogout}) async {}
+
+  @override
+  Future<void> markLaunchPromptDismissed() async {}
+}
+
+/// 在 pump 期间主动 watch 登录态，让他人主页关注/私信按钮的 requireLogin 放行。
+class _AuthWarmup extends ConsumerWidget {
+  const _AuthWarmup({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(authSessionControllerProvider);
+    return child;
+  }
+}
 
 /// 他人主页用「未关注」能力位，使 [ProfileActionBar] 在 capability 已就绪时渲染（非 null）。
 class _NotFollowingRelationshipCapability
@@ -39,8 +83,11 @@ Widget _scopedApp({ProfileMode mode = ProfileMode.mine}) {
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _NotFollowingRelationshipCapability(),
       ),
+      authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
     ],
     child: MaterialApp(
+      builder: (context, child) =>
+          _AuthWarmup(child: child ?? const SizedBox.shrink()),
       home: ProfileShell(mode: mode, userId: 'nature_photographer'),
     ),
   );

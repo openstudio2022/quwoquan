@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/app_page_access_navigator_observer.dart';
+import 'package:quwoquan_app/app/navigation/native_back_navigation.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -46,6 +49,8 @@ import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/suggest_homepage_page.dart';
 import 'package:quwoquan_app/ui/user/pages/edit_profile_page.dart';
+import 'package:quwoquan_app/ui/user/pages/legal_document_page.dart';
+import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_comments_page.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
@@ -76,6 +81,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.listen<bool>(welcomeCompletedProvider, (Object? previous, bool next) {
     refreshListenable.value++;
   });
+  ref.listen<AuthSessionState>(authSessionControllerProvider, (
+    Object? previous,
+    AuthSessionState next,
+  ) {
+    refreshListenable.value++;
+  });
 
   return GoRouter(
     refreshListenable: refreshListenable,
@@ -85,12 +96,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         : AppRoutePaths.welcome,
     redirect: (BuildContext context, GoRouterState state) {
       final done = ref.read(welcomeCompletedProvider);
+      final auth = ref.read(authSessionControllerProvider);
       final loc = state.matchedLocation;
       if (!done && loc != AppRoutePaths.welcome) {
         return AppRoutePaths.welcome;
       }
       if (done && loc == AppRoutePaths.welcome) {
         return AppRoutePaths.home;
+      }
+      if (done &&
+          auth.isAuthenticated &&
+          loc == AppRoutePaths.loginPathTemplate) {
+        return AppRoutePaths.home;
+      }
+      // 受限路由守卫：未登录直达需要账号身份的页面时跳全屏登录并带回源。
+      // 会话恢复中（restoring）暂不拦截，避免已登录用户出现误跳闪烁。
+      if (done && auth.status != AuthSessionStatus.restoring) {
+        final gate = requiredRouteGateForLocation(loc);
+        if (gate != null && !auth.isAuthenticated) {
+          return AppRoutePaths.login(
+            reason: gate.name,
+            redirect: state.uri.toString(),
+          );
+        }
       }
       return null;
     },
@@ -99,16 +127,53 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.welcome,
         pageBuilder: (context, state) => NoTransitionPage<void>(
           key: state.pageKey,
-          child: WelcomeScreen(
-            onFinish: () {
-              ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
-            },
+          child: Consumer(
+            builder: (context, ref, _) => WelcomeScreen(
+              loginPrompt: _welcomeLoginPromptConfig(context, ref),
+              onFinish: () {
+                _completeWelcome(ref);
+              },
+            ),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.loginPathTemplate,
+        pageBuilder: (context, state) => CupertinoPage<void>(
+          key: state.pageKey,
+          fullscreenDialog: true,
+          child: LoginPage(
+            reason: state.uri.queryParameters['reason'],
+            redirect: state.uri.queryParameters['redirect'],
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.legalUserAgreement,
+        pageBuilder: (context, state) => CupertinoPage<void>(
+          key: state.pageKey,
+          child: const LegalDocumentPage(
+            title: UITextConstants.userAgreement,
+            url: AuthLegalConfig.userAgreementUrl,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.legalPrivacyPolicy,
+        pageBuilder: (context, state) => CupertinoPage<void>(
+          key: state.pageKey,
+          child: const LegalDocumentPage(
+            title: UITextConstants.privacyPolicy,
+            url: AuthLegalConfig.privacyPolicyUrl,
           ),
         ),
       ),
       ShellRoute(
         builder: (context, state, child) {
-          return MainAppShell(currentLocation: state.uri.path, child: child);
+          return AppNativeBackScope(
+            router: GoRouter.of(context),
+            child: MainAppShell(currentLocation: state.uri.path, child: child),
+          );
         },
         routes: [
           GoRoute(
@@ -149,8 +214,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.startGroupChat,
-        pageBuilder: (context, state) => MaterialPage<void>(
-          key: state.pageKey,
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          kind: AppRoutePageKind.fullscreenDialog,
           fullscreenDialog: true,
           child: StartGroupChatPage(
             onBack: () {
@@ -284,8 +350,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.suggestHomepagePathTemplate,
         pageBuilder: (context, state) {
           final query = state.uri.queryParameters['query'] ?? '';
-          return MaterialPage<void>(
-            key: state.pageKey,
+          return appRoutePage<void>(
+            state: state,
+            kind: AppRoutePageKind.fullscreenDialog,
             fullscreenDialog: true,
             child: SuggestHomepagePage(initialQuery: query),
           );
@@ -296,16 +363,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           '{id}',
           ':id',
         ),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           final extra = state.extra is HomepageDetailPageRouteExtra
               ? state.extra! as HomepageDetailPageRouteExtra
               : null;
-          return HomepageDetailPage(
-            homepageId: id,
-            selectionMode: extra?.selectionMode ?? false,
-            initialSummary: extra?.initialSummary,
-            referralSource: extra?.referralSource ?? ReferralSource.entityPage,
+          return appRoutePage<void>(
+            state: state,
+            child: HomepageDetailPage(
+              homepageId: id,
+              selectionMode: extra?.selectionMode ?? false,
+              initialSummary: extra?.initialSummary,
+              referralSource: extra?.referralSource ?? ReferralSource.entityPage,
+            ),
           );
         },
       ),
@@ -313,8 +383,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.homepageClaimPathTemplate.replaceAll('{id}', ':id'),
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return MaterialPage<void>(
-            key: state.pageKey,
+          return appRoutePage<void>(
+            state: state,
+            kind: AppRoutePageKind.fullscreenDialog,
             fullscreenDialog: true,
             child: HomepageClaimPage(homepageId: id),
           );
@@ -327,8 +398,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return MaterialPage<void>(
-            key: state.pageKey,
+          return appRoutePage<void>(
+            state: state,
+            kind: AppRoutePageKind.fullscreenDialog,
             fullscreenDialog: true,
             child: HomepageMaintenancePage(homepageId: id),
           );
@@ -341,8 +413,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
         pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return MaterialPage<void>(
-            key: state.pageKey,
+          return appRoutePage<void>(
+            state: state,
+            kind: AppRoutePageKind.fullscreenDialog,
             fullscreenDialog: true,
             child: HomepageStatusReportPage(homepageId: id),
           );
@@ -378,7 +451,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.createPathTemplate,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final typeStr = state.uri.queryParameters['type'];
           final initialTabKey = state.uri.queryParameters['tab'];
           final initialHomepage = state.extra is HomepageCanonicalReference
@@ -398,11 +471,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               action = null;
             }
           }
-          return CreatePage(
-            initialAction: action,
-            initialTabKey: initialTabKey,
-            initialHomepage: initialHomepage,
-            initialDraftId: initialDraftId,
+          return appRoutePage<void>(
+            state: state,
+            child: CreatePage(
+              initialAction: action,
+              initialTabKey: initialTabKey,
+              initialHomepage: initialHomepage,
+              initialDraftId: initialDraftId,
+            ),
           );
         },
         routes: [
@@ -421,8 +497,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 if (p != null && p.isNotEmpty) paths.add(p);
               }
               if (paths.isEmpty && path.isNotEmpty) paths.add(path);
-              return MaterialPage<void>(
-                key: state.pageKey,
+              return appRoutePage<void>(
+                state: state,
+                kind: AppRoutePageKind.fullscreenDialog,
                 fullscreenDialog: true,
                 child: ImageEditorPage(
                   initialPath: path,
@@ -438,46 +515,56 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutePaths.circleDetailPathTemplate.replaceAll('{id}', ':id'),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           final circleExtra = state.extra is CircleDetailPageRouteExtra
               ? state.extra! as CircleDetailPageRouteExtra
               : null;
-          return CircleDetailPage(
-            circleId: id,
-            referralSource:
-                circleExtra?.referralSource ?? ReferralSource.organicFeed,
-            onBack: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.circles);
-              }
-            },
+          return appRoutePage<void>(
+            state: state,
+            child: CircleDetailPage(
+              circleId: id,
+              referralSource:
+                  circleExtra?.referralSource ?? ReferralSource.organicFeed,
+              onBack: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutePaths.circles);
+                }
+              },
+            ),
           );
         },
         routes: [
           GoRoute(
             path: AppRoutePaths.circleStatsSegment,
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
               final type = state.uri.queryParameters['type'] ?? 'members';
-              return CircleStatsPage(circleId: id, type: type);
+              return appRoutePage<void>(
+                state: state,
+                child: CircleStatsPage(circleId: id, type: type),
+              );
             },
           ),
         ],
       ),
       GoRoute(
         path: AppRoutePaths.articleDetailPathTemplate.replaceAll('{id}', ':id'),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '0';
           final extra = state.extra is ArticleDetailPageRouteExtra
               ? state.extra! as ArticleDetailPageRouteExtra
               : null;
-          return ArticleDetailPage(
-            articleId: id,
-            referralSource: extra?.referralSource ?? ReferralSource.organicFeed,
-            feedRequestId: extra?.feedRequestId,
+          return appRoutePage<void>(
+            state: state,
+            child: ArticleDetailPage(
+              articleId: id,
+              referralSource:
+                  extra?.referralSource ?? ReferralSource.organicFeed,
+              feedRequestId: extra?.feedRequestId,
+            ),
           );
         },
       ),
@@ -486,7 +573,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           '{username}',
           ':username',
         ),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final username = state.pathParameters['username'] ?? '';
           final currentUser = ref.read(userDataProvider);
           final isSelf =
@@ -503,7 +590,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
 
           if (isSelf) {
-            return MyProfilePage(onBack: onBack);
+            return appRoutePage<void>(
+              state: state,
+              child: MyProfilePage(onBack: onBack),
+            );
           }
           UserProfileRouteExtra? extra;
           ReferralSource profileReferralSource = ReferralSource.authorProfile;
@@ -529,14 +619,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               backgroundImage: m['backgroundImage']?.toString(),
             );
           }
-          return OtherProfilePage(
-            username: username,
-            subAccountId: extra?.safeSubAccountId,
-            initialAvatarUrl: extra?.safeAvatar,
-            initialDisplayName: extra?.safeDisplayName,
-            initialBackgroundImageUrl: extra?.safeBackgroundImage,
-            referralSource: profileReferralSource,
-            onBack: onBack,
+          return appRoutePage<void>(
+            state: state,
+            child: OtherProfilePage(
+              username: username,
+              subAccountId: extra?.safeSubAccountId,
+              initialAvatarUrl: extra?.safeAvatar,
+              initialDisplayName: extra?.safeDisplayName,
+              initialBackgroundImageUrl: extra?.safeBackgroundImage,
+              referralSource: profileReferralSource,
+              onBack: onBack,
+            ),
           );
         },
       ),
@@ -544,7 +637,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutePaths.mediaViewerPathTemplate
             .replaceAll('{category}', ':category')
             .replaceAll('{index}', ':index'),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final category = state.pathParameters['category'] ?? 'images';
           final indexStr = state.pathParameters['index'] ?? '0';
           final index = int.tryParse(indexStr) ?? 0;
@@ -553,13 +646,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               : null;
 
           if (extra != null && extra.dtoPosts.isNotEmpty) {
-            return UnifiedMediaViewerPage(extra: extra);
+            return appRoutePage<void>(
+              state: state,
+              child: UnifiedMediaViewerPage(extra: extra),
+            );
           }
 
-          return PhotoDetailPage(
-            category: category,
-            initialIndex: index,
-            initialExtra: extra,
+          return appRoutePage<void>(
+            state: state,
+            child: PhotoDetailPage(
+              category: category,
+              initialIndex: index,
+              initialExtra: extra,
+            ),
           );
         },
       ),
@@ -568,7 +667,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           '{index}',
           ':index',
         ),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final indexStr = state.pathParameters['index'] ?? '0';
           final index = int.tryParse(indexStr) ?? 0;
           final extra = state.extra is MediaViewerExtra
@@ -576,107 +675,143 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               : null;
 
           if (extra != null && extra.dtoPosts.isNotEmpty) {
-            return UnifiedMediaViewerPage(extra: extra);
+            return appRoutePage<void>(
+              state: state,
+              child: UnifiedMediaViewerPage(extra: extra),
+            );
           }
 
-          return VideoDetailPage(initialIndex: index, initialExtra: extra);
+          return appRoutePage<void>(
+            state: state,
+            child: VideoDetailPage(initialIndex: index, initialExtra: extra),
+          );
         },
       ),
       GoRoute(
         path: AppRoutePaths.assistantPersonal,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final assistantOpenContext = state.extra is AssistantOpenContext
               ? state.extra as AssistantOpenContext
               : null;
-          return PersonalAssistantConversationPage(
-            assistantOpenContext: assistantOpenContext,
-            onBack: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.home);
-              }
-            },
+          return appRoutePage<void>(
+            state: state,
+            child: PersonalAssistantConversationPage(
+              assistantOpenContext: assistantOpenContext,
+              onBack: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutePaths.home);
+                }
+              },
+            ),
           );
         },
       ),
       GoRoute(
         path: AppRoutePaths.assistantManagement,
-        builder: (context, state) {
-          return AssistantManagementPage(
-            onBack: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.assistantPersonal);
-              }
-            },
+        pageBuilder: (context, state) {
+          return appRoutePage<void>(
+            state: state,
+            child: AssistantManagementPage(
+              onBack: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutePaths.assistantPersonal);
+                }
+              },
+            ),
           );
         },
       ),
       GoRoute(
         path: AppRoutePaths.assistantSkills,
-        builder: (context, state) {
-          return AssistantSkillCenterPage(
-            onBack: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go(AppRoutePaths.assistantPersonal);
-              }
-            },
+        pageBuilder: (context, state) {
+          return appRoutePage<void>(
+            state: state,
+            child: AssistantSkillCenterPage(
+              onBack: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go(AppRoutePaths.assistantPersonal);
+                }
+              },
+            ),
           );
         },
       ),
       GoRoute(
         path: AppRoutePaths.settings,
-        builder: (context, state) {
-          return const SettingsPage();
+        pageBuilder: (context, state) {
+          return appRoutePage<void>(
+            state: state,
+            child: const SettingsPage(),
+          );
         },
         routes: [
           GoRoute(
             path: AppRoutePaths.settingsDeveloperSegment,
-            builder: (context, state) {
-              return const DeveloperSettingsPage();
+            pageBuilder: (context, state) {
+              return appRoutePage<void>(
+                state: state,
+                child: const DeveloperSettingsPage(),
+              );
             },
           ),
         ],
       ),
       GoRoute(
         path: AppRoutePaths.profileEdit,
-        builder: (context, state) {
-          return const EditProfilePage();
+        pageBuilder: (context, state) {
+          return appRoutePage<void>(
+            state: state,
+            child: const EditProfilePage(),
+          );
         },
       ),
       GoRoute(
         path: AppRoutePaths.profilePersonas,
-        builder: (context, state) {
-          return const PersonaManagementPage();
+        pageBuilder: (context, state) {
+          return appRoutePage<void>(
+            state: state,
+            child: const PersonaManagementPage(),
+          );
         },
       ),
       GoRoute(
         path: AppRoutePaths.profileComments,
-        builder: (context, state) {
-          return const ProfileCommentsPage();
+        pageBuilder: (context, state) {
+          return appRoutePage<void>(
+            state: state,
+            child: const ProfileCommentsPage(),
+          );
         },
       ),
       GoRoute(
         path: AppRoutePaths.profileResonance,
-        builder: (context, state) {
-          return const ResonancePage();
+        pageBuilder: (context, state) {
+          return appRoutePage<void>(
+            state: state,
+            child: const ResonancePage(),
+          );
         },
       ),
       GoRoute(
         path: AppRoutePaths.profileStatsPathTemplate,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final type = state.uri.queryParameters['type'] ?? 'fans';
           final userId = state.uri.queryParameters['userId'] ?? '';
-          return ProfileStatsPage(type: type, userId: userId);
+          return appRoutePage<void>(
+            state: state,
+            child: ProfileStatsPage(type: type, userId: userId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutePaths.chatDetailPathTemplate.replaceAll('{id}', ':id'),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
           final assistantOpenContext = state.extra is AssistantOpenContext
               ? state.extra as AssistantOpenContext
@@ -700,68 +835,92 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
 
           if (isAssistant) {
-            return PersonalAssistantConversationPage(
-              onBack: handleBack,
-              assistantOpenContext: assistantOpenContext,
+            return appRoutePage<void>(
+              state: state,
+              child: PersonalAssistantConversationPage(
+                onBack: handleBack,
+                assistantOpenContext: assistantOpenContext,
+              ),
             );
           }
-          return ChatDetailPage(
-            conversationId: id,
-            onBack: handleBack,
-            assistantOpenContext: assistantOpenContext,
-            searchAnchorContext: searchAnchorContext,
+          return appRoutePage<void>(
+            state: state,
+            child: ChatDetailPage(
+              conversationId: id,
+              onBack: handleBack,
+              assistantOpenContext: assistantOpenContext,
+              searchAnchorContext: searchAnchorContext,
+            ),
           );
         },
         routes: [
           GoRoute(
             path: AppRoutePaths.chatSettingsSegment,
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
-              return ChatSettingsPage(conversationId: id);
+              return appRoutePage<void>(
+                state: state,
+                child: ChatSettingsPage(conversationId: id),
+              );
             },
           ),
           GoRoute(
             path: AppRoutePaths.chatMemberSearchSegment,
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
-              return GroupMemberSearchPage(conversationId: id);
+              return appRoutePage<void>(
+                state: state,
+                child: GroupMemberSearchPage(conversationId: id),
+              );
             },
           ),
           GoRoute(
             path: AppRoutePaths.chatAddMembersSegment,
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
-              return StartGroupChatPage(
-                conversationId: id,
-                onBack: () {
-                  if (context.canPop()) {
-                    context.pop();
-                  } else {
-                    context.go(AppRoutePaths.chat);
-                  }
-                },
+              return appRoutePage<void>(
+                state: state,
+                child: StartGroupChatPage(
+                  conversationId: id,
+                  onBack: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go(AppRoutePaths.chat);
+                    }
+                  },
+                ),
               );
             },
           ),
           GoRoute(
             path: AppRoutePaths.chatManageSegment,
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
-              return GroupManagePage(conversationId: id);
+              return appRoutePage<void>(
+                state: state,
+                child: GroupManagePage(conversationId: id),
+              );
             },
           ),
           GoRoute(
             path: AppRoutePaths.chatTransferOwnershipSegment,
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
-              return TransferOwnershipPage(conversationId: id);
+              return appRoutePage<void>(
+                state: state,
+                child: TransferOwnershipPage(conversationId: id),
+              );
             },
           ),
           GoRoute(
             path: AppRoutePaths.chatAdminsSegment,
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
-              return GroupAdminsPage(conversationId: id);
+              return appRoutePage<void>(
+                state: state,
+                child: GroupAdminsPage(conversationId: id),
+              );
             },
           ),
         ],
@@ -771,9 +930,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           '{callId}',
           ':callId',
         ),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final callId = state.pathParameters['callId'] ?? '';
-          return OutgoingCallPage(callId: callId);
+          return appRoutePage<void>(
+            state: state,
+            child: OutgoingCallPage(callId: callId),
+          );
         },
       ),
       GoRoute(
@@ -781,9 +943,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           '{callId}',
           ':callId',
         ),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final callId = state.pathParameters['callId'] ?? '';
-          return IncomingCallPage(callId: callId);
+          return appRoutePage<void>(
+            state: state,
+            child: IncomingCallPage(callId: callId),
+          );
         },
       ),
       GoRoute(
@@ -791,9 +956,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           '{callId}',
           ':callId',
         ),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final callId = state.pathParameters['callId'] ?? '';
-          return VoiceCallPage(callId: callId);
+          return appRoutePage<void>(
+            state: state,
+            child: VoiceCallPage(callId: callId),
+          );
         },
       ),
       GoRoute(
@@ -801,26 +969,71 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           '{callId}',
           ':callId',
         ),
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final callId = state.pathParameters['callId'] ?? '';
-          return VideoCallPage(callId: callId);
+          return appRoutePage<void>(
+            state: state,
+            child: VideoCallPage(callId: callId),
+          );
         },
       ),
       GoRoute(
         path: AppRoutePaths.rtcPickParticipants,
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final extra = CallParticipantPickerRouteExtra.fromRouter(state.extra);
-          return CallParticipantPickerPage(
-            callId: extra.callId,
-            maxParticipants: extra.maxParticipants,
-            conversationId: extra.conversationId,
-            defaultSelectAll: extra.defaultSelectAll,
+          return appRoutePage<void>(
+            state: state,
+            child: CallParticipantPickerPage(
+              callId: extra.callId,
+              maxParticipants: extra.maxParticipants,
+              conversationId: extra.conversationId,
+              defaultSelectAll: extra.defaultSelectAll,
+            ),
           );
         },
       ),
     ],
   );
 });
+
+WelcomeLoginPromptConfig? _welcomeLoginPromptConfig(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  final auth = ref.read(authSessionControllerProvider);
+  final reason = auth.promptReason;
+  if (auth.status != AuthSessionStatus.guest ||
+      reason == null ||
+      reason == AuthPromptReason.actionRequired ||
+      reason == AuthPromptReason.sessionExpired) {
+    return null;
+  }
+  return WelcomeLoginPromptConfig(
+    title: UITextConstants.welcomeLoginPromptTitle,
+    subtitle: UITextConstants.welcomeLoginPromptSubtitle,
+    onLogin: () {
+      _completeWelcome(ref);
+      if (!context.mounted) {
+        return;
+      }
+      context.go(AppRoutePaths.login(reason: reason.name));
+    },
+    onContinueAsGuest: () async {
+      await ref.read(authSessionControllerProvider.notifier).continueAsGuest();
+      if (!context.mounted) {
+        return;
+      }
+      _completeWelcome(ref);
+    },
+  );
+}
+
+void _completeWelcome(WidgetRef ref) {
+  ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+  AppStartupRuntime.instance.scheduleHomeReadyReport(
+    (provider) => ref.read(provider),
+  );
+}
 
 /// 创作入口抽屉的独立路由页（避免在 Shell 内 setState 导致 build scope 断言）
 class _CreateEntryRoutePage extends ConsumerWidget {

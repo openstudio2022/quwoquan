@@ -59,8 +59,8 @@ class TestKeys {
   static const searchContentVideoToggle = ValueKey<String>(
     'search_content_video_toggle',
   );
-  static const searchContentMomentToggle = ValueKey<String>(
-    'search_content_moment_toggle',
+  static const searchContentMicroToggle = ValueKey<String>(
+    'search_content_micro_toggle',
   );
   static const globalSearchScopeRail = ValueKey<String>(
     'global_search_scope_rail',
@@ -99,8 +99,8 @@ class TestKeys {
   static const searchContentTypeVideoChip = ValueKey<String>(
     'search_content_type_video_chip',
   );
-  static const searchContentTypeMomentChip = ValueKey<String>(
-    'search_content_type_moment_chip',
+  static const searchContentTypeMicroChip = ValueKey<String>(
+    'search_content_type_micro_chip',
   );
   static const searchObjectSheet = ValueKey<String>('search_object_sheet');
   static const searchObjectResetButton = ValueKey<String>(
@@ -179,6 +179,12 @@ class TestKeys {
   );
   static const chatInputExpandedEmojiToggleButton = ValueKey<String>(
     'chat_input_expanded_emoji_toggle_button',
+  );
+  static const chatInputVoiceHoldButton = ValueKey<String>(
+    'chat_input_voice_hold_button',
+  );
+  static const chatInputVoiceRecordHud = ValueKey<String>(
+    'chat_input_voice_record_hud',
   );
   static const assistantProcessHeader = ValueKey<String>(
     'assistant_process_header',

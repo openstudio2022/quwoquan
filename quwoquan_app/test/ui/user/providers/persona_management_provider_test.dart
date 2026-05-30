@@ -4,6 +4,7 @@ import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/providers/persona_management_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeAnalyticsService extends AnalyticsService {
   _FakeAnalyticsService() : super.forTesting();
@@ -17,6 +18,14 @@ class _FakeAnalyticsService extends AnalyticsService {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    // activatePersona 现在会同步更新 AuthSession 的 activeSubAccount，
+    // 该链路依赖 SharedPreferences，需在测试态提供 mock 存储。
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+  });
+
   group('PersonaManagementNotifier telemetry', () {
     test('create / activate / retire / quota reached 记录成功事件', () async {
       final analytics = _FakeAnalyticsService();
