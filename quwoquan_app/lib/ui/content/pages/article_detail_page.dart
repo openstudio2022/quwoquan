@@ -17,6 +17,9 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/article_reader/hosts/article_detail_reader_adapter.dart';
+import 'package:quwoquan_app/ui/content/article_reader/hosts/article_reader_host_adapter.dart';
+import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/post_read_projection_facade.dart';
@@ -291,13 +294,18 @@ class _ArticleDetailPageState extends ConsumerState<ArticleDetailPage> {
                           child: SizedBox(
                             width: stageWidth,
                             height: stageHeight,
-                            child: ArticleReadOnlyBookDeck(
-                              pages: pages,
-                              template: article.template,
-                              fontPreset: article.fontPreset,
-                              metrics: metrics,
-                              coverUrl: article.coverImage,
-                              pagePadding: pagePadding,
+                            child: ArticleReaderFlipHost(
+                              adapter: ArticleDetailReaderAdapter(
+                                ArticleReaderHostConfig(
+                                  pages: pages,
+                                  template: article.template,
+                                  fontPreset: article.fontPreset,
+                                  metrics: metrics,
+                                  initialPage: 0,
+                                  coverUrl: article.coverImage,
+                                  pagePadding: pagePadding,
+                                ),
+                              ),
                             ),
                           ),
                         );

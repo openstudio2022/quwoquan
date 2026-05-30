@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -12,7 +13,7 @@ import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 /// 欢迎页
 ///
 /// 与 Figma 原型及趣我圈2026 WelcomeScreen 视觉、动效一致。
-/// 动效顺序：水滴出现(100ms) -> 花瓣绽放(800ms) -> 文案出现(2000ms)
+/// 动效顺序：短暂留白 -> 花瓣绽放 -> 文案出现 -> 直接进入首页。
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key, required this.onFinish});
 
@@ -24,54 +25,41 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen>
     with TickerProviderStateMixin {
-  /// 欢迎页自动进入发现页的倒计时秒数（右上角展示）
-  static const int welcomeCountdownSeconds = 3;
+  static const Duration _initialDelay = Duration(milliseconds: 60);
+  static const Duration _petalDuration = Duration(milliseconds: 600);
+  static const Duration _petalStagger = Duration(milliseconds: 35);
+  static const Duration _postBloomPause = Duration(milliseconds: 240);
+  static const Duration _textDuration = Duration(milliseconds: 520);
+  static const Duration _finalPause = Duration(milliseconds: 360);
 
   late List<AnimationController> _petalControllers;
   late AnimationController _textController;
-  int _countdownRemaining = 0;
-  Timer? _countdownTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppStartupRuntime.instance.markWelcomeShown();
+    });
     _petalControllers = List.generate(
       8,
-      (i) => AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 800),
-      ),
+      (i) => AnimationController(vsync: this, duration: _petalDuration),
     );
-    _textController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
+    _textController = AnimationController(vsync: this, duration: _textDuration);
 
     Future<void> runSequence() async {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(_initialDelay);
       if (!mounted) return;
       for (var i = 0; i < 8; i++) {
         _petalControllers[i].forward();
-        await Future<void>.delayed(const Duration(milliseconds: 40));
+        await Future<void>.delayed(_petalStagger);
       }
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+      await Future<void>.delayed(_postBloomPause);
       if (!mounted) return;
       await _textController.forward();
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await Future<void>.delayed(_finalPause);
       if (!mounted) return;
-      setState(() => _countdownRemaining = welcomeCountdownSeconds);
-      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-        if (!mounted) {
-          t.cancel();
-          return;
-        }
-        setState(() => _countdownRemaining--);
-        if (_countdownRemaining <= 0) {
-          t.cancel();
-          _countdownTimer = null;
-          widget.onFinish();
-        }
-      });
+      widget.onFinish();
     }
 
     runSequence();
@@ -83,7 +71,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       c.dispose();
     }
     _textController.dispose();
-    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -106,7 +93,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             _buildBackground(appearance),
             _buildMainContent(appearance),
             _buildAssistantWhisper(appearance),
-            _buildCountdownBadge(appearance),
           ],
         ),
       ),
@@ -149,34 +135,6 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  /// 右上角倒计时角标：仅在进入 3 秒等待阶段显示
-  Widget _buildCountdownBadge(WelcomeAppearance appearance) {
-    if (_countdownRemaining <= 0) return const SizedBox.shrink();
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + AppSpacing.lg,
-      right: AppSpacing.lg,
-      child: Container(
-        decoration: BoxDecoration(
-          color: appearance.buttonBackground,
-          borderRadius: BorderRadius.circular(AppSpacing.fullBorderRadius),
-        ),
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
-        child: Text(
-          '$_countdownRemaining',
-          style: TextStyle(
-            fontSize: AppTypography.lg,
-            fontWeight: AppTypography.semiBold,
-            color: appearance.countdownDigit,
-            decoration: TextDecoration.none,
-          ),
         ),
       ),
     );

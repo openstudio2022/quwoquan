@@ -100,6 +100,23 @@ void main() {
     );
   });
 
+  test('SpreadModel 可将 cover 语义与 hard density 解耦', () {
+    final model = StPageFlipSpreadModel(
+      pageCount: 4,
+      showCover: true,
+      hardPagePolicy: StPageFlipHardPagePolicy.none,
+    );
+    final spreads = model.spreadsFor(StPageFlipOrientation.landscape);
+
+    expect(spreads.map((spread) => spread.pages), <List<int>>[
+      <int>[0],
+      <int>[1, 2],
+      <int>[3],
+    ]);
+    expect(model.densityForPage(0), StPageFlipDensity.soft);
+    expect(model.densityForPage(3), StPageFlipDensity.soft);
+  });
+
   test('FlipController 在单页模式下完成前翻', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),

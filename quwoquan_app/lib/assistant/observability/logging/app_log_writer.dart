@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,9 @@ class AppLogWriter {
   final AppLogPaths _paths;
   final int keepDays;
   DateTime? _lastPruneAt;
+  Future<Directory>? _rootDirectoryFuture;
+  Future<void> _writeTail = Future<void>.value();
+  bool _pruneScheduled = false;
 
   Future<String> appendJsonLine({
     required String subDirectory,
@@ -19,19 +23,20 @@ class AppLogWriter {
     DateTime? at,
   }) async {
     final time = at ?? DateTime.now();
-    final dayDir = await _ensureDayDirectory(time);
-    final subDir = Directory('${dayDir.path}/$subDirectory');
-    if (!subDir.existsSync()) {
-      subDir.createSync(recursive: true);
-    }
-    final file = File('${subDir.path}/$fileName');
-    file.writeAsStringSync(
-      '${jsonEncode(payload)}\n',
-      mode: FileMode.append,
-      flush: true,
-    );
-    await _pruneIfNeeded();
-    return file.path;
+    return _enqueueWrite(() async {
+      final dayDir = await _ensureDayDirectory(time);
+      final subDir = Directory('${dayDir.path}/$subDirectory');
+      if (!await subDir.exists()) {
+        await subDir.create(recursive: true);
+      }
+      final file = File('${subDir.path}/$fileName');
+      await file.writeAsString(
+        '${jsonEncode(payload)}\n',
+        mode: FileMode.append,
+      );
+      _schedulePruneIfNeeded();
+      return file.path;
+    });
   }
 
   Future<String> writeJsonFile({
@@ -41,52 +46,82 @@ class AppLogWriter {
     DateTime? at,
   }) async {
     final time = at ?? DateTime.now();
-    final dayDir = await _ensureDayDirectory(time);
-    final subDir = Directory('${dayDir.path}/$subDirectory');
-    if (!subDir.existsSync()) {
-      subDir.createSync(recursive: true);
-    }
-    final file = File('${subDir.path}/$fileName');
-    file.writeAsStringSync(
-      const JsonEncoder.withIndent('  ').convert(payload),
-      flush: true,
-    );
-    await _pruneIfNeeded();
-    return file.path;
+    return _enqueueWrite(() async {
+      final dayDir = await _ensureDayDirectory(time);
+      final subDir = Directory('${dayDir.path}/$subDirectory');
+      if (!await subDir.exists()) {
+        await subDir.create(recursive: true);
+      }
+      final file = File('${subDir.path}/$fileName');
+      await file.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(payload),
+      );
+      _schedulePruneIfNeeded();
+      return file.path;
+    });
   }
 
   Future<Directory> _ensureDayDirectory(DateTime time) async {
-    final dayDir = await _paths.dayDirectory(time);
-    if (!dayDir.existsSync()) {
-      dayDir.createSync(recursive: true);
+    final root = await (_rootDirectoryFuture ??= _paths.rootDirectory());
+    final dayDir = Directory('${root.path}/${_dayStamp(time)}');
+    if (!await dayDir.exists()) {
+      await dayDir.create(recursive: true);
     }
     return dayDir;
   }
 
-  Future<void> _pruneIfNeeded() async {
+  Future<T> _enqueueWrite<T>(Future<T> Function() action) {
+    final completer = Completer<T>();
+    final previous = _writeTail;
+    final next = Completer<void>();
+    _writeTail = next.future;
+    unawaited(() async {
+      try {
+        await previous;
+        completer.complete(await action());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      } finally {
+        if (!next.isCompleted) {
+          next.complete();
+        }
+      }
+    }());
+    return completer.future;
+  }
+
+  void _schedulePruneIfNeeded() {
     final now = DateTime.now();
-    if (_lastPruneAt != null && now.difference(_lastPruneAt!).inHours < 12) {
+    if (_pruneScheduled ||
+        (_lastPruneAt != null && now.difference(_lastPruneAt!).inHours < 12)) {
       return;
     }
     _lastPruneAt = now;
+    _pruneScheduled = true;
+    unawaited(_pruneDirectories(now));
+  }
+
+  Future<void> _pruneDirectories(DateTime now) async {
     try {
-      final root = await _paths.rootDirectory();
-      if (!root.existsSync()) return;
+      final root = await (_rootDirectoryFuture ??= _paths.rootDirectory());
+      if (!await root.exists()) return;
       final threshold = now.subtract(Duration(days: keepDays));
-      final entries = root.listSync().whereType<Directory>().toList(
-        growable: false,
-      );
-      for (final dir in entries) {
-        final name = dir.uri.pathSegments.isNotEmpty
-            ? dir.uri.pathSegments[dir.uri.pathSegments.length - 2]
+      await for (final entity in root.list()) {
+        if (entity is! Directory) {
+          continue;
+        }
+        final name = entity.uri.pathSegments.isNotEmpty
+            ? entity.uri.pathSegments[entity.uri.pathSegments.length - 2]
             : '';
         final parsed = DateTime.tryParse(name);
-        if (parsed == null) continue;
+        if (parsed == null) {
+          continue;
+        }
         if (parsed.isBefore(
           DateTime(threshold.year, threshold.month, threshold.day),
         )) {
           try {
-            dir.deleteSync(recursive: true);
+            await entity.delete(recursive: true);
           } catch (error) {
             if (kDebugMode) {
               debugPrint('[AppLogWriter] prune failed: $error');
@@ -98,6 +133,15 @@ class AppLogWriter {
       if (kDebugMode) {
         debugPrint('[AppLogWriter] prune exception: $error');
       }
+    } finally {
+      _pruneScheduled = false;
     }
+  }
+
+  String _dayStamp(DateTime time) {
+    final y = time.year.toString().padLeft(4, '0');
+    final m = time.month.toString().padLeft(2, '0');
+    final d = time.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 }

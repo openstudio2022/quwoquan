@@ -89,6 +89,72 @@ class ContentMockData {
         .toList(growable: false);
   }
 
+  static List<FeedItemDto> _expandDiscoveryFeed(
+    List<FeedItemDto> source, {
+    required int targetCount,
+    required String cloneLabel,
+  }) {
+    if (source.length >= targetCount) {
+      return source;
+    }
+    final expanded = <FeedItemDto>[...source];
+    var cloneIndex = 1;
+    while (expanded.length < targetCount) {
+      final base = source[(expanded.length - source.length) % source.length];
+      expanded.add(
+        base.copyWith(
+          id: '${base.id}_${cloneLabel}_$cloneIndex',
+          title: base.title == null || base.title!.trim().isEmpty
+              ? base.title
+              : '${base.title} · ${cloneIndex + 1}',
+          summary: base.summary == null || base.summary!.trim().isEmpty
+              ? base.summary
+              : '${base.summary}（扩展批次 ${cloneIndex + 1}）',
+          createdAt: base.createdAt.subtract(Duration(minutes: cloneIndex)),
+        ),
+      );
+      cloneIndex += 1;
+    }
+    return List<FeedItemDto>.unmodifiable(expanded);
+  }
+
+  static String _buildLongformMockArticleMarkdown({
+    required String title,
+    required String summary,
+    required String template,
+    required String fontPreset,
+    required String coverUrl,
+  }) {
+    final normalizedTitle = title.trim().isEmpty ? '无题长文' : title.trim();
+    final normalizedSummary = summary.trim().isEmpty
+        ? '这是一段用于精品沉浸翻页的长文样本。'
+        : summary.trim();
+    final repeatedParagraph = [
+      normalizedSummary,
+      '为了保证首页精品与文章浏览入口都能稳定验证翻页，这里把摘要扩展为更长的连续正文。',
+      '正文继续补充场景、细节、人物动作与环境变化，让排版在窄屏沉浸视口中稳定切出第二页、第三页。',
+      '当用户在首页精品中停留到文章卡时，应该能像真实长文一样完成前翻、后翻，而不是停留在单页摘要。',
+    ].join('\n\n');
+    final figure = coverUrl.trim().isEmpty
+        ? ''
+        : '\n:::figure id=\"cover_${normalizedTitle.hashCode}\" layout=\"fullWidth\" caption=\"精品长文封面\"\n$coverUrl\n:::\n';
+    return '---\n'
+        'title: $normalizedTitle\n'
+        'summary: $normalizedSummary\n'
+        'template: $template\n'
+        'fontPreset: $fontPreset\n'
+        '---\n\n'
+        '# $normalizedTitle\n\n'
+        '$normalizedSummary\n'
+        '$figure\n'
+        '## 开篇\n\n'
+        '$repeatedParagraph\n\n'
+        '## 展开\n\n'
+        '$repeatedParagraph\n\n'
+        '## 收束\n\n'
+        '$repeatedParagraph\n';
+  }
+
   static Map<String, dynamic> _buildArticleMarkdownSource({
     required String title,
     required String intro,
@@ -145,8 +211,13 @@ class ContentMockData {
       final row = discoveryArticleData.firstWhere((a) => a.id == trimmed);
       final title = row.title ?? '';
       final summary = row.summary ?? row.body ?? '';
-      final markdown =
-          '---\ntitle: $title\nsummary: $summary\ntemplate: ${row.articleTemplate ?? 'journal'}\nfontPreset: ${row.articleFontPreset ?? 'clean'}\n---\n\n# $title\n\n$summary\n';
+      final markdown = _buildLongformMockArticleMarkdown(
+        title: title,
+        summary: summary,
+        template: row.articleTemplate ?? 'journal',
+        fontPreset: row.articleFontPreset ?? 'clean',
+        coverUrl: row.coverUrl,
+      );
       return <String, dynamic>{
         ...row.toDiscoveryWireMap(),
         'id': row.id,
@@ -223,7 +294,8 @@ class ContentMockData {
   // width/height：主图尺寸（px），用于前端直接计算宽高比，无需请求图片元数据。
   // 比例来源于 Unsplash 图片的真实宽高比。
   // authorBackgroundUrl：作者主页背景图，每个作者 ID 固定一张。
-  static List<FeedItemDto> get discoveryPhotoData => _withCircleContext([
+  static List<FeedItemDto> get discoveryPhotoData => _expandDiscoveryFeed(
+    _withCircleContext([
     {
       'postId': 'd1',
       'contentType': 'image',
@@ -467,13 +539,17 @@ class ContentMockData {
       'shareCount': 48,
       'createdAt': '2025-12-11T10:00:00Z',
     },
-  ]);
+    ]),
+    targetCount: 24,
+    cloneLabel: 'photo',
+  );
 
   // ─── Video feed（视频 tab）─────────────────────────────────────────────────
   // width/height：视频分辨率（px），处理管道写入。
   // 竖屏短视频通常为 1080×1920，横屏为 1920×1080。
 
-  static List<FeedItemDto> get discoveryVideoData => _withCircleContext([
+  static List<FeedItemDto> get discoveryVideoData => _expandDiscoveryFeed(
+    _withCircleContext([
     {
       'postId': 'v1',
       'contentType': 'video',
@@ -549,7 +625,10 @@ class ContentMockData {
       'musicName': 'Digital Future Beats',
       'createdAt': '2026-01-08T20:00:00Z',
     },
-  ]);
+    ]),
+    targetCount: 24,
+    cloneLabel: 'video',
+  );
 
   // ─── Moment feed（微趣 tab）───────────────────────────────────────────────
 
@@ -638,7 +717,8 @@ class ContentMockData {
 
   // ─── Article feed（文章 tab）──────────────────────────────────────────────
 
-  static List<FeedItemDto> get discoveryArticleData => _withCircleContext([
+  static List<FeedItemDto> get discoveryArticleData => _expandDiscoveryFeed(
+    _withCircleContext([
     _buildArticlePost(
       postId: 'web-dev',
       authorId: 'tech_daily',
@@ -995,7 +1075,10 @@ class ContentMockData {
       shareCount: 21,
       createdAt: '2026-01-04T18:45:00Z',
     ),
-  ]);
+    ]),
+    targetCount: 24,
+    cloneLabel: 'article',
+  );
 
   static List<Map<String, dynamic>>
   get articleCanonicalFallbackFixtures => <Map<String, dynamic>>[

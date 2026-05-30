@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:hive_flutter/hive_flutter.dart';
@@ -21,6 +22,7 @@ class VisitRecorderService {
   final String _boxName;
   final OpsVisitRepository? _remoteRepository;
   final String _currentUserId;
+  Timer? _pendingFlushTimer;
 
   Future<Box<String>> _ensurePendingBox() async {
     if (!Hive.isBoxOpen(kVisitPendingSyncBoxName)) {
@@ -95,7 +97,7 @@ class VisitRecorderService {
     }
 
     if (shouldSyncRemote) {
-      await _syncRemote(target);
+      unawaited(_syncRemote(target));
     }
   }
 
@@ -146,11 +148,23 @@ class VisitRecorderService {
       source: _sourceFor(target),
     );
     try {
-      await _flushPending(repository);
       await repository.recordVisit(input: input);
+      _schedulePendingFlush(repository, delay: const Duration(seconds: 4));
     } catch (_) {
       await _enqueuePending(input);
+      _schedulePendingFlush(repository, delay: const Duration(seconds: 12));
     }
+  }
+
+  void _schedulePendingFlush(
+    OpsVisitRepository repository, {
+    Duration delay = const Duration(seconds: 8),
+  }) {
+    _pendingFlushTimer?.cancel();
+    _pendingFlushTimer = Timer(delay, () {
+      _pendingFlushTimer = null;
+      unawaited(_flushPending(repository));
+    });
   }
 
   Future<void> _flushPending(OpsVisitRepository repository) async {

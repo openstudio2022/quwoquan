@@ -23,7 +23,7 @@ void main() {
       }
     });
 
-    test('失败后入队，后续上报会先重放 pending batch', () async {
+    test('失败后入队，后续上报不阻塞当前 batch，flushPending 再后台重放', () async {
       final client = _QueueingHttpClient();
       final repository = RemoteOpsEventRepository(
         httpClient: CloudHttpClient(client: client),
@@ -58,9 +58,14 @@ void main() {
         ],
       );
 
+      expect(client.postCalls, equals(2));
+      expect(queueBox.length, equals(1));
+      expect(client.postedEventIds, containsAll(<String>['evt-1', 'evt-2']));
+
+      await repository.flushPending();
+
       expect(client.postCalls, equals(3));
       expect(queueBox.length, equals(0));
-      expect(client.postedEventIds, containsAll(<String>['evt-1', 'evt-2']));
     });
   });
 }

@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/ui/content/pageflip/types.dart';
 
+enum StPageFlipHardPagePolicy { none, coverAndTail }
+
 @immutable
 class StPageFlipSpreadModel {
   StPageFlipSpreadModel({
     required this.pageCount,
     this.showCover = false,
+    this.hardPagePolicy = StPageFlipHardPagePolicy.coverAndTail,
   }) : assert(pageCount >= 0),
        _portraitSpread = List<StPageFlipSpread>.generate(
          pageCount,
@@ -13,10 +16,11 @@ class StPageFlipSpreadModel {
          growable: false,
        ),
        _landscapeSpread = _buildLandscapeSpread(pageCount, showCover),
-       _hardPages = _buildHardPages(pageCount, showCover);
+       _hardPages = _buildHardPages(pageCount, showCover, hardPagePolicy);
 
   final int pageCount;
   final bool showCover;
+  final StPageFlipHardPagePolicy hardPagePolicy;
   final List<StPageFlipSpread> _portraitSpread;
   final List<StPageFlipSpread> _landscapeSpread;
   final Set<int> _hardPages;
@@ -31,10 +35,7 @@ class StPageFlipSpreadModel {
     return spreadsFor(orientation).length;
   }
 
-  int? getSpreadIndexByPage(
-    int pageIndex,
-    StPageFlipOrientation orientation,
-  ) {
+  int? getSpreadIndexByPage(int pageIndex, StPageFlipOrientation orientation) {
     final spreads = spreadsFor(orientation);
     for (var index = 0; index < spreads.length; index += 1) {
       final spread = spreads[index];
@@ -186,9 +187,13 @@ class StPageFlipSpreadModel {
     return List<StPageFlipSpread>.unmodifiable(spreads);
   }
 
-  static Set<int> _buildHardPages(int pageCount, bool showCover) {
+  static Set<int> _buildHardPages(
+    int pageCount,
+    bool showCover,
+    StPageFlipHardPagePolicy hardPagePolicy,
+  ) {
     final hardPages = <int>{};
-    if (pageCount == 0) {
+    if (pageCount == 0 || hardPagePolicy == StPageFlipHardPagePolicy.none) {
       return hardPages;
     }
     if (showCover) {

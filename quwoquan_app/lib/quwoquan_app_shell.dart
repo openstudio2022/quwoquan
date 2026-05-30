@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/app_router.dart';
 import 'package:quwoquan_app/app/providers/accessibility_provider.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
@@ -32,17 +33,19 @@ void logQuwoquanAppException({
     sessionId: traceStore.sessionId,
     pageVisitId: traceStore.newPageVisitId(),
   );
-  AppLogService.instance.writeEvent(
-    logType: AppLogType.error,
-    level: AppLogLevel.error,
-    context: context,
-    payload: AppLogAppExceptionPayload(
-      kind: 'app_exception',
-      source: source,
-      exception: exceptionText,
-      stack: stackText,
-    ).toMap(),
-    hasError: true,
+  unawaited(
+    AppLogService.instance.writeEvent(
+      logType: AppLogType.error,
+      level: AppLogLevel.error,
+      context: context,
+      payload: AppLogAppExceptionPayload(
+        kind: 'app_exception',
+        source: source,
+        exception: exceptionText,
+        stack: stackText,
+      ).toMap(),
+      hasError: true,
+    ),
   );
   unawaited(
     AppExceptionTelemetryService.instance.recordGlobalException(
@@ -51,23 +54,25 @@ void logQuwoquanAppException({
       stackText: stackText,
     ),
   );
-  AppLogService.instance.writeEvent(
-    logType: AppLogType.pageAccess,
-    level: AppLogLevel.error,
-    context: context,
-    payload: AppLogPageRouteExceptionPayload(
-      event: 'exception',
-      route: 'app',
-      pageName: 'app',
-      source: source,
-      exception: exceptionText,
-    ).toMap(),
-    summaryPayload: AppLogPageRouteExceptionSummaryPayload(
-      event: 'exception',
-      route: 'app',
-      source: source,
-    ).toMap(),
-    hasError: true,
+  unawaited(
+    AppLogService.instance.writeEvent(
+      logType: AppLogType.pageAccess,
+      level: AppLogLevel.error,
+      context: context,
+      payload: AppLogPageRouteExceptionPayload(
+        event: 'exception',
+        route: 'app',
+        pageName: 'app',
+        source: source,
+        exception: exceptionText,
+      ).toMap(),
+      summaryPayload: AppLogPageRouteExceptionSummaryPayload(
+        event: 'exception',
+        route: 'app',
+        source: source,
+      ).toMap(),
+      hasError: true,
+    ),
   );
 }
 
@@ -105,6 +110,7 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppStartupRuntime.instance.markFirstFramePainted();
       _initializeApp();
     });
   }
@@ -168,17 +174,20 @@ class _QuWoQuanAppRootState extends ConsumerState<QuWoQuanAppRoot>
         );
   }
 
-  Future<void> _initializeApp() async {
+  void _initializeApp() {
     try {
-      await ref
-          .read(appearanceSettingsControllerProvider.notifier)
-          .ensureLoaded();
       ref
           .read(themeProvider.notifier)
           .updateSystemBrightness(
             WidgetsBinding.instance.platformDispatcher.platformBrightness,
           );
       ref.read(appLogUploaderProvider);
+      unawaited(
+        ref.read(appearanceSettingsControllerProvider.notifier).ensureLoaded(),
+      );
+      AppStartupRuntime.instance.schedulePostFirstFrameWarmup(
+        (provider) => ref.read(provider),
+      );
     } catch (e) {
       // 初始化错误由上层观测处理
     }

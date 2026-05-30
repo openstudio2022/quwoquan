@@ -9,6 +9,8 @@ import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 
 /// 单类 feed 状态：items + nextCursor
 class DiscoveryFeedState {
+  static const Object _unset = Object();
+
   const DiscoveryFeedState({
     this.items = const [],
     this.seenItemIds = const [],
@@ -23,19 +25,23 @@ class DiscoveryFeedState {
   final bool isLoading;
   final String? error;
 
+  bool get hasMore => nextCursor != null && nextCursor!.isNotEmpty;
+
   DiscoveryFeedState copyWith({
     List<PostBaseDto>? items,
     List<String>? seenItemIds,
-    String? nextCursor,
+    Object? nextCursor = _unset,
     bool? isLoading,
-    String? error,
+    Object? error = _unset,
   }) {
     return DiscoveryFeedState(
       items: items ?? this.items,
       seenItemIds: seenItemIds ?? this.seenItemIds,
-      nextCursor: nextCursor ?? this.nextCursor,
+      nextCursor: identical(nextCursor, _unset)
+          ? this.nextCursor
+          : nextCursor as String?,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: identical(error, _unset) ? this.error : error as String?,
     );
   }
 }
@@ -132,7 +138,10 @@ class DiscoveryFeedMapNotifier
         value.isLoading) {
       return;
     }
-    state = {...state, tabId: AsyncData(value.copyWith(isLoading: true))};
+    state = {
+      ...state,
+      tabId: AsyncData(value.copyWith(isLoading: true, error: null)),
+    };
     try {
       final repo = ref.read(contentRepositoryProvider);
       final query = toDiscoveryFeedQuery(tabId);
@@ -169,6 +178,7 @@ class DiscoveryFeedMapNotifier
             seenItemIds: mergedSeen,
             nextCursor: page.nextCursor,
             isLoading: false,
+            error: null,
           ),
         ),
       };

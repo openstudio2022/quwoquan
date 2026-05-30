@@ -974,6 +974,22 @@ ArticleCanvasMetrics resolveArticleCanvasMetrics(
     );
   }
   final paperSpec = resolveUnifiedArticlePaperSpec();
+  if (variant == ArticleCanvasVariant.immersive) {
+    return ArticleCanvasMetrics(
+      aspectRatio: paperSpec.aspectRatio,
+      outerPadding: paperSpec.outerPadding,
+      contentPadding: paperSpec.contentPadding,
+      headerReservedHeight: 0,
+      footerReservedHeight: 0,
+      wrapImageGap: width >= 430
+          ? AppSpacing.containerMd
+          : AppSpacing.containerSm,
+      wrapImageMaxWidth: width >= 430 ? 156 : 144,
+      fullWidthImageAspectRatio: 4 / 3,
+      journalImageAspectRatio: 1,
+      inlineImageSpacing: articleParagraphSpacing(),
+    );
+  }
   return ArticleCanvasMetrics(
     aspectRatio: paperSpec.aspectRatio,
     outerPadding: paperSpec.outerPadding,

@@ -16,14 +16,14 @@ void main() {
     return CupertinoApp(home: WelcomeScreen(onFinish: onFinish ?? () {}));
   }
 
-  /// 推进足够时长让所有动画 + 倒计时结束。
+  /// 推进足够时长让欢迎页短动画完成并自动进入首页。
   ///
   /// `runSequence()` 内部交替使用 `Future.delayed` 和 `AnimationController.forward()`，
   /// 单次大跨度 `pump(Duration(seconds: N))` 无法让逐段串行的 await 正确恢复——
   /// 必须按 frame 节奏多次推进，让每段 microtask/动画都拿到调度机会。
   Future<void> settle(WidgetTester tester) async {
-    // 总计 ~10s，足以覆盖完整序列：100+600+500+320+800+800+800+1200+3000 ≈ 8.1s
-    for (var i = 0; i < 200; i++) {
+    // 总计 ~3s，覆盖欢迎页短动画链路并留出充足 buffer。
+    for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
   }
@@ -135,13 +135,15 @@ void main() {
       await settle(tester);
     });
 
-    testWidgets('倒计时结束后调用 onFinish 回调', (tester) async {
+    testWidgets('短动画结束后直接调用 onFinish，且不再显示倒计时数字', (tester) async {
       var finishedCount = 0;
       await tester.pumpWidget(wrap(onFinish: () => finishedCount++));
 
-      // 倒计时序列结束后应被调用恰好一次
       await settle(tester);
       expect(finishedCount, 1);
+      expect(find.text('3'), findsNothing);
+      expect(find.text('2'), findsNothing);
+      expect(find.text('1'), findsNothing);
     });
   });
 }

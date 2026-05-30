@@ -802,6 +802,27 @@ void main() {
         backwardState.backwardVersoDisplayState,
         equals('semanticSnapshot'),
       );
+      final backwardDynamicStates = debugStates
+          .where(
+            (state) =>
+                state.renderDirection == StPageFlipDirection.back &&
+                state.renderBranch ==
+                    ArticleReadOnlyBookRenderBranch.paperFoldDynamic,
+          )
+          .toList(growable: false);
+      final visibleBackStates = backwardDynamicStates.where(
+        (state) =>
+            state.backwardBackPaintBounds != null &&
+            state.backwardBackPaintBounds!.width > 8,
+      );
+      expect(visibleBackStates, isNotEmpty);
+      expect(
+        visibleBackStates.map((state) => state.backwardVersoDisplayState),
+        everyElement(equals('semanticSnapshot')),
+        reason:
+            'visible BACK sheet frames must not switch from paperFallback or '
+            'waitingForSnapshot to semanticSnapshot during the same turn.',
+      );
       expect(backwardState.backwardBottomLayerPageIndex, equals(3));
       expect(backwardState.backwardFlippingLayerPageIndex, equals(2));
       expect(backwardState.backwardBackPaintBounds, isNotNull);

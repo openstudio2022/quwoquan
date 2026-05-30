@@ -128,7 +128,13 @@ class MockContentRepository implements ContentRepository {
       identity: identity,
       type: type,
     );
-    return CursorPage<PostBaseDto>(items: items, nextCursor: null);
+    final offset = int.tryParse((cursor ?? '').trim()) ?? 0;
+    final safeOffset = offset.clamp(0, items.length);
+    final safeLimit = limit <= 0 ? items.length : limit;
+    final end = (safeOffset + safeLimit).clamp(0, items.length);
+    final pageItems = items.sublist(safeOffset, end);
+    final nextCursor = end < items.length ? '$end' : null;
+    return CursorPage<PostBaseDto>(items: pageItems, nextCursor: nextCursor);
   }
 
   @override

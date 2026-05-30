@@ -152,7 +152,10 @@ void main() {
                               allowLandscapeSpread: true,
                             );
                             final stageHeight =
-                                metrics.frameSpecForStageWidth(stageWidth).paperSize.height +
+                                metrics
+                                    .frameSpecForStageWidth(stageWidth)
+                                    .paperSize
+                                    .height +
                                 pagePadding.vertical;
                             capturedStageWidth = stageWidth;
                             return UnconstrainedBox(
@@ -187,10 +190,10 @@ void main() {
 
     expect(capturedStageWidth, isNotNull);
     final outerWidth = surfaceSize.width - AppSpacing.containerMd * 2;
-    final stageSize = tester.getSize(find.byKey(TestKeys.articlePageCurlLayer));
-    final visiblePage = tester.widgetList<ArticlePageShell>(
-      find.byType(ArticlePageShell),
-    ).first;
+    final stageSize = tester.getSize(find.byType(ArticleReadOnlyBookDeck));
+    final visiblePage = tester
+        .widgetList<ArticlePageShell>(find.byType(ArticlePageShell))
+        .first;
     final visiblePageFinder = find.byWidget(visiblePage);
     final pageSize = tester.getSize(visiblePageFinder);
 
@@ -273,10 +276,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(pageChanges.length, greaterThanOrEqualTo(2));
-    expect(
-      pageChanges.sublist(pageChanges.length - 2),
-      equals(<int>[1, 0]),
-    );
+    expect(pageChanges.sublist(pageChanges.length - 2), equals(<int>[1, 0]));
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
   });
 }

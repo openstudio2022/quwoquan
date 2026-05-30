@@ -514,11 +514,14 @@ class RemoteOpsEventRepository
        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
        _queueBoxName = queueBoxName ?? kOpsEventQueueBoxName {
     _bindLifecycle();
+    _scheduleFlush(delay: const Duration(seconds: 15));
   }
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
   final String _queueBoxName;
+  Timer? _flushTimer;
+  bool _isFlushing = false;
 
   void _bindLifecycle() {
     try {
@@ -528,16 +531,32 @@ class RemoteOpsEventRepository
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scheduleFlush(delay: const Duration(seconds: 4));
+      return;
+    }
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
+      _flushTimer?.cancel();
+      _flushTimer = null;
       unawaited(flushPending());
     }
   }
 
   void dispose() {
+    _flushTimer?.cancel();
+    _flushTimer = null;
     try {
       WidgetsBinding.instance.removeObserver(this);
     } catch (_) {}
+  }
+
+  void _scheduleFlush({Duration delay = const Duration(seconds: 8)}) {
+    _flushTimer?.cancel();
+    _flushTimer = Timer(delay, () {
+      _flushTimer = null;
+      unawaited(flushPending());
+    });
   }
 
   Uri _uri(String path, {Map<String, String>? queryParameters}) {
@@ -558,35 +577,43 @@ class RemoteOpsEventRepository
 
   @override
   Future<void> flushPending() async {
-    final box = await _ensureBox();
-    final keys = box.keys.map((key) => key.toString()).toList(growable: false)
-      ..sort();
-    var consecutiveFailures = 0;
-    for (final key in keys) {
-      final raw = box.get(key);
-      if (raw == null || raw.isEmpty) {
-        await box.delete(key);
-        continue;
+    if (_isFlushing) {
+      return;
+    }
+    _isFlushing = true;
+    try {
+      final box = await _ensureBox();
+      final keys = box.keys.map((key) => key.toString()).toList(growable: false)
+        ..sort();
+      var consecutiveFailures = 0;
+      for (final key in keys) {
+        final raw = box.get(key);
+        if (raw == null || raw.isEmpty) {
+          await box.delete(key);
+          continue;
+        }
+        try {
+          final parsed = (jsonDecode(raw) as List)
+              .whereType<Map>()
+              .map(
+                (item) =>
+                    OpsEventRecordInput.fromJson(item.cast<String, dynamic>()),
+              )
+              .toList(growable: false);
+          await _postBatch(parsed);
+          await box.delete(key);
+          consecutiveFailures = 0;
+        } catch (e) {
+          developer.log(
+            'OpsEventRepository.flushPending failed key=$key: $e',
+            name: 'ops',
+          );
+          consecutiveFailures++;
+          if (consecutiveFailures >= 3) break;
+        }
       }
-      try {
-        final parsed = (jsonDecode(raw) as List)
-            .whereType<Map>()
-            .map(
-              (item) =>
-                  OpsEventRecordInput.fromJson(item.cast<String, dynamic>()),
-            )
-            .toList(growable: false);
-        await _postBatch(parsed);
-        await box.delete(key);
-        consecutiveFailures = 0;
-      } catch (e) {
-        developer.log(
-          'OpsEventRepository.flushPending failed key=$key: $e',
-          name: 'ops',
-        );
-        consecutiveFailures++;
-        if (consecutiveFailures >= 3) break;
-      }
+    } finally {
+      _isFlushing = false;
     }
   }
 
@@ -679,15 +706,17 @@ class RemoteOpsEventRepository
     if (events.isEmpty) {
       return const OpsEventBatchAck(acceptedCount: 0, duplicateCount: 0);
     }
-    await flushPending();
     try {
-      return await _postBatch(events);
+      final ack = await _postBatch(events);
+      _scheduleFlush(delay: const Duration(seconds: 3));
+      return ack;
     } catch (e) {
       developer.log(
         'ops reportEventBatch failed, enqueuing: $e',
         name: 'OpsEventRepository',
       );
       await _enqueue(events);
+      _scheduleFlush(delay: const Duration(seconds: 12));
       return const OpsEventBatchAck(acceptedCount: 0, duplicateCount: 0);
     }
   }

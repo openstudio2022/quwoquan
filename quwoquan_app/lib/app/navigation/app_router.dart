@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/navigation/app_page_access_navigator_observer.dart';
 import 'package:quwoquan_app/app/providers/welcome_state_provider.dart';
 import 'package:quwoquan_app/app/navigation/main_tab_registry.dart';
@@ -71,7 +72,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   AppPageAccessNavigatorObserver.instance.attachEventReporter(
     repository: ref.read(opsEventRepositoryProvider),
     currentUserId: ref.read(currentUserIdProvider),
-    experimentBucket: ref.read(contentRuntimeConfigProvider).experimentBucket,
+    experimentBucket: '',
   );
   ref.listen<bool>(welcomeCompletedProvider, (Object? previous, bool next) {
     refreshListenable.value++;
@@ -102,6 +103,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           child: WelcomeScreen(
             onFinish: () {
               ref.read(welcomeCompletedProvider.notifier).setCompleted(true);
+              AppStartupRuntime.instance.scheduleHomeReadyReport(
+                (provider) => ref.read(provider),
+              );
             },
           ),
         ),

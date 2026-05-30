@@ -15,6 +15,8 @@ class HomePrimaryTabStrip extends StatelessWidget {
     this.featuredIndicatorVisible = false,
     this.featuredExpanded = false,
     this.onHorizontalDragEnd,
+    this.immersiveSelectedColor,
+    this.immersiveUnselectedColor,
   });
 
   static const String followingTabId = 'following';
@@ -55,6 +57,8 @@ class HomePrimaryTabStrip extends StatelessWidget {
   final bool featuredIndicatorVisible;
   final bool featuredExpanded;
   final GestureDragEndCallback? onHorizontalDragEnd;
+  final Color? immersiveSelectedColor;
+  final Color? immersiveUnselectedColor;
 
   static double _measureLabelWidth(BuildContext context, String label) {
     final painter = TextPainter(
@@ -123,6 +127,8 @@ class HomePrimaryTabStrip extends StatelessWidget {
                   showIndicator:
                       tabs[i] == featuredTabId && featuredIndicatorVisible,
                   indicatorExpanded: featuredExpanded,
+                  immersiveSelectedColor: immersiveSelectedColor,
+                  immersiveUnselectedColor: immersiveUnselectedColor,
                   onTap: () => _handleTabTap(tabs[i]),
                 ),
               ],
@@ -168,6 +174,8 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
     this.reserveIndicatorSlot = false,
     this.showIndicator = false,
     this.indicatorExpanded = false,
+    this.immersiveSelectedColor,
+    this.immersiveUnselectedColor,
   });
 
   final String tabId;
@@ -180,20 +188,23 @@ class _HomePrimaryTabStripItem extends StatelessWidget {
   final bool reserveIndicatorSlot;
   final bool showIndicator;
   final bool indicatorExpanded;
+  final Color? immersiveSelectedColor;
+  final Color? immersiveUnselectedColor;
 
   @override
   Widget build(BuildContext context) {
     final selectedColor = switch (style) {
-      HomePrimaryTabStripStyle.immersive => AppColors.worksTitle,
+      HomePrimaryTabStripStyle.immersive =>
+        immersiveSelectedColor ?? AppColors.worksTitle,
       HomePrimaryTabStripStyle.regular =>
         isDark
             ? AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
             : AppColors.primaryColor,
     };
     final unselectedColor = switch (style) {
-      HomePrimaryTabStripStyle.immersive => AppColors.worksTitle.withValues(
-        alpha: 0.72,
-      ),
+      HomePrimaryTabStripStyle.immersive =>
+        immersiveUnselectedColor ??
+            AppColors.worksTitle.withValues(alpha: 0.72),
       HomePrimaryTabStripStyle.regular =>
         isDark
             ? AppColorsFunctional.getColor(isDark, ColorType.tabUnselected)

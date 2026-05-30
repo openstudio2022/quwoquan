@@ -69,6 +69,40 @@ void main() {
       expect(hostSource, isNot(contains('ArticlePageCurlRenderer')));
       expect(hostSource, isNot(contains('genericDynamic')));
       expect(hostSource, isNot(contains('mirroredForwardDynamic')));
+      expect(
+        hostSource,
+        contains('ArticleReaderStableTextureCaptureLayer('),
+        reason:
+            'article reader deck must use the offscreen stable capture layer, '
+            'not a capture subtree rebuilt by every animation tick.',
+      );
+      expect(
+        hostSource,
+        contains('useOffscreenPaint: true'),
+        reason:
+            'hidden texture capture surfaces must not enter the visible stage.',
+      );
+      expect(
+        hostSource,
+        isNot(contains('class _ArticleReaderTextureCaptureLayer')),
+        reason:
+            'the old local capture layer was rebuilt inside the interactive stack '
+            'and could flicker while page curl frames were ticking.',
+      );
+      expect(
+        hostSource,
+        contains('_ensureBackTextureReadyForDirection('),
+        reason:
+            'BACK should not enter the dynamic sheet until the required semantic '
+            'verso texture is already available.',
+      );
+      expect(
+        hostSource,
+        contains('_startPageFlipTextureSession('),
+        reason:
+            'a page turn must freeze texture readiness for the session so a '
+            'late snapshot cannot visibly switch the moving sheet material.',
+      );
 
       final forwardImports = _sourceImportLines(forwardPipelineSource);
       expect(forwardImports, isNot(contains(contains('backward'))));
@@ -213,14 +247,14 @@ void main() {
           'test/components/pageflip/backward_partition_evidence_test.dart',
         );
         final softLayerStart = hostSource.indexOf('Widget _buildSoftPageLayer');
-        final hardLayerStart = hostSource.indexOf(
-          'Widget _buildHardFlippingPageLayer',
+        final dynamicLayerStart = hostSource.indexOf(
+          'Widget _buildDynamicPageLayer',
         );
         expect(softLayerStart, isNonNegative);
-        expect(hardLayerStart, greaterThan(softLayerStart));
+        expect(dynamicLayerStart, greaterThan(softLayerStart));
         final softLayerSource = hostSource.substring(
           softLayerStart,
-          hardLayerStart,
+          dynamicLayerStart,
         );
 
         expect(
@@ -229,6 +263,16 @@ void main() {
           reason: 'BACK 专属 soft helper 已废止，host `_buildSoftPageLayer` 不得再调用。',
         );
         expect(softLayerSource, contains('Transform.rotate('));
+        expect(
+          hostSource,
+          isNot(contains('Widget _buildHardFlippingPageLayer')),
+          reason: '旧 3D 硬翻页入口不得留在 article reader deck 主链。',
+        );
+        expect(
+          hostSource,
+          isNot(contains('rotateY(')),
+          reason: 'article reader 前后翻必须走 soft/paperFold，而不是 Matrix4.rotateY。',
+        );
         expect(
           hostSource,
           contains('_buildBackwardFullSheetBackSurface('),
@@ -452,7 +496,7 @@ void main() {
           'ArticlePageTextureSnapshot? _validBackPageTextureSnapshotForIndex',
         );
         final validatorEnd = hostSource.indexOf(
-          'void _queueSceneTextureSnapshots',
+          'void _queueStaticTextureSnapshots',
           validatorStart,
         );
         expect(validatorStart, isNonNegative);

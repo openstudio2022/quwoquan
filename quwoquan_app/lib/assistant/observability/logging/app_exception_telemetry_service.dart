@@ -84,7 +84,7 @@ class AppExceptionTelemetryService {
       },
     );
     await _enqueue(event);
-    await flushPending();
+    unawaited(flushPending().catchError((_) {}));
   }
 
   Future<void> flushPending() async {
