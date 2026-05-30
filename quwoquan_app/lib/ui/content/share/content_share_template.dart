@@ -2,6 +2,7 @@ import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 
 class ContentShareAction {
   const ContentShareAction({required this.id, required this.label});
@@ -64,10 +65,17 @@ class ContentShareTemplateBuilder {
     String visibility = 'public',
     List<String> circleNames = const <String>[],
     List<String> tags = const <String>[],
+    ContentSurfaceView? surfaceView,
   }) {
+    // 统一展示 model 双读（D1b）：surfaceView 非空（flag 开）时由统一 model 取种子，
+    // 否则走旧投影路径。两路径同源（同 DTO → 同字段口径），可单独回退。
+    _ShareSeed seedFor() => surfaceView == null
+        ? _shareSeedForPost(post)
+        : _shareSeedForSurfaceView(surfaceView);
+
     final permission = _normalizeVisibility(visibility);
     if (permission == 'private') {
-      final blockedSeed = _shareSeedForPost(post);
+      final blockedSeed = seedFor();
       return ContentShareTemplate(
         profileId: post.identity,
         layout: 'blocked',
@@ -87,7 +95,7 @@ class ContentShareTemplateBuilder {
     }
 
     final profile = _profileForIdentity(post.identity);
-    final shareSeed = _shareSeedForPost(post);
+    final shareSeed = seedFor();
     final deeplink = AppLinkTemplates.postAppDeepLink(
       post.id,
       visibilityIsCircleVisible: permission == 'circle_visible',
@@ -193,6 +201,44 @@ class ContentShareTemplateBuilder {
       summary: '',
       coverUrl: cover,
     );
+  }
+
+  /// 统一展示 model 路径的分享种子（与 [_shareSeedForPost] 同源口径）。
+  static _ShareSeed _shareSeedForSurfaceView(ContentSurfaceView view) {
+    final title = view.title ?? '';
+    final body = view.body ?? '';
+    final displayName = view.author.displayName;
+    final cover = view.cover?.url.isNotEmpty == true
+        ? view.cover!.url
+        : (view.video?.thumbnailUrl.isNotEmpty == true
+              ? view.video!.thumbnailUrl
+              : (view.images.isNotEmpty ? view.images.first.url : ''));
+    switch (view.kind) {
+      case ContentSurfaceKind.article:
+        return _ShareSeed(
+          title: _clip(title, fallback: '作品'),
+          summary: _clip(body, maxLength: 48),
+          coverUrl: cover,
+        );
+      case ContentSurfaceKind.video:
+        return _ShareSeed(
+          title: _clip(body, fallback: '$displayName 的视频作品'),
+          summary: _clip(body, maxLength: 48),
+          coverUrl: cover,
+        );
+      case ContentSurfaceKind.image:
+        return _ShareSeed(
+          title: _clip(body, fallback: '$displayName 的图片作品'),
+          summary: _clip(body, maxLength: 48),
+          coverUrl: cover,
+        );
+      case ContentSurfaceKind.micro:
+        return _ShareSeed(
+          title: _clip(body, fallback: '$displayName 的点滴'),
+          summary: _clip(body, maxLength: 48),
+          coverUrl: cover,
+        );
+    }
   }
 
   static String _decorateSummary({

@@ -18,6 +18,7 @@ import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagemen
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
+import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/navigation/home_primary_tab_strip.dart';
@@ -614,7 +615,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         .read(contentRepositoryProvider)
         .discoveryPresentationWireForPost(postId);
     if (wire == null) return null;
-    return Map<String, Object?>.from(wire);
+    return Map<String, Object?>.from(wire.toLegacyRow());
   }
 
   PostSummaryView? _summaryForPost(String postId) {
@@ -813,7 +814,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   bool _showsCaptionOverlay(PostBaseDto post) {
     return _overlayTitleForPost(post).isNotEmpty ||
         _overlayBodyForPost(post).isNotEmpty ||
-        _circlesForPost(post).isNotEmpty;
+        _circlesForPost(post).isNotEmpty ||
+        IntersectionReasonChip.primaryText(post.intersectionReasons) != null;
   }
 
   ImmersiveViewerStageLayoutSpec _layoutSpecForPost(PostBaseDto post) {
@@ -1167,6 +1169,28 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     final overlayFooter = currentPost == null
         ? null
         : _overlayFooterForPost(context, currentPost);
+    // 交集理由位（与 feed 内容卡同口径：首条 displayText 只读，无来源不展示）。
+    // 沉浸为深底，固定 isDark:true 取高对比 accent。
+    final intersectionReasonChip = currentPost == null
+        ? null
+        : IntersectionReasonChip.fromReasons(
+            currentPost.intersectionReasons,
+            isDark: true,
+            key: const ValueKey<String>('works-caption-intersection-reason'),
+          );
+    final captionFooter = intersectionReasonChip == null
+        ? overlayFooter
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              intersectionReasonChip,
+              if (overlayFooter != null) ...[
+                SizedBox(height: AppSpacing.intraGroupSm),
+                overlayFooter,
+              ],
+            ],
+          );
     // 与 welcome_screen 一致：阻断 MaterialApp 默认 TextStyle 合并带来的误装饰（黄下划线等）。
     return DefaultTextStyle.merge(
       style: const TextStyle(
@@ -1323,7 +1347,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                     caption: overlayBody,
                     isExpanded: _isCaptionExpanded(currentPost.id),
                     onToggle: () => _toggleCaptionExpanded(currentPost.id),
-                    footer: overlayFooter,
+                    footer: captionFooter,
                   ),
                 ),
 

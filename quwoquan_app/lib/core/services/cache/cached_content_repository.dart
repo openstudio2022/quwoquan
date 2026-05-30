@@ -441,7 +441,7 @@ class CachedContentRepository implements ContentRepository {
   bool get usesCloudAssistantEdgeSync => _delegate.usesCloudAssistantEdgeSync;
 
   @override
-  Map<String, dynamic>? discoveryPresentationWireForPost(String postId) {
+  DiscoveryPresentationWire? discoveryPresentationWireForPost(String postId) {
     return _delegate.discoveryPresentationWireForPost(postId);
   }
 

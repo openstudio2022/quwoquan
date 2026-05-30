@@ -39,6 +39,7 @@ class ContentBehaviorTracker {
     List<String>? tags,
     String? feedRequestId,
     int? position,
+    ReferralSource? referralSource,
   }) {
     if (_impressionSeen.contains(contentId)) return;
     _impressionSeen.add(contentId);
@@ -49,6 +50,7 @@ class ContentBehaviorTracker {
       tags: tags,
       feedRequestId: feedRequestId,
       position: position,
+      referralSource: referralSource,
     ));
   }
 
@@ -59,6 +61,7 @@ class ContentBehaviorTracker {
     List<String>? tags,
     String? feedRequestId,
     int? position,
+    ReferralSource? referralSource,
   }) {
     if (durationSeconds < 1) return;
     _add(BehaviorEvent(
@@ -69,6 +72,7 @@ class ContentBehaviorTracker {
       duration: durationSeconds,
       feedRequestId: feedRequestId,
       position: position,
+      referralSource: referralSource,
     ));
   }
 
@@ -78,6 +82,7 @@ class ContentBehaviorTracker {
     List<String>? tags,
     String? feedRequestId,
     int? position,
+    ReferralSource? referralSource,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
@@ -86,6 +91,7 @@ class ContentBehaviorTracker {
       tags: tags,
       feedRequestId: feedRequestId,
       position: position,
+      referralSource: referralSource,
     ));
   }
 
@@ -95,6 +101,7 @@ class ContentBehaviorTracker {
     List<String>? tags,
     String? feedRequestId,
     int? position,
+    ReferralSource? referralSource,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
@@ -103,6 +110,7 @@ class ContentBehaviorTracker {
       tags: tags,
       feedRequestId: feedRequestId,
       position: position,
+      referralSource: referralSource,
     ));
   }
 
@@ -112,6 +120,7 @@ class ContentBehaviorTracker {
     List<String>? tags,
     String? feedRequestId,
     int? position,
+    ReferralSource? referralSource,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
@@ -120,6 +129,7 @@ class ContentBehaviorTracker {
       tags: tags,
       feedRequestId: feedRequestId,
       position: position,
+      referralSource: referralSource,
     ));
   }
 
@@ -130,6 +140,7 @@ class ContentBehaviorTracker {
     List<String>? tags,
     String? feedRequestId,
     int? position,
+    ReferralSource? referralSource,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
@@ -139,6 +150,7 @@ class ContentBehaviorTracker {
       duration: dwellSeconds,
       feedRequestId: feedRequestId,
       position: position,
+      referralSource: referralSource,
     ));
   }
 
@@ -148,6 +160,7 @@ class ContentBehaviorTracker {
     int? commentLength,
     List<String>? tags,
     String? feedRequestId,
+    ReferralSource? referralSource,
   }) {
     _add(BehaviorEvent(
       contentId: contentId,
@@ -156,17 +169,24 @@ class ContentBehaviorTracker {
       tags: tags,
       feedRequestId: feedRequestId,
       commentLength: commentLength,
+      referralSource: referralSource,
     ));
   }
 
-  /// 记录关注完成（follow）。
+  /// 记录关注完成（follow）。关注是交集行动，回流带 dimension + tagRefs（B3 归因）。
   void trackFollow(String authorId, {
     String? feedRequestId,
+    ReferralSource? referralSource,
+    String? intersectionDimension,
+    List<String>? intersectionTagRefs,
   }) {
     _add(BehaviorEvent(
       contentId: authorId,
       action: BehaviorAction.follow,
       feedRequestId: feedRequestId,
+      referralSource: referralSource,
+      intersectionDimension: intersectionDimension,
+      intersectionTagRefs: intersectionTagRefs,
     ));
   }
 

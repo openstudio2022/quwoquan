@@ -40,6 +40,8 @@ class AssistantOpenContext {
     this.tab,
     this.dimension,
     this.entityId,
+    this.objectType,
+    this.intersectionRefs = const [],
     this.hints = const {},
   });
 
@@ -53,6 +55,14 @@ class AssistantOpenContext {
 
   /// 作者/圈子等实体 id。
   final String? entityId;
+
+  /// 被打开对象的类型：post / circle / entity / user（B2 上下文透传，供小趣按需解释）。
+  final String? objectType;
+
+  /// 交集来源引用（路径制 tagRef 或 relation:{kind}:{objectId}），
+  /// 供小趣按需深度解释时只引用真实来源，禁止编造（全局验收 G2）。
+  final List<String> intersectionRefs;
+
   final VisitTarget visitTarget;
   final ExperienceLevel experienceLevel;
 
@@ -64,6 +74,8 @@ class AssistantOpenContext {
     String? tab,
     String? dimension,
     String? entityId,
+    String? objectType,
+    List<String>? intersectionRefs,
     VisitTarget? visitTarget,
     ExperienceLevel? experienceLevel,
     Map<String, dynamic>? hints,
@@ -73,6 +85,8 @@ class AssistantOpenContext {
       tab: tab ?? this.tab,
       dimension: dimension ?? this.dimension,
       entityId: entityId ?? this.entityId,
+      objectType: objectType ?? this.objectType,
+      intersectionRefs: intersectionRefs ?? this.intersectionRefs,
       visitTarget: visitTarget ?? this.visitTarget,
       experienceLevel: experienceLevel ?? this.experienceLevel,
       hints: hints ?? this.hints,

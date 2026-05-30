@@ -14,13 +14,17 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/ui/discovery/widgets/unified_object_card.dart';
 import 'package:quwoquan_app/ui/assistant/widgets/assistant_half_sheet.dart';
 import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/post_summary_view.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show BehaviorAction, ReferralSource;
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/moment_social_feed.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/works_immersive_viewer.dart';
 
@@ -35,9 +39,13 @@ class HomePage extends ConsumerStatefulWidget {
 
 class _HomePageState extends ConsumerState<HomePage>
     with AutomaticKeepAliveClientMixin {
-  static const String _defaultTab = HomePrimaryTabStrip.recommendedTabId;
-  static const List<String> _tabOrder = HomePrimaryTabStrip.homeTabIds;
+  // 默认频道 = recommend（与 ContentUIConfig.homeChannels 首发推荐频道 id 对齐）。
+  static const String _defaultTab = 'recommend';
   late String _activeTab;
+
+  /// 频道顺序真相源 = homeChannelsProvider（端默认 + 远程覆盖），用于左右滑动切频道。
+  List<String> _channelOrder() =>
+      ref.read(homeChannelsProvider).map((channel) => channel.id).toList();
 
   @override
   bool get wantKeepAlive => true;
@@ -113,15 +121,16 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 
   void _handleTabSwipe(TabSwipeDirection direction) {
-    final currentIndex = _tabOrder.indexOf(_activeTab);
+    final order = _channelOrder();
+    final currentIndex = order.indexOf(_activeTab);
     if (currentIndex < 0) {
       return;
     }
     final nextIndex = currentIndex + direction.delta;
-    if (nextIndex < 0 || nextIndex >= _tabOrder.length) {
+    if (nextIndex < 0 || nextIndex >= order.length) {
       return;
     }
-    _handleTabChange(_tabOrder[nextIndex]);
+    _handleTabChange(order[nextIndex]);
   }
 
   @override
@@ -131,6 +140,12 @@ class _HomePageState extends ConsumerState<HomePage>
     final effectiveTopInset = safeTop + AppSpacing.intraGroupXs;
 
     final isDark = ref.watch(isDarkProvider);
+    final channels = ref.watch(homeChannelsProvider);
+    // 守护远程覆盖后当前频道可能被移除：回退到第一个频道，避免空白页。
+    final effectiveActiveTab =
+        channels.any((channel) => channel.id == _activeTab)
+        ? _activeTab
+        : (channels.isNotEmpty ? channels.first.id : _activeTab);
     final bg = SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final searchChromeColor = isDark ? bg : AppColors.primaryColor;
     final searchChromeSurface = AppChromeSurface.immersive;
@@ -186,10 +201,11 @@ class _HomePageState extends ConsumerState<HomePage>
                       horizontal: AppSpacing.feedContentHorizontal(context),
                     ),
                     child: HomePrimaryTabStrip(
-                      activeTab: _activeTab,
+                      activeTab: effectiveActiveTab,
                       onTabChange: _handleTabChange,
                       onHorizontalDragEnd: _handleTabSwipeDragEnd,
                       isDark: isDark,
+                      channels: channels,
                     ),
                   ),
                 ),
@@ -198,7 +214,7 @@ class _HomePageState extends ConsumerState<HomePage>
                 child: TabSwipeSwitchRegion(
                   enabled: true,
                   onSwipe: _handleTabSwipe,
-                  child: _buildBody(isDark),
+                  child: _buildBody(isDark, channels, effectiveActiveTab),
                 ),
               ),
             ],
@@ -208,46 +224,72 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  Widget _buildBody(bool isDark) {
-    switch (_activeTab) {
-      case HomePrimaryTabStrip.followingTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.followingTabId);
-      case HomePrimaryTabStrip.recommendedTabId:
-        return _buildFeedTab(isDark, 'moment');
-      case HomePrimaryTabStrip.travelPhotographyTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.travelTabId);
-      case HomePrimaryTabStrip.campusTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.campusTabId);
-      case HomePrimaryTabStrip.travelTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.travelTabId);
-      case HomePrimaryTabStrip.photographyTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.photographyTabId);
-      case HomePrimaryTabStrip.techTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.techTabId);
-      case HomePrimaryTabStrip.carFriendsTabId:
-        return _buildFeedTab(isDark, HomePrimaryTabStrip.carFriendsTabId);
-      default:
-        return const SizedBox.shrink();
+  /// 按频道 template 路由到 Feed 模板组件（去硬编码 switch）；
+  /// feedTabId = channel.id（取数/气质文案/桶 key 真相源），template 驱动单列/多列/今日交集流。
+  Widget _buildBody(
+    bool isDark,
+    List<HomeChannelConfig> channels,
+    String activeTab,
+  ) {
+    HomeChannelConfig? channel;
+    for (final candidate in channels) {
+      if (candidate.id == activeTab) {
+        channel = candidate;
+        break;
+      }
     }
-  }
-
-  Widget _buildFeedTab(bool isDark, String feedTabId) {
-    final visualPriority = _isInlineImageCarouselTab(feedTabId);
+    if (channel == null) {
+      return const SizedBox.shrink();
+    }
     return MomentSocialFeed(
+      key: ValueKey<String>('home-feed-${channel.id}'),
       isDark: isDark,
-      feedTabId: feedTabId,
-      inlineImageCarousel: visualPriority,
-      disableImageViewerOnTap: visualPriority,
+      feedTabId: channel.id,
+      template: channel.template,
       onUserTap: _openUserProfile,
       onPostTap: (post, index, {feedPosts}) {
         _openFeedPost(post, index, feedPosts: feedPosts);
       },
+      onIntersectionObjectOpen: _openIntersectionObject,
+      onIntersectionObjectAction: _handleIntersectionObjectAction,
     );
   }
 
-  bool _isInlineImageCarouselTab(String feedTabId) {
-    return feedTabId == HomePrimaryTabStrip.travelTabId ||
-        feedTabId == HomePrimaryTabStrip.photographyTabId;
+  /// 今日交集对象卡行动按钮（关注/加入/加好友）：交集行动回流。
+  /// 带 intersectionDimension + intersectionTagRefs，便于推荐归因还原交集来源。
+  void _handleIntersectionObjectAction(IntersectionReason reason) {
+    final targetId = reason.actionTargetId.trim();
+    if (targetId.isEmpty) return;
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackFollow(
+          targetId,
+          referralSource: ReferralSource.organicFeed,
+          feedRequestId: ref
+              .read(feedSessionProvider.notifier)
+              .currentFeedRequestId,
+          intersectionDimension: reason.dimension,
+          intersectionTagRefs: reason.tagRefs,
+        );
+    // 行动回流后跳到对象页，让用户完成实际关注/加入（关系写入归属对象页）。
+    _openIntersectionObject(reason);
+  }
+
+  /// 今日交集对象卡跳转：按对象类型路由到对应对象/聚合页。
+  /// 路由全部来自 metadata codegen（[AppRoutePaths]），不在此硬编码 path。
+  void _openIntersectionObject(IntersectionReason reason) {
+    final targetId = reason.actionTargetId.trim();
+    if (targetId.isEmpty) return;
+    final kind = UnifiedObjectKind.fromRelationKind(reason.relationKind);
+    switch (kind) {
+      case UnifiedObjectKind.person:
+        context.push(AppRoutePaths.userProfile(username: targetId));
+      case UnifiedObjectKind.circle:
+        context.push(AppRoutePaths.circleDetail(id: targetId));
+      case UnifiedObjectKind.place:
+      case UnifiedObjectKind.org:
+        context.push(AppRoutePaths.homepageDetail(id: targetId));
+    }
   }
 
   void _openUserProfile(
@@ -282,6 +324,10 @@ class _HomePageState extends ConsumerState<HomePage>
     final navFeedRequestId = ref
         .read(feedSessionProvider.notifier)
         .newFeedRequestId();
+    // 入口 post 在 feed 中的位置（推荐归因；-1 → null 不上报）。
+    final feedPosition = (feedPosts ?? const <PostBaseDto>[]).indexWhere(
+      (item) => item.id == post.id,
+    );
     ref
         .read(behaviorRepositoryProvider)
         .reportSingle(
@@ -290,6 +336,7 @@ class _HomePageState extends ConsumerState<HomePage>
           authorId: post.authorId,
           referralSource: ReferralSource.organicFeed,
           feedRequestId: navFeedRequestId,
+          position: feedPosition >= 0 ? feedPosition : null,
         );
 
     final rawPostsById = homeFollowingMediaViewerRaws(
@@ -331,6 +378,7 @@ class _HomePageState extends ConsumerState<HomePage>
         rawPostsById: rawPostsById,
         interactionSnapshot: interactionSnapshot,
         feedRequestId: navFeedRequestId,
+        position: feedPosition >= 0 ? feedPosition : null,
       ),
     );
     if (result is MediaViewerResult) {

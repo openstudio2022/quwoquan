@@ -27,6 +27,40 @@ class AssistantHalfSheet extends StatelessWidget {
     );
   }
 
+  /// chip 点击真实分发（B4）：按 actionType 落地真实指令/跳转，消除 TODO 占位。
+  /// command → 进入会话页并携带指令；route → 跳转目标路由；setting → 打开设置。
+  /// 仅在用户主动打开半弹窗时出现，无自动弹窗骚扰（克制出现）。
+  void _dispatchChip(BuildContext context, AssistantChipEntry chip) {
+    Navigator.of(context).pop();
+    switch (chip.actionType) {
+      case 'route':
+        switch (chip.value) {
+          case 'circles':
+            context.push(AppRoutePaths.circles);
+            return;
+          case 'create':
+            context.push(AppRoutePaths.create());
+            return;
+        }
+        context.push(AppRoutePaths.assistantPersonal, extra: openContext);
+        return;
+      case 'setting':
+        context.push(AppRoutePaths.settings);
+        return;
+      case 'command':
+      default:
+        context.push(
+          AppRoutePaths.assistantPersonal,
+          extra: openContext.copyWith(
+            hints: <String, dynamic>{
+              ...openContext.hints,
+              'command': chip.value ?? '',
+            },
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -124,9 +158,7 @@ class AssistantHalfSheet extends StatelessWidget {
                   .map(
                     (c) => ActionChip(
                       label: c.label,
-                      onPressed: () {
-                        // TODO: 根据 actionType/value 发指令或跳转
-                      },
+                      onPressed: () => _dispatchChip(context, c),
                     ),
                   )
                   .toList(),

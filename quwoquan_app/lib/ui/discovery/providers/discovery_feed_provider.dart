@@ -73,13 +73,30 @@ class DiscoveryFeedMapNotifier
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() => {};
 
+  /// 解析取数查询：首页频道以 [homeChannelsProvider]（端默认 + 远程覆盖）的 feed_query 为真相源；
+  /// 非首页频道（发现 tab photo/video/...）回退 [toDiscoveryFeedQuery]。
+  DiscoveryFeedQuery _resolveQuery(String tabId) {
+    for (final channel in ref.read(homeChannelsProvider)) {
+      if (channel.id != tabId) continue;
+      final category = channel.feedQuery['category'];
+      if (category != null && category.isNotEmpty) {
+        return (
+          category: category,
+          identity: channel.feedQuery['identity'],
+          type: channel.feedQuery['type'],
+        );
+      }
+    }
+    return toDiscoveryFeedQuery(tabId);
+  }
+
   Future<void> load(String tabId, {bool force = false}) async {
     final currentValue = state[tabId]?.value;
     if (!force && currentValue != null && currentValue.items.isNotEmpty) {
       return;
     }
     final repo = ref.read(contentRepositoryProvider);
-    final query = toDiscoveryFeedQuery(tabId);
+    final query = _resolveQuery(tabId);
     final feedSession = ref.read(feedSessionProvider.notifier);
     final sessionId = feedSession.sessionId;
     final feedRequestId = feedSession.newFeedRequestId();
@@ -135,7 +152,7 @@ class DiscoveryFeedMapNotifier
     state = {...state, tabId: AsyncData(value.copyWith(isLoading: true))};
     try {
       final repo = ref.read(contentRepositoryProvider);
-      final query = toDiscoveryFeedQuery(tabId);
+      final query = _resolveQuery(tabId);
       final feedSession = ref.read(feedSessionProvider.notifier);
       final sessionId = feedSession.sessionId;
       final feedRequestId = feedSession.newFeedRequestId();

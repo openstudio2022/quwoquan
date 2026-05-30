@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
 enum HomePrimaryTabStripStyle { regular, immersive }
@@ -11,6 +12,7 @@ class HomePrimaryTabStrip extends StatelessWidget {
     required this.activeTab,
     required this.onTabChange,
     required this.isDark,
+    this.channels,
     this.style = HomePrimaryTabStripStyle.regular,
     this.featuredIndicatorVisible = false,
     this.featuredExpanded = false,
@@ -18,7 +20,8 @@ class HomePrimaryTabStrip extends StatelessWidget {
   });
 
   static const String followingTabId = 'following';
-  static const String recommendedTabId = 'recommended';
+  // 与 ContentUIConfig.homeChannels 的推荐频道 id 对齐（运营/远程覆盖真相源）。
+  static const String recommendedTabId = 'recommend';
   static const String featuredTabId = 'featured';
   static const String circlesTabId = 'circles';
   static const String travelPhotographyTabId = 'travel_photography';
@@ -51,6 +54,10 @@ class HomePrimaryTabStrip extends StatelessWidget {
   final String activeTab;
   final ValueChanged<String> onTabChange;
   final bool isDark;
+
+  /// 首页频道（运营资产，来自 homeChannelsProvider：端默认 + 远程覆盖）。
+  /// 为空时回退发布自带默认 [homeTabIds]（仅离线兜底）；immersive 风格固定用 [immersiveTabIds]。
+  final List<HomeChannelConfig>? channels;
   final HomePrimaryTabStripStyle style;
   final bool featuredIndicatorVisible;
   final bool featuredExpanded;
@@ -90,9 +97,17 @@ class HomePrimaryTabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gap = AppSpacing.primaryTabGroupGap(context);
+    final labelByTabId = <String, String>{
+      for (final channel in channels ?? const <HomeChannelConfig>[])
+        channel.id: UITextConstants.homeChannelLabel(channel.labelKey),
+    };
+    final regularTabs = (channels != null && channels!.isNotEmpty)
+        ? channels!.map((channel) => channel.id).toList(growable: false)
+        : homeTabIds;
     final tabs = style == HomePrimaryTabStripStyle.immersive
         ? immersiveTabIds
-        : homeTabIds;
+        : regularTabs;
+    String labelFor(String tabId) => labelByTabId[tabId] ?? _labelForTab(tabId);
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onHorizontalDragEnd: onHorizontalDragEnd,
@@ -110,11 +125,11 @@ class HomePrimaryTabStrip extends StatelessWidget {
                 _HomePrimaryTabStripItem(
                   key: tabKey(tabs[i]),
                   tabId: tabs[i],
-                  label: _labelForTab(tabs[i]),
+                  label: labelFor(tabs[i]),
                   selected: activeTab == tabs[i],
                   slotWidth: _slotWidth(
                     context,
-                    _labelForTab(tabs[i]),
+                    labelFor(tabs[i]),
                     reserveAccessorySlot: tabs[i] == featuredTabId,
                   ),
                   isDark: isDark,

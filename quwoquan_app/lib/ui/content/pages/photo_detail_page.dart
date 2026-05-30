@@ -276,6 +276,7 @@ class _PhotoDetailPageState extends ConsumerState<PhotoDetailPage> {
             tab: 'photo',
             visitTarget: target,
             experienceLevel: service.getExperience(target),
+            objectType: 'post',
           ),
         );
       },

@@ -105,6 +105,8 @@ class BehaviorEvent {
     this.totalUnits,
     this.entityRefs,
     this.pageVisitId,
+    this.intersectionDimension,
+    this.intersectionTagRefs,
   });
 
   final String contentId;
@@ -148,6 +150,13 @@ class BehaviorEvent {
   /// Page visit ID for ops event correlation
   final String? pageVisitId;
 
+  /// 交集行动归因（B3）：触发该行为的交集维度（identity/location/content/interest/relationship）。
+  /// 替代旧 reasonType 闭集枚举，回流到推荐管线用于交集解释与归因。
+  final String? intersectionDimension;
+
+  /// 交集行动归因（B3）：触发该行为的路径制 tagRef 锚点（来自统一 taxonomy）。
+  final List<String>? intersectionTagRefs;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'contentId': contentId,
     'action': action.wireValue,
@@ -166,6 +175,10 @@ class BehaviorEvent {
     if (entityRefs != null && entityRefs!.isNotEmpty) 'entityRefs': entityRefs,
     if (pageVisitId != null && pageVisitId!.isNotEmpty)
       'pageVisitId': pageVisitId,
+    if (intersectionDimension != null && intersectionDimension!.isNotEmpty)
+      'intersectionDimension': intersectionDimension,
+    if (intersectionTagRefs != null && intersectionTagRefs!.isNotEmpty)
+      'intersectionTagRefs': intersectionTagRefs,
   };
 }
 
@@ -258,6 +271,16 @@ class RemoteBehaviorRepository extends BehaviorRepository
   final String _currentUserId;
   final String _experimentBucket;
   final String Function()? _feedSessionIdProvider;
+
+  // ── 双 sessionId 语义（军规 R23 收敛说明）──────────────────────────────
+  // 端侧存在两个不同语义、不可混用的会话标识，上报 body 同时携带：
+  //   1) sessionId      = CloudRequestHeaders.sessionId（AppTraceContextStore，App 生命周期级、
+  //                       跨服务链路追踪，同时进 X-Client-Session-Id 头）。粒度：整个 App 会话。
+  //   2) feedSessionId  = FeedSessionProvider 的 30 分钟滚动 UUID。粒度：推荐 feed 拉取会话，
+  //                       用于把同一刷流会话内的曝光/点击/停留归因到同一次推荐请求。
+  // 关系：feedSessionId ⊂ sessionId 时间轴（一个 App 会话可包含多个 feed 会话）。
+  // 推荐 HotPath 归因用 feedSessionId + feedRequestId；跨服务 trace 用 sessionId。
+  // 二者名称相近但不等价，禁止互相替代（既往割裂点见 R23）。
 
   /// Canonical session ID for cross-service tracing (matches HTTP header).
   String get _resolvedSessionId => CloudRequestHeaders.sessionId;

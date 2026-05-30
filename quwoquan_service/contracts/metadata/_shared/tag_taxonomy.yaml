@@ -1,5 +1,16 @@
 version: 1
 
+# ⚠️ DEPRECATED — 已废弃，禁止新增/引用。
+# 唯一标签真相源已收口到数据工程路径制 taxonomy：quwoquan_data/publish/v1/tags
+# （四分组 Topic/Audience/Format/Entity，tagRef = 目录路径）。
+# 对象标签字段（post.tags / circle.tags / entity.categoryTags|highlightTags / user.interestTags）
+# 已切换为路径制 tagRef（见各 fields.yaml 的 tag_ref: true）。
+# 存量数据回填映射见 _shared/tag_ref_migration.yaml；回填完成后本文件整体删除。
+# 不得在 Go/Dart/脚本中引用本文件的扁平 id（topic_*/circle_*/interest_* 等）。
+deprecated: true
+superseded_by: quwoquan_data/publish/v1/tags
+migration_map: _shared/tag_ref_migration.yaml
+
 taxonomies:
   user_tags:
     description: 用户标签

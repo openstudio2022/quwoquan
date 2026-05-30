@@ -87,5 +87,52 @@ void main() {
       await tracker.flush();
       expect(repo.recorded.first.action, BehaviorAction.share);
     });
+
+    // ── V1-F/V1-H T3：feed 归因字段回流（feedRequestId/position/referralSource）──
+    test('impression 透传 feedRequestId/position/referralSource 回流', () async {
+      tracker.trackImpression(
+        'post_1',
+        feedRequestId: 'req-abc',
+        position: 7,
+        referralSource: ReferralSource.organicFeed,
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.feedRequestId, equals('req-abc'));
+      expect(event.position, equals(7));
+      expect(event.referralSource, equals(ReferralSource.organicFeed));
+    });
+
+    test('click 透传 position + referralSource 回流', () async {
+      tracker.trackClick(
+        'post_2',
+        feedRequestId: 'req-xyz',
+        position: 3,
+        referralSource: ReferralSource.organicFeed,
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.click);
+      expect(event.position, equals(3));
+      expect(event.referralSource, equals(ReferralSource.organicFeed));
+    });
+
+    test('follow 交集行动回流 dimension + tagRefs（B3 归因）', () async {
+      tracker.trackFollow(
+        'author_1',
+        feedRequestId: 'req-follow',
+        referralSource: ReferralSource.organicFeed,
+        intersectionDimension: 'identity',
+        intersectionTagRefs: const <String>['identity/campus/xdf'],
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.follow);
+      expect(event.intersectionDimension, equals('identity'));
+      expect(event.intersectionTagRefs, contains('identity/campus/xdf'));
+    });
   });
 }

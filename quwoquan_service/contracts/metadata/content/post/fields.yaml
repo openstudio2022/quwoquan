@@ -98,7 +98,8 @@ entities:
         api_exposure: read_write
         ops_exposure: read
         recommend_feature: true
-        tag_taxonomy_ref: content_tags
+        tag_ref: true
+        description: 路径制 tagRef 列表；唯一真相源为数据工程 publish/v1/tags（四分组路径 id），已废弃扁平 tag_taxonomy.yaml
 
       - name: mediaUrls
         type: "[]string"

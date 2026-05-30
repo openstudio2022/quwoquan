@@ -158,6 +158,7 @@ class MediaViewerExtra {
     this.interactionSnapshot = const MediaViewerInteractionSnapshot(),
     this.referralSource = ReferralSource.organicFeed,
     this.feedRequestId,
+    this.position,
   });
 
   final List<PostSummaryView> posts;
@@ -173,4 +174,7 @@ class MediaViewerExtra {
   final MediaViewerInteractionSnapshot interactionSnapshot;
   final ReferralSource referralSource;
   final String? feedRequestId;
+
+  /// 入口 post 在 feed 中的位置（推荐归因用；从 feed 列表序号透传）。
+  final int? position;
 }

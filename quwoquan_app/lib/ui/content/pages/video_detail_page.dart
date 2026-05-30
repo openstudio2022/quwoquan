@@ -271,6 +271,7 @@ class _VideoDetailPageState extends ConsumerState<VideoDetailPage> {
             tab: 'video',
             visitTarget: target,
             experienceLevel: service.getExperience(target),
+            objectType: 'post',
           ),
         );
       },

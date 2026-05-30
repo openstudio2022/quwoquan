@@ -1,0 +1,87 @@
+version: 1
+read_model: IntersectionReason
+description: |
+  交集理由（B1 契约，跨会话基建真相源）。
+  云侧推荐管线据「实时推荐结果 + 交集来源」预生成结构化交集理由随 feed / 对象详情下发；
+  端只读展示，禁止本地拼装文案（全局验收 G2）。
+  挂载点共用同一结构：feed item、对象推荐卡、对象页交集卡（你和这里的交集 / 你们的交集）、内容卡交集线索。
+
+  闭集枚举（端按字符串解析）：
+    dimension: identity | location | content | interest | relationship（5 源闭集，稳定用户语言来源）
+    source:    tagRef | geoTagRef | entityRef | followEdge | contact
+    actionType: follow | join | add_contact | view_object
+    relationKind: follow | contact | mutual（relationship 维度无标签锚点时使用）
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: IntersectionReason
+  base_class: ""
+  output_path: cloud/runtime/generated/recommendation/intersection_reason.g.dart
+  fields:
+    - name: dimension
+      dart_type: String
+      nullable: false
+      source: dimension
+      aliases: [dimension]
+      default: "''"
+    - name: tagRefs
+      dart_type: List<String>
+      nullable: false
+      source: tagRefs
+      aliases: [tagRefs]
+    - name: relationKind
+      dart_type: String
+      nullable: false
+      source: relationKind
+      aliases: [relationKind]
+      default: "''"
+    - name: relationObjectId
+      dart_type: String
+      nullable: false
+      source: relationObjectId
+      aliases: [relationObjectId]
+      default: "''"
+    - name: label
+      dart_type: String
+      nullable: false
+      source: label
+      aliases: [label]
+      default: "''"
+    - name: sharedCount
+      dart_type: int
+      nullable: false
+      source: sharedCount
+      aliases: [sharedCount]
+      default: "0"
+    - name: strength
+      dart_type: double
+      nullable: false
+      source: strength
+      aliases: [strength]
+      default: "0.0"
+    - name: displayText
+      dart_type: String
+      nullable: false
+      source: displayText
+      aliases: [displayText]
+      default: "''"
+    - name: actionType
+      dart_type: String
+      nullable: false
+      source: actionType
+      aliases: [actionType]
+      default: "''"
+    - name: actionTargetId
+      dart_type: String
+      nullable: false
+      source: actionTargetId
+      aliases: [actionTargetId]
+      default: "''"
+    - name: source
+      dart_type: String
+      nullable: false
+      source: source
+      aliases: [source]
+      default: "''"
