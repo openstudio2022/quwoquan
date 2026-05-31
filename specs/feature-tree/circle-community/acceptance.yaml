@@ -1,84 +1,32 @@
-feature: circle-community
-level: "L1_capability"
-archived: false
-level_acceptance:
-- id: A1
-  description: '端侧目录完成从 features/circles/ 到 ui/circle/ 的迁移： 所有路由和 Provider 更新完毕，项目内无任何
-    import 引用 features/circles/ 路径， flutter analyze 无新增错误。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
-  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
-  - path: quwoquan_app/lib/ui/circle/pages/circle_stats_page.dart
-- id: A2
-  description: 'CircleRepository 三层模式（Abstract + Mock + Remote）创建完成， 已注册到 app_providers.dart
-    的 circleRepositoryProvider， 通过 appDataSourceModeProvider 切换 mock/remote， AppContentRepository
-    中的 circles* 接口已移除。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/cloud/services/circle/circle_repository.dart
-  - path: quwoquan_app/lib/core/providers/app_providers.dart
-- id: A3
-  description: '底栏一级入口与全局搜索一级筛选统一显示为“圈子”； 圈子列表和搜索结果可同时承接兴趣型圈子与组织型主页， 并继续由统一领域标签体系驱动（至少 travel/local_life/health_wellness/tech/education
-    5 个领域对齐）。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
-  - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
-- id: A4
-  description: '群组详情模板冻结完成：通用圈子模板使用“首页/内容/群/成员”， 组织主页模板使用“首页/内容/组织/成员”； 首页至少包含头部信息、公告、内容精选、群/组织入口、成员摘要， 单模块失败不影响其他模块渲染。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
-- id: A5
-  description: '群组内容模型统一完成：用户动作统一为“发布内容”； 一级内容类型冻结为笔记/作品/提问/口碑， 表达形式冻结为图文笔记/视频/文章； 全局添加入口与群组内入口共用同一发布页； 口碑必须绑定
-    1 个主具体事物，群不作为公开内容主分发面。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/ui/content/entry/pages/create_page.dart
-  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
-- id: A6
-  description: '群模型与角色分层成立：圈级使用圈主/圈管，组织型使用负责人/管理员，群级使用群主/群管； 群分为公共群与自建群； 小型群组默认
-    1 个公共群，大型群组支持多个公共群或组织节点； 成员默认加入 1 个公共群并可加入多个自建群。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
-  - path: quwoquan_app/lib/ui/chat/pages/start_group_chat_page.dart
-- id: A7
-  description: '圈子详情页所有硬编码视觉字面量清零： 字号使用 AppTypography.*、间距使用 AppSpacing.*、颜色使用 AppColors/AppColorsFunctional、
-    圆角使用 AppSpacing.*BorderRadius， python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py 对 ui/circle/
-    目录零新增违规。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/ui/circle/pages/circle_detail_page.dart
-- id: A8
-  description: '云侧 circle-service 核心 API 实现并通过契约测试： ListCircles、CreateCircle、GetCircle、JoinCircle、LeaveCircle、
-    GetCircleFeed、GetCircleStats 7 个端点与 service.yaml 契约一致， 并能支撑群组首页、内容、成员与群摘要的 typed
-    contract 读取语义。
-
-    '
-  status: pending
-  tests: []
-- id: A9
-  description: '圈子推荐与搜索“圈子”结果口径一致： 基于用户兴趣画像（领域标签权重） 推荐排序圈子列表，结果可同时返回兴趣型圈子与组织型主页； 推荐结果与用户近
-    7 天活跃领域相关度 ≥ 60%（通过离线评测验证）， 推荐服务不可用时自动降级到按热度排序。
-
-    '
-  status: pending
-  tests:
-  - path: quwoquan_app/lib/ui/circle/pages/circles_page.dart
-  - path: quwoquan_app/lib/ui/search/pages/global_search_page.dart
+version: 2
+node:
+  id: circle-community
+  level: L1_domain_service
+  path: specs/feature-tree/circle-community
+  title: circle community
+  parent_domain_service: circle-community
+scope:
+  summary: circle community 验收范围。
+  in_scope: []
+  out_of_scope: []
+domain_acceptance:
+  DA1:
+    title: circle community 领域边界验收
+    done_when:
+    - 领域边界、上下游依赖、工程映射和服务治理清晰。
+    boundary_points: []
+    evidence:
+      primary:
+      - T1_static_contract
+      - T3_service_contract
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

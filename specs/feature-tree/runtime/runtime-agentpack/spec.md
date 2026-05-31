@@ -8,7 +8,7 @@
 - IngestTaskPack：新特性自动归入特性树。
 
 ## 约束
-- 状态推断基于 tasks.md 完成度（全部完成 → completed，部分 → in_progress）。
+- 状态推断基于 树内任务文档 完成度（全部完成 → completed，部分 → in_progress）。
 - tree_index.yaml 为自动生成，不手写。
 
 ## 验收标准

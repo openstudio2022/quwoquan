@@ -4,7 +4,7 @@
 
 `global-search-experience` 是一次能力归属重构，而不是一次普通页面改版。PRD 已经冻结三件事：
 
-1. 全局搜索是独立 `L1_capability`，不再挂靠 `discovery-content`。
+1. 全局搜索是独立 `L1_domain_service`，不再挂靠 `discovery-content`。
 2. “本地聊天搜索 / 群组 facet / 网络结果” 的对象边界必须明确，不再复用记录 chat 搜索节点。
 3. 问小趣只作为快捷 handoff，不参与综合搜索结果混排。
 

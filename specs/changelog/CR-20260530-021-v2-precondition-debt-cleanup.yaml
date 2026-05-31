@@ -7,7 +7,7 @@ status: active
 affected_nodes:
   - specs/feature-tree/discovery-content/content-type-framework
   - specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model
-  - specs/feature-tree/discovery-content/content-type-framework/v2-admission-gate-checklist.md
+  - specs/feature-tree/discovery-content/content-type-framework/content-unification-admission-gate-checklist.md
 
 entries:
   - timestamp: "2026-05-30T09:30:00+08:00"
@@ -38,7 +38,7 @@ entries:
       - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/plan.yaml
         sections:
           - slices
-      - path: specs/feature-tree/discovery-content/content-type-framework/v2-admission-gate-checklist.md
+      - path: specs/feature-tree/discovery-content/content-type-framework/content-unification-admission-gate-checklist.md
         sections:
           - Block D
     impact:

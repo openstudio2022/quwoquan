@@ -2,8 +2,8 @@
 
 ## 节点定位
 
-- `L1_capability`: `shared-homepage-network`
-- `L2_journey`: `homepage-review-and-content-journey`
+- `L1_domain_service`: `shared-homepage-network`
+- `L2_business_capability`: `homepage-review-and-content-journey`
 
 该 Journey 冻结“用户如何围绕某个主页完成理解、比较、浏览内容与继续贡献内容”的完整链路。  
 它承接主页总览、口碑摘要、内容聚合、问答聚合、相关群组入口与主页上下文下的发布入口，不承接认领审核与下线治理。
@@ -45,7 +45,7 @@
 
 ## 特性树拆分
 
-本 Journey 冻结为 4 个 `L3_scenario` 方向：
+本 Journey 冻结为 4 个 `L3_story` 方向：
 
 | L3 Scenario | 负责的问题 | 归属域 |
 |---|---|---|

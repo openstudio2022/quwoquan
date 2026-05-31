@@ -2,8 +2,8 @@
 
 ## 节点定位
 
-- `L1_capability`: `shared-homepage-network`
-- `L2_journey`: `homepage-claim-maintain-and-offline-journey`
+- `L1_domain_service`: `shared-homepage-network`
+- `L2_business_capability`: `homepage-claim-maintain-and-offline-journey`
 
 该 Journey 冻结“主页如何从候选进入已发布、如何被认领维护、如何在现实世界消亡后软下线保留记录”的完整链路。  
 它承接候选建档、认领申请、认领后基础维护和下线治理，不承接主页搜索与普通浏览消费细节。
@@ -43,7 +43,7 @@
 
 ## 特性树拆分
 
-本 Journey 冻结为 4 个 `L3_scenario` 方向：
+本 Journey 冻结为 4 个 `L3_story` 方向：
 
 | L3 Scenario | 负责的问题 | 归属域 |
 |---|---|---|

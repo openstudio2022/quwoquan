@@ -2,7 +2,7 @@
 
 ## 节点定位
 
-- `L1_capability`: `global-search-experience`
+- `L1_domain_service`: `global-search-experience`
 
 该节点是 App 内统一搜索入口、两段式搜索建议、独立网络结果页、搜索记录与“小趣搜” assistant 结果的唯一能力归属。
 它不再挂靠 `discovery-content`，也不再沿用 `chat-conversation/contact-and-session-governance/contact-search-index*` 这类记录节点。
@@ -94,7 +94,7 @@
 
 ### In Scope
 
-- 新建独立 `L1_capability`，承接全局搜索全部产品与文档治理。
+- 新建独立 `L1_domain_service`，承接全局搜索全部产品与文档治理。
 - 全屏搜索首页初始态：搜索框、`最近在搜` 双列卡片、展开、垃圾桶进入记录管理态。
 - 输入后的实时联想页：严格按 `最常使用 / 联系人 / 聊天记录 / 搜索网络结果` 四段组织。
 - 联系人、聊天记录各默认展示 3 条，并支持在当前页内联展开更多后直接跳转会话。

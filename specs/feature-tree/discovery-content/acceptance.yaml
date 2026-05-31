@@ -1,7 +1,32 @@
-feature: discovery-content
-level: "L1_capability"
-archived: false
+version: 2
+node:
+  id: discovery-content
+  level: L1_domain_service
+  path: specs/feature-tree/discovery-content
+  title: discovery content
+  parent_domain_service: discovery-content
+scope:
+  summary: discovery content 验收范围。
+  in_scope: []
+  out_of_scope: []
+domain_acceptance:
+  DA1:
+    title: discovery content 领域边界验收
+    done_when:
+    - 领域边界、上下游依赖、工程映射和服务治理清晰。
+    boundary_points: []
+    evidence:
+      primary:
+      - T1_static_contract
+      - T3_service_contract
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance: {}
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

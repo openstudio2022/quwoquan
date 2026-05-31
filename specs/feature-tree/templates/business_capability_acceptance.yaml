@@ -1,0 +1,52 @@
+version: 2
+node:
+  id: business-capability-id
+  level: L2_business_capability
+  path: specs/feature-tree/domain-service-id/business-capability-id
+  title: business capability title
+  parent_domain_service: domain-service-id
+
+scope:
+  summary: capability SIT summary
+  story_refs:
+    - story-id
+  out_of_scope:
+    - item
+
+sit_acceptance:
+  SIT1:
+    title: capability integration acceptance
+    story_refs:
+      - story-id
+    capability_boundary:
+      owns:
+        - capability-owned behavior
+      does_not_own:
+        - behavior owned elsewhere
+    conflict_matrix:
+      - conflict: adjacent gesture or feature
+        resolution: arbitration rule
+    done_when:
+      - combined business flow works across stories
+      - state transitions and edge cases are covered
+      - data consistency and recovery behavior are verified
+    performance_points:
+      - response latency target
+      - conflict or false-positive rate target
+    evidence:
+      primary:
+        - T2_module_interaction
+        - T3_app_api_integration
+      supporting:
+        - T1_static_contract
+    tests:
+      planned:
+        - module or integration test
+      recorded: []
+    status: pending
+
+execution:
+  local_gate:
+    - make gate
+  full_gate:
+    - make gate-full

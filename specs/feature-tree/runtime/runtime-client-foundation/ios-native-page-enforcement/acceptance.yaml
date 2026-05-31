@@ -1,95 +1,41 @@
-version: 1
-feature: ios-native-page-enforcement
-level: "L3_story"
-archived: true
-template: A1-A5
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.ios-native-page-enforcement
-  parent_path: capability.runtime.feature.runtime-client-foundation
-level_acceptance:
-  focus_groups:
-    - A1_functional
-    - A7_contract_metadata_consistency
-  notes: iOS 原生根壳与静态门禁；详见 spec.md
-  A1:
-    criteria: 门禁脚本在仓库根可执行，对 quwoquan_app 约定路径生效
-    status: implemented
-    linked_tasks:
-      - M1
+version: 2
+node:
+  id: ios-native-page-enforcement
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement
+  title: ios native page enforcement
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: ios native page enforcement 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: ios native page enforcement GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      - file: quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
-  A2:
-    criteria: make gate（quwoquan_app 段）调用 verify_ios_native_surface_gate.py，失败时非零退出
-    status: implemented
-    linked_tasks:
-      - M2
-    tests:
-      - file: agent_ops/gate/gate_repo.sh
-  A3:
-    criteria: lib/ui/**/pages/**/*.dart、components 约定路径与 design 一致；其内禁止未豁免的 return Scaffold(
-    status: implemented
-    linked_tasks:
-      - M3
-    tests:
-      - file: quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
-  A4:
-    criteria: allowlist 仅登记已知存量；新增业务页不得依赖扩大豁免
-    status: implemented
-    linked_tasks:
-      - M1
-    tests:
-      - file: specs/gates/ios_native_surface_allowlist.yaml
-  A7:
-    criteria: spec/design/plan 与 02_IOS_NATIVE_FRONTEND_UX_SPEC、page-layout-semantics 一致
-    status: implemented
-    linked_tasks:
-      - M3
-    tests:
-      - file: specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/spec.md
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: python3 quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
-  full_gate: make gate
-
-# 以下为 T1~T4 叙事映射（供 CR / 评审引用，门禁以 level_acceptance 为准）
-journey_acceptance:
-  - id: A1
-    statement: 门禁脚本在仓库根执行且对 quwoquan_app 页面路径生效
-    t_layers: [T1]
-  - id: A2
-    statement: make gate（quwoquan_app 段）调用 verify_ios_native_surface_gate.py 失败时退出非零
-    t_layers: [T1]
-  - id: A3
-    statement: lib/ui/**/pages/**/*.dart（及 design 所列 components 路径）中禁止出现未豁免的 return Scaffold(
-    t_layers: [T1, T2]
-  - id: A4
-    statement: 约定的 components 全屏页路径与同规则一致（见 design 中 glob）
-    t_layers: [T1, T2]
-  - id: A5
-    statement: allowlist 仅包含当前已知的 Material 根壳文件；新增业务页不得依赖 allowlist
-    t_layers: [T3]
-
-scenario_acceptance:
-  - id: S1
-    statement: 开发者在全新页面使用 return Scaffold( 时本地 make gate 失败并给出文件与规则链接
-    t_layers: [T2]
-  - id: S2
-    statement: 将 allowlist 中某文件改为 AppScaffold 根壳后，从 allowlist 移除仍能通过 gate
-    t_layers: [T2, T3]
-
-evidence_matrix:
-  T1:
-    - type: script
-      artifact: quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py
-    - type: config
-      artifact: specs/gates/ios_native_surface_allowlist.yaml
-    - type: ci
-      artifact: agent_ops/gate/gate_repo.sh run_app 调用链
-  T2:
-    - type: manual
-      note: 故意引入违规一行后 gate 失败再还原
-  T3:
-    - type: doc
-      artifact: specs/feature-tree/runtime/runtime-client-foundation/ios-native-page-enforcement/plan.yaml
-  T4:
-    - type: deferred
-      note: 全量 UI 黄金用例可选；本 L3 以静态门禁为主
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

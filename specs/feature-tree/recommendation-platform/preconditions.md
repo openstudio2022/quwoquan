@@ -26,9 +26,9 @@ make codegen-rec-model-python
 
 | 节点 | spec | design | tasks | acceptance | 说明 |
 |------|------|--------|-------|------------|------|
-| L1 recommendation-platform | ✅ | ✅ | ✅ | ✅ | [spec](spec.md)、[design](design.md)、[tasks](tasks.md)、[acceptance](acceptance.yaml) |
-| L3 rec-model-training | ✅ | — | ✅ | ✅ | 设计见 L1 design；本节点 [spec](rec-model-training/spec.md)、[tasks](rec-model-training/tasks.md)、[acceptance](rec-model-training/acceptance.yaml) |
-| L3 rec-model-service | ✅ | — | ✅ | ✅ | [spec](rec-model-service/spec.md)、[readiness](rec-model-service/readiness.md)、[tasks](rec-model-service/tasks.md)、[acceptance](rec-model-service/acceptance.yaml) |
+| L1 recommendation-platform | ✅ | ✅ | ✅ | ✅ | [spec](spec.md)、[design](design.md)、[tasks](树内任务文档)、[acceptance](acceptance.yaml) |
+| L3 rec-model-training | ✅ | — | ✅ | ✅ | 设计见 L1 design；本节点 [spec](rec-model-training/spec.md)、[tasks](rec-model-training/树内任务文档)、[acceptance](rec-model-training/acceptance.yaml) |
+| L3 rec-model-service | ✅ | — | ✅ | ✅ | [spec](rec-model-service/spec.md)、[readiness](rec-model-service/readiness.md)、[tasks](rec-model-service/树内任务文档)、[acceptance](rec-model-service/acceptance.yaml) |
 
 L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使用。
 
@@ -63,8 +63,8 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 
 ## 5. 进入 Implement 时的约定
 
-- **rec-model-training**：按 [rec-model-training/tasks.md](rec-model-training/tasks.md) 及 L4/L5 tasks 实施；每完成一个 task 运行 `make build`（若涉及 Go 工具）及约定脚本/测试。
-- **rec-model-service**：按 [rec-model-service/tasks.md](rec-model-service/tasks.md) 及 L4/L5 tasks 实施；每完成一个 task 运行 G2（见主线：build + test-contract；Python 服务需有对应测试与就绪检查）。
+- **rec-model-training**：按 [rec-model-training/树内任务文档](rec-model-training/树内任务文档) 及 L4/L5 tasks 实施；每完成一个 task 运行 `make build`（若涉及 Go 工具）及约定脚本/测试。
+- **rec-model-service**：按 [rec-model-service/树内任务文档](rec-model-service/树内任务文档) 及 L4/L5 tasks 实施；每完成一个 task 运行 G2（见主线：build + test-contract；Python 服务需有对应测试与就绪检查）。
 - **门禁**：`make gate`（quwoquan_service）在提交前通过；全栈门禁 `make gate-full` 在 Verify 阶段执行。
 
 ---
@@ -79,7 +79,7 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 | rec-model-service metadata + codegen + readiness | ✅ 已具备 |
 | rec-model-training 依赖的 _projections 与契约 | ✅ 已具备 |
 
-**结论**：进入两个服务（rec-model-training、rec-model-service）开发的前置条件已满足，可按 `tasks.md` 与开发流程进入 Implement 阶段。
+**结论**：进入两个服务（rec-model-training、rec-model-service）开发的前置条件已满足，可按 `树内任务文档` 与开发流程进入 Implement 阶段。
 
 ---
 
@@ -91,13 +91,13 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 
 | 对象 | 检查项 | 参考 |
 |------|--------|------|
-| **rec-model-service** | inference-api：main.py、POST /v1/score 真实实现、scenario 路由、content_feed 模型或占位、/health；inference-deployment：Dockerfile、docker-compose 条目 | [rec-model-service/tasks.md](rec-model-service/tasks.md) Phase 2/3 |
-| **rec-model-training** | 代码落点（如 scripts/ml/）、feature_registry 约定、training-pipeline 与 training-deployment 可跑通或占位 | [rec-model-training/tasks.md](rec-model-training/tasks.md) |
+| **rec-model-service** | inference-api：main.py、POST /v1/score 真实实现、scenario 路由、content_feed 模型或占位、/health；inference-deployment：Dockerfile、docker-compose 条目 | [rec-model-service/树内任务文档](rec-model-service/树内任务文档) Phase 2/3 |
+| **rec-model-training** | 代码落点（如 scripts/ml/）、feature_registry 约定、training-pipeline 与 training-deployment 可跑通或占位 | [rec-model-training/树内任务文档](rec-model-training/树内任务文档) |
 | **门禁** | `make verify-metadata`、`make build`（Go）、rec-model-service 测试（若有） | quwoquan_service |
 
 ### 7.2 Go 对接（go-integration，必须在本会话完成）
 
-按 [rec-model-service/go-integration/tasks.md](rec-model-service/go-integration/tasks.md) 顺序：
+按 [rec-model-service/go-integration/树内任务文档](rec-model-service/go-integration/树内任务文档) 顺序：
 
 1. **ModelPredictRequest 增加 Scenario 字段**：在 `runtime/recommendation/scorer.go` 中为 `ModelPredictRequest` 增加 `Scenario string`，与 metadata/OpenAPI 一致；`RemoteModelScorer.ScoreBatch` 请求体带 scenario（如 `content_feed`）。
 2. **HTTPModelServiceClient**：实现 `ModelServiceClient` 接口，HTTP POST 到 rec-model-service 的 `/v1/score`，请求/响应与 OpenAPI 一致；可放在 `content-service/internal/infrastructure/recommendation/` 或 `runtime/recommendation/`。

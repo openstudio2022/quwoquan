@@ -1,0 +1,174 @@
+version: 1
+owner: quwoquan-platform
+source:
+  app_spec: specs/feature-tree/spec.md
+  app_acceptance: specs/feature-tree/acceptance.yaml
+  tree_index: specs/feature-tree/tree_index.yaml
+
+schema:
+  journey:
+    required:
+      - id
+      - title
+      - user_goal
+      - scenario_refs
+      - domain_services
+      - uat_refs
+  scenario:
+    required:
+      - id
+      - title
+      - parent_journey
+      - domain_services
+      - business_capabilities
+      - stories
+      - acceptance_refs
+
+journeys:
+  - id: content-discovery-to-consumption
+    title: 内容发现到消费
+    user_goal: 用户从发现页进入内容详情，并完成阅读、互动或跳转作者主页。
+    scenario_refs:
+      - content-feed-open-detail
+      - content-detail-profile-handoff
+    domain_services:
+      - discovery-content
+      - user-identity-profile-relationship
+      - shared-homepage-network
+    uat_refs:
+      - UAT1
+    status: draft
+
+  - id: cross-domain-search
+    title: 跨领域搜索
+    user_goal: 用户在统一搜索入口中查找内容、圈子、聊天记录、主页和地点。
+    scenario_refs:
+      - global-search-query-and-filter
+    domain_services:
+      - global-search-experience
+      - discovery-content
+      - circle-community
+      - chat-conversation
+      - shared-homepage-network
+    uat_refs:
+      - UAT1
+    status: draft
+
+  - id: app-root-navigation-safety
+    title: 应用根导航安全
+    user_goal: 用户通过系统边缘手势返回上一页或退出根页时，获得符合平台习惯且不误触的体验。
+    scenario_refs:
+      - global-route-edge-pop-contract
+      - immersive-media-edge-swipe-back
+      - home-edge-swipe-exit-guard
+    domain_services:
+      - runtime
+      - discovery-content
+    uat_refs:
+      - UAT_EDGE_SWIPE
+    status: specified
+
+scenarios:
+  - id: global-route-edge-pop-contract
+    title: 全局无底栏页面边缘返回
+    parent_journey: app-root-navigation-safety
+    domain_services:
+      - runtime
+    business_capabilities:
+      - runtime/native-edge-gesture-navigation
+    stories:
+      - runtime/native-edge-gesture-navigation/global-route-edge-pop-contract
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EDGE_SWIPE
+    boundary_notes:
+      - runtime 负责平台防腐策略、Page 工厂与根壳返回状态机；业务页面只声明路由类型和可选返回 guard。
+    status: specified
+
+  - id: content-feed-open-detail
+    title: 从内容流打开详情
+    parent_journey: content-discovery-to-consumption
+    domain_services:
+      - discovery-content
+    business_capabilities:
+      - discovery-content/feed-orchestration-recommendation
+      - discovery-content/content-display-journey-consistency
+    stories:
+      - discovery-content/feed-orchestration-recommendation/unified-items-cursor
+      - discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT1
+    boundary_notes:
+      - 发现流排序归 discovery-content；作者关系与画像归 user-identity-profile-relationship。
+    status: draft
+
+  - id: content-detail-profile-handoff
+    title: 内容详情跳转作者主页
+    parent_journey: content-discovery-to-consumption
+    domain_services:
+      - discovery-content
+      - user-identity-profile-relationship
+      - shared-homepage-network
+    business_capabilities:
+      - discovery-content/content-display-journey-consistency
+      - user-identity-profile-relationship/profile-homepage-redesign
+      - shared-homepage-network/homepage-review-and-content-journey
+    stories:
+      - discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract
+      - user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT1
+    boundary_notes:
+      - 内容详情只传递 referralSource 与 subject id，不拥有主页 IA。
+    status: draft
+
+  - id: global-search-query-and-filter
+    title: 全局搜索查询与筛选
+    parent_journey: cross-domain-search
+    domain_services:
+      - global-search-experience
+      - discovery-content
+      - circle-community
+      - chat-conversation
+      - shared-homepage-network
+    business_capabilities:
+      - global-search-experience/cross-domain-search-journey
+      - global-search-experience/search-provider-routing-and-storage-topology
+    stories:
+      - global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+      - global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT1
+    boundary_notes:
+      - global-search-experience 负责入口、路由和聚合体验；各领域服务负责本域结果契约。
+    status: draft
+
+  - id: immersive-media-edge-swipe-back
+    title: 沉浸式媒体浏览器边缘滑动返回
+    parent_journey: app-root-navigation-safety
+    domain_services:
+      - runtime
+      - discovery-content
+    business_capabilities:
+      - runtime/native-edge-gesture-navigation
+    stories:
+      - runtime/native-edge-gesture-navigation/immersive-media-edge-swipe-back
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EDGE_SWIPE
+    boundary_notes:
+      - runtime 负责平台手势策略；discovery-content 负责沉浸式媒体 surface 的业务语义。
+    status: specified
+
+  - id: home-edge-swipe-exit-guard
+    title: 主页边缘滑动退出保护
+    parent_journey: app-root-navigation-safety
+    domain_services:
+      - runtime
+    business_capabilities:
+      - runtime/native-edge-gesture-navigation
+    stories:
+      - runtime/native-edge-gesture-navigation/home-edge-swipe-exit-guard
+    acceptance_refs:
+      - specs/feature-tree/acceptance.yaml#UAT_EDGE_SWIPE
+    boundary_notes:
+      - 根页退出保护归 runtime/app shell；具体业务 tab 不拥有退出决策。
+    status: specified

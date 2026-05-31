@@ -1,39 +1,41 @@
-feature: article-rich-content-blocks
-level: "L3_story"
-template: A1-A4
-archived: false
+version: 2
+node:
+  id: article-rich-content-blocks
+  level: L3_story
+  path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/article-rich-content-blocks
+  title: article rich content blocks
+  parent_domain_service: discovery-content
+  parent_business_capability: dual-rail-discovery-redesign
+scope:
+  summary: article rich content blocks 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: article rich content blocks GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make build && make test-contract
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: fields.yaml 中 ArticleBlock schema 存在，make codegen-app 成功生成 article_block_dto.g.dart（含
-      DO NOT EDIT 头）
-    status: pending
-    linked_tasks:
-    - M1
-    - C1
-    tests: []
-  A2:
-    criteria: ArticleBlockDto.fromMap() 正确解析 TextBlock（content）/ ImageBlock（url+widthFraction+floatSide+caption）/
-      QuoteBlock（content）
-    status: pending
-    linked_tasks:
-    - C1
-    - T1
-    tests: []
-  A3:
-    criteria: ImageBlock 包含 widthFraction（half/third/full）、floatSide（left/right/none）、aspectRatio、caption
-      字段；宽高比超 9:16 时端侧截断
-    status: pending
-    linked_tasks:
-    - M1
-    - T2
-    tests: []
-  A4:
-    criteria: ArticlePostDto.blocks 为 null 时端侧降级使用 body 字段渲染单页，不崩溃
-    status: pending
-    linked_tasks:
-    - R1
-    - T3
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

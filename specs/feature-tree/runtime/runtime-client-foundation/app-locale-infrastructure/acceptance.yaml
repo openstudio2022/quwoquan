@@ -1,44 +1,41 @@
-version: 1
-feature: app-locale-infrastructure
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.app-locale-infrastructure
-  parent_path: capability.runtime.feature.runtime-client-foundation
-  acceptance_inherits_from: capability.runtime.feature.runtime-client-foundation
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A7_contract_metadata_consistency
-  - A8_test_automation
-  notes: 国际化基础设施；当前仅交付中文，英文为 TODO 占位。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: l10n.yaml + app_zh.arb 配置正确
-      when: 执行 flutter gen-l10n
-      then: 生成 AppLocalizations + AppLocalizationsZh + AppLocalizationsEn，无报错
-    - given: 任意 Flutter widget 中引入 context.l10n
-      when: 调用 context.l10n.loading
-      then: 返回 '加载中...'，类型为 String
-  A2_experience:
-  - context.l10n.xxx 调用方式与 context.theme / context.colorScheme 风格一致
-  A3_service_governance:
-  - UITextConstants 保留，不强制删除，标注非 widget 上下文使用
-  A4_observability:
-  - N/A
-  A5_product_ops:
-  - N/A
-  A6_security_privacy:
-  - ARB 文件无 PII / secret
-  A7_contract_metadata_consistency:
-  - app_zh.arb key 集合 ⊇ UITextConstants 所有常量名（驼峰转换后）
-  - app_zh.arb key 集合 ⊇ AppStrings 所有常量名（驼峰转换后）
-  - app_en.arb key 集合 = app_zh.arb key 集合
-  A8_test_automation:
-  - flutter analyze 零错误零警告（治理范围内）
-  - flutter gen-l10n 零报错
-  - lib/ui/ 目录 CJK 字面量脚本检查通过（零匹配）
+version: 2
+node:
+  id: app-locale-infrastructure
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/app-locale-infrastructure
+  title: app locale infrastructure
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: app locale infrastructure 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: app locale infrastructure GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: flutter analyze && flutter gen-l10n
-  full_gate: make gate-full 客户端适配版
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

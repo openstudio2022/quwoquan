@@ -61,3 +61,11 @@
 - A3：门禁可阻断 task catalog 引用不存在的 module 或 package
 - A7：module/package 拆分不改变领域 API、Outbox 事实源、队列路由语义
 - A8：`make verify`/`make gate` 自动执行 module/package/catalog/retention 校验
+
+## 统一门禁矩阵（FF 配置发布契约）
+
+| 阶段命令 | 必过项（最小集） | 不通过处理 |
+|---|---|---|
+| `/prd` | spec.md 含 module/package/domain 映射与环境变量范围；acceptance.yaml 含对应验收项 | 阻断 FF，先补文档 |
+| `/design` | 每服务 default/alpha/beta/gamma/prod 目录齐；APP_ENV 与进程-领域映射校验有测试；门禁脚本可执行 | 阻断 apply，先补实现与测试 |
+| `/commit` / submit-with-gate | strict gate 通过；CONFIG_VERSION 文件存在且可映射；配置-镜像兼容校验通过 | 禁止提交入库 |

@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `chat-conversation`
-- `L2_journey`: `group-creation-member-management`
-- `L3_scenario`: `group-member-roster-version-sync`
+- `L1_domain_service`: `chat-conversation`
+- `L2_business_capability`: `group-creation-member-management`
+- `L3_story`: `group-member-roster-version-sync`
 
 ## 背景与动机
 

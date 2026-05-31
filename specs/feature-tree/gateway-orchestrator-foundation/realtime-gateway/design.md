@@ -215,5 +215,5 @@ V1 实现 `FeishuAdapter`，其余 adapter 按需注册。
 
 ## 存量带规划任务
 
-- config-push V2 实现（与 tasks.md 搁置任务对应）
+- config-push V2 实现（与 树内任务文档 搁置任务对应）
 - 消息压缩从 JSON 升级到 protobuf（与性能优化迭代对应）

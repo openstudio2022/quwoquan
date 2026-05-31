@@ -1,14 +1,41 @@
-version: 1
-feature: downstream-timeout-fallback
-level: "L3_story"
-template: A1-A8
-focus_groups: []
-tests:
-  mock: []
-  unit: []
-  contract: []
-  integration: []
-  uat: []
+version: 2
+node:
+  id: downstream-timeout-fallback
+  level: L3_story
+  path: specs/feature-tree/gateway-orchestrator-foundation/orchestration-degradation-rollback/downstream-timeout-fallback
+  title: downstream timeout fallback
+  parent_domain_service: gateway-orchestrator-foundation
+  parent_business_capability: orchestration-degradation-rollback
+scope:
+  summary: downstream timeout fallback 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: downstream timeout fallback GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

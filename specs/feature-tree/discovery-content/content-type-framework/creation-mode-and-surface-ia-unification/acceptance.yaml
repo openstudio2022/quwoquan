@@ -1,113 +1,41 @@
-feature: creation-mode-and-surface-ia-unification
-level: L3_scenario
-source_path: discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
-archived: false
-status: pending
+version: 2
+node:
+  id: creation-mode-and-surface-ia-unification
+  level: L3_story
+  path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+  title: creation mode and surface ia unification
+  parent_domain_service: discovery-content
+  parent_business_capability: content-type-framework
+scope:
+  summary: creation mode and surface ia unification 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: creation mode and surface ia unification GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: flutter analyze quwoquan_app/lib && python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: '全局 `+` 与发现页 `+` 已统一为同一套 iOS 风格三段式动作菜单：首组只含 `从相册选择 / 相机 / 写文字`，第二组只含 `发起群聊 / 添加同好`，第三组为 `取消`；首层不再暴露 `点滴/作品/图片/视频/文章` 等分类。'
-    status: pending
-    linked_tasks: [D1, D2]
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: required
-    tests:
-      - create action sheet widget test
-      - global plus and discovery plus parity audit
-      - create entry rollback flag rehearsal
-  A2:
-    criteria: '创作一级流程已收敛为两个编辑器：相册/相机进入媒体编辑器，写文字进入文字为主编辑器；用户可见主路径中不再保留四个创作页、身份切换和格式切换的并行心智。'
-    status: pending
-    linked_tasks: [D3, D4]
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: required
-    tests:
-      - create editor v2 route test
-      - start action to editor kind widget test
-      - create editor v2 patrol smoke test
-  A3:
-    criteria: '媒体编辑器已冻结并实现统一媒体规则：图片与视频互斥、视频最多 1 个、图片沿用现有图片作品上限、编辑页内可继续追加图片、可删空图片后改视频或删视频后改图片，主预览与横向缩略列表结构稳定。'
-    status: pending
-    linked_tasks: [D4, D6]
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: required
-    tests:
-      - media editor rules widget test
-      - media picker mutual exclusion regression test
-      - add more images and replace video patrol test
-  A4:
-    criteria: '文字为主编辑器已冻结并实现“正文优先、标题可选、短内容可无标题直接发布、长内容轻提醒补标题”的交互；标题默认以 `添加标题（可选）` 轻入口呈现，点击后展开输入，提示只做非阻塞建议。'
-    status: pending
-    linked_tasks: [D4, D7]
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: required
-    tests:
-      - text editor title progressive disclosure test
-      - title hint threshold widget test
-      - publish without title journey test
-  A5:
-    criteria: '发布设置能力被保留但已轻量化：主编辑页默认展示摘要态或二级入口，不再长期展开完整表单；位置、圈子、可见性、小趣使用开关仍可完整配置，并保持与现有选择器和发布契约兼容。'
-    status: pending
-    linked_tasks: [D8]
-    test_layers:
-      T1: optional
-      T2: required
-      T3: required
-      T4: optional
-    tests:
-      - publish settings summary widget test
-      - publish settings roundtrip integration test
-      - content repository publish payload compatibility test
-  A6:
-    criteria: '旧草稿到新编辑器的兼容路径已冻结并可验证：旧 `moment/photo/video/article` 草稿可读，新草稿统一写入 `v2` 结构；自动保存、杀进程恢复、继续追加媒体和发布后返回不造成草稿结构性损坏。'
-    status: pending
-    linked_tasks: [D4, D5]
-    test_layers:
-      T1: optional
-      T2: required
-      T3: optional
-      T4: required
-    tests:
-      - create draft v2 compatibility test
-      - autosave and restore widget test
-      - create draft recovery patrol test
-  A7:
-    criteria: '第一版内部兼容映射已明确并可回归：媒体编辑器发布继续落到现有 `image/video` 契约，文字为主编辑器根据内容重量映射到现有轻内容或文章契约；用户首层体验中不再重新暴露旧术语。'
-    status: pending
-    linked_tasks: [D8, D9]
-    test_layers:
-      T1: optional
-      T2: required
-      T3: required
-      T4: optional
-    tests:
-      - create publish payload mapping test
-      - content repository contract regression test
-      - current taxonomy label audit
-  A8:
-    criteria: '灰度、回滚与商用品质 guardrails 已齐备：`simple_create_action_sheet`、`create_editor_v2`、`progressive_title_prompt` 可独立开关；入口耗时、编辑器可交互、草稿恢复、发布成功率和 crash-free 指标可观测，任一能力异常都可单独回退。'
-    status: pending
-    linked_tasks: [D10, D11, D12]
-    test_layers:
-      T1: required
-      T2: optional
-      T3: required
-      T4: required
-    tests:
-      - runtime flag contract test
-      - create entry and editor rollout rehearsal
-      - create editor key path sla probe
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

@@ -28,7 +28,7 @@
 
 - [`learning-event-feedback-injection/spec.md`](./learning-event-feedback-injection/spec.md)
 - [`learning-event-feedback-injection/learning-event-ingestion/spec.md`](./learning-event-feedback-injection/learning-event-ingestion/spec.md)
-- [`learning-event-feedback-injection/plan.yaml`](./learning-event-feedback-injection/plan.yaml)
+- [`learning-event-feedback-injection/树内计划文档`](./learning-event-feedback-injection/树内计划文档)
 
 ## 验收标准（L1 重点）
 - A1：Run/Stream、学习上报、反馈注入可用。

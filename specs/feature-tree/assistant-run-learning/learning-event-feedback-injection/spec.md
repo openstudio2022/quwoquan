@@ -22,7 +22,7 @@
 
 - [`learning-event-ingestion/spec.md`](./learning-event-ingestion/spec.md)
 - [`learning-event-ingestion--interactionevent-scorecard-schema/spec.md`](./learning-event-ingestion--interactionevent-scorecard-schema/spec.md)
-- [`plan.yaml`](./plan.yaml)
+- [`树内计划文档`](./树内计划文档)
 
 ## 验收标准
 - A1：事件上报、聚合、注入链路可用且数据完整。

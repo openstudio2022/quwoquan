@@ -116,7 +116,7 @@ domains:
         target_dto: ChatMessageDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_conversation_page.dart
         status: compliant
-        note: Provider 状态 List<ChatMessageDto>；Repository.listMessages 强类型；气泡经 toDisplayMap
+        note: Provider 状态 List<ChatMessageDto>；Repository.listMessages 强类型；气泡经 toDisplayItem；语音发送走 audio media 契约
         target_dto: ChatMessageDto
       - path: quwoquan_app/lib/ui/chat/pages/chat_settings_page.dart
         status: compliant
@@ -291,10 +291,18 @@ domains:
         target_edit_draft: N/A
       - path: quwoquan_app/lib/ui/user/pages/my_profile_page.dart
         status: compliant
-        note: 同 other_profile_page（本人态）
+        note: 同 other_profile_page（本人态）；未登录态登录 CTA 消费 AuthSessionState
         target_dto: UserProfileDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
+      - path: quwoquan_app/lib/ui/user/pages/login_page.dart
+        status: compliant
+        note: AuthRepository.loginOneTap / AuthLoginResultDto；协议勾选前不调用一键登录 SDK
+        target_dto: AuthLoginResultDto
+      - path: quwoquan_app/lib/ui/user/pages/legal_document_page.dart
+        status: exempt
+        note: 远端协议/隐私政策 WebView；内容由配置 URL 提供，无页面业务 DTO
+        target_dto: N/A
       - path: quwoquan_app/lib/ui/user/pages/edit_profile_page.dart
         status: compliant
         note: ProfileEditUpdatePayload → updateProfile（Map 仅 Repository 边界）
@@ -395,7 +403,7 @@ domains:
     ui_pages:
       - path: quwoquan_app/lib/ui/settings/pages/settings_page.dart
         status: compliant
-        note: 以本地/Cupertino 为主；云上外观设置走 codegen 错误码路径
+        note: 以本地/Cupertino 为主；云上外观设置走 codegen 错误码路径；账号退出/切换经 AuthRepository 与 AuthSessionState
         target_dto: N/A
       - path: quwoquan_app/lib/ui/settings/pages/developer_settings_page.dart
         status: exempt

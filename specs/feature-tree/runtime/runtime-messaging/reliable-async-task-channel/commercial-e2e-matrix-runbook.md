@@ -44,7 +44,7 @@ python3 agent_ops/avatar/check_avatar_commercial_matrix_prereqs.py --strict
      make verify-chat-avatar-commercial-matrix
    ```
    或 `python3 agent_ops/avatar/verify_chat_avatar_commercial_matrix_evidence.py --manifest PATH`。退出码 **0** 才允许在 T9/本文档勾选「四条齐全」；**2** 表示 `GATE_BLOCK`（含 dry-run 混入、`status!=passed`、缺 Android/iOS 之一等）。
-5. **归档**：将 manifest 路径、校验命令、CI `run_id` 写入 [`tasks.md`](./tasks.md) T9 与 [`avatar-e2e-validation.md`](./avatar-e2e-validation.md)「当前执行证据」。
+5. **归档**：将 manifest 路径、校验命令、CI `run_id` 写入 [`树内任务文档`](./树内任务文档) T9 与 [`avatar-e2e-validation.md`](./avatar-e2e-validation.md)「当前执行证据」。
 
 ### 3.1 一键编排（Phase L + 可选 Phase B）
 
@@ -97,4 +97,4 @@ python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --help
 - [ ] E3 cloud-gamma-pre：CI artifact 或等价可追溯路径
 - [ ] E4 prod-smoke：同上
 - [ ] `make verify-chat-avatar-commercial-matrix COMMERCIAL_MATRIX_MANIFEST=...` 退出码 0
-- [ ] 文档：`avatar-e2e-validation.md` 与 `tasks.md` T9 与证据一致，无「已完成」与 GATE_BLOCK 矛盾表述
+- [ ] 文档：`avatar-e2e-validation.md` 与 `树内任务文档` T9 与证据一致，无「已完成」与 GATE_BLOCK 矛盾表述

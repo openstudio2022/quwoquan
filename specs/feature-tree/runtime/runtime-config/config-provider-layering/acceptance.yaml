@@ -1,43 +1,41 @@
-version: 1
-feature: config-provider-layering
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-config.component.config-provider-layering
-  parent_path: capability.runtime.feature.runtime-config
-  acceptance_inherits_from: capability.runtime.feature.runtime-config
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A3_service_governance
-  - A7_contract_metadata_consistency
-  - A8_test_automation
-  notes: 配置分层加载能力与发布化接入能力。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: 存在 default + beta 两套配置
-      when: APP_ENV=beta 启动服务
-      then: 最终运行配置=default 被 beta 覆盖后的结果
-    - given: 容器设置 CONFIG_ROOT=/etc/qwq-config 且 CONFIG_VERSION=v2026.02.28.0
-      when: 服务启动
-      then: 按 default->env->version->env-vars 顺序加载
-    - given: 存在环境变量覆盖项
-      when: 服务启动
-      then: 环境变量值覆盖文件配置
-  A3_service_governance:
-  - 高风险配置项定义清晰并强制灰度发布
-  - 配置发布与镜像发布可解耦
-  - 部署进程拓扑映射在 beta/gamma/prod 保持一致
-  A7_contract_metadata_consistency:
-  - 配置结构与运行时加载器字段一致
-  - 每个服务均具备 default/alpha/beta/gamma/prod 目录结构
-  A8_test_automation:
-  - 配置加载顺序与覆盖规则有单测
-  - alpha/beta/gamma/prod 四环境加载行为有集成测试
-  - 门禁脚本可阻断目录缺失、非法 APP_ENV、缺失 CONFIG_VERSION 映射
-  - 新建服务流程自动生成合规配置目录并通过门禁
-  - 部署映射门禁可阻断 domain 重复归属和 beta/gamma/prod 拓扑漂移
+version: 2
+node:
+  id: config-provider-layering
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-config/config-provider-layering
+  title: config provider layering
+  parent_domain_service: runtime
+  parent_business_capability: runtime-config
+scope:
+  summary: config provider layering 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: config provider layering GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

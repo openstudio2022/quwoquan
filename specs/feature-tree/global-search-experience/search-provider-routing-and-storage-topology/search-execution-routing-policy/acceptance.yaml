@@ -1,48 +1,41 @@
-version: 1
-feature: search-execution-routing-policy
-level: L3_scenario
-source_path: global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
-parent_journey: search-provider-routing-and-storage-topology
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+version: 2
+node:
+  id: search-execution-routing-policy
+  level: L3_story
+  path: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy
+  title: search execution routing policy
+  parent_domain_service: global-search-experience
+  parent_business_capability: search-provider-routing-and-storage-topology
 scope:
-  summary: >
-    冻结 search planner 的执行策略与降级语义。
-  journey_bindings:
-    - J2
-  in_scope:
-    - execution mode
-    - typed degrade signal
-  out_of_scope:
-    - provider 内部逻辑
-
-scenario_acceptance:
-  A1:
-    title: planner 基于 execution mode 决定搜索执行位置
-    scenario: search execution routing policy
-    journey_step: planner routes search requests
+  summary: search execution routing policy 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: search execution routing policy GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
     done_when:
-      - "`local_only / remote_only / hybrid_remote_fallback_local` 已正式定义"
-      - 页面层不再用 if/switch 判断执行位置
-      - 降级语义以 typed signal 返回
-    edge_cases:
-      - provider timeout
-      - provider 0 result
-      - provider hard failure
-    linked_plan_items:
-      - P1
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
     evidence:
       primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      planned:
-        - execution policy contract test
+      planned: []
       recorded: []
     status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

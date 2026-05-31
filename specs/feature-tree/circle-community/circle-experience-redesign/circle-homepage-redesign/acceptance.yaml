@@ -1,98 +1,41 @@
-feature: circle-homepage-redesign
-level: "L3_story"
-archived: false
-level_acceptance:
-- id: A1
-  description: '共享的群组详情基础壳层建立：详情页统一具备头部信息区、主操作区、模块化首页与独立降级能力； 单模块失败不影响其他模块使用。
-
-    '
-  status: pending
-  linked_tasks: []
-  test_layers:
-    T1: optional
-    T2: required
-    T3: optional
-    T4: optional
-  tests:
-  - path: quwoquan_app/test/ui/circle/widgets/circle_shell_test.dart
-  - path: quwoquan_app/test/ui/circle/widgets/circle_header_test.dart
-- id: A2
-  description: '通用圈子模板可用：页签固定为“首页/内容/群/成员”； 首页至少包含公告、公共群入口、内容精选与成员摘要； 内容页可按笔记/作品/提问/口碑筛选。
-
-    '
-  status: pending
-  linked_tasks: []
-  test_layers:
-    T1: optional
-    T2: required
-    T3: required
-    T4: optional
-  tests:
-  - path: quwoquan_app/test/ui/circle/widgets/circle_shell_test.dart
-  - path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
-- id: A3
-  description: '组织主页模板可用：页签固定为“首页/内容/组织/成员”； 首页至少包含官方公告、找到我的组织、组织结构入口与内容精选； 组织页可同时承接组织节点、公共交流群与兴趣小组。
-
-    '
-  status: pending
-  linked_tasks: []
-  test_layers:
-    T1: optional
-    T2: required
-    T3: optional
-    T4: optional
-  tests:
-  - path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
-- id: A4
-  description: '通用群主页与组织节点主页区分成立：通用群主页使用“首页/交流/资料/成员”； 组织节点主页使用“首页/内容/交流/资料/成员”； 组织节点前台优先显示具体名称而非普通聊天群。
-
-    '
-  status: pending
-  linked_tasks: []
-  test_layers:
-    T1: optional
-    T2: required
-    T3: optional
-    T4: optional
-  tests:
-  - path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
-- id: A5
-  description: '详情页内容与发布模型完成对齐：统一动作叫“发布内容”； 一级内容类型为笔记/作品/提问/口碑； 基础表达形式为图文笔记/视频/文章； 口碑必须绑定
-    1 个主具体事物； 全局入口与群组内入口共用同一发布页。
-
-    '
-  status: pending
-  linked_tasks: []
-  test_layers:
-    T1: optional
-    T2: required
-    T3: required
-    T4: optional
-  tests:
-  - path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
-- id: A6
-  description: '角色标签与治理边界清晰：通用圈子模板显示圈主/圈管，组织主页模板显示负责人/管理员，群或组织节点显示群主/群管或节点负责人； 圈级或组织级角色拥有上位治理权，但不自动等于所有群的群主。
-
-    '
-  status: pending
-  linked_tasks: []
-  test_layers:
-    T1: optional
-    T2: required
-    T3: optional
-    T4: optional
-  tests:
-  - path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
-- id: A7
-  description: '群组详情与具体事物的集成边界冻结：详情页只消费具体事物摘要，可显示关联卡和口碑精选； 前台一律显示具体类目名，如关联学校/车型/酒店/景点，不显示“实体”字样。
-
-    '
-  status: pending
-  linked_tasks: []
-  test_layers:
-    T1: optional
-    T2: required
-    T3: optional
-    T4: optional
-  tests:
-  - path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
+version: 2
+node:
+  id: circle-homepage-redesign
+  level: L3_story
+  path: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign
+  title: circle homepage redesign
+  parent_domain_service: circle-community
+  parent_business_capability: circle-experience-redesign
+scope:
+  summary: circle homepage redesign 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: circle homepage redesign GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

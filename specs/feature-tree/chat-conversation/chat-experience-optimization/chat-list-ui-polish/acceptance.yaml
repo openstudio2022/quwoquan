@@ -1,78 +1,41 @@
-version: 1
-feature: chat-list-ui-polish
-level: "L3_story"
-status: specified
-archived: false
-template: '2026-03-10'
-focus_groups: []
+version: 2
+node:
+  id: chat-list-ui-polish
+  level: L3_story
+  path: specs/feature-tree/chat-conversation/chat-experience-optimization/chat-list-ui-polish
+  title: chat list ui polish
+  parent_domain_service: chat-conversation
+  parent_business_capability: chat-experience-optimization
+scope:
+  summary: chat list ui polish 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: chat list ui polish GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 消息主列表统一采用“头像 + 标题 + 单行摘要 + 右上时间”的微信式行结构；标题与时间同一行，标题过长时在靠近时间前省略，摘要行不能为空白
-    status: pending
-    test_layers:
-      T1: required
-      T2: required
-  A2:
-    criteria: 单聊显示圆角方形头像；群聊显示 1~9 宫格组合头像；组合头像中所有子头像尺寸一致，未填充区域使用与页面白底可区分的轻灰底
-    status: pending
-    test_layers:
-      T2: required
-      T4: required
-  A3:
-    criteria: 列表行之间存在微信式弱分割线，分割线不穿透头像区、对比度不过强，但会话边界清晰可感知
-    status: pending
-    test_layers:
-      T2: required
-      T4: required
-  A4:
-    criteria: 右上时间显示符合会话列表规则：当天为时段+时间，昨天/前天为自然日标签，同年更早为“月日”，跨年为“年月日”
-    status: pending
-    test_layers:
-      T1: required
-      T2: required
-  A5:
-    criteria: 群聊组合头像布局满足 1/2/3/4/5/6/7/8/9+ 人规则，且成员顺序与群成员顺序一致；当所有成员都无有效头像时回退为单个默认占位
-    status: pending
-    test_layers:
-      T2: required
-      T3: required
-      T4: required
-  A6:
-    criteria: 当消息胶囊为“全部 / @我 / 未读”时，上滑隐藏二级胶囊、回滑恢复二级胶囊；显隐过程中内容区不留下胶囊高度的空白留白
-    status: pending
-    test_layers:
-      T2: required
-      T4: required
-  A7:
-    criteria: “全部”空状态允许鼓励语；“@我”和“未读”必须使用独立提醒型空状态话术，不能复用“开始聊天吧”类文案
-    status: pending
-    test_layers:
-      T2: required
-  A8:
-    criteria: “@我”胶囊显示未处理提及总数，“未读”胶囊显示未读消息总数，二者均支持 99+；“全部”不显示数字角标
-    status: pending
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-  A9:
-    criteria: 用户进入会话并成功完成已读同步后，列表行未读数、“@我”胶囊数与“未读”胶囊数按同一用户态模型递减，不能出现列表已读但胶囊不减或反之
-    status: pending
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-  A10:
-    criteria: 消息列表唯一数据源切换到 per-user inbox read model，对应请求使用 metadata 定义的 ListInbox operation / pageId；UI 不再以页面本地 Map 推导 title、lastMessagePreview、lastMessageTime、unreadCount 作为第二真相源
-    status: pending
-    test_layers:
-      T2: required
-      T3: required
-  A11:
-    criteria: 本期密信不纳入验收，不因密信列表未完成而阻塞“全部 / @我 / 未读”三条主链路上线
-    status: pending
-    test_layers:
-      T2: required
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

@@ -1,50 +1,41 @@
-version: 1
-feature: page-layout-semantics
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.page-layout-semantics
-  parent_path: capability.runtime.feature.runtime-client-foundation
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A7_contract_metadata_consistency
-  notes: 页面布局统一语义；规范见 specs/ux/page-layout-semantics.md；不含用户/作者/圈子主页；包含圈子一级 tab 的频道管理面板语义
-  A1:
-    criteria: Modal 页使用 close，Stack 页使用 arrow_back
-    status: implemented
-    linked_tasks:
-    - top-toolbar-and-selection-pattern
-    tests: []
-  A2:
-    criteria: 多选选择器底部 取消|完成；单选 tap 即返回
-    status: implemented
-    linked_tasks:
-    - top-toolbar-and-selection-pattern
-    tests: []
-  A3:
-    criteria: 设置类页面统一使用 SettingsSemanticConstants 与块结构
-    status: implemented
-    linked_tasks:
-    - settings-page-structure
-    tests: []
-  A7:
-    criteria: specs/ux/page-layout-semantics.md 与特性树一致
-    status: implemented
-    linked_tasks: []
-    tests: []
-  A8:
-    criteria: 贴底对话态 Sheet 符合 page-layout-semantics §4.4；showCupertinoModalPopup 经 conversation_sheet_manifest 登记并通过 verify_conversation_sheet_canonical
-    status: implemented
-    linked_tasks: []
-    tests: []
-  A5:
-    criteria: 圈子页右上角使用三横频道管理入口，点击后在一级 tab 下方滑出微博式频道面板，支持我的频道/全部频道切换、增删与顺序调整，并落盘本地偏好
+version: 2
+node:
+  id: page-layout-semantics
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/page-layout-semantics
+  title: page layout semantics
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: page layout semantics 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: page layout semantics GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
     status: pending
-    linked_tasks:
-    - circles-channel-management-panel
-    tests: []
 execution:
-  local_gate: flutter analyze lib/ui/content/entry/ lib/ui/settings/ lib/ui/chat/
-    lib/ui/assistant/
-  full_gate: make gate
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

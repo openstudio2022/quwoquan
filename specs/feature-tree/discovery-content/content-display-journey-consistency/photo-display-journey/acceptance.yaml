@@ -1,18 +1,41 @@
-version: 1
-feature: photo-display-journey
-level: "L3_story"
-template: A1-A8
+version: 2
+node:
+  id: photo-display-journey
+  level: L3_story
+  path: specs/feature-tree/discovery-content/content-display-journey-consistency/photo-display-journey
+  title: photo display journey
+  parent_domain_service: discovery-content
+  parent_business_capability: content-display-journey-consistency
+scope:
+  summary: photo display journey 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: photo display journey GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1: 列表、浏览器、作者详情数据与 post 一致，均使用 FeedItemDto 规范字段（依赖 feed-item-dto-contract）
-  A2: 关注/赞/收藏跨页面一致，重入后保持；HomeState 为唯一状态源（D5/D6/D10/D11）
-  A3: 作者详情关注/取消后返回，浏览器展示自动更新（共享 homeStateProvider，D9）
-  A4: 浏览器滑动顺序与列表一致，支持加载更多（D12/D13/D14）
-  A5: ImmersiveImageViewer 构造参数含 FeedItemDto，无 onLikeClick/onSaveClick/onFollowClick
-    callback（D20/D21/D22/D23）
-  A6: Mock/Remote 切换后图片旅程全链路正确（D17/D18）
-  A7: FeedItemDto 字段与 discovery_feed.yaml client_projection 一致（依赖 feed-item-dto-contract
-    A1）
-  A8: make gate 通过
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

@@ -100,7 +100,7 @@
 
 - 存在 **经评审的全页面矩阵**（无故意遗漏；新增页在 PR 中更新矩阵或门禁）。
 - **无未关闭的 P0「仅浅色」**（豁免类除外且已文档化）。
-- `spec.md` / `acceptance.yaml` / `design.md` / `plan.yaml` 与 `02_IOS_NATIVE_FRONTEND_UX_SPEC` 一致。
+- `spec.md` / `acceptance.yaml` / `design.md` / `树内计划文档` 与 `02_IOS_NATIVE_FRONTEND_UX_SPEC` 一致。
 
 ## 证据分层（T1–T4）
 
@@ -108,7 +108,7 @@
 |----|------|
 | **T1** | 规格与设计文档、`page-dual-theme-matrix.md`、CR |
 | **T2** | `flutter analyze`、`verify_dart_semantic.py`（gate 串联）、矩阵 PR 更新 |
-| **T3** | 按 `plan.yaml` **slice** 域内深浅色抽检（真机/模拟器） |
+| **T3** | 按 `树内计划文档` **slice** 域内深浅色抽检（真机/模拟器） |
 | **T4** | （可选 v2）Golden / 脚本截图对比 |
 
 ## L1 / L2 / L3 映射

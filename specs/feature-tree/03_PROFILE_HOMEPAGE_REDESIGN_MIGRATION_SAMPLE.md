@@ -1,6 +1,6 @@
 # 迁移样板：`profile-homepage-redesign`
 
-本样板用于说明如何把一个现有的 `L2_feature / L3_story / tasks.md` 组合迁移到新的 `L2_journey / L3_scenario / plan.yaml` 模型，而不直接改写业务内容。
+本样板用于说明如何把一个现有的 `L2_business_capability / L3_story / 树内任务文档` 组合迁移到新的 `L2_business_capability / L3_story / 树内计划文档` 模型，而不直接改写业务内容。
 
 ## 当前节点
 
@@ -8,28 +8,28 @@
 
 - `specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/`
 - `specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/`
-- `specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/plan.yaml`
-- `specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/plan.yaml`
+- `specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/树内计划文档`
+- `specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/树内计划文档`
 - `specs/changelog/CR-20260318-001-profile-homepage-redesign-journey-scenario-migration.yaml`
 
 当前问题：
 
 - `L2` 同时承载了旅程目标、文件迁移、UI 实现细节与测试 case 数量。
 - `L3` 同时承载了主体模型、元数据基线、统一 UI、滚动动效、观测与回滚。
-- `tasks.md` 混入了设计补丁、schema 草案和任务执行三种职责。
+- `树内任务文档` 混入了设计补丁、schema 草案和任务执行三种职责。
 
 ## 迁移目标
 
 ```text
-L2_journey: profile-homepage-redesign
-  ├── L3_scenario: owner-subaccount-homepage-unification
-  ├── L3_scenario: profile-shell-ui-unification
-  └── L3_scenario: profile-motion-and-sticky-coordination
+L2_business_capability: profile-homepage-redesign
+  ├── L3_story: owner-subaccount-homepage-unification
+  ├── L3_story: profile-shell-ui-unification
+  └── L3_story: profile-motion-and-sticky-coordination
 ```
 
 ## 文档拆分建议
 
-### `L2_journey`
+### `L2_business_capability`
 
 保留：
 
@@ -43,52 +43,52 @@ L2_journey: profile-homepage-redesign
 - 组件实现细节
 - 具体 widget / journey case 数量
 
-### `L3_scenario: owner-subaccount-homepage-unification`
+### `L3_story: owner-subaccount-homepage-unification`
 
 保留：
 
 - 主体模型、资料同步、关系能力与互动活动的单场景目标
 - 该场景负责的异常边界
-- 对应 `plan.yaml` slices 与 `T1/T2/T3` 证据
+- 对应 `树内计划文档` slices 与 `T1/T2/T3` 证据
 
 移出：
 
 - 与统一 ProfileShell 视觉壳层无关的 UI 细节
 - 与滚动/吸顶动效强绑定的实现方案
 
-### 新增 `L3_scenario`
+### 新增 `L3_story`
 
 - `profile-shell-ui-unification`
   - 负责统一壳层、Header、ActionBar、一级/二级 Tab 结构
 - `profile-motion-and-sticky-coordination`
   - 负责单主滚动坐标系、拉伸、回弹、identity pin、primary tab pin
 
-## `plan.yaml` 切片示意
+## `树内计划文档` 切片示意
 
-`owner-subaccount-homepage-unification/plan.yaml`
+`owner-subaccount-homepage-unification/树内计划文档`
 
 - `P1`：冻结主体模型与 metadata
 - `P2`：收口资料同步写入与关系能力
 - `P3`：补齐互动活动读契约与证据
 
-`profile-shell-ui-unification/plan.yaml`
+`profile-shell-ui-unification/树内计划文档`
 
 - `P1`：统一 ProfileShell 入口与壳层骨架
 - `P2`：统一一级/二级 Tab 与动作区
 
-`profile-motion-and-sticky-coordination/plan.yaml`
+`profile-motion-and-sticky-coordination/树内计划文档`
 
 - `P1`：单主滚动坐标系
 - `P2`：下拉拉伸与回弹
 - `P3`：identity pin / primary tab pin
 
-`profile-homepage-redesign/plan.yaml`
+`profile-homepage-redesign/树内计划文档`
 
 - `P1`：重定 Journey 边界
 - `P2`：冻结 Scenario 拆分拓扑
 - `P3`：迁移 Journey acceptance schema
 - `P4`：回填新增 Scenario 节点
-- `P5`：退出 current `tasks.md` 主导
+- `P5`：退出 current `树内任务文档` 主导
 
 ## CR 建议
 

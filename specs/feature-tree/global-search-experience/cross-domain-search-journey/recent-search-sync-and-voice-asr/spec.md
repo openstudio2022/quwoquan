@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `global-search-experience`
-- `L2_journey`: `cross-domain-search-journey`
-- `L3_scenario`: `recent-search-sync-and-voice-asr`
+- `L1_domain_service`: `global-search-experience`
+- `L2_business_capability`: `cross-domain-search-journey`
+- `L3_story`: `recent-search-sync-and-voice-asr`
 
 ## 背景与动机
 

@@ -1,70 +1,41 @@
-version: 1
-feature: chat-group-admin-govern
-level: "L3_story"
-status: specified
-archived: false
-template: '2026-03-10'
-focus_groups: []
+version: 2
+node:
+  id: chat-group-admin-govern
+  level: L3_story
+  path: specs/feature-tree/chat-conversation/chat-experience-optimization/chat-group-admin-govern
+  title: chat group admin govern
+  parent_domain_service: chat-conversation
+  parent_business_capability: chat-experience-optimization
+scope:
+  summary: chat group admin govern 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: chat group admin govern GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 群管理页入口仅群主和管理员可见，普通成员不可见
-    status: pending
-    test_layers:
-      T2: required
-  A2:
-    criteria: 群管理页包含：二维码进群、进群需确认、仅管理员改群名、群主转让、管理员设置、解散群聊
-    status: pending
-    test_layers:
-      T2: required
-  A3:
-    criteria: 群主转让：选择成员后弹出确认弹窗（屏幕居中），确认后原群主变为普通成员、新成员变为群主
-    status: pending
-    test_layers:
-      T2: required
-      T3: required
-  A4:
-    criteria: 管理员设置：最多选择 3 人，超过时无法再选中并提示"最多选择 3 位管理员"
-    status: pending
-    test_layers:
-      T2: required
-  A5:
-    criteria: 非管理员点击群名称时弹窗提示"群组已设定为只有群主或管理员才能修改群名"（当 nameEditableByAdminOnly=true 时）
-    status: pending
-    test_layers:
-      T2: required
-  A6:
-    criteria: 隐私屏障开关对非管理员显示为 disabled（灰色不可操作），管理员可正常操作
-    status: pending
-    test_layers:
-      T2: required
-      T4: required
-  A7:
-    criteria: 解散群聊仅群主可见并可操作，管理员和普通成员不可见该入口
-    status: pending
-    test_layers:
-      T2: required
-  A8:
-    criteria: 群设置变更后通过 WebSocket 推送到所有在线群成员，端侧缓存自动更新
-    status: pending
-    test_layers:
-      T3: required
-  A9:
-    criteria: 群主转让为原子操作，不存在两个群主的中间态
-    status: pending
-    test_layers:
-      T1: required
-      T3: required
-  A10:
-    criteria: 群设置页成员头像为圆角方形，尺寸 52px（比对话页消息头像 40px 大一号）
-    status: pending
-    test_layers:
-      T2: required
-      T4: required
-  A11:
-    criteria: 群名称修改成功后通知所有群成员并同步到其他成员端侧
-    status: pending
-    test_layers:
-      T3: required
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

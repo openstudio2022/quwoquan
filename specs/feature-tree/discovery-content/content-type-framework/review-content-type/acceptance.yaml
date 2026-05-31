@@ -1,0 +1,182 @@
+version: 2
+node:
+  id: review-content-type
+  level: L3_story
+  path: specs/feature-tree/discovery-content/content-type-framework/review-content-type
+  title: review content type
+  parent_domain_service: discovery-content
+  parent_business_capability: content-type-framework
+scope:
+  summary: >-
+    在统一内容契约上引入口碑（review）内容类型（方案 A：ContentType 新增枚举值）。口碑=带评分+强 POI
+    绑定的内容类型，复用 publish 写链路、召回管线与统一 ContentSurfaceView；POI 星级聚合作读侧投影。
+  in_scope:
+  - ContentType 新增枚举值 review（端云 DTO/codegen 一致）
+  - 口碑字段族 rating(1-5 必填)/reviewAspects + POI 绑定（primaryHomepageId 必填）
+  - 复用 CreatePost/UpdatePost/PublishPost 写链路与校验
+  - 一人一 POI 一评（部分唯一索引）
+  - POI 口碑聚合读模型（ratingAverage/ratingCount/ratingDistribution）
+  - ContentSurfaceView contentType==review 分支接入（不拆表/不新增第二套 model）
+  out_of_scope:
+  - 独立 review 实体/repository/端点
+  - 商家认领/官方回复/口碑运营后台
+  - 创作侧打标 UI（归 B3 creation-tagging-ia）
+  - pageflip 受控文件
+gwt_acceptance:
+  GWT1:
+    title: ContentType 含 review，端云一致且既有类型零回归
+    given:
+    - _shared/types.yaml ContentType 增加 review 枚举值。
+    when:
+    - make verify-metadata + codegen + codegen-app 执行。
+    then:
+    - 端云 DTO/codegen 产物含 review；image/video/micro/article 路径零行为变化。
+    done_when:
+    - 契约门禁绿，既有内容类型测试无回归。
+    edge_cases:
+    - 读路径遇未知 contentType 安全降级，不抛异常。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/types.yaml
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_service/services/content-service/tests/review_contract_test.go
+      - quwoquan_app/test/ui/content/post/contract/review_projection_contract_test.dart
+      recorded: []
+    status: pending
+  GWT2:
+    title: 口碑写校验 rating 必填且 POI 必填，非法被拒
+    given:
+    - 用户以 contentType=review 发布。
+    when:
+    - rating 缺失/越界 或 primaryHomepageId 为空。
+    then:
+    - 返回结构化错误码（errors.yaml codegen），拒绝写入。
+    - rating∈[1,5] 且 primaryHomepageId 非空时写入成功。
+    done_when:
+    - 写校验契约测试覆盖正常+边界+非法路径。
+    edge_cases:
+    - reviewAspects 缺省为空合法。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    - quwoquan_service/contracts/metadata/content/post/errors.yaml
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_service/services/content-service/tests/review_contract_test.go
+      recorded: []
+    status: pending
+  GWT3:
+    title: 一人一 POI 一评，部分唯一索引生效
+    given:
+    - 同一作者已对某 POI 发布有效口碑。
+    when:
+    - 同一作者再次对同一 POI 发布口碑。
+    then:
+    - 按 design 决策（更新已有口碑 / 拒绝重复），部分唯一约束生效。
+    done_when:
+    - 重复写入路径契约+集成测试覆盖。
+    edge_cases:
+    - 已删除口碑不占用唯一槽，可重新发布。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/storage.yaml
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_integration
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_service/services/content-service/tests/review_contract_test.go
+      recorded: []
+    status: pending
+  GWT4:
+    title: POI 口碑聚合读模型正确且删除后补偿
+    given:
+    - 某 POI 存在若干已发布口碑。
+    when:
+    - 读取 POI 聚合 / 删除某条口碑。
+    then:
+    - ratingAverage/ratingCount/ratingDistribution 正确；删除后聚合补偿到位。
+    done_when:
+    - 聚合读模型契约+集成测试覆盖，最终一致窗口≤5s 可观测。
+    edge_cases:
+    - 仅自己可见的口碑不计入公开聚合。
+    contract_refs: []
+    performance_points:
+    - POI 聚合读 P99 ≤ 150ms
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_integration
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_service/services/content-service/tests/review_aggregate_test.go
+      recorded: []
+    status: pending
+  GWT5:
+    title: 统一展示——review 在 ContentSurfaceView 上 contentType 分支呈现
+    given:
+    - 一条 review 内容进入 feed/detail/immersive/share 任一 surface。
+    when:
+    - 经 ContentSurfaceViewMapper 投影为 ContentSurfaceView。
+    then:
+    - review 评分/POI 摘要经 contentType==review 分支呈现，四 surface 口径一致。
+    - 不拆表、不新增第二套 model；分支用契约字段判别（非 is/as）。
+    done_when:
+    - T1 投影契约 + T2 四 surface 同源断言通过。
+    edge_cases:
+    - 无 reviewAspects 时只读降级。
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/post/contract/review_projection_contract_test.dart
+      recorded: []
+    status: pending
+  GWT6:
+    title: 召回与交集——review 进召回通道且交集归因可还原
+    given:
+    - review 含 entityRefs/tagRefs。
+    when:
+    - 进入推荐召回与交集理由生成。
+    then:
+    - review 出现在召回结果；POI/标签维度的 IntersectionReason 可还原。
+    done_when:
+    - 召回与交集归因集成测试覆盖。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_integration
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_service/services/content-service/tests/review_aggregate_test.go
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

@@ -1,78 +1,39 @@
-# templates 设计
+# 模板领域服务设计
 
-## 设计动因
+## 设计目标
 
-`templates` 目录承担的是规格作者模板，而不是产品功能本身。  
-如果这个目录没有正式设计说明，后续容易出现两个问题：
+模板目录以 authoring asset 的形式存在，目标是让所有新增特性树节点使用同一套文档结构、验收语言和测试证据口径。
 
-1. 模板文件被当作“随手放的草稿”，长期失去维护；
-2. gate 对 feature-tree 的结构要求无法同等作用到模板目录。
+## 设计决策
 
-## 上游输入评审
+### D1：模板按层级拆分
 
-- 规格树根规则：`specs/feature-tree/`
-- 模板资产：`l2_journey_acceptance.yaml`、`l3_scenario_acceptance.yaml`、`plan.yaml`
-- 仓库 gate：要求节点具备完整的 `spec / design / acceptance / plan`
+应用根、领域服务、业务能力和 Story 的文档职责不同，因此模板按层级拆分，而不是复用一份通用模板。
 
-## 方案对比
+### D2：Story 不设设计模板
 
-### 方案 A：把模板目录排除出 gate
+Story 是最小可闭环价值点，设计决策必须上收到业务能力层。Story 只保留 `spec.md` 与 `acceptance.yaml`。
 
-优点：
+### D3：计划不进入特性树
 
-- 实现简单。
+`树内计划文档` 和 `树内任务文档` 不再作为正式治理文档。执行计划保留在会话、PR 或外部台账中。
 
-缺点：
+## 模板资产
 
-- 模板目录逐渐失控；
-- 结构约束无法一体化；
-- 作者难以理解模板资产的正式归属。
-
-### 方案 B：把模板目录也建成正式 feature-tree 节点
-
-优点：
-
-- 模板资产自身也满足结构校验；
-- 新作者可以通过标准节点理解模板用途；
-- gate 规则不需要为模板分叉特殊逻辑。
-
-缺点：
-
-- 需要补齐最小规格文档。
-
-### 选型
-
-选择 **方案 B**。
-
-## 关键设计决策
-
-### D1：模板目录作为 authoring capability 存在
-
-`templates` 不是线上能力，但仍是规格体系中的正式节点。  
-它的用户是规格作者，而不是终端用户。
-
-### D2：模板文件只提供结构骨架
-
-模板文件包含：
-
-- L2 acceptance 骨架
-- L3 acceptance 骨架
-- plan 骨架
-
-它们定义格式，不定义任何具体业务事实。
-
-### D3：模板目录同样遵守 gate 要求
-
-目录必须具备：
-
-- `spec.md`
-- `design.md`
-- `acceptance.yaml`
-- `plan.yaml`
-
-这样 gate 不需要为模板写例外。
+- `app_root_spec.md`
+- `app_root_design.md`
+- `app_root_acceptance.yaml`
+- `domain_service_spec.md`
+- `domain_service_design.md`
+- `domain_service_acceptance.yaml`
+- `business_capability_spec.md`
+- `business_capability_design.md`
+- `business_capability_acceptance.yaml`
+- `story_spec.md`
+- `story_acceptance.yaml`
 
 ## 演进策略
 
-- 后续新增模板时，优先扩展现有模板而不是创建并行第二套骨架。
-- 模板字段若因 gate 演进而变化，应先改模板，再推广到新增节点。
+- 新增模板必须先更新本设计。
+- gate 规则变化必须先反映到模板。
+- 旧 Journey / Scenario 模板不得作为新增节点入口继续使用。

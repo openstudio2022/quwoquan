@@ -2,8 +2,8 @@
 
 ## 节点定位
 
-- `L1_capability`: `global-search-experience`
-- `L2_journey`: `cross-domain-search-journey`
+- `L1_domain_service`: `global-search-experience`
+- `L2_business_capability`: `cross-domain-search-journey`
 
 该 Journey 冻结从任一一级页面进入两段式全屏搜索，到完成初始记录浏览、实时联想、独立网络结果浏览、最近搜索管理、语音转词与 `小趣搜` assistant 结果查看的完整链路。
 
@@ -36,7 +36,7 @@
 
 ## 特性树拆分
 
-本 Journey 冻结为 6 个 `L3_scenario`：
+本 Journey 冻结为 6 个 `L3_story`：
 
 | L3 Scenario | 负责的问题 | 归属域 |
 |---|---|---|

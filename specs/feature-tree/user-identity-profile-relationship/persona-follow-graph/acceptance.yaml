@@ -1,153 +1,35 @@
 version: 2
-feature: persona-follow-graph
-level: L2_journey
-source_path: user-identity-profile-relationship/persona-follow-graph
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+node:
+  id: persona-follow-graph
+  level: L2_business_capability
+  path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph
+  title: persona follow graph
+  parent_domain_service: user-identity-profile-relationship
+  parent_business_capability: persona-follow-graph
 scope:
-  summary: >
-    冻结“一个用户 + 多个分身”的完整旅程：主分身管理、公开分身资料建立、
-    跨域动作主体透传与分身级关系隔离，统一替换记录账号/主账号/子账号语义。
-  composed_scenarios:
-    - persona-management
-    - persona-profile-subject-and-visibility
-    - persona-context-propagation
-    - follow-relationship
-    - social-graph-read
-  out_of_scope:
-    - 登录与凭证绑定本身
-    - 主页壳层视觉与滚动动效实现
-    - 合规物理清除与客服工单流
-
-journey_acceptance:
-  J1:
-    title: 用户可完成主分身与多分身管理
-    journey: profile/settings -> persona management -> create/edit/activate/retire
-    scenario_refs:
-      - persona-management
-      - persona-profile-subject-and-visibility
+  summary: persona follow graph 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: persona follow graph 能力 SIT
+    story_refs: []
     done_when:
-      - 用户可以从个人主页与设置进入统一的分身管理台
-      - 分身支持创建、切换、停用/删除保护、配额与主分身约束
-      - 新分身默认继承主分身资料基线，并可进入分身资料编辑
-    blockers: []
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
     evidence:
       primary:
-        - T2_module_interaction
-        - T3_cross_service_integration
+      - T2_module_interaction
+      - T3_app_api_integration
       supporting:
-        - T1_schema
-        - T4_user_journey
+      - T1_static_contract
     tests:
-      planned:
-        - persona management widget journey test
-        - user-service persona lifecycle contract test
-        - owner to persona management patrol test
-      recorded:
-        - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/persona_management_page_test.dart`"
-        - "T1/T2: `flutter test test/cloud/user/contract/user_repository_contract_test.dart test/cloud/user/contract/user_profile_wire_dto_contract_test.dart test/cloud/integration/remote_api_path_contract_test.dart`"
-        - "T1/T3: `go test ./services/user-service/tests -run 'Test(CreatePersona|ActivatePersona|DeletePersona|GetPersonaManagementSummary|UpdatePersona|ApplyPersonaProfileSync|GetPersonaLifecycleGuard|RetirePersona|DeleteEmptyPersona|RetiredPersona)'`"
-    notes:
-      - "J1 中 `persona-management` 的入口统一、create/activate/sync、delete-empty 与 retire 语义现已闭环。"
-      - "`retire` 已具备真实持久化状态，`hasAttributedHistory` 与 delete/retire 分流已有 T3 契约证据支撑。"
-    status: implemented
-  J2:
-    title: 分身成为内容、聊天、圈子、助手与邀请的统一动作主体
-    journey: activate persona -> publish/comment/chat/circle/assistant/invite -> observe downstream consistency
-    scenario_refs:
-      - persona-context-propagation
-      - follow-relationship
-      - social-graph-read
-    done_when:
-      - 激活分身后，发帖、评论、聊天、圈子、邀请与助手上下文统一切换
-      - 默认动作主体来自 active persona，只有显式选择时才允许覆盖
-      - 任何链路缺少 persona 上下文时，系统阻断或提示恢复，不允许静默回退到 userId
-    blockers:
-      - 下游域继续以 userId 或旧 owner 语义作为默认动作主体
-      - 评论、聊天、邀请、通知任一链路发生串号
-    evidence:
-      primary:
-        - T3_cross_service_integration
-        - T4_user_journey
-      supporting:
-        - T1_schema
-        - T2_module_interaction
-    tests:
-      planned:
-        - persona propagation integration test
-        - publish comment chat assistant end-to-end journey test
-        - notification attribution verification
-      recorded:
-        - "T3: `go test ./services/circle-service/tests/... ./services/user-service/tests/...`"
-        - "T2: `flutter test test/ui/assistant/providers/assistant_conversation_controller_test.dart test/cloud/circle/circle_write_wire_ssot_test.dart`"
-    status: partial
-  J3:
-    title: 外部只看到分身主体，内部保留用户归属链
-    journey: public read -> social graph -> historical activity -> internal audit
-    scenario_refs:
-      - persona-profile-subject-and-visibility
-      - follow-relationship
-      - social-graph-read
-    done_when:
-      - 普通读接口与常规界面无法推断同一用户下的多个分身关联
-      - strict isolation 与停用分身的公开读取策略稳定可预期
-      - 审计与风控链路可追踪 userId 与分身映射，但不泄露到业务读接口
-    blockers:
-      - 主页、评论、共同联系人、圈子参与或邀请记录可反推出跨分身关联
-      - 停用后记录归因丢失或被重绑到 userId
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
-        - T4_user_journey
-    tests:
-      planned:
-        - sub-account visibility contract test
-        - isolation leakage regression test
-        - audit mapping verification
-      recorded:
-        - "T1: `make -C quwoquan_service verify-metadata && make codegen && make codegen-app`"
-        - "T2: `flutter test test/cloud/integration/remote_api_path_contract_test.dart test/cloud/content/post/contract/post_feed_dto_contract_test.dart test/ui/content/post_read_projection_facade_test.dart test/ui/user/providers/profile_state_provider_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/user/widgets/profile_action_bar_widget_test.dart test/cloud/user/contract/relationship_capability_repository_contract_test.dart`"
-        - "T3: `go test ./services/user-service/tests -run 'Test(SubAccountView_|RelationshipCapabilityView_|Follow_|Block_|ListFollowing_|ListFollowers_|SearchSocialRelations_)'`"
-        - "T3: `go test ./services/content-service/tests -run 'TestDiscoveryProjectionPersistsProfileSubjectID'`"
-    notes:
-      - "`persona-profile-subject-and-visibility` 已把公开 `ProfileSubject`、strict/retired 不可见、记录快照与 discovery canonical subject 收口完成。"
-      - "M4 补全后，follow/capability/list/search 主链路已切到 `ProfileSubject` 单轨，并把公开 graph 列表与搜索结果统一压平为不暴露 `ownerUserId` 的读投影。"
-      - "但跨内容/共同联系人/审计映射的全面泄漏验证仍未完成，因此 J3 继续保持 partial。"
-    status: partial
-
-release_guardrails:
-  R1:
-    title: 用户及分身统一升级可灰度可回滚
-    done_when:
-      - 分身管理、公开分身资料、上下文透传三类能力可独立开关
-      - 串号、公开映射泄露或记录归因丢失时可单独回退对应能力
-      - 关键指标具备观测：switch latency、attribution mismatch、public leakage、persona migration failure
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T4_release_rehearsal
-    tests:
-      planned:
-        - feature flag rollback rehearsal
-        - observability dashboard verification
-      recorded:
-        - "T2: `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/ui/user/widgets/profile_shell_widget_test.dart test/ui/content/post/contract/content_runtime_config_provider_test.dart test/ui/user/providers/persona_management_provider_test.dart`"
-        - "T1/T3: `go test ./runtime/governance ./services/user-service/tests/...`"
-        - "T1/T3: `go test ./runtime/persona ./runtime/governance ./runtime/sync ./services/user-service/internal/domain/user/telemetry`"
-        - "T3: `go run ./tools/persona_rollout --input ./runtime/persona/testdata/rehearsal_input.json --switch-latency-ms 18.4`"
-    notes:
-      - "persona-management 相关入口开关、flag-off 降级与成功/失败 telemetry 已补齐。"
-      - "M2 已补齐 `ops.user.profile_subject_v1`、四个 `profile_subject_*` 指标、personaId fallback rollback，以及 discovery canonical subject 回归。"
-      - "M4 补全后，`ops.user.persona_context_v1 / ops.user.persona_graph_v1`、follow/graph 指标最小触发断言以及 flag-off rollback rehearsal 已补齐；graph actor 解析在 flag-off 下优先保留既有 persona edge 可读性。"
-      - "M5 已新增 `ops.user.persona_model_v2 / persona_sync_v2 / persona_graph_v2` 映射、persona rollout dry-run/validate 工具、persona sync patch type，以及四类验收指标的本地 rehearsal 输出。"
-      - "但本会话仅完成本地 dry-run 与单测证据，尚未完成真实 staging 的 T4 发布演练；同时 M4 的共同粉丝 / mutual 更强泄漏验证仍未闭环，因此 R1 仍保持 partial。"
-    status: partial
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

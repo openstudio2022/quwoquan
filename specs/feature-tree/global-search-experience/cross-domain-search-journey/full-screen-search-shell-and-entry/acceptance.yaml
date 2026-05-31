@@ -1,76 +1,41 @@
 version: 2
-feature: full-screen-search-shell-and-entry
-level: L3_scenario
-source_path: global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
-parent_journey: cross-domain-search-journey
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+node:
+  id: full-screen-search-shell-and-entry
+  level: L3_story
+  path: specs/feature-tree/global-search-experience/cross-domain-search-journey/full-screen-search-shell-and-entry
+  title: full screen search shell and entry
+  parent_domain_service: global-search-experience
+  parent_business_capability: cross-domain-search-journey
 scope:
-  summary: >
-    冻结全局搜索首页初始态与输入后联想态的全屏壳层、统一入口、
-    默认上下文与 route/surface/page context。
-  journey_bindings:
-    - J1
-  in_scope:
-    - 首页、聊天页、圈子页、助手页统一进入全屏搜索首页
-    - 搜索框、`最近在搜` 双列卡片、展开与记录管理态布局
-    - 输入后联想页的四段结构布局
-  out_of_scope:
-    - 搜索结果分组逻辑
-    - 最近搜索同步实现
-
-scenario_acceptance:
-  A1:
-    title: 全屏搜索壳层与统一入口成立
-    scenario: global search shell and entry
-    journey_step: open search landing from root surfaces
+  summary: full screen search shell and entry 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: full screen search shell and entry GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
     done_when:
-      - 首页、聊天页、圈子页、助手页进入同一全屏搜索首页
-      - 搜索首页包含搜索框、`最近在搜` 双列卡片、展开与记录管理态
-      - 输入后页面切换为 `最常使用 / 联系人 / 聊天记录 / 搜索网络结果` 四段联想布局
-      - 返回与取消操作不会破坏原页面上下文
-    edge_cases:
-      - 深色模式下层级不混乱
-      - 小屏与大屏断点下信息架构不跳变
-      - 从不同页面进入时默认上下文可区分
-    linked_plan_items:
-      - P1
-      - P2
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
     evidence:
       primary:
-        - T2_module_interaction
-        - T4_user_journey
-      supporting:
-        - T1_schema
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      planned:
-        - global search shell widget test
-        - root entry journey test
-      recorded:
-        - flutter test test/ui/search/pages/global_search_page_widget_test.dart
-        - flutter test test/ui/discovery/home_page_widget_test.dart test/ui/chat/widgets/chat_page_widget_test.dart test/ui/circle/widgets/circles_page_widget_test.dart test/ui/assistant/pages/personal_assistant_conversation_page_widget_test.dart test/app/shell/main_app_shell_widget_test.dart
+      planned: []
+      recorded: []
     status: pending
-
-story_readiness:
-  S1:
-    title: 壳层路由与上下文元数据可治理
-    done_when:
-      - 搜索页 route、surface、page context 的真相源已明确
-      - 不再在各页面手写第二套搜索入口路径
-    evidence:
-      primary:
-        - T1_schema
-        - T2_module_interaction
-      supporting:
-        - T3_cross_service_integration
-    tests:
-      planned:
-        - route surface metadata review
-      recorded:
-        - make verify-metadata
-        - make gate
-    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

@@ -6,7 +6,7 @@
 
 1. **特性树仍混用多套层级**：`tree_index.yaml`、`runtime/tree.yaml`、`acceptance.yaml`、脚本和命令文案同时存在 `L3_component`、`L4_detail`、`L5_leaf`、`L4_story` 等旧新混合语义。
 2. **命令默认仍以四层/五层思维驱动**：`/explore`、`/prd`、`/design`、`/dev` 明面上在收敛，但仍把 `L4` 当实施叶子，把 `L5` 当兼容层，导致新增特性和存量治理口径持续漂移。
-3. **任务层和树层没有彻底解耦**：很多节点把“任务项”“守护项”“兼容项”“观测项”继续下钻成目录层级，`tasks.md` 没能成为唯一工程执行清单。
+3. **任务层和树层没有彻底解耦**：很多节点把“任务项”“守护项”“兼容项”“观测项”继续下钻成目录层级，`树内任务文档` 没能成为唯一工程执行清单。
 4. **测试层和特性树层相互污染**：当前仓库已经有较成熟的 `T1~T4` 测试治理视图，但主流程与 deploy 文案仍把 `L3/L4` 用作测试层表达，导致“层级”和“验证方式”混用。
 5. **现有治理目标已改变**：本轮决策已经明确，不再采用四层树，也不再保留兼容迁移层，而是一次性切换到严格三层治理模型。
 
@@ -36,16 +36,16 @@
 ### R1：将特性树统一重构为三层治理模型
 
 - R1.1：仓库特性树只保留三层语义：
-  - `L1_capability`：能力
-  - `L2_feature`：Feature / 稳定业务特性容器
+  - `L1_domain_service`：能力
+  - `L2_business_capability`：Feature / 稳定业务特性容器
   - `L3_story`：Story / 最小独立交付单元
-- R1.2：目录树保留到 `L3_story`；`Task` 不再作为目录节点存在，而是通过 `tasks.md` 或后续 `tasks.yaml` 表达。
+- R1.2：目录树保留到 `L3_story`；`Task` 不再作为目录节点存在，而是通过 `树内任务文档` 或后续 `tasks.yaml` 表达。
 - R1.3：所有记录 `L3_component / L3_subfeature / L4_detail / L4_story / L4_object_task / L5_*` 必须退出正式治理模型。
-- R1.4：任何新增 `L2_feature` 若还能继续拆出稳定子容器，说明建模过大；任何 `L3_story` 若还能拆出多个独立 Story，必须继续拆分。
+- R1.4：任何新增 `L2_business_capability` 若还能继续拆出稳定子容器，说明建模过大；任何 `L3_story` 若还能拆出多个独立 Story，必须继续拆分。
 
 ### R2：重构命令语义，使其围绕三层模型运行
 
-- R2.1：`/explore` 负责定位 `L1_capability`、`L2_feature` 与目标 `L3_story`，并给出初步 Task 拆解方向，不再输出旧层级归属。
+- R2.1：`/explore` 负责定位 `L1_domain_service`、`L2_business_capability` 与目标 `L3_story`，并给出初步 Task 拆解方向，不再输出旧层级归属。
 - R2.2：`/prd` 只创建或更新 `L3_story` 的 `spec.md` 与 `acceptance.yaml`。
 - R2.3：`/design` 只面向 `L3_story` 设计方案，并产出该 Story 的 Task 执行清单。
 - R2.4：`/dev` 以 `L3_story` 为唯一实施单位，逐个完成其 Task。
@@ -81,8 +81,8 @@
 
 ### R6：重构存量特性树
 
-- R6.1：所有现有 L1 节点保留为新 `L1_capability`。
-- R6.2：旧扁平 Story 与记录深层节点需要按“Feature 容器”与“独立 Story”重新归并到 `L2_feature / L3_story`。
+- R6.1：所有现有 L1 节点保留为新 `L1_domain_service`。
+- R6.2：旧扁平 Story 与记录深层节点需要按“Feature 容器”与“独立 Story”重新归并到 `L2_business_capability / L3_story`。
 - R6.3：旧 `L5` 一律消失，不再保留为目录层或兼容字段。
 - R6.4：旧中间分组信息若仍有价值，应迁移为 tag、journey、module_group、business_object 等元数据，而不是继续保留目录层。
 
@@ -92,7 +92,7 @@
 - OS2：本次 `/prd` 不处理具体业务功能的代码实现，不修改端侧或云侧业务逻辑。
 - OS3：本次 `/prd` 不保留任何兼容迁移策略，不设计“双轨并行”方案，也不为旧层级继续提供映射表。
 - OS4：本次 `/prd` 不继续讨论是否采用微软四层、Jira 四层或 SAFe 分层，三层模型已作为输入前提冻结。
-- OS5：本次 `/prd` 不决定 Task 最终是否落为 `tasks.md` 还是 `tasks.yaml`，只冻结其“不作为目录层”的原则。
+- OS5：本次 `/prd` 不决定 Task 最终是否落为 `树内任务文档` 还是 `tasks.yaml`，只冻结其“不作为目录层”的原则。
 
 ## 对标输入与吸收结论
 
@@ -127,7 +127,7 @@
 
 ## 角色分工
 
-- **产品**：确认三层模型的交付边界，确保 `L2_feature` 与 `L3_story` 的职责清晰，且 `L3_story` 真正对应独立用户/平台价值。
+- **产品**：确认三层模型的交付边界，确保 `L2_business_capability` 与 `L3_story` 的职责清晰，且 `L3_story` 真正对应独立用户/平台价值。
 - **架构**：负责三层治理定义、目录模型、脚本改造边界、索引与门禁统一口径。
 - **开发**：按 `L3_story -> Task` 实施重构，保证文档、脚本与实现一致推进。
 - **测试**：负责把 `acceptance.yaml` 与 `T1~T4` 验证闭环对齐，不再使用旧 `L3/L4` 测试称呼。
@@ -147,7 +147,7 @@
 - `specs/feature-tree/tree_index.yaml`：特性树索引唯一真相源
 - `specs/feature-tree/<L1>/<L2>/spec.md`：规格真相源
 - `specs/feature-tree/<L1>/<L2>/acceptance.yaml`：验收真相源
-- `tasks.md` 或后续 `tasks.yaml`：任务真相源
+- `树内任务文档` 或后续 `tasks.yaml`：任务真相源
 
 禁止行为：
 

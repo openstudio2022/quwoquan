@@ -1,21 +1,41 @@
-feature: moment-image-grid
-level: "L3_story"
-template: A1-A2
-archived: false
+version: 2
+node:
+  id: moment-social-feed--moment-image-grid
+  level: L3_story
+  path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/moment-social-feed--moment-image-grid
+  title: moment social feed  moment image grid
+  parent_domain_service: discovery-content
+  parent_business_capability: dual-rail-discovery-redesign
+scope:
+  summary: moment social feed  moment image grid 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: moment social feed  moment image grid GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make build && make test-contract
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 1图全宽（高度≤400px），2图两列，3-9图3列宫格，图片圆角4px
-    status: pending
-    linked_tasks:
-    - Im1
-    tests: []
-  A2:
-    criteria: 点击任意图片 → 全屏浏览器打开（黑背景），初始页 = 点击图索引，左右滑切换，点击关闭退出
-    status: pending
-    linked_tasks:
-    - Im2
-    - Im3
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

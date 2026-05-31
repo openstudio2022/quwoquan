@@ -2,8 +2,8 @@
 
 ## 节点定位
 
-- `L1_capability`: `chat-conversation`
-- `L2_journey`: `group-creation-member-management`
+- `L1_domain_service`: `chat-conversation`
+- `L2_business_capability`: `group-creation-member-management`
 
 该 Journey 冻结从全局添加入口发起群聊、按真实群聊/圈子/互关同好选人、创建成功回流消息列表、再到后续加人和解散边界的完整生命周期。
 
@@ -39,7 +39,7 @@
 
 ## 特性树拆分
 
-本 Journey 以 4 个 `L3_scenario` 收口：
+本 Journey 以 4 个 `L3_story` 收口：
 
 | L3 Scenario | 负责的问题 | 说明 |
 |---|---|---|

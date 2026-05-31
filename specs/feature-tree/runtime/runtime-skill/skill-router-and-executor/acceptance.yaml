@@ -1,50 +1,41 @@
-version: 1
-feature: skill-router-and-executor
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-skill.subfeature.skill-router-and-executor
-  parent_path: capability.runtime.feature.runtime-skill
-  acceptance_inherits_from: capability.runtime.feature.runtime-skill
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A3_service_governance
-  - A8_test_automation
-  notes: SkillRouter + SkillExecutor 设计与实现，场景匹配与执行流程。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: 用户在内容详情页查看一篇游记（tag=travel）
-      when: SkillRouter.Match(PageContext)
-      then: 返回 travel_planner Skill
-    - given: travel_planner Skill 被选中
-      when: SkillExecutor.Execute(skillId, userId, context)
-      then: 获取 PageContext + 调用 Tool + 返回结果
-    - given: 多个 Skill 匹配
-      when: SkillRouter 选择
-      then: 按优先级返回最高优先级 Skill
-  A2_experience:
-  - Skill 执行延迟 < 2s（不含 LLM 推理）
-  A3_service_governance:
-  - Skill 执行有超时控制和资源限制
-  - Skill 异常不影响主路径
-  A4_observability:
-  - Skill 执行延迟、成功率、调用链可监控
-  A5_product_ops:
-  - N/A
-  A6_security_privacy:
-  - Skill 执行前需授权检查
-  A7_contract_metadata_consistency:
-  - Skill 注册与 skill_catalog.yaml 一致
-  A8_test_automation:
-  - SkillRouter 单元测试（场景匹配 + 优先级）
-  - SkillExecutor 契约测试
-tests:
-  unit:
-  - quwoquan_service/runtime/skill/tests/router_test.go
-  contract:
-  - quwoquan_service/runtime/skill/tests/skill_execution_contract_test.go
+version: 2
+node:
+  id: skill-router-and-executor
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-skill/skill-router-and-executor
+  title: skill router and executor
+  parent_domain_service: runtime
+  parent_business_capability: runtime-skill
+scope:
+  summary: skill router and executor 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: skill router and executor GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

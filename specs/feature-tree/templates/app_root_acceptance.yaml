@@ -1,0 +1,48 @@
+version: 2
+node:
+  id: app-root
+  level: AppRoot
+  path: specs/feature-tree
+  title: app root title
+
+scope:
+  summary: app-level UAT summary
+  journey_refs:
+    - journey-id
+  scenario_refs:
+    - scenario-id
+  out_of_scope:
+    - item
+
+uat_acceptance:
+  UAT1:
+    title: user journey acceptance title
+    journey: end-to-end user journey
+    scenario_refs:
+      - scenario-id
+    experience_points:
+      - user-visible experience point
+    platforms:
+      - iOS
+      - Android
+    done_when:
+      - observable user outcome
+    performance_points:
+      - action-to-feedback latency target
+      - animation jank threshold
+    evidence:
+      primary:
+        - T4_user_journey
+      supporting:
+        - T3_cross_service_integration
+    tests:
+      planned:
+        - patrol or e2e journey
+      recorded: []
+    status: pending
+
+execution:
+  local_gate:
+    - make gate
+  full_gate:
+    - make gate-full

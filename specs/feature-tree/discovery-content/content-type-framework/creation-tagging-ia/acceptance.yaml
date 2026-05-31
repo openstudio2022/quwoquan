@@ -1,0 +1,170 @@
+version: 2
+node:
+  id: creation-tagging-ia
+  level: L3_story
+  path: specs/feature-tree/discovery-content/content-type-framework/creation-tagging-ia
+  title: creation tagging IA
+  parent_domain_service: discovery-content
+  parent_business_capability: content-type-framework
+scope:
+  summary: >-
+    冻结创作侧打标 IA：各类型编辑页内联打标区，打标全类型可选、不强制，由自动打标（转发识别+内容识别）辅助，
+    手动 UI 作确认/修正层。首发芯片集来自 tag_ref_migration launch 子集，搜索补充在 C2 后 flag 灰度。
+    tagRefs 经 CreatePost 注入，使「打标→content.tagRefs→交集归因」可还原。
+  in_scope:
+  - 各类型编辑页内联打标区（图文/视频/口碑），打标可选不拦截发布
+  - 自动打标建议 suggestedTagRefs 消费 + 可编辑/可删除芯片（确认/修正层）
+  - 交互形态：launch 子集芯片 + 自动建议多选 ≤5；C2 后 flag 灰度搜索补充
+  - 首发标签子集引用 tag_ref_migration launch 项（不另建第二套）
+  - tagRefs 经 CreatePost/UpdatePost writable_fields 注入（已通）
+  out_of_scope:
+  - 自动打标模型/管线（转发识别、内容识别）实现（属 ML/数据工程）
+  - publish/v1/tags 真相源发布（属 C2）
+  - 标签运营后台/治理
+  - pageflip 受控文件
+gwt_acceptance:
+  GWT1:
+    title: 各类型编辑页内联打标区，打标可选不拦截发布
+    given:
+    - 用户在图文/视频/口碑编辑页创作。
+    when:
+    - 未选任何标签直接发布。
+    then:
+    - 发布成功，不因缺标签被拦截；打标区为可选内联区域。
+    done_when:
+    - 三类型编辑页打标可选路径 widget 测试通过。
+    edge_cases:
+    - 自动建议拉取超时时只显首发子集芯片，不阻断发布。
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      recorded: []
+    status: pending
+  GWT2:
+    title: 芯片集来自首发 launch 子集 + 自动建议，多选上限 5
+    given:
+    - 编辑页打标区渲染。
+    when:
+    - 加载首发 launch 子集芯片与 suggestedTagRefs 自动建议芯片。
+    then:
+    - 芯片集合=launch 子集∪自动建议；多选最多 5；超限禁选。
+    done_when:
+    - 芯片来源与上限 widget 测试通过。
+    edge_cases:
+    - 首发子集唯一来源 tag_ref_migration launch，端侧无第二套列表。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/_shared/tag_ref_migration.yaml
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      recorded: []
+    status: pending
+  GWT3:
+    title: 自动建议芯片可勾选/取消/删除，修正后 tagRefs 正确
+    given:
+    - 自动打标产出 suggestedTagRefs。
+    when:
+    - 用户勾选/取消/删除自动建议芯片。
+    then:
+    - 未确认的自动建议不静默写入；最终 tagRefs 反映用户修正结果。
+    done_when:
+    - 自动建议修正路径 widget 测试通过。
+    edge_cases:
+    - 自动建议为空时打标区仍可手动从首发子集选。
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      recorded: []
+    status: pending
+  GWT4:
+    title: 选定 tagRefs 经 CreatePost 注入，发布后 content.tagRefs 一致
+    given:
+    - 用户选定若干 tagRef。
+    when:
+    - 提交 CreatePost / UpdatePost(draft)。
+    then:
+    - content.tagRefs 含用户选定 + 已确认自动标签，与提交一致。
+    done_when:
+    - payload 注入契约 + widget 测试通过。
+    edge_cases: []
+    contract_refs:
+    - quwoquan_service/contracts/metadata/content/post/service.yaml
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      recorded: []
+    status: pending
+  GWT5:
+    title: tagRefs 进召回与交集归因，打标→交集可还原
+    given:
+    - 已发布内容含 tagRefs。
+    when:
+    - 进入推荐召回与 IntersectionReason 生成。
+    then:
+    - tagRefs 参与召回；标签维度交集理由可还原。
+    done_when:
+    - 召回与交集归因集成测试覆盖。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_integration
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      recorded: []
+    status: pending
+  GWT6:
+    title: 搜索补充由 flag 灰度（C2 后），检索源唯一 publish/v1/tags
+    given:
+    - 搜索补充 feature flag 关闭（C2 未发布）。
+    when:
+    - 渲染打标区。
+    then:
+    - 不渲染搜索入口；仅首发子集 + 自动建议芯片。flag 开启后检索源唯一 publish/v1/tags。
+    done_when:
+    - flag 开关两态 widget 测试通过。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned:
+      - quwoquan_app/test/ui/content/entry/creation_tagging_widget_test.dart
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

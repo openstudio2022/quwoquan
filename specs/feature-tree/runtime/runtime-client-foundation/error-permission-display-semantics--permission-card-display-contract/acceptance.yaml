@@ -1,41 +1,41 @@
-version: 1
-archived: true
-archived_at: '2026-03-01T07:10:00Z'
-feature: permission-card-display-contract
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.error-permission-display-semantics.task.permission-card-display-contract
-  parent_path: capability.runtime.feature.runtime-client-foundation.subfeature.error-permission-display-semantics
-level_acceptance:
-  A1:
-    criteria: 定位永久拒绝时展示「去设置」按钮
-    status: implemented
-    linked_tasks:
-    - T2
-    tests: []
-  A2:
-    criteria: 权限卡片使用 AppSpacing、colorScheme token
-    status: implemented
-    tests: []
-  A7:
-    criteria: 权限文案来自 l10n
-    status: implemented
-    tests: []
-  A8:
-    criteria: LocationPermissionChecker 可注入，L1b 可覆盖权限态
-    status: implemented
-    linked_tasks:
-    - T1
+version: 2
+node:
+  id: error-permission-display-semantics--permission-card-display-contract
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics--permission-card-display-contract
+  title: error permission display semantics  permission card display contract
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: error permission display semantics  permission card display contract 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: error permission display semantics  permission card display contract GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-    - file: test/ui/content/entry/widgets/location_selector_page_widget_test.dart
-      functions:
-      - permission_permanently_denied_shows_l10n_and_open_settings
-  A9:
-    criteria: L4 Patrol 真机权限拒绝 + 去设置跳转（advisory）
-    status: deferred
-    linked_tasks:
-    - T4
-    tests: []
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: flutter analyze
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

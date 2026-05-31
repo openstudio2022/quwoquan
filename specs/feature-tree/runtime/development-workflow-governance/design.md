@@ -4,8 +4,8 @@
 
 本特性不是业务功能设计，而是仓库治理系统的结构性重构。上游 `spec.md` 已明确冻结三层目标：
 
-- `L1_capability`
-- `L2_feature`
+- `L1_domain_service`
+- `L2_business_capability`
 - `L3_story`
 
 并且明确：
@@ -68,7 +68,7 @@
 
 ### 方案 A：文档先收口，脚本后续渐进改造
 
-先改 `spec.md / design.md / tasks.md / acceptance.yaml` 与命令文案，暂不强制脚本零兼容，后续再慢慢迁移生成器和 gate。
+先改 `spec.md / design.md / 树内任务文档 / acceptance.yaml` 与命令文案，暂不强制脚本零兼容，后续再慢慢迁移生成器和 gate。
 
 **优点**：
 - 改动节奏更平滑。
@@ -135,9 +135,9 @@
 
 ## 关键设计决策
 
-- 决策 1：三层唯一正式层级为 `L1_capability / L2_feature / L3_story`。
+- 决策 1：三层唯一正式层级为 `L1_domain_service / L2_business_capability / L3_story`。
 - 决策 2：目录树保留到 `L3_story`，`Task` 不进入目录。
-- 决策 3：`acceptance.yaml` 在 `L1`、`L2_feature` 与 `L3_story` 存在；`Task` 不单独有验收文件。
+- 决策 3：`acceptance.yaml` 在 `L1`、`L2_business_capability` 与 `L3_story` 存在；`Task` 不单独有验收文件。
 - 决策 4：测试只保留 `T1~T4` 作为治理语言，不再使用 `L3/L4` 表示测试层。
 - 决策 5：`changes/` 旧五层脚手架退出特性树主治理链路。
 - 决策 6：任何旧层级、旧兼容字段、旧目录深度在门禁中直接 fail。
@@ -157,7 +157,7 @@
   - 设计真相源
 - `specs/feature-tree/<L1>/<L2>/acceptance.yaml`
   - 验收真相源
-- `tasks.md` 或后续 `tasks.yaml`
+- `树内任务文档` 或后续 `tasks.yaml`
   - 任务真相源
 
 ### 必须移除的第二真相源
@@ -218,7 +218,7 @@
 
 - 规格防偏：`spec.md`
 - 方案防漂：`design.md`
-- 任务防漏：`tasks.md`
+- 任务防漏：`树内任务文档`
 - 验收防回归：`acceptance.yaml`
 - 自动化防回长：tree index、脚手架、verify scripts、gate
 

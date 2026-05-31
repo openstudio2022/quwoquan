@@ -1,28 +1,41 @@
-feature: photo-gallery-swipe
-level: "L3_story"
-template: A1-A3
-archived: false
+version: 2
+node:
+  id: works-immersive-viewer--photo-gallery-swipe
+  level: L3_story
+  path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer--photo-gallery-swipe
+  title: works immersive viewer  photo gallery swipe
+  parent_domain_service: discovery-content
+  parent_business_capability: dual-rail-discovery-redesign
+scope:
+  summary: works immersive viewer  photo gallery swipe 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: works immersive viewer  photo gallery swipe GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make build && make test-contract
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: '多图水平翻页正确，底部 1.5px #4A8BF5 进度条宽度随页码变化'
-    status: pending
-    linked_tasks:
-    - W2
-    - W3
-    tests: []
-  A2:
-    criteria: '非全宽比例图片上下留白区域填充从首图提取的环境色模糊背景，加载失败降级到 #0A0E14'
-    status: pending
-    linked_tasks:
-    - W4
-    tests: []
-  A3:
-    criteria: 单图时无水平翻页手势，无进度条
-    status: pending
-    linked_tasks:
-    - W2
-    - W3
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

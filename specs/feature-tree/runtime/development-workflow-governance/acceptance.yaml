@@ -1,120 +1,35 @@
-version: 1
-feature: development-workflow-governance
-level: "L2_feature"
-template: A1-A8
-archived: false
-focus_groups:
-- workflow
-- feature-tree
-- acceptance
-- testing-governance
-- gate
-tree_context:
-  feature_path: capability.runtime.story.development-workflow-governance
-  parent_path: capability.runtime
-non_functional_acceptance:
-  consistency:
-    enabled: true
-    goals:
-    - 命令、规则、主流程、特性树、索引与门禁使用同一套三层术语
-    - 仓库内不再保留 L4/L5 或记录兼容映射
-  migration_safety:
-    enabled: true
-    scenarios:
-    - 全量迁移后可重建 tree_index 并通过门禁
-    - 若门禁失败可整体回滚治理分支
-  performance:
-    enabled: false
-    budgets: []
-  gray_release:
-    enabled: false
-    steps: []
-    rollback_on: []
+version: 2
+node:
+  id: development-workflow-governance
+  level: L2_business_capability
+  path: specs/feature-tree/runtime/development-workflow-governance
+  title: development workflow governance
+  parent_domain_service: runtime
+  parent_business_capability: development-workflow-governance
+scope:
+  summary: development workflow governance 验收范围。
+  in_scope: []
+  out_of_scope: []
+sit_acceptance:
+  SIT1:
+    title: development workflow governance 能力 SIT
+    story_refs: []
+    done_when:
+    - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    performance_points: []
+    evidence:
+      primary:
+      - T2_module_interaction
+      - T3_app_api_integration
+      supporting:
+      - T1_static_contract
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: PRD 阶段：文档完整性与术语一致性检查；实施阶段：make gate
-  full_gate: 实施阶段：make gate-full + tree_index 重建 + 存量节点抽样迁移校验
-level_acceptance:
-  A1:
-    criteria: 三层治理模型被正式冻结为 `L1_capability / L2_feature / L3_story`，并明确规定 Task
-      仅作为任务项存在，不再占用目录层。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: optional
-      T4: optional
-    tests: []
-  A2:
-    criteria: 所有规则、命令与主流程文档统一使用三层术语，不再出现任何旧正式层级定义。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: optional
-      T4: optional
-    tests: []
-  A3:
-    criteria: '`/explore`、`/prd`、`/design`、`/dev`、`/verify`、`/commit`、`/deliver`、`/deploy`
-      的职责围绕 `L1_capability / L2_feature / L3_story` 重写：L3 是唯一最小交付单元，Task 只是工程任务。'
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A4:
-    criteria: 测试治理与特性树层级彻底解耦：测试仅使用 `T1~T4`，deploy 与测试规则中不再使用 `L3/L4` 代指测试层。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: required
-    tests: []
-  A5:
-    criteria: tree index 生成器、脚手架、校验脚本与门禁脚本全部切换到三层模型；发现旧层级或旧兼容字段时直接失败，不再兼容读取。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A6:
-    criteria: 现有 `specs/feature-tree/` 与其 `acceptance.yaml` 被纳入一次性迁移范围：L1 保留，扁平 Story 与记录深层节点重新归并为新的
-      `L2_feature / L3_story`，最深层守护项一律折叠为任务项。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
-  A7:
-    criteria: '`acceptance.yaml` 与三层模型一致：L1 负责能力治理验收，L2 负责 Story 验收，L3 不再有独立 acceptance
-      文件，只通过任务项链接回 L2。'
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: optional
-      T4: optional
-    tests: []
-  A8:
-    criteria: 重构方案具备可执行的切换与回滚约束：单窗口完成、门禁全绿后切换、tree_index 可重建、样例节点可验证，失败时可整体回滚治理分支。
-    status: pending
-    linked_tasks: []
-    test_layers:
-      T1: required
-      T2: required
-      T3: required
-      T4: optional
-    tests: []
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

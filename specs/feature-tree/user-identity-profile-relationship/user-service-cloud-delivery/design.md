@@ -576,4 +576,4 @@ GIN trigram 索引已建（`gin_user_profiles_search` on nickname, bio），搜�
 
 ## 存量带规划任务
 
-见 tasks.md「搁置任务」和「未来演进任务」章节。
+见 树内任务文档「搁置任务」和「未来演进任务」章节。

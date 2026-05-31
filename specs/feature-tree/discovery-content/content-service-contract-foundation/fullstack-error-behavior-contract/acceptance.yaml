@@ -1,40 +1,41 @@
-version: 1
-feature: fullstack-error-behavior-contract
-level: "L3_story"
-status: specified
-archived: true
-archived_at: '2026-03-01T00:00:00Z'
-acceptance_criteria:
-- id: A1
-  description: errors.yaml 结构完整
-  assertions:
-  - 含 CONTENT.USER.* 和 CONTENT.SYSTEM.* 两类
-  - 每个 code 含 dart_const / go_const / http_status / recovery action / user_message.zh
-  - make verify-metadata PASS
-- id: A2
-  description: 端侧错误码 codegen 正确
-  assertions:
-  - content_errors.g.dart 含 ContentErrorCode enum，成员数 == errors.yaml code 数
-  - ContentErrorMessages.zh 含全部 zh user_message
-  - CloudErrorMapper.fromCode("CONTENT.USER.post_not_found") == ContentErrorCode.postNotFound
-- id: A3
-  description: 云侧错误码 codegen 正确
-  assertions:
-  - generated/errors.go 含全部 ErrXxx 常量
-  - 常量值 == errors.yaml code 字符串
-- id: A4
-  description: behaviors.yaml 结构完整
-  assertions:
-  - impression/dwell/click/dislike 声明为 batch=true
-  - like/favorite 声明为 dedicated_route（不在 BehaviorTracker 中）
-  - 推荐特征字段类型与 fields.yaml 一致
-- id: A5
-  description: Dart BehaviorTracker 生成正确
-  assertions:
-  - trackImpression/trackDwell/trackClick/trackDislike 方法均存在
-  - 批量路由 == service.yaml POST /v1/content/behaviors
-- id: A6
-  description: Python schema 生成正确
-  assertions:
-  - ContentFeatures Pydantic model 存在
-  - 字段与 behaviors.yaml recommend_features 一一对应
+version: 2
+node:
+  id: fullstack-error-behavior-contract
+  level: L3_story
+  path: specs/feature-tree/discovery-content/content-service-contract-foundation/fullstack-error-behavior-contract
+  title: fullstack error behavior contract
+  parent_domain_service: discovery-content
+  parent_business_capability: content-service-contract-foundation
+scope:
+  summary: fullstack error behavior contract 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: fullstack error behavior contract GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

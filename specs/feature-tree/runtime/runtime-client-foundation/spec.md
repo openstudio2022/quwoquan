@@ -31,7 +31,7 @@
 
 - 所有客户端横切能力必须经此 L2 统一定义，禁止在业务域 L2（如 `discovery-content`）下新建客户端基础设施节点
 - **元数据 YAML 的唯一编辑仍归属 `contracts/metadata` + codegen 主线**；本 L2 的 `metadata-driven-client-data-contract` 仅约束 **Flutter 侧类型消费与 Mock/Remote 同源**，不替代云侧 metadata 评审流程
-- 纯客户端 Gate（如 iOS 壳、dart semantic）不涉及 Go codegen；**可选** 元数据驱动 UI 门禁见该 L3 的 `plan.yaml`
+- 纯客户端 Gate（如 iOS 壳、dart semantic）不涉及 Go codegen；**可选** 元数据驱动 UI 门禁见该 L3 的 `树内计划文档`
 - 对象级缓存、查询快照、资源缓存和用户缓存清理统一归属 `local-cache-architecture`；业务域只登记对象策略与验收，不得自建第二套缓存合同或页面级 TTL。
 
 ## 验收标准概要

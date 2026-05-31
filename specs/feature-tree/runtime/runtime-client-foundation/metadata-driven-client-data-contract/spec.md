@@ -27,7 +27,7 @@
 
 4. **本 baseline 交付**  
    - 本 L3 的 **spec / design / acceptance / plan**、**缺口清单**、**CR**、**tree_index** 登记。  
-   - **不**在本 baseline 会话内完成全仓库逐页改码；迁移按 `plan.yaml` 切片在独立 `/dev` 会话执行。
+   - **不**在本 baseline 会话内完成全仓库逐页改码；迁移按 `树内计划文档` 切片在独立 `/dev` 会话执行。
 
 ## Out of Scope
 
@@ -54,7 +54,7 @@
 ## Explore / baseline 就绪分析
 
 - **全页路径与清单对照、能否进入 baseline、Gap 与修改方案**：见同目录 [`explore-baseline-readiness-20260329.md`](./explore-baseline-readiness-20260329.md)。  
-- **摘要**：规格类 baseline **可冻结**；**全页 UI 元数据消费闭环** 仍按 `plan.yaml` 切片推进；当前须优先消除 **横向矩阵 P2=✓** 与清单 **`partial`** 的语义冲突。
+- **摘要**：规格类 baseline **可冻结**；**全页 UI 元数据消费闭环** 仍按 `树内计划文档` 切片推进；当前须优先消除 **横向矩阵 P2=✓** 与清单 **`partial`** 的语义冲突。
 
 ## 数据生命周期 / 权限
 
@@ -67,7 +67,7 @@
 
 ## 验收重点摘要
 
-- `spec.md` / `design.md` / `acceptance.yaml` / `plan.yaml` / `CR` / `metadata_driven_ui_gap_inventory.yaml` 已合入。  
+- `spec.md` / `design.md` / `acceptance.yaml` / `树内计划文档` / `CR` / `metadata_driven_ui_gap_inventory.yaml` 已合入。  
 - `tree_index.yaml` 已登记本 L3。  
 - 新增云接口或新页面数据模型：**须** 先改 metadata 再 codegen，**禁止** 仅端侧手写 DTO 作为长期方案。
 

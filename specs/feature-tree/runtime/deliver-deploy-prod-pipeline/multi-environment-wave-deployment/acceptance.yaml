@@ -1,30 +1,41 @@
-version: 1
-feature: multi-environment-wave-deployment
-level: "L3_story"
-archived: true
-template: A1-A3
-level_acceptance:
-  A1:
-    criteria: 五环境矩阵与波次在 deploy/shared 可检索
-    status: implemented
+version: 2
+node:
+  id: multi-environment-wave-deployment
+  level: L3_story
+  path: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-wave-deployment
+  title: multi environment wave deployment
+  parent_domain_service: runtime
+  parent_business_capability: deliver-deploy-prod-pipeline
+scope:
+  summary: multi environment wave deployment 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: multi environment wave deployment GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      - file: deploy/shared/environment_matrix.md
-        functions: [environment_matrix]
-      - file: deploy/shared/gray_rollout_stages.yaml
-        functions: [gray_rollout_stages]
-  A2:
-    criteria: L3 契约 Makefile 与 pre-release 均含双 base URL
-    status: implemented
-    tests:
-      - file: .github/workflows/pre-release-gate.yml
-        functions: [pre_release_gate]
-      - file: quwoquan_service/scripts/deploy/verify_config_gray_parallel_binding.sh
-        functions: [verify_config_gray_parallel_binding]
-  A3:
-    criteria: gray_rollout 注释与 environment_matrix 的 D/E 说明一致
-    status: implemented
-    tests:
-      - file: quwoquan_service/scripts/deploy/verify_gray_rollout_stages.sh
-        functions: [verify_gray_rollout_stages]
-      - file: deploy/shared/gray_rollout_stages.yaml
-        functions: [gray_rollout_stages]
+      planned: []
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

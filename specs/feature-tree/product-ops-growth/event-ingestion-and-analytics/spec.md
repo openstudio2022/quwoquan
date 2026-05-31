@@ -214,4 +214,4 @@
 - A2：对标吸收、SLO/KPI、容量/成本、生命周期、灰度/回滚在 spec 中冻结。
 - A4：推荐、Assistant、运营三条反馈应用闭环可复盘。
 - A7：metadata/字段分级/事件版本/幂等与去重规则形成统一真相源。
-- A8：具备进入 `/baseline` 所需的 `spec.md / design.md / acceptance.yaml / plan.yaml / CR`。
+- A8：具备进入 `/baseline` 所需的 `spec.md / design.md / acceptance.yaml / 树内计划文档 / CR`。

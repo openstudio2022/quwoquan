@@ -1,138 +1,41 @@
-version: 1
-feature: local-cache-architecture
-level: "L3_story"
-template: A1-A10
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.local-cache-architecture
-  parent_path: capability.runtime.feature.runtime-client-foundation
-level_acceptance:
-  focus_groups:
-    - A1_functional
-    - A7_contract_metadata_consistency
-    - A9_runtime_observability
-  notes: 本 L3 冻结对象级缓存、查询快照、资源缓存、同步一致性、分层清理与验证看护；首版不强制全局 ETag/304
-  A1:
-    criteria: 统一 CacheReadResult 输出合同、对象策略模板、分层模型、清理入口规格已冻结
-    status: planned
-    linked_tasks:
-      - cache-spec-baseline
+version: 2
+node:
+  id: local-cache-architecture
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture
+  title: local cache architecture
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: local cache architecture 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: local cache architecture GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      - file: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md
-      - file: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml
-  A2:
-    criteria: 设计文档明确 ObjectCacheStore、QuerySnapshotStore、ResourceCacheController、CacheManagementService、CacheRepositoryDecorator 的职责边界
-    status: planned
-    linked_tasks:
-      - cache-design-baseline
-    tests:
-      - file: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/design.md
-  A3:
-    criteria: inventory 覆盖 post、用户、会话、评论、媒体资源、feed/search/profile/circle query snapshot 的当前状态与缺口
-    status: planned
-    linked_tasks:
-      - cache-inventory-baseline
-    tests:
-      - file: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-inventory.md
-  A4:
-    criteria: 用户可见分层清理入口具备释放空间估算、影响说明、二次确认、保护对象边界与完成统计
-    status: planned
-    linked_tasks:
-      - cache-management-entry
-    tests:
-      - file: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-management-runbook.md
-  A5:
-    criteria: 业务对象特性树已登记对象级缓存章节，且指向统一对象策略
-    status: planned
-    linked_tasks:
-      - business-feature-cache-specs
-    tests:
-      - file: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md
-      - file: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
-      - file: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md
-      - file: specs/feature-tree/chat-conversation/chat-experience-optimization/chat-list-local-cache/spec.md
-      - file: specs/feature-tree/runtime/runtime-media/spec.md
-      - file: specs/feature-tree/discovery-content/feed-orchestration-recommendation/unified-items-cursor/spec.md
-  A6:
-    criteria: 首批实现后重复打开详情、滚动 feed、切换一级/二级 tab 不线性放大 GET 次数
-    status: planned
-    linked_tasks:
-      - request-suppression-tests
-    tests:
-      - file: quwoquan_app/test
-        note: 新增 feed/detail/query cache hit/miss 与请求数断言
-  A7:
-    criteria: 可缓存对象 freshness 字段来自 metadata/codegen；客户端不硬编码第二套 path、operation、surface 或版本字段规则
-    status: planned
-    linked_tasks:
-      - metadata-freshness-alignment
-    tests:
-      - file: quwoquan_service/contracts/metadata
-      - file: quwoquan_app/lib/cloud/runtime/generated
-  A8:
-    criteria: 图片/头像/封面/正文图入口收口到统一 wrapper，直用 Image.network、NetworkImage、CachedNetworkImage 的 allowlist 只能递减
-    status: planned
-    linked_tasks:
-      - unified-resource-entrypoints
-    tests:
-      - file: quwoquan_app/scripts/media/verify_app_network_image_surface.py
-      - file: specs/gates/app_network_image_policy_allowlist.yaml
-  A9:
-    criteria: cache hit/miss、network suppression、refresh latency、clear cache result、offline recovery 可被测试或观测读取
-    status: planned
-    linked_tasks:
-      - cache-diagnostics-probe
-    tests:
-      - file: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-management-runbook.md
-  A10:
-    criteria: T4 真机覆盖冷启动首页 feed、连续滚动、重复进入详情、头像/封面变更、分层清理缓存后的离线回显
-    status: planned
-    linked_tasks:
-      - cache-t4-evidence
-    tests:
-      - file: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-management-runbook.md
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: "make verify-app-page-horizontal-quality && python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py"
-  full_gate: make gate
-journey_acceptance:
-  - id: A1
-    statement: 页面统一消费 CacheReadResult，不自行判断缓存来源与新鲜度
-    t_layers: [T1, T2]
-  - id: A2
-    statement: 业务对象策略统一登记并可被开发和测试复用
-    t_layers: [T1]
-  - id: A3
-    statement: 用户分层清理不会删除草稿、待发送消息、outbox、账号凭证
-    t_layers: [T2, T4]
-scenario_acceptance:
-  - id: S1
-    statement: 离线冷启动可展示最近 feed/query/detail 快照并标识离线状态
-    t_layers: [T2, T4]
-  - id: S2
-    statement: 恢复网络后对象版本更新并与本地 overlay 合并
-    t_layers: [T2, T3]
-  - id: S3
-    statement: 清理临时图片和视频后，post metadata 与头像 URL 仍可回显
-    t_layers: [T2, T4]
-evidence_matrix:
-  T1:
-    - type: doc
-      artifact: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md
-    - type: doc
-      artifact: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/design.md
-    - type: doc
-      artifact: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml
-    - type: doc
-      artifact: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-inventory.md
-    - type: doc
-      artifact: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/cache-management-runbook.md
-  T2:
-    - type: planned_test
-      note: ObjectCacheStore、QuerySnapshotStore、ResourceCacheController、CacheManagementService 单元测试
-    - type: planned_test
-      note: feed/detail/query stale-while-revalidate widget/provider 测试
-  T3:
-    - type: planned_test
-      note: RemoteRepository 版本字段、sync patch/outbox 合并、弱网恢复集成测试
-  T4:
-    - type: manual_evidence
-      note: 真机 flutter run 录屏与抓包，覆盖冷启动、滚动、重复详情、清理缓存、离线恢复
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

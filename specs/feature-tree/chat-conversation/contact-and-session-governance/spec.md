@@ -1,6 +1,6 @@
 # L2 规格：contact-and-session-governance — 联系人与会话治理
 
-> **层级**：L2_feature（隶属 L1 `chat-conversation`）
+> **层级**：L2_business_capability（隶属 L1 `chat-conversation`）
 > **状态**：specified
 
 ## 0. 一句话定义

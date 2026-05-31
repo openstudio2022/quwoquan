@@ -1,69 +1,41 @@
 version: 2
-feature: homepage-contextual-publish-entry
-level: L3_scenario
-source_path: shared-homepage-network/homepage-review-and-content-journey/homepage-contextual-publish-entry
-parent_journey: homepage-review-and-content-journey
-archived: false
-
-execution:
-  local_gate: make gate
-  full_gate: make gate-full
-
+node:
+  id: homepage-contextual-publish-entry
+  level: L3_story
+  path: specs/feature-tree/shared-homepage-network/homepage-review-and-content-journey/homepage-contextual-publish-entry
+  title: homepage contextual publish entry
+  parent_domain_service: shared-homepage-network
+  parent_business_capability: homepage-review-and-content-journey
 scope:
-  summary: >
-    冻结从主页上下文进入发布器、默认带入主页并完成回流的链路。
-  journey_bindings:
-    - J3
-  in_scope:
-    - 主页内发布入口
-    - 主页上下文默认带入
-    - 返回主页语义
-  out_of_scope:
-    - 编辑器实现
-    - 搜索与补充主页
-
-scenario_acceptance:
-  A1:
-    title: 主页上下文发布入口可用
-    scenario: homepage contextual publish entry
-    journey_step: tap publish on homepage -> open composer with homepage context -> finish publish
+  summary: homepage contextual publish entry 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: homepage contextual publish entry GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
     done_when:
-      - 用户可从主页发笔记、作品、提问、口碑
-      - 当前主页默认已带入发布上下文
-      - 发布后可返回主页并看到对应回流
-    edge_cases:
-      - 口碑不可移除主页绑定
-      - 发布失败时保留内容与上下文
-    linked_plan_items:
-      - P3
-      - P4
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
     evidence:
       primary:
-        - T3_cross_service_integration
-        - T4_user_journey
-      supporting:
-        - T2_module_interaction
-        - T1_schema
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      planned:
-        - homepage contextual publish entry test
+      planned: []
       recorded: []
     status: pending
-
-story_readiness:
-  S1:
-    title: 主页上下文发布入口不生成第二套发布协议
-    done_when:
-      - 主页内入口与全局入口共用同一发布器
-      - 主页上下文带入字段与发布契约已冻结
-    evidence:
-      primary:
-        - T1_schema
-        - T3_cross_service_integration
-      supporting:
-        - T2_module_interaction
-    tests:
-      planned:
-        - contextual publish contract review
-      recorded: []
-    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

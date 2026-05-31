@@ -2,8 +2,8 @@
 
 ## 节点定位
 
-- `L1_capability`: `shared-homepage-network`
-- `L2_journey`: `homepage-discovery-and-attach-journey`
+- `L1_domain_service`: `shared-homepage-network`
+- `L2_business_capability`: `homepage-discovery-and-attach-journey`
 
 该 Journey 冻结“用户如何发现一个具体事物的主页，并在发布内容时把它挂上去”的完整链路。  
 它承接主页搜索、主页选择器、缺失主页补充、主页预览与发布挂载，不承接口碑详情消费、认领维护和下线治理。
@@ -47,7 +47,7 @@
 
 ## 特性树拆分
 
-本 Journey 冻结为 4 个 `L3_scenario` 方向：
+本 Journey 冻结为 4 个 `L3_story` 方向：
 
 | L3 Scenario | 负责的问题 | 归属域 |
 |---|---|---|

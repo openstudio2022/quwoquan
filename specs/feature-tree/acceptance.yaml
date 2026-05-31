@@ -1,0 +1,72 @@
+version: 2
+node:
+  id: app-root
+  level: AppRoot
+  path: specs/feature-tree
+  title: app root
+scope:
+  summary: app root 验收范围。
+  in_scope: []
+  out_of_scope: []
+uat_acceptance:
+  UAT1:
+    title: app root UAT
+    journey: 应用根 Journey/Scenario 用户价值闭环。
+    scenario_refs: []
+    done_when:
+    - 用户可感知结果满足应用根验收。
+    experience_points: []
+    performance_points: []
+    evidence:
+      primary:
+      - T4_user_journey
+      supporting:
+      - T3_cross_service_integration
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+  UAT_EDGE_SWIPE:
+    title: iOS/Android 边缘滑动返回与退出保护
+    journey: 用户在任意无底栏子页通过平台原生边缘手势返回上一页，在沉浸式媒体浏览器中不会误触横滑翻页，并在 Android 底栏根页首次边缘返回时获得退出保护提示。
+    scenario_refs:
+    - app-root-navigation-safety
+    - global-route-edge-pop-contract
+    - immersive-media-edge-swipe-back
+    - home-edge-swipe-exit-guard
+    done_when:
+    - 无底栏普通页面通过 iOS leading edge 或 Android 左/右边缘返回上一页。
+    - 沉浸式媒体浏览器边缘滑动触发返回，不误触媒体左右切换。
+    - Android 主页根页第一次边缘滑动只提示再次滑动退出。
+    - Android 主页根页第二次边缘滑动在 2 秒保护窗口内退出或交给系统返回。
+    - iOS 根页无可 pop 栈时不模拟退出应用。
+    - iOS 与 Android 的系统手势区域、阈值、动画和提示分别验证。
+    experience_points:
+    - global route edge pop contract
+    - immersive media browser edge swipe back
+    - Android home root edge swipe exit guard
+    performance_points:
+    - edge swipe action-to-feedback latency <= 100ms
+    - return animation has no visible jank on supported devices
+    - media page-swipe and edge-back false-positive conflicts are covered
+    evidence:
+      primary:
+      - T4_user_journey
+      supporting:
+      - T2_module_interaction
+      - T3_route_integration
+    tests:
+      planned:
+      - quwoquan_app/test/app/navigation/native_back_navigation_policy_test.dart
+      - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+      - quwoquan_app/test/ui/content/edge_gesture/immersive_media_edge_swipe_back_test.dart
+      - quwoquan_app/test/app/navigation/home_edge_swipe_exit_guard_test.dart
+      - quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart
+      recorded: []
+    status: pending
+execution:
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

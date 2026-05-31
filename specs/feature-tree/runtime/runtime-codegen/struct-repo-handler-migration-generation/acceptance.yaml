@@ -1,54 +1,41 @@
-version: 1
-feature: struct-repo-handler-migration-generation
-level: "L3_story"
-template: A1-A8
-tree_context:
-  feature_path: capability.runtime.feature.runtime-codegen.subfeature.template-engine-and-metadata-reader.object.struct-repo-handler-migration-generation
-  parent_path: capability.runtime.feature.runtime-codegen.subfeature.template-engine-and-metadata-reader
-  acceptance_inherits_from: capability.runtime.feature.runtime-codegen
-level_acceptance:
-  focus_groups:
-  - A1_functional
-  - A8_test_automation
-  notes: 核心生成模板：struct、repo、handler、migration。
-global_acceptance:
-  A1_functional:
-    scenarios:
-    - given: Post 聚合 metadata
-      when: 执行 entity.go.tmpl 渲染
-      then: 生成正确的 Go struct，字段与 fields.yaml 一致
-    - given: Post 聚合 metadata
-      when: 执行 repository.go.tmpl + repo_impl_mongo.go.tmpl 渲染
-      then: 生成 Repository interface 和 Mongo 实现
-    - given: Post 聚合 metadata
-      when: 执行 http_handler.go.tmpl 渲染
-      then: 生成 HTTP handler 骨架
-    - given: UserProfile 聚合 metadata（PG）
-      when: 执行 migration_pg.sql.tmpl 渲染
-      then: 生成正确的 PostgreSQL DDL
-  A2_experience:
-  - 生成代码风格一致，符合 gofmt
-  A3_service_governance:
-  - 不覆盖手写业务逻辑文件
-  A4_observability:
-  - 生成文件清单输出
-  A5_product_ops:
-  - N/A
-  A6_security_privacy:
-  - 生成代码无硬编码 secret
-  A7_contract_metadata_consistency:
-  - struct 字段名、类型、约束与 fields.yaml 完全一致
-  A8_test_automation:
-  - 各模板单元测试验证生成产物正确性
-  - 生成代码 go build 通过
-tests:
-  unit:
-  - tools/codegen/tests/entity_template_test.go
-  - tools/codegen/tests/repo_template_test.go
-  - tools/codegen/tests/handler_template_test.go
-  - tools/codegen/tests/migration_template_test.go
-  contract:
-  - tools/codegen/tests/generated_code_compile_test.go
+version: 2
+node:
+  id: struct-repo-handler-migration-generation
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-codegen/struct-repo-handler-migration-generation
+  title: struct repo handler migration generation
+  parent_domain_service: runtime
+  parent_business_capability: runtime-codegen
+scope:
+  summary: struct repo handler migration generation 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: struct repo handler migration generation GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

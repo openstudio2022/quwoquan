@@ -408,7 +408,7 @@ lib/ui/user/
 
 ## Story 与测试层映射
 
-本 L2 特性按以下 L4 Story 分解（design 阶段确定 story 边界，tasks.md 细化工程步骤）：
+本 L2 特性按以下 L4 Story 分解（design 阶段确定 story 边界，树内任务文档 细化工程步骤）：
 
 | Story | 范围 | 主要验收项 | 测试层 |
 |-------|------|-----------|--------|
@@ -640,4 +640,4 @@ double _springDampedOffset(double raw, double maxPull) {
 
 ## 存量带规划任务
 
-见 tasks.md 「搁置任务」和「未来演进任务」章节。
+见 树内任务文档 「搁置任务」和「未来演进任务」章节。

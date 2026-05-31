@@ -1,66 +1,41 @@
-version: 1
-feature: s8-p8-semantic-token
-level: "L3_story"
-template: A1-A5
-tree_context:
-  feature_path: capability.runtime.feature.runtime-client-foundation.subfeature.s8-p8-semantic-token
-  parent_path: capability.runtime.feature.runtime-client-foundation
-level_acceptance:
-  focus_groups:
-    - A1_functional
-  notes: 客户端治理 L3；无云契约；与 page-horizontal-quality 矩阵 P8 列联动
-  A1:
-    criteria: spec/design/plan/acceptance 与 CR-012 已落盘；范围与 12 页清单与 spec 一致
-    status: implemented
-    linked_tasks:
-      - slice-s8-baseline-freeze
+version: 2
+node:
+  id: s8-p8-semantic-token
+  level: L3_story
+  path: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token
+  title: s8 p8 semantic token
+  parent_domain_service: runtime
+  parent_business_capability: runtime-client-foundation
+scope:
+  summary: s8 p8 semantic token 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: s8 p8 semantic token GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
     tests:
-      - file: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
-      - file: specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
-  A2:
-    criteria: /dev 各波次后 verify_dart_semantic 通过且 baseline 不无故扩容
-    status: implemented
-    linked_tasks:
-      - slice-s8-w0-tokens
-      - slice-s8-w1-twelve-pages
-      - slice-s8-w2-w5-waves
-    tests:
-      - file: quwoquan_app/scripts/runtime/verify_dart_semantic.py
-      - file: quwoquan_app/scripts/runtime/.verify_dart_semantic_baseline.txt
-
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: "python3 quwoquan_app/scripts/runtime/verify_dart_semantic.py && python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py && python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py"
-  full_gate: make gate
-
-journey_acceptance:
-  - id: A1
-    statement: S8 P8 基线文档与 CR 可追溯
-    t_layers: [T1]
-
-scenario_acceptance:
-  - id: S8-dev-w1
-    statement: W1 完成 12 页 baseline 清零或合法 ignore，矩阵 P8 更新
-    t_layers: [T3]
-  - id: S8-dev-close
-    statement: W5 后 baseline 仅余豁免或清零，矩阵 P8 与代码一致
-    t_layers: [T4]
-
-evidence_matrix:
-  T1:
-    - type: doc
-      artifact: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/spec.md
-    - type: doc
-      artifact: specs/feature-tree/runtime/runtime-client-foundation/s8-p8-semantic-token/design.md
-    - type: doc
-      artifact: specs/changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml
-  T2:
-    - type: script
-      artifact: quwoquan_app/scripts/runtime/verify_dart_semantic.py
-    - type: file
-      artifact: quwoquan_app/scripts/runtime/.verify_dart_semantic_baseline.txt
-  T3:
-    - type: process
-      note: PR 含 baseline 行删除 + page-horizontal-quality-matrix.md P8 列
-  T4:
-    - type: deferred
-      note: W5 收口或登记剩余技术债至矩阵备注
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

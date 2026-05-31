@@ -20,7 +20,7 @@
 | 变更请求（S9 治理收口：规则 + Makefile + PR 清单） | [`CR-20260330-014-page-horizontal-quality-s9-governance-closure.yaml`](../../../../changelog/CR-20260330-014-page-horizontal-quality-s9-governance-closure.yaml) |
 | Mock·端云·测试隔离策略（§4.1 §9 **§5.1 发布/开发测试态功能规格**） | [`mock_data_cloud_integration_policy.md`](../../../../gates/mock_data_cloud_integration_policy.md) |
 | **§5.1 基线冻结登记** | [`CR-20260330-011-mock-release-functional-spec-baseline.yaml`](../../../../changelog/CR-20260330-011-mock-release-functional-spec-baseline.yaml)（与 [`CR-20260329-007`](../../../../changelog/CR-20260329-007-mock-data-isolation-gate.yaml) 互补） |
-| **实施波次 B**（S1–S9 之后） | [nine-session-rollout-plan.md §实施波次 B](./nine-session-rollout-plan.md) + [`tasks.md` M8](./tasks.md) |
+| **实施波次 B**（S1–S9 之后） | [nine-session-rollout-plan.md §实施波次 B](./nine-session-rollout-plan.md) + [`树内任务文档` M8](./树内任务文档) |
 | CR-20260330-010（实施波次 B） | [`CR-20260330-010-mock-isolation-implementation-wave.md`](../../../../changelog/CR-20260330-010-mock-isolation-implementation-wave.md)（YAML 副本可与实施首 PR 一并补） |
 | **S8（P8 语义 token）子 L3** | [`../s8-p8-semantic-token/spec.md`](../s8-p8-semantic-token/spec.md) · [`CR-20260330-012`](../../../../changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml) |
 

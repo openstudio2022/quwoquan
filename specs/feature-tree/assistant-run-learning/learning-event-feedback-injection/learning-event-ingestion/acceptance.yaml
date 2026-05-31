@@ -1,30 +1,41 @@
-version: 1
-feature: learning-event-ingestion
-level: "L3_story"
-template: A1-A8
-focus_groups:
-  - A1_functional
-  - A7_contract_metadata_consistency
-  - A8_test_evidence
-tests:
-  mock: []
-  unit:
-    - quwoquan_service/services/assistant-service/internal/application/service_test.go
-  contract:
-    - quwoquan_service/services/assistant-service/internal/adapters/http/handler_test.go
-  integration:
-    - quwoquan_app/test/cloud/assistant/assistant_repository_learning_contract_test.dart
-  uat: []
-level_acceptance:
-  A1:
-    criteria: learning events/scorecards 通过真实 remote sync 上报，服务端完成 schema 校验、幂等、落库、投影与事件发布。
-    status: specified
-  A7:
-    criteria: learning-event-ingestion 与 interactionevent-scorecard-schema 中定义的字段在 metadata/codegen/app/service 中保持一致。
-    status: specified
-  A8:
-    criteria: 具备单测、HTTP 契约测试、端云 contract 与 staging 证据，不能以 localMock/cloudStub 作为完成口径。
-    status: specified
+version: 2
+node:
+  id: learning-event-ingestion
+  level: L3_story
+  path: specs/feature-tree/assistant-run-learning/learning-event-feedback-injection/learning-event-ingestion
+  title: learning event ingestion
+  parent_domain_service: assistant-run-learning
+  parent_business_capability: learning-event-feedback-injection
+scope:
+  summary: learning event ingestion 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: learning event ingestion GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

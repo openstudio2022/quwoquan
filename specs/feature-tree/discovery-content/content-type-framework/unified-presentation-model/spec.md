@@ -2,11 +2,11 @@
 
 ## 节点定位
 
-- `L1_capability`: `discovery-content`
-- `L2_journey`: `content-type-framework`
-- `L3_scenario`: `unified-presentation-model`
+- `L1_domain_service`: `discovery-content`
+- `L2_business_capability`: `content-type-framework`
+- `L3_story`: `unified-presentation-model`
 
-本场景是 V2「内容多形态统一」的**硬前置债务清零**项（Block D · D1）。目标：在进入 V2 增量开发前，先收敛端侧四套并行的内容展示模型，建立单一只读 presentation model 作为内容消费 surface 的唯一真相源。本场景仅做读侧收敛，不改变发布写链路、不新增持久化字段；若与既往实现冲突，以本规格为准。
+本场景是「内容多形态统一」的**硬前置债务清零**项（Block D · D1）。目标：在内容多形态统一增量开发前，先收敛端侧四套并行的内容展示模型，建立单一只读 presentation model 作为内容消费 surface 的唯一真相源。本场景仅做读侧收敛，不改变发布写链路、不新增持久化字段；若与既往实现冲突，以本规格为准。
 
 ## 背景与动机
 
@@ -19,7 +19,7 @@
 
 四套模型导致：同一帖在不同 surface 字段口径/兜底不一致；新增字段（如 A4 交集理由 `IntersectionReason`）需在四处分别接入；`discoveryPresentationWireForPost` 以 `Map<String, dynamic>?` 弱类型穿透（R04 GATE_BLOCK）；任何展示口径修复都要改四处，回归面不可控。
 
-V2 将引入口碑（review）等新内容形态并要求"统一对象卡 / 统一交集呈现"，若不先收敛读侧模型，新形态会再叠一套分叉。因此本场景作为 V2 硬前置先行落地。
+内容多形态统一将引入口碑（review）等新内容形态并要求"统一对象卡 / 统一交集呈现"，若不先收敛读侧模型，新形态会再叠一套分叉。因此本场景作为其硬前置先行落地。
 
 ## 目标用户（间接）
 
@@ -107,14 +107,14 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 
 - 不改发布/编辑写链路与持久化结构。
 - 不新增 metadata 持久化字段。
-- 不在本轮接入口碑（review）类型（属 V2 增量 B2，但必须能在统一 model 上以 `contentType` 分支无痛接入）。
+- 不在本轮接入口碑（review）类型（属内容多形态统一增量 B2，但必须能在统一 model 上以 `contentType` 分支无痛接入）。
 - 不动 pageflip 受控文件 `article_read_only_book_deck.dart`。
 
 ## 约束
 
 - 遵循 13-coding-discipline R04（去弱类型）/ R24（抽象克制，单一真相源）/ R03（拆超大文件）。
 - 遵循 04-dart-polymorphism：媒体类型分支用 `contentType` 契约字段，禁止对 DTO 子类 `is/as/whereType`。
-- 进入 `/dev` 前 `spec.md` / `design.md` / `acceptance.yaml` / `plan.yaml` / CR 必须同步完成。
+- 进入 `/dev` 前 `spec.md` / `design.md` / `acceptance.yaml` / `树内计划文档` / CR 必须同步完成。
 
 ## 验收重点
 

@@ -20,7 +20,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/app/shell/main_app_shell.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏 `IndexedStack`+状态栏；小趣退出底栏；`isDarkProvider` / `AppColorsFunctional`；2026-05-17 收口底部安全区与底栏背景一体化，避免 home indicator 机型下缘留白过厚；regular 档底栏高度同步降到紧凑基线 |
+| `lib/app/shell/main_app_shell.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏 `IndexedStack`+状态栏；小趣退出底栏；未登录点击创作/聊天进入登录门禁；`isDarkProvider` / `AppColorsFunctional`；2026-05-17 收口底部安全区与底栏背景一体化，避免 home indicator 机型下缘留白过厚；regular 档底栏高度同步降到紧凑基线 |
 | `lib/app/shell/bottom_navigation.dart` | T1 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五栏底栏；C 位创作触发 `/create-entry`；底栏背景 / `forceDark` 与壳一致；2026-05-17 底栏内容改为占满含底部安全区总高、顶部留白与底部安全区对称，并在有圆角/indicator 机型增加左右保护量；2026-05-19 图标/label/阴影接入 chrome 语义 token，视觉基线不变 |
 
 ---
@@ -60,7 +60,7 @@
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/ui/chat/pages/chat_page.dart` | T1 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | Tab 根；消息 capsule 增加 `@小趣` 与 `提醒`；P2 联系人 `ChatContactsRow`+`listContacts` DTO；P6 on-accent 字色走 `badgeForeground`；会话列表头像统一走共享 token，群头像优先预渲染 URL，组合头像仅兜底；2026-05-17 顶部工具栏改为与搜索壳同源的 safeTop 基线，并复用收紧后的 regular 档主顶栏高度；2026-05-19 切换为 appChrome 顶栏别名与主底栏真实高度留白 |
 | `lib/ui/chat/pages/chat_detail_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 委托 `ChatConversationPage`；P2 消息链 `ChatMessageDto` + Repository 强类型 |
-| `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 `ChatMessageDto` + `ChatMessageDisplayItem` 强类型展示链；2026-05-19 三点入口、选择态文字操作与默认单行输入栏统一到 appChrome/chatInput token |
+| `lib/ui/chat/pages/chat_conversation_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `ConversationPageScaffold`；P2 消息列表 `ChatMessageDto` + `ChatMessageDisplayItem` 强类型展示链；2026-05-19 三点入口、选择态文字操作与默认单行输入栏统一到 appChrome/chatInput token；2026-05-30 语音消息接入 `VoiceRecorder`/`voiceSendProvider`，compact 输入栏收敛 `@小趣` 防挤压，语音发送沿 metadata `audio` 契约 |
 | `lib/ui/chat/pages/chat_settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 `ChatGroupSettingsDto`；聊天信息；`AppScaffold`；P7 成员网格按头像与文字高度计算；2026-05-19 登记为三点入口链路设置 Inset chrome |
 | `lib/ui/chat/pages/start_group_chat_page.dart` | T4 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `ChatInboxDto`/`CircleDto`/`ChatConversationCreatedDto` + 向导 ViewModel；模态建群；选择群聊页与主列表共享会话头像 token / 占位视觉 |
 | `lib/ui/chat/pages/transfer_ownership_page.dart` | T3 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | P2 成员 DTO 过滤/展示；`SettingsInsetMemberPickerPageScaffold` |
@@ -144,7 +144,7 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/settings/pages/settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `AppScaffold`；P5 设置列表模板 |
+| `lib/ui/settings/pages/settings_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `AppScaffold`；P5 设置列表模板；登录态显示切换账号/退出登录，未登录显示登录入口 |
 | `lib/ui/settings/pages/developer_settings_page.dart` | T2 | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | ✓ | 开发者页 P2/P3 — |
 
 ---
@@ -153,7 +153,9 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：作品/微趣 Tab `profileWorks`/`profileMoments`+readPresentation；资料 DTO |
+| `lib/ui/user/pages/my_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：作品/微趣 Tab `profileWorks`/`profileMoments`+readPresentation；资料 DTO；未登录态展示登录 CTA |
+| `lib/ui/user/pages/login_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | P2 `AuthRepository.loginOneTap` + `AuthLoginResultDto`；P3 Mock/Remote 由 `authRepositoryProvider` 切换；协议勾选前不调用一键登录 SDK |
+| `lib/ui/user/pages/legal_document_page.dart` | T2 | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 远端 WebView 展示用户协议/隐私政策；P2/P3 —，内容来自配置 URL；禁用 JS，保留返回与失败重试 |
 | `lib/ui/user/pages/other_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | **P2 ✓**：同 my_profile |
 | `lib/ui/user/pages/edit_profile_page.dart` | T2 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ProfileEditUpdatePayload |
 | `lib/ui/user/pages/persona_management_page.dart` | T7 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | UserRepository summary / PersonaDtoSurface |
@@ -179,11 +181,11 @@
 
 | 类别 | 数量 |
 |------|------|
-| `ui/**/pages/*_page.dart`（含 T0 一行） | 56 |
+| `ui/**/pages/*_page.dart`（含 T0 一行） | 58 |
 | `welcome_screen.dart`（额外入口） | 1 |
 | `components/**/*_page.dart` | 5 |
 | `app/shell/*.dart`（主壳 + 底栏） | 2 |
-| **矩阵数据行（含 T0 + shell）** | **64** |
+| **矩阵数据行（含 T0 + shell）** | **66** |
 | **需验收的独立页面行（排除 T0）** | **62** |
 | **P6 = ✓（full）** | **53** |
 | **P6 = ○（partial，待收敛 S6）** | **8** |
@@ -225,5 +227,5 @@
 | 2026-05-17 | **主壳安全区节奏收口**：`main_app_shell`/`bottom_navigation`/`home_page`/`chat_page` 调整顶部与底部安全区消费方式；底栏改为背景吃满底部安全区、内容上下对称收口；首页与消息页主顶栏 regular 档降到紧凑基线，并让关注/精品切换共用同一顶栏几何与 T2 位置稳定回归测试 |
 | 2026-03-29 | **P3 Mock/Remote 收口**：`ui_mock_isolation_allowlist` 清零；聊天/圈子/搜索/global_surface 数据经 `ChatRepository`/`CircleRepository`/`AppContentRepository`；`RemoteAppContentRepository` 不再委托 Mock（空态/最小 Map）；`APP_DATA_SOURCE` + Release 隐藏开发者数据源开关；`main_prod.dart` + CI `flutter build macos` 带 `dart-define` |
 | 2026-03-30 | **S7/P7 默认 B** + **`search_embedded`**：`GroupMemberSearchPage` 纳入 `settings_canonical_manifest`；`verify_settings_canonical` 校验 `EmbeddedMemberSearchPageShell`；§4.3 增 C 类；`page-horizontal-quality-spec` / `nine-session-rollout-plan` 写明 P7 默认策略 B |
-| 2026-03-30 | **S8/P8**：`verify_dart_semantic` 全仓无命中；`.verify_dart_semantic_baseline.txt` 清空（仅注释）；增补 `AppSpacing.zero`/`textLineHeightSingle`、`AppColors.networkCallQualityWeak`、HSL 八色 token；见 `s8-p8-semantic-token/plan.yaml` 各 slice 已实施 |
+| 2026-03-30 | **S8/P8**：`verify_dart_semantic` 全仓无命中；`.verify_dart_semantic_baseline.txt` 清空（仅注释）；增补 `AppSpacing.zero`/`textLineHeightSingle`、`AppColors.networkCallQualityWeak`、HSL 八色 token；见 `s8-p8-semantic-token/树内计划文档` 各 slice 已实施 |
 | 2026-04-11 | **元数据驱动分波（续）**：`MediaPostCard`/`RecentSearchReadPresentation`/`ContentBehaviorBatchEventDto` 等；同日本仓完成帖子全链 P2 ✓（见上行） |

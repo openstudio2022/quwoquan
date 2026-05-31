@@ -1,64 +1,41 @@
-version: 1
-feature: chat-list-local-cache
-level: "L3_story"
-status: specified
-archived: false
-template: '2026-03-10'
-focus_groups: []
+version: 2
+node:
+  id: chat-list-local-cache
+  level: L3_story
+  path: specs/feature-tree/chat-conversation/chat-experience-optimization/chat-list-local-cache
+  title: chat list local cache
+  parent_domain_service: chat-conversation
+  parent_business_capability: chat-experience-optimization
+scope:
+  summary: chat list local cache 验收范围。
+  in_scope: []
+  out_of_scope: []
+gwt_acceptance:
+  GWT1:
+    title: chat list local cache GWT
+    given:
+    - 前置条件明确。
+    when:
+    - 用户或系统动作发生。
+    then:
+    - 可观察结果符合预期。
+    done_when:
+    - 最小价值点闭环。
+    edge_cases: []
+    contract_refs: []
+    performance_points: []
+    evidence:
+      primary:
+      - T1_contract
+      - T2_module_interaction
+      supporting: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
 execution:
-  local_gate: make gate
-  full_gate: make gate-full
-level_acceptance:
-  A1:
-    criteria: 打开趣聊列表时，本地缓存优先渲染，无白屏无 loading 转圈（有缓存时）
-    status: pending
-    test_layers:
-      T2: required
-      T4: required
-  A2:
-    criteria: 后台异步请求 GET /conversations/timestamps，获取全量会话 ID + updatedAt 索引
-    status: pending
-    test_layers:
-      T1: required
-      T3: required
-  A3:
-    criteria: 逐条比对后仅拉取有变化的会话（POST /conversations/batch），不全量重拉
-    status: pending
-    test_layers:
-      T1: required
-      T3: required
-  A4:
-    criteria: 云端新增会话（本地不存在）被正确识别并拉取
-    status: pending
-    test_layers:
-      T2: required
-      T3: required
-  A5:
-    criteria: 云端已不存在的会话（退群/被踢）被正确从本地标记删除
-    status: pending
-    test_layers:
-      T2: required
-      T3: required
-  A6:
-    criteria: 本地新建会话立即写入缓存并异步同步云端，成功后用云端 ID 覆盖
-    status: pending
-    test_layers:
-      T2: required
-      T3: required
-  A7:
-    criteria: 无网络时静默使用本地缓存数据，不显示错误弹窗
-    status: pending
-    test_layers:
-      T2: required
-      T4: required
-  A8:
-    criteria: WebSocket conv.updated 事件触发时主动更新对应本地缓存条目
-    status: pending
-    test_layers:
-      T2: required
-      T3: required
-  A9:
-    criteria: 磁盘缓存无 TTL，App 重启后本地数据仍在
-    status: pending
-    test_layers:
-      T2: required
+  local_gate:
+  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

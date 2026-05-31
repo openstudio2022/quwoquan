@@ -1,0 +1,56 @@
+id: CR-20260530-022
+title: content naming convergence + specs de-versioning (Block 0/E/F)
+slug: content-naming-convergence
+revision: 1
+status: active
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-type-framework
+  - specs/feature-tree/discovery-content/content-type-framework/content-unification-admission-gate-checklist.md
+  - specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model
+
+entries:
+  - timestamp: "2026-05-30T16:20:00+08:00"
+    summary: >-
+      内容多形态统一准入前，完成命名收敛硬切（Block E）、工作树合并落盘（Block 0）与 specs 去版本化（Block F）。
+      E1 moment(身份)/micro(类型) 双轴分离；E2 频道标识统一为单一 channelId；E3 互动接口并入唯一
+      ContentReactionRepository；E4 tags→tagRefs 全栈硬切（存储/索引/迁移 + Go 后端 + 推荐管线 +
+      Python ML + rec_model 契约 + DTO + fixtures + Dart 消费）并补齐 entityRefs；E5 退役「瞬间」、
+      微趣=micro/点滴=moment 严格分轴、分享模板硬编码中文改走 UITextConstants。Block F 将准入门清单
+      重命名为 content-unification-admission-gate-checklist.md 并去除全部 V1/V2 版本化措辞。
+    reason: >-
+      旧代码在同一语义上存在多套命名分叉（moment 既当类型又当身份、channel/tab 标识混用、Reaction/Interaction
+      双接口、tags/tagRefs 不一致、瞬间/微趣/点滴中文混用），且规格用 V1/V2 版本化命名。按用户冻结口径
+      「不做向后兼容、不留兼容/版本分叉、统一切换到统一契约/概念/对象」，必须在进入内容多形态统一前一次性硬切清零，
+      避免债务带入下一阶段。
+    change_type:
+      - baseline
+      - refactor
+      - debt_cleanup
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/content-unification-admission-gate-checklist.md
+        sections:
+          - Block 0
+          - Block E
+          - Block F
+          - Gate
+      - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md
+        sections:
+          - 功能范围
+      - path: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/acceptance.yaml
+        sections:
+          - GWT1
+          - GWT2
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - T1
+        - T2
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - 硬切口径：旧符号直接删除，无 @Deprecated 共存、无双读 flag、无双语义 wire 序列化方法（统一命名 toWireMap）。
+      - E4 tags→tagRefs 跨端云存储/索引/迁移、推荐与 ML 契约，breaking_contract=true，迁移随存储 migration 落地。
+      - Block F 去版本化：准入门清单与 unified-presentation-model spec 移除 V1/V2 措辞，CR 链接同步指向新文件名。
+      - app 门禁 gate_repo.sh --scope app 全绿（[gate] OK），6 个回归测试已修复。

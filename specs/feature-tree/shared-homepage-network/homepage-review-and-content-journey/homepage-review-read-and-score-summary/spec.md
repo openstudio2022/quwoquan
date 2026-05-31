@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `shared-homepage-network`
-- `L2_journey`: `homepage-review-and-content-journey`
-- `L3_scenario`: `homepage-review-read-and-score-summary`
+- `L1_domain_service`: `shared-homepage-network`
+- `L2_business_capability`: `homepage-review-and-content-journey`
+- `L3_story`: `homepage-review-read-and-score-summary`
 
 ## 背景与动机
 

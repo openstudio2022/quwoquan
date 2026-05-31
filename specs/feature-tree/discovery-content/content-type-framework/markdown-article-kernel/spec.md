@@ -2,9 +2,9 @@
 
 ## 节点定位
 
-- `L1_capability`: `discovery-content`
-- `L2_journey`: `content-type-framework`
-- `L3_scenario`: `markdown-article-kernel`
+- `L1_domain_service`: `discovery-content`
+- `L2_business_capability`: `content-type-framework`
+- `L3_story`: `markdown-article-kernel`
 
 本场景冻结趣我圈长文系统的 Markdown 内核升级基线：长文内容以 Markdown 作为唯一持久化真相源，端侧运行时解析为 `QwqMarkdownAst`，再由 `MarkdownPaginationEngine` 动态分页并交给侵入式媒体浏览器渲染。当前应用尚未正式上线，存量 `articleDocument` 预制数据不做兼容保留，全部按 Markdown 重新生成。
 
