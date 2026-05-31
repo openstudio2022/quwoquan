@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"testing"
 
@@ -49,6 +50,7 @@ func TestMain(m *testing.M) {
 		}
 		mongoURI = uri
 	}
+	mongoURI = normalizeMongoURI(mongoURI)
 
 	var err error
 	mongoClient, err = mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
@@ -92,4 +94,21 @@ func cleanCollections(t *testing.T) {
 	for _, coll := range []string{"tag_nodes", "object_tag_index"} {
 		mongoDB.Collection(coll).DeleteMany(context.Background(), bson.M{})
 	}
+}
+
+// normalizeMongoURI 让本地 / 容器测试 URI 走直连，避免 server selection 长时间挂起。
+func normalizeMongoURI(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	query := parsed.Query()
+	query.Set("directConnection", "true")
+	query.Set("serverSelectionTimeoutMS", "5000")
+	query.Set("connectTimeoutMS", "5000")
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
 }

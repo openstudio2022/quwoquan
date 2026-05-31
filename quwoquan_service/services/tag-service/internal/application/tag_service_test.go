@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	model "quwoquan_service/services/tag-service/internal/domain/tag/model"
@@ -13,7 +14,20 @@ func (f *fakeNodeReader) FindByTagRef(_ context.Context, tagRef string) (*model.
 	return f.nodes[tagRef], nil
 }
 
-type fakeObjReader struct{ objs map[string]*model.ObjectTagIndex }
+func (f *fakeNodeReader) ListAll(_ context.Context) ([]model.TagNode, error) {
+	out := make([]model.TagNode, 0, len(f.nodes))
+	for _, node := range f.nodes {
+		out = append(out, *node)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return out[i].TagRef < out[j].TagRef
+	})
+	return out, nil
+}
+
+type fakeObjReader struct {
+	objs map[string]*model.ObjectTagIndex
+}
 
 func (f *fakeObjReader) FindByObject(_ context.Context, id, typ string) (*model.ObjectTagIndex, error) {
 	return f.objs[id+"|"+typ], nil
@@ -34,8 +48,10 @@ func (f *fakeObjReader) FindObjectsByTagRef(_ context.Context, tagRef, objectTyp
 
 func newServiceWithFixtures() *TagService {
 	nodes := &fakeNodeReader{nodes: map[string]*model.TagNode{
-		"Topic/旅行":            {TagRef: "Topic/旅行", Group: "Topic", Label: "旅行"},
-		"Topic/摄影":            {TagRef: "Topic/摄影", Group: "Topic", Label: "摄影"},
+		"Topic/旅行":          {TagRef: "Topic/旅行", Group: "Topic", Label: "旅行", LabelEn: "Travel"},
+		"Topic/旅行/周末旅行":     {TagRef: "Topic/旅行/周末旅行", Group: "Topic", Label: "周末旅行", LabelEn: "Weekend Travel"},
+		"Topic/旅行/亲子旅行":     {TagRef: "Topic/旅行/亲子旅行", Group: "Topic", Label: "亲子旅行", LabelEn: "Family Travel"},
+		"Topic/摄影":          {TagRef: "Topic/摄影", Group: "Topic", Label: "摄影", LabelEn: "Photography"},
 		"Entity/机构/学校/北京大学": {TagRef: "Entity/机构/学校/北京大学", Group: "Entity", Label: "北京大学"},
 	}}
 	objs := &fakeObjReader{objs: map[string]*model.ObjectTagIndex{
@@ -61,6 +77,55 @@ func TestResolve(t *testing.T) {
 	}
 	if miss != nil {
 		t.Fatalf("expected nil for unknown tagRef, got %+v", miss)
+	}
+}
+
+func TestListDimensions(t *testing.T) {
+	svc := newServiceWithFixtures()
+	dims, err := svc.ListDimensions(context.Background())
+	if err != nil {
+		t.Fatalf("list dimensions error: %v", err)
+	}
+	if len(dims) != 18 {
+		t.Fatalf("expected 18 dimensions, got %d", len(dims))
+	}
+	if dims[0].Group != "Topic" || dims[0].DimensionID != "Topic/主题" {
+		t.Fatalf("unexpected first dimension: %+v", dims[0])
+	}
+}
+
+func TestSuggest(t *testing.T) {
+	svc := newServiceWithFixtures()
+	suggestions, err := svc.Suggest(context.Background(), "旅", "Topic", 0)
+	if err != nil {
+		t.Fatalf("suggest error: %v", err)
+	}
+	if len(suggestions) != 3 {
+		t.Fatalf("expected 3 suggestions, got %d: %+v", len(suggestions), suggestions)
+	}
+	if suggestions[0].TagRef != "Topic/旅行" || suggestions[0].MatchField != "label" {
+		t.Fatalf("unexpected first suggestion: %+v", suggestions[0])
+	}
+	limited, err := svc.Suggest(context.Background(), "旅", "Topic", 1)
+	if err != nil {
+		t.Fatalf("suggest limit error: %v", err)
+	}
+	if len(limited) != 1 {
+		t.Fatalf("expected 1 limited suggestion, got %d", len(limited))
+	}
+}
+
+func TestValidateTagRefs(t *testing.T) {
+	svc := newServiceWithFixtures()
+	result, err := svc.ValidateTagRefs(context.Background(), []string{"Topic/旅行", "Topic/不存在"})
+	if err != nil {
+		t.Fatalf("validate error: %v", err)
+	}
+	if len(result.Valid) != 1 || result.Valid[0] != "Topic/旅行" {
+		t.Fatalf("unexpected valid set: %+v", result.Valid)
+	}
+	if len(result.Invalid) != 1 || result.Invalid[0] != "Topic/不存在" {
+		t.Fatalf("unexpected invalid set: %+v", result.Invalid)
 	}
 }
 

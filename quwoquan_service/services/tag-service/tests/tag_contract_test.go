@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -66,6 +67,75 @@ func TestResolveUnknownReturns404(t *testing.T) {
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for unknown tagRef, got %d", rec.Code)
+	}
+}
+
+func TestListDimensions(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/tag/dimensions", nil)
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var dims []struct {
+		Group       string `json:"group"`
+		DimensionID string `json:"dimensionId"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &dims); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(dims) != 18 {
+		t.Fatalf("expected 18 dimensions, got %d", len(dims))
+	}
+	if dims[0].Group != "Topic" || dims[0].DimensionID != "Topic/主题" {
+		t.Fatalf("unexpected first dimension: %+v", dims[0])
+	}
+}
+
+func TestSuggestTags(t *testing.T) {
+	seedLaunchSubset(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/tag/suggest?q=旅", nil)
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var suggestions []struct {
+		TagRef     string `json:"tagRef"`
+		Label      string `json:"label"`
+		MatchField string `json:"matchField"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &suggestions); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(suggestions) != 1 {
+		t.Fatalf("expected 1 suggestion, got %d: %+v", len(suggestions), suggestions)
+	}
+	if suggestions[0].TagRef != "Topic/旅行" || suggestions[0].MatchField != "label" {
+		t.Fatalf("unexpected suggestion: %+v", suggestions[0])
+	}
+}
+
+func TestValidateTagRefs(t *testing.T) {
+	seedLaunchSubset(t)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/tag/validate", bytes.NewBufferString(`{"tagRefs":["Topic/旅行","Topic/不存在"]}`))
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var view struct {
+		Valid   []string `json:"valid"`
+		Invalid []string `json:"invalid"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &view); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(view.Valid) != 1 || view.Valid[0] != "Topic/旅行" {
+		t.Fatalf("unexpected valid set: %+v", view.Valid)
+	}
+	if len(view.Invalid) != 1 || view.Invalid[0] != "Topic/不存在" {
+		t.Fatalf("unexpected invalid set: %+v", view.Invalid)
 	}
 }
 
@@ -141,7 +211,7 @@ func TestInvertedFilterByType(t *testing.T) {
 // 保留契约端点显式 501（不留静默 404）。
 func TestReservedEndpointsReturn501(t *testing.T) {
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/v1/tag/suggest?q=旅", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/tag/search?q=旅", nil)
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotImplemented {
 		t.Fatalf("expected 501 for reserved endpoint, got %d", rec.Code)

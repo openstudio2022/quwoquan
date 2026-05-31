@@ -71,6 +71,13 @@ quwoquan_data/batch_plans/
 # artifacts — runtime/build products (already-tracked declarative files stay)
 artifacts/local-gamma/
 artifacts/ecs-onebox/
+artifacts/app-env-packages/
+artifacts/service-env-packages/
+artifacts/stackctl/
+artifacts/stackctl-contract/
+
+# quwoquan_data release artifacts are generated outputs, not source truth.
+quwoquan_data/release/
 
 # Local control-plane and runtime caches
 .control-plane-state/

@@ -20,9 +20,6 @@ func NewTagHandler(svc *application.TagService) *TagHandler {
 
 // reservedRoutes 是 service.yaml 保留契约、V0.5 未实现的端点；显式 501，不留静默 404。
 var reservedRoutes = []string{
-	"GET /v1/tag/dimensions",
-	"GET /v1/tag/suggest",
-	"POST /v1/tag/validate",
 	"GET /v1/tag/search",
 	"GET /v1/tag/related",
 	"POST /v1/tag/search-by-tags",
@@ -31,12 +28,15 @@ var reservedRoutes = []string{
 	"GET /v1/tag/related-objects",
 }
 
-// Routes 注册 V0.5 首发交集核心路由 + 保留契约的 501 占位。
+// Routes 注册 V0.5 首发交集核心路由、创作打标基础查询 + 保留契约的 501 占位。
 func (h *TagHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /v1/tag/resolve", h.resolve)
 	mux.HandleFunc("GET /v1/tag/shared-tags", h.sharedTags)
 	mux.HandleFunc("GET /v1/tag/inverted", h.inverted)
+	mux.HandleFunc("GET /v1/tag/dimensions", h.listDimensions)
+	mux.HandleFunc("GET /v1/tag/suggest", h.suggest)
+	mux.HandleFunc("POST /v1/tag/validate", h.validate)
 	for _, p := range reservedRoutes {
 		mux.HandleFunc(p, h.notImplemented)
 	}
@@ -85,6 +85,54 @@ func (h *TagHandler) inverted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view, err := h.svc.Inverted(r.Context(), tagRef, q.Get("objectType"), parseLimit(q.Get("limit")))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (h *TagHandler) listDimensions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	views, err := h.svc.ListDimensions(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
+func (h *TagHandler) suggest(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	query := q.Get("q")
+	if query == "" {
+		writeError(w, http.StatusBadRequest, "q is required")
+		return
+	}
+	views, err := h.svc.Suggest(r.Context(), query, q.Get("group"), parseLimit(q.Get("limit")))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, views)
+}
+
+func (h *TagHandler) validate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	var req struct {
+		TagRefs []string `json:"tagRefs"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	view, err := h.svc.ValidateTagRefs(r.Context(), req.TagRefs)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
