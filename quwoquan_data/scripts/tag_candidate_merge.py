@@ -1,7 +1,7 @@
 """将标签候选去重/归并后写入正式标签树
 
 读取 tag_runtime/candidates.ndjson，
-过滤已存在/重复/低频候选，将通过审核的候选写入 publish/v1/tags。
+过滤已存在/重复/低频候选，将通过审核的候选写入 publish/tags。
 
 输出:
   - 新增的 _definition.json 文件
@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, RUNTIME_ROOT, NOW_ISO
 
-TAGS_ROOT = PUBLISH_ROOT / "v1" / "tags"
+TAGS_ROOT = PUBLISH_ROOT / "tags"
 RUNTIME_TAG_DIR = RUNTIME_ROOT / "tag_runtime"
 CANDIDATES_FILE = RUNTIME_TAG_DIR / "candidates.ndjson"
 MERGE_LOG = RUNTIME_TAG_DIR / "merge_log.ndjson"

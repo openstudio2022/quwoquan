@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from _common.paths import DATA_ROOT, publish_version_root, publish_active_version
+from _common.paths import DATA_ROOT, PUBLISH_ROOT
 
 
 TEMPLATES_ROOT = DATA_ROOT / "templates"
@@ -41,8 +41,7 @@ def iter_yaml_files(root: Path, suffix: str) -> list[Path]:
 
 
 def active_tags_root() -> Path:
-    version = publish_active_version() or 1
-    return publish_version_root(version) / "tags"
+    return PUBLISH_ROOT / "tags"
 
 
 def tag_exists(tag_ref: str) -> bool:

@@ -24,8 +24,15 @@ def sha256_file(path: Path) -> str:
 
 
 def asset_id_from_object_key(object_key: str) -> str:
-    safe = re.sub(r"[^a-zA-Z0-9_]", "_", object_key.replace("/", "_"))
-    return f"data_asset_{safe}"
+    """Stable, readable, collision-free asset id derived from objectKey.
+
+    旧实现把非 ASCII（如中文 topicId）整段塌缩成一长串下划线，既不可读又会在
+    "纯中文 topicId" 之间撞 id。新实现：保留可读 ASCII token、把连续非法字符折叠为
+    单个 `_`，再追加 objectKey 的 sha1 前 8 位保证唯一。
+    """
+    ascii_part = re.sub(r"[^a-zA-Z0-9]+", "_", object_key).strip("_")
+    digest = hashlib.sha1(object_key.encode("utf-8")).hexdigest()[:8]
+    return f"data_asset_{ascii_part}_{digest}" if ascii_part else f"data_asset_{digest}"
 
 
 def infer_format_angle(tag_refs: list[str]) -> str:

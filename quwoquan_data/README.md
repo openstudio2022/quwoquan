@@ -10,6 +10,39 @@ Agent 驱动的语义数据加工管线，从地理实体发现到内容生产�
 - **中文优先**：所有标签、实体、文章的 ID 和目录名使用中文，英文作为扩展字段。
 - **轻量 schema**：标签本体只含稳定语义字段，动态规则外置到 `tag_policy.yaml` 和 `tag_runtime/`。
 
+## CLI-first + Skill 范式（强制）
+
+所有内容生产/冷启动/校验能力统一经 `qwq-data` 暴露，禁止为单场景新写孤立可执行脚本。完整说明见 [`.cursor/skills/quwoquan-data-content/SKILL.md`](../.cursor/skills/quwoquan-data-content/SKILL.md)。
+
+```
+python3 quwoquan_data/scripts/cli.py <command> ...
+```
+
+| 命令 | 作用 |
+|---|---|
+| `plan` | 内容指令 → compose_brief（叙事契约 / imagePlan / imagePolicy） |
+| `download` | 多平台素材获取 + 来源质量评分 + 匿名化 |
+| `produce --stage compose-brief` | 准备阶段：analyze + 选图 → 落写作契约 `writing_pack.json` + `prompt.md` + 占位（**不拼正文**） |
+| `produce --stage review` | 校验阶段：读会话模型写回的 `article.md` → 三道门 + 图片/游记感密度门 → 裁决 |
+| `produce --stage review --materialize` | review 通过后落地为 post package（仅 `generator=agent`；含账本/实体 sidecar） |
+| `media check-images` | 真实 CV 图片门：人脸/水印/OCR 文叠/感知去重 |
+| `annotate` | Human-in-loop 标注：发布前对账本图片/事实/文章下人判定/打分/置发布态/记再加工 |
+| `ship` | 一键发布：promote→重建索引→按环境采样写 sample bundle→(可选)调用服务侧 importer 灌库 |
+| `verify` | 收紧范围校验 post package（schema + 语义 + 图片 + 三道门） |
+| `template lint` | 模板蓝图门禁（route 叙事契约 / gallery imagePolicy） |
+
+> **Human-in-loop + 发布门**：review 产出每图/事实/文章的 agent 判定+打分写账本（`produce/review/ledger/{ref}.json`）；
+> `annotate` 下人判定；`promote`/`ship` 据账本过滤（discard 图剔除、无主页实体过滤、fix 项跳过）。详见
+> [`docs/content_pipeline_spec.md`](docs/content_pipeline_spec.md)。
+> **一键发布到运行库**：`publish/` 单一主线（prod 全量），`ship` 按 `deploy/shared/content_sampling_manifest.yaml`
+> 确定性采样出 `publish/sample_bundles/{env}.json`；服务侧
+> `quwoquan_service/services/content-service/cmd/import` 消费它把 posts/entities 幂等灌入 mongo。
+
+> **正文只能由会话模型创作**：`compose` 已删除全部脚本拼正文。compose-brief 产出写作契约后，由 Agent 按 `prompt.md` 创作正文写回 `produce/<task>/<batch>/drafts/<ref>.article.md`（`generator=agent`），再 review。
+> **三道真实性门**（review + verify 强制）：generator 出处门、模板指纹门、事实可回溯门。
+
+**硬约束**：新能力 = `<command>/handler.py`（`register_parser` + `handle_*`）+ 可选 `gate.py`，复用逻辑沉到 `_common/`；`SKILL.md` 只暴露 CLI；禁止在 `scripts/**` 新增可直跑（`__main__`）业务入口（旧脚本只能薄壳委托）。门禁：`python3 quwoquan_data/scripts/verify/verify_cli_first.py`（基线 `cli_first_allowlist.txt`）+ `bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`。
+
 ## 标签体系设计
 
 ### 四分组架构（Topic-Audience-Format-Entity）

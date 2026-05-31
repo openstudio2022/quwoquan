@@ -48,6 +48,44 @@ def lint_templates(registry: TemplateRegistry) -> list[str]:
         if not isinstance(blueprint.get("imagePlan"), list) or not blueprint.get("imagePlan"):
             errors.append(f"{label}: imagePlan must be a non-empty list")
 
+        if _is_route_blueprint(blueprint):
+            for field in (
+                "narrativeMode",
+                "evidenceRequirements",
+                "continuityExpectations",
+                "routeCoverageExpectations",
+            ):
+                if not isinstance(blueprint.get(field), dict) or not blueprint.get(field):
+                    errors.append(f"{label}: route blueprint missing {field}")
+            narrative_mode = blueprint.get("narrativeMode") or {}
+            if narrative_mode and not narrative_mode.get("transitionPolicy"):
+                errors.append(f"{label}: narrativeMode.transitionPolicy is required for route blueprint")
+            evidence_requirements = blueprint.get("evidenceRequirements") or {}
+            if evidence_requirements and not isinstance(evidence_requirements.get("fact"), dict):
+                errors.append(f"{label}: evidenceRequirements.fact must be an object")
+            route_coverage = blueprint.get("routeCoverageExpectations") or {}
+            if route_coverage and "minCoveredEntityRefs" not in route_coverage:
+                errors.append(f"{label}: routeCoverageExpectations.minCoveredEntityRefs is required")
+            for field in ("openingTension", "explicitFeelings", "decisionPoints", "tipsEmbeddingPolicy"):
+                if not isinstance(blueprint.get(field), dict) or not blueprint.get(field):
+                    errors.append(f"{label}: route blueprint missing narrative contract field {field}")
+            feelings = blueprint.get("explicitFeelings") or {}
+            if feelings and not (feelings.get("requireLike") and feelings.get("requireDislike")):
+                errors.append(f"{label}: explicitFeelings must require both like and dislike")
+            tips_policy = blueprint.get("tipsEmbeddingPolicy") or {}
+            if tips_policy and not tips_policy.get("forbidStandaloneBlock"):
+                errors.append(f"{label}: tipsEmbeddingPolicy.forbidStandaloneBlock must be true")
+
+        if str(blueprint.get("carrier")) == "gallery":
+            policy = blueprint.get("imagePolicy")
+            if not isinstance(policy, dict) or not policy:
+                errors.append(f"{label}: gallery blueprint requires imagePolicy")
+            else:
+                if not isinstance(policy.get("minImages"), int):
+                    errors.append(f"{label}: imagePolicy.minImages must be an integer")
+                if not isinstance(policy.get("captionMaxChars"), int):
+                    errors.append(f"{label}: imagePolicy.captionMaxChars must be an integer")
+
         for hit in scan_region_locked_terms(blueprint):
             errors.append(
                 f"{label}: region-locked term in structure/mustIncludeFacts: {hit}; "
@@ -71,3 +109,12 @@ def _category_for_vertical(vertical: object) -> str:
     if vertical == "campus":
         return "life"
     return "travel"
+
+
+def _is_route_blueprint(blueprint: dict[str, object]) -> bool:
+    subject = blueprint.get("subject")
+    return (
+        isinstance(subject, dict)
+        and subject.get("kind") == "topic"
+        and subject.get("type") == "旅行/线路"
+    )

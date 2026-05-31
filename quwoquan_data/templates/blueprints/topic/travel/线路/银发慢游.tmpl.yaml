@@ -18,6 +18,30 @@ render: { articleTemplate: gentle, fontPreset: clean }
 conditionAxes:
   region: { applicable: true, slot: 地区舒适度与医疗 }
   season: { applicable: true, slot: 季节舒适窗口 }
+narrativeMode:
+  kind: senior_route
+  openingFocus: comfort_judgement
+  transitionPolicy: slow_progression
+  factsHeading: 先把舒适度、安全边界和替代方案讲清楚
+  closingFocus: comfort_decision
+evidenceRequirements:
+  fact:
+    required: true
+    categories: [transport, stay, risk, intensity]
+  emotion:
+    required: true
+    kinds: [like, pain]
+  mainline:
+    required: true
+    minSignals: 2
+continuityExpectations:
+  requireProgression: true
+  requireTransitions: true
+  forbidSlotStacking: true
+  minNarrativeParagraphs: 4
+routeCoverageExpectations:
+  minCoveredEntityRefs: 2
+  requireAllPrimaryNodes: false
 structure:
   required: [强度判断, 交通与换乘, 休息点, 医疗与厕所, 舒适住宿, 替代方案]
   optional: [陪同者建议, 雨天版本]
@@ -35,4 +59,8 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+openingTension: { required: true, focus: 出发动机与犹豫 }
+explicitFeelings: { requireLike: true, requireDislike: true }
+decisionPoints: { required: true, minPoints: 2 }
+tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
 sopExampleRef: sop/article.md

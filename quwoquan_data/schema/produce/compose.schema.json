@@ -34,7 +34,14 @@
     "publishAngle": { "type": "string" },
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
-    "articleRenderProfile": { "type": "object" }
+    "articleRenderProfile": { "type": "object" },
+    "conditionContext": { "type": "object" },
+    "recommendation": { "type": "object" },
+    "composeBriefRef": { "type": "string" },
+    "sourceQuality": { "type": "array" },
+    "storySpine": { "type": "object" },
+    "relatedSearchPlan": { "type": "object" },
+    "evidenceBundle": { "type": "object" }
   },
   "required": ["topicId", "articleMarkdown", "title", "entityRefs", "tagRefs"]
 }

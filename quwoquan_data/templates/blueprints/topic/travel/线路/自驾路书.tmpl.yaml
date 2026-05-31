@@ -18,6 +18,30 @@ render: { articleTemplate: journal, fontPreset: clean }
 conditionAxes:
   region: { applicable: true, slot: 地形与风险 }
   season: { applicable: true, slot: 季节路况窗口 }
+narrativeMode:
+  kind: route_roadbook
+  openingFocus: drive_judgement
+  transitionPolicy: route_progression
+  factsHeading: 开车前必须先算清楚这些变量
+  closingFocus: fallback_plan
+evidenceRequirements:
+  fact:
+    required: true
+    categories: [transport, intensity, stay, risk]
+  emotion:
+    required: true
+    kinds: [pain, like]
+  mainline:
+    required: true
+    minSignals: 3
+continuityExpectations:
+  requireProgression: true
+  requireTransitions: true
+  forbidSlotStacking: true
+  minNarrativeParagraphs: 5
+routeCoverageExpectations:
+  minCoveredEntityRefs: 3
+  requireAllPrimaryNodes: true
 structure:
   required: [线路总览, 行前判断, 分段路书, 补给与住宿, 风险与替代方案]
   optional: [摄影停靠点, 车型建议, 返程路线]
@@ -36,4 +60,8 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+openingTension: { required: true, focus: 出发动机与犹豫 }
+explicitFeelings: { requireLike: true, requireDislike: true }
+decisionPoints: { required: true, minPoints: 2 }
+tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
 sopExampleRef: sop/article.md

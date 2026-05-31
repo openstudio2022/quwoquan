@@ -29,6 +29,10 @@ def resolve_compose_brief(
         tag_refs = [t for t in dict.fromkeys(tag_refs + condition["tagRefs"]) if t and t != "None"]
     must_include = _dedupe(list(blueprint.get("mustIncludeFacts", [])) + condition["facts"])
     image_plan = list(blueprint.get("imagePlan", [])) + condition["imageSlots"]
+    narrative_mode = _normalize_optional_mapping(blueprint.get("narrativeMode"))
+    evidence_requirements = _normalize_optional_mapping(blueprint.get("evidenceRequirements"))
+    continuity_expectations = _normalize_optional_mapping(blueprint.get("continuityExpectations"))
+    route_coverage_expectations = _normalize_optional_mapping(blueprint.get("routeCoverageExpectations"))
     recommendation = build_recommendation_manifest(
         registry, blueprint, subject, refs, tag_refs, condition_context=condition["context"]
     )
@@ -61,6 +65,22 @@ def resolve_compose_brief(
         "structure": blueprint.get("structure"),
         "conditionAxes": blueprint.get("conditionAxes"),
         "conditionContext": condition["context"],
+        "narrativeMode": narrative_mode,
+        "evidenceRequirements": evidence_requirements,
+        "continuityExpectations": continuity_expectations,
+        "routeCoverageExpectations": route_coverage_expectations,
+        "openingTension": _normalize_optional_mapping(blueprint.get("openingTension")),
+        "explicitFeelings": _normalize_optional_mapping(blueprint.get("explicitFeelings")),
+        "decisionPoints": _normalize_optional_mapping(blueprint.get("decisionPoints")),
+        "tipsEmbeddingPolicy": _normalize_optional_mapping(blueprint.get("tipsEmbeddingPolicy")),
+        "imagePolicy": _normalize_optional_mapping(blueprint.get("imagePolicy")),
+        "narrativePlan": _build_narrative_plan(
+            blueprint,
+            request,
+            refs,
+            title_hint=title or route.template_id,
+            route_coverage_expectations=route_coverage_expectations,
+        ),
         "hooks": blueprint.get("hooks", []),
         "mustIncludeFacts": must_include,
         "forbiddenPhrases": blueprint.get("forbiddenPhrases", []),
@@ -75,6 +95,10 @@ def resolve_compose_brief(
 
 def _dedupe(items: list[Any]) -> list[Any]:
     return [item for item in dict.fromkeys(items) if item is not None]
+
+
+def _normalize_optional_mapping(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
 
 
 def _resolve_condition(
@@ -160,3 +184,65 @@ def _merge_tag_refs(registry: TemplateRegistry, blueprint: dict[str, Any], creat
     tags.extend(str(t) for t in creator.get("publicProfileTagRefs", []))
     tags.extend(str(t) for t in creator.get("recommendationTagRefs", []))
     return [tag for tag in dict.fromkeys(tags) if tag and tag != "None"]
+
+
+def _build_narrative_plan(
+    blueprint: dict[str, Any],
+    request: RouteRequest,
+    entity_refs: list[str],
+    *,
+    title_hint: str,
+    route_coverage_expectations: dict[str, Any],
+) -> dict[str, Any]:
+    narrative_mode = _normalize_optional_mapping(blueprint.get("narrativeMode"))
+    if not narrative_mode:
+        return {}
+
+    route_nodes = [
+        {
+            "sequence": index,
+            "entityRef": ref,
+            "entityName": ref.split("/")[-1],
+        }
+        for index, ref in enumerate(entity_refs, start=1)
+    ]
+    if route_nodes:
+        mid_sections = [{"kind": "route_node", **node} for node in route_nodes]
+    else:
+        mid_sections = list(narrative_mode.get("sectionPlan") or [])
+
+    section_plan: list[dict[str, Any]] = []
+    opening_focus = str(narrative_mode.get("openingFocus") or "hook")
+    section_plan.append(
+        {
+            "kind": "opening",
+            "focus": opening_focus,
+            "title": str(narrative_mode.get("openingHeading") or title_hint),
+        }
+    )
+    section_plan.extend(mid_sections)
+    section_plan.append(
+        {
+            "kind": "facts_decision",
+            "focus": str(narrative_mode.get("factsFocus") or "decision_facts"),
+            "title": str(narrative_mode.get("factsHeading") or "把关键判断讲清楚"),
+        }
+    )
+    section_plan.append(
+        {
+            "kind": "closing",
+            "focus": str(narrative_mode.get("closingFocus") or "decision"),
+            "title": str(narrative_mode.get("closingHeading") or "最后再做决定"),
+        }
+    )
+    return {
+        "kind": str(narrative_mode.get("kind") or "structured"),
+        "openingFocus": opening_focus,
+        "transitionPolicy": str(narrative_mode.get("transitionPolicy") or "sectional"),
+        "sectionPlan": section_plan,
+        "routeNodes": route_nodes,
+        "routeCoverageTarget": route_coverage_expectations.get("minCoveredEntityRefs"),
+        "subjectKind": request.subject_kind,
+        "subjectType": request.subject_type,
+        "intent": request.intent,
+    }

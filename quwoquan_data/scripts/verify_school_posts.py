@@ -18,8 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT
 
-ENTITIES_ROOT = PUBLISH_ROOT / "v1" / "entities" / "机构" / "学校"
-POSTS_ROOT = PUBLISH_ROOT / "v1" / "posts" / "article"
+ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
+POSTS_ROOT = PUBLISH_ROOT / "posts" / "article"
 
 SCHOOL_POST_ANGLES = {
     "索引", "新生攻略", "选课攻略", "校园评测", "考研经验",

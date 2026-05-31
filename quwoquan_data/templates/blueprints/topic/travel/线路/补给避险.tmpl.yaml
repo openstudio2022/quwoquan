@@ -18,6 +18,30 @@ render: { articleTemplate: gentle, fontPreset: clean }
 conditionAxes:
   region: { applicable: true, slot: 地区与医疗 }
   season: { applicable: true, slot: 季节天气与路况 }
+narrativeMode:
+  kind: safety_route
+  openingFocus: risk_judgement
+  transitionPolicy: checklist_progression
+  factsHeading: 把补给、天气和下撤边界先讲透
+  closingFocus: safety_decision
+evidenceRequirements:
+  fact:
+    required: true
+    categories: [risk, transport, stay]
+  emotion:
+    required: true
+    kinds: [pain, like]
+  mainline:
+    required: true
+    minSignals: 2
+continuityExpectations:
+  requireProgression: true
+  requireTransitions: true
+  forbidSlotStacking: true
+  minNarrativeParagraphs: 4
+routeCoverageExpectations:
+  minCoveredEntityRefs: 2
+  requireAllPrimaryNodes: false
 structure:
   required: [风险总览, 油电补给, 天气路况, 地区与医疗, 行李清单, 失联备选]
   optional: [儿童老人注意, 车辆检查]
@@ -35,4 +59,8 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+openingTension: { required: true, focus: 出发动机与犹豫 }
+explicitFeelings: { requireLike: true, requireDislike: true }
+decisionPoints: { required: true, minPoints: 2 }
+tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
 sopExampleRef: sop/article.md

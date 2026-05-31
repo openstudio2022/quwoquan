@@ -1,4 +1,4 @@
-"""Build lookup indexes from publish/v1 entities and posts.
+"""Build lookup indexes from the single publish mainline (entities and posts).
 
 The index layer keeps `_entity.json` as the fact source while exposing
 compact NDJSON shards for search and reverse lookup.
@@ -15,8 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import NOW_ISO, PUBLISH_ROOT  # noqa: E402
 
-V1_ROOT = PUBLISH_ROOT / "v1"
-INDEX_ROOT = V1_ROOT / "index"
+PUBLISH_MAINLINE = PUBLISH_ROOT
+INDEX_ROOT = PUBLISH_MAINLINE / "index"
 ENTITY_INDEX_ROOT = INDEX_ROOT / "entities"
 POST_INDEX_ROOT = INDEX_ROOT / "posts"
 
@@ -114,10 +114,10 @@ def build_entity_index() -> tuple[int, list[Path]]:
     entity_lookup: dict[str, dict] = {}
     entity_count = 0
 
-    for entity_file in sorted(V1_ROOT.rglob("_entity.json")):
+    for entity_file in sorted(PUBLISH_MAINLINE.rglob("_entity.json")):
         if "entities" not in entity_file.parts:
             continue
-        rel = entity_file.parent.relative_to(V1_ROOT)
+        rel = entity_file.parent.relative_to(PUBLISH_MAINLINE)
         parts = rel.parts
         if len(parts) < 4 or parts[0] != "entities":
             continue
@@ -163,13 +163,13 @@ def build_post_index(entity_lookup: dict[str, dict]) -> tuple[int, list[Path]]:
     records_by_file: dict[str, list[dict]] = defaultdict(list)
     post_count = 0
 
-    for manifest in sorted(V1_ROOT.rglob("manifest.json")):
+    for manifest in sorted(PUBLISH_MAINLINE.rglob("manifest.json")):
         if "entities" in manifest.parts or "index" in manifest.parts:
             continue
         if "posts" not in manifest.parts:
             continue
         data = read_json(manifest)
-        rel = manifest.parent.relative_to(V1_ROOT)
+        rel = manifest.parent.relative_to(PUBLISH_MAINLINE)
         parts = rel.parts
         if not parts or parts[0] != "posts":
             continue
@@ -220,11 +220,11 @@ def build_publish_lookup_indexes() -> dict[str, int]:
             "schemaVersion": "quwoquan.publish.lookup_index_manifest",
             "entities": {
                 "count": entity_count,
-                "files": [str(p.relative_to(V1_ROOT)) for p in entity_files],
+                "files": [str(p.relative_to(PUBLISH_MAINLINE)) for p in entity_files],
             },
             "posts": {
                 "count": post_count,
-                "files": [str(p.relative_to(V1_ROOT)) for p in post_files],
+                "files": [str(p.relative_to(PUBLISH_MAINLINE)) for p in post_files],
             },
             "updatedAt": NOW_ISO,
         },
@@ -233,16 +233,16 @@ def build_publish_lookup_indexes() -> dict[str, int]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="生成 publish/v1 实体与 post lookup 索引")
+    parser = argparse.ArgumentParser(description="生成 publish 主线实体与 post lookup 索引")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if args.dry_run:
         entity_count = 0
         post_count = 0
-        for entity_file in sorted(V1_ROOT.rglob("_entity.json")):
+        for entity_file in sorted(PUBLISH_MAINLINE.rglob("_entity.json")):
             if "entities" in entity_file.parts:
                 entity_count += 1
-        for manifest in sorted(V1_ROOT.rglob("manifest.json")):
+        for manifest in sorted(PUBLISH_MAINLINE.rglob("manifest.json")):
             if "entities" not in manifest.parts and "index" not in manifest.parts and "posts" in manifest.parts:
                 post_count += 1
         print(f"[dry-run] entities={entity_count}, posts={post_count}")

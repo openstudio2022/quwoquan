@@ -45,19 +45,27 @@ def main() -> None:
     from build.handler import register_parser as reg_build
     from download.handler import register_parser as reg_download
     from produce.handler import register_parser as reg_produce
+    from media.handler import register_parser as reg_media
     from publish.handler import register_parser as reg_publish
     from reconcile.handler import register_parser as reg_reconcile
     from template.handler import register_parser as reg_template
     from plan.handler import register_parser as reg_plan
+    from verify.handler import register_parser as reg_verify
+    from annotate.handler import register_parser as reg_annotate
+    from ship.handler import register_parser as reg_ship
 
     reg_explore(subparsers)
     reg_build(subparsers)
     reg_download(subparsers)
     reg_produce(subparsers)
+    reg_media(subparsers)
     reg_publish(subparsers)
     reg_reconcile(subparsers)
     reg_template(subparsers)
     reg_plan(subparsers)
+    reg_verify(subparsers)
+    reg_annotate(subparsers)
+    reg_ship(subparsers)
 
     p_reset = subparsers.add_parser("reset", help="Clear runtime data")
     p_reset.add_argument("--include-release", action="store_true", help="Also clear release/")

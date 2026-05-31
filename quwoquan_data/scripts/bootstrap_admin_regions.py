@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
 
-TAGS_ROOT = PUBLISH_ROOT / "v1" / "tags" / "Topic" / "地理" / "行政区"
+TAGS_ROOT = PUBLISH_ROOT / "tags" / "Topic" / "地理" / "行政区"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "admin_regions"
 
 DRY_RUN = False

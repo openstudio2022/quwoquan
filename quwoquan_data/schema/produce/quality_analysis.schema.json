@@ -13,7 +13,15 @@
         "readability": { "type": "number" }
       }
     },
-    "recommendation": { "type": "string", "enum": ["proceed", "skip", "needs_improvement"] }
+    "recommendation": { "type": "string", "enum": ["proceed", "skip", "needs_improvement"] },
+    "templateId": { "type": "string" },
+    "title": { "type": "string" },
+    "evidenceBundle": { "type": "object" },
+    "storySpine": { "type": "object" },
+    "sourceQuality": { "type": "array" },
+    "relatedSearchPlan": { "type": "object" },
+    "sourceUrls": { "type": "array", "items": { "type": "string" } },
+    "sourcePaths": { "type": "array", "items": { "type": "string" } }
   },
   "required": ["topicId", "qualityScore", "recommendation"]
 }

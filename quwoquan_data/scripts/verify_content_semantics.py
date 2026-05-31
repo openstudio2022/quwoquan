@@ -12,8 +12,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.io import read_json  # noqa: E402
 from _common.paths import batch_command_root, batch_inputs_dir  # noqa: E402
-from cold_start.chuanxi_catalog_v2 import CHUANXI_V2_TASK_ID  # noqa: E402
-from cold_start.chuanxi_v2_fact_coverage import fact_covered  # noqa: E402
+from _common.fact_coverage import fact_covered  # noqa: E402
 
 
 STUB_URL_MARKERS = ("cold-start.local", "cold_start.local")
@@ -89,6 +88,31 @@ def verify_semantics(posts_root: Path, task: str | None = None, batch: str | Non
                     issues.append(f"{ref}: mustIncludeFact '{fact}' appears as schema label only")
                 if not fact_covered(fact, article):
                     issues.append(f"{ref}: mustIncludeFact '{fact}' not reflected in body")
+            if manifest.get("storySpine", {}).get("routeEntities"):
+                route_entities = [str(item) for item in manifest["storySpine"].get("routeEntities") or [] if item]
+                if route_entities:
+                    mentioned = [name for name in route_entities if name in article]
+                    min_covered = min(len(route_entities), 2)
+                    if len(mentioned) < min_covered:
+                        issues.append(f"{ref}: routeCoverage insufficient ({len(mentioned)}/{len(route_entities)})")
+                    positions = [article.find(name) for name in route_entities if name in article]
+                    if positions and positions != sorted(positions):
+                        issues.append(f"{ref}: routeCoverage progression order broken")
+                    if sum(article.count(term) for term in ("先", "再", "随后", "最后", "一路", "转场", "返程")) < 2:
+                        issues.append(f"{ref}: narrativeContinuity lacks progression transitions")
+                    headings = re.findall(r"(?m)^##\s+(.+)$", article)
+                    if headings:
+                        brief_path = batch_inputs_dir(task, batch, "produce", "compose") / f"{ref}.json"
+                        if brief_path.exists():
+                            brief = read_json(brief_path)
+                            required = [str(x) for x in (brief.get("structure") or {}).get("required") or []]
+                            mirrored = sum(1 for heading in headings if heading in required)
+                            if required and mirrored >= max(3, len(required) - 1):
+                                issues.append(f"{ref}: narrativeContinuity still mirrors structure.required")
+                if "evidenceBundle" in manifest:
+                    coverage = (manifest.get("evidenceBundle") or {}).get("coverage") or {}
+                    if coverage.get("rejectOnlyEntities"):
+                        issues.append(f"{ref}: evidenceQuality reject-only entities {coverage['rejectOnlyEntities']}")
 
         asset_ids = re.findall(r"asset://([A-Za-z0-9_./-]+)", article)
         if asset_ids:
@@ -112,7 +136,7 @@ def verify_semantics(posts_root: Path, task: str | None = None, batch: str | Non
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify content semantics")
-    parser.add_argument("--task", default=CHUANXI_V2_TASK_ID)
+    parser.add_argument("--task")
     parser.add_argument("--batch")
     parser.add_argument("--posts-root")
     args = parser.parse_args()

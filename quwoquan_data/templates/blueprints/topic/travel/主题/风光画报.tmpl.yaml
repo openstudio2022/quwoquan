@@ -1,0 +1,42 @@
+templateId: 主题_风光画报
+version: 1
+subject: { kind: topic, type: 旅行/主题, minEntityRefs: 3, subjectTagRef: Topic/旅行/旅行主题/城市漫步 }
+vertical: travel
+category: travel
+intent: 体验
+carrier: gallery
+styleFamily: 摄影画报风
+audiences: [photoTraveler, leisureTraveler]
+creatorPersona:
+  archetype: landscape_photographer
+  preferredCreatorIds: [qwq_creator_landscape_photographer_001]
+  requiredProfileTagRefs: [Topic/旅行/旅行主题/城市漫步, Topic/旅行/玩法/摄影旅拍]
+  allowedPerspective: [摄影师, 第一人称经验]
+  mustNotClaim: [商业图库授权, 官方摄影师身份]
+editorialIntent: 以图为主、配紧凑小字，用一组精选画面呈现地点的光影与氛围，文字只做轻量引导。
+render: { articleTemplate: journal, fontPreset: clean }
+conditionAxes:
+  region: { applicable: true, slot: 区域与天气 }
+  season: { applicable: true, slot: 季节光线 }
+structure:
+  required: [画面主线, 光影节点, 细节特写]
+  optional: [机位补充, 周边串联]
+hooks: ["{name}最好看的光，用一组画面说清楚", "在{name}，先看图再决定怎么走"]
+mustIncludeFacts: [画面顺序, 光线时段, 拍摄节点]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 200, max: 800 }
+imagePlan:
+  - { slot: 封面画面, imageLayout: fullWidth }
+  - { slot: 光影图集, gallery: masonry }
+  - { slot: 细节特写, gallery: grid }
+imagePolicy:
+  minImages: 4
+  captionMaxChars: 20
+  galleryLayout: masonry
+crossRefs: { minEntity: 3, minTag: 4 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/article.md

@@ -1,7 +1,7 @@
 """路径真相源 — 统一目录结构
 
 核心原则：
-- entities/tags/posts 在 runtime/tasks 和 publish/v{N} 下同构
+- entities/tags/posts 在 runtime/tasks 和 publish/ 下同构（单一发布主线，无版本目录）
 - 所有 ID 从目录路径推导，JSON 中不重复存储
 - entities 三层目录：entities/{领域}/{类型}/{名称}/（如 entities/地点/景区/峨眉山/）
 - tags 全目录化，每个标签 = 目录 + _definition.json
@@ -10,7 +10,6 @@
 """
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 
@@ -26,20 +25,9 @@ COMMANDS = ("explore", "build", "download", "produce", "reconcile", "publish")
 NOW_ISO = "2026-05-15T00:00:00+08:00"
 
 
-# ─── publish 版本化 ───────────────────────────────────────────────
+# ─── publish 单一主线（已去版本化）───────────────────────────────
 def publish_meta_path() -> Path:
     return PUBLISH_ROOT / "publish_meta.json"
-
-
-def publish_active_version() -> int:
-    meta = publish_meta_path()
-    if meta.exists():
-        return json.loads(meta.read_text(encoding="utf-8")).get("activeVersion", 0)
-    return 0
-
-
-def publish_version_root(version: int) -> Path:
-    return PUBLISH_ROOT / f"v{version}"
 
 
 # ─── 同构路径（runtime task 与 publish 共用）─────────────────────
@@ -123,9 +111,9 @@ def task_changeset_dir(task_id: str) -> Path:
     return task_root(task_id) / "changeset"
 
 
-# ─── publish 同构 ─────────────────────────────────────────────────
-def publish_data(version: int) -> DataRoot:
-    return DataRoot(publish_version_root(version))
+# ─── publish 同构（单一主线）─────────────────────────────────────
+def publish_data() -> DataRoot:
+    return DataRoot(PUBLISH_ROOT)
 
 
 # ─── release 输出（供服务端 bulk import 消费）─────────────────────

@@ -18,6 +18,30 @@ render: { articleTemplate: journal, fontPreset: clean }
 conditionAxes:
   region: { applicable: true, slot: 目的地与天气 }
   season: { applicable: true, slot: 季节人流与备选 }
+narrativeMode:
+  kind: weekend_route
+  openingFocus: weekend_choice
+  transitionPolicy: short_trip
+  factsHeading: 周末成不成立，关键看这几项
+  closingFocus: go_or_not
+evidenceRequirements:
+  fact:
+    required: true
+    categories: [transport, cost, ticket]
+  emotion:
+    required: true
+    kinds: [like, pain]
+  mainline:
+    required: true
+    minSignals: 2
+continuityExpectations:
+  requireProgression: true
+  requireTransitions: true
+  forbidSlotStacking: true
+  minNarrativeParagraphs: 4
+routeCoverageExpectations:
+  minCoveredEntityRefs: 1
+  requireAllPrimaryNodes: false
 structure:
   required: [周末动线, 交通方式, 时间安排, 费用区间, 避坑与备选]
   optional: [周边串联, 亲子/老人注意]
@@ -35,4 +59,8 @@ recommendation:
   exposeStyleTags: true
   qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
   bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin, recommendationWeight]
+openingTension: { required: true, focus: 出发动机与犹豫 }
+explicitFeelings: { requireLike: true, requireDislike: true }
+decisionPoints: { required: true, minPoints: 2 }
+tipsEmbeddingPolicy: { mode: inline, forbidStandaloneBlock: true }
 sopExampleRef: sop/article.md

@@ -15,8 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
 from build_publish_lookup_indexes import build_publish_lookup_indexes
 
-ENTITIES_ROOT = PUBLISH_ROOT / "v1" / "entities" / "地点" / "住宿"
-POSTS_ROOT = PUBLISH_ROOT / "v1" / "posts" / "article"
+ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "地点" / "住宿"
+POSTS_ROOT = PUBLISH_ROOT / "posts" / "article"
 
 
 def write_json(path: Path, data: dict):
@@ -458,7 +458,7 @@ def main():
         gen_post(p)
         print(f"  ✓ {p['title']}")
 
-    print("\n重建 publish/v1 lookup 索引...")
+    print("\n重建 publish lookup 索引...")
     counts = build_publish_lookup_indexes()
     print(f"  lookup 索引: entities={counts['entities']}, posts={counts['posts']}")
 

@@ -1,0 +1,28 @@
+# CLI-first ratchet allowlist —— 现存允许直接运行(__main__)的脚本基线。
+# 新增业务能力禁止再添加直跑入口；应实现为 <command>/handler.py(register_parser) + _common/ 逻辑。
+# 历史脚本逐步收敛为薄壳委托 qwq-data；清理时删除对应行，禁止新增掩盖新债。
+cli.py
+promote_to_publish.py
+build_publish_lookup_indexes.py
+verify_no_legacy_hardcode.py
+bootstrap_sichuan_accommodation.py
+bootstrap_school_entities.py
+bootstrap_school_posts.py
+bootstrap_event_topics.py
+bootstrap_tags.py
+bootstrap_admin_regions.py
+bootstrap_geo_landmarks.py
+fetch_school_catalog.py
+tag_stats.py
+tag_reverse_discover.py
+tag_graph.py
+tag_candidate_merge.py
+verify_tag_tree.py
+verify_school_entities.py
+verify_school_posts.py
+verify_school_catalog_coverage.py
+verify_campus_taxonomy.py
+verify_content_quality.py
+verify_content_semantics.py
+verify/verify_quwoquan_data_post_packages.py
+verify/verify_cli_first.py

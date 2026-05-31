@@ -25,8 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
 from build_publish_lookup_indexes import build_publish_lookup_indexes
 
-ENTITIES_ROOT = PUBLISH_ROOT / "v1" / "entities" / "机构" / "学校"
-POSTS_ROOT = PUBLISH_ROOT / "v1" / "posts" / "article"
+ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
+POSTS_ROOT = PUBLISH_ROOT / "posts" / "article"
 
 DEEP_ANGLES_UNIVERSITY_KEY = [
     ("新生攻略", "Format/内容角度/攻略/新生攻略", "Topic/教育成长/校园生活"),
@@ -293,7 +293,7 @@ def main():
     print(f"  深内容: {stats['deep_posts']}")
     print(f"  总 posts: {total_posts}")
 
-    print("\n重建 publish/v1 lookup 索引...")
+    print("\n重建 publish lookup 索引...")
     counts = build_publish_lookup_indexes()
     print(f"  lookup 索引: entities={counts['entities']}, posts={counts['posts']}")
 
