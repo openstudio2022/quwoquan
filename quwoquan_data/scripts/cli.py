@@ -47,6 +47,8 @@ def main() -> None:
     from produce.handler import register_parser as reg_produce
     from publish.handler import register_parser as reg_publish
     from reconcile.handler import register_parser as reg_reconcile
+    from template.handler import register_parser as reg_template
+    from plan.handler import register_parser as reg_plan
 
     reg_explore(subparsers)
     reg_build(subparsers)
@@ -54,6 +56,8 @@ def main() -> None:
     reg_produce(subparsers)
     reg_publish(subparsers)
     reg_reconcile(subparsers)
+    reg_template(subparsers)
+    reg_plan(subparsers)
 
     p_reset = subparsers.add_parser("reset", help="Clear runtime data")
     p_reset.add_argument("--include-release", action="store_true", help="Also clear release/")

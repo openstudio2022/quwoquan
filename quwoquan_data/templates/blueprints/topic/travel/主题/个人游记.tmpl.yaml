@@ -1,0 +1,35 @@
+templateId: 旅行_个人游记
+version: 1
+subject: { kind: topic, type: 旅行/主题, minEntityRefs: 1, subjectTagRef: Format/内容角度/叙事/旅行叙事 }
+vertical: travel
+category: travel
+intent: 叙事
+carrier: article
+styleFamily: 旅途随笔风
+audiences: [leisureTraveler]
+creatorPersona:
+  archetype: travel_blogger
+  preferredCreatorIds: [qwq_creator_travel_blogger_001]
+  requiredProfileTagRefs: [Format/内容载体/文章/游记, Format/内容角度/叙事/旅行叙事]
+  allowedPerspective: [第一人称经验]
+  mustNotClaim: [官方推荐, 商业合作]
+editorialIntent: 用个人经验写出真实旅行感受，同时把事实信息和主观感受分清楚。
+render: { articleTemplate: journal, fontPreset: handwritten }
+structure:
+  required: [出发原因, 路上片段, 一个具体时刻, 实用补充, 回看这趟旅行]
+  optional: [同行者, 花费, 遗憾]
+hooks: ["我在{name}记住的不是景点，而是这个时刻", "如果再去一次{name}，我会保留和删掉这些安排"]
+mustIncludeFacts: [旅行时间, 交通方式, 停留地点, 主观体验边界]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 900, max: 1800 }
+imagePlan:
+  - { slot: 时间线主图, imageLayout: fullWidth }
+  - { slot: 情绪转场, imageLayout: wrapLeft }
+  - { slot: 细节随手照, gallery: carousel }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/article.md

@@ -1,0 +1,29 @@
+version: 1
+archetypes:
+  self_drive_expert:
+    label: 自驾路书作者
+    requiredTagRefs: [Topic/旅行/出行方式/自驾, Topic/旅行/旅行筹备/行前规划]
+  landscape_photographer:
+    label: 风光摄影师
+    requiredTagRefs: [Topic/旅行/玩法/摄影旅拍, Format/内容载体/图文/图集]
+  travel_blogger:
+    label: 旅行博主
+    requiredTagRefs: [Topic/旅行, Format/内容载体/文章/游记]
+  pro_guide:
+    label: 专业导游
+    requiredTagRefs: [Topic/旅行/玩法/观光游览, Format/内容角度/攻略/行前指南]
+  geo_editor:
+    label: 地理编辑
+    requiredTagRefs: [Format/内容角度/资讯/深度报道, Format/内容角度/科普/知识科普]
+  campus_blogger:
+    label: 校园博主
+    requiredTagRefs: [Topic/教育成长/校园生活]
+  student_mentor:
+    label: 学长姐
+    requiredTagRefs: [Format/内容角度/攻略/新生攻略, Topic/教育成长/校园生活/开学季]
+  career_mentor:
+    label: 校招辅导员
+    requiredTagRefs: [Topic/教育成长/实习求职/校园招聘, Format/内容角度/经验分享/校招经验]
+  food_columnist:
+    label: 风物美食专栏作者
+    requiredTagRefs: [Topic/美食餐饮/菜系/中国菜系, Format/内容角度/科普/知识科普]

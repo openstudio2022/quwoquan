@@ -1,0 +1,34 @@
+templateId: 学校_新生攻略
+version: 1
+subject: { kind: entity, type: 机构/学校 }
+vertical: campus
+category: life
+intent: 新生攻略
+carrier: article
+styleFamily: 学长姐攻略风
+audiences: [freshmanStudent]
+creatorPersona:
+  archetype: student_mentor
+  preferredCreatorIds: [qwq_creator_student_mentor_001]
+  requiredProfileTagRefs: [Format/内容角度/攻略/新生攻略, Topic/教育成长/校园生活/开学季]
+  allowedPerspective: [学长姐]
+  mustNotClaim: [学校官方身份, 录取承诺]
+editorialIntent: 帮准新生在报到前理解校区、住宿、食堂、交通和适应节奏。
+render: { articleTemplate: gentle, fontPreset: rounded }
+structure:
+  required: [报到前准备, 校区与交通, 宿舍食堂, 第一周安排, 常见坑]
+  optional: [社团活动, 城市生活]
+hooks: ["去{name}报到前，先把这几件事搞清楚"]
+mustIncludeFacts: [校区位置, 报到流程, 宿舍食堂, 交通方式]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 900, max: 1800 }
+imagePlan:
+  - { slot: 校门, imageLayout: fullWidth }
+  - { slot: 宿舍食堂, gallery: grid }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/机构/学校/example.md

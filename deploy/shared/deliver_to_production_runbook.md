@@ -1,6 +1,6 @@
 # Deliver → Prod 端到端运行手册
 
-**五环境与波次**见 [environment_matrix.md](environment_matrix.md)（与本文阶段编号一致：local-gamma mirror → ECS gamma 主门禁 → prod 灰度/全量）。
+**四环境与 prod rollout stage** 见 [environment_matrix.md](environment_matrix.md)（与本文阶段编号一致：alpha / beta / gamma / prod，其中 `local-gamma mirror` 是 `gamma` 的本地左移拓扑，不是第五环境）。
 
 ## 1. 目标
 
@@ -30,6 +30,8 @@
 - 代码已合入 `dev1.0`（分支开发模式）或已准备发起进入 `main` 的 PR；分支策略见 `deploy/shared/branch_strategy.md`
 - `make gate-local-gamma` 建议在提交前通过并生成 `artifacts/local-gamma/report.json`。该命令用于左移预测试，不替代 `main` 的 required checks；见 `/.cursor/commands/commit.md`
 - `deploy/shared/process_domain_mapping.yaml` 合法，`verify_deployment_domain_mapping.sh` 通过
+- `deploy/shared/environment_topology_manifest.yaml`、`deploy/shared/local_env_port_manifest.yaml` 已通过校验
+- 如变更环境打包/启动/发布链路，先执行 `python3 agent_ops/deploy/stackctl.py verify`
 
 ### 3.1.1 local-gamma mirror（提交前左移）
 
@@ -37,6 +39,8 @@
 
 ```bash
 make gate-local-gamma
+# 或统一入口
+python3 agent_ops/deploy/stackctl.py up --target gamma-local
 ```
 
 通过判据：
@@ -62,6 +66,15 @@ make gate-local-gamma
 - **gamma**：gamma API 可访问，`GAMMA_BASE_URL`、`GAMMA_PRODUCT_OPS_BASE_URL`、`GAMMA_TEST_AUTH_TOKEN` 已配置
 - **prod**：K8s 集群就绪（阿里云 ACK / 火山引擎 VKE / 华为云 CCE），`CONFIG_VERSION`、`IMAGE_VERSION` 已确定
 - **多云切换**：通过 `CLOUD_PROVIDER=aliyun|volcengine|huaweicloud` 选择 overlay，见 `deploy/cloud-providers/`
+
+### 3.2.1 Package Purity / Host Allowlist
+
+进入 G5c 前必须确认：
+
+- 已执行 `python3 agent_ops/deploy/stackctl.py package --env prod --include-services`
+- 已执行 `python3 agent_ops/deploy/stackctl.py verify --env prod`
+- prod artifact 不包含 mock/seed/debug/test/local host
+- prod host allowlist、secret scope 与 rollout stage 由 `environment_topology_manifest.yaml` 驱动，不能手工覆盖出第二套口径
 
 ### 3.3 灰度参数
 
@@ -93,6 +106,8 @@ make gate-local-gamma
 
 ```bash
 gh workflow run "08. Deploy Gamma ECS"
+# 或统一入口
+python3 agent_ops/deploy/stackctl.py deploy --target gamma-hosted --stage pre --image-version <new> --previous-image-version <old>
 ```
 
 2) hosted pre core 执行：
@@ -173,6 +188,14 @@ make config-gray-rollout \
   FROM_IMAGE=<old> TO_IMAGE=<new> \
   FROM_CONFIG=<old> TO_CONFIG=<new> \
   STEP=50  # 初始灰度（1 pod，全自动）；100 为 Carry-on 全量（需审批）
+
+# 或统一入口
+python3 agent_ops/deploy/stackctl.py deploy \
+  --target prod-hosted \
+  --service seed-box \
+  --from-image <old> --to-image <new> \
+  --from-config <old> --to-config <new> \
+  --step 50
 ```
 
 ### 6.2 SLO 卡点（每步后）
@@ -182,12 +205,26 @@ make config-slo-gate \
   ERROR_RATE=<实测> P95_MS=<实测> REDIS_ERROR_RATE=<实测>
 ```
 
+建议同时归档：
+
+```bash
+python3 agent_ops/deploy/stackctl.py health --target prod-hosted
+python3 agent_ops/deploy/stackctl.py inspect --target prod-hosted --scope all
+python3 agent_ops/deploy/stackctl.py doctor --target prod-hosted
+```
+
 阈值见 `deploy/service/config-release/slo_thresholds.yaml`。
 
 ### 6.3 异常回滚
 
 ```bash
 make config-rollback SERVICE=seed-box TO_CONFIG=<rollback-version>
+```
+
+若需要统一修复入口：
+
+```bash
+python3 agent_ops/deploy/stackctl.py repair --target prod-hosted --fix rebuild-packages
 ```
 
 ### 6.4 high_risk_fields
@@ -206,10 +243,13 @@ make config-rollback SERVICE=seed-box TO_CONFIG=<rollback-version>
 ☐ deliver 完成，代码已入库 `dev1.0` 或已准备进入 `main` 的显式 PR（分支策略见 `branch_strategy.md`）
 ☐ make gate-local-gamma 通过（本地 T1/T2/T3/T4）并生成 artifacts/local-gamma/report.json
 ☐ verify_deployment_domain_mapping.sh 通过
+☐ environment_topology / local_env_port manifest 校验通过
+☐ stackctl package / verify 报告已归档
 ☐ `03` / `04` / `05` required checks 已全部通过
 ☐ ECS gamma pre 已部署目标版本
 ☐ T3 test-api-contract 通过
 ☐ gamma assistant/avatar Android+iOS 旅程通过并带证据产物
+☐ prod package purity / artifact isolation / public-vs-upstream URL 契约通过
 ☐ 灰度：初始灰度（1 pod，全自动）→ Carry-on 100%（审批后执行）
 ☐ 每步 SLO 卡点通过
 ☐ prod 100% 后监控稳定

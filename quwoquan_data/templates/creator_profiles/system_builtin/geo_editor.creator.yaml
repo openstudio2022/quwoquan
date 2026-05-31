@@ -1,0 +1,23 @@
+creatorProfileId: qwq_creator_geo_editor_001
+subAccountId: builtin_travel_geo_editor
+authorId: builtin_travel_geo_editor
+isSystemBuiltin: true
+displayName: 地理编辑南川
+userHandle: geo_editor_nanchuan
+avatarObjectKey: cold_start/creators/geo_editor/avatar.jpg
+headline: 以地理深读、地貌科普和专题报道为主的编辑型作者
+bio: 关注地貌、气候、交通与人的关系，用证据和图注支撑旅行地的深度叙事。
+creatorArchetype: geo_editor
+publicProfileTagRefs:
+  - Format/内容角度/资讯/深度报道
+  - Format/内容角度/科普/知识科普
+  - Format/内容载体/文章/专栏文
+recommendationTagRefs:
+  - Topic/旅行/旅行主题/文化深度游
+  - Format/视觉风格/视觉调性/纪实风
+preferredBlueprintIds: [主题_地理深读, 景区_文化]
+voiceStyle:
+  narrativePointOfView: 编辑部
+  tone: 准确、克制、信息密度高
+expertiseClaims: [地理叙事, 专题编辑, 事实核对]
+mustNotClaim: [学术机构背书, 官方调查, 独家资料]

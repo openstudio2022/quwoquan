@@ -1,0 +1,35 @@
+templateId: 榜单_Top榜单
+version: 1
+subject: { kind: topic, type: 旅行/榜单, minEntityRefs: 5, subjectTagRef: Format/内容角度/盘点/Top榜单 }
+vertical: travel
+category: travel
+intent: 盘点
+carrier: article
+styleFamily: 摄影画报风
+audiences: [leisureTraveler, photoTraveler]
+creatorPersona:
+  archetype: travel_blogger
+  preferredCreatorIds: [qwq_creator_travel_blogger_001]
+  requiredProfileTagRefs: [Format/内容角度/盘点/Top榜单, Topic/旅行]
+  allowedPerspective: [编辑部, 第一人称经验]
+  mustNotClaim: [官方排名, 商业合作]
+editorialIntent: 用明确标准做榜单，而不是把地点简单罗列。
+render: { articleTemplate: journal, fontPreset: clean }
+structure:
+  required: [榜单标准, 逐项推荐, 横向对比, 怎么选择, 避坑提醒]
+  optional: [地图分布, 预算区间]
+hooks: ["这份{name}榜单，先说清楚我们按什么标准选", "{name}怎么选？先看这几个差异"]
+mustIncludeFacts: [入选理由, 适合人群, 交通或位置, 优缺点]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 官方榜单]
+wordCount: { min: 1200, max: 2400 }
+imagePlan:
+  - { slot: 榜单封面, imageLayout: fullWidth }
+  - { slot: 逐项图集, gallery: grid }
+  - { slot: 对比信息图, imageLayout: wrapRight }
+crossRefs: { minEntity: 5, minTag: 4 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/article.md

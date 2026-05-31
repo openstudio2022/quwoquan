@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+STACKCTL = ROOT / "agent_ops" / "deploy" / "stackctl.py"
+PORT_PROFILE = ROOT / "agent_ops" / "deploy" / "print_local_port_profile.py"
+TMP = ROOT / "artifacts" / "stackctl-contract"
+
+
+def run(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        argv,
+        cwd=str(ROOT),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def main() -> int:
+    issues: list[str] = []
+
+    help_result = run(["python3", str(STACKCTL), "--help"])
+    if help_result.returncode != 0 or "package" not in help_result.stdout or "deploy" not in help_result.stdout:
+        issues.append("stackctl --help must list package and deploy commands")
+
+    verify_help = run(["python3", str(STACKCTL), "verify", "--help"])
+    if verify_help.returncode != 0 or "--kind" not in verify_help.stdout or "--tier" not in verify_help.stdout:
+        issues.append("stackctl verify --help must expose --kind/--tier")
+
+    health_help = run(["python3", str(STACKCTL), "health", "--help"])
+    if health_help.returncode != 0 or "--scope" not in health_help.stdout:
+        issues.append("stackctl health --help must expose --scope")
+
+    inspect_help = run(["python3", str(STACKCTL), "inspect", "--help"])
+    if inspect_help.returncode != 0 or "--kind" not in inspect_help.stdout:
+        issues.append("stackctl inspect --help must expose --kind alias")
+
+    profile_result = run(
+        ["python3", str(PORT_PROFILE), "--profile", "beta-local", "--format", "json"]
+    )
+    if profile_result.returncode != 0:
+        issues.append("print_local_port_profile beta-local failed")
+    else:
+        payload = json.loads(profile_result.stdout)
+        env_map = payload.get("env") or {}
+        if "GATEWAY_PORT" not in env_map or "MEDIA_PORT" not in env_map or "MEDIA_ORIGIN_PORT" not in env_map:
+            issues.append("beta-local port profile missing gateway/media env exports")
+
+    package_result = run(
+        [
+            "python3",
+            str(STACKCTL),
+            "--output-format",
+            "json",
+            "--report-dir",
+            str(TMP / "package-alpha"),
+            "package",
+            "--env",
+            "alpha",
+        ]
+    )
+    if package_result.returncode != 0:
+        issues.append("stackctl package --env alpha failed")
+    else:
+        payload = json.loads(package_result.stdout)
+        if payload.get("exitCode") != 0:
+            issues.append("stackctl package JSON output exitCode must be 0")
+        if not payload.get("reportDir"):
+            issues.append("stackctl package JSON output missing reportDir")
+        report_dir = ROOT / str(payload.get("reportDir"))
+        if not (report_dir / "summary.json").exists():
+            issues.append("stackctl package must emit summary.json artifact")
+
+    if issues:
+        print("[verify_stackctl_args_contract] FAIL")
+        for issue in issues:
+            print(f"  - {issue}")
+        return 1
+
+    print("[verify_stackctl_args_contract] OK")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

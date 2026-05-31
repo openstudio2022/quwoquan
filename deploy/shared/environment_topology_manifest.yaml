@@ -1,0 +1,345 @@
+{
+  "schemaVersion": "environment-topology/v1",
+  "environments": {
+    "alpha": {
+      "publicBases": {
+        "api": "http://127.0.0.1:17000",
+        "realtime": "ws://127.0.0.1:17000",
+        "productOps": "http://127.0.0.1:17010",
+        "mediaAvatar": "http://127.0.0.1:17100",
+        "mediaImage": "http://127.0.0.1:17100",
+        "mediaVideo": "http://127.0.0.1:17100",
+        "mediaUpload": "http://127.0.0.1:17100"
+      },
+      "subnets": {
+        "edge": "172.30.10.0/24",
+        "media": "172.30.20.0/24",
+        "service": "172.30.30.0/24",
+        "data": "172.30.40.0/24"
+      },
+      "serviceAliases": {
+        "edge": "alpha-edge",
+        "media": "alpha-media",
+        "service": "alpha-service",
+        "data": "alpha-data"
+      },
+      "mockBoundaryFlags": {
+        "apiEdge": true,
+        "mediaEdge": true,
+        "mediaOrigin": true,
+        "servicePlane": true,
+        "dataPlane": true
+      },
+      "artifactPolicy": {
+        "app": {
+          "runtimeEnv": "alpha",
+          "dataSource": "mock",
+          "allowSeeds": true,
+          "allowLocalHosts": true,
+          "allowProdHosts": false,
+          "distribution": "internal-only"
+        },
+        "service": {
+          "allowFixtureRefs": true,
+          "allowReleaseSnapshot": false,
+          "secretScope": "alpha",
+          "distribution": "internal-only"
+        }
+      },
+      "hostAllowlist": ["127.0.0.1", "10.0.2.2", "localhost"],
+      "forbiddenHostTokens": [
+        "api.quwoquan.com",
+        "gamma-api.quwoquan-env.test",
+        "avatar-cdn.quwoquan.com"
+      ],
+      "rolloutStagePolicy": {
+        "mode": "fixed-env",
+        "allowedStages": []
+      }
+    },
+    "beta": {
+      "publicBases": {
+        "api": "http://127.0.0.1:18000",
+        "realtime": "ws://127.0.0.1:18000",
+        "productOps": "http://127.0.0.1:18010",
+        "mediaAvatar": "http://127.0.0.1:18100",
+        "mediaImage": "http://127.0.0.1:18100",
+        "mediaVideo": "http://127.0.0.1:18100",
+        "mediaUpload": "http://127.0.0.1:18100"
+      },
+      "subnets": {
+        "edge": "172.31.10.0/24",
+        "media": "172.31.20.0/24",
+        "service": "172.31.30.0/24",
+        "data": "172.31.40.0/24"
+      },
+      "serviceAliases": {
+        "edge": "beta-edge",
+        "media": "beta-media",
+        "service": "beta-service",
+        "data": "beta-data"
+      },
+      "mockBoundaryFlags": {
+        "apiEdge": false,
+        "mediaEdge": false,
+        "mediaOrigin": false,
+        "servicePlane": false,
+        "dataPlane": false
+      },
+      "artifactPolicy": {
+        "app": {
+          "runtimeEnv": "beta",
+          "dataSource": "remote",
+          "allowSeeds": false,
+          "allowLocalHosts": true,
+          "allowProdHosts": false,
+          "distribution": "internal-only"
+        },
+        "service": {
+          "allowFixtureRefs": true,
+          "allowReleaseSnapshot": true,
+          "secretScope": "beta",
+          "distribution": "internal-only"
+        }
+      },
+      "hostAllowlist": ["127.0.0.1", "10.0.2.2", "localhost"],
+      "forbiddenHostTokens": [
+        "api.quwoquan.com",
+        "gamma-api.quwoquan-env.test",
+        "avatar-cdn.quwoquan.com"
+      ],
+      "rolloutStagePolicy": {
+        "mode": "fixed-env",
+        "allowedStages": []
+      }
+    },
+    "gamma": {
+      "publicBases": {
+        "api": "https://gamma-api.quwoquan-env.test",
+        "realtime": "wss://gamma-api.quwoquan-env.test",
+        "productOps": "https://gamma-product-ops.quwoquan-env.test",
+        "mediaAvatar": "https://gamma-avatar.quwoquan-env.test",
+        "mediaImage": "https://gamma-image.quwoquan-env.test",
+        "mediaVideo": "https://gamma-video.quwoquan-env.test",
+        "mediaUpload": "https://gamma-upload.quwoquan-env.test"
+      },
+      "subnets": {
+        "edge": "172.40.10.0/24",
+        "media": "172.40.20.0/24",
+        "service": "172.40.30.0/24",
+        "data": "172.40.40.0/24"
+      },
+      "serviceAliases": {
+        "edge": "gamma-edge",
+        "media": "gamma-media",
+        "service": "gamma-service",
+        "data": "gamma-data"
+      },
+      "mockBoundaryFlags": {
+        "apiEdge": false,
+        "mediaEdge": false,
+        "mediaOrigin": false,
+        "servicePlane": false,
+        "dataPlane": false
+      },
+      "artifactPolicy": {
+        "app": {
+          "runtimeEnv": "gamma",
+          "dataSource": "remote",
+          "allowSeeds": false,
+          "allowLocalHosts": false,
+          "allowProdHosts": false,
+          "distribution": "pre-release"
+        },
+        "service": {
+          "allowFixtureRefs": false,
+          "allowReleaseSnapshot": true,
+          "secretScope": "gamma",
+          "distribution": "pre-release"
+        }
+      },
+      "hostAllowlist": [
+        "gamma-api.quwoquan-env.test",
+        "gamma-product-ops.quwoquan-env.test",
+        "gamma-avatar.quwoquan-env.test",
+        "gamma-image.quwoquan-env.test",
+        "gamma-video.quwoquan-env.test",
+        "gamma-upload.quwoquan-env.test"
+      ],
+      "forbiddenHostTokens": ["api.quwoquan.com", "avatar-cdn.quwoquan.com"],
+      "rolloutStagePolicy": {
+        "mode": "fixed-env",
+        "allowedStages": []
+      }
+    },
+    "prod": {
+      "publicBases": {
+        "api": "https://api.quwoquan.com",
+        "realtime": "wss://api.quwoquan.com",
+        "productOps": "https://product-ops.quwoquan.com",
+        "mediaAvatar": "https://avatar-cdn.quwoquan.com",
+        "mediaImage": "https://image-cdn.quwoquan.com",
+        "mediaVideo": "https://video-cdn.quwoquan.com",
+        "mediaUpload": "https://upload.quwoquan.com"
+      },
+      "subnets": {
+        "edge": "10.60.10.0/24",
+        "media": "10.60.20.0/24",
+        "service": "10.60.30.0/24",
+        "data": "10.60.40.0/24"
+      },
+      "serviceAliases": {
+        "edge": "prod-edge",
+        "media": "prod-media",
+        "service": "prod-service",
+        "data": "prod-data"
+      },
+      "mockBoundaryFlags": {
+        "apiEdge": false,
+        "mediaEdge": false,
+        "mediaOrigin": false,
+        "servicePlane": false,
+        "dataPlane": false
+      },
+      "artifactPolicy": {
+        "app": {
+          "runtimeEnv": "prod",
+          "dataSource": "remote",
+          "allowSeeds": false,
+          "allowLocalHosts": false,
+          "allowProdHosts": true,
+          "distribution": "store-release"
+        },
+        "service": {
+          "allowFixtureRefs": false,
+          "allowReleaseSnapshot": true,
+          "secretScope": "prod",
+          "distribution": "store-release"
+        }
+      },
+      "hostAllowlist": [
+        "api.quwoquan.com",
+        "product-ops.quwoquan.com",
+        "avatar-cdn.quwoquan.com",
+        "image-cdn.quwoquan.com",
+        "video-cdn.quwoquan.com",
+        "upload.quwoquan.com"
+      ],
+      "forbiddenHostTokens": [
+        ".test",
+        ".example",
+        "127.0.0.1",
+        "10.0.2.2",
+        "192.168."
+      ],
+      "rolloutStagePolicy": {
+        "mode": "prod-rollout",
+        "allowedStages": ["gray-initial", "carry-on", "full"]
+      }
+    }
+  },
+  "targets": {
+    "alpha-local": {
+      "env": "alpha",
+      "backend": "local",
+      "portProfile": "alpha-local",
+      "publicBases": {
+        "api": "http://127.0.0.1:17000",
+        "realtime": "ws://127.0.0.1:17000",
+        "productOps": "http://127.0.0.1:17010",
+        "mediaAvatar": "http://127.0.0.1:17100",
+        "mediaImage": "http://127.0.0.1:17100",
+        "mediaVideo": "http://127.0.0.1:17100",
+        "mediaUpload": "http://127.0.0.1:17100"
+      },
+      "origins": {
+        "mediaOrigin": "http://127.0.0.1:17110"
+      }
+    },
+    "beta-local": {
+      "env": "beta",
+      "backend": "local",
+      "portProfile": "beta-local",
+      "publicBases": {
+        "api": "http://127.0.0.1:18000",
+        "realtime": "ws://127.0.0.1:18000",
+        "productOps": "http://127.0.0.1:18010",
+        "mediaAvatar": "http://127.0.0.1:18100",
+        "mediaImage": "http://127.0.0.1:18100",
+        "mediaVideo": "http://127.0.0.1:18100",
+        "mediaUpload": "http://127.0.0.1:18100"
+      },
+      "origins": {
+        "mediaOrigin": "http://127.0.0.1:18110"
+      }
+    },
+    "gamma-local": {
+      "env": "gamma",
+      "backend": "local",
+      "portProfile": "gamma-local",
+      "publicBases": {
+        "api": "http://127.0.0.1:19000",
+        "realtime": "ws://127.0.0.1:19000",
+        "productOps": "http://127.0.0.1:19010",
+        "mediaAvatar": "http://127.0.0.1:19100",
+        "mediaImage": "http://127.0.0.1:19100",
+        "mediaVideo": "http://127.0.0.1:19100",
+        "mediaUpload": "http://127.0.0.1:19100"
+      },
+      "origins": {
+        "mediaOrigin": "http://127.0.0.1:19110"
+      }
+    },
+    "gamma-hosted": {
+      "env": "gamma",
+      "backend": "ssh-hosted",
+      "portProfile": null,
+      "publicBases": {
+        "api": "https://gamma-api.quwoquan-env.test",
+        "realtime": "wss://gamma-api.quwoquan-env.test",
+        "productOps": "https://gamma-product-ops.quwoquan-env.test",
+        "mediaAvatar": "https://gamma-avatar.quwoquan-env.test",
+        "mediaImage": "https://gamma-image.quwoquan-env.test",
+        "mediaVideo": "https://gamma-video.quwoquan-env.test",
+        "mediaUpload": "https://gamma-upload.quwoquan-env.test"
+      },
+      "origins": {
+        "mediaOrigin": "https://gamma-origin.quwoquan-env.test"
+      }
+    },
+    "prod-sim": {
+      "env": "prod",
+      "backend": "local",
+      "portProfile": "prod-sim",
+      "publicBases": {
+        "api": "http://127.0.0.1:20000",
+        "realtime": "ws://127.0.0.1:20000",
+        "productOps": "http://127.0.0.1:20010",
+        "mediaAvatar": "http://127.0.0.1:20100",
+        "mediaImage": "http://127.0.0.1:20100",
+        "mediaVideo": "http://127.0.0.1:20100",
+        "mediaUpload": "http://127.0.0.1:20100"
+      },
+      "origins": {
+        "mediaOrigin": "http://127.0.0.1:20110"
+      }
+    },
+    "prod-hosted": {
+      "env": "prod",
+      "backend": "workflow",
+      "portProfile": null,
+      "publicBases": {
+        "api": "https://api.quwoquan.com",
+        "realtime": "wss://api.quwoquan.com",
+        "productOps": "https://product-ops.quwoquan.com",
+        "mediaAvatar": "https://avatar-cdn.quwoquan.com",
+        "mediaImage": "https://image-cdn.quwoquan.com",
+        "mediaVideo": "https://video-cdn.quwoquan.com",
+        "mediaUpload": "https://upload.quwoquan.com"
+      },
+      "origins": {
+        "mediaOrigin": "https://media-origin.quwoquan.com"
+      }
+    }
+  }
+}

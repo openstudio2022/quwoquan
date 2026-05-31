@@ -1,0 +1,12 @@
+{
+  "templateId": "学校_校园日记",
+  "entityType": "学校",
+  "angle": "校园日记",
+  "description": "校园四季与日常点滴记录",
+  "requiredSections": ["校园四季", "日常记录"],
+  "optionalSections": ["难忘瞬间", "毕业寄语"],
+  "minWordCount": 600,
+  "maxWordCount": 1200,
+  "imageMinCount": 2,
+  "tone": "感性、真实、有画面感"
+}

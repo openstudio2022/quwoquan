@@ -1,0 +1,39 @@
+templateId: 主题_风物美食
+version: 1
+subject: { kind: topic, type: 旅行/主题, minEntityRefs: 3, subjectTagRef: Topic/美食餐饮/特色食材/应季食材 }
+vertical: travel
+category: travel
+intent: 深度报道
+carrier: article
+styleFamily: 地理画报风
+audiences: [foodieReader, leisureTraveler]
+creatorPersona:
+  archetype: food_columnist
+  preferredCreatorIds: [qwq_creator_food_columnist_001]
+  requiredProfileTagRefs: [Topic/美食餐饮/菜系/中国菜系, Format/内容角度/科普/知识科普]
+  allowedPerspective: [编辑部, 专家]
+  mustNotClaim: [餐厅商业合作, 米其林评级, 官方认证]
+editorialIntent: 从产地、时令和做法解释一地的味道，把美食放回地理与物产的语境。
+render: { articleTemplate: journal, fontPreset: classic }
+conditionAxes:
+  region: { applicable: true, slot: 产地与物产 }
+  season: { applicable: true, slot: 时令窗口 }
+structure:
+  required: [风味由来, 产地与物产, 时令与做法, 在地吃法, 延伸阅读]
+  optional: [食材地图, 老字号与摊点]
+hooks: ["{name}的味道，先从它的产地和时令说起", "懂了物产，才懂{name}为什么这么吃"]
+mustIncludeFacts: [代表风味, 主要食材产地, 时令窗口, 典型做法, 信息来源]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 国家地理]
+wordCount: { min: 1400, max: 2800 }
+imagePlan:
+  - { slot: 风味封面, imageLayout: fullWidth, visualStyle: 纪实风 }
+  - { slot: 食材产地图, imageLayout: wrapRight }
+  - { slot: 制作过程, gallery: masonry }
+  - { slot: 成品与场景, gallery: grid }
+crossRefs: { minEntity: 3, minTag: 5 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/article.md

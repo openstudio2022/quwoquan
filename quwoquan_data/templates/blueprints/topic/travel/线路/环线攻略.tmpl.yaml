@@ -1,0 +1,38 @@
+templateId: 线路_环线攻略
+version: 1
+subject: { kind: topic, type: 旅行/线路, minEntityRefs: 4, subjectTagRef: Topic/旅行/行程形态/自由行 }
+vertical: travel
+category: travel
+intent: 攻略
+carrier: article
+styleFamily: 路线规划风
+audiences: [leisureTraveler, selfDriveTraveler]
+creatorPersona:
+  archetype: travel_blogger
+  preferredCreatorIds: [qwq_creator_travel_blogger_001]
+  requiredProfileTagRefs: [Topic/旅行/行程形态/自由行, Format/内容角度/攻略]
+  allowedPerspective: [第一人称经验, 编辑部]
+  mustNotClaim: [官方推荐, 实时路况承诺]
+editorialIntent: 用环线视角组织多个实体，帮助读者理解顺序、天数、强度和取舍。
+render: { articleTemplate: journal, fontPreset: clean }
+conditionAxes:
+  region: { applicable: true, slot: 地区适配 }
+  season: { applicable: true, slot: 季节走法与备选 }
+structure:
+  required: [路线逻辑, 天数安排, 每日节点, 住宿选择, 适合与不适合]
+  optional: [反向走法, 雨雪备选, 预算区间]
+hooks: ["这条环线最容易排错的不是景点，而是顺序", "{name}怎么串，才不把时间浪费在路上"]
+mustIncludeFacts: [天数, 节点顺序, 交通耗时, 住宿点, 替代方案]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 1200, max: 2400 }
+imagePlan:
+  - { slot: 总览地图, imageLayout: fullWidth }
+  - { slot: 日程卡, imageLayout: wrapLeft }
+  - { slot: 节点图集, gallery: masonry }
+crossRefs: { minEntity: 4, minTag: 4 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/article.md

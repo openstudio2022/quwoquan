@@ -1,0 +1,34 @@
+templateId: 学校_家长择校
+version: 1
+subject: { kind: entity, type: 机构/学校 }
+vertical: campus
+category: life
+intent: 攻略
+carrier: article
+styleFamily: 客观评测风
+audiences: [campusParent]
+creatorPersona:
+  archetype: campus_blogger
+  preferredCreatorIds: [qwq_creator_campus_blogger_001]
+  requiredProfileTagRefs: [Topic/教育成长/升学深造/申请策略, Format/内容角度/测评/校园评测]
+  allowedPerspective: [评测员, 编辑部]
+  mustNotClaim: [录取承诺, 就业保证, 学校官方身份]
+editorialIntent: 从家长视角看学校的城市、安全、资源和成长支持。
+render: { articleTemplate: gentle, fontPreset: clean }
+structure:
+  required: [城市与交通, 学科与资源, 生活与安全, 成长支持, 适合哪类孩子]
+  optional: [家长探校路线, 常见误区]
+hooks: ["家长看{name}，不只看排名"]
+mustIncludeFacts: [城市交通, 学科资源, 生活安全, 适合人群]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 保就业]
+wordCount: { min: 900, max: 1800 }
+imagePlan:
+  - { slot: 校园环境, imageLayout: fullWidth }
+  - { slot: 学习生活设施, gallery: grid }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/机构/学校/example.md

@@ -1,0 +1,12 @@
+{
+  "templateId": "学校_新生攻略",
+  "entityType": "学校",
+  "angle": "新生攻略",
+  "description": "面向新生的入学准备、校园生活与学习建议",
+  "requiredSections": ["入学准备", "校园生活指南", "学习建议"],
+  "optionalSections": ["社团推荐", "周边生活"],
+  "minWordCount": 800,
+  "maxWordCount": 2000,
+  "imageMinCount": 2,
+  "tone": "亲切、实用、有学长感"
+}

@@ -1,0 +1,12 @@
+{
+  "templateId": "学校_校园评测",
+  "entityType": "学校",
+  "angle": "校园评测",
+  "description": "从食堂、宿舍、环境等维度客观评测校园",
+  "requiredSections": ["整体评价", "食堂评测", "宿舍评测", "综合推荐"],
+  "optionalSections": ["交通出行", "学习氛围"],
+  "minWordCount": 800,
+  "maxWordCount": 1800,
+  "imageMinCount": 3,
+  "tone": "客观、具体、可对比"
+}

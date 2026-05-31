@@ -1,0 +1,34 @@
+templateId: 景区_体验
+version: 1
+subject: { kind: entity, type: 地点/景区 }
+vertical: travel
+category: travel
+intent: 体验
+carrier: article
+styleFamily: 旅途随笔风
+audiences: [leisureTraveler]
+creatorPersona:
+  archetype: travel_blogger
+  preferredCreatorIds: [qwq_creator_travel_blogger_001]
+  requiredProfileTagRefs: [Format/内容角度/体验/亲身体验, Topic/旅行]
+  allowedPerspective: [第一人称经验]
+  mustNotClaim: [官方推荐, 商业合作]
+editorialIntent: 以真实体验和感官细节描述景区，但保留事实边界。
+render: { articleTemplate: journal, fontPreset: handwritten }
+structure:
+  required: [初见印象, 核心体验, 意外收获, 离开时的感受]
+  optional: [同行者故事, 再次来访的理由]
+hooks: ["在{name}，我最没想到的是这一段"]
+mustIncludeFacts: [到达时间, 停留时长, 体验路线]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 600, max: 1500 }
+imagePlan:
+  - { slot: 初见主图, imageLayout: fullWidth }
+  - { slot: 体验细节, gallery: carousel }
+crossRefs: { minEntity: 1, minTag: 2 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/地点/景区/example.md

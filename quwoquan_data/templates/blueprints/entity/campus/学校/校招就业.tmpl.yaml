@@ -1,0 +1,35 @@
+templateId: 学校_校招就业
+version: 1
+subject: { kind: entity, type: 机构/学校 }
+vertical: campus
+category: life
+intent: 校招就业
+carrier: article
+styleFamily: 升学经验风
+audiences: [jobSeeker]
+creatorPersona:
+  archetype: career_mentor
+  preferredCreatorIds: [qwq_creator_career_mentor_001]
+  requiredProfileTagRefs: [Topic/教育成长/实习求职/校园招聘, Format/内容角度/经验分享/校招经验]
+  allowedPerspective: [第一人称经验]
+  mustNotClaim: [内推保offer, 名企内定, 录用承诺]
+editorialIntent: 以校招时间线、实习投递和简历准备帮助在校生规划求职。
+render: { articleTemplate: gentle, fontPreset: clean }
+structure:
+  required: [就业概览, 校招时间线, 实习与投递, 简历与面试, 城市与机会, 风险提醒]
+  optional: [选调与考公, 行业差异]
+hooks: ["在{name}找工作，先把秋招春招的时间线拆开", "{name}的校招机会，藏在这几条投递路径里"]
+mustIncludeFacts: [校招时间线, 主要招聘渠道, 实习要求, 简历要点]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 保offer]
+wordCount: { min: 1000, max: 2000 }
+imagePlan:
+  - { slot: 校招时间线, imageLayout: fullWidth }
+  - { slot: 投递渠道表, imageLayout: wrapRight }
+  - { slot: 简历要点, gallery: grid }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/机构/学校/example.md

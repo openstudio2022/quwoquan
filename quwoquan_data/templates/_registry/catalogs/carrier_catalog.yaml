@@ -1,0 +1,23 @@
+version: 1
+carriers:
+  article:
+    contentType: article
+    tagRefs:
+      - Format/内容载体/文章/长文
+    defaultMinWordCount: 800
+  image:
+    contentType: image
+    tagRefs:
+      - Format/内容载体/图文/图集
+    defaultMinImageCount: 6
+  review:
+    contentType: article
+    tagRefs:
+      - Format/内容载体/文章/测评文
+    defaultMinWordCount: 600
+    recommendationTypeHint: review
+  video:
+    contentType: video
+    tagRefs:
+      - Format/内容载体/视频/中视频
+    defaultMinDurationSeconds: 45

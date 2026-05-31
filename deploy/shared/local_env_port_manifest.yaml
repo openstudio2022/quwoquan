@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "local-env-port-manifest/v1",
+  "planes": {
+    "edge": {
+      "offsetStart": 0,
+      "offsetEnd": 99
+    },
+    "media": {
+      "offsetStart": 100,
+      "offsetEnd": 199
+    },
+    "service": {
+      "offsetStart": 200,
+      "offsetEnd": 399
+    },
+    "dataDebug": {
+      "offsetStart": 400,
+      "offsetEnd": 499
+    }
+  },
+  "roles": {
+    "api-edge": {
+      "plane": "edge",
+      "slotOffset": 0
+    },
+    "product-ops-edge": {
+      "plane": "edge",
+      "slotOffset": 10
+    },
+    "platform-ops-edge": {
+      "plane": "edge",
+      "slotOffset": 20
+    },
+    "ops-portal": {
+      "plane": "edge",
+      "slotOffset": 30
+    },
+    "media-edge": {
+      "plane": "media",
+      "slotOffset": 100
+    },
+    "media-origin": {
+      "plane": "media",
+      "slotOffset": 110
+    },
+    "media-processor": {
+      "plane": "media",
+      "slotOffset": 120
+    },
+    "chat-service": {
+      "plane": "service",
+      "slotOffset": 200
+    },
+    "user-service": {
+      "plane": "service",
+      "slotOffset": 210
+    },
+    "content-service": {
+      "plane": "service",
+      "slotOffset": 220
+    },
+    "assistant-service": {
+      "plane": "service",
+      "slotOffset": 230
+    },
+    "rec-model-service": {
+      "plane": "service",
+      "slotOffset": 240
+    },
+    "product-ops-service": {
+      "plane": "service",
+      "slotOffset": 250
+    },
+    "platform-ops-service": {
+      "plane": "service",
+      "slotOffset": 260
+    },
+    "postgres": {
+      "plane": "dataDebug",
+      "slotOffset": 400
+    },
+    "mongodb": {
+      "plane": "dataDebug",
+      "slotOffset": 410
+    },
+    "redis": {
+      "plane": "dataDebug",
+      "slotOffset": 420
+    }
+  },
+  "profiles": {
+    "alpha-local": {
+      "blockStart": 17000,
+      "blockEnd": 17999
+    },
+    "beta-local": {
+      "blockStart": 18000,
+      "blockEnd": 18999
+    },
+    "gamma-local": {
+      "blockStart": 19000,
+      "blockEnd": 19999
+    },
+    "prod-sim": {
+      "blockStart": 20000,
+      "blockEnd": 20999
+    }
+  }
+}

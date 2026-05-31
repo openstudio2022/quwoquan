@@ -1,0 +1,38 @@
+templateId: 线路_周末短途
+version: 1
+subject: { kind: topic, type: 旅行/线路, minEntityRefs: 1, subjectTagRef: Topic/旅行/旅行时长/周末短途 }
+vertical: travel
+category: travel
+intent: 攻略
+carrier: article
+styleFamily: 实用攻略风
+audiences: [weekendLocalTraveler, leisureTraveler]
+creatorPersona:
+  archetype: travel_blogger
+  preferredCreatorIds: [qwq_creator_travel_blogger_001]
+  requiredProfileTagRefs: [Topic/旅行/旅行时长/周末短途, Format/内容角度/攻略]
+  allowedPerspective: [第一人称经验, 编辑部]
+  mustNotClaim: [官方推荐, 最低价承诺]
+editorialIntent: 为成都及周边常住者设计 1–2 日周末短途，兼顾自驾与公共交通的可执行动线。
+render: { articleTemplate: journal, fontPreset: clean }
+conditionAxes:
+  region: { applicable: true, slot: 目的地与天气 }
+  season: { applicable: true, slot: 季节人流与备选 }
+structure:
+  required: [周末动线, 交通方式, 时间安排, 费用区间, 避坑与备选]
+  optional: [周边串联, 亲子/老人注意]
+hooks: ["周末不想宅家，这条线从成都出发刚好", "{name}适合周末慢慢走，关键是别把时间耗在路上"]
+mustIncludeFacts: [出发地, 单程耗时, 交通方式, 门票或预约, 返程时间]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 900, max: 1800 }
+imagePlan:
+  - { slot: 目的地封面, imageLayout: fullWidth }
+  - { slot: 动线示意, imageLayout: wrapRight }
+  - { slot: 场景图集, gallery: grid }
+crossRefs: { minEntity: 1, minTag: 4 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin, recommendationWeight]
+sopExampleRef: sop/article.md

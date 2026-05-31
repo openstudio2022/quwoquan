@@ -58,8 +58,9 @@ def assemble_release(task_id: str, release_id: str) -> Path:
                         for topic_dir in type_dir.iterdir():
                             if topic_dir.is_dir():
                                 dst_topic = dst_type / topic_dir.name
-                                if not dst_topic.exists():
-                                    shutil.copytree(topic_dir, dst_topic)
+                                if dst_topic.exists():
+                                    shutil.rmtree(dst_topic)
+                                shutil.copytree(topic_dir, dst_topic)
 
     # Release manifest
     write_json(root / "release_manifest.json", {

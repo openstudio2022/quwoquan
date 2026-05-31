@@ -1,0 +1,38 @@
+templateId: 线路_银发慢游
+version: 1
+subject: { kind: topic, type: 旅行/线路, minEntityRefs: 2, subjectTagRef: Format/内容角度/攻略/银发专享 }
+vertical: travel
+category: travel
+intent: 攻略
+carrier: article
+styleFamily: 银发慢游风
+audiences: [seniorTraveler]
+creatorPersona:
+  archetype: pro_guide
+  preferredCreatorIds: [qwq_creator_pro_guide_001]
+  requiredProfileTagRefs: [Format/内容角度/攻略/银发专享, Topic/旅行/玩法/观光游览]
+  allowedPerspective: [专业导览, 编辑部]
+  mustNotClaim: [医疗建议, 官方背书]
+editorialIntent: 为银发读者设计低强度、少换乘、重舒适和安全边界的慢游线路。
+render: { articleTemplate: gentle, fontPreset: clean }
+conditionAxes:
+  region: { applicable: true, slot: 地区舒适度与医疗 }
+  season: { applicable: true, slot: 季节舒适窗口 }
+structure:
+  required: [强度判断, 交通与换乘, 休息点, 医疗与厕所, 舒适住宿, 替代方案]
+  optional: [陪同者建议, 雨天版本]
+hooks: ["{name}慢慢走，关键是少折腾和有退路"]
+mustIncludeFacts: [步行强度, 换乘次数, 休息点, 医疗点, 住宿舒适度]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 医疗保证]
+wordCount: { min: 900, max: 1800 }
+imagePlan:
+  - { slot: 慢游路线, imageLayout: fullWidth }
+  - { slot: 休息点, imageLayout: wrapRight }
+  - { slot: 舒适住宿, gallery: grid }
+crossRefs: { minEntity: 2, minTag: 4 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/article.md

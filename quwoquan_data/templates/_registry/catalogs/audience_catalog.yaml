@@ -1,0 +1,77 @@
+version: 1
+audiences:
+  leisureTraveler:
+    vertical: travel
+    label: 休闲游客
+    voice: 实用、有温度、少术语
+    tagRefs: [Topic/旅行/旅行筹备/行前规划]
+  budgetStudent:
+    vertical: travel
+    label: 学生穷游者
+    voice: 预算敏感、重视公共交通和性价比
+    tagRefs: [Topic/旅行/住宿/青旅住宿, Topic/旅行/旅行筹备/行前规划]
+  photoTraveler:
+    vertical: travel
+    label: 摄影爱好者
+    voice: 关注光线、机位、焦段和拍摄限制
+    tagRefs: [Topic/旅行/玩法/摄影旅拍]
+  familyTraveler:
+    vertical: travel
+    label: 亲子家庭
+    voice: 重视安全、距离、休息点和可替代方案
+    tagRefs: [Topic/旅行/玩法/研学游学, Topic/旅行/住宿/亲子住宿]
+  selfDriveTraveler:
+    vertical: travel
+    label: 自驾旅行者
+    voice: 重视里程、路况、补给和风险
+    tagRefs: [Topic/旅行/出行方式/自驾]
+  seniorTraveler:
+    vertical: travel
+    label: 银发慢游者
+    voice: 慢节奏、低风险、重视舒适度
+    tagRefs: [Topic/旅行/玩法/观光游览]
+  foodieReader:
+    vertical: travel
+    label: 美食旅行者
+    voice: 关注风味、物产、产地与时令，重在地体验
+    tagRefs: [Topic/美食餐饮/菜系/中国菜系]
+  freshmanStudent:
+    vertical: campus
+    label: 准新生
+    voice: 学长姐口吻，先讲报到和适应
+    tagRefs: [Topic/教育成长/校园生活/开学季, Format/内容角度/攻略/新生攻略]
+  prospectiveStudent:
+    vertical: campus
+    label: 择校学生
+    voice: 客观比较学校氛围、学科和生活
+    tagRefs: [Format/内容角度/测评/校园评测]
+  campusParent:
+    vertical: campus
+    label: 家长
+    voice: 关注安全、学业支持、城市与就业
+    tagRefs: [Topic/教育成长/升学深造/申请策略]
+  examCandidate:
+    vertical: campus
+    label: 考研备考者
+    voice: 务实、拆解时间线和风险
+    tagRefs: [Topic/教育成长/升学深造/考研, Format/内容角度/经验分享/考研经验]
+  jobSeeker:
+    vertical: campus
+    label: 求职学生
+    voice: 看重实习、校招、简历和城市机会
+    tagRefs: [Topic/教育成长/实习求职/校园招聘]
+  weekendLocalTraveler:
+    vertical: travel
+    label: 成都周末短途客
+    voice: 重视 1–2 日动线、公共交通与周末人流
+    tagRefs: [Topic/旅行/旅行时长/周末短途, Topic/旅行/出行方式/公共交通]
+  groupTourTraveler:
+    vertical: travel
+    label: 跟团游客
+    voice: 关注成团、行程强度、自费与退改
+    tagRefs: [Topic/旅行/行程形态/跟团游, Topic/旅行/出行方式/跟团巴士]
+  hubInboundTraveler:
+    vertical: travel
+    label: 外地入川游客
+    voice: 先算大交通到成都，再衔接川西段
+    tagRefs: [Topic/旅行/出行方式/高铁铁路, Topic/旅行/出行方式/飞机航班, Topic/旅行/行程形态/自由行]

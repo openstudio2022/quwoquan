@@ -1,0 +1,34 @@
+templateId: 博物馆_体验
+version: 1
+subject: { kind: entity, type: 地点/博物馆 }
+vertical: travel
+category: humanity
+intent: 体验
+carrier: article
+styleFamily: 旅途随笔风
+audiences: [leisureTraveler]
+creatorPersona:
+  archetype: travel_blogger
+  preferredCreatorIds: [qwq_creator_travel_blogger_001]
+  requiredProfileTagRefs: [Topic/旅行/玩法/博物馆展览, Format/内容角度/体验/亲身体验]
+  allowedPerspective: [第一人称经验]
+  mustNotClaim: [官方讲解员身份, 商业合作]
+editorialIntent: 从真实参观体验写博物馆，兼顾展品亮点和动线建议。
+render: { articleTemplate: journal, fontPreset: handwritten }
+structure:
+  required: [进馆第一印象, 最停留的展厅, 一个展品故事, 参观动线, 离开后的感受]
+  optional: [亲子体验, 周边咖啡]
+hooks: ["在{name}，我停留最久的是这个展柜"]
+mustIncludeFacts: [参观时间, 推荐动线, 停留展厅]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 700, max: 1600 }
+imagePlan:
+  - { slot: 外观, imageLayout: fullWidth }
+  - { slot: 展陈细节, gallery: carousel }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/地点/博物馆/example.md

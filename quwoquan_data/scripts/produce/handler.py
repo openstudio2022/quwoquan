@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 
 from _common.paths import ensure_batch_layout, batch_command_root
+from produce.materialize import materialize_posts
 
 
 CONTENT_TYPES = ("article", "image", "video")
@@ -34,10 +35,19 @@ def handle_produce(args: argparse.Namespace) -> None:
     print(f"[produce] Posts output: {produce_root}/posts/{content_type}/")
     print(f"[produce] Ready for Agent semantic processing.")
 
+    if getattr(args, "materialize", False):
+        paths = materialize_posts(task_id, batch_id, content_type)
+        print(f"[produce] Materialized {len(paths)} approved post package(s).")
+
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("produce", help="Produce content (article/image/video)")
     p.add_argument("--task", required=True, help="Task ID")
     p.add_argument("--batch", required=True, help="Batch ID")
     p.add_argument("--type", required=True, choices=CONTENT_TYPES, help="Content type")
+    p.add_argument(
+        "--materialize",
+        action="store_true",
+        help="Materialize approved review results into produce/posts/",
+    )
     p.set_defaults(handler=handle_produce)

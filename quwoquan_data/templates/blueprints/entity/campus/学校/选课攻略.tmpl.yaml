@@ -1,0 +1,34 @@
+templateId: 学校_选课攻略
+version: 1
+subject: { kind: entity, type: 机构/学校 }
+vertical: campus
+category: life
+intent: 选课攻略
+carrier: article
+styleFamily: 学长姐攻略风
+audiences: [freshmanStudent]
+creatorPersona:
+  archetype: student_mentor
+  preferredCreatorIds: [qwq_creator_student_mentor_001]
+  requiredProfileTagRefs: [Format/内容角度/攻略/选课攻略, Topic/教育成长/学业学术/选课指南]
+  allowedPerspective: [学长姐]
+  mustNotClaim: [官方教务规则承诺, 保绩点]
+editorialIntent: 用时间线和决策标准帮助学生理解选课，不替代官方教务信息。
+render: { articleTemplate: gentle, fontPreset: clean }
+structure:
+  required: [选课前准备, 必修与通识, 抢课策略, 退补选, 风险提醒]
+  optional: [高年级建议, GPA管理]
+hooks: ["在{name}选课，先别只看老师评分"]
+mustIncludeFacts: [选课阶段, 课程类型, 风险提醒]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 800, max: 1600 }
+imagePlan:
+  - { slot: 流程图, imageLayout: fullWidth }
+  - { slot: checklist, imageLayout: wrapRight }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/机构/学校/example.md

@@ -1,0 +1,34 @@
+templateId: 餐厅_探店
+version: 1
+subject: { kind: entity, type: 地点/餐厅 }
+vertical: travel
+category: food
+intent: 探店
+carrier: review
+styleFamily: 探店点评风
+audiences: [leisureTraveler]
+creatorPersona:
+  archetype: travel_blogger
+  preferredCreatorIds: [qwq_creator_travel_blogger_001]
+  requiredProfileTagRefs: [Format/内容角度/探店/餐厅探店]
+  allowedPerspective: [评测员, 第一人称经验]
+  mustNotClaim: [商业合作, 官方推荐]
+editorialIntent: 用真实探店结构说明是否值得专程去、适合谁、怎么点。
+render: { articleTemplate: gentle, fontPreset: clean }
+structure:
+  required: [到店场景, 招牌与点单, 味道与服务, 价格与排队, 适合人群]
+  optional: [替代选择, 周边串联]
+hooks: ["{name}值得排队吗？先说结论"]
+mustIncludeFacts: [价格, 地址或片区, 招牌菜, 适合人群]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 恰饭]
+wordCount: { min: 600, max: 1400 }
+imagePlan:
+  - { slot: 门头环境, imageLayout: fullWidth }
+  - { slot: 菜品细节, gallery: grid }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/地点/餐厅/example.md

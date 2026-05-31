@@ -14,9 +14,15 @@ if [ -d "$ROOT/scripts" ]; then
   exit 1
 fi
 
+bash agent_ops/scaffold/verify_global_increment_constraints.sh
+
 run_service() {
   echo "[gate] quwoquan_service"
   bash agent_ops/scaffold/verify_feature_traceability.sh
+  python3 agent_ops/gate/verify_stackctl_args_contract.py
+  python3 agent_ops/gate/verify_environment_topology_manifest.py
+  python3 agent_ops/gate/verify_local_env_port_manifest.py
+  python3 agent_ops/gate/verify_prod_rollout_stackctl_contract.py
   bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
   python3 quwoquan_service/scripts/contract/verify_tag_ref_source_of_truth.py
   bash agent_ops/scaffold/verify_acceptance_standard.sh
@@ -39,9 +45,11 @@ run_service() {
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
   bash quwoquan_service/scripts/runtime/verify_service_config_layout.sh
   bash quwoquan_service/scripts/runtime/verify_service_env_contract.sh
+  python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   bash quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh
   bash quwoquan_service/scripts/deploy/verify_config_image_compat.sh
   bash quwoquan_service/scripts/deploy/verify_config_pr_policy.sh
+  make verify-env-packaging
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
   dart tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
@@ -75,6 +83,7 @@ run_app() {
     #   - acceptance.yaml 引用的测试文件必须存在
     python3 agent_ops/assistant/verify_degraded_response_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py || exit 1
     # 页面 A/B/C：默认 --quiet 仅汇总、不阻断；GATE_PAGE_ABC_ENFORCE 见 specs/gates/page_abc_governance.md
@@ -116,6 +125,7 @@ run_app() {
     python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py || exit 1
+    python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py || exit 1
     python3 quwoquan_service/scripts/contract/verify_metadata_service_entities_vs_fields.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
     python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py || exit 1
@@ -129,7 +139,7 @@ run_app() {
     python3 quwoquan_service/scripts/gamma/verify_gamma_validation_profiles.py || exit 1
     python3 agent_ops/ci/verify_ci_profile_consistency.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_app_seed_manifests, verify_business_env_data_inventory, verify_pageflip_backward_mainline"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_app_seed_manifests, verify_business_env_data_inventory, verify_pageflip_backward_mainline"
   fi
   # L1 content tests (L1a contract, L1b widget, L1c journey) — fast, no external deps
   # Paths follow: test/{layer}/{domain}/{entity}/{test_type}/ (see .cursor/rules/03-testing.mdc §3)
@@ -197,6 +207,15 @@ run_portal() {
   npm run ops-portal:build
 }
 
+run_data() {
+  echo "[gate] quwoquan_data"
+  python3 quwoquan_data/scripts/cli.py template lint
+  python3 quwoquan_data/scripts/cli.py template creator-lint
+  python3 quwoquan_data/scripts/cli.py template rec-contract
+  python3 quwoquan_data/scripts/cli.py template region-season-lint
+  python3 quwoquan_data/scripts/verify_content_quality.py
+}
+
 echo "[gate] repo quality gate (scope=$scope)"
 
 run_patrol_local() {
@@ -212,6 +231,7 @@ run_patrol_local() {
 case "$scope" in
   all)
     run_service
+    run_data
     run_app
     run_portal
     ;;
@@ -224,11 +244,14 @@ case "$scope" in
   portal|ops-portal)
     run_portal
     ;;
+  data)
+    run_data
+    ;;
   patrol)
     run_patrol_local
     ;;
   *)
-    echo "[gate] FAIL: invalid scope: $scope (expected all|service|app|portal|patrol)" 1>&2
+    echo "[gate] FAIL: invalid scope: $scope (expected all|service|app|portal|data|patrol)" 1>&2
     exit 2
     ;;
 esac

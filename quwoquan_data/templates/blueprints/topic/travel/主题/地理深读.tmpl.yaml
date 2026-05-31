@@ -1,0 +1,39 @@
+templateId: 主题_地理深读
+version: 1
+subject: { kind: topic, type: 旅行/主题, minEntityRefs: 2, subjectTagRef: Topic/旅行/旅行主题/文化深度游 }
+vertical: travel
+category: travel
+intent: 深度报道
+carrier: article
+styleFamily: 地理画报风
+audiences: [leisureTraveler, photoTraveler]
+creatorPersona:
+  archetype: geo_editor
+  preferredCreatorIds: [qwq_creator_geo_editor_001]
+  requiredProfileTagRefs: [Format/内容角度/资讯/深度报道, Format/内容角度/科普/知识科普]
+  allowedPerspective: [编辑部, 专家]
+  mustNotClaim: [学术机构背书, 独家资料]
+editorialIntent: 用地理、交通、气候和人的关系解释一个旅行主题，而不是堆砌景点。
+render: { articleTemplate: journal, fontPreset: classic }
+conditionAxes:
+  region: { applicable: true, slot: 区域地貌脉络 }
+  season: { applicable: true, slot: 季节窗口与物候 }
+structure:
+  required: [地理问题, 区域脉络, 地貌与季节, 人与路线, 旅行观察]
+  optional: [地图信息图, 图说长卷, 延伸阅读]
+hooks: ["为什么{name}会让人一去再去？答案藏在地理里", "看懂{name}，先看懂它的山、河和路"]
+mustIncludeFacts: [地理位置, 地貌成因, 季节窗口, 观察点, 安全边界]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture, 国家地理]
+wordCount: { min: 1600, max: 3000 }
+imagePlan:
+  - { slot: 封面大片, imageLayout: fullWidth, visualStyle: 纪实风 }
+  - { slot: 地图信息图, imageLayout: wrapRight }
+  - { slot: 地貌细节, gallery: masonry }
+  - { slot: 人文现场, imageLayout: fullWidth }
+crossRefs: { minEntity: 2, minTag: 5 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/article.md

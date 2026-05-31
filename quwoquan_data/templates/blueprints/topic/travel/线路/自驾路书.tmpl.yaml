@@ -1,0 +1,39 @@
+templateId: 线路_自驾路书
+version: 1
+subject: { kind: topic, type: 旅行/线路, minEntityRefs: 3, subjectTagRef: Topic/旅行/出行方式/自驾 }
+vertical: travel
+category: travel
+intent: 路线推荐
+carrier: article
+styleFamily: 路线规划风
+audiences: [selfDriveTraveler, leisureTraveler]
+creatorPersona:
+  archetype: self_drive_expert
+  preferredCreatorIds: [qwq_creator_self_drive_guide_001]
+  requiredProfileTagRefs: [Topic/旅行/出行方式/自驾, Format/内容角度/攻略/路线推荐]
+  allowedPerspective: [第一人称经验, 专业导览]
+  mustNotClaim: [官方背书, 实时路况承诺, 商业合作]
+editorialIntent: 把复杂自驾线路拆成可执行的路书，帮助读者判断天数、路况、补给和风险。
+render: { articleTemplate: journal, fontPreset: clean }
+conditionAxes:
+  region: { applicable: true, slot: 地形与风险 }
+  season: { applicable: true, slot: 季节路况窗口 }
+structure:
+  required: [线路总览, 行前判断, 分段路书, 补给与住宿, 风险与替代方案]
+  optional: [摄影停靠点, 车型建议, 返程路线]
+hooks: ["第一次自驾这条线，先看懂路况和补给", "{name}不是景点清单，而是一条要算好体力和时间的路"]
+mustIncludeFacts: [里程, 分段耗时, 路况, 油电补给, 停车点, 应急避险]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 1400, max: 2600 }
+imagePlan:
+  - { slot: 总览地图, imageLayout: fullWidth, visualStyle: 电影感 }
+  - { slot: 分段路况, imageLayout: wrapRight }
+  - { slot: 节点图集, gallery: masonry }
+  - { slot: 风险提示, imageLayout: fullWidth }
+crossRefs: { minEntity: 3, minTag: 4 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/article.md

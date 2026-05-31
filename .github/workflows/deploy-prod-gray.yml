@@ -106,11 +106,10 @@ jobs:
             exit 1
           fi
 
-  deploy-prod-step:
-    name: Deploy prod (optional)
-    needs: [validate]
+  stackctl-deploy:
+    name: Stackctl deploy prod gray
+    needs: [validate, resolve-versions]
     runs-on: ubuntu-latest
-    if: github.event.inputs.dry_run != 'true'
     env:
       PROD_KUBECONFIG: ${{ secrets.PROD_KUBECONFIG }}
     steps:
@@ -121,62 +120,18 @@ jobs:
         run: |
           curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/
-      - name: Deploy to prod
+      - name: Deploy via stackctl
         run: |
-          step=${{ github.event.inputs.step }}
-          total=2
-          replicas=$((step * total / 100))
-          [[ $replicas -lt 1 ]] && replicas=1
-          CLOUD_PROVIDER=${{ github.event.inputs.cloud_provider }} \
-          IMAGE_VERSION=${{ github.event.inputs.to_image }} \
-          CONFIG_VERSION=${{ github.event.inputs.to_config }} \
-          REPLICAS=$replicas \
-          DRY_RUN=false \
-          PROD_KUBECONFIG="$PROD_KUBECONFIG" \
-          bash agent_ops/deploy/prod/deploy_to_prod.sh
-      - name: Wait rollout
-        run: kubectl rollout status deployment/seed-box -n seed-box-prod --timeout=5m
-
-  gray-rollout-state:
-    name: Update rollout state
-    needs: [validate, deploy-prod-step, resolve-versions]
-    if: always() && (needs.validate.result == 'success') && (needs.deploy-prod-step.result == 'success' || needs.deploy-prod-step.result == 'skipped')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Config gray rollout
-        run: |
-          make config-gray-rollout \
-            SERVICE=seed-box \
-            FROM_IMAGE=${{ needs.resolve-versions.outputs.from_image }} \
-            TO_IMAGE=${{ github.event.inputs.to_image }} \
-            FROM_CONFIG=${{ needs.resolve-versions.outputs.from_config }} \
-            TO_CONFIG=${{ github.event.inputs.to_config }} \
-            STEP=${{ github.event.inputs.step }}
-
-  slo-gate:
-    name: SLO gate
-    needs: [gray-rollout-state, resolve-versions]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: SLO gate
-        id: slo
-        run: |
-          set +e
-          gate_output="$(make config-slo-gate \
-            ERROR_RATE=${{ github.event.inputs.error_rate }} \
-            P95_MS=${{ github.event.inputs.p95_ms }} \
-            REDIS_ERROR_RATE=${{ github.event.inputs.redis_error_rate }} 2>&1)"
-          exit_code=$?
-          set -e
-          echo "$gate_output"
-          echo "exitcode=$exit_code" >> $GITHUB_OUTPUT
-          exit $exit_code
-      - name: Rollback on SLO rollback
-        if: steps.slo.outputs.exitcode == '20'
-        run: |
-          make config-rollback \
-            SERVICE=seed-box \
-            TO_CONFIG=${{ needs.resolve-versions.outputs.from_config }}
-          echo "::error::SLO rollback triggered"
+          python3 agent_ops/deploy/stackctl.py deploy \
+            --target prod-hosted \
+            --cloud-provider "${{ github.event.inputs.cloud_provider }}" \
+            --service seed-box \
+            --from-image "${{ needs.resolve-versions.outputs.from_image }}" \
+            --to-image "${{ github.event.inputs.to_image }}" \
+            --from-config "${{ needs.resolve-versions.outputs.from_config }}" \
+            --to-config "${{ github.event.inputs.to_config }}" \
+            --step "${{ github.event.inputs.step }}" \
+            --dry-run "${{ github.event.inputs.dry_run }}" \
+            --error-rate "${{ github.event.inputs.error_rate }}" \
+            --p95-ms "${{ github.event.inputs.p95_ms }}" \
+            --redis-error-rate "${{ github.event.inputs.redis_error_rate }}"

@@ -1,0 +1,35 @@
+templateId: 遗址_文化
+version: 1
+subject: { kind: entity, type: 地点/遗址 }
+vertical: travel
+category: humanity
+intent: 科普
+carrier: article
+styleFamily: 地理画报风
+audiences: [leisureTraveler, familyTraveler]
+creatorPersona:
+  archetype: pro_guide
+  preferredCreatorIds: [qwq_creator_pro_guide_001]
+  requiredProfileTagRefs: [Topic/旅行/玩法/古迹寻访, Format/内容角度/科普/知识科普]
+  allowedPerspective: [专业导览, 编辑部]
+  mustNotClaim: [考古机构背书, 独家资料]
+editorialIntent: 把遗址的历史脉络、参观动线和可见细节讲清楚。
+render: { articleTemplate: ritual, fontPreset: classic }
+structure:
+  required: [遗址概况, 历史脉络, 现场可见细节, 参观动线, 延伸阅读]
+  optional: [亲子讲解点, 周边串联]
+hooks: ["去{name}，先知道哪些地方还看得见历史"]
+mustIncludeFacts: [年代, 位置, 参观动线, 代表遗存]
+forbiddenPhrases: [冷启动, 批次, 角色：, 占位, contract_fixture]
+wordCount: { min: 900, max: 2000 }
+imagePlan:
+  - { slot: 遗址全景, imageLayout: fullWidth }
+  - { slot: 细节遗存, imageLayout: wrapRight }
+  - { slot: 导览动线, gallery: grid }
+crossRefs: { minEntity: 1, minTag: 3 }
+recommendation:
+  authorBinding: { required: true, source: creator_profile_catalog }
+  exposeStyleTags: true
+  qualitySignals: [bodyLength, requiredFactsCovered, imageSlotCoverage, entityRefCount]
+  bodyForbiddenFields: [qualityScore, templateId, routingReason, coldStartBoost, isSystemBuiltin]
+sopExampleRef: sop/主页/地点/遗址/example.md

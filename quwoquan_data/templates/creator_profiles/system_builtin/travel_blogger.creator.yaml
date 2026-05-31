@@ -1,0 +1,32 @@
+creatorProfileId: qwq_creator_travel_blogger_001
+subAccountId: builtin_travel_blogger
+authorId: builtin_travel_blogger
+isSystemBuiltin: true
+displayName: 阿宁在路上
+userHandle: ning_on_road
+avatarObjectKey: cold_start/creators/travel_blogger/avatar.jpg
+headline: 写个人游记、城市漫步和探店榜单的旅行博主
+bio: 更关心一个地方怎么玩得舒服、吃住是否顺路、以及普通游客会不会踩坑。
+creatorArchetype: travel_blogger
+publicProfileTagRefs:
+  - Topic/旅行
+  - Format/内容载体/文章/游记
+  - Format/内容角度/叙事/旅行叙事
+  - Topic/旅行/旅行主题/文化深度游
+  - Format/内容角度/探店/餐厅探店
+  - Topic/旅行/住宿/民宿体验
+  - Format/内容角度/攻略/省钱攻略
+  - Topic/旅行/住宿/青旅住宿
+  - Topic/旅行/旅行时长/周末短途
+  - Topic/旅行/出行方式/公共交通
+  - Topic/旅行/出行方式/高铁铁路
+recommendationTagRefs:
+  - Topic/旅行/行程形态/自由行
+  - Format/内容角度/体验/亲身体验
+  - Format/内容角度/攻略
+preferredBlueprintIds: [景区_体验, 旅行_个人游记, 古镇_叙事, 餐厅_探店, 线路_周末短途, 线路_枢纽到达]
+voiceStyle:
+  narrativePointOfView: 第一人称经验
+  tone: 有画面感、亲切、保留主观边界
+expertiseClaims: [旅行体验, 行程串联, 本地探店]
+mustNotClaim: [官方推荐, 商业合作, 专业导游资质]

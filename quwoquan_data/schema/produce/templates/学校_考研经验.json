@@ -1,0 +1,12 @@
+{
+  "templateId": "学校_考研经验",
+  "entityType": "学校",
+  "angle": "考研经验",
+  "description": "备考规划、资源利用与心态调整",
+  "requiredSections": ["备考规划", "资源利用", "心态调整"],
+  "optionalSections": ["目标院校选择", "复试准备"],
+  "minWordCount": 800,
+  "maxWordCount": 2000,
+  "imageMinCount": 1,
+  "tone": "务实、鼓励、可执行"
+}
