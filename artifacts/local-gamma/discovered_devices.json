@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-05-28T10:29:33.383451Z",
+  "capturedAt": "2026-05-31T14:57:40.993842Z",
   "suite": "gamma-patrol-matrix",
   "requestedEnvironments": [
     "local-gamma"
@@ -7,8 +7,8 @@
   "deviceCount": 1,
   "devices": [
     {
-      "id": "004155EC-D4FB-4AB3-B830-E1D51E715521",
-      "name": "iPhone 17 Pro Max",
+      "id": "DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB",
+      "name": "iPhone 17 Pro",
       "targetPlatform": "ios",
       "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-26-3",
       "emulator": true,

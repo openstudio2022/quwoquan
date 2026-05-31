@@ -34,6 +34,10 @@ gamma-api.quwoquan-env.test {
 	handle @api_assistant {
 		reverse_proxy assistant-service:18087
 	}
+	@api_tag path /v1/tag*
+	handle @api_tag {
+		reverse_proxy tag-service:18092
+	}
 	handle /v1/ops/* {
 		reverse_proxy product-ops-service:18086
 	}
@@ -87,6 +91,10 @@ gamma-upload.quwoquan-env.test {
 	@pub_assistant path /v1/assistant*
 	handle @pub_assistant {
 		reverse_proxy assistant-service:18087
+	}
+	@pub_tag path /v1/tag*
+	handle @pub_tag {
+		reverse_proxy tag-service:18092
 	}
 	handle /v1/ops/* {
 		reverse_proxy product-ops-service:18086

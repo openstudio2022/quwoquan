@@ -1,7 +1,7 @@
 {
   "status": "passed",
-  "baseUrl": "http://127.0.0.1:18180",
-  "productOpsBaseUrl": "http://127.0.0.1:18186",
+  "baseUrl": "http://127.0.0.1:19000",
+  "productOpsBaseUrl": "http://127.0.0.1:19010",
   "enabledDomains": [
     "chat",
     "content"
@@ -17,7 +17,7 @@
   "seed": {
     "status": "passed",
     "insertedCount": 11,
-    "output": "time=\"2026-05-28T18:17:08+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-05-26T00:00:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 11 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 11\n}\n\nrs0 [direct: primary] test> "
+    "output": "time=\"2026-05-31T22:57:09+08:00\" level=warning msg=\"/Users/zhaoyuxi/Projects/quwoquan/quwoquan_service/docker-compose.gamma-local.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion\"\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> \nrs0 [direct: primary] test> | | | | ISODate('2026-05-26T00:00:00.000Z')\nrs0 [direct: primary] test> \nrs0 [direct: primary] test> { acknowledged: true, deletedCount: 11 }\nrs0 [direct: primary] test> {\n  acknowledged: true,\n  insertedIds: {\n    '0': 'fixture_photo_001',\n    '1': 'fixture_photo_002',\n    '2': 'fixture_video_001',\n    '3': 'fixture_article_001',\n    '4': 'fixture_moment_001',\n    '5': 'fixture_post_photography_001',\n    '6': 'fixture_post_travel_001',\n    '7': 'fixture_post_citywalk_001',\n    '8': 'fixture_post_lifestyle_001',\n    '9': 'fixture_post_outdoor_001',\n    '10': 'fixture_post_tech_001'\n  }\n}\nrs0 [direct: primary] test> {\n  insertedCount: 11\n}\n\nrs0 [direct: primary] test> "
   },
   "endpoints": [
     {
@@ -41,7 +41,7 @@
       "domain": "content",
       "path": "/v1/content/posts/fixture_photo_001",
       "httpStatus": 200,
-      "bytes": 1599,
+      "bytes": 1562,
       "status": "passed"
     },
     {
@@ -111,7 +111,7 @@
       "name": "product_ops_api_contract",
       "status": "passed",
       "exitCode": 0,
-      "output": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/ops/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: ops_event_ingestion_end_to_end POST /v1/ops/events 后 summary / drilldown 可读\n00:00 +1: ops_visit_record_end_to_end POST /v1/ops/visits 后 stats 可读\n00:00 +2: (tearDownAll)\n00:00 +2: All tests passed!\n"
+      "output": "Waiting for another flutter command to release the startup lock...\n00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/ops/api_contract_runner.dart\n00:00 +0: (setUpAll)\n00:00 +0: ops_event_ingestion_end_to_end POST /v1/ops/events 后 summary / drilldown 可读\n00:00 +1: ops_visit_record_end_to_end POST /v1/ops/visits 后 stats 可读\n00:00 +2: (tearDownAll)\n00:00 +2: All tests passed!\n"
     }
   ]
 }

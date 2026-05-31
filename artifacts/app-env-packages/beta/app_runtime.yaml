@@ -2,12 +2,12 @@ schemaVersion: app-runtime-config
 runtime:
   appRuntimeEnv: beta
   appDataSource: remote
-  gatewayBaseUrl: http://127.0.0.1:18080
-  realtimeBaseUrl: ""
-  mediaAvatarCdnBaseUrl: http://127.0.0.1:18088
-  mediaImageCdnBaseUrl: http://127.0.0.1:18088
-  mediaVideoCdnBaseUrl: http://127.0.0.1:18088
-  mediaUploadBaseUrl: http://127.0.0.1:18088
+  gatewayBaseUrl: http://127.0.0.1:18000
+  realtimeBaseUrl: ws://127.0.0.1:18000
+  mediaAvatarCdnBaseUrl: http://127.0.0.1:18100
+  mediaImageCdnBaseUrl: http://127.0.0.1:18100
+  mediaVideoCdnBaseUrl: http://127.0.0.1:18100
+  mediaUploadBaseUrl: http://127.0.0.1:18100
   currentUserId: fixture_user_current
 seed:
   enabled: false
